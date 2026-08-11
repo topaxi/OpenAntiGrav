@@ -51,7 +51,7 @@
 //! disc image. What this says is that the controller is stable against a plant of
 //! the right *shape*, which is the property that was broken.
 
-use oag_ai::{Driver, Frame, Line, Tuning};
+use oag_ai::{Driver, Frame, Line, Pilot, Tuning};
 use oag_core::math::{Quat, Vec3};
 use oag_physics::{
     Body, Environment, Handling, Ray, RaycastHit, Raycaster, ShipState, Surface, params,
@@ -310,7 +310,14 @@ fn drive_the_oval(ticks: usize) -> Run {
 }
 
 fn drive_the_oval_with(ticks: usize, tuning: Tuning) -> Run {
-    drive_the_oval_as(ticks, tuning, Driver::default(), &handling(), &oval())
+    drive_the_oval_as(
+        ticks,
+        tuning,
+        Driver::default(),
+        &handling(),
+        &oval(),
+        &Pilot::BALANCED,
+    )
 }
 
 fn drive_the_oval_as(
@@ -319,6 +326,7 @@ fn drive_the_oval_as(
     mut driver: Driver,
     handling: &Handling,
     line: &Line,
+    pilot: &Pilot,
 ) -> Run {
     let handling = *handling;
 
@@ -352,7 +360,14 @@ fn drive_the_oval_as(
     let mut committed = 0.0f32;
 
     for tick in 0..ticks {
-        let controls = driver.drive(&state, line, &tuning);
+        let controls = driver.drive(
+            &state,
+            &oag_ai::Context {
+                line,
+                tuning: &tuning,
+                pilot,
+            },
+        );
         oag_physics::step(&mut state, &controls, &handling, &env, &Plane, dt);
 
         let index = driver.index as usize;
@@ -444,6 +459,7 @@ fn drive_the_field(ticks: usize) -> Vec<Run> {
                 Driver::for_slot(0xC0FFEE, slot),
                 &handling(),
                 &oval(),
+                &Pilot::BALANCED,
             )
         })
         .collect()
@@ -540,6 +556,7 @@ fn the_same_seed_drives_the_same_race() {
         Driver::for_slot(7, 3),
         &handling(),
         &oval(),
+        &Pilot::BALANCED,
     );
     let two = drive_the_oval_as(
         600,
@@ -547,6 +564,7 @@ fn the_same_seed_drives_the_same_race() {
         Driver::for_slot(7, 3),
         &handling(),
         &oval(),
+        &Pilot::BALANCED,
     );
     assert_eq!(one.progress, two.progress);
     assert_eq!(one.mean_offset, two.mean_offset);
@@ -645,8 +663,22 @@ fn a_differential_braking_driver_does_not_ring() {
         ..Tuning::default()
     };
     let braked = handling_with_airbrakes();
-    let with = drive_the_oval_as(1800, Tuning::default(), Driver::default(), &braked, &oval());
-    let without = drive_the_oval_as(1800, symmetric, Driver::default(), &braked, &oval());
+    let with = drive_the_oval_as(
+        1800,
+        Tuning::default(),
+        Driver::default(),
+        &braked,
+        &oval(),
+        &Pilot::BALANCED,
+    );
+    let without = drive_the_oval_as(
+        1800,
+        symmetric,
+        Driver::default(),
+        &braked,
+        &oval(),
+        &Pilot::BALANCED,
+    );
 
     assert!(
         with.peak_error < 20.0,
@@ -676,12 +708,22 @@ fn a_differential_braking_driver_does_not_ring() {
 /// hundred ticks pinned at lock, which is the loop saying it cannot produce the
 /// yaw it wants. That is the case this exists for.
 ///
-/// Measured over 1,800 ticks on the 60-unit oval:
+/// **The gain is not monotonic in how tight the corner is**, which is worth
+/// knowing before anyone "improves" this fixture by tightening it. Measured
+/// over 2,400 ticks, peak error with the differential against without:
 ///
-/// | | peak error | ticks at full lock |
+/// | corners | with | without |
 /// | --- | --- | --- |
-/// | symmetric braking | 21.4 | 776 |
-/// | with the differential | **19.2** | **739** |
+/// | 120-unit, 400-unit straights | 7.5 | 7.4 |
+/// | **60-unit, 300-unit straights** | **19.2** | **21.4** |
+/// | 45-unit, 500-unit straights | 55.2 | 56.3 |
+/// | 35-unit, 600-unit straights | 98.5 | 98.8 |
+/// | 25-unit, 700-unit straights | 163.3 | 164.6 |
+///
+/// A 98-unit peak error on a 35-unit corner is a craft *missing the turn and
+/// rejoining*, not one cornering badly - there is no grip left for extra yaw to
+/// buy anything with. The benefit peaks where the craft is **marginally** past
+/// the steering's authority, which is the 60-unit case below.
 #[test]
 fn a_differential_holds_a_corner_the_steering_alone_cannot() {
     let symmetric = Tuning {
@@ -692,8 +734,22 @@ fn a_differential_holds_a_corner_the_steering_alone_cannot() {
     let braked = handling_with_airbrakes();
     // Corners the craft genuinely cannot make on the stick alone.
     let tight = oval_of(60.0, 300.0);
-    let with = drive_the_oval_as(1800, Tuning::default(), Driver::default(), &braked, &tight);
-    let without = drive_the_oval_as(1800, symmetric, Driver::default(), &braked, &tight);
+    let with = drive_the_oval_as(
+        1800,
+        Tuning::default(),
+        Driver::default(),
+        &braked,
+        &tight,
+        &Pilot::BALANCED,
+    );
+    let without = drive_the_oval_as(
+        1800,
+        symmetric,
+        Driver::default(),
+        &braked,
+        &tight,
+        &Pilot::BALANCED,
+    );
 
     assert!(
         without.saturated_ticks > 300,
@@ -730,8 +786,22 @@ fn a_differential_barely_touches_a_corner_the_craft_can_already_make() {
         ..Tuning::default()
     };
     let braked = handling_with_airbrakes();
-    let with = drive_the_oval_as(1800, Tuning::default(), Driver::default(), &braked, &oval());
-    let without = drive_the_oval_as(1800, symmetric, Driver::default(), &braked, &oval());
+    let with = drive_the_oval_as(
+        1800,
+        Tuning::default(),
+        Driver::default(),
+        &braked,
+        &oval(),
+        &Pilot::BALANCED,
+    );
+    let without = drive_the_oval_as(
+        1800,
+        symmetric,
+        Driver::default(),
+        &braked,
+        &oval(),
+        &Pilot::BALANCED,
+    );
 
     assert!(
         without.saturated_ticks < 100,
@@ -744,5 +814,73 @@ fn a_differential_barely_touches_a_corner_the_craft_can_already_make() {
         "the differential should be near-invisible here: {:.2} against {:.2}",
         with.peak_error,
         without.peak_error
+    );
+}
+
+/// The safety net on the four built-in characters: a pilot that cannot get
+/// round is a pilot that puts a craft in the scenery in a real race, and the
+/// disc-backed test that would catch it does not run in CI.
+#[test]
+fn every_built_in_pilot_gets_round_the_oval() {
+    let line = oval();
+    // **Both fixtures.** `handling()` has no airbrakes at all, so a pilot whose
+    // distinguishing trait is `trail` would be validated there on a craft that
+    // cannot use it - see
+    // `the_default_fixture_has_no_airbrakes_and_the_regression_bounds_know_it`.
+    for craft in [handling(), handling_with_airbrakes()] {
+        for (name, pilot) in Pilot::BUILT_IN {
+            for slot in 1..3u32 {
+                let run = drive_the_oval_as(
+                    1800,
+                    Tuning::default(),
+                    Driver::for_slot(0xC0FFEE, slot),
+                    &craft,
+                    &line,
+                    &pilot,
+                );
+                assert!(
+                    run.progress > line.len(),
+                    "{name} in slot {slot} did not finish a lap: {} points",
+                    run.progress
+                );
+                assert!(
+                    run.peak_error < 20.0,
+                    "{name} in slot {slot} got {:.1} units from its line",
+                    run.peak_error
+                );
+            }
+        }
+    }
+}
+
+/// The characters have to be distinguishable by driving, not just by their
+/// numbers. Aggression is late braking plus commitment, so it shows up as
+/// distance covered.
+#[test]
+fn an_aggressive_pilot_gets_further_round_than_a_shy_one() {
+    let line = oval();
+    let mut aggressive_wins = 0;
+    for slot in 1..8u32 {
+        let driver = Driver::for_slot(0xC0FFEE, slot);
+        // On the airbrake fixture, so `trail` - 1.0-1.4 against 0.1-0.5 - is
+        // part of what is being compared rather than inert.
+        let run = |pilot: &Pilot| {
+            drive_the_oval_as(
+                1800,
+                Tuning::default(),
+                driver,
+                &handling_with_airbrakes(),
+                &line,
+                pilot,
+            )
+            .progress
+        };
+        if run(&Pilot::AGGRESSIVE) > run(&Pilot::SHY) {
+            aggressive_wins += 1;
+        }
+    }
+    assert_eq!(
+        aggressive_wins, 7,
+        "the aggressive pilot should out-run the shy one from every seed"
     );
 }

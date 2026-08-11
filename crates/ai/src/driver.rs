@@ -24,8 +24,9 @@ use oag_core::Rng;
 use oag_core::math::Vec3;
 use oag_physics::{ShipControls, ShipState};
 
-use crate::line::{Frame, Line};
+use crate::line::{Aim, Line};
 use crate::noise::wobble;
+use crate::pilot::Pilot;
 
 /// The controller's constants.
 ///
@@ -199,11 +200,27 @@ pub struct Personality {
     /// Multiplier on [`Tuning::brake_lookahead`] - how far ahead this driver
     /// starts worrying about a corner. Below one is a late braker.
     pub patience: f32,
+    /// Multiplier on [`Tuning::trail_gain`]: how readily this driver spends
+    /// grip on rotating the craft when the steering has run out of lock.
+    pub trail: f32,
+    /// Multiplier on [`Tuning::corridor_use`]: how much of the corridor this
+    /// driver is willing to use at all.
+    pub width: f32,
+    /// Bias toward the inside of the corner ahead, signed by its curvature, in
+    /// the same fraction-of-the-room units as [`Personality::line_bias`].
+    ///
+    /// Unlike the bias, this **swaps sides with the corner**, which is what a
+    /// driver taking a racing line does and what a fixed lean cannot express.
+    pub inside: f32,
 }
 
 impl Personality {
     /// The driver that was here before personalities were: shares the field's
     /// tuning exactly and drives the authored line.
+    /// **The identity, and every axis added later has to keep it one.** An
+    /// appended multiplier is neutral at one and an appended bias at zero, so
+    /// this stays the driver that was here before any of it existed - which is
+    /// what every exact assertion written against seed zero is measuring.
     pub const NEUTRAL: Self = Self {
         line_bias: 0.0,
         wander: 0.0,
@@ -211,6 +228,9 @@ impl Personality {
         look: 1.0,
         commitment: 1.0,
         patience: 1.0,
+        trail: 1.0,
+        width: 1.0,
+        inside: 0.0,
     };
 
     /// Derives a personality from a seed.
@@ -228,32 +248,59 @@ impl Personality {
     /// character would depend on how many pickups had been drawn.
     #[must_use]
     pub fn from_seed(seed: u32) -> Self {
+        Self::from_pilot_seed(&Pilot::BALANCED, seed)
+    }
+
+    /// Derives a personality from a pilot and a seed.
+    ///
+    /// Seed zero is [`Self::NEUTRAL`] whatever the pilot, with **zero** draws,
+    /// for the reason [`Self::from_seed`] gives.
+    #[must_use]
+    pub fn from_pilot_seed(pilot: &Pilot, seed: u32) -> Self {
         if seed == 0 {
             return Self::NEUTRAL;
         }
-        let mut rng = Rng::new(u64::from(seed));
-        // Sequential lets rather than a closure in a struct literal, because the
-        // *order* of the draws is what makes this reproducible and a struct
-        // literal's field order is a thing a later edit moves without thinking.
-        // Two craft that drew the same values in a different order are two
-        // different craft.
+        Self::from_pilot(pilot, &mut Rng::new(u64::from(seed)))
+    }
 
-        // Both signs, and rarely near zero: the middle of the corridor is where
-        // everyone would be anyway.
-        let magnitude = spread(&mut rng, 0.25, 0.85);
-        let line_bias = if rng.next_f32() < 0.5 {
-            -magnitude
-        } else {
-            magnitude
-        };
-        let wander = spread(&mut rng, 0.10, 0.30);
-        // Two and a half to seven seconds a step at 60 Hz. Slower than a corner,
-        // so the drift is something a driver *is* rather than something that
-        // happens to it mid-bend.
-        let wander_rate = 1.0 / spread(&mut rng, 150.0, 420.0);
-        let look = spread(&mut rng, 0.85, 1.15);
-        let commitment = spread(&mut rng, 0.93, 1.05);
-        let patience = spread(&mut rng, 0.85, 1.20);
+    /// Draws a personality out of a pilot's ranges.
+    ///
+    /// # The draw order is frozen
+    ///
+    /// **Draws one to seven are what shipped before pilots existed, in this
+    /// order, for ever; a new axis appends after them and never goes between.**
+    /// [`Pilot::BALANCED`] holds the spans those seven used, so this reproduces
+    /// the pre-pilot personality bit for bit for every seed - which is what
+    /// made introducing pilots a change to no behaviour and no world hash.
+    /// `pilot::tests::the_balanced_pilot_reproduces_the_personality_that_shipped_before_pilots_existed`
+    /// is that claim, against literals captured before the change.
+    ///
+    /// Sequential lets rather than a closure in a struct literal, because the
+    /// *order* of the draws is what makes this reproducible and a struct
+    /// literal's field order is a thing a later edit moves without thinking.
+    /// Two craft that drew the same values in a different order are two
+    /// different craft.
+    ///
+    /// Takes the generator rather than a seed so a caller can prove two pilots
+    /// consume the same draws by comparing `Rng::snapshot` afterwards.
+    #[must_use]
+    pub fn from_pilot(pilot: &Pilot, rng: &mut Rng) -> Self {
+        // Rarely near zero: the middle of the corridor is where everyone would
+        // be anyway.
+        let magnitude = pilot.line_bias.draw(rng);
+        let line_bias = magnitude * pilot.lean.sign(rng);
+        let wander = pilot.wander.draw(rng);
+        // Drawn as a period and stored as a rate. Two and a half to seven
+        // seconds a step at 60 Hz for the balanced pilot - slower than a
+        // corner, so the drift is something a driver *is* rather than something
+        // that happens to it mid-bend.
+        let wander_rate = 1.0 / pilot.wander_period.draw(rng);
+        let look = pilot.look.draw(rng);
+        let commitment = pilot.commitment.draw(rng);
+        let patience = pilot.patience.draw(rng);
+        let trail = pilot.trail.draw(rng);
+        let width = pilot.width.draw(rng);
+        let inside = pilot.inside.draw(rng);
 
         Self {
             line_bias,
@@ -262,6 +309,9 @@ impl Personality {
             look,
             commitment,
             patience,
+            trail,
+            width,
+            inside,
         }
     }
 }
@@ -272,9 +322,31 @@ impl Default for Personality {
     }
 }
 
-/// One draw, scaled into `low..high`.
-fn spread(rng: &mut Rng, low: f32, high: f32) -> f32 {
-    low + (high - low) * rng.next_f32()
+/// Everything a driver reads that is not its own craft.
+///
+/// A bundle rather than a widening argument list, so a later stage adding a
+/// channel - what the other craft are doing, where the pads are - is one line
+/// at each call site instead of a signature churn through every test.
+#[derive(Debug, Clone, Copy)]
+pub struct Context<'a> {
+    /// The line to follow, and the corridor around it.
+    pub line: &'a Line,
+    /// The constants the whole field shares.
+    pub tuning: &'a Tuning,
+    /// The character this craft is drawn from.
+    pub pilot: &'a Pilot,
+}
+
+impl<'a> Context<'a> {
+    /// A context with the balanced pilot, for callers that have not got one.
+    #[must_use]
+    pub fn new(line: &'a Line, tuning: &'a Tuning) -> Self {
+        Self {
+            line,
+            tuning,
+            pilot: &Pilot::BALANCED,
+        }
+    }
 }
 
 /// What a driver carries from one tick to the next.
@@ -322,6 +394,15 @@ pub struct Driver {
 /// pay it every tick, so it is also the cost that matters.
 const SEARCH_WINDOW: usize = 48;
 
+/// The turn, in radians across the stretch between a craft and its aim point,
+/// at which [`Personality::inside`] is asking for all the room it is allowed.
+///
+/// `Line::bend` returns the turn itself, which is a tenth of a radian on the
+/// sort of corner a craft takes at speed - so without a scale here an `inside`
+/// of one would be worth a tenth of the corridor and the axis would read as
+/// broken rather than as subtle. Ours, and a feel knob: about nine degrees.
+const FULL_BEND: f32 = 0.15;
+
 impl Driver {
     /// A driver with a character of its own, from a seed.
     ///
@@ -359,8 +440,8 @@ impl Driver {
 
     /// This driver's character. Derived, not stored - see [`Self::seed`].
     #[must_use]
-    pub fn personality(&self) -> Personality {
-        Personality::from_seed(self.seed)
+    pub fn personality(&self, pilot: &Pilot) -> Personality {
+        Personality::from_pilot_seed(pilot, self.seed)
     }
 
     /// Chooses this tick's controls, and advances the driver's place on the line.
@@ -368,12 +449,13 @@ impl Driver {
     /// Returns released controls when there is no line to follow: a track whose
     /// spline produced nothing leaves the opponents sitting on the grid, which is
     /// what this engine did before there was an AI at all.
-    pub fn drive(&mut self, state: &ShipState, line: &Line, tuning: &Tuning) -> ShipControls {
+    pub fn drive(&mut self, state: &ShipState, ctx: &Context<'_>) -> ShipControls {
+        let (line, tuning) = (ctx.line, ctx.tuning);
         if line.is_empty() {
             return ShipControls::default();
         }
 
-        let personality = self.personality();
+        let personality = self.personality(ctx.pilot);
         let body = &state.body;
         let forward = body.forward();
 
@@ -389,12 +471,12 @@ impl Driver {
         let look =
             (tuning.look_min + tuning.look_speed * speed).min(tuning.look_max) * personality.look;
 
-        let steer = self.steering(state, line, look, speed, tuning, &personality);
+        let steer = self.steering(state, ctx, look, speed, &personality);
         let window = look * tuning.brake_lookahead * personality.patience;
         let curvature = line.max_curvature(index, window, look * 0.5);
         let target = corner_target(curvature, tuning, &personality);
         let (thrust, brake) = throttle(speed, target, tuning);
-        let differential = trail(&steer, speed, target, tuning);
+        let differential = trail(&steer, speed, target, tuning, &personality);
         let (airbrake_left, airbrake_right) = airbrakes(brake, differential, tuning.brake_floor);
 
         ShipControls {
@@ -417,13 +499,13 @@ impl Driver {
     /// and that is a craft in the scenery. Measured, on `16_Track` - see
     /// `docs/gameplay/ai.md`.
     #[must_use]
-    pub fn allows_speed(&self, line: &Line, tuning: &Tuning, speed: f32, distance: f32) -> bool {
-        if line.is_empty() || distance <= 0.0 {
+    pub fn allows_speed(&self, ctx: &Context<'_>, speed: f32, distance: f32) -> bool {
+        if ctx.line.is_empty() || distance <= 0.0 {
             return true;
         }
-        let span = (tuning.look_min + tuning.look_speed * speed) * 0.5;
-        let curvature = line.max_curvature(self.index as usize, distance, span);
-        speed <= corner_target(curvature, tuning, &self.personality())
+        let span = (ctx.tuning.look_min + ctx.tuning.look_speed * speed) * 0.5;
+        let curvature = ctx.line.max_curvature(self.index as usize, distance, span);
+        speed <= corner_target(curvature, ctx.tuning, &self.personality(ctx.pilot))
     }
 
     /// The steering command, as a turn-rate error.
@@ -446,12 +528,12 @@ impl Driver {
     fn steering(
         &self,
         state: &ShipState,
-        line: &Line,
+        ctx: &Context<'_>,
         look: f32,
         speed: f32,
-        tuning: &Tuning,
         personality: &Personality,
     ) -> Steer {
+        let (line, tuning) = (ctx.line, ctx.tuning);
         let body = &state.body;
         let aim = line.aim(self.index as usize, look);
         // **The drift moves the aim point, not the command.** Noise added to the
@@ -460,7 +542,7 @@ impl Driver {
         // choosing a slightly different line, which is what a driver who is not
         // a machine actually does. The controller stays the one
         // `tests/closed_loop.rs` measured.
-        let aim = aim.point + self.drift(aim.corridor, tuning, personality);
+        let aim = aim.point + self.drift(&aim, look, ctx, personality);
         let to_aim = aim - body.position;
         let distance = to_aim.length();
         if distance <= f32::EPSILON {
@@ -501,16 +583,35 @@ impl Driver {
     /// line's own shape and world up is exactly the mistake `docs/formats/track.md`
     /// records: it is wrong the moment the track rolls. A line with no corridor
     /// is a synthetic one, and every craft on it drives it exactly.
-    fn drift(&self, corridor: Option<Frame>, tuning: &Tuning, personality: &Personality) -> Vec3 {
-        let Some(frame) = corridor else {
+    fn drift(&self, aim: &Aim, look: f32, ctx: &Context<'_>, personality: &Personality) -> Vec3 {
+        let Some(frame) = aim.corridor else {
             return Vec3::ZERO;
         };
         let phase = self.phase as f32 * personality.wander_rate;
         // The seed is the driver's, so two craft with the same wander amplitude
         // still wander apart.
         let wobbled = personality.wander * wobble(self.seed, phase);
-        let wanted = (personality.line_bias + wobbled).clamp(-1.0, 1.0);
-        let offset = wanted * frame.room(wanted) * tuning.corridor_use;
+        // **Which way the corner goes, not how hard.** A fixed lean is a side
+        // of the line; an inside line swaps sides with the corner, so this is
+        // the one axis that has to read the geometry rather than just the
+        // craft. It fades out on a straight, where `bend` goes to zero.
+        // **From the craft's own index, not the aim point's.** The aim point is
+        // already `look` downtrack, and `bend` walks three spans past whatever
+        // it is given, so measuring from there would bias toward a corner two
+        // lookaheads away rather than the one being entered. A third of the
+        // lookahead per span puts the three samples between the craft and its
+        // aim point, which is the stretch this offset is steering through.
+        let bend = (ctx
+            .line
+            .bend(self.index as usize, look / 3.0, frame.lateral)
+            / FULL_BEND)
+            .clamp(-1.0, 1.0);
+        let inside = personality.inside * bend;
+        let wanted = (personality.line_bias + wobbled + inside).clamp(-1.0, 1.0);
+        // Every term above is in the same fraction-of-the-room units and is
+        // clamped once here, so no term can fight the corridor: the clamp below
+        // is the backstop and not the mechanism.
+        let offset = wanted * frame.room(wanted) * ctx.tuning.corridor_use * personality.width;
         frame.lateral * frame.clamp(offset)
     }
 }
@@ -616,7 +717,13 @@ fn throttle(speed: f32, target: f32, tuning: &Tuning) -> (f32, f32) {
 /// `oag_physics::controls::update` ramps the airbrake states toward it at
 /// `Airbrake::gain`/`falloff`. The plant is the rate limiter, so the driver
 /// needs no state of its own to remember.
-fn trail(steer: &Steer, speed: f32, target: f32, tuning: &Tuning) -> f32 {
+fn trail(
+    steer: &Steer,
+    speed: f32,
+    target: f32,
+    tuning: &Tuning,
+    personality: &Personality,
+) -> f32 {
     if speed < target
         || steer.command.abs() < tuning.trail_saturation
         || steer.rate_error.abs() <= tuning.trail_deadband
@@ -624,7 +731,7 @@ fn trail(steer: &Steer, speed: f32, target: f32, tuning: &Tuning) -> f32 {
         return 0.0;
     }
     let past = steer.rate_error.abs() - tuning.trail_deadband;
-    let magnitude = (past * tuning.trail_gain).min(tuning.trail_max);
+    let magnitude = (past * tuning.trail_gain * personality.trail).min(tuning.trail_max);
     // Positive `rate_error` is a craft that wants to turn further right, and a
     // nose-right yaw needs `imbalance = L - R` negative - so the **right** side
     // is the one braked. Getting this backwards is what `5ad69f3` shipped for
@@ -672,6 +779,7 @@ fn airbrakes(brake: f32, differential: f32, floor: f32) -> (f32, f32) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::line::Frame;
     use oag_core::math::{Quat, Vec3};
     use oag_physics::Body;
 
@@ -701,8 +809,7 @@ mod tests {
         let mut driver = Driver::default();
         let controls = driver.drive(
             &craft(Vec3::ZERO, 0.0),
-            &Line::default(),
-            &Tuning::default(),
+            &Context::new(&Line::default(), &Tuning::default()),
         );
         assert_eq!(controls, ShipControls::default());
     }
@@ -710,7 +817,10 @@ mod tests {
     #[test]
     fn a_craft_on_a_straight_holds_full_thrust_and_no_steering() {
         let mut driver = Driver::default();
-        let controls = driver.drive(&craft(Vec3::ZERO, 50.0), &straight(), &Tuning::default());
+        let controls = driver.drive(
+            &craft(Vec3::ZERO, 50.0),
+            &Context::new(&straight(), &Tuning::default()),
+        );
         assert_eq!(controls.thrust, 1.0);
         assert!(controls.steer_x.abs() < 1e-3, "steer {}", controls.steer_x);
         assert_eq!(controls.airbrake_left, 0.0);
@@ -726,8 +836,10 @@ mod tests {
         let tuning = Tuning::default();
 
         let mut driver = Driver::default();
-        let right_of_line =
-            driver.drive(&craft(Vec3::new(6.0, 0.0, 0.0), 40.0), &straight(), &tuning);
+        let right_of_line = driver.drive(
+            &craft(Vec3::new(6.0, 0.0, 0.0), 40.0),
+            &Context::new(&straight(), &tuning),
+        );
         assert!(
             right_of_line.steer_x < 0.0,
             "steer {} should be left of centre",
@@ -737,8 +849,7 @@ mod tests {
         let mut driver = Driver::default();
         let left_of_line = driver.drive(
             &craft(Vec3::new(-6.0, 0.0, 0.0), 40.0),
-            &straight(),
-            &tuning,
+            &Context::new(&straight(), &tuning),
         );
         assert!(
             left_of_line.steer_x > 0.0,
@@ -755,13 +866,13 @@ mod tests {
         let mut state = craft(Vec3::new(6.0, 0.0, 0.0), 40.0);
 
         let mut driver = Driver::default();
-        let still = driver.drive(&state, &straight(), &tuning);
+        let still = driver.drive(&state, &Context::new(&straight(), &tuning));
 
         // Yawing left, which is positive about the craft's own up axis, and is
         // the direction the controller wants to go.
         state.body.angular_velocity = Vec3::new(0.0, 0.3, 0.0);
         let mut driver = Driver::default();
-        let turning = driver.drive(&state, &straight(), &tuning);
+        let turning = driver.drive(&state, &Context::new(&straight(), &tuning));
         assert!(
             turning.steer_x > still.steer_x,
             "already turning: {} should be less left lock than {}",
@@ -793,7 +904,7 @@ mod tests {
         for step in -200..=200 {
             let mut state = craft(line.point(0), 200.0);
             state.body.angular_velocity = Vec3::new(0.0, step as f32 * 0.02, 0.0);
-            let controls = Driver::default().drive(&state, &line, &tuning);
+            let controls = Driver::default().drive(&state, &Context::new(&line, &tuning));
             if controls.steer_x.abs() >= tuning.trail_saturation {
                 continue;
             }
@@ -828,7 +939,8 @@ mod tests {
                 })
                 .collect(),
         );
-        let controls = Driver::default().drive(&craft(line.point(0), 200.0), &line, &tuning);
+        let controls =
+            Driver::default().drive(&craft(line.point(0), 200.0), &Context::new(&line, &tuning));
         assert!(
             controls.steer_x.abs() >= tuning.trail_saturation,
             "a 60-unit circle at 200 should have the loop at lock, got {}",
@@ -859,12 +971,12 @@ mod tests {
             rate_error: -1.0,
         };
         // Over the target, so the overspeed gate is open.
-        assert!(trail(&hard_right, 100.0, 50.0, &tuning) > 0.0);
-        assert!(trail(&hard_left, 100.0, 50.0, &tuning) < 0.0);
+        assert!(trail(&hard_right, 100.0, 50.0, &tuning, &Personality::NEUTRAL) > 0.0);
+        assert!(trail(&hard_left, 100.0, 50.0, &tuning, &Personality::NEUTRAL) < 0.0);
 
         let (left, right) = airbrakes(
             0.0,
-            trail(&hard_right, 100.0, 50.0, &tuning),
+            trail(&hard_right, 100.0, 50.0, &tuning, &Personality::NEUTRAL),
             tuning.brake_floor,
         );
         assert!(right > left, "turning right brakes the right side");
@@ -877,7 +989,16 @@ mod tests {
             command: 1.0,
             rate_error: tuning.trail_deadband,
         };
-        assert_eq!(trail(&saturated_but_settled, 100.0, 50.0, &tuning), 0.0);
+        assert_eq!(
+            trail(
+                &saturated_but_settled,
+                100.0,
+                50.0,
+                &tuning,
+                &Personality::NEUTRAL
+            ),
+            0.0
+        );
     }
 
     #[test]
@@ -887,7 +1008,10 @@ mod tests {
             command: tuning.trail_saturation - 0.01,
             rate_error: 1.0,
         };
-        assert_eq!(trail(&unsaturated, 100.0, 50.0, &tuning), 0.0);
+        assert_eq!(
+            trail(&unsaturated, 100.0, 50.0, &tuning, &Personality::NEUTRAL),
+            0.0
+        );
     }
 
     /// Below the corner's target speed is corner exit, where the grip is wanted
@@ -900,8 +1024,14 @@ mod tests {
             command: 1.0,
             rate_error: 1.0,
         };
-        assert_eq!(trail(&hard, 49.0, 50.0, &tuning), 0.0);
-        assert_eq!(trail(&hard, 300.0, f32::INFINITY, &tuning), 0.0);
+        assert_eq!(
+            trail(&hard, 49.0, 50.0, &tuning, &Personality::NEUTRAL),
+            0.0
+        );
+        assert_eq!(
+            trail(&hard, 300.0, f32::INFINITY, &tuning, &Personality::NEUTRAL),
+            0.0
+        );
     }
 
     /// A yaw request must never drop a side to zero while braking: both sides
@@ -1009,8 +1139,7 @@ mod tests {
         // Absurdly far off the line, at speed: the raw curvature is enormous.
         let controls = driver.drive(
             &craft(Vec3::new(500.0, 0.0, 0.0), 150.0),
-            &straight(),
-            &tuning,
+            &Context::new(&straight(), &tuning),
         );
         assert!(
             controls.steer_x >= -1.0,
@@ -1037,11 +1166,93 @@ mod tests {
         Line::with_corridor(points, corridor)
     }
 
+    /// An arc bending to the driver's right, with an even corridor.
+    ///
+    /// Built the same way `tests/closed_loop.rs` builds the oval's: the chord
+    /// direction crossed with world up, which is only legitimate because this
+    /// fixture is flat.
+    fn right_hand_corner() -> Line {
+        let radius = 120.0f32;
+        let points: Vec<Vec3> = (0..96)
+            .map(|step| {
+                let angle = step as f32 * 0.02;
+                // Toward `-X`, which is the driver's right on a line running
+                // along `-Z` - the same convention `straight_with_corridor`
+                // states and `Y.cross(along)` produces.
+                Vec3::new(radius * angle.cos() - radius, 0.0, -radius * angle.sin())
+            })
+            .collect();
+        let corridor = points
+            .iter()
+            .enumerate()
+            .map(|(at, _)| {
+                let next = points[(at + 1).min(points.len() - 1)];
+                let here = points[at.min(points.len() - 2)];
+                let along = (next - here).normalize_or_zero();
+                Frame {
+                    lateral: Vec3::Y.cross(along).normalize_or_zero(),
+                    left: -8.0,
+                    right: 8.0,
+                }
+            })
+            .collect();
+        Line::with_corridor(points, corridor)
+    }
+
+    /// `inside` is the one axis that reads the geometry rather than the craft,
+    /// so it has to move the aim toward the inside of a real corner - and it
+    /// has to be zero on a straight, or it is just a second `line_bias`.
+    #[test]
+    fn an_inside_line_leans_into_the_corner_and_not_on_a_straight() {
+        let tuning = Tuning::default();
+        let driver = Driver::seeded(11);
+        let plain = Personality {
+            inside: 0.0,
+            ..Personality::NEUTRAL
+        };
+        let keen = Personality {
+            inside: 0.6,
+            ..Personality::NEUTRAL
+        };
+
+        let corner = right_hand_corner();
+        let aim = corner.aim(0, 40.0);
+        let lateral = aim.corridor.expect("the fixture has a corridor").lateral;
+        let across = |personality: &Personality| {
+            driver
+                .drift(&aim, 40.0, &Context::new(&corner, &tuning), personality)
+                .dot(lateral)
+        };
+        assert!(
+            across(&keen) > across(&plain) + 0.5,
+            "an inside line should pull toward the corner: {} against {}",
+            across(&keen),
+            across(&plain)
+        );
+
+        // The same pilot on a straight has no corner to lean into.
+        let straight = straight_with_corridor();
+        let flat = straight.aim(0, 40.0);
+        let flat_lateral = flat.corridor.expect("the fixture has a corridor").lateral;
+        let on_a_straight = |personality: &Personality| {
+            driver
+                .drift(&flat, 40.0, &Context::new(&straight, &tuning), personality)
+                .dot(flat_lateral)
+        };
+        assert!(
+            (on_a_straight(&keen) - on_a_straight(&plain)).abs() < 1.0e-3,
+            "an inside line should do nothing on a straight"
+        );
+    }
+
     /// Seed zero has to stay the driver every other test in this file measures.
     #[test]
     fn seed_zero_is_the_plain_line_follower() {
         assert_eq!(Personality::from_seed(0), Personality::NEUTRAL);
-        assert_eq!(Driver::default().personality(), Personality::NEUTRAL);
+        assert_eq!(
+            Driver::default().personality(&Pilot::BALANCED),
+            Personality::NEUTRAL
+        );
         assert_ne!(Personality::from_seed(1), Personality::NEUTRAL);
     }
 
@@ -1097,9 +1308,14 @@ mod tests {
 
         let offset = |seed: u32| {
             let mut driver = Driver::seeded(seed);
-            driver.drive(&state, &line, &tuning);
+            driver.drive(&state, &Context::new(&line, &tuning));
             driver
-                .drift(line.aim(0, 40.0).corridor, &tuning, &driver.personality())
+                .drift(
+                    &line.aim(0, 40.0),
+                    40.0,
+                    &Context::new(&line, &tuning),
+                    &driver.personality(&Pilot::BALANCED),
+                )
                 .dot(Vec3::NEG_X)
         };
 
@@ -1117,19 +1333,28 @@ mod tests {
     fn the_drift_stays_inside_the_corridor() {
         let tuning = Tuning::default();
         let line = straight_with_corridor();
-        let frame = line.aim(0, 40.0).corridor;
-        let room = 8.0 * tuning.corridor_use;
+        let aim = line.aim(0, 40.0);
+        // `width` scales `corridor_use`, so the budget a driver may spend is
+        // the shared fraction times the widest a pilot is allowed to be. The
+        // corridor's own edge, below, is the one that must never be crossed.
+        let room = 8.0 * tuning.corridor_use * Pilot::BALANCED.width.high;
 
         for seed in 1..500u32 {
             let mut driver = Driver::seeded(seed);
-            let personality = driver.personality();
+            let personality = driver.personality(&Pilot::BALANCED);
             // A minute of driving, at the ticks the wander is a function of.
             for tick in 0..3_600 {
                 driver.phase = tick;
-                let across = driver.drift(frame, &tuning, &personality).dot(Vec3::NEG_X);
+                let across = driver
+                    .drift(&aim, 40.0, &Context::new(&line, &tuning), &personality)
+                    .dot(Vec3::NEG_X);
                 assert!(
                     across.abs() <= room + 1e-3,
-                    "seed {seed} at tick {tick} aimed {across} across a corridor of {room}"
+                    "seed {seed} at tick {tick} aimed {across} across a budget of {room}"
+                );
+                assert!(
+                    across.abs() <= 8.0,
+                    "seed {seed} at tick {tick} aimed outside the corridor entirely, at {across}"
                 );
             }
         }
@@ -1144,8 +1369,8 @@ mod tests {
 
         let mut plain = Driver::default();
         let mut seeded = Driver::seeded(7);
-        let a = plain.drive(&state, &straight(), &tuning);
-        let b = seeded.drive(&state, &straight(), &tuning);
+        let a = plain.drive(&state, &Context::new(&straight(), &tuning));
+        let b = seeded.drive(&state, &Context::new(&straight(), &tuning));
         assert_eq!(a.steer_x, b.steer_x);
     }
 
@@ -1155,15 +1380,17 @@ mod tests {
     fn a_driver_drifts_over_time() {
         let tuning = Tuning::default();
         let line = straight_with_corridor();
-        let frame = line.aim(0, 40.0).corridor;
+        let aim = line.aim(0, 40.0);
 
         let mut driver = Driver::seeded(3);
-        let personality = driver.personality();
+        let personality = driver.personality(&Pilot::BALANCED);
         let mut low = f32::INFINITY;
         let mut high = f32::NEG_INFINITY;
         for tick in 0..3_600 {
             driver.phase = tick;
-            let across = driver.drift(frame, &tuning, &personality).dot(Vec3::NEG_X);
+            let across = driver
+                .drift(&aim, 40.0, &Context::new(&line, &tuning), &personality)
+                .dot(Vec3::NEG_X);
             low = low.min(across);
             high = high.max(across);
         }
@@ -1201,11 +1428,11 @@ mod tests {
         let mut driver = Driver::seeded(4);
         let state = craft(Vec3::ZERO, 40.0);
         for expected in 1..=5 {
-            driver.drive(&state, &straight(), &Tuning::default());
+            driver.drive(&state, &Context::new(&straight(), &Tuning::default()));
             assert_eq!(driver.phase, expected);
         }
         // No line, no drive, no tick.
-        driver.drive(&state, &Line::default(), &Tuning::default());
+        driver.drive(&state, &Context::new(&Line::default(), &Tuning::default()));
         assert_eq!(driver.phase, 5);
     }
 
@@ -1216,8 +1443,7 @@ mod tests {
         let line = straight();
         driver.drive(
             &craft(Vec3::new(0.0, 0.0, -200.0), 40.0),
-            &line,
-            &Tuning::default(),
+            &Context::new(&line, &Tuning::default()),
         );
         assert_eq!(driver.index, 20);
     }

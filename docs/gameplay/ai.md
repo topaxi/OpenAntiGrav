@@ -465,14 +465,24 @@ than the recovered law being "fixed".
 **Measured**, over 1,800 ticks on the closed-loop oval, differential against
 symmetric:
 
-| corners | peak error from the line | ticks at full lock |
-| --- | --- | --- |
-| 120 units - the craft is not grip-limited | 7.5 against 7.4 | 23 against 18 |
-| 60 units - the craft understeers | **19.2 against 21.4** | **739 against 776** |
+| corners, with 400-to-700-unit straights | peak error from the line |
+| --- | --- |
+| 120 units - the craft is not grip-limited | 7.5 against 7.4 |
+| **60 units - the craft understeers** | **19.2 against 21.4** |
+| 45 units | 55.2 against 56.3 |
+| 35 units | 98.5 against 98.8 |
+| 25 units | 163.3 against 164.6 |
 
-So it earns its place exactly where the argument says it should and is within
+So it earns its place exactly where the argument says it should, and is within
 noise where the craft could already make the corner. That small negative on the
 wide oval is recorded rather than tuned away.
+
+**And the gain is not monotonic in how tight the corner is**, which is the part
+worth knowing before tightening the fixture to "test it harder". A 98-unit peak
+error on a 35-unit corner is a craft missing the turn and rejoining rather than
+one cornering badly, and a craft that far outside the corridor has no grip left
+for extra yaw to spend. The benefit peaks where the craft is **marginally** past
+the steering's authority.
 
 `Race::step_opponents` gives each craft **its own** `Environment`, from the
 sample its own driver is standing on. Sharing the player's would fly seven craft
@@ -494,12 +504,16 @@ one line has to do - there is one best place to be and nothing to separate two
 craft that both compute it - and no amount of tuning fixes it, because the
 tuning is the thing they share.
 
-So each craft carries a **seed**, and `Personality::from_seed` turns it into six
+So each craft carries a **seed**, and a personality is drawn from it: a set of
 departures from the shared `Tuning`. **All of it is ours**; the original varies
 its field by scheduling thrust against the player's position, which is the part
 [this page refuses to port](#what-we-build-instead).
 
-| Axis | What it varies | Range |
+Since 2026-08-11 the seed is drawn out of a **pilot** rather than out of one
+fixed set of ranges - see [pilots](#pilots-and-the-personalities-drawn-inside-them)
+below. The axes are the same either way:
+
+| Axis | What it varies | Balanced range |
 | --- | --- | --- |
 | `line_bias` | which side of the line this craft holds, and how far, as a fraction of the room on that side | 0.25-0.85 either way |
 | `wander` | how much of that room it spends drifting about the bias | 0.10-0.30 |
@@ -507,6 +521,9 @@ its field by scheduling thrust against the player's position, which is the part
 | `look` | multiplier on the lookahead - how far down the road it aims | 0.85-1.15 |
 | `commitment` | multiplier on the grip it assumes through a corner | 0.93-1.05 |
 | `patience` | multiplier on how early it starts braking | 0.85-1.20 |
+| `trail` | multiplier on how readily it rotates the craft on the airbrakes | 0.7-1.1 |
+| `width` | multiplier on how much of the corridor it uses at all | 0.9-1.1 |
+| `inside` | bias toward the inside of the corner ahead, **signed by the corner** rather than fixed to a side | 0.0-0.15 |
 
 Two of those do the visible work. **The bias** puts eight craft on eight parts of
 the track instead of one line, and **the commitment** gives them eight different
@@ -552,6 +569,41 @@ would move every later pickup roll) was deliberately not done.
 keeps them apart, not a rule that keeps them apart: there is no avoidance, no
 overtaking line and no defending. Two personalities that happen to pick similar
 lines will run nose to tail, the same way two human drivers would.
+
+### Pilots, and the personalities drawn inside them
+
+A personality is what one craft got. A **pilot** is the distribution it came out
+of - so four aggressive craft are four different aggressive drivers rather than
+one aggressive driver four times, which is the argument that put a personality on
+each craft in the first place, applied one level up. Four ship, all invented:
+
+| Pilot | Drives like |
+| --- | --- |
+| `balanced` | the field as it drove before pilots existed - the same spans, exactly |
+| `aggressive` | brakes latest, commits hardest, least wander, tightest inside line, rotates on the airbrakes |
+| `passive` | looks furthest ahead, brakes earliest, gives up corner speed for a tidy line |
+| `shy` | runs widest and slowest, and will yield once it can see who is behind it |
+
+Which pilot a slot draws comes from the race seed through **a stream of its
+own**, deliberately not the one `Driver::for_slot` uses: sharing it would tie a
+craft's pilot to its personality seed, so the aggressive slot would always be the
+one that also drew a high commitment and a field of eight would be four
+characters wearing eight names.
+
+**The draw order is frozen, and this is the rule to read before touching
+`Pilot`.** Draws one to seven are the ones that shipped before pilots existed, in
+that order, for ever; a new axis appends after them and never goes between. Two
+things rest on it. `Pilot::BALANCED` holds the spans the old code used, so
+`Personality::from_pilot(&BALANCED, seed)` reproduces the pre-pilot personality
+**bit for bit for every seed** - which is what made introducing pilots a change
+to no behaviour and no world hash, and it is pinned by a table of `f32::to_bits`
+literals captured before the refactor rather than regenerated after it. And every
+pilot consumes the *same* draws in the same order, so an axis a pilot holds fixed
+still spends its draw (`Span::fixed`, `Lean`) - skipping it would silently
+re-roll every later axis, and only for that pilot.
+
+`shy`'s yielding is not built yet: it needs to know a rival is behind, which is
+the next stage. What the pilot is today is the driving style that goes with it.
 
 ### Pads, and what an opponent does with a pickup
 
@@ -758,6 +810,12 @@ rebase onto a function start, so they were left alone rather than guessed at.
 | Braking starts at the floor rather than an epsilon, and climbs with the overspeed | `driver::tests::a_brake_climbs_with_the_overspeed_and_never_starts_below_the_floor`, `a_driver_never_brakes_below_the_floor` | yes |
 | **The default closed-loop fixture has no airbrakes at all** | `closed_loop::the_default_fixture_has_no_airbrakes_and_the_regression_bounds_know_it` | yes |
 | And the airbrake fixture is not inert either | `closed_loop::the_airbrake_fixture_actually_slows_and_yaws_a_craft` | yes |
+| **The balanced pilot reproduces the pre-pilot personality bit for bit** | `pilot::tests::the_balanced_pilot_reproduces_the_personality_that_shipped_before_pilots_existed`, against literals captured at `fd35d8f` | yes |
+| Every pilot consumes the same draws in the same order, and a fixed span or lean still spends its draw | three tests in `pilot::tests` | yes |
+| Seed zero is the plain line-follower whatever the pilot, and no pilot asks for more grip than the hull has | `pilot::tests::seed_zero_is_the_plain_line_follower_whatever_the_pilot`, `..._no_pilot_asks_for_more_grip_than_the_hull_has` | yes |
+| Which pilot a slot draws does not track its personality seed | `pilot::tests::the_pilot_a_slot_draws_does_not_track_its_personality_seed`, over 400 races | yes |
+| All four pilots get round the oval on **both** handling fixtures, and the aggressive one out-runs the shy one from every seed | `closed_loop::every_built_in_pilot_gets_round_the_oval`, `an_aggressive_pilot_gets_further_round_than_a_shy_one` | yes |
+| An inside line leans into a corner and does nothing on a straight | `driver::tests::an_inside_line_leans_into_the_corner_and_not_on_a_straight` | yes |
 
 `race::tests`' craft is built on `Handling::ZERO` with an empty collision world,
 so no force law runs there at all and those tests assert only that the controls

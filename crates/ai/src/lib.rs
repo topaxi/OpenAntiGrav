@@ -74,6 +74,8 @@
 mod driver;
 mod line;
 mod noise;
+mod pilot;
 
-pub use driver::{Driver, Personality, Tuning};
+pub use driver::{Context, Driver, Personality, Tuning};
 pub use line::{Aim, Frame, Line};
+pub use pilot::{Lean, Pilot, Span, pilot_for_slot};

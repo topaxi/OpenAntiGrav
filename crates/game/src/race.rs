@@ -2245,6 +2245,12 @@ pub struct Race {
     /// What the opponents' drivers are flown with. One set for the whole field:
     /// per-craft variation is the skill work, and this is the basic driver.
     ai_tuning: oag_ai::Tuning,
+    /// Which pilot each grid slot is flying.
+    ///
+    /// Not world state: it is read-only for the whole race and drawn from the
+    /// race seed, so it reproduces without being carried. Slot 0 is the
+    /// player's and is never read.
+    ai_pilots: [oag_ai::Pilot; oag_gameplay::MAX_SHIPS],
     /// The lap counter's ring, or `None` on a track whose chain does not close.
     course: Option<Course>,
     /// Zone mode's three numbers, off the disc. `None` outside Zone mode, and on
@@ -2588,6 +2594,7 @@ impl Race {
         // spline fallback instead, the offsets would be measured from a pose
         // nobody authored and the seven opponents would be a guess wearing the
         // shape of a measurement.
+        let mut ai_pilots = [oag_ai::Pilot::BALANCED; oag_gameplay::MAX_SHIPS];
         if pose_override.is_none()
             && start_position.is_some()
             && (mode.has_opponents() || opponents)
@@ -2606,7 +2613,16 @@ impl Race {
                 // the same eight characters on every replay and the next race
                 // fields eight others. Nothing here reads a clock or the
                 // world's generator - see `oag_ai::Driver::for_slot`.
-                opponent.driver = oag_ai::Driver::for_slot(seed, index as u32 + 1);
+                let slot = index as u32 + 1;
+                opponent.driver = oag_ai::Driver::for_slot(seed, slot);
+                // **And the character it is a variation on**, drawn from the
+                // race seed through a stream of its own. Sharing the driver
+                // seed's would tie a craft's pilot to its personality, so the
+                // aggressive slot would always be the one that also drew a high
+                // commitment - see `oag_ai::pilot_for_slot`.
+                let roster = oag_ai::Pilot::BUILT_IN;
+                let choice = oag_ai::pilot_for_slot(seed, slot, roster.len() as u32);
+                ai_pilots[slot as usize] = roster[choice as usize].1;
                 opponent.place_at(*pose);
             }
             world.ship_count = GRID_SLOTS;
@@ -2619,6 +2635,7 @@ impl Race {
         Self {
             racing_line: racing_line(&spline),
             ai_tuning: oag_ai::Tuning::default(),
+            ai_pilots,
             world,
             collision,
             spline,
@@ -2870,12 +2887,19 @@ impl Race {
             // `Eliminated`, because the explosion, the respawn and the
             // elimination bookkeeping are all unbuilt. So it coasts, settles and
             // is passed. See `oag_physics::damage::CraftState`.
+            let pilot = self.ai_pilots[slot];
             let ship = &mut self.world.ships[slot];
             let handling = ship.handling;
             let position = ship.physics.body.position;
             let controls = if ship.physics.craft_state == oag_physics::CraftState::Racing {
-                ship.driver
-                    .drive(&ship.physics, &self.racing_line, &self.ai_tuning)
+                ship.driver.drive(
+                    &ship.physics,
+                    &oag_ai::Context {
+                        line: &self.racing_line,
+                        tuning: &self.ai_tuning,
+                        pilot: &pilot,
+                    },
+                )
             } else {
                 oag_physics::ShipControls::default()
             };
@@ -3104,12 +3128,15 @@ impl Race {
                 .dot(ship.physics.body.forward())
                 .max(0.0);
             let boosted = speed * TURBO_SPEED_RATIO;
-            if !ship.driver.allows_speed(
-                &self.racing_line,
-                &self.ai_tuning,
-                boosted,
-                boosted * simple.time,
-            ) {
+            let context = oag_ai::Context {
+                line: &self.racing_line,
+                tuning: &self.ai_tuning,
+                pilot: &self.ai_pilots[slot],
+            };
+            if !ship
+                .driver
+                .allows_speed(&context, boosted, boosted * simple.time)
+            {
                 return;
             }
             self.world.ships[slot].physics.turbo_timer = simple.time;

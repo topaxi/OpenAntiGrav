@@ -317,6 +317,26 @@ impl Line {
         let turned = into.dot(out_of).clamp(-1.0, 1.0).acos();
         turned / travelled
     }
+
+    /// Which way the line bends over `span`, positive where it bends toward
+    /// `lateral`.
+    ///
+    /// **Direction, not curvature** - [`Line::curvature`] is the magnitude.
+    /// This is the chord turn projected across the line, so it carries the sign
+    /// a caller asking "which way is the inside of this corner" needs, and it
+    /// does it without an `acos`.
+    #[must_use]
+    pub fn bend(&self, index: usize, span: f32, lateral: Vec3) -> f32 {
+        if self.points.len() < 3 {
+            return 0.0;
+        }
+        let (first, a, _) = self.ahead(index, span);
+        let (second, b, _) = self.ahead(first, span);
+        let (_, c, _) = self.ahead(second, span);
+        let into = (b - a).normalize_or_zero();
+        let out_of = (c - b).normalize_or_zero();
+        (out_of - into).dot(lateral)
+    }
 }
 
 #[cfg(test)]
