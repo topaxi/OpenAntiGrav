@@ -431,13 +431,44 @@ sequence runs inside the step and has to finish. Nothing reads its `Eliminated`
 state afterwards, so it coasts, settles and is passed - the explosion, the
 respawn and the elimination bookkeeping are all unbuilt.
 
+### Pads, and what an opponent does with a pickup
+
+**Both classes of pad now cross every craft**, not only the player's. Each racer
+keeps its own broadphase row and its own "which pad was I on last tick" edge; a
+weapon pad's *refresh timer* stays shared, because it belongs to the pad, so a
+craft that takes a pickup leaves the pad inert for whoever arrives next. An
+opponent draws from the `ai` column of the shipped `<Pickupodds>` table rather
+than the `human` one - a distinction the disc's own data makes. `front` and
+`back` remain unreachable: they need race *positions*.
+
+**What an opponent does with what it draws is a policy, and nothing about it is
+recovered.** The original decides this in `Data\XML\WeaponAIstats.xml`, a sixth
+AI file that `AiStats_LoadAll` does not even load - so it has its own loader,
+which has not been looked for. Until that is read, this is invention, and it is
+kept small enough to be obviously provisional: **Turbo is fired at once but only
+where the driver is not braking**, and **everything else is absorbed**, which
+pays energy into the pool. So an opponent never shoots at anybody. That is a gap,
+not a decision - nothing picks a target, so a fired Rocket would go down the
+middle of the track.
+
+An opponent gets the speed pad's *force* but no *plume*: there is one `Exhaust`
+and it belongs to slot 0.
+
 ### What an opponent still does not get
 
-Each is separate work, and each is listed so nobody assumes otherwise: speed pads
-and weapon pads (the sweep is built around the player's position), a lap counter
-of its own (`oag_race::RaceState` is single-ship), a respawn when it falls off,
-anything at all happening when it is eliminated, any weapon, and a livery that is
-not the player's. **Nor any of the skill
+Each is separate work, and each is listed so nobody assumes otherwise: an exhaust
+trail of its own, a lap counter of its own (`oag_race::RaceState` is
+single-ship), a respawn when it falls off, anything at all happening when it is
+eliminated, a weapon aimed at anybody, and a livery that is not the player's.
+
+**Craft-to-craft collision does not exist in this engine at all**, for anybody -
+it is not an AI gap. A craft collides with the *track*: an opponent is stepped
+against the same `CollisionWorld` the player is, so it takes walls, floors and
+reset zones exactly as the player does. What is missing is the two-body path.
+`Ship_ApplyCollisionImpulse` covers one body against geometry; the pair resolver
+`0x0884ef30` is **unread**, and so is the writer of the pending impulse at
+`entity->0x4c + 0x110` that feeds it. See `HANDOVER.md`'s ship-to-ship row: the
+`stun_timer` and its gate already exist and nothing arms them. **Nor any of the skill
 work above** - no skill vector, no mistakes, no difficulty selection, no `[ai]`
 config block. Those are the second half.
 

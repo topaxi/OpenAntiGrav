@@ -72,8 +72,8 @@ use oag_formats::track::{AiTrack, Sample, StartPosition};
 use oag_formats::vex;
 use oag_formats::{collision, handling};
 use oag_gameplay::{
-    ControlScheme, GRID_SLOTS, InputSnapshot, Pose, Ship, World, collision_world, handling_for,
-    ship_controls, to_format_class,
+    ControlScheme, GRID_SLOTS, InputSnapshot, MAX_SHIPS, Pose, Ship, World, collision_world,
+    handling_for, ship_controls, to_format_class,
 };
 use oag_input::Keyboard;
 use oag_physics::{CollisionWorld, Environment, Evaluated, Handling, SpeedClass};
@@ -2242,16 +2242,16 @@ pub struct Race {
     /// moving 2 units a tick is skipped for 450 ticks for the cost of one
     /// subtraction.
     ///
-    /// **One slot per pad, not eight.** The original keeps a slot per racer;
-    /// there is one ship here, and widening this is part of whatever change adds
-    /// the other seven rather than something to carry unexercised.
-    pad_distance: Vec<f32>,
+    /// **One row per racer**, as the original keeps: a broadphase cache is a
+    /// statement about where *a* craft is, and eight craft sharing one row would
+    /// skip pads for each other.
+    pad_distance: [Vec<f32>; MAX_SHIPS],
     /// Which pad the ship was inside last tick, the original's `craft+0x1d0`.
     ///
     /// `None` outside every pad. Only a *change* of value counts as entering a new
     /// pad, which is what gates the Zone score - standing still on one pad does
-    /// not pay repeatedly.
-    pad_current: Option<usize>,
+    /// not pay repeatedly. One per racer.
+    pad_current: [Option<usize>; MAX_SHIPS],
     /// The track's weapon-pad trigger volumes - see [`Setup::weapon_pads`].
     ///
     /// **Empty unless the mode arms them.** A weapons-off race in the original
@@ -2261,13 +2261,13 @@ pub struct Race {
     weapon_pads: Vec<oag_formats::pads::PadVolume>,
     /// Distance from the ship to each weapon pad. The speed pads'
     /// [`Self::pad_distance`], one class over, and the same broadphase.
-    weapon_pad_distance: Vec<f32>,
+    weapon_pad_distance: [Vec<f32>; MAX_SHIPS],
     /// Which weapon pad the ship was inside last tick.
     ///
     /// The edge this changes on is what grants a pickup, exactly as
     /// [`Self::pad_current`]'s edge is what pays the Zone score. Two pads
-    /// overlapping on one tick is one entry.
-    weapon_pad_current: Option<usize>,
+    /// overlapping on one tick is one entry. One per racer.
+    weapon_pad_current: [Option<usize>; MAX_SHIPS],
     /// Seconds each weapon pad has left before it can be triggered again.
     ///
     /// The original's `pad+0x1a0`, stamped by `WeaponPads_TestCraft` with
@@ -2340,8 +2340,9 @@ pub struct Race {
     /// Where the ship was at the end of last tick, for the swept test.
     ///
     /// `None` on the first tick, which is the original's own "no previous
-    /// position" case in `Pads_TestCraft` and takes the single-point path.
-    pad_previous_position: Option<Vec3>,
+    /// position" case in `Pads_TestCraft` and takes the single-point path. One
+    /// per racer.
+    pad_previous_position: [Option<Vec3>; MAX_SHIPS],
     /// The burst's emitter anchor, **model space**: the `Ship Collision Fx`
     /// locator nearest the last impact, or the contact point itself mapped
     /// into model space when the model authors no locators. Transformed
@@ -2541,21 +2542,21 @@ impl Race {
             // Every pad starts due for a real test. `Pad_Bind` zeroes the same
             // cache at load, so the first tick measures rather than trusting a
             // distance nothing has computed yet.
-            pad_distance: vec![0.0; speedup_pads.len()],
+            pad_distance: std::array::from_fn(|_| vec![0.0; speedup_pads.len()]),
             speedup_pads,
             // The same broadphase, and the same "due for a real test" start.
-            weapon_pad_distance: vec![0.0; weapon_pads.len()],
+            weapon_pad_distance: std::array::from_fn(|_| vec![0.0; weapon_pads.len()]),
             // Every pad starts collectable. The original's `+0x1a0` is zero
             // until something stamps it, and nothing stamps it at load.
             weapon_pad_refresh_left: vec![0.0; weapon_pads.len()],
             weapon_pads,
-            weapon_pad_current: None,
+            weapon_pad_current: [None; MAX_SHIPS],
             weapon_pad_refresh,
             weapons,
             class,
             class_gravity_scale,
-            pad_current: None,
-            pad_previous_position: None,
+            pad_current: [None; MAX_SHIPS],
+            pad_previous_position: [None; MAX_SHIPS],
             blast_flash_left: [0.0; oag_gameplay::projectile::MAX_PROJECTILES],
             blast_flash_point: [Vec3::ZERO; oag_gameplay::projectile::MAX_PROJECTILES],
             boost_kick: 0.0,
@@ -2729,8 +2730,7 @@ impl Race {
     fn step_opponents(&mut self) {
         let damage_rules = oag_gameplay::damage_rules(self.world.race.mode);
         for slot in 1..self.world.ship_count as usize {
-            let ship = &mut self.world.ships[slot];
-            if !ship.active {
+            if !self.world.ships[slot].active {
                 continue;
             }
 
@@ -2748,6 +2748,9 @@ impl Race {
             // `Eliminated`, because the explosion, the respawn and the
             // elimination bookkeeping are all unbuilt. So it coasts, settles and
             // is passed. See `oag_physics::damage::CraftState`.
+            let ship = &mut self.world.ships[slot];
+            let handling = ship.handling;
+            let position = ship.physics.body.position;
             let controls = if ship.physics.craft_state == oag_physics::CraftState::Racing {
                 ship.driver
                     .drive(&ship.physics, &self.racing_line, &self.ai_tuning)
@@ -2755,9 +2758,17 @@ impl Race {
                 oag_physics::ShipControls::default()
             };
 
+            // The pads, measured from where the craft starts the tick, exactly as
+            // slot 0's are. Both classes: a speed pad boosts an opponent and a
+            // weapon pad hands it a pickup.
+            let (moved, sweep) = self.pad_sweep(slot, position);
+            let pad_hit = self.test_speedup_pads(slot, position, moved, &sweep);
+            self.test_weapon_pads(slot, position, moved, &sweep);
+            self.spend_opponent_pickup(slot);
+
             // The driver just located itself, and the line is index-parallel to
             // the sample table, so this costs a lookup rather than a search.
-            let index = ship.driver.index as usize;
+            let index = self.world.ships[slot].driver.index as usize;
             let track_sample = self.spline.sample(index).map(Spline::track_sample);
             let track_sample_next = self
                 .spline
@@ -2767,19 +2778,79 @@ impl Race {
             let env = Environment {
                 track_sample,
                 track_sample_next,
+                // **The same pads the player crosses.** Measured from the
+                // position the tick started at and swept to where the craft is
+                // now, exactly as slot 0's are - see `Race::pad_sweep`. Without
+                // this an opponent is the only thing on the circuit that a speed
+                // pad does not touch, and the field falls away from a player who
+                // uses them.
+                pad_hit,
                 class_gravity_scale: self.class_gravity_scale,
                 damage_rules,
                 ..Environment::default()
             };
             oag_physics::step(
-                &mut ship.physics,
+                &mut self.world.ships[slot].physics,
                 &controls,
-                &ship.handling,
+                &handling,
                 &env,
                 &self.collision,
                 self.dt,
             );
         }
+    }
+
+    /// What an opponent does with a pickup it is holding.
+    ///
+    /// # This is a policy, and it is the crudest one that is not "nothing"
+    ///
+    /// **Nothing about it is recovered.** The original decides this in
+    /// `WeaponAIstats.xml` and whatever reads it - a sixth AI file that
+    /// `AiStats_LoadAll` does not even load, so it has its own loader that has
+    /// not been looked for. See
+    /// `docs/ghidra/functions/psp-pulse-usa/ai-stats.md`. Until that is read,
+    /// anything here is invention, so it is kept small enough to be obviously
+    /// provisional:
+    ///
+    /// - **Turbo is fired at once**, but only on a stretch the driver is not
+    ///   braking for. A turbo spent into a corner is a turbo spent into a wall.
+    /// - **Everything else is absorbed**, which pays energy into the pool and is
+    ///   a real effect rather than a discard. It is also what a cautious human
+    ///   does with a weapon they cannot aim, and an opponent cannot aim: nothing
+    ///   picks a target, so a fired Rocket would be a rocket down the middle of
+    ///   the track.
+    ///
+    /// So an opponent never shoots at the player. That is a gap and not a
+    /// decision - see `docs/gameplay/ai.md`.
+    fn spend_opponent_pickup(&mut self, slot: usize) {
+        let Some(weapon) = self.world.ships[slot].pickup.weapon else {
+            return;
+        };
+        let Some(weapons) = self.weapons.as_ref() else {
+            return;
+        };
+
+        if weapon == oag_formats::weapons::Weapon::Turbo {
+            // Full throttle means the speed target is not asking it to slow for
+            // anything it can see, which is the only "is this a straight?" this
+            // engine has that the driver already computed.
+            let on_a_straight =
+                self.world.ships[slot].physics.thrust >= oag_physics::controls::CONTROL_RANGE;
+            let Some(simple) = weapons.simple(weapon) else {
+                return;
+            };
+            if !on_a_straight {
+                return;
+            }
+            self.world.ships[slot].physics.turbo_timer = simple.time;
+        } else {
+            let Some(amount) = weapons.absorb(weapon) else {
+                return;
+            };
+            let dimensions = self.world.ships[slot].handling.dimensions;
+            oag_physics::damage::add(&mut self.world.ships[slot].physics, &dimensions, amount);
+        }
+        self.world.ships[slot].pickup.weapon = None;
     }
 
     /// Advances the simulation one fixed tick, and the camera with it.
@@ -2833,13 +2904,13 @@ impl Race {
         // original measures it: `Ship_ApplySpeedupPad` runs inside the same craft
         // update as the other fourteen terms, all of them against the position the
         // tick started at, and the integrator moves the body afterwards.
-        let (moved, sweep) = self.pad_sweep(before);
-        let pad_hit = self.test_speedup_pads(before, moved, &sweep);
+        let (moved, sweep) = self.pad_sweep(0, before);
+        let pad_hit = self.test_speedup_pads(0, before, moved, &sweep);
         // After the speed pad, sharing its sweep. The two are independent - a
         // track can author a weapon pad on top of a speed pad and both fire -
         // and this one returns nothing, because a pickup is an event rather than
         // a per-tick force.
-        self.test_weapon_pads(before, moved, &sweep);
+        self.test_weapon_pads(0, before, moved, &sweep);
         let ship = &mut self.world.ships[0];
         let env = Environment {
             track_sample,
@@ -3301,19 +3372,32 @@ impl Race {
         // The broadphase caches, which are simulation state and not a cache in
         // the "can be recomputed" sense: a stale entry changes which tick a pad
         // is next measured on, and therefore which tick it triggers.
-        for distance in &self.weapon_pad_distance {
-            hasher.write_f32(*distance);
+        // Every racer's row, not only the player's, and every slot of every row
+        // whether or not a craft occupies it - the same argument the world hash
+        // makes for its inactive ship slots.
+        for row in &self.weapon_pad_distance {
+            for distance in row {
+                hasher.write_f32(*distance);
+            }
         }
-        for distance in &self.pad_distance {
-            hasher.write_f32(*distance);
+        for row in &self.pad_distance {
+            for distance in row {
+                hasher.write_f32(*distance);
+            }
         }
-        write_pad_index(&mut hasher, self.weapon_pad_current);
-        write_pad_index(&mut hasher, self.pad_current);
-        match self.pad_previous_position {
-            None => hasher.write_u8(0),
-            Some(position) => {
-                hasher.write_u8(1);
-                hasher.write_vec3(position);
+        for current in self.weapon_pad_current {
+            write_pad_index(&mut hasher, current);
+        }
+        for current in self.pad_current {
+            write_pad_index(&mut hasher, current);
+        }
+        for previous in self.pad_previous_position {
+            match previous {
+                None => hasher.write_u8(0),
+                Some(position) => {
+                    hasher.write_u8(1);
+                    hasher.write_vec3(position);
+                }
             }
         }
         hasher.write_u32(self.respawn_cooldown);
@@ -3415,8 +3499,8 @@ impl Race {
     /// origin was the previous test's destination. A stationary ship and a long
     /// jump both fall through to the single point: interpolating a zero-length
     /// step adds nothing, and interpolating a long one does not close the gap.
-    fn pad_sweep(&mut self, position: Vec3) -> (f32, Vec<Vec3>) {
-        let previous = self.pad_previous_position.replace(position);
+    fn pad_sweep(&mut self, slot: usize, position: Vec3) -> (f32, Vec<Vec3>) {
+        let previous = self.pad_previous_position[slot].replace(position);
         let moved = previous.map_or(f32::INFINITY, |from| position.distance(from));
         let sweep = match previous {
             Some(from) if (0.0..Self::PAD_SWEEP_LIMIT).contains(&moved) && moved > 0.0 => (1
@@ -3443,7 +3527,13 @@ impl Race {
     /// `moved` and `sweep` come from [`Self::pad_sweep`] and are shared with
     /// [`Self::test_weapon_pads`], because the original's two trigger functions
     /// run in the same craft update against the same previous position.
-    fn test_speedup_pads(&mut self, position: Vec3, moved: f32, sweep: &[Vec3]) -> Option<Vec3> {
+    fn test_speedup_pads(
+        &mut self,
+        slot: usize,
+        position: Vec3,
+        moved: f32,
+        sweep: &[Vec3],
+    ) -> Option<Vec3> {
         if self.speedup_pads.is_empty() {
             return None;
         }
@@ -3453,14 +3543,14 @@ impl Race {
             // The broadphase. Spend the distance travelled, and skip until it is
             // used up. `moved` is infinite on the first tick, so every pad is
             // measured once before any of them is skipped.
-            self.pad_distance[index] -= moved;
-            if self.pad_distance[index] > 0.0 {
+            self.pad_distance[slot][index] -= moved;
+            if self.pad_distance[slot][index] > 0.0 {
                 continue;
             }
 
             // Measured from the destination, which is where the cache has to be
             // correct from for the next tick's subtraction to mean anything.
-            self.pad_distance[index] = pad.distance(position.to_array());
+            self.pad_distance[slot][index] = pad.distance(position.to_array());
 
             // First pad wins. The cache above is still updated for every pad whose
             // turn it was, or a skipped one would keep a stale distance forever.
@@ -3477,12 +3567,12 @@ impl Race {
         // original's single `craft+0x1d0` slot and its single `DAT_08b3435c` flag,
         // which `Zone_Update` (`0x0882f5cc`) consumes and clears once per tick.
         let entered = hit.map(|(index, _)| index);
-        if entered != self.pad_current {
-            self.pad_current = entered;
+        if entered != self.pad_current[slot] {
+            self.pad_current[slot] = entered;
             if entered.is_some() {
                 // Zone mode only. `Ship_ApplySpeedupPad` raises its flag under
                 // the mode selector `zone-mode.md` identifies.
-                if self.world.race.mode == Mode::Zone {
+                if slot == 0 && self.world.race.mode == Mode::Zone {
                     self.world.race.score += oag_race::zone::SPEEDUP_PAD_SCORE;
                 }
                 // The visual, on the same edge and with the same **fixed**
@@ -3493,7 +3583,14 @@ impl Race {
                 // outlives the force rather than expiring with it; see
                 // `oag_render::exhaust::BOOST_SECONDS`, which is where the reason
                 // is written down.
-                self.exhaust.boost(exhaust::BOOST_SECONDS);
+                //
+                // **The player's plume only**, because there is one `Exhaust` and
+                // it belongs to slot 0. An opponent gets the boost *force* and no
+                // plume; drawing seven more is render work that has not landed.
+                // See `docs/gameplay/ai.md`.
+                if slot == 0 {
+                    self.exhaust.boost(exhaust::BOOST_SECONDS);
+                }
             }
         }
 
@@ -3531,7 +3628,7 @@ impl Race {
     /// Called once a tick with the position the tick *starts* at, like the speed
     /// pad's, and **after** it, so both spend the same `moved` and neither can
     /// see a position the other has already advanced past.
-    fn test_weapon_pads(&mut self, position: Vec3, moved: f32, sweep: &[Vec3]) {
+    fn test_weapon_pads(&mut self, slot: usize, position: Vec3, moved: f32, sweep: &[Vec3]) {
         if self.weapon_pads.is_empty() {
             return;
         }
@@ -3540,17 +3637,22 @@ impl Race {
         // stamp down by `dt`, floored at zero, whether or not anything is near
         // it. Outside the hit loop because the original runs it as the class's
         // `update` method on every pad, every tick.
-        for left in &mut self.weapon_pad_refresh_left {
-            *left = (*left - self.dt).max(0.0);
+        // **Once a tick, not once a craft.** The timer belongs to the pad, so
+        // the first craft through it is the one that runs the countdown and the
+        // other seven read what it left. Slot 0 is stepped first, every tick.
+        if slot == 0 {
+            for left in &mut self.weapon_pad_refresh_left {
+                *left = (*left - self.dt).max(0.0);
+            }
         }
 
         let mut hit = None;
         for (index, pad) in self.weapon_pads.iter().enumerate() {
-            self.weapon_pad_distance[index] -= moved;
-            if self.weapon_pad_distance[index] > 0.0 {
+            self.weapon_pad_distance[slot][index] -= moved;
+            if self.weapon_pad_distance[slot][index] > 0.0 {
                 continue;
             }
-            self.weapon_pad_distance[index] = pad.distance(position.to_array());
+            self.weapon_pad_distance[slot][index] = pad.distance(position.to_array());
 
             if hit.is_none() && sweep.iter().any(|point| pad.contains(point.to_array())) {
                 hit = Some(index);
@@ -3559,10 +3661,10 @@ impl Race {
 
         // The edge, outside the loop for the same reason the speed pad's is: two
         // pads overlapping on one tick is one entry.
-        if hit == self.weapon_pad_current {
+        if hit == self.weapon_pad_current[slot] {
             return;
         }
-        self.weapon_pad_current = hit;
+        self.weapon_pad_current[slot] = hit;
         let Some(index) = hit else {
             return;
         };
@@ -3579,7 +3681,7 @@ impl Race {
         self.weapon_pad_refresh_left[index] = self.weapon_pad_refresh;
 
         // Points 2 and 3.
-        if !self.world.ships[0].pickup.is_empty() {
+        if !self.world.ships[slot].pickup.is_empty() {
             return;
         }
         let Some(weapons) = self.weapons.as_ref() else {
@@ -3589,14 +3691,18 @@ impl Race {
         else {
             return;
         };
-        // The player, so the `human` column. `front`/`back` need race positions,
-        // which need opponents that move.
-        let drawn = oag_gameplay::pickup::draw(
-            &mut self.world.rng,
-            table,
-            oag_gameplay::pickup::Driver::Human,
-        );
-        self.world.ships[0].pickup.weapon = drawn;
+        // **The `human` column for slot 0 and the `ai` column for the rest**,
+        // which is a distinction the shipped `<Pickupodds>` table draws itself -
+        // see `docs/gameplay/pickups.md`. `front`/`back` are still unreachable:
+        // they need race *positions*, and `oag_race::RaceState` is single-ship,
+        // so nobody is placed.
+        let who = if slot == 0 {
+            oag_gameplay::pickup::Driver::Human
+        } else {
+            oag_gameplay::pickup::Driver::Ai
+        };
+        let drawn = oag_gameplay::pickup::draw(&mut self.world.rng, table, who);
+        self.world.ships[slot].pickup.weapon = drawn;
     }
 
     /// Whether this tick ended in contact with `Reset` geometry.
@@ -6538,6 +6644,60 @@ mod tests {
         Race::start(setup)
     }
 
+    /// [`race_with_a_grid`] with a speed pad big enough to hold the whole field.
+    fn grid_on_a_speed_pad() -> Race {
+        let mut handling = hulled_handling();
+        // Invented and large, the same argument `race_with_pads` makes: the
+        // boost has to be unmistakable rather than lost in the rest of the force
+        // law. Not a shipped value - ADR-0006.
+        handling.speedup_pads = oag_physics::params::SpeedupPads {
+            amount: 37.0,
+            time: 0.5,
+        };
+        let mut setup = setup(handling);
+        setup.mode = Mode::SingleRace;
+        setup.speedup_pads = enveloping_pad();
+        setup.start_position = Some(oag_formats::track::StartPosition {
+            position: [0.0, 0.0, 0.0],
+            left: [0.0, 0.0, -1.0],
+            up: [0.0, 1.0, 0.0],
+            forward: [1.0, 0.0, 0.0],
+        });
+        Race::start(setup)
+    }
+
+    /// A speed pad is a pad for everybody, which it was not until 2026-08-11:
+    /// the sweep was built around the player's own position and an opponent was
+    /// the one thing on the circuit a pad could not touch.
+    #[test]
+    fn a_speed_pad_boosts_every_craft_and_not_only_the_player() {
+        let mut race = grid_on_a_speed_pad();
+        race.tick(&InputSnapshot::default());
+
+        for slot in 0..8 {
+            assert!(
+                race.world.ships[slot].physics.pad_timer > 0.0,
+                "slot {slot} crossed the pad and was not boosted"
+            );
+        }
+    }
+
+    /// Each craft keeps its own broadphase row. Sharing one would let a pad the
+    /// player has just measured be skipped for everybody else.
+    #[test]
+    fn every_craft_keeps_its_own_pad_broadphase() {
+        let mut race = grid_on_a_speed_pad();
+        race.tick(&InputSnapshot::default());
+        assert_eq!(race.pad_distance.len(), MAX_SHIPS);
+        for slot in 0..8 {
+            assert_eq!(
+                race.pad_current[slot],
+                Some(0),
+                "slot {slot} does not know it is on the pad"
+            );
+        }
+    }
+
     /// The wiring: every opponent is stepped, with controls a driver chose.
     ///
     /// **What this cannot assert, and why.** [`setup`] builds a craft on
@@ -7019,7 +7179,8 @@ mod tests {
         // broadphase either way.
         let place = |race: &mut Race, pad: oag_formats::pads::PadVolume| {
             race.weapon_pads[0] = pad;
-            race.weapon_pad_distance[0] = 0.0;
+            // Slot 0's row: these tests fly the player.
+            race.weapon_pad_distance[0][0] = 0.0;
         };
 
         race.tick(&InputSnapshot::default());
@@ -7257,7 +7418,7 @@ mod tests {
         let mut race = race_with_weapon_pads(Mode::SingleRace, enveloping_pad(), 1.0);
         race.tick(&InputSnapshot::default());
         let before = race.state_hash();
-        race.weapon_pad_distance[0] += 1.0;
+        race.weapon_pad_distance[0][0] += 1.0;
         assert_ne!(before, race.state_hash());
     }
 
