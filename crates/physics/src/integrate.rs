@@ -266,6 +266,10 @@ pub fn step<R: Raycaster + ?Sized>(
     // After `evaluate`, so the tick a pickup is fired on gets the boost. See
     // `crate::engine::advance_turbo`.
     crate::engine::advance_turbo(state, dt);
+    // And after `apply_contact` above, so the tick a Shield is fired on is
+    // protected rather than skipped - the same argument, one line later because
+    // what reads this timer is the damage path rather than the force law.
+    crate::damage::advance_shield_pickup(state, dt);
 
     evaluated
 }

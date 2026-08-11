@@ -357,6 +357,14 @@ struct Cli {
     #[arg(long)]
     opponents: bool,
 
+    /// Seed the world generator, instead of `race::SEED`.
+    ///
+    /// A verification aid - see `race::Options::seed`. The one thing in a race
+    /// that draws from the generator today is which pickup a weapon pad hands
+    /// over, so this is how a capture is made to show a chosen weapon.
+    #[arg(long)]
+    seed: Option<u64>,
+
     /// In a race, print a telemetry line every this many ticks. Zero prints
     /// none.
     #[arg(long, default_value_t = 60)]
@@ -727,6 +735,7 @@ fn main() -> Result<()> {
         collision: cli.collision,
         lod: cli.lod.unwrap_or(settings.graphics.lod),
         opponents: cli.opponents,
+        seed: cli.seed,
         pose,
         camera,
     };

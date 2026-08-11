@@ -199,6 +199,22 @@ pub fn advance_state(state: &mut ShipState, dt: f32) {
     }
 }
 
+/// Counts a fired Shield pickup down.
+///
+/// [`crate::engine::advance_turbo`]'s twin, and deliberately identical to it:
+/// called once a tick from [`crate::step`] **after** [`apply_contact`] has read
+/// the timer, so the tick a shield is fired on is protected rather than skipped,
+/// and floored at zero so `> 0.0` is the whole of the gate.
+///
+/// It therefore inherits the same one-tick-longer character `advance_turbo`
+/// documents and measures - a `0.75` second pickup protects for 46 ticks at
+/// 60 Hz, not 45, because the timer is read before it is decremented. Pinned by
+/// `a_fired_shield_refuses_damage_for_its_authored_duration` so that reordering
+/// the call fails a test rather than moving a number nobody is watching.
+pub fn advance_shield_pickup(state: &mut ShipState, dt: f32) {
+    state.shield_pickup_timer = (state.shield_pickup_timer - dt).max(0.0);
+}
+
 /// Fill the pool, `Ship_ResetShield` (`0x0883dd24`).
 ///
 /// The only thing on the disc that sets the pool to its maximum outright; a
@@ -209,6 +225,12 @@ pub fn reset(state: &mut ShipState, dimensions: &Dimensions) {
     state.shield = dimensions.shield;
     state.craft_state = CraftState::Racing;
     state.state_timer = 0.0;
+    // Ours, like the timer itself: taking the grid is a race-scale event and a
+    // shield left running from the previous race would protect a craft that
+    // never collected one. `turbo_timer` is deliberately *not* cleared here -
+    // that is a separate open question recorded in `HANDOVER.md`, and changing
+    // it in this pass would bury a behaviour change inside a shield.
+    state.shield_pickup_timer = 0.0;
 }
 
 /// The energy a frame's contacts cost, before the pool is touched.
@@ -243,7 +265,14 @@ pub fn apply_contact(
     // `Ship_Damage` refuses outright outside the racing states - a craft already
     // blowing up takes no further damage. The original's gate lists states 4, 5,
     // 6 and 2; the three this crate models collapse to "not racing".
-    if state.craft_state != CraftState::Racing {
+    //
+    // A fired Shield pickup refuses on the same edge, and that placement is the
+    // point: refusing *here* means it also suppresses `depleted` and
+    // `crossed_critical`, so a shielded craft cannot be destroyed and cannot
+    // fire the energy-critical cue. Refusing after the subtraction would give a
+    // shield that hides the number while the craft still dies. **The refusal is
+    // ours** - see [`crate::ShipState::shield_pickup_timer`].
+    if state.craft_state != CraftState::Racing || state.shield_pickup_timer > 0.0 {
         return Shield::default();
     }
 
@@ -534,6 +563,74 @@ mod tests {
         assert_eq!(s.craft_state, CraftState::Racing);
         assert_eq!(s.state_timer, 0.0);
         assert_eq!(s.shield, 300.0);
+    }
+
+    /// The whole of what a fired Shield does: refuse the hit outright, and
+    /// refuse it on the edge that also suppresses the two signals - a shielded
+    /// craft neither dies nor cries critical.
+    #[test]
+    fn a_running_shield_refuses_the_hit_and_both_its_signals() {
+        let d = dimensions(100.0);
+        // Low enough that an unshielded craft would be destroyed outright, so
+        // this cannot pass by the hit merely being small.
+        let mut s = state(1.0);
+        s.shield_pickup_timer = 0.5;
+
+        let report = apply_contact(&mut s, &d, &wall(1000.0), DamageRules::default());
+        assert_eq!(report, Shield::default(), "a shielded craft took a hit");
+        assert_eq!(s.shield, 1.0, "the pool moved");
+        assert_eq!(s.craft_state, CraftState::Racing, "a shielded craft died");
+    }
+
+    /// The timer runs one tick longer than the arithmetic, for the reason
+    /// [`advance_shield_pickup`] gives, and the tick it expires on is a tick
+    /// that takes damage again. The pair is what pins the ordering in
+    /// `crate::step`: advancing before `apply_contact` would cost the firing
+    /// tick, and reading `>= 0.0` would leak a tick at the other end.
+    #[test]
+    fn a_fired_shield_refuses_damage_for_its_authored_duration() {
+        let d = dimensions(300.0);
+        let dt = 1.0 / 60.0;
+        let mut s = state(300.0);
+        s.shield_pickup_timer = 0.75;
+
+        let mut protected = 0;
+        for _ in 0..120 {
+            let report = apply_contact(&mut s, &d, &wall(10.0), DamageRules::default());
+            if report.lost == 0.0 {
+                protected += 1;
+            }
+            advance_shield_pickup(&mut s, dt);
+        }
+        assert_eq!(
+            protected, 46,
+            "0.75 s at 60 Hz protects 46 ticks, not 45 - see advance_shield_pickup"
+        );
+        assert!(
+            s.shield < 300.0,
+            "the pool must be spendable once it expires"
+        );
+    }
+
+    /// Floored, so a long-expired shield does not drift the determinism hash by
+    /// an ever-growing negative - the same guarantee `advance_turbo` gives.
+    #[test]
+    fn an_expired_shield_stops_at_zero() {
+        let mut s = state(100.0);
+        s.shield_pickup_timer = 0.01;
+        for _ in 0..100 {
+            advance_shield_pickup(&mut s, 1.0);
+        }
+        assert_eq!(s.shield_pickup_timer, 0.0);
+    }
+
+    /// Taking the grid clears a running shield, for the reason [`reset`] gives.
+    #[test]
+    fn reset_clears_a_running_shield() {
+        let mut s = state(0.0);
+        s.shield_pickup_timer = 5.0;
+        reset(&mut s, &dimensions(300.0));
+        assert_eq!(s.shield_pickup_timer, 0.0);
     }
 
     /// A ship whose `<Misc>` never loaded has a zero maximum, and the HUD divides

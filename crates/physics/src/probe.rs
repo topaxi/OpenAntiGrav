@@ -373,6 +373,7 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
         craft_state,
         state_timer,
         turbo_timer,
+        shield_pickup_timer,
     } = *state;
 
     hash_body(hasher, &body);
@@ -439,6 +440,13 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
     // corridor. Another fixed run of bytes, hashed because a turbo the gate
     // could not see would let a replay of a single race diverge silently.
     hasher.write_f32(turbo_timer);
+    // And the same again for a fired Shield: no probe script can collect one.
+    // It differs from `turbo_timer` in one way that matters to this gate - a
+    // running shield makes `crate::damage::apply_contact` return early, so it
+    // does not merely add bytes, it can suppress a write to `shield` above.
+    // Zero through every script here, but the first scenario that fires one will
+    // see both fields move together.
+    hasher.write_f32(shield_pickup_timer);
 }
 
 /// The ship a run starts with: on the corridor's centre line, resting on the

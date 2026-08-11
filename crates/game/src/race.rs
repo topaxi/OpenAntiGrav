@@ -331,6 +331,20 @@ pub struct Options {
     /// [`pose`]: Options::pose
     /// [`camera`]: Options::camera
     pub opponents: bool,
+    /// The world generator's seed, or `None` for [`SEED`].
+    ///
+    /// **A verification aid too**, and it exists because one already-recovered
+    /// thing became untestable without it: `crates/game/tests/race_ground_truth.rs`
+    /// asserts a fired Turbo's *magnitude* off the disc's own `<Engine turbo>`,
+    /// which needs a pad crossing that actually draws a Turbo. That was
+    /// automatic while `oag_gameplay::pickup::IMPLEMENTED` held one weapon and
+    /// stopped being so the moment it held two. A seed the test can choose is
+    /// what keeps that assertion pointed at the weapon it is about, rather than
+    /// weakening it to "whatever the pad handed over".
+    ///
+    /// It changes nothing about a real race: every caller that does not set it
+    /// gets [`SEED`], which is the fixed value the field replaced.
+    pub seed: Option<u64>,
     /// Put the craft here instead of on its grid slot.
     ///
     /// **A capture aid, not a spawn.** The point is that two circuits, or a
@@ -406,6 +420,7 @@ impl Default for Options {
             collision: false,
             lod: mesh::Lod::Both,
             opponents: false,
+            seed: None,
             pose: None,
             camera: None,
         }
@@ -436,6 +451,8 @@ pub struct Setup {
     /// this crate implements; the field exists only so a verification build
     /// can override that decision.
     pub opponents: bool,
+    /// The world generator's seed, already resolved from [`Options::seed`].
+    pub seed: u64,
     /// The decoded spline graph, as the file has it.
     pub ai: AiTrack,
     /// The spline resampled for locating a ship, and for placing it.
@@ -1426,6 +1443,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             mode: options.mode,
             class: options.class,
             opponents: options.opponents,
+            seed: options.seed.unwrap_or(SEED),
             zone,
             ai,
             spline,
@@ -2296,6 +2314,7 @@ impl Race {
         let Setup {
             mode,
             opponents,
+            seed,
             zone,
             spline,
             course,
@@ -2330,7 +2349,7 @@ impl Race {
             Vec::new()
         };
 
-        let mut world = World::new(SEED);
+        let mut world = World::new(seed);
         world.race = RaceState::new(mode);
         let ship = &mut world.ships[0];
         ship.active = true;
@@ -3013,11 +3032,25 @@ impl Race {
                     // a reading of what the original shows.
                     self.exhaust.boost(exhaust::BOOST_SECONDS);
                 }
-                // The other twelve have no effect to run. Deliberately *not*
+                oag_formats::weapons::Weapon::Shield => {
+                    let Some(simple) = weapons.simple(weapon) else {
+                        // As above: nothing to raise a shield *for*, so the
+                        // pickup is kept rather than spent on nothing.
+                        return;
+                    };
+                    self.world.ships[0].physics.shield_pickup_timer = simple.time;
+                    // No visual. The disc authors a per-team
+                    // `Data\Ships\<Team>\<Team>shield.vex` for the shield hit
+                    // response (`docs/overview/roadmap.md`) and none of it is
+                    // built, so reusing the exhaust plume the way the Turbo does
+                    // would be inventing a look rather than reusing one. The
+                    // HUD icon leaving the slot is the only feedback today.
+                }
+                // The other eleven have no effect to run. Deliberately *not*
                 // spent: a pickup that vanishes when fired and does nothing is
                 // worse than one the player can still absorb. They cannot reach
-                // here anyway while `pickup::IMPLEMENTED` holds one weapon; the
-                // arm exists so adding to that list is a compile-visible choice
+                // here anyway while `pickup::IMPLEMENTED` excludes them; the arm
+                // exists so adding to that list is a compile-visible choice
                 // rather than a silent no-op.
                 _ => return,
             }
@@ -6025,6 +6058,7 @@ mod tests {
             mode: Mode::TimeTrial,
             class: SpeedClass::Venom,
             opponents: false,
+            seed: SEED,
             // A time trial does not read it, and these tests never run a Zone
             // race: the numbers are the disc's and there is no disc here.
             zone: None,
@@ -6333,6 +6367,12 @@ mod tests {
     /// How long [`one_turbo_table`]'s Turbo runs for, in seconds.
     const FIXTURE_TURBO_TIME: f32 = 0.75;
 
+    /// How long [`one_shield_table`]'s Shield runs for, in seconds.
+    const FIXTURE_SHIELD_TIME: f32 = 1.25;
+
+    /// What [`one_shield_table`]'s Shield pays back when absorbed.
+    const FIXTURE_SHIELD_ABSORB: f32 = 7.0;
+
     /// A weapon table with one Turbo in it, weighted for a human.
     ///
     /// **Built by parsing a document rather than by constructing the struct**,
@@ -6391,6 +6431,19 @@ mod tests {
         pads: Vec<oag_formats::pads::PadVolume>,
         refresh: f32,
     ) -> Race {
+        race_with_weapon_table(mode, pads, refresh, one_turbo_table())
+    }
+
+    /// [`race_with_weapon_pads`] with the table chosen by the caller, so a test
+    /// about a weapon other than the Turbo does not have to reproduce the rest
+    /// of the fixture. Every existing caller wants a table weighting Turbo alone
+    /// - which is also what keeps their draws stable as `IMPLEMENTED` grows.
+    fn race_with_weapon_table(
+        mode: Mode,
+        pads: Vec<oag_formats::pads::PadVolume>,
+        refresh: f32,
+        table: oag_formats::weapons::WeaponStats,
+    ) -> Race {
         let mut handling = hulled_handling();
         // `Handling::ZERO` gives an engine that produces no thrust and a hull
         // with no energy pool, and both of those are what these tests measure a
@@ -6407,9 +6460,26 @@ mod tests {
         let mut setup = setup(handling);
         setup.mode = mode;
         setup.weapon_pads = pads;
-        setup.weapons = Some(one_turbo_table());
+        setup.weapons = Some(table);
         setup.weapon_pad_refresh = refresh;
         Race::start(setup)
+    }
+
+    /// The Turbo fixture's twin for the Shield, and the same rules apply: every
+    /// number invented per ADR-0006, and `absorb` and `time` deliberately unlike
+    /// each other and unlike the Turbo table's, so a test that confused any two
+    /// of the four fails rather than passes by coincidence.
+    fn one_shield_table() -> oag_formats::weapons::WeaponStats {
+        oag_formats::weapons::parse(
+            r#"<WeaponStats>
+                 <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
+                 <Weapon type="Shield"><Stats absorb="7" time="1.25"/></Weapon>
+                 <Pickupodds class="Venom">
+                   <Weapon type="Shield"><Stats ai="1" back="1" front="1" human="1"/></Weapon>
+                 </Pickupodds>
+               </WeaponStats>"#,
+        )
+        .expect("the fixture table must parse")
     }
 
     /// The whole grant chain: containment in `oag_formats::pads`, the entry
@@ -6612,6 +6682,92 @@ mod tests {
             whole + 1,
             "the turbo ran {ticks} tick(s) against the authored {whole} plus the \
              float residue"
+        );
+    }
+
+    /// The Shield's half of the same chain: a pad hands one out, `SQUARE` spends
+    /// it, and the timer comes from the file's own `<Shield time>` rather than
+    /// from anything invented in this crate.
+    ///
+    /// **What a running shield then does is pinned in
+    /// `oag_physics::damage`'s own tests**, not here, and the split is
+    /// deliberate: that is where the wall contact and the energy pool live, and
+    /// reproducing a scrape in this fixture would test the collision geometry
+    /// rather than the wiring. What this test owns is the wiring - that the
+    /// button reaches the right field with the disc's number in it, and that the
+    /// slot empties.
+    #[test]
+    fn a_fired_shield_arms_the_timer_for_its_authored_duration() {
+        let mut race =
+            race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_shield_table());
+        let mut buttons = Buttons::new();
+
+        race.tick(&buttons.tick(CROSS));
+        assert_eq!(
+            race.ship_pickup(),
+            Some(oag_formats::weapons::Weapon::Shield),
+            "a table weighting Shield alone must hand out a Shield"
+        );
+
+        race.tick(&buttons.tick(CROSS | SQUARE));
+        assert_eq!(race.ship_pickup(), None, "firing must spend the pickup");
+        // The authored `time`, less the one tick `crate::step` has already
+        // counted off - the countdown runs after the damage path reads it, which
+        // is what protects the tick a shield is fired on.
+        assert!(
+            (race.ship().physics.shield_pickup_timer - (FIXTURE_SHIELD_TIME - race.dt())).abs()
+                < 1e-5,
+            "expected the authored {FIXTURE_SHIELD_TIME} less one tick, got {}",
+            race.ship().physics.shield_pickup_timer
+        );
+
+        // And it expires on the file's own duration, one tick longer than the
+        // arithmetic, for the reason `oag_physics::damage::advance_shield_pickup`
+        // gives and `a_fired_turbo_multiplies_thrust_for_its_authored_duration`
+        // spells out at length.
+        let mut ticks: u32 = 1;
+        while race.ship().physics.shield_pickup_timer > 0.0 {
+            race.tick(&buttons.tick(CROSS));
+            ticks += 1;
+            assert!(ticks < 600, "the shield never expired");
+        }
+        let whole = (FIXTURE_SHIELD_TIME / race.dt()).round() as u32;
+        assert_eq!(
+            ticks,
+            whole + 1,
+            "the shield ran {ticks} against {whole} + 1"
+        );
+    }
+
+    /// Absorbing a Shield pays its own `absorb` rather than the Turbo's, which
+    /// is the one thing that could quietly cross over now that two weapons are
+    /// authored with two different pairs.
+    #[test]
+    fn absorbing_a_shield_pays_the_shields_own_absorb() {
+        let mut race =
+            race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_shield_table());
+        let mut buttons = Buttons::new();
+
+        race.tick(&buttons.tick(0));
+        assert_eq!(
+            race.ship_pickup(),
+            Some(oag_formats::weapons::Weapon::Shield)
+        );
+        // Spend the pool first, or the payment lands against a full one and the
+        // recovered clamp hides it.
+        race.world.ships[0].physics.shield = 10.0;
+        race.tick(&buttons.tick(CIRCLE));
+
+        assert_eq!(race.ship_pickup(), None, "absorbing must spend the pickup");
+        assert!(
+            (race.ship().physics.shield - (10.0 + FIXTURE_SHIELD_ABSORB)).abs() < 1e-4,
+            "expected the shield's own absorb of {FIXTURE_SHIELD_ABSORB}, pool is {}",
+            race.ship().physics.shield
+        );
+        assert_eq!(
+            race.ship().physics.shield_pickup_timer,
+            0.0,
+            "absorbing must not also raise the shield"
         );
     }
 

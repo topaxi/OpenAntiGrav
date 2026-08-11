@@ -459,6 +459,40 @@ pub struct ShipState {
     /// if any - is not here, because it is an `oag_formats::weapons::Weapon` and
     /// this crate deliberately depends on nothing but `oag-core`.
     pub turbo_timer: f32,
+    /// Seconds left on a fired Shield pickup.
+    ///
+    /// While it is positive the craft takes no damage:
+    /// [`crate::damage::apply_contact`] returns early the same way it does for a
+    /// craft that is already blowing up.
+    ///
+    /// # This one is ours all the way down, unlike [`Self::turbo_timer`]
+    ///
+    /// The Turbo's *magnitude* is the disc's `<Engine turbo>` and its gate is an
+    /// inference from a flag pair that was actually read. **Nothing comparable
+    /// exists here.** `WeaponStats_ParseShield` (`0x0880ca2c`) reads an `absorb`
+    /// and a `time` into `craft`-relative offsets `+0x8c`/`+0x90`, and
+    /// `docs/formats/weapon-stats.md` records that the `time` **joins to no
+    /// recovered code path** - no reader of those offsets has been found, and
+    /// neither has any branch in `Ship_Damage` (`0x088439ac`) that a shield would
+    /// have to take. So the *duration* is the disc's own number and **what it
+    /// does is this project's reading of what a shield is for**, in the same
+    /// sense that a weapon pad granting anything at all is. See
+    /// `docs/gameplay/pickups.md`, whose recovered-versus-ours table carries it.
+    ///
+    /// **Damage refused rather than reduced** is part of that reading: the
+    /// original may well scale it, and nothing says so either way. Refusing is
+    /// the choice that is unambiguous to test and that cannot half-work.
+    ///
+    /// **A consequence worth stating.** [`crate::damage::Shield::depleted`] is
+    /// the edge Zone's unbuilt end condition is waiting for, and it cannot fire
+    /// while this timer runs. That is intended - a shielded craft is not being
+    /// destroyed - but it means a mode that ends on `depleted` can be held open
+    /// by a pickup.
+    ///
+    /// **Not named `shield_timer`**, because [`Self::shield`] is the energy pool
+    /// and [`crate::damage::Shield`] is the per-tick contact outcome. A third
+    /// bare `shield` here would read as one of those two.
+    pub shield_pickup_timer: f32,
 }
 
 impl Default for ShipState {
@@ -495,6 +529,7 @@ impl Default for ShipState {
             craft_state: crate::damage::CraftState::Racing,
             state_timer: 0.0,
             turbo_timer: 0.0,
+            shield_pickup_timer: 0.0,
         }
     }
 }
