@@ -2764,7 +2764,7 @@ impl Race {
             let (moved, sweep) = self.pad_sweep(slot, position);
             let pad_hit = self.test_speedup_pads(slot, position, moved, &sweep);
             self.test_weapon_pads(slot, position, moved, &sweep);
-            self.spend_opponent_pickup(slot);
+            self.spend_opponent_pickup(slot, &controls);
 
             // The driver just located itself, and the line is index-parallel to
             // the sample table, so this costs a lookup rather than a search.
@@ -2822,7 +2822,7 @@ impl Race {
     ///
     /// So an opponent never shoots at the player. That is a gap and not a
     /// decision - see `docs/gameplay/ai.md`.
-    fn spend_opponent_pickup(&mut self, slot: usize) {
+    fn spend_opponent_pickup(&mut self, slot: usize, controls: &oag_physics::ShipControls) {
         let Some(weapon) = self.world.ships[slot].pickup.weapon else {
             return;
         };
@@ -2833,9 +2833,11 @@ impl Race {
         if weapon == oag_formats::weapons::Weapon::Turbo {
             // Full throttle means the speed target is not asking it to slow for
             // anything it can see, which is the only "is this a straight?" this
-            // engine has that the driver already computed.
-            let on_a_straight =
-                self.world.ships[slot].physics.thrust >= oag_physics::controls::CONTROL_RANGE;
+            // engine has. **The controls the driver chose this tick**, not
+            // `ShipState::thrust`: that is written by `controls::update` inside
+            // the step, which has not run yet, so it still holds last tick's
+            // value here.
+            let on_a_straight = controls.thrust >= 1.0;
             let Some(simple) = weapons.simple(weapon) else {
                 return;
             };
@@ -6682,13 +6684,27 @@ mod tests {
         }
     }
 
-    /// Each craft keeps its own broadphase row. Sharing one would let a pad the
-    /// player has just measured be skipped for everybody else.
+    /// The pad state is per racer, and one craft's row does not move another's.
+    ///
+    /// The structural half - a row per slot - is what stops a pad the player has
+    /// just measured being skipped for everybody else. The behavioural half
+    /// perturbs one row and shows the others are untouched, because on an
+    /// enveloping pad *every* craft reads `Some(0)` whether the rows are shared
+    /// or not, so "they all know they are on it" discriminates nothing.
     #[test]
-    fn every_craft_keeps_its_own_pad_broadphase() {
+    fn one_craft_s_pad_row_does_not_move_another_s() {
         let mut race = grid_on_a_speed_pad();
         race.tick(&InputSnapshot::default());
         assert_eq!(race.pad_distance.len(), MAX_SHIPS);
+
+        let others: Vec<_> = (1..8).map(|slot| race.pad_distance[slot][0]).collect();
+        race.pad_distance[0][0] += 1234.0;
+        for (index, slot) in (1..8).enumerate() {
+            assert_eq!(
+                race.pad_distance[slot][0], others[index],
+                "moving slot 0's row moved slot {slot}'s"
+            );
+        }
         for slot in 0..8 {
             assert_eq!(
                 race.pad_current[slot],

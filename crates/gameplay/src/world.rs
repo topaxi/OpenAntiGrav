@@ -29,6 +29,10 @@ pub struct Ship {
     /// rather than over the whole track. Lap counting is **not** built on this:
     /// where the original counts laps is an open question, and `gate` has no
     /// runtime class at all. See `docs/formats/track.md`.
+    ///
+    /// **Not the same index as [`Self::driver`]**, which is a position in the
+    /// racing line's own point table and is what an opponent actually steers by.
+    /// This one is a per-path control-point segment and is still read by nothing.
     pub segment: u16,
     /// What this craft is carrying, if anything.
     ///

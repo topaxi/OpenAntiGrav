@@ -88,9 +88,8 @@ pub enum Driver {
     /// The player.
     #[default]
     Human,
-    /// An AI-driven craft. Nothing drives one yet; kept because the column
-    /// exists in the authored data and reading it into nothing would be worse
-    /// than naming it.
+    /// An AI-driven craft. Live since 2026-08-11: `oag_game::race` draws from
+    /// this column for every slot but the player's. See `docs/gameplay/ai.md`.
     Ai,
 }
 
