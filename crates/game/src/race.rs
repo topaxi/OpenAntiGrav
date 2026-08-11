@@ -2446,17 +2446,36 @@ pub struct Race {
     /// Render from this pose instead of [`Self::camera`]. See [`CameraOverride`].
     camera_override: Option<CameraOverride>,
     dt: f32,
-    /// Ticks left before a `Reset` contact can respawn again.
+    /// Ticks left before a `Reset` contact can respawn each craft again.
     ///
     /// See [`RESPAWN_COOLDOWN_TICKS`].
-    respawn_cooldown: u32,
-    /// How many respawns have happened back to back, for [`RESPAWN_GIVE_UP`].
-    respawns_in_a_row: u32,
-    /// Set once respawning has given up, so the complaint is printed once.
-    respawn_disabled: bool,
-    /// How many times the ship has been respawned this race, for tests and for
-    /// the load report.
-    respawns: u32,
+    ///
+    /// **Per slot, and all four of these are, which is not tidiness.** One
+    /// shared set of counters would let an opponent stuck in a corner exhaust
+    /// [`RESPAWN_GIVE_UP`] and switch off the *player's* recovery, and a
+    /// cooldown armed by one craft would strand another that fell off in the
+    /// same half second. Indexed by ship slot, like [`Self::exhaust`].
+    respawn_cooldown: [u32; oag_gameplay::MAX_SHIPS],
+    /// How many respawns each craft has had back to back, for
+    /// [`RESPAWN_GIVE_UP`].
+    respawns_in_a_row: [u32; oag_gameplay::MAX_SHIPS],
+    /// Set once respawning has given up on a craft, so the complaint is printed
+    /// once.
+    respawn_disabled: [bool; oag_gameplay::MAX_SHIPS],
+    /// How many times each craft has been respawned this race, for tests and
+    /// for the load report.
+    respawns: [u32; oag_gameplay::MAX_SHIPS],
+    /// How many consecutive ticks each opponent has spent away from the sample
+    /// its driver believes it is on. See [`RESCUE_TICKS`].
+    ///
+    /// Slot 0's entry is never written: the player is recovered by the authored
+    /// reset volumes and by their own hands, and teleporting a craft somebody is
+    /// flying is a much bigger decision than teleporting one nobody can see.
+    lost_ticks: [u32; oag_gameplay::MAX_SHIPS],
+    /// [`RESCUE_HALF_WIDTHS`] in track units, resolved once against this
+    /// circuit's widest half-width rather than folded over the sample table
+    /// every tick.
+    rescue_distance: f32,
     /// Each craft's exhaust animation state, advanced on the simulation tick.
     ///
     /// **One per racer, slot 0 the player's**, because the original runs
@@ -2680,6 +2699,40 @@ pub const RESPAWN_COOLDOWN_TICKS: u32 = 30;
 /// recovered, and a visible complaint beats an invisible freeze.
 pub const RESPAWN_GIVE_UP: u32 = 5;
 
+/// How far an opponent may drift from the sample its own driver believes it is
+/// on before it counts as lost, in multiples of the track's widest half-width.
+///
+/// # Invented, and the reason it is not the reset volumes
+///
+/// A `Reset` contact is authored geometry and it is what recovers a craft that
+/// falls through the floor. It does **not** recover a craft that leaves the
+/// circuit sideways into open space: measured on the disc's twelve circuits, a
+/// lone opponent that came off receded from the track at racing speed for the
+/// rest of the race - eight thousand units in fifty seconds - and touched no
+/// reset volume at any point, because there is none out there to touch. Seven
+/// of the twelve never completed a lap for that reason alone.
+///
+/// So this is a second, invented trigger, and it is deliberately keyed on the
+/// *driver's* index rather than on a global search of the sample table: it
+/// costs one distance instead of four thousand per craft per tick, and it
+/// measures the thing that actually went wrong, which is that the craft and the
+/// driver's idea of where it is have come apart. See
+/// [ADR-0006](../../docs/architecture/adr/0006-no-copyrighted-content.md) - it
+/// is ours, not the original's, and nothing in the RE tree describes what the
+/// original does here.
+///
+/// Eight half-widths is wide enough that a leap, a barrel roll off a crest or a
+/// shove into a wall does not trip it, and the failure it catches overshoots it
+/// by two orders of magnitude within seconds.
+pub const RESCUE_HALF_WIDTHS: f32 = 8.0;
+
+/// How long an opponent has to stay that far away before it is put back.
+///
+/// A second and a half at 60 Hz. **The dwell matters more than the distance**:
+/// airborne over a gap is briefly indistinguishable from gone, and the two are
+/// told apart by whether the craft comes back.
+pub const RESCUE_TICKS: u32 = 90;
+
 impl Race {
     /// Starts a race: one ship, on the racing line, at the start of the spline.
     ///
@@ -2780,6 +2833,7 @@ impl Race {
         // shape of a measurement.
         let mut ai_pilots = [oag_ai::Pilot::BALANCED; oag_gameplay::MAX_SHIPS];
         let line = racing_line(&spline);
+        let rescue_distance = spline.max_half_width() * RESCUE_HALF_WIDTHS;
         let mut pilot_names: [String; oag_gameplay::MAX_SHIPS] = Default::default();
         // The built-ins, plus whatever the player has authored. A directory
         // that cannot be read is not a reason to refuse to race: the built-ins
@@ -2891,10 +2945,12 @@ impl Race {
             // ADR-0007: 60 Hz, from the clock rather than from a literal, so there
             // is one place the rate is decided.
             dt: TickClock::new(TickRate::DEFAULT).rate().dt(),
-            respawn_cooldown: 0,
-            respawns_in_a_row: 0,
-            respawn_disabled: false,
-            respawns: 0,
+            respawn_cooldown: [0; oag_gameplay::MAX_SHIPS],
+            respawns_in_a_row: [0; oag_gameplay::MAX_SHIPS],
+            respawn_disabled: [false; oag_gameplay::MAX_SHIPS],
+            respawns: [0; oag_gameplay::MAX_SHIPS],
+            lost_ticks: [0; oag_gameplay::MAX_SHIPS],
+            rescue_distance,
             // Cold, then snapped on the first tick. A race starts from a standing
             // start with no thrust, so there is nothing to snap *to* here.
             //
@@ -3051,10 +3107,20 @@ impl Race {
         self.view.draws_own_ship()
     }
 
-    /// How many times a `Reset` contact has respawned the ship this race.
+    /// How many times a `Reset` contact has respawned the player this race.
     #[must_use]
     pub fn respawns(&self) -> u32 {
-        self.respawns
+        self.respawns[0]
+    }
+
+    /// The same, for any craft on the grid.
+    ///
+    /// Out of bounds reads zero rather than panicking: a caller sweeping
+    /// [`oag_gameplay::MAX_SHIPS`] slots on a six-craft grid is asking a fair
+    /// question and the answer is "none".
+    #[must_use]
+    pub fn respawns_of(&self, slot: usize) -> u32 {
+        self.respawns.get(slot).copied().unwrap_or(0)
     }
 
     /// The fixed timestep, from [`TickRate::DEFAULT`].
@@ -3083,6 +3149,19 @@ impl Race {
     #[must_use]
     pub fn spline(&self) -> &Spline {
         &self.spline
+    }
+
+    /// The line the opponents' drivers follow, index-parallel to
+    /// [`Self::spline`].
+    ///
+    /// Read-only, and it exists so a test can ask the question that matters
+    /// when an opponent misbehaves: *is the craft where its driver believes it
+    /// is?* Comparing a ship's position against `point(driver.index)` separates
+    /// a driver that has lost its place on the line from one that is simply
+    /// driving badly, and those two have nothing in common as bugs.
+    #[must_use]
+    pub fn racing_line(&self) -> &oag_ai::Line {
+        &self.racing_line
     }
 
     /// Drives and steps every craft that is not the player's.
@@ -3185,6 +3264,29 @@ impl Race {
                 &self.collision,
                 self.dt,
             );
+
+            // **The same recovery the player gets**, and it is not a nicety.
+            // Without it an opponent that leaves the geometry keeps going: the
+            // solo benchmark measured craft receding from the track at racing
+            // speed, 1,500 units per ten seconds, for the rest of the race.
+            // Seven of the disc's twelve circuits never saw a completed lap for
+            // this reason, and it read as a driving fault rather than as a
+            // missing mechanism.
+            //
+            // Same `env` and same pre-step position the force law just ran with,
+            // for the reason `reset_zone_touched` gives, and `index` is the
+            // sample the craft was on before the step - the last place it is
+            // known to have been on the track.
+            self.respawn_cooldown[slot] = self.respawn_cooldown[slot].saturating_sub(1);
+            // Unconditionally, and before the `||` could skip it: the dwell
+            // counter has to see every tick or a craft banks time it never
+            // spent away.
+            let lost = self.lost_off_the_circuit(slot);
+            if lost || self.reset_zone_touched(slot, &env, position) {
+                self.respawn(slot, Some(index));
+            } else if self.respawn_cooldown[slot] == 0 {
+                self.respawns_in_a_row[slot] = 0;
+            }
         }
     }
 
@@ -3676,15 +3778,15 @@ impl Race {
             self.ignite_blast_flash(impact.point, impact.struck.map(usize::from));
         }
 
-        self.respawn_cooldown = self.respawn_cooldown.saturating_sub(1);
-        if self.reset_zone_touched(&env, before) {
+        self.respawn_cooldown[0] = self.respawn_cooldown[0].saturating_sub(1);
+        if self.reset_zone_touched(0, &env, before) {
             // `index` is where the ship was *before* this tick moved it, which is
             // as close to "last known good" as this loop can cheaply get.
-            self.respawn(index);
-        } else if self.respawn_cooldown == 0 {
+            self.respawn(0, index);
+        } else if self.respawn_cooldown[0] == 0 {
             // Clear of the trigger with the cooldown expired: whatever run of
             // back-to-back respawns was happening is over.
-            self.respawns_in_a_row = 0;
+            self.respawns_in_a_row[0] = 0;
         }
 
         self.step_opponents();
@@ -4130,8 +4232,17 @@ impl Race {
                 }
             }
         }
-        hasher.write_u32(self.respawn_cooldown);
-        hasher.write_u32(self.respawns_in_a_row);
+        // Every slot, because every craft recovers now. Fixed length, so the
+        // stream's shape does not depend on how many craft are on the grid.
+        for cooldown in self.respawn_cooldown {
+            hasher.write_u32(cooldown);
+        }
+        for run in self.respawns_in_a_row {
+            hasher.write_u32(run);
+        }
+        for dwell in self.lost_ticks {
+            hasher.write_u32(dwell);
+        }
 
         hasher.finish()
     }
@@ -4616,11 +4727,45 @@ impl Race {
     ///
     /// Suppressed while the cooldown runs and once respawning has given up, so
     /// the two guards live in one place rather than at the call site.
-    fn reset_zone_touched(&self, env: &Environment, before: Vec3) -> bool {
-        if self.respawn_disabled || self.respawn_cooldown > 0 {
+    /// Whether this opponent has been away from its own driver's idea of where
+    /// it is for long enough to count as lost.
+    ///
+    /// Advances the dwell counter as a side effect, so it must be called once
+    /// per craft per tick and not conditionally - a caller that skipped it
+    /// while a cooldown ran would let a craft bank dwell it never spent.
+    ///
+    /// See [`RESCUE_HALF_WIDTHS`] for why this exists next to the reset volumes
+    /// rather than instead of them.
+    fn lost_off_the_circuit(&mut self, slot: usize) -> bool {
+        let ship = &self.world.ships[slot];
+        let index = ship.driver.index as usize;
+        let away = ship
+            .physics
+            .body
+            .position
+            .distance(self.racing_line.point(index))
+            > self.rescue_distance;
+        self.lost_ticks[slot] = if away {
+            self.lost_ticks[slot].saturating_add(1)
+        } else {
+            0
+        };
+        // An empty line puts every point at the origin, so a track with no
+        // spline would read every craft as lost and respawn it onto nothing.
+        //
+        // The same two guards `reset_zone_touched` applies, applied *after* the
+        // counter so the dwell is still measured while they hold.
+        !self.racing_line.is_empty()
+            && !self.respawn_disabled[slot]
+            && self.respawn_cooldown[slot] == 0
+            && self.lost_ticks[slot] >= RESCUE_TICKS
+    }
+
+    fn reset_zone_touched(&self, slot: usize, env: &Environment, before: Vec3) -> bool {
+        if self.respawn_disabled[slot] || self.respawn_cooldown[slot] > 0 {
             return false;
         }
-        let ship = &self.world.ships[0];
+        let ship = &self.world.ships[slot];
         // The same `env` the force law just ran with, so the self-collider
         // exclusion cannot differ between the two.
         oag_physics::reset::contact(&ship.physics, &ship.handling, env, &self.collision, before)
@@ -4649,7 +4794,7 @@ impl Race {
     /// [`Ship::place_at`] resets the whole physics state and keeps only mass and
     /// inertia. Whether the original preserves any speed through a respawn is also
     /// unrecorded.
-    fn respawn(&mut self, sample_index: Option<usize>) {
+    fn respawn(&mut self, slot: usize, sample_index: Option<usize>) {
         let sample = sample_index
             .and_then(|index| self.spline.sample(index))
             .or_else(|| self.spline.start());
@@ -4657,30 +4802,43 @@ impl Race {
             return;
         };
 
-        let ship = &mut self.world.ships[0];
+        let ship = &mut self.world.ships[slot];
         let height = spawn_height(&ship.handling);
-        ship.place_at(Pose::from_sample(&sample, sample.racing_line, height));
+        let pose = Pose::from_sample(&sample, sample.racing_line, height);
+        ship.place_at(pose);
 
-        self.respawns += 1;
-        self.respawns_in_a_row += 1;
-        self.respawn_cooldown = RESPAWN_COOLDOWN_TICKS;
+        // **The driver has to be told where it has been put.** `Driver::drive`
+        // locates a craft in a 48-sample window around its last index, so a
+        // teleport of more than that leaves the driver steering at the piece of
+        // track the craft fell off - the same failure the grid had when
+        // `Driver::index` started at zero, except mid-race and invisible,
+        // because a craft that recovered and then drove into the scenery reads
+        // as bad driving rather than as a lost index.
+        ship.driver.index = self
+            .racing_line
+            .nearest(pose.position, 0, self.racing_line.len()) as u32;
+
+        self.respawns[slot] += 1;
+        self.respawns_in_a_row[slot] += 1;
+        self.respawn_cooldown[slot] = RESPAWN_COOLDOWN_TICKS;
+        // The craft is back on its line by definition, so the dwell starts
+        // again rather than carrying over and rescuing it a second time on the
+        // tick the cooldown expires.
+        self.lost_ticks[slot] = 0;
 
         // Otherwise the ribbon spans the teleport: ten samples of history from
         // wherever the craft fell off, stretched across the track to where it was
-        // put back. The camera is snapped for the same reason.
-        //
-        // Slot 0's, because this whole function is the player's - nothing respawns
-        // an opponent yet. When something does, it has to clear that craft's
-        // ribbon too, or the teleport draws as a streak across the track.
-        self.exhaust[0].clear_trail();
+        // put back. The camera is snapped for the same reason, and only for the
+        // player, who is the only craft one is flown from.
+        self.exhaust[slot].clear_trail();
 
-        if self.respawns_in_a_row >= RESPAWN_GIVE_UP {
-            self.respawn_disabled = true;
+        if self.respawns_in_a_row[slot] >= RESPAWN_GIVE_UP {
+            self.respawn_disabled[slot] = true;
             eprintln!(
-                "reset: {} respawns in a row without getting clear, giving up. \
-                 The recovery pose is probably inside a Reset volume; see \
-                 Race::respawn.",
-                self.respawns_in_a_row
+                "reset: craft {slot} respawned {} times in a row without getting \
+                 clear, giving up on it. The recovery pose is probably inside a \
+                 Reset volume; see Race::respawn.",
+                self.respawns_in_a_row[slot]
             );
         }
     }
@@ -5044,7 +5202,9 @@ impl Race {
     /// degrades only the camera's half.
     #[must_use]
     pub fn visibility_sections(&self) -> (u8, u8) {
-        if self.respawn_cooldown > 0 {
+        // The player's, because this places the player's camera. An opponent
+        // recovering across the circuit must not blank the shot.
+        if self.respawn_cooldown[0] > 0 {
             return (UNPLACED, UNPLACED);
         }
         let ship = self.ship();
@@ -8234,6 +8394,92 @@ mod tests {
         }
     }
 
+    /// An opponent that leaves the circuit is put back on it.
+    ///
+    /// **The failure this pins is not hypothetical.** Before it, an opponent
+    /// that came off receded from the track at racing speed for the rest of the
+    /// race, touching no `Reset` volume because there is none out in open
+    /// space, and seven of the disc's twelve circuits never saw a completed lap
+    /// as a result. See [`RESCUE_HALF_WIDTHS`].
+    #[test]
+    fn an_opponent_that_flies_off_the_circuit_is_put_back_on_it() {
+        let mut race = race_with_a_grid();
+        race.tick(&InputSnapshot::default());
+        assert_eq!(race.respawns_of(1), 0);
+
+        // Straight up and far away, which no reset volume in this fixture
+        // covers - the point being that geometry cannot catch this.
+        let away = race.world.ships[1].physics.body.position + Vec3::Y * 100_000.0;
+        race.world.ships[1].physics.body.position = away;
+
+        // Not on the first tick: a craft is only lost once it stays lost, or a
+        // leap over a gap would teleport it mid-flight.
+        race.tick(&InputSnapshot::default());
+        assert_eq!(
+            race.respawns_of(1),
+            0,
+            "one tick away is a jump, not a craft that is gone"
+        );
+
+        // Held out there until it is recovered, and then let go: putting it back
+        // out on the tick after the rescue would measure the shove, not the
+        // recovery.
+        for _ in 0..RESCUE_TICKS {
+            if race.respawns_of(1) > 0 {
+                break;
+            }
+            race.world.ships[1].physics.body.position = away;
+            race.tick(&InputSnapshot::default());
+        }
+        assert_eq!(race.respawns_of(1), 1, "the craft was never recovered");
+
+        // Back on the line, and - the part that is easy to get wrong - its
+        // driver knows where it was put. A driver left pointing at the old index
+        // steers at the piece of track the craft fell off.
+        let ship = &race.world.ships[1];
+        let residual = ship
+            .physics
+            .body
+            .position
+            .distance(race.racing_line().point(ship.driver.index as usize));
+        assert!(
+            residual < race.rescue_distance,
+            "recovered {residual} from where its driver thinks it is"
+        );
+
+        // And nobody else was touched.
+        for slot in [0usize, 2, 3] {
+            assert_eq!(race.respawns_of(slot), 0, "craft {slot} was recovered too");
+        }
+    }
+
+    /// Giving up on one craft must not give up on the rest of them.
+    ///
+    /// The counters were a single set until opponents could respawn, so one
+    /// opponent wedged in a corner would have exhausted [`RESPAWN_GIVE_UP`] and
+    /// switched off the *player's* recovery for the remainder of the race.
+    #[test]
+    fn giving_up_on_one_craft_leaves_the_others_recoverable() {
+        let mut race = race_with_a_grid();
+        race.respawn_disabled[1] = true;
+        race.respawns_in_a_row[1] = RESPAWN_GIVE_UP;
+
+        let away = race.world.ships[2].physics.body.position + Vec3::Y * 100_000.0;
+        for _ in 0..=RESCUE_TICKS {
+            race.world.ships[1].physics.body.position += Vec3::Y * 100_000.0;
+            race.world.ships[2].physics.body.position = away;
+            race.tick(&InputSnapshot::default());
+        }
+
+        assert_eq!(race.respawns_of(1), 0, "a craft given up on was recovered");
+        assert_eq!(
+            race.respawns_of(2),
+            1,
+            "giving up on craft 1 switched off craft 2's recovery"
+        );
+        assert!(!race.respawn_disabled[0], "the player's was switched off");
+    }
+
     /// A wreck must not go on racing. A single race runs with `Damage` on, so an
     /// opponent can empty its pool, and `oag_physics::step` integrates whatever
     /// it is handed - which before this was a destroyed craft at full throttle.
@@ -9872,8 +10118,16 @@ mod tests {
     #[test]
     fn a_respawn_in_flight_makes_everything_visible() {
         let mut race = Race::start(setup(Handling::default()));
-        race.respawn_cooldown = 1;
+        race.respawn_cooldown[0] = 1;
         assert_eq!(race.visibility_sections(), (UNPLACED, UNPLACED));
+
+        // And an opponent recovering across the circuit does not blank the
+        // shot: the camera is the player's, and only the player's respawn can
+        // make it untrustworthy.
+        race.respawn_cooldown[0] = 0;
+        race.respawn_cooldown[3] = 1;
+        assert_ne!(race.visibility_sections(), (UNPLACED, UNPLACED));
+        race.respawn_cooldown[0] = 1;
 
         // And the resulting set really is everything, not merely two unknown
         // ids - this is the property the whole conservative path exists for.

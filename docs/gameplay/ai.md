@@ -779,12 +779,61 @@ where the cost is paid once - and
 `race_ground_truth::every_craft_starts_on_its_line_on_every_circuit` is the test
 that was missing.
 
-**Seven circuits still do not complete a lap**, and they are no longer stuck:
-they cover seven to eleven thousand units a minute at racing speed. On those the
-craft sits thousands of units from the sample its driver thinks it is on, which
-points at the racing line or the lap ring rather than at the controller.
-`a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round` pins the five so
-the number cannot quietly fall again.
+### Nothing recovered an opponent that left the circuit
+
+**Found 2026-08-12, chasing the seven circuits the fix above did not reach.** On
+those the craft was covering seven to eleven thousand units a minute at racing
+speed while sitting thousands of units from the sample its driver believed it
+was on. The obvious reading - that the racing line was built wrong, since
+`Spline::from_track` concatenates every path in file order - is **wrong**, and a
+probe killed it in one run: every circuit on the disc carries two or three
+paths, the working ones included, and a healthy craft crosses path boundaries
+with the index following it and a residual of three to nine units throughout.
+
+What the probe actually showed is a craft leaving the geometry and *continuing
+in a straight line for the rest of the race* - eight thousand units in fifty
+seconds, off-track distance and residual growing together. Two mechanisms were
+missing, not one:
+
+1. **`Race::respawn` was the player's alone.** The code said so in a comment.
+   Nothing on the grid but slot 0 could be put back.
+2. **A `Reset` volume cannot catch a craft receding into open space.** With
+   per-slot respawn wired in, the twelve circuits produced **zero** respawns
+   between them: there is no authored geometry out there to touch.
+
+So there is a second, **invented** trigger next to the reset volumes -
+`RESCUE_HALF_WIDTHS`, eight times the track's widest half-width, held for
+`RESCUE_TICKS` (a second and a half) - keyed on the distance from the craft to
+the sample *its own driver* believes it is on. That measures the thing that went
+wrong rather than a proxy for it, and it costs one distance per craft per tick
+instead of a search of the whole sample table. It is ours under
+[ADR-0006](../architecture/adr/0006-no-copyrighted-content.md); nothing in the
+RE tree describes what the original does here.
+
+| | before | after |
+| --- | --- | --- |
+| circuits a lone craft completes laps on | five | **nine** |
+| circuits with a **clean** lap (no recovery) | five | five |
+
+**The clean-lap number deliberately did not move**, and that gap is the finding.
+Four circuits now complete every lap and never manage one without being
+recovered. A lap the craft had to be rescued during is not a lap it drove, so
+the benchmark counts them separately and the respawn count is the
+driving-quality metric: on an empty circuit at the top difficulty a competent
+driver should never need recovering at all. The rescue is a safety net for a
+race with seven other craft shoving, not a fix for a driver that flies into the
+scenery.
+
+Three circuits - 05, 14 and 07 - still never register a second lap, and 07 does
+it *without being rescued once*: it is on the track, going round, and not being
+counted. All three are the circuits whose spline carries three paths rather than
+two, which points at the lap ring. That is the next thing to chase, and it is a
+different bug from the four above it.
+
+`a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round` carries both
+ratchets so neither number can quietly fall, and
+`an_opponent_that_flies_off_the_circuit_is_put_back_on_it` pins the rescue
+without needing the disc.
 
 ### A solo lap is the benchmark
 
