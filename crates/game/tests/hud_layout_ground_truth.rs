@@ -403,6 +403,29 @@ fn every_weapon_has_an_icon_widget_named_after_it() {
             "{entry}: all {} weapon icons resolve by name",
             Weapon::ALL.len()
         );
+
+        // **The two premises the backdrop substitution rests on**, asserted
+        // against the shipped file rather than against the hand-written sample:
+        // the disc authors the backdrop and the icon in one colour, which is
+        // what makes the pair unreadable as authored, and it defines the
+        // background colour that stands in for it. If a layout ever stopped
+        // defining `HudBGColour`, the substitution would silently not happen
+        // and the icon would go back to being invisible - see
+        // `oag_game::hud::PICKUP_BACKDROP_COLOUR`.
+        let backdrop = layout.sprite("PickupBackground").expect("PickupBackground");
+        let turbo = layout
+            .sprite(&hud::pickup_icon_name(Weapon::Turbo))
+            .expect("TurboIcon");
+        assert_eq!(
+            backdrop.color, turbo.color,
+            "{entry}: the backdrop and the icon are authored in different \
+             colours, so the substitution may no longer be needed"
+        );
+        assert!(
+            layout.constants.contains_key("HudBGColour"),
+            "{entry} defines no HudBGColour, so the pickup backdrop would draw \
+             in the authored opaque white and hide the icon"
+        );
     }
 
     // The time trial's single icon, and it must stay single: a second one

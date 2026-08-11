@@ -777,10 +777,45 @@ const LIVE_SPRITES: &[&str] = &[
 
 /// The backdrop the held pickup's icon sits on.
 ///
-/// Authored `Centred="true"` at `x=240` - the middle of the PSP's 480 - in
-/// `Arcade_HUD.xml` and `Elimination_HUD.xml`, and in neither of the two
-/// layouts this engine's weapons-off modes draw.
+/// Authored `Centred="true"` at `x=240` - the middle of the PSP's 480.
 const PICKUP_BACKGROUND: &str = "PickupBackground";
+
+/// The layout's own background colour, substituted for the pickup backdrop's
+/// authored one.
+///
+/// # Why a substitution is needed at all
+///
+/// **Drawing these two widgets exactly as the disc authors them produces an
+/// opaque white hexagon with the icon invisible inside it**, and that is not a
+/// bug in this reader - it is what the shipped data says, measured:
+///
+/// - `PickupBackground` samples a **filled hexagon whose alpha is 255** across
+///   2,424 of its 2,492 opaque pixels, and `TurboIcon` samples a glyph in the
+///   same white with antialiased edges. Both are pure white masks; all the
+///   colour is meant to come from the tint.
+/// - Both are authored `Color="FEConst->HudColour1"`, and `HudColour1` is
+///   `0xFFFFFFFF` - **opaque white**.
+///
+/// So an opaque white hexagon is drawn and then an opaque white glyph is drawn
+/// on top of it, and the second is invisible against the first. The original
+/// plainly does not look like that, so **it must set at least one of the two
+/// colours at runtime** - which is unrecovered. `0x0883b3b8` is the known place
+/// the runtime reaches into these widgets (it forces the icon id) and is where
+/// to look.
+///
+/// # What is substituted, and why this one
+///
+/// `HudBGColour`, the only background colour the layout defines - `0x40000000`,
+/// a quarter-alpha black - applied to the backdrop while the icon keeps its
+/// authored white. **Every value still comes off the player's own disc**;
+/// what is ours is the choice of which constant, and it is flagged here rather
+/// than hidden. The precedent is the front end's title colour, substituted the
+/// same way and for the same reason while the widget behind it is unbuilt - see
+/// `docs/ui/menus-original.md`.
+///
+/// Recorded in [pickups](../../../docs/gameplay/pickups.md). A reference frame
+/// of the original's own pickup box would settle it and has not been taken.
+const PICKUP_BACKDROP_COLOUR: &str = "HudBGColour";
 
 /// The layout's sprite name for one weapon's icon.
 ///
@@ -802,16 +837,31 @@ pub fn pickup_icon_name(weapon: oag_formats::weapons::Weapon) -> String {
 
 /// The sprites a held pickup adds to the frame, in paint order.
 ///
-/// Empty when nothing is held, which is every tick of a race with weapons off -
-/// and the layouts those modes draw carry neither widget anyway, so the empty
-/// case is reached two independent ways.
-fn pickup_sprites(layout: &Layout, weapon: oag_formats::weapons::Weapon) -> Vec<&Sprite> {
+/// Empty when nothing is held. The backdrop is retinted; see
+/// [`PICKUP_BACKDROP_COLOUR`] for the measurement that makes that necessary and
+/// for what is substituted.
+fn pickup_sprites(layout: &Layout, weapon: oag_formats::weapons::Weapon) -> Vec<Sprite> {
     let icon = pickup_icon_name(weapon);
-    // Background first: the icon sits on it, and paint order here is the
-    // layout's own back-to-front convention.
+    // Backdrop first: the icon sits on it, and paint order here is the layout's
+    // own back-to-front convention.
     [PICKUP_BACKGROUND, icon.as_str()]
         .into_iter()
         .filter_map(|name| layout.sprite(name))
+        .map(|sprite| {
+            if sprite.name != PICKUP_BACKGROUND {
+                return sprite.clone();
+            }
+            let mut backdrop = sprite.clone();
+            // Only when the layout defines it. A source that does not gets the
+            // authored colour and the unreadable picture, which is the honest
+            // failure: this build does not know what colour the backdrop is,
+            // and inventing one for a layout that never offered it would be a
+            // second guess on top of the first.
+            if let Some(raw) = layout.constants.get(PICKUP_BACKDROP_COLOUR) {
+                backdrop.color = colour(&layout.constants, Some(raw));
+            }
+            backdrop
+        })
         .collect()
 }
 
@@ -924,7 +974,7 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
     // the craft is holding - see `pickup_sprites`.
     if let Some(weapon) = readout.pickup {
         for sprite in pickup_sprites(cx.layout, weapon) {
-            frame.sprites.push(sprite_draw(sprite, cx.atlas_origin));
+            frame.sprites.push(sprite_draw(&sprite, cx.atlas_origin));
         }
     }
 
@@ -1326,25 +1376,68 @@ mod tests {
         let empty = pickup_sprites(&layout, Weapon::Turbo);
         assert_eq!(empty.len(), 2, "the fixture must author both widgets");
 
-        let names: Vec<&str> = pickup_sprites(&layout, Weapon::Turbo)
+        let names: Vec<String> = pickup_sprites(&layout, Weapon::Turbo)
             .iter()
-            .map(|s| s.name.as_str())
+            .map(|s| s.name.clone())
             .collect();
         assert_eq!(names, ["PickupBackground", "TurboIcon"]);
 
-        let rocket: Vec<&str> = pickup_sprites(&layout, Weapon::Rocket)
+        let rocket: Vec<String> = pickup_sprites(&layout, Weapon::Rocket)
             .iter()
-            .map(|s| s.name.as_str())
+            .map(|s| s.name.clone())
             .collect();
         assert_eq!(rocket, ["PickupBackground", "RocketIcon"]);
 
         // A weapon whose icon this layout does not author draws the backdrop and
-        // no icon, rather than nothing or a panic: `TimeTrial_HUD.xml` carries
-        // neither widget, and a layout carrying one and not the other is the
-        // case that would otherwise crash a race.
+        // no icon, rather than nothing or a panic: a layout carrying one and not
+        // the other is the case that would otherwise crash a race.
         let absent = pickup_sprites(&layout, Weapon::Quake);
         assert_eq!(absent.len(), 1);
         assert_eq!(absent[0].name, "PickupBackground");
+    }
+
+    /// **The backdrop is retinted and the icon is not**, which is the whole
+    /// reason a held pickup is legible - see [`PICKUP_BACKDROP_COLOUR`]. Both
+    /// widgets are authored `HudColour1`, which is opaque white, and the art
+    /// behind them is a solid white hexagon and a white glyph, so drawing them
+    /// as authored is an opaque hexagon with nothing visible on it.
+    #[test]
+    fn the_pickup_backdrop_is_retinted_and_the_icon_keeps_its_authored_colour() {
+        use oag_formats::weapons::Weapon;
+        let layout = Layout::from_xml(SAMPLE);
+
+        // The premise, asserted rather than assumed: if a future layout stopped
+        // authoring both in the same colour, the substitution would need
+        // revisiting and this is what would say so.
+        let authored = layout.sprite("PickupBackground").expect("PickupBackground");
+        let icon = layout.sprite("TurboIcon").expect("TurboIcon");
+        assert_eq!(
+            authored.color, icon.color,
+            "the disc authors both in one colour; that is what makes the pair unreadable"
+        );
+        assert_eq!(
+            authored.color,
+            [1.0, 1.0, 1.0, 1.0],
+            "and that colour is white"
+        );
+
+        let drawn = pickup_sprites(&layout, Weapon::Turbo);
+        assert_ne!(
+            drawn[0].color, authored.color,
+            "the backdrop must not keep the authored white"
+        );
+        // `HudBGColour` is `0x40000000` - a quarter-alpha black - so the
+        // substituted backdrop is dark and mostly transparent.
+        assert_eq!(drawn[0].color[3], 0x40 as f32 / 255.0);
+        assert_eq!(drawn[0].color[0..3], [0.0, 0.0, 0.0]);
+        assert_eq!(
+            drawn[1].color, icon.color,
+            "the icon keeps what the disc authored"
+        );
+        // Everything else about the backdrop is untouched - this is a tint, not
+        // a second widget.
+        assert_eq!(drawn[0].rect, authored.rect);
+        assert_eq!(drawn[0].uv, authored.uv);
     }
 
     #[test]

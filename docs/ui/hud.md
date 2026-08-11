@@ -338,6 +338,14 @@ backdrop and `TurboIcon` alone** - which is the disc's own event text
 (*"a free turbo pickup once per lap"*) recorded a second time. See
 [pickups](../gameplay/pickups.md).
 
+**The backdrop's colour is substituted, and it has to be.** `PickupBackground`
+and every `<Type>Icon` are authored `HudColour1`, which is `0xFFFFFFFF`, and
+their art is a solid white hexagon and a white glyph - so drawn as authored the
+icon is invisible inside an opaque white hexagon. The original must set a colour
+at runtime and that is unrecovered; this build draws the backdrop in the
+layout's own `HudBGColour` instead. The measurement and what is and is not
+claimed are on [pickups](../gameplay/pickups.md).
+
 **A bar and its background share a rectangle exactly**, differing only in colour -
 pinned by `each_bar_exactly_overlays_its_own_background`. So the fill can only be
 a horizontal crop of the same art rather than separate geometry, and `*Mark` is a

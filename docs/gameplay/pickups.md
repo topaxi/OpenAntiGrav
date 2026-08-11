@@ -117,7 +117,42 @@ weapon's own `type` string: `TurboIcon`, `ShieldIcon`, `RocketIcon`,
 thirteen by `every_weapon_has_an_icon_widget_named_after_it`.
 
 The numeric ids are still real - `0x0883b3b8` forces one, and it is `6` - they
-are simply not needed to draw the right icon. That constant is, separately, a
+are simply not needed to draw the right icon.
+
+### Drawing both widgets as authored gives an opaque white hexagon
+
+Found by looking at it, after the first version of this shipped. **It is not a
+bug in the reader; it is what the shipped data says**, and both halves are
+measured:
+
+- `PickupBackground` samples a **filled hexagon whose alpha is 255** on 2,424 of
+  its 2,492 opaque pixels; `TurboIcon` samples a glyph in the same white with
+  antialiased edges. Both are pure white masks, so all the colour is meant to
+  come from the tint.
+- Both are authored `Color="FEConst->HudColour1"`, and that constant is
+  `0xFFFFFFFF` - **opaque white**.
+
+So an opaque white hexagon is drawn and an opaque white glyph is drawn on top of
+it, and the second is invisible against the first. The original does not look
+like that, so **it must set at least one of the two colours at runtime**, and
+that is unrecovered. `0x0883b3b8` is the known place the runtime reaches into
+these widgets - it forces the icon id - and is where to look.
+
+**What this build does instead is a substitution, not a recovery.** The backdrop
+is drawn in `HudBGColour`, the only background colour the layout defines
+(`0x40000000`, a quarter-alpha black), and the icon keeps its authored white.
+Every value still comes off the player's own disc; what is ours is the choice of
+which constant. The precedent is the front end's title colour, substituted the
+same way while the widget behind it is unbuilt.
+
+Two ground-truth assertions keep it honest, both against the shipped file: that
+the backdrop and the icon really are authored in one colour - if that ever
+stopped being true the substitution would no longer be needed - and that the
+layout really defines `HudBGColour`, without which the substitution would
+silently not happen and the icon would go back to being invisible.
+
+**A reference frame of the original's own pickup box would settle it** and has
+not been taken. It is the cheapest open thing on this page. That constant is, separately, a
 reason to read the `1.2` pickup as the Turbo: `6` lands on `Turbo` if the ids
 index the class-name pool from one.
 
