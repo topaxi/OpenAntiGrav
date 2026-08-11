@@ -275,7 +275,11 @@ Two consequences worth having in one place:
   subtraction, so it also suppresses `Shield::depleted` and
   `crossed_critical`. A shielded craft cannot be destroyed and does not cry
   energy-critical. That means a mode ending on `depleted` - Zone's unbuilt end
-  condition - can be held open by a pickup.
+  condition - could be held open by a pickup. **Not reachable today**, and worth
+  saying so rather than implying a live hazard: Zone races with weapons off, so
+  its pads are unarmed and it is excluded from the free Turbo, and a craft in
+  Zone can never be holding a Shield. It is a constraint on whoever builds that
+  end condition, not a bug in this one.
 - **It does not refuse momentum.** A rocket's `blastforce` still shoves a
   shielded craft off the racing line. Extending the shield to stop that would
   be a second invented rule stacked on the first.
@@ -307,9 +311,10 @@ flight update has been found anywhere in the executable:
 - the launch point (the hull's own forward extent, so a shot starts outside the
   craft that fired it) and the flight speed being the class's plus `launchSpeed`
   rather than one or the other, and the craft's own velocity *not* inherited;
-- a sphere of half the largest `<Misc>` dimension for a hull, which is smaller
-  than the box on two axes - a rocket can miss a craft it would have clipped
-  rather than hit one it would have missed;
+- a sphere of half the largest `<Misc>` dimension for a hull, which matches the
+  box nose-to-tail and is *wider* than it on the other two axes - so a near miss
+  can register as a hit, which favours the shooter and is the generous reading
+  rather than the conservative one;
 - **full damage everywhere inside `blastradius`, with no falloff**, and the
   firing craft not excluded from its own blast;
 - `blastforce` applied as an impulse rather than a force held over a duration;
