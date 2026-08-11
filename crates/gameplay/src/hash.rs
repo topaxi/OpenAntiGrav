@@ -115,6 +115,15 @@ fn write_ship(hasher: &mut StateHasher, ship: &Ship) {
     // either are about to steer differently. See `oag_ai::Personality`.
     hasher.write_u32(driver.seed);
     hasher.write_u32(driver.phase);
+    // **And the grudge.** `place` is what an overtake is detected against and
+    // `provocation` is how long the last one still stings for; a driver that
+    // has just been passed covers its line harder, so two runs agreeing on
+    // every position and disagreeing on either are about to drive differently.
+    // `write_u32` rather than a `u16` write because `StateHasher` has no
+    // sixteen-bit one, and inventing a narrower write to save two bytes in a
+    // hash is not worth a second way to feed it.
+    hasher.write_u32(u32::from(driver.place));
+    hasher.write_u32(u32::from(driver.provocation));
     write_standing(hasher, standing);
     hasher.write_u8(u8::from(*active));
 }

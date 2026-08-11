@@ -22,11 +22,11 @@
 
 use oag_core::Rng;
 use oag_core::math::Vec3;
-use oag_physics::{ShipControls, ShipState};
+use oag_physics::{ShipControls, ShipState, Sideshift};
 
 use crate::field::Field;
 use crate::line::{Aim, Line};
-use crate::noise::wobble;
+use crate::noise::{roll, wobble};
 use crate::pilot::Pilot;
 
 /// The controller's constants.
@@ -219,6 +219,10 @@ pub struct Personality {
     pub defence: f32,
     /// How early it lifts off for a craft close ahead.
     pub caution: f32,
+    /// How readily it throws the craft sideways at a rival level with it.
+    pub ram: f32,
+    /// How many ticks of provocation being overtaken is worth.
+    pub provocation_ticks: f32,
 }
 
 impl Personality {
@@ -241,6 +245,8 @@ impl Personality {
         courtesy: 0.0,
         defence: 0.0,
         caution: 0.0,
+        ram: 0.0,
+        provocation_ticks: 0.0,
     };
 
     /// Derives a personality from a seed.
@@ -314,6 +320,8 @@ impl Personality {
         let courtesy = pilot.courtesy.draw(rng);
         let defence = pilot.defence.draw(rng);
         let caution = pilot.caution.draw(rng);
+        let ram = pilot.ram.draw(rng);
+        let provocation_ticks = pilot.provocation_ticks.draw(rng);
 
         Self {
             line_bias,
@@ -328,6 +336,8 @@ impl Personality {
             courtesy,
             defence,
             caution,
+            ram,
+            provocation_ticks,
         }
     }
 }
@@ -404,6 +414,25 @@ pub struct Driver {
     /// back where it left off instead of somewhere its own history cannot
     /// explain.
     pub phase: u32,
+    /// Where this driver was placed last tick, `1`-based; `0` before it has ever
+    /// been placed.
+    ///
+    /// The whole of what an overtake detector needs: a place that got *worse* is
+    /// a craft that was just passed. A `u8` because the grid is eight, and an
+    /// integer because this type is `Eq` and lives in the world snapshot.
+    ///
+    /// **Zero is not first.** A craft that has never been placed has not just
+    /// been overtaken, and reading it as first would provoke the whole grid on
+    /// the tick the standings first resolve.
+    pub place: u8,
+    /// Ticks of provocation still to run, counting down.
+    ///
+    /// **A countdown rather than a level with a decay rate**, because a rate
+    /// would be an `f32` on a type that must stay `Eq`. How provokable a pilot
+    /// is becomes how many ticks an overtake adds - see
+    /// [`Personality::provocation_ticks`] - which is the same knob from the
+    /// other end.
+    pub provocation: u16,
 }
 
 /// How much of the line either side of the last index a driver looks at.
@@ -412,6 +441,25 @@ pub struct Driver {
 /// narrow enough that the search cannot cross to a stacked section. Eight craft
 /// pay it every tick, so it is also the cost that matters.
 const SEARCH_WINDOW: usize = 48;
+
+/// The most provocation a driver can be carrying, in ticks - ten seconds.
+///
+/// A ceiling rather than an accumulator without one: a craft having a bad race
+/// would otherwise bank enough grievance to spend the rest of it at maximum.
+const PROVOCATION_MAX: u16 = 600;
+
+/// The noise stream ramming decisions are rolled against.
+const RAM_STREAM: u32 = 1;
+
+/// How often a driver at full `ram` will take a shot at a rival alongside, per
+/// tick. About once a second.
+const RAM_RATE: f32 = 1.0 / 60.0;
+
+/// How much corridor room a driver wants on the side it is shifting toward.
+///
+/// A ram that puts the rammer into the wall is not aggression, it is a bug with
+/// a personality.
+const RAM_CLEARANCE: f32 = 3.0;
 
 /// The turn, in radians across the stretch between a craft and its aim point,
 /// at which [`Personality::inside`] is asking for all the room it is allowed.
@@ -482,6 +530,7 @@ impl Driver {
         self.index = index as u32;
         // Only ticks this driver actually drove. See [`Self::phase`].
         self.phase = self.phase.wrapping_add(1);
+        self.stew(ctx, &personality);
 
         // Forward speed rather than speed: a craft sliding sideways at 60 is not
         // approaching its corner at 60, and the lookahead is about how far away
@@ -504,6 +553,7 @@ impl Driver {
             thrust,
             airbrake_left,
             airbrake_right,
+            sideshift: self.ram(state, ctx, &personality),
             ..ShipControls::default()
         }
     }
@@ -603,6 +653,84 @@ impl Driver {
     /// line's own shape and world up is exactly the mistake `docs/formats/track.md`
     /// records: it is wrong the moment the track rolls. A line with no corridor
     /// is a synthetic one, and every craft on it drives it exactly.
+    /// Advances the grudge: notices being overtaken, and lets it cool.
+    ///
+    /// **A place that got worse is a craft that was just passed**, which is the
+    /// whole of the detector. Both places have to be real: `0` means nothing
+    /// has placed this craft yet, and treating that as first would provoke the
+    /// entire grid on the tick the standings first resolve.
+    ///
+    /// What provocation does **not** touch is
+    /// [`Personality::commitment`]. It is the obvious thing to raise and the
+    /// wrong one: that axis is documented as the one where over what the hull
+    /// can hold is a driver in the wall, and an angry AI that drives into the
+    /// scenery reads as a bug rather than as character. It scales what a driver
+    /// does to *other craft*, not what it asks of its own.
+    fn stew(&mut self, ctx: &Context<'_>, personality: &Personality) {
+        let now = ctx.field.place;
+        if now != 0 && self.place != 0 && now > self.place {
+            let sting = personality.provocation_ticks as u16;
+            self.provocation = self.provocation.saturating_add(sting).min(PROVOCATION_MAX);
+        }
+        self.provocation = self.provocation.saturating_sub(1);
+        self.place = now;
+    }
+
+    /// How provoked this driver is, `0.0..=1.0`.
+    fn provoked(&self) -> f32 {
+        f32::from(self.provocation) / f32::from(PROVOCATION_MAX)
+    }
+
+    /// Whether to throw the craft sideways at a rival this tick, and which way.
+    ///
+    /// **Gated on the physics' own `ShipState::shift_lockout`** rather than on a
+    /// cooldown of the driver's own: the timer deciding whether a shift can fire
+    /// is already in the snapshot and already hashed, and a second one beside it
+    /// would be a second source of truth that drifts out of step with the first.
+    ///
+    /// Four conditions, and the last is the one that is easy to forget: there
+    /// has to be **corridor room on the side being shifted toward**. See
+    /// [`RAM_CLEARANCE`].
+    ///
+    /// Worth saying plainly: `Race::resolve_craft_pairs` discards the contact it
+    /// computes and nothing arms `stun_timer`, so **a ram shoves and nothing
+    /// else** - no stun, no damage, no score. Its payoff is positional.
+    fn ram(&self, state: &ShipState, ctx: &Context<'_>, personality: &Personality) -> Sideshift {
+        if personality.ram <= 0.0 || state.shift_lockout > 0.0 {
+            return Sideshift::None;
+        }
+        if state.sideshift_timers.iter().any(|timer| *timer > 0.0) {
+            return Sideshift::None;
+        }
+        let Some(rival) = ctx.field.alongside else {
+            return Sideshift::None;
+        };
+
+        // Rammed toward the rival, so the room that matters is on its side.
+        let toward = rival.offset;
+        if toward.abs() <= f32::EPSILON {
+            return Sideshift::None;
+        }
+        let room = ctx
+            .line
+            .aim(self.index as usize, 0.0)
+            .corridor
+            .map_or(f32::INFINITY, |frame| frame.room(toward));
+        if room < RAM_CLEARANCE {
+            return Sideshift::None;
+        }
+
+        let appetite = personality.ram * (1.0 + self.provoked());
+        if roll(self.seed, self.phase, RAM_STREAM) >= appetite * RAM_RATE {
+            return Sideshift::None;
+        }
+        if toward > 0.0 {
+            Sideshift::Right
+        } else {
+            Sideshift::Left
+        }
+    }
+
     /// How much of its thrust this driver keeps when it is closing on a craft
     /// in front, `0.0..=1.0`.
     ///
@@ -661,7 +789,11 @@ impl Driver {
         let Some(rival) = ctx.field.behind else {
             return 0.0;
         };
-        let lean = personality.defence - personality.courtesy;
+        // **Provocation scales covering, not yielding.** A driver that has just
+        // been passed defends harder; it does not become more polite. Applied
+        // to the defence side alone so a shy pilot stays shy however cross it
+        // is - see `Self::stew`.
+        let lean = personality.defence * (1.0 + self.provoked()) - personality.courtesy;
         if lean == 0.0 {
             return 0.0;
         }
@@ -922,6 +1054,278 @@ fn airbrakes(brake: f32, differential: f32, floor: f32) -> (f32, f32) {
 mod tests {
     use super::*;
     use crate::field::Rival;
+
+    fn placed(place: u8) -> Field {
+        Field {
+            place,
+            ..Field::EMPTY
+        }
+    }
+
+    fn stewing(driver: &mut Driver, line: &Line, field: &Field, personality: &Personality) {
+        let tuning = Tuning::default();
+        driver.stew(
+            &Context {
+                line,
+                tuning: &tuning,
+                pilot: &Pilot::BALANCED,
+                field,
+            },
+            personality,
+        );
+    }
+
+    /// Losing a place stings, and then wears off.
+    #[test]
+    fn a_driver_that_loses_a_place_is_provoked_and_calms_down_again() {
+        let line = straight_with_corridor();
+        let hot = Personality {
+            provocation_ticks: 300.0,
+            ..Personality::NEUTRAL
+        };
+        let mut driver = Driver::seeded(3);
+
+        // Settle on a place first, so the detector has something to compare to.
+        stewing(&mut driver, &line, &placed(3), &hot);
+        assert_eq!(driver.provocation, 0);
+
+        // Passed: third becomes fourth.
+        stewing(&mut driver, &line, &placed(4), &hot);
+        assert!(driver.provocation > 250, "got {}", driver.provocation);
+
+        // And it cools, one tick at a time.
+        let stung = driver.provocation;
+        for _ in 0..100 {
+            stewing(&mut driver, &line, &placed(4), &hot);
+        }
+        assert_eq!(driver.provocation, stung - 100);
+    }
+
+    #[test]
+    fn a_driver_that_gains_a_place_is_not_provoked() {
+        let line = straight_with_corridor();
+        let hot = Personality {
+            provocation_ticks: 300.0,
+            ..Personality::NEUTRAL
+        };
+        let mut driver = Driver::seeded(3);
+        stewing(&mut driver, &line, &placed(4), &hot);
+        stewing(&mut driver, &line, &placed(3), &hot);
+        assert_eq!(driver.provocation, 0);
+    }
+
+    /// The `place == 0` case, which naively reads as an overtake on tick one
+    /// for every craft on the grid.
+    #[test]
+    fn a_driver_that_has_never_been_placed_is_not_provoked_by_its_first_placing() {
+        let line = straight_with_corridor();
+        let hot = Personality {
+            provocation_ticks: 300.0,
+            ..Personality::NEUTRAL
+        };
+        let mut driver = Driver::seeded(3);
+        assert_eq!(driver.place, 0);
+        // Eighth on the grid, placed for the first time. Not an overtake.
+        stewing(&mut driver, &line, &placed(8), &hot);
+        assert_eq!(driver.provocation, 0);
+        assert_eq!(driver.place, 8);
+    }
+
+    #[test]
+    fn provocation_never_exceeds_its_ceiling_however_often_a_driver_is_passed() {
+        let line = straight_with_corridor();
+        let hot = Personality {
+            provocation_ticks: 600.0,
+            ..Personality::NEUTRAL
+        };
+        let mut driver = Driver::seeded(3);
+        stewing(&mut driver, &line, &placed(1), &hot);
+        for place in 2..=8u8 {
+            for _ in 0..20 {
+                stewing(&mut driver, &line, &placed(place), &hot);
+            }
+        }
+        assert!(driver.provocation <= PROVOCATION_MAX);
+    }
+
+    /// Provocation makes a driver harder to pass, not faster - the axis it must
+    /// not touch is `commitment`.
+    #[test]
+    fn a_provoked_driver_covers_harder_than_a_calm_one() {
+        let line = straight_with_corridor();
+        let mean = Personality {
+            defence: 0.5,
+            ..Personality::NEUTRAL
+        };
+        let pressing = rival_behind(4.0, 20.0, 20.0);
+
+        let calm = Driver::seeded(11);
+        let mut cross = Driver::seeded(11);
+        cross.provocation = PROVOCATION_MAX;
+
+        let tuning = Tuning::default();
+        let aim = line.aim(0, 40.0);
+        let lateral = aim.corridor.expect("fixture has a corridor").lateral;
+        let lean = |driver: &Driver, field: &Field| {
+            driver
+                .drift(
+                    &aim,
+                    40.0,
+                    &Context {
+                        line: &line,
+                        tuning: &tuning,
+                        pilot: &Pilot::BALANCED,
+                        field,
+                    },
+                    &mean,
+                )
+                .dot(lateral)
+        };
+        let calm_lean = lean(&calm, &pressing) - lean(&calm, &Field::EMPTY);
+        let cross_lean = lean(&cross, &pressing) - lean(&cross, &Field::EMPTY);
+        assert!(
+            cross_lean.abs() > calm_lean.abs() * 1.5,
+            "a provoked driver should cover harder: {cross_lean} against {calm_lean}"
+        );
+    }
+
+    fn alongside(offset: f32) -> Field {
+        Field {
+            alongside: Some(Rival {
+                slot: 2,
+                gap: 1.0,
+                offset,
+                closing: 0.0,
+                range: offset.abs(),
+                cos_bearing: 0.0,
+            }),
+            ..Field::EMPTY
+        }
+    }
+
+    fn shove(
+        driver: &Driver,
+        state: &ShipState,
+        line: &Line,
+        field: &Field,
+        ram: f32,
+    ) -> Sideshift {
+        let tuning = Tuning::default();
+        driver.ram(
+            state,
+            &Context {
+                line,
+                tuning: &tuning,
+                pilot: &Pilot::BALANCED,
+                field,
+            },
+            &Personality {
+                ram,
+                ..Personality::NEUTRAL
+            },
+        )
+    }
+
+    /// Over a second of ticks a keen rammer takes its shot, and it goes toward
+    /// the craft it is level with.
+    #[test]
+    fn a_ram_goes_toward_the_craft_alongside() {
+        let line = straight_with_corridor();
+        let state = craft(Vec3::ZERO, 40.0);
+        for (offset, wanted) in [(4.0, Sideshift::Right), (-4.0, Sideshift::Left)] {
+            let mut fired = None;
+            for phase in 0..600u32 {
+                let mut driver = Driver::seeded(5);
+                driver.phase = phase;
+                let shift = shove(&driver, &state, &line, &alongside(offset), 1.0);
+                if shift != Sideshift::None {
+                    fired = Some(shift);
+                    break;
+                }
+            }
+            assert_eq!(fired, Some(wanted), "offset {offset}");
+        }
+    }
+
+    #[test]
+    fn a_ram_waits_for_the_physics_own_lockout() {
+        let line = straight_with_corridor();
+        let mut state = craft(Vec3::ZERO, 40.0);
+        state.shift_lockout = 0.5;
+        for phase in 0..600u32 {
+            let mut driver = Driver::seeded(5);
+            driver.phase = phase;
+            assert_eq!(
+                shove(&driver, &state, &line, &alongside(4.0), 1.0),
+                Sideshift::None,
+                "shifted while locked out at phase {phase}"
+            );
+        }
+    }
+
+    /// A ram that puts the rammer into the wall is a bug with a personality.
+    #[test]
+    fn a_ram_never_goes_toward_a_corridor_edge_it_has_no_room_for() {
+        // A corridor with nothing to the right at all.
+        let points: Vec<Vec3> = (0..64)
+            .map(|step| Vec3::new(0.0, 0.0, -10.0 * step as f32))
+            .collect();
+        let corridor = points
+            .iter()
+            .map(|_| Frame {
+                lateral: Vec3::X,
+                left: -8.0,
+                right: 0.0,
+            })
+            .collect();
+        let pinned = Line::with_corridor(points, corridor);
+        let state = craft(Vec3::ZERO, 40.0);
+        for phase in 0..600u32 {
+            let mut driver = Driver::seeded(5);
+            driver.phase = phase;
+            assert_eq!(
+                shove(&driver, &state, &pinned, &alongside(4.0), 1.0),
+                Sideshift::None,
+                "shifted into the wall at phase {phase}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_driver_with_no_appetite_never_rams() {
+        let line = straight_with_corridor();
+        let state = craft(Vec3::ZERO, 40.0);
+        for phase in 0..600u32 {
+            let mut driver = Driver::seeded(5);
+            driver.phase = phase;
+            assert_eq!(
+                shove(&driver, &state, &line, &alongside(4.0), 0.0),
+                Sideshift::None
+            );
+        }
+    }
+
+    #[test]
+    fn a_driver_alongside_nobody_never_rams() {
+        let line = straight_with_corridor();
+        let state = craft(Vec3::ZERO, 40.0);
+        for phase in 0..600u32 {
+            let mut driver = Driver::seeded(5);
+            driver.phase = phase;
+            assert_eq!(
+                shove(&driver, &state, &line, &Field::EMPTY, 1.0),
+                Sideshift::None
+            );
+        }
+    }
+
+    /// `Driver` lives in the world snapshot, and that is what keeps it there.
+    #[test]
+    fn a_driver_stays_copy_and_eq() {
+        fn requires<T: Copy + Eq + Default>() {}
+        requires::<Driver>();
+    }
+
     use crate::line::Frame;
 
     fn rival_behind(offset: f32, gap: f32, closing: f32) -> Field {

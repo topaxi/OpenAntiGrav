@@ -163,6 +163,16 @@ pub struct Pilot {
     /// defence both sometimes move craft toward each other, and nothing else
     /// here reacts to a closing gap at all.
     pub caution: Span,
+    /// How readily this pilot throws the craft sideways at a rival level with
+    /// it. Draw 14.
+    pub ram: Span,
+    /// How long being overtaken stings, in ticks. Draw 15.
+    ///
+    /// **How provokable a pilot is, expressed as a duration rather than as a
+    /// decay rate.** `Driver` must stay `Eq` to live in the world snapshot, so
+    /// what it carries is an integer countdown; a per-pilot decay rate would be
+    /// an `f32` on that type. This is the same knob from the other end.
+    pub provocation_ticks: Span,
 }
 
 impl Pilot {
@@ -186,6 +196,8 @@ impl Pilot {
         courtesy: Span::new(0.15, 0.40),
         defence: Span::new(0.15, 0.40),
         caution: Span::new(0.5, 0.9),
+        ram: Span::new(0.05, 0.20),
+        provocation_ticks: Span::new(120.0, 300.0),
     };
 
     /// Brakes late, commits hard, holds a tight inside line and rotates the
@@ -206,6 +218,8 @@ impl Pilot {
         courtesy: Span::new(0.0, 0.10),
         defence: Span::new(0.55, 0.95),
         caution: Span::new(0.15, 0.45),
+        ram: Span::new(0.55, 0.95),
+        provocation_ticks: Span::new(300.0, 600.0),
     };
 
     /// Looks further ahead, brakes earlier, gives up corner speed for a tidy
@@ -224,6 +238,8 @@ impl Pilot {
         courtesy: Span::new(0.35, 0.65),
         defence: Span::new(0.05, 0.25),
         caution: Span::new(0.7, 1.0),
+        ram: Span::new(0.0, 0.05),
+        provocation_ticks: Span::new(60.0, 180.0),
     };
 
     /// Runs wide, brakes earliest, and stays out of everyone's way.
@@ -245,6 +261,8 @@ impl Pilot {
         courtesy: Span::new(0.70, 1.00),
         defence: Span::new(0.0, 0.08),
         caution: Span::new(0.8, 1.0),
+        ram: Span::new(0.0, 0.0),
+        provocation_ticks: Span::new(30.0, 120.0),
     };
 
     /// The four, with the names a config file and a menu spell them by.
@@ -277,7 +295,7 @@ impl Pilot {
 
     /// Every span, in draw order. `lean` is not one - it is not a range.
     #[must_use]
-    pub fn spans(&self) -> [Span; 12] {
+    pub fn spans(&self) -> [Span; 14] {
         [
             self.line_bias,
             self.wander,
@@ -291,6 +309,8 @@ impl Pilot {
             self.courtesy,
             self.defence,
             self.caution,
+            self.ram,
+            self.provocation_ticks,
         ]
     }
 }

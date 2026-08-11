@@ -664,8 +664,53 @@ near a pilot. Two tests came out of that: one comparing two variants of one
 pilot that differ *only* in the social pair, and one asserting the shipped table
 actually spreads across it.
 
-`shy`'s yielding is what those axes are for. What is still unbuilt is anything
-that touches another craft on purpose, and any weapon aimed at anybody.
+`shy`'s yielding is what those axes are for.
+
+### Being provoked, and shoving
+
+Two more axes spend the same view. `ram` is how readily a driver throws the
+craft sideways at a rival level with it, through `ShipControls::sideshift` -
+which the physics has implemented in full, so this is a decision rather than a
+mechanism. `provocation_ticks` is how long being overtaken stings for.
+
+`Driver` grows two integers for it, and stays `Copy + Eq` because it lives in
+the world snapshot: `place`, the position it held last tick, and `provocation`,
+a countdown. **A place that got worse is a craft that was just passed**, which
+is the whole detector; `0` means nothing has placed this craft yet and is
+deliberately not read as first, or the whole grid would be provoked on the tick
+the standings first resolve. A countdown rather than a level with a decay rate,
+because a rate would be an `f32` on a type that must stay `Eq` - so how
+provokable a pilot is becomes how many ticks an overtake adds, which is the same
+knob from the other end.
+
+**Provocation scales covering and ramming. It does not touch `commitment`.**
+That is the tempting one and the wrong one: the axis is documented as the one
+where over what the hull can hold is a driver in the wall, and an angry AI that
+drives into the scenery reads as a bug rather than as character. Being cross
+changes what a driver does to other craft, not what it asks of its own.
+
+The decision is rolled against `noise::roll`, which is **independent per tick**
+where `wobble` is smooth on purpose - a gate driven off a drift fires in long
+runs rather than at a rate. It takes a stream index so ramming and firing are
+not the same coin landing twice, and like everything else here it draws from the
+craft's own seed rather than from `World::rng`, which would move every later
+pickup roll.
+
+Four conditions gate a shove, and the last is the one that is easy to forget:
+the physics' own `shift_lockout` must be clear (**not** a second cooldown on the
+driver, which would be a second source of truth drifting out of step with the
+first), no shift already running, a rival actually alongside, and **corridor room
+on the side being shifted toward**. A ram that puts the rammer into the wall is
+not aggression, it is a bug with a personality.
+
+**What a ram does not do**, and this is worth saying plainly:
+`Race::resolve_craft_pairs` discards the `PairContact` it computes and nothing
+arms `stun_timer`, so a ram **shoves and nothing else** - no stun, no damage, no
+score, no spark. Its payoff is purely positional. The natural follow-on is three
+lines: bump the *victim's* provocation off the contact that is already being
+computed, which would make the feature social in both directions.
+
+What is still unbuilt is any weapon aimed at anybody.
 
 ### Pads, and what an opponent does with a pickup
 
@@ -887,6 +932,12 @@ rebase onto a function start, so they were left alone rather than guessed at.
 | Two craft that can see each other do not converge, and a yielding leader gives way where a covering one does not | `closed_loop::two_craft_that_can_see_each_other_do_not_converge`, `a_yielding_leader_gives_way_where_a_covering_one_does_not` | yes |
 | The field a driver sees excludes itself, orders rivals correctly, and is empty on a track with no ring | four tests in `race::tests` | yes |
 | The built-in pilots disagree about yielding rather than merely declaring it | `pilot::tests::the_built_in_pilots_disagree_about_yielding` | yes |
+| A driver that loses a place is provoked and calms down again, and one that gains a place is not | three tests in `driver::tests` | yes |
+| **A craft placed for the first time is not treated as having been overtaken** | `driver::tests::a_driver_that_has_never_been_placed_is_not_provoked_by_its_first_placing` | yes |
+| Provocation is capped however often a driver is passed, and a provoked driver covers harder | two tests in `driver::tests` | yes |
+| A ram goes toward the craft alongside, waits for the physics' own lockout, and never goes toward a corridor edge it has no room for | five tests in `driver::tests` | yes |
+| `Driver` stays `Copy + Eq`, which is what keeps it in the world snapshot | `driver::tests::a_driver_stays_copy_and_eq`, a compile-time guard | yes |
+| A roll is uniform, per-tick independent, and its streams disagree | five tests in `noise::tests` | yes |
 
 `race::tests`' craft is built on `Handling::ZERO` with an empty collision world,
 so no force law runs there at all and those tests assert only that the controls

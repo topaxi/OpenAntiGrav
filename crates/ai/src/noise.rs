@@ -50,6 +50,27 @@ pub fn wobble(seed: u32, t: f32) -> f32 {
     octave(seed, t) * 0.75 + octave(seed ^ 0x9e37_79b9, t * 3.0) * 0.25
 }
 
+/// A fresh value in `0.0..1.0` for this seed, this tick and this stream.
+///
+/// **Independent per tick, where [`wobble`] is smooth by design.** A line wants
+/// a drift and a decision gate wants a roll, and one function cannot be both: a
+/// gate driven off `wobble` would fire in long runs rather than at a rate,
+/// because consecutive ticks are correlated on purpose.
+///
+/// `stream` keeps unrelated decisions apart, so ramming and firing do not turn
+/// out to be the same coin landing twice.
+///
+/// No state, no clock, and **not a draw from the world's generator** - one taken
+/// from that stream would move every later pickup roll and make a driver's
+/// decisions depend on how many pickups had been handed out. The rule
+/// `Personality::from_pilot` follows, for the same reason.
+#[must_use]
+pub fn roll(seed: u32, phase: u32, stream: u32) -> f32 {
+    // 24 bits, scaled by 2^-24, exactly as `value` and `oag_core::Rng::next_f32`
+    // do it.
+    (mix(seed ^ mix(phase ^ mix(stream))) >> 8) as f32 * (1.0 / 16_777_216.0)
+}
+
 /// One octave: hash at each end of the step `t` falls in, smoothstep between.
 fn octave(seed: u32, t: f32) -> f32 {
     let whole = t.floor();
@@ -69,6 +90,77 @@ fn octave(seed: u32, t: f32) -> f32 {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn a_roll_stays_in_the_unit_interval() {
+        for seed in 1..40u32 {
+            for phase in 0..200u32 {
+                for stream in 0..3u32 {
+                    let value = roll(seed, phase, stream);
+                    assert!(
+                        (0.0..1.0).contains(&value),
+                        "{seed}/{phase}/{stream}: {value}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_roll_is_a_pure_function_of_its_arguments() {
+        assert_eq!(roll(7, 11, 2), roll(7, 11, 2));
+    }
+
+    /// The reason it exists beside `wobble`: a gate wants independence between
+    /// ticks, and `wobble` is correlated between them on purpose.
+    #[test]
+    fn a_roll_changes_every_tick_where_a_wobble_barely_does() {
+        let mut roll_steps = 0.0f32;
+        let mut wobble_steps = 0.0f32;
+        for phase in 0..500u32 {
+            roll_steps += (roll(3, phase + 1, 0) - roll(3, phase, 0)).abs();
+            let rate = 1.0 / 300.0;
+            wobble_steps +=
+                (wobble(3, (phase + 1) as f32 * rate) - wobble(3, phase as f32 * rate)).abs();
+        }
+        assert!(
+            roll_steps > wobble_steps * 20.0,
+            "a roll should move far more per tick than a drift: {roll_steps} against {wobble_steps}"
+        );
+    }
+
+    /// Two decisions must not turn out to be one coin landing twice.
+    #[test]
+    fn two_streams_of_one_seed_do_not_agree() {
+        let mut agreements = 0;
+        let total = 2_000;
+        for phase in 0..total {
+            if (roll(9, phase, 0) < 0.5) == (roll(9, phase, 1) < 0.5) {
+                agreements += 1;
+            }
+        }
+        let ratio = f64::from(agreements) / f64::from(total);
+        assert!(
+            (0.45..0.55).contains(&ratio),
+            "streams agree {ratio} of the time"
+        );
+    }
+
+    /// A gate compares against a rate, so the values have to be spread rather
+    /// than merely varied.
+    #[test]
+    fn a_roll_is_uniform_enough_to_threshold_against() {
+        let mut buckets = [0u32; 10];
+        for phase in 0..10_000u32 {
+            buckets[(roll(5, phase, 0) * 10.0) as usize % 10] += 1;
+        }
+        for (bucket, count) in buckets.iter().enumerate() {
+            assert!(
+                (800..1200).contains(count),
+                "bucket {bucket} held {count} of 10000"
+            );
+        }
+    }
     use super::*;
 
     /// The published MurmurHash3 finaliser, against values from a separate

@@ -170,6 +170,18 @@ fn run(ticks: u32) -> (u64, u64) {
 ///   `0` throughout and what moved is two more words entering the stream, not
 ///   any value in it.
 ///
+/// - **Moved a fourth time 2026-08-11**, when `Driver::place` and
+///   `Driver::provocation` joined the hash. A driver notices being overtaken by
+///   its place getting worse and covers its line harder for a while afterwards,
+///   so both decide what it does to the craft around it; see
+///   `oag_ai::Driver::stew`. **Isolated the same way**: with those two
+///   `write_u32`s removed and nothing else changed, the previous constants -
+///   `0x2e8d_8a4d_ab71_199e` / `0x65bc_a8c9_0bc9_07f0` at 60 ticks and
+///   `0xf019_f135_fae6_d657` / `0x177a_c6df_4c46_417d` at 600 - reproduce bit
+///   for bit. The scenario here still has no AI in it, so both fields are `0`
+///   throughout and what moved is two more words entering the stream, not any
+///   value in it.
+///
 /// **Never edit these to make the test pass**, the same rule
 /// `crates/physics/tests/determinism.rs` states at length: a movement here is a
 /// change to what a race *does*, and the change is the thing to find. When a
@@ -177,8 +189,8 @@ fn run(ticks: u32) -> (u64, u64) {
 /// beneath this comment and isolate the cause first, by removing the new field's
 /// own write and checking that the previous constants reproduce bit for bit.
 const REFERENCE: &[(u32, u64, u64)] = &[
-    (60, 0x2e8d_8a4d_ab71_199e, 0x65bc_a8c9_0bc9_07f0),
-    (600, 0xf019_f135_fae6_d657, 0x177a_c6df_4c46_417d),
+    (60, 0x9c26_b4b5_c0c7_43be, 0xc9d7_d405_37ab_9310),
+    (600, 0x6c9c_3ab9_8500_0e77, 0x5c72_e308_83b1_c29d),
 ];
 
 #[test]
