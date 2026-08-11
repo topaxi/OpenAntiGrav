@@ -148,9 +148,28 @@ fn axes(body: &Body) -> [Vec3; 3] {
     [body.right(), body.up(), body.forward()]
 }
 
-/// `<Misc width height length>` as half-extents on those axes.
+/// How much of the authored hull box a craft actually collides with.
+///
+/// **Ours, and a feel knob rather than a measurement.** There is no original to
+/// match here - `0x08815ccc` reports nothing - so nothing sets this but play.
+///
+/// The reason it is below `1.0`: `<Misc width height length>` is a **bounding**
+/// box, sized to the hull's widest point. Measured on a real Pulse craft it is
+/// `5.5 x 3.5 x 13`, whose half-length of `6.5` lands within a whisker of the
+/// `6.45` bounding radius `oag-view` reports for the shipped Feisar mesh - so the
+/// box bounds the model rather than tracing it. A Wipeout hull tapers hard toward
+/// the nose, so a full-size box has the craft colliding along its whole length at
+/// the width of its widest point, and two craft passing bump where the models
+/// visibly miss. That was reported from play twice.
+///
+/// Applied to every axis rather than only to width, because the taper is in
+/// plan *and* in profile.
+pub const HULL_SCALE: f32 = 0.75;
+
+/// `<Misc width height length>` as half-extents on those axes, scaled by
+/// [`HULL_SCALE`].
 fn half_extents(size: &Dimensions) -> Vec3 {
-    Vec3::new(size.width, size.height, size.length) * 0.5
+    Vec3::new(size.width, size.height, size.length) * (0.5 * HULL_SCALE)
 }
 
 /// How far a box reaches along `axis` from its own centre.
@@ -307,24 +326,40 @@ mod tests {
         assert!(overlap(&a.body, &hull(), &b.body, &hull()).is_none());
     }
 
-    /// The regression the play report produced: a sphere of half the hull's
-    /// diagonal reaches 4.58 units on this hull where the flank is 2 away, so
-    /// two craft side by side shoved each other while visibly apart.
+    /// The regression the play reports produced, twice: craft shoved each other
+    /// while visibly apart.
     ///
-    /// The hull is 4 wide, so two of them touch flank to flank at 4 units and
-    /// not before.
+    /// Two hulls of width `w` touch flank to flank at `w * HULL_SCALE` and not
+    /// before - written against the constant rather than a literal, so retuning
+    /// the feel moves one number and not a test's meaning.
     #[test]
-    fn side_by_side_craft_touch_at_the_flank_and_not_before() {
+    fn side_by_side_craft_touch_at_the_scaled_flank_and_not_before() {
         let b = craft(Vec3::ZERO, Vec3::ZERO);
-        let just_clear = craft(Vec3::new(4.1, 0.0, 0.0), Vec3::ZERO);
+        let touch_at = hull().width * HULL_SCALE;
+
+        let just_clear = craft(Vec3::new(touch_at * 1.05, 0.0, 0.0), Vec3::ZERO);
         assert!(
             overlap(&just_clear.body, &hull(), &b.body, &hull()).is_none(),
-            "craft 4.1 apart with 4 units of width are not touching"
+            "craft just outside {touch_at} are not touching"
         );
-        let just_touching = craft(Vec3::new(3.9, 0.0, 0.0), Vec3::ZERO);
+        let just_touching = craft(Vec3::new(touch_at * 0.95, 0.0, 0.0), Vec3::ZERO);
         assert!(
             overlap(&just_touching.body, &hull(), &b.body, &hull()).is_some(),
-            "craft 3.9 apart with 4 units of width are touching"
+            "craft just inside {touch_at} are touching"
+        );
+    }
+
+    /// The scale is a reduction, or it is not doing its job. Asserted through the
+    /// geometry rather than on the constant itself, which the compiler would fold
+    /// away.
+    #[test]
+    fn the_hull_scale_shrinks_the_box() {
+        let b = craft(Vec3::ZERO, Vec3::ZERO);
+        // Just inside the authored flank, outside the scaled one.
+        let between = craft(Vec3::new(hull().width * 0.95, 0.0, 0.0), Vec3::ZERO);
+        assert!(
+            overlap(&between.body, &hull(), &b.body, &hull()).is_none(),
+            "the authored box would collide here and the scaled one must not"
         );
     }
 
@@ -334,11 +369,13 @@ mod tests {
     #[test]
     fn the_hull_is_longer_than_it_is_wide() {
         let b = craft(Vec3::ZERO, Vec3::ZERO);
-        // 6 units along the length axis: inside 8, so touching.
-        let nose_to_tail = craft(Vec3::new(0.0, 0.0, 6.0), Vec3::ZERO);
+        // Halfway between the scaled width and the scaled length: touching
+        // nose to tail, clear abreast. A sphere cannot tell the two apart, which
+        // is what made it feel wrong.
+        let gap = (hull().width + hull().length) * 0.5 * HULL_SCALE;
+        let nose_to_tail = craft(Vec3::new(0.0, 0.0, gap), Vec3::ZERO);
         assert!(overlap(&nose_to_tail.body, &hull(), &b.body, &hull()).is_some());
-        // The same 6 units across the width: outside 4, so clear.
-        let abreast = craft(Vec3::new(6.0, 0.0, 0.0), Vec3::ZERO);
+        let abreast = craft(Vec3::new(gap, 0.0, 0.0), Vec3::ZERO);
         assert!(overlap(&abreast.body, &hull(), &b.body, &hull()).is_none());
     }
 
@@ -347,23 +384,31 @@ mod tests {
     #[test]
     fn rotating_a_hull_rotates_its_footprint() {
         let b = craft(Vec3::ZERO, Vec3::ZERO);
-        let mut across = craft(Vec3::new(5.0, 0.0, 0.0), Vec3::ZERO);
+        // Between the two touch distances: outside the combined scaled *width*
+        // (nose-on), inside the combined scaled width-plus-length (broadside).
+        let nose_on = hull().width * HULL_SCALE;
+        let broadside = (hull().width + hull().length) * 0.5 * HULL_SCALE;
+        let gap = (nose_on + broadside) * 0.5;
+        let mut across = craft(Vec3::new(gap, 0.0, 0.0), Vec3::ZERO);
         assert!(
             overlap(&across.body, &hull(), &b.body, &hull()).is_none(),
-            "nose-on at 5 units apart, 4 units of combined width: clear"
+            "nose-on at {gap} apart: clear"
         );
         // Now broadside: the 8-unit length lies across the gap.
         across.body.orientation = Quat::from_rotation_y(std::f32::consts::FRAC_PI_2);
         assert!(
             overlap(&across.body, &hull(), &b.body, &hull()).is_some(),
-            "broadside at 5 units apart, with an 8-unit hull across the gap: touching"
+            "broadside at {gap} apart, with the hull's length across it: touching"
         );
     }
 
     #[test]
     fn a_head_on_pair_is_pushed_apart() {
-        // Overlapping across the width: 4 units of combined width, 3 apart.
-        let mut a = craft(Vec3::new(3.0, 0.0, 0.0), Vec3::new(-10.0, 0.0, 0.0));
+        // Overlapping across the width.
+        let mut a = craft(
+            Vec3::new(hull().width * HULL_SCALE * 0.75, 0.0, 0.0),
+            Vec3::new(-10.0, 0.0, 0.0),
+        );
         let mut b = craft(Vec3::ZERO, Vec3::new(10.0, 0.0, 0.0));
         let contact = resolve(&mut a, &hull(), &mut b, &hull()).expect("they overlap");
 
@@ -380,7 +425,7 @@ mod tests {
             b.body.linear_velocity
         );
         // And they are further apart than they were.
-        assert!(a.body.position.x > 3.0);
+        assert!(a.body.position.x > hull().width * HULL_SCALE * 0.75);
         assert!(b.body.position.x < 0.0);
     }
 
@@ -388,7 +433,10 @@ mod tests {
     /// thing the two-body path does that the one-body path does not.
     #[test]
     fn a_pair_already_separating_is_left_alone() {
-        let mut a = craft(Vec3::new(3.0, 0.0, 0.0), Vec3::new(50.0, 0.0, 0.0));
+        let mut a = craft(
+            Vec3::new(hull().width * HULL_SCALE * 0.75, 0.0, 0.0),
+            Vec3::new(50.0, 0.0, 0.0),
+        );
         let mut b = craft(Vec3::ZERO, Vec3::new(-50.0, 0.0, 0.0));
         assert!(resolve(&mut a, &hull(), &mut b, &hull()).is_none());
     }
@@ -399,7 +447,10 @@ mod tests {
     /// original's is symmetric rather than mass-weighted.
     #[test]
     fn the_impulse_conserves_momentum() {
-        let mut a = craft(Vec3::new(3.0, 0.0, 0.0), Vec3::new(-10.0, 0.0, 0.0));
+        let mut a = craft(
+            Vec3::new(hull().width * HULL_SCALE * 0.75, 0.0, 0.0),
+            Vec3::new(-10.0, 0.0, 0.0),
+        );
         let mut b = craft(Vec3::ZERO, Vec3::new(4.0, 0.0, 0.0));
         a.body.mass = 3.0;
         b.body.mass = 1.0;
@@ -416,7 +467,10 @@ mod tests {
     /// it leaves. See `docs/architecture/determinism.md`.
     #[test]
     fn the_argument_order_does_not_change_the_outcome() {
-        let start_a = craft(Vec3::new(3.0, 0.0, 0.0), Vec3::new(-10.0, 0.0, 3.0));
+        let start_a = craft(
+            Vec3::new(hull().width * HULL_SCALE * 0.75, 0.0, 0.0),
+            Vec3::new(-10.0, 0.0, 3.0),
+        );
         let start_b = craft(Vec3::ZERO, Vec3::new(7.0, 0.0, -1.0));
 
         let (mut a1, mut b1) = (start_a, start_b);
@@ -434,7 +488,10 @@ mod tests {
     /// A glancing hit spins the craft, or a race is bumper cars on rails.
     #[test]
     fn an_off_centre_hit_produces_spin() {
-        let mut a = craft(Vec3::new(3.0, 0.0, 3.0), Vec3::new(-20.0, 0.0, 0.0));
+        let mut a = craft(
+            Vec3::new(hull().width * HULL_SCALE * 0.7, 0.0, 2.0),
+            Vec3::new(-20.0, 0.0, 0.0),
+        );
         let mut b = craft(Vec3::ZERO, Vec3::ZERO);
         resolve(&mut a, &hull(), &mut b, &hull()).expect("they overlap");
         assert!(

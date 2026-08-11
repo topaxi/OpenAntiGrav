@@ -483,8 +483,21 @@ craft is.
 
 It began as a sphere of half the hull's diagonal and that was **far too big** -
 on a 4 x 2 x 8 hull the sphere reaches 4.58 units where the flank is 2 away, so
-craft shoved each other while visibly apart. Reported from play, and the box test
-is the fix.
+craft shoved each other while visibly apart. Reported from play; the box test was
+the first fix and it was still too big, which is the second finding:
+
+**`<Misc width height length>` is a bounding box, not the hull.** A real Pulse
+craft measures `5.5 x 3.5 x 13`, and half that length - `6.5` - lands within a
+whisker of the `6.45` bounding radius `oag-view` reports for the shipped Feisar
+mesh. So the authored box *bounds* the model rather than tracing it, and a
+Wipeout hull tapers hard toward the nose: at full size a craft collides along its
+whole length at the width of its widest point, and two craft passing bump where
+the models visibly miss.
+
+`pair::HULL_SCALE` is the knob, and it is **ours with nothing behind it** - there
+is no original to match, so only play sets it. The tests are written against the
+constant rather than against literals, so retuning it moves one number and not a
+test's meaning.
 
 Still not armed: the `stun_timer` and its gate exist and nothing sets them,
 because what posts the pending impulse at `entity->0x4c + 0x110` is still unread -
@@ -501,8 +514,8 @@ config block. Those are the second half.
 | The controller steers back toward its line, brakes for a corner, is damped by its own turn rate | `oag-ai`'s own tests, against a synthetic circle and straight | yes |
 | Curvature reads `1/radius` on a circle | `line::tests::curvature_approximates_one_over_the_radius` | yes |
 | Every opponent is stepped with controls a driver chose | `race::tests::the_opponents_are_driven_rather_than_parked` | yes |
-| A grid of eight leaves the line, goes the right way, and is still on the track after ten seconds | `race_ground_truth::the_ai_drives_the_field_along_the_track` | **no** - needs a disc image |
-| Two runs of one race stay identical, drivers included | `race_ground_truth::a_driven_field_replays_identically` | **no** - needs a disc image |
+| A grid of eight leaves the line, goes the right way, and is still on the track after ten seconds | `race_ground_truth::the_ai_drives_the_field_along_the_track` | **no** - needs a disc image. **Run and passing as of 2026-08-11.** |
+| Two runs of one race stay identical, drivers included | `race_ground_truth::a_driven_field_replays_identically` | **no** - needs a disc image. **Run and passing as of 2026-08-11.** |
 
 `race::tests`' craft is built on `Handling::ZERO` with an empty collision world,
 so no force law runs there at all and those tests assert only that the controls
@@ -516,6 +529,11 @@ The wall-to-wall weave was reported from the running game, not caught by a test.
 `closed_loop.rs` was then written, watched failing at **84.1 units** of peak
 error from the line, and is at **7.3** after the rewrite. That is evidence the
 structural fix works; it is not a substitute for looking at the screen.
+
+**The two disc-backed tests were run for the first time on 2026-08-11 and both
+pass**, on `16_Track` off a real image. Until then they had only ever been
+compiled. Every claim about a full grid actually getting round a circuit rests on
+that run and on nothing earlier.
 
 Nothing anywhere asserts a lap time. There is no measurement of the original's
 opponents to compare against, and the speed law is this project's own.
