@@ -22,7 +22,7 @@ Unmeasured, so capped at **84** by the
 | `0x0880c058` | `WeaponStats_ParseRocket` | 88 |
 | `0x08861814` | `Weapons_DispatchFire` | 80 |
 | `0x0886e104` | `Weapon_FireRocket` | 88 |
-| `0x0886b038` | `Rocket_Spawn_q` | 78 |
+| `0x0886f038` | `Rocket_Spawn` - **corrected**, see [rocket-visuals.md](rocket-visuals.md) | 90 |
 | `0x088675cc` | `Weapon_UpdateBurstFire_q` | 72 |
 | `0x08869588` | `Projectiles_Update_q` | 75 |
 
@@ -119,19 +119,19 @@ craft->fire_flags &= ~0x80;       // craft + 0x1b8 - one shot, cleared immediate
 
 if (world->live < 0x2e) {
     // 1. straight ahead, through the craft's own matrix
-    Rocket_Spawn_q(world, craft->matrix, &craft->pose, craft_index);
+    Rocket_Spawn(world, craft->matrix, &craft->pose, craft_index);
 
     // 2. rotated by +spread
     a  = rocket_stats[+0x24];                 // `spread`
     t  = vcst_s(5) * a;                       // 2/pi: radians -> VFPU turns
     m  = rotation_from(vcos_s(t), vsin_s(t));
-    Rocket_Spawn_q(world, vmmul_q(m, craft->matrix), &craft->pose, craft_index);
+    Rocket_Spawn(world, vmmul_q(m, craft->matrix), &craft->pose, craft_index);
 
     // 3. rotated by -spread
     a  = -rocket_stats[+0x24];
     t  = vcst_s(5) * a;
     m  = rotation_from(vcos_s(t), vsin_s(t));
-    Rocket_Spawn_q(world, vmmul_q(m, craft->matrix), &craft->pose, craft_index);
+    Rocket_Spawn(world, vmmul_q(m, craft->matrix), &craft->pose, craft_index);
 }
 ```
 
@@ -214,6 +214,15 @@ three rows from "ours" to "recovered" because of this page.
 
 ## History
 
+- **2026-08-11, later.** **The spawn helper's address on this page was wrong**,
+  and it was this page's own trap that did it: the `jal 0x0006b038` in
+  `Weapon_FireRocket` is relative, so the target is `0x0886f038`, not
+  `0x0886b038`. The row is corrected above and the function is read end to end in
+  [rocket-visuals.md](rocket-visuals.md). `0x0886b038` is a real function - a
+  segment-versus-craft sweep on the same pool - but it is not the spawn and
+  should not have carried the name. Worth keeping because the trap is documented
+  three paragraphs into this very page and still caught the next reader: knowing
+  about it is not the same as applying it in the direction that bites.
 - **2026-08-11.** Written while answering "should a rocket fire three?".
   **The first version of this page got it wrong** and the mistake is worth
   keeping: `Weapon_UpdateBurstFire_q` was found first, reads as a plausible

@@ -1,0 +1,289 @@
+# What a Rocket looks like: the model, the three effects, and the flight
+
+| | |
+| --- | --- |
+| **Binary** | `PSP_GAME/SYSDIR/BOOT.BIN` (Pulse, PSP), image base `0x08804000` |
+| **Subsystem** | weapons - the Rocket's presentation |
+| **Related** | [`weapon-fire.md`](weapon-fire.md) (the fire word and the fan), [`particle-system.md`](particle-system.md) (the `.pob` interpreter these effects run through), [`exhaust.md`](exhaust.md) (the node classes), [`../../../formats/pob.md`](../../../formats/pob.md) (the particle container), [`../../../formats/vex.md`](../../../formats/vex.md) (the class-ID table) |
+
+[`weapon-fire.md`](weapon-fire.md) answered *how many* rockets a press puts in the
+air. This page answers what each one **is**: a textured model, three separately
+authored particle systems, a looping sound, and a flight path that follows the
+track rather than a straight line.
+
+Verified live in PPSSPP as well as read statically - see
+[Runtime verification](#runtime-verification) - so the claims here that the
+emulator exercised sit above the decompilation-only ceiling of 84.
+
+| Address | Name | Confidence |
+| --- | --- | --- |
+| `0x0885cc24` | `Rocket_Ctor` | 85 |
+| `0x0885cdb8` | `Rocket_Init` | 85 |
+| `0x0885d1b0` | `Rocket_SpeedForClass` | 88 |
+| `0x0885d2a8` | `Rocket_Update` | 88 |
+| `0x0886f038` | `Rocket_Spawn` | 90 |
+| `0x0886ebdc` | `Rocket_HitCraft_q` | 78 |
+| `0x0886ed34` | `Rocket_SpawnCraftExplosion_q` | 78 |
+| `0x08915484` | `Psys_Spawn_q` | 72 |
+
+## First: `weapon-fire.md` has the spawn helper at the wrong address
+
+**`Rocket_Spawn_q` is recorded there as `0x0886b038`. It is `0x0886f038`**, and
+the cause is that page's own documented trap catching the page that documents
+it. `Weapon_FireRocket` contains `jal 0x0006b038`, which is *relative*:
+
+```text
+0886e17c: jal 0x0006b038      ; 0x08804000 + 0x0006b038 = 0x0886f038
+```
+
+The two functions are not related:
+
+- **`0x0886f038`** takes a pool slot at `world+0x64`, stamps the owner index and
+  a monotonic serial, calls the constructor and bumps the live count. It takes
+  four arguments, matching the call. This is the spawn.
+- **`0x0886b038` is not even a function entry.** It is an address *inside*
+  `FUN_0886afb8` (body `0x0886afb8`-`0x0886b457`), which is a
+  segment-versus-craft sweep taking two arguments. It reads the same projectile
+  pool, so it is weapons code, but it is not a spawn - and the name was hung on
+  an interior address, which is why `scripts/audit-ghidra-names.py` reported the
+  live name at `0x0886afb8` while `names.tsv` claimed `0x0886b038`. The row and
+  the database disagreed and neither was right.
+
+That function is left **unnamed**: what it is has not been established to 50, and
+this project's rule is to write the hypothesis down rather than guess a name.
+
+`search_instructions jal 0x0006b038` returns **exactly three call sites, all
+inside `Weapon_FireRocket`** (`0x0886e17c`, `0x0886e2e8`, `0x0886e440`), which is
+the "three spawns, one invocation" that page already established, now pointing at
+the function that actually does it.
+
+`names.tsv` row for `0x0886b038` is corrected by the same change as this page.
+
+## The rocket is a model, not a billboard
+
+`Rocket_Ctor` (`0x0885cc24`) allocates a `0x1d0`-byte scene node and hands it a
+`.vex` file:
+
+```c
+func_0x0010eb80(node, 0x2780e8, 0x45000000, 0xfdb2, 0x3e9, 0);
+//                    ^ string  ^ 2048.0f          ^ vex class id
+*(int *)(self + 0x110) = node;     // the handle Rocket_Update drives
+```
+
+`0x2780e8` is relative; the string at `0x08a7c0e8` is **`Data\Weapons\Rocket.vex`**.
+`0x3e9` is a `.vex` node class id, in the band [`vex.md`](../../../formats/vex.md)
+already tabulates (`0x3bf` Engine Flare, `0x3c8` Trail, `0x3e2` Ship Muzzle).
+
+**Confirmed against the disc, not only the executable.** The entry exists, and
+our own parser decodes it:
+
+```sh
+cargo run -q -p oag-view -- \
+  "data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/Data.wad" \
+  --mesh 'Data\Weapons\Rocket.vex' --screenshot /tmp/rocket-mesh.png
+# Data\Weapons\Rocket.vex: 1 meshes, 84 vertices, 28 triangles, radius 1.34
+```
+
+It is a finned dart, white with red banding - a needle nose, a long tapered body,
+one dorsal fin and one ventral fin.
+
+This is the single largest mismatch with `oag_gameplay`/`oag_render`, which draw
+a camera-facing additive billboard of half-size `1.5`
+(`PROJECTILE_SPRITE_HALF_SIZE`, `crates/game/src/race.rs`). The *scale* is close;
+the primitive is wrong.
+
+## It is oriented to velocity and to the track, every tick
+
+The tail of `Rocket_Update` (`0x0885d2a8`) rebuilds a basis and pushes it at the
+node:
+
+| Offset | What |
+| --- | --- |
+| `+0x80` | normalised velocity - forward |
+| `+0x70` | the stored surface normal, re-orthogonalised against forward |
+| `+0x60` | their cross product |
+| `+0xa0`..`+0xdc` | the assembled matrix, then rotated |
+
+```c
+func_0x002676b4(0xbfc90fdb, m, m);          // 0xbfc90fdb = -1.5707964f = -pi/2
+func_0x00141284(*(self + 0x110), m, 0);     // hand it to the node
+```
+
+So the model is aligned to **where it is going and what it is flying over**, with
+a fixed quarter-turn correction.
+
+**The axis of that quarter-turn is not resolved here.** `func_0x002676b4`
+resolves to `0x08a6b6b4`, which is outside the band the other resolved calls on
+this page land in and just below the string table - it has the shape of an import
+stub, and `scripts/resolve-psp-imports.py` is the tool for it. Until it is
+resolved, the quarter-turn is recorded and **not** reproduced: forward alignment
+is fully evidenced, the extra rotation is a model-space convention we cannot yet
+name.
+
+## Three particle systems, and which fires when
+
+All three names are literals in `BOOT.BIN`, as bare names and as
+`Data\Psys\*.POB` paths, and all three go through one helper -
+`Psys_Spawn_q` (`0x08915484`) - whose second argument is the name and whose third
+is a four-character tag, little-endian.
+
+| Effect | String | Tag | Spawned by | When |
+| --- | --- | --- | --- | --- |
+| `WO_ROCKET_FLARE` | `0x08a7c100` | `ROFL` | `Rocket_Init` `0x0885cdb8` | at launch, carried by the rocket |
+| `WO_ROCKET_EXPLO_TRACK` | `0x08a7c110` | `ROD2` | `Rocket_Update` `0x0885d2a8`, at both of its collision branches | the rocket hits track geometry |
+| `WO_ROCKET_EXPLO` | `0x08a7ca74` | `ROEX` | `Rocket_SpawnCraftExplosion_q` `0x0886ed34` | the rocket hits a **craft** |
+
+`0x4c464f52` is `ROFL`, `0x32444f52` is `ROD2`, `0x58454f52` is `ROEX`.
+
+**The two explosions are separately authored, and the split is confirmed rather
+than inferred from the names.** `Rocket_HitCraft_q` (`0x0886ebdc`) is the
+craft-hit path - it credits `damage` and `slowdown_time`, then calls the `ROEX`
+spawner - while both of `Rocket_Update`'s detonating branches call `ROD2`.
+
+Two details of the craft-hit explosion worth not losing:
+
+- **It is not drawn at the impact point.** The position is the *struck craft's*
+  own (`craft+0x90`) with **`y - 2.5`**.
+- **It is conditional.** Only spawned when `func_0x0003a37c(craft+0xf0)` is
+  non-zero - an activity or visibility test that is not read here.
+
+`WO_ROCKET_FLARE`'s **name** is recovered; its **parameters are not**. The `.pob`
+record layout at a resolved target is still undecoded
+([`pob.md`](../../../formats/pob.md) is explicit about this), so nothing here
+states a colour, size or lifetime from the file. What the emulator showed is
+below.
+
+## Flight follows the track
+
+`Rocket_Update` runs two swept queries a tick through
+`func_0x0002d98c(world, from, to, &point, &normal, self+0x114, 0)`:
+
+1. a **surface probe** - from the projected position, `6.0` units along the
+   stored normal `self+0x100` - run only while flag bit `4` is clear
+2. the **flight sweep** - previous position `self+0xf0` to projected position
+
+Both branch on the same return code:
+
+| Code | What happens |
+| --- | --- |
+| `0x7f` | no hit: `velocity.y -= dt * 50.0`, so **the rocket falls** |
+| `0` or `4` | detonate: flags `|= 0x14`, spawn `WO_ROCKET_EXPLO_TRACK` |
+| anything else | **deflect**: adopt the hit normal, push out `3.0` along it, recompute velocity from the corrected position, renormalise and rescale to speed |
+
+A rocket therefore skims the surface, glances off walls and drops when it runs
+out of track - it is not a straight-line projectile.
+
+**Scope, said plainly: this is simulation, not rendering, and this change does
+not implement it.** `oag_gameplay::projectile` flies a rocket dead straight at a
+constant speed and detonates on first contact. Changing that alters the state
+hash and belongs in its own change with its own determinism review. It is
+recorded here because it changes the *picture* more than any texture would.
+
+## Authored projectile speeds are km/h
+
+`Rocket_SpeedForClass` (`0x0885d1b0`) - a leaf Ghidra had not made a function -
+is a pure table lookup with no arithmetic:
+
+```text
+class 0 -> lwc1 f0, 0x08(stats)    venomspeed
+class 1 -> lwc1 f0, 0x0c(stats)    flashspeed
+class 2 -> lwc1 f0, 0x10(stats)    rapierspeed
+class 3 -> lwc1 f0, 0x14(stats)    phantomspeed
+otherwise 0.0
+```
+
+Those offsets are exactly [`weapon-fire.md`](weapon-fire.md)'s, from an
+independent read, which is the corroboration that makes this an 88.
+
+**Both callers divide its result by 3.6** before it becomes a velocity -
+`Rocket_Init` by the literal `0x3e8e38e4` (`0.2777778`), `Rocket_Update` by a
+literal `3.6`. Nothing between the parse and the divide scales it. So the
+authored speeds are **km/h**, and a reimplementation that spends them as
+units-per-second flies the rocket **3.6x too fast**.
+
+[`weapon-stats.md`](../../../formats/weapon-stats.md) records the attribute
+names at confidence 92 but **does not state a unit**, so this adds to that page
+rather than contradicting it.
+
+**This change does not act on it either** - projectile speed is simulation state.
+Both this and the flight path above are reported, not implemented.
+
+## Audio, in passing
+
+`Rocket_Init` allocates a `0x70`-byte emitter, sets `+0x38 = 0x44160000`
+(`600.0f`, a rolloff distance) and starts a looping sound at volume `1.0` named
+by the string at `0x08a7c0d0`: **`~ROCKETTVL`**. The neighbouring `~PLASMATVL`
+confirms the `<WEAPON>TVL` - travel - pattern.
+
+## Runtime verification
+
+Done with `scripts/psp-fire-weapon.py`, written for this page, against PPSSPP
+v1.20.4 under Xvfb and `pulse-psp-usa.chd`, in a live Single Race.
+
+**The cheat is one word.** `Weapons_DispatchFire` reads a fire-request word per
+craft and dispatches one handler per set bit, so setting bit `0x80` is exactly
+equivalent to holding a Rocket and pressing fire - no need for the grant path,
+which is still unread.
+
+Two things had to be right, and each cost an attempt:
+
+- **Writes only take while the CPU is stepping.** Written against a free-running
+  emulator the word reads back set and no handler ever consumes it.
+- **The craft the weapons code walks is not the craft `Ship_UpdateCraft` takes.**
+  `psp-trace.py` learns a craft pointer from that function's `a0`; `+0x1b8` on
+  *that* object is not the fire word. `Weapons_DispatchFire` walks an **inline
+  array in the world**: `world + 0x70 + index * 0x1f0`, `_DAT_000577f8` entries,
+  read straight off its loop induction. The world arrives in `a0` - the
+  prototype's leading `float` rides in `f12` - confirmed live, `a1` is zero.
+
+What the run established:
+
+- Setting bit `0x80` on craft 0 was **consumed within the frame**, and
+  `Weapon_FireRocket` is the only handler for that bit
+  (`jal 0x0006a104` -> `0x0886e104` in the dispatch chain). This is the
+  bit-to-handler mapping verified rather than read.
+- A breakpoint at **`0x0885d2a8` then hit repeatedly**, with nothing else in the
+  air. That is `Rocket_Update` running per rocket per tick, and it is why that
+  address sits at 88 rather than 82.
+- **What the frames show.** Rockets leave together and travel **low, hugging the
+  track surface**, reading as small warm-orange elongated glows rather than
+  white points - consistent with the surface probe above. On track impact they
+  produce a **large orange fireball** sitting on the track surface, far bigger
+  and far warmer than the white additive flash this engine draws.
+
+**No frame from the original is committed.** Screenshots of the running game are
+reproduction; they stayed outside the repository and `just audit-leakage` is what
+enforces that. The description above is the deliverable, not the image.
+
+To repeat it:
+
+```sh
+Xvfb :97 -screen 0 1280x720x24 &
+printf '[General]\nRemoteDebuggerOnStartup = True\nRemoteDebuggerLocal = True\nRemoteISOPort = 47810\n' > /tmp/debugger.ini
+DISPLAY=:97 SDL_VIDEODRIVER=x11 setsid PPSSPPSDL --appendconfig=/tmp/debugger.ini \
+    --windowed data/images/pulse-psp-usa.chd < /dev/null &
+
+uv run --with websocket-client scripts/psp-drive.py --port 47810 menu --single-race --any-track
+uv run --with websocket-client scripts/psp-fire-weapon.py --port 47810 --shots /tmp \
+    --freeze-at 0x0885d2a8 --freeze-hits 24 rocket
+```
+
+## What is not verified
+
+- **The quarter-turn's axis**, blocked on resolving `0x08a6b6b4` - see above.
+- **`WO_ROCKET_FLARE`'s parameters**, blocked on the `.pob` payload layout.
+- **`func_0x0003a37c`**, the test that gates the craft-hit explosion.
+- **What class `0x3e9` is called.** The id is read off the constructor; the
+  class table's name for it was not looked up.
+- **Whether the PS2 build agrees.** Nothing here has a second-binary leg, which
+  is what holds every row below 95.
+
+## History
+
+- **2026-08-11.** Written while answering "make the rockets look like the
+  original's". Found `weapon-fire.md`'s spawn address wrong by the same
+  relative-address trap that page warns about - a reminder that the trap catches
+  people who know about it. The emulator leg was added after the static read,
+  and changed one thing: it is what turned "the rocket probably follows the
+  surface" into a picture of two rockets skimming the track a body-length off
+  the racing line.

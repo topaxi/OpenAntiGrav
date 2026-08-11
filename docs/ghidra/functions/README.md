@@ -43,6 +43,8 @@ Maintained as pages are added, sorted by subsystem.
 | Camera views | [psp-pulse-usa/camera.md](psp-pulse-usa/camera.md) | [ps2-pulse-eu/camera.md](ps2-pulse-eu/camera.md) |
 | Ship exhaust (`Engine Flare`, `Trail`) | [psp-pulse-usa/exhaust.md](psp-pulse-usa/exhaust.md) | - |
 | Particle system (`Psys`, `.pob` interpreter) | [psp-pulse-usa/particle-system.md](psp-pulse-usa/particle-system.md) | - |
+| Firing a weapon (the request word) | [psp-pulse-usa/weapon-fire.md](psp-pulse-usa/weapon-fire.md) | - |
+| The Rocket's model, effects and flight | [psp-pulse-usa/rocket-visuals.md](psp-pulse-usa/rocket-visuals.md) | - |
 | Bloom (four-pass framebuffer post-process) | [psp-pulse-usa/bloom.md](psp-pulse-usa/bloom.md) | - |
 | Craft update and handling stats | [psp-pulse-usa/engine.md](psp-pulse-usa/engine.md) | [ps2-pulse-eu/handling-xml.md](ps2-pulse-eu/handling-xml.md) (loader), [ps2-pulse-eu/craft-update.md](ps2-pulse-eu/craft-update.md) (hover, damping, integrator) |
 | Video and the Movie widget | [psp-pulse-usa/frontend-video.md](psp-pulse-usa/frontend-video.md) | - |

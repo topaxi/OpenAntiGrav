@@ -256,12 +256,32 @@ fn write_pad_index(hasher: &mut oag_core::hash::StateHasher, index: Option<usize
     }
 }
 
+/// The archive entry a Rocket's model comes from.
+///
+/// **Recovered, confidence 85.** The string `Rocket_Ctor` (`0x0885cc24`) hands
+/// its scene node, at `0x08a7c0e8` - see
+/// `docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`. Backslashes, the way
+/// the loader assembles paths, which is what the name hash needs.
+pub const ROCKET_MODEL_ENTRY: &str = r"Data\Weapons\Rocket.vex";
+
 /// Half-width of the sprite a projectile in flight is drawn as, in world units.
 ///
-/// **Invented.** See [`Race::ignite_blast_flash`] for why this whole effect is a
-/// placeholder. Small enough to read as a bolt rather than a fireball at the
-/// distance a rocket is fired from.
+/// **Invented**, and now only a *fallback*: a rocket is drawn as
+/// [`ROCKET_MODEL_ENTRY`]'s model when that model loaded, and as this billboard
+/// only when it did not. Small enough to read as a bolt rather than a fireball
+/// at the distance a rocket is fired from.
 pub const PROJECTILE_SPRITE_HALF_SIZE: f32 = 1.5;
+
+/// Half-width of the flare carried by a rocket that *is* drawn as a model.
+///
+/// **The flare itself is recovered and its size is not.** The original attaches
+/// a `WO_ROCKET_FLARE` particle system to every rocket at launch
+/// (`Rocket_Init`, tag `ROFL`), but the `.pob` payload that would give its
+/// colour, size and lifetime is still undecoded - see `docs/formats/pob.md`. So
+/// the *presence* of a glow at the rocket is recovered and every number here is
+/// invented, sized to sit around a model of radius 1.34 rather than to replace
+/// it.
+pub const ROCKET_FLARE_HALF_SIZE: f32 = 1.1;
 
 /// Half-width a blast flash reaches at the end of its fade, in world units.
 ///
@@ -269,6 +289,24 @@ pub const PROJECTILE_SPRITE_HALF_SIZE: f32 = 1.5;
 /// is a gameplay distance and drawing it would claim the picture shows the
 /// damage volume, which nothing has measured.
 pub const BLAST_FLASH_HALF_SIZE: f32 = 8.0;
+
+/// How much larger a blast on track geometry is drawn than one on a hull.
+///
+/// **The split is recovered; the ratio is invented.** The original authors two
+/// separate particle systems and picks between them by what was struck -
+/// `WO_ROCKET_EXPLO_TRACK` from `Rocket_Update`'s collision branches,
+/// `WO_ROCKET_EXPLO` from `Rocket_HitCraft_q` - so drawing one flash for both
+/// was a real mismatch rather than a missing flourish. What the two *look* like
+/// is not decoded, so this engine only distinguishes them by size and by where
+/// they sit; a track hit reads bigger, which is what the emulator's frames show.
+pub const TRACK_BLAST_SIZE_RATIO: f32 = 1.45;
+
+/// How far below a struck craft's centre its blast is drawn, in world units.
+///
+/// **Recovered, confidence 78.** `Rocket_HitCraft_q` (`0x0886ebdc`) builds the
+/// explosion's position from the struck craft's own position with `y - 2.5`, not
+/// from the rocket's impact point.
+pub const CRAFT_BLAST_DROP: f32 = 2.5;
 
 /// How long a blast flash is drawn for, in seconds. **Invented.**
 pub const BLAST_FLASH_SECONDS: f32 = 0.35;
@@ -670,6 +708,20 @@ pub struct Loaded {
     /// between `World` and the two `Mesh` nodes), so this is drawn once in
     /// ship space rather than mounted on a locator.
     pub boost_model: Option<Model>,
+    /// The model a Rocket in flight is drawn as: `Data\Weapons\Rocket.vex`.
+    ///
+    /// **Recovered, confidence 85.** `Rocket_Ctor` (`0x0885cc24`) builds the
+    /// projectile a scene node of `.vex` class `0x3e9` from exactly this entry
+    /// and keeps the handle at `+0x110`, which `Rocket_Update` drives every
+    /// tick. See `docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`.
+    /// **A rocket is a model, not a billboard**, which is what this engine drew
+    /// before. The file is 3712 bytes, 84 vertices, 28 triangles, radius 1.34:
+    /// a finned dart.
+    ///
+    /// `None` when the source carries no entry under that name, on the same
+    /// terms as [`Self::boost_model`] - a missing rocket model falls back to the
+    /// billboard rather than failing the race.
+    pub rocket_model: Option<Model>,
     /// The plume's authored texture-transform animation, from the keyframe
     /// block after its mesh's material array - the mechanism the original
     /// samples the plume's authored UVs through (`TEXMAPMODE` 0; see
@@ -1245,6 +1297,34 @@ pub fn load(options: &Options) -> Result<Loaded> {
         }
     };
 
+    // The Rocket's own model, on the same terms as the boost plume: absence is
+    // reported, not fatal. It is not per-team and not per-track - one entry
+    // serves every rocket in the game, which is why it loads here once and the
+    // scene clones it per projectile slot.
+    let rocket_model = match archives.read_name(ROCKET_MODEL_ENTRY) {
+        Ok(blob) => match mesh::build_with_textures(ROCKET_MODEL_ENTRY, &blob, None, options.lod) {
+            Ok(model) => {
+                report.push(format!(
+                    "{ROCKET_MODEL_ENTRY}: {} triangle(s), radius {:.2} - a rocket in \
+                     flight is this model, not a billboard",
+                    model.indices.len() / 3,
+                    model.radius
+                ));
+                Some(model)
+            }
+            Err(error) => {
+                report.push(format!("{ROCKET_MODEL_ENTRY}: did not decode ({error})"));
+                None
+            }
+        },
+        Err(_) => {
+            report.push(format!(
+                "{ROCKET_MODEL_ENTRY}: absent - rockets fall back to a billboard"
+            ));
+            None
+        }
+    };
+
     // Shared with the sky and the pads below: all three are node classes inside
     // the same track file, and a material in any of them names a texture by its
     // ordinal among *all* of the file's `Texture` nodes, not a per-class one -
@@ -1569,6 +1649,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         fog_volumes,
         ship_model,
         boost_model,
+        rocket_model,
         boost_uv_transform,
         visibility,
         flare,
@@ -2443,6 +2524,14 @@ pub struct Race {
     /// Where each blast flash is, in world space. Read only where the timer
     /// beside it is positive.
     blast_flash_point: [Vec3; oag_gameplay::projectile::MAX_PROJECTILES],
+    /// Whether each blast flash went off on track geometry rather than a hull.
+    ///
+    /// **The distinction is the original's**, even though what this engine draws
+    /// for either is not: `WO_ROCKET_EXPLO_TRACK` and `WO_ROCKET_EXPLO` are
+    /// separately authored particle systems, chosen by exactly this question.
+    /// See [`TRACK_BLAST_SIZE_RATIO`] and
+    /// `docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`.
+    blast_flash_on_track: [bool; oag_gameplay::projectile::MAX_PROJECTILES],
     /// How far the boost's field-of-view kick has opened, `0.0` to `1.0`.
     ///
     /// Render-only state, on `Race` rather than in `World` for the same reason
@@ -2771,6 +2860,7 @@ impl Race {
             pad_previous_position: [None; MAX_SHIPS],
             blast_flash_left: [0.0; oag_gameplay::projectile::MAX_PROJECTILES],
             blast_flash_point: [Vec3::ZERO; oag_gameplay::projectile::MAX_PROJECTILES],
+            blast_flash_on_track: [false; oag_gameplay::projectile::MAX_PROJECTILES],
             boost_kick: 0.0,
             boost_fov_kick: crate::display::BoostFovKick::DEFAULT,
             flaps: [0.0, 0.0],
@@ -3506,7 +3596,7 @@ impl Race {
         );
         self.advance_blast_flashes();
         for impact in impacts.iter().flatten() {
-            self.ignite_blast_flash(impact.point);
+            self.ignite_blast_flash(impact.point, impact.struck.map(usize::from));
         }
 
         self.respawn_cooldown = self.respawn_cooldown.saturating_sub(1);
@@ -3971,16 +4061,25 @@ impl Race {
 
     /// Arms a blast flash where a rocket went off.
     ///
-    /// # This is a placeholder and it says so
+    /// # What is recovered here, and what is still a placeholder
     ///
-    /// The original's own weapon effects are `Ship Muzzle` (`0x3e2`) and
-    /// `cannon_flash` (`0x3eb`), neither of which is built, and its shield hit
-    /// response is a per-team `Data\Ships\<Team>\<Team>shield.vex` that is not
-    /// built either - see `docs/overview/roadmap.md`. **Nothing here is
-    /// recovered.** What this draws is one additive billboard in the engine
-    /// flare's own texture, fading over [`BLAST_FLASH_SECONDS`], so that a
-    /// rocket detonating is visible at all rather than being a silent change to
-    /// a number.
+    /// **Recovered: that there are two of these, and which one goes off.** The
+    /// original authors `WO_ROCKET_EXPLO_TRACK` and `WO_ROCKET_EXPLO`
+    /// separately and picks between them by whether the rocket struck track
+    /// geometry or a craft - `Rocket_Update` (`0x0885d2a8`) spawns the first at
+    /// both of its collision branches, `Rocket_HitCraft_q` (`0x0886ebdc`) the
+    /// second. It also places the craft-hit one at the *struck craft's* position
+    /// dropped by [`CRAFT_BLAST_DROP`], not at the rocket's impact point. See
+    /// `docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`.
+    ///
+    /// **Still a placeholder: what either one looks like.** The `.pob` payload
+    /// that would give colour, size and lifetime is undecoded
+    /// (`docs/formats/pob.md`), and the original's other weapon effects -
+    /// `Ship Muzzle` (`0x3e2`), `cannon_flash` (`0x3eb`), the per-team
+    /// `<Team>shield.vex` - are not built at all. What this draws for both is
+    /// one additive billboard in the engine flare's own texture, fading over
+    /// [`BLAST_FLASH_SECONDS`], with the track variant drawn
+    /// [`TRACK_BLAST_SIZE_RATIO`] larger.
     ///
     /// [`Race::sparks`] is deliberately **not** reused for it, and the reason is
     /// worth recording: `Sparks::advance` re-anchors the whole system to the
@@ -3992,7 +4091,7 @@ impl Race {
     /// flash is decoration, so overwriting the one closest to finishing is the
     /// least visible loss. Render-only state, so this ordering cannot reach the
     /// simulation.
-    fn ignite_blast_flash(&mut self, point: Vec3) {
+    fn ignite_blast_flash(&mut self, point: Vec3, struck: Option<usize>) {
         let slot = self
             .blast_flash_left
             .iter()
@@ -4000,7 +4099,18 @@ impl Race {
             .min_by(|(_, a), (_, b)| a.total_cmp(b))
             .map_or(0, |(index, _)| index);
         self.blast_flash_left[slot] = BLAST_FLASH_SECONDS;
-        self.blast_flash_point[slot] = point;
+        // A hull hit is drawn at the struck craft, dropped, rather than at the
+        // impact point - the original's own choice, and the reason this takes
+        // `struck` rather than deriving everything from `point`. A craft that
+        // has since gone inactive falls back to the impact point rather than
+        // reading a stale pose.
+        self.blast_flash_point[slot] = match struck {
+            Some(slot) if self.world.ships[slot].active => {
+                self.world.ships[slot].physics.body.position - Vec3::Y * CRAFT_BLAST_DROP
+            }
+            _ => point,
+        };
+        self.blast_flash_on_track[slot] = struck.is_none();
     }
 
     /// Ages every blast flash by one tick.
@@ -4015,39 +4125,117 @@ impl Race {
     /// `right` and `up` are the camera's, read out of the view matrix the same
     /// way the exhaust's are. Empty when nothing is in the air and nothing has
     /// just gone off, which is the overwhelmingly common case.
+    ///
+    /// `modelled` says the caller is drawing the rockets as
+    /// [`ROCKET_MODEL_ENTRY`]'s mesh. When it is, the billboard here shrinks to
+    /// [`ROCKET_FLARE_HALF_SIZE`] and becomes the *flare around* the model - the
+    /// original carries one, `WO_ROCKET_FLARE`, attached at launch - rather than
+    /// standing in for the rocket itself at
+    /// [`PROJECTILE_SPRITE_HALF_SIZE`].
     #[must_use]
-    pub fn projectile_sprites(&self, right: Vec3, up: Vec3) -> Vec<oag_render::mesh::GpuVertex> {
+    pub fn projectile_sprites(
+        &self,
+        right: Vec3,
+        up: Vec3,
+        modelled: bool,
+    ) -> Vec<oag_render::mesh::GpuVertex> {
         let mut vertices = Vec::new();
+        let half = if modelled {
+            ROCKET_FLARE_HALF_SIZE
+        } else {
+            PROJECTILE_SPRITE_HALF_SIZE
+        };
         for projectile in &self.world.projectiles.slots {
             if projectile.kind.is_none() {
                 continue;
             }
-            vertices.extend(exhaust::sprite(
-                projectile.position,
-                right,
-                up,
-                PROJECTILE_SPRITE_HALF_SIZE,
-                1.0,
-            ));
+            // Behind the nose rather than on it, so the glow reads as coming off
+            // the tail of the model instead of swallowing it. A no-op for the
+            // billboard fallback, whose "model" is the sprite itself.
+            let centre = if modelled {
+                projectile.position
+                    - projectile.velocity.normalize_or_zero() * ROCKET_FLARE_HALF_SIZE
+            } else {
+                projectile.position
+            };
+            vertices.extend(exhaust::sprite(centre, right, up, half, 1.0));
         }
-        for (left, point) in self
+        for ((left, point), on_track) in self
             .blast_flash_left
             .iter()
             .zip(&self.blast_flash_point)
-            .filter(|(left, _)| **left > 0.0)
+            .zip(&self.blast_flash_on_track)
+            .filter(|((left, _), _)| **left > 0.0)
         {
             // Grows as it fades, which is what an expanding blast looks like and
-            // is not a reading of anything.
+            // is not a reading of anything. The track/hull ratio *is* a reading
+            // that the two differ, though not of by how much - see
+            // `TRACK_BLAST_SIZE_RATIO`.
             let age = 1.0 - left / BLAST_FLASH_SECONDS;
+            let scale = if *on_track {
+                TRACK_BLAST_SIZE_RATIO
+            } else {
+                1.0
+            };
             vertices.extend(exhaust::sprite(
                 *point,
                 right,
                 up,
-                BLAST_FLASH_HALF_SIZE * (0.4 + age),
+                BLAST_FLASH_HALF_SIZE * scale * (0.4 + age),
                 1.0 - age,
             ));
         }
         vertices
+    }
+
+    /// Where each live rocket is and how it is oriented, for the model draw.
+    ///
+    /// **Forward alignment is recovered; the quarter-turn is not.**
+    /// `Rocket_Update` (`0x0885d2a8`) rebuilds a basis every tick from the
+    /// rocket's normalised velocity and the surface normal under it, hands it to
+    /// the model's scene node, and rotates it by a further `-pi/2` about an axis
+    /// this project has not resolved - the call is an unresolved import stub.
+    /// So this aligns the model along its velocity, which is the evidenced part,
+    /// and does **not** invent the extra rotation. See
+    /// `docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`.
+    ///
+    /// The original's second basis vector is the *track* normal, which this
+    /// engine does not carry on a projectile (its rockets fly straight and never
+    /// consult the surface - the same page records that gap). World up stands in,
+    /// which only decides the model's roll about its own length.
+    ///
+    /// One entry per live rocket, in slot order, so the caller can zip it
+    /// against its drawables.
+    #[must_use]
+    pub fn rocket_model_matrices(&self) -> Vec<Mat4> {
+        self.world
+            .projectiles
+            .slots
+            .iter()
+            .filter(|projectile| projectile.kind.is_some())
+            .map(|projectile| {
+                let forward = projectile.velocity.normalize_or_zero();
+                if forward == Vec3::ZERO {
+                    return Mat4::from_translation(projectile.position);
+                }
+                // `Vec3::Y` is a poor reference exactly when the rocket is flying
+                // straight up or down; `any_orthonormal_vector` is the fallback
+                // rather than a silently degenerate basis.
+                let reference = if forward.dot(Vec3::Y).abs() > 0.999 {
+                    forward.any_orthonormal_vector()
+                } else {
+                    Vec3::Y
+                };
+                let side = forward.cross(reference).normalize_or_zero();
+                let up = side.cross(forward);
+                Mat4::from_cols(
+                    side.extend(0.0),
+                    up.extend(0.0),
+                    forward.extend(0.0),
+                    projectile.position.extend(1.0),
+                )
+            })
+            .collect()
     }
 
     /// How far the ship moved since the last pad test, and the path it swept.
@@ -5606,6 +5794,15 @@ pub struct Scene {
     /// rather than `Option<Vec<_>>` so the no-plume source and the iteration read
     /// the same way `ships` does.
     boost: Vec<Drawable>,
+    /// One drawable per projectile slot, for rockets drawn as their own model.
+    ///
+    /// **Empty** when `Data\Weapons\Rocket.vex` did not load, and the sprite
+    /// fallback in [`Race::projectile_sprites`] carries the whole effect then.
+    /// Sized to `MAX_PROJECTILES` and clone-per-slot for the same reason
+    /// [`Self::ships`] is clone-per-craft: a `Drawable` owns the uniform buffer
+    /// its model matrix goes in, and three rockets in the air at once need three
+    /// matrices. Eighty-four vertices apiece makes sixteen copies cheap.
+    rockets: Vec<Drawable>,
     /// The plume's authored texture-transform keyframes, sampled per frame
     /// and applied to its authored UVs - the recovered mechanism
     /// (`TEXMAPMODE` 0 plus the animated `TEXOFFSET` u-scroll; see
@@ -5679,6 +5876,7 @@ impl Scene {
         weapon_pad_model: Option<Model>,
         mode: Mode,
         boost_model: Option<Model>,
+        rocket_model: Option<Model>,
         boost_uv_transform: Option<oag_formats::vex::TexTransform>,
         flare: Option<FlareTexture>,
         noise: Option<FlareTexture>,
@@ -5944,6 +6142,27 @@ impl Scene {
                 )?);
             }
         }
+        // One per projectile slot, cloned the way the hulls and plumes above are.
+        // A rocket's hull is opaque - it is a painted dart, not a glow - so this
+        // takes the ordinary transparent blend and the protected glow mask the
+        // ships take, and the flare around it stays in the additive pass with
+        // the exhaust where it belongs.
+        let mut rockets = Vec::new();
+        if let Some(model) = rocket_model.filter(|model| !model.indices.is_empty()) {
+            for _ in 0..oag_gameplay::projectile::MAX_PROJECTILES {
+                rockets.push(Drawable::new(
+                    device,
+                    queue,
+                    model.clone(),
+                    format,
+                    anisotropy,
+                    sample_count,
+                    scene_depth,
+                    mesh_render::TRANSPARENT_BLEND,
+                    mesh_render::GlowMask::Protected,
+                )?);
+            }
+        }
         // 64 is a stand-in size only, and only when the disc's own texture did not
         // decode; `load` has already reported that when it happens.
         let flare = flare.unwrap_or_else(|| FlareTexture::placeholder(64));
@@ -5976,6 +6195,7 @@ impl Scene {
             visibility,
             ships,
             boost,
+            rockets,
             boost_uv_transform,
             collision,
             sky,
@@ -6150,6 +6370,13 @@ impl Scene {
         if let Some(player) = self.ships.first() {
             player.deflect_airbrakes(queue, left, right);
         }
+        // One matrix per rocket in the air. `zip` bounds it the way the ships'
+        // loop is bounded: nothing in the air writes nothing, and the drawables
+        // past the live count keep last frame's uniforms and are not drawn.
+        let rocket_matrices = race.rocket_model_matrices();
+        for (drawable, matrix) in self.rockets.iter().zip(&rocket_matrices) {
+            drawable.write(queue, view_projection, *matrix);
+        }
         // Same model matrix as the ship: the original parents the plume to the
         // craft, not to the flare - see `Loaded::boost_model`. Skipped while
         // hidden rather than written and left undrawn, since there is nothing
@@ -6239,7 +6466,7 @@ impl Scene {
         // Rockets in flight and their blast flashes, appended to the flare's own
         // buffer: same additive pipeline, same texture, no second pass. See
         // `Race::ignite_blast_flash` for why the whole effect is a placeholder.
-        vertices.extend(race.projectile_sprites(right, up));
+        vertices.extend(race.projectile_sprites(right, up, !self.rockets.is_empty()));
         self.exhaust.borrow_mut().upload(
             queue,
             &view_projection.to_cols_array_2d(),
@@ -6350,6 +6577,13 @@ impl Scene {
             if index == 0 && !race.draws_own_ship() {
                 continue;
             }
+            stats.add(drawable.draw(&mut pass, None, None, None));
+        }
+        // Rockets, with the hulls: an opaque painted model that occludes and is
+        // occluded, not an effect. Bounded by how many matrices were written
+        // this frame, for the same reason the plumes are - a drawable whose
+        // uniform buffer went unwritten would draw at last frame's pose.
+        for drawable in self.rockets.iter().take(rocket_matrices.len()) {
             stats.add(drawable.draw(&mut pass, None, None, None));
         }
         // After the ships, so the hulls' depth is already in the buffer: a
@@ -6616,6 +6850,7 @@ pub fn capture(
         pad_model,
         weapon_pad_model,
         boost_model,
+        rocket_model,
         boost_uv_transform,
         fog_volumes,
         visibility,
@@ -6705,6 +6940,7 @@ pub fn capture(
         weapon_pad_model,
         mode,
         boost_model,
+        rocket_model,
         boost_uv_transform,
         flare,
         noise,
@@ -8506,7 +8742,7 @@ mod tests {
         let right = Vec3::X;
         let up = Vec3::Y;
         assert!(
-            race.projectile_sprites(right, up).is_empty(),
+            race.projectile_sprites(right, up, false).is_empty(),
             "an empty sky must draw nothing rather than a quad at the origin"
         );
 
@@ -8520,7 +8756,10 @@ mod tests {
             );
             race.blast_flash_left[slot] = BLAST_FLASH_SECONDS;
         }
-        let vertices = race.projectile_sprites(right, up);
+        // The billboard fallback, which is the worst case for this buffer: the
+        // modelled path emits the same count of (smaller) flare quads, so
+        // asserting the fallback bounds both.
+        let vertices = race.projectile_sprites(right, up, false);
         assert_eq!(
             vertices.len(),
             oag_gameplay::projectile::MAX_PROJECTILES * 2 * 6,
@@ -8535,6 +8774,130 @@ mod tests {
              silently drop the overflow",
             vertices.len() + flares,
             exhaust::MAX_VERTICES
+        );
+    }
+
+    /// A rocket drawn as a model is oriented along its own velocity.
+    ///
+    /// The forward column is the evidenced half of `Rocket_Update`'s basis (see
+    /// `docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`); the roll about
+    /// it is not, which is why only forward and orthonormality are asserted.
+    #[test]
+    fn a_modelled_rocket_points_where_it_is_going() {
+        let mut race =
+            race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_rocket_table());
+        assert!(
+            race.rocket_model_matrices().is_empty(),
+            "an empty sky must place no rocket models"
+        );
+
+        let heading = Vec3::new(1.0, 0.0, 2.0).normalize();
+        race.world.projectiles.spawn(
+            oag_formats::weapons::Weapon::Rocket,
+            Vec3::X,
+            heading * 600.0,
+            0,
+        );
+        let matrices = race.rocket_model_matrices();
+        assert_eq!(matrices.len(), 1, "one live rocket, one matrix");
+
+        let matrix = matrices[0];
+        assert!(
+            matrix.w_axis.truncate().abs_diff_eq(Vec3::X, 1e-5),
+            "the model sits where the rocket is, got {:?}",
+            matrix.w_axis
+        );
+        assert!(
+            matrix.z_axis.truncate().abs_diff_eq(heading, 1e-5),
+            "forward must be the velocity, got {:?} against {heading:?}",
+            matrix.z_axis
+        );
+        // A degenerate basis would still translate correctly and would light the
+        // model from nowhere, so orthonormality is worth its own assertion.
+        let (x, y, z) = (
+            matrix.x_axis.truncate(),
+            matrix.y_axis.truncate(),
+            matrix.z_axis.truncate(),
+        );
+        for (label, axis) in [("side", x), ("up", y), ("forward", z)] {
+            assert!(
+                (axis.length() - 1.0).abs() < 1e-5,
+                "{label} is not unit length: {}",
+                axis.length()
+            );
+        }
+        assert!(x.dot(y).abs() < 1e-5 && x.dot(z).abs() < 1e-5 && y.dot(z).abs() < 1e-5);
+    }
+
+    /// A rocket fired straight down still gets a usable basis.
+    ///
+    /// World up is the reference the side vector is built from, so a rocket
+    /// flying along it is exactly the degenerate case. Ours, not the original's -
+    /// it builds its second vector from the track normal, which a projectile in
+    /// this engine does not carry.
+    #[test]
+    fn a_rocket_flying_along_world_up_does_not_collapse_its_basis() {
+        let mut race =
+            race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_rocket_table());
+        race.world.projectiles.spawn(
+            oag_formats::weapons::Weapon::Rocket,
+            Vec3::ZERO,
+            Vec3::NEG_Y * 600.0,
+            0,
+        );
+        let matrix = race.rocket_model_matrices()[0];
+        let (x, y, z) = (
+            matrix.x_axis.truncate(),
+            matrix.y_axis.truncate(),
+            matrix.z_axis.truncate(),
+        );
+        assert!(
+            z.abs_diff_eq(Vec3::NEG_Y, 1e-5),
+            "forward must still be the velocity, got {z:?}"
+        );
+        assert!(
+            (x.length() - 1.0).abs() < 1e-5 && (y.length() - 1.0).abs() < 1e-5,
+            "the fallback reference must still produce unit axes, got {} and {}",
+            x.length(),
+            y.length()
+        );
+        assert!(x.dot(z).abs() < 1e-5 && y.dot(z).abs() < 1e-5);
+    }
+
+    /// A hull hit and a track hit are different blasts, in different places.
+    ///
+    /// **Both halves are the original's.** It authors `WO_ROCKET_EXPLO` and
+    /// `WO_ROCKET_EXPLO_TRACK` separately, and `Rocket_HitCraft_q`
+    /// (`0x0886ebdc`) puts the hull one at the *struck craft's* position dropped
+    /// by [`CRAFT_BLAST_DROP`] rather than at the impact point. This engine drew
+    /// one flash at the impact point for both.
+    #[test]
+    fn a_hull_blast_sits_under_the_craft_and_a_track_blast_where_it_struck() {
+        let mut race =
+            race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_rocket_table());
+        let impact = Vec3::new(5.0, 1.0, -3.0);
+
+        race.ignite_blast_flash(impact, None);
+        assert!(race.blast_flash_on_track[0], "no craft struck means track");
+        assert_eq!(
+            race.blast_flash_point[0], impact,
+            "a track blast goes where the rocket struck"
+        );
+
+        let struck = 1;
+        race.world.ships[struck].active = true;
+        let craft = Vec3::new(-20.0, 4.0, 11.0);
+        race.world.ships[struck].physics.body.position = craft;
+        race.ignite_blast_flash(impact, Some(struck));
+        let slot = race
+            .blast_flash_on_track
+            .iter()
+            .position(|on_track| !on_track)
+            .expect("the hull blast must have taken a slot");
+        assert_eq!(
+            race.blast_flash_point[slot],
+            craft - Vec3::Y * CRAFT_BLAST_DROP,
+            "a hull blast is drawn under the craft, not at the impact point"
         );
     }
 
