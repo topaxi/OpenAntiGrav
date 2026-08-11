@@ -1,13 +1,21 @@
 # Particle system
 
-**Status: partial.** The container, the slot table (including the pointer
-fixup it drives at load time, confirmed live), the name field, and what a
-slot resolves to are all decoded, implemented in
+**Status: partial, and the two halves are at very different depths.** The
+container, the slot table (including the pointer fixup it drives at load
+time, confirmed live), the name field, and **the emitter tree** are all
+decoded, implemented in
 [`oag-formats::pob`](../../crates/formats/src/pob.rs) and validated against
-all 35 `.pob` files on the PSP disc. What is **not** decoded is the record
-layout at a resolved target: 43% of them are readable developer strings
-(texture paths, layer names), and the rest are floats whose field boundaries
-are still unread.
+all 35 `.pob` files on the PSP disc and all 41 on the PS2 disc. What is
+**not** decoded is the record layout at a *slot-resolved* target: 43% of
+them are readable developer strings (texture paths, layer names), and the
+rest are floats whose field boundaries are still unread.
+
+The distinction matters because it has been flattened to "the payload is
+undecoded" more than once. The emitter records - schedules, shapes, speeds,
+lifetimes, colour tables, channel blocks, the child/sibling tree - are read
+at fixed offsets and need no fixup at all; see "The emitter record layout is
+decoded" and "The parser walks the tree" below. Only the slot table's own
+targets are unread.
 
 These are the `SYSP` blobs under `Data\Psys\` in `Data.wad` - one per authored
 effect, loaded by `Data\Psys\%s.POB` (built at `FUN_089156a0` in the PSP
@@ -27,7 +35,7 @@ involvement - see [`oag_render::exhaust`](../rendering/README.md).
 +0x0c  u32      1 in every file seen
 +0x10  slot[count], 4 bytes each: u32, or 0xffffffff for an unused slot
        ...      32-byte NUL-terminated name, immediately after the table
-       ...      payload, undecoded
+       ...      the emitter tree, whose root record starts at that name
 ```
 
 `+0x04` is redundant with the blob's own length - `HEADER_LEN(16) +
@@ -67,9 +75,10 @@ WO_SHURIKEN_HEAD, WO_SHURIKEN_TRAIL, WO_SNOW, WO_WEAPON_ABSORB
 
 `WO_SHIP_COLL_SPARK`, `WO_SHIP_COLL_SPARK_DAMAGE` and
 `WO_SHIP_COLL_SPARK_NODAMAGE` are three distinct, separately authored
-particle systems for the effect `oag_render::sparks` currently authors by
-hand (see [contact-response.md](../ghidra/functions/psp-pulse-usa/contact-response.md)
-and the `HANDOVER.md` open thread), and `WO_SHIP_COLL_SPARK_TRAIL` and
+particle systems for the effect `oag_render::sparks` draws (see
+[contact-response.md](../ghidra/functions/psp-pulse-usa/contact-response.md);
+`_DAMAGE` is the tree it loads and `WO_SHIP_COLL_SPARK` is one emitter
+*inside* it as well as a file of its own), and `WO_SHIP_COLL_SPARK_TRAIL` and
 `WO_SHIP_COLL_SPARK_TRAIL_SMOKE` are two more in the same family.
 
 ## The slot table is a pointer-fixup table
@@ -344,6 +353,73 @@ Confidence **90** for the sibling-tree mechanism and the four emitters'
 schedules (file bytes plus two independent live captures agree); **85** for
 the per-emitter parameter semantics (they inherit the table above).
 
+### The parser walks the tree - 2026-08-12
+
+The table above was, until now, transcribed by hand into
+`oag_render::sparks::EMITTERS` for one file. It is now **parsed**:
+[`ParticleSystem::emitters`](../../crates/formats/src/pob.rs) reads an
+`Emitter` per record and follows `+0x944`/`+0x948`/`+0x94c` into a tree,
+returning it depth-first with the root first and the two child fields as
+indices into the same vector. Nothing is converted on the way out - speeds
+stay units per tick, lifetimes stay integer ticks - so a consumer converts
+once, where its own units are.
+
+**The tree is not a sibling chain.** `WO_SHIP_COLL_SPARK_DAMAGE` made it
+look like one because all four of its emitters are peers. `WO_ROCKET_EXPLO`
+is the counter-example that fixes the container's shape: seven records,
+nested both ways.
+
+```text
+WO_ROCKET_EXPLO
+├─ (per particle) SMOKEMUSHROOM        +0x948, 78±2 tick smoke, its own drag node
+├─ DEBRIS                              +0x94c
+├─ SMOKERING
+├─ GLOW
+└─ FIREMUSHROOM_PARENT_GLOWS
+   └─ (per particle) FIREMUSHROOM      +0x948
+```
+
+`WO_ROCKET_FLARE` is two (`WO_ROCKET_FLARE` + `WO_ROCKET_SHAZZAM`),
+`WO_ROCKET_EXPLO_TRACK` five.
+
+**Corpus check, 2026-08-12, both discs, one parser, no adjustments** -
+`crates/assets/tests/pob_ground_truth.rs`, run with `just test-data`:
+
+| | systems | emitters | largest tree |
+| --- | --- | --- | --- |
+| PSP `Data.wad` | 35 | 76 | `WO_ROCKET_EXPLO`, 7 |
+| PS2 `WADS2.WAD` | 41 | 90 | `WO_ROCKET_EXPLO`, 7 |
+
+Every one of those 166 records passes the same invariants: the root's name
+is the resource's own; the render-mode index lands inside the eight-entry
+blend table; the blend class is 1, 2 or 3; the shape is inside the emit
+dispatch's switch; all four channel blocks carry a known mode and keyframe
+times that are ascending and inside `0..=1`; the emission interval and
+per-emission count are at least 1 with `max >= min`; lifetime, live cap,
+speed spread, cone angle (`0..=180` degrees), atlas grid and child
+probability (`0..=1`) are all in range; and no tree revisits a record.
+
+That is what raises this from "the layout of one file" to a layout: a wrong
+offset would have to be simultaneously plausible as a schedule, an angle and
+a probability across 166 independently authored records on two platforms.
+**Confidence 90** for the record layout as parsed (up from 85), with the
+individual rows still carrying the confidence the table above gives them.
+
+Two corrections the corpus forced on the table:
+
+- **`+0x38` is not an extent axis.** It reads `-0.0003575` on the
+  collision-spark root, which looked like a small second radius, but
+  `-15910579.0` and `8.8e23` on records whose every other field is sane. The
+  parser keeps `+0x34` as the extent and exposes `+0x38`/`+0x40` raw and
+  unread; `+0x40` is still a plausible second axis (`0.737` on
+  `SMOKEMUSHROOM`, `2.94` on a `SMOKERING`).
+- **Channel mode 3 ignores its keyframes.** `WO_SHIP_COLL_SPARK_TRAIL`'s
+  size block authors six keys *and* mode 3, and
+  `ParticleSystem_InitParticle` draws `Psys_RandFloatRange(lo, hi)` without
+  consulting them - authored data the interpreter never reads, not a
+  reading error. The block's `period` field is likewise authored (`4.0` on
+  `WO_SHIP_COLL_SPARK`) with no traced consumer.
+
 ### A second, fixed-offset field block sits right after the name - no fixup needed
 
 `FUN_088f4910` (the function `ShipCollisionFx_Trigger`'s spawned particle
@@ -491,13 +567,18 @@ just wad cat 'data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/Data.wad' 0xeff1f331
 # space-constrained /tmp
 ```
 
-`oag_formats::pob::ParticleSystem::parse` and `resolve_slot` recover the
-name, slot table and every fixup target from any of the 35 PSP or 41 PS2
-blobs; no ground-truth test is committed because, per
-[ADR-0006](../architecture/adr/0006-no-copyrighted-content.md), only
-hand-authored fixtures - never extracted game bytes - may land in the repo.
-Unit tests in `pob.rs` build synthetic blobs replaying the confirmed fixup
-shape instead.
+`oag_formats::pob::ParticleSystem::parse`, `resolve_slot` and `emitters`
+recover the name, slot table, every fixup target and the whole emitter tree
+from any of the 35 PSP or 41 PS2 blobs. Per
+[ADR-0006](../architecture/adr/0006-no-copyrighted-content.md) only
+hand-authored fixtures - never extracted game bytes - may land in the repo,
+so the unit tests in `pob.rs` build synthetic blobs replaying the confirmed
+fixup and record shapes, and the corpus check runs against the user's own
+disc, `#[ignore]`d and out of CI:
+
+```sh
+cargo nextest run -p oag-assets --run-ignored all --test pob_ground_truth --no-capture
+```
 
 ## Not determined
 

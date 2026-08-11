@@ -285,7 +285,7 @@ pub const CLASS_ENGINE_FLARE: u32 = 0x3bf;
 
 /// Class ID of a `ParticleSystem` node.
 ///
-/// The `.pob` payload it names is undecoded; see `docs/formats/README.md`.
+/// The `.pob` it names parses through [`crate::pob`], emitter tree and all.
 pub const CLASS_PARTICLE_SYSTEM: u32 = 0x3c4;
 
 /// Class ID of a `Trail` node: a position-history ribbon.
