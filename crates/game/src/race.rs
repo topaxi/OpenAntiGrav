@@ -277,11 +277,13 @@ pub const PROJECTILE_SPRITE_HALF_SIZE: f32 = 1.5;
 ///
 /// **The flare itself is recovered and its size is not.** The original attaches
 /// a `WO_ROCKET_FLARE` particle system to every rocket at launch
-/// (`Rocket_Init`, tag `ROFL`), but the `.pob` payload that would give its
-/// colour, size and lifetime is still undecoded - see `docs/formats/pob.md`. So
-/// the *presence* of a glow at the rocket is recovered and every number here is
-/// invented, sized to sit around a model of radius 1.34 rather than to replace
-/// it.
+/// (`Rocket_Init`, tag `ROFL`). Its parameters **are** readable - the emitter
+/// tree parses and `oag_render::psys` plays it (`docs/formats/pob.md`) - but
+/// nothing here reads them yet: a flare is per-rocket state and the particle
+/// pool is per-effect, so wiring it needs one shared pool rather than another
+/// constant. Until then the *presence* of a glow is recovered and every number
+/// here is invented, sized to sit around a model of radius 1.34 rather than to
+/// replace it.
 ///
 /// **Kept well under the model's own radius on purpose**, by reasoning rather
 /// than by measurement: this is an *additive* sprite at full alpha, so at
@@ -313,8 +315,9 @@ pub const BLAST_FLASH_HALF_SIZE: f32 = 8.0;
 /// `WO_ROCKET_EXPLO_TRACK` from `Rocket_Update`'s collision branches,
 /// `WO_ROCKET_EXPLO` from `Rocket_HitCraft_q` - so drawing one flash for both
 /// was a real mismatch rather than a missing flourish. What the two *look* like
-/// is not decoded, so this engine only distinguishes them by size and by where
-/// they sit; a track hit reads bigger, which is what the emulator's frames show.
+/// is decoded but not yet played (`oag_render::psys`), so this engine still
+/// distinguishes them only by size and by where they sit; a track hit reads
+/// bigger, which is what the emulator's frames show.
 pub const TRACK_BLAST_SIZE_RATIO: f32 = 1.45;
 
 /// How far below a struck craft's centre its blast is drawn, in world units.
@@ -331,8 +334,8 @@ pub const CRAFT_BLAST_DROP: f32 = 2.5;
 /// rocket carries in flight - there is no separate `WO_ROCKET_TRAIL` on the
 /// disc, unlike the Shuriken, which has both a `_HEAD` and a `_TRAIL`. So one
 /// emitter draws both the glow at the nose and the streak behind it. What that
-/// emitter's particles look like is in the undecoded `.pob` payload
-/// (`docs/formats/pob.md`), so the count, the spacing and the fade here are all
+/// emitter's particles look like now parses (`docs/formats/pob.md`) and is not
+/// yet played, so the count, the spacing and the fade here are all still
 /// invented.
 ///
 /// One puff a tick at 60 Hz, so eight of them is an eighth of a second of
@@ -370,8 +373,9 @@ pub const BLAST_FLASH_SECONDS: f32 = 0.6;
 /// **Invented.** One additive billboard reads as a flat disc whatever its size;
 /// three at different sizes and offsets, expanding at different rates, read as
 /// a fireball. The original draws a whole authored particle system
-/// (`WO_ROCKET_EXPLO`, `WO_ROCKET_EXPLO_TRACK`) whose parameters are undecoded,
-/// so this is a stand-in that is *legible*, not one that is right.
+/// (`WO_ROCKET_EXPLO`, seven emitters, and `WO_ROCKET_EXPLO_TRACK`, five) whose
+/// parameters now parse and are not yet played, so this is a stand-in that is
+/// *legible*, not one that is right.
 pub const BLAST_PUFFS: usize = 3;
 
 /// How much faster a craft assumes a Turbo will make it, when deciding whether
@@ -4227,9 +4231,10 @@ impl Race {
     /// dropped by [`CRAFT_BLAST_DROP`], not at the rocket's impact point. See
     /// `docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`.
     ///
-    /// **Still a placeholder: what either one looks like.** The `.pob` payload
-    /// that would give colour, size and lifetime is undecoded
-    /// (`docs/formats/pob.md`), and the original's other weapon effects -
+    /// **Still a placeholder: what either one looks like.** The `.pob` that
+    /// gives colour, size and lifetime parses and plays
+    /// (`oag_render::psys`) but is not wired here yet, and the original's
+    /// other weapon effects -
     /// `Ship Muzzle` (`0x3e2`), `cannon_flash` (`0x3eb`), the per-team
     /// `<Team>shield.vex` - are not built at all. What this draws for both is
     /// one additive billboard in the engine flare's own texture, fading over

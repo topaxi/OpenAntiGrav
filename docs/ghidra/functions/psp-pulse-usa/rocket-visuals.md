@@ -147,11 +147,24 @@ Two details of the craft-hit explosion worth not losing:
 - **It is conditional.** Only spawned when `func_0x0003a37c(craft+0xf0)` is
   non-zero - an activity or visibility test that is not read here.
 
-`WO_ROCKET_FLARE`'s **name** is recovered; its **parameters are not**. The `.pob`
-record layout at a resolved target is still undecoded
-([`pob.md`](../../../formats/pob.md) is explicit about this), so nothing here
-states a colour, size or lifetime from the file. What the emulator showed is
-below.
+**Superseded 2026-08-12: the parameters are readable now.** When this page was
+written, only `WO_ROCKET_FLARE`'s *name* was recovered, on the grounds that a
+`.pob`'s payload was undecoded. That was too broad a claim even then - it is
+the *slot-resolved* record that is unread, not the emitter record - and the
+emitter tree is now parsed and played
+([`pob.md`](../../../formats/pob.md), "The parser walks the tree"). All three
+of the rocket's effects come out whole:
+
+| effect | emitters |
+| --- | --- |
+| `WO_ROCKET_FLARE` | `WO_ROCKET_FLARE` (2 per tick for 100 ticks, 30-tick life, 4x4 atlas, random frame), `WO_ROCKET_SHAZZAM` |
+| `WO_ROCKET_EXPLO_TRACK` | root glow, `fat_streaks`, `SMOKERING`, `Fire_Emitter`, and one more |
+| `WO_ROCKET_EXPLO` | root, `SMOKEMUSHROOM` (per particle), `DEBRIS` (32 per tick), `SMOKERING`, `GLOW`, `FIREMUSHROOM_PARENT_GLOWS`, `FIREMUSHROOM` (per particle) |
+
+What has **not** happened is wiring them into the renderer: `race.rs` still
+draws the invented puffs described below. The blocker is no longer decoding
+but pooling - see `HANDOVER.md`. The emulator observations that follow were
+taken before any of this and stand on their own.
 
 **One structural point the name list does settle**, though: the rocket has no
 separate trail effect. The Shuriken authors both `WO_SHURIKEN_HEAD` and
