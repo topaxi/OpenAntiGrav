@@ -21,20 +21,23 @@ pub struct GpuVertex {
     /// need the rig. This is the viewer's own choice, not the game's: the GE
     /// decides per draw from state we have not recovered.
     pub lit: f32,
-    /// How many whole V (row) sweeps of this vertex's texture pass under it per
-    /// [`ANIM_PERIOD_TICKS`], or 0.0 for a surface that does not animate.
+    /// Which of [`Model::anim_tracks`] transforms this vertex's texture
+    /// coordinate, plus one; `0` for a surface that does not animate.
     ///
-    /// The shader offsets the V texture coordinate by `v_cycles * anim_phase`,
-    /// and that is the entire animation: the colour and brightness curve lives
-    /// in the texture's own rows, not in any code here. Which textures qualify,
-    /// and the evidence for each, is [`ANIMATED_TEXTURES`].
+    /// The shader looks the entry up and applies `uv * scale + offset`, the
+    /// GE's own `TEXSCALE`/`TEXOFFSET` arithmetic - see
+    /// `docs/ghidra/functions/psp-pulse-usa/texture-animation.md`. The curve
+    /// itself is the material's authored keyframe block, sampled on the CPU
+    /// once per frame per track rather than per vertex.
     ///
-    /// A rate rather than the flag this used to be, so a surface that turns out
-    /// to run at a different speed is a table entry rather than a second uniform
-    /// and a second branch. It stays one `f32` because no recovered surface
-    /// scrolls in U: a track model is millions of vertices, and a second
-    /// component would cost that much memory to carry zeroes.
-    pub v_cycles: f32,
+    /// An index rather than the scalar V rate this used to be, because the
+    /// authored data is not a scalar V rate. `16_Track` alone carries 17
+    /// distinct tracks, and they scroll in U as often as in V - the
+    /// `col_display7` displays this project animated downwards actually run
+    /// sideways - some diagonally, and the flicker panels step between held
+    /// values rather than sliding at all. One `u32` carries all of that for
+    /// the same four bytes per vertex the rate cost.
+    pub anim: u32,
 }
 
 /// A world-space bounding sphere, for frustum culling.
@@ -93,14 +96,39 @@ pub struct DrawCall {
     pub node: Option<u32>,
 }
 
+/// How many distinct texture-transform tracks one model may carry, matching
+/// `mesh.wgsl`'s `TexAnims` array.
+///
+/// Slot 0 is the identity, so a model gets `ANIM_TRACK_LIMIT - 1` real tracks.
+///
+/// **The headroom is measured, not guessed**: swept over all 52 `.vex` files
+/// the PSP disc ships that this project builds - every circuit's four layout
+/// variants plus both models of all eight teams - the worst is `04_Track` at
+/// **18** distinct tracks, against `16_Track`'s 17. So this is a factor of
+/// three. `crates/render/tests/authored_uv_ground_truth.rs` re-measures it, and
+/// fails rather than silently overflowing if a file ever exceeds it.
+///
+/// Exceeding it is graceful either way: the surfaces past the ceiling draw
+/// unanimated rather than the build failing, in [`build_with_textures`] and in
+/// [`merge`] alike.
+pub const ANIM_TRACK_LIMIT: usize = 64;
+
 /// Which textures animate and how fast: `oag_pulse::textures::ANIMATED_TEXTURES`.
 ///
 /// The table moved to the title package under [ADR-0022] - which surfaces move is
 /// a fact about what Pulse ships, and every key is a `Data\Tex\` entry off its
-/// disc. The mechanism stays here: this lookup, the per-vertex
-/// [`GpuVertex::v_cycles`] attribute and the V offset in `mesh.wgsl`. The evidence
-/// for each entry is on the constant itself and in
+/// disc. The evidence for each entry is on the constant itself and in
 /// `crates/render/tests/animated_uv_ground_truth.rs`.
+///
+/// **Nothing draws through this any more.** The renderer reads each material's
+/// authored keyframe block instead ([`GpuVertex::anim`]), which is the
+/// original's own mechanism rather than an inference from geometry - and the
+/// two disagree: the table scrolls `col_display7_GLOW` in V where the disc
+/// authors it in U. What the table and its measurement are still good for is
+/// the question they were built to answer, *which* surfaces on a circuit are
+/// meant to move, which is a useful cross-check on the authored reading and
+/// the only record of the narrow-V-band survey. Kept for that, and for
+/// [`is_blink_light_texture`], which several ship paths still key off.
 ///
 /// [ADR-0022]: ../../../docs/architecture/adr/0022-title-packages.md
 pub use oag_pulse::textures::ANIMATED_TEXTURES;
@@ -335,6 +363,14 @@ pub struct Model {
     /// them. `None` on a track, on a ship whose file carries no `Airbrake`
     /// node, and on either side that is absent.
     pub airbrakes: [Option<Flap>; 2],
+    /// The distinct texture-transform tracks this model's materials author,
+    /// indexed by [`GpuVertex::anim`] minus one.
+    ///
+    /// Deduplicated: `16_Track`'s 90 animated meshes author 17 distinct
+    /// tracks, and identical tracks share an entry so the per-frame table the
+    /// shader reads stays small. Order is first-seen, which keeps a rebuild of
+    /// the same file byte-identical.
+    pub anim_tracks: Vec<vex::TexTransform>,
 }
 
 /// One authored airbrake flap: which vertices are its own, and what it hinges
@@ -617,6 +653,7 @@ fn build_class(
     let mut transparent_draws: Vec<DrawCall> = Vec::new();
     let mut mesh_count = 0;
     let mut airbrakes: [Option<Flap>; 2] = [None, None];
+    let mut anim_tracks: Vec<vex::TexTransform> = Vec::new();
 
     for (index, node) in nodes
         .iter()
@@ -650,6 +687,10 @@ fn build_class(
         // set together on the same batch, but transparent takes priority if
         // they ever are, since blending is the more permissive of the two.
         let materials = vex::mesh_materials(payload);
+        // One authored keyframe block per material, and a material without one
+        // is simply not animated - the engine's own identity default. Read
+        // here rather than per batch because several batches share a material.
+        let transforms = vex::mesh_tex_transforms(payload);
 
         for batch_list in [0u8, 1u8] {
             for batch in vex::mesh_batches(payload, batch_list).context("decoding batches")? {
@@ -672,11 +713,26 @@ fn build_class(
                     .flatten()
                     .map(|m| m.texture as usize)
                     .filter(|&t| textures.get(t).is_some_and(Option::is_some));
-                let v_cycles = texture
-                    .and_then(|t| textures.get(t))
+                // The material's own authored track, deduplicated into
+                // `anim_tracks`. `0` means "no transform", so a real track is
+                // its index plus one.
+                let anim = transforms
+                    .get(usize::from(batch.material_index))
                     .and_then(Option::as_ref)
-                    .and_then(|t| animated_v_cycles(&t.label))
-                    .unwrap_or(0.0);
+                    .and_then(|transform| {
+                        anim_tracks
+                            .iter()
+                            .position(|seen| seen == transform)
+                            .or_else(|| {
+                                // Past the shader's array, the surface draws
+                                // unanimated rather than the build failing.
+                                (anim_tracks.len() + 1 < ANIM_TRACK_LIMIT).then(|| {
+                                    anim_tracks.push(transform.clone());
+                                    anim_tracks.len() - 1
+                                })
+                            })
+                    })
+                    .map_or(0, |at| u32::try_from(at + 1).unwrap_or(0));
 
                 let mut lo = [f32::MAX; 3];
                 let mut hi = [f32::MIN; 3];
@@ -701,7 +757,7 @@ fn build_class(
                         }),
                         texcoord: v.texcoord.unwrap_or([0.0, 0.0]),
                         lit: if v.colour.is_some() { 0.0 } else { 1.0 },
-                        v_cycles,
+                        anim,
                     });
                 }
                 for tri in batch.triangles() {
@@ -807,6 +863,7 @@ fn build_class(
         radius,
         mesh_count,
         airbrakes,
+        anim_tracks,
     })
 }
 
@@ -895,6 +952,7 @@ pub fn merge(label: &str, models: Vec<Model>) -> Model {
         centre: [0.0; 3],
         radius: 1.0,
         mesh_count: 0,
+        anim_tracks: Vec::new(),
     };
 
     for model in models {
@@ -904,8 +962,27 @@ pub fn merge(label: &str, models: Vec<Model>) -> Model {
         let vertex_base = out.vertices.len() as u32;
         let index_base = out.indices.len() as u32;
         let texture_base = out.textures.len();
+        // Positional like the texture slots, and rebased the same way, except
+        // that 0 is "no transform" rather than a slot and has to stay 0.
+        let anim_base = u32::try_from(out.anim_tracks.len()).unwrap_or(0);
+        out.anim_tracks.extend(model.anim_tracks);
+        // Concatenating two models can push the total past what the shader's
+        // table holds, where the builder's own ceiling only bounds one source.
+        // Rebased indices past it fall back to "no transform" rather than
+        // pointing off the end.
+        let limit = u32::try_from(ANIM_TRACK_LIMIT).unwrap_or(u32::MAX);
+        out.anim_tracks.truncate(ANIM_TRACK_LIMIT - 1);
 
-        out.vertices.extend(model.vertices);
+        out.vertices.extend(model.vertices.into_iter().map(|mut v| {
+            if v.anim != 0 {
+                // 0, not a wrap: an index that no longer has a track behind it
+                // must draw unanimated, where a modulo would quietly hand it
+                // some *other* surface's animation.
+                let rebased = v.anim.saturating_add(anim_base);
+                v.anim = if rebased < limit { rebased } else { 0 };
+            }
+            v
+        }));
         out.indices
             .extend(model.indices.iter().map(|i| i + vertex_base));
         let rebase = |d: DrawCall| DrawCall {
@@ -1048,7 +1125,7 @@ mod merge_tests {
                     colour: [1.0; 4],
                     texcoord: [0.0; 2],
                     lit: 1.0,
-                    v_cycles: 0.0,
+                    anim: 0,
                 })
                 .collect(),
             indices: (0..vertices as u32).collect(),
@@ -1068,6 +1145,7 @@ mod merge_tests {
             textures: (0..textures).map(|_| None).collect(),
             centre: [0.0; 3],
             radius: 1.0,
+            anim_tracks: Vec::new(),
             mesh_count: 1,
         }
     }

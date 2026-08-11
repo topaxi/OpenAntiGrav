@@ -158,6 +158,7 @@ pub fn build_model(label: &str, ai: &AiTrack) -> Model {
         textures: Vec::new(),
         centre,
         radius,
+        anim_tracks: Vec::new(),
         mesh_count: ai.paths.len(),
     }
 }
@@ -210,7 +211,7 @@ fn strip(
             colour,
             texcoord: [0.0, 0.0],
             lit: 1.0,
-            v_cycles: 0.0,
+            anim: 0,
         });
         vertices.push(GpuVertex {
             position: edges_of(s, right, lift),
@@ -218,7 +219,7 @@ fn strip(
             colour,
             texcoord: [1.0, 0.0],
             lit: 1.0,
-            v_cycles: 0.0,
+            anim: 0,
         });
     }
     for i in 0..samples.len() as u32 - 1 {

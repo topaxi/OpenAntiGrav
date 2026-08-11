@@ -672,15 +672,43 @@ had at "confidence 0" until this read. Immediately after the material array:
 +0x18  f32[2] runtime out: scale u, v  (1.0, 1.0 in the file)
 +0x20  f32[2] runtime out: offset u, v
 +0x28  f32    runtime: last update time
-+0x2c  f32    wrap period in seconds (600.0 everywhere read); bit 0 of the
-              word doubles as the step-vs-lerp flag
++0x2c  f32    authored loop period in seconds; bit 0 of the word doubles as
+              the step-vs-lerp flag
 ```
+
+There is **one block per material**, `0x40` bytes each, and the array starts
+where the materials end - the same array the runtime reaches as
+`mesh+0x60 + material_index * 0x40`, relocated in place. A material that
+authors no animation leaves its block's two counts at zero, which is the
+engine's identity default; on `16_Track` most animated meshes have a single
+material, but its hologram panels carry two blocks and animate at different
+rates (one tile of `v` per 60 frames and per 120).
+
+**A later block's `times`/`values` are relative to the start of the array, not
+to the block that holds them.** Indistinguishable on a single-material mesh,
+and the difference between real key data and noise on a second one.
+
+**`+0x2c` is the loop period and it is not the last key time.** Measured across
+`16_Track`: the flicker panels' tracks end at frames 12, 18 and 24 and all
+three author a **50-frame** loop, which is what lets sibling meshes carry the
+same steps at different key times and flicker against one another. Driving
+them off their last key runs them at up to four times speed and collapses that
+interleave into unison. (An earlier revision of this page said "600.0
+everywhere read", which was true of the two boost-plume blocks it had read and
+wrong as a generalisation.)
 
 The engine relocates the two `times` and two `values` offsets to absolute
 pointers and then uses the block in place; `TexAnim_UpdateTransform`
-(`0x08927204`) evaluates both tracks per frame (clamp outside the key range,
-lerp inside) and the result reaches the GE as `TEXSCALE`/`TEXOFFSET` words in
-the material's five-word list, gated on the material's `& 0x10` flag.
+(`0x08927204`) evaluates both tracks per frame (wrap by `+0x2c`, divide by
+`+0x0c` to reach key-time units, clamp outside the key range, lerp inside
+unless the step flag is set) and the result reaches the GE as
+`TEXSCALE`/`TEXOFFSET` words in the material's five-word list, gated on the
+material's `& 0x10` flag.
+
+`oag_formats::vex::mesh_tex_transforms` parses the array and
+`TexTransform::sample` reproduces the evaluator;
+`oag_render::mesh_render::TexAnims` is what draws through it.
+`crates/render/tests/authored_uv_ground_truth.rs` pins both against the disc.
 
 Read off `Data\Ships\Assegai\shipboost.vex` and Feisar's (byte-identical), on
 both meshes of each: scale constant `(1.0, 1.0)`, offset `u` ramping
@@ -1165,9 +1193,16 @@ spanning essentially its full **width**: `piranha_banner_ADD_GLOW` 254.00 of 256
 zero materials** on all four circuits that embed it (`03`, `04`, `13`, `14`), so
 it is never drawn - the same shape as `flicker1/2nonalpha_GLOW`.
 
-So the billboards' contents render and do not move, on either axis. This is also
-why the renderer carries a scalar V rate per vertex rather than a `u`/`v` pair:
-nothing on the disc is authored to scroll in U.
+So the billboards' contents render and do not move, on either axis.
+
+**That last measurement does not generalise to non-billboard scenery, and a
+reading built on it was wrong.** The renderer used to carry a scalar V rate per
+vertex on the strength of it. The authored blocks say otherwise: of the 17
+distinct tracks on `16_Track`, several are pure **U** scrolls - including
+`col_display7_GLOW`, which is on all twelve circuits and which the V-only table
+therefore animated on the wrong axis - and others are diagonal. The per-vertex
+attribute is now an index into the model's authored tracks
+([`GpuVertex::anim`]), which carries `u`, `v`, scale and stepping alike.
 
 A narrow band is evidence for *which* textures, not a runtime rule. The engine
 scrolls a shared texture globally and any geometry sampling it inherits the
@@ -1180,20 +1215,29 @@ and the banded texture content are real measurements, but nothing had confirmed
 that the original animates these particular surfaces, and the rates are reused
 from the blink light rather than recovered.
 
-**The check has since been run, and it came back negative.** A breakpoint on
-`Gu_TexOffset` through a live race found the only non-zero texture offsets in the
-frame are the exhaust ribbon's; every other call passes `(0, 0)`, on a circuit
-carrying two of the surfaces listed above. **The original does not animate track
-surfaces by moving texture coordinates**, so `[graphics] animated_textures`
-defaults **off** and turning it on is a departure. The selection above is kept
-because the geometry behind it is a real measurement that whatever the true
-mechanism turns out to be will want. See
+**The mechanism is settled, and it is not this one.** The surfaces above are
+animated by the per-material keyframe block described in
+[The texture-transform keyframe block](#the-texture-transform-keyframe-block-at-0x30--material_count--0x14),
+whose compiled five-word display list writes `TEXOFFSET` directly and never
+calls `Gu_TexOffset` - which is why a breakpoint on that function saw only the
+exhaust ribbon and why the negative it produced did not mean what it looked
+like. The renderer replays the authored tracks, so `[graphics]
+animated_textures` now defaults **on**: it is a reproduction rather than a
+departure, and what the switch does off is freeze every animated surface at
+the first key of its track, for still-frame comparison. See
 [`texture-animation.md`](../ghidra/functions/psp-pulse-usa/texture-animation.md).
 
-Two readings are ruled out rather than untested. There is **no authored scroll
-rate**: material `+0x0c..0x14` is zero on every material of every circuit. And
-the material `flags` word is **not** an animation switch: the static
-`hub_banner_GLOW` and the banded `flicker1nonalpha_GLOW` both carry `0x91`.
+The geometric survey above is kept, and it is worth being clear about what it
+is now: a record of which surfaces the *geometry* singles out, useful as a
+cross-check on the authored blocks, and not what drives the picture. Where the
+two disagree the blocks win - they are the original's own data.
+
+One reading is ruled out rather than untested: the material `flags` word is
+**not** an animation switch, since the static `hub_banner_GLOW` and the banded
+`flicker1nonalpha_GLOW` both carry `0x91`. A second is now explained rather
+than ruled out - material `+0x0c..0x14` is indeed zero on every material of
+every circuit, because the animation is stored in the block after the material
+array, not on the material.
 
 ## Path templates
 

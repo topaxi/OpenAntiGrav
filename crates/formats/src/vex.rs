@@ -1588,6 +1588,27 @@ impl TexTransformTrack {
     /// texture units (the 1/256 scaling applied).
     #[must_use]
     pub fn sample(&self, t: f32) -> (f32, f32) {
+        self.sample_with(t, false)
+    }
+
+    /// [`sample`](Self::sample), with the block's step flag applied.
+    ///
+    /// `TexAnim_EvalKeyframes` takes the flag as an argument and, when it is
+    /// set, snaps to a key instead of interpolating between two. It is not a
+    /// detail: the flicker sequences on `16_Track` are authored as key *pairs*
+    /// one frame apart (`(3, 4)`, `(7, 8)`, ...), and lerping across the gaps
+    /// between pairs turns a hard flicker into a slow slide.
+    ///
+    /// **Which key it snaps to is a choice, not a read.** The decompilation
+    /// says "snaps to the key" without settling the direction, and this holds
+    /// the **preceding** one. That is what those key pairs argue for - hold a
+    /// value, then jump to the next - and holding the *following* key instead
+    /// would shift every stepped surface one segment early rather than change
+    /// what it looks like. Confidence 60 on the direction alone, per
+    /// `docs/reverse-engineering/confidence-rubric.md`; everything else here
+    /// is read at instruction level.
+    #[must_use]
+    pub fn sample_with(&self, t: f32, step: bool) -> (f32, f32) {
         let Some((&first, &last)) = self.times.first().zip(self.times.last()) else {
             return (0.0, 0.0);
         };
@@ -1603,9 +1624,12 @@ impl TexTransformTrack {
             .iter()
             .position(|&key| t < f32::from(key))
             .unwrap_or(self.times.len() - 1);
+        let (u0, v0) = scale(self.values[i - 1]);
+        if step {
+            return (u0, v0);
+        }
         let (t0, t1) = (f32::from(self.times[i - 1]), f32::from(self.times[i]));
         let frac = (t - t0) / (t1 - t0);
-        let (u0, v0) = scale(self.values[i - 1]);
         let (u1, v1) = scale(self.values[i]);
         (u0 + (u1 - u0) * frac, v0 + (v1 - v0) * frac)
     }
@@ -1627,23 +1651,126 @@ pub struct TexTransform {
     /// The `TEXSCALE` track. A single key `(256, 256)` is the common
     /// "constant 1.0" case.
     pub scale: TexTransformTrack,
+    /// Seconds per key-time unit, from the block's `+0x0c`. `1/60` on every
+    /// block read so far, which is what makes key times 60 Hz frames.
+    pub seconds_per_key: f32,
+    /// The authored loop period in seconds, from the block's `+0x2c`.
+    ///
+    /// **Not the last key time**, and reading it as such is wrong by a factor
+    /// of four on `16_Track`'s flicker sequences: their tracks end at frame
+    /// 12, 18 or 24 while all three author a 50-frame loop. That difference is
+    /// the whole point of the field - sibling meshes carry the same steps at
+    /// different key times and share one period, which is how the original
+    /// interleaves their phase.
+    pub loop_seconds: f32,
+    /// Bit 0 of the *word* at `+0x2c`, whose float value is
+    /// [`loop_seconds`](Self::loop_seconds). Set means snap to the preceding
+    /// key rather than interpolate - see
+    /// [`TexTransformTrack::sample_with`].
+    pub step: bool,
+}
+
+impl TexTransform {
+    /// Evaluates both tracks at `seconds`, the way `TexAnim_UpdateTransform`
+    /// (`0x08927204`) does: wrap the time by
+    /// [`loop_seconds`](Self::loop_seconds), divide by
+    /// [`seconds_per_key`](Self::seconds_per_key) to reach key-time units, and
+    /// sample. Returns `(scale, offset)`, both in texture units.
+    ///
+    /// An empty track evaluates to the engine's own not-found default -
+    /// `(1.0, 1.0)` for the scale, `(0.0, 0.0)` for the offset - rather than to
+    /// zero, so a block that authors only one of the two leaves the other
+    /// alone.
+    #[must_use]
+    pub fn sample(&self, seconds: f32) -> ([f32; 2], [f32; 2]) {
+        let period = if self.loop_seconds > 0.0 {
+            self.loop_seconds
+        } else {
+            f32::MAX
+        };
+        let unit = if self.seconds_per_key > 0.0 {
+            self.seconds_per_key
+        } else {
+            1.0 / 60.0
+        };
+        let t = (seconds % period) / unit;
+        let scale = if self.scale.times.is_empty() {
+            [1.0, 1.0]
+        } else {
+            let (u, v) = self.scale.sample_with(t, self.step);
+            [u, v]
+        };
+        let offset = if self.offset.times.is_empty() {
+            [0.0, 0.0]
+        } else {
+            let (u, v) = self.offset.sample_with(t, self.step);
+            [u, v]
+        };
+        (scale, offset)
+    }
 }
 
 /// The texture-transform keyframe block of one mesh payload, if it carries
 /// any keys.
 ///
-/// The block sits immediately after the material array, at
-/// `+0x30 + material_count * 0x14`; its two `times` and two `values` fields
-/// are offsets relative to the block itself. Returns `None` when the block
-/// (or any key data it points at) runs past the payload, or when both tracks
-/// are empty - which is the identity transform, per the engine's own default.
+/// This is the block of **material 0**. A mesh authors one `0x40`-byte block
+/// per material; [`mesh_tex_transforms`] returns all of them. Kept as its own
+/// entry point because most animated meshes have exactly one material, and
+/// every caller that predates the per-material reading wants this one.
 #[must_use]
 pub fn mesh_tex_transform(payload: &[u8]) -> Option<TexTransform> {
+    mesh_tex_transform_at(payload, 0)
+}
+
+/// Every material's texture-transform block, in material order.
+///
+/// The blocks sit immediately after the material array, at
+/// `+0x30 + material_count * 0x14`, `0x40` bytes each - the same array the
+/// runtime reaches as `mesh+0x60 + material_index * 0x40`, relocated in place.
+/// An entry is `None` when that material authors no track at all, which is the
+/// identity transform per the engine's own default.
+#[must_use]
+pub fn mesh_tex_transforms(payload: &[u8]) -> Vec<Option<TexTransform>> {
+    if payload.len() < 0x30 {
+        return Vec::new();
+    }
+    let material_count = usize::from(u16_at(payload, 2));
+    (0..material_count)
+        .map(|i| mesh_tex_transform_at(payload, i))
+        .collect()
+}
+
+/// One material's block. See [`mesh_tex_transforms`] for the layout, and
+/// `docs/ghidra/functions/psp-pulse-usa/texture-animation.md` for the field
+/// map.
+///
+/// Returns `None` when the material does not carry the `& 0x10` flag, when the
+/// block (or any key data it points at) runs past the payload, or when both
+/// tracks are empty.
+///
+/// **The flag test is the engine's own gate**, not belt-and-braces:
+/// `Mesh_UpdateTextureTransforms` (`0x0890e160`) walks the materials and
+/// evaluates only those carrying it. It matters because a `.vex` payload that
+/// is not a mesh at all still parses this far - a `Skycube` payload *is* a
+/// Mesh payload - and arbitrary bytes read as a plausible block often enough
+/// to matter. Both predicates agree on everything measured; see
+/// `crates/render/tests/authored_uv_ground_truth.rs`, which asserts that
+/// rather than assuming it.
+fn mesh_tex_transform_at(payload: &[u8], material_index: usize) -> Option<TexTransform> {
     if payload.len() < 0x30 {
         return None;
     }
     let material_count = usize::from(u16_at(payload, 2));
-    let block = 0x30 + material_count * 0x14;
+    if material_index >= material_count {
+        return None;
+    }
+    // The engine's gate: `& 0x10` on the material's first `u16`.
+    let material = 0x30 + material_index * 0x14;
+    if material + 2 > payload.len() || u16_at(payload, material) & 0x10 == 0 {
+        return None;
+    }
+    let base = 0x30 + material_count * 0x14;
+    let block = base + material_index * 0x40;
     if block + 0x30 > payload.len() {
         return None;
     }
@@ -1652,9 +1779,14 @@ pub fn mesh_tex_transform(payload: &[u8]) -> Option<TexTransform> {
     if offset_count == 0 && scale_count == 0 {
         return None;
     }
+    // The `times`/`values` fields are relative to the **start of the block
+    // array**, not to the block that holds them. Indistinguishable on a
+    // single-material mesh, and wrong on `16_Track`'s two-material hologram
+    // panels: material 1's fields resolve to real key data off the array base
+    // and to noise off its own block.
     let track = |count: usize, times_rel: usize, values_rel: usize| {
-        let times_at = block + u32_at(payload, block + times_rel) as usize;
-        let values_at = block + u32_at(payload, block + values_rel) as usize;
+        let times_at = base + u32_at(payload, block + times_rel) as usize;
+        let values_at = base + u32_at(payload, block + values_rel) as usize;
         if times_at + count * 2 > payload.len() || values_at + count * 4 > payload.len() {
             return None;
         }
@@ -1670,9 +1802,15 @@ pub fn mesh_tex_transform(payload: &[u8]) -> Option<TexTransform> {
                 .collect(),
         })
     };
+    // The `times`/`values` fields are relative to the block, so a per-material
+    // block's key data is reached from that block's own base, not the first's.
+    let loop_word = u32_at(payload, block + 0x2c);
     Some(TexTransform {
         offset: track(offset_count, 0x04, 0x10)?,
         scale: track(scale_count, 0x08, 0x14)?,
+        seconds_per_key: f32::from_bits(u32_at(payload, block + 0x0c)),
+        loop_seconds: f32::from_bits(loop_word),
+        step: loop_word & 1 != 0,
     })
 }
 
@@ -2138,6 +2276,7 @@ mod tests {
         let mut payload = vec![0u8; 0x30];
         payload[2] = 1; // material_count
         payload.extend([0u8; 0x14]); // one material
+        payload[0x30] = 0x10; // ...carrying the engine's animate-me flag
         let block = payload.len(); // 0x44
         payload.extend([0u8; 0x30]); // the block itself
         let w =
@@ -2175,6 +2314,156 @@ mod tests {
         assert!((u - (2.0 + 251.0 / 2.0) / 256.0).abs() < 1e-6);
         assert_eq!(v, 0.0);
         assert_eq!(transform.offset.period(), 90.0);
+    }
+
+    /// Two materials, two blocks, and the second one's key offsets resolving
+    /// off the **array base** rather than off its own block.
+    ///
+    /// Shaped after `16_Track`'s hologram panels, whose two materials scroll V
+    /// one tile per 60 and per 120 frames. Read off the wrong base, material 1
+    /// decodes to noise (key times in the tens of thousands) rather than
+    /// failing, which is why this is pinned rather than left to the
+    /// ground-truth test.
+    #[test]
+    fn a_second_materials_block_resolves_its_keys_off_the_array_base() {
+        let mut payload = vec![0u8; 0x30];
+        payload[2] = 2; // material_count
+        payload.extend([0u8; 0x28]); // two materials
+        payload[0x30] = 0x10; // ...both carrying the animate-me flag
+        payload[0x44] = 0x10;
+        let base = payload.len();
+        payload.extend([0u8; 0x80]); // two blocks
+        let w =
+            |p: &mut Vec<u8>, at: usize, v: u32| p[at..at + 4].copy_from_slice(&v.to_le_bytes());
+
+        // One shared pool of key data after both blocks. Each block's own
+        // times/values are two keys of V scroll over `frames`.
+        let author = |p: &mut Vec<u8>, block: usize, frames: u16, loop_word: u32| {
+            p[block..block + 2].copy_from_slice(&2u16.to_le_bytes()); // offset keys
+            p[block + 2..block + 4].copy_from_slice(&1u16.to_le_bytes()); // scale keys
+            let scale_times = p.len() - base;
+            p.extend(frames.to_le_bytes());
+            let scale_values = p.len() - base;
+            p.extend(256u16.to_le_bytes());
+            p.extend(256u16.to_le_bytes());
+            let offset_times = p.len() - base;
+            p.extend(0u16.to_le_bytes());
+            p.extend(frames.to_le_bytes());
+            let offset_values = p.len() - base;
+            for v in [0i16, 0, 0, 256] {
+                p.extend(v.to_le_bytes());
+            }
+            w(p, block + 0x04, offset_times as u32);
+            w(p, block + 0x08, scale_times as u32);
+            w(p, block + 0x0c, (1.0f32 / 60.0).to_bits());
+            w(p, block + 0x10, offset_values as u32);
+            w(p, block + 0x14, scale_values as u32);
+            w(p, block + 0x2c, loop_word);
+        };
+        author(&mut payload, base, 60, 1.0f32.to_bits());
+        author(&mut payload, base + 0x40, 120, 2.0f32.to_bits());
+
+        let blocks = super::mesh_tex_transforms(&payload);
+        assert_eq!(blocks.len(), 2);
+        let first = blocks[0].as_ref().expect("material 0 authors a track");
+        let second = blocks[1].as_ref().expect("material 1 authors a track");
+        assert_eq!(first.offset.times, vec![0, 60]);
+        assert_eq!(second.offset.times, vec![0, 120]);
+        assert_eq!(second.offset.values, vec![(0, 0), (0, 256)]);
+        assert_eq!(first.loop_seconds, 1.0);
+        assert_eq!(second.loop_seconds, 2.0);
+        // `mesh_tex_transform` is material 0's block, unchanged.
+        assert_eq!(super::mesh_tex_transform(&payload).as_ref(), Some(first));
+    }
+
+    /// The loop period is the block's own `+0x2c`, not the last key time, and
+    /// bit 0 of that word snaps the sample to the preceding key.
+    ///
+    /// Shaped after `16_Track`'s flicker sequences: keys in pairs one frame
+    /// apart, ending at frame 12, over an authored 50-frame loop. Reading the
+    /// period as `period()` would run them at four times speed and destroy the
+    /// phase interleave with their siblings.
+    #[test]
+    fn the_loop_period_and_step_flag_come_from_the_block_not_the_keys() {
+        let mut payload = vec![0u8; 0x30];
+        payload[2] = 1;
+        payload.extend([0u8; 0x14]);
+        payload[0x30] = 0x10;
+        let block = payload.len();
+        payload.extend([0u8; 0x40]);
+        let w =
+            |p: &mut Vec<u8>, at: usize, v: u32| p[at..at + 4].copy_from_slice(&v.to_le_bytes());
+        payload[block..block + 2].copy_from_slice(&4u16.to_le_bytes());
+        let offset_times = payload.len() - block;
+        for t in [3u16, 4, 7, 8] {
+            payload.extend(t.to_le_bytes());
+        }
+        let offset_values = payload.len() - block;
+        for v in [0i16, 0, 0, -64, 0, -64, 0, -128] {
+            payload.extend(v.to_le_bytes());
+        }
+        w(&mut payload, block + 0x04, offset_times as u32);
+        w(&mut payload, block + 0x10, offset_values as u32);
+        w(&mut payload, block + 0x0c, (1.0f32 / 60.0).to_bits());
+        // 0.8333 s with bit 0 set: the float's low mantissa bit *is* the flag.
+        w(&mut payload, block + 0x2c, (50.0f32 / 60.0).to_bits() | 1);
+
+        let t = super::mesh_tex_transform(&payload).expect("block parses");
+        assert!(t.step);
+        assert!((t.loop_seconds - 50.0 / 60.0).abs() < 1e-6);
+        assert_eq!(t.offset.period(), 8.0, "the keys end long before the loop");
+
+        // Stepped: frame 5 sits between keys 4 and 7 and holds key 4's value
+        // rather than sliding towards key 7's.
+        let (_, offset) = t.sample(5.0 / 60.0);
+        assert_eq!(offset, [0.0, -64.0 / 256.0]);
+        // Past the last key it clamps, all the way to the wrap.
+        let (_, late) = t.sample(45.0 / 60.0);
+        assert_eq!(late, [0.0, -128.0 / 256.0]);
+        // And the wrap is the block's period, not the last key time: one loop
+        // on lands back at the start, where 8 frames on would not.
+        let (_, wrapped) = t.sample(50.0 / 60.0);
+        assert_eq!(wrapped, t.sample(0.0).1);
+        // An absent scale track evaluates to the engine's identity default.
+        assert_eq!(t.sample(5.0 / 60.0).0, [1.0, 1.0]);
+    }
+
+    /// A material without the `& 0x10` flag has no transform, whatever the
+    /// bytes where its block would sit happen to say.
+    ///
+    /// The engine's own gate (`Mesh_UpdateTextureTransforms` evaluates only
+    /// flagged materials), and the thing that keeps a payload which is not
+    /// really an animated mesh from picking up an animation: arbitrary bytes
+    /// read as a plausible block often enough that "the counts are non-zero"
+    /// is not a safe predicate on its own.
+    #[test]
+    fn a_material_without_the_flag_has_no_transform_however_the_bytes_read() {
+        let mut payload = vec![0u8; 0x30];
+        payload[2] = 1;
+        payload.extend([0u8; 0x14]);
+        let block = payload.len();
+        payload.extend([0u8; 0x40]);
+        // A block that would parse: two offset keys pointing at real data.
+        payload[block..block + 2].copy_from_slice(&2u16.to_le_bytes());
+        let times = payload.len() - block;
+        payload.extend(0u16.to_le_bytes());
+        payload.extend(60u16.to_le_bytes());
+        let values = payload.len() - block;
+        for v in [0i16, 0, 0, 256] {
+            payload.extend(v.to_le_bytes());
+        }
+        let w =
+            |p: &mut Vec<u8>, at: usize, v: u32| p[at..at + 4].copy_from_slice(&v.to_le_bytes());
+        w(&mut payload, block + 0x04, times as u32);
+        w(&mut payload, block + 0x10, values as u32);
+
+        assert_eq!(super::mesh_tex_transform(&payload), None, "flag is clear");
+        payload[0x30] = 0x10;
+        assert!(
+            super::mesh_tex_transform(&payload).is_some(),
+            "the same bytes with the flag set do parse - so the flag is what \
+             decided it, not a malformed block"
+        );
     }
 
     /// An empty block - both counts zero - is the engine's identity default,

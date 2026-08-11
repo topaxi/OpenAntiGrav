@@ -8,18 +8,34 @@
 struct Uniforms {
     view_projection: mat4x4<f32>,
     model: mat4x4<f32>,
-    // Phase of the global texture-animation clock, 0.0 to 1.0 over
-    // `ANIM_PERIOD_TICKS`. Scaled per vertex by `v_cycles`, so a surface with
-    // `v_cycles == 0.0` - which is nearly all of them - ignores it entirely.
-    // See `oag_render::mesh::GpuVertex::v_cycles`.
+    // Unused. Was the phase of a global texture-animation clock, back when
+    // every animated surface was assumed to scroll V at a rate chosen from a
+    // table of texture names; the authored per-material keyframe blocks
+    // replaced it (see `TexAnims` below). Kept as padding rather than removed
+    // because `UNIFORMS_SIZE` and this layout are mirrored by the asset
+    // viewer and by four other pipelines in this crate.
     //
     // Three trailing f32 fields rather than a vec3: WGSL aligns vec3 to 16
     // bytes, which would silently insert padding this struct's Rust mirror
     // (a flat, tightly packed repr(C)) does not have.
-    anim_phase: f32,
+    _unused: f32,
     _pad0: f32,
     _pad1: f32,
     _pad2: f32,
+};
+
+// Each material's authored texture transform, already sampled for this frame
+// on the CPU - `xy` is `TEXSCALE`, `zw` is `TEXOFFSET`. Entry 0 is the
+// identity, so a vertex whose `anim` is 0 costs one indexed load and no
+// branch.
+//
+// A fixed-size array rather than a storage buffer: this has to run on the GL
+// backend too, where a vertex shader may not read storage. `16_Track`, the
+// heaviest circuit measured, authors 17 distinct tracks, so the ceiling is
+// generous - `oag_render::mesh::ANIM_TRACK_LIMIT` holds the same number and
+// the builder clamps against it.
+struct TexAnims {
+    transform: array<vec4<f32>, 64>,
 };
 
 // The authored fog of whichever `fogCube` volume the camera is inside, already
@@ -45,6 +61,7 @@ struct Fog {
 @group(1) @binding(0) var albedo: texture_2d<f32>;
 @group(1) @binding(1) var albedo_sampler: sampler;
 @group(2) @binding(0) var<uniform> fog: Fog;
+@group(3) @binding(0) var<uniform> anims: TexAnims;
 
 struct VertexInput {
     @location(0) position: vec3<f32>,
@@ -52,7 +69,7 @@ struct VertexInput {
     @location(2) colour: vec4<f32>,
     @location(3) texcoord: vec2<f32>,
     @location(4) lit: f32,
-    @location(5) v_cycles: f32,
+    @location(5) anim: u32,
 };
 
 struct VertexOutput {
@@ -73,14 +90,15 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     // without needing an inverse transpose.
     out.normal = (uniforms.model * vec4<f32>(in.normal, 0.0)).xyz;
     out.colour = in.colour;
-    // Scrolls backward through the palette's rows (decreasing V), not
-    // forward. Confirmed against a real ship: the white column's authored
-    // row sequence is asymmetric (a fast rise then a slower fade, not a
-    // symmetric pulse like red's), so playing it in the wrong direction
-    // reads as backwards - a fade-then-flash instead of a flash-then-fade -
-    // while red's near-symmetric curve looks the same either way. See
-    // `docs/formats/vex.md`.
-    out.texcoord = in.texcoord - vec2<f32>(0.0, uniforms.anim_phase * in.v_cycles);
+    // `uv * scale + offset`, the GE's own `TEXSCALE`/`TEXOFFSET` arithmetic -
+    // the four words `TexAnim_CompileTransformList` (`0x08927358`) writes into
+    // each animated material's display list. The direction is the authored
+    // sign and is not negated here: a ship's blink lights author `v` running
+    // 0 to -1, which is the backward sweep through the palette's rows that a
+    // real capture confirmed, and the arrows on `16_Track` author `v` running
+    // 0 to +1, which runs the other way on purpose.
+    let anim = anims.transform[in.anim];
+    out.texcoord = in.texcoord * anim.xy + anim.zw;
     out.lit = in.lit;
     out.world = world.xyz;
     return out;

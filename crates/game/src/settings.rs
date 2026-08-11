@@ -452,34 +452,29 @@ pub struct Graphics {
     /// rather than opting a player into a divergence they did not ask for.
     #[serde(with = "LodDef", default)]
     pub lod: Lod,
-    /// Whether trackside surfaces whose texture is a scrolling filmstrip
-    /// animate, or stay on their authored frame.
+    /// Whether trackside surfaces animate, or stay frozen at their authored
+    /// texture coordinates.
     ///
-    /// **Off by default, because the check it existed for came back negative.**
-    /// The surfaces were selected on structural evidence - banded texture rows,
-    /// and at least one draw call painting from a narrow V band, the authored
-    /// signature of a quad that picks a phase by V - and then measured against
-    /// the running original, which is what this switch was for.
-    ///
-    /// A breakpoint on `Gu_TexOffset` (`0x08811630`) through a live race found
-    /// **60 calls from three sites, and the only non-zero offsets came from
-    /// `Trail_DrawRibbon`**: 9 calls, 9 distinct advancing values, the exhaust
-    /// ribbon whose scroll rates were already recovered. The other 51 calls
-    /// passed exactly `(0, 0)`. The race was Talon's Junction, which carries two
-    /// of the table's entries, and the track was plainly rendering throughout.
-    /// Five candidate palettes were byte-static over the same window, so a CLUT
-    /// scroll is not the explanation either. See
+    /// **On by default, because it is now a reproduction rather than a
+    /// guess.** Each animated material carries its own keyframed
+    /// `TEXSCALE`/`TEXOFFSET` track in the `.vex` file: key times in 60 Hz
+    /// frames, values in 1/256 units, an authored loop period and a step flag.
+    /// The renderer replays those, the way `TexAnim_UpdateTransform`
+    /// (`0x08927204`) does. See
     /// `docs/ghidra/functions/psp-pulse-usa/texture-animation.md`.
     ///
-    /// So **the original does not animate track surfaces by moving texture
-    /// coordinates**, and turning this on is a departure rather than a
-    /// reproduction. It is kept, off, because the geometry that selected those
-    /// surfaces is a real measurement that a future reading of the actual
-    /// mechanism will want.
+    /// It was off while the animation was inferred instead: surfaces picked
+    /// out by banded texture rows and narrow-V-band geometry, scrolled at
+    /// chosen rates. That reading was not merely unproven, it was wrong on the
+    /// axis - `col_display7_GLOW`, on all twelve circuits, authors a **U**
+    /// scroll where the table drove it in V.
     ///
-    /// The ships are deliberately not covered by this switch: their pulse is
-    /// measured in a frame-accurate capture, so whatever drives it is real even
-    /// though this read shows it is not a UV offset.
+    /// What it still does, off, is freeze every animated surface at the start
+    /// of its track, which is what a still-frame comparison against a capture
+    /// of the original wants.
+    ///
+    /// The ships are deliberately not covered by this switch: their blink is
+    /// measured in a frame-accurate capture, so it animates either way.
     #[serde(default = "default_animated_textures")]
     pub animated_textures: bool,
     /// Whether the recovered bloom post-process runs.
@@ -540,8 +535,6 @@ pub struct Graphics {
     pub camera_view: crate::display::CameraView,
 }
 
-/// See [`Graphics::animated_textures`]: **off**, because a debugger read of the
-/// original found no texture-coordinate offset submitted for any track surface.
 /// See [`Graphics::boost_fov_kick`]: **[`crate::display::BoostFovKick::DEFAULT`]**,
 /// so the boost is felt. Off is for comparing against a capture of the
 /// original, which does not have *this* effect.
@@ -562,8 +555,10 @@ fn default_bloom() -> bool {
     false
 }
 
+/// See [`Graphics::animated_textures`]: **on**, now that the renderer replays
+/// the authored keyframe tracks instead of a table of chosen rates.
 fn default_animated_textures() -> bool {
-    false
+    true
 }
 
 impl Default for Graphics {

@@ -879,7 +879,7 @@ fn rib_vertex(p: Vec3, rgb: [f32; 3], u: f32, v: f32, glow: f32) -> GpuVertex {
         texcoord: [u, v],
         // Emissive, like the flare: no light rig.
         lit: 0.0,
-        v_cycles: 0.0,
+        anim: 0,
     }
 }
 
@@ -1417,7 +1417,7 @@ fn quad(centre: Vec3, right: Vec3, up: Vec3, alpha: f32) -> [GpuVertex; 6] {
         colour: [1.0, 1.0, 1.0, alpha],
         texcoord: [u, v],
         lit: 0.0,
-        v_cycles: 0.0,
+        anim: 0,
     };
     let bl = corner(-1.0, -1.0, 0.0, 1.0);
     let br = corner(1.0, -1.0, 1.0, 1.0);

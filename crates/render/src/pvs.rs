@@ -602,6 +602,7 @@ mod tests {
             textures: Vec::new(),
             centre: [0.0; 3],
             radius: 1.0,
+            anim_tracks: Vec::new(),
             mesh_count: 1,
         }
     }
@@ -764,7 +765,7 @@ mod tests {
             colour: [1.0; 4],
             texcoord: [0.0; 2],
             lit: 1.0,
-            v_cycles: 0.0,
+            anim: 0,
         };
         model.indices.clear();
         for (draw, base_x) in [(0usize, 100.0f32), (1, 0.0), (2, 0.0), (3, 0.0)] {
