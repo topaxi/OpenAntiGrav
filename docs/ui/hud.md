@@ -276,6 +276,20 @@ is **not** worked around by hardcoding.
 
 ## Still open after the frame
 
+- **The shield bar is not one colour, and this build draws it as one.** Found
+  2026-08-11 in the two single-race frames that settled the position anchor, which
+  were not looking for it: on the grid the bar is **cyan** at `100%`, and fifty
+  seconds later, after wall contact, it is **solid red** at `79%` - same widget,
+  same rectangle, same authored `Color`. So the original tints `ShieldBar` at
+  runtime from the value, exactly as it substitutes a string key into a positioned
+  widget (see the structural finding above). **What the rule is, is not
+  established**: two samples cannot separate a threshold from a gradient, and 79 %
+  is high enough that "red means critical" is already ruled out. `ShieldBarText`
+  stays white in both. Frames at three or four known levels would settle it; a
+  writer of the colour in `Hud_SetEnergyBar`'s neighbourhood
+  ([shield.md](../ghidra/functions/psp-pulse-usa/shield.md)) would settle it
+  better. The speed bar in the same frames is mint green and fills from the left,
+  which is what this build already draws.
 - **The outline colour is approximate.** The default is the layout's own
   `HudBGColour`, `0x40000000` - 25 % black - because that is what every widget that
   *does* name a border points at, which makes it data rather than invention. The
@@ -301,8 +315,8 @@ geometry - the geometry is 95 throughout.
 | Speed | `SpeedBar`, `SpeedBarBg`, `SpeedBarMark`, `SpeedBarText` | 90 | `speed * 3.6`, the recovered km/h factor |
 | Shield | `ShieldBar`, `ShieldBarBg`, `ShieldBarMark`, `ShieldBarText` | 75 | no runtime pool exists yet; see [roadmap](../overview/roadmap.md) M5 |
 | Lap | `Lap`, `LapOf`, `Lap Outof`, `LapTxt` | 60 | **lap counting is unrecovered** - see below |
-| Position | `Position`, `PositionOf`, `Position Outof`, `PositionTxt` | 75 | **drawn** as of 2026-08-11, from `Race::places()`; only `Arcade_HUD.xml` carries them, and they take the anchor off `TotalTime` - see below |
-| Times | `CurrentTime`, `BestTime`, `TotalTime`, `CountdownTime`, `TimeDiffText`, `TimeDiffIcon`, `TimeIcon` | 70 | format `m.ss.hh`, observed as `1.11.08` on the running game |
+| Position | `Position`, `PositionOf`, `Position Outof`, `PositionTxt` | 95 | **drawn** as of 2026-08-11, from `Race::places()`, and checked against the original's own `pos 8 / 8`; only `Arcade_HUD.xml` carries them, and they take the anchor off `TotalTime` - see below |
+| Times | `CurrentTime`, `BestTime`, `TotalTime`, `CountdownTime`, `TimeDiffText`, `TimeDiffIcon`, `TimeIcon` | 70 | format `m.ss.hh`, observed as `1.11.08` on the running game. **`TotalTime` is not drawn in a single race**: it shares an anchor with `Position` and yields it - see below |
 | Weapon | `PickupBackground`, `SubWeapon`, **13** `<Type>Icon` widgets | 95 | **drawn**; the icon is found by *name* - see below. `SubWeapon` is not driven |
 | Warnings | `ForwardWarningIcons`, `RearWarningIcons` and children | 55 | incoming-weapon indicators; nothing drives them |
 | Countdown | `ReadyText`, `GoText`, plus the `Mode3D` models | 65 | |
@@ -374,14 +388,36 @@ coincidence - it is measured, and reproducible with
 just wad cat --expand <image>:PSP_GAME/USRDIR/Data.wad 'Data\\XML\\Arcade_HUD.xml'
 ```
 
-**Which of the two wins is inference, confidence 55.** This build draws the place
-and drops the total time, because the place only exists in a race with a field
-while `TimeTrial`, `Zone` and `Elimination` all carry `TotalTime` and no place - so
-the clock is not homeless without this anchor and the place would be. No frame of
-the original has been read to confirm it. **What settles it**: the PPSSPP recipe
-above driven to a full field with `psp-drive.py menu --single-race`, then read the
-top-right corner. The rule is `oag_game::hud::place_owns_the_anchor` and it asks
-the *layout*, not just the readout, so `Elimination_HUD.xml` keeps its clock.
+**The place is the one that wins, and the original was asked.** Confidence **95**,
+up from the 55 this section shipped with for a few hours: a single race driven on
+the real game (PPSSPP under Xvfb, `psp-drive.py menu --single-race`,
+`pulse-psp-usa`, 2026-08-11 - recipe on
+[ppsspp-debugger.md](../reverse-engineering/ppsspp-debugger.md#running-without-a-real-display-xvfb-works-no-compositor-needed))
+reads
+
+```text
+pos
+8 / 8
+```
+
+in the top-right corner, on the grid and again fifty seconds into the lap, with
+**no total time anywhere on the screen**. Two frames, both `POS`, no clock. That
+also squares with the layouts: `TimeTrial`, `Zone` and `Elimination` carry
+`TotalTime` and no place, so the clock is not homeless without this anchor and the
+place would be.
+
+The rule is `oag_game::hud::place_owns_the_anchor` and it asks the *layout*, not
+just the readout, so `Elimination_HUD.xml` keeps its clock. **The captions were not
+separately confirmed** - the `TOTAL` caption is suppressed with its clock here on
+the ~5 px overlap argument above, and the reference frames show `pos` where it
+would have been, which is consistent with but does not isolate that.
+
+**The same two frames settle a second question nobody asked them.** The original
+places its own **parked player 8th of 8 on the grid**, before anyone has crossed
+the line - not 1st. That is independent corroboration of the lap-1 rule in
+`oag_race::Standing::distance`: a craft that has not reached the line is behind the
+field, and the arithmetic that read it as almost a lap ahead disagreed with the
+original as well as with common sense. See [ai.md](../gameplay/ai.md#the-field-is-placed).
 
 Found by `no_two_live_widgets_share_an_anchor_on_any_shipped_layout`, which is a
 new ground-truth check and reported this collision the first time it ran. Its unit

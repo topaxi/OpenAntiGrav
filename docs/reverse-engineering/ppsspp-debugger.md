@@ -39,8 +39,14 @@ preference order is:
 
 ## Getting a debugger you can connect to
 
+**PPSSPP v1.20.4 boots a `.chd` directly** - measured 2026-08-11, the whole way to
+a driveable single race - so the extraction step below is optional on that version
+and `chdman` is not needed at all. It is kept because it is what older notes and
+older builds assume, and because an ISO is what `PPSSPPHeadless` was tested with
+here.
+
 ```sh
-# the image PPSSPP wants is an ISO; data/images/ holds CHDs, so extract one once
+# optional on v1.20.4, which boots the CHD itself; needed if your build does not
 chdman extractdvd -i data/images/pulse-psp-usa.chd -o data/cache/pulse-psp-usa.iso
 
 # headless: no window, no dialogs, and it breaks at start
@@ -168,6 +174,55 @@ screenshot) under Xvfb for longer than the pass above did:**
   `missing an image filename` error, regardless of whether the id is hex,
   decimal, or the window's name. `-window root` plus repositioning (above) is
   the only path that worked, not a fallback of convenience.
+
+### 2026-08-11: the whole walk runs under Xvfb, at full speed, on the CHD
+
+The pass above left the menu walk and everything after it as "expected to carry
+over, but an inference". It carries over. One session, `pulse-psp-usa.chd`,
+`Xvfb :99 -screen 0 1280x720x24`, software GL (`LIBGL_ALWAYS_SOFTWARE=1`), no
+window manager and no compositor of any kind: first-boot dialogs answered, main
+menu, Custom Race set to SINGLE RACE / VENOM, track and ship confirmed, track
+description dismissed, countdown sat out, craft on the grid at
+`(-132.30, -49.58, -175.27)`, then a lap driven by holding thrust through the
+debugger. Screenshots at every step with `magick import -window root`, all real
+frames. This is what settled the HUD's top-right anchor - see
+[hud.md](../ui/hud.md#the-place-and-the-total-time-are-authored-at-one-anchor-so-one-of-them-has-to-go).
+
+**The focus-throttle unknown is retired: there is no throttle.** Measured off the
+PSP cycle counter rather than off the frame rate - `cpu.status`'s `ticks` advanced
+3.00 s of emulated time in 3.00 s of wall clock, so **100 % speed** with nothing
+focused and nothing to focus it. Which also means the wall-clock sleeps the menu
+walk is built on hold under Xvfb; they would not survive a 20 % emulator.
+
+Four things this pass adds:
+
+- **Give the instance its own profile directory, and it is not only for
+  parallelism.** `HOME=<dir> XDG_CONFIG_HOME=<dir>/.config PPSSPPSDL ...` with
+  `<dir>/.config/ppsspp/PSP/SYSTEM/ppsspp.ini` written beforehand works, and is
+  the "separate `PPSSPP_HOME`" the section above guessed at. It was **required**
+  here: `~/.config/ppsspp` was not writable, PPSSPP said so once as
+  `Error saving config (Loaded appended config)` and carried on - and the
+  websocket debugger never opened, so `--appendconfig`'s
+  `RemoteDebuggerOnStartup` did not take effect. The two variables were changed
+  together with the ini, so "unwritable config silently loses appended settings"
+  is the reading rather than an isolated cause; either way, **an ini on disk in a
+  writable profile is the path that worked**.
+- **A failed debugger handshake looks like a hang, not a refusal.** With the
+  debugger off, `GET /debugger` answers `301` to `/debugger/index.html` - the
+  file server's own behaviour, and the tell that the flag did not apply. With it
+  on but the emulator still grinding through the boot logos, the WebSocket
+  upgrade simply times out. Retry before concluding anything; it connected on the
+  next attempt with no change.
+- **The main menu has two spellings**, and it stopped the walk dead:
+  `Main menu` out of a fresh profile's first-boot dialogs, `Main Menu` every
+  other way in. `psp-drive.py` compared exactly and reported "the front end is in
+  `'Main menu'`, not `'Main Menu'`", which reads like a changed menu tree. It now
+  compares case-insensitively.
+- **The attract demo is a race by state name.** Idle ~120 s at the menus and the
+  game starts driving itself, announcing `Demo InGame` - which contains `InGame`,
+  so `psp-drive.py menu` read it as "already in a race" and returned success
+  having done nothing. Any button leaves it and one press lands at the main menu;
+  the walk now presses out of it rather than trusting the name.
 
 **The menu walk is deliberately track-blind** (by design - it doesn't try to
 identify which circuit is loaded), so reaching a *specific* track needs manual

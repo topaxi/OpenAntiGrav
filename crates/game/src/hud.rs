@@ -814,14 +814,21 @@ fn caption(label: &Label, strings: &crate::language::StringTable) -> Option<Stri
 /// just wad cat --expand <image>:PSP_GAME/USRDIR/Data.wad 'Data\\XML\\Arcade_HUD.xml'
 /// ```
 ///
-/// **Which of the two wins is inference, at confidence 55.** `Position` is here
-/// because the place is the readout that only exists in a race with a field, and
-/// `Arcade_HUD.xml` is the only one of the five layouts that carries the place
-/// group at all - `TimeTrial`, `Zone` and `Elimination` have the total time and no
-/// place, so the time is not homeless without this anchor. No frame of the
-/// original has been read to confirm it. **What settles it**: the PPSSPP recipe in
-/// `docs/ui/hud.md` driven to a full field with `psp-drive.py menu --single-race`,
-/// then read the top-right corner.
+/// **And the place is the one that wins, measured on the original.** Confidence
+/// **95**, no longer the 55 this comment carried for its first hours: a single
+/// race was driven on the real game (PPSSPP under Xvfb, `psp-drive.py menu
+/// --single-race`, `pulse-psp-usa`, 2026-08-11) and its top-right corner reads
+///
+/// ```text
+/// pos
+/// 8 / 8
+/// ```
+///
+/// on the grid and again fifty seconds into the lap - the place, the separator and
+/// the field size, and **no total time anywhere on the screen**. Which is also
+/// what the layout implies: `TimeTrial`, `Zone` and `Elimination` carry the total
+/// time and no place, so the clock is not homeless without this anchor and the
+/// place would be. The recipe is on `docs/reverse-engineering/ppsspp-debugger.md`.
 ///
 /// The choice is per *layout*, not per readout: `Elimination_HUD.xml` has a
 /// `TotalTime` and no `Position`, so a race with a field still shows its clock

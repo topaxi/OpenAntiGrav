@@ -347,11 +347,24 @@ RACE_TYPE_SINGLE_RACE = 0
 # Front-end states, from `0x08b31784+0x18c`. The menu tree announces itself; the
 # hex-grid cells do not, which is why the walk below verifies at these points and
 # counts presses in between.
+#
+# **The main menu has two spellings and this cost a session.** Measured
+# 2026-08-11 under Xvfb on `pulse-psp-usa`: a *fresh profile* comes out of the
+# first-boot dialogs into `Main menu`, and the same screen reached any other way -
+# backing out of a race, dismissing the attract demo - announces `Main Menu`. The
+# walk compared exactly and so failed on a first boot with "the front end is in
+# 'Main menu', not 'Main Menu'", which reads like a changed menu tree and is a
+# changed capital. `expect` and the back-out loop compare case-insensitively for
+# this reason; nothing else here does.
 MAIN_MENU = "Main Menu"
 RACEBOX = "Racebox"
 CUSTOM_RACE = "Single Player"
 TRACK_SELECT = "Track Creation"
 IN_GAME = "InGame"
+
+# The attract demo's own state name is `Demo InGame`, so it contains `IN_GAME` and
+# any check for "am I in a race" has to exclude it. See [`menu`].
+DEMO_PREFIX = "Demo"
 
 # First-boot dialogs, in the order they appear. Answering them is a one-time cost
 # per memory stick - the SDL build persists the profile - but a walk that cannot
@@ -373,13 +386,23 @@ def tap(dbg, button, times=1, wait=0.45):
         time.sleep(wait)
 
 
+def named(seen, wanted):
+    """Whether a state name is the one wanted, ignoring case.
+
+    Case-insensitive because the main menu ships two capitalisations of one
+    screen - see [`MAIN_MENU`] - and a walk that stops on a capital letter is a
+    walk that needs a human for no reason.
+    """
+    return seen is not None and seen.lower() == wanted.lower()
+
+
 def expect(dbg, wanted, what, timeout=15.0):
     """Wait for a named front-end state, or say which one turned up instead."""
     end = time.time() + timeout
     seen = None
     while time.time() < end:
         seen = dbg.state_name()
-        if seen == wanted:
+        if named(seen, wanted):
             return
         time.sleep(0.4)
     print(
@@ -434,10 +457,24 @@ def menu(args):
     dbg.analog(0.0, 0.0)
 
     state = dbg.state_name()
-    if state and IN_GAME in state:
+    if state and IN_GAME in state and not state.startswith(DEMO_PREFIX):
         print("already in a race (%r)" % state)
         dbg.close()
         return
+
+    # The attract demo *is* a race by state name, and it is not this one. Left
+    # sitting at the menus for ~120 s the game starts driving itself and announces
+    # `Demo InGame`, which the check above used to read as "already in a race" -
+    # so the walk returned success having done nothing, and whatever ran next
+    # measured the demo's craft. Any button leaves it; one press lands back at the
+    # main menu. Measured 2026-08-11.
+    if state and state.startswith(DEMO_PREFIX):
+        print("in the attract demo (%r): pressing out of it" % state, file=sys.stderr)
+        for _ in range(8):
+            tap(dbg, "cross", 1, wait=1.2)
+            state = dbg.state_name()
+            if state and IN_GAME not in state:
+                break
 
     # First boot, if this memory stick has never run the game.
     for _ in range(len(FIRST_BOOT) * 2):
@@ -451,9 +488,10 @@ def menu(args):
         time.sleep(1.5)
 
     # Back out of wherever the menus are. `circle` is Back on every screen of the
-    # tree, and `Main Menu` is the one state name that cannot be mistaken.
+    # tree, and `Main Menu` is the one state name that cannot be mistaken - in
+    # either of its two capitalisations, which is what `named` is for.
     for _ in range(12):
-        if dbg.state_name() == MAIN_MENU:
+        if named(dbg.state_name(), MAIN_MENU):
             break
         tap(dbg, "circle", 1, wait=1.5)
     expect(dbg, MAIN_MENU, "backing out with circle")
