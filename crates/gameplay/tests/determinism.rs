@@ -138,6 +138,16 @@ fn run(ticks: u32) -> (u64, u64) {
 ///
 /// - **Recorded 2026-08-11**, with the module itself. There is no earlier value
 ///   to compare against - this is the first race-level gate the project has had.
+/// - **Moved 2026-08-11**, when `Ship::driver` joined the hash. The field is the
+///   opponent driver's place on the racing line, which seeds next tick's search
+///   and so is simulation state; see `oag_gameplay::hash::write_ship`. **The
+///   cause was isolated the way the paragraph below requires**: with the
+///   driver's own `write_u32` removed and nothing else changed, the previous
+///   constants - `0x0d6b_1685_6498_ed5e` / `0xd8f1_9e9e_49a7_9460` at 60 ticks
+///   and `0x7b98_740e_2313_1d4f` / `0x77b7_b259_b11d_603d` at 600 - reproduce
+///   bit for bit. So the movement is the new field entering the hash and not a
+///   change in what the simulation does. The scenario here has no AI in it, so
+///   every driver in it is at index `0` throughout.
 ///
 /// **Never edit these to make the test pass**, the same rule
 /// `crates/physics/tests/determinism.rs` states at length: a movement here is a
@@ -146,8 +156,8 @@ fn run(ticks: u32) -> (u64, u64) {
 /// beneath this comment and isolate the cause first, by removing the new field's
 /// own write and checking that the previous constants reproduce bit for bit.
 const REFERENCE: &[(u32, u64, u64)] = &[
-    (60, 0x0d6b_1685_6498_ed5e, 0xd8f1_9e9e_49a7_9460),
-    (600, 0x7b98_740e_2313_1d4f, 0x77b7_b259_b11d_603d),
+    (60, 0xe8fa_1f54_0742_7f0e, 0xf195_097c_9824_11b0),
+    (600, 0x8f0c_b68a_5b98_18df, 0x2a7b_fddd_ae47_fd8d),
 ];
 
 #[test]

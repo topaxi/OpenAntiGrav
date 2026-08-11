@@ -88,6 +88,7 @@ fn write_ship(hasher: &mut StateHasher, ship: &Ship) {
         handling,
         segment,
         pickup,
+        driver,
         active,
     } = ship;
 
@@ -100,6 +101,12 @@ fn write_ship(hasher: &mut StateHasher, ship: &Ship) {
     let _ = handling;
     hasher.write_u32(u32::from(*segment));
     write_held(hasher, pickup);
+    // **Hashed, unlike `handling`.** A driver's place on the racing line is the
+    // seed for next tick's windowed search, so two runs whose craft agree but
+    // whose drivers are looking at different stretches of line have already
+    // diverged - the next steering command will differ and nothing before it
+    // will show why. It is `0` for slot 0, which the player flies.
+    hasher.write_u32(driver.index);
     hasher.write_u8(u8::from(*active));
 }
 
