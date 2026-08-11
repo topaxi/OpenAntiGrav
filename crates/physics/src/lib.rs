@@ -76,6 +76,7 @@ pub mod forces;
 pub mod hover;
 pub mod integrate;
 pub mod maglock;
+pub mod pair;
 pub mod params;
 pub mod passive;
 pub mod probe;

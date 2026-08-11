@@ -2800,6 +2800,48 @@ impl Race {
         }
     }
 
+    /// Craft against craft, every pair, once a tick.
+    ///
+    /// `oag_physics::pair::resolve` is `Body_ResolveContactPair` (`0x0884ef30`),
+    /// read 2026-08-11 - the function this engine was missing, and the reason
+    /// craft used to pass through each other. The response is recovered; the
+    /// *shape* is not, and `pair::overlap` says so.
+    ///
+    /// **After every craft has been stepped**, not during. Stepping and
+    /// resolving interleaved would let a craft that has already moved this tick
+    /// collide with one that has not, which makes the outcome depend on slot
+    /// order - and the original resolves contacts in its own pass, after
+    /// integration, which
+    /// `docs/ghidra/functions/ps2-pulse-eu/craft-update.md` records for the PS2
+    /// twin.
+    ///
+    /// Pairs are visited in slot order, low index first, and each unordered pair
+    /// exactly once. `pair::resolve` is symmetric in its two arguments - pinned
+    /// by its own test - so the order cannot change the world; visiting in a
+    /// fixed order anyway is what
+    /// `docs/architecture/determinism.md` asks for, because a *sequence* of
+    /// resolutions is order-dependent even when each one is not.
+    fn resolve_craft_pairs(&mut self) {
+        for a in 0..self.world.ship_count as usize {
+            for b in (a + 1)..self.world.ship_count as usize {
+                if !self.world.ships[a].active || !self.world.ships[b].active {
+                    continue;
+                }
+                let (first, second) = self.world.ships.split_at_mut(b);
+                let ship_a = &mut first[a];
+                let ship_b = &mut second[0];
+                let a_size = ship_a.handling.dimensions;
+                let b_size = ship_b.handling.dimensions;
+                oag_physics::pair::resolve(
+                    &mut ship_a.physics,
+                    &a_size,
+                    &mut ship_b.physics,
+                    &b_size,
+                );
+            }
+        }
+    }
+
     /// What an opponent does with a pickup it is holding.
     ///
     /// # This is a policy, and it is the crudest one that is not "nothing"
@@ -2970,6 +3012,7 @@ impl Race {
         }
 
         self.step_opponents();
+        self.resolve_craft_pairs();
 
         self.world.tick += 1;
 
@@ -6710,6 +6753,78 @@ mod tests {
                 race.pad_current[slot],
                 Some(0),
                 "slot {slot} does not know it is on the pad"
+            );
+        }
+    }
+
+    /// Craft used to pass through each other, which is what this catches.
+    ///
+    /// Two craft are overlapped and closing, and the pass has to separate them.
+    /// `setup`'s craft has no force law at all, which is what makes this a clean
+    /// test of the pair resolver alone: nothing else here can move a body, so
+    /// any separation is the resolver's.
+    #[test]
+    fn two_overlapping_craft_are_pushed_apart() {
+        let mut race = race_with_a_grid();
+        let where_it_was = race.world.ships[0].physics.body.position;
+        // Well inside the hull radius, and **not** coincident: two bodies at
+        // exactly one point have no normal, which `pair::overlap` refuses.
+        race.world.ships[1].physics.body.position = where_it_was + Vec3::new(0.0, 0.0, 1.0);
+        // Closing, or the separating gate refuses the pair.
+        race.world.ships[0].physics.body.linear_velocity = Vec3::new(0.0, 0.0, 8.0);
+        race.world.ships[1].physics.body.linear_velocity = Vec3::new(0.0, 0.0, -8.0);
+        let before = race.world.ships[0]
+            .physics
+            .body
+            .position
+            .distance(race.world.ships[1].physics.body.position);
+
+        race.resolve_craft_pairs();
+
+        let after = race.world.ships[0]
+            .physics
+            .body
+            .position
+            .distance(race.world.ships[1].physics.body.position);
+        assert!(
+            after > before,
+            "two overlapping craft went from {before:.3} apart to {after:.3}"
+        );
+        assert!(
+            race.world.ships[0].physics.body.linear_velocity.z < 8.0,
+            "the closing craft was not slowed"
+        );
+    }
+
+    /// Two bodies at exactly one point have no normal to push along. Refused
+    /// rather than divided by, and the pass must survive it: a spawn bug that
+    /// stacked two craft should not take the process down.
+    #[test]
+    fn coincident_craft_are_refused_rather_than_dividing_by_zero() {
+        let mut race = race_with_a_grid();
+        let where_it_was = race.world.ships[0].physics.body.position;
+        race.world.ships[1].physics.body.position = where_it_was;
+        race.resolve_craft_pairs();
+        assert!(race.world.ships[0].physics.body.position.is_finite());
+        assert!(race.world.ships[1].physics.body.position.is_finite());
+    }
+
+    /// The pair pass must not touch craft that are nowhere near each other, or
+    /// a grid would shove itself apart on the start line.
+    #[test]
+    fn craft_that_are_not_touching_are_left_alone() {
+        let mut race = race_with_a_grid();
+        let before: Vec<_> = race
+            .world
+            .ships
+            .iter()
+            .map(|ship| ship.physics.body.position)
+            .collect();
+        race.resolve_craft_pairs();
+        for (slot, was) in before.iter().enumerate() {
+            assert_eq!(
+                race.world.ships[slot].physics.body.position, *was,
+                "slot {slot} was moved by a contact it is not in"
             );
         }
     }

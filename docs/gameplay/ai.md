@@ -461,14 +461,28 @@ trail of its own, a lap counter of its own (`oag_race::RaceState` is
 single-ship), a respawn when it falls off, anything at all happening when it is
 eliminated, a weapon aimed at anybody, and a livery that is not the player's.
 
-**Craft-to-craft collision does not exist in this engine at all**, for anybody -
-it is not an AI gap. A craft collides with the *track*: an opponent is stepped
-against the same `CollisionWorld` the player is, so it takes walls, floors and
-reset zones exactly as the player does. What is missing is the two-body path.
-`Ship_ApplyCollisionImpulse` covers one body against geometry; the pair resolver
-`0x0884ef30` is **unread**, and so is the writer of the pending impulse at
-`entity->0x4c + 0x110` that feeds it. See `HANDOVER.md`'s ship-to-ship row: the
-`stun_timer` and its gate already exist and nothing arms them. **Nor any of the skill
+**Craft-to-craft collision landed 2026-08-11**, and it was never an AI gap - the
+engine had no two-body path for anybody. `Body_ResolveContactPair`
+(`0x0884ef30`) is now read and reimplemented in `oag_physics::pair`; the recovery
+is on
+[contact-response.md](../ghidra/functions/psp-pulse-usa/contact-response.md#body_resolvecontactpair-0x0884ef30-the-two-body-path).
+
+The finding worth carrying: **a craft bounces off another craft with `e = 0.1`
+and off the track with `e = 0.4`**, in the same build. The pair resolver hardcodes
+its restitution where the one-body path reads the per-body field, it has a
+separating-velocity gate the one-body path does not, and it applies **no
+friction** at all. Track contact was already right and is untouched.
+
+**The shape is ours and is the weak part.** The original tests hull against hull
+through a box-against-box narrowphase (`0x08815ccc`) that is still unread, so
+`pair::overlap` uses a sphere of half the hull's diagonal. A sphere is round and
+a craft is not: generous at the corners, mean along the flanks, which are the
+places a race actually brushes. That function is what replaces it.
+
+Still not armed: the `stun_timer` and its gate exist and nothing sets them,
+because what posts the pending impulse at `entity->0x4c + 0x110` is still unread -
+the two calls at the tail of the pair resolver are the candidates and they do not
+rebase onto a function start, so they were left alone rather than guessed at. **Nor any of the skill
 work above** - no skill vector, no mistakes, no difficulty selection, no `[ai]`
 config block. Those are the second half.
 

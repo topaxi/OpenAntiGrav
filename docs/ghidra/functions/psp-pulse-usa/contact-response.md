@@ -644,8 +644,8 @@ unread; a craft against track geometry takes the single-body path.
   confidence-75 wall attribution in
   [force-balance-ground-truth.md](../../../physics/force-balance-ground-truth.md)
   stays capped where it is.
-- **`0x0884ef30`**, the two-body contact resolver. The one-body path above is
-  what a craft against track geometry takes; ship-to-ship goes through the other.
+- ~~**`0x0884ef30`**, the two-body contact resolver.~~ **Read 2026-08-11** - see
+  [the section below](#body_resolvecontactpair-0x0884ef30-the-two-body-path).
 - **What posts the pending impulse at `entity->0x4c + 0x110`.** The consumer is
   read and the contact path is excluded (above), so the writer is somewhere in
   the weapon or rival-contact code and is the next step for anyone wiring the
@@ -653,3 +653,79 @@ unread; a craft against track geometry takes the single-body path.
 - **`0x08815ccc`** (box against box) and **`0x0881702c`** (mesh against mesh,
   gated on `world+0x5464`), the two narrowphase pairs `Collision_DispatchPair`
   can reach that a craft against track geometry does not.
+
+## `Body_ResolveContactPair` (`0x0884ef30`): the two-body path
+
+**Read 2026-08-11.** This page listed it under "Not determined" until then, as the
+one thing standing between the engine and craft-to-craft collision. Confidence
+**80**: the arithmetic is unambiguous and every VFPU step is accounted for, but it
+is decompilation of one function with no runtime leg and no second binary, which
+the [rubric](../../../reverse-engineering/confidence-rubric.md) caps at 84.
+
+Signature, as the narrowphase calls it (see [collision.md](collision.md)):
+`(contact, bodyB, bodyA)`. The contact record is read at three rows - the contact
+**point**, the contact **normal**, and a row carrying a scalar plus a handle.
+
+### The gate: a separating test the one-body path does not have
+
+```text
+if ((vA . n) - (vB . n)) - 0.5 <= 0.0   -> resolve, else return
+```
+
+`vA` and `vB` are each body's velocity **at the contact point** - the full rigid
+term, `linear + omega x r`. This is the clearest divergence from
+`Body_ResolveContact`: the one-body path applies its impulse whatever the sign of
+`vn`, and this one refuses on a pair that is already separating faster than
+`0.5`. The threshold is a code literal, not a body or collider field.
+
+### The impulse
+
+```text
+j = -(1.1 * vn) / (angular + invMassA + invMassB)
+```
+
+with `vn` the relative normal velocity recomputed from the same two point
+velocities, and `angular` the usual `n . ((I_A^-1 (r_A x n)) x r_A + (I_B^-1 (r_B x n)) x r_B)`,
+built here from two `vtfm4_q` inverse-inertia transforms and two cross products.
+
+Two things to take from it:
+
+- **`invMassA + invMassB`, which is what makes it a pair resolver.** This page
+  predicted exactly that from the PS2 twin, and it holds.
+- **Restitution is a hardcoded `-1.1`, so `e = 0.1`** - and that is *not* the
+  PSP's one-body value. `Body_ResolveContact` reads the per-body `body+0x388`,
+  which the ship constructor sets to `0.4`. So a craft bounces off the **track**
+  with `e = 0.4` and off **another craft** with `e = 0.1`, in the same build. It
+  is also the PS2 pair resolver's own numerator, so the two builds agree with
+  each other about pairs while the PSP disagrees with itself across the two
+  paths. Worth stating plainly because the `0.4`-versus-`0.1` split was already
+  flagged as the thing a reader trips on, and this is a third instance of it.
+
+`invMass` is at `body+0x378`, read on both bodies.
+
+### What it does with the impulse
+
+Equal and opposite, at the contact point, through the named
+`Body_ApplyImpulseAtPoint` (`0x0884d64c`): `+j*n` to A and `-j*n` to B.
+
+Then a **symmetric positional correction**: each body is moved along the normal
+by `±0.25 * s`, where `s` is the contact row-3 scalar (penetration depth by
+position and use, unconfirmed). A quarter each way rather than a half, and the
+same magnitude for both bodies regardless of mass.
+
+**No friction.** The one-body path folds `- f*vt` into the same impulse; this one
+has no tangential term at all.
+
+### Still not determined
+
+- **The two calls after the impulses**, at unrelocated `0x499f8` and `0x49c60`.
+  Rebased they land *inside* `Ship_UpdateCraft` (`0x08849618`) rather than on a
+  function start, so either Ghidra's boundaries are wrong there or the rebasing
+  rule that works for every other call on this page does not hold for these two.
+  **Not guessed at.** One of them is the obvious candidate for arming the stun
+  and for posting the pending impulse at `entity->0x4c + 0x110`, which is this
+  page's other open item, so it is worth a careful second look rather than an
+  inference.
+- **Which narrowphase pair reaches it.** `0x08815ccc` (box against box) is the
+  candidate for craft-to-craft and is unread, so the hull *shape* the original
+  tests is still unknown.
