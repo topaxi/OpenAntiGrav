@@ -540,6 +540,11 @@ pub struct Readout {
     pub zone: u32,
     /// Zone mode's score.
     pub score: i32,
+    /// What the craft is carrying, if anything.
+    ///
+    /// `None` on every tick of a race with weapons off, which is every mode but
+    /// the single race - see `oag_race::Mode::weapons_enabled`.
+    pub pickup: Option<oag_formats::weapons::Weapon>,
 }
 
 /// What [`Readout::speed_full_kmh`] defaults to.
@@ -755,9 +760,11 @@ fn text_for(
 
 /// Sprite widgets drawn whenever the HUD is up.
 ///
-/// The bars, their backgrounds and the time icon. Everything else in the layouts
-/// is a weapon icon, a warning, an opponent tag or a mode-specific piece, none of
-/// which has anything driving it - see `docs/ui/hud.md`.
+/// The bars, their backgrounds and the time icon. What is left in the layouts
+/// is a warning, an opponent tag or a mode-specific piece, none of which has
+/// anything driving it - see `docs/ui/hud.md`. The pickup widgets are the
+/// exception and are **not** here, because they are conditional rather than
+/// always-on: see [`pickup_sprites`].
 const LIVE_SPRITES: &[&str] = &[
     "SpeedBarBg",
     "ShieldBarBg",
@@ -767,6 +774,46 @@ const LIVE_SPRITES: &[&str] = &[
     "ShieldBarMark",
     "TimeIcon",
 ];
+
+/// The backdrop the held pickup's icon sits on.
+///
+/// Authored `Centred="true"` at `x=240` - the middle of the PSP's 480 - in
+/// `Arcade_HUD.xml` and `Elimination_HUD.xml`, and in neither of the two
+/// layouts this engine's weapons-off modes draw.
+const PICKUP_BACKGROUND: &str = "PickupBackground";
+
+/// The layout's sprite name for one weapon's icon.
+///
+/// **A name rule, not an id table, and that is a finding rather than a
+/// convenience.** `docs/ui/hud.md` recorded these as "14 `*Icon` widgets" whose
+/// "icon ids are numeric", with no id-to-weapon mapping known. Read off the
+/// disc, `Arcade_HUD.xml` authors **thirteen** and names each after its weapon's
+/// own `type` string - `TurboIcon`, `ShieldIcon`, `RocketIcon` and so on - which
+/// is exactly `weapons::Weapon::ALL`. So the lookup needs nothing recovered:
+/// the layout and the weapon table agree on the spelling, misspellings
+/// (`LeachBeam`, `Repulser`) included.
+///
+/// The numeric ids are still real - `0x0883b3b8` forces one - and are simply not
+/// needed to draw the right icon.
+#[must_use]
+pub fn pickup_icon_name(weapon: oag_formats::weapons::Weapon) -> String {
+    format!("{}Icon", weapon.as_type())
+}
+
+/// The sprites a held pickup adds to the frame, in paint order.
+///
+/// Empty when nothing is held, which is every tick of a race with weapons off -
+/// and the layouts those modes draw carry neither widget anyway, so the empty
+/// case is reached two independent ways.
+fn pickup_sprites(layout: &Layout, weapon: oag_formats::weapons::Weapon) -> Vec<&Sprite> {
+    let icon = pickup_icon_name(weapon);
+    // Background first: the icon sits on it, and paint order here is the
+    // layout's own back-to-front convention.
+    [PICKUP_BACKGROUND, icon.as_str()]
+        .into_iter()
+        .filter_map(|name| layout.sprite(name))
+        .collect()
+}
 
 /// Everything the HUD needs that does not change from frame to frame.
 ///
@@ -869,6 +916,15 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
                 cx.atlas_origin,
             )),
             None => frame.sprites.push(sprite_draw(sprite, cx.atlas_origin)),
+        }
+    }
+
+    // The pickup, after the always-on sprites and before the text. Conditional
+    // rather than allow-listed, because *which* icon is live changes with what
+    // the craft is holding - see `pickup_sprites`.
+    if let Some(weapon) = readout.pickup {
+        for sprite in pickup_sprites(cx.layout, weapon) {
+            frame.sprites.push(sprite_draw(sprite, cx.atlas_origin));
         }
     }
 
@@ -1187,6 +1243,12 @@ mod tests {
 <Image name="PickupBackground">
 <Values x="240" y="35" Centred="true" width="66" height="60" U="3" V="111" TxtrWidth="66" TxtrHeight="60" CalcBlur="1" Color="FEConst->HudColour1" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
 </Image>
+<Image name="TurboIcon">
+<Values x="240" y="35" Centred="true" width="48" height="48" U="70" V="111" TxtrWidth="48" TxtrHeight="48" Color="FEConst->HudColour1" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+</Image>
+<Image name="RocketIcon">
+<Values x="240" y="35" Centred="true" width="48" height="48" U="120" V="111" TxtrWidth="48" TxtrHeight="48" Color="FEConst->HudColour1" Src="Data\HUD\Textures\PulseHUD.mip"></Values>
+</Image>
 <Text name="TimeDiffText">
 <Values font="HUD" scale="0.6" align="centre" vertalign="middle" x="0" y="5"/>
 </Text>
@@ -1197,10 +1259,10 @@ mod tests {
     #[test]
     fn the_sample_yields_every_widget_it_declares() {
         let layout = Layout::from_xml(SAMPLE);
-        assert_eq!(layout.sprites.len(), 2);
+        assert_eq!(layout.sprites.len(), 4);
         assert_eq!(layout.labels.len(), 4);
         assert_eq!(layout.models.len(), 1);
-        assert_eq!(layout.widget_count(), 6);
+        assert_eq!(layout.widget_count(), 8);
         assert!(
             layout.skipped.is_empty(),
             "nothing should be skipped: {:?}",
@@ -1239,6 +1301,50 @@ mod tests {
         assert_eq!(box_.rect, [207.0, 5.0, 66.0, 60.0]);
         // The centring must not disturb the source rectangle.
         assert_eq!(box_.uv, [3.0, 111.0, 66.0, 60.0]);
+    }
+
+    /// The name rule, against the layout's own widget names. See
+    /// [`pickup_icon_name`] - `docs/ui/hud.md` had these down as numeric ids
+    /// with no known mapping, and they are simply named after the weapons.
+    #[test]
+    fn a_weapons_icon_widget_is_named_after_the_weapon() {
+        use oag_formats::weapons::Weapon;
+        assert_eq!(pickup_icon_name(Weapon::Turbo), "TurboIcon");
+        // The two the game misspells. Whatever the file says is what the layout
+        // says, which is the whole reason this can be a rule at all.
+        assert_eq!(pickup_icon_name(Weapon::LeachBeam), "LeachBeamIcon");
+        assert_eq!(pickup_icon_name(Weapon::Repulser), "RepulserIcon");
+    }
+
+    /// Holding nothing draws neither the backdrop nor an icon, and holding
+    /// something draws exactly its own - not every icon the layout carries.
+    #[test]
+    fn the_pickup_widgets_are_drawn_only_for_what_is_held() {
+        use oag_formats::weapons::Weapon;
+        let layout = Layout::from_xml(SAMPLE);
+
+        let empty = pickup_sprites(&layout, Weapon::Turbo);
+        assert_eq!(empty.len(), 2, "the fixture must author both widgets");
+
+        let names: Vec<&str> = pickup_sprites(&layout, Weapon::Turbo)
+            .iter()
+            .map(|s| s.name.as_str())
+            .collect();
+        assert_eq!(names, ["PickupBackground", "TurboIcon"]);
+
+        let rocket: Vec<&str> = pickup_sprites(&layout, Weapon::Rocket)
+            .iter()
+            .map(|s| s.name.as_str())
+            .collect();
+        assert_eq!(rocket, ["PickupBackground", "RocketIcon"]);
+
+        // A weapon whose icon this layout does not author draws the backdrop and
+        // no icon, rather than nothing or a panic: `TimeTrial_HUD.xml` carries
+        // neither widget, and a layout carrying one and not the other is the
+        // case that would otherwise crash a race.
+        let absent = pickup_sprites(&layout, Weapon::Quake);
+        assert_eq!(absent.len(), 1);
+        assert_eq!(absent[0].name, "PickupBackground");
     }
 
     #[test]

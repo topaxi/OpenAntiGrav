@@ -371,6 +371,11 @@ pub fn replay<R: Raycaster + ?Sized>(
         physics: initial_state(first, handling, options.basis, options.angular),
         handling: *handling,
         segment: 0,
+        // A replay has no track and therefore no `Weapon Pad`, so nothing can
+        // ever fill this. Named rather than left to `..Default::default()` so
+        // that a pickup reaching a replay is a compile error to think about
+        // rather than a silent empty slot.
+        pickup: oag_gameplay::Held::empty(),
         active: true,
     };
     world.ship_count = 1;
@@ -554,6 +559,11 @@ where
         physics: initial,
         handling: *handling,
         segment: 0,
+        // A replay has no track and therefore no `Weapon Pad`, so nothing can
+        // ever fill this. Named rather than left to `..Default::default()` so
+        // that a pickup reaching a replay is a compile error to think about
+        // rather than a silent empty slot.
+        pickup: oag_gameplay::Held::empty(),
         active: true,
     };
     world.ship_count = 1;

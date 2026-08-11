@@ -1,28 +1,32 @@
 # Race modes
 
-Three single-ship modes are implemented: **time trial**, **speed lap** and
-**Zone**. None of them needs opponents, weapons or a grid, which is why they came
-first - they are the part of the race layer that can be finished rather than
-stubbed.
+Four modes are implemented. Three are single-ship - **time trial**, **speed lap**
+and **Zone** - and came first because none of them needs opponents, weapons or a
+grid: they are the part of the race layer that can be finished rather than
+stubbed. The fourth, **single race**, is the first with weapons, and it exists
+because pickups have nowhere else to happen; see below.
 
 **Neither is invented - both are measured on the running original and now
 enforced in code, not just true by construction.** `Mode::has_opponents` and
-`Mode::weapons_enabled` return `false` for all three: the Custom Race screen
+`Mode::weapons_enabled` return `false` for the three single-ship modes: the Custom Race screen
 greys `AI DIFFICULTY` to `N/A` and `WEAPONS` to `Off` for time trial, speed lap
 and Zone alike, screenshotted for all seven of the original's race types on
 2026-08-10 - see
 [shield.md](../ghidra/functions/psp-pulse-usa/shield.md#g_weapons_enableds-per-mode-default-spelled-out-and-checked-against-every-race-type).
 Two consequences in `crates/game/src/race.rs`:
 
-- **The grid never spawns opponents for these three modes.** It used to spawn
-  the full eight-craft grid whenever a track authored a `Start Position`,
-  regardless of mode - correct arithmetic ([grid.md](../ghidra/functions/psp-pulse-usa/grid.md)
-  measured it against a *Single Race*, the "one reachable race type with a
-  full field", never against one of the three modes this crate races), wired
-  to the wrong condition. `Options::opponents` is the escape hatch the grid
+- **The grid never spawns opponents for any mode yet.** For the three
+  single-ship modes that is the original's own answer; for a single race it is
+  not - `MSC_EVENT_SR` promises "a full grid of opponents" and the AI
+  `DIFFICULTY` row is selectable. Nothing drives an opponent here, and seven
+  parked hulls wearing the player's livery is a worse race than an empty track,
+  so `Mode::has_opponents` answers `false` for it too and says why.
+  The grid *arithmetic* is right and measured - [grid.md](../ghidra/functions/psp-pulse-usa/grid.md)
+  took it against a real *Single Race*, the "one reachable race type with a full
+  field" - it is only unused. `Options::opponents` is the escape hatch that
   measurement's own ground-truth test and `--opponents` on `just play` use to
-  see a full grid without a fourth mode existing yet.
-- **`Weapon Pad`s decode but are never drawn.** The original does the
+  place all eight without a mode asking for them.
+- **`Weapon Pad`s decode but are drawn and armed only in a single race.** The original does the
   equivalent at a different layer - `World_CollectNodeLists` clears the
   node's own visibility bits rather than skipping the decode - documented on
   [pads.md](../ghidra/functions/psp-pulse-usa/pads.md#a-weapons-off-race-neither-draws-weapon-pads-nor-can-trigger-them).
@@ -35,17 +39,19 @@ The rules live in `crates/race`; how a lap is decided at all is
 [lap counting](lap-counting.md), and it is a convention rather than a recovery.
 
 Selected on the RACE menu page, which opens on the time trial, or with
-`--mode time_trial|speed_lap|zone` on the command line. `--race` skips the menus,
+`--mode time_trial|speed_lap|zone|single_race` on the command line. `--race` skips the menus,
 so the flag is the only way in on that path.
 
 ## What each mode is
 
-| | Time trial | Speed lap | Zone |
-| --- | --- | --- | --- |
-| Laps | 3 | unlimited | unlimited |
-| Throttle | the player's | the player's | the mode's |
-| Ends by itself | after lap 3 | never | **not implemented** - see below |
-| HUD layout | `TimeTrial_HUD.xml` | `TimeTrial_HUD.xml` | `Zone_HUD.xml` |
+| | Time trial | Speed lap | Zone | Single race |
+| --- | --- | --- | --- | --- |
+| Laps | 3 | unlimited | unlimited | 3, **ours** |
+| Throttle | the player's | the player's | the mode's | the player's |
+| Ends by itself | after lap 3 | never | **not implemented** - see below | after lap 3 |
+| Weapons | off | off | off | **on** |
+| Free turbo a lap | **yes** | **yes** | no | no |
+| HUD layout | `TimeTrial_HUD.xml` | `TimeTrial_HUD.xml` | `Zone_HUD.xml` | `Arcade_HUD.xml` |
 
 Time trial and speed lap sharing a layout is the disc's arrangement, not a
 shortcut: there is no `SpeedLap_HUD.xml`, which is why
@@ -191,12 +197,44 @@ rule, and `oag_gameplay::damage_rules` is the port of it - a time trial's pool
 recovers automatically because the original's does, not because this project
 decided it should.
 
-Both also grant *"a free turbo pickup once per lap"*, which is **not**
-implemented: `Engine::turbo` is read into `Handling` and never applied.
+Both also grant *"a free turbo pickup once per lap"*, and **it is implemented as
+of 2026-08-11** - on the lap edge, into an empty slot only. The manual string is
+no longer the only record of it: `TimeTrial_HUD.xml` authors a
+`PickupBackground` and exactly one weapon icon, `TurboIcon`, where `Zone_HUD.xml`
+authors none and `Arcade_HUD.xml` authors all thirteen. Two shipped files
+agreeing puts it at confidence 85. What a fired turbo does is the recovered `1.2`
+engine multiplier and **not** `Engine::turbo`, which is a different term under
+different flags and is still unapplied - see [pickups](pickups.md).
 
 **Also out of scope:** the `Zone_Bar_*` widgets and the `IG_HUD_PERF_ZONE` /
 `IG_HUD_NEW_ZONE_RECORD` banners. Their writers were not found, and the
 zone-specific graphics were scoped out of this work.
+
+## Single race
+
+**The mode weapons happen in, and the reason it exists.** The original clears
+`g_weapons_enabled` for all three modes above and then hides every `Weapon Pad`
+and empties the trigger list, so no mode this engine had could hand out a pickup
+at all - not "a crossing does nothing", but "there is nothing to cross". A
+pickup system therefore needed the mode that has weapons, and this is it.
+See [pickups](pickups.md).
+
+What it is: a three-lap race with weapons on, damage on, and `Arcade_HUD.xml` -
+the layout whose pickup widgets have been parsed since the HUD work and drawn by
+nothing until now.
+
+**Three departures from the original, all of them absences.**
+
+- **No opponents.** `MSC_EVENT_SR` promises "a full grid of opponents" and the
+  original's `AI DIFFICULTY` row is selectable. That is the AI item; until it
+  lands the field is empty rather than parked, for the reason above.
+- **No `WEAPONS` row.** The original calls weapons "optional" here and this
+  build takes the default, so a single race always has them. A missing setting,
+  not a different rule.
+- **The lap count is ours.** Three, carried over from the time trial. The
+  race-setup format carries `laps="%d"`, so the original configures it per event
+  and no single race has been watched long enough to read what a Custom Race is
+  set to. `Mode::SINGLE_RACE_LAPS`, flagged as a guess where it is defined.
 
 ## What no mode has yet
 

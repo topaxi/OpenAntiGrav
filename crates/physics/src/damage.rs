@@ -288,6 +288,30 @@ pub fn regenerate(state: &mut ShipState, dimensions: &Dimensions, rules: DamageR
     state.shield = regenerated.min(dimensions.shield);
 }
 
+/// Adds energy to the pool, clamped at the ship's maximum.
+///
+/// `Ship_AddShield` (`0x0883ddc8`) adds a delta and routes it through
+/// `Ship_SetShield` (`0x0883e6f4`), which takes `min(amount, max)` against the
+/// skill-indexed `<Misc>` maximum and floors nothing - see
+/// `docs/ghidra/functions/psp-pulse-usa/shield.md`. **So the clamp above is
+/// recovered**, and it is the reason this exists rather than callers writing
+/// `state.shield += delta`: an unclamped pool draws a `ShieldBar` past full and
+/// reports over 100 %.
+///
+/// The one caller today is absorbing a pickup, which pays back
+/// `<Weapon><Stats absorb>`. Zone's perfect-zone recharge is the original's
+/// other `Ship_AddShield` caller and predates this; it writes the field
+/// directly and should move here.
+///
+/// Returns how much actually landed, which is less than `delta` against a full
+/// pool. A caller that wants to say "absorbed" only when something happened
+/// reads it; the sound cue the original plays is not implemented either way.
+pub fn add(state: &mut ShipState, dimensions: &Dimensions, delta: f32) -> f32 {
+    let before = state.shield;
+    state.shield = (state.shield + delta).min(dimensions.shield);
+    state.shield - before
+}
+
 /// The pool as a percentage of its maximum, `0.0` when there is no maximum.
 ///
 /// A ship whose `<Misc>` never loaded has a zero pool, and the original would

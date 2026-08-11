@@ -17,6 +17,7 @@ pub mod collision;
 pub mod controls;
 pub mod handling;
 pub mod input;
+pub mod pickup;
 pub mod spawn;
 pub mod world;
 
@@ -24,5 +25,6 @@ pub use collision::collision_world;
 pub use controls::{ControlScheme, ship_controls};
 pub use handling::{AirbrakeGraphics, airbrake_graphics_for, handling_for, to_format_class};
 pub use input::InputSnapshot;
+pub use pickup::{Driver, Held};
 pub use spawn::{GRID_COLUMN_OFFSET, GRID_ROW_PITCH, GRID_SLOTS, Pose, grid_pose};
 pub use world::{MAX_SHIPS, Ship, World, damage_rules};

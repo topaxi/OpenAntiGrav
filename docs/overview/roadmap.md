@@ -517,12 +517,32 @@ seen from the authoring side.
       speed class and separately for AI, human, front and back of the grid. See
       [weapon stats](../formats/weapon-stats.md). That makes the item a format
       decode plus behaviour rather than a recovery.
-      **They still hand nothing out**: what runs when a craft enters a pad,
-      firing, and the `source == 2` damage path through
-      [`Ship_Damage`](../ghidra/functions/psp-pulse-usa/shield.md) are all
-      unstarted. **Turbo, Shield and Autopilot are the cheap three** - they
-      share a two-attribute schema (`absorb`, `time`) and damage nobody, so
-      none of them needs a projectile or a target.
+      **A pad now hands out a pickup, and Turbo is the one weapon that does
+      something** (2026-08-11). See [pickups](../gameplay/pickups.md), which
+      carries the split that matters here: the *trigger* is recovered at 90 -
+      `WeaponPads_TestCraft` stamps `<WeaponPad refresh_time>`, a per-class
+      debounce now parsed - the odds table is recovered at 92, `SQUARE` fires
+      and `CIRCLE` absorbs at 90, and the `1.2` engine multiplier a fired Turbo
+      arms is recovered at 85. **The grant itself, the weighted draw and the
+      one-slot inventory are this project's**, because no pickup-grant call site
+      exists anywhere in the executable and `craft+0x1c0`'s bits are still
+      unread. The original's PRNG being unrecovered means only the
+      *distribution* can ever be checked, never the sequence.
+      **This needed a fourth mode**, because a weapons-off race in the original
+      hides every pad and empties the trigger list - so none of the three modes
+      here could exercise a pickup at all. `Mode::SingleRace` is it: weapons on,
+      `Arcade_HUD.xml`, and no opponents until the AI lands.
+      **And a time trial's free turbo is in**, on two independent shipped
+      records rather than one - `MSC_EVENT_TT`'s *"free turbo pickup once per
+      lap"* and `TimeTrial_HUD.xml` authoring a `PickupBackground` and
+      `TurboIcon` alone where Zone authors none and Arcade authors all thirteen.
+      **Ten weapons still hand out nothing**: firing, projectiles, targets and
+      the `source == 2` damage path through
+      [`Ship_Damage`](../ghidra/functions/psp-pulse-usa/shield.md) are unstarted,
+      and the draw pool is restricted to weapons with an effect so a player is
+      never handed one that cannot be used. Shield's `time` joins to no
+      recovered code path; Autopilot is the AI's own controller taking over and
+      belongs with the AI.
 - [~] **Shield and energy.** The pool, its maximum and the one thing that spends
       it are recovered and implemented: `*(craft+0x1c4) + 0x88` is the pool,
       `<Misc>`'s three difficulty slots at stats-base `0x84 + skill * 4` are its

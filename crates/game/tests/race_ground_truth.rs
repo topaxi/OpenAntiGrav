@@ -969,3 +969,92 @@ fn the_weapon_pads_are_drawn_where_they_trigger() {
         );
     }
 }
+
+/// **The pickup chain, on the disc's own track and the disc's own weapon
+/// table.** The unit tests in `oag_game::race` run it against a synthetic pad
+/// and a hand-written table, so they check the logic against this project's
+/// reading of both formats. This checks it against the shipped bytes: a real
+/// `Weapon Pad` volume out of `16_Track`, real `<Pickupodds>` out of
+/// `WeaponStats_Race.xml`, and the real `<WeaponPad refresh_time>` out of
+/// `HandlingStats.xml`.
+///
+/// Three things it pins, in order of how easily each could break silently:
+///
+/// 1. **A single race arms the pads and the three solo modes do not.** This is
+///    the one part of the pickup system that is wholly recovered - a
+///    weapons-off race in the original hides every pad and zeroes the trigger
+///    list's count - so it is the part with a right answer to fail against.
+/// 2. **Crossing one grants a pickup**, which is this project's reading rather
+///    than a ported branch: no grant call site has been found. What is checked
+///    here is that the chain reaches the inventory at all, not that the
+///    original does the same.
+/// 3. **The class's authored odds resolve.** `HandlingStats.xml` spells a speed
+///    class `VENOM` and `WeaponStats_Race.xml` spells it `Venom`, so a lookup
+///    that matched case-sensitively would find no table and hand out nothing -
+///    a failure that looks exactly like "the pad did not fire".
+///
+/// See `docs/gameplay/pickups.md`.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_weapon_pad_on_the_disc_hands_out_a_pickup_in_a_single_race() {
+    let Some(image) = image() else { return };
+
+    // Where to put the craft: the first weapon pad the track authors, lifted to
+    // the pad's own centre. Taken from a plain load so the position comes from
+    // the same decode `the_weapon_pads_are_drawn_where_they_trigger` checks.
+    let Some(scouted) = load() else { return };
+    let pad = *scouted
+        .setup
+        .weapon_pads
+        .first()
+        .expect("16_Track authors weapon pads");
+    let centre = Vec3::from_array(pad.centre());
+    println!("first weapon pad at {centre:?}");
+
+    let race_at_pad = |mode: oag_race::Mode| {
+        let loaded = race::load(&race::Options {
+            source: image.display().to_string(),
+            class: SpeedClass::Venom,
+            mode,
+            pose: Some(race::PoseRequest::SplineAligned {
+                position: centre,
+                yaw: 0.0,
+            }),
+            ..race::Options::default()
+        })
+        .expect("loading the race");
+        race::Race::start(loaded.setup)
+    };
+
+    // A single race: the craft starts inside the volume, so the first tick is
+    // the entry edge.
+    let mut single = race_at_pad(oag_race::Mode::SingleRace);
+    single.tick(&Default::default());
+    let granted = single.ship_pickup();
+    assert!(
+        granted.is_some(),
+        "a craft standing on a real weapon pad was handed nothing - either the \
+         trigger missed the volume or the class's <Pickupodds> did not resolve"
+    );
+    println!("granted {granted:?} off the disc's own odds");
+
+    // And the three weapons-off modes hand out nothing from the same spot, for
+    // any number of ticks. Zone is the one with no free turbo either, so it is
+    // the clean negative; a time trial and a speed lap are checked for the
+    // *pad* specifically by standing still, which never completes a lap.
+    for mode in [
+        oag_race::Mode::TimeTrial,
+        oag_race::Mode::SpeedLap,
+        oag_race::Mode::Zone,
+    ] {
+        let mut race = race_at_pad(mode);
+        for _ in 0..120 {
+            race.tick(&Default::default());
+        }
+        assert_eq!(
+            race.ship_pickup(),
+            None,
+            "{mode:?} handed out a pickup, and the original arms no pads for it"
+        );
+    }
+}

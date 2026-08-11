@@ -22,9 +22,10 @@ because the two are separate *gameplay* objects: a speed pad pushes and a weapon
 pad hands something out, and a merged buffer could not later show one without the
 other.
 
-**Nothing consumes a weapon pad.** Its trigger volumes decode and are carried on
-`oag_game::race::Setup::weapon_pads`; what a pad hands out is the weapons item on
-the [roadmap](../overview/roadmap.md).
+**A weapon pad hands out a pickup** as of 2026-08-11, in the one mode that arms
+them - see [pickups](../gameplay/pickups.md) for the trigger, the draw and the
+recovered-versus-ours split. Its trigger volumes are carried on
+`oag_game::race::Setup::weapon_pads` and consumed by `Race::test_weapon_pads`.
 
 `crates/game/tests/race_ground_truth.rs::the_weapon_pads_are_drawn_where_they_trigger`
 is what makes "drawn where they trigger" a fact rather than a hope: the geometry
@@ -94,10 +95,19 @@ shipped data rather than a runtime trace.
 
 ## Not determined
 
-- **What writes `pad+0x1a0`**, the field that gates every hit. Carried inert in
-  `crates/formats/src/pads.rs`. `<WeaponPad refresh_time>` is the obvious
-  candidate, which would make it a pickup-respawn timer no speedup pad sets.
-- **Whether `Weapon Pad` shares more than the payload.** The geometry decodes and
-  is asserted, but nothing consumes one - there is no pickup system.
+- ~~**What writes `pad+0x1a0`**~~ - **answered.** `WeaponPads_TestCraft`
+  (`0x0888727c`) stamps it with `<WeaponPad refresh_time>` and
+  `WeaponPad_UpdateRefreshTimer` (`0x0892c034`) counts it down, at confidence 90:
+  see [the runtime page](../ghidra/functions/psp-pulse-usa/pads.md). It is a
+  **debounce** rather than the pickup-respawn timer this entry guessed at -
+  `0.55` seconds for every speed class, less than a craft takes to clear a pad.
+  Parsed by `oag_formats::handling::WeaponPad`.
+- ~~**Whether `Weapon Pad` shares more than the payload**~~ - the geometry, the
+  volumes and the trigger are all shared with `Speedup Pad`; what differs is only
+  what happens on a hit. See [pickups](../gameplay/pickups.md).
+- **The pad's own colour cycle is still unimplemented.**
+  `WeaponPad_UpdateRefreshTimer` packs a grey into `pad+0x6c` while the pad is
+  cooling down and cross-fades a small colour table once it is collectable, so
+  the original shows a spent pad differently. Observed, not built.
 - **Nothing here has been verified under an emulator.** This is static reading
   plus agreement with shipped data, which is what caps the scores at 94.

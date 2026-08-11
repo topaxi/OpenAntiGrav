@@ -420,6 +420,15 @@ impl Default for Options {
 pub struct Setup {
     /// Which mode's rules the race runs under.
     pub mode: Mode,
+    /// The speed class the race is run in.
+    ///
+    /// Most of what the class decides is already resolved by the time a `Setup`
+    /// exists - the handling block, the gravity scale and the speed-pad tunables
+    /// are all per-class and all baked in above. It is carried anyway because
+    /// [`Self::weapons`]' pickup odds are indexed by class *inside* a table this
+    /// keeps whole, and resolving that at load would throw away the other
+    /// classes' rows for no gain.
+    pub class: SpeedClass,
     /// Whether to spawn the rest of the grid regardless of what `mode` says.
     ///
     /// The resolved form of [`Options::opponents`] - see its doc comment.
@@ -1415,6 +1424,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     Ok(Loaded {
         setup: Setup {
             mode: options.mode,
+            class: options.class,
             opponents: options.opponents,
             zone,
             ai,
@@ -2157,6 +2167,44 @@ pub struct Race {
     /// pad, which is what gates the Zone score - standing still on one pad does
     /// not pay repeatedly.
     pad_current: Option<usize>,
+    /// The track's weapon-pad trigger volumes - see [`Setup::weapon_pads`].
+    ///
+    /// **Empty unless the mode arms them.** A weapons-off race in the original
+    /// does not skip the trigger, it zeroes the list's own count
+    /// (`World_CollectNodeLists`), and emptying this reproduces that at the same
+    /// layer rather than adding a mode test to every tick.
+    weapon_pads: Vec<oag_formats::pads::PadVolume>,
+    /// Distance from the ship to each weapon pad. The speed pads'
+    /// [`Self::pad_distance`], one class over, and the same broadphase.
+    weapon_pad_distance: Vec<f32>,
+    /// Which weapon pad the ship was inside last tick.
+    ///
+    /// The edge this changes on is what grants a pickup, exactly as
+    /// [`Self::pad_current`]'s edge is what pays the Zone score. Two pads
+    /// overlapping on one tick is one entry.
+    weapon_pad_current: Option<usize>,
+    /// Seconds each weapon pad has left before it can be triggered again.
+    ///
+    /// The original's `pad+0x1a0`, stamped by `WeaponPads_TestCraft` with
+    /// `<WeaponPad refresh_time>` and counted back down by
+    /// `WeaponPad_UpdateRefreshTimer` (`0x0892c034`) - see
+    /// [`oag_formats::handling::WeaponPad`]. Per pad rather than per craft,
+    /// which is what makes it a property of the track rather than of the racer.
+    ///
+    /// **Deliberately outside the determinism hash**, unlike
+    /// `ShipState::turbo_timer`. It is genuine simulation state and a replay of
+    /// a single race would need it; it is not hashed because the hash covers
+    /// `ShipState` and the tick, and widening that is a change to the gate
+    /// rather than a change to this feature. Recorded here so the gap is a known
+    /// one - see `docs/gameplay/pickups.md`.
+    weapon_pad_refresh_left: Vec<f32>,
+    /// How long a stamped weapon pad stays inert - see
+    /// [`Setup::weapon_pad_refresh`].
+    weapon_pad_refresh: f32,
+    /// This race's weapon table - see [`Setup::weapons`].
+    weapons: Option<oag_formats::weapons::WeaponStats>,
+    /// The speed class, which indexes the pickup odds - see [`Setup::class`].
+    class: SpeedClass,
     /// How far the boost's field-of-view kick has opened, `0.0` to `1.0`.
     ///
     /// Render-only state, on `Race` rather than in `World` for the same reason
@@ -2260,11 +2308,27 @@ impl Race {
             nozzle,
             collision_fx,
             speedup_pads,
+            weapon_pads,
+            weapons,
+            weapon_pad_refresh,
+            class,
             class_gravity_scale,
             pose_override,
             camera_override,
             ..
         } = setup;
+
+        // The mode gate, applied once at construction rather than on every tick,
+        // because that is where the original applies it: `World_CollectNodeLists`
+        // zeroes the trigger list's own count at track load, so a weapons-off
+        // race has no weapon pads to walk rather than a walk that decides
+        // nothing. Dropping the volumes here also makes it impossible for a
+        // later change to reach them by accident.
+        let weapon_pads = if mode.weapons_enabled() {
+            weapon_pads
+        } else {
+            Vec::new()
+        };
 
         let mut world = World::new(SEED);
         world.race = RaceState::new(mode);
@@ -2382,6 +2446,16 @@ impl Race {
             // distance nothing has computed yet.
             pad_distance: vec![0.0; speedup_pads.len()],
             speedup_pads,
+            // The same broadphase, and the same "due for a real test" start.
+            weapon_pad_distance: vec![0.0; weapon_pads.len()],
+            // Every pad starts collectable. The original's `+0x1a0` is zero
+            // until something stamps it, and nothing stamps it at load.
+            weapon_pad_refresh_left: vec![0.0; weapon_pads.len()],
+            weapon_pads,
+            weapon_pad_current: None,
+            weapon_pad_refresh,
+            weapons,
+            class,
             class_gravity_scale,
             pad_current: None,
             pad_previous_position: None,
@@ -2519,6 +2593,16 @@ impl Race {
         &self.world.ships[0]
     }
 
+    /// What the player's craft is carrying, if anything.
+    ///
+    /// A convenience over `ship().pickup.weapon`, and the accessor the HUD
+    /// reads: which pickup is held is presentation-facing in a way the rest of
+    /// [`Ship`] is not.
+    #[must_use]
+    pub fn ship_pickup(&self) -> Option<oag_formats::weapons::Weapon> {
+        self.world.ships[0].pickup.weapon
+    }
+
     /// The resampled spline, for a caller that wants to measure against it.
     #[must_use]
     pub fn spline(&self) -> &Spline {
@@ -2531,6 +2615,9 @@ impl Race {
     /// one place "cross is thrust" is written down.
     pub fn tick(&mut self, snapshot: &InputSnapshot) -> Evaluated {
         let controls = ship_controls(snapshot, self.scheme);
+
+        // Before the force law, so a Turbo fired this tick boosts this tick.
+        self.spend_pickup(snapshot);
 
         // The two spline samples the magstrip hold reads. In the original these are
         // `AiTrack_LocatePosition`'s two output records on the ship entity; here
@@ -2573,7 +2660,13 @@ impl Race {
         // original measures it: `Ship_ApplySpeedupPad` runs inside the same craft
         // update as the other fourteen terms, all of them against the position the
         // tick started at, and the integrator moves the body afterwards.
-        let pad_hit = self.test_speedup_pads(before);
+        let (moved, sweep) = self.pad_sweep(before);
+        let pad_hit = self.test_speedup_pads(before, moved, &sweep);
+        // After the speed pad, sharing its sweep. The two are independent - a
+        // track can author a weapon pad on top of a speed pad and both fire -
+        // and this one returns nothing, because a pickup is an event rather than
+        // a per-tick force.
+        self.test_weapon_pads(before, moved, &sweep);
         let ship = &mut self.world.ships[0];
         let env = Environment {
             track_sample,
@@ -2654,6 +2747,10 @@ impl Race {
                 let ship = &mut self.world.ships[0];
                 let max = ship.handling.dimensions.shield;
                 ship.physics.shield = (ship.physics.shield + zone.recharge).min(max);
+            }
+
+            if outcome.lap_completed {
+                self.grant_free_turbo();
             }
         }
 
@@ -2817,6 +2914,152 @@ impl Race {
     /// destination last tick.
     const PAD_SWEEP_STEPS: u32 = 4;
 
+    /// Hands a time trial or a speed lap its free Turbo.
+    ///
+    /// **Two shipped records say this happens, and they were found
+    /// independently.** The disc's own event text is explicit -
+    /// `MSC_EVENT_TT` and `MSC_EVENT_SL` each read *"You will be given a free
+    /// turbo pickup once per lap"* - and `TimeTrial_HUD.xml` authors a
+    /// `PickupBackground` and **exactly one** weapon icon, `TurboIcon`, where
+    /// `Arcade_HUD.xml` authors all thirteen and `Zone_HUD.xml` authors none.
+    /// A layout carrying one pickup widget for a mode whose `Weapon Pad`s are
+    /// hidden is otherwise inexplicable. Confidence **85** on the rule; the
+    /// second record was found by `every_weapon_has_an_icon_widget_named_after_it`
+    /// failing against the assumption that these layouts carried none.
+    ///
+    /// **What is not recovered is *when* within the lap.** "Once per lap" is
+    /// awarded here on the lap edge, which means the ship gets its first one on
+    /// crossing the line to start lap 2 rather than at the start line - and the
+    /// original may well hand it over at the start of a lap instead, which is
+    /// the same edge one lap earlier. Nothing read says which. The conservative
+    /// choice is the one that cannot give a free boost before the clock starts.
+    ///
+    /// Zone is excluded: it authors no pickup widgets at all, and its event text
+    /// promises nothing.
+    fn grant_free_turbo(&mut self) {
+        if !matches!(self.world.race.mode, Mode::TimeTrial | Mode::SpeedLap) {
+            return;
+        }
+        // The same "only into an empty slot" rule a pad follows, so a player who
+        // has not spent last lap's turbo does not silently lose this one - they
+        // keep the one they have.
+        if !self.world.ships[0].pickup.is_empty() {
+            return;
+        }
+        // Gated on the table, so a disc whose weapon file did not load hands
+        // out nothing rather than a Turbo with no duration to fire it for.
+        if self
+            .weapons
+            .as_ref()
+            .and_then(|w| w.simple(oag_formats::weapons::Weapon::Turbo))
+            .is_none()
+        {
+            return;
+        }
+        self.world.ships[0].pickup.weapon = Some(oag_formats::weapons::Weapon::Turbo);
+    }
+
+    /// Fires or absorbs whatever the craft is holding.
+    ///
+    /// **The buttons are recovered and the actions are not.**
+    /// `Options_LoadDefaultControlMapping` (`0x0883672c`) maps action 1, *fire*,
+    /// to `SQUARE` and action 2, *absorb*, to `CIRCLE`, at confidence 90 - see
+    /// `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`, whose table is
+    /// self-checking on the `accelerate`/`CROSS` row this project already knew.
+    /// What each does with the pickup is this engine's, for the reason
+    /// `oag_gameplay::pickup` gives at length: no grant, fire or absorb call
+    /// site has been found.
+    ///
+    /// Absorb *pays* the recovered `<Weapon><Stats absorb>` into the pool
+    /// through the recovered clamp, so of the two it is the better evidenced.
+    ///
+    /// Edge-triggered on both, so holding a button spends one pickup rather than
+    /// one a tick. Nothing happens with an empty slot, including no sound - the
+    /// original's "nothing to fire" cue is not implemented.
+    fn spend_pickup(&mut self, snapshot: &InputSnapshot) {
+        let fire = snapshot
+            .buttons
+            .is_pressed(oag_gameplay::input::button::SQUARE);
+        let absorb = snapshot
+            .buttons
+            .is_pressed(oag_gameplay::input::button::CIRCLE);
+        if !fire && !absorb {
+            return;
+        }
+        let Some(weapon) = self.world.ships[0].pickup.weapon else {
+            return;
+        };
+        let Some(weapons) = self.weapons.as_ref() else {
+            return;
+        };
+
+        // Fire wins a same-tick tie. Arbitrary, and stated rather than left to
+        // the order of two `if`s: a pad hands out one thing and both buttons
+        // spend it, so the two can only race on a tick where the player pressed
+        // both.
+        if fire {
+            match weapon {
+                oag_formats::weapons::Weapon::Turbo => {
+                    let Some(simple) = weapons.simple(weapon) else {
+                        // The file authors no Turbo. Nothing to fire *with*, so
+                        // the pickup is kept rather than spent on nothing.
+                        return;
+                    };
+                    self.world.ships[0].physics.turbo_timer = simple.time;
+                    // The same visual a speed pad arms, on the same argument:
+                    // the plume is what a boost looks like, and there is one
+                    // boost. Not recovered for this path - no capture of a fired
+                    // Turbo exists - so it is the plume being reused rather than
+                    // a reading of what the original shows.
+                    self.exhaust.boost(exhaust::BOOST_SECONDS);
+                }
+                // The other twelve have no effect to run. Deliberately *not*
+                // spent: a pickup that vanishes when fired and does nothing is
+                // worse than one the player can still absorb. They cannot reach
+                // here anyway while `pickup::IMPLEMENTED` holds one weapon; the
+                // arm exists so adding to that list is a compile-visible choice
+                // rather than a silent no-op.
+                _ => return,
+            }
+        } else {
+            let Some(amount) = weapons.absorb(weapon) else {
+                return;
+            };
+            let handling = self.world.ships[0].handling;
+            oag_physics::damage::add(
+                &mut self.world.ships[0].physics,
+                &handling.dimensions,
+                amount,
+            );
+        }
+        self.world.ships[0].pickup.weapon = None;
+    }
+
+    /// How far the ship moved since the last pad test, and the path it swept.
+    ///
+    /// One computation shared by both pad triggers, because the original's two -
+    /// `Pads_TestCraft` and `WeaponPads_TestCraft` - run in the same craft
+    /// update against the same recorded previous position. Computing it twice
+    /// would be harmless today and wrong the moment either advanced the record,
+    /// which is exactly the mistake `pad_previous_position.replace` invites.
+    ///
+    /// The sweep's destination is included and its origin is not, because the
+    /// origin was the previous test's destination. A stationary ship and a long
+    /// jump both fall through to the single point: interpolating a zero-length
+    /// step adds nothing, and interpolating a long one does not close the gap.
+    fn pad_sweep(&mut self, position: Vec3) -> (f32, Vec<Vec3>) {
+        let previous = self.pad_previous_position.replace(position);
+        let moved = previous.map_or(f32::INFINITY, |from| position.distance(from));
+        let sweep = match previous {
+            Some(from) if (0.0..Self::PAD_SWEEP_LIMIT).contains(&moved) && moved > 0.0 => (1
+                ..=Self::PAD_SWEEP_STEPS)
+                .map(|step| from.lerp(position, step as f32 / Self::PAD_SWEEP_STEPS as f32))
+                .collect(),
+            _ => vec![position],
+        };
+        (moved, sweep)
+    }
+
     /// Which way the speed pad under the ship pushes, or `None` if there is none.
     ///
     /// Reimplements `Pads_TestCraft` (`0x08887144`) and the two functions under
@@ -2828,26 +3071,14 @@ impl Race {
     /// Also does the two things that happen on **entering a new** pad, because
     /// both are edges on the same value the original latches at `craft+0x1d0`:
     /// the Zone score, and arming the exhaust flare.
-    fn test_speedup_pads(&mut self, position: Vec3) -> Option<Vec3> {
+    ///
+    /// `moved` and `sweep` come from [`Self::pad_sweep`] and are shared with
+    /// [`Self::test_weapon_pads`], because the original's two trigger functions
+    /// run in the same craft update against the same previous position.
+    fn test_speedup_pads(&mut self, position: Vec3, moved: f32, sweep: &[Vec3]) -> Option<Vec3> {
         if self.speedup_pads.is_empty() {
             return None;
         }
-
-        // How far the ship travelled since this test last ran, which is what the
-        // broadphase spends and what decides swept versus single-point.
-        let previous = self.pad_previous_position.replace(position);
-        let moved = previous.map_or(f32::INFINITY, |from| position.distance(from));
-
-        // The swept path, destination last. A stationary ship and a long jump both
-        // fall through to the single point: interpolating a zero-length step adds
-        // nothing, and interpolating a long one does not close the gap.
-        let sweep: Vec<Vec3> = match previous {
-            Some(from) if (0.0..Self::PAD_SWEEP_LIMIT).contains(&moved) && moved > 0.0 => (1
-                ..=Self::PAD_SWEEP_STEPS)
-                .map(|step| from.lerp(position, step as f32 / Self::PAD_SWEEP_STEPS as f32))
-                .collect(),
-            _ => vec![position],
-        };
 
         let mut hit = None;
         for (index, pad) in self.speedup_pads.iter().enumerate() {
@@ -2899,6 +3130,105 @@ impl Race {
         }
 
         hit.map(|(_, direction)| direction)
+    }
+
+    /// Crosses the ship against the track's weapon pads, granting a pickup.
+    ///
+    /// Reimplements `WeaponPads_TestCraft` (`0x0888727c`), which
+    /// `docs/ghidra/functions/psp-pulse-usa/pads.md` reads as "the exact mirror
+    /// of `Pads_TestCraft`" for the `world+0x10c` list - same swept test, same
+    /// per-racer distance cache. So the broadphase and the sweep below are
+    /// [`Self::test_speedup_pads`]' verbatim, and what differs is only what
+    /// happens on a hit.
+    ///
+    /// # Three things happen here and only one of them is recovered
+    ///
+    /// Worth separating at the call site rather than only in
+    /// `docs/gameplay/pickups.md`, because they are easy to read as one ported
+    /// branch:
+    ///
+    /// 1. **Stamping the pad** with `<WeaponPad refresh_time>` is the whole of
+    ///    what the original's function does on a hit, at confidence 90. It is
+    ///    done here on **any** hit, including one that grants nothing, because
+    ///    that is what the original does - the stamp is unconditional.
+    /// 2. **Granting a pickup at all** is ours. No pickup-grant call site has
+    ///    been found anywhere, so a crossing handing something over is this
+    ///    project's reading of what a weapon pad is for.
+    /// 3. **Only granting into an empty slot** is ours too, and is the one rule
+    ///    here with no evidence in either direction. A craft that already holds
+    ///    something still stamps the pad, so a full inventory costs the pad its
+    ///    cooldown - which is the conservative reading, and the one that cannot
+    ///    hand out two pickups from one crossing.
+    ///
+    /// Called once a tick with the position the tick *starts* at, like the speed
+    /// pad's, and **after** it, so both spend the same `moved` and neither can
+    /// see a position the other has already advanced past.
+    fn test_weapon_pads(&mut self, position: Vec3, moved: f32, sweep: &[Vec3]) {
+        if self.weapon_pads.is_empty() {
+            return;
+        }
+
+        // `WeaponPad_UpdateRefreshTimer` (`0x0892c034`): every pad counts its own
+        // stamp down by `dt`, floored at zero, whether or not anything is near
+        // it. Outside the hit loop because the original runs it as the class's
+        // `update` method on every pad, every tick.
+        for left in &mut self.weapon_pad_refresh_left {
+            *left = (*left - self.dt).max(0.0);
+        }
+
+        let mut hit = None;
+        for (index, pad) in self.weapon_pads.iter().enumerate() {
+            self.weapon_pad_distance[index] -= moved;
+            if self.weapon_pad_distance[index] > 0.0 {
+                continue;
+            }
+            self.weapon_pad_distance[index] = pad.distance(position.to_array());
+
+            if hit.is_none() && sweep.iter().any(|point| pad.contains(point.to_array())) {
+                hit = Some(index);
+            }
+        }
+
+        // The edge, outside the loop for the same reason the speed pad's is: two
+        // pads overlapping on one tick is one entry.
+        if hit == self.weapon_pad_current {
+            return;
+        }
+        self.weapon_pad_current = hit;
+        let Some(index) = hit else {
+            return;
+        };
+
+        // Point 1 above. Unconditional, and before the grant, so a pad that
+        // hands nothing over is still spent.
+        if self.weapon_pad_refresh_left[index] > 0.0 {
+            // Still cooling down. The stamp is not refreshed - re-stamping would
+            // make a craft parked on a pad hold it inert forever, and the
+            // original cannot reach this branch at all: its timer is what
+            // `Pad_ContainsPoint` is asked about before the hit is reported.
+            return;
+        }
+        self.weapon_pad_refresh_left[index] = self.weapon_pad_refresh;
+
+        // Points 2 and 3.
+        if !self.world.ships[0].pickup.is_empty() {
+            return;
+        }
+        let Some(weapons) = self.weapons.as_ref() else {
+            return;
+        };
+        let Some(table) = oag_gameplay::pickup::table_for(weapons, to_format_class(self.class))
+        else {
+            return;
+        };
+        // The player, so the `human` column. `front`/`back` need race positions,
+        // which need opponents that move.
+        let drawn = oag_gameplay::pickup::draw(
+            &mut self.world.rng,
+            table,
+            oag_gameplay::pickup::Driver::Human,
+        );
+        self.world.ships[0].pickup.weapon = drawn;
     }
 
     /// Whether this tick ended in contact with `Reset` geometry.
@@ -3032,10 +3362,10 @@ impl Race {
             speed_kmh: ship.physics.body.linear_velocity.length()
                 * oag_render::exhaust::SPEED_TO_KMH,
             speed_full_kmh: crate::hud::DEFAULT_SPEED_FULL_KMH,
-            // Nothing depletes this yet - no weapons, and track-contact damage is
-            // unrecovered - so the bar reads full for the whole race. It is the
-            // ship's own pool rather than the parameter now, because Zone's
-            // perfect-zone recharge writes it.
+            // The ship's own pool, which wall contact spends and absorbing a
+            // pickup pays back into - `oag_physics::damage`. (This comment said
+            // "nothing depletes this yet" until 2026-08-11, three subsystems
+            // after it stopped being true.)
             shield: ship.physics.shield,
             shield_max: ship.handling.dimensions.shield,
             lap: if counted { race.lap } else { 0 },
@@ -3056,6 +3386,7 @@ impl Race {
             wrong_way: self.wrong_way(),
             zone: race.zone.into(),
             score: race.score,
+            pickup: ship.pickup.weapon,
         }
     }
 
@@ -5692,6 +6023,7 @@ mod tests {
                 down_speed: 30.0,
             },
             mode: Mode::TimeTrial,
+            class: SpeedClass::Venom,
             opponents: false,
             // A time trial does not read it, and these tests never run a Zone
             // race: the numbers are the disc's and there is no disc here.
@@ -5996,6 +6328,281 @@ mod tests {
             );
             assert_eq!(race.world.race.score, 0, "{mode:?} scored for a pad");
         }
+    }
+
+    /// How long [`one_turbo_table`]'s Turbo runs for, in seconds.
+    const FIXTURE_TURBO_TIME: f32 = 0.75;
+
+    /// A weapon table with one Turbo in it, weighted for a human.
+    ///
+    /// **Built by parsing a document rather than by constructing the struct**,
+    /// which is not only because `WeaponStats::simple` is private: it means
+    /// every test below runs against the same reader a real disc goes through,
+    /// so a parser change that broke the pickup path could not pass here.
+    ///
+    /// Every number is invented, per ADR-0006 - what the shipped file authors is
+    /// not in this repository. `absorb` and `time` are deliberately different
+    /// from each other and from every other constant here, so a test that
+    /// confused them would fail rather than pass by coincidence.
+    fn one_turbo_table() -> oag_formats::weapons::WeaponStats {
+        oag_formats::weapons::parse(
+            r#"<WeaponStats>
+                 <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
+                 <Weapon type="Turbo"><Stats absorb="23" time="0.75"/></Weapon>
+                 <Pickupodds class="Venom">
+                   <Weapon type="Turbo"><Stats ai="1" back="1" front="1" human="1"/></Weapon>
+                 </Pickupodds>
+               </WeaponStats>"#,
+        )
+        .expect("the fixture table must parse")
+    }
+
+    /// Drives buttons the way the real input layer does: a per-tick *level*,
+    /// with the pressed and released edges derived from the previous tick's.
+    ///
+    /// Not [`HeldButtons`], which goes through the keyboard map and therefore
+    /// only reaches the seven buttons `key_for_button` binds - `SQUARE` and
+    /// `CIRCLE`, the two the pickup reads, are not among them.
+    struct Buttons(oag_gameplay::input::Input);
+
+    impl Buttons {
+        fn new() -> Self {
+            Self(oag_gameplay::input::Input::new())
+        }
+
+        /// One tick's snapshot with exactly `mask` held.
+        fn tick(&mut self, mask: u32) -> InputSnapshot {
+            self.0.begin_frame(mask);
+            InputSnapshot {
+                buttons: self.0,
+                ..InputSnapshot::default()
+            }
+        }
+    }
+
+    const CROSS: u32 = 1 << oag_gameplay::input::button::CROSS;
+    const SQUARE: u32 = 1 << oag_gameplay::input::button::SQUARE;
+    const CIRCLE: u32 = 1 << oag_gameplay::input::button::CIRCLE;
+
+    /// A race with weapon pads, the mode that arms them, and a table to draw
+    /// from. `refresh` is `<WeaponPad refresh_time>`.
+    fn race_with_weapon_pads(
+        mode: Mode,
+        pads: Vec<oag_formats::pads::PadVolume>,
+        refresh: f32,
+    ) -> Race {
+        let mut handling = hulled_handling();
+        // `Handling::ZERO` gives an engine that produces no thrust and a hull
+        // with no energy pool, and both of those are what these tests measure a
+        // *difference* in. Invented numbers, large enough to read cleanly.
+        handling.engine.amount = 20.0;
+        handling.engine.accelcap = 1000.0;
+        handling.dimensions.shield = 100.0;
+        let mut setup = setup(handling);
+        setup.mode = mode;
+        setup.weapon_pads = pads;
+        setup.weapons = Some(one_turbo_table());
+        setup.weapon_pad_refresh = refresh;
+        Race::start(setup)
+    }
+
+    /// The whole grant chain: containment in `oag_formats::pads`, the entry
+    /// edge, the weighted draw out of the authored odds, and the inventory. One
+    /// test for the same reason the speed pad's is one - every link is worthless
+    /// without the others.
+    #[test]
+    fn crossing_a_weapon_pad_grants_the_pickup_its_class_weights() {
+        let mut race = race_with_weapon_pads(Mode::SingleRace, enveloping_pad(), 1.0);
+        assert!(
+            race.ship_pickup().is_none(),
+            "a race must start empty-handed"
+        );
+        race.tick(&InputSnapshot::default());
+        assert_eq!(
+            race.ship_pickup(),
+            Some(oag_formats::weapons::Weapon::Turbo)
+        );
+    }
+
+    /// The mode gate, and it is the one thing about a weapon pad that *is*
+    /// wholly recovered: a weapons-off race in the original does not ignore a
+    /// crossing, it empties the trigger list at track load. So the three
+    /// single-ship modes must grant nothing while standing on a pad forever.
+    #[test]
+    fn a_weapons_off_mode_never_grants_anything() {
+        for mode in [Mode::TimeTrial, Mode::SpeedLap, Mode::Zone] {
+            let mut race = race_with_weapon_pads(mode, enveloping_pad(), 1.0);
+            for _ in 0..120 {
+                race.tick(&InputSnapshot::default());
+            }
+            assert!(
+                race.ship_pickup().is_none(),
+                "{mode:?} handed out a pickup, and the original arms no pads for it"
+            );
+        }
+    }
+
+    /// One crossing is one pickup. The ship sits inside an enveloping pad for
+    /// two seconds, spending what it is given every tick; without the entry
+    /// edge and the refresh stamp it would be handed one on every tick it is
+    /// inside.
+    #[test]
+    fn sitting_on_a_weapon_pad_does_not_refill_the_slot() {
+        let mut race = race_with_weapon_pads(Mode::SingleRace, enveloping_pad(), 1.0);
+        let mut granted = 0;
+        for _ in 0..120 {
+            race.tick(&InputSnapshot::default());
+            if race.ship_pickup().is_some() {
+                granted += 1;
+                race.world.ships[0].pickup.weapon = None;
+            }
+        }
+        assert_eq!(granted, 1, "the pad fired {granted} times for one crossing");
+    }
+
+    /// Firing a Turbo sets the timer from the file's own `<Turbo time>` and the
+    /// engine multiplies its thrust while it runs - the recovered `1.2`. Read as
+    /// a *difference* against an identical race that never fired, because the
+    /// absolute thrust depends on the whole force law.
+    #[test]
+    fn a_fired_turbo_multiplies_thrust_for_its_authored_duration() {
+        let mut fired = race_with_weapon_pads(Mode::SingleRace, enveloping_pad(), 1.0);
+        let mut plain = race_with_weapon_pads(Mode::SingleRace, enveloping_pad(), 1.0);
+        let mut fired_buttons = Buttons::new();
+        let mut plain_buttons = Buttons::new();
+
+        // Both take the pickup on tick 1 and only one of them fires it.
+        fired.tick(&fired_buttons.tick(CROSS));
+        plain.tick(&plain_buttons.tick(CROSS));
+        assert_eq!(
+            fired.ship_pickup(),
+            Some(oag_formats::weapons::Weapon::Turbo)
+        );
+
+        let boosted = fired.tick(&fired_buttons.tick(CROSS | SQUARE));
+        let ordinary = plain.tick(&plain_buttons.tick(CROSS));
+
+        assert!(
+            fired.ship().physics.turbo_timer > 0.0,
+            "firing must arm the timer"
+        );
+        assert_eq!(fired.ship_pickup(), None, "firing must spend the pickup");
+        assert!(
+            boosted.engine.thrust > ordinary.engine.thrust,
+            "a fired turbo must add thrust: {} against {}",
+            boosted.engine.thrust,
+            ordinary.engine.thrust
+        );
+        // The recovered multiplier, exactly - the two races differ in nothing
+        // else on this tick.
+        assert!(
+            (boosted.engine.thrust
+                - ordinary.engine.thrust * oag_physics::engine::ENGINE_PICKUP_SPEEDUP)
+                .abs()
+                < 1e-3,
+            "expected exactly {}x",
+            oag_physics::engine::ENGINE_PICKUP_SPEEDUP
+        );
+
+        // And it expires on the file's own duration rather than running forever.
+        let mut ticks: u32 = 1;
+        while fired.ship().physics.turbo_timer > 0.0 {
+            fired.tick(&fired_buttons.tick(CROSS));
+            ticks += 1;
+            assert!(ticks < 600, "the turbo never expired");
+        }
+        let expected = (FIXTURE_TURBO_TIME / fired.dt()).round() as u32;
+        assert!(
+            ticks.abs_diff(expected) <= 1,
+            "the turbo ran {ticks} tick(s) against the authored {expected}"
+        );
+    }
+
+    /// The free Turbo a time trial and a speed lap get once per lap, which the
+    /// disc records twice - in `MSC_EVENT_TT`/`MSC_EVENT_SL` and in
+    /// `TimeTrial_HUD.xml`'s lone `TurboIcon`. See [`Race::grant_free_turbo`].
+    ///
+    /// Driven directly rather than by racing a lap: the *edge* it hangs off is
+    /// `oag_race::Outcome::lap_completed`, which `oag-race`'s own tests cover,
+    /// and what is worth pinning here is which modes it applies to and what it
+    /// does to a slot that is already full.
+    #[test]
+    fn only_the_two_solo_modes_are_given_a_free_turbo_and_never_two_at_once() {
+        use oag_formats::weapons::Weapon;
+
+        for mode in [Mode::TimeTrial, Mode::SpeedLap] {
+            let mut race = race_with_weapon_pads(mode, Vec::new(), 1.0);
+            race.grant_free_turbo();
+            assert_eq!(
+                race.ship_pickup(),
+                Some(Weapon::Turbo),
+                "{mode:?} should be given a free turbo"
+            );
+        }
+
+        // Zone authors no pickup widget at all and its event text promises
+        // nothing; a single race has pads instead.
+        for mode in [Mode::Zone, Mode::SingleRace] {
+            let mut race = race_with_weapon_pads(mode, Vec::new(), 1.0);
+            race.grant_free_turbo();
+            assert_eq!(race.ship_pickup(), None, "{mode:?} was given a free turbo");
+        }
+
+        // A held pickup is kept rather than replaced, so a player who saved last
+        // lap's turbo does not lose this lap's for nothing.
+        let mut race = race_with_weapon_pads(Mode::TimeTrial, Vec::new(), 1.0);
+        race.grant_free_turbo();
+        race.grant_free_turbo();
+        assert_eq!(race.ship_pickup(), Some(Weapon::Turbo));
+
+        // And a disc whose weapon table did not load hands out nothing rather
+        // than a turbo with no duration behind it.
+        let mut setup = setup(hulled_handling());
+        setup.mode = Mode::TimeTrial;
+        setup.weapons = None;
+        let mut race = Race::start(setup);
+        race.grant_free_turbo();
+        assert_eq!(race.ship_pickup(), None);
+    }
+
+    /// Absorbing pays the weapon's own `absorb` into the energy pool, and the
+    /// clamp is the recovered one: a full pool cannot exceed its maximum.
+    #[test]
+    fn absorbing_pays_the_pool_and_never_past_its_maximum() {
+        let mut race = race_with_weapon_pads(Mode::SingleRace, enveloping_pad(), 1.0);
+        race.tick(&InputSnapshot::default());
+        assert_eq!(
+            race.ship_pickup(),
+            Some(oag_formats::weapons::Weapon::Turbo)
+        );
+
+        // The pool starts full, so absorbing into it must add nothing at all -
+        // which is the clamp under test rather than a missing absorb.
+        let max = race.ship().handling.dimensions.shield;
+        assert!(max > 0.0, "the fixture must have a pool to fill");
+        let mut buttons = Buttons::new();
+        buttons.tick(0);
+        race.tick(&buttons.tick(CIRCLE));
+        assert_eq!(race.ship_pickup(), None, "absorbing must spend the pickup");
+        assert!(
+            race.ship().physics.shield <= max,
+            "the pool went past its maximum: {} against {max}",
+            race.ship().physics.shield
+        );
+
+        // Now with room in the pool, so the payment itself is observable.
+        let mut race = race_with_weapon_pads(Mode::SingleRace, enveloping_pad(), 1.0);
+        race.world.ships[0].physics.shield = 1.0;
+        race.tick(&InputSnapshot::default());
+        let before = race.ship().physics.shield;
+        let mut buttons = Buttons::new();
+        buttons.tick(0);
+        race.tick(&buttons.tick(CIRCLE));
+        assert!(
+            race.ship().physics.shield > before,
+            "absorbing paid nothing: {} against {before}",
+            race.ship().physics.shield
+        );
     }
 
     /// The authored kick widens the view while the boost runs and closes again

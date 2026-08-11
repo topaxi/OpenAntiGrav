@@ -303,7 +303,7 @@ geometry - the geometry is 95 throughout.
 | Lap | `Lap`, `LapOf`, `Lap Outof`, `LapTxt` | 60 | **lap counting is unrecovered** - see below |
 | Position | `Position`, `PositionOf`, `Position Outof`, `PositionTxt` | 60 | needs a grid; seven of eight slots are unread code |
 | Times | `CurrentTime`, `BestTime`, `TotalTime`, `CountdownTime`, `TimeDiffText`, `TimeDiffIcon`, `TimeIcon` | 70 | format `m.ss.hh`, observed as `1.11.08` on the running game |
-| Weapon | `PickupBackground`, `SubWeapon`, 14 `*Icon` widgets | 70 | icon ids are numeric; `0x0883b3b8` "forces the HUD icon id to 6" |
+| Weapon | `PickupBackground`, `SubWeapon`, **13** `<Type>Icon` widgets | 95 | **drawn**; the icon is found by *name* - see below. `SubWeapon` is not driven |
 | Warnings | `ForwardWarningIcons`, `RearWarningIcons` and children | 55 | incoming-weapon indicators; nothing drives them |
 | Countdown | `ReadyText`, `GoText`, plus the `Mode3D` models | 65 | |
 | Wrong way | `WrongWay` | 70 | `dot(forward, tangent)` is a sufficient source |
@@ -311,6 +311,32 @@ geometry - the geometry is 95 throughout.
 | Eliminator | kill counters | 50 | |
 | Tags | `PosTag0-7`, `PlrTag0-7`, `HeadToHeadBar` | 50 | runtime-anchored, multiplayer |
 | Debug | `VersionTextOnHUD`, `Info1`-`Info4`, `Info`, `Info2nd` | 40 | present in shipped layouts; purpose inferred from the names |
+
+### The pickup icon is found by name, and there are thirteen of them
+
+**This row read "14 `*Icon` widgets" with "numeric" ids and no known mapping
+until 2026-08-11, and both halves were wrong.** `Arcade_HUD.xml` authors
+**thirteen** weapon icons - the fourteenth was `TimeDiffIcon` being counted -
+and each is named after its weapon's own `type` string:
+
+```text
+TurboIcon ShieldIcon AutopilotIcon RocketIcon MissileIcon QuakeIcon CannonIcon
+PlasmaIcon BombIcon MineIcon LeachBeamIcon RepulserIcon ShurikenIcon
+```
+
+That is exactly `oag_formats::weapons::Weapon::ALL`, misspellings (`LeachBeam`,
+`Repulser`) included, so the lookup is `format!("{}Icon", weapon.as_type())` -
+`oag_game::hud::pickup_icon_name` - and needs nothing recovered. Pinned against
+the shipped file for all thirteen by
+`crates/game/tests/hud_layout_ground_truth.rs`. The numeric ids are real
+(`0x0883b3b8` forces `6`) and simply are not needed.
+
+**The four layouts author three different pickup sets**, and the difference is
+evidence rather than noise: `Arcade` and `Elimination` carry the backdrop and
+all thirteen, `Zone` carries none, and **`TimeTrial_HUD.xml` carries the
+backdrop and `TurboIcon` alone** - which is the disc's own event text
+(*"a free turbo pickup once per lap"*) recorded a second time. See
+[pickups](../gameplay/pickups.md).
 
 **A bar and its background share a rectangle exactly**, differing only in colour -
 pinned by `each_bar_exactly_overlays_its_own_background`. So the fill can only be

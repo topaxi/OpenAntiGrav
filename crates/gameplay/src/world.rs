@@ -30,6 +30,22 @@ pub struct Ship {
     /// where the original counts laps is an open question, and `gate` has no
     /// runtime class at all. See `docs/formats/track.md`.
     pub segment: u16,
+    /// What this craft is carrying, if anything.
+    ///
+    /// Filled by crossing a `Weapon Pad` and emptied by firing or absorbing;
+    /// see [`crate::pickup`], which carries the recovered-versus-ours split for
+    /// the whole system. Always empty in a mode that races with weapons off,
+    /// because such a race has no armed pads at all - the original does not
+    /// merely ignore a crossing, it empties the trigger list.
+    ///
+    /// **Here rather than on `ShipState`**, because it is an
+    /// `oag_formats::weapons::Weapon` and `oag-physics` depends on nothing but
+    /// `oag-core`. The consequence is that it is *not* covered by
+    /// `oag_physics::probe::hash_state`'s compile-time enforcement - what a held
+    /// pickup does to the simulation reaches the hash through
+    /// `ShipState::turbo_timer` instead, and the inventory itself changes no
+    /// force.
+    pub pickup: crate::pickup::Held,
     /// Whether this slot holds a ship at all.
     pub active: bool,
 }
@@ -40,6 +56,7 @@ impl Default for Ship {
             physics: ShipState::default(),
             handling: Handling::ZERO,
             segment: 0,
+            pickup: crate::pickup::Held::empty(),
             active: false,
         }
     }

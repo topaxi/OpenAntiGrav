@@ -263,6 +263,9 @@ pub fn step<R: Raycaster + ?Sized>(
     );
     crate::damage::regenerate(state, &handling.dimensions, env.damage_rules, dt);
     crate::damage::advance_state(state, dt);
+    // After `evaluate`, so the tick a pickup is fired on gets the boost. See
+    // `crate::engine::advance_turbo`.
+    crate::engine::advance_turbo(state, dt);
 
     evaluated
 }

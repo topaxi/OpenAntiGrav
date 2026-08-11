@@ -2,7 +2,16 @@
 
 **Status: the schema is read end to end, confidence 92.** Every weapon's
 tunables, the disturber effects and the pickup distribution are **authored XML on
-the disc**, not a table compiled into the executable. Nothing is implemented yet.
+the disc**, not a table compiled into the executable.
+
+**Partly implemented since 2026-08-11.** `oag_formats::weapons` decodes the three
+`absorb`/`time` weapons, `absorb` for all thirteen, `<Pickupodds>` in full and
+`<Global> slowdown_limit`; a race reads the file, a `Weapon Pad` draws from the
+odds and Turbo is the one weapon with an effect. See
+[pickups](../gameplay/pickups.md), which carries what is recovered and what is
+this project's. Everything else on this page is still decoded nowhere, for the
+reason the parser's own docs give: a field with no consumer is a field nobody
+has checked.
 
 That is the headline, because it changes what the weapons item on the
 [roadmap](../overview/roadmap.md) costs: it is a format decode plus behaviour,
@@ -139,11 +148,14 @@ rung.
 
 ## What this does not answer
 
-- **What triggers a pickup.** A `Weapon Pad`'s trigger volumes decode
-  ([pads.md](pads.md)) and are drawn, but what runs when a craft enters one is
-  unread. The craft flag word `craft+0x1c0` gates the engine's turbo and pickup
-  multipliers and is the obvious place the state lands.
-- **How a weapon is fired**, and what `craft+0x1c0`'s bits mean.
+- **What the original does on a pickup.** The *trigger* is recovered -
+  `WeaponPads_TestCraft` stamps the pad's refresh timer, [pads.md](pads.md) -
+  and **no grant call site has been found**, so which weapon a crossing hands
+  over, and how the four weights become one, are both unread. This project draws
+  its own; see [pickups](../gameplay/pickups.md).
+- **How a weapon is fired**, and what `craft+0x1c0`'s bits mean. One bit is
+  identified: `0x0004` gates the `1.2` engine multiplier that a Turbo pickup
+  arms.
 - **`Ship_Damage`'s `weapon_kind`**, whose nine telemetry buckets almost
   certainly index this table; the mapping is still unconfirmed.
 

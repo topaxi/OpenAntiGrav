@@ -257,11 +257,27 @@ pub const ENGINE_OUTPUT_SCALE: f32 = 1.0;
 /// straight out of the instruction stream, and what is weaker is calling the `0x800`
 /// pickup-flag bit "speed-up" specifically.
 ///
-/// **Not applied.** Doing so needs the pickup system and the `craft+0x1c0` flag word,
-/// neither of which this crate has, and on the Time Trial capture the trace is
-/// compared against there is no pickup, so the multiplier is inert there anyway. It is
-/// recorded because it was one of the two candidates for the missing 17x on thrust,
-/// and it rules itself out: `1.2` cannot scale anything down.
+/// # Applied since 2026-08-11, gated on [`ShipState::turbo_timer`]
+///
+/// The gate is the one part of this that is not recovered. The original's is a bit
+/// of `craft+0x1c0`, armed from the pickup word by the same function that forces the
+/// HUD icon and reads the pickup's own `+0x148` timer - so the shape is "a held
+/// pickup, for as long as it lasts", and a `f32` of seconds is that shape without
+/// the two undecoded words. What is recovered is the **multiply and its constant**,
+/// and where in `Ship_UpdateEngine` they land, which is what this is.
+///
+/// Two things support reading the `0x800` pickup as the **Turbo** weapon rather than
+/// something else, neither conclusive on its own: the same branch forces HUD icon
+/// id `6`, and `Arcade_HUD.xml` names its icons after the weapons in the class-name
+/// pool's order; and the disc's own manual text says a time trial "will be given a
+/// free turbo pickup once per lap", so a Turbo pickup exists and does something to
+/// the engine. Confidence **80** on the identification, against 85 on the arithmetic.
+/// See `docs/gameplay/pickups.md`.
+///
+/// **Not to be confused with `Engine.turbo`**, which is a flat *additive* thrust
+/// under flag bits `0x200`/`0x400` and a mode enum. `0x400`'s only known writer is
+/// the barrel roll (`docs/ghidra/functions/psp-pulse-usa/input-bindings.md`), so
+/// that term belongs to a different mechanic and stays unimplemented here.
 pub const ENGINE_PICKUP_SPEEDUP: f32 = 1.2;
 
 /// The fixed doubling on the engine's output, from the same expression.
@@ -396,9 +412,33 @@ pub fn engine(
     }
     thrust = thrust.min(cap);
 
+    // `if (flags & 0x0004) T *= craft+0x2a0`, between the cap and the doubling,
+    // which is where the original puts it - see `ENGINE_PICKUP_SPEEDUP`. It is
+    // **after** the `min`, so a fired Turbo pushes the craft past the cap rather
+    // than being clipped by it, which is what makes it worth firing at speed.
+    if state.turbo_timer > 0.0 {
+        thrust *= ENGINE_PICKUP_SPEEDUP;
+    }
+
     thrust = thrust * ENGINE_OUTPUT_SCALE * ENGINE_OUTPUT_DOUBLE;
 
     EngineForce { thrust, lift: 0.0 }
+}
+
+/// Counts a fired Turbo pickup down.
+///
+/// Called once a tick from [`crate::step`], **after** the force law has read the
+/// timer, so a pickup fired with `time` seconds on it boosts for exactly that
+/// many seconds' worth of ticks rather than one fewer. That ordering is this
+/// project's, not a reading: the original's equivalent is a bit and a timer in
+/// two undecoded words, and nothing has been read that says when the bit clears.
+/// See [`ENGINE_PICKUP_SPEEDUP`].
+///
+/// Floored at zero rather than allowed to go negative, so
+/// `turbo_timer > 0.0` is the whole of the gate and a long-expired pickup does
+/// not drift the determinism hash by an ever-growing negative.
+pub fn advance_turbo(state: &mut ShipState, dt: f32) {
+    state.turbo_timer = (state.turbo_timer - dt).max(0.0);
 }
 
 /// The brake, as a world-space force.

@@ -342,3 +342,98 @@ fn the_atlas_and_both_hud_fonts_are_readable() {
         assert!(!font.glyphs.is_empty());
     }
 }
+
+/// **The pickup icon is found by name, and the disc is what says so.**
+///
+/// `docs/ui/hud.md` recorded these widgets as "14 `*Icon` widgets" whose "icon
+/// ids are numeric", with no id-to-weapon mapping known - which made drawing the
+/// right icon look like it needed an unrecovered table. It does not:
+/// `Arcade_HUD.xml` authors **thirteen** and names each one after its weapon's
+/// own `type` string, so `oag_game::hud::pickup_icon_name` is the whole lookup.
+///
+/// # The layouts also say which modes hand out what, and they agree with the manual
+///
+/// This is the half worth reading twice, because it was found by this test
+/// failing against an assumption rather than by anybody looking for it. The four
+/// layouts author three different pickup sets:
+///
+/// | Layout | Pickup widgets |
+/// | --- | --- |
+/// | `Arcade_HUD.xml` | the backdrop and **all thirteen** icons |
+/// | `Elimination_HUD.xml` | the same |
+/// | `TimeTrial_HUD.xml` | the backdrop and **`TurboIcon` alone** |
+/// | `Zone_HUD.xml` | **none** |
+///
+/// A time trial races with `g_weapons_enabled == 0` and its `Weapon Pad`s
+/// hidden, so a lone Turbo icon in its layout would be inexplicable - except
+/// that the disc's own event text says exactly this: `MSC_EVENT_TT` and `MSC_EVENT_SL`
+/// each promise *"You will be given a free turbo pickup once per lap"*. **A
+/// string table and a HUD layout agreeing is two independent records of one
+/// rule**, which is the same shape of evidence that settled the weapons-off
+/// energy recovery in `oag_gameplay::damage_rules`. See
+/// `docs/gameplay/pickups.md`.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn every_weapon_has_an_icon_widget_named_after_it() {
+    use oag_formats::weapons::Weapon;
+
+    let Some(mut archives) = open() else {
+        return;
+    };
+
+    // The two weapons-bearing layouts author every weapon, which is what makes
+    // the name rule worth having: it has to resolve for all thirteen and not
+    // only for the one this engine implements.
+    for entry in [hud::layouts::ARCADE, hud::layouts::ELIMINATION] {
+        let layout = layout_of(&mut archives, entry);
+        assert!(
+            layout.sprite("PickupBackground").is_some(),
+            "{entry}: no PickupBackground to draw an icon on"
+        );
+        let missing: Vec<String> = Weapon::ALL
+            .into_iter()
+            .map(hud::pickup_icon_name)
+            .filter(|name| layout.sprite(name).is_none())
+            .collect();
+        assert!(
+            missing.is_empty(),
+            "{entry} authors no widget for {missing:?}, so the name rule does not hold"
+        );
+        println!(
+            "{entry}: all {} weapon icons resolve by name",
+            Weapon::ALL.len()
+        );
+    }
+
+    // The time trial's single icon, and it must stay single: a second one
+    // appearing here would mean the free-turbo reading is too narrow.
+    let time_trial = layout_of(&mut archives, hud::layouts::TIME_TRIAL);
+    let present: Vec<Weapon> = Weapon::ALL
+        .into_iter()
+        .filter(|&weapon| time_trial.sprite(&hud::pickup_icon_name(weapon)).is_some())
+        .collect();
+    assert_eq!(
+        present,
+        vec![Weapon::Turbo],
+        "{} authors {present:?}; the disc's own event text says a time trial gets \
+         a free turbo and nothing else",
+        hud::layouts::TIME_TRIAL
+    );
+    assert!(
+        time_trial.sprite("PickupBackground").is_some(),
+        "an icon with no backdrop to sit on"
+    );
+
+    // Zone authors nothing, which is the one mode where "weapons off" really is
+    // the whole story.
+    let zone = layout_of(&mut archives, hud::layouts::ZONE);
+    let zone_icons: Vec<Weapon> = Weapon::ALL
+        .into_iter()
+        .filter(|&weapon| zone.sprite(&hud::pickup_icon_name(weapon)).is_some())
+        .collect();
+    assert!(
+        zone_icons.is_empty() && zone.sprite("PickupBackground").is_none(),
+        "{} authors pickup widgets {zone_icons:?}",
+        hud::layouts::ZONE
+    );
+}
