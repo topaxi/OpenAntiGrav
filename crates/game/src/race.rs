@@ -9092,11 +9092,15 @@ mod tests {
                 "rocket {slot} spawned behind the craft: {:?}",
                 rocket.position
             );
-            // Venom's authored speed plus `launchSpeed`, the same for all three
-            // - the fan turns them, it does not slow them.
+            // Venom's authored speed plus `launchSpeed`, the same for all three:
+            // the fan turns them, it does not slow them. Both figures are km/h
+            // in the file, so the velocity is the sum over
+            // `KMH_PER_UNIT_PER_SECOND` - spelled as the arithmetic so the unit
+            // stays legible.
+            let expected = (600.0 + 16.0) / oag_gameplay::projectile::KMH_PER_UNIT_PER_SECOND;
             assert!(
-                (rocket.velocity.length() - 616.0).abs() < 1e-2,
-                "rocket {slot}: expected 600 + 16, got {}",
+                (rocket.velocity.length() - expected).abs() < 1e-2,
+                "rocket {slot}: expected (600 + 16) km/h as units per second, got {}",
                 rocket.velocity.length()
             );
             assert!(

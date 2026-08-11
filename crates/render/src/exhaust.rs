@@ -240,7 +240,11 @@ pub const LAYER_START: [f32; LAYERS] = [0.0, 0.25, 0.5];
 pub const LAYER_GAIN: [f32; LAYERS] = [1.0, 1.33, 2.0];
 
 /// Speed to km/h. The original multiplies by this before every speed test.
-pub const SPEED_TO_KMH: f32 = 3.6;
+///
+/// Re-exported from [`oag_core::math`] rather than defined here: the same
+/// conversion turns an authored weapon speed into a velocity in
+/// `oag_gameplay::projectile`, which cannot see this crate.
+pub use oag_core::math::SPEED_TO_KMH;
 
 /// Speed at which the speed term starts to contribute, in km/h.
 pub const RAMP_FLOOR_KMH: f32 = 100.0;

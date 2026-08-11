@@ -20,6 +20,24 @@
 
 pub use glam::{Mat3, Mat4, Quat, Vec2, Vec3, Vec4, mat3, mat4, quat, vec2, vec3, vec4};
 
+/// How many km/h one world unit per second is.
+///
+/// **Recovered.** The original multiplies by this before every speed test - the
+/// exhaust's ramp and the HUD's readout both go through it - and divides by it
+/// to turn an authored weapon speed into a velocity
+/// (`docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`). One physical
+/// conversion, used in both directions.
+///
+/// **It lives here because it has two consumers on opposite sides of a
+/// dependency rule.** `oag_render::exhaust` needs it to display a speed and
+/// `oag_gameplay::projectile` needs it to spend an authored one, and no
+/// gameplay crate may depend on `oag-render`
+/// (`scripts/check-dependency-rules.py`). `oag-core` is the crate both already
+/// depend on, so it is the only place a single definition can sit. It was
+/// duplicated for exactly one commit before this; a second copy of a constant
+/// is a second thing to get wrong.
+pub const SPEED_TO_KMH: f32 = 3.6;
+
 /// Right-handed camera matrices with a 0..1 depth range.
 ///
 /// That range is what wgpu, Metal and DX12 expect; the OpenGL -1..1 convention

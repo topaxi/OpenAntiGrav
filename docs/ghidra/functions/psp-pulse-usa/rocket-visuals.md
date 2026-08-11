@@ -210,8 +210,21 @@ units-per-second flies the rocket **3.6x too fast**.
 names at confidence 92 but **does not state a unit**, so this adds to that page
 rather than contradicting it.
 
-**This change does not act on it either** - projectile speed is simulation state.
-Both this and the flight path above are reported, not implemented.
+**This one is now implemented**, in its own commit separate from the visuals:
+`oag_gameplay::projectile::launch` divides by
+[`oag_core::math::SPEED_TO_KMH`](../../../../crates/core/src/math.rs) at the call
+site, mirroring the original, which converts in the consumer rather than in the
+lookup. A Venom rocket went from `1000` units/s - **3600 km/h** on our own HUD's
+`* 3.6`, against a craft that tops out near 600 - to `278` units/s, or 1000
+km/h.
+
+It moves no committed hash. `crates/gameplay/tests/determinism.rs` spawns its
+rocket with an explicit velocity rather than through `launch`, and
+`crates/core/tests/determinism.rs` covers the generator, so **no reference
+constant was touched** - which is the only acceptable outcome, per that test's
+own standing instruction.
+
+The flight path above is still **reported, not implemented**.
 
 ## Audio, in passing
 

@@ -20,12 +20,22 @@
 //! argument whose value 2 is a weapon, and the weapons-off halving and the clamp
 //! are its own (`.../shield.md`).
 //!
-//! **Ours.** No projectile *flight* update has been found - only the launch. So:
+//! **Ours.** The launch is recovered and so, now, is the flight - but this
+//! module does not implement the flight, which is a different thing from not
+//! knowing it. So:
 //!
-//! - **Straight-line flight at a constant speed.** A rocket is the one weapon
-//!   whose name says it does not steer, and the Missile's `lock_max_dist` /
-//!   `lock_min_dist` - which the Rocket does not carry - is what says the two
-//!   differ in exactly that. But no integrator has been read.
+//! - **Straight-line flight at a constant speed, and this is now a known
+//!   simplification rather than an unknown.** `Rocket_Update` (`0x0885d2a8`)
+//!   **has** been read (`.../rocket-visuals.md`): the original probes `6.0`
+//!   units toward the surface every tick and *deflects* off geometry - adopting
+//!   the hit normal, pushing out `3.0`, recomputing velocity - detonating only
+//!   on two specific collision codes, and applying `velocity.y -= dt * 50.0`
+//!   when it hits nothing. A rocket skims the track and glances off walls;
+//!   confirmed in PPSSPP, where the frames show them hugging the surface. This
+//!   module still flies them dead straight and detonates on first contact,
+//!   because adopting the real path moves the state hash and wants its own
+//!   change. **Do not read the straight line here as evidence about the
+//!   original.**
 //! - **The axis the fan rotates about.** See [`launch`].
 //! - **A sphere for a hull**, and one that is *wider* than the hull on two of
 //!   its three axes. The original tests a projectile against something and
@@ -62,8 +72,9 @@ pub const MAX_PROJECTILES: usize = 16;
 /// **Ours, and a safety net rather than a mechanic.** A rocket that leaves the
 /// track through a gap in the collision soup would otherwise hold its slot for
 /// the whole race. Long enough that no rocket fired at anything reachable
-/// expires first: at the slowest authored class speed it covers several
-/// kilometres, which is more than a lap of any Pulse circuit is wide.
+/// expires first: the disc's slowest class authors `800` km/h, which is `222`
+/// units a second (see [`launch`] on the unit), so ten seconds is better than
+/// two kilometres - more than a lap of any Pulse circuit is wide.
 pub const MAX_FLIGHT_SECONDS: f32 = 10.0;
 
 /// One thing in the air.
@@ -472,6 +483,18 @@ fn segment_sphere(p0: Vec3, p1: Vec3, centre: Vec3, radius: f32) -> Option<f32> 
 /// `docs/ghidra/functions/psp-pulse-usa/weapon-fire.md`.
 pub const ROCKET_SHOTS: usize = 3;
 
+/// How many km/h one world unit per second is, for the authored weapon speeds.
+///
+/// **Recovered, confidence 84**, as the divisor both of
+/// `Rocket_SpeedForClass`'s callers apply - see [`launch`]. It is
+/// [`oag_core::math::SPEED_TO_KMH`], the same physical conversion the exhaust
+/// ramp and the HUD's readout run the other way, named for this direction here.
+///
+/// Kept as a division rather than a multiply by a baked reciprocal, which is
+/// what `Rocket_Update` itself does and which keeps the arithmetic one
+/// operation instead of two roundings.
+pub const KMH_PER_UNIT_PER_SECOND: f32 = oag_core::math::SPEED_TO_KMH;
+
 /// Where a craft launches its rockets from, and how fast.
 ///
 /// Returns [`ROCKET_SHOTS`] `(position, velocity)` pairs in the original's own
@@ -499,7 +522,31 @@ pub const ROCKET_SHOTS: usize = 3;
 ///   so a rocket starts outside the craft that fired it, is this engine's, and
 ///   it uses the craft's *unrotated* forward so the three still share it.
 /// - **The speed being the class's plus `launchSpeed`** rather than one or the
-///   other, and the craft's own velocity not being inherited.
+///   other, and the craft's own velocity not being inherited. The original's
+///   flight speed is the class's **alone** - neither `Rocket_Init` nor
+///   `Rocket_Update` mentions `launchSpeed` - so the sum is this engine's
+///   choice and stays one, flagged here rather than quietly corrected: what
+///   `launchSpeed` *is* for has not been found.
+/// - **Treating `launchSpeed` as km/h too.** The four class speeds are measured
+///   (see below); `launchSpeed` is authored in the same `<Stats>` block and in
+///   the same range, so it is converted with them. Nothing reads it, so nothing
+///   confirms it.
+///
+/// # The authored speeds are km/h, not units per second
+///
+/// **Recovered, confidence 84** - `docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`.
+/// `Rocket_SpeedForClass` (`0x0885d1b0`) returns the authored float for the
+/// current class and does no arithmetic, and **both** of its callers divide by
+/// `3.6` before it becomes a velocity. Spending the numbers as units per
+/// second, which this did until 2026-08-11, flies a rocket **3.6x too fast**:
+/// the disc authors `venomspeed="800" launchSpeed="200"`, so a Venom rocket ran
+/// at `1000` units/s, which the HUD's own `* 3.6` would read as **3600 km/h**
+/// against a craft that tops out near 600. Converted it is `278` units/s, or
+/// 1000 km/h - faster than the craft, which is what a rocket should be.
+///
+/// The conversion is at the call site rather than inside
+/// [`RocketStats::speed_for`] on purpose, mirroring the original: the lookup
+/// hands back the authored figure and the consumer spends it.
 #[must_use]
 pub fn launch(
     state: &ShipState,
@@ -511,7 +558,7 @@ pub fn launch(
     let up = state.body.up();
     let nose = state.body.position
         + forward * oag_physics::wall::hull_extent(&state.body, dimensions, forward);
-    let speed = stats.speed_for(class) + stats.launch_speed;
+    let speed = (stats.speed_for(class) + stats.launch_speed) / KMH_PER_UNIT_PER_SECOND;
 
     // The original's own order. A zero `spread` collapses all three onto the
     // same ray rather than erroring: that is a file that authors no fan, not a
@@ -608,8 +655,10 @@ mod tests {
     #[test]
     fn a_rocket_hits_a_wall_it_would_tunnel_through_in_one_tick() {
         let mut projectiles = Projectiles::new();
-        // 800 units a second is the slowest class's authored rocket speed on the
-        // disc; at 60 Hz that is 13 units a tick against a wall of no thickness.
+        // Deliberately faster than any real rocket - the disc's quickest class
+        // authors `1100` km/h, or `306` units a second - because this is the
+        // tunnelling guard and it should hold with headroom. At 60 Hz, 800
+        // units a second is 13 units a tick against a wall of no thickness.
         projectiles.spawn(Weapon::Rocket, Vec3::ZERO, Vec3::Z * 800.0, 0);
         let world = wall_at_z(20.0);
         let dt = 1.0 / 60.0;
@@ -998,10 +1047,13 @@ mod tests {
                 (nose - state.body.position).dot(forward) > 0.0,
                 "the launch point is behind the craft: {nose:?}"
             );
-            // One speed: the class's plus `launchSpeed`, unchanged by the fan.
+            // One speed, unchanged by the fan: the class's plus `launchSpeed`,
+            // converted out of the km/h the file authors them in. Spelled as
+            // the arithmetic rather than as `180.55` so the unit is legible -
+            // this assertion is the guard against the 3.6x reappearing.
             assert!(
-                (velocity.length() - 650.0).abs() < 1e-2,
-                "expected 600 + 50, got {}",
+                (velocity.length() - (600.0 + 50.0) / KMH_PER_UNIT_PER_SECOND).abs() < 1e-2,
+                "expected (600 + 50) km/h as units per second, got {}",
                 velocity.length()
             );
         }
