@@ -90,7 +90,7 @@ they were done, because each unblocked the next:
 | **The race-level determinism hash** (2026-08-11) | `hash_world` + `Race::state_hash` close the hole the pickups opened - inventory, projectiles, pad timers and the RNG position |
 | **The weapon-fire dispatch** (2026-08-11) | **`entity+0x1b8` is read**: one bit per weapon, sixteen handlers. A Rocket fires **three at once**, fanned by `spread` |
 | **`Mode::SingleRace`** (2026-08-11) | the fourth mode, and the only one with weapons on - pickups had nowhere else to happen |
-| **Rocket visuals** (2026-08-11) | **a rocket is `Data\Weapons\Rocket.vex`, not a billboard**, and its two explosions are separately authored. [rocket-visuals.md](docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md), verified in PPSSPP with `scripts/psp-fire-weapon.py` |
+| **Rocket visuals** (2026-08-11) | **a rocket is `Data\Weapons\Rocket.vex`, not a billboard**, and its two explosions are separately authored. [rocket-visuals.md](docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md), verified in PPSSPP with `scripts/psp-fire-weapon.py`. **Our own renderer's rocket has never appeared in a captured frame** - `--race` cannot steer to a weapon pad, so nothing grants a pickup; the model, its axis and its matrices are tested, the pixels are not |
 
 **What blocks M5 now is the AI, and it is the only thing** - and the weapon pass
 sharpened that rather than changing it. The Autopilot pickup still waits on it -

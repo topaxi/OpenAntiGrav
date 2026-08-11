@@ -493,7 +493,7 @@
 
 0x0885cc24	function	Rocket_Ctor	85	rocket-visuals.md
 0x0885cdb8	function	Rocket_Init	85	rocket-visuals.md
-0x0885d1b0	function	Rocket_SpeedForClass	88	rocket-visuals.md
+0x0885d1b0	function	Rocket_SpeedForClass	84	rocket-visuals.md
 0x0885d2a8	function	Rocket_Update	88	rocket-visuals.md
 0x0886f038	function	Rocket_Spawn	90	rocket-visuals.md
 0x0886ebdc	function	Rocket_HitCraft_q	78	rocket-visuals.md

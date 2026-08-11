@@ -281,7 +281,22 @@ pub const PROJECTILE_SPRITE_HALF_SIZE: f32 = 1.5;
 /// the *presence* of a glow at the rocket is recovered and every number here is
 /// invented, sized to sit around a model of radius 1.34 rather than to replace
 /// it.
-pub const ROCKET_FLARE_HALF_SIZE: f32 = 1.1;
+///
+/// **Kept well under the model's own radius on purpose**, by reasoning rather
+/// than by measurement: this is an *additive* sprite at full alpha, so at
+/// anything near the model's size it would blow the dart out to a flat white
+/// blob and undo the point of drawing the mesh. No rendered frame has yet been
+/// captured with a rocket in it to check the balance against - see the note on
+/// [`Race::rocket_model_matrices`].
+pub const ROCKET_FLARE_HALF_SIZE: f32 = 0.55;
+
+/// How far behind a rocket's centre its flare sits, in world units.
+///
+/// **Invented**, and set from the model rather than picked: `Rocket.vex` spans
+/// `2.684` along its own forward axis (pinned by
+/// `the_rocket_model_is_longest_along_the_axis_it_is_flown_down`), so half of
+/// that puts the glow at the tail instead of over the fuselage.
+pub const ROCKET_FLARE_SETBACK: f32 = 1.34;
 
 /// Half-width a blast flash reaches at the end of its fade, in world units.
 ///
@@ -4153,8 +4168,7 @@ impl Race {
             // the tail of the model instead of swallowing it. A no-op for the
             // billboard fallback, whose "model" is the sprite itself.
             let centre = if modelled {
-                projectile.position
-                    - projectile.velocity.normalize_or_zero() * ROCKET_FLARE_HALF_SIZE
+                projectile.position - projectile.velocity.normalize_or_zero() * ROCKET_FLARE_SETBACK
             } else {
                 projectile.position
             };
@@ -4206,6 +4220,35 @@ impl Race {
     ///
     /// One entry per live rocket, in slot order, so the caller can zip it
     /// against its drawables.
+    ///
+    /// # No rendered frame has yet contained a rocket
+    ///
+    /// Worth stating rather than leaving to be discovered. What *is* checked:
+    /// the model loads off a real disc and its long axis is the one aimed down
+    /// the velocity here
+    /// (`the_rocket_model_is_longest_along_the_axis_it_is_flown_down`), the
+    /// bases below are orthonormal and velocity-aligned including the
+    /// straight-up degenerate case, and the draw is wired exactly as the ships'
+    /// and plumes' are. What is **not**: a captured frame with a rocket in it.
+    ///
+    /// The headless capture path cannot produce one. `--race` gives a craft that
+    /// holds the throttle and does not steer, so over 2400 ticks it never
+    /// reaches a `Weapon Pad`, never gets a pickup, and the telemetry line never
+    /// reports one held. A first attempt at this misread three pieces of
+    /// **track scenery** as a fanned volley - they render identically in
+    /// `time_trial`, where no rocket can exist, which is the check that settles
+    /// it and the one to repeat before believing any future frame:
+    ///
+    /// ```sh
+    /// cargo run -p oag-game -- --race --mode single_race --hold cross \
+    ///     --press square --ticks 900 --screenshot /tmp/on.png
+    /// cargo run -p oag-game -- --race --mode time_trial  --hold cross \
+    ///     --press square --ticks 900 --screenshot /tmp/off.png
+    /// magick compare -metric AE /tmp/on.png /tmp/off.png null:
+    /// ```
+    ///
+    /// Closing it wants a craft that can drive to a pad - the AI, or an input
+    /// script replayed through `oag-trace run --script`.
     #[must_use]
     pub fn rocket_model_matrices(&self) -> Vec<Mat4> {
         self.world

@@ -118,6 +118,18 @@ class-name order.
 **Projectile speed is per speed class**, spelled out rather than indexed:
 `venomspeed`, `flashspeed`, `rapierspeed`, `phantomspeed`.
 
+**And those four are authored in km/h, not units per second.** Confidence 84,
+and it belongs here rather than only in the page that found it:
+`Rocket_SpeedForClass` (`0x0885d1b0`) is a pure table lookup that returns the
+authored float for the current class - `+0x08`/`+0x0c`/`+0x10`/`+0x14`, exactly
+the offsets tabulated above - and **both** of its callers divide the result by
+`3.6` before it becomes a velocity. Nothing between the parse and that divide
+scales it. A reimplementation that spends these numbers as units per second
+therefore flies the projectile **3.6x too fast**. See
+[rocket-visuals.md](../ghidra/functions/psp-pulse-usa/rocket-visuals.md), which
+reads the two call sites; this note adds a unit to the attribute names above and
+does not revise them.
+
 ### `<DisturberOdds>`: what a hit does to you
 
 Per weapon, two sibling elements with matching attribute sets - a weight and a

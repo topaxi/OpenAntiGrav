@@ -2073,3 +2073,61 @@ fn a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round() {
         laps.len()
     );
 }
+
+/// The Rocket's model is longest along the axis `Race::rocket_model_matrices`
+/// aims at its velocity.
+///
+/// **This is the assertion that catches a rocket drawn flying sideways.**
+/// `rocket_model_matrices` builds `Mat4::from_cols(side, up, forward, position)`,
+/// which maps the model's own **+Z** onto the direction of travel. Nothing in the
+/// unit tests can check that +Z is where the dart's nose actually points: they
+/// assert the matrix contains what was written into it, which is true whatever
+/// the mesh looks like. Only the real file can settle it.
+///
+/// It also bears on something left unresolved in
+/// `docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`. `Rocket_Update`
+/// builds the same forward/normal/cross basis and then rotates it by a further
+/// `-pi/2` about an axis this project has not identified - and a quarter turn is
+/// exactly the shape of a model-space axis convention. If this test ever fails
+/// because the long axis is X, that deferred rotation is the reason, and the fix
+/// is a fixed pre-rotation here rather than a new reading of the original.
+#[test]
+#[ignore = "needs a real disc image under data/images/"]
+fn the_rocket_model_is_longest_along_the_axis_it_is_flown_down() {
+    let Some(loaded) = load() else { return };
+    let model = loaded
+        .rocket_model
+        .expect("the disc carries Data\\Weapons\\Rocket.vex");
+
+    let mut min = [f32::INFINITY; 3];
+    let mut max = [f32::NEG_INFINITY; 3];
+    for vertex in &model.vertices {
+        for axis in 0..3 {
+            min[axis] = min[axis].min(vertex.position[axis]);
+            max[axis] = max[axis].max(vertex.position[axis]);
+        }
+    }
+    let span = [max[0] - min[0], max[1] - min[1], max[2] - min[2]];
+    println!(
+        "Rocket.vex spans x {:.3}, y {:.3}, z {:.3}",
+        span[0], span[1], span[2]
+    );
+
+    let longest = (0..3).max_by(|a, b| span[*a].total_cmp(&span[*b])).unwrap();
+    assert_eq!(
+        longest,
+        2,
+        "the dart is longest along {} but `rocket_model_matrices` aims +Z down the \
+         velocity, so the model would be drawn broadside; spans are {span:?}",
+        ["x", "y", "z"][longest]
+    );
+    // A dart, not a disc: the long axis should dominate, or "longest" is noise.
+    let second = (0..3)
+        .filter(|axis| *axis != longest)
+        .map(|axis| span[axis])
+        .fold(0.0f32, f32::max);
+    assert!(
+        span[longest] > second * 1.5,
+        "expected one clearly dominant axis, got {span:?}"
+    );
+}

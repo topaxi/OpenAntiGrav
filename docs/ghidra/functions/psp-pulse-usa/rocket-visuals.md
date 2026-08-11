@@ -19,9 +19,9 @@ emulator exercised sit above the decompilation-only ceiling of 84.
 | --- | --- | --- |
 | `0x0885cc24` | `Rocket_Ctor` | 85 |
 | `0x0885cdb8` | `Rocket_Init` | 85 |
-| `0x0885d1b0` | `Rocket_SpeedForClass` | 88 |
+| `0x0885d1b0` | `Rocket_SpeedForClass` | 84 |
 | `0x0885d2a8` | `Rocket_Update` | 88 |
-| `0x0886f038` | `Rocket_Spawn` | 90 |
+| `0x0886f038` | `Rocket_Spawn` | 88 |
 | `0x0886ebdc` | `Rocket_HitCraft_q` | 78 |
 | `0x0886ed34` | `Rocket_SpawnCraftExplosion_q` | 78 |
 | `0x08915484` | `Psys_Spawn_q` | 72 |
@@ -193,7 +193,12 @@ otherwise 0.0
 ```
 
 Those offsets are exactly [`weapon-fire.md`](weapon-fire.md)'s, from an
-independent read, which is the corroboration that makes this an 88.
+independent read of the same binary. **That is corroboration but not a second
+leg**: the rubric's 85-94 band wants a runtime trace or a *second binary*, and
+two passes over one `BOOT.BIN` is the "consistent call sites" evidence already
+counted. Nothing has measured what this function returns - rockets flying proves
+it ran, not what came out - so it sits at the decompilation-only ceiling of
+**84**.
 
 **Both callers divide its result by 3.6** before it becomes a velocity -
 `Rocket_Init` by the literal `0x3e8e38e4` (`0.2777778`), `Rocket_Update` by a
@@ -243,8 +248,15 @@ What the run established:
   (`jal 0x0006a104` -> `0x0886e104` in the dispatch chain). This is the
   bit-to-handler mapping verified rather than read.
 - A breakpoint at **`0x0885d2a8` then hit repeatedly**, with nothing else in the
-  air. That is `Rocket_Update` running per rocket per tick, and it is why that
-  address sits at 88 rather than 82.
+  air. That is `Rocket_Update` running per rocket per tick, and it is a *direct*
+  runtime leg - a breakpoint on the function itself - which is why that address
+  sits at 88 rather than 82.
+- **`Rocket_Spawn`'s runtime leg is indirect and is worth naming as such.** No
+  breakpoint was set on `0x0886f038`. What the run shows is that rockets
+  provably came into existence, and this is the only construction path, so it
+  provably ran - an inference from a runtime observation rather than an
+  observation of the function. Combined with three unambiguous call sites that
+  supports 88; it would not support more.
 - **What the frames show.** Rockets leave together and travel **low, hugging the
   track surface**, reading as small warm-orange elongated glows rather than
   white points - consistent with the surface probe above. On track impact they
@@ -267,6 +279,29 @@ uv run --with websocket-client scripts/psp-drive.py --port 47810 menu --single-r
 uv run --with websocket-client scripts/psp-fire-weapon.py --port 47810 --shots /tmp \
     --freeze-at 0x0885d2a8 --freeze-hits 24 rocket
 ```
+
+## What our own renderer has and has not been shown to do
+
+The change that accompanies this page draws the model. Separating what was
+checked from what was assumed, because the two got confused once already:
+
+- **Checked.** The entry loads off a real disc in a real race, and the model's
+  long axis is the one the engine aims down the velocity - `Rocket.vex` spans
+  `x 1.071, y 0.929, z 2.684`, and the matrix maps model **+Z** onto the
+  direction of travel. That is a ground-truth test
+  (`the_rocket_model_is_longest_along_the_axis_it_is_flown_down`), and it is
+  also the check that would catch the deferred quarter-turn mattering: if the
+  nose ran along X, a fixed pre-rotation would be needed and the test would say
+  so.
+- **Not checked: a rendered frame with a rocket in it.** The headless capture
+  path cannot make one - `--race` holds the throttle and does not steer, so the
+  craft never reaches a `Weapon Pad` and never receives a pickup.
+
+**And a mistake worth keeping.** Three pale chevrons in a `single_race` capture
+were read as a fanned volley. They are **track scenery**: they render
+identically in `time_trial`, where no rocket can exist. The lesson is the cheap
+control that settles it - render the same tick with weapons off and diff, rather
+than identify an effect by its shape.
 
 ## What is not verified
 
