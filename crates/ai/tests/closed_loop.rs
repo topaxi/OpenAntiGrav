@@ -145,6 +145,32 @@ fn handling() -> Handling {
     }
 }
 
+/// The tuning this file's invented craft is driven with.
+///
+/// **`Tuning::default()`'s `lateral_accel` is a measurement against the real
+/// hulls and does not describe this one.** The disc's craft carry
+/// `grip_ground` 10 and `accelcap` 17 in the units the loader scales them
+/// into; [`handling`] below invents 40 and 60. The two are not commensurate -
+/// the invented craft reaches 187 and the real one 300 - so a speed target
+/// tuned for one over-drives the other, and at the shipped 180 this fixture
+/// slides 81 units off its line.
+///
+/// So the hull is invented and the tuning that matches it is invented beside
+/// it, which keeps every regression number in this file measuring the thing it
+/// was written to measure: **controller stability, not the speed target**. The
+/// speed target is answered by real data, in
+/// `race_ground_truth::the_ai_drives_the_field_along_the_track`.
+///
+/// `the_default_tuning_is_not_this_ones` pins the split, the way
+/// `the_default_fixture_has_no_airbrakes_and_the_regression_bounds_know_it`
+/// pins the other one.
+fn tuning() -> Tuning {
+    Tuning {
+        lateral_accel: 55.0,
+        ..Tuning::default()
+    }
+}
+
 /// The same craft, with airbrakes that do something.
 ///
 /// **A second fixture rather than an extension of the first, and the split is
@@ -307,7 +333,7 @@ struct Run {
 }
 
 fn drive_the_oval(ticks: usize) -> Run {
-    drive_the_oval_with(ticks, Tuning::default())
+    drive_the_oval_with(ticks, tuning())
 }
 
 fn drive_the_oval_with(ticks: usize, tuning: Tuning) -> Run {
@@ -457,7 +483,7 @@ fn drive_the_field(ticks: usize) -> Vec<Run> {
         .map(|slot| {
             drive_the_oval_as(
                 ticks,
-                Tuning::default(),
+                tuning(),
                 Driver::for_slot(0xC0FFEE, slot),
                 &handling(),
                 &oval(),
@@ -554,7 +580,7 @@ fn a_field_of_seeded_drivers_strings_out() {
 fn the_same_seed_drives_the_same_race() {
     let one = drive_the_oval_as(
         600,
-        Tuning::default(),
+        tuning(),
         Driver::for_slot(7, 3),
         &handling(),
         &oval(),
@@ -562,7 +588,7 @@ fn the_same_seed_drives_the_same_race() {
     );
     let two = drive_the_oval_as(
         600,
-        Tuning::default(),
+        tuning(),
         Driver::for_slot(7, 3),
         &handling(),
         &oval(),
@@ -662,12 +688,12 @@ fn a_differential_braking_driver_does_not_ring() {
     let symmetric = Tuning {
         trail_gain: 0.0,
         trail_max: 0.0,
-        ..Tuning::default()
+        ..tuning()
     };
     let braked = handling_with_airbrakes();
     let with = drive_the_oval_as(
         1800,
-        Tuning::default(),
+        tuning(),
         Driver::default(),
         &braked,
         &oval(),
@@ -731,14 +757,14 @@ fn a_differential_holds_a_corner_the_steering_alone_cannot() {
     let symmetric = Tuning {
         trail_gain: 0.0,
         trail_max: 0.0,
-        ..Tuning::default()
+        ..tuning()
     };
     let braked = handling_with_airbrakes();
     // Corners the craft genuinely cannot make on the stick alone.
     let tight = oval_of(60.0, 300.0);
     let with = drive_the_oval_as(
         1800,
-        Tuning::default(),
+        tuning(),
         Driver::default(),
         &braked,
         &tight,
@@ -785,12 +811,12 @@ fn a_differential_barely_touches_a_corner_the_craft_can_already_make() {
     let symmetric = Tuning {
         trail_gain: 0.0,
         trail_max: 0.0,
-        ..Tuning::default()
+        ..tuning()
     };
     let braked = handling_with_airbrakes();
     let with = drive_the_oval_as(
         1800,
-        Tuning::default(),
+        tuning(),
         Driver::default(),
         &braked,
         &oval(),
@@ -834,7 +860,7 @@ fn every_built_in_pilot_gets_round_the_oval() {
             for slot in 1..3u32 {
                 let run = drive_the_oval_as(
                     1800,
-                    Tuning::default(),
+                    tuning(),
                     Driver::for_slot(0xC0FFEE, slot),
                     &craft,
                     &line,
@@ -869,7 +895,7 @@ fn an_aggressive_pilot_gets_further_round_than_a_shy_one() {
         let run = |pilot: &Pilot| {
             drive_the_oval_as(
                 1800,
-                Tuning::default(),
+                tuning(),
                 driver,
                 &handling_with_airbrakes(),
                 &line,
@@ -919,7 +945,7 @@ fn drive_two_round_the_oval(ticks: usize, pilots: [&Pilot; 2]) -> Pair {
     let handling = handling_with_airbrakes();
     let env = Environment::default();
     let dt = 1.0 / 60.0;
-    let tuning = Tuning::default();
+    let tuning = tuning();
 
     let heading = (line.point(1) - line.point(0)).normalize_or_zero();
     let across = heading.cross(Vec3::Y).normalize_or_zero();
@@ -1088,4 +1114,28 @@ fn a_yielding_leader_gives_way_where_a_covering_one_does_not() {
         gave_way.mean_offset[0],
         covered.mean_offset[0]
     );
+}
+
+/// The companion to
+/// [`the_default_fixture_has_no_airbrakes_and_the_regression_bounds_know_it`],
+/// and it exists for the same reason: to stop the next reader collapsing two
+/// deliberately different things into one.
+///
+/// `Tuning::default()`'s `lateral_accel` was swept against the **real** hulls
+/// on a real circuit and is roughly three times what this file's invented craft
+/// can hold. Driving this fixture with it puts the craft 81 units off its line,
+/// which would read as the controller weaving when it is really the speed
+/// target asking for grip the invented hull does not have.
+#[test]
+fn the_default_tuning_is_not_this_ones() {
+    assert_ne!(
+        tuning().lateral_accel,
+        Tuning::default().lateral_accel,
+        "if these ever agree, one of them stopped describing its own craft"
+    );
+    // Everything else is shared, so a change to the real tuning still reaches
+    // this file.
+    assert_eq!(tuning().rate_gain, Tuning::default().rate_gain);
+    assert_eq!(tuning().trail_gain, Tuning::default().trail_gain);
+    assert_eq!(tuning().brake_floor, Tuning::default().brake_floor);
 }

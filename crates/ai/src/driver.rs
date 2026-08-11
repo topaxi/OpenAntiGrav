@@ -68,10 +68,26 @@ pub struct Tuning {
     /// `sqrt(lateral_accel / k)`, the standard cornering limit. Raising it makes
     /// a driver commit harder and, past what the hull can hold, into the wall.
     ///
-    /// **Deliberately conservative**, because cornering here is steering and a
-    /// speed target and nothing else. The original's own `<Controller>` has no
-    /// airbrake term either - see the note on [`Tuning`] - which is consistent
-    /// with that and is *not* evidence for it.
+    /// **Measured against the hull rather than guessed at**, and it was
+    /// guessed at once: this was `55.0` until 2026-08-11, which was reported
+    /// from play as "my craft is faster than the AI, first place within a few
+    /// seconds". It was. At 55 an opponent spent **45 per cent of a real race
+    /// off the throttle entirely**, braking for corners it could hold flat.
+    ///
+    /// Swept on `16_Track`, a minute a run, seven craft:
+    ///
+    /// | value | mean speed | off throttle | furthest off the line |
+    /// | --- | --- | --- | --- |
+    /// | 55 | 90 | 45% | 28 |
+    /// | 130 | 113 | 16% | 32 |
+    /// | **180** | **116** | **8%** | 36 |
+    /// | 220 | 99 | 4% | 46 |
+    ///
+    /// **The curve turns over**, which is what makes 180 a measurement and not
+    /// a preference: past it a craft is not cornering faster, it is sliding
+    /// wide, and the mean speed and the lap count both fall while the distance
+    /// off the line climbs. Nothing wrecked at any of these, so the ceiling is
+    /// where the craft stops being quick rather than where it crashes.
     pub lateral_accel: f32,
     /// How far ahead the speed target looks for the sharpest bend, as a multiple
     /// of the lookahead. A corner has to be seen before it is entered.
@@ -137,7 +153,7 @@ impl Default for Tuning {
             look_max: 90.0,
             rate_gain: 5.0,
             max_turn_rate: 1.2,
-            lateral_accel: 55.0,
+            lateral_accel: 180.0,
             brake_lookahead: 2.5,
             brake_margin: 0.05,
             corridor_use: 0.6,

@@ -423,6 +423,36 @@ The speed target is `sqrt(lateral_accel / curvature)`, the ordinary cornering
 limit, taken over the **sharpest** bend within a braking window rather than at
 one point ahead - a corner has to be seen before it is entered.
 
+**`lateral_accel` was measured rather than guessed, after it was guessed once.**
+It sat at 55 until 2026-08-11, when it was reported from play as "my craft is
+faster than the AI, first place within a few seconds". It was, and the reason
+was not the top speed: an opponent reached 283 against the player's 169. It was
+that the AI spent **45 per cent of a real race off the throttle entirely**,
+braking for corners it could hold flat. Swept on `16_Track`, a minute a run,
+seven craft:
+
+| `lateral_accel` | mean speed | off throttle | furthest off the line | laps |
+| --- | --- | --- | --- | --- |
+| 55 | 90 | 45% | 28 | five of seven onto lap 2 |
+| 130 | 113 | 16% | 32 | six of seven |
+| **180** | **116** | **8%** | 36 | **six of seven** |
+| 220 | 99 | 4% | 46 | four of seven |
+
+**The curve turns over**, which is what makes 180 a measurement and not a
+preference: past it a craft is not cornering faster, it is sliding wide, and
+both the mean speed and the lap count fall while the distance off the line
+climbs. Nothing wrecked at any value tried, so the ceiling is where the craft
+stops being quick rather than where it crashes.
+
+**And the synthetic harness cannot see any of this.** `oag-ai`'s
+`closed_loop.rs` drives an invented hull - `grip_ground` 40 and `accelcap` 60
+against the disc's scaled 10 and 17 - which is not commensurate with a real one,
+and at 180 that craft slides 81 units off its line. So the fixture carries its
+own tuning beside its own hull, and what it measures stays what it was written
+to measure: **controller stability, not the speed target**. The speed target is
+a real-data question and `the_ai_drives_the_field_along_the_track` is where it
+is answered. `the_default_tuning_is_not_this_ones` pins the split.
+
 ### Airbrakes, and what a differential one actually does
 
 Reading the force law before designing against it changed what the feature is.
