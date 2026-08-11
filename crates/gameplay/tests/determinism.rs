@@ -207,6 +207,30 @@ fn run(ticks: u32) -> (u64, u64) {
 ///   `0x7e38_a669_8476_79e7` / `0xd7d6_954f_c46d_066d` at 600 - reproduce bit
 ///   for bit. The scenario has no AI, so the field is `0` throughout.
 ///
+/// - **Moved a seventh time 2026-08-11, and this one is unlike the six above:
+///   it is a change to what the simulation *does*, not to what is hashed.**
+///   Projectiles now follow the track floor instead of flying straight - see
+///   `oag_gameplay::projectile` and
+///   `docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`. This scenario
+///   flies a rocket down a corridor into a wall, so its whole trajectory
+///   differs. That is the intended outcome, not a defect.
+///
+///   **Every entry above could isolate by removing one `write_*` call; this one
+///   cannot**, so it was isolated in two steps instead. The first is the one
+///   that matters, because it is what would catch an accidental change riding
+///   along:
+///
+///   1. With **both** the new `Projectile::surface` write *and* the
+///      surface-following disabled, and nothing else changed, the constants
+///      this commit replaces - `0x2524_032f_46c2_e75e` /
+///      `0xc9ba_8f3a_d73d_2530` at 60 and `0x2655_f848_d5d1_9117` /
+///      `0xd5df_df48_d023_11bd` at 600 - **reproduce bit for bit**. Nothing
+///      else in this change touches the simulation.
+///   2. With the field hashed but the flight still straight they read
+///      `0x9c82_3577_13b6_c4d7` / `0x9bcf_b626_ad64_1387` at 60 and `0xfc3e_1605_38a7_e79e` / `0x38f8_30b3_2f75_8c5a` at 600. That is the field's own
+///      contribution; the rest of the distance to the constants below is the
+///      flight model, which is the point of the change.
+///
 /// **Never edit these to make the test pass**, the same rule
 /// `crates/physics/tests/determinism.rs` states at length: a movement here is a
 /// change to what a race *does*, and the change is the thing to find. When a
@@ -214,8 +238,8 @@ fn run(ticks: u32) -> (u64, u64) {
 /// beneath this comment and isolate the cause first, by removing the new field's
 /// own write and checking that the previous constants reproduce bit for bit.
 const REFERENCE: &[(u32, u64, u64)] = &[
-    (60, 0x2524_032f_46c2_e75e, 0xc9ba_8f3a_d73d_2530),
-    (600, 0x2655_f848_d5d1_9117, 0xd5df_df48_d023_11bd),
+    (60, 0x8a04_20ea_d659_f08e, 0x3005_5382_1116_2a30),
+    (600, 0xd934_4be0_d70e_dc17, 0x9ca7_8a00_bbbb_29ad),
 ];
 
 #[test]

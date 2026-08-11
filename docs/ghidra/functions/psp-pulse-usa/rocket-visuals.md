@@ -173,11 +173,28 @@ Both branch on the same return code:
 A rocket therefore skims the surface, glances off walls and drops when it runs
 out of track - it is not a straight-line projectile.
 
-**Scope, said plainly: this is simulation, not rendering, and this change does
-not implement it.** `oag_gameplay::projectile` flies a rocket dead straight at a
-constant speed and detonates on first contact. Changing that alters the state
-hash and belongs in its own change with its own determinism review. It is
-recorded here because it changes the *picture* more than any texture would.
+**Now implemented, in its own commit.** `oag_gameplay::projectile` probes toward
+the surface each tick, rides `3.0` above what it finds, turns its velocity
+parallel to it, falls at `50.0` when it finds nothing, and stops only on a craft
+or a wall. It is weapon-agnostic, so the Missile and the rest inherit it.
+
+**This was not a cosmetic gap.** Flying straight, a volley fired on a real track
+**died in the tick it was fired** - measured, all three gone before the next
+frame. That is what "they look like three dots and disappear" was, and it is why
+the mesh work alone did not read as an improvement. After the change the same
+volley flies for about half a second, climbing with the track as it goes, and
+detonates on geometry.
+
+Two judgement calls are ours, because the original's query returns a *collision
+code* (`0` and `4` detonate, other non-zero values deflect) and this engine's
+raycaster returns a normal instead: **wall versus floor** is decided by how
+square-on the hit is, and **rideable versus too-steep** by how far the probed
+normal has turned. Both thresholds are named constants with their reasoning.
+
+It moved the committed race hash, which is correct and was isolated in two steps
+before the constants were touched - see `crates/gameplay/tests/determinism.rs`,
+whose first step shows the **previous constants reproduce bit for bit** with the
+change disabled.
 
 ## Authored projectile speeds are km/h
 

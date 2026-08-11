@@ -260,6 +260,7 @@ fn write_projectile(hasher: &mut StateHasher, projectile: &Projectile) {
         velocity,
         owner,
         lifetime,
+        surface,
     } = projectile;
 
     // Every field of every slot, free or not - the same argument the inactive
@@ -271,6 +272,9 @@ fn write_projectile(hasher: &mut StateHasher, projectile: &Projectile) {
     hasher.write_vec3(*velocity);
     hasher.write_u8(*owner);
     hasher.write_f32(*lifetime);
+    // The surface being ridden decides which way next tick probes, so it is
+    // simulation state and not a cached convenience.
+    hasher.write_vec3(*surface);
 }
 
 fn write_option_u32(hasher: &mut StateHasher, value: Option<u32>) {
@@ -354,6 +358,7 @@ mod tests {
             velocity: Vec3::Z,
             owner: 0,
             lifetime: 1.0,
+            surface: Vec3::Y,
         };
         let mut second = World::new(1);
         second.projectiles.slots[1] = first.projectiles.slots[0];

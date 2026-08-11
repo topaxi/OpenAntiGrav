@@ -20,22 +20,35 @@
 //! argument whose value 2 is a weapon, and the weapons-off halving and the clamp
 //! are its own (`.../shield.md`).
 //!
-//! **Ours.** The launch is recovered and so, now, is the flight - but this
-//! module does not implement the flight, which is a different thing from not
-//! knowing it. So:
+//! Also recovered, and now implemented: **a projectile follows the floor.**
+//! `Rocket_Update` (`0x0885d2a8`) probes [`SURFACE_PROBE_LENGTH`] units toward
+//! the surface every tick, rides [`RIDE_HEIGHT`] above what it finds, and falls
+//! at [`FALL_ACCELERATION`] when it finds nothing
+//! (`.../rocket-visuals.md`). Confirmed in PPSSPP, where the frames show rockets
+//! hugging the track a body-length off the racing line, and corroborated by a
+//! maintainer who has played the game: projectiles skim the floor and stop only
+//! on a craft or a wall.
 //!
-//! - **Straight-line flight at a constant speed, and this is now a known
-//!   simplification rather than an unknown.** `Rocket_Update` (`0x0885d2a8`)
-//!   **has** been read (`.../rocket-visuals.md`): the original probes `6.0`
-//!   units toward the surface every tick and *deflects* off geometry - adopting
-//!   the hit normal, pushing out `3.0`, recomputing velocity - detonating only
-//!   on two specific collision codes, and applying `velocity.y -= dt * 50.0`
-//!   when it hits nothing. A rocket skims the track and glances off walls;
-//!   confirmed in PPSSPP, where the frames show them hugging the surface. This
-//!   module still flies them dead straight and detonates on first contact,
-//!   because adopting the real path moves the state hash and wants its own
-//!   change. **Do not read the straight line here as evidence about the
-//!   original.**
+//! **This is why the module was rewritten rather than tuned.** Flying straight,
+//! a volley died in the tick it was fired - measured on a real track, all three
+//! rockets gone before the next frame, which is what "they look like three dots
+//! and disappear" was.
+//!
+//! **Ours.**
+//!
+//! - **Wall versus floor.** The original picks "detonate" or "deflect" from a
+//!   collision *code* its query returns; this engine's raycaster has no such
+//!   code, so the test is geometric. See [`WALL_FACING`] and [`RIDEABLE_COS`],
+//!   the two thresholds that decision rests on.
+//! - **Turning the velocity parallel to the surface rather than reflecting it.**
+//!   The original recomputes velocity from a corrected position, which is not
+//!   quite either; this preserves speed and follows the track, which is the
+//!   behaviour described.
+//! - **That the rule is weapon-agnostic.** It lives in [`Projectiles::advance`],
+//!   so the Missile and the rest inherit it when they land. A maintainer's
+//!   account puts the Missile on the floor too and is **less sure about the
+//!   Cannon**; nothing here has read either, so if the Cannon turns out to fire
+//!   flat this is the place that has to grow a per-weapon flag.
 //! - **The axis the fan rotates about.** See [`launch`].
 //! - **A sphere for a hull**, and one that is *wider* than the hull on two of
 //!   its three axes. The original tests a projectile against something and
@@ -89,9 +102,26 @@ pub struct Projectile {
     pub kind: Option<Weapon>,
     /// Where it is, in world space.
     pub position: Vec3,
-    /// Where it is going, in world units a second. Constant for its whole life:
-    /// nothing steers, and no gravity is applied.
+    /// Where it is going, in world units a second.
+    ///
+    /// **Not constant.** It is turned parallel to the surface each tick the
+    /// projectile finds one, and pulled down by [`FALL_ACCELERATION`] each tick
+    /// it does not. Speed is preserved across a turn; only the direction moves.
     pub velocity: Vec3,
+    /// The surface normal the projectile is riding, normalised.
+    ///
+    /// **Recovered as a concept**: the original keeps one at `self+0x100`,
+    /// initialises it from the firing craft and re-probes along it every tick
+    /// (`Rocket_Update`, `0x0885d2a8`). It is what makes a projectile follow a
+    /// banked or rolling track rather than a horizontal plane - the probe goes
+    /// along *this*, not along world down.
+    ///
+    /// Seeded to [`Vec3::Y`] by [`Projectiles::spawn`] rather than to the firing
+    /// craft's up, which is **ours**: the original seeds it from the craft and
+    /// this engine's spawn call does not carry one. The first probe corrects it,
+    /// so the cost is at most one tick of a wrong probe direction on a steeply
+    /// banked launch.
+    pub surface: Vec3,
     /// Which ship slot fired it.
     ///
     /// Read for two things: the shot cannot hit its own launcher in flight, and
@@ -158,6 +188,7 @@ impl Projectiles {
                 velocity: Vec3::ZERO,
                 owner: 0,
                 lifetime: 0.0,
+                surface: Vec3::Y,
             }; MAX_PROJECTILES],
         }
     }
@@ -208,6 +239,8 @@ impl Projectiles {
             velocity,
             owner,
             lifetime: MAX_FLIGHT_SECONDS,
+            // World up until the first probe corrects it - see the field.
+            surface: Vec3::Y,
         };
         true
     }
@@ -244,7 +277,41 @@ impl Projectiles {
             };
 
             let from = projectile.position;
-            let to = from + projectile.velocity * dt;
+            let mut to = from + projectile.velocity * dt;
+
+            // **The surface probe, before the flight sweep** - the order is the
+            // original's. Look along the normal being ridden for something to
+            // ride; conform to it if it is floor-like, fall if there is nothing.
+            let probe = Raycaster::raycast(
+                raycaster,
+                Ray::new(to, -projectile.surface, SURFACE_PROBE_LENGTH),
+                None,
+                false,
+            );
+            match probe {
+                // Rideable: sit at the ride height above it, adopt its normal,
+                // and turn the velocity parallel to it without changing speed.
+                // Turning rather than reflecting is what makes a projectile
+                // *follow* a rolling track instead of bouncing down it.
+                Some(hit) if hit.normal.dot(projectile.surface) > RIDEABLE_COS => {
+                    projectile.surface = hit.normal;
+                    to = hit.point + hit.normal * RIDE_HEIGHT;
+                    let speed = projectile.velocity.length();
+                    let along =
+                        projectile.velocity - hit.normal * projectile.velocity.dot(hit.normal);
+                    // A projectile aimed straight at the floor has nothing left
+                    // after the normal component is removed; keep its heading
+                    // rather than zeroing it and let the sweep below resolve it.
+                    if along.length_squared() > 1e-6 {
+                        projectile.velocity = along.normalize() * speed;
+                    }
+                }
+                // Nothing under it, or only something too steep to ride: it
+                // falls. The projectile keeps whatever normal it had, so it
+                // resumes riding when the track comes back under it.
+                _ => projectile.velocity -= Vec3::Y * FALL_ACCELERATION * dt,
+            }
+
             let step = to - from;
             let distance = step.length();
 
@@ -295,7 +362,15 @@ fn nearest_hit<R: Raycaster + ?Sized>(
     // `include_reset` is false: a `Reset Collision` volume is a respawn trigger
     // rather than a surface, and a rocket detonating on one would blow up in
     // mid-air over the run-off.
+    //
+    // **Only a face-on hit stops it.** A projectile riding the track clips the
+    // floor constantly - that is what riding it means - and detonating on those
+    // is exactly the bug this model exists to fix: before it, three rockets
+    // died in the tick they were fired. A grazing hit is the floor and is
+    // ignored here, having already been handled by the surface probe; a hit the
+    // projectile runs *into* is a wall and stops it. See [`WALL_FACING`].
     let mut best = Raycaster::raycast(raycaster, Ray::new(from, direction, distance), None, false)
+        .filter(|hit| -hit.normal.dot(direction) > WALL_FACING)
         .map(|hit| (hit.distance, hit.point, None));
 
     for (slot, ship) in ships.iter().enumerate() {
@@ -495,6 +570,47 @@ pub const ROCKET_SHOTS: usize = 3;
 /// operation instead of two roundings.
 pub const KMH_PER_UNIT_PER_SECOND: f32 = oag_core::math::SPEED_TO_KMH;
 
+/// How far a projectile looks toward the surface for something to ride.
+///
+/// **Recovered, confidence 82.** `Rocket_Update` (`0x0885d2a8`) scales the
+/// stored normal by `6.0` and casts along it from the projected position, every
+/// tick, before anything else. See
+/// `docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`.
+pub const SURFACE_PROBE_LENGTH: f32 = 6.0;
+
+/// How far above the surface a projectile rides.
+///
+/// **Recovered, confidence 82.** The same function pushes out along the hit
+/// normal by `3.0` after a surface hit, which is what holds a projectile off the
+/// track rather than in it.
+pub const RIDE_HEIGHT: f32 = 3.0;
+
+/// How fast a projectile with nothing under it falls, in units per second squared.
+///
+/// **Recovered, confidence 82.** `velocity.y -= dt * 50.0` on the branch where
+/// the surface probe finds nothing - a projectile that flies off the edge of the
+/// track drops instead of sailing on forever.
+pub const FALL_ACCELERATION: f32 = 50.0;
+
+/// How square-on a geometry hit must be to count as a wall rather than the floor.
+///
+/// **Ours, and the one judgement call in the surface-following model.** The
+/// original distinguishes "detonate" from "deflect" by a *collision code* its
+/// query returns (`0` and `4` detonate, other non-zero values deflect) and this
+/// engine's raycaster has no such code. What it has is the hit normal, so the
+/// test is geometric: a projectile skimming the floor meets it edge-on, and one
+/// flying into a wall meets it face-on. `0.25` is about 75 degrees off the
+/// surface - generous, because a false *wall* stops a shot dead and a false
+/// *floor* only lets it skim one more tick.
+pub const WALL_FACING: f32 = 0.25;
+
+/// How closely a probed surface must match the one being ridden to be ridden too.
+///
+/// **Ours.** Stops a projectile from treating a wall it happens to probe into as
+/// a new floor and climbing it. `0.5` is 60 degrees, which passes any bank or
+/// roll a Pulse circuit authors and rejects anything vertical.
+pub const RIDEABLE_COS: f32 = 0.5;
+
 /// Where a craft launches its rockets from, and how fast.
 ///
 /// Returns [`ROCKET_SHOTS`] `(position, velocity)` pairs in the original's own
@@ -616,6 +732,24 @@ mod tests {
         CollisionWorld::new()
     }
 
+    /// A large horizontal floor, wound so its normal points up.
+    fn floor_at_y(y: f32) -> CollisionWorld {
+        let mut world = CollisionWorld::new();
+        world.push(TriangleSoup::new(
+            vec![
+                [-500.0, y, -500.0],
+                [-500.0, y, 500.0],
+                [500.0, y, 500.0],
+                [500.0, y, -500.0],
+            ],
+            vec![[0, 1, 2], [0, 2, 3]],
+            Vec::new(),
+            Surface::Floor,
+            0,
+        ));
+        world
+    }
+
     #[test]
     fn a_spawned_projectile_takes_the_first_free_slot_and_the_array_never_grows() {
         let mut projectiles = Projectiles::new();
@@ -630,23 +764,80 @@ mod tests {
         assert_eq!(projectiles.slots.len(), MAX_PROJECTILES);
     }
 
-    /// Straight line, constant speed, no gravity and no steering. The whole
-    /// flight model, and the thing every other test here rests on.
+    /// Over nothing at all, a projectile holds its heading and falls.
+    ///
+    /// **This test used to assert the opposite** - "nothing pulls a rocket
+    /// down" - and it was pinning the bug rather than a behaviour. With no
+    /// surface under it the original accelerates a projectile downward at
+    /// [`FALL_ACCELERATION`], so an empty world is the *falling* case, not the
+    /// straight-line one. The straight line is what a projectile does across
+    /// the two axes it is not being pulled along.
     #[test]
-    fn flight_is_straight_and_at_a_constant_speed() {
+    fn over_empty_space_a_projectile_keeps_its_heading_and_falls() {
         let mut projectiles = Projectiles::new();
         projectiles.spawn(Weapon::Rocket, Vec3::ZERO, Vec3::Z * 600.0, 0);
         let world = empty_world();
         let dt = 1.0 / 60.0;
 
+        // From tick 2: `to` is computed from the velocity the *previous* tick
+        // left, so the first tick's gravity does not move it yet. That lag is
+        // the original's own ordering - it projects the position, then probes,
+        // then accelerates - and is kept rather than tidied.
+        let mut last_drop = 0.0;
         for tick in 1..=10 {
             let impacts = projectiles.advance(dt, &world, &ships(&[]));
-            assert!(impacts.iter().all(Option::is_none));
+            assert!(impacts.iter().all(Option::is_none), "nothing to hit");
             let p = projectiles.slots[0];
+            // Forward is untouched: gravity is on Y and nothing steers.
             assert!((p.position.z - 10.0 * tick as f32).abs() < 1e-3, "{p:?}");
-            assert_eq!(p.position.x, 0.0);
-            assert_eq!(p.position.y, 0.0, "nothing pulls a rocket down");
+            assert_eq!(p.position.x, 0.0, "nothing pushes it sideways");
+            // Falling, and falling *faster* every tick - an acceleration, not a
+            // fixed sink rate.
+            let drop = -p.position.y;
+            if tick > 1 {
+                assert!(
+                    drop > last_drop,
+                    "tick {tick}: expected to keep falling, was {last_drop}, now {drop}"
+                );
+            }
+            last_drop = drop;
         }
+    }
+
+    /// A projectile fired flat over a floor rides it instead of hitting it.
+    ///
+    /// The regression that matters: before the surface-following model, a
+    /// volley fired on a real track died in the tick it was fired, because a
+    /// projectile skimming the floor was detonating on it. Here the floor is
+    /// directly below and the projectile must survive, settle to
+    /// [`RIDE_HEIGHT`] above it, and keep its speed.
+    #[test]
+    fn a_projectile_over_a_floor_rides_it_rather_than_detonating() {
+        let mut projectiles = Projectiles::new();
+        projectiles.spawn(Weapon::Rocket, Vec3::Y * 4.0, Vec3::Z * 240.0, 0);
+        let world = floor_at_y(0.0);
+        let dt = 1.0 / 60.0;
+
+        for tick in 1..=30 {
+            let impacts = projectiles.advance(dt, &world, &ships(&[]));
+            assert!(
+                impacts.iter().all(Option::is_none),
+                "tick {tick}: the floor is not a target"
+            );
+        }
+        let p = projectiles.slots[0];
+        assert_eq!(p.kind, Some(Weapon::Rocket), "it must still be in the air");
+        assert!(
+            (p.position.y - RIDE_HEIGHT).abs() < 0.5,
+            "expected to settle near the ride height, at {:?}",
+            p.position
+        );
+        assert!(
+            (p.velocity.length() - 240.0).abs() < 1.0,
+            "riding must not change speed, got {}",
+            p.velocity.length()
+        );
+        assert!(p.position.z > 100.0, "it must have gone somewhere: {p:?}");
     }
 
     /// The swept test, and the reason it exists: at an authored class speed a
