@@ -13,6 +13,11 @@
   grant is recovered in detail and **the grant itself is ours**.
 - [lap counting](lap-counting.md) - how a lap is decided, and why that is **our
   convention** rather than a recovery.
+- [opponent AI](ai.md) - what drives the other seven craft in Pulse and Pure,
+  recovered from their shipped tuning data, and **why this project keeps the
+  steering and throws away the speed schedule**. Read it before touching
+  rubberbanding: the original spreads the player coupling across *two* blocks
+  and only one of them is called `RubberBanding`.
 
 ## Scope
 

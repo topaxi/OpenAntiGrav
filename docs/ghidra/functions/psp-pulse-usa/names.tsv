@@ -474,3 +474,12 @@
 0x08927358	function	TexAnim_CompileTransformList	90	texture-animation.md
 0x089114fc	function	Node_SetAnimTimeTree	75	texture-animation.md
 0x0890e240	function	Mesh_SetAnimTime	78	texture-animation.md
+0x08835830	function	AiStats_LoadAll	88	ai-stats.md
+0x088358a4	function	AiStats_ParseFile	88	ai-stats.md
+0x08835a88	function	AiStats_ParseClass	88	ai-stats.md
+0x08835b78	function	AiStats_ParseRaceBalancing	88	ai-stats.md
+0x08835ce0	function	AiStats_ParseStartStats	88	ai-stats.md
+0x08835e50	function	AiStats_ParseRubberBanding	88	ai-stats.md
+0x08836084	function	AiStats_ParsePosBalancing	88	ai-stats.md
+0x088361f0	function	AiStats_ParseSkillScale	88	ai-stats.md
+0x08836548	function	AiStats_ParseController	88	ai-stats.md

@@ -563,7 +563,15 @@ seen from the authoring side.
       **coefficient itself**, which measures `0.035000` exactly on 25 of 25
       `Ship_Damage` calls spanning a factor of 225 in magnitude. The one claim
       left unmeasured is `entity + 0x368`, the field gating the damage path.
-- [ ] AI
+- [ ] AI. **The original's own tuning data is now read and written up** - see
+      [ai.md](../gameplay/ai.md). Both games ship their AI as XML: a lookahead
+      PD steering controller per speed class, and a speed *schedule* keyed on
+      the player's race position and the gap to the player. The steering half
+      is close to what `oag-trace plan` already does; the longitudinal half is
+      the work, and this project replaces the schedule with a physics-derived
+      speed profile rather than porting it. What is still missing is the unit
+      semantics of the thrust numbers, which needs one targeted Ghidra session
+      on the consumer of `AIStats` - the same page lists the hooks.
 - [ ] Audio, including the **positional** classes a track authors:
       `sound` `0x3e1`, `soundcone` `0x3e9` and `speaker` `0x3cc`. The banks and
       waveforms decode already (M1); what is missing is placing them in the world.
