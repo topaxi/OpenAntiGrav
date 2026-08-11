@@ -4,8 +4,11 @@ What a `Weapon Pad` hands out, what a craft does with it, and - separately -
 the free Turbo a solo event is given once a lap.
 
 Implemented in [`oag_gameplay::pickup`](../../crates/gameplay/src/pickup.rs)
-(the draw and the inventory), `oag_game::race` (the trigger, the grant and
-spending it) and `oag_physics::engine` (what a fired Turbo does). The pad
+(the draw and the inventory),
+[`oag_gameplay::projectile`](../../crates/gameplay/src/projectile.rs) (rockets in
+the air and what they hit), `oag_game::race` (the trigger, the grant and
+spending it), `oag_physics::engine` (what a fired Turbo does) and
+`oag_physics::damage` (what a fired Shield refuses and what a blast costs). The pad
 geometry is [pads.md](../formats/pads.md); the table is
 [weapon-stats.md](../formats/weapon-stats.md); the runtime side of the pad is
 [the Ghidra page](../ghidra/functions/psp-pulse-usa/pads.md).
@@ -30,6 +33,13 @@ This subsystem is unusually mixed, so the split comes before anything else.
 | **The inventory's shape** (one slot, `Option<Weapon>`) | **ours** | - |
 | **Granting only into an empty slot** | **ours** | - |
 | **When in the lap the free Turbo arrives** | **ours** | - |
+| `<Rocket>`: `damage`, `blastforce`, `blastradius`, `launchSpeed`, a speed per class | **recovered** | 92 |
+| `Ship_Damage`'s `source == 2` being a weapon hit | **recovered** | 75 |
+| **That a fired Shield refuses damage, and refuses it outright** | **ours** | - |
+| **That a rocket flies straight at a constant speed** | **ours** | - |
+| **One rocket per fire** (`spread` argues for a volley - see below) | **ours** | - |
+| **A sphere for a hull, and full damage inside `blastradius` with no falloff** | **ours** | - |
+| **The launch offset, the flight speed being class + `launchSpeed`, the lifetime cap** | **ours** | - |
 
 The three "ours" rows in the middle are not a gap anyone can close by looking
 harder in the obvious place. `WeaponPads_TestCraft` (`0x0888727c`) stamps the
@@ -162,22 +172,23 @@ term entirely - see below.
 ## Only what has an effect is handed out
 
 `oag_gameplay::pickup::IMPLEMENTED` is the pool a pad draws from, and it holds
-**Turbo alone** today.
+**Turbo, Shield and Rocket** (2026-08-11).
 
-- Ten of the thirteen need a projectile, a target or both.
-- **Shield**'s `time` joins to no recovered code path. `shield.md` is about the
-  energy *pool*, which is a different thing that the filename invites confusing
-  with it.
+- **Missile** needs the lock distances its own `<Stats>` authors, and a target
+  worth locking - which needs the AI.
+- **Quake** needs track deformation, **LeachBeam** a beam and a victim, and most
+  of the remaining seven need the slowdown mechanic behind
+  `<Global slowdown_limit>`, which has no consumer.
 - **Autopilot** is the AI's own controller taking over: `Ai_Construct`
   (`0x088536bc`) names the local player's input source the literal
   `"autopilot input"`. It is AI work wearing a pickup's clothes, not pickup
   work.
 
 **This is a departure and a deliberate one.** The authored table weights
-thirteen weapons and the draw sees one of them, so what a player gets is the
+thirteen weapons and the draw sees three of them, so what a player gets is the
 authored distribution *conditioned on* the implemented set. It narrows to
 nothing as weapons land - adding a variant to `IMPLEMENTED` is the whole change
-- and it beats handing out a rocket that cannot be fired.
+- and it beats handing out a mine that cannot be dropped.
 
 ## What a fired Turbo does
 
@@ -243,6 +254,100 @@ magnitude the class's own `<Engine turbo>`, so both numbers are real. The field
 is hashed by the determinism gate, which is why it lives on `ShipState` rather
 than beside the inventory.
 
+## What a fired Shield does
+
+**It refuses damage outright for `<Weapon type="Shield"><Stats time>` seconds**,
+through `oag_physics::ShipState::shield_pickup_timer` and an early return in
+`damage::apply_contact`.
+
+**Only the duration is recovered.** `WeaponStats_ParseShield` (`0x0880ca2c`)
+reads an `absorb` and a `time` into `craft`-relative `+0x8c`/`+0x90`, and
+**no reader of those offsets has been found** - nor any branch in `Ship_Damage`
+(`0x088439ac`) that a shield would have to take. So *that* it refuses damage is
+this project's reading of what a shield is for, in the same sense that a weapon
+pad granting anything at all is. Refusing rather than *reducing* is part of that
+reading: the original may well scale, nothing says either way, and refusing is
+the choice that cannot half-work.
+
+Two consequences worth having in one place:
+
+- **It refuses on the same edge a destroyed craft does**, before the
+  subtraction, so it also suppresses `Shield::depleted` and
+  `crossed_critical`. A shielded craft cannot be destroyed and does not cry
+  energy-critical. That means a mode ending on `depleted` - Zone's unbuilt end
+  condition - can be held open by a pickup.
+- **It does not refuse momentum.** A rocket's `blastforce` still shoves a
+  shielded craft off the racing line. Extending the shield to stop that would
+  be a second invented rule stacked on the first.
+
+The timer runs one tick longer than the arithmetic, exactly as the Turbo's does
+and for the same reason - it is read before it is decremented. Pinned by
+`a_fired_shield_refuses_damage_for_its_authored_duration` rather than tolerated.
+
+## What a fired Rocket does
+
+**One projectile, straight ahead, at the class's own authored speed.** Built in
+[`oag_gameplay::projectile`](../../crates/gameplay/src/projectile.rs); the
+damage lands through `oag_physics::damage::apply_weapon`, which is
+`Ship_Damage`'s recovered body - the state gate, the weapons-off halving, the
+clamp and the destroyed transition - sharing one function with the contact path
+so the two cannot drift.
+
+**Recovered:** the numbers. `<Weapon type="Rocket"><Stats>` authors `damage`,
+`blastforce`, `blastradius`, `launchSpeed` and a *separate flight speed per
+speed class* (`venomspeed`/`flashspeed`/`rapierspeed`/`phantomspeed`), measured
+at 800/900/1000/1100 on the shipped race table and a rung lower on the
+Eliminator one. Also recovered, at confidence 75: `Ship_Damage`'s `source`
+argument, whose value 2 is a weapon hit.
+
+**Ours, and unavoidably so** - no firing call site, no projectile class and no
+flight update has been found anywhere in the executable:
+
+- straight-line flight at constant speed, with no gravity and no steering;
+- the launch point (the hull's own forward extent, so a shot starts outside the
+  craft that fired it) and the flight speed being the class's plus `launchSpeed`
+  rather than one or the other, and the craft's own velocity *not* inherited;
+- a sphere of half the largest `<Misc>` dimension for a hull, which is smaller
+  than the box on two axes - a rocket can miss a craft it would have clipped
+  rather than hit one it would have missed;
+- **full damage everywhere inside `blastradius`, with no falloff**, and the
+  firing craft not excluded from its own blast;
+- `blastforce` applied as an impulse rather than a force held over a duration;
+- a ten-second lifetime cap, so a rocket that leaves the world through a gap in
+  the collision soup cannot hold its slot for the race.
+
+### `spread` argues for a volley, and this fires one
+
+**`spread` is on the Rocket's `<Stats>` and not on the Missile's** - measured on
+the shipped USA disc, and [weapon-stats.md](../formats/weapon-stats.md) records
+the same asymmetry. A homing weapon has no use for a launch spread and a volley
+does, so the attribute is the only evidence in the tree about how many
+projectiles one fire produces, and it points at more than one.
+
+**This engine fires one anyway.** That is a choice, not a reading: nothing says
+how many, and one is what can be tested end to end today.
+`oag_gameplay::projectile::MAX_PROJECTILES` is sized so revisiting it costs a
+spawn loop and a hash regeneration rather than a redesign.
+
+### There is almost nothing to shoot at, and that is the race's fault
+
+`oag_race::Mode::has_opponents` is unconditionally `false`, so a race fields one
+craft. A rocket can reach track geometry, the firing craft's own hull at close
+range, and the parked grid the `--opponents` verification flag spawns - and
+nothing else until the AI lands. That is what
+`a_rocket_fired_on_a_real_track_flies_and_detonates` checks off a real disc: 221
+units of flight over 14 ticks into Talon's Junction's own collision soup.
+
+### What is not built
+
+`slowdown_time` and `<Global slowdown_limit>` are the slowdown mechanic and have
+no consumer, so they stay decoded-in-name-only. `Ship_Damage`'s `weapon_kind`
+sub-bucket - nine cases - is unmapped, and the absorb-spark effect its
+`source == 2` branch triggers is not reproduced. The visual is a placeholder: an
+additive billboard per rocket and a fading one where it goes off, in the engine
+flare's own texture, because `Ship Muzzle` (`0x3e2`) and `cannon_flash`
+(`0x3eb`) are the original's own weapon effects and neither is built.
+
 ## Absorbing
 
 `CIRCLE`, and it pays the weapon's own `<Stats absorb>` into the energy pool
@@ -270,8 +375,9 @@ the original does: the stamp is unconditional and the grant is not.
 
 ## What is not built
 
-- **Ten of the thirteen weapons.** No projectile, no target, no `source == 2`
-  damage path.
+- **Ten of the thirteen weapons.** Missile needs a lock and a target, Quake
+  needs track deformation, LeachBeam a beam, and most of the rest the slowdown
+  mechanic. Autopilot is AI work.
 - **The pad's ready-to-collect colour cycle.** `WeaponPad_UpdateRefreshTimer`
   (`0x0892c034`) packs a grey into `pad+0x6c` while cooling down and cross-fades
   a small colour table once it is collectable. Observed, not implemented, so a
@@ -280,42 +386,55 @@ the original does: the stamp is unconditional and the grant is not.
   Nothing read says so, and the inventory here is one slot.
 - **The `front`/`back` odds columns**, which need race positions, which need
   opponents that move.
-## The determinism gate does not see any of this, and it should
+## The determinism gate, and the hole that used to be here
 
-**The simulation is still deterministic.** Nothing here reads a wall clock, OS
-entropy or a `HashMap` iteration order; every draw goes through the seeded
-`World::rng`, so the same seed and the same inputs give the same race. That part
-of [the rules](../architecture/determinism.md) holds.
+**The simulation is deterministic.** Nothing here reads a wall clock, OS entropy
+or a `HashMap` iteration order; every draw goes through the seeded `World::rng`,
+so the same seed and the same inputs give the same race. That part of
+[the rules](../architecture/determinism.md) always held.
 
-**What does not hold is that the gate can see it.** The committed hash covers
-`ShipState` and the tick
-(`oag_physics::probe::hash_state`, `crates/physics/tests/determinism.rs`), and
-three pieces of simulation state this feature added sit outside it:
+**What did not hold, until 2026-08-11, is that the gate could see it.** The
+committed hash covered `ShipState` and the tick alone
+(`oag_physics::probe::hash_state`), and three pieces of this feature's state sat
+outside it: the per-pad refresh timers on `Race`, the inventory on
+`oag_gameplay::Ship`, and the generator's own position, which nothing had ever
+hashed.
 
-- the per-pad refresh timers, on `Race`;
-- the inventory, on `oag_gameplay::Ship`;
-- the generator's own position, which nothing has ever hashed.
+That was sharper than "an uncovered field". A pad's refresh timer decides whether
+`pickup::draw` is called, and `draw` consumes `World::rng` - so **a refresh timer
+one tick out shifted the whole generator stream from there on, changing every
+later draw in the race, and the gate reported green.**
 
-`ShipState::turbo_timer` *is* hashed, so what a fired Turbo does to the force law
-is covered - but what decides whether it is ever fired is not.
+### What covers it now
 
-**The consequence is sharper than "an uncovered field", and it is why this is
-written down rather than left implicit.** A pad's refresh timer decides whether
-`pickup::draw` is called, and `draw` consumes `World::rng`. So a change that
-moved a refresh timer by one tick would shift the whole generator stream from
-there on, changing every later draw in the race - and the gate would report
-green, because none of the three fields above reaches the hash. That is exactly
-the class of silent divergence the gate exists to catch.
+Two halves, and neither needs a disc, so both run on all three CI platforms:
 
-Two things follow for whoever picks this up. A **snapshot-based replay** cannot
-restore a single race today, because the pads' state is not in the snapshot the
-determinism rules are shaped around. And **widening the hash is the fix**, not
-moving the fields: they are on `Race` and `Ship` for good reasons -
-`oag-physics` depends on nothing but `oag-core` and cannot name a `Weapon`, and
-pad timers belong to the track rather than to a craft. What is needed is a
-race-level hash beside the ship-level one. None exists yet; the only thing
-shaped like one lives inside
-`cycling_the_camera_changes_no_simulation_state`.
+| Half | Covered by | Guarded by |
+| --- | --- | --- |
+| The whole `World` - ships, inventory, projectiles, lap state, RNG position | `oag_gameplay::hash::hash_world` | committed constants in `crates/gameplay/tests/determinism.rs` |
+| The pad timers and distance caches, which live on `Race` | `oag_game::race::Race::state_hash` | `a_pad_refresh_timer_one_tick_out_moves_the_race_hash` and its neighbours, in `race.rs`'s own `#[cfg(test)]` block |
+
+The split is not tidiness: `Race` normally needs a disc, so its constants could
+only live in an `#[ignore]`d test. What makes the pad half coverable is that
+`race_with_weapon_pads` builds a `Race` from synthetic pads with no disc at all.
+**Nothing here is left to `just test-data`.**
+
+**The fields stayed where they were**, which is what this page previously said
+the fix should be: `oag-physics` depends on nothing but `oag-core` and cannot
+name a `Weapon`, and pad timers belong to the track rather than to a craft. The
+hash widened around them instead.
+
+Every struct `hash_world` touches is destructured **exhaustively, with no `..`
+rest pattern**, the same mechanism `probe::hash_state` uses - so a new field on
+`World`, `Ship`, `Held`, `Projectile` or `RaceState` stops that file compiling
+rather than being silently left out.
+
+### Still open
+
+A **snapshot-based replay** still cannot restore a single race, because the pad
+state is not in the world snapshot even though it is now in the hash. Moving it
+would be the replay's change to make, with its own reason, rather than a side
+effect of this one.
 
 ## See also
 

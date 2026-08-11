@@ -506,10 +506,13 @@ arrays, most likely by breakpointing `0x08849db4` in a live race.
 
 ## What is not implemented
 
-- **`Weapon Pad` pickups, `pad+0x1a0`/`pad+0x6c` included.** The payload
-  decodes identically and is asserted against the disc, and the refresh timer
-  and its colour-cycle writer are now identified (see `Pad_ContainsPoint`
-  above), but nothing consumes any of it: there is no pickup system.
+- **The `Weapon Pad`'s colour cycle, `pad+0x1a0`/`pad+0x6c`.** The pickup system
+  itself landed on 2026-08-11 and consumes the trigger and the refresh timer -
+  see [pickups.md](../../../gameplay/pickups.md). What is still unimplemented is
+  the *look*: `WeaponPad_UpdateRefreshTimer` (`0x0892c034`) packs a grey into
+  `pad+0x6c` while the pad cools down and cross-fades a colour keyframe table
+  once it is collectable, so in this engine a spent pad looks the same as a
+  fresh one.
 - **The `"SPEEDUPPAD"` sound.** There is no audio system yet, so neither emitter
   path is reproduced. `oag_game::race` arms the flare and nothing else.
 - **`craft+0x318`'s curve.** See the open question above.

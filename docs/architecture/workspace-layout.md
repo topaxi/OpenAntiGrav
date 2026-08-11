@@ -55,11 +55,26 @@ crate created before its shape is understood tends to get the wrong shape.
 
 | Crate | Milestone | Purpose |
 | --- | --- | --- |
-| `oag-weapons` | M5 | Pickups, projectiles, damage. |
+| `oag-weapons` | M5 | Pickups, projectiles, damage. **Not created; the work landed elsewhere** - see below. |
 | `oag-ai` | M5 | Opponent behaviour. |
 | `oag-ui` | M5 | HUD and menus. |
 | `oag-replay` | M7 | Input recording and playback. |
 | `oag-net` | M8 | Multiplayer. |
+
+**`oag-weapons` is a plan this project did not follow, and the reason is the
+warning above it.** Pickups landed on 2026-08-11 and projectiles the same day,
+and they went into the crates that already had what they needed:
+`oag_formats::weapons` for the table, `oag_gameplay::pickup` for the draw and
+the inventory, `oag_gameplay::projectile` for flight and blasts,
+`oag_game::race` for the trigger and the fire buttons, and
+`oag_physics::damage` for what a hit costs. A new crate would have needed
+`oag-formats` (to name a `Weapon`) and `oag-physics` (to move a body), which is
+`oag-gameplay`'s dependency set exactly - so it would have been a second name
+for the same layer rather than a boundary.
+
+Splitting it out later is still open, and the thing that would justify it is
+weapons growing past what one module should hold. Recorded here rather than
+silently diverging, because the table above is what a contributor reads first.
 
 ## Title packages
 

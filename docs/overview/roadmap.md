@@ -536,13 +536,35 @@ seen from the authoring side.
       records rather than one - `MSC_EVENT_TT`'s *"free turbo pickup once per
       lap"* and `TimeTrial_HUD.xml` authoring a `PickupBackground` and
       `TurboIcon` alone where Zone authors none and Arcade authors all thirteen.
-      **Ten weapons still hand out nothing**: firing, projectiles, targets and
-      the `source == 2` damage path through
-      [`Ship_Damage`](../ghidra/functions/psp-pulse-usa/shield.md) are unstarted,
-      and the draw pool is restricted to weapons with an effect so a player is
-      never handed one that cannot be used. Shield's `time` joins to no
-      recovered code path; Autopilot is the AI's own controller taking over and
-      belongs with the AI.
+      **Shield and Rocket followed the same day**, taking the draw pool to
+      three. Shield is the Turbo's shape - the disc's `<Shield time>` on a timer
+      that makes `damage::apply_contact` refuse - and **Rocket is the first
+      projectile**: `oag_gameplay::projectile` flies a fixed-size array of them
+      straight-line, sweeps each tick's step against the track and against
+      hulls, and spends `<Rocket damage>`/`blastforce`/`blastradius` through a
+      new `damage::apply_weapon` that shares `Ship_Damage`'s recovered body with
+      the contact path. A ground-truth test fires one on the disc's own geometry
+      and watches it detonate. The per-class flight speeds are the file's own -
+      it authors four.
+      **Almost all of it is ours**, and pickups.md's table says which parts: no
+      firing call site, no projectile class and no flight update exists anywhere
+      in the executable, so straight-line flight, the launch offset, a sphere
+      for a hull, full damage inside the radius, and one rocket per fire are all
+      this project's readings on top of the disc's numbers. `spread` argues for
+      a volley and is recorded as an open question rather than dismissed.
+      **The determinism gate widened to match**: `oag_gameplay::hash::hash_world`
+      plus `Race::state_hash` now cover the inventory, the projectiles, the pad
+      refresh timers and the generator's own position, which were the known hole
+      pickups.md recorded when the pickups landed. Both halves run in CI on all
+      three platforms and neither needs a disc.
+      **Ten weapons still hand out nothing**: Missile needs a lock and a target,
+      Quake track deformation, LeachBeam a beam, and most of the rest the
+      slowdown mechanic behind `<Global slowdown_limit>`, which has no consumer.
+      Autopilot is the AI's own controller taking over and belongs with the AI.
+      **And a rocket has almost nothing to hit**, which is the AI's fault rather
+      than the weapon's: `Mode::has_opponents` is unconditionally `false`, so
+      track geometry and the `--opponents` parked grid are the whole target
+      list.
 - [~] **Shield and energy.** The pool, its maximum and the one thing that spends
       it are recovered and implemented: `*(craft+0x1c4) + 0x88` is the pool,
       `<Misc>`'s three difficulty slots at stats-base `0x84 + skill * 4` are its
@@ -552,12 +574,15 @@ seen from the authoring side.
       time trial does. `oag_physics::damage` is the port, the pool is hashed by
       the determinism gate, and the HUD's `ShieldBar` now moves. See
       [shield](../ghidra/functions/psp-pulse-usa/shield.md).
-      **Three of the four things that touch the pool are not built**, none of
-      them guessable from here: weapon damage, weapon absorb and the pit-lane
-      recharge all need weapons. And the destroyed transition - `Ship_Damage`
-      sets craft state 4 at zero - has no state to move to yet, so the pool
-      floors instead and `damage::Shield::depleted` is the signal to build it
-      on. **Measured against the running original** for the pool's location,
+      **Weapon damage and weapon absorb are in** as of 2026-08-11:
+      `damage::apply_weapon` is `Ship_Damage`'s body given an authored amount
+      rather than a scaled impulse, and `CIRCLE` pays `<Stats absorb>` through
+      the recovered clamp. **The pit-lane recharge is the one left**, and the
+      destroyed transition - `Ship_Damage` sets craft state 4 at zero - still has
+      no state to move to, so the pool floors instead and
+      `damage::Shield::depleted` is the signal to build it on. A fired Shield
+      suppresses that signal for its duration, which is a thing Zone's unbuilt
+      end condition will have to account for. **Measured against the running original** for the pool's location,
       the two race-option globals, the regeneration branch and the weapons-off
       halving - which comes out at 1.98 against a predicted 2.00 - and for the
       **coefficient itself**, which measures `0.035000` exactly on 25 of 25
