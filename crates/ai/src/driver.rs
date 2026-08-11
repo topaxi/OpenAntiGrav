@@ -61,6 +61,30 @@ pub struct Tuning {
     /// A craft thrown far off its line computes an enormous required curvature;
     /// without this it asks for a rate no hull can produce and holds full lock
     /// all the way through the recovery, which is its own kind of weave.
+    ///
+    /// **It was `1.2`, and that turned out to be the binding constraint on a
+    /// real corner** - reported from play as the field making a hard turn on
+    /// Talon's Junction badly. What the trace showed was *not* an overspeed:
+    /// through the whole corner the craft sat below its own speed target and
+    /// never touched the airbrakes, while drifting from 18 units inside the
+    /// line to 30 outside it. Thirty units off with a 57-unit lookahead is a
+    /// pure-pursuit request of about 2 rad/s, and this clamped it to 1.2 while
+    /// the craft was already achieving 1.08 - so the controller was asking for
+    /// everything it was allowed and was still not permitted to turn hard
+    /// enough to get back.
+    ///
+    /// Swept on `16_Track`, a minute a run, seven craft:
+    ///
+    /// | value | worst excursion | mean off line | mean speed |
+    /// | --- | --- | --- | --- |
+    /// | 1.2 | 36 | 7.5 | 114 |
+    /// | 1.6 | 27 | 6.0 | 122 |
+    /// | **1.8** | **24** | **6.0** | **122** |
+    /// | 2.2 | 29 | 6.1 | 122 |
+    ///
+    /// It flattens either side of 1.8 rather than continuing to improve, which
+    /// is the shape of a constraint that has stopped binding: past it the limit
+    /// is the hull, not the permission.
     pub max_turn_rate: f32,
     /// The lateral acceleration a craft is assumed to hold through a corner.
     ///
@@ -152,7 +176,7 @@ impl Default for Tuning {
             look_speed: 0.35,
             look_max: 90.0,
             rate_gain: 5.0,
-            max_turn_rate: 1.2,
+            max_turn_rate: 1.8,
             lateral_accel: 180.0,
             brake_lookahead: 2.5,
             brake_margin: 0.05,
