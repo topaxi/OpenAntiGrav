@@ -1408,6 +1408,23 @@ impl FlareTexture {
 /// The colour's alpha carries the flicker, which the additive blend then
 /// weights by - `src.rgb * src.a + dst.rgb`, recovered from
 /// `ExhaustFlare_BuildDisplayList`.
+/// One camera-facing additive sprite at a world point, in the flare's own shape.
+///
+/// **Not part of the recovered exhaust.** It exists so a caller with something
+/// else to draw as a glowing dot - a projectile in flight, today - can reuse the
+/// flare's pipeline and texture instead of standing up a second one for a
+/// placeholder. `half_size` is in world units and `alpha` is the additive
+/// weight; the flare's own values come from [`Exhaust`] and are not what a
+/// caller here wants.
+///
+/// The billboard is built from the caller's `right` and `up`, which are read out
+/// of the view matrix the same way [`Exhaust::vertices`]' are - see its docs for
+/// why that is world-space rather than a post-projection sprite.
+#[must_use]
+pub fn sprite(centre: Vec3, right: Vec3, up: Vec3, half_size: f32, alpha: f32) -> [GpuVertex; 6] {
+    quad(centre, right * half_size, up * half_size, alpha)
+}
+
 fn quad(centre: Vec3, right: Vec3, up: Vec3, alpha: f32) -> [GpuVertex; 6] {
     let corner = |sx: f32, sy: f32, u: f32, v: f32| GpuVertex {
         position: (centre + right * sx + up * sy).to_array(),

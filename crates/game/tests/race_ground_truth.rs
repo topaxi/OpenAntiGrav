@@ -1146,11 +1146,12 @@ fn a_weapon_pad_on_the_disc_hands_out_a_pickup_in_a_single_race() {
     let centre = Vec3::from_array(pad.centre());
     println!("first weapon pad at {centre:?}");
 
-    let race_at_pad = |mode: oag_race::Mode| {
+    let race_at_pad_seeded = |mode: oag_race::Mode, seed: Option<u64>| {
         let loaded = race::load(&race::Options {
             source: image.display().to_string(),
             class: SpeedClass::Venom,
             mode,
+            seed,
             pose: Some(race::PoseRequest::SplineAligned {
                 position: centre,
                 yaw: 0.0,
@@ -1160,18 +1161,39 @@ fn a_weapon_pad_on_the_disc_hands_out_a_pickup_in_a_single_race() {
         .expect("loading the race");
         race::Race::start(loaded.setup)
     };
+    let race_at_pad = |mode: oag_race::Mode| race_at_pad_seeded(mode, None);
 
     // A single race: the craft starts inside the volume, so the first tick is
     // the entry edge.
     let mut single = race_at_pad(oag_race::Mode::SingleRace);
     single.tick(&Default::default());
     let granted = single.ship_pickup();
-    assert!(
-        granted.is_some(),
+    let granted = granted.expect(
         "a craft standing on a real weapon pad was handed nothing - either the \
-         trigger missed the volume or the class's <Pickupodds> did not resolve"
+         trigger missed the volume or the class's <Pickupodds> did not resolve",
+    );
+    assert!(
+        oag_gameplay::pickup::IMPLEMENTED.contains(&granted),
+        "the pad handed out {granted:?}, which nothing can fire or absorb"
     );
     println!("granted {granted:?} off the disc's own odds");
+
+    // **The magnitude check below is about the Turbo specifically**, so it needs
+    // a crossing that draws one. That used to be automatic - `IMPLEMENTED` held
+    // a single weapon - and stopped being so the moment it held more. Scanning
+    // seeds rather than pinning a magic one, because a magic constant would go
+    // quietly wrong the next time `IMPLEMENTED` grows and the walk order shifts,
+    // which is the failure this whole comment exists to prevent.
+    let turbo_seed = (0..64u64).find(|&seed| {
+        let mut race = race_at_pad_seeded(oag_race::Mode::SingleRace, Some(seed));
+        race.tick(&Default::default());
+        race.ship_pickup() == Some(oag_formats::weapons::Weapon::Turbo)
+    });
+    let turbo_seed = turbo_seed.expect(
+        "no seed in 0..64 drew a Turbo from this class's authored odds - either \
+         the table weights it at zero or the draw is broken",
+    );
+    println!("seed {turbo_seed} draws a Turbo");
 
     // **And firing it visibly accelerates the craft, on the disc's own
     // numbers.** This is the assertion the first version of this feature
@@ -1181,8 +1203,8 @@ fn a_weapon_pad_on_the_disc_hands_out_a_pickup_in_a_single_race() {
     // applied to a thrust already clamped to `0.5 * speed + accelcap` is a few
     // units of force. Comparing *speed after a second* against a control makes
     // the magnitude the thing under test rather than the ratio.
-    let mut control = race_at_pad(oag_race::Mode::SingleRace);
-    let mut fired = race_at_pad(oag_race::Mode::SingleRace);
+    let mut control = race_at_pad_seeded(oag_race::Mode::SingleRace, Some(turbo_seed));
+    let mut fired = race_at_pad_seeded(oag_race::Mode::SingleRace, Some(turbo_seed));
     let mut control_buttons = Input::new();
     let mut fired_buttons = Input::new();
     const CROSS: u32 = 1 << button::CROSS;

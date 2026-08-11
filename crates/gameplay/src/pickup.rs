@@ -35,18 +35,35 @@
 //!
 //! # Only what has an effect is handed out
 //!
-//! [`IMPLEMENTED`] is the pool a pad draws from, and today it is Turbo alone.
-//! Ten of the thirteen weapons need a projectile, a target or both; Shield's
-//! `time` joins to no recovered code path; and Autopilot is the AI's own
-//! controller taking over (`Ai_Construct` names the local player's input source
-//! the literal `"autopilot input"`), so it is AI work rather than pickup work.
+//! [`IMPLEMENTED`] is the pool a pad draws from: Turbo, Shield and Rocket.
+//!
+//! Of the ten still out, nine need a lock, a beam, a mechanic nothing has read
+//! or a second flight model - Missile needs the lock distances its `<Stats>`
+//! authors, Quake needs track deformation, LeachBeam needs a beam and a victim,
+//! and most of the rest need the slowdown mechanic behind
+//! `<Global slowdown_limit>`. Autopilot is the AI's own controller taking over
+//! (`Ai_Construct` names the local player's input source the literal
+//! `"autopilot input"`), so it is AI work rather than pickup work.
+//!
+//! **What Shield and Rocket do is ours**, more so than the Turbo's effect was:
+//! the Turbo at least has a recovered magnitude in `<Engine turbo>`, while
+//! Shield's `time` joins to no recovered code path at all and no
+//! projectile-flight call site has been found anywhere. The durations, speeds,
+//! radii and damage are the disc's; what they drive is this project's reading.
+//! See [`oag_physics::ShipState::shield_pickup_timer`], [`crate::projectile`]
+//! and `docs/gameplay/pickups.md`, which carries the split.
+//!
+//! **A rocket has almost nothing to hit today**, and that is a property of the
+//! race rather than of the weapon: `oag_race::Mode::has_opponents` is
+//! unconditionally `false`, so a race fields one craft. Track geometry and the
+//! parked grid the `--opponents` verification flag spawns are what a rocket can
+//! reach until the AI lands.
 //!
 //! **This is a departure and it is deliberate**: the authored table weights
-//! thirteen weapons and this draws from one of them, so the distribution a
-//! player sees is the authored one *conditioned on* the implemented set. It
-//! narrows to nothing as weapons land - adding one to [`IMPLEMENTED`] is the
-//! whole change - and it is preferred to handing out a rocket that cannot be
-//! fired.
+//! thirteen weapons and this draws from a subset, so the distribution a player
+//! sees is the authored one *conditioned on* the implemented set. It narrows to
+//! nothing as weapons land - adding one to [`IMPLEMENTED`] is the whole change -
+//! and it is preferred to handing out a mine that cannot be dropped.
 
 use oag_core::Rng;
 use oag_formats::weapons::{PickupTable, Weapon, WeaponStats};
@@ -57,7 +74,7 @@ use oag_formats::weapons::{PickupTable, Weapon, WeaponStats};
 /// subset with an effect. A slice rather than a fixed-size array precisely
 /// because it is expected to grow, which is the opposite of
 /// [`oag_race::Mode::ALL`]'s reason for being one.
-pub const IMPLEMENTED: &[Weapon] = &[Weapon::Turbo];
+pub const IMPLEMENTED: &[Weapon] = &[Weapon::Turbo, Weapon::Shield, Weapon::Rocket];
 
 /// Which column of `<Pickupodds>` a craft draws from.
 ///
@@ -219,13 +236,19 @@ mod tests {
         }
     }
 
+    /// The stand-in for "weighted, and not implemented". **It has to be a weapon
+    /// that stays out of [`IMPLEMENTED`]**, or the tests below invert silently
+    /// the day it lands - which is exactly what happened to the `Rocket` these
+    /// two used before. Quake needs track deformation and is a long way off.
+    const UNIMPLEMENTED: Weapon = Weapon::Quake;
+
     #[test]
     fn a_class_that_weights_nothing_implemented_hands_out_nothing() {
-        // A rocket is weighted and a rocket cannot be handed out, so this is the
+        // A quake is weighted and a quake cannot be handed out, so this is the
         // real shape of the restriction rather than an empty table.
-        let rockets_only = table(&[(Weapon::Rocket, 1.0, 1.0)]);
+        let quakes_only = table(&[(UNIMPLEMENTED, 1.0, 1.0)]);
         let mut rng = Rng::new(1);
-        assert_eq!(draw(&mut rng, &rockets_only, Driver::Human), None);
+        assert_eq!(draw(&mut rng, &quakes_only, Driver::Human), None);
     }
 
     #[test]
@@ -250,23 +273,39 @@ mod tests {
 
     /// **The only thing about the draw that can be checked against the
     /// original's data**, and it is a distribution rather than a sequence - see
-    /// the module docs. Two implemented weapons are simulated by weighting Turbo
-    /// against a stand-in, so the walk is exercised with more than one live
-    /// branch even while `IMPLEMENTED` has one entry.
+    /// the module docs.
+    ///
+    /// Two implemented weapons weighted 3:1 against each other, plus an
+    /// unimplemented one weighted far above both. The second half is the part
+    /// that catches a real mistake: a walk that summed the *table's* total
+    /// rather than the implemented subset's would spend most of its rolls past
+    /// the end of the live weights and fall through to the trailing `find`,
+    /// which returns the last implemented weapon every time. That reads as
+    /// "mostly Shield" rather than as an error.
     #[test]
     fn the_walk_visits_a_weight_in_proportion_to_it() {
-        // Weight Turbo at 3 and take 10,000 draws; every one must be Turbo,
-        // because it is the only implemented weapon, and none may be `None`.
-        let weighted = table(&[(Weapon::Turbo, 3.0, 3.0), (Weapon::Rocket, 97.0, 97.0)]);
+        let weighted = table(&[
+            (Weapon::Turbo, 3.0, 3.0),
+            (Weapon::Shield, 1.0, 1.0),
+            (UNIMPLEMENTED, 96.0, 96.0),
+        ]);
         let mut rng = Rng::new(99);
-        let mut turbos = 0;
+        let (mut turbos, mut shields) = (0, 0);
         for _ in 0..10_000 {
             match draw(&mut rng, &weighted, Driver::Human) {
                 Some(Weapon::Turbo) => turbos += 1,
+                Some(Weapon::Shield) => shields += 1,
                 other => panic!("drew {other:?}, which is not implemented"),
             }
         }
-        assert_eq!(turbos, 10_000);
+        assert_eq!(turbos + shields, 10_000, "every draw must land somewhere");
+        // 3:1 over 10,000 draws puts Turbo at 7,500 with a standard deviation of
+        // about 43. A 500-wide window is roughly 11 sigma - wide enough that no
+        // seed makes this flaky, narrow enough to reject an even split.
+        assert!(
+            (7_000..=8_000).contains(&turbos),
+            "3:1 odds drew {turbos} turbos and {shields} shields"
+        );
     }
 
     /// The property the determinism gate needs from this: same seed, same

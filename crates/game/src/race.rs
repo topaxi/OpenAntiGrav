@@ -213,6 +213,37 @@ pub const EXHAUST_SEED: u64 = 0xe8_a5_71_00;
 /// [`EXHAUST_SEED`] for the same determinism reason.
 pub const SPARKS_SEED: u64 = 0x5_9a_2b_00;
 
+/// A pad index for [`Race::state_hash`], with a discriminant byte.
+///
+/// Or "not on a pad" hashes the same as "on pad zero", which is precisely the
+/// edge the trigger is built on.
+fn write_pad_index(hasher: &mut oag_core::hash::StateHasher, index: Option<usize>) {
+    match index {
+        None => hasher.write_u8(0),
+        Some(index) => {
+            hasher.write_u8(1);
+            hasher.write_u32(index as u32);
+        }
+    }
+}
+
+/// Half-width of the sprite a projectile in flight is drawn as, in world units.
+///
+/// **Invented.** See [`Race::ignite_blast_flash`] for why this whole effect is a
+/// placeholder. Small enough to read as a bolt rather than a fireball at the
+/// distance a rocket is fired from.
+pub const PROJECTILE_SPRITE_HALF_SIZE: f32 = 1.5;
+
+/// Half-width a blast flash reaches at the end of its fade, in world units.
+///
+/// **Invented**, and deliberately *not* the disc's `<Rocket blastradius>`: that
+/// is a gameplay distance and drawing it would claim the picture shows the
+/// damage volume, which nothing has measured.
+pub const BLAST_FLASH_HALF_SIZE: f32 = 8.0;
+
+/// How long a blast flash is drawn for, in seconds. **Invented.**
+pub const BLAST_FLASH_SECONDS: f32 = 0.35;
+
 /// The archive entry name of a team's `.vex` model.
 ///
 /// Assembled the way the loader assembles it, with backslashes, which is what the
@@ -331,6 +362,20 @@ pub struct Options {
     /// [`pose`]: Options::pose
     /// [`camera`]: Options::camera
     pub opponents: bool,
+    /// The world generator's seed, or `None` for [`SEED`].
+    ///
+    /// **A verification aid too**, and it exists because one already-recovered
+    /// thing became untestable without it: `crates/game/tests/race_ground_truth.rs`
+    /// asserts a fired Turbo's *magnitude* off the disc's own `<Engine turbo>`,
+    /// which needs a pad crossing that actually draws a Turbo. That was
+    /// automatic while `oag_gameplay::pickup::IMPLEMENTED` held one weapon and
+    /// stopped being so the moment it held two. A seed the test can choose is
+    /// what keeps that assertion pointed at the weapon it is about, rather than
+    /// weakening it to "whatever the pad handed over".
+    ///
+    /// It changes nothing about a real race: every caller that does not set it
+    /// gets [`SEED`], which is the fixed value the field replaced.
+    pub seed: Option<u64>,
     /// Put the craft here instead of on its grid slot.
     ///
     /// **A capture aid, not a spawn.** The point is that two circuits, or a
@@ -406,6 +451,7 @@ impl Default for Options {
             collision: false,
             lod: mesh::Lod::Both,
             opponents: false,
+            seed: None,
             pose: None,
             camera: None,
         }
@@ -436,6 +482,8 @@ pub struct Setup {
     /// this crate implements; the field exists only so a verification build
     /// can override that decision.
     pub opponents: bool,
+    /// The world generator's seed, already resolved from [`Options::seed`].
+    pub seed: u64,
     /// The decoded spline graph, as the file has it.
     pub ai: AiTrack,
     /// The spline resampled for locating a ship, and for placing it.
@@ -1426,6 +1474,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             mode: options.mode,
             class: options.class,
             opponents: options.opponents,
+            seed: options.seed.unwrap_or(SEED),
             zone,
             ai,
             spline,
@@ -2241,6 +2290,15 @@ pub struct Race {
     weapons: Option<oag_formats::weapons::WeaponStats>,
     /// The speed class, which indexes the pickup odds - see [`Setup::class`].
     class: SpeedClass,
+    /// Seconds left on each blast flash, indexed the same as its point below.
+    ///
+    /// **Render-only state**, on `Race` rather than in `World` for the reason
+    /// [`Self::boost_kick`] is - and here the case is unusually clear, because
+    /// the whole effect is a placeholder. See [`Self::ignite_blast_flash`].
+    blast_flash_left: [f32; oag_gameplay::projectile::MAX_PROJECTILES],
+    /// Where each blast flash is, in world space. Read only where the timer
+    /// beside it is positive.
+    blast_flash_point: [Vec3; oag_gameplay::projectile::MAX_PROJECTILES],
     /// How far the boost's field-of-view kick has opened, `0.0` to `1.0`.
     ///
     /// Render-only state, on `Race` rather than in `World` for the same reason
@@ -2332,6 +2390,7 @@ impl Race {
         let Setup {
             mode,
             opponents,
+            seed,
             zone,
             spline,
             course,
@@ -2366,7 +2425,7 @@ impl Race {
             Vec::new()
         };
 
-        let mut world = World::new(SEED);
+        let mut world = World::new(seed);
         world.race = RaceState::new(mode);
         let ship = &mut world.ships[0];
         ship.active = true;
@@ -2497,6 +2556,8 @@ impl Race {
             class_gravity_scale,
             pad_current: None,
             pad_previous_position: None,
+            blast_flash_left: [0.0; oag_gameplay::projectile::MAX_PROJECTILES],
+            blast_flash_point: [Vec3::ZERO; oag_gameplay::projectile::MAX_PROJECTILES],
             boost_kick: 0.0,
             boost_fov_kick: crate::display::BoostFovKick::DEFAULT,
             flaps: [0.0, 0.0],
@@ -2802,6 +2863,27 @@ impl Race {
             &self.collision,
             self.dt,
         );
+
+        // **After the craft moved and before the race rules.** A rocket fired
+        // this tick was spawned from the pose the tick *started* at, in
+        // `spend_pickup`, so flying it here gives it a full tick of travel from
+        // where the muzzle was rather than half a tick from wherever the step
+        // ended up - which is the same argument that puts the Turbo's boost on
+        // the tick it was fired. Before the rules, so a craft blown up by a
+        // blast this tick is blown up before the lap counter reads it.
+        let rocket = self.weapons.as_ref().and_then(|w| w.rocket());
+        let damage_rules = oag_gameplay::damage_rules(self.world.race.mode);
+        let impacts = oag_gameplay::projectile::step(
+            &mut self.world,
+            self.dt,
+            &self.collision,
+            rocket.as_ref(),
+            damage_rules,
+        );
+        self.advance_blast_flashes();
+        for impact in impacts.iter().flatten() {
+            self.ignite_blast_flash(impact.point);
+        }
 
         self.respawn_cooldown = self.respawn_cooldown.saturating_sub(1);
         if self.reset_zone_touched(&env, before) {
@@ -3127,11 +3209,49 @@ impl Race {
                     // a reading of what the original shows.
                     self.exhaust.boost(exhaust::BOOST_SECONDS);
                 }
-                // The other twelve have no effect to run. Deliberately *not*
-                // spent: a pickup that vanishes when fired and does nothing is
-                // worse than one the player can still absorb. They cannot reach
-                // here anyway while `pickup::IMPLEMENTED` holds one weapon; the
-                // arm exists so adding to that list is a compile-visible choice
+                oag_formats::weapons::Weapon::Shield => {
+                    let Some(simple) = weapons.simple(weapon) else {
+                        // As above: nothing to raise a shield *for*, so the
+                        // pickup is kept rather than spent on nothing.
+                        return;
+                    };
+                    self.world.ships[0].physics.shield_pickup_timer = simple.time;
+                    // No visual. The disc authors a per-team
+                    // `Data\Ships\<Team>\<Team>shield.vex` for the shield hit
+                    // response (`docs/overview/roadmap.md`) and none of it is
+                    // built, so reusing the exhaust plume the way the Turbo does
+                    // would be inventing a look rather than reusing one. The
+                    // HUD icon leaving the slot is the only feedback today.
+                }
+                oag_formats::weapons::Weapon::Rocket => {
+                    let Some(stats) = weapons.rocket() else {
+                        // No authored rocket, so nothing to put in the air.
+                        return;
+                    };
+                    let ship = &self.world.ships[0];
+                    let (position, velocity) = oag_gameplay::projectile::launch(
+                        &ship.physics,
+                        &ship.handling.dimensions,
+                        &stats,
+                        to_format_class(self.class),
+                    );
+                    if !self.world.projectiles.spawn(
+                        oag_formats::weapons::Weapon::Rocket,
+                        position,
+                        velocity,
+                        0,
+                    ) {
+                        // Every slot is taken. Keep the pickup rather than spend
+                        // it on a shot that was never fired - the same rule the
+                        // two arms above follow for a missing table.
+                        return;
+                    }
+                }
+                // The other ten have no effect to run. Deliberately *not* spent:
+                // a pickup that vanishes when fired and does nothing is worse
+                // than one the player can still absorb. They cannot reach here
+                // anyway while `pickup::IMPLEMENTED` excludes them; the arm
+                // exists so adding to that list is a compile-visible choice
                 // rather than a silent no-op.
                 _ => return,
             }
@@ -3147,6 +3267,140 @@ impl Race {
             );
         }
         self.world.ships[0].pickup.weapon = None;
+    }
+
+    /// One 64-bit fingerprint of everything this race carries from tick to tick.
+    ///
+    /// [`oag_gameplay::hash::hash_world`] plus the pad state, which lives here
+    /// rather than in the world because a pad belongs to the track and not to a
+    /// craft - `docs/gameplay/pickups.md` states that and this does not overturn
+    /// it. The two are folded into one hasher rather than one hashing the
+    /// other's output, so the result is a single stream.
+    ///
+    /// # Why the pad timers have to be in it
+    ///
+    /// This is the field the known-gap section of `docs/gameplay/pickups.md`
+    /// uses as its worked example: **a pad refresh timer one tick out shifts
+    /// every subsequent draw**, because a pad that is ready a tick earlier grants
+    /// a pickup a tick earlier and moves the generator with it. Nothing about
+    /// that shows in a ship's dynamics until the pickup itself differs, by which
+    /// point the cause is thousands of ticks back.
+    ///
+    /// **Render-only state is not here** - the exhaust, the sparks, the boost
+    /// kick, the airbrake flaps and the blast flashes all have their own
+    /// generators and none of them may reach the simulation. See
+    /// [`Self::boost_kick`].
+    #[must_use]
+    pub fn state_hash(&self) -> u64 {
+        let mut hasher = oag_core::hash::StateHasher::new();
+        oag_gameplay::hash::write_world(&mut hasher, &self.world);
+
+        for left in &self.weapon_pad_refresh_left {
+            hasher.write_f32(*left);
+        }
+        // The broadphase caches, which are simulation state and not a cache in
+        // the "can be recomputed" sense: a stale entry changes which tick a pad
+        // is next measured on, and therefore which tick it triggers.
+        for distance in &self.weapon_pad_distance {
+            hasher.write_f32(*distance);
+        }
+        for distance in &self.pad_distance {
+            hasher.write_f32(*distance);
+        }
+        write_pad_index(&mut hasher, self.weapon_pad_current);
+        write_pad_index(&mut hasher, self.pad_current);
+        match self.pad_previous_position {
+            None => hasher.write_u8(0),
+            Some(position) => {
+                hasher.write_u8(1);
+                hasher.write_vec3(position);
+            }
+        }
+        hasher.write_u32(self.respawn_cooldown);
+        hasher.write_u32(self.respawns_in_a_row);
+
+        hasher.finish()
+    }
+
+    /// Arms a blast flash where a rocket went off.
+    ///
+    /// # This is a placeholder and it says so
+    ///
+    /// The original's own weapon effects are `Ship Muzzle` (`0x3e2`) and
+    /// `cannon_flash` (`0x3eb`), neither of which is built, and its shield hit
+    /// response is a per-team `Data\Ships\<Team>\<Team>shield.vex` that is not
+    /// built either - see `docs/overview/roadmap.md`. **Nothing here is
+    /// recovered.** What this draws is one additive billboard in the engine
+    /// flare's own texture, fading over [`BLAST_FLASH_SECONDS`], so that a
+    /// rocket detonating is visible at all rather than being a silent change to
+    /// a number.
+    ///
+    /// [`Race::sparks`] is deliberately **not** reused for it, and the reason is
+    /// worth recording: `Sparks::advance` re-anchors the whole system to the
+    /// hull on every tick, so a burst ignited at a rocket's impact would emit
+    /// its particles from the craft instead of from the impact. It is one
+    /// hull-mounted emitter, not a general particle system.
+    ///
+    /// First free slot, or the shortest-lived one when every slot is busy: a
+    /// flash is decoration, so overwriting the one closest to finishing is the
+    /// least visible loss. Render-only state, so this ordering cannot reach the
+    /// simulation.
+    fn ignite_blast_flash(&mut self, point: Vec3) {
+        let slot = self
+            .blast_flash_left
+            .iter()
+            .enumerate()
+            .min_by(|(_, a), (_, b)| a.total_cmp(b))
+            .map_or(0, |(index, _)| index);
+        self.blast_flash_left[slot] = BLAST_FLASH_SECONDS;
+        self.blast_flash_point[slot] = point;
+    }
+
+    /// Ages every blast flash by one tick.
+    fn advance_blast_flashes(&mut self) {
+        for left in &mut self.blast_flash_left {
+            *left = (*left - self.dt).max(0.0);
+        }
+    }
+
+    /// This frame's projectile and blast sprites, in the engine flare's shape.
+    ///
+    /// `right` and `up` are the camera's, read out of the view matrix the same
+    /// way the exhaust's are. Empty when nothing is in the air and nothing has
+    /// just gone off, which is the overwhelmingly common case.
+    #[must_use]
+    pub fn projectile_sprites(&self, right: Vec3, up: Vec3) -> Vec<oag_render::mesh::GpuVertex> {
+        let mut vertices = Vec::new();
+        for projectile in &self.world.projectiles.slots {
+            if projectile.kind.is_none() {
+                continue;
+            }
+            vertices.extend(exhaust::sprite(
+                projectile.position,
+                right,
+                up,
+                PROJECTILE_SPRITE_HALF_SIZE,
+                1.0,
+            ));
+        }
+        for (left, point) in self
+            .blast_flash_left
+            .iter()
+            .zip(&self.blast_flash_point)
+            .filter(|(left, _)| **left > 0.0)
+        {
+            // Grows as it fades, which is what an expanding blast looks like and
+            // is not a reading of anything.
+            let age = 1.0 - left / BLAST_FLASH_SECONDS;
+            vertices.extend(exhaust::sprite(
+                *point,
+                right,
+                up,
+                BLAST_FLASH_HALF_SIZE * (0.4 + age),
+                1.0 - age,
+            ));
+        }
+        vertices
     }
 
     /// How far the ship moved since the last pad test, and the path it swept.
@@ -5181,7 +5435,7 @@ impl Scene {
         let camera = race.view();
         let right = Vec3::new(camera.x_axis.x, camera.y_axis.x, camera.z_axis.x);
         let up = Vec3::new(camera.x_axis.y, camera.y_axis.y, camera.z_axis.y);
-        let (vertices, trail) = match race.nozzle() {
+        let (mut vertices, trail) = match race.nozzle() {
             Some(nozzle) => (
                 race.exhaust().vertices(nozzle, right, up),
                 race.exhaust().trail_vertices(right, up),
@@ -5189,6 +5443,10 @@ impl Scene {
             // No locator, nothing drawn - rather than a flare at the origin.
             None => (Vec::new(), Vec::new()),
         };
+        // Rockets in flight and their blast flashes, appended to the flare's own
+        // buffer: same additive pipeline, same texture, no second pass. See
+        // `Race::ignite_blast_flash` for why the whole effect is a placeholder.
+        vertices.extend(race.projectile_sprites(right, up));
         self.exhaust.borrow_mut().upload(
             queue,
             &view_projection.to_cols_array_2d(),
@@ -6139,6 +6397,7 @@ mod tests {
             mode: Mode::TimeTrial,
             class: SpeedClass::Venom,
             opponents: false,
+            seed: SEED,
             // A time trial does not read it, and these tests never run a Zone
             // race: the numbers are the disc's and there is no disc here.
             zone: None,
@@ -6558,6 +6817,12 @@ mod tests {
     /// How long [`one_turbo_table`]'s Turbo runs for, in seconds.
     const FIXTURE_TURBO_TIME: f32 = 0.75;
 
+    /// How long [`one_shield_table`]'s Shield runs for, in seconds.
+    const FIXTURE_SHIELD_TIME: f32 = 1.25;
+
+    /// What [`one_shield_table`]'s Shield pays back when absorbed.
+    const FIXTURE_SHIELD_ABSORB: f32 = 7.0;
+
     /// A weapon table with one Turbo in it, weighted for a human.
     ///
     /// **Built by parsing a document rather than by constructing the struct**,
@@ -6616,6 +6881,19 @@ mod tests {
         pads: Vec<oag_formats::pads::PadVolume>,
         refresh: f32,
     ) -> Race {
+        race_with_weapon_table(mode, pads, refresh, one_turbo_table())
+    }
+
+    /// [`race_with_weapon_pads`] with the table chosen by the caller, so a test
+    /// about a weapon other than the Turbo does not have to reproduce the rest
+    /// of the fixture. Every existing caller wants a table weighting Turbo alone
+    /// - which is also what keeps their draws stable as `IMPLEMENTED` grows.
+    fn race_with_weapon_table(
+        mode: Mode,
+        pads: Vec<oag_formats::pads::PadVolume>,
+        refresh: f32,
+        table: oag_formats::weapons::WeaponStats,
+    ) -> Race {
         let mut handling = hulled_handling();
         // `Handling::ZERO` gives an engine that produces no thrust and a hull
         // with no energy pool, and both of those are what these tests measure a
@@ -6632,9 +6910,26 @@ mod tests {
         let mut setup = setup(handling);
         setup.mode = mode;
         setup.weapon_pads = pads;
-        setup.weapons = Some(one_turbo_table());
+        setup.weapons = Some(table);
         setup.weapon_pad_refresh = refresh;
         Race::start(setup)
+    }
+
+    /// The Turbo fixture's twin for the Shield, and the same rules apply: every
+    /// number invented per ADR-0006, and `absorb` and `time` deliberately unlike
+    /// each other and unlike the Turbo table's, so a test that confused any two
+    /// of the four fails rather than passes by coincidence.
+    fn one_shield_table() -> oag_formats::weapons::WeaponStats {
+        oag_formats::weapons::parse(
+            r#"<WeaponStats>
+                 <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
+                 <Weapon type="Shield"><Stats absorb="7" time="1.25"/></Weapon>
+                 <Pickupodds class="Venom">
+                   <Weapon type="Shield"><Stats ai="1" back="1" front="1" human="1"/></Weapon>
+                 </Pickupodds>
+               </WeaponStats>"#,
+        )
+        .expect("the fixture table must parse")
     }
 
     /// The whole grant chain: containment in `oag_formats::pads`, the entry
@@ -6837,6 +7132,239 @@ mod tests {
             whole + 1,
             "the turbo ran {ticks} tick(s) against the authored {whole} plus the \
              float residue"
+        );
+    }
+
+    /// The Shield's half of the same chain: a pad hands one out, `SQUARE` spends
+    /// it, and the timer comes from the file's own `<Shield time>` rather than
+    /// from anything invented in this crate.
+    ///
+    /// **What a running shield then does is pinned in
+    /// `oag_physics::damage`'s own tests**, not here, and the split is
+    /// deliberate: that is where the wall contact and the energy pool live, and
+    /// reproducing a scrape in this fixture would test the collision geometry
+    /// rather than the wiring. What this test owns is the wiring - that the
+    /// button reaches the right field with the disc's number in it, and that the
+    /// slot empties.
+    #[test]
+    fn a_fired_shield_arms_the_timer_for_its_authored_duration() {
+        let mut race =
+            race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_shield_table());
+        let mut buttons = Buttons::new();
+
+        race.tick(&buttons.tick(CROSS));
+        assert_eq!(
+            race.ship_pickup(),
+            Some(oag_formats::weapons::Weapon::Shield),
+            "a table weighting Shield alone must hand out a Shield"
+        );
+
+        race.tick(&buttons.tick(CROSS | SQUARE));
+        assert_eq!(race.ship_pickup(), None, "firing must spend the pickup");
+        // The authored `time`, less the one tick `crate::step` has already
+        // counted off - the countdown runs after the damage path reads it, which
+        // is what protects the tick a shield is fired on.
+        assert!(
+            (race.ship().physics.shield_pickup_timer - (FIXTURE_SHIELD_TIME - race.dt())).abs()
+                < 1e-5,
+            "expected the authored {FIXTURE_SHIELD_TIME} less one tick, got {}",
+            race.ship().physics.shield_pickup_timer
+        );
+
+        // And it expires on the file's own duration, one tick longer than the
+        // arithmetic, for the reason `oag_physics::damage::advance_shield_pickup`
+        // gives and `a_fired_turbo_multiplies_thrust_for_its_authored_duration`
+        // spells out at length.
+        let mut ticks: u32 = 1;
+        while race.ship().physics.shield_pickup_timer > 0.0 {
+            race.tick(&buttons.tick(CROSS));
+            ticks += 1;
+            assert!(ticks < 600, "the shield never expired");
+        }
+        let whole = (FIXTURE_SHIELD_TIME / race.dt()).round() as u32;
+        assert_eq!(
+            ticks,
+            whole + 1,
+            "the shield ran {ticks} against {whole} + 1"
+        );
+    }
+
+    /// Absorbing a Shield pays its own `absorb` rather than the Turbo's, which
+    /// is the one thing that could quietly cross over now that two weapons are
+    /// authored with two different pairs.
+    #[test]
+    fn absorbing_a_shield_pays_the_shields_own_absorb() {
+        let mut race =
+            race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_shield_table());
+        let mut buttons = Buttons::new();
+
+        race.tick(&buttons.tick(0));
+        assert_eq!(
+            race.ship_pickup(),
+            Some(oag_formats::weapons::Weapon::Shield)
+        );
+        // Spend the pool first, or the payment lands against a full one and the
+        // recovered clamp hides it.
+        race.world.ships[0].physics.shield = 10.0;
+        race.tick(&buttons.tick(CIRCLE));
+
+        assert_eq!(race.ship_pickup(), None, "absorbing must spend the pickup");
+        assert!(
+            (race.ship().physics.shield - (10.0 + FIXTURE_SHIELD_ABSORB)).abs() < 1e-4,
+            "expected the shield's own absorb of {FIXTURE_SHIELD_ABSORB}, pool is {}",
+            race.ship().physics.shield
+        );
+        assert_eq!(
+            race.ship().physics.shield_pickup_timer,
+            0.0,
+            "absorbing must not also raise the shield"
+        );
+    }
+
+    /// The pad half of the determinism gate, and the reason it is here rather
+    /// than in `crates/gameplay/tests/determinism.rs`: the timers live on
+    /// `Race`, and this fixture is the only one that builds a `Race` **with no
+    /// disc**, so it is the only one that can run in CI on all three OSes.
+    ///
+    /// The scenario is `docs/gameplay/pickups.md`'s own worked example of a
+    /// silent divergence: **a pad refresh timer one tick out**. Nothing about it
+    /// shows in the craft's dynamics until the pickup itself differs, thousands
+    /// of ticks later.
+    #[test]
+    fn a_pad_refresh_timer_one_tick_out_moves_the_race_hash() {
+        let mut race = race_with_weapon_pads(Mode::SingleRace, enveloping_pad(), 1.0);
+        let mut buttons = Buttons::new();
+        for _ in 0..30 {
+            race.tick(&buttons.tick(CROSS));
+        }
+        let before = race.state_hash();
+
+        // The craft has not moved and nothing it carries has changed - only how
+        // long the pad has left to cool down.
+        race.weapon_pad_refresh_left[0] -= race.dt();
+        assert_ne!(
+            before,
+            race.state_hash(),
+            "a pad timer moved by one tick was invisible to the gate, which is \
+             exactly the hole this hash exists to close"
+        );
+    }
+
+    /// The broadphase cache is simulation state too: a stale entry changes which
+    /// tick a pad is next measured on, and therefore which tick it triggers.
+    #[test]
+    fn the_pad_distance_cache_moves_the_race_hash() {
+        let mut race = race_with_weapon_pads(Mode::SingleRace, enveloping_pad(), 1.0);
+        race.tick(&InputSnapshot::default());
+        let before = race.state_hash();
+        race.weapon_pad_distance[0] += 1.0;
+        assert_ne!(before, race.state_hash());
+    }
+
+    /// Two races from one seed driven with identical input agree on the whole
+    /// hash, tick for tick - not only at the end. A run that diverged and
+    /// converged again would pass a final-state comparison.
+    #[test]
+    fn two_identical_races_agree_on_the_race_hash_every_tick() {
+        let mut a = race_with_weapon_pads(Mode::SingleRace, enveloping_pad(), 1.0);
+        let mut b = race_with_weapon_pads(Mode::SingleRace, enveloping_pad(), 1.0);
+        let (mut a_buttons, mut b_buttons) = (Buttons::new(), Buttons::new());
+
+        for tick in 0..240 {
+            // A varied script, so the run is not one long coast: fire on tick
+            // 5, absorb on 90, thrust throughout.
+            let mask = match tick {
+                5 => CROSS | SQUARE,
+                90 => CROSS | CIRCLE,
+                _ => CROSS,
+            };
+            a.tick(&a_buttons.tick(mask));
+            b.tick(&b_buttons.tick(mask));
+            assert_eq!(
+                a.state_hash(),
+                b.state_hash(),
+                "two identical races diverged on tick {tick}"
+            );
+        }
+    }
+
+    /// Firing a pickup moves the hash. Without this the two tests above would
+    /// pass over a scenario where nothing happened.
+    #[test]
+    fn the_race_hash_sees_a_pickup_being_spent() {
+        let mut race = race_with_weapon_pads(Mode::SingleRace, enveloping_pad(), 1.0);
+        let mut buttons = Buttons::new();
+        race.tick(&buttons.tick(CROSS));
+        assert!(race.ship_pickup().is_some(), "nothing to spend");
+
+        let held = race.state_hash();
+        race.tick(&buttons.tick(CROSS | SQUARE));
+        assert_ne!(held, race.state_hash());
+    }
+
+    /// The Rocket's own fixture. Invented numbers, all distinct, and the four
+    /// class speeds ascending so a class read from the wrong index is a wrong
+    /// *value* rather than a coincidence.
+    fn one_rocket_table() -> oag_formats::weapons::WeaponStats {
+        oag_formats::weapons::parse(
+            r#"<WeaponStats>
+                 <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
+                 <Weapon type="Rocket"><Stats absorb="11" blastforce="12" blastradius="13"
+                   damage="14" slowdown_time="15" venomspeed="600" flashspeed="700"
+                   rapierspeed="800" phantomspeed="900" launchSpeed="16" spread="17"/></Weapon>
+                 <Pickupodds class="Venom">
+                   <Weapon type="Rocket"><Stats ai="1" back="1" front="1" human="1"/></Weapon>
+                 </Pickupodds>
+               </WeaponStats>"#,
+        )
+        .expect("the fixture table must parse")
+    }
+
+    /// Firing a Rocket puts exactly one projectile in the air, ahead of the
+    /// craft, at the class's own speed - and spends the pickup.
+    ///
+    /// **What the rocket then does is pinned in `oag_gameplay::projectile`'s own
+    /// tests**, the same split the Shield's wiring test uses: flight, hulls and
+    /// blasts need geometry and targets, and this fixture has one craft and no
+    /// track.
+    #[test]
+    fn a_fired_rocket_puts_one_projectile_in_the_air() {
+        let mut race =
+            race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_rocket_table());
+        let mut buttons = Buttons::new();
+
+        race.tick(&buttons.tick(0));
+        assert_eq!(
+            race.ship_pickup(),
+            Some(oag_formats::weapons::Weapon::Rocket)
+        );
+        assert_eq!(race.world.projectiles.live(), 0, "nothing before firing");
+
+        let before = race.ship().physics.body.position;
+        let forward = race.ship().physics.body.forward();
+        race.tick(&buttons.tick(SQUARE));
+
+        assert_eq!(race.ship_pickup(), None, "firing must spend the pickup");
+        assert_eq!(race.world.projectiles.live(), 1, "one fire, one rocket");
+
+        let rocket = race.world.projectiles.slots[0];
+        assert_eq!(rocket.kind, Some(oag_formats::weapons::Weapon::Rocket));
+        assert_eq!(rocket.owner, 0);
+        assert!(
+            (rocket.position - before).dot(forward) > 0.0,
+            "the rocket spawned behind the craft: {:?}",
+            rocket.position
+        );
+        // Venom's authored speed plus `launchSpeed`, and it has already flown
+        // one tick's worth by the time the tick returns.
+        assert!(
+            (rocket.velocity.length() - 616.0).abs() < 1e-2,
+            "expected 600 + 16, got {}",
+            rocket.velocity.length()
+        );
+        assert!(
+            rocket.velocity.dot(forward) > 0.0,
+            "a rocket must fly forwards"
         );
     }
 

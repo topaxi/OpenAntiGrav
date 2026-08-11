@@ -35,7 +35,9 @@
 //!   instead and [`Shield::depleted`] is the signal a caller can act on. That
 //!   signal is what [Zone](../../../docs/gameplay/race-modes.md) needs for its
 //!   own missing end condition.
-//! - **Weapon damage and absorb**, which need weapons.
+//! - **`Ship_Damage`'s `weapon_kind` sub-bucket**, nine cases, unmapped - and
+//!   the absorb-spark effect its `source == 2` branch triggers. [`apply_weapon`]
+//!   is that branch's damage half and nothing else.
 //! - **The respawn cost.** `Ship_SetState`'s state-3 branch computes
 //!   `clamp(shield - 1, 0, 5)` and stores it; what consumes it is unread.
 //! - **The `SkillLevel` race option.** The pool arrives already resolved for a
@@ -199,6 +201,22 @@ pub fn advance_state(state: &mut ShipState, dt: f32) {
     }
 }
 
+/// Counts a fired Shield pickup down.
+///
+/// [`crate::engine::advance_turbo`]'s twin, and deliberately identical to it:
+/// called once a tick from [`crate::step`] **after** [`apply_contact`] has read
+/// the timer, so the tick a shield is fired on is protected rather than skipped,
+/// and floored at zero so `> 0.0` is the whole of the gate.
+///
+/// It therefore inherits the same one-tick-longer character `advance_turbo`
+/// documents and measures - a `0.75` second pickup protects for 46 ticks at
+/// 60 Hz, not 45, because the timer is read before it is decremented. Pinned by
+/// `a_fired_shield_refuses_damage_for_its_authored_duration` so that reordering
+/// the call fails a test rather than moving a number nobody is watching.
+pub fn advance_shield_pickup(state: &mut ShipState, dt: f32) {
+    state.shield_pickup_timer = (state.shield_pickup_timer - dt).max(0.0);
+}
+
 /// Fill the pool, `Ship_ResetShield` (`0x0883dd24`).
 ///
 /// The only thing on the disc that sets the pool to its maximum outright; a
@@ -209,6 +227,12 @@ pub fn reset(state: &mut ShipState, dimensions: &Dimensions) {
     state.shield = dimensions.shield;
     state.craft_state = CraftState::Racing;
     state.state_timer = 0.0;
+    // Ours, like the timer itself: taking the grid is a race-scale event and a
+    // shield left running from the previous race would protect a craft that
+    // never collected one. `turbo_timer` is deliberately *not* cleared here -
+    // that is a separate open question recorded in `HANDOVER.md`, and changing
+    // it in this pass would bury a behaviour change inside a shield.
+    state.shield_pickup_timer = 0.0;
 }
 
 /// The energy a frame's contacts cost, before the pool is touched.
@@ -240,16 +264,80 @@ pub fn apply_contact(
     wall: &WallResponse,
     rules: DamageRules,
 ) -> Shield {
+    let report = subtract(state, dimensions, contact_damage(wall.impulse_sum, rules));
+    regenerate(state, dimensions, rules, 0.0);
+    report
+}
+
+/// Apply one weapon's damage to the pool, `Ship_Damage` with `source == 2`.
+///
+/// The same function [`apply_contact`] is, differing only in where the amount
+/// comes from: a contact scales an impulse by [`CONTACT_DAMAGE_SCALE`], and a
+/// weapon passes the disc's own `<Stats damage>` through unchanged. Everything
+/// after that - the state gate, the weapons-off halving, the clamp, the two
+/// edges and the destroyed transition - is shared, which is the point of it
+/// being one [`subtract`] rather than two similar bodies.
+///
+/// **Does not regenerate.** [`apply_contact`] does, because it is called from
+/// inside [`crate::step`] and the floor has to land in the same tick as the
+/// loss; this is called from outside the step by whoever owns the projectile,
+/// and the tick's own [`regenerate`] has already run or is about to.
+///
+/// `source == 2` is what the original calls a weapon hit, at confidence 75 -
+/// it rests on the telemetry bucket layout rather than on a string, and it is
+/// the *only* part of the weapon-damage path with any evidence behind it. The
+/// `weapon_kind` sub-bucket - nine cases, unmapped - is not reproduced, and
+/// neither is the absorb-spark effect that branch triggers. See
+/// `docs/ghidra/functions/psp-pulse-usa/shield.md`.
+pub fn apply_weapon(
+    state: &mut ShipState,
+    dimensions: &Dimensions,
+    amount: f32,
+    rules: DamageRules,
+) -> Shield {
+    subtract(state, dimensions, weapon_damage(amount, rules))
+}
+
+/// The energy one weapon hit costs, before the pool is touched.
+///
+/// [`contact_damage`]'s twin: the authored amount, halved when the race has
+/// weapons off. That halving cannot be reached today - a weapons-off race arms
+/// no pads and hands out no weapon - and it is applied anyway because
+/// `Ship_Damage` applies it to *every* amount regardless of source, which is the
+/// recovered rule. Reproducing it here rather than skipping it means the day
+/// something else reaches this path, the rule is already right.
+#[must_use]
+pub fn weapon_damage(amount: f32, rules: DamageRules) -> f32 {
+    if rules.weapons {
+        amount
+    } else {
+        amount * NO_WEAPONS_DAMAGE_SCALE
+    }
+}
+
+/// `Ship_Damage`'s body: the state gate, the clamp, the two edges and the
+/// destroyed transition, given an amount that is already scaled.
+///
+/// Shared by [`apply_contact`] and [`apply_weapon`] so the two cannot drift -
+/// the gate in particular, which is what makes a shielded or already-destroyed
+/// craft immune to *both* and not just to whichever one was written first.
+fn subtract(state: &mut ShipState, dimensions: &Dimensions, lost: f32) -> Shield {
     // `Ship_Damage` refuses outright outside the racing states - a craft already
     // blowing up takes no further damage. The original's gate lists states 4, 5,
     // 6 and 2; the three this crate models collapse to "not racing".
-    if state.craft_state != CraftState::Racing {
+    //
+    // A fired Shield pickup refuses on the same edge, and that placement is the
+    // point: refusing *here* means it also suppresses `depleted` and
+    // `crossed_critical`, so a shielded craft cannot be destroyed and cannot
+    // fire the energy-critical cue. Refusing after the subtraction would give a
+    // shield that hides the number while the craft still dies. **The refusal is
+    // ours** - see [`crate::ShipState::shield_pickup_timer`].
+    if state.craft_state != CraftState::Racing || state.shield_pickup_timer > 0.0 {
         return Shield::default();
     }
 
     let max = dimensions.shield;
     let before = state.shield;
-    let lost = contact_damage(wall.impulse_sum, rules);
 
     // `Ship_SetShield` clamps above and never below; the floor is ours and
     // `ShipState::shield` says why.
@@ -263,8 +351,6 @@ pub fn apply_contact(
     }
     let crossed_critical =
         percent(before, max) > CRITICAL_PERCENT && percent(state.shield, max) <= CRITICAL_PERCENT;
-
-    regenerate(state, dimensions, rules, 0.0);
 
     Shield {
         lost,
@@ -534,6 +620,129 @@ mod tests {
         assert_eq!(s.craft_state, CraftState::Racing);
         assert_eq!(s.state_timer, 0.0);
         assert_eq!(s.shield, 300.0);
+    }
+
+    /// The whole of what a fired Shield does: refuse the hit outright, and
+    /// refuse it on the edge that also suppresses the two signals - a shielded
+    /// craft neither dies nor cries critical.
+    #[test]
+    fn a_running_shield_refuses_the_hit_and_both_its_signals() {
+        let d = dimensions(100.0);
+        // Low enough that an unshielded craft would be destroyed outright, so
+        // this cannot pass by the hit merely being small.
+        let mut s = state(1.0);
+        s.shield_pickup_timer = 0.5;
+
+        let report = apply_contact(&mut s, &d, &wall(1000.0), DamageRules::default());
+        assert_eq!(report, Shield::default(), "a shielded craft took a hit");
+        assert_eq!(s.shield, 1.0, "the pool moved");
+        assert_eq!(s.craft_state, CraftState::Racing, "a shielded craft died");
+    }
+
+    /// The timer runs one tick longer than the arithmetic, for the reason
+    /// [`advance_shield_pickup`] gives, and the tick it expires on is a tick
+    /// that takes damage again. The pair is what pins the ordering in
+    /// `crate::step`: advancing before `apply_contact` would cost the firing
+    /// tick, and reading `>= 0.0` would leak a tick at the other end.
+    #[test]
+    fn a_fired_shield_refuses_damage_for_its_authored_duration() {
+        let d = dimensions(300.0);
+        let dt = 1.0 / 60.0;
+        let mut s = state(300.0);
+        s.shield_pickup_timer = 0.75;
+
+        let mut protected = 0;
+        for _ in 0..120 {
+            let report = apply_contact(&mut s, &d, &wall(10.0), DamageRules::default());
+            if report.lost == 0.0 {
+                protected += 1;
+            }
+            advance_shield_pickup(&mut s, dt);
+        }
+        assert_eq!(
+            protected, 46,
+            "0.75 s at 60 Hz protects 46 ticks, not 45 - see advance_shield_pickup"
+        );
+        assert!(
+            s.shield < 300.0,
+            "the pool must be spendable once it expires"
+        );
+    }
+
+    /// Floored, so a long-expired shield does not drift the determinism hash by
+    /// an ever-growing negative - the same guarantee `advance_turbo` gives.
+    #[test]
+    fn an_expired_shield_stops_at_zero() {
+        let mut s = state(100.0);
+        s.shield_pickup_timer = 0.01;
+        for _ in 0..100 {
+            advance_shield_pickup(&mut s, 1.0);
+        }
+        assert_eq!(s.shield_pickup_timer, 0.0);
+    }
+
+    /// Taking the grid clears a running shield, for the reason [`reset`] gives.
+    #[test]
+    fn reset_clears_a_running_shield() {
+        let mut s = state(0.0);
+        s.shield_pickup_timer = 5.0;
+        reset(&mut s, &dimensions(300.0));
+        assert_eq!(s.shield_pickup_timer, 0.0);
+    }
+
+    /// A weapon hit spends the pool through the same body a wall does - the
+    /// clamp, the two edges and the destroyed transition - and differs only in
+    /// that the amount is the disc's number rather than a scaled impulse.
+    #[test]
+    fn a_weapon_hit_spends_the_authored_amount_and_shares_the_contact_path() {
+        let d = dimensions(100.0);
+        let mut s = state(100.0);
+
+        let report = apply_weapon(&mut s, &d, 30.0, DamageRules::default());
+        assert_eq!(report.lost, 30.0, "a weapon hit is not impulse-scaled");
+        assert_eq!(s.shield, 70.0);
+        assert!(!report.crossed_critical);
+
+        // Straight through the 20 % line, and then to zero on the next one.
+        let crossing = apply_weapon(&mut s, &d, 60.0, DamageRules::default());
+        assert!(crossing.crossed_critical);
+        let killing = apply_weapon(&mut s, &d, 60.0, DamageRules::default());
+        assert!(killing.depleted);
+        assert_eq!(s.shield, 0.0, "the pool must not go negative");
+        assert_eq!(s.craft_state, CraftState::Destroyed);
+    }
+
+    /// The gate is shared, which is the reason [`subtract`] exists: a shielded
+    /// craft has to be immune to a rocket and not only to a wall.
+    #[test]
+    fn a_running_shield_refuses_a_weapon_hit_too() {
+        let d = dimensions(100.0);
+        let mut s = state(100.0);
+        s.shield_pickup_timer = 0.5;
+        assert_eq!(
+            apply_weapon(&mut s, &d, 100.0, DamageRules::default()),
+            Shield::default()
+        );
+        assert_eq!(s.shield, 100.0);
+
+        let mut wrecked = state(100.0);
+        wrecked.craft_state = CraftState::Eliminated;
+        assert_eq!(
+            apply_weapon(&mut wrecked, &d, 100.0, DamageRules::default()),
+            Shield::default()
+        );
+    }
+
+    /// The weapons-off halving is `Ship_Damage`'s and applies to every amount,
+    /// not only to a wall's. Unreachable today and reproduced anyway.
+    #[test]
+    fn turning_weapons_off_halves_a_weapon_hit_as_well() {
+        let rules = DamageRules {
+            weapons: false,
+            ..DamageRules::default()
+        };
+        assert_eq!(weapon_damage(30.0, rules), 15.0);
+        assert_eq!(weapon_damage(30.0, DamageRules::default()), 30.0);
     }
 
     /// A ship whose `<Misc>` never loaded has a zero maximum, and the HUD divides

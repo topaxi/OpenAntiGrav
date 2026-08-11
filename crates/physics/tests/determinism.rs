@@ -168,24 +168,41 @@ use oag_physics::{CraftState, Environment, ShipState, step};
 ///   `hasher.write_f32(turbo_timer)` alone removed and every other change in
 ///   place, the six constants from 2026-08-10 reproduce bit for bit. The
 ///   trajectory is untouched; what moved is the length of the hash stream.
+/// - **Regenerated 2026-08-11 a second time, and behaviour did not change
+///   either.** `ShipState` gained `shield_pickup_timer`, the seconds left on a
+///   fired Shield pickup. No probe script fires one and none *can*, for the same
+///   reason the Turbo entry above gives, so the field holds zero on every tick
+///   of every run here.
+///
+///   This one needed the isolation check more than its predecessors did, because
+///   unlike `turbo_timer` it is **read by a branch this gate does exercise**:
+///   `crate::damage::apply_contact` now returns early while the timer runs, and
+///   the probe scripts scrape a wall. A zero timer must take the same path a
+///   craft with no such field took. Checked the same way and it is the same
+///   result: with `hasher.write_f32(shield_pickup_timer)` alone removed and
+///   every other change in place - the `apply_contact` guard, the
+///   `advance_shield_pickup` call in `crate::step`, and `damage::reset` clearing
+///   the field - the three constants from earlier the same day reproduce bit for
+///   bit. So the new branch is never taken here and what moved is the length of
+///   the hash stream.
 const REFERENCE: &[(u32, Script, u64, u64)] = &[
     (
         600,
         Script::Corridor,
-        0xa17d_89dc_a0a4_1428,
-        0x8c58_5f21_8de3_755b,
+        0x1bb8_fded_1804_caa8,
+        0x8244_ebec_90a0_bcfb,
     ),
     (
         3_600,
         Script::Corridor,
-        0x99da_e033_ada7_4b2c,
-        0x5530_888a_d239_8aaa,
+        0x395c_010f_8f11_e3ec,
+        0xf34a_d031_fc7c_40fa,
     ),
     (
         3_600,
         Script::Aerobatic,
-        0x9039_6de5_75bf_325b,
-        0x48d7_47cb_7587_ef41,
+        0x88f8_13c8_191d_598b,
+        0xbbff_c797_6921_ca81,
     ),
 ];
 
