@@ -130,6 +130,18 @@ pub struct World {
     ///
     /// [ADR-0003]: ../../../docs/architecture/adr/0003-no-ecs.md
     pub race: RaceState,
+    /// Everything a weapon has put in the air.
+    ///
+    /// **The field that grows the snapshot**, and it grows it by a constant:
+    /// [`crate::projectile::MAX_PROJECTILES`] slots of plain `Copy` data, sized
+    /// the same way `[Ship; MAX_SHIPS]` is and for the same reason. A race must
+    /// not change the size of a snapshot, so the array holds free slots rather
+    /// than shrinking - see [ADR-0003].
+    ///
+    /// Unlike [`Ship::pickup`] this **is** simulation state that moves every
+    /// tick, so it is covered by [`crate::hash::hash_world`] rather than left to
+    /// reach the determinism gate indirectly.
+    pub projectiles: crate::projectile::Projectiles,
 }
 
 impl World {
@@ -142,6 +154,7 @@ impl World {
             ships: [Ship::default(); MAX_SHIPS],
             ship_count: 0,
             race: RaceState::default(),
+            projectiles: crate::projectile::Projectiles::new(),
         }
     }
 

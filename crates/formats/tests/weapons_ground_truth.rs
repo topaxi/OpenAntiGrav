@@ -148,6 +148,53 @@ fn the_three_simple_weapons_are_authored_in_both_tables() {
     }
 }
 
+/// Claim 1b: the Rocket authors all five of the things a projectile needs, in
+/// both tables, and the four class speeds really are four different numbers.
+///
+/// The last part is the one worth having. `speed_for` reads the array
+/// positionally, and every one of the four attributes is a plain number, so a
+/// decoder that read the same attribute four times would pass any test that
+/// only checked one class. Four distinct ascending values is also the shape a
+/// per-class projectile speed *should* have, and asserting it is what would
+/// catch the file being read in the wrong order.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_rocket_authors_a_speed_for_every_class() {
+    use oag_formats::handling::SpeedClass;
+
+    let Some(tables) = tables() else { return };
+    for (name, blob) in &tables {
+        let stats = weapons::from_blob(blob).unwrap_or_else(|e| panic!("{name}: {e}"));
+        let rocket = stats
+            .rocket()
+            .unwrap_or_else(|| panic!("{name}: no Rocket authored"));
+
+        assert!(
+            rocket.blastradius > 0.0 && rocket.damage > 0.0 && rocket.blastforce > 0.0,
+            "{name}: a rocket that hits nobody or hurts nobody - {rocket:?}"
+        );
+
+        let speeds: Vec<f32> = SpeedClass::ALL
+            .iter()
+            .map(|&class| rocket.speed_for(class))
+            .collect();
+        println!("{name}: rocket speeds by class {speeds:?}");
+        assert!(
+            speeds.iter().all(|&s| s > 0.0),
+            "{name}: a rocket that does not fly - {speeds:?}"
+        );
+        // Distinct, which is what says the four attributes were read as four.
+        for (i, a) in speeds.iter().enumerate() {
+            for b in &speeds[i + 1..] {
+                assert!(
+                    (a - b).abs() > f32::EPSILON,
+                    "{name}: two classes share a speed, so the four reads may be one - {speeds:?}"
+                );
+            }
+        }
+    }
+}
+
 /// Claim 2: `absorb` is on every weapon the file authors.
 ///
 /// Stated as "every weapon the *decoder recognises* that the file authors",

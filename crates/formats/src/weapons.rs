@@ -167,6 +167,70 @@ pub struct Simple {
     pub time: f32,
 }
 
+/// The Rocket's `<Stats>`, less the two attributes nothing consumes.
+///
+/// # Why this one is decoded and the other nine projectile weapons are not
+///
+/// The module's rule is that an attribute is decoded when something reads it,
+/// and this is the first weapon with a projectile behind it: see
+/// `crates/gameplay/src/projectile.rs`. The nine still undecoded need a lock, a
+/// beam, track deformation or the slowdown mechanic, and none of those exists.
+///
+/// **Two of the Rocket's own eleven are left out for the same reason.**
+/// `slowdown_time` is the slowdown mechanic's half of the pair with
+/// [`WeaponStats::slowdown_limit`] and has no consumer, and `spread` is
+/// discussed below. Both stay named-not-decoded on
+/// `docs/formats/weapon-stats.md`.
+///
+/// # `spread`, and the count question it leaves open
+///
+/// **`spread` is on the Rocket and not on the Missile** - measured on the
+/// shipped USA disc, and the schema table on `docs/formats/weapon-stats.md`
+/// records the same asymmetry. A homing weapon has no use for a launch spread
+/// and a *volley* does, so the attribute is the only evidence in the tree about
+/// how many projectiles one Rocket fire produces, and it points at more than
+/// one.
+///
+/// **This engine fires one**, which is a choice rather than a reading: no
+/// firing call site has been found, nothing says how many, and one is the
+/// behaviour that can be tested end to end today. It is recorded in the
+/// ours-versus-recovered table on `docs/gameplay/pickups.md` with the `spread`
+/// evidence beside it, so that revisiting it starts from the evidence rather
+/// than from this decision. `oag_gameplay::projectile::MAX_PROJECTILES` is sized
+/// so a volley needs no redesign.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct RocketStats {
+    /// Energy paid back for absorbing it rather than firing it.
+    pub absorb: f32,
+    /// The impulse the blast pushes a craft with.
+    pub blastforce: f32,
+    /// How far from the impact the blast reaches.
+    pub blastradius: f32,
+    /// Energy the blast costs a craft inside that radius.
+    pub damage: f32,
+    /// Added to the class's own speed at launch.
+    pub launch_speed: f32,
+    /// `venomspeed`, `flashspeed`, `rapierspeed`, `phantomspeed`, in
+    /// [`crate::handling::SpeedClass::ALL`]'s order so the class indexes it.
+    ///
+    /// Private, because the index *is* the meaning: read it through
+    /// [`RocketStats::speed_for`], which cannot get the order wrong.
+    speeds: [f32; 4],
+}
+
+impl RocketStats {
+    /// How fast a rocket flies in one speed class.
+    ///
+    /// **A per-class projectile speed is the file's own design**, not a scaling
+    /// this engine applies: all four are authored separately, which is what a
+    /// weapon that has to stay catchable in Phantom and threatening in Venom
+    /// needs.
+    #[must_use]
+    pub fn speed_for(&self, class: crate::handling::SpeedClass) -> f32 {
+        self.speeds[class as usize]
+    }
+}
+
 /// How likely a pad is to hand out one weapon, from one `<Pickupodds>` block.
 ///
 /// Four weights, and their shape is the pickup design: the same weapon is
@@ -224,6 +288,10 @@ pub struct WeaponStats {
     ///
     /// `None` for one the file omits. Read it through [`Self::simple`].
     simple: [Option<Simple>; 3],
+    /// The Rocket's own block, or `None` for a file that omits it.
+    ///
+    /// Read it through [`Self::rocket`].
+    rocket: Option<RocketStats>,
     /// `absorb` for every weapon the file authors, in document order.
     pub absorb: Vec<(Weapon, f32)>,
     /// One entry per `<Pickupodds>` block, in document order.
@@ -245,6 +313,16 @@ impl WeaponStats {
             _ => return None,
         };
         self.simple[index]
+    }
+
+    /// The Rocket's `<Stats>`, or `None` when the file authors no Rocket.
+    ///
+    /// `None` is a real state rather than a failure, the same way
+    /// [`Self::simple`]'s is: the Race and Eliminator tables need not carry the
+    /// same set, and a caller with no rocket stats hands out no rocket.
+    #[must_use]
+    pub fn rocket(&self) -> Option<RocketStats> {
+        self.rocket
     }
 
     /// One weapon's `absorb`, or `None` when the file authors no such weapon.
@@ -349,6 +427,7 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
 
     let mut slowdown_limit = None;
     let mut simple: [Option<Simple>; 3] = [None; 3];
+    let mut rocket = None;
     let mut absorb = Vec::new();
 
     // One pass over `<Weapon>` children, so an unknown `type` is skipped and a
@@ -370,6 +449,25 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
             continue;
         };
         absorb.push((weapon_kind, number(block, "Stats", "absorb")?));
+        if weapon_kind == Weapon::Rocket {
+            rocket = Some(RocketStats {
+                absorb: number(block, "Stats", "absorb")?,
+                blastforce: number(block, "Stats", "blastforce")?,
+                blastradius: number(block, "Stats", "blastradius")?,
+                damage: number(block, "Stats", "damage")?,
+                // Camel-cased in the document while every other attribute here
+                // is lower-cased. The file's spelling, kept verbatim, because
+                // this is the string a lookup is matched against.
+                launch_speed: number(block, "Stats", "launchSpeed")?,
+                speeds: [
+                    number(block, "Stats", "venomspeed")?,
+                    number(block, "Stats", "flashspeed")?,
+                    number(block, "Stats", "rapierspeed")?,
+                    number(block, "Stats", "phantomspeed")?,
+                ],
+            });
+            continue;
+        }
         let index = match weapon_kind {
             Weapon::Turbo => 0,
             Weapon::Shield => 1,
@@ -418,6 +516,7 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
             element: "Weapon type=\"Global\"",
         })?,
         simple,
+        rocket,
         absorb,
         pickups,
     })
@@ -458,7 +557,7 @@ mod tests {
     /// would also stop testing the parser and start testing the disc.
     const FIXTURE: &str = r#"<WeaponStats>
 <Weapon type="Global"><Stats slowdown_limit="1"/></Weapon>
-<Weapon type="Rocket"><Stats absorb="2" damage="3"/></Weapon>
+<Weapon type="Rocket"><Stats absorb="2" blastforce="3" blastradius="4" damage="5" slowdown_time="6" venomspeed="100" flashspeed="200" rapierspeed="300" phantomspeed="400" launchSpeed="7" spread="8"/></Weapon>
 <Weapon type="Turbo"><Stats absorb="4" time="5"/></Weapon>
 <Weapon type="Shield"><Stats absorb="6" time="7"/></Weapon>
 <Weapon type="Autopilot"><Stats absorb="8" time="9"/></Weapon>
@@ -513,6 +612,62 @@ mod tests {
         assert_eq!(stats.absorb(Weapon::Rocket), Some(2.0));
         assert_eq!(stats.absorb(Weapon::Turbo), Some(4.0));
         assert_eq!(stats.absorb(Weapon::Mine), None, "the fixture omits it");
+    }
+
+    #[test]
+    fn the_rocket_reads_the_five_things_a_projectile_needs() {
+        let rocket = parse(FIXTURE)
+            .expect("the fixture parses")
+            .rocket()
+            .expect("the fixture authors a Rocket");
+        assert_eq!(
+            rocket,
+            RocketStats {
+                absorb: 2.0,
+                blastforce: 3.0,
+                blastradius: 4.0,
+                damage: 5.0,
+                launch_speed: 7.0,
+                speeds: [100.0, 200.0, 300.0, 400.0],
+            }
+        );
+    }
+
+    /// The four class speeds are read positionally, so a test that only checked
+    /// one of them would pass with the array in any order. Each fixture value is
+    /// distinct, and the class is the index.
+    #[test]
+    fn each_speed_class_reads_its_own_projectile_speed() {
+        use crate::handling::SpeedClass;
+        let rocket = parse(FIXTURE).expect("parses").rocket().expect("a Rocket");
+        assert_eq!(rocket.speed_for(SpeedClass::Venom), 100.0);
+        assert_eq!(rocket.speed_for(SpeedClass::Flash), 200.0);
+        assert_eq!(rocket.speed_for(SpeedClass::Rapier), 300.0);
+        assert_eq!(rocket.speed_for(SpeedClass::Phantom), 400.0);
+    }
+
+    /// A file with no Rocket is not an error, the same way one with no Turbo is
+    /// not: the two shipped tables need not carry the same set, and a caller
+    /// with no stats hands out no rocket.
+    #[test]
+    fn a_file_without_a_rocket_has_no_rocket_stats() {
+        let no_rocket = "<WeaponStats><Weapon type=\"Global\"><Stats slowdown_limit=\"1\"/></Weapon></WeaponStats>";
+        assert_eq!(parse(no_rocket).expect("parses").rocket(), None);
+    }
+
+    /// And a Rocket missing one of the five is an error rather than a zero -
+    /// a zero `blastradius` is a rocket that hits nobody, which reads as a
+    /// gameplay bug rather than as a parse failure.
+    #[test]
+    fn a_rocket_missing_an_attribute_is_an_error() {
+        let broken = FIXTURE.replace(r#" blastradius="4""#, "");
+        assert_eq!(
+            parse(&broken),
+            Err(Error::MissingAttribute {
+                element: "Stats",
+                attribute: "blastradius"
+            })
+        );
     }
 
     #[test]

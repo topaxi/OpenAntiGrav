@@ -147,6 +147,28 @@ impl Body {
         self.torque += torque;
     }
 
+    /// Applies a world-space impulse through the centre of mass, immediately.
+    ///
+    /// **Not an accumulator, and that is the whole reason it exists.**
+    /// [`crate::step`] calls [`Self::clear_accumulators`] at its top, so a force
+    /// added by a caller *outside* the step - which is where a weapon blast is
+    /// applied, because only `oag-gameplay` knows what a weapon is - would be
+    /// dropped before anything integrated it. An impulse writes the velocity
+    /// instead, so it survives.
+    ///
+    /// `dv = J / m`, with a zero or negative mass ignored rather than dividing:
+    /// a `Handling::ZERO` fixture has no mass, and an infinity in a velocity
+    /// takes the whole simulation with it.
+    ///
+    /// **Ours.** The original applies `<Rocket blastforce>` through something
+    /// unread; that it is an impulse rather than a force held over some duration
+    /// is this project's reading. See `oag_gameplay::projectile`.
+    pub fn apply_impulse(&mut self, impulse: Vec3) {
+        if self.mass > 0.0 {
+            self.linear_velocity += impulse / self.mass;
+        }
+    }
+
     /// Drops the frame's accumulated force and torque.
     pub fn clear_accumulators(&mut self) {
         self.force = Vec3::ZERO;

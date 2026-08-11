@@ -113,6 +113,22 @@ impl Rng {
         // 24 bits of mantissa, scaled by 2^-24. Exact.
         (self.next_u32() >> 8) as f32 * (1.0 / 16_777_216.0)
     }
+
+    /// The generator's whole internal state, for hashing.
+    ///
+    /// **Where the generator *is* matters as much as what it emits.** Two runs
+    /// that agree on every ship position but have drawn a different number of
+    /// values have already diverged; the next pickup will differ and nothing
+    /// before it will show why. So a world hash covers this, and that is the
+    /// only reason it is public - see `oag_gameplay::hash::hash_world`.
+    ///
+    /// Deliberately not a way to *set* the state: a caller that could would be
+    /// able to rewind or fork the stream, and the seed is the only supported
+    /// way to decide what it produces.
+    #[must_use]
+    pub fn snapshot(&self) -> [u32; 4] {
+        self.state
+    }
 }
 
 #[cfg(test)]

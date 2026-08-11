@@ -35,22 +35,29 @@
 //!
 //! # Only what has an effect is handed out
 //!
-//! [`IMPLEMENTED`] is the pool a pad draws from: Turbo and Shield.
+//! [`IMPLEMENTED`] is the pool a pad draws from: Turbo, Shield and Rocket.
 //!
-//! Of the eleven still out, ten need a projectile, a target or a mechanic
-//! nothing has read - Missile needs the lock distances its `<Stats>` authors,
-//! Quake needs track deformation, LeachBeam needs a beam and a victim, and most
-//! of the rest need the slowdown mechanic behind `<Global slowdown_limit>`.
-//! Autopilot is the AI's own controller taking over (`Ai_Construct` names the
-//! local player's input source the literal `"autopilot input"`), so it is AI
-//! work rather than pickup work.
+//! Of the ten still out, nine need a lock, a beam, a mechanic nothing has read
+//! or a second flight model - Missile needs the lock distances its `<Stats>`
+//! authors, Quake needs track deformation, LeachBeam needs a beam and a victim,
+//! and most of the rest need the slowdown mechanic behind
+//! `<Global slowdown_limit>`. Autopilot is the AI's own controller taking over
+//! (`Ai_Construct` names the local player's input source the literal
+//! `"autopilot input"`), so it is AI work rather than pickup work.
 //!
-//! **What a Shield does is ours**, more so than the Turbo's effect was: the
-//! Turbo at least has a recovered magnitude in `<Engine turbo>`, while Shield's
-//! `time` joins to no recovered code path at all. The duration is the disc's;
-//! refusing damage for it is this project's reading. See
-//! [`oag_physics::ShipState::shield_pickup_timer`] and
-//! `docs/gameplay/pickups.md`, which carries the split.
+//! **What Shield and Rocket do is ours**, more so than the Turbo's effect was:
+//! the Turbo at least has a recovered magnitude in `<Engine turbo>`, while
+//! Shield's `time` joins to no recovered code path at all and no
+//! projectile-flight call site has been found anywhere. The durations, speeds,
+//! radii and damage are the disc's; what they drive is this project's reading.
+//! See [`oag_physics::ShipState::shield_pickup_timer`], [`crate::projectile`]
+//! and `docs/gameplay/pickups.md`, which carries the split.
+//!
+//! **A rocket has almost nothing to hit today**, and that is a property of the
+//! race rather than of the weapon: `oag_race::Mode::has_opponents` is
+//! unconditionally `false`, so a race fields one craft. Track geometry and the
+//! parked grid the `--opponents` verification flag spawns are what a rocket can
+//! reach until the AI lands.
 //!
 //! **This is a departure and it is deliberate**: the authored table weights
 //! thirteen weapons and this draws from a subset, so the distribution a player
@@ -67,7 +74,7 @@ use oag_formats::weapons::{PickupTable, Weapon, WeaponStats};
 /// subset with an effect. A slice rather than a fixed-size array precisely
 /// because it is expected to grow, which is the opposite of
 /// [`oag_race::Mode::ALL`]'s reason for being one.
-pub const IMPLEMENTED: &[Weapon] = &[Weapon::Turbo, Weapon::Shield];
+pub const IMPLEMENTED: &[Weapon] = &[Weapon::Turbo, Weapon::Shield, Weapon::Rocket];
 
 /// Which column of `<Pickupodds>` a craft draws from.
 ///
