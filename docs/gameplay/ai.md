@@ -473,11 +473,18 @@ its restitution where the one-body path reads the per-body field, it has a
 separating-velocity gate the one-body path does not, and it applies **no
 friction** at all. Track contact was already right and is untouched.
 
-**The shape is ours and is the weak part.** The original tests hull against hull
-through a box-against-box narrowphase (`0x08815ccc`) that is still unread, so
-`pair::overlap` uses a sphere of half the hull's diagonal. A sphere is round and
-a craft is not: generous at the corners, mean along the flanks, which are the
-places a race actually brushes. That function is what replaces it.
+**The detection is ours, and there is nothing to recover.** `0x08815ccc`, the
+box-against-box narrowphase a pair of craft would dispatch to, turns out to be
+`jr ra; nop` - it reports nothing, ever. So craft-to-craft contact never comes out
+of Pulse's narrowphase at all, and what does feed the pair resolver two craft has
+not been found. `pair::overlap` tests an oriented box against an oriented box over
+the hull's own `<Misc width height length>`, which is what the shape kind says a
+craft is.
+
+It began as a sphere of half the hull's diagonal and that was **far too big** -
+on a 4 x 2 x 8 hull the sphere reaches 4.58 units where the flank is 2 away, so
+craft shoved each other while visibly apart. Reported from play, and the box test
+is the fix.
 
 Still not armed: the `stun_timer` and its gate exist and nothing sets them,
 because what posts the pending impulse at `entity->0x4c + 0x110` is still unread -

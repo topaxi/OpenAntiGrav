@@ -726,6 +726,36 @@ has no tangential term at all.
   and for posting the pending impulse at `entity->0x4c + 0x110`, which is this
   page's other open item, so it is worth a careful second look rather than an
   inference.
-- **Which narrowphase pair reaches it.** `0x08815ccc` (box against box) is the
-  candidate for craft-to-craft and is unread, so the hull *shape* the original
-  tests is still unknown.
+### `0x08815ccc` is a stub, so craft-to-craft contact does not come from the narrowphase
+
+**Read 2026-08-11, and it changes the picture.** `Collision_DispatchPair`
+(`0x08816eac`) sends a box proxy against a box proxy to `0x08815ccc`, and
+`0x08815ccc` is **two instructions**:
+
+```
+08815ccc  jr    ra
+08815cd0  _nop
+```
+
+It reports nothing, ever. Ghidra does not even claim it as a function - there is
+nothing there to claim. Confidence **90**: four bytes of `0x03e00008` need no
+interpretation, and `collision.md`'s dispatch reading, which the table above
+rests on, is independently at 85.
+
+Craft are box proxies. So **no pair of craft can produce a contact through
+`Collision_StepNarrowphase`**, and whatever reaches `Body_ResolveContactPair`
+with two craft in it is somewhere this project has not found. That is consistent
+with, and sharpens, the open item about the pending impulse at
+`entity->0x4c + 0x110`: the note that its writer "is somewhere in the weapon or
+rival-contact code" now has the narrowphase positively excluded rather than
+merely unexamined.
+
+**The consequence for `oag_physics::pair`**: its detection is not an
+approximation of a recovered test, because there is no recovered test to
+approximate. It uses an oriented box against an oriented box over the hull's own
+`<Misc width height length>`, and says so.
+
+### Still not determined
+
+- **What feeds `Body_ResolveContactPair` a pair of craft**, given the above.
+- **`0x0881702c`** (mesh against mesh, gated on `world+0x5464`).
