@@ -51,7 +51,7 @@
 //! disc image. What this says is that the controller is stable against a plant of
 //! the right *shape*, which is the property that was broken.
 
-use oag_ai::{Driver, Line, Tuning};
+use oag_ai::{Driver, Frame, Line, Tuning};
 use oag_core::math::{Quat, Vec3};
 use oag_physics::{
     Body, Environment, Handling, Ray, RaycastHit, Raycaster, ShipState, Surface, params,
@@ -187,8 +187,32 @@ fn oval() -> Line {
         std::f32::consts::PI,
         std::f32::consts::TAU,
     );
-    Line::new(points)
+
+    // A corridor `CORRIDOR` units either side, so a seeded driver has somewhere
+    // to be other than the line. A real track's comes off the disc, one bound
+    // per control point; this one is even, because what is under test is the
+    // driver and not the shape of a corridor.
+    //
+    // **The frame is built from the line itself and world up**, which is only
+    // right because this plane is flat. A real track rolls, and there the axis
+    // is the sample's own `lateral` - see `docs/formats/track.md`.
+    let corridor = (0..points.len())
+        .map(|index| {
+            let here = points[index];
+            let next = points[(index + 1) % points.len()];
+            let along = (next - here).normalize_or_zero();
+            Frame {
+                lateral: along.cross(Vec3::Y).normalize_or_zero(),
+                left: -CORRIDOR,
+                right: CORRIDOR,
+            }
+        })
+        .collect();
+    Line::with_corridor(points, corridor)
 }
+
+/// How much room the oval's corridor gives either side of the line.
+const CORRIDOR: f32 = 12.0;
 
 /// Signed distance from the craft to its line, across the line.
 fn cross_track(line: &Line, index: usize, position: Vec3) -> f32 {
@@ -205,6 +229,12 @@ struct Run {
     peak_error: f32,
     /// Mean distance from the line over the run.
     mean_error: f32,
+    /// Mean *signed* distance, positive to the left of the line.
+    ///
+    /// This is the one that says which part of the corridor a driver held. The
+    /// unsigned mean above cannot: two craft running the same distance off the
+    /// line on opposite sides have the same one.
+    mean_offset: f32,
     /// How far along the line it travelled, in points.
     progress: usize,
 }
@@ -214,9 +244,12 @@ fn drive_the_oval(ticks: usize) -> Run {
 }
 
 fn drive_the_oval_with(ticks: usize, tuning: Tuning) -> Run {
+    drive_the_oval_as(ticks, tuning, Driver::default())
+}
+
+fn drive_the_oval_as(ticks: usize, tuning: Tuning, mut driver: Driver) -> Run {
     let line = oval();
     let handling = handling();
-    let mut driver = Driver::default();
 
     // On the line, pointing along it, at the ride height, at rest.
     let start = line.point(0);
@@ -239,6 +272,7 @@ fn drive_the_oval_with(ticks: usize, tuning: Tuning) -> Run {
 
     let mut peak_error = 0.0f32;
     let mut total_error = 0.0f32;
+    let mut total_offset = 0.0f32;
     let mut samples = 0usize;
     let mut laps = 0usize;
     let mut last_index = 0usize;
@@ -259,6 +293,7 @@ fn drive_the_oval_with(ticks: usize, tuning: Tuning) -> Run {
         if tick > 60 {
             peak_error = peak_error.max(error.abs());
             total_error += error.abs();
+            total_offset += error;
             samples += 1;
         }
         assert!(
@@ -270,6 +305,7 @@ fn drive_the_oval_with(ticks: usize, tuning: Tuning) -> Run {
     Run {
         peak_error,
         mean_error: total_error / samples.max(1) as f32,
+        mean_offset: total_offset / samples.max(1) as f32,
         progress: laps * line.len() + last_index,
     }
 }
@@ -307,4 +343,103 @@ fn a_craft_makes_progress_round_the_oval() {
         run.progress,
         line.len()
     );
+}
+
+/// A grid's worth of seeded drivers, each driven round the same oval.
+fn drive_the_field(ticks: usize) -> Vec<Run> {
+    (1..8)
+        .map(|slot| drive_the_oval_as(ticks, Tuning::default(), Driver::for_slot(0xC0FFEE, slot)))
+        .collect()
+}
+
+/// **The reason personalities exist.** Seven drivers on one line hold seven
+/// different parts of the corridor, rather than the same centimetre of it.
+///
+/// Asserted on the *signed* mean offset, and on the spread between drivers
+/// rather than on any driver's own number: what is wrong with a field that
+/// tracks one line is that they agree, and this is the direct measurement of
+/// them not agreeing.
+#[test]
+fn a_field_of_seeded_drivers_does_not_drive_one_line() {
+    let runs = drive_the_field(1800);
+    let offsets: Vec<f32> = runs.iter().map(|run| run.mean_offset).collect();
+
+    let low = offsets.iter().copied().fold(f32::INFINITY, f32::min);
+    let high = offsets.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+    assert!(
+        high - low > 4.0,
+        "the field spread over {:.1} units of a {:.0}-unit corridor: {offsets:?}",
+        high - low,
+        CORRIDOR * 2.0
+    );
+
+    // And the spread is the field's, not two outliers with five craft still
+    // nose to tail. Mean absolute deviation rather than a nearest-neighbour
+    // check: **two drivers are allowed to pick similar lines**, the same way two
+    // human drivers are, and a test that forbade it would be pinning the
+    // distribution's luck rather than the property under test.
+    let mean = offsets.iter().sum::<f32>() / offsets.len() as f32;
+    let deviation = offsets
+        .iter()
+        .map(|offset| (offset - mean).abs())
+        .sum::<f32>()
+        / offsets.len() as f32;
+    assert!(
+        deviation > 1.5,
+        "the field deviates {deviation:.1} units from its own mean: {offsets:?}"
+    );
+}
+
+/// The spread is the corridor's to give. A driver that used more of it than
+/// [`Tuning::corridor_use`] allows would be relying on a clamp that only knows
+/// about the point it is aiming at, and on a real track the room either side of
+/// the line is the only thing between the field and the scenery.
+#[test]
+fn a_seeded_driver_stays_inside_the_corridor() {
+    // The lag between aiming and arriving, which the corridor does not bound:
+    // the controller's own tracking error, measured at 7.3 units peak on this
+    // oval by the run above. Loose for the same reason that bound is loose.
+    const TRACKING: f32 = 12.0;
+
+    for (slot, run) in drive_the_field(1800).iter().enumerate() {
+        assert!(
+            run.peak_error < CORRIDOR + TRACKING,
+            "driver {slot} got {:.1} units from the line, past a corridor of {CORRIDOR}",
+            run.peak_error
+        );
+    }
+}
+
+/// Different corner speeds are what open a gap and close it again, so the field
+/// must not arrive at the same place on the same tick either.
+#[test]
+fn a_field_of_seeded_drivers_strings_out() {
+    let progress: Vec<usize> = drive_the_field(1800)
+        .iter()
+        .map(|run| run.progress)
+        .collect();
+    let low = progress.iter().copied().min().unwrap_or(0);
+    let high = progress.iter().copied().max().unwrap_or(0);
+    assert!(
+        high > low,
+        "every driver covered exactly {high} points, so nothing separates them"
+    );
+    // And they all still got round: a spread produced by one craft stopping is
+    // not a race.
+    assert!(
+        low > oval().len(),
+        "the slowest driver covered {low} of {} points",
+        oval().len()
+    );
+}
+
+/// The seed is the whole of a driver's character, so the same seed has to give
+/// the same drive - twice in one process, and by extension in a replay.
+#[test]
+fn the_same_seed_drives_the_same_race() {
+    let one = drive_the_oval_as(600, Tuning::default(), Driver::for_slot(7, 3));
+    let two = drive_the_oval_as(600, Tuning::default(), Driver::for_slot(7, 3));
+    assert_eq!(one.progress, two.progress);
+    assert_eq!(one.mean_offset, two.mean_offset);
+    assert_eq!(one.peak_error, two.peak_error);
 }

@@ -98,7 +98,15 @@ fn the_exhaust_pipeline_builds_and_draws_on_a_real_device() {
         state.trail_ready(),
         "the ring must be full to draw a ribbon"
     );
-    let trail = state.trail_vertices(Vec3::X, Vec3::Y);
+    // One craft's ribbon is an eighth of the buffer now that all eight craft
+    // share it, so this concatenates a grid's worth of them - the point of this
+    // test is a **full** buffer on a real device, and an eighth of one would
+    // stop exercising the case a too-small budget truncates.
+    let one = state.trail_vertices(Vec3::X, Vec3::Y);
+    assert_eq!(one.len(), exhaust::TRAIL_VERTICES_PER_CRAFT);
+    let trail: Vec<_> = std::iter::repeat_n(one, exhaust::MAX_TRAILS)
+        .flatten()
+        .collect();
     assert_eq!(trail.len(), exhaust::MAX_TRAIL_VERTICES);
     pipeline.upload(&queue, &identity, &vertices, &trail);
 

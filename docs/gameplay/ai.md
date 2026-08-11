@@ -373,9 +373,11 @@ against a synthetic circle with no disc image anywhere.
 
 | Piece | What it is |
 | --- | --- |
-| `Line` | The line to drive, as world-space points, closed. Built by the caller; on a real track that is `pos - HOVER_LIFT * down + racing_line * lateral` per spline sample, so it is **the disc's own line**, and it is index-parallel to the sample table so a craft locates itself once per tick rather than twice. |
-| `Tuning` | The controller's constants. **Ours** - none of the disc's own per-class values appear in the tree, per [ADR-0006](../architecture/adr/0006-no-copyrighted-content.md). |
-| `Driver` | One `u32`: where the craft last found itself. `Copy`, and it lives on `Ship` inside the world snapshot, so a replay reproduces the drive. |
+| `Line` | The line to drive, as world-space points, closed, and the **corridor** around it. Built by the caller; on a real track the line is `pos - HOVER_LIFT * down + racing_line * lateral` per spline sample and the corridor is `ai_bound_left`/`ai_bound_right` rebased onto it, so both are **the disc's own**, and it is index-parallel to the sample table so a craft locates itself once per tick rather than twice. |
+| `Frame` | One point's worth of corridor: the lateral axis, and how far left and right of the line a craft may go. |
+| `Tuning` | The controller's constants, shared by the whole field. **Ours** - none of the disc's own per-class values appear in the tree, per [ADR-0006](../architecture/adr/0006-no-copyrighted-content.md). |
+| `Personality` | What makes one driver drive unlike the next: departures from that shared tuning, derived from a seed. See [the field is not one driver eight times](#the-field-is-not-one-driver-eight-times). |
+| `Driver` | Three `u32`s: where the craft last found itself, its seed, and how many ticks it has driven. `Copy` and `Eq`, and it lives on `Ship` inside the world snapshot, so a replay reproduces the drive. |
 
 ### The plant decides the controller's shape
 
@@ -431,6 +433,73 @@ sequence runs inside the step and has to finish. Nothing reads its `Eliminated`
 state afterwards, so it coasts, settles and is passed - the explosion, the
 respawn and the elimination bookkeeping are all unbuilt.
 
+### The field is not one driver eight times
+
+**Reported from play, 2026-08-11: the opponents followed the line so exactly
+that they drove in single file.** That is what a field sharing one controller and
+one line has to do - there is one best place to be and nothing to separate two
+craft that both compute it - and no amount of tuning fixes it, because the
+tuning is the thing they share.
+
+So each craft carries a **seed**, and `Personality::from_seed` turns it into six
+departures from the shared `Tuning`. **All of it is ours**; the original varies
+its field by scheduling thrust against the player's position, which is the part
+[this page refuses to port](#what-we-build-instead).
+
+| Axis | What it varies | Range |
+| --- | --- | --- |
+| `line_bias` | which side of the line this craft holds, and how far, as a fraction of the room on that side | 0.25-0.85 either way |
+| `wander` | how much of that room it spends drifting about the bias | 0.10-0.30 |
+| `wander_rate` | how fast the drift moves | one step per 2.5-7 s |
+| `look` | multiplier on the lookahead - how far down the road it aims | 0.85-1.15 |
+| `commitment` | multiplier on the grip it assumes through a corner | 0.93-1.05 |
+| `patience` | multiplier on how early it starts braking | 0.85-1.20 |
+
+Two of those do the visible work. **The bias** puts eight craft on eight parts of
+the track instead of one line, and **the commitment** gives them eight different
+corner speeds, which is what opens a gap and closes it again over a lap - corner
+speed goes as the square root of it, so a few per cent of grip is a couple of per
+cent of speed. The rest is texture. **The ranges are ours and were picked to
+spread the field around a controller that is known to be stable**, not tuned
+against anything: the shared `Tuning` stays the centre of the distribution, so
+what `closed_loop.rs` measured still describes the middle of the field.
+
+Four properties the implementation has, each for a reason:
+
+- **The room comes off the disc.** `ai_bound_left` and `ai_bound_right` are
+  authored per control point, so how wide the field runs is the *track's*
+  property and narrows where the artists narrowed it. The bounds are rebased
+  onto the racing line when the line is built - the disc stores all three as
+  offsets from the sample's own centre, and a driver only ever asks how far it
+  may stray from the line it is driving. `Tuning::corridor_use` is **0.6** of
+  whichever side is being leant toward, so the corridor's own edge stays a
+  backstop rather than a target.
+- **The drift moves the aim point, not the steering command.** Noise on the
+  command is noise inside a rate loop with a gain of five and nothing filtering
+  it. Noise on the point being aimed at is a driver choosing a slightly
+  different line, and the controller underneath is unchanged.
+- **The corridor is interpolated onto the same segment fraction the aim point
+  is.** A bound snapped to the nearest sample steps by ~2.5 units every time the
+  walk crosses one - the same trap the aim point itself was already interpolated
+  to avoid, one level further out.
+- **No `sin`.** The drift is integer-hashed value noise with a smoothstep
+  between whole steps (`crates/ai/src/noise.rs`). IEEE-754 does not require
+  correct rounding for transcendentals, so a sine resolves to the platform's
+  libm and the simulation stops being bit-identical across the three operating
+  systems CI runs. See [determinism](../architecture/determinism.md).
+
+**Nothing here reads a clock, the world's generator, or another craft.** The
+personality is a pure function of the seed, the drift is a pure function of the
+seed and the driver's own tick count, and the seed is a pure function of the
+race's seed and the craft's slot - so the same race fields the same eight
+characters on every replay, and drawing a personality from `World::rng` (which
+would move every later pickup roll) was deliberately not done.
+
+**And the field still has no idea another craft exists.** The spread is what
+keeps them apart, not a rule that keeps them apart: there is no avoidance, no
+overtaking line and no defending. Two personalities that happen to pick similar
+lines will run nose to tail, the same way two human drivers would.
+
 ### Pads, and what an opponent does with a pickup
 
 **Both classes of pad now cross every craft**, not only the player's. Each racer
@@ -446,13 +515,67 @@ recovered.** The original decides this in `Data\XML\WeaponAIstats.xml`, a sixth
 AI file that `AiStats_LoadAll` does not even load - so it has its own loader,
 which has not been looked for. Until that is read, this is invention, and it is
 kept small enough to be obviously provisional: **Turbo is fired at once but only
-where the driver is not braking**, and **everything else is absorbed**, which
-pays energy into the pool. So an opponent never shoots at anybody. That is a gap,
-not a decision - nothing picks a target, so a fired Rocket would go down the
-middle of the track.
+where the driver is not braking and the line stays clear for as far as the boost
+carries**, and **everything else is absorbed**, which pays energy into the pool.
+So an opponent never shoots at anybody. That is a gap, not a decision - nothing
+picks a target, so a fired Rocket would go down the middle of the track.
 
-An opponent gets the speed pad's *force* but no *plume*: there is one `Exhaust`
-and it belongs to slot 0.
+**The second half of that Turbo rule was added 2026-08-11, and the measurement is
+worth keeping.** "Not braking" is the driver's own braking horizon, and that
+horizon is built from the speed the craft is doing *now*: a craft at 126 looks
+about 160 units ahead, fires, and arrives at the next corner at 270 having never
+looked at it. On `16_Track` one craft in a field of seven did exactly that and
+left the circuit - **and it never touched a wall on the way**, so nothing in the
+damage model saw a problem. `Driver::allows_speed` is the fix: it asks the same
+cornering limit the throttle brakes against, for the *boosted* speed, over the
+distance the boost covers. `TURBO_SPEED_RATIO` (2.2, in `race.rs`) is the
+assumed speed-up, ours and a rule of thumb - erring high is the safe direction,
+because it makes a craft keep the pickup rather than spend it into a wall.
+
+**It does not close the hole**: with the gate in, one craft in 28 craft-minutes
+on `16_Track` still leaves the track after a Turbo, and because nothing respawns
+an opponent it is gone for the race. The speed target and the lookahead ceiling
+(`look_max`, 90 units - a third of a second at 270) are the next places to look.
+
+### The field burns
+
+**Every craft has its own exhaust as of 2026-08-11.** There used to be one
+`Exhaust` and it belonged to slot 0, so an opponent got the speed pad's *force*
+and nothing on screen: seven craft drove the whole circuit dark.
+
+`Race::exhaust` is now `[Exhaust; MAX_SHIPS]`, advanced per craft in
+`Race::advance_exhausts` off *that* craft's thrust and *that* craft's speed - so
+an opponent lifting for a corner dims while the leader on the straight does not.
+Each craft also lays its own ribbon from its own `engine_flare` locator, carried
+through its own pose, and arms its own boost plume: at the speed pad
+(`ExhaustFlare_OnSpeedupPad`'s site, which the original calls from inside the
+per-craft update), and on a Turbo it decides to spend.
+
+Three things are worth stating about how it is put together, because each is a
+decision rather than a detail:
+
+- **One generator per craft, not one drawn from eight times.** Slot 0 keeps
+  `EXHAUST_SEED` unshifted and an opponent takes `EXHAUST_SEED + slot`. A single
+  shared stream would make the player's flicker depend on how many opponents the
+  mode fields, so every exhaust number pinned against a single-craft capture
+  would have moved the day a grid appeared behind it. Adjacent seeds are safe
+  because `Rng::new` runs a SplitMix64 expansion before the first draw. Pinned
+  by `the_players_flicker_does_not_depend_on_the_field_behind_it` and
+  `the_field_does_not_flicker_in_lockstep`.
+- **Still render-only state.** The array sits on `Race`, not in `World`, for
+  exactly the reason one `Exhaust` did: it must not enter a snapshot a replay or
+  a determinism hash reads. Eight of them change nothing about that.
+- **The shared vertex buffers had to grow.** `oag_render::exhaust` uploads every
+  flare and every ribbon through one pipeline, and `Pipeline::upload` clamps with
+  `min` - so an undersized buffer would have dropped the last craft's ribbon with
+  nothing in the logs. `MAX_TRAILS` is the grid, `MAX_TRAIL_VERTICES` is eight
+  ribbons, and `MAX_SPRITES` now carries its own arithmetic: eight flares plus a
+  projectile and a blast flash per projectile slot, 40 of 48.
+
+The one gap left is per-team **liveries**: the whole field still wears the
+player's hull, so there is one model-space nozzle rather than eight, and every
+plume is the player's team's. When per-team models land the locator moves with
+the model.
 
 ### The field is placed
 
@@ -499,11 +622,21 @@ and the same run now places that player 8th of 8.
 
 ### What an opponent still does not get
 
-Each is separate work, and each is listed so nobody assumes otherwise: an exhaust
-trail of its own, a lap *time* of its own (the standing counts laps; only the
-player has a clock), a respawn when it falls off, anything at all happening when
-it is eliminated, a weapon aimed at anybody, and a livery that is not the
-player's. The player's *own* position is on screen now; an opponent's is not -
+Each is separate work, and each is listed so nobody assumes otherwise: a lap
+*time* of its own (the standing counts laps; only the player has a clock), a
+respawn when it falls off, anything at all happening when it is eliminated, a
+weapon aimed at anybody, and a livery that is not the player's. The exhaust left
+this list on 2026-08-11 - see [The field burns](#the-field-burns).
+
+**And it does not know the other craft are there.** A personality spreads the
+field across the corridor, which is what stopped the single file, but nothing
+avoids, overtakes or defends: a craft closing on a slower one holds its own line
+straight through it and the two bounce. That is the next piece of this work, and
+it is the one the corridor was widened for. **Nor any of the skill work
+above** - no mistake injection with a recovery behaviour, no reaction latency,
+no difficulty selection, no adaptation, no `[ai]` config block. The personality
+covers three of that vector's six axes.
+The player's *own* position is on screen now; an opponent's is not -
 `PosTag0`-`PosTag7`, the floating name tags, are runtime-anchored to a rival's
 projected screen position and nothing computes that.
 
@@ -548,9 +681,7 @@ test's meaning.
 Still not armed: the `stun_timer` and its gate exist and nothing sets them,
 because what posts the pending impulse at `entity->0x4c + 0x110` is still unread -
 the two calls at the tail of the pair resolver are the candidates and they do not
-rebase onto a function start, so they were left alone rather than guessed at. **Nor any of the skill
-work above** - no skill vector, no mistakes, no difficulty selection, no `[ai]`
-config block. Those are the second half.
+rebase onto a function start, so they were left alone rather than guessed at.
 
 ### What is verified, and where
 
@@ -563,6 +694,10 @@ config block. Those are the second half.
 | A grid of eight leaves the line, goes the right way, and is still on the track after ten seconds | `race_ground_truth::the_ai_drives_the_field_along_the_track` | **no** - needs a disc image. **Run and passing as of 2026-08-11.** |
 | Two runs of one race stay identical, drivers included | `race_ground_truth::a_driven_field_replays_identically` | **no** - needs a disc image. **Run and passing as of 2026-08-11.** |
 | The field is placed, and being further round earns a better place | `race_ground_truth::the_field_is_placed_by_how_far_round_it_is` | **no** - needs a disc image. **Run and passing as of 2026-08-11.** |
+| Seven seeded drivers hold seven different parts of the corridor, and the field strings out | `oag-ai`'s `closed_loop::a_field_of_seeded_drivers_does_not_drive_one_line` and `..._strings_out`, on the oval with an invented corridor | yes |
+| A seeded driver stays inside the corridor, and the same seed drives the same race | `oag-ai`'s `closed_loop::a_seeded_driver_stays_inside_the_corridor`, `the_same_seed_drives_the_same_race` | yes |
+| The drift is smooth, bounded, and different per seed | `noise::tests`, five of them | yes |
+| The field spreads across the **disc's own** corridor, both sides of the line | `race_ground_truth::the_field_spreads_across_the_ai_corridor` | **no** - needs a disc image. **Run and passing as of 2026-08-11**: seven craft spread **16.6 units** across a corridor with 10.5 to spare either side of the line. |
 
 `race::tests`' craft is built on `Handling::ZERO` with an empty collision world,
 so no force law runs there at all and those tests assert only that the controls
@@ -584,6 +719,15 @@ that run and on nothing earlier.
 
 Nothing anywhere asserts a lap time. There is no measurement of the original's
 opponents to compare against, and the speed law is this project's own.
+
+**The single-file report was from play too, and the numbers behind the fix were
+measured on real data rather than asserted.** Driving `16_Track` for a minute,
+four race seeds, seven opponents each: with one shared personality every craft
+peaked at **13.0-13.7 units** from the line - seven craft doing the same thing to
+within a decimetre - and with seeded personalities they peak at **11-22**, on
+both sides of the line. The same runs are where the Turbo departure above was
+found, and where the claim that it is now one craft in 28 rather than zero comes
+from.
 
 ## Where this sits
 

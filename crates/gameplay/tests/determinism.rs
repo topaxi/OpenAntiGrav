@@ -158,6 +158,18 @@ fn run(ticks: u32) -> (u64, u64) {
 ///   its default and what moved is the field entering the stream, not any value
 ///   in it.
 ///
+/// - **Moved a third time 2026-08-11**, when `Driver::seed` and `Driver::phase`
+///   joined the hash. The seed decides an opponent's whole character - which
+///   part of the AI corridor it holds, how hard it commits to a corner - and the
+///   phase is the tick count its drift is a function of, so both decide what it
+///   steers next; see `oag_ai::Personality`. **Isolated the same way**: with
+///   those two `write_u32`s removed and nothing else changed, the previous
+///   constants - `0x187f_03ac_8cc2_f9fe` / `0xaa73_ebe5_d207_ccd0` at 60 ticks
+///   and `0x8b79_23a3_6397_3ab7` / `0x7bb3_4940_5709_0a5d` at 600 - reproduce
+///   bit for bit. The scenario here still has no AI in it, so both fields are
+///   `0` throughout and what moved is two more words entering the stream, not
+///   any value in it.
+///
 /// **Never edit these to make the test pass**, the same rule
 /// `crates/physics/tests/determinism.rs` states at length: a movement here is a
 /// change to what a race *does*, and the change is the thing to find. When a
@@ -165,8 +177,8 @@ fn run(ticks: u32) -> (u64, u64) {
 /// beneath this comment and isolate the cause first, by removing the new field's
 /// own write and checking that the previous constants reproduce bit for bit.
 const REFERENCE: &[(u32, u64, u64)] = &[
-    (60, 0x187f_03ac_8cc2_f9fe, 0xaa73_ebe5_d207_ccd0),
-    (600, 0x8b79_23a3_6397_3ab7, 0x7bb3_4940_5709_0a5d),
+    (60, 0x2e8d_8a4d_ab71_199e, 0x65bc_a8c9_0bc9_07f0),
+    (600, 0xf019_f135_fae6_d657, 0x177a_c6df_4c46_417d),
 ];
 
 #[test]

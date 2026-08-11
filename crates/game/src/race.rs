@@ -201,13 +201,42 @@ const FOV_GUARD_DEG: (f32, f32) = (1.0, 179.0);
 /// whenever something does. See `crates/core/src/rng.rs`.
 pub const SEED: u64 = 1;
 
-/// Seed for the exhaust's flicker, kept distinct from [`SEED`].
+/// Seed for the player's exhaust flicker, kept distinct from [`SEED`].
 ///
 /// The exhaust draws two numbers per tick and the simulation must not see them:
 /// sharing a generator would let the picture change the physics, which is what
 /// `docs/architecture/determinism.md` forbids. A separate seed also means the two
 /// streams cannot be mistaken for each other when reading a capture.
+///
+/// **Slot 0 keeps exactly this value**, unshifted, so every capture and every
+/// pinned exhaust number taken before the field had flares of its own still
+/// reproduces - see [`exhaust_seed`].
 pub const EXHAUST_SEED: u64 = 0xe8_a5_71_00;
+
+/// The exhaust's per-frame budgets have to cover the whole grid.
+///
+/// `oag_render::exhaust` sizes its two shared vertex buffers for
+/// `exhaust::MAX_TRAILS` craft and cannot import [`MAX_SHIPS`] itself - rule 1 of
+/// `docs/architecture/workspace-layout.md` runs the other way, but a render crate
+/// reaching into the simulation for a constant is the kind of dependency that
+/// only ever grows. This is the one place both numbers are visible, so this is
+/// where they are compared.
+///
+/// A **compile-time** assertion, because the failure is the silent kind:
+/// `exhaust::Pipeline::upload` clamps with `min`, so an undersized buffer drops
+/// the last craft's ribbon with nothing in the logs.
+const _: () = assert!(oag_render::exhaust::MAX_TRAILS >= MAX_SHIPS);
+
+/// The exhaust flicker seed for one craft.
+///
+/// Slot 0 is [`EXHAUST_SEED`] itself and an opponent is that plus its slot, so
+/// eight craft side by side on the grid do not flicker in lockstep. Adjacent
+/// seeds are safe to use this way because `Rng::new` runs a SplitMix64 expansion
+/// over the seed before the first draw, which is what decorrelates them; a raw
+/// LCG would need a stride instead.
+fn exhaust_seed(slot: usize) -> u64 {
+    EXHAUST_SEED + slot as u64
+}
 
 /// Seed for spark spawn parameters, kept distinct from [`SEED`] and
 /// [`EXHAUST_SEED`] for the same determinism reason.
@@ -243,6 +272,18 @@ pub const BLAST_FLASH_HALF_SIZE: f32 = 8.0;
 
 /// How long a blast flash is drawn for, in seconds. **Invented.**
 pub const BLAST_FLASH_SECONDS: f32 = 0.35;
+
+/// How much faster a craft assumes a Turbo will make it, when deciding whether
+/// it can afford to fire one.
+///
+/// **Ours, and a rule of thumb rather than a measurement.** Nothing derives the
+/// speed a boost settles at - it depends on the class, the craft's own thrust
+/// and where the boost is spent - and the number only has to be roughly right,
+/// because it is used to ask whether the *corner* ahead is a corner. Observed
+/// on `16_Track`: 126 into a Turbo comes out at about 270. Erring high is the
+/// safe direction, since it makes a craft keep the pickup rather than spend it
+/// into a wall. See [`Race::spend_opponent_pickup`].
+const TURBO_SPEED_RATIO: f32 = 2.2;
 
 /// The archive entry name of a team's `.vex` model.
 ///
@@ -1939,29 +1980,54 @@ fn advance_standings(world: &mut World, course: &Course) {
     world.race.lap = world.ships[0].standing.lap;
 }
 
-/// The authored racing line, one point per spline sample.
+/// The authored racing line and the corridor around it, one entry per spline
+/// sample.
 ///
-/// Three things the disc carries and this reads: the sample position, the
-/// `HOVER_LIFT` the loader applies to it, and `racing_line` - the lateral offset
-/// the artists authored, in the sample's own `lateral` axis. The corridor around
-/// it (`ai_bound_left`, `ai_bound_right`) is *not* used yet; the basic driver
-/// tracks the line itself and the bounds are what a skill vector's line noise
-/// would spend. See `docs/formats/track.md` and `docs/gameplay/ai.md`.
+/// Five things the disc carries and this reads: the sample position, the
+/// `HOVER_LIFT` the loader applies to it, `racing_line` - the lateral offset the
+/// artists authored, in the sample's own `lateral` axis - and the two bounds
+/// `ai_bound_left` and `ai_bound_right` that fence the AI corridor in the same
+/// axis. See `docs/formats/track.md`.
+///
+/// **The bounds are rebased onto the line.** The disc stores all three as
+/// offsets from the sample's own centre; a driver only ever asks how far it may
+/// stray from the line it is driving, so what it gets is the difference. Left
+/// comes out at most zero and right at least zero, which the shipped data
+/// guarantees - the loader clamps the bounds to straddle the racing line by at
+/// least 0.1 and all 34,261 control points already satisfy it.
+///
+/// The corridor is what an opponent's [`oag_ai::Personality`] spends on not
+/// driving the ideal line, so how far the field spreads is the track's own
+/// property and narrows where the artists narrowed it. See
+/// `docs/gameplay/ai.md`.
 ///
 /// Index-parallel to the sample table on purpose - see [`Race::racing_line`].
 #[must_use]
 fn racing_line(spline: &Spline) -> oag_ai::Line {
-    oag_ai::Line::new(
-        (0..spline.len())
-            .filter_map(|index| spline.sample(index))
-            .map(|sample| {
-                let down = Vec3::from_array(sample.down);
-                let lateral = Vec3::from_array(sample.lateral);
-                Vec3::from_array(sample.pos) - oag_formats::track::HOVER_LIFT * down
-                    + sample.racing_line * lateral
-            })
-            .collect(),
-    )
+    let samples: Vec<_> = (0..spline.len())
+        .filter_map(|index| spline.sample(index))
+        .collect();
+    let points = samples
+        .iter()
+        .map(|sample| {
+            let down = Vec3::from_array(sample.down);
+            let lateral = Vec3::from_array(sample.lateral);
+            Vec3::from_array(sample.pos) - oag_formats::track::HOVER_LIFT * down
+                + sample.racing_line * lateral
+        })
+        .collect();
+    let corridor = samples
+        .iter()
+        .map(|sample| oag_ai::Frame {
+            // Already unit length: checked on all 34,261 control points, and
+            // the B-spline blend of four unit vectors is not, which is why
+            // this renormalises rather than trusting the sample.
+            lateral: Vec3::from_array(sample.lateral).normalize_or_zero(),
+            left: (sample.ai_bound_left - sample.racing_line).min(0.0),
+            right: (sample.ai_bound_right - sample.racing_line).max(0.0),
+        })
+        .collect();
+    oag_ai::Line::with_corridor(points, corridor)
 }
 
 /// The spline resampled into a flat table, for locating a ship on the track.
@@ -2219,22 +2285,39 @@ pub struct Race {
     /// How many times the ship has been respawned this race, for tests and for
     /// the load report.
     respawns: u32,
-    /// The exhaust's animation state, advanced on the simulation tick.
+    /// Each craft's exhaust animation state, advanced on the simulation tick.
+    ///
+    /// **One per racer, slot 0 the player's**, because the original runs
+    /// `Exhaust_Update` per craft: a flare, a ribbon and a boost plume belong to
+    /// the craft that is burning, not to the race. Indexed by ship slot, so
+    /// `exhaust[n]` and `world.ships[n]` are the same craft; entries past
+    /// `world.ship_count` are simply never advanced.
     ///
     /// Here rather than in `World` for the same reason [`Chase`] is: it is
     /// render-only state, so it must not enter a snapshot a replay or a
     /// determinism hash reads. `physics/src/probe.rs` destructures `ShipState`
     /// exhaustively on purpose, and adding a visual field there would move the
     /// pinned hashes for no reason.
-    exhaust: Exhaust,
-    /// The flicker's generator, deliberately **not** `world.rng`.
+    exhaust: [Exhaust; MAX_SHIPS],
+    /// The flicker's generators, deliberately **not** `world.rng`.
     ///
     /// The exhaust draws two random numbers per tick. Taking them from the
     /// simulation's generator would make the picture change what the simulation
     /// does next - the determinism rules exist to prevent exactly that. Seeded, so
     /// a capture at tick *n* is still reproducible.
-    exhaust_rng: Rng,
+    ///
+    /// **One stream per craft** rather than one shared stream drawn from eight
+    /// times a tick, for two reasons: a shared stream makes slot 0's flicker
+    /// depend on how many opponents the mode fields, which would break every
+    /// capture taken against a single-craft race, and it couples eight flares
+    /// that should be independent. See [`exhaust_seed`].
+    exhaust_rng: [Rng; MAX_SHIPS],
     /// The `engine_flare` locator in model space, when the ship model has one.
+    ///
+    /// One value for the whole field, because every craft wears the player's hull
+    /// today - see `Scene::new`. It becomes one per craft when per-team models
+    /// land, at which point the locator moves with the model rather than with the
+    /// race.
     nozzle: Option<Vec3>,
     /// Collision sparks' particle pool, advanced on the simulation tick.
     ///
@@ -2485,20 +2568,16 @@ impl Race {
         // `Start Position` node is. So the seven opponents are ahead of the
         // player, which is what a Pulse grid looks like.
         //
-        // **They do not move.** Nothing drives them - there is no AI - so they
-        // are placed and stepped by nothing, which is a deliberate stopping
-        // point rather than an oversight: an opponent stepped with the player's
-        // `Environment` would read the player's track sample and its own pose
-        // would drift off the strip it is parked on. See
-        // `docs/overview/roadmap.md`'s AI item.
+        // Each one gets a driver here and its own `Environment`, standing and
+        // exhaust as the race runs - see [`Self::step_opponents`],
+        // [`Self::update_standings`] and [`Self::advance_exhausts`].
         //
         // **Gated on the mode first of all.** `mode.has_opponents()` is `false`
-        // for every mode this crate implements - measured live, confirmed on
-        // the running original, AI DIFFICULTY greyed to N/A the same way
-        // WEAPONS is - so a time trial, speed lap or Zone race spawns the
-        // player alone, the way the original does. `opponents` is the
-        // verification override [`Setup::opponents`] documents; nothing that
-        // reaches this from the menu ever sets it.
+        // for a time trial, a speed lap and a Zone race - measured live,
+        // confirmed on the running original, AI DIFFICULTY greyed to N/A the
+        // same way WEAPONS is - so those three spawn the player alone, the way
+        // the original does, and a single race fields the grid. `opponents` is
+        // the verification override [`Setup::opponents`] documents.
         //
         // Skipped entirely when the caller overrode the pose: an override exists
         // to put *one* craft somewhere specific, and surrounding it with a grid
@@ -2522,6 +2601,12 @@ impl Race {
                 opponent.physics.body.mass = handling.physical.mass;
                 opponent.physics.body.inertia = box_inertia();
                 oag_physics::damage::reset(&mut opponent.physics, &handling.dimensions);
+                // **Eight drivers, not one driver eight times.** The seed is
+                // the race's own and the craft's slot, so the same race fields
+                // the same eight characters on every replay and the next race
+                // fields eight others. Nothing here reads a clock or the
+                // world's generator - see `oag_ai::Driver::for_slot`.
+                opponent.driver = oag_ai::Driver::for_slot(seed, index as u32 + 1);
                 opponent.place_at(*pose);
             }
             world.ship_count = GRID_SLOTS;
@@ -2561,8 +2646,12 @@ impl Race {
             respawns: 0,
             // Cold, then snapped on the first tick. A race starts from a standing
             // start with no thrust, so there is nothing to snap *to* here.
-            exhaust: Exhaust::new(),
-            exhaust_rng: Rng::new(EXHAUST_SEED),
+            //
+            // A cold `Exhaust` has an empty trail ring and `Exhaust::trail_ready`
+            // gates the ribbon on a *full* one, so no craft draws a ribbon across
+            // the track from the origin to its grid slot on the opening ticks.
+            exhaust: [Exhaust::new(); MAX_SHIPS],
+            exhaust_rng: std::array::from_fn(|slot| Rng::new(exhaust_seed(slot))),
             nozzle,
             collision_fx,
             sparks: Sparks::new(),
@@ -2755,10 +2844,11 @@ impl Race {
     /// player's piece of track.
     ///
     /// **What an opponent does not get yet**, each deliberate and each a
-    /// separate piece of work: speed pads and weapon pads (the sweep is built
-    /// around the player's own position), a lap counter of its own
-    /// ([`oag_race::RaceState`] is single-ship), a respawn when it falls off, and
-    /// any weapon at all.
+    /// separate piece of work: a lap *time* of its own ([`oag_race::RaceState`]
+    /// is the player's clock and only [`oag_race::Standing`] is per craft), a
+    /// respawn when it falls off, a target for anything it fires, and a livery of
+    /// its own. It does get pads of both classes, a standing, an `Exhaust` and a
+    /// pickup it can spend - see [`Self::spend_opponent_pickup`].
     fn step_opponents(&mut self) {
         let damage_rules = oag_gameplay::damage_rules(self.world.race.mode);
         for slot in 1..self.world.ship_count as usize {
@@ -2848,6 +2938,40 @@ impl Race {
         }
     }
 
+    /// Advances every active craft's exhaust and lays down its trail sample.
+    ///
+    /// The original updates the exhaust inside the per-craft update, so all eight
+    /// flares ramp, flicker and trail on their own state; this is that fan-out.
+    /// A craft's ramp follows *its* thrust and *its* speed, so an opponent
+    /// coasting into a corner dims while the leader on the straight does not.
+    ///
+    /// **Slot order, and slot 0 first.** Each craft draws from its own generator
+    /// ([`exhaust_seed`]), so the order cannot change what any of them sees - but
+    /// the player's stream is the one captures are pinned against, and keeping it
+    /// first keeps the tick's shape the same as when the player was the only
+    /// craft with a flare at all.
+    ///
+    /// The trail sample is one per tick, which is what `Trail_Update` does per
+    /// frame - it takes no `dt` at all. The direction is the nozzle's own
+    /// backwards axis, so a segment keeps the orientation the craft had when it
+    /// was laid down rather than swinging with the current pose as the ship
+    /// turns.
+    fn advance_exhausts(&mut self) {
+        for slot in 0..self.world.ship_count as usize {
+            if !self.world.ships[slot].active {
+                continue;
+            }
+            let ship = &self.world.ships[slot].physics;
+            let thrust = ship.thrust;
+            let speed = ship.body.linear_velocity.length();
+            let back = -ship.body.forward();
+            self.exhaust[slot].advance(self.dt, thrust, speed, &mut self.exhaust_rng[slot]);
+            if let Some(nozzle) = self.nozzle_of(slot) {
+                self.exhaust[slot].push_trail(nozzle, back);
+            }
+        }
+    }
+
     /// Every craft's race position, `1`-based, in slot order.
     ///
     /// Inactive slots are placed too - they are at the start line and last,
@@ -2933,6 +3057,8 @@ impl Race {
     ///
     /// - **Turbo is fired at once**, but only on a stretch the driver is not
     ///   braking for. A turbo spent into a corner is a turbo spent into a wall.
+    ///   It arms that craft's own boost plume, the same reuse the player's Turbo
+    ///   makes of the speed pad's visual.
     /// - **Everything else is absorbed**, which pays energy into the pool and is
     ///   a real effect rather than a discard. It is also what a cautious human
     ///   does with a weapon they cannot aim, and an opponent cannot aim: nothing
@@ -2963,7 +3089,34 @@ impl Race {
             if !on_a_straight {
                 return;
             }
+            // **And clear over the distance the boost itself covers**, which is
+            // not the distance the driver was looking at. Its braking horizon is
+            // built from the speed it is doing now, so a craft that fires a
+            // Turbo at 126 arrives at the next corner doing 270 having checked
+            // 160 units ahead. Measured on `16_Track`: one craft in a field of
+            // seven did exactly that and left the circuit, and it never touched
+            // a wall on the way - see `docs/gameplay/ai.md`.
+            let ship = &self.world.ships[slot];
+            let speed = ship
+                .physics
+                .body
+                .linear_velocity
+                .dot(ship.physics.body.forward())
+                .max(0.0);
+            let boosted = speed * TURBO_SPEED_RATIO;
+            if !ship.driver.allows_speed(
+                &self.racing_line,
+                &self.ai_tuning,
+                boosted,
+                boosted * simple.time,
+            ) {
+                return;
+            }
             self.world.ships[slot].physics.turbo_timer = simple.time;
+            // And its own plume, the same reuse the player's Turbo makes of it -
+            // an opponent's boost has to be visible from behind, or the field
+            // gains speed with nothing on screen saying why.
+            self.exhaust[slot].boost(exhaust::BOOST_SECONDS);
         } else {
             let Some(amount) = weapons.absorb(weapon) else {
                 return;
@@ -3157,11 +3310,7 @@ impl Race {
         // what makes the headless `capture` path - which calls only `tick` -
         // produce the same flare at the same tick count as the window does, and
         // it is the same reason the chase camera is advanced from here.
-        let ship = &self.world.ships[0].physics;
-        let thrust = ship.thrust;
-        let speed = ship.body.linear_velocity.length();
-        self.exhaust
-            .advance(self.dt, thrust, speed, &mut self.exhaust_rng);
+        self.advance_exhausts();
 
         // Open while the boost's own timer runs, close once it has expired, both
         // as an exponential approach so neither edge is a step. Driven from
@@ -3182,15 +3331,6 @@ impl Race {
             if !boosting && self.boost_kick < 1.0e-3 {
                 self.boost_kick = 0.0;
             }
-        }
-
-        // One sample per tick, which is what `Trail_Update` does per frame - it
-        // takes no `dt` at all. The direction is the nozzle's own backwards axis so
-        // a segment keeps the orientation the craft had when it was laid down,
-        // rather than swinging with the current pose as the ship turns.
-        if let Some(nozzle) = self.nozzle() {
-            let back = -self.ship().physics.body.forward();
-            self.exhaust.push_trail(nozzle, back);
         }
 
         // The flaps, on the fixed tick beside the camera and the exhaust, and
@@ -3407,7 +3547,7 @@ impl Race {
                     // boost. Not recovered for this path - no capture of a fired
                     // Turbo exists - so it is the plume being reused rather than
                     // a reading of what the original shows.
-                    self.exhaust.boost(exhaust::BOOST_SECONDS);
+                    self.exhaust[0].boost(exhaust::BOOST_SECONDS);
                 }
                 oag_formats::weapons::Weapon::Shield => {
                     let Some(simple) = weapons.simple(weapon) else {
@@ -3728,13 +3868,12 @@ impl Race {
                 // `oag_render::exhaust::BOOST_SECONDS`, which is where the reason
                 // is written down.
                 //
-                // **The player's plume only**, because there is one `Exhaust` and
-                // it belongs to slot 0. An opponent gets the boost *force* and no
-                // plume; drawing seven more is render work that has not landed.
-                // See `docs/gameplay/ai.md`.
-                if slot == 0 {
-                    self.exhaust.boost(exhaust::BOOST_SECONDS);
-                }
+                // **The craft that crossed the pad, whichever it is.** Every
+                // racer carries its own `Exhaust`, so an opponent's boost shows
+                // as an opponent's plume rather than as the player's - the
+                // original arms `ExhaustFlare_OnSpeedupPad` from inside the
+                // per-craft update, with that craft's own flare.
+                self.exhaust[slot].boost(exhaust::BOOST_SECONDS);
             }
         }
 
@@ -3905,7 +4044,11 @@ impl Race {
         // Otherwise the ribbon spans the teleport: ten samples of history from
         // wherever the craft fell off, stretched across the track to where it was
         // put back. The camera is snapped for the same reason.
-        self.exhaust.clear_trail();
+        //
+        // Slot 0's, because this whole function is the player's - nothing respawns
+        // an opponent yet. When something does, it has to clear that craft's
+        // ribbon too, or the teleport draws as a streak across the track.
+        self.exhaust[0].clear_trail();
 
         if self.respawns_in_a_row >= RESPAWN_GIVE_UP {
             self.respawn_disabled = true;
@@ -4025,10 +4168,30 @@ impl Race {
         }
     }
 
-    /// The exhaust's current animation state.
+    /// The **player's** exhaust animation state.
+    ///
+    /// Slot 0, which is what every capture and every pinned exhaust number is
+    /// taken against. [`Self::exhaust_of`] is the one to reach for when drawing
+    /// the field.
     #[must_use]
     pub fn exhaust(&self) -> &Exhaust {
-        &self.exhaust
+        &self.exhaust[0]
+    }
+
+    /// One craft's exhaust animation state.
+    ///
+    /// Indexed by ship slot, the player at 0. A slot past [`Self::ship_count`]
+    /// holds a cold `Exhaust` that nothing advances - drawn, it would be an
+    /// invisible flare at whatever pose an unused ship slot carries, so a caller
+    /// iterating the field bounds itself by `ship_count` the way the hull draw
+    /// does.
+    ///
+    /// # Panics
+    ///
+    /// If `slot` is not a ship slot.
+    #[must_use]
+    pub fn exhaust_of(&self, slot: usize) -> &Exhaust {
+        &self.exhaust[slot]
     }
 
     /// Held throttle on the original's `0..=100` scale, for
@@ -4111,20 +4274,21 @@ impl Race {
         // something the original's own variable timestep does anyway.
         let target = entry_intensity.unwrap_or(1.0).clamp(0.0, 1.0);
         let ticks = target / exhaust::INTENSITY_RISE / self.dt;
+        // **The player's, and only the player's.** A pose comparison is against
+        // one captured craft; posing the whole field would put seven opponents
+        // into a boost the capture says nothing about.
+        let (player, rng) = (&mut self.exhaust[0], &mut self.exhaust_rng[0]);
         for _ in 0..(ticks.floor() as u32) {
-            self.exhaust
-                .advance(self.dt, Self::FULL_THRUST, speed, &mut self.exhaust_rng);
+            player.advance(self.dt, Self::FULL_THRUST, speed, rng);
         }
         let remainder = (ticks - ticks.floor()) * self.dt;
         if remainder > 0.0 {
-            self.exhaust
-                .advance(remainder, Self::FULL_THRUST, speed, &mut self.exhaust_rng);
+            player.advance(remainder, Self::FULL_THRUST, speed, rng);
         }
-        self.exhaust.boost(exhaust::BOOST_SECONDS);
+        player.boost(exhaust::BOOST_SECONDS);
         let aged = (age / self.dt).round() as u32;
         for _ in 0..aged {
-            self.exhaust
-                .advance(self.dt, Self::FULL_THRUST, speed, &mut self.exhaust_rng);
+            player.advance(self.dt, Self::FULL_THRUST, speed, rng);
         }
 
         // **A posed frame otherwise has no ribbon at all, and that silently
@@ -4148,10 +4312,10 @@ impl Race {
         // `Race::tick`.
         if let Some(nozzle) = self.nozzle() {
             let back = -self.ship().physics.body.forward();
-            self.exhaust.clear_trail();
+            self.exhaust[0].clear_trail();
             for k in (0..exhaust::TRAIL_SAMPLES).rev() {
                 let behind = back * (speed * self.dt * k as f32);
-                self.exhaust.push_trail(nozzle + behind, back);
+                self.exhaust[0].push_trail(nozzle + behind, back);
             }
         }
     }
@@ -4162,8 +4326,17 @@ impl Race {
         &self.sparks
     }
 
-    /// The `engine_flare` locator in **world** space, or `None` when the ship
-    /// model carries no `Engine Flare` node.
+    /// The track's speed-pad trigger volumes.
+    ///
+    /// Empty on a track that authors none, which is an ordinary state rather than
+    /// a failure - see [`Setup::speedup_pads`].
+    #[must_use]
+    pub fn speedup_pads(&self) -> &[oag_formats::pads::PadVolume] {
+        &self.speedup_pads
+    }
+
+    /// The player's `engine_flare` locator in **world** space, or `None` when the
+    /// ship model carries no `Engine Flare` node.
     ///
     /// Composed through [`Race::ship_model_matrix`], which is the only correct
     /// route: the locator is authored in `.vex` model space, so it has to pick up
@@ -4172,8 +4345,22 @@ impl Race {
     /// ship's nose.
     #[must_use]
     pub fn nozzle(&self) -> Option<Vec3> {
+        self.nozzle_of(0)
+    }
+
+    /// One craft's `engine_flare` locator in **world** space.
+    ///
+    /// [`Self::nozzle`] one slot over. The *model-space* locator is the same for
+    /// every craft while the whole field wears the player's hull; what differs is
+    /// the matrix it is carried through, which is that craft's own pose.
+    ///
+    /// # Panics
+    ///
+    /// If `slot` is not a ship slot.
+    #[must_use]
+    pub fn nozzle_of(&self, slot: usize) -> Option<Vec3> {
         let local = self.nozzle?;
-        Some(self.ship_model_matrix().transform_point3(local))
+        Some(model_matrix_of(&self.world.ships[slot]).transform_point3(local))
     }
 
     /// Where the camera is and what it is aimed at, as a view matrix.
@@ -4443,7 +4630,22 @@ impl Race {
     /// to be the whole of it.
     #[must_use]
     pub fn ship_model_matrix(&self) -> Mat4 {
-        model_matrix_of(self.ship())
+        self.ship_model_matrix_of(0)
+    }
+
+    /// One craft's model matrix, by ship slot.
+    ///
+    /// [`Self::ship_model_matrices`] gives the same matrices for drawing the
+    /// field, but it *filters* inactive craft, so its indices are not slot
+    /// indices. Anything that has to line a craft's slot up with something else
+    /// held per slot - its plume, its flare - asks for the matrix by slot here.
+    ///
+    /// # Panics
+    ///
+    /// If `slot` is not a ship slot.
+    #[must_use]
+    pub fn ship_model_matrix_of(&self, slot: usize) -> Mat4 {
+        model_matrix_of(&self.world.ships[slot])
     }
 
     /// How many craft are in play, the player included.
@@ -5109,15 +5311,22 @@ pub struct Scene {
     /// `Drawable` owns its uniform buffer, and eight craft need eight matrices a
     /// frame. See `oag_render::mesh::Model`'s note on the trade.
     ships: Vec<Drawable>,
-    /// The boost plume: an ordinary `Drawable` with its blend pipeline
-    /// overridden to [`exhaust::TRAIL_BLEND`] instead of
+    /// One boost plume per craft: ordinary `Drawable`s with their blend pipeline
+    /// overridden to [`exhaust::BLEND`] instead of
     /// [`mesh_render::TRANSPARENT_BLEND`].
     ///
-    /// `None` when the source carries no `shipboost.vex` under this team's
-    /// name - see `Loaded::boost_model`. Drawn only while
-    /// [`Exhaust::plume_visible`] is true, with the ship's own model matrix,
-    /// since the original parents it to the craft rather than to the flare.
-    boost: Option<Drawable>,
+    /// **Empty** when the source carries no `shipboost.vex` under this team's
+    /// name - see `Loaded::boost_model`. Each is drawn only while its craft's
+    /// [`Exhaust::plume_visible`] is true, with that craft's own model matrix,
+    /// since the original parents the plume to the craft rather than to the
+    /// flare.
+    ///
+    /// Eight copies of the mesh for the same reason [`Self::ships`] holds eight:
+    /// a `Drawable` owns the uniform buffer its model matrix and its UV transform
+    /// are written into, and two craft boosting at once need two of each. Empty
+    /// rather than `Option<Vec<_>>` so the no-plume source and the iteration read
+    /// the same way `ships` does.
+    boost: Vec<Drawable>,
     /// The plume's authored texture-transform keyframes, sampled per frame
     /// and applied to its authored UVs - the recovered mechanism
     /// (`TEXMAPMODE` 0 plus the animated `TEXOFFSET` u-scroll; see
@@ -5431,13 +5640,17 @@ impl Scene {
         // render at the same pose, so they share one zoom and a ratio between
         // them cancels it. See `docs/rendering/projection-vs-the-original.md`,
         // `docs/ghidra/functions/psp-pulse-usa/exhaust.md` and `mesh-draw.md`.
-        let boost = boost_model
-            .filter(|model| !model.indices.is_empty())
-            .map(|model| {
-                Drawable::new(
+        //
+        // One per grid slot, cloned the way the hulls above are: every craft can
+        // be on a speed pad at once, and eight plumes need eight model matrices
+        // and eight sampled UV transforms a frame.
+        let mut boost = Vec::new();
+        if let Some(model) = boost_model.filter(|model| !model.indices.is_empty()) {
+            for _ in 0..GRID_SLOTS {
+                boost.push(Drawable::new(
                     device,
                     queue,
-                    model,
+                    model.clone(),
                     format,
                     anisotropy,
                     sample_count,
@@ -5449,9 +5662,9 @@ impl Scene {
                     // boost's brightest surface contributes nothing to the glow
                     // mask, which is the shape of the effect a player notices.
                     mesh_render::GlowMask::Written,
-                )
-            })
-            .transpose()?;
+                )?);
+            }
+        }
         // 64 is a stand-in size only, and only when the disc's own texture did not
         // decode; `load` has already reported that when it happens.
         let flare = flare.unwrap_or_else(|| FlareTexture::placeholder(64));
@@ -5616,7 +5829,7 @@ impl Scene {
         for drawable in &self.ships {
             drawable.write_anims(queue, seconds);
         }
-        // `self.boost` is deliberately left out of this list, at `Fog::off`
+        // `self.boost` is deliberately left out of both lists, at `Fog::off`
         // from `mesh_render::build`. Whether the original fogs the plume is
         // unrecovered - it is scene geometry like the ship, but additive like
         // the flare, and the flare's own post-projection draw is not answered
@@ -5637,6 +5850,10 @@ impl Scene {
             );
         }
         self.track.write(queue, view_projection, Mat4::IDENTITY);
+        // How many slots this race fills, which bounds every per-craft loop from
+        // here down: the scene always holds a full grid's worth of drawables and a
+        // time trial fields one craft.
+        let drawn = usize::from(race.ship_count());
         // Every craft in play, the player first. `zip` rather than an index so a
         // race with fewer craft than the scene has drawables writes only the
         // ones it has - the rest keep last frame's uniforms and are not drawn.
@@ -5678,14 +5895,20 @@ impl Scene {
         // mid-ramp already faded, and one that outlives the wrap re-brightens
         // as a second pulse. `Exhaust::plume_timer` carries exactly the
         // original's reset-at-reveal semantics.
-        if let Some(boost) = &self.boost
-            && race.exhaust().plume_visible()
-        {
-            let model = race.ship_model_matrix();
-            boost.write(queue, view_projection, model);
+        //
+        // **Per craft, and each on its own timer.** Eight craft can be mid-boost
+        // at once and their reveals are independent, so the sample time is that
+        // craft's `plume_timer` rather than one shared clock. Indexed by slot -
+        // not `zip`ped over `ship_model_matrices`, which filters inactive craft
+        // and so does not keep slot alignment.
+        for (slot, boost) in self.boost.iter().enumerate().take(drawn) {
+            if !race.exhaust_of(slot).plume_visible() {
+                continue;
+            }
+            boost.write(queue, view_projection, race.ship_model_matrix_of(slot));
             let (scale, offset) = match &self.boost_uv_transform {
                 Some(transform) => {
-                    let t = race.exhaust().plume_timer() * 60.0;
+                    let t = race.exhaust_of(slot).plume_timer() * 60.0;
                     (transform.scale.sample(t), transform.offset.sample(t))
                 }
                 None => ((1.0, 1.0), (0.0, 0.0)),
@@ -5710,14 +5933,30 @@ impl Scene {
         let camera = race.view();
         let right = Vec3::new(camera.x_axis.x, camera.y_axis.x, camera.z_axis.x);
         let up = Vec3::new(camera.x_axis.y, camera.y_axis.y, camera.z_axis.y);
-        let (mut vertices, trail) = match race.nozzle() {
-            Some(nozzle) => (
-                race.exhaust().vertices(nozzle, right, up),
-                race.exhaust().trail_vertices(right, up),
-            ),
+        // One flare and one ribbon per craft, the player's first, all in the two
+        // buffers `exhaust::Pipeline` owns - a flare is six vertices and a ribbon
+        // is a fixed 648, so eight of each is one upload and one draw call apiece
+        // rather than eight. The budgets are sized for exactly this: see
+        // `exhaust::MAX_SPRITES`' table and `exhaust::MAX_TRAILS`.
+        //
+        // **The player's own flare is not skipped in the cockpit view**, and that
+        // is deliberate rather than overlooked: the nozzle sits behind the eye, so
+        // it falls outside the frustum on its own. See `Race::draws_own_ship`,
+        // which skips the *hull* because a hull drawn around the camera really
+        // does put polygons across the middle of the screen.
+        let mut vertices = Vec::new();
+        let mut trail = Vec::new();
+        for slot in 0..drawn {
             // No locator, nothing drawn - rather than a flare at the origin.
-            None => (Vec::new(), Vec::new()),
-        };
+            // `break` rather than `continue` because the whole field shares one
+            // model, so a missing `Engine Flare` node is missing for every craft.
+            let Some(nozzle) = race.nozzle_of(slot) else {
+                break;
+            };
+            let exhaust = race.exhaust_of(slot);
+            vertices.extend(exhaust.vertices(nozzle, right, up));
+            trail.extend(exhaust.trail_vertices(right, up));
+        }
         // Rockets in flight and their blast flashes, appended to the flare's own
         // buffer: same additive pipeline, same texture, no second pass. See
         // `Race::ignite_blast_flash` for why the whole effect is a placeholder.
@@ -5828,19 +6067,22 @@ impl Scene {
         // polygon across the middle of the screen. See `Race::draws_own_ship`.
         // Only the *player's* hull is skipped in the cockpit view. The opponents
         // in front are exactly what a cockpit view is for.
-        let drawn = usize::from(race.ship_count());
         for (index, drawable) in self.ships.iter().take(drawn).enumerate() {
             if index == 0 && !race.draws_own_ship() {
                 continue;
             }
             stats.add(drawable.draw(&mut pass, None, None, None));
         }
-        // After the ship, so the hull's depth is already in the buffer: the
+        // After the ships, so the hulls' depth is already in the buffer: a
         // plume's own blend pipeline writes no depth, the same reasoning as
-        // the flare below.
-        if let Some(boost) = &self.boost
-            && race.exhaust().plume_visible()
-        {
+        // the flares below. One draw per boosting craft, gated on the same
+        // craft's plume the write above was gated on - a plume drawn from a
+        // uniform buffer that was not written this frame would be last frame's
+        // pose.
+        for (slot, boost) in self.boost.iter().enumerate().take(drawn) {
+            if !race.exhaust_of(slot).plume_visible() {
+                continue;
+            }
             stats.add(boost.draw(&mut pass, None, None, None));
         }
         if let Some(collision) = &self.collision {
@@ -6893,6 +7135,177 @@ mod tests {
         }
     }
 
+    /// A speed pad arms the plume of the craft that crossed it, all eight of them.
+    ///
+    /// Until 2026-08-11 there was one `Exhaust` and it was slot 0's, so an
+    /// opponent got the pad's *force* and nothing on screen. This is the visual
+    /// half of `a_speed_pad_boosts_every_craft_and_not_only_the_player`, and it is
+    /// a separate assertion on purpose: the force reaching a craft and its flare
+    /// being armed are two writes at the same site, and the plume was the one that
+    /// used to be missing.
+    #[test]
+    fn a_speed_pad_arms_every_craft_s_own_plume() {
+        let mut race = grid_on_a_speed_pad();
+        race.tick(&InputSnapshot::default());
+
+        for slot in 0..8 {
+            assert!(
+                race.exhaust_of(slot).boost_timer() > 0.0,
+                "slot {slot} crossed the pad and its plume was not armed"
+            );
+        }
+    }
+
+    /// One craft's exhaust follows *its* throttle, not the field's.
+    ///
+    /// The discriminator is the fixture's own asymmetry: the player holds no
+    /// button, so `ShipControls::thrust` is zero and slot 0's engine is off, while
+    /// every opponent's driver holds full throttle down the straight. A shared
+    /// `Exhaust` would show one intensity for all eight; eight of them show the
+    /// player's falling while the field's climbs.
+    #[test]
+    fn each_craft_s_exhaust_follows_its_own_throttle() {
+        let mut race = race_with_a_grid();
+        // Long enough for `INTENSITY_RISE` to separate a burning engine from a
+        // cold one - the ramp takes four seconds end to end, so a quarter of a
+        // second is plenty to order the two and far short of saturating.
+        for _ in 0..15 {
+            race.tick(&InputSnapshot::default());
+        }
+
+        assert!(
+            !race.exhaust_of(0).engine_on(),
+            "the player holds no throttle, so slot 0's engine must be off"
+        );
+        for slot in 1..8 {
+            assert!(
+                race.exhaust_of(slot).engine_on(),
+                "slot {slot}'s driver holds throttle, so its engine must be on"
+            );
+            assert!(
+                race.exhaust_of(slot).intensity() > race.exhaust_of(0).intensity(),
+                "slot {slot} is burning and the player is not, but its intensity \
+                 ({}) is not above the player's ({})",
+                race.exhaust_of(slot).intensity(),
+                race.exhaust_of(0).intensity()
+            );
+        }
+    }
+
+    /// Every craft lays its own ribbon, from its own nozzle.
+    ///
+    /// One shared trail ring fed from eight poses would zig-zag between the craft
+    /// once a tick, which is why this asserts the *newest sample* of each craft's
+    /// ribbon is at that craft's own nozzle rather than only that eight rings are
+    /// full.
+    #[test]
+    fn every_craft_lays_its_own_ribbon() {
+        let mut setup = setup(hulled_handling());
+        setup.mode = Mode::SingleRace;
+        setup.start_position = Some(oag_formats::track::StartPosition {
+            position: [0.0, 0.0, 0.0],
+            left: [0.0, 0.0, -1.0],
+            up: [0.0, 1.0, 0.0],
+            forward: [1.0, 0.0, 0.0],
+        });
+        // The synthetic setup authors no ship model and so no locator, and with
+        // no nozzle nothing is pushed at all - see `setup`. Invented, and behind
+        // the craft's origin along model `-z`, which is where an engine sits;
+        // what the test needs is only that the eight are far enough apart to tell
+        // one craft's ribbon from another's, and the grid's own 19.79-unit step
+        // is 25 times this.
+        setup.nozzle = Some(Vec3::new(0.0, 0.0, -0.8));
+        let mut race = Race::start(setup);
+        // `Exhaust::trail_ready` gates the ribbon on a full ring, which is the
+        // original's own gate, so this needs one tick per sample.
+        for _ in 0..oag_render::exhaust::TRAIL_SAMPLES {
+            race.tick(&InputSnapshot::default());
+        }
+
+        let nozzles: Vec<Vec3> = (0..8)
+            .map(|slot| {
+                race.nozzle_of(slot)
+                    .expect("the fixture's hull authors a nozzle")
+            })
+            .collect();
+        for slot in 0..8 {
+            assert!(
+                race.exhaust_of(slot).trail_ready(),
+                "slot {slot}'s ring never filled"
+            );
+            // The head of the ribbon: `trail_vertices` builds every layer from
+            // the newest sample first, so the first vertex sits on the rim of a
+            // cross centred on this craft's own nozzle.
+            let head = race.exhaust_of(slot).trail_vertices(Vec3::X, Vec3::Y)[0].position;
+            let head = Vec3::from_array(head);
+            let nearest = (0..8)
+                .min_by(|a, b| {
+                    let (a, b) = (nozzles[*a], nozzles[*b]);
+                    head.distance(a).total_cmp(&head.distance(b))
+                })
+                .expect("eight craft");
+            assert_eq!(
+                nearest, slot,
+                "slot {slot}'s ribbon starts nearest slot {nearest}'s nozzle"
+            );
+        }
+    }
+
+    /// The player's flicker does not change when the field grows.
+    ///
+    /// This is the seeding decision under test, and it is worth a test rather
+    /// than a comment: one shared generator drawn from once per craft would make
+    /// slot 0's flicker depend on how many opponents the mode fields, so every
+    /// exhaust number pinned against a single-craft capture would move the day
+    /// a grid appeared behind it. See [`exhaust_seed`].
+    #[test]
+    fn the_players_flicker_does_not_depend_on_the_field_behind_it() {
+        let mut alone = race_with_pads(Mode::TimeTrial, Vec::new());
+        let mut field = race_with_a_grid();
+        assert_eq!(alone.ship_count(), 1);
+        assert_eq!(field.ship_count(), 8);
+
+        for tick in 0..30 {
+            alone.tick(&InputSnapshot::default());
+            field.tick(&InputSnapshot::default());
+            // Bit-identical, not close: both draw the same two numbers from a
+            // generator seeded the same way, against the same thrust and the same
+            // standing-start speed.
+            assert_eq!(
+                alone.exhaust().half_size(),
+                field.exhaust().half_size(),
+                "tick {tick}: the flare's size moved when opponents were added"
+            );
+            assert_eq!(
+                alone.exhaust().alpha(),
+                field.exhaust().alpha(),
+                "tick {tick}: the flare's alpha moved when opponents were added"
+            );
+        }
+    }
+
+    /// Eight craft do not flicker in lockstep.
+    ///
+    /// The other half of the seeding decision: distinct streams. Eight craft
+    /// sharing one seed would pulse together, which reads as a single effect
+    /// rather than eight engines.
+    #[test]
+    fn the_field_does_not_flicker_in_lockstep() {
+        let mut race = race_with_a_grid();
+        race.tick(&InputSnapshot::default());
+
+        let sizes: Vec<f32> = (0..8)
+            .map(|slot| race.exhaust_of(slot).half_size())
+            .collect();
+        for slot in 1..8 {
+            assert_ne!(
+                sizes[slot], sizes[0],
+                "slot {slot}'s flare is exactly the player's size - the two are \
+                 drawing from the same stream"
+            );
+        }
+    }
+
     /// Craft used to pass through each other, which is what this catches.
     ///
     /// Two craft are overlapped and closing, and the pass has to separate them.
@@ -7657,6 +8070,10 @@ mod tests {
     /// so the projectile sprites were dropped on the floor with nothing in the
     /// logs and nothing on screen. A budget test is the only thing that catches
     /// a silent truncation, because every other symptom is "it does not appear".
+    ///
+    /// The worst case grew when the field gained flares of its own: the sprite
+    /// buffer now carries **one flare per craft** as well as the projectiles, so
+    /// the headroom checked here is a whole grid's worth rather than one quad.
     #[test]
     fn every_projectile_is_drawn_and_the_worst_case_fits_the_buffer() {
         let mut race =
@@ -7684,11 +8101,14 @@ mod tests {
             oag_gameplay::projectile::MAX_PROJECTILES * 2 * 6,
             "six vertices per rocket and per flash"
         );
+        // Every craft's flare shares this buffer with the projectiles, so the
+        // worst case is a full grid of flares *plus* a full sky of rockets.
+        let flares = MAX_SHIPS * 6;
         assert!(
-            vertices.len() + exhaust::MAX_VERTICES.min(6) <= exhaust::MAX_VERTICES,
+            vertices.len() + flares <= exhaust::MAX_VERTICES,
             "the worst case is {} vertices against a buffer of {} - `upload` would \
              silently drop the overflow",
-            vertices.len() + 6,
+            vertices.len() + flares,
             exhaust::MAX_VERTICES
         );
     }

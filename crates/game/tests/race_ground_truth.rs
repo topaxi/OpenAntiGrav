@@ -888,6 +888,172 @@ fn the_ai_drives_the_field_along_the_track() {
     }
 }
 
+/// Every craft on the disc's own track burns, trails and boosts on its own.
+///
+/// The real-data half of the per-craft exhaust; `race::tests`' synthetic half
+/// runs on a hand-built straight with no ship model, and so with no nozzle and no
+/// pads at all. What only the disc can say is that the effect survives the real
+/// article: a real `Engine Flare` locator on a real hull, and the track's own
+/// authored speed pads under a field that actually drives over them.
+///
+/// **Three separate claims**, and the third is the one that used to be false:
+///
+/// 1. every craft's engine is lit and its ribbon ring is full,
+/// 2. no two craft share a ribbon - each one's newest sample is at its own
+///    nozzle,
+/// 3. an opponent that crosses a speed pad gets a *plume*, not just the force.
+///
+/// Before 2026-08-11 there was one `Exhaust` and it belonged to slot 0, so the
+/// seven opponents drove the whole circuit dark.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn every_craft_burns_trails_and_boosts_on_its_own() {
+    let Some(loaded) = load_single_race() else {
+        return;
+    };
+    let mut race = race::Race::start(loaded.setup);
+    assert_eq!(race.ship_count(), 8);
+    assert!(
+        race.nozzle().is_some(),
+        "the disc's hull authors an Engine Flare node, so every craft has a nozzle"
+    );
+    assert!(
+        !race.speedup_pads().is_empty(),
+        "the third claim needs a track with authored speed pads"
+    );
+
+    // Twenty seconds. Ten is enough for the field to be driving and trailing;
+    // reaching a speed pad takes longer, and this is the assertion that has to
+    // observe one being crossed rather than assume it.
+    //
+    // **Watched every tick rather than sampled at the end**, and that is not
+    // caution: the AI's throttle is bang-bang against a cornering-speed target,
+    // so a craft braking into a corner on the final tick has its engine
+    // legitimately off. Whether a craft's flare ever lit is the claim; what it
+    // happens to be doing at tick 1,200 is the track's business.
+    const TICKS: u32 = 1200;
+    let mut lit = [0u32; 8];
+    let mut boosted = [false; 8];
+    for _ in 0..TICKS {
+        race.tick(&oag_gameplay::InputSnapshot::default());
+        for slot in 0..8 {
+            lit[slot] += u32::from(race.exhaust_of(slot).engine_on());
+            boosted[slot] |= race.exhaust_of(slot).boost_timer() > 0.0;
+        }
+    }
+
+    let nozzles: Vec<Vec3> = (0..8)
+        .map(|slot| race.nozzle_of(slot).expect("every craft has a nozzle"))
+        .collect();
+    for (slot, lit) in lit.iter().enumerate().skip(1) {
+        let exhaust = race.exhaust_of(slot);
+        // A quarter of the run, which separates "this craft is racing" from
+        // both "its engine never came on" and "one stray tick". The AI holds
+        // throttle down every straight and lifts for every corner, so the real
+        // figure is far above this on any circuit - and the *final* tick's state
+        // is deliberately not asserted at all: a craft braking into a corner at
+        // tick 1,200 has its engine legitimately off and its intensity already
+        // decayed to zero, which is what this counter replaced.
+        assert!(
+            *lit > TICKS / 4,
+            "opponent {slot}'s engine was on for {lit} of {TICKS} ticks"
+        );
+        assert!(
+            exhaust.trail_ready(),
+            "opponent {slot} laid no ribbon in twenty seconds"
+        );
+
+        // The head of the ribbon sits on the rim of a cross centred on the
+        // craft's own nozzle, so the nearest nozzle to it must be that craft's.
+        // A shared `Exhaust` puts every head on whichever craft pushed last.
+        let head = Vec3::from_array(exhaust.trail_vertices(Vec3::X, Vec3::Y)[0].position);
+        let nearest = (0..8)
+            .min_by(|a, b| {
+                head.distance(nozzles[*a])
+                    .total_cmp(&head.distance(nozzles[*b]))
+            })
+            .expect("eight craft");
+        assert_eq!(
+            nearest, slot,
+            "opponent {slot}'s ribbon starts nearest slot {nearest}'s craft"
+        );
+    }
+
+    // At least one *opponent*, which is the claim. Asserted over the field
+    // rather than per slot: which craft finds a pad in twenty seconds is a
+    // property of the racing line and the track, not something this test gets to
+    // decide, and pinning a particular slot would make it a test of the AI's
+    // route. The player is excluded outright - it is parked on the grid.
+    assert!(
+        boosted[1..].iter().any(|seen| *seen),
+        "no opponent's plume was ever armed, so a pad's force is still reaching \
+         craft its visual does not"
+    );
+}
+
+/// The field spreads across the track's own AI corridor rather than queueing up
+/// on one line.
+///
+/// **This is the real-data half of the personality work**; the synthetic half is
+/// `oag-ai`'s `a_field_of_seeded_drivers_does_not_drive_one_line`, on an oval
+/// with an invented corridor. What only real data can say is that the corridor
+/// *off the disc* is wide enough to be worth spending and that the bounds were
+/// rebased onto the racing line the right way round - a sign error there would
+/// put the whole field on one side of the line, which is the same queue moved
+/// sideways.
+///
+/// Signed offsets, in the sample's own lateral axis, measured off each craft's
+/// own place on the line. The bound is the corridor's, so a track whose artists
+/// left less room asserts less.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_field_spreads_across_the_ai_corridor() {
+    let Some(loaded) = load_single_race() else {
+        return;
+    };
+    let mut race = race::Race::start(loaded.setup);
+    assert_eq!(race.ship_count(), 8);
+
+    // Ten seconds, the same window the driving test uses: long enough that each
+    // craft has left the grid's own lateral stagger behind and settled onto the
+    // line it chose.
+    for _ in 0..600 {
+        race.tick(&oag_gameplay::InputSnapshot::default());
+    }
+
+    let mut offsets = Vec::new();
+    let mut room = f32::INFINITY;
+    for slot in 1..8 {
+        let ship = &race.world.ships[slot];
+        let sample = race
+            .spline()
+            .sample(ship.driver.index as usize)
+            .expect("the driver stands on a sample");
+        let lateral = Vec3::from_array(sample.lateral).normalize_or_zero();
+        let line = Vec3::from_array(sample.pos)
+            - oag_formats::track::HOVER_LIFT * Vec3::from_array(sample.down)
+            + sample.racing_line * lateral;
+        offsets.push((ship.physics.body.position - line).dot(lateral));
+        room = room
+            .min(sample.ai_bound_right - sample.racing_line)
+            .min(sample.racing_line - sample.ai_bound_left);
+    }
+
+    let low = offsets.iter().copied().fold(f32::INFINITY, f32::min);
+    let high = offsets.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+    assert!(
+        high - low > room,
+        "the field spread {:.2} units across a corridor with {room:.2} to spare either side of \
+         the line: {offsets:?}",
+        high - low
+    );
+    // Both sides of it, or the rebasing has a sign error.
+    assert!(
+        low < 0.0 && high > 0.0,
+        "the whole field sits on one side of the line: {offsets:?}"
+    );
+}
+
 /// Two runs of one race are one race, opponents included.
 ///
 /// The drivers hold their state on the ships and therefore inside the world

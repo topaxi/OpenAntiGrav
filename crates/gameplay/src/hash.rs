@@ -108,6 +108,13 @@ fn write_ship(hasher: &mut StateHasher, ship: &Ship) {
     // diverged - the next steering command will differ and nothing before it
     // will show why. It is `0` for slot 0, which the player flies.
     hasher.write_u32(driver.index);
+    // **The seed and the tick count with it.** The seed decides this craft's
+    // whole character - which part of the corridor it holds, how hard it
+    // commits to a corner - and the count is the argument its drift is a
+    // function of, so two runs that agree on every position but disagree on
+    // either are about to steer differently. See `oag_ai::Personality`.
+    hasher.write_u32(driver.seed);
+    hasher.write_u32(driver.phase);
     write_standing(hasher, standing);
     hasher.write_u8(u8::from(*active));
 }

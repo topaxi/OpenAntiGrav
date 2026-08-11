@@ -26,19 +26,54 @@
 //! pass them in.
 //!
 //! The reasoning, the recovered schema and the design this is the first half of
-//! are on `docs/gameplay/ai.md`. **Not built yet, and deliberately**: the skill
-//! vector, mistake injection, difficulty selection and the adaptive rules that
-//! page describes. This is the basic driver they hang off.
+//! are on `docs/gameplay/ai.md`.
+//!
+//! # Eight drivers, not one driver eight times
+//!
+//! A field that all shares one [`Tuning`] and one line drives in single file,
+//! because there is one best place to be and nothing to separate two craft that
+//! both compute it. So each craft carries a seed, and [`Personality::from_seed`]
+//! turns that into a small set of departures from the shared tuning: which part
+//! of the corridor it holds, how much it drifts about that and how fast, how far
+//! ahead it looks, how much grip it assumes through a corner, and how early it
+//! brakes.
+//!
+//! Two of those do the visible work. **The line bias** puts the eight craft on
+//! eight different parts of the track rather than on one line, and **the
+//! commitment** gives them eight different corner speeds, which is what opens
+//! gaps and closes them again over a lap. The rest is texture.
+//!
+//! The corridor it all gets spent inside is the disc's own: `ai_bound_left` and
+//! `ai_bound_right` are authored per control point, so how far the field spreads
+//! is a property of the track and narrows where the artists narrowed it. See
+//! [`Frame`] and `docs/formats/track.md`.
+//!
+//! ## What a personality does not cover
+//!
+//! Named so nobody assumes otherwise, and each a separate piece of work:
+//! **nothing here knows another craft exists**, so there is no avoidance, no
+//! overtaking line and no defending - the spread is what keeps craft apart, not
+//! a rule that keeps them apart. No mistake injection and no recovery
+//! behaviour, no reaction latency, no difficulty selection, no weapon
+//! competence, and no adaptation between races. `docs/gameplay/ai.md` describes
+//! all of them.
 //!
 //! # Determinism
 //!
-//! No randomness, no clock and no allocation per tick, so a race replays
-//! identically. A future skill vector that wants noise takes it from
-//! `oag_core::Rng` through the world, never from a generator of its own. See
-//! `docs/architecture/determinism.md`.
+//! No clock and no allocation per tick, so a race replays identically.
+//!
+//! The two sources of variation are both pure functions of a craft's own seed:
+//! the personality comes off `oag_core::Rng` at a fixed sequence of draws, and
+//! the drift is integer-hashed value noise over the driver's own tick count.
+//! **Neither draws from the world's generator**, which would move every pickup
+//! roll after it, and neither uses a transcendental - `sin` resolves to the
+//! platform's libm and is exactly the thing
+//! `docs/architecture/determinism.md` forbids. The reasoning is at the top of
+//! `noise.rs`.
 
 mod driver;
 mod line;
+mod noise;
 
-pub use driver::{Driver, Tuning};
-pub use line::Line;
+pub use driver::{Driver, Personality, Tuning};
+pub use line::{Aim, Frame, Line};

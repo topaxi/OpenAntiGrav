@@ -579,7 +579,7 @@ impl Exhaust {
         let samples: Vec<(Vec3, Vec3)> = self.trail_samples().collect();
         let width_scale = self.intensity * TRAIL_WIDTH_GAIN + TRAIL_WIDTH_BASE;
 
-        let mut out = Vec::with_capacity(MAX_TRAIL_VERTICES);
+        let mut out = Vec::with_capacity(TRAIL_VERTICES_PER_CRAFT);
         // The rim, in `Trail_DrawRibbon`'s own order. The fifth entry closes
         // the tube; `v` runs 0..1 once around it in quarters.
         let rim = [up, right, -up, -right, up];
@@ -986,18 +986,36 @@ pub fn trail_glow(intensity: f32, segment: usize) -> f32 {
     intensity * TRAIL_GLOW_GAIN * fall.max(0.0)
 }
 
+/// How many craft this crate's per-frame budgets are sized for.
+///
+/// The grid, which is eight in every Pulse race mode. Duplicated rather than
+/// imported from `oag_gameplay::MAX_SHIPS` because this crate must not depend on
+/// the simulation; the two are compared at compile time on the game crate's side,
+/// where both are visible.
+pub const MAX_TRAILS: usize = 8;
+
 /// How many camera-facing quads [`Pipeline`]'s buffer holds.
 ///
-/// **The flare itself is one**, and one is what the original writes: not one per
-/// layer, because the three staggered ramps are the ribbon's and
-/// `ExhaustFlare_Draw` writes exactly four vertices sharing one colour.
+/// **The flare itself is one per craft**, and one is what the original writes per
+/// craft: not one per layer, because the three staggered ramps are the ribbon's
+/// and `ExhaustFlare_Draw` writes exactly four vertices sharing one colour.
 ///
 /// The rest of the budget is [`sprite`]'s, which is **not** recovered - it is
 /// there so a caller with something else to billboard reuses this pipeline
 /// rather than standing up a second one. Sized for a projectile and a blast
-/// flash per slot of `oag_gameplay::projectile::MAX_PROJECTILES`, with room to
-/// spare; the number is duplicated rather than imported because this crate must
-/// not depend on the simulation.
+/// flash per slot of `oag_gameplay::projectile::MAX_PROJECTILES`, which is 16;
+/// the number is duplicated rather than imported for the same reason
+/// [`MAX_TRAILS`] is.
+///
+/// So the whole budget, and the arithmetic to redo before appending anything
+/// else here:
+///
+/// | source | quads |
+/// | --- | ---: |
+/// | one engine flare per craft ([`MAX_TRAILS`]) | 8 |
+/// | one sprite per projectile in flight | 16 |
+/// | one sprite per blast flash | 16 |
+/// | **total** | **40** |
 ///
 /// **A too-small budget here truncates silently** - [`Pipeline::upload`] clamps
 /// with `min` - which is exactly how the projectile sprites first came out
@@ -1008,17 +1026,22 @@ pub const MAX_SPRITES: usize = 48;
 /// The maximum vertices [`Pipeline`]'s buffer holds, six per [`MAX_SPRITES`].
 pub const MAX_VERTICES: usize = MAX_SPRITES * 6;
 
-/// The flare alone must not fill the budget, or a caller's [`sprite`] is
+/// The flares alone must not fill the budget, or a caller's [`sprite`] is
 /// truncated by [`Pipeline::upload`]'s `min` with nothing to show for it.
 ///
 /// A **compile-time** assertion rather than a test, because the failure it
 /// guards against is invisible at runtime: the picture is simply missing the
-/// thing that was appended.
-const _: () = assert!(MAX_SPRITES > 1);
+/// thing that was appended. The right-hand side is [`MAX_SPRITES`]' own table:
+/// one flare per craft, plus a projectile and a blast flash per projectile slot.
+const _: () = assert!(MAX_SPRITES >= MAX_TRAILS + 2 * 16);
 
-/// The ribbon's vertex budget: three layers of `TRAIL_SAMPLES - 1` segments,
-/// each a four-quad diamond tube.
-pub const MAX_TRAIL_VERTICES: usize = LAYERS * (TRAIL_SAMPLES - 1) * TRAIL_FINS * 6;
+/// One craft's ribbon: three layers of `TRAIL_SAMPLES - 1` segments, each a
+/// four-quad diamond tube.
+pub const TRAIL_VERTICES_PER_CRAFT: usize = LAYERS * (TRAIL_SAMPLES - 1) * TRAIL_FINS * 6;
+
+/// The ribbon's vertex budget: [`TRAIL_VERTICES_PER_CRAFT`] for every craft on
+/// the grid, since all eight trail at once and they share one buffer.
+pub const MAX_TRAIL_VERTICES: usize = MAX_TRAILS * TRAIL_VERTICES_PER_CRAFT;
 
 /// The flare's draw pipeline: the first blended, depth-tested pipeline in this
 /// crate.
@@ -1767,9 +1790,13 @@ mod tests {
         assert!(e.trail_ready());
         assert_eq!(
             e.trail_vertices(Vec3::X, Vec3::Y).len(),
-            MAX_TRAIL_VERTICES,
+            TRAIL_VERTICES_PER_CRAFT,
             "a full ring must emit every layer's every segment"
         );
+        // And the shared buffer holds a full ring for every craft on the grid,
+        // which is what makes the eighth craft's ribbon reach the screen rather
+        // than being clipped off by `Pipeline::upload`'s `min`.
+        assert_eq!(MAX_TRAIL_VERTICES, MAX_TRAILS * TRAIL_VERTICES_PER_CRAFT);
     }
 
     /// A respawn must not leave a ribbon stretched across the track.

@@ -600,13 +600,19 @@ seen from the authoring side.
       page - both games ship their AI as XML, a per-class steering controller
       and a speed *schedule* keyed on the player - and the parser is named in
       Ghidra at 88.
+      **Landed since**, each on [ai.md](../gameplay/ai.md): both pad classes
+      cross every craft, `oag_race::Standing` counts a lap per craft so the
+      field can be *placed*, an opponent draws and spends a pickup, and **every
+      craft has its own exhaust** - flare, ribbon and boost plume, off its own
+      thrust and its own pose.
       **What is left**, in the order it is worth doing: the skill vector and
       mistake injection that make an opponent beatable at a chosen level, a lap
-      counter per craft (`oag_race::RaceState` is single-ship, so only the
-      player's laps are counted and the field cannot be *placed*), pads and
-      weapons for an opponent, and per-craft liveries. Also still unread: the
-      unit semantics of the original's thrust numbers, which needs a live read
-      under PPSSPP rather than more decompilation.
+      *time* per craft (only the player has a clock), a target for anything an
+      opponent fires, a respawn when one falls off, and per-craft liveries -
+      which is also why there is one nozzle for the whole field rather than
+      eight. Also still unread: the unit semantics of the original's thrust
+      numbers, which needs a live read under PPSSPP rather than more
+      decompilation.
 - [ ] Audio, including the **positional** classes a track authors:
       `sound` `0x3e1`, `soundcone` `0x3e9` and `speaker` `0x3cc`. The banks and
       waveforms decode already (M1); what is missing is placing them in the world.
@@ -687,15 +693,17 @@ is a shipped permutation table, and a short field packs to the *back*. See
 where the original puts its own - a near-constant residual dominated by our
 anchor being 1.68 out, which is what says the layout is right rather than
 averaging out. `crates/game/tests/race_ground_truth.rs` pins it against the
-original's own eight positions. "Can" rather than "does": none of the three
-modes this crate implements races with opponents in the original either, so a
-real race spawns the player alone - `race::Options::opponents` is what the
-ground-truth test above sets to exercise the full grid without a fourth,
-opponent-bearing mode existing yet.
+original's own eight positions. A **single race** fields that grid -
+`Mode::SingleRace::has_opponents()` is `true` - while a time trial, a speed lap
+and a Zone run all spawn the player alone, the way the original does;
+`race::Options::opponents` is the verification override for looking at the
+layout under a mode that races solo.
 
-**Nothing drives the seven opponents, when a build asks for them at all.** They
-hold station on the grid, and they all wear the player's hull. That is the AI
-item and the livery item, not the grid one.
+**The seven opponents drive, and each one burns.** A driver, its own
+`Environment`, both pad classes, a standing, a pickup it can spend and an
+exhaust of its own - flare, ribbon and boost plume. What they still share is the
+player's hull, which is the livery item, not the grid one. See
+[ai.md](../gameplay/ai.md).
 
 ---
 

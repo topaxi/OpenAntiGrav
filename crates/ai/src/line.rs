@@ -1,6 +1,59 @@
-//! The line an opponent drives, as plain world-space points.
+//! The line an opponent drives, as plain world-space points, and the corridor
+//! it is allowed to drift inside.
 
 use oag_core::math::Vec3;
+
+/// How much room a craft has either side of the line, and which way "aside" is.
+///
+/// **Both bounds are relative to the line itself**, so `left` is at most zero
+/// and `right` at least zero. The disc stores them the other way - absolute
+/// offsets in the sample's own lateral axis, alongside the racing line's own
+/// offset in the same axis - and the caller subtracts, because a driver here
+/// only ever asks "how far may I go from the line I am driving". See
+/// `docs/formats/track.md`.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct Frame {
+    /// Unit vector across the line, pointing to the driver's **right**.
+    pub lateral: Vec3,
+    /// How far left of the line the corridor reaches. Zero or negative.
+    pub left: f32,
+    /// How far right of the line the corridor reaches. Zero or positive.
+    pub right: f32,
+}
+
+impl Frame {
+    /// How much room there is on the side `offset` points to, as a positive
+    /// distance. Zero when there is no corridor that way.
+    #[must_use]
+    pub fn room(&self, offset: f32) -> f32 {
+        if offset >= 0.0 {
+            self.right
+        } else {
+            -self.left
+        }
+        .max(0.0)
+    }
+
+    /// `offset` cut down to what the corridor allows.
+    #[must_use]
+    pub fn clamp(&self, offset: f32) -> f32 {
+        offset.clamp(self.left.min(0.0), self.right.max(0.0))
+    }
+}
+
+/// A point on the line to aim at, and the room around it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Aim {
+    /// Index of the sample the point sits on or just after.
+    pub index: usize,
+    /// The point itself, on the line.
+    pub point: Vec3,
+    /// How far along the line it actually is - the *travelled* distance, which
+    /// is not the distance that was asked for once the line curves.
+    pub travelled: f32,
+    /// The corridor there, when the line carries one.
+    pub corridor: Option<Frame>,
+}
 
 /// A closed run of world-space points, in driving order.
 ///
@@ -11,16 +64,50 @@ use oag_core::math::Vec3;
 ///
 /// Closed rather than open: a race goes round, so index arithmetic wraps and
 /// there is no end to fall off.
+///
+/// A line may also carry the **corridor** around it, one [`Frame`] per point.
+/// That is what a driver spends on not driving the ideal line - see
+/// [`crate::Personality`] - and a line built without one simply has no room to
+/// spend, so every craft on it drives the same line. `Line::new` is that case,
+/// and it is the one the synthetic tests use.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Line {
     points: Vec<Vec3>,
+    /// Parallel to [`Self::points`], or empty. Never any other length -
+    /// [`Line::with_corridor`] drops a mismatched one rather than half-using it.
+    corridor: Vec<Frame>,
 }
 
 impl Line {
-    /// Wraps a list of points. Order is driving order.
+    /// Wraps a list of points. Order is driving order. No corridor.
     #[must_use]
     pub fn new(points: Vec<Vec3>) -> Self {
-        Self { points }
+        Self {
+            points,
+            corridor: Vec::new(),
+        }
+    }
+
+    /// Wraps a list of points and the corridor around them.
+    ///
+    /// A corridor whose length does not match the points is **dropped**, not
+    /// truncated: a half-length one would silently give the back of the track no
+    /// room, which reads as a driver bug rather than as the wiring mistake it
+    /// is.
+    #[must_use]
+    pub fn with_corridor(points: Vec<Vec3>, corridor: Vec<Frame>) -> Self {
+        let corridor = if corridor.len() == points.len() {
+            corridor
+        } else {
+            Vec::new()
+        };
+        Self { points, corridor }
+    }
+
+    /// Whether this line knows how much room there is around it.
+    #[must_use]
+    pub fn has_corridor(&self) -> bool {
+        !self.corridor.is_empty()
     }
 
     /// How many points the line holds.
@@ -97,9 +184,58 @@ impl Line {
     /// cannot spin forever.
     #[must_use]
     pub fn ahead(&self, index: usize, distance: f32) -> (usize, Vec3, f32) {
+        let (at, _, _, point, travelled) = self.walk(index, distance);
+        (at, point, travelled)
+    }
+
+    /// [`Self::ahead`], plus the corridor at the point it lands on.
+    ///
+    /// **The corridor is interpolated onto the same fraction of the same
+    /// segment as the point is**, for the reason [`Self::ahead`] interpolates
+    /// the point: a bound snapped to the nearest sample steps by a sample's
+    /// worth every time the walk crosses one, and a driver that clamps its
+    /// drift against a stepping bound puts that step straight into the
+    /// commanded turn rate. The same trap, one level further out.
+    #[must_use]
+    pub fn aim(&self, index: usize, distance: f32) -> Aim {
+        let (at, next, fraction, point, travelled) = self.walk(index, distance);
+        Aim {
+            index: at,
+            point,
+            travelled,
+            corridor: self.frame(at, next, fraction),
+        }
+    }
+
+    /// The corridor `fraction` of the way from `at` to `next`.
+    fn frame(&self, at: usize, next: usize, fraction: f32) -> Option<Frame> {
+        if self.corridor.is_empty() {
+            return None;
+        }
+        let here = self.corridor[at];
+        let there = self.corridor[next];
+        Some(Frame {
+            // Renormalised after the blend, which shortens a vector wherever
+            // the track turns.
+            lateral: (here.lateral + (there.lateral - here.lateral) * fraction).normalize_or_zero(),
+            left: here.left + (there.left - here.left) * fraction,
+            right: here.right + (there.right - here.right) * fraction,
+        })
+    }
+
+    /// Walks `distance` along the line from `index`.
+    ///
+    /// Returns the segment it ended on (`at`, `next`), how far along that
+    /// segment (`fraction`), the interpolated point, and the *travelled*
+    /// distance - which is what a caller converting an offset into a curvature
+    /// has to divide by, since on a curve it is not the distance requested.
+    ///
+    /// Gives up after one full lap, so a degenerate line whose points coincide
+    /// cannot spin forever.
+    fn walk(&self, index: usize, distance: f32) -> (usize, usize, f32, Vec3, f32) {
         let count = self.points.len();
         if count == 0 {
-            return (0, Vec3::ZERO, 0.0);
+            return (0, 0, 0.0, Vec3::ZERO, 0.0);
         }
         let mut at = index % count;
         let mut travelled = 0.0;
@@ -112,12 +248,12 @@ impl Line {
                 }
                 let fraction = ((distance - travelled) / step).clamp(0.0, 1.0);
                 let point = self.points[at] + (self.points[next] - self.points[at]) * fraction;
-                return (at, point, travelled + step * fraction);
+                return (at, next, fraction, point, travelled + step * fraction);
             }
             travelled += step;
             at = next;
         }
-        (at, self.points[at], travelled)
+        (at, at, 0.0, self.points[at], travelled)
     }
 
     /// The sharpest bend anywhere within `distance` ahead of `index`.
@@ -256,6 +392,70 @@ mod tests {
         let tight = circle(50.0, 64);
         let wide = circle(400.0, 64);
         assert!(tight.curvature(0, 10.0) > wide.curvature(0, 10.0));
+    }
+
+    /// Four points a fixed distance apart, with a corridor that widens along
+    /// them, so an interpolated bound is distinguishable from a snapped one.
+    fn widening() -> Line {
+        let points: Vec<Vec3> = (0..4)
+            .map(|step| Vec3::new(0.0, 0.0, 10.0 * step as f32))
+            .collect();
+        let corridor = (0..4)
+            .map(|step| Frame {
+                lateral: Vec3::X,
+                left: -(step as f32),
+                right: 1.0 * step as f32,
+            })
+            .collect();
+        Line::with_corridor(points, corridor)
+    }
+
+    #[test]
+    fn a_line_can_have_no_corridor() {
+        let line = Line::new(vec![Vec3::ZERO, Vec3::X]);
+        assert!(!line.has_corridor());
+        assert_eq!(line.aim(0, 0.5).corridor, None);
+    }
+
+    /// A corridor that does not match the points is dropped rather than
+    /// half-used: a truncated one would silently give the back of the track no
+    /// room, and that reads as a driver bug rather than as the wiring mistake
+    /// it is.
+    #[test]
+    fn a_mismatched_corridor_is_dropped() {
+        let line = Line::with_corridor(
+            vec![Vec3::ZERO, Vec3::X, Vec3::Y],
+            vec![Frame::default(), Frame::default()],
+        );
+        assert!(!line.has_corridor());
+    }
+
+    /// **The bound is interpolated onto the same segment fraction the aim point
+    /// is**, not snapped to the sample. Snapped, it steps by a whole sample's
+    /// worth every time the walk crosses one, and a driver that clamps its
+    /// drift against a stepping bound puts that step into the commanded turn
+    /// rate.
+    #[test]
+    fn the_corridor_is_interpolated_rather_than_snapped() {
+        let line = widening();
+        let frame = line.aim(0, 15.0).corridor.expect("a corridor");
+        assert!((frame.right - 1.5).abs() < 1e-4, "right {}", frame.right);
+        assert!((frame.left + 1.5).abs() < 1e-4, "left {}", frame.left);
+        assert!((frame.lateral - Vec3::X).length() < 1e-4);
+    }
+
+    #[test]
+    fn a_frame_measures_the_room_on_the_side_being_asked_about() {
+        let frame = Frame {
+            lateral: Vec3::X,
+            left: -2.0,
+            right: 6.0,
+        };
+        assert_eq!(frame.room(1.0), 6.0);
+        assert_eq!(frame.room(-1.0), 2.0);
+        assert_eq!(frame.clamp(9.0), 6.0);
+        assert_eq!(frame.clamp(-9.0), -2.0);
+        assert_eq!(frame.clamp(3.0), 3.0);
     }
 
     #[test]
