@@ -72,7 +72,7 @@ a union:
 | `type` | Parser | `<Stats>` attributes |
 | --- | --- | --- |
 | `Global` | `0x0880dab0` | `slowdown_limit` |
-| **`Rocket`** | **`0x0880c058`** | **`absorb blastforce blastradius damage venomspeed flashspeed rapierspeed phantomspeed launchSpeed`**, plus `slowdown_time spread` |
+| **`Rocket`** | **`0x0880c058`** | **`absorb blastforce blastradius damage venomspeed flashspeed rapierspeed phantomspeed launchSpeed spread`**, plus `slowdown_time` |
 | `Missile` | `0x0880c31c` | the rocket's, less `spread`, plus `lock_max_dist lock_min_dist` |
 | `Quake` | `0x0880c60c` | `absorb damage radius slowdown_time` |
 | `Cannon` | `0x0880c774` | `absorb rounds rate damage_per_bullet slowdown_time` |
@@ -94,12 +94,12 @@ eleven attributes, and the two left plain are `slowdown_time` - half of the
 slowdown mechanic, whose other half is `<Global slowdown_limit>` and which has
 no consumer - and `spread`.
 
-**`spread` is worth a second look before anyone implements a rocket volley or
-decides against one.** It is on the Rocket and *not* on the Missile, which is
-the only evidence in the tree about how many projectiles one fire produces: a
-homing weapon has no use for a launch spread and a volley does. This engine
-fires one, as a stated choice rather than a reading - see
-[pickups.md](../gameplay/pickups.md).
+**`spread` is the half-angle of a three-rocket fan, in radians**, and that is
+recovered rather than inferred: `Weapon_FireRocket` (`0x0886e104`) spawns one
+rocket straight ahead, one rotated by `+spread` and one by `-spread`. Its
+absence from the Missile follows - a homing weapon has no use for a launch fan.
+See [weapon-fire.md](../ghidra/functions/psp-pulse-usa/weapon-fire.md), which
+also carries the **struct offsets** for the whole Rocket block.
 
 **`absorb` is on every one of them**, which is what `Ship_Damage`'s absorb branch
 spends: [`shield.md`](../ghidra/functions/psp-pulse-usa/shield.md) records

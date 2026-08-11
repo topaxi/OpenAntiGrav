@@ -1348,8 +1348,23 @@ fn a_rocket_fired_on_a_real_track_flies_and_detonates() {
     assert_eq!(race.ship_pickup(), None, "firing must spend the pickup");
     assert_eq!(
         race.world.projectiles.live(),
-        1,
-        "firing a rocket on a real track put nothing in the air"
+        oag_gameplay::projectile::ROCKET_SHOTS,
+        "firing a rocket on a real track did not put a full volley in the air"
+    );
+
+    // **On the disc's own `spread`.** It authors `0.05` radians - under three
+    // degrees - so the three fly very nearly parallel and diverge by only a few
+    // units over the distance to a wall. That is the whole reason this is
+    // asserted as a *fan* rather than eyeballed: at this angle a volley and
+    // three copies of one shot look identical in a screenshot.
+    let right = race.ship().physics.body.right();
+    let lateral: Vec<f32> = (0..oag_gameplay::projectile::ROCKET_SHOTS)
+        .map(|slot| race.world.projectiles.slots[slot].velocity.dot(right))
+        .collect();
+    println!("lateral velocity components off the disc's own spread: {lateral:?}");
+    assert!(
+        lateral.iter().any(|&l| l > 0.5) && lateral.iter().any(|&l| l < -0.5),
+        "the volley did not fan on the disc's own numbers: {lateral:?}"
     );
 
     // It has to *travel*, which is what says the class speed was read at all,
@@ -1358,8 +1373,12 @@ fn a_rocket_fired_on_a_real_track_flies_and_detonates() {
     let mut ticks = 1;
     let mut furthest = 0.0f32;
     while race.world.projectiles.live() > 0 {
+        // Slot 0 is the middle rocket, the one that flies straight - the outer
+        // two may detonate a tick either side of it.
         let flying = race.world.projectiles.slots[0].position;
-        furthest = furthest.max((flying - muzzle).length());
+        if race.world.projectiles.slots[0].kind.is_some() {
+            furthest = furthest.max((flying - muzzle).length());
+        }
         race.tick(&snapshot(&mut buttons, 0));
         ticks += 1;
         assert!(ticks < 1200, "the rocket never stopped");

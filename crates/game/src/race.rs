@@ -3429,21 +3429,36 @@ impl Race {
                         return;
                     };
                     let ship = &self.world.ships[0];
-                    let (position, velocity) = oag_gameplay::projectile::launch(
+                    // **Three, together, fanned by `<Rocket spread>`** - see
+                    // `oag_gameplay::projectile::launch` and
+                    // `docs/ghidra/functions/psp-pulse-usa/weapon-fire.md`. The
+                    // order is the original's, and it matters: it decides which
+                    // slot each rocket lands in, and the slot is hashed state.
+                    let shots = oag_gameplay::projectile::launch(
                         &ship.physics,
                         &ship.handling.dimensions,
                         &stats,
                         to_format_class(self.class),
                     );
-                    if !self.world.projectiles.spawn(
-                        oag_formats::weapons::Weapon::Rocket,
-                        position,
-                        velocity,
-                        0,
-                    ) {
-                        // Every slot is taken. Keep the pickup rather than spend
-                        // it on a shot that was never fired - the same rule the
-                        // two arms above follow for a missing table.
+                    // Spent on the *first* shot getting away. A partial volley
+                    // is better than a pickup that survives having fired two of
+                    // three, and the array cannot fill from one press in a race
+                    // this engine can currently run.
+                    let mut fired = 0;
+                    for (position, velocity) in shots {
+                        if self.world.projectiles.spawn(
+                            oag_formats::weapons::Weapon::Rocket,
+                            position,
+                            velocity,
+                            0,
+                        ) {
+                            fired += 1;
+                        }
+                    }
+                    if fired == 0 {
+                        // Every slot was taken. Keep the pickup rather than
+                        // spend it on a volley that never left - the same rule
+                        // the two arms above follow for a missing table.
                         return;
                     }
                 }
@@ -7743,13 +7758,18 @@ mod tests {
     /// The Rocket's own fixture. Invented numbers, all distinct, and the four
     /// class speeds ascending so a class read from the wrong index is a wrong
     /// *value* rather than a coincidence.
+    ///
+    /// **`spread` is the exception to "all distinct" and has to be**: it is an
+    /// angle in radians now that `Weapon_FireRocket` is read, so the arbitrary
+    /// `17` this fixture used while the attribute was undecoded is 974 degrees
+    /// and fires two of the three rockets backwards. A plausible fan instead.
     fn one_rocket_table() -> oag_formats::weapons::WeaponStats {
         oag_formats::weapons::parse(
             r#"<WeaponStats>
                  <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
                  <Weapon type="Rocket"><Stats absorb="11" blastforce="12" blastradius="13"
                    damage="14" slowdown_time="15" venomspeed="600" flashspeed="700"
-                   rapierspeed="800" phantomspeed="900" launchSpeed="16" spread="17"/></Weapon>
+                   rapierspeed="800" phantomspeed="900" launchSpeed="16" spread="0.2"/></Weapon>
                  <Pickupodds class="Venom">
                    <Weapon type="Rocket"><Stats ai="1" back="1" front="1" human="1"/></Weapon>
                  </Pickupodds>
@@ -7758,15 +7778,19 @@ mod tests {
         .expect("the fixture table must parse")
     }
 
-    /// Firing a Rocket puts exactly one projectile in the air, ahead of the
-    /// craft, at the class's own speed - and spends the pickup.
+    /// Firing a Rocket puts **three** in the air at once, ahead of the craft,
+    /// at the class's own speed - and spends the pickup.
     ///
-    /// **What the rocket then does is pinned in `oag_gameplay::projectile`'s own
-    /// tests**, the same split the Shield's wiring test uses: flight, hulls and
-    /// blasts need geometry and targets, and this fixture has one craft and no
-    /// track.
+    /// Three is recovered, not chosen: `Weapon_FireRocket` (`0x0886e104`) makes
+    /// three literal spawn calls in one invocation. See
+    /// `docs/ghidra/functions/psp-pulse-usa/weapon-fire.md`.
+    ///
+    /// **The fan's geometry is pinned in `oag_gameplay::projectile`'s own
+    /// tests**, the same split the Shield's wiring test uses. What this owns is
+    /// the wiring: that the button reaches the array, three times, with the
+    /// disc's numbers, and that the slot empties.
     #[test]
-    fn a_fired_rocket_puts_one_projectile_in_the_air() {
+    fn a_fired_rocket_puts_three_projectiles_in_the_air() {
         let mut race =
             race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_rocket_table());
         let mut buttons = Buttons::new();
@@ -7783,26 +7807,43 @@ mod tests {
         race.tick(&buttons.tick(SQUARE));
 
         assert_eq!(race.ship_pickup(), None, "firing must spend the pickup");
-        assert_eq!(race.world.projectiles.live(), 1, "one fire, one rocket");
+        assert_eq!(
+            race.world.projectiles.live(),
+            oag_gameplay::projectile::ROCKET_SHOTS,
+            "one press is a volley of three"
+        );
 
-        let rocket = race.world.projectiles.slots[0];
-        assert_eq!(rocket.kind, Some(oag_formats::weapons::Weapon::Rocket));
-        assert_eq!(rocket.owner, 0);
+        for slot in 0..oag_gameplay::projectile::ROCKET_SHOTS {
+            let rocket = race.world.projectiles.slots[slot];
+            assert_eq!(rocket.kind, Some(oag_formats::weapons::Weapon::Rocket));
+            assert_eq!(rocket.owner, 0);
+            assert!(
+                (rocket.position - before).dot(forward) > 0.0,
+                "rocket {slot} spawned behind the craft: {:?}",
+                rocket.position
+            );
+            // Venom's authored speed plus `launchSpeed`, the same for all three
+            // - the fan turns them, it does not slow them.
+            assert!(
+                (rocket.velocity.length() - 616.0).abs() < 1e-2,
+                "rocket {slot}: expected 600 + 16, got {}",
+                rocket.velocity.length()
+            );
+            assert!(
+                rocket.velocity.dot(forward) > 0.0,
+                "rocket {slot} must fly forwards"
+            );
+        }
+
+        // And they really are fanned rather than three copies of one shot,
+        // which the count alone would not catch.
+        let right = race.ship().physics.body.right();
+        let lateral: Vec<f32> = (0..oag_gameplay::projectile::ROCKET_SHOTS)
+            .map(|slot| race.world.projectiles.slots[slot].velocity.dot(right))
+            .collect();
         assert!(
-            (rocket.position - before).dot(forward) > 0.0,
-            "the rocket spawned behind the craft: {:?}",
-            rocket.position
-        );
-        // Venom's authored speed plus `launchSpeed`, and it has already flown
-        // one tick's worth by the time the tick returns.
-        assert!(
-            (rocket.velocity.length() - 616.0).abs() < 1e-2,
-            "expected 600 + 16, got {}",
-            rocket.velocity.length()
-        );
-        assert!(
-            rocket.velocity.dot(forward) > 0.0,
-            "a rocket must fly forwards"
+            lateral.iter().any(|&l| l > 1.0) && lateral.iter().any(|&l| l < -1.0),
+            "the volley did not fan: lateral components {lateral:?}"
         );
     }
 

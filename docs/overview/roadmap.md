@@ -561,10 +561,12 @@ seen from the authoring side.
       Quake track deformation, LeachBeam a beam, and most of the rest the
       slowdown mechanic behind `<Global slowdown_limit>`, which has no consumer.
       Autopilot is the AI's own controller taking over and belongs with the AI.
-      **And a rocket has almost nothing to hit**, which is the AI's fault rather
-      than the weapon's: `Mode::has_opponents` is unconditionally `false`, so
-      track geometry and the `--opponents` parked grid are the whole target
-      list.
+      **A rocket now has something to hit**: the AI landed the same day and
+      `Mode::SingleRace::has_opponents()` returns `true`, so a single race
+      fields seven driven craft. What is missing on that axis is **aiming** -
+      nothing picks a target, so an opponent never fires at anybody and the
+      player connects by pointing the craft rather than by locking on. That is
+      also what the Missile is waiting for.
 - [~] **Shield and energy.** The pool, its maximum and the one thing that spends
       it are recovered and implemented: `*(craft+0x1c4) + 0x88` is the pool,
       `<Misc>`'s three difficulty slots at stats-base `0x84 + skill * 4` are its

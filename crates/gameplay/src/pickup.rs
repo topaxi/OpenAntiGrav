@@ -53,11 +53,10 @@
 //! See [`oag_physics::ShipState::shield_pickup_timer`], [`crate::projectile`]
 //! and `docs/gameplay/pickups.md`, which carries the split.
 //!
-//! **A rocket has almost nothing to hit today**, and that is a property of the
-//! race rather than of the weapon: `oag_race::Mode::has_opponents` is
-//! unconditionally `false`, so a race fields one craft. Track geometry and the
-//! parked grid the `--opponents` verification flag spawns are what a rocket can
-//! reach until the AI lands.
+//! **A rocket has targets now**: `oag_race::Mode::has_opponents` is `true` for
+//! [`oag_race::Mode::SingleRace`], so a single race fields seven driven craft
+//! as well as the track. What is still missing is *aiming* - nothing picks a
+//! target, so a hit is a matter of where the craft was pointed.
 //!
 //! **This is a departure and it is deliberate**: the authored table weights
 //! thirteen weapons and this draws from a subset, so the distribution a player

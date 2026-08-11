@@ -9,31 +9,31 @@
 //! Stated at the top, the way [`crate::pickup`] states it, because this module
 //! is **almost entirely ours** and that is easy to lose.
 //!
-//! **Recovered.** The numbers, and only the numbers:
-//! `<Weapon type="Rocket"><Stats>` authors `damage`, `blastforce`,
-//! `blastradius`, `launchSpeed` and a separate flight speed per speed class, at
-//! confidence 92 (`docs/formats/weapon-stats.md`). Also recovered is what
-//! happens at the far end - `Ship_Damage` (`0x088439ac`) takes a `source`
-//! argument whose value 2 is a weapon, and the weapons-off halving and the
-//! clamp are its own (`docs/ghidra/functions/psp-pulse-usa/shield.md`).
+//! **Recovered.** The numbers, and **how many rockets a press puts in the
+//! air**. `<Weapon type="Rocket"><Stats>` authors `damage`, `blastforce`,
+//! `blastradius`, `launchSpeed`, `spread` and a separate flight speed per speed
+//! class, at confidence 92 (`docs/formats/weapon-stats.md`). `Weapon_FireRocket`
+//! (`0x0886e104`) then spawns **three at once** - straight ahead, `+spread` and
+//! `-spread` - at confidence 88
+//! (`docs/ghidra/functions/psp-pulse-usa/weapon-fire.md`). Also recovered is
+//! what happens at the far end: `Ship_Damage` (`0x088439ac`) takes a `source`
+//! argument whose value 2 is a weapon, and the weapons-off halving and the clamp
+//! are its own (`.../shield.md`).
 //!
-//! **Ours, and there is no way for it not to be.** No firing call site, no
-//! projectile class and no flight update has been found anywhere in the
-//! executable. So:
+//! **Ours.** No projectile *flight* update has been found - only the launch. So:
 //!
 //! - **Straight-line flight at a constant speed.** A rocket is the one weapon
 //!   whose name says it does not steer, and the Missile's `lock_max_dist` /
 //!   `lock_min_dist` - which the Rocket does not carry - is what says the two
 //!   differ in exactly that. But no integrator has been read.
-//! - **One rocket per fire.** See [`oag_formats::weapons::RocketStats`], which
-//!   records the `spread` evidence pointing the other way.
+//! - **The axis the fan rotates about.** See [`launch`].
 //! - **A sphere for a hull**, and one that is *wider* than the hull on two of
 //!   its three axes. The original tests a projectile against something and
 //!   nothing says what. See [`hull_radius`], which is exact about which way it
 //!   errs.
 //! - **Full damage everywhere inside `blastradius`,** with no falloff. See
 //!   [`Impact`].
-//! - **The launch offset, the lifetime cap, and the slot count.**
+//! - **The launch offset and the lifetime cap.**
 //!
 //! # Fixed-size, like everything else in the world
 //!
@@ -49,11 +49,12 @@ use oag_physics::{Ray, Raycaster, ShipState};
 
 /// The most projectiles that can be in the air at once.
 ///
-/// **Ours.** Eight craft with one weapon each cannot exceed eight in flight
-/// today, and the headroom above that is deliberate: a Rocket fired as a volley,
-/// which `spread` hints at (see [`RocketStats`]), would want three slots per
-/// shot, and sixteen absorbs that without moving the array's size and with it
-/// every committed world hash.
+/// **Ours.** A Rocket puts [`ROCKET_SHOTS`] in the air per press, so eight craft
+/// firing at once need 24 - which is why this is sixteen rather than the eight a
+/// one-shot weapon would have wanted, and why it has headroom above 24 for the
+/// weapons still to land. The original's own pool is far larger (`0x2e` live
+/// projectiles at the Rocket's bounds check) and a race that hit this ceiling
+/// would silently drop shots; see [`Projectiles::spawn`].
 pub const MAX_PROJECTILES: usize = 16;
 
 /// How long a projectile flies before it gives up, in seconds.
@@ -462,35 +463,63 @@ fn segment_sphere(p0: Vec3, p1: Vec3, centre: Vec3, radius: f32) -> Option<f32> 
     }
 }
 
-/// Where a craft launches a projectile from, and how fast.
+/// How many rockets one press puts in the air.
 ///
-/// **Ours, both halves.**
+/// **Recovered, confidence 88.** `Weapon_FireRocket` (`0x0886e104`) makes three
+/// literal calls to one spawn helper in a single invocation, with no timer
+/// between them: one through the craft's own matrix, one through it rotated by
+/// `+spread`, one by `-spread`. See
+/// `docs/ghidra/functions/psp-pulse-usa/weapon-fire.md`.
+pub const ROCKET_SHOTS: usize = 3;
+
+/// Where a craft launches its rockets from, and how fast.
 ///
-/// The origin is the ship's nose - its centre of mass pushed forward by the
-/// hull's own extent along its facing, through
-/// [`oag_physics::wall::hull_extent`], which is the same function the contact
-/// solver measures the hull with. So a rocket starts outside the craft that
-/// fired it rather than inside it, and no grace period is needed to stop a
-/// launch registering as a self-hit.
+/// Returns [`ROCKET_SHOTS`] `(position, velocity)` pairs in the original's own
+/// order - straight ahead, `+spread`, `-spread` - because that order decides
+/// which projectile slot each lands in, and the slot is hashed state.
 ///
-/// The speed is the class's own `<Rocket venomspeed|...>` **plus**
-/// `launchSpeed`. That reading of the pair is a guess: the file authors both,
-/// the names suggest a cruise speed and a launch addition, and nothing has been
-/// read that combines them. The craft's own velocity is **not** inherited -
-/// which is the other plausible reading of what `launchSpeed` is for, and is
-/// recorded here as the alternative rather than silently not done.
+/// # What is recovered here, and what is not
+///
+/// **Recovered.** That there are three; that they leave *together* rather than
+/// as a burst; that they share the craft's position and differ only by a
+/// rotation built from `<Rocket spread>` and its negation; and that `spread` is
+/// an angle in radians (from the `vcst_s(5)` = `2/pi` the original multiplies by
+/// before `vcos_s`/`vsin_s`, which is Allegrex's radians-to-quarter-turns
+/// conversion).
+///
+/// **Ours.**
+///
+/// - **The axis the fan rotates about.** The original builds its rotation
+///   through four `vpfxs`-prefixed lanes and reading the axis back off the
+///   prefixes was not attempted. The craft's **up** axis is what a lateral
+///   spread of forward-firing rockets wants, and it is what this uses.
+/// - **The launch offset.** The original passes the craft's pose for the
+///   position and varies only the matrix, so all three share an origin - that
+///   part is recovered. Pushing that origin forward by the hull's own extent,
+///   so a rocket starts outside the craft that fired it, is this engine's, and
+///   it uses the craft's *unrotated* forward so the three still share it.
+/// - **The speed being the class's plus `launchSpeed`** rather than one or the
+///   other, and the craft's own velocity not being inherited.
 #[must_use]
 pub fn launch(
     state: &ShipState,
     dimensions: &Dimensions,
     stats: &RocketStats,
     class: oag_formats::handling::SpeedClass,
-) -> (Vec3, Vec3) {
+) -> [(Vec3, Vec3); ROCKET_SHOTS] {
     let forward = state.body.forward();
+    let up = state.body.up();
     let nose = state.body.position
         + forward * oag_physics::wall::hull_extent(&state.body, dimensions, forward);
     let speed = stats.speed_for(class) + stats.launch_speed;
-    (nose, forward * speed)
+
+    // The original's own order. A zero `spread` collapses all three onto the
+    // same ray rather than erroring: that is a file that authors no fan, not a
+    // broken weapon.
+    [0.0, stats.spread, -stats.spread].map(|angle| {
+        let direction = oag_core::math::Quat::from_axis_angle(up, angle) * forward;
+        (nose, direction * speed)
+    })
 }
 
 #[cfg(test)]
@@ -926,48 +955,109 @@ mod tests {
         assert!(radius > dimensions.height * 0.5);
     }
 
-    /// A launch starts outside the hull that fired it and carries the class's
-    /// own speed plus `launchSpeed` - not one or the other.
+    /// The volley: three rockets, together, fanned by `spread` - and the
+    /// middle one dead ahead.
+    ///
+    /// **This is the recovered shape**, so it is asserted as a shape rather
+    /// than loosely: three shots, one origin, one speed, and the outer two
+    /// symmetric about the craft's forward axis by the authored half-angle.
+    /// A test that only counted three would pass with all three on the same ray.
     #[test]
-    fn a_launch_clears_the_hull_and_reads_both_speeds() {
+    fn a_launch_fires_three_fanned_about_the_craft_forward() {
         use oag_formats::handling::SpeedClass;
 
-        let mut state = ShipState::default();
-        state.body.position = Vec3::new(0.0, 0.0, 0.0);
+        let state = ShipState::default();
         let dimensions = Dimensions {
             length: 4.0,
             width: 2.0,
             height: 1.0,
             ..Dimensions::default()
         };
+        // `spread` of 0.25 rad is about 14 degrees to each side.
         let stats = oag_formats::weapons::parse(
             r#"<WeaponStats>
                  <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
                  <Weapon type="Rocket"><Stats absorb="1" blastforce="2" blastradius="3"
                    damage="4" slowdown_time="5" venomspeed="600" flashspeed="700"
-                   rapierspeed="800" phantomspeed="900" launchSpeed="50" spread="6"/></Weapon>
+                   rapierspeed="800" phantomspeed="900" launchSpeed="50" spread="0.25"/></Weapon>
                </WeaponStats>"#,
         )
         .expect("the fixture parses")
         .rocket()
         .expect("a Rocket");
 
-        let (nose, velocity) = launch(&state, &dimensions, &stats, SpeedClass::Venom);
-        // `Body::forward` is `-Z`, so a nose ahead of the origin has a negative
-        // `z`. Asserted through the body's own axis rather than as a sign, so
-        // this test says "outside the hull" rather than "in this direction".
+        let shots = launch(&state, &dimensions, &stats, SpeedClass::Venom);
+        assert_eq!(shots.len(), ROCKET_SHOTS);
+
+        let forward = state.body.forward();
+        for (nose, velocity) in shots {
+            // One origin, ahead of the hull, shared by all three - the original
+            // varies the matrix and not the pose.
+            assert_eq!(nose, shots[0].0, "the three must share an origin");
+            assert!(
+                (nose - state.body.position).dot(forward) > 0.0,
+                "the launch point is behind the craft: {nose:?}"
+            );
+            // One speed: the class's plus `launchSpeed`, unchanged by the fan.
+            assert!(
+                (velocity.length() - 650.0).abs() < 1e-2,
+                "expected 600 + 50, got {}",
+                velocity.length()
+            );
+        }
+
+        // The middle one is dead ahead, and the outer two are symmetric about
+        // it by the authored half-angle.
+        let angle = |v: Vec3| forward.angle_between(v.normalize());
+        assert!(angle(shots[0].1) < 1e-5, "the first shot must fly straight");
         assert!(
-            (nose - state.body.position).dot(state.body.forward()) > 0.0,
-            "the launch point is behind the craft: {nose:?}"
+            (angle(shots[1].1) - 0.25).abs() < 1e-4,
+            "expected 0.25 rad, got {}",
+            angle(shots[1].1)
         );
         assert!(
-            nose.length() > 0.0,
-            "the launch point is inside the hull: {nose:?}"
+            (angle(shots[2].1) - 0.25).abs() < 1e-4,
+            "expected 0.25 rad, got {}",
+            angle(shots[2].1)
         );
+        // ...and to *opposite* sides, which is what a fan is. Comparing against
+        // the craft's own right axis, because two shots at the same angle from
+        // forward could both be to the left.
+        let right = state.body.right();
         assert!(
-            (velocity.length() - 650.0).abs() < 1e-2,
-            "expected the class speed plus launchSpeed, got {}",
-            velocity.length()
+            shots[1].1.dot(right) * shots[2].1.dot(right) < 0.0,
+            "the two outer rockets went the same way"
         );
+    }
+
+    /// A file that authors no fan is a file with three rockets on one ray, not
+    /// an error - and not a crash from normalising a zero.
+    #[test]
+    fn a_zero_spread_still_fires_three() {
+        use oag_formats::handling::SpeedClass;
+
+        let stats = oag_formats::weapons::parse(
+            r#"<WeaponStats>
+                 <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
+                 <Weapon type="Rocket"><Stats absorb="1" blastforce="2" blastradius="3"
+                   damage="4" slowdown_time="5" venomspeed="600" flashspeed="700"
+                   rapierspeed="800" phantomspeed="900" launchSpeed="0" spread="0"/></Weapon>
+               </WeaponStats>"#,
+        )
+        .expect("parses")
+        .rocket()
+        .expect("a Rocket");
+
+        let shots = launch(
+            &ShipState::default(),
+            &Dimensions::default(),
+            &stats,
+            SpeedClass::Venom,
+        );
+        assert_eq!(shots.len(), ROCKET_SHOTS);
+        for (_, velocity) in shots {
+            assert!(velocity.is_finite(), "{velocity:?}");
+            assert!((velocity - shots[0].1).length() < 1e-4);
+        }
     }
 }

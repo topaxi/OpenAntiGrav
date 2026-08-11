@@ -484,3 +484,10 @@
 0x088361f0	function	AiStats_ParseSkillScale	88	ai-stats.md
 0x08836548	function	AiStats_ParseController	88	ai-stats.md
 0x0884ef30	function	Body_ResolveContactPair	80	contact-response.md
+
+0x0880c058	function	WeaponStats_ParseRocket	88	weapon-fire.md
+0x08861814	function	Weapons_DispatchFire	80	weapon-fire.md
+0x0886e104	function	Weapon_FireRocket	88	weapon-fire.md
+0x0886b038	function	Rocket_Spawn_q	78	weapon-fire.md
+0x088675cc	function	Weapon_UpdateBurstFire_q	72	weapon-fire.md
+0x08869588	function	Projectiles_Update_q	75	weapon-fire.md

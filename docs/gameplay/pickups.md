@@ -35,9 +35,11 @@ This subsystem is unusually mixed, so the split comes before anything else.
 | **When in the lap the free Turbo arrives** | **ours** | - |
 | `<Rocket>`: `damage`, `blastforce`, `blastradius`, `launchSpeed`, a speed per class | **recovered** | 92 |
 | `Ship_Damage`'s `source == 2` being a weapon hit | **recovered** | 75 |
+| `entity+0x1b8` is the fire-request word, one bit per weapon | **recovered** | 80 |
+| **A Rocket fires three at once, at `-spread`, `0`, `+spread`** | **recovered** | 88 |
+| `spread` is that fan's half-angle, in radians | **recovered** | 82 |
 | **That a fired Shield refuses damage, and refuses it outright** | **ours** | - |
 | **That a rocket flies straight at a constant speed** | **ours** | - |
-| **One rocket per fire** (`spread` argues for a volley - see below) | **ours** | - |
 | **A sphere for a hull, and full damage inside `blastradius` with no falloff** | **ours** | - |
 | **The launch offset, the flight speed being class + `launchSpeed`, the lifetime cap** | **ours** | - |
 
@@ -321,27 +323,49 @@ flight update has been found anywhere in the executable:
 - a ten-second lifetime cap, so a rocket that leaves the world through a gap in
   the collision soup cannot hold its slot for the race.
 
-### `spread` argues for a volley, and this fires one
+### Three at once, fanned by `spread` - and this one is recovered
 
-**`spread` is on the Rocket's `<Stats>` and not on the Missile's** - measured on
-the shipped USA disc, and [weapon-stats.md](../formats/weapon-stats.md) records
-the same asymmetry. A homing weapon has no use for a launch spread and a volley
-does, so the attribute is the only evidence in the tree about how many
-projectiles one fire produces, and it points at more than one.
+`Weapon_FireRocket` (`0x0886e104`) spawns one rocket through the craft's own
+matrix, one through it rotated by `+spread`, and one by `-spread`: **three
+literal calls to one spawn helper in a single invocation, with no timer between
+them.** They leave together and fly a fan. Confidence **88**; the whole path is
+on [weapon-fire.md](../ghidra/functions/psp-pulse-usa/weapon-fire.md).
 
-**This engine fires one anyway.** That is a choice, not a reading: nothing says
-how many, and one is what can be tested end to end today.
-`oag_gameplay::projectile::MAX_PROJECTILES` is sized so revisiting it costs a
-spawn loop and a hash regeneration rather than a redesign.
+`spread` is the fan's **half-angle in radians**, at confidence 82 - the original
+multiplies it by the VFPU constant `2/pi` before `vcos_s`/`vsin_s`, which is
+exactly Allegrex's radians-to-quarter-turns conversion and only makes sense one
+way round. Its absence from the Missile reads correctly once this is known: a
+homing weapon has no use for a launch fan.
 
-### There is almost nothing to shoot at, and that is the race's fault
+**What is still ours here is the axis.** The original builds its rotation
+through four `vpfxs`-prefixed lanes and reading the axis back off them was not
+attempted; this engine rotates about the craft's up axis, which is what a
+lateral spread of forward-firing rockets wants.
 
-`oag_race::Mode::has_opponents` is unconditionally `false`, so a race fields one
-craft. A rocket can reach track geometry, the firing craft's own hull at close
-range, and the parked grid the `--opponents` verification flag spawns - and
-nothing else until the AI lands. That is what
-`a_rocket_fired_on_a_real_track_flies_and_detonates` checks off a real disc: 221
-units of flight over 14 ticks into Talon's Junction's own collision soup.
+**This corrected an earlier reading, and the correction is worth keeping.** The
+first pass through the executable found a *different* multi-shot handler -
+`0x088675cc`, one projectile per `0.1 s` until a round counter on the craft runs
+out - and wrote it up as the Rocket. That would have produced a staggered
+stream. It is almost certainly the Cannon, whose `<Stats>` is the only one
+authoring `rounds` and `rate`. What caught it was somebody who had played the
+game saying the three fly in parallel.
+
+### What a rocket can hit, and what it still cannot do
+
+`oag_race::Mode::has_opponents` is `true` for a single race now that the AI
+drives, so a volley can reach seven moving craft as well as track geometry and
+the firing craft's own hull at close range.
+
+**What is missing is aiming.** Nothing picks a target: the player connects by
+pointing the craft, and an opponent never fires at anybody at all - see
+[ai.md](ai.md). The fan is what stands in for aim, which is a reasonable reading
+of what a three-rocket spread is *for*, and is worth remembering before anyone
+concludes the rockets are inaccurate.
+
+`a_rocket_fired_on_a_real_track_flies_and_detonates` checks the flight half off a
+real disc: 221 units over 16 ticks into Talon's Junction's own collision soup,
+with the volley's lateral components measured symmetric on the disc's own
+`spread`.
 
 ### What is not built
 

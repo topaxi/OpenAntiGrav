@@ -176,28 +176,22 @@ pub struct Simple {
 /// `crates/gameplay/src/projectile.rs`. The nine still undecoded need a lock, a
 /// beam, track deformation or the slowdown mechanic, and none of those exists.
 ///
-/// **Two of the Rocket's own eleven are left out for the same reason.**
-/// `slowdown_time` is the slowdown mechanic's half of the pair with
-/// [`WeaponStats::slowdown_limit`] and has no consumer, and `spread` is
-/// discussed below. Both stay named-not-decoded on
-/// `docs/formats/weapon-stats.md`.
+/// **One of the Rocket's eleven is left out for the same reason**:
+/// `slowdown_time`, the slowdown mechanic's half of the pair with
+/// [`WeaponStats::slowdown_limit`], which has no consumer.
 ///
-/// # `spread`, and the count question it leaves open
+/// # `spread` is the fan angle of three rockets, and that is recovered
 ///
-/// **`spread` is on the Rocket and not on the Missile** - measured on the
-/// shipped USA disc, and the schema table on `docs/formats/weapon-stats.md`
-/// records the same asymmetry. A homing weapon has no use for a launch spread
-/// and a *volley* does, so the attribute is the only evidence in the tree about
-/// how many projectiles one Rocket fire produces, and it points at more than
-/// one.
+/// `Weapon_FireRocket` (`0x0886e104`) spawns one rocket through the craft's own
+/// matrix, one through it rotated by `+spread` and one by `-spread` - three
+/// calls to one spawn helper in a single invocation, with no timer between
+/// them. So a Rocket fires **three at once**, and `spread` is the half-angle of
+/// the fan, in radians. Confidence 88; see
+/// `docs/ghidra/functions/psp-pulse-usa/weapon-fire.md`.
 ///
-/// **This engine fires one**, which is a choice rather than a reading: no
-/// firing call site has been found, nothing says how many, and one is the
-/// behaviour that can be tested end to end today. It is recorded in the
-/// ours-versus-recovered table on `docs/gameplay/pickups.md` with the `spread`
-/// evidence beside it, so that revisiting it starts from the evidence rather
-/// than from this decision. `oag_gameplay::projectile::MAX_PROJECTILES` is sized
-/// so a volley needs no redesign.
+/// The attribute's absence from the Missile - which carries the rocket's
+/// `<Stats>` less `spread`, plus its lock distances - reads the right way round
+/// once this is known: a homing weapon has no use for a launch fan.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct RocketStats {
     /// Energy paid back for absorbing it rather than firing it.
@@ -210,6 +204,15 @@ pub struct RocketStats {
     pub damage: f32,
     /// Added to the class's own speed at launch.
     pub launch_speed: f32,
+    /// Half the fan angle of the three-rocket spread, **in radians**.
+    ///
+    /// `Weapon_FireRocket` (`0x0886e104`) fires one rocket straight ahead, one
+    /// rotated by `+spread` and one by `-spread`. The radians reading comes from
+    /// the `vcst_s(5)` (`2/pi`) it multiplies by before `vcos_s`/`vsin_s`, which
+    /// is exactly the radians-to-quarter-turns conversion Allegrex's
+    /// trigonometric instructions need. See
+    /// `docs/ghidra/functions/psp-pulse-usa/weapon-fire.md`.
+    pub spread: f32,
     /// `venomspeed`, `flashspeed`, `rapierspeed`, `phantomspeed`, in
     /// [`crate::handling::SpeedClass::ALL`]'s order so the class indexes it.
     ///
@@ -459,6 +462,7 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
                 // is lower-cased. The file's spelling, kept verbatim, because
                 // this is the string a lookup is matched against.
                 launch_speed: number(block, "Stats", "launchSpeed")?,
+                spread: number(block, "Stats", "spread")?,
                 speeds: [
                     number(block, "Stats", "venomspeed")?,
                     number(block, "Stats", "flashspeed")?,
@@ -557,7 +561,7 @@ mod tests {
     /// would also stop testing the parser and start testing the disc.
     const FIXTURE: &str = r#"<WeaponStats>
 <Weapon type="Global"><Stats slowdown_limit="1"/></Weapon>
-<Weapon type="Rocket"><Stats absorb="2" blastforce="3" blastradius="4" damage="5" slowdown_time="6" venomspeed="100" flashspeed="200" rapierspeed="300" phantomspeed="400" launchSpeed="7" spread="8"/></Weapon>
+<Weapon type="Rocket"><Stats absorb="2" blastforce="3" blastradius="4" damage="5" slowdown_time="6" venomspeed="100" flashspeed="200" rapierspeed="300" phantomspeed="400" launchSpeed="7" spread="0.25"/></Weapon>
 <Weapon type="Turbo"><Stats absorb="4" time="5"/></Weapon>
 <Weapon type="Shield"><Stats absorb="6" time="7"/></Weapon>
 <Weapon type="Autopilot"><Stats absorb="8" time="9"/></Weapon>
@@ -628,6 +632,7 @@ mod tests {
                 blastradius: 4.0,
                 damage: 5.0,
                 launch_speed: 7.0,
+                spread: 0.25,
                 speeds: [100.0, 200.0, 300.0, 400.0],
             }
         );
@@ -658,6 +663,14 @@ mod tests {
     /// And a Rocket missing one of the five is an error rather than a zero -
     /// a zero `blastradius` is a rocket that hits nobody, which reads as a
     /// gameplay bug rather than as a parse failure.
+    /// `spread` is the fan angle and has to survive the parse, because three
+    /// rockets at zero degrees apart is one rocket wearing a disguise.
+    #[test]
+    fn the_rocket_reads_its_fan_angle() {
+        let rocket = parse(FIXTURE).expect("parses").rocket().expect("a Rocket");
+        assert_eq!(rocket.spread, 0.25);
+    }
+
     #[test]
     fn a_rocket_missing_an_attribute_is_an_error() {
         let broken = FIXTURE.replace(r#" blastradius="4""#, "");
