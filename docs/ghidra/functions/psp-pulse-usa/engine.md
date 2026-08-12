@@ -1823,6 +1823,64 @@ convention this engine uses throughout, so `basis * (r x -omega)` is
 recorded sign and the recorded frame were both right, and they cancel.
 Confidence **88**. The crate's note can be closed rather than carried.
 
+### `rebound_jump_time` gates the landing bounce, and it gates it *in the air*
+
+Read out of `Ship_HoverTwoPoint` (`0x0884a658`) on 2026-08-12, chasing a report
+that the original gives a small bounce on touchdown. Confidence **85**: taken
+from the decompiler rather than a capture, but every neighbouring field offset
+matches the `Antigrav` layout already recorded above, and the two either side of
+it are the ones the confidence-91 rebound blend already uses.
+
+`craft+0x70` points at the parsed `Antigrav` block, so `+0x4` is `rebound`,
+`+0x8` is `landing_rebound` and `+0xc` is `rebound_jump_time`. `craft+0x2b4` is
+the time-since-landing the blend reads, and `craft+0x284` is how long the craft
+has been off the ground. The tail of the function:
+
+```c
+if ((craft+0x1c0 & 1) == 0) {            // no probe touched anything this tick
+    if (handling->rebound_jump_time < craft+0x284) {
+        craft+0x2b4 = 0;                 // arm the landing response
+    }
+} else {
+    craft+0x2b4 += craft+0x1c8;          // grounded: count up by dt
+}
+```
+
+**The timer is zeroed while the craft is still airborne, not when it lands**, and
+only once the flight has already lasted longer than `rebound_jump_time`. So the
+sequence is: fly long enough, the timer arms at zero; touch down, it starts
+counting and `landing_rebound` blends over the first 0.2 s.
+
+The consequence is the point of the mechanism: **a hop shorter than
+`rebound_jump_time` never arms it**, so the craft lands out of a small bounce
+with the ordinary `rebound` and no landing response at all. Only a real flight
+earns the bounce.
+
+`crates/physics/src/forces.rs` does it differently - it resets
+`time_since_landing` on the grounded 0 -> 1 edge whatever the flight was worth,
+and `rebound_jump_time` is parsed, carried through `oag_gameplay::handling` into
+`oag_physics::params::Antigrav`, and **never read by the force law**. That makes
+ours apply the landing blend on every momentary loss of contact, including the
+`grounded` 1.0 -> 0.5 -> 1.0 flicker a craft does constantly on rough ground.
+
+### The probes depenetrate as well as push
+
+Also in `Ship_HoverTwoPoint`, and worth recording because it is a *position*
+change rather than a force:
+
+```c
+local_510 = dot(craft+0xe0 - craft+0x1e0, up);   // probe point to hit point
+craft+0x308 = local_510;                          // what the spring measures
+if (local_510 < 1.0 && craft+0x208 == 1) {
+    Body_Translate(up * (1.0 - local_510), craft+0x1cc);
+}
+```
+
+Within one unit of the probe origin the hull is treated as through the surface
+and the body is **moved** out along `up` by the shortfall, before any spring
+force. Confidence **80** - the guard on `craft+0x208` is unidentified, so what
+selects a craft for this is not known.
+
 ### Resolved: neither reading was refuted, the load was
 
 The two readings this section used to record as contradicted by
