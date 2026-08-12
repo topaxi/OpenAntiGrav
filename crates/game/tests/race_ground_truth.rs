@@ -1536,31 +1536,74 @@ fn a_rocket_fired_on_a_real_track_flies_and_detonates() {
     // It has to *travel*, which is what says the class speed was read at all,
     // and it has to stop, which is what says it met the real collision soup
     // rather than flying through it to the lifetime cap.
+    //
+    // **Measured per shot, not for the volley.** This used to run the clock
+    // until the *last* rocket died and then assert that time was under the
+    // reap, while only ever measuring slot 0 - two different rockets in one
+    // assertion. On this circuit and at this firing point the disc's own
+    // `spread` fans the third shot off the side, and it then falls for the
+    // full ten seconds because there is nothing under it to hit. That is
+    // `Rocket_Update`'s own no-hit branch (`velocity.y -= dt * 50.0`, reaped
+    // at [`MAX_FLIGHT_SECONDS`]), so the reap is the *correct* end for it -
+    // and the failure it produced said "the rocket aged out instead of
+    // hitting the track", which sent two passes looking for a speed bug that
+    // was never there. The speed is exact: 277.78 units a second, the
+    // authored `venomspeed` 800 plus `launchSpeed` 200 over
+    // [`KMH_PER_UNIT_PER_SECOND`].
     let mut ticks = 1;
+    let mut last_alive = [0usize; oag_gameplay::projectile::ROCKET_SHOTS];
     let mut furthest = 0.0f32;
+    let mut travelled = 0.0f32;
+    let mut previous = race.world.projectiles.slots[0].position;
     while race.world.projectiles.live() > 0 {
         // Slot 0 is the middle rocket, the one that flies straight - the outer
         // two may detonate a tick either side of it.
         let flying = race.world.projectiles.slots[0].position;
         if race.world.projectiles.slots[0].kind.is_some() {
             furthest = furthest.max((flying - muzzle).length());
+            travelled += (flying - previous).length();
+            previous = flying;
+        }
+        for (slot, alive) in last_alive.iter_mut().enumerate() {
+            if race.world.projectiles.slots[slot].kind.is_some() {
+                *alive = ticks;
+            }
         }
         race.tick(&snapshot(&mut buttons, 0));
         ticks += 1;
-        assert!(ticks < 1200, "the rocket never stopped");
+        assert!(ticks < 1200, "a rocket never stopped");
     }
-    println!("the rocket flew {furthest:.1} units over {ticks} tick(s)");
+    println!(
+        "the middle rocket flew {travelled:.1} units of path, reaching \
+         {furthest:.1} from the muzzle; last tick alive per shot: \
+         {last_alive:?} of {ticks}"
+    );
     assert!(
         furthest > 10.0,
         "the rocket travelled {furthest:.1} units, which is not flight"
     );
-    // 10 seconds at any authored class speed is thousands of units, so a rocket
-    // that merely aged out would show a far larger distance than a wall on a
-    // real circuit can be from a weapon pad.
-    let seconds = ticks as f32 * race.dt();
+
+    // The reap in ticks, so a shot that ended on geometry is the one that
+    // ended sooner than it.
+    let reap = (oag_gameplay::projectile::MAX_FLIGHT_SECONDS / race.dt()) as usize;
+    let stopped = last_alive.iter().filter(|&&t| t < reap).count();
+
+    // The middle shot is aimed down the craft's own forward axis, so it is
+    // the one that must meet the circuit. If *this* ages out, either the
+    // speed is wrong or the sweep is missing the soup - the two faults this
+    // test exists to catch.
     assert!(
-        seconds < oag_gameplay::projectile::MAX_FLIGHT_SECONDS,
-        "the rocket aged out after {seconds:.2} s instead of hitting the track"
+        last_alive[0] < reap,
+        "the middle rocket aged out after {} tick(s) instead of hitting the \
+         track; reap is {reap}",
+        last_alive[0]
+    );
+    // And it must not be alone, or a volley that mostly flies through walls
+    // would still pass on its one lucky shot.
+    assert!(
+        stopped >= 2,
+        "only {stopped} of {} rockets met the collision soup: {last_alive:?}",
+        oag_gameplay::projectile::ROCKET_SHOTS
     );
 }
 
