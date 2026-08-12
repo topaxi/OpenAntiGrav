@@ -1000,16 +1000,33 @@ Three of those runs start within eight samples of a path boundary (09 at 967
 against 963, 02 at 1167 against 1159, 06 at 1196 against 1195), which is a lead
 and not yet a finding.
 
-**Two readings, not separated, and neither should be built on yet.** Either the
-disc authors an AI line that leaves the surface and the original holds craft to
-it by some mechanism not yet recovered, or this repository's collision loading
-drops geometry those stretches need. The zero-gap circuits argue the loader
-broadly works; they do not argue it works everywhere. Settling it means reading
-what is actually under 09's 967-1021 - track, scenery, or nothing - and that has
-not been done.
+Reading what is actually down there settles the first split and unsettles the
+correlation. On a healthy stretch the cast finds `Floor` at **half a ride height
+below the line**, everywhere, on every circuit. On 13's 20-48 it finds nothing
+within sixty reaches - an authored jump. On 09's 967-1021 it finds a `Wall` at
+the first sample and then `Floor` sinking to 4.8 ride heights and climbing back
+over sixty samples: a dip the line flies straight over. **But 06's notch is a
+single sample at 1196 with `Floor` at 0.5 either side of it**, and 06 loses its
+craft at 1230, where the floor is exactly where it should be. So the unsupported
+stretches are real and previously unmeasured, and they are *not* where the craft
+comes off.
 
-What is settled: **tuning the driver cannot fix this**, and a grip figure fitted
-against it would be fitted against a hole.
+**Where it does come off is the middle of the track.** At the tick contact is
+lost, on every failing circuit, the craft is comfortably inside its own
+corridor - 06 at +0.3 in a corridor running -23.3 to 0.0, 09 at +0.7 in -16.0 to
+10.8, 02 at +2.9 in -11.9 to 12.1 - at ordinary racing speed, with `Floor` half a
+ride height beneath it. Then it is airborne for three hundred ticks and seven
+hundred units down.
+
+So it is neither cornering wide nor driving off an edge nor a hole in the track.
+A craft in the middle of a supported piece of circuit stops being held by it.
+**That is a physics or collision question, not an AI one**, and the next step is
+a tick trace through 06's 1196-1230 asking what the hover hold and the wall
+contact do across the notch at 1196 - the one-sample gap the craft crosses
+thirty-five samples before it lets go.
+
+What is settled either way: **tuning the driver cannot fix this**, and a grip
+figure fitted against it would be fitted against whatever this turns out to be.
 
 **Grip stays at 180 until the corner departures are understood.** A sweep across
 all twelve circuits says 220 and 260 are quicker (38.6s and 38.4s mean clean lap
