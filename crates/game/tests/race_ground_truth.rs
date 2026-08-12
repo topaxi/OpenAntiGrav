@@ -2229,6 +2229,135 @@ fn a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round() {
     );
 }
 
+/// Whether there is anything under the line an opponent is told to drive.
+///
+/// **The measurement that turned "the AI flies off at one corner" into
+/// something that is not an AI question at all.** Craft were leaving six
+/// circuits at a repeatable place every lap, falling five to eight hundred
+/// units while only a few units laterally off their own line - straight down,
+/// not wide. So the question stopped being how the driver steers and became
+/// whether the surface it is steering along is there.
+///
+/// Casting down the surface normal at **every** sample of the racing line, from
+/// one probe reach above to one below, which is exactly what a craft's own
+/// antigravity probes reach:
+///
+/// | circuit | line samples with nothing under them | where |
+/// | --- | --- | --- |
+/// | 16, 03, 04 | **0** | - |
+/// | 06 | 5 | 1196-1200 |
+/// | 01 | 12 | 31-42 |
+/// | 07 | 13 | 2364-2376 |
+/// | 13 | 31 | 19-49 |
+/// | 09 | 55 | 967-1021 |
+/// | 02 | 70 | 1167-1236 |
+/// | 10 | 72 | 135-206 |
+/// | 14 | 82 | 684-765 |
+/// | 05 | 134 | 161-211, 811-893 |
+///
+/// Each is a single contiguous run, and **the three circuits with none are
+/// three of the circuits that never lose a craft**. A second, deeper cast
+/// separates two different things wearing the same result: on 13 and most of 10
+/// there is nothing within sixty reaches, which is an authored *jump* - 13 flies
+/// it, lands, and laps cleanly. On 09, 02, 05, 14, 01 and 07 there is a surface,
+/// one to sixty ride-heights **below** the line. That is not a gap in the track;
+/// it is a racing line running above the track.
+///
+/// Which of those two this is per circuit is not settled, and neither is whether
+/// the deeper cases are the disc's data or this repository's collision loading.
+/// See `docs/gameplay/ai.md`.
+///
+/// The assertion is only that the three clean circuits stay clean, because that
+/// is the part that is understood. The table prints so a reader gets the whole
+/// picture rather than the one bound.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_racing_line_has_track_under_it_where_it_is_known_to() {
+    let Some(image) = image() else { return };
+    let mut archives = oag_pulse::open(&image.display().to_string()).expect("mounting the disc");
+    let blob = archives
+        .read_name(oag_pulse::names::GAME_PLUGIN_DEFINITION)
+        .expect("the game plugin definition");
+    let definition = oag_formats::fexml::expand(&blob).expect("expanding it");
+
+    let mut measured: Vec<(String, usize)> = Vec::new();
+    for track in catalogue::tracks(&definition)
+        .into_iter()
+        .filter(|track| !track.reversed)
+    {
+        let Ok(loaded) = race::load(&race::Options {
+            source: image.display().to_string(),
+            class: SpeedClass::Venom,
+            mode: oag_race::Mode::SingleRace,
+            track: track.entry_name(),
+            ..race::Options::default()
+        }) else {
+            continue;
+        };
+        let reach = loaded.setup.handling.antigrav.ride_height;
+        let collision = loaded.setup.collision.clone();
+        let race = race::Race::start(loaded.setup);
+        let line = race.racing_line();
+
+        // Two casts per unsupported sample: one probe reach, which is what a
+        // craft holds onto, then sixty, which says whether there is a surface
+        // down there at all.
+        let (mut gaps, mut below) = (Vec::new(), 0u32);
+        for index in 0..line.len() {
+            let Some(sample) = race.ai_sample(index) else {
+                continue;
+            };
+            let up = (-Vec3::from_array(sample.down)).normalize_or_zero();
+            let from = line.point(index) + up * reach;
+            let cast = |length: f32| {
+                collision
+                    .raycast(oag_physics::Ray::new(from, -up, length), None, false)
+                    .is_some()
+            };
+            if cast(reach * 2.0) {
+                continue;
+            }
+            gaps.push(index);
+            if cast(reach * 60.0) {
+                below += 1;
+            }
+        }
+        let mut runs: Vec<(usize, usize)> = Vec::new();
+        for index in &gaps {
+            match runs.last_mut() {
+                Some(last) if *index == last.1 + 1 => last.1 = *index,
+                _ => runs.push((*index, *index)),
+            }
+        }
+        println!(
+            "{:<12} {:>4} of {} line samples unsupported ({below} have a surface further \
+             below) in runs {:?}",
+            track.id,
+            gaps.len(),
+            line.len(),
+            runs.iter()
+                .filter(|(from, to)| to - from >= 4)
+                .map(|(from, to)| format!("{from}..{to}"))
+                .collect::<Vec<_>>(),
+        );
+        measured.push((track.id.clone(), gaps.len()));
+    }
+    if measured.is_empty() {
+        return;
+    }
+
+    for id in ["16_Track", "03_Track", "04_Track"] {
+        let Some((_, gaps)) = measured.iter().find(|(name, _)| name == id) else {
+            continue;
+        };
+        assert_eq!(
+            *gaps, 0,
+            "{id} used to have track under every sample of its racing line and now has \
+             {gaps} without"
+        );
+    }
+}
+
 /// The Rocket's model is longest along the axis `Race::rocket_model_matrices`
 /// aims at its velocity.
 ///

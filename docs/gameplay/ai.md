@@ -950,6 +950,67 @@ ends up physically on the split's other branch now has no line beneath it at
 all. That is strictly better than stalling at the seam, and the rescue net
 catches it, but it is a gap.
 
+#### And the corner departures are not a driving fault either
+
+**Found 2026-08-12, and it moves this out of the AI entirely.** Tracing 06
+through its departure showed the craft is already 22 units *below* its own line
+at index 1240 and falling - `grounded` at zero, thrust at zero, speed climbing
+109 to 151 while it drops. Of the 23 units it is off the line, 22 are vertical
+and 6 lateral against a 70-unit half-width. It is not cornering wide. It is
+falling straight down through where the track should be.
+
+So the useful detector is not distance from the line but **loss of contact**:
+the driver index at the last grounded tick before a flight of a second or more.
+That reads much earlier than the corridor test - 06 at 1230 rather than 1290 -
+and every failing circuit shows the same signature, a fall of 500 to 780 units:
+
+| circuit | boundary | last contact | falls |
+| --- | --- | --- | --- |
+| 16, 03, 04 | - | never leaves the ground | - |
+| 13 | 1523 | 20 | flies 60 ticks, **lands**, laps cleanly |
+| 01 | 1763 | 78 | 510-550 |
+| 05 | 1015 | 215 | 500-660 |
+| 07 | 991 | 268 | 680 |
+| 10 | 131 | 137 then 345 | first flight lands; the second falls 500-690 |
+| 14 | 891 | 762 | 750-775 |
+| 09 | 963 | 1026 | 570-600 |
+| 06 | 1195 | 1230 | 600-710 |
+| 02 | 1159 | 1232 | 625-720 |
+
+Still not the boundaries, so the retraction above stands - but the margin is 35
+to 73 samples rather than 94 to 142, and on 14, 01, 05 and 07 the loss is
+nowhere near one.
+
+`the_racing_line_has_track_under_it_where_it_is_known_to` then casts down the
+surface normal at every sample of the line, one probe reach either way, which is
+what a craft's own antigravity probes hold onto. **Nine of the twelve circuits
+have a stretch of racing line with nothing under it**, each one a single
+contiguous run, and the three with none - 16, 03 and 04 - are three of the
+circuits that never lose a craft. A second cast sixty reaches deep splits the
+result in two:
+
+- **Nothing down there at all**: 13's 31 samples and 40 of 10's 72. That is an
+  authored **jump**, and 13 flies it, lands and laps cleanly, which is what a
+  jump is supposed to look like.
+- **A surface, one to sixty ride-heights below**: 09's 55, 02's 70, 14's 82,
+  05's 134, 01's 12, 07's 13. Not a gap in the track - a racing line running
+  *above* the track.
+
+Three of those runs start within eight samples of a path boundary (09 at 967
+against 963, 02 at 1167 against 1159, 06 at 1196 against 1195), which is a lead
+and not yet a finding.
+
+**Two readings, not separated, and neither should be built on yet.** Either the
+disc authors an AI line that leaves the surface and the original holds craft to
+it by some mechanism not yet recovered, or this repository's collision loading
+drops geometry those stretches need. The zero-gap circuits argue the loader
+broadly works; they do not argue it works everywhere. Settling it means reading
+what is actually under 09's 967-1021 - track, scenery, or nothing - and that has
+not been done.
+
+What is settled: **tuning the driver cannot fix this**, and a grip figure fitted
+against it would be fitted against a hole.
+
 **Grip stays at 180 until the corner departures are understood.** A sweep across
 all twelve circuits says 220 and 260 are quicker (38.6s and 38.4s mean clean lap
 against 39.8s) and reach six clean circuits rather than five - but the respawn
@@ -1424,6 +1485,7 @@ rebase onto a function start, so they were left alone rather than guessed at.
 | **A track whose lap drives every path maps a line index onto itself**, which is what says the two index spaces agree where they should | `race::tests::a_track_whose_lap_drives_every_path_maps_a_line_index_onto_itself`, `..._a_track_with_no_ring_still_gets_every_sample_in_file_order` | yes |
 | A driver's index reads the sample the lap puts there, and one past the end wraps to the start | `race::tests::an_ai_index_reads_the_sample_the_lap_puts_there` | yes |
 | Eleven of twelve circuits complete a lap and six manage a clean one | `race_ground_truth::a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round` | **no** - needs a disc image. **Run and passing 2026-08-12.** |
+| **Three circuits have track under every sample of their racing line, and nine do not** | `race_ground_truth::the_racing_line_has_track_under_it_where_it_is_known_to` | **no** - needs a disc image. **Run and passing 2026-08-12**: 16, 03 and 04 at zero; the other nine between 5 and 134 samples. |
 
 `race::tests`' craft is built on `Handling::ZERO` with an empty collision world,
 so no force law runs there at all and those tests assert only that the controls
