@@ -721,6 +721,23 @@ pub fn probe<R: Raycaster + ?Sized>(
     let Some(hit) = raycaster.raycast(ray, env.self_collider, false) else {
         return HoverProbe::miss(point);
     };
+    probe_from_hit(state, handling, point, &hit, target_height)
+}
+
+/// The half of [`probe`] that turns a hit into a force, without casting.
+///
+/// Split out for [`derived_hit`], which above [`FAST_PROBE_SPEED`] produces the
+/// rear probe's hit arithmetically rather than by casting - see there for why.
+#[must_use]
+fn probe_from_hit(
+    state: &ShipState,
+    handling: &Handling,
+    point: Vec3,
+    hit: &crate::collide::RaycastHit,
+    target_height: f32,
+) -> HoverProbe {
+    let body = &state.body;
+    let up = body.up();
 
     let height = (point - hit.point).dot(up);
 
@@ -791,6 +808,91 @@ pub fn probe<R: Raycaster + ?Sized>(
     }
 }
 
+/// Above this forward speed the rear probe is **derived rather than cast**.
+///
+/// `Ship_CastHoverProbes` branches on `craft+0x2ec <= 50.0` at its head, and
+/// `craft+0x2ec` is the cached `|dot(velocity, forward)|` of the previous frame,
+/// recovered at 199/199 against a capture; see
+/// `docs/ghidra/functions/psp-pulse-usa/engine.md`. Below the threshold it casts
+/// two independent rays. Above it, it casts **one**, and if that ray hits, it
+/// manufactures the other probe's hit record from it.
+pub const FAST_PROBE_SPEED: f32 = 50.0;
+
+/// How far the derived hit is pushed along `up` per unit of forward-facing
+/// surface normal, `vscl.q` by `0x40c00000` at the tail of the fast path.
+///
+/// A slope-following correction with no derivation behind it: the exact answer
+/// over a 9-unit probe spacing would be `-9 * dot(n, forward) / dot(n, up)`,
+/// and the original uses a flat `6.0`. Transcribed, not improved.
+pub const DERIVED_HIT_SLOPE_GAIN: f32 = 6.0;
+
+/// The rear probe's hit, manufactured from the front probe's.
+///
+/// **This is the mechanism that keeps a craft attached over a crest**, and it is
+/// why the original does not shed half its suspension the moment one probe
+/// overruns a lip. Above [`FAST_PROBE_SPEED`] the second ray is never cast: the
+/// first probe's whole hit record is copied, its point translated by the
+/// world-space vector between the two probes, and then pushed along `up` by
+/// `dot(normal, forward) * 6.0` to follow the slope. The hit *flag* is copied
+/// too, so a front probe in contact guarantees a rear probe in contact and
+/// `grounded` cannot read `0.5` at speed.
+#[must_use]
+fn derived_hit(
+    state: &ShipState,
+    front_point: Vec3,
+    rear_point: Vec3,
+    front: &crate::collide::RaycastHit,
+) -> crate::collide::RaycastHit {
+    let up = state.body.up();
+    let forward = state.body.forward();
+    let slope = front.normal.dot(forward);
+    crate::collide::RaycastHit {
+        point: front.point + (rear_point - front_point) + up * slope * DERIVED_HIT_SLOPE_GAIN,
+        ..*front
+    }
+}
+
+/// Casts the pair, taking whichever of the two paths the speed selects.
+#[must_use]
+fn probe_pair<R: Raycaster + ?Sized>(
+    state: &ShipState,
+    handling: &Handling,
+    env: &Environment,
+    raycaster: &R,
+    offsets: [Vec3; 2],
+    target_height: f32,
+) -> [HoverProbe; 2] {
+    let body = &state.body;
+    let speed = body.linear_velocity.dot(body.forward()).abs();
+    if speed <= FAST_PROBE_SPEED {
+        return [
+            probe(state, handling, env, raycaster, offsets[0], target_height),
+            probe(state, handling, env, raycaster, offsets[1], target_height),
+        ];
+    }
+
+    let up = body.up();
+    let front_point = body.position + body.orientation * offsets[0];
+    let rear_point = body.position + body.orientation * offsets[1];
+    let Some(front) = raycaster.raycast(
+        Ray::new(front_point, -up, target_height),
+        env.self_collider,
+        false,
+    ) else {
+        // The front ray found nothing, so the original casts the rear one for
+        // real - the derivation has nothing to derive from.
+        return [
+            HoverProbe::miss(front_point),
+            probe(state, handling, env, raycaster, offsets[1], target_height),
+        ];
+    };
+    let rear = derived_hit(state, front_point, rear_point, &front);
+    [
+        probe_from_hit(state, handling, front_point, &front, target_height),
+        probe_from_hit(state, handling, rear_point, &rear, target_height),
+    ]
+}
+
 /// Runs both probes and the grounded-only terms.
 #[must_use]
 pub fn evaluate<R: Raycaster + ?Sized>(
@@ -801,10 +903,7 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     target_height: f32,
 ) -> Hover {
     let offsets = probe_offsets();
-    let probes = [
-        probe(state, handling, env, raycaster, offsets[0], target_height),
-        probe(state, handling, env, raycaster, offsets[1], target_height),
-    ];
+    let probes = probe_pair(state, handling, env, raycaster, offsets, target_height);
 
     let contacts = probes.iter().filter(|probe| probe.contact).count() as u32;
     if contacts == 0 {

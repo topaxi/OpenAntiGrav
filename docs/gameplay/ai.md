@@ -1230,6 +1230,43 @@ It changes nothing about the four that remain: those craft leave contact where
 there is nothing within a probe reach to come back to, and a damping coefficient
 does not reach that.
 
+#### And then two more, from how the probes are cast at speed
+
+`Ship_CastHoverProbes` branches at its head on `craft+0x2ec <= 50.0` - the
+cached `|dot(velocity, forward)|`, recovered at 199/199 against a capture. Below
+that speed it casts two independent rays. **Above it, it casts one**, and if the
+front ray hits, the rear probe's entire hit record is manufactured from it: the
+point translated by the world-space vector between the two probes, then pushed
+along `up` by `dot(normal, forward) * 6.0` to follow the slope. The hit *flag*
+is copied with it.
+
+That last detail is the mechanism. **At speed, a front probe in contact
+guarantees a rear probe in contact**, so `grounded` cannot read `0.5` - the
+craft cannot shed half its suspension because one probe overran a lip. This
+crate cast two independent rays at every speed and did exactly that; the
+symptom is visible in a hand-driven capture as `grounded 1.0` then `0.5` then
+`0.0` over two seconds.
+
+Every fall on this page happens between 115 and 160 units per second, which is
+to say entirely inside the branch this crate did not have.
+
+| | before | after |
+| --- | --- | --- |
+| circuits managing a clean lap | 7 | **9** |
+| 05 de Konstruct | never a second lap | clean 36.8s, **zero** recoveries |
+| 09 The Amphiseum | no clean lap, 6 recoveries | clean 47.4s, 3 recoveries |
+| 01 Basilico | 36.9s, 3 recoveries | 34.3s, 2 recoveries |
+| still no clean lap | 02, 05, 09, 14, 06 | 02 Metropia, 14 Fort Gale, 06 Vertica |
+
+All twelve circuits now complete every lap. Vertica, the circuit the whole
+investigation started on, is still one of the three - its losses moved from
+index 1518 to 1506 and its recoveries from six to seven, so the fast path
+changed where it comes off without stopping it.
+
+The `6.0` is transcribed and not derived: the exact slope correction over the
+9-unit probe spacing would be `-9 * dot(n, forward) / dot(n, up)`, and the
+original uses a flat constant. Kept literal.
+
 **Grip stays at 180 until the corner departures are understood.** A sweep across
 all twelve circuits says 220 and 260 are quicker (38.6s and 38.4s mean clean lap
 against 39.8s) and reach six clean circuits rather than five - but the respawn
