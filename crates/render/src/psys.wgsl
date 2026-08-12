@@ -66,14 +66,26 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // effect binds (orange_glow2.tga - identified live: every psys draw in
     // a crash reads the same texture address, and the dump's pixels carry
     // the authoring-path's promise). Measured: alpha falls essentially
-    // linearly (fit (1-r)^0.92, a touch faster mid-range, hence 1.2); the
-    // texel colour *also* dims linearly with radius while keeping its
-    // saturated hue, whitening only in the innermost ~15 %. Splitting the
-    // falloff between rgb and alpha the same way the sprite does is what
-    // keeps the bright part of a spark small - a flat-rgb quad reads twice
-    // as wide at the same alpha curve, which was the reported "too big,
-    // not line-like" look.
-    let core = pow(shape, 8.0);
-    let rgb = mix(in.colour.rgb, vec3<f32>(1.0, 1.0, 1.0), core * 0.85) * shape;
+    // linearly (fit (1-r)^0.92, a touch faster mid-range, hence 1.2), and
+    // the texel colour dims linearly with radius while keeping its
+    // saturated hue. Splitting the falloff between rgb and alpha the same
+    // way the sprite does is what keeps the bright part of a spark small -
+    // a flat-rgb quad reads twice as wide at the same alpha curve, which
+    // was the reported "too big, not line-like" look.
+    //
+    // **The colour is the palette's, never whitened.** This used to carry a
+    // `mix(rgb, white, pow(shape, 8.0) * 0.85)` term, from the same dump's
+    // innermost ~15 % reading. It was fitted on the collision sparks, whose
+    // quads are all under a unit across, and it is a fixed *fraction* of
+    // whatever quad it lands on - so on a rocket explosion's 30-to-100-unit
+    // billboards the same fraction manufactured a 15-unit disc of pure
+    // white. Held against the original in PPSSPP (`data/reference/`, taken
+    // with `scripts/psp-fire-weapon.py`), that is plainly wrong: the real
+    // fireball stays amber to its hottest point and the scene behind reads
+    // through it. The emitter's 256-entry table is the colour authority and
+    // it authors no white, so inventing one here was overriding the asset.
+    // Removing it barely moves the sparks - `bits` is white in its own
+    // palette either way.
+    let rgb = in.colour.rgb * shape;
     return vec4<f32>(rgb, pow(shape, 1.2) * in.colour.a);
 }

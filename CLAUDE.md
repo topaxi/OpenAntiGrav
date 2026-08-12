@@ -197,6 +197,39 @@ Consequences that affect how you name and touch things in Ghidra / decompiled co
 - The `ghidra-mcp` MCP server (configured in `.mcp.json`) drives Ghidra directly when
   a Ghidra project is open.
 
+### Never invent what the assets already author
+
+**If a thing exists in the disc's own data, play the data. Do not author a
+stand-in for it, and do not hand-transcribe it into a `const` either.** This
+applies to particle effects (`Data\Psys\*.POB`), models, textures, tables and
+tuning values alike. Two failures this rule exists to prevent, both of which
+already happened here:
+
+1. **A hand-transcribed table.** `oag_render::sparks` carried the collision
+   effect's four emitters as a `const` read off the file by hand. Every value
+   was *correct* - the parser reproduces them - and it was still wrong: not
+   re-derivable, and no use at all for the other 34 effects on the disc.
+2. **A plausible-looking stand-in.** The rocket drew invented smoke puffs and
+   expanding blast billboards because the `.pob` payload was believed
+   undecoded. A stand-in that reads as *legible* is exactly how a wrong
+   picture survives review, and it silently removed the pressure to decode the
+   real thing.
+
+So: parse it, play it, and if it will not parse, **draw nothing and say so** in
+the loader report. Nothing is an honest, visible absence; an invention is not.
+Where a stand-in genuinely cannot be avoided (a texture that has no located WAD
+entry yet), keep it to a *substitute for the missing asset alone* and never let
+it override data you do have - the whitening term removed from
+`crates/render/src/psys.wgsl` on 2026-08-12 was a sprite substitute that had
+grown into an override of the emitter's own colour table.
+
+The mechanism for effects is already generic: `oag_render::psys::Library` loads
+any `Data\Psys\<name>.POB` by name and `psys::Stage` plays any number of them at
+once. Adding an effect is adding its name and its **trigger** - and the trigger
+is the part that needs reverse-engineering, so an effect with no recovered
+trigger stays unwired rather than fired on a guess. `HANDOVER.md` lists the ones
+still waiting.
+
 ## Documentation tree
 
 Start at [`docs/README.md`](docs/README.md) for the full reading order and tree map.

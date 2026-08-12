@@ -420,6 +420,77 @@ Two corrections the corpus forced on the table:
   reading error. The block's `period` field is likewise authored (`4.0` on
   `WO_SHIP_COLL_SPARK`) with no traced consumer.
 
+### Flag `0x1` is "this effect loops" - 2026-08-12
+
+The flags word at `+0x20` carries a bit that decides whether
+`duration_ticks` at `+0x24` is a countdown at all. **Corpus-derived,
+confidence 75**, and the split is clean on both discs - 76 emitters over the
+PSP's 35 systems and 41 on the PS2, with **no file mixing set and clear
+emitters**, which is what makes it a property of the effect rather than of
+one emitter.
+
+| `0x1` set | `0x1` clear |
+| --- | --- |
+| `WO_ROCKET_FLARE`, `WO_MISSILE_HEAD`, `WO_SHURIKEN_HEAD`, `WO_SHURIKEN_TRAIL`, `WO_PLASMA_HEAD`, `WO_LEACHBEAM_CHARGING`, `WO_LEACHBEAM_ENERGY`, `WO_REPULSER`, `WO_QUAKE`, `WO_RAIN`, `WO_RAIN_LENS`, `WO_SNOW`, `WO_BLUE_WELDER`, `WO_MODESTO_STEAM_A`; PS2 adds `WO_SHIP_ENGINEFLARE`, `WO_MODESTO_STEAM_B`, `WO_UNDERWATER_DEBRIS` | every explosion, every bounce, every spark burst, `WO_PLASMA_FLASH`, `WO_REPULSER_BLAST`, `WO_WEAPON_ABSORB`, `WO_BOMB_SMOKERING`; PS2 adds `WO_CANNON_HIT_SHIP`, `WO_TRACK_ROCK_DEBRIS`, `WO_DAMAGE_PLUME` |
+
+Every attached or environmental effect is on the left; every impact is on
+the right. **`WO_RAIN`, `WO_SNOW` and `WO_BLUE_WELDER` settle it on their
+own**: all three author a *one-tick* duration, and none of the three can be
+a one-tick effect. The PS2's `WO_SHIP_ENGINEFLARE` is the same argument from
+an independently authored set - an engine flare runs for the whole race.
+
+The executable has the matching mechanism, at `ParticleSystem_Update`
+(`0x088f5b9c`). Under **instance** flag `0x10` at `+0x160`:
+
+- the counter at `+0x138` counts *up* by one per update instead of down by
+  the frame's ticks,
+- the emitter-level channel age becomes `counter / 60` rather than
+  `1 - counter / duration`,
+- and the branch that sets the finished bit is skipped entirely.
+
+What is **not** traced is the spec-`0x1`-to-instance-`0x10` assignment: the
+instance initialiser is behind an unresolved import stub, so the two are
+joined by the corpus rather than by a read. That is what holds the
+confidence at 75 rather than higher.
+
+Why it matters to a reimplementation: `WO_ROCKET_FLARE` authors 100 ticks
+and a rocket flies for up to 600. Reading that as a countdown makes the
+flare stop a sixth of the way through the flight, and the obvious repair -
+re-triggering it - is an invention covering a misread flag.
+
+### The colour table is RGB-only, and `+0xbc` says whether it animates - 2026-08-12
+
+`ParticleSystem_UpdateParticles` (`0x088f635c`) resolves a live particle's
+colour in four instructions, and they settle two questions this project had
+open:
+
+```c
+local_60 = (*(int *)(spec + 0xbc) != 2);
+...
+if (local_60 != 0) {
+    *p = (*p & 0xff000000)                                   // keep alpha
+       | (palette[(int)(age * 255.999) & 0xff] & 0xffffff);  // RGB only
+}
+```
+
+- **The palette entry's alpha byte is masked off** (`& 0xffffff`) and the
+  particle's own alpha byte is preserved. The 256-entry table is an
+  RGB-over-life ramp whose fourth column the interpreter never reads, even
+  though it is authored as a ramp too. A renderer that multiplies the two
+  makes every additive particle roughly twice as transparent as it should
+  be.
+- **`+0xbc == 2` means the colour does not animate**: the per-tick refresh
+  is skipped and the particle keeps whatever colour it was given at spawn.
+  What the spawn draw *is* remains unread - `func_0x000f16c4` is another
+  import stub - so "constant at whatever it drew" is as far as this goes.
+
+Alpha comes from the alpha channel scaled by an instance field:
+`alpha = clamp(channel, 0, 255) * instance[+0x40]`, and drawn size likewise
+`size = particle_size * instance[+0x34]` - the second being the severity
+`ShipCollisionFx_Trigger` derives from the impact. Confidence **85** for
+both, straight off the decompilation, with the caveat that nothing has read
+what feeds `+0x40`.
+
 ### A second, fixed-offset field block sits right after the name - no fixup needed
 
 `FUN_088f4910` (the function `ShipCollisionFx_Trigger`'s spawned particle
