@@ -836,6 +836,27 @@ pub const DERIVED_HIT_SLOPE_GAIN: f32 = 6.0;
 /// `dot(normal, forward) * 6.0` to follow the slope. The hit *flag* is copied
 /// too, so a front probe in contact guarantees a rear probe in contact and
 /// `grounded` cannot read `0.5` at speed.
+///
+/// # Which probe is cast, settled by measurement
+///
+/// `Ship_InitCraft` writes the offsets at `0x08849480`: probe 0 is
+/// `(0, -1.5, +6.0)` and probe 1 is `(0, -1.5, -6.0)`, raw, before the `0.75`
+/// this module folds in. Whether `+6.0` is the *nose* depends on whether the
+/// original's craft basis faces its local `+Z`, which this crate mirrors - and
+/// nothing recovered settles it, so it was **measured instead**: casting
+/// `offsets[1]` first and deriving `offsets[0]` takes the twelve-circuit solo
+/// benchmark from nine clean laps to **two**, with respawn counts of twenty to
+/// fifty a circuit against nought to seven. The order below is the right way
+/// round by a very wide margin.
+///
+/// # Why it is also a downforce
+///
+/// Worth seeing, because it is not obvious from the shape: the derived hit is
+/// *not* clamped by a ray, so on a falling slope it can sit further below the
+/// probe than `target_height`. The spring is `(target_height - height)`, so a
+/// derived probe past its target pulls the craft **down** onto the surface
+/// rather than pushing it off. That is the only term in the model that does,
+/// and it exists only above [`FAST_PROBE_SPEED`].
 #[must_use]
 fn derived_hit(
     state: &ShipState,
