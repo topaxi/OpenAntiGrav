@@ -2167,11 +2167,12 @@ fn advance_standings(world: &mut World, course: &Course) {
 /// property and narrows where the artists narrowed it. See
 /// `docs/gameplay/ai.md`.
 ///
-/// Index-parallel to the sample table on purpose - see [`Race::racing_line`].
+/// Index-parallel to [`ai_order`] on purpose - see [`Race::racing_line`].
 #[must_use]
-fn racing_line(spline: &Spline) -> oag_ai::Line {
-    let samples: Vec<_> = (0..spline.len())
-        .filter_map(|index| spline.sample(index))
+fn racing_line(spline: &Spline, order: &[u32]) -> oag_ai::Line {
+    let samples: Vec<_> = order
+        .iter()
+        .filter_map(|&index| spline.sample(index as usize))
         .collect();
     let points = samples
         .iter()
@@ -2194,6 +2195,47 @@ fn racing_line(spline: &Spline) -> oag_ai::Line {
         })
         .collect();
     oag_ai::Line::with_corridor(points, corridor)
+}
+
+/// Which spline samples the AI line is made of, in the order a lap drives them.
+///
+/// **The one place the two index spaces are related**, and the reason there are
+/// two. [`Spline`] is every path the track authors, concatenated in *file*
+/// order, because the hover hold and the culler have to be able to locate a
+/// craft wherever it physically is - including on the branch of a split that
+/// this lap does not use. A driver wants the opposite: the circuit, once round,
+/// with nothing in it that a lap does not drive.
+///
+/// On nine of the disc's twelve circuits those are the same list and this is the
+/// identity permutation. On `05_Track`, `14_Track` and `07_Track` the file holds
+/// three paths and the lap ring walks two; the third is the other side of a
+/// split, and file order dropped a thousand samples of it into the middle of the
+/// lap, pointing the wrong way. A driver reaching the end of path 0 found its
+/// next samples a kilometre away, its 48-sample window could not follow, and the
+/// index stuck - those three circuits were exactly the three a lone craft never
+/// got a second lap out of. See `docs/gameplay/ai.md`.
+///
+/// Falls back to the whole table in file order when the track has no closed
+/// ring. A driveable ribbon with no lap counter still wants a line, and "every
+/// sample there is" is the honest answer when nothing knows which way round is
+/// forward.
+#[must_use]
+fn ai_order(spline: &Spline, course: Option<&Course>) -> Vec<u32> {
+    let every = || (0..spline.len() as u32).collect::<Vec<_>>();
+    let Some(course) = course else {
+        return every();
+    };
+    let mut order = Vec::with_capacity(spline.len());
+    for path in course.path_order() {
+        // The samples of one path, which the table holds contiguously. Scanning
+        // rather than assuming the two crates resample identically: `Course` and
+        // `Spline` each carry their own `STEPS_PER_SEGMENT` and a mapping built
+        // on them being equal would break silently if either moved.
+        order.extend(
+            (0..spline.len() as u32).filter(|&index| spline.path_of(index as usize) == Some(path)),
+        );
+    }
+    if order.is_empty() { every() } else { order }
 }
 
 /// The spline resampled into a flat table, for locating a ship on the track.
@@ -2402,12 +2444,17 @@ pub struct Race {
     spline: Spline,
     /// The authored racing line, as the opponents' drivers want it.
     ///
-    /// Built once from [`Self::spline`] and **index-parallel to it**, so a
-    /// driver's place on the line is also its place in the sample table and no
+    /// Built once from [`Self::spline`] and **index-parallel to [`Self::ai_order`]**,
+    /// so a driver's place on the line is also its place in that table and no
     /// craft pays for two searches. Track data rather than world state, which is
     /// why it is here and the drivers themselves are on the ships. See
     /// [`racing_line`] and `docs/gameplay/ai.md`.
     racing_line: oag_ai::Line,
+    /// Which spline sample each racing-line index is, in lap order.
+    ///
+    /// The identity permutation on nine of the disc's twelve circuits. See
+    /// [`ai_order`], and [`Self::ai_sample`] for the lookup itself.
+    ai_order: Vec<u32>,
     /// What the opponents' drivers are flown with. One set for the whole field:
     /// per-craft variation is the skill work, and this is the basic driver.
     ai_tuning: oag_ai::Tuning,
@@ -2832,7 +2879,8 @@ impl Race {
         // nobody authored and the seven opponents would be a guess wearing the
         // shape of a measurement.
         let mut ai_pilots = [oag_ai::Pilot::BALANCED; oag_gameplay::MAX_SHIPS];
-        let line = racing_line(&spline);
+        let order = ai_order(&spline, course.as_ref());
+        let line = racing_line(&spline, &order);
         let rescue_distance = spline.max_half_width() * RESCUE_HALF_WIDTHS;
         let mut pilot_names: [String; oag_gameplay::MAX_SHIPS] = Default::default();
         // The built-ins, plus whatever the player has authored. A directory
@@ -2919,6 +2967,7 @@ impl Race {
 
         Self {
             racing_line: line,
+            ai_order: order,
             // **Degraded from the measured tuning**, never boosted toward it -
             // see `oag_ai::Difficulty`. At the top level this is the
             // measurement unchanged.
@@ -3167,7 +3216,7 @@ impl Race {
     }
 
     /// The line the opponents' drivers follow, index-parallel to
-    /// [`Self::spline`].
+    /// [`Self::ai_order`] rather than to [`Self::spline`].
     ///
     /// Read-only, and it exists so a test can ask the question that matters
     /// when an opponent misbehaves: *is the craft where its driver believes it
@@ -3177,6 +3226,36 @@ impl Race {
     #[must_use]
     pub fn racing_line(&self) -> &oag_ai::Line {
         &self.racing_line
+    }
+
+    /// The spline sample a driver's index stands on.
+    ///
+    /// **`driver.index` is an index into the racing line, not into the sample
+    /// table**, and on the three circuits where those differ using one as the
+    /// other reads a sample from the wrong side of the track. Wraps, because the
+    /// line is a closed ring and the caller that wants the *next* sample is
+    /// asking a lap question rather than a table question - `ai_order[i + 1]`,
+    /// never `ai_order[i] + 1`, which at the end of a path is a different place
+    /// entirely.
+    #[must_use]
+    pub fn ai_sample(&self, ai_index: usize) -> Option<&Sample> {
+        self.sample_index_of(ai_index)
+            .and_then(|index| self.spline.sample(index))
+    }
+
+    /// The same lookup, as an index into [`Self::spline`].
+    ///
+    /// For the one caller that needs the number rather than the sample:
+    /// [`Self::respawn`] takes a *sample* index, because the player reaches it
+    /// from `Spline::nearest` and an opponent from its driver, and a single
+    /// parameter carrying two index spaces depending on the caller is the bug
+    /// this pair of accessors exists to make impossible to write.
+    #[must_use]
+    fn sample_index_of(&self, ai_index: usize) -> Option<usize> {
+        if self.ai_order.is_empty() {
+            return None;
+        }
+        Some(self.ai_order[ai_index % self.ai_order.len()] as usize)
     }
 
     /// Drives and steps every craft that is not the player's.
@@ -3249,12 +3328,11 @@ impl Race {
             self.spend_opponent_pickup(slot, &controls, &field);
 
             // The driver just located itself, and the line is index-parallel to
-            // the sample table, so this costs a lookup rather than a search.
+            // `ai_order`, so this costs a lookup rather than a search.
             let index = self.world.ships[slot].driver.index as usize;
-            let track_sample = self.spline.sample(index).map(Spline::track_sample);
+            let track_sample = self.ai_sample(index).map(Spline::track_sample);
             let track_sample_next = self
-                .spline
-                .sample(index + 1)
+                .ai_sample(index + 1)
                 .map(Spline::track_sample)
                 .or(track_sample);
             let env = Environment {
@@ -3291,14 +3369,16 @@ impl Race {
             // Same `env` and same pre-step position the force law just ran with,
             // for the reason `reset_zone_touched` gives, and `index` is the
             // sample the craft was on before the step - the last place it is
-            // known to have been on the track.
+            // known to have been on the track. Mapped out of the driver's index
+            // space, because [`Self::respawn`] speaks the sample table's.
+            let last_good = self.sample_index_of(index);
             self.respawn_cooldown[slot] = self.respawn_cooldown[slot].saturating_sub(1);
             // Unconditionally, and before the `||` could skip it: the dwell
             // counter has to see every tick or a craft banks time it never
             // spent away.
             let lost = self.lost_off_the_circuit(slot);
             if lost || self.reset_zone_touched(slot, &env, position) {
-                self.respawn(slot, Some(index));
+                self.respawn(slot, last_good);
             } else if self.respawn_cooldown[slot] == 0 {
                 self.respawns_in_a_row[slot] = 0;
             }
@@ -3712,6 +3792,11 @@ impl Race {
         // successor through a junction. The original follows the junction graph;
         // this is one sample out of 34,000 per lap and is recorded rather than
         // pretended away.
+        //
+        // Still table order, deliberately: the player's locator works in sample
+        // space, where every path the track authors is reachable. An opponent's
+        // equivalent goes through [`Self::ai_sample`] instead, because a driver
+        // is asking a lap question. See [`ai_order`].
         let track_sample_next = index
             .and_then(|index| self.spline.sample(index + 1))
             .map(Spline::track_sample);
@@ -4738,10 +4823,6 @@ impl Race {
         self.world.ships[slot].pickup.weapon = drawn;
     }
 
-    /// Whether this tick ended in contact with `Reset` geometry.
-    ///
-    /// Suppressed while the cooldown runs and once respawning has given up, so
-    /// the two guards live in one place rather than at the call site.
     /// Whether this opponent has been away from its own driver's idea of where
     /// it is for long enough to count as lost.
     ///
@@ -4776,6 +4857,10 @@ impl Race {
             && self.lost_ticks[slot] >= RESCUE_TICKS
     }
 
+    /// Whether this tick ended in contact with `Reset` geometry.
+    ///
+    /// Suppressed while the cooldown runs and once respawning has given up, so
+    /// the two guards live in one place rather than at the call site.
     fn reset_zone_touched(&self, slot: usize, env: &Environment, before: Vec3) -> bool {
         if self.respawn_disabled[slot] || self.respawn_cooldown[slot] > 0 {
             return false;
@@ -4810,8 +4895,14 @@ impl Race {
     /// inertia. Whether the original preserves any speed through a respawn is also
     /// unrecorded.
     fn respawn(&mut self, slot: usize, sample_index: Option<usize>) {
+        // **The fallback is the lap's first sample, not the table's.** They are
+        // the same on every circuit the disc ships, and this arm fires exactly
+        // when the caller had no index to give - which for an opponent means
+        // `ai_order` was empty, the one case where "sample zero" has no
+        // relationship to any lap at all.
         let sample = sample_index
             .and_then(|index| self.spline.sample(index))
+            .or_else(|| self.ai_sample(0))
             .or_else(|| self.spline.start());
         let Some(sample) = sample.copied() else {
             return;
@@ -4890,6 +4981,11 @@ impl Race {
     /// `Spline::from_track` concatenates paths in file order rather than travel
     /// order, and on a slow capture most windows step by zero. The dot product has
     /// neither failure mode and reads `+0.9999` against `-0.9999`.
+    ///
+    /// [`ai_order`] did not change that. It gives the *drivers* a travel-ordered
+    /// view; this reads `Spline::nearest`, which is still the whole table in
+    /// file order, and has to be - the player can be anywhere the track is,
+    /// including on a branch the lap never drives.
     ///
     /// `false` when the ship is not near the spline at all, which is the safe way
     /// round: a spurious warning is worse than a missing one.
@@ -10052,6 +10148,133 @@ mod tests {
     fn the_widest_half_width_comes_from_the_track() {
         let spline = Spline::from_track(&straight_track());
         assert!((spline.max_half_width() - 12.0).abs() < 1e-3);
+    }
+
+    /// The shape of `05_Track`, `14_Track` and `07_Track`: paths 0 and 1 are the
+    /// two branches of a split and path 2 is the merge, so a lap drives 0 and 2
+    /// and never touches 1.
+    fn split_track() -> AiTrack {
+        let base = straight_track();
+        let path = base.paths[0].clone();
+        AiTrack {
+            version: base.version,
+            paths: vec![
+                oag_formats::track::Path {
+                    entry: Some(0),
+                    exit: Some(1),
+                    ..path.clone()
+                },
+                oag_formats::track::Path {
+                    entry: Some(0),
+                    exit: Some(1),
+                    ..path.clone()
+                },
+                oag_formats::track::Path {
+                    entry: Some(1),
+                    exit: Some(0),
+                    ..path
+                },
+            ],
+            junctions: vec![
+                oag_formats::track::Junction {
+                    prev: [Some(2), None],
+                    next: [Some(0), Some(1)],
+                },
+                oag_formats::track::Junction {
+                    prev: [Some(0), Some(1)],
+                    next: [Some(2), None],
+                },
+            ],
+        }
+    }
+
+    #[test]
+    fn a_branch_the_lap_never_drives_is_not_in_the_ai_line() {
+        let ai = split_track();
+        let spline = Spline::from_track(&ai);
+        let course = Course::from_track(&ai, None).expect("the split's chain closes");
+        let order = ai_order(&spline, Some(&course));
+
+        let per_path = spline.len() / 3;
+        assert_eq!(
+            order.len(),
+            2 * per_path,
+            "the alternate branch is still in the line"
+        );
+        assert!(
+            order
+                .iter()
+                .all(|&index| spline.path_of(index as usize) != Some(1)),
+            "a sample of the branch the lap never drives reached the line"
+        );
+        // And in travel order rather than file order: the merge follows the
+        // branch it merges from.
+        assert_eq!(spline.path_of(order[0] as usize), Some(0));
+        assert_eq!(spline.path_of(order[order.len() - 1] as usize), Some(2));
+    }
+
+    /// The nine circuits where nothing changes, and the assertion that says so:
+    /// file order already is travel order, so the mapping is the identity and
+    /// every index means exactly what it meant before `ai_order` existed.
+    #[test]
+    fn a_track_whose_lap_drives_every_path_maps_a_line_index_onto_itself() {
+        let ai = straight_track();
+        let spline = Spline::from_track(&ai);
+        let course = Course::from_track(&ai, None).expect("this fixture does close");
+        let order = ai_order(&spline, Some(&course));
+        assert_eq!(order, (0..spline.len() as u32).collect::<Vec<_>>());
+    }
+
+    /// A track with no closed ring still gets a line - every sample, in file
+    /// order, because nothing knows which way round is forward.
+    #[test]
+    fn a_track_with_no_ring_still_gets_every_sample_in_file_order() {
+        let spline = Spline::from_track(&straight_track());
+        let order = ai_order(&spline, None);
+        assert_eq!(order, (0..spline.len() as u32).collect::<Vec<_>>());
+    }
+
+    /// The lookup a driver's index goes through, and the wrap that makes
+    /// "the next sample" a lap question rather than a table one.
+    ///
+    /// **Asserted against `path_of` rather than against `ai_order`**, because
+    /// `ai_sample` *is* a lookup through `ai_order` and comparing the two would
+    /// assert a function equals its own definition - true on a mapping that had
+    /// dropped the wrong path entirely. Which path each index lands on is a
+    /// claim the mapping can fail.
+    #[test]
+    fn an_ai_index_reads_the_sample_the_lap_puts_there() {
+        let ai = split_track();
+        let mut race = Race::start(Setup {
+            ai: ai.clone(),
+            spline: Spline::from_track(&ai),
+            course: Course::from_track(&ai, None),
+            ..setup(hulled_handling())
+        });
+        race.world.ships[0].active = true;
+
+        let length = race.racing_line().len();
+        assert!(length > 0);
+        let walked: Vec<u16> = (0..length)
+            .map(|ai_index| {
+                let sample = race.sample_index_of(ai_index).expect("a sample index");
+                race.spline.path_of(sample).expect("a path")
+            })
+            .collect();
+        assert!(
+            !walked.contains(&1),
+            "a line index reads the branch the lap never drives"
+        );
+        // Two contiguous runs, one per path the lap drives, in travel order.
+        let handovers = walked.windows(2).filter(|pair| pair[0] != pair[1]).count();
+        assert_eq!(handovers, 1, "the two paths are not contiguous: {walked:?}");
+        assert_eq!((walked[0], walked[length - 1]), (0, 2));
+
+        // One past the end is the start again, and the assertion is which
+        // *path* it lands on: this fixture's three paths are clones of one
+        // straight, so comparing positions would hold even on a wrap into the
+        // branch the lap skips.
+        assert_eq!(race.sample_index_of(length), race.sample_index_of(0));
     }
 
     /// A local search finds what a whole-table search would, when the answer is

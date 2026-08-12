@@ -824,62 +824,139 @@ driver should never need recovering at all. The rescue is a safety net for a
 race with seven other craft shoving, not a fix for a driver that flies into the
 scenery.
 
-Three circuits - 05, 14 and 07 - still never register a second lap, and 07 does
-it *without being rescued once*: it is on the track, going round, and not being
-counted. All three are the circuits whose spline carries three paths rather than
-two, which points at the lap ring. That is a different bug from the four above
-it, and the next section is where the four went.
+Three circuits - 05, 14 and 07 - still never registered a second lap at this
+point, and 07 did it *without being rescued once*. All three are the circuits
+whose spline carries three paths rather than two, which was the lead the next
+section followed: two of the three were an AI line built out of a path the lap
+never drives, and the third turned out to be a beached craft.
 
 `a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round` carries both
 ratchets so neither number can quietly fall, and
 `an_opponent_that_flies_off_the_circuit_is_put_back_on_it` pins the rescue
 without needing the disc.
 
-### Where a craft comes off: the seam between two paths
+### Where a craft comes off, and it is not the seam between two paths
 
-**Open as of 2026-08-12.** Recording each rescue against the driver's index
-turned a vague "it comes off sometimes" into one number per circuit: the losses
-cluster inside a handful of samples, every lap, at one place.
+**A hypothesis this page carried and a direct measurement then killed**, written
+up as both because the wrong version is the more instructive half.
 
-| circuit | rescues | driver index at each |
+Recording each rescue against the driver's index gave one tight cluster per
+circuit - 06 at 1520-1522 on all six of its rescues. The rescue fires
+`RESCUE_TICKS` after the craft leaves, so the index at the rescue is not the
+index it left at; subtracting an estimated 325-sample flight put 06's cluster on
+its path boundary at 1196, and that arithmetic became "craft come off at the
+seam". **It was wrong.** The flight offset is not a constant: it is however far
+the index keeps advancing while the craft is airborne, which depends on the
+craft.
+
+The honest measurement watches the craft leave rather than reconstructing it
+backwards. A lone Ace, every circuit, recording the driver index the first time
+the craft is more than **two max half-widths** off the line point its own driver
+is standing on - far enough out that no amount of ordinary cornering reaches it:
+
+| circuit | path boundary | left the corridor at | laps cleanly |
+| --- | --- | --- | --- |
+| 16 | 1752 | never | yes |
+| 03 | 1748 | never | yes |
+| 04 | 1684 | never | yes |
+| 13 | 1524 | never | yes |
+| 10 | 132 | 336-381 | yes, and is rescued 5× |
+| 06 | 1196 | 1290-1291 | no |
+| 02 | 1160 | 1274-1357 | no |
+| 09 | 964 | 1106-1123 | no |
+| 01 | 1764 | 114-118 | no |
+| 05 | 1016, 2048 | 195-283 | no |
+| 14 | 892, 1784 | 823 | no |
+| 07 | 992, 1984 | **never** | no |
+
+Nothing leaves at a boundary. 06 leaves 94 samples past its own, 02 114 past,
+09 142 past; 01 leaves at 118 with its only boundary at 1764, and 07 never
+leaves the corridor at all yet still never completes a second lap. Craft come
+off at **corners**, one particular corner per circuit, which is a driving fault
+and nothing to do with how the sample table was concatenated.
+
+Two seam observations survive as facts with no observed consequence, and are
+recorded so the next reader does not re-derive them and draw the same
+conclusion. Every path ends in near-coincident samples - steps of 0.6, 0.3, 0.1
+into the boundary against a 1.50-unit median - on all twelve circuits including
+the four that never put a wheel wrong. And 06's step *across* its boundary is a
+14.8-unit outlier at `cos 0.79` where every other circuit's is 6-7 units at
+`cos 1.00`; 06 does lose craft, but 94 samples further on, so the outlier is
+unexplained rather than exonerated.
+
+#### The one ordering fault that is real: a path the lap never drives
+
+The same probe found something else, and it is a different bug wearing the same
+clothes. Three circuits carry **three** paths where the rest carry two, and on
+all three the lap ring walks only two of them:
+
+| circuit | paths in file order | paths the ring walks | step from path 0 into path 1 |
+| --- | --- | --- | --- |
+| 05 | 0, 1, 2 | 0, 2 | 816 units, `cos -0.36` |
+| 14 | 0, 1, 2 | 0, 2 | 1,249 units, `cos -0.89` |
+| 07 | 0, 1, 2 | 0, 2 | 1,160 units, `cos -0.97` |
+
+Path 1 is the other branch of a split. `Spline::from_track` concatenates every
+path in file order, so the AI line spliced a stretch of track the lap never
+drives into the middle of the lap - and pointing the wrong way. A driver
+reaching the end of path 0 finds its next thousand samples a kilometre away, its
+48-sample window cannot follow, and the index sticks. **These three circuits are
+exactly the three that never register a second lap**, and 07 does it without
+being rescued once: it is not flying off, it is stuck at sample 991 going
+nowhere.
+
+The fix is to walk the lap ring rather than the file, `Race::ai_order`: the AI
+line is the ring's paths in travel order, and a path the ring never walks is not
+in it. `Course::path_order` supplies the sequence; the mapping scans the sample
+table per path rather than assuming `Course` and `Spline` resample identically,
+because they carry a `STEPS_PER_SEGMENT` each and a mapping resting on those
+being equal would break silently if either moved.
+
+**Two index spaces exist from here on**, and conflating them is the bug this
+introduces if it is done carelessly. `driver.index` indexes the racing line;
+`Spline::nearest` returns a sample index. `Race::ai_sample` is the only bridge,
+and it wraps, because the caller asking for the sample after this one is asking
+a lap question - `ai_order[i + 1]`, never `ai_order[i] + 1`, which at the end of
+a path is somewhere else entirely. `Race::respawn` speaks the sample table's
+space for both its callers, since the player reaches it from `Spline::nearest`.
+
+What it was worth, against the same solo benchmark:
+
+| | before | after |
 | --- | --- | --- |
-| 06 | 6 | 1521, 1521, 1522, 1520, 1521, 1521 |
-| 09 | 6 | 1298, 1293, 1304, 1305, 1274, 1291 |
-| 01 | 8 | 846, 254, 262, 262, 262, 261, 262, 261 |
-| 02 | 7 | 1528, 1455, 1452, 1541, 1547, 1458, 1456 |
+| circuits completing a lap | 9 | 11 |
+| circuits managing a *clean* lap | 5 | 6 |
+| 07 | 1 lap, never rescued, stuck at 991 | 4 laps, clean 48.5s |
+| 14 | 1 lap | 4 laps, still no clean one |
+| 05 | 1 lap | 1 lap |
+| the other nine | - | **identical**, to the lap time, the respawn count and every loss index |
 
-The rescue fires about 325 samples after the craft actually leaves, because it
-waits out `RESCUE_TICKS` while the craft flies. Subtracting that offset puts
-every cluster on the circuit's **path boundary** - 06 loses it at 1195 against a
-boundary at 1196, and a tick-by-tick trace confirms it: grounded 1 → 0.5 → 0 at
-index 1195, height +16.6 and then falling for the next four hundred units.
+That last row is the check that matters: on those nine the mapping is the
+identity permutation, so anything moving there would have meant the bridge was
+wrong. Nothing moved.
 
-`Spline::from_track` samples `0..points.len()` segments of each path and
-concatenates the paths in **file order**. Two things fall out of that, and only
-the second is fatal:
+**05 did not improve, and it is not a line fault.** Its line is now the ring's
+2,976 samples against a 2,976-point course, so the ordering is right. Traced
+tick by tick, the craft drives into the scenery around index 590, ends up
+grounded doing two units per second, decays to zero, and sits there for the
+remaining seventy seconds of the run. It is 70 units off its line and the rescue
+triggers at 336, so nothing recovers it. **A craft that has stopped making
+progress has no recovery at all** - the rescue asks "is it far from its line",
+which a beached craft is not. That is a missing mechanism rather than a tuning
+question, and it is the next one.
 
-- **Every path ends in a cluster of near-coincident samples.** The steps into a
-  boundary run 0.6, 0.3, 0.1 against a 1.50-unit median, on every circuit
-  including the four that lap cleanly. Ugly, and on its own harmless.
-- **The step across the seam can change direction.** On the circuits that lap
-  cleanly it does not - 04 goes `0.31,-0.02,0.95` to `0.30,-0.01,0.95`, 13 and
-  01 likewise hold their heading. On 06 it goes `-0.19,-0.34,0.92` to
-  `-0.21,-0.84,0.51`: the line **dives twelve units downward in a single
-  14.8-unit step**, and a driver that aims at it drives off the track.
+One limitation this buys, stated rather than discovered later: an opponent that
+ends up physically on the split's other branch now has no line beneath it at
+all. That is strictly better than stalling at the seam, and the rescue net
+catches it, but it is a gap.
 
-So the seam is not universally harmful; it is harmful where the two paths do not
-join smoothly, which is an ordering-or-data question rather than a sampling one.
-Whether the answer is to follow the lap ring's path order instead of file order,
-or to drop the degenerate tail samples, is **not yet settled** - the two readings
-have not been separated and neither should be built on until they are.
-
-**Grip stays at 180 until this is fixed.** A sweep across all twelve circuits
-says 220 and 260 are quicker (38.6s and 38.4s mean clean lap against 39.8s) and
-reach six clean circuits rather than five - but it was measured with craft
-falling off a seam on seven of them, and the respawn count barely moves across
-the whole range (29 at grip 120, 35 at 180, 33 at 260). A number that does not
-respond to grip is not a grip problem, and fitting grip against it would be
-fitting to the artefact. `sweep_grip` is the harness; re-run it after the seam.
+**Grip stays at 180 until the corner departures are understood.** A sweep across
+all twelve circuits says 220 and 260 are quicker (38.6s and 38.4s mean clean lap
+against 39.8s) and reach six clean circuits rather than five - but the respawn
+count barely moves across the whole range (29 at grip 120, 35 at 180, 33 at
+260). A number that does not respond to grip is not answering a grip question,
+and fitting grip against it would be fitting to whatever is actually throwing
+craft off those corners. `sweep_grip` is the harness; re-run it after.
 
 ### A solo lap is the benchmark
 
@@ -1223,10 +1300,17 @@ and the same run now places that player 8th of 8.
 ### What an opponent still does not get
 
 Each is separate work, and each is listed so nobody assumes otherwise: a lap
-*time* of its own (the standing counts laps; only the player has a clock), a
-respawn when it falls off, anything at all happening when it is eliminated, a
-weapon aimed at anybody, and a livery that is not the player's. The exhaust left
-this list on 2026-08-11 - see [The field burns](#the-field-burns).
+*time* of its own (the standing counts laps; only the player has a clock),
+anything at all happening when it is eliminated, and a livery that is not the
+player's. The exhaust left this list on 2026-08-11 - see
+[The field burns](#the-field-burns); the respawn and a weapon aimed at somebody
+left it since.
+
+**And it does not get recovered when it stops.** The rescue asks whether a craft
+is far from its line, which catches one flying into open space and misses one
+beached against the scenery at zero speed - `05_Track` spends seventy of its
+three hundred seconds exactly there. See
+[Where a craft comes off](#where-a-craft-comes-off-and-it-is-not-the-seam-between-two-paths).
 
 **And it does not know the other craft are there.** A personality spreads the
 field across the corridor, which is what stopped the single file, but nothing
@@ -1336,6 +1420,10 @@ rebase onto a function start, so they were left alone rather than guessed at.
 | Two pilots differing in one number digest differently, and no built-in digests to zero | two tests in `pilots::tests` | yes |
 | **The suite never reads the developer's own pilot directory** | structural: every test goes through `parse` or `load_from` with a path it made itself | yes |
 | **The determinism scenario flies no pilot**, so its constants cannot become machine-dependent | tripwire in `determinism::the_run_visits_the_paths_it_claims_to_cover` | yes |
+| A branch the lap never drives is not in the AI line, and the lap's own path order is not the file's | `race::tests::a_branch_the_lap_never_drives_is_not_in_the_ai_line`, `course::tests::an_alternate_branch_is_left_off_the_ring` | yes |
+| **A track whose lap drives every path maps a line index onto itself**, which is what says the two index spaces agree where they should | `race::tests::a_track_whose_lap_drives_every_path_maps_a_line_index_onto_itself`, `..._a_track_with_no_ring_still_gets_every_sample_in_file_order` | yes |
+| A driver's index reads the sample the lap puts there, and one past the end wraps to the start | `race::tests::an_ai_index_reads_the_sample_the_lap_puts_there` | yes |
+| Eleven of twelve circuits complete a lap and six manage a clean one | `race_ground_truth::a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round` | **no** - needs a disc image. **Run and passing 2026-08-12.** |
 
 `race::tests`' craft is built on `Handling::ZERO` with an empty collision world,
 so no force law runs there at all and those tests assert only that the controls

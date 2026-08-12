@@ -2103,8 +2103,7 @@ fn every_craft_starts_on_its_line_on_every_circuit() {
         for slot in 1..race.ship_count() as usize {
             let ship = &race.world.ships[slot];
             let sample = race
-                .spline()
-                .sample(ship.driver.index as usize)
+                .ai_sample(ship.driver.index as usize)
                 .expect("the driver stands on a sample");
             let lateral = Vec3::from_array(sample.lateral).normalize_or_zero();
             let line = Vec3::from_array(sample.pos)
@@ -2148,15 +2147,24 @@ fn every_craft_starts_on_its_line_on_every_circuit() {
 /// the rescue must not be allowed to launder a craft that flies into the
 /// scenery. Four circuits complete every lap and never manage a clean one.
 ///
+/// and that gap is the finding. Dropping the paths a lap never drives out of
+/// the AI line ([`race::Race::ai_sample`]) then took *round* to eleven and
+/// *clean* to six, and the nine circuits it did not touch reproduced their lap
+/// times, respawn counts and loss indices exactly - which is what said the
+/// mapping was right.
+///
 /// # What is left, and it is not one bug
 ///
-/// - **02, 09, 01, 06 lap but never cleanly.** The craft comes off and is put
-///   back. That is a driver fault and the thing to tune next.
-/// - **05, 14, 07 never register a second lap at all**, and 07 does it without
-///   being rescued once - it is on the track, going round, and not being
-///   counted. All three are the circuits whose spline carries *three* paths
-///   against the usual two, which points at the lap ring rather than at the
-///   driver.
+/// - **02, 09, 01, 06, 14 lap but never cleanly.** The craft leaves the
+///   corridor at one particular corner, every lap, and is put back. A driving
+///   fault, and the thing to tune next - see `docs/gameplay/ai.md` for the
+///   measurement that separated it from the path boundaries it was blamed on.
+/// - **05 never registers a second lap**, and no longer for a line reason: it
+///   drives into the scenery at index ~590, ends up grounded at two units per
+///   second slowing to zero, and sits there for the remaining seventy seconds.
+///   It is only 70 units off its line, so nothing rescues it. A craft that has
+///   stopped making progress needs its own recovery, which is a mechanism that
+///   does not exist.
 ///
 /// Both bounds are "no worse than today" rather than targets: a number that
 /// asserted twelve would be a test failing for a reason already written down,
@@ -2192,10 +2200,14 @@ fn a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round() {
         );
     }
     println!("clean laps: {lapped:?}\nno clean lap: {missed:?}");
+    // 07 is the marginal one: its clean lap is 48.5s against a 36-42s field,
+    // so a tuning change that costs it that lap fails this assertion without
+    // anything having regressed. Check which circuit dropped before assuming a
+    // driving fault.
     assert!(
-        lapped.len() >= 5,
+        lapped.len() >= 6,
         "only {} of {} circuits saw a clean lap, which is worse than the \
-         recorded five: {missed:?}",
+         recorded six: {missed:?}",
         lapped.len(),
         laps.len()
     );
@@ -2209,9 +2221,9 @@ fn a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round() {
         .map(|(id, _)| id)
         .collect();
     assert!(
-        round.len() >= 9,
+        round.len() >= 11,
         "only {} of {} circuits were completed at all, which is worse than the \
-         recorded nine",
+         recorded eleven",
         round.len(),
         laps.len()
     );
