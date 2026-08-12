@@ -1061,18 +1061,19 @@ impl Library {
 /// [`System`], not a bigger one: `WO_ROCKET_EXPLO` alone schedules about 150
 /// concurrent particles and four of its seven emitters author a `2000` cap
 /// that never binds, so two explosions sharing a pool would evict each
-/// other's particles rather than queue. Sixteen covers what a race actually
-/// puts on screen - a handful of rockets in flight, each carrying a flare,
-/// plus their detonations - at about 340 KB of pool.
-pub const MAX_INSTANCES: usize = 16;
+/// other's particles rather than queue. Twenty-four covers what a race
+/// actually puts on screen - one engine flare per craft on a source that
+/// authors one (eight), a handful of rockets in flight each carrying a
+/// flare, plus their detonations - at about 500 KB of pool.
+pub const MAX_INSTANCES: usize = 24;
 
 /// Instances [`Stage::attach`] refuses to take, so a detonation always has
 /// somewhere to play.
 ///
-/// Without it a grid holding sixteen rockets in flight would own every
-/// instance and the explosions - the effect the player is actually looking
-/// at - would be the ones dropped.
-const RESERVED_FOR_BURSTS: usize = 4;
+/// Without it a full grid's engine flares plus a volley of rockets would own
+/// every instance and the explosions - the effect the player is actually
+/// looking at - would be the ones dropped.
+const RESERVED_FOR_BURSTS: usize = 6;
 
 /// A [`Stage`] instance a caller still owns.
 ///

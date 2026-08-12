@@ -319,18 +319,36 @@ pub const CRAFT_BLAST_EFFECT: &str = "WO_ROCKET_EXPLO";
 /// from the rocket's impact point.
 pub const CRAFT_BLAST_DROP: f32 = 2.5;
 
+/// The engine flare the **PS2** port authors as a particle effect.
+///
+/// Two looping emitters, and there is no PSP counterpart - the PSP release
+/// authors no `Data\Psys` engine flare at all, which is why
+/// [`oag_render::exhaust`] draws one procedurally from the `Engine Flare`
+/// locator and the behaviour measured off the PSP. Where the source *does*
+/// ship one, playing it beats approximating it, so a PS2-sourced race gets
+/// the asset and the procedural flare quad steps aside - see
+/// [`Race::engine_flare_effect`].
+pub const ENGINE_FLARE_EFFECT: &str = "WO_SHIP_ENGINEFLARE";
+
 /// Every `Data\Psys` effect this race loads, and what triggers it.
 ///
 /// **The list is the trigger set, not the asset set.** There are 35 effects on
 /// the PSP disc and 41 on the PS2 one; what decides whether one appears here is
 /// whether the *executable's* reason for playing it has been recovered, because
 /// an effect with no recovered trigger would just be this engine guessing when
-/// to fire it. See `HANDOVER.md` for the ones still waiting on that.
-pub const RACE_EFFECTS: [&str; 4] = [
+/// to fire it. `crates/game/tests/psys_inventory_ground_truth.rs` holds every
+/// effect on both discs against this list and fails if one is neither played
+/// nor explicitly recorded as having no recovered trigger.
+///
+/// **It is a superset across sources, not a per-disc list.** An entry absent
+/// from the mounted archives is reported by the loader and skipped, so naming
+/// a PS2-only effect here costs a PSP race one report line and nothing else.
+pub const RACE_EFFECTS: [&str; 5] = [
     sparks::DAMAGE_EFFECT,
     ROCKET_FLARE_EFFECT,
     TRACK_BLAST_EFFECT,
     CRAFT_BLAST_EFFECT,
+    ENGINE_FLARE_EFFECT,
 ];
 
 /// How much faster a craft assumes a Turbo will make it, when deciding whether
@@ -2520,6 +2538,9 @@ pub struct Race {
     /// permanently hull-mounted emitter re-ignited on a cooldown rather than
     /// an effect that comes and goes - see [`Self::sparks_anchor`].
     stage: psys::Stage,
+    /// The [`ENGINE_FLARE_EFFECT`] instance riding each craft's nozzle, on a
+    /// source that authors one. All `None` on a PSP-sourced race.
+    engine_flare: [Option<psys::Playing>; MAX_SHIPS],
     /// The flare instance riding each live projectile, indexed by its
     /// [`oag_gameplay::projectile`] slot.
     ///
@@ -2925,6 +2946,7 @@ impl Race {
             sparks: psys::System::new(),
             effects,
             stage: psys::Stage::new(),
+            engine_flare: [None; MAX_SHIPS],
             projectile_flare: [None; oag_gameplay::projectile::MAX_PROJECTILES],
             stage_rng: Rng::new(STAGE_SEED),
             sparks_ignitions: 0,
@@ -3690,6 +3712,9 @@ impl Race {
         for impact in impacts.iter().flatten() {
             self.ignite_blast(impact.point, impact.struck.map(usize::from));
         }
+        // After the craft have moved, so a flare sits on this tick's nozzle
+        // rather than the last one's.
+        self.advance_engine_flares();
         self.stage.advance(self.dt, &mut self.stage_rng);
 
         self.respawn_cooldown = self.respawn_cooldown.saturating_sub(1);
@@ -4213,6 +4238,47 @@ impl Race {
             // effect, because what was struck is what chose the file.
             Some(_) => (CRAFT_BLAST_EFFECT, point),
             None => (TRACK_BLAST_EFFECT, point),
+        }
+    }
+
+    /// Keeps an [`ENGINE_FLARE_EFFECT`] instance on every active craft's
+    /// nozzle, where the source authors one.
+    ///
+    /// **The PS2 port authors an engine flare as a particle effect and the
+    /// PSP does not.** On a PSP-sourced race the effect is absent from the
+    /// library, nothing attaches, and [`oag_render::exhaust`]'s procedural
+    /// flare draws as it always has. On a PS2-sourced one the asset plays
+    /// and the procedural quad steps aside - see
+    /// [`Race::engine_flare_effect`], which is what the renderer asks.
+    ///
+    /// The trigger needs no reverse-engineering: an engine flare is on for
+    /// as long as the craft is, which is why this one is wired where the
+    /// other PS2-only effects are not. Both its emitters are
+    /// [`oag_formats::pob::flags::LOOPING`], so it runs until detached.
+    ///
+    /// Anchored at the `Engine Flare` locator under the craft's *current*
+    /// transform, the same point the procedural flare uses, so the two are
+    /// interchangeable rather than merely similar.
+    fn advance_engine_flares(&mut self) {
+        let Some(effect) = self.effects.get(ENGINE_FLARE_EFFECT).cloned() else {
+            return;
+        };
+        for slot in 0..MAX_SHIPS {
+            let nozzle = self.world.ships[slot]
+                .active
+                .then(|| self.nozzle_of(slot))
+                .flatten();
+            match (nozzle, self.engine_flare[slot]) {
+                (Some(at), Some(playing)) => self.stage.follow(playing, at),
+                (Some(at), None) => self.engine_flare[slot] = self.stage.attach(&effect, at, 1.0),
+                // Gone or never had a locator: hand the instance back and
+                // let its particles fade rather than cutting them.
+                (None, Some(playing)) => {
+                    self.stage.detach(playing);
+                    self.engine_flare[slot] = None;
+                }
+                (None, None) => {}
+            }
         }
     }
 
@@ -4967,6 +5033,20 @@ impl Race {
     #[must_use]
     pub fn stage(&self) -> &psys::Stage {
         &self.stage
+    }
+
+    /// Whether this source authors an engine flare as a particle effect, and
+    /// it loaded.
+    ///
+    /// The renderer asks this to decide whether to draw
+    /// [`oag_render::exhaust`]'s procedural flare quad: drawing both would
+    /// put an invented glow on top of the authored one, which is the exact
+    /// thing `CLAUDE.md`'s do-not-invent rule forbids. The trail ribbon and
+    /// the boost plume are unaffected - the PS2's effect is the *flare*, and
+    /// neither of those has an authored counterpart on either disc.
+    #[must_use]
+    pub fn engine_flare_effect(&self) -> bool {
+        self.effects.get(ENGINE_FLARE_EFFECT).is_some()
     }
 
     /// How many spark bursts the contact rule has triggered.
@@ -6651,7 +6731,11 @@ impl Scene {
                 break;
             };
             let exhaust = race.exhaust_of(slot);
-            vertices.extend(exhaust.vertices(nozzle, right, up));
+            // The flare quad only where the source authors no effect for it
+            // - see `Race::engine_flare_effect`. The ribbon always.
+            if !race.engine_flare_effect() {
+                vertices.extend(exhaust.vertices(nozzle, right, up));
+            }
             trail.extend(exhaust.trail_vertices(right, up));
         }
         // Only the billboard *fallback* for a rocket whose model did not
