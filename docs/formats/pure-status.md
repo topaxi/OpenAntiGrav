@@ -81,7 +81,7 @@ Counts below are over all three archives, 1,229 entries, unless stated.
 | [Bitmap font](fnt.md) | reads | 6 fonts. Version `1` + `"FNT"`, codepoint table at `0x30`, offset table at `0x30 + 2*count`, and `atlas + 0x40 + clut_size + texel_size == file length` exact on **6/6**, with `texel_size == width * height / 2`. The atlas flag bit is set on 6/6, same as Pulse | 94 |
 | [PSP movie](pmf.md) | reads | 14 movies. `stream_offset == 0x800` and `stream_offset + stream_size == file length` exact on **14/14**; two streams each, ids `0xe0` and `0xbd`. Version string `"0012"` only, where Pulse ships both `"0012"` and `"0014"` | 94 |
 | [PSP sound bank](psp-audio.md) | **absent** | No entry in any Pure archive begins `SBlk`, though the executable names `Data\Sound\*.bnk` paths. Pure's 25 RIFF entries are `WAVE_FORMAT_EXTENSIBLE`, 2 channels, 44.1 kHz | 85 |
-| Particle system (`.pob`) | unknown, both | 37 `SYSP` entries in `Data.wad` and 37 in `FE.wad`, against Pulse's 35 and 27. Still undecoded on either disc | - |
+| [Particle system (`.pob`)](#pures-particle-systems-decode-unchanged) | reads | 37 `SYSP` entries in `Data.wad` and 37 in `FE.wad`, against Pulse's 35 and 27. **Decodes unchanged**: three of the four effects a race loads by name resolve on Pure and play, emitter trees and all | 92 |
 
 ## The class-ID space is renumbered
 
@@ -203,6 +203,48 @@ implements turns the ship's environment map back into a clean radial highlight,
 which is what confirms both the flag's meaning and that nothing else is wrong
 with the block. Confidence **88** as written; the Pulse half of it is now
 contradicted by measurement and should be read as **open**, not as 88.
+
+## Pure's particle systems decode unchanged
+
+**Measured 2026-08-12, and this row used to read "unknown, both".** Pointing a
+Pure race at `oag_render::psys::Library` - which loads any `Data\Psys\<name>.POB`
+by name - decodes three of the four effects the race path asks for, with their
+whole emitter trees, and plays them. Sparks fly off a Pure hull on contact with
+no change to the decoder at all.
+
+That makes Pure a **third corpus** for `.pob`, and the strongest evidence yet
+that the effect format is a pipeline property rather than a release one.
+Confidence **92**: three effects decoding to sensible emitter trees on a disc the
+decoder was never written against, though nothing here has been checked against
+the original running.
+
+| effect | Pulse | Pure |
+| --- | --- | --- |
+| `WO_SHIP_COLL_SPARK_DAMAGE` | 4 emitters | 4 emitters, **same four names** |
+| `WO_ROCKET_EXPLO` | 7 emitters | 5 emitters |
+| `WO_ROCKET_FLARE` | 2 emitters | 1 emitter |
+| `WO_ROCKET_EXPLO_TRACK` | 4 emitters | **no entry of that name** |
+| `WO_SHIP_ENGINEFLARE` | **no entry** | **no entry** |
+
+Three things in that table are worth separating, because they are three different
+kinds of fact:
+
+- **The format carries over.** Every effect present decodes; none needed a
+  version branch, unlike `.vex`, whose entire class-ID space renumbered.
+- **The content does not.** `WO_ROCKET_EXPLO` is 7 emitters on Pulse and 5 on
+  Pure, and `WO_ROCKET_FLARE` 2 against 1 - so a shared *name* is not a shared
+  *asset* here, which is the opposite of what the dev/pub reel turned out to be.
+  The collision spark is the one that matches emitter-for-emitter by name.
+- **`WO_SHIP_ENGINEFLARE` is absent from both discs**, so it is not a Pure gap at
+  all: that name resolves on neither pressing and the engine already reports it
+  and draws nothing. Only `WO_ROCKET_EXPLO_TRACK` is genuinely Pure-shaped -
+  present on Pulse, absent on Pure - and whether Pure spells it differently or
+  ships no such effect is unread.
+
+What is **not** established is any *trigger* on Pure. These play because the
+engine fires them from its own recovered Pulse triggers; nothing has read Pure's
+executable for where it fires its own. The do-not-invent rule in `CLAUDE.md`
+applies here exactly as it does on Pulse.
 
 ## Name recovery transfers intact
 
