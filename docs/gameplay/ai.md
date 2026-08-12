@@ -1267,6 +1267,70 @@ The `6.0` is transcribed and not derived: the exact slope correction over the
 9-unit probe spacing would be `-9 * dot(n, forward) / dot(n, up)`, and the
 original uses a flat constant. Kept literal.
 
+#### And the last three, with a mechanism the original does not have
+
+Metropia, Fort Gale and Vertica survived all of the above, and a hand-driven
+craft still fell through two of them. Logging the vertical velocity through Fort
+Gale's drop said why, and it is not something a faithful port can fix:
+
+```
+air 1   vy  -76.09 (-1.27/tick)  line dy   -8.1  below  -  above   2.0
+air 2   vy  -77.24 (-1.29/tick)  line dy   -8.9  below  -  above   3.4
+air 44  vy -119.01 (-1.98/tick)  line dy  -81.6  below  -  above  79.8
+```
+
+**On the first airborne tick the craft is already under the track.** Nothing
+below it, and the surface two units over its head - a gap that only grows. It
+rides the descent at 139 units/s, which at that gradient is **76 units/s
+straight down while still in contact**; the ramp ends, and it crosses to the
+underside in the single tick between one contact test and the next.
+
+The contact test casts *down* from the hull along `-up`. Once the surface is
+above the hull, no ray of any length finds it and penetration escape has no
+downward hit to measure. Gravity here is about 80 units/s², so the craft is at
+119 units/s down after a second and 160 after two, while the track it left
+levels off overhead.
+
+So `oag_physics::hover::sweep` asks the question the discrete test cannot: *did
+the hull pass through a surface during this tick?* Each probe's motion segment,
+from where it was before the integrator ran to where it is now, is cast against
+the world; a crossing of a hoverable face from the front puts the craft back on
+the surface with its inward velocity removed. **It is ours, not recovered**, and
+it is the only mechanism in `oag-physics` that is.
+
+It runs unconditionally, and the first attempt did not. Gating it on
+`state.grounded == 0.0` looked obviously right and was exactly wrong: `grounded`
+is set by `forces::evaluate` *before* the integrator moves the craft, so on the
+one tick that matters it still reports the contact the craft had on the way in.
+The gate skipped the only case it existed for, and the benchmark moved by one
+recovery on one circuit - which is what a fix that never fires looks like.
+
+Ungated:
+
+| | before | after |
+| --- | --- | --- |
+| circuits managing a clean lap | 9 | **12** |
+| circuits needing no recovery at all | 5 | **11** |
+| total recoveries across the disc | 22 | **2** |
+
+Both remaining recoveries are 01's, one of them on the standing-start lap.
+Neither determinism reference moved: no probe scenario ever crosses a surface,
+so the sweep never fires in one.
+
+### What this whole thread was actually about
+
+Five sections of this page were written chasing an AI fault that did not exist.
+The opponents were fine. What was wrong was an AI line built out of a path the
+lap never drives, a landing response armed on every flicker of contact, a
+missing speed-gated probe path, and a contact test that could only look one way.
+The AI's own tuning has not been touched since, and the twelve-circuit benchmark
+went from two clean laps to twelve.
+
+The order in which those were found is not the order they should have been
+looked for in. **A player driving the same section by hand fell through it too,
+and that single fact - available at any point - would have ruled out the AI on
+day one.** It is worth trying before a measurement campaign, not after.
+
 **Grip stays at 180 until the corner departures are understood.** A sweep across
 all twelve circuits says 220 and 260 are quicker (38.6s and 38.4s mean clean lap
 against 39.8s) and reach six clean circuits rather than five - but the respawn

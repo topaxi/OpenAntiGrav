@@ -914,6 +914,109 @@ fn probe_pair<R: Raycaster + ?Sized>(
     ]
 }
 
+/// Catches a hull that crossed a hoverable surface between one tick and the
+/// next, and puts it back on top of it.
+///
+/// # This one is ours
+///
+/// **Nothing in the original does this**, and the reason to add it anyway is
+/// that the original's contact test - and therefore this crate's - can only
+/// ever look *one way*. [`probe`] casts down from the hull along `-up` for
+/// `target_height`. Once the surface is above the hull no cast of any length
+/// finds it, penetration escape has no downward hit to measure, and the craft
+/// is gone for good.
+///
+/// That is not hypothetical. Instrumented on Fort Gale (`14_Track`), a craft
+/// rides a descent at 139 units/s, which at that gradient is **76 units/s
+/// straight down while still in contact**. The ramp ends; on the very first
+/// airborne tick the craft is already 2.0 units *below* the surface with
+/// nothing beneath it at all, and from there it is ballistic - 119 units/s
+/// down after a second, 160 after two, with the track it left receding
+/// overhead. A player driving the same section by hand falls through it too, so
+/// it is not an opponent's line that is wrong. See `docs/gameplay/ai.md`.
+///
+/// A longer ray cannot fix a one-sided test, and a faster contact rate only
+/// moves the speed at which it fails. What fixes it is asking the question the
+/// discrete test cannot: *did the hull pass through the surface during this
+/// tick?* So this sweeps each probe's own motion segment - where it was before
+/// the integrator ran, to where it is now - and if that segment crosses a
+/// hoverable face from the front, the craft is placed back on the surface with
+/// its inward velocity removed. That is an ordinary continuous-collision test,
+/// deliberately chosen over reproducing something the original does not have.
+///
+/// Two properties that keep it from changing anything it should not:
+///
+/// - It runs **only when both probes found nothing**, so a craft in normal
+///   contact never reaches it and the recovered force law is untouched.
+/// - It needs a surface *on the segment*. An authored jump is a gap with
+///   nothing to cross, so a craft flying one is unaffected - `13_Track`'s jump
+///   still flies and still lands on its own.
+///
+/// Returns the position correction and the new velocity, or `None`.
+#[must_use]
+pub fn sweep<R: Raycaster + ?Sized>(
+    state: &ShipState,
+    env: &Environment,
+    raycaster: &R,
+    before: Vec3,
+) -> Option<(Vec3, Vec3)> {
+    let body = &state.body;
+    let travel = body.position - before;
+    let distance = travel.length();
+    if distance <= 0.0 {
+        return None;
+    }
+    let direction = travel / distance;
+    let up = body.up();
+
+    // The earliest crossing of the two probes' segments, in probe order so a
+    // tie cannot depend on anything but the offsets.
+    let mut best: Option<(f32, Vec3, Vec3)> = None;
+    for offset in probe_offsets() {
+        let arm = body.orientation * offset;
+        let from = before + arm;
+        let Some(hit) = raycaster.raycast(
+            Ray::new(from, direction, distance),
+            env.self_collider,
+            false,
+        ) else {
+            continue;
+        };
+        if !hit.surface.is_hoverable() {
+            continue;
+        }
+        // Only a face the craft is moving *into*. Leaving a surface from
+        // underneath - which a craft on the inside of a loop does every tick -
+        // must not be caught.
+        if travel.dot(hit.normal) >= 0.0 {
+            continue;
+        }
+        if best.is_none_or(|(nearest, _, _)| hit.distance < nearest) {
+            best = Some((hit.distance, hit.point, hit.normal));
+        }
+    }
+    let (_, point, normal) = best?;
+
+    // Put the probe that crossed back a clearance above the face, along the
+    // face's own normal rather than along `up`: that keeps the along-track
+    // motion the craft earned and only undoes the part that went through.
+    let arm = body.orientation * probe_offsets()[0];
+    let depth = (body.position + arm - point).dot(normal);
+    let correction = normal * (PENETRATION_LIMIT - depth);
+
+    // And take the inward velocity off, or the next tick simply repeats this.
+    // No restitution: the suspension is what makes a landing springy, and it
+    // gets to do that from the tick after this one.
+    let into = body.linear_velocity.dot(normal);
+    let velocity = if into < 0.0 {
+        body.linear_velocity - normal * into
+    } else {
+        body.linear_velocity
+    };
+    let _ = up;
+    Some((correction, velocity))
+}
+
 /// Runs both probes and the grounded-only terms.
 #[must_use]
 pub fn evaluate<R: Raycaster + ?Sized>(
