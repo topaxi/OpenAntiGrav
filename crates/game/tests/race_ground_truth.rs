@@ -2198,18 +2198,16 @@ fn every_craft_starts_on_its_line_on_every_circuit() {
 ///
 /// # What is left, and it is not one bug
 ///
-/// - **02, 09, 06, 14 lap but never cleanly.** The craft loses ground contact
-///   at one particular place, every lap, and falls. Not a driving fault at all -
-///   a human driver does the same thing in the same place. See
-///   `docs/gameplay/ai.md`. 01 left this list on 2026-08-12 when the landing
-///   response was gated on `rebound_jump_time`: 8 respawns to 3, and a clean
-///   36.9s lap.
-/// - **05 never registers a second lap**, and no longer for a line reason: it
-///   drives into the scenery at index ~590, ends up grounded at two units per
-///   second slowing to zero, and sits there for the remaining seventy seconds.
-///   It is only 70 units off its line, so nothing rescues it. A craft that has
-///   stopped making progress needs its own recovery, which is a mechanism that
-///   does not exist.
+/// - **02, 06, 14 lap but never cleanly.** The craft loses ground contact at
+///   one particular place, every lap, and falls. Not a driving fault at all - a
+///   human driver does the same thing in the same place. See
+///   `docs/gameplay/ai.md`.
+/// - **Five circuits left this list on 2026-08-12**, none of them by anything
+///   to do with the AI. Gating the landing response on `rebound_jump_time` took
+///   01 from eight recoveries to three; deriving the rear hover probe above
+///   `hover::FAST_PROBE_SPEED` instead of casting it took 05 from never
+///   completing a second lap to a clean one with **zero** recoveries, and gave
+///   09 its first clean lap.
 ///
 /// Both bounds are "no worse than today" rather than targets: a number that
 /// asserted twelve would be a test failing for a reason already written down,
@@ -2245,14 +2243,14 @@ fn a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round() {
         );
     }
     println!("clean laps: {lapped:?}\nno clean lap: {missed:?}");
-    // 07 is the marginal one: its clean lap is 48.4s against a 36-42s field,
-    // so a tuning change that costs it that lap fails this assertion without
-    // anything having regressed. Check which circuit dropped before assuming a
-    // driving fault.
+    // 07 and 09 are the marginal ones, at 48.3s and 47.4s against a 34-42s
+    // field, so a change that costs one of them its clean lap fails this
+    // assertion without anything having regressed. Check which circuit dropped
+    // before assuming a driving fault.
     assert!(
-        lapped.len() >= 7,
+        lapped.len() >= 9,
         "only {} of {} circuits saw a clean lap, which is worse than the \
-         recorded seven: {missed:?}",
+         recorded nine: {missed:?}",
         lapped.len(),
         laps.len()
     );
@@ -2266,9 +2264,8 @@ fn a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round() {
         .map(|(id, _)| id)
         .collect();
     assert!(
-        round.len() >= 11,
-        "only {} of {} circuits were completed at all, which is worse than the \
-         recorded eleven",
+        round.len() >= 12,
+        "only {} of {} circuits were completed at all, and all twelve have been",
         round.len(),
         laps.len()
     );

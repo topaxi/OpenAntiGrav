@@ -70,6 +70,22 @@ use oag_physics::{CraftState, Environment, ShipState, step};
 ///   3,600-tick hashes moved; the 600-tick `Corridor` entry is untouched
 ///   because that scenario never reaches a wall in 600 ticks, which is the
 ///   expected shape of a change scoped to contact geometry.
+/// - **Regenerated 2026-08-12 (second time today), behaviour again, and no
+///   field was added at all** - so unlike every entry below it there is nothing
+///   to isolate: the whole movement is the force law.
+///   `Ship_CastHoverProbes` branches on `craft+0x2ec <= 50.0`, the cached
+///   forward speed. Above that threshold it casts **one** ray and, if it hits,
+///   manufactures the rear probe's entire hit record from the front one -
+///   translated by the vector between the probes and pushed along `up` by
+///   `dot(normal, forward) * 6.0`. The hit flag is copied with it, so at speed a
+///   front probe in contact guarantees a rear probe in contact. This crate cast
+///   two independent rays at every speed, and so shed half its suspension the
+///   moment one probe overran a lip. See [`hover::FAST_PROBE_SPEED`].
+///
+///   Worth what it cost: on the disc's twelve circuits a lone craft went from
+///   seven clean laps to **nine**, `05_Track` from never completing a second lap
+///   to a clean one with zero recoveries, and `09_Track` from six recoveries to
+///   three.
 /// - **Regenerated 2026-08-12, and behaviour *did* change** - the first entry
 ///   here that is not a pure hash-input change, so it is isolated differently.
 ///   `Ship_UpdateCraft` (`0x08849df0`) keeps an airborne clock at `craft+0x284`
@@ -208,20 +224,20 @@ const REFERENCE: &[(u32, Script, u64, u64)] = &[
     (
         600,
         Script::Corridor,
-        0xe80d_4d99_628f_488f,
-        0x687c_0b28_a703_0a5d,
+        0x8609_c774_c408_8b6c,
+        0x6b5f_549c_b628_a7b2,
     ),
     (
         3_600,
         Script::Corridor,
-        0xf5ee_ff09_4f1e_d55e,
-        0x4bae_4481_3240_6862,
+        0x3c37_237f_ee68_9a86,
+        0x6ee2_a9e1_c91e_8934,
     ),
     (
         3_600,
         Script::Aerobatic,
-        0xe71f_223f_f37f_a160,
-        0x2c4c_6494_a320_e57f,
+        0xdb7c_6400_f629_bc7d,
+        0xe50e_e16e_fca3_d976,
     ),
 ];
 
