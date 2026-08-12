@@ -886,7 +886,14 @@ fn particle_effect(
     let blob = archives
         .read_name(&path)
         .map_err(|e| format!("{path}: not in the archive set ({e})"))?;
-    let effect = psys::Effect::parse(&blob)
+    // The one thing about a `.pob` that is a property of the release rather
+    // than of the file - see `psys::ColourScale`. Read off the source
+    // because it cannot be read off the bytes.
+    let scale = match archives.layout.platform {
+        oag_assets::Platform::Ps2 => psys::ColourScale::Half,
+        _ => psys::ColourScale::Full,
+    };
+    let effect = psys::Effect::parse(&blob, scale)
         .map_err(|e| format!("{path}: {} bytes, does not parse ({e})", blob.len()))?;
     let note = format!(
         "{name}: {} emitter(s) - {}",

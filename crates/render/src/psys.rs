@@ -151,6 +151,52 @@ pub enum Blend {
     AlphaOver,
 }
 
+/// What byte value an emitter's colour table and alpha channel treat as
+/// fully bright.
+///
+/// **The two releases author the same effects at different colour scales**,
+/// and it is the one thing in a `.pob` that cannot be read out of the file.
+/// Measured over both corpora on 2026-08-12:
+///
+/// | release | RGB reaches | alpha channel reaches |
+/// | --- | --- | --- |
+/// | PSP, 35 systems | `255` | `255` |
+/// | PS2, 41 systems | **`127`, never more** | **`127.5`, never more** |
+///
+/// The same effect differs by exactly a factor of two: `WO_ROCKET_FLARE`'s
+/// first palette entry is `[255, 255, 255, 255]` on the PSP and caps at
+/// `127` on the PS2. That is the PS2 GS's convention, where `0x80` rather
+/// than `0xff` is 1.0 - and `127.5` is exactly half of `255`.
+///
+/// **It cannot be detected per file.** One PSP effect's brightest channel is
+/// `40` and another's is `216`, so "nothing above 127, therefore PS2" would
+/// misread a legitimately dark PSP effect and draw it twice as bright. The
+/// container header carries no version or platform word either - both
+/// releases write the same `+0x0a` and `+0x0c`. So the caller says, from the
+/// source it opened.
+///
+/// Confidence **80**: the corpus split is total on both discs and the
+/// same-effect factor of two is exact, but nothing in the PS2 executable has
+/// been read to confirm how it consumes these bytes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ColourScale {
+    /// `0..=255`, the PSP GE's convention.
+    Full,
+    /// `0..=127.5`, the PS2 GS's.
+    Half,
+}
+
+impl ColourScale {
+    /// What to divide an authored byte by to get `0..=1`.
+    #[must_use]
+    pub fn divisor(self) -> f32 {
+        match self {
+            Self::Full => 255.0,
+            Self::Half => 127.5,
+        }
+    }
+}
+
 /// How a particle takes its colour from the emitter's 256-entry table.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ColourMode {
@@ -207,8 +253,13 @@ pub struct EmitterSpec {
     /// Drawn half-size in world units, over the particle's life, before the
     /// system's scale.
     pub size: Channel,
-    /// Alpha in `0..=255`, over the particle's life.
+    /// Alpha over the particle's life, in the source's own byte scale -
+    /// divide by [`EmitterSpec::colour_divisor`] rather than by 255.
     pub alpha: Channel,
+    /// What [`EmitterSpec::alpha`] treats as fully opaque, from the source's
+    /// [`ColourScale`]. The palette is already normalised at parse; this is
+    /// the alpha channel's share of the same conversion.
+    pub colour_divisor: f32,
     /// The emitter's 256 RGBA entries, premultiplied to `0..=1`. **Read
     /// from the user's disc at runtime and never committed** - see
     /// ADR-0006.
@@ -321,7 +372,7 @@ impl Effect {
     /// The blob failing to parse, or an emitter using a draw class, blend
     /// class or channel mode with no traced consumer - each of which would
     /// otherwise reach the pool as a silent no-draw.
-    pub fn parse(data: &[u8]) -> Result<Self, Error> {
+    pub fn parse(data: &[u8], scale: ColourScale) -> Result<Self, Error> {
         let system = ParticleSystem::parse(data)?;
         let records = system.emitters(data)?;
         if records.len() > MAX_EMITTER_STATES {
@@ -332,7 +383,7 @@ impl Effect {
 
         let emitters = records
             .iter()
-            .map(EmitterSpec::from_record)
+            .map(|record| EmitterSpec::from_record(record, scale))
             .collect::<Result<Vec<_>, _>>()?;
 
         // Everything reachable as a child starts with its parent's
@@ -377,7 +428,7 @@ impl EmitterSpec {
     }
 
     /// Translates one parsed record.
-    fn from_record(record: &pob::Emitter) -> Result<Self, Error> {
+    fn from_record(record: &pob::Emitter, scale: ColourScale) -> Result<Self, Error> {
         let emitter = || record.name.clone();
 
         let render = match record.draw_class() {
@@ -430,12 +481,13 @@ impl EmitterSpec {
         };
 
         let mut palette = Box::new([[0.0f32; 4]; 256]);
+        let divisor = scale.divisor();
         for (out, entry) in palette.iter_mut().zip(record.colours.iter()) {
             *out = [
-                f32::from(entry[0]) / 255.0,
-                f32::from(entry[1]) / 255.0,
-                f32::from(entry[2]) / 255.0,
-                f32::from(entry[3]) / 255.0,
+                f32::from(entry[0]) / divisor,
+                f32::from(entry[1]) / divisor,
+                f32::from(entry[2]) / divisor,
+                f32::from(entry[3]) / divisor,
             ];
         }
 
@@ -470,6 +522,7 @@ impl EmitterSpec {
             live_cap: record.live_cap.max(0) as usize,
             size: record.size.clone(),
             alpha: record.alpha.clone(),
+            colour_divisor: divisor,
             palette,
             colour_mode: if record.colour_mode == 2 {
                 ColourMode::RandomEntry
@@ -934,7 +987,8 @@ impl System {
             let spec = &effect.emitters[usize::from(particle.spec)];
             let age = 1.0 - (particle.life / particle.max_life).clamp(0.0, 1.0);
             let half = channel_sample(&spec.size, age, particle.size_sample) * particle.scale;
-            let alpha = channel_sample(&spec.alpha, age, particle.alpha_sample) / 255.0;
+            let alpha =
+                channel_sample(&spec.alpha, age, particle.alpha_sample) / spec.colour_divisor;
             let colour = match spec.colour_mode {
                 ColourMode::RandomEntry => spec.palette[usize::from(particle.colour_index)],
                 // `palette[(int)(age * 255.999)]`, the original's own
@@ -1752,6 +1806,7 @@ mod tests {
                 live_cap: 100,
                 size: constant(1.0),
                 alpha: constant(255.0),
+                colour_divisor: ColourScale::Full.divisor(),
                 palette: Box::new([[1.0; 4]; 256]),
                 colour_mode: ColourMode::RandomEntry,
                 render: Render::Billboard,

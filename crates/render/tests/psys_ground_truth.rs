@@ -37,7 +37,9 @@ use oag_assets::Archive;
 use oag_core::Rng;
 use oag_core::math::Vec3;
 use oag_formats::pob;
-use oag_render::psys::{Blend, ColourMode, Direction, Effect, Render, System, TICK_HZ};
+use oag_render::psys::{
+    Blend, ColourMode, ColourScale, Direction, Effect, Render, System, TICK_HZ,
+};
 use oag_render::sparks;
 
 /// `.pob` blobs on the PSP disc, per `docs/formats/pob.md`.
@@ -72,7 +74,7 @@ fn effect(archive: &mut Archive, name: &str) -> Effect {
     let blob = archive
         .read_name(&sparks::effect_path(name))
         .unwrap_or_else(|error| panic!("{name}: {error}"));
-    Effect::parse(&blob).unwrap_or_else(|error| panic!("{name}: {error}"))
+    Effect::parse(&blob, ColourScale::Full).unwrap_or_else(|error| panic!("{name}: {error}"))
 }
 
 fn close(a: f32, b: f32) -> bool {
@@ -253,7 +255,8 @@ fn every_effect_on_the_disc_plays_without_panicking() {
             continue;
         }
         let blob = archive.read(index).expect("read");
-        let effect = Effect::parse(&blob).unwrap_or_else(|error| panic!("entry {index}: {error}"));
+        let effect = Effect::parse(&blob, ColourScale::Full)
+            .unwrap_or_else(|error| panic!("entry {index}: {error}"));
 
         let mut rng = Rng::new(index as u64 + 1);
         let mut system = System::new();

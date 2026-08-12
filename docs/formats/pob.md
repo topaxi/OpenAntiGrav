@@ -491,6 +491,46 @@ Alpha comes from the alpha channel scaled by an instance field:
 both, straight off the decompilation, with the caveat that nothing has read
 what feeds `+0x40`.
 
+### The two releases author colour at different scales - 2026-08-12
+
+The one thing about a `.pob` that is a property of the **release** rather
+than of the file. Measured over both corpora with one unmodified parser:
+
+| release | RGB reaches | alpha channel reaches |
+| --- | --- | --- |
+| PSP, 35 systems | `255` | `255` |
+| PS2, 41 systems | **`127`, never more** | **`127.5`, never more** |
+
+Not one of the PS2's 41 systems puts a byte above `127` in any of the 256
+palette entries of any emitter, and not one alpha channel's range exceeds
+`127.5`. The **same effect** differs by exactly a factor of two:
+`WO_ROCKET_FLARE`'s first palette entry is `[255, 255, 255, 255]` on the PSP
+and caps at `127` on the PS2. That is the PS2 GS's own convention, where
+`0x80` rather than `0xff` is 1.0, and `127.5` is exactly half of `255`.
+
+**It cannot be detected from the file.** Three things rule that out:
+
+- the container header carries no version or platform word - both releases
+  write the same `+0x0a = 1` and `+0x0c = 1`;
+- a per-file "nothing above 127, so it is PS2" test misreads a legitimately
+  dark PSP effect. One PSP system's brightest channel is `40` and another's
+  is `216`;
+- the emitter record has no colour-depth field either - every offset in the
+  table above holds the same kind of value on both discs.
+
+So a reader has to be told, from the source it opened.
+`oag_render::psys::ColourScale` is that parameter and
+`oag_assets::Layout::platform` is what chooses it - the only thing in this
+project that branches on the platform rather than on the data, and it says
+so.
+
+Confidence **80**: the corpus split is total on both discs and the
+same-effect factor of two is exact, but nothing in the PS2 executable has
+been read to confirm how it consumes these bytes. What a wrong reading looks
+like: every PS2 particle effect draws at a quarter of its intended additive
+brightness - half the colour times half the alpha - which is how this was
+found, as "the PS2 engine flare is barely visible".
+
 ### A second, fixed-offset field block sits right after the name - no fixup needed
 
 `FUN_088f4910` (the function `ShipCollisionFx_Trigger`'s spawned particle

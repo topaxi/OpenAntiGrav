@@ -61,9 +61,17 @@ fn reject_foreign_title(looked_in: &str, serial: &str, title: &Title) -> Result<
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Layout {
     /// What the source says it is, or what its archives imply when it says
-    /// nothing. Carried for reports and error messages; nothing branches on it,
-    /// because every decode this project has is chosen by the *data* rather than
-    /// by the disc it came off.
+    /// nothing. Carried for reports and error messages, and every *decode* is
+    /// still chosen by the **data** rather than by the disc it came off.
+    ///
+    /// **One thing branches on it, and only because it cannot be read out of
+    /// the data**: `oag_render::psys::ColourScale`, the byte value a
+    /// particle effect's colour table treats as fully bright. The PSP
+    /// authors `0..=255` and the PS2 `0..=127.5` - the same effect, exported
+    /// twice at scales differing by exactly two - and no `.pob` header word
+    /// distinguishes them. See that type for the corpus evidence and why a
+    /// per-file heuristic is unsafe. A second such case would be worth
+    /// looking at hard before adding it.
     pub platform: Platform,
     /// The bulk archive: tracks, ships, handling, and on the PSP the movies,
     /// screens and string tables too.
