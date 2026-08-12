@@ -80,6 +80,7 @@ fn load(image: &Path) -> boot::Boot {
         audio_cache: oag_game::boot::default_audio_cache_dir(),
         extent: oag_game::movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
         no_video: true,
+        refresh_video: false,
     };
     boot::load(&options).expect("loading the boot sequence")
 }
@@ -354,6 +355,7 @@ fn the_reel_flag_opens_the_screen_the_disc_itself_plays_it_on() {
             audio_cache: oag_game::boot::default_audio_cache_dir(),
             extent: oag_game::movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
             no_video: true,
+            refresh_video: false,
         };
         let loaded = boot::load(&options).expect("Pure's reel state is on its boot path");
         assert_eq!(

@@ -982,6 +982,69 @@ impl Extent {
 /// `docs/ps2/pulse-disc-layout.md`.
 const MPEG_PS_START_CODE: [u8; 4] = [0x00, 0x00, 0x01, 0xba];
 
+/// How a caller wants a movie opened, beyond which frames of it.
+///
+/// A struct rather than two trailing `bool`s because that is exactly what it
+/// was becoming: `open(.., extent, false, false)` at a call site says nothing
+/// about which flag is which, and the two mean opposite kinds of thing.
+/// [`Default`] is the ordinary case - decode the picture, reuse whatever the
+/// cache already holds.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Decode {
+    /// Skip the picture entirely and report a picture-less movie instead -
+    /// still with a correct frame count, width, height and frame rate, since
+    /// those come from parsing the container rather than decoding it.
+    pub no_video: bool,
+    /// Treat every cache file as a miss, so a transcode runs and overwrites it.
+    ///
+    /// **Only reaches the paths that transcode.** A `native-video` build
+    /// decoding H.264 through GStreamer writes no cache file, so there is
+    /// nothing there to ignore and this changes nothing for it; what it forces
+    /// is a re-run of the `ffmpeg` conversions in [`transcode`],
+    /// [`transcode_ipu`] and [`transcode_mpeg2_ps`]. This is the flag for a
+    /// cache written by a build whose conversion has since been fixed - the
+    /// cache is keyed by *content*, so a changed encoder produces the same key
+    /// and the stale file would otherwise be reused forever.
+    pub refresh: bool,
+}
+
+/// What a movie load is doing, for a caller that is drawing a wait.
+///
+/// **The three differ by three orders of magnitude**, which is the whole reason
+/// this is reported rather than left as one word: a cache hit is milliseconds, a
+/// GStreamer decode is seconds, and an `ffmpeg` transcode of the 1200-frame
+/// intro is about eighty of them. A screen that called all three "loading" would
+/// be asking a player to sit through eighty seconds in the same voice it uses
+/// for a wait they will never see.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Step {
+    /// Reading a cache file that already holds the frames asked for.
+    Cached,
+    /// Decoding through the platform's own decoder - see `gst_frame_store`.
+    /// No frame count: that decode is one call which returns when it is done.
+    Decoding,
+    /// `ffmpeg` is converting, and has encoded `done` of `total` frames.
+    ///
+    /// `total` is `None` when the conversion was not capped and the input's own
+    /// length is not known here, which is the raw program stream's case.
+    Transcoding { done: usize, total: Option<usize> },
+}
+
+/// Where a movie load reports its [`Step`], for a caller that is drawing a wait.
+///
+/// `None` for the callers with nowhere to show one - a headless capture, the
+/// ground-truth tests, `--dry-run` - which is also why this is a borrowed
+/// callback rather than a channel: nothing is spawned to service it, and a
+/// caller that passes `None` costs nothing at all.
+pub type Watch<'a> = Option<&'a (dyn Fn(Step) + Sync)>;
+
+/// Reports `step` if anyone is listening.
+fn watched(watch: Watch<'_>, step: Step) {
+    if let Some(watch) = watch {
+        watch(step);
+    }
+}
+
 /// Makes a movie's frames available, transcoding if it must.
 ///
 /// Dispatches on the blob's own magic rather than on which platform it came
@@ -992,23 +1055,20 @@ const MPEG_PS_START_CODE: [u8; 4] = [0x00, 0x00, 0x01, 0xba];
 /// `key` identifies the source for caching. It must change when the bytes do:
 /// the callers pass the WAD name hash and the entry size (or, for a loose PS2
 /// file, its own path and length), so a different disc image cannot collide.
-///
-/// `no_video` skips the transcode and reports a picture-less movie instead -
-/// still with a correct frame count, width, height and frame rate, since
-/// those come from parsing the container rather than decoding it.
 pub fn open(
     blob: &[u8],
     key: &str,
     cache_dir: &Path,
     extent: Extent,
-    no_video: bool,
+    how: Decode,
+    watch: Watch<'_>,
 ) -> Result<Movie> {
     if blob.starts_with(pmf::MAGIC) {
-        open_psmf(blob, key, cache_dir, extent, no_video)
+        open_psmf(blob, key, cache_dir, extent, how, watch)
     } else if blob.starts_with(&MPEG_PS_START_CODE) {
-        open_mpeg2_ps(blob, key, cache_dir, extent, no_video)
+        open_mpeg2_ps(blob, key, cache_dir, extent, how, watch)
     } else if blob.starts_with(&ipf::MAGIC) {
-        open_ipuf(blob, key, cache_dir, extent, no_video)
+        open_ipuf(blob, key, cache_dir, extent, how, watch)
     } else {
         let head = &blob[..blob.len().min(4)];
         bail!("{key} is not a movie container this build recognises (starts with {head:02x?})")
@@ -1021,7 +1081,8 @@ fn open_psmf(
     key: &str,
     cache_dir: &Path,
     extent: Extent,
-    no_video: bool,
+    how: Decode,
+    watch: Watch<'_>,
 ) -> Result<Movie> {
     let header = pmf::Header::parse(blob).context("parsing the PSMF header")?;
     let video = header
@@ -1060,7 +1121,7 @@ fn open_psmf(
         .audio
         .and_then(|stream| movie_audio(&demuxed, stream, key));
 
-    if no_video {
+    if how.no_video {
         return Ok(Movie {
             header: Some(header),
             frame_count,
@@ -1076,6 +1137,11 @@ fn open_psmf(
 
     let wanted = extent.limit(frame_count);
 
+    // Said before the attempt, not after: `GstDecoder::open` decodes every
+    // wanted frame into memory before it returns, so this word has to be on
+    // screen while that happens rather than once it has.
+    #[cfg(all(target_os = "linux", feature = "native-video"))]
+    watched(watch, Step::Decoding);
     #[cfg(all(target_os = "linux", feature = "native-video"))]
     if let Some(frames) = gst_frame_store(&demuxed.video, key, width, height, wanted) {
         return Ok(Movie {
@@ -1091,7 +1157,18 @@ fn open_psmf(
         });
     }
 
-    match transcode(&demuxed.video, key, cache_dir, width, height, wanted) {
+    match transcode(
+        &demuxed.video,
+        Conversion {
+            key,
+            cache_dir,
+            width,
+            height,
+            refresh: how.refresh,
+            watch,
+        },
+        wanted,
+    ) {
         Ok(frames) => Ok(Movie {
             header: Some(header),
             frame_count,
@@ -1180,11 +1257,12 @@ fn open_mpeg2_ps(
     key: &str,
     cache_dir: &Path,
     extent: Extent,
-    no_video: bool,
+    how: Decode,
+    watch: Watch<'_>,
 ) -> Result<Movie> {
     let probed = probe(blob, key, cache_dir)?;
 
-    if no_video {
+    if how.no_video {
         return Ok(Movie {
             header: None,
             frame_count: probed.frame_count,
@@ -1198,12 +1276,20 @@ fn open_mpeg2_ps(
         });
     }
 
-    let wanted = match extent {
-        Extent::Whole => None,
-        Extent::Frames(n) => Some(n),
-    };
+    let wanted = Frames::plan(extent, probed.frame_count);
 
-    match transcode_mpeg2_ps(blob, key, cache_dir, probed.width, probed.height, wanted) {
+    match transcode_mpeg2_ps(
+        blob,
+        Conversion {
+            key,
+            cache_dir,
+            width: probed.width,
+            height: probed.height,
+            refresh: how.refresh,
+            watch,
+        },
+        wanted,
+    ) {
         Ok(frames) => Ok(Movie {
             header: None,
             frame_count: frames.len,
@@ -1277,7 +1363,8 @@ fn open_ipuf(
     key: &str,
     cache_dir: &Path,
     extent: Extent,
-    no_video: bool,
+    how: Decode,
+    watch: Watch<'_>,
 ) -> Result<Movie> {
     let parsed = ipf::parse(blob).map_err(|e| anyhow!("parsing {key} as an IPF: {e}"))?;
     let width = parsed.header.width;
@@ -1285,7 +1372,7 @@ fn open_ipuf(
     let frame_count = parsed.len();
     let frame_rate = backdrop_frame_rate(width);
 
-    if no_video {
+    if how.no_video {
         return Ok(Movie {
             header: None,
             frame_count,
@@ -1301,7 +1388,18 @@ fn open_ipuf(
 
     let wanted = extent.limit(frame_count);
 
-    match transcode_ipu(&parsed, key, cache_dir, width, height, wanted) {
+    match transcode_ipu(
+        &parsed,
+        Conversion {
+            key,
+            cache_dir,
+            width,
+            height,
+            refresh: how.refresh,
+            watch,
+        },
+        wanted,
+    ) {
         Ok(frames) => Ok(Movie {
             header: None,
             frame_count,
@@ -1354,22 +1452,106 @@ fn ipum(bitstream: &[u8], width: u32, height: u32, frames: usize) -> Vec<u8> {
     out
 }
 
-/// Converts a PS2 `.IPF`'s IPU bitstream into lossless AV1 under `cache_dir`.
-fn transcode_ipu(
-    parsed: &ipf::Ipf<'_>,
-    key: &str,
-    cache_dir: &Path,
+/// Everything a conversion needs beyond the bytes it is converting.
+///
+/// The six travel together through all three `transcode_*` functions and are
+/// answers to one question - where this conversion writes, at what size, and who
+/// is watching - so they are one parameter rather than six. `frames` is
+/// deliberately *not* in here: it is a `usize` for the two containers that carry
+/// their own length and an `Option<usize>` for the raw program stream, which has
+/// no header to read one from.
+/// How many frames a conversion encodes, and how many that will turn out to be.
+///
+/// **Two numbers because they answer different questions**, and they are only
+/// sometimes the same one:
+///
+/// - `cap` is `ffmpeg`'s `-frames:v`, which stops the encode early. `None`
+///   converts the whole input, and it is also what names the cache file (see
+///   [`cache_name`]), so it must stay exactly what the caller asked for.
+/// - `total` is the denominator of the progress report. It is known even when
+///   there is no cap, because the input's own length was measured before any of
+///   this started.
+///
+/// One `Option<usize>` used to serve both, which was fine until something drew a
+/// bar with it: the PS2's uncapped `.PSS` transcode reported a frame number with
+/// nothing to divide it by, so a minute of work moved the bar not at all. The
+/// cap was `None` and the length was known the whole time.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct Frames {
+    cap: Option<usize>,
+    total: Option<usize>,
+}
+
+impl Frames {
+    /// Encode `n` and stop. The cap is also the count, by definition.
+    fn capped(n: usize) -> Self {
+        Self {
+            cap: Some(n),
+            total: Some(n),
+        }
+    }
+
+    /// Encode all of it. `available` is what the container was measured at.
+    ///
+    /// **The measurement does not have to be exact and is not treated as if it
+    /// were.** A raw program stream carries no frame count, so [`probe`] derives
+    /// one from its duration and frame rate - 38.0 s at 25/1 gives 950 for
+    /// `INTRO512.PSS`, which is what that file really encodes to, but an
+    /// approximation is all it can be. It is the denominator of a picture of a
+    /// wait, not of a decision: a low estimate saturates the bar at the end of
+    /// the slice it was already heading for, which is where the next load puts
+    /// it anyway.
+    fn whole(available: usize) -> Self {
+        Self {
+            cap: None,
+            total: Some(available),
+        }
+    }
+
+    /// What `extent` asks for, against a container measured at `available`.
+    ///
+    /// The one place the two questions above are answered together, so that a
+    /// caller cannot answer only the first - which is exactly how the bar came
+    /// to stand still through the longest wait the boot has.
+    fn plan(extent: Extent, available: usize) -> Self {
+        match extent {
+            Extent::Whole => Self::whole(available),
+            Extent::Frames(n) => Self::capped(n),
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct Conversion<'a> {
+    /// Identifies the source for caching - see [`open`].
+    key: &'a str,
+    cache_dir: &'a Path,
     width: u32,
     height: u32,
-    frames: usize,
-) -> Result<FrameStore> {
+    /// Ignore whatever is already cached - see [`Decode::refresh`].
+    refresh: bool,
+    watch: Watch<'a>,
+}
+
+/// Converts a PS2 `.IPF`'s IPU bitstream into lossless AV1 under the cache.
+fn transcode_ipu(parsed: &ipf::Ipf<'_>, to: Conversion<'_>, frames: usize) -> Result<FrameStore> {
+    let Conversion {
+        key,
+        cache_dir,
+        width,
+        height,
+        refresh,
+        watch,
+    } = to;
     let out = cache_dir.join(cache_name(key, width, height, Some(frames)));
 
-    let ready = FrameStore::open(out.clone(), width, height)
-        .ok()
+    let ready = (!refresh)
+        .then(|| FrameStore::open(out.clone(), width, height).ok())
+        .flatten()
         .filter(|store| store.len == frames);
 
     if let Some(store) = ready {
+        watched(watch, Step::Cached);
         return Ok(store);
     }
 
@@ -1380,7 +1562,7 @@ fn transcode_ipu(
     let wrapped = ipum(&parsed.bitstream(), width, height, parsed.len());
     std::fs::write(&source, &wrapped).with_context(|| format!("writing {}", source.display()))?;
 
-    run_ffmpeg(&source, &out, Some("ipu"), Some(frames))?;
+    run_ffmpeg(&source, &out, Some("ipu"), Frames::capped(frames), watch)?;
 
     let store = FrameStore::open(out, width, height)?;
     if store.len == 0 {
@@ -1389,29 +1571,35 @@ fn transcode_ipu(
     Ok(store)
 }
 
-/// Converts an H.264 elementary stream into lossless AV1 under `cache_dir`.
+/// Converts an H.264 elementary stream into lossless AV1 under the cache.
 ///
 /// Returns the reason as an error when conversion is impossible, which the
 /// caller turns into a fallback rather than a failure.
-fn transcode(
-    video: &[u8],
-    key: &str,
-    cache_dir: &Path,
-    width: u32,
-    height: u32,
-    frames: usize,
-) -> Result<FrameStore> {
+fn transcode(video: &[u8], to: Conversion<'_>, frames: usize) -> Result<FrameStore> {
+    let Conversion {
+        key,
+        cache_dir,
+        width,
+        height,
+        refresh,
+        watch,
+    } = to;
     let out = cache_dir.join(cache_name(key, width, height, Some(frames)));
 
     // A previous run's file is reused only if it opens *and* holds the frames
     // asked for. Unlike the raw cache this cannot be checked by file length, so
     // it is checked by decoding the container - cheap, since that is a parse of
     // the frame headers and not of the pictures.
-    let ready = FrameStore::open(out.clone(), width, height)
-        .ok()
+    //
+    // `refresh` skips the question rather than answering it `false`: the point
+    // is to overwrite a file that would have opened perfectly well.
+    let ready = (!refresh)
+        .then(|| FrameStore::open(out.clone(), width, height).ok())
+        .flatten()
         .filter(|store| store.len == frames);
 
     if let Some(store) = ready {
+        watched(watch, Step::Cached);
         return Ok(store);
     }
 
@@ -1425,7 +1613,7 @@ fn transcode(
 
     // The elementary stream carries no container timing, so the demuxer has to
     // be named explicitly.
-    run_ffmpeg(&es, &out, Some("h264"), Some(frames))?;
+    run_ffmpeg(&es, &out, Some("h264"), Frames::capped(frames), watch)?;
 
     let store = FrameStore::open(out, width, height)?;
     if store.len == 0 {
@@ -1439,21 +1627,28 @@ fn transcode(
 /// Unlike [`transcode`], `video` is the *whole* container - `ffmpeg` demuxes
 /// it itself, so there is no elementary stream to extract first, and no input
 /// format to name: a program stream carries its own.
-fn transcode_mpeg2_ps(
-    video: &[u8],
-    key: &str,
-    cache_dir: &Path,
-    width: u32,
-    height: u32,
-    frames: Option<usize>,
-) -> Result<FrameStore> {
-    let out = cache_dir.join(cache_name(key, width, height, frames));
+fn transcode_mpeg2_ps(video: &[u8], to: Conversion<'_>, frames: Frames) -> Result<FrameStore> {
+    let Conversion {
+        key,
+        cache_dir,
+        width,
+        height,
+        refresh,
+        watch,
+    } = to;
+    // `cap` rather than `total` in both: the cache file is named for what was
+    // asked for, and an uncapped conversion is spelled `-all` whatever the
+    // container turned out to measure. Naming it for the count would orphan
+    // every file already in the cache and make the name depend on `ffprobe`.
+    let out = cache_dir.join(cache_name(key, width, height, frames.cap));
 
-    let ready = FrameStore::open(out.clone(), width, height)
-        .ok()
-        .filter(|store| frames.is_none_or(|n| store.len == n));
+    let ready = (!refresh)
+        .then(|| FrameStore::open(out.clone(), width, height).ok())
+        .flatten()
+        .filter(|store| frames.cap.is_none_or(|n| store.len == n));
 
     if let Some(store) = ready {
+        watched(watch, Step::Cached);
         return Ok(store);
     }
 
@@ -1463,7 +1658,7 @@ fn transcode_mpeg2_ps(
     let source = cache_dir.join(format!("{key}.pss"));
     std::fs::write(&source, video).with_context(|| format!("writing {}", source.display()))?;
 
-    run_ffmpeg(&source, &out, None, frames)?;
+    run_ffmpeg(&source, &out, None, frames, watch)?;
 
     let store = FrameStore::open(out, width, height)?;
     if store.len == 0 {
@@ -1477,21 +1672,41 @@ fn transcode_mpeg2_ps(
 /// `input_format` names the demuxer explicitly when `input` is a bare
 /// elementary stream with no container of its own (`Some("h264")` for a
 /// `.PMF`'s video); `None` lets `ffmpeg` recognise the container itself, which
-/// a raw MPEG-2 program stream carries. `frames` caps how many pictures are
-/// encoded; `None` converts the whole input.
+/// a raw MPEG-2 program stream carries. `frames` says both how many pictures to
+/// encode and how many that will be - see [`Frames`], which exists because those
+/// are two questions.
+/// `watch` is called as each frame is encoded - see [`ffmpeg_progress`].
 fn run_ffmpeg(
     input: &Path,
     output: &Path,
     input_format: Option<&str>,
-    frames: Option<usize>,
+    frames: Frames,
+    watch: Watch<'_>,
 ) -> Result<()> {
     // Said before rather than after, because the whole 1200-frame intro takes
     // about 80 seconds and silence for that long reads as a hang. It happens
     // once per movie: the result is cached.
     eprintln!(
         "transcoding {} into {} (once; cached after this)",
-        frames.map_or_else(|| "every frame".to_string(), |n| format!("{n} frame(s)")),
+        frames.cap.map_or_else(
+            || frames.total.map_or_else(
+                || "every frame".to_string(),
+                |n| format!("all {n} frame(s)")
+            ),
+            |n| format!("{n} frame(s)")
+        ),
         output.display()
+    );
+    // Reported before the process is even spawned, so a screen watching this
+    // says "transcoding" for the whole of the wait rather than from whenever
+    // libaom finishes its first frame. Encoding one frame of the intro is a
+    // tenth of a second, but `ffmpeg` opening and probing its input is not.
+    watched(
+        watch,
+        Step::Transcoding {
+            done: 0,
+            total: frames.total,
+        },
     );
     let mut command = std::process::Command::new("ffmpeg");
     command
@@ -1502,8 +1717,17 @@ fn run_ffmpeg(
         command.args(["-f", format]);
     }
     command.arg("-i").arg(input);
-    if let Some(frames) = frames {
-        command.args(["-frames:v", &frames.to_string()]);
+    if let Some(cap) = frames.cap {
+        command.args(["-frames:v", &cap.to_string()]);
+    }
+    if watch.is_some() {
+        // Only when somebody is reading it: `-progress` writes a block of
+        // key=value lines every second, and a run nobody is watching should not
+        // pay for a pipe and a reader thread to throw them away. `-nostats`
+        // turns off the human-readable status line that would otherwise share
+        // the same stream.
+        command.args(["-progress", "pipe:1", "-nostats"]);
+        command.stdout(std::process::Stdio::piped());
     }
     let status = command
         .args(["-c:v", "libaom-av1"])
@@ -1525,7 +1749,18 @@ fn run_ffmpeg(
         .args(["-pix_fmt", PIXEL_FORMAT])
         .args(["-f", "ivf"])
         .arg(output)
-        .status();
+        .spawn()
+        .and_then(|mut child| {
+            // Drained on *this* thread rather than a spawned one, which is what
+            // keeps `watch` a borrowed `&dyn Fn` with no `'static` bound: the
+            // read runs entirely inside this call. It is also why the pipe must
+            // be drained at all - a progress block a second would eventually
+            // fill the pipe buffer and block `ffmpeg` itself.
+            if let Some(stdout) = child.stdout.take() {
+                ffmpeg_progress(stdout, frames.total, watch);
+            }
+            child.wait()
+        });
 
     match status {
         Ok(status) if status.success() => Ok(()),
@@ -1538,6 +1773,34 @@ fn run_ffmpeg(
              without it the sequence still plays, with a black picture"
         ),
         Err(e) => Err(e).context("running ffmpeg"),
+    }
+}
+
+/// Turns `ffmpeg -progress pipe:1` into [`Step::Transcoding`] reports.
+///
+/// The format is `ffmpeg`'s own and is deliberately machine-readable: one
+/// `key=value` per line, a block of them about once a second, each block ended
+/// by a `progress=continue` (or `progress=end` for the last). Only `frame=` is
+/// read here - the rest is bitrate, speed and timing, none of which a loading
+/// screen has anywhere to put.
+///
+/// **Every parse failure is silence rather than an error.** This is a picture of
+/// a wait, not a measurement: a line that will not parse, a build of `ffmpeg`
+/// that spells its keys differently, a pipe that closes early - all of them mean
+/// the count stops moving while the conversion carries on, which is what the
+/// caller already copes with when nobody is watching at all. Returning an error
+/// from here would fail a transcode that is going perfectly well.
+fn ffmpeg_progress(stdout: std::process::ChildStdout, total: Option<usize>, watch: Watch<'_>) {
+    use std::io::BufRead;
+
+    for line in std::io::BufReader::new(stdout).lines() {
+        let Ok(line) = line else { return };
+        if let Some(done) = line
+            .strip_prefix("frame=")
+            .and_then(|n| n.trim().parse().ok())
+        {
+            watched(watch, Step::Transcoding { done, total });
+        }
     }
 }
 
@@ -2185,6 +2448,36 @@ mod tests {
         assert_eq!(audio.block_count(), 3);
         let expected = 3.0 * 2048.0 / 44_100.0;
         assert!((audio.seconds() - expected).abs() < 1e-9);
+    }
+
+    /// **An uncapped conversion still knows how many frames it will make.**
+    ///
+    /// The regression this pins: `Extent::Whole` used to become a bare `None`
+    /// that meant both "do not pass `-frames:v`" and "there is no total", so the
+    /// PS2's `.PSS` transcode reported frame numbers with no denominator and the
+    /// loading screen's bar stood still through the longest wait in the boot.
+    /// The container was measured before any of it started.
+    #[test]
+    fn an_uncapped_conversion_keeps_the_count_it_was_measured_at() {
+        let whole = Frames::plan(Extent::Whole, 950);
+        assert_eq!(
+            whole.cap, None,
+            "`-frames:v` must stay off, or the cache file is renamed and the \
+             encode is truncated"
+        );
+        assert_eq!(
+            whole.total,
+            Some(950),
+            "the denominator the progress report divides by"
+        );
+
+        let capped = Frames::plan(Extent::Frames(30), 950);
+        assert_eq!(capped.cap, Some(30));
+        assert_eq!(
+            capped.total,
+            Some(30),
+            "a capped encode makes exactly its cap, so the two agree"
+        );
     }
 
     #[test]

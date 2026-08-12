@@ -902,7 +902,28 @@ machine and this checkout.
   than a race that resolves. The ordering used to come free from `boot::load`
   being blocking; now that the movies run on `boot::MediaWorker`,
   `Session::start_prefetch` is the only thing holding it, and it is one `if` in
-  `Session::frame`.
+  `Session::frame`. `--refresh-video` (2026-08-12) makes the worker's planning
+  pass stop skipping cached movies, so with `--prefetch` as well it re-converts
+  the boot's own two reels - wasteful, still ordered, and noted at the call site.
+- **The loading screen's bar was hidden for every ordinary boot and the reason
+  was not the gate.** The `0 / 0 converted` beside a full bar reading `100%` was
+  a real complaint; the fix bundled bar, counts and percentage into one
+  all-or-nothing row keyed on `total > 0`, and the boot's media phase reported no
+  counts at all, so the whole row vanished on every windowed start. **Fixed
+  2026-08-12 by giving the phase real counts** (`boot::MediaPlan::loads`,
+  `boot::MediaWorker::progress`) rather than by loosening the gate - the general
+  shape of the trap being that a display gate keyed on "is there data" reads
+  "nobody reported" and "nothing to report" as the same thing. `movie::Step` and
+  `movie::Watch` came with it, so a transcode says so and counts its frames out
+  of `ffmpeg -progress pipe:1`; that pipe's parse failures are silent by design,
+  which is why the reporting has its own ground-truth test rather than only unit
+  tests. The bar then went **continuous**: each load owns one slice and fills it
+  from its own step, so a minute-long transcode crosses 40% -> 60% rather than
+  holding at 40%. The invariant to preserve if that is ever touched is
+  monotonicity - `Cached` takes exactly a whole slice, so it lands where
+  `done + 1` will a millisecond later, and the percentage text reads the same
+  function the width does. See
+  [frontend boot](docs/architecture/frontend-boot.md#loading-is-not-transcoding).
 
 ## Verification status: what to lean on
 

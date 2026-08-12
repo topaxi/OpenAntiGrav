@@ -107,6 +107,27 @@ struct Cli {
     #[arg(long)]
     cache: Option<std::path::PathBuf>,
 
+    /// Convert every movie again even when the cache already holds it,
+    /// overwriting the cached file.
+    ///
+    /// **For a cache written by a build whose conversion has since changed.**
+    /// The movie cache is keyed by the *source* bytes - the WAD name hash and
+    /// the entry size - so a fixed transcode produces the same key as the wrong
+    /// one it replaces, and every later run would reuse the stale file forever.
+    /// This is the way out, and clearing the cache directory by hand is the
+    /// other.
+    ///
+    /// Only affects movies that are transcoded at all: on a `native-video`
+    /// build the H.264 reels decode through GStreamer and write no cache file,
+    /// so there is nothing there for this to ignore. It converts nothing that
+    /// would not otherwise have been converted - it only refuses the shortcut.
+    ///
+    /// The sounds are untouched. `--prefetch` still skips every ATRAC3+ stream
+    /// it finds cached, which is five seconds of the wait rather than ten
+    /// minutes of it.
+    #[arg(long)]
+    refresh_video: bool,
+
     /// Convert every movie and every sound on the disc up front, on a
     /// background thread, instead of one at a time on first use.
     ///
@@ -140,6 +161,18 @@ struct Cli {
     /// tip on show: the heartbeat peaks at 5 and 11 of its 24 frames.
     #[arg(long, value_name = "DONE/TOTAL")]
     loading_screen: Option<String>,
+
+    /// With `--loading-screen`, draw the boot's own media phase at a stated
+    /// load step instead of the `--prefetch` phase: `cached`, `decoding`, or
+    /// `transcoding:DONE/TOTAL` (e.g. `transcoding:340/1200`).
+    ///
+    /// The counts above stay the loads - `2/5` is two of five movie loads done -
+    /// and this is what the one in flight is doing. Stated for the same reason
+    /// they are: a cache hit is over in milliseconds and a frame counter holds
+    /// one value for about a second, so neither is a state a capture can be
+    /// timed to catch.
+    #[arg(long, value_name = "STEP", requires = "loading_screen")]
+    loading_step: Option<String>,
 
     /// Write everything the mixer produced to a WAV instead of to a device.
     ///
@@ -826,6 +859,7 @@ fn main() -> Result<()> {
             .movie_frames
             .map_or(movie::Extent::Whole, movie::Extent::Frames),
         no_video: cli.no_video,
+        refresh_video: cli.refresh_video,
     };
 
     // Every leg with no window loads the whole boot here and now, blocking, and
@@ -945,6 +979,7 @@ fn main() -> Result<()> {
             source: source.clone(),
             movies: options.cache.clone(),
             audio: boot::default_audio_cache_dir(),
+            refresh_video: cli.refresh_video,
         }),
         loading_assets,
         state: None,
@@ -1004,11 +1039,18 @@ fn run_windowless(
     // processes writing one cache file, which is a corrupt file rather than a
     // race that resolves. Started once boot has finished, they are already
     // cached and the worker's planning pass skips them by name.
+    //
+    // `--refresh-video` turns that skip off, so with both flags the worker
+    // converts the boot's own two reels a second time. Wasteful - a couple of
+    // the ten minutes - but still ordered, which is the property this comment is
+    // actually about: the boot has finished with the cache before the worker
+    // touches it either way.
     let mut prefetch = cli.prefetch.then(|| {
         prefetch::Prefetch::spawn(prefetch::Options {
             source: options.source.clone(),
             movies: options.cache.clone(),
             audio: boot::default_audio_cache_dir(),
+            refresh_video: cli.refresh_video,
         })
     });
 
@@ -1026,6 +1068,7 @@ fn run_windowless(
     // movie and reaches the GPU through `capture::loading`.
     if let (Some(path), Some(spec)) = (&cli.screenshot, &cli.loading_screen) {
         let progress = parse_progress(spec)?;
+        let phase = parse_step(cli.loading_step.as_deref())?;
         let assets = loading::Assets::load(&options.source, &loaded.strings);
         for note in &assets.notes {
             println!("{note}");
@@ -1039,6 +1082,7 @@ fn run_windowless(
                 size: parse_size(&cli.size)?,
                 ticks: cli.ticks,
                 progress,
+                phase,
                 renderer: settings.graphics.renderer.clone(),
                 aspect: settings.display.aspect,
             },
@@ -1145,6 +1189,43 @@ fn resolve_scheme(cli: &Cli, settings: &settings::Settings) -> ControlScheme {
         eprintln!("ignoring [controls] scheme = {token:?}; using {fallback}");
         fallback
     })
+}
+
+/// Parses `--loading-step`'s value into the phase the capture draws.
+///
+/// **Same reason `--loading-screen` exists, one level down.** A cache hit is
+/// over in milliseconds and a transcode holds one number for a second at a time,
+/// so neither is a state a capture can be *timed* to catch; stating it is the
+/// only way to look at the layout. No value at all is the prefetch phase, which
+/// is what `--loading-screen` alone has always drawn.
+fn parse_step(spec: Option<&str>) -> Result<loading::Phase> {
+    let Some(spec) = spec else {
+        return Ok(loading::Phase::Prefetch);
+    };
+    let bad = || {
+        anyhow::anyhow!(
+            "{spec:?} is not a load step; write it as cached, decoding, \
+             or transcoding:DONE/TOTAL (TOTAL may be omitted)"
+        )
+    };
+    Ok(loading::Phase::Media(Some(match spec {
+        "cached" => movie::Step::Cached,
+        "decoding" => movie::Step::Decoding,
+        _ => {
+            let frames = spec.strip_prefix("transcoding:").ok_or_else(bad)?;
+            let (done, total) = frames
+                .split_once('/')
+                .map_or((frames, None), |(d, t)| (d, Some(t)));
+            let done: usize = done.trim().parse().map_err(|_| bad())?;
+            let total = total.map(|t| t.trim().parse::<usize>()).transpose()?;
+            ensure!(
+                total.is_none_or(|total| done <= total),
+                "frame {done} of {} is past the end",
+                total.unwrap_or_default()
+            );
+            movie::Step::Transcoding { done, total }
+        }
+    })))
 }
 
 fn button_mask(names: Option<&str>) -> u32 {
@@ -2766,6 +2847,7 @@ impl LoadingStage {
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         viewport: (f32, f32, f32, f32),
+        phase: loading::Phase,
         progress: &prefetch::Progress,
     ) {
         let quads = self.screen.quads();
@@ -2775,7 +2857,7 @@ impl LoadingStage {
             [1.0, 1.0, 1.0, self.screen.opacity()],
             &vertices,
         );
-        let list = self.screen.draw_list(progress, &self.atlas);
+        let list = self.screen.draw_list(phase, progress, &self.atlas);
         self.renderer
             .render(&gpu.device, &gpu.queue, encoder, view, &list, viewport);
         capture::draw_wave(encoder, view, &self.wave, viewport);
@@ -3407,6 +3489,56 @@ impl Session {
         )
     }
 
+    /// The one snapshot the loading screen draws, over both of its waits.
+    ///
+    /// The screen counts whatever is converting *now*, and the two things that
+    /// convert never overlap: `--prefetch` is not started until the boot's own
+    /// movies are done with the cache (see the call to
+    /// [`Self::start_prefetch`]), so this is a hand-off rather than a sum. While
+    /// the media phase runs its counts are the ones shown; after it, the
+    /// prefetch worker's own are, unchanged.
+    ///
+    /// **`finished` is never the media phase's to answer.** It means "the
+    /// prefetch worker has nothing left to do", and the fade is gated on it
+    /// *and* [`LoadingStage::media_ready`] separately - folding the two here
+    /// would let a boot with no prefetch fade out while a movie was still
+    /// decoding.
+    fn loading_progress(&self) -> (loading::Phase, prefetch::Progress) {
+        let progress = self.prefetch_progress();
+        let Stage::Loading(stage) = &self.stage else {
+            return (loading::Phase::Prefetch, progress);
+        };
+        let Some(media) = stage.media.as_ref().filter(|m| !m.is_finished()) else {
+            return (loading::Phase::Prefetch, progress);
+        };
+        let media = media.progress();
+        // Every field is stated rather than taken from the prefetch snapshot:
+        // while the media phase runs, none of that worker's figures describe
+        // what is on screen, and `..progress` would let a later field quietly
+        // arrive from the wrong phase.
+        (
+            loading::Phase::Media(media.step),
+            prefetch::Progress {
+                total: media.total,
+                done: media.done,
+                current: media.current,
+                // Not the media phase's to report: nothing here is skipped for
+                // being cached and nothing here fails - a movie that will not
+                // load is a `None` and a report line, and the phase carries on.
+                cached: 0,
+                failed: 0,
+                planning: false,
+                // Never this phase's to answer either. `finished` means the
+                // prefetch worker has nothing left to do, and the fade is gated
+                // on it *and* `LoadingStage::media_ready` separately; a run with
+                // no `--prefetch` reports `true` here from the moment it starts,
+                // and letting that through would head the screen "READY" over a
+                // movie that is still decoding.
+                finished: false,
+            },
+        )
+    }
+
     /// Hands the window to the front end once the loading screen's fade is out.
     ///
     /// **Also where the boot's two halves become one.** The movies have landed
@@ -3596,7 +3728,7 @@ impl Session {
         // One snapshot for the whole frame, taken outside the tick loop: it is a
         // lock and a clone, and the ticks in one frame cannot have seen the
         // worker at different points anyway.
-        let progress = self.prefetch_progress();
+        let (phase, progress) = self.loading_progress();
 
         for _ in 0..steps {
             // Ends the devices' tick for both stages. A race reads the snapshot's
@@ -3797,7 +3929,7 @@ impl Session {
         let target = self.framebuffer.view();
         let (scene_stats, video_label) = match &mut self.stage {
             Stage::Loading(stage) => {
-                stage.render(&self.gpu, &mut encoder, target, inside, &progress);
+                stage.render(&self.gpu, &mut encoder, target, inside, phase, &progress);
                 (None, None)
             }
             Stage::Frontend(stage) => {

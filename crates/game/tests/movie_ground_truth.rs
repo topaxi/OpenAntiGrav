@@ -86,6 +86,7 @@ fn load() -> Option<boot::Boot> {
         audio_cache: oag_game::boot::default_audio_cache_dir(),
         extent: movie::Extent::Frames(FRAMES),
         no_video: false,
+        refresh_video: false,
     };
     Some(boot::load(&options).expect("loading the boot sequence"))
 }
@@ -111,6 +112,7 @@ fn load_whole() -> Option<boot::Boot> {
         audio_cache: oag_game::boot::default_audio_cache_dir(),
         extent: movie::Extent::Whole,
         no_video: false,
+        refresh_video: false,
     };
     Some(boot::load(&options).expect("loading the boot sequence"))
 }

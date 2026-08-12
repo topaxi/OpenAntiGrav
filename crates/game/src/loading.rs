@@ -1,10 +1,15 @@
-//! The loading screen shown while `--prefetch` converts the disc.
+//! The loading screen shown while the boot's movies decode and `--prefetch`
+//! converts the disc.
 //!
-//! [`crate::prefetch`] costs about ten minutes on a cold cache, and a window
-//! that draws nothing for ten minutes is indistinguishable from a hang. This is
-//! the screen that says otherwise: the original's own procedural wave from
-//! [`oag_render::loading`], one of the disc's 30 loading tips, and - the part
-//! that actually does the job - the counts.
+//! [`crate::prefetch`] costs about ten minutes on a cold cache and the boot's
+//! own reels several seconds on every start, and a window that draws nothing
+//! for either is indistinguishable from a hang. This is the screen that says
+//! otherwise: the original's own procedural wave from [`oag_render::loading`],
+//! one of the disc's 30 loading tips, and - the part that actually does the
+//! job - the counts.
+//!
+//! Both waits are counted and [`Phase`] says which one is being counted; they
+//! never overlap, so the screen shows one set of figures throughout.
 //!
 //! **The numbers are the point and the wave is the decoration.** A pretty
 //! animation with no figures still reads as a hang after the first minute, so
@@ -43,6 +48,40 @@ use crate::prefetch::Progress;
 ///
 /// [ADR-0022]: ../../../docs/architecture/adr/0022-title-packages.md
 pub use oag_pulse::loading::{GLOW_STRIP_ENTRY, TIPS_ENTRY};
+
+/// Which of the screen's two waits the counts belong to.
+///
+/// The screen is up for both and they never overlap - `--prefetch` does not
+/// start until the boot's own movies are done with the cache - so this says
+/// which one is being counted rather than describing a mixture. It exists
+/// because the two are honestly different work: one decodes the three reels
+/// this boot needs, the other transcodes every convertible asset on the disc,
+/// and a heading that called both by one word would be wrong about one of them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Phase {
+    /// The boot's own movies, on every windowed start. See
+    /// [`crate::boot::MediaWorker`].
+    ///
+    /// Carries what the current load is doing, because that is the difference
+    /// between a wait nobody notices and eighty seconds of one - see
+    /// [`crate::movie::Step`]. `None` before a load has said anything, and for
+    /// the sound loads, which have their own cache and do not report.
+    Media(Option<crate::movie::Step>),
+    /// `--prefetch` converting the disc. See [`crate::prefetch`].
+    ///
+    /// No step: that worker converts by the hundred and names each asset as it
+    /// starts it, so "which of them is transcoding" is answered by the count
+    /// already on screen.
+    Prefetch,
+}
+
+impl Default for Phase {
+    /// The media phase, having said nothing yet: what every windowed boot opens
+    /// on, before the first load has reported.
+    fn default() -> Self {
+        Self::Media(None)
+    }
+}
 
 /// Frames one tip stays up, at the 60 Hz the window steps at.
 ///
@@ -283,7 +322,7 @@ impl Screen {
     /// pipeline and its own additive blend, and is drawn over this list in a
     /// second pass. See [`oag_render::loading::Pipeline`].
     #[must_use]
-    pub fn draw_list(&self, progress: &Progress, atlas: &Atlas) -> Vec<Draw> {
+    pub fn draw_list(&self, phase: Phase, progress: &Progress, atlas: &Atlas) -> Vec<Draw> {
         let mut out = Vec::new();
         let fade = self.opacity();
         let dim = |colour: [f32; 4]| [colour[0], colour[1], colour[2], colour[3] * fade];
@@ -300,7 +339,7 @@ impl Screen {
             color: dim(HEADING),
             border: None,
             align: Align::Centre,
-            text: heading(progress),
+            text: heading(phase, progress),
         });
 
         if let Some(tip) = self.tip() {
@@ -327,7 +366,7 @@ impl Screen {
         //
         // All of it together, or none of it: see [`counted`].
         if counted(progress) {
-            let filled = progress.fraction().clamp(0.0, 1.0) * BAR_WIDTH;
+            let filled = fraction(phase, progress) * BAR_WIDTH;
             out.push(Draw::Fill {
                 rect: [BAR_X, BAR_Y, BAR_WIDTH, BAR_HEIGHT],
                 color: dim(BAR_TROUGH),
@@ -346,7 +385,7 @@ impl Screen {
                 color: dim(COUNTS),
                 border: None,
                 align: Align::Left,
-                text: counts(progress),
+                text: counts(phase, progress),
             });
             out.push(Draw::Text {
                 x: BAR_X + BAR_WIDTH,
@@ -355,7 +394,7 @@ impl Screen {
                 color: dim(COUNTS),
                 border: None,
                 align: Align::Right,
-                text: percentage(progress),
+                text: percentage(phase, progress),
             });
         }
 
@@ -371,40 +410,170 @@ impl Screen {
             });
         }
 
+        // A line of its own rather than a suffix on the one above, because
+        // `elide` keeps a string's *tail*: appended, the state would survive and
+        // the entry name would be eaten from the left, which is the wrong half
+        // to lose. Two short lines are both legible at any name length.
+        if let Some(step) = step_line(phase) {
+            out.push(Draw::Text {
+                x: BAR_X,
+                y: STEP_Y,
+                scale: CURRENT_SCALE,
+                color: dim(CURRENT),
+                border: None,
+                align: Align::Left,
+                text: step,
+            });
+        }
+
         out
     }
 }
 
+/// What the current load is doing, under the entry name it is doing it to.
+///
+/// `None` draws nothing: a phase with no step to report has no line, rather than
+/// a line saying it has nothing to report.
+fn step_line(phase: Phase) -> Option<String> {
+    let Phase::Media(step) = phase else {
+        return None;
+    };
+    Some(match step? {
+        // Named rather than silent. A cache hit is over in milliseconds, so this
+        // is rarely *read* - but it is what makes the transcoding line below
+        // mean something specific when it does appear.
+        crate::movie::Step::Cached => "already converted, reading the cache".to_string(),
+        crate::movie::Step::Decoding => "decoding".to_string(),
+        // The counter is the anti-hang signal and the reason any of this is
+        // plumbed: a number that moves once a second is the difference between
+        // eighty seconds of progress and eighty seconds of nothing.
+        crate::movie::Step::Transcoding {
+            done,
+            total: Some(total),
+        } => format!("transcoding - frame {done} of {total}"),
+        crate::movie::Step::Transcoding { done, total: None } => {
+            format!("transcoding - frame {done}")
+        }
+    })
+}
+
 /// What the screen calls what it is doing.
-fn heading(progress: &Progress) -> String {
+fn heading(phase: Phase, progress: &Progress) -> String {
     if progress.planning {
         return "READING THE ARCHIVES".to_string();
     }
     if !counted(progress) {
-        // The ordinary boot: the screen is up for the movies rather than for a
-        // conversion, and there is no count behind this word. See [`counted`].
+        // Nothing to count: a boot whose title names no movie at all, which is
+        // the one case the media phase has no work in. See [`counted`].
         return "LOADING".to_string();
     }
     if progress.finished {
         return "READY".to_string();
     }
-    "CONVERTING ASSETS".to_string()
+    match phase {
+        // The one wait worth its own word. A transcode of the intro is about
+        // eighty seconds and a cache hit is milliseconds, and heading both
+        // "loading" is how a player learns to read the word as "a moment" and
+        // then sits through a minute and a half of it.
+        Phase::Media(Some(crate::movie::Step::Transcoding { .. })) => {
+            "TRANSCODING MOVIES".to_string()
+        }
+        // Deliberately not "converting" for the rest: a warm cache reads the
+        // cached file and a `native-video` build decodes it, and neither is a
+        // conversion. "Loading" is true of both.
+        Phase::Media(_) => "LOADING MOVIES".to_string(),
+        Phase::Prefetch => "CONVERTING ASSETS".to_string(),
+    }
 }
 
 /// Whether there is a conversion being counted, and so whether the bar, the
 /// done/total pair and the percentage have anything to say.
 ///
-/// **`false` is the ordinary boot.** The loading screen is up on every windowed
-/// start now, covering the seconds the boot's own two movies take to decode -
-/// one wait, not a count of many - and `--prefetch` is the only thing that ever
-/// fills these numbers in. Drawing them anyway gave `0 / 0 converted` beside a
-/// full bar reading `100%`, which describes nothing and looks like a bug in the
-/// counter rather than an absence of one. The three are one row and go together.
+/// **`false` is now the rare case, and it is the honest one.** Both of the
+/// screen's waits count what they are doing - the media phase from
+/// [`crate::boot::MediaPlan::loads`], the prefetch worker from its own planning
+/// pass - so a total of zero means there is genuinely nothing to count: a title
+/// whose chain names no movie, on a run with no `--prefetch`. Drawing the row
+/// anyway gave `0 / 0` beside a full bar reading `100%`, which describes nothing
+/// and looks like a bug in the counter rather than an absence of one.
+///
+/// The three are one row and go together. An earlier build hid all three on
+/// every ordinary boot, because the media phase reported no counts at all and so
+/// looked like that empty case; the bar is back because the counts behind it are
+/// real, not because the gate was loosened.
 ///
 /// `planning` counts as counted: a worker that has not finished its walk has a
 /// total of zero and is certainly converting something.
 fn counted(progress: &Progress) -> bool {
     progress.planning || progress.total > 0
+}
+
+/// How much of one load's own slice the read-or-decode part takes when a
+/// transcode follows it.
+///
+/// A fifth, and the number is a guess about *proportions* rather than a
+/// measurement - it cannot be measured, because the two are not the same work.
+/// What it has to get right is the ordering: opening the container and demuxing
+/// it is a small fraction of what `ffmpeg` then spends on the pictures (2.6 s of
+/// intro against 55 s of transcode, measured on the PS2's `INTRO512.PSS`), so
+/// the head has to be small enough that the frame counter drives nearly all of
+/// the slice.
+const LOADING_SHARE: f32 = 0.2;
+
+/// How full the bar is, from `0.0` to `1.0`.
+///
+/// **Each load owns one slice of the bar and fills its own slice**, rather than
+/// the bar stepping once per load. With five loads and a transcode in the third,
+/// the bar does not sit at 40% for a minute: it crosses from 40% to 60% as the
+/// frame counter runs, which is the difference between a bar that is watched and
+/// a bar that is assumed broken.
+///
+/// The step's share of its own slice:
+///
+/// | Step | Share | Why |
+/// | --- | --- | --- |
+/// | nothing reported | `0.0` | the slice has not started |
+/// | [`Cached`](crate::movie::Step::Cached) | `1.0` | the hit *is* the whole of that load's work |
+/// | [`Decoding`](crate::movie::Step::Decoding) | [`LOADING_SHARE`] | held, because a decode reports no progress and may still fall back to a transcode |
+/// | [`Transcoding`](crate::movie::Step::Transcoding) with a total | `LOADING_SHARE` upward | the frame counter drives the rest |
+/// | `Transcoding` with no total | [`LOADING_SHARE`] | held: no denominator, so no fraction to invent |
+///
+/// **Monotonic by construction, which is the property that matters.** `Cached`
+/// takes exactly the whole slice, so the bar is already where `done + 1` will
+/// put it a millisecond later; `Decoding` holds at the head that `Transcoding`
+/// then counts up from. A bar that went backwards would be worse than one that
+/// only stepped.
+///
+/// The sound loads report no step and so hold their slices at the boundary -
+/// [`crate::at3`] has its own cache and does not report through
+/// [`crate::movie::Watch`]. They are normally the fast ones; on a cold audio
+/// cache they are two slices where the bar stands still, which is a real gap and
+/// not a hidden one.
+fn fraction(phase: Phase, progress: &Progress) -> f32 {
+    let base = progress.fraction().clamp(0.0, 1.0);
+    if progress.total == 0 {
+        return base;
+    }
+    let Phase::Media(Some(step)) = phase else {
+        return base;
+    };
+    let within = match step {
+        crate::movie::Step::Cached => 1.0,
+        crate::movie::Step::Decoding | crate::movie::Step::Transcoding { total: None, .. } => {
+            LOADING_SHARE
+        }
+        // A total of zero is not a conversion of nothing, it is a total nobody
+        // could state - treated as the no-total case rather than divided by.
+        crate::movie::Step::Transcoding { total: Some(0), .. } => LOADING_SHARE,
+        crate::movie::Step::Transcoding {
+            done,
+            total: Some(total),
+        } => {
+            let encoded = (done as f32 / total as f32).clamp(0.0, 1.0);
+            LOADING_SHARE + (1.0 - LOADING_SHARE) * encoded
+        }
+    };
+    (base + within / progress.total as f32).clamp(0.0, 1.0)
 }
 
 /// The done/total pair, and the two counts that only matter when they are not
@@ -415,11 +584,19 @@ fn counted(progress: &Progress) -> bool {
 /// broken without it. `failed` is worth showing for the opposite reason: it is
 /// normally zero, and a run where it is not should say so while it is still on
 /// screen rather than only in the summary line at the end.
-fn counts(progress: &Progress) -> String {
+fn counts(phase: Phase, progress: &Progress) -> String {
     if progress.planning {
         return "counting what needs converting".to_string();
     }
-    let mut out = format!("{} / {} converted", progress.done, progress.total);
+    // `cached` and `failed` below are always zero in the media phase - nothing
+    // there is skipped for being cached, and a reel that will not load is a
+    // report line rather than a failure the screen counts - so the two branches
+    // differ only in the verb.
+    let verb = match phase {
+        Phase::Media(_) => "loaded",
+        Phase::Prefetch => "converted",
+    };
+    let mut out = format!("{} / {} {verb}", progress.done, progress.total);
     if progress.cached > 0 {
         out.push_str(&format!(", {} already cached", progress.cached));
     }
@@ -429,16 +606,21 @@ fn counts(progress: &Progress) -> String {
     out
 }
 
-/// The fraction as a whole percentage.
+/// The bar's own fill as a whole percentage.
+///
+/// **The same [`fraction`] the bar is drawn from, deliberately.** They sit on one
+/// row saying the same thing, and a figure that disagreed with the width beside
+/// it would make both look wrong - which is exactly what reading the plain
+/// `done / total` here would do now that the bar sub-fills its current slice.
 ///
 /// Blank while planning: [`Progress::fraction`] is `1.0` before anything has
 /// been counted, which is the honest answer to "how much of nothing is left"
 /// and reads as `100%` on a screen that has only just opened.
-fn percentage(progress: &Progress) -> String {
+fn percentage(phase: Phase, progress: &Progress) -> String {
     if progress.planning {
         return String::new();
     }
-    format!("{}%", (progress.fraction().clamp(0.0, 1.0) * 100.0).round())
+    format!("{}%", (fraction(phase, progress) * 100.0).round())
 }
 
 /// Breaks `text` into lines no wider than `max_width` in screen units.
@@ -551,6 +733,9 @@ const COUNTS: [f32; 4] = [0.85, 0.9, 0.95, 1.0];
 const CURRENT_Y: f32 = 168.0;
 const CURRENT_SCALE: f32 = 0.8;
 const CURRENT: [f32; 4] = [0.5, 0.58, 0.66, 1.0];
+
+/// One line under the entry name, at the same scale. See [`step_line`].
+const STEP_Y: f32 = 180.0;
 
 #[cfg(test)]
 mod tests {
@@ -694,7 +879,7 @@ mod tests {
         let mut state = progress(37, 115);
         state.cached = 12;
         state.current = Some("Data.wad hash:71d3c1ec".to_string());
-        let drawn = text_of(&screen.draw_list(&state, &atlas));
+        let drawn = text_of(&screen.draw_list(Phase::Prefetch, &state, &atlas));
 
         assert!(
             drawn.iter().any(|line| line.contains("37 / 115")),
@@ -712,26 +897,26 @@ mod tests {
         assert!(drawn.iter().any(|line| line == "a tip"), "{drawn:?}");
     }
 
-    /// **The ordinary boot draws no counter at all.** Without `--prefetch`
-    /// there is no conversion behind this screen - it is up for the boot's own
-    /// movies - and every number on it would be zero. The bar, the `0 / 0
-    /// converted` and the `100%` are one row and are all absent together; the
-    /// tip and the wave are what is left, which is the whole screen a player
-    /// ordinarily sees.
+    /// **Nothing to count draws no counter at all.** A title whose chain names
+    /// no movie, on a run with no `--prefetch`, has nothing behind this screen
+    /// and every number on it would be zero. The bar, the `0 / 0` and the `100%`
+    /// are one row and are all absent together; the tip and the wave are what is
+    /// left.
     #[test]
     fn a_boot_with_nothing_to_convert_draws_no_bar_and_no_counts() {
         let atlas = Atlas::build();
         let screen = Screen::new(vec!["a tip".to_string()]);
-        // What `Session::prefetch_progress` reports on a run with no worker.
+        // What `Session::prefetch_progress` reports on a run with no worker,
+        // and what `MediaPlan::loads` counts for a plan that names nothing.
         let state = Progress {
             finished: true,
             ..Progress::default()
         };
-        let list = screen.draw_list(&state, &atlas);
+        let list = screen.draw_list(Phase::Media(None), &state, &atlas);
         let drawn = text_of(&list);
 
         assert!(
-            !drawn.iter().any(|line| line.contains("converted")),
+            !drawn.iter().any(|line| line.contains("loaded")),
             "no done/total pair: {drawn:?}"
         );
         assert!(
@@ -751,6 +936,48 @@ mod tests {
         assert_eq!(fills, 1, "only the backdrop, no bar: {list:?}");
     }
 
+    /// **The ordinary boot draws the bar again**, because the media phase now
+    /// counts its own loads: `Session::loading_progress` folds
+    /// [`crate::boot::MediaWorker::progress`] in, and a plan naming both movies
+    /// and a backdrop is five loads rather than nothing.
+    ///
+    /// The regression this pins is the one that removed it: the phase reported
+    /// no counts, `counted` read that as the empty case, and the whole row went
+    /// with it.
+    #[test]
+    fn the_media_phase_draws_the_bar_and_counts_its_own_loads() {
+        let atlas = Atlas::build();
+        let screen = Screen::new(Vec::new());
+        let state = Progress {
+            total: 5,
+            done: 2,
+            current: Some("WO_INTRO.PMF".to_string()),
+            ..Progress::default()
+        };
+        let list = screen.draw_list(Phase::Media(None), &state, &atlas);
+        let drawn = text_of(&list);
+
+        assert!(
+            drawn.iter().any(|line| line == "2 / 5 loaded"),
+            "the media phase loads rather than converts: {drawn:?}"
+        );
+        assert!(drawn.iter().any(|line| line == "40%"), "{drawn:?}");
+        assert!(
+            drawn.iter().any(|line| line.contains("WO_INTRO.PMF")),
+            "the reel being read is named: {drawn:?}"
+        );
+        assert!(
+            drawn.iter().any(|line| line == "LOADING MOVIES"),
+            "not CONVERTING ASSETS, which is the other phase: {drawn:?}"
+        );
+        // The backdrop, the trough and the filled part.
+        let fills = list
+            .iter()
+            .filter(|draw| matches!(draw, Draw::Fill { .. }))
+            .count();
+        assert_eq!(fills, 3, "{list:?}");
+    }
+
     /// Nothing counted yet is not `100%` - see [`percentage`].
     #[test]
     fn planning_reports_no_percentage_it_cannot_know() {
@@ -760,7 +987,7 @@ mod tests {
             planning: true,
             ..Progress::default()
         };
-        let drawn = text_of(&screen.draw_list(&state, &atlas));
+        let drawn = text_of(&screen.draw_list(Phase::Prefetch, &state, &atlas));
         assert!(!drawn.iter().any(|line| line.ends_with('%')), "{drawn:?}");
         assert!(
             drawn.iter().any(|line| line == "READING THE ARCHIVES"),
@@ -775,7 +1002,7 @@ mod tests {
         let atlas = Atlas::build();
         let screen = Screen::new(Vec::new());
         let fills: Vec<[f32; 4]> = screen
-            .draw_list(&progress(1, 4), &atlas)
+            .draw_list(Phase::Prefetch, &progress(1, 4), &atlas)
             .iter()
             .filter_map(|draw| match draw {
                 Draw::Fill { rect, .. } => Some(*rect),
@@ -785,6 +1012,218 @@ mod tests {
         // The backdrop, the trough and the fill.
         assert_eq!(fills.len(), 3, "{fills:?}");
         assert!((fills[2][2] - BAR_WIDTH * 0.25).abs() < 0.01, "{fills:?}");
+    }
+
+    /// **A transcode says so, and says how far.** The complaint this answers is
+    /// that a cache hit and an eighty-second `ffmpeg` run looked identical: same
+    /// heading, same entry name, one of them over before it was read.
+    #[test]
+    fn a_transcode_is_headed_and_counted_apart_from_a_cache_hit() {
+        let atlas = Atlas::build();
+        let screen = Screen::new(Vec::new());
+        let state = Progress {
+            total: 5,
+            done: 2,
+            current: Some(r"Data\Movies\Intro.pss".to_string()),
+            ..Progress::default()
+        };
+
+        let transcoding = text_of(&screen.draw_list(
+            Phase::Media(Some(crate::movie::Step::Transcoding {
+                done: 340,
+                total: Some(1200),
+            })),
+            &state,
+            &atlas,
+        ));
+        assert!(
+            transcoding.iter().any(|l| l == "TRANSCODING MOVIES"),
+            "{transcoding:?}"
+        );
+        assert!(
+            transcoding
+                .iter()
+                .any(|l| l == "transcoding - frame 340 of 1200"),
+            "the frame counter is the anti-hang signal: {transcoding:?}"
+        );
+
+        let cached = text_of(&screen.draw_list(
+            Phase::Media(Some(crate::movie::Step::Cached)),
+            &state,
+            &atlas,
+        ));
+        assert!(cached.iter().any(|l| l == "LOADING MOVIES"), "{cached:?}");
+        assert!(
+            cached.iter().any(|l| l.contains("reading the cache")),
+            "{cached:?}"
+        );
+        assert!(
+            !cached.iter().any(|l| l.contains("transcoding")),
+            "a cache hit must not borrow the last transcode's caption: {cached:?}"
+        );
+
+        // Nothing reported yet, and the sound loads, which never report.
+        let quiet = text_of(&screen.draw_list(Phase::Media(None), &state, &atlas));
+        assert!(quiet.iter().any(|l| l == "LOADING MOVIES"), "{quiet:?}");
+        assert!(
+            !quiet.iter().any(|l| l.contains("transcoding")
+                || l.contains("decoding")
+                || l.contains("cache")),
+            "no step is no line, not a line saying there is no step: {quiet:?}"
+        );
+    }
+
+    /// An uncapped conversion has a numerator and no denominator, and must not
+    /// invent one - see [`crate::movie::Step::Transcoding`].
+    #[test]
+    fn an_uncapped_transcode_counts_frames_without_claiming_a_total() {
+        let atlas = Atlas::build();
+        let screen = Screen::new(Vec::new());
+        let drawn = text_of(&screen.draw_list(
+            Phase::Media(Some(crate::movie::Step::Transcoding {
+                done: 91,
+                total: None,
+            })),
+            &progress(1, 2),
+            &atlas,
+        ));
+        assert!(
+            drawn.iter().any(|l| l == "transcoding - frame 91"),
+            "{drawn:?}"
+        );
+    }
+
+    /// **The bar crosses its slice as the transcode runs**, rather than sitting
+    /// still for a minute and then stepping. See [`fraction`].
+    #[test]
+    fn a_transcode_fills_its_own_slice_of_the_bar() {
+        // Two of five loads done, so the third owns 40%..60%.
+        let state = Progress {
+            total: 5,
+            done: 2,
+            ..Progress::default()
+        };
+        let at = |done, total| {
+            fraction(
+                Phase::Media(Some(crate::movie::Step::Transcoding { done, total })),
+                &state,
+            )
+        };
+
+        // The head, before a frame is encoded: started, but barely.
+        let started = at(0, Some(1200));
+        assert!(
+            (started - (0.4 + 0.2 / 5.0)).abs() < 1e-6,
+            "the read-or-decode head is LOADING_SHARE of one slice: {started}"
+        );
+        // Half the frames is half of what is left of the slice.
+        let half = at(600, Some(1200));
+        assert!(
+            (half - (0.4 + (0.2 + 0.8 * 0.5) / 5.0)).abs() < 1e-6,
+            "{half}"
+        );
+        // The last frame lands exactly on the slice boundary, which is where
+        // `done + 1` puts it a moment later.
+        let end = at(1200, Some(1200));
+        assert!((end - 0.6).abs() < 1e-6, "{end}");
+
+        assert!(started < half && half < end, "{started} {half} {end}");
+    }
+
+    /// A slice is never left behind and never overshot, whatever a step reports.
+    ///
+    /// The property the whole scheme rests on: a bar that went backwards would
+    /// be worse than one that only stepped, and `Cached` taking a whole slice is
+    /// the case where that is easiest to get wrong.
+    #[test]
+    fn no_step_moves_the_bar_backwards_or_past_its_own_slice() {
+        use crate::movie::Step;
+
+        let state = Progress {
+            total: 4,
+            done: 1,
+            ..Progress::default()
+        };
+        let floor = fraction(Phase::Media(None), &state);
+        let ceiling = fraction(
+            Phase::Media(Some(Step::Cached)),
+            &Progress {
+                done: 2,
+                ..state.clone()
+            },
+        );
+        assert!((floor - 0.25).abs() < 1e-6, "{floor}");
+
+        for step in [
+            Step::Cached,
+            Step::Decoding,
+            Step::Transcoding {
+                done: 0,
+                total: None,
+            },
+            Step::Transcoding {
+                done: 999,
+                total: None,
+            },
+            // A stated total of zero: nobody could divide by it, and it must not
+            // produce a NaN width either.
+            Step::Transcoding {
+                done: 0,
+                total: Some(0),
+            },
+            Step::Transcoding {
+                done: 7,
+                total: Some(7),
+            },
+            // More frames than the total claimed, which `ffmpeg` has no reason
+            // to report but which must not push past the slice if it does.
+            Step::Transcoding {
+                done: 99,
+                total: Some(7),
+            },
+        ] {
+            let at = fraction(Phase::Media(Some(step)), &state);
+            assert!(at.is_finite(), "{step:?} gave {at}");
+            assert!(
+                (floor..=floor + 0.25 + 1e-6).contains(&at),
+                "{step:?} left the slice 0.25..0.50: {at}"
+            );
+            assert!(at <= ceiling + 1e-6, "{step:?} passed the next load: {at}");
+        }
+    }
+
+    /// The figure and the width are one statement, so they are one number.
+    #[test]
+    fn the_percentage_is_the_width_the_bar_was_drawn_at() {
+        let atlas = Atlas::build();
+        let screen = Screen::new(Vec::new());
+        let phase = Phase::Media(Some(crate::movie::Step::Transcoding {
+            done: 600,
+            total: Some(1200),
+        }));
+        let state = Progress {
+            total: 5,
+            done: 2,
+            ..Progress::default()
+        };
+        let list = screen.draw_list(phase, &state, &atlas);
+
+        let widths: Vec<f32> = list
+            .iter()
+            .filter_map(|draw| match draw {
+                Draw::Fill { rect, .. } => Some(rect[2]),
+                _ => None,
+            })
+            .collect();
+        // The backdrop, the trough and the fill.
+        assert_eq!(widths.len(), 3, "{list:?}");
+        let drawn = (widths[2] / BAR_WIDTH * 100.0).round();
+
+        let text = text_of(&list);
+        assert!(
+            text.iter().any(|line| line == &format!("{drawn}%")),
+            "the bar is {drawn}% wide and the figures beside it say: {text:?}"
+        );
     }
 
     /// The wave freezes when the work does, and only then - `Wave::finish` is
@@ -824,7 +1263,7 @@ mod tests {
         for _ in 0..FADE_FRAMES / 2 {
             screen.advance(true);
         }
-        let list = screen.draw_list(&progress(1, 2), &atlas);
+        let list = screen.draw_list(Phase::Prefetch, &progress(1, 2), &atlas);
         let alpha = list
             .iter()
             .find_map(|draw| match draw {
