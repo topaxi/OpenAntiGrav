@@ -128,14 +128,20 @@ struct Cli {
     #[arg(long)]
     refresh_video: bool,
 
-    /// Decode the boot's movies from the AV1 cache even when this build has a
-    /// platform decoder that could do it directly.
+    /// Build the AV1 cache for the boot's movies rather than letting this
+    /// build's platform decoder handle them.
     ///
-    /// **Opt-in, and the platform decoder stays the default** - see
-    /// [ADR-0017](../../docs/architecture/adr/0017-gstreamer-native-video.md).
+    /// **You need this once.** A cache file that already exists is preferred
+    /// over the platform decoder with no flag at all, so this is the run that
+    /// creates one; every run after it picks the file up by itself. `--prefetch`
+    /// does the same thing for every movie on the disc rather than just the
+    /// boot's.
+    ///
     /// Only affects the PSP's H.264 `.PMF` reels on a Linux `native-video`
     /// build; the PS2's `.PSS` and `.IPF` have no platform decoder and always
-    /// went through the cache.
+    /// went through the cache. For an uncached first run the platform decoder
+    /// stays the default - see
+    /// [ADR-0017](../../docs/architecture/adr/0017-gstreamer-native-video.md).
     ///
     /// The trade is a one-off transcode against a faster start every time after
     /// it. GStreamer decodes every wanted frame into memory before it returns;
@@ -144,12 +150,11 @@ struct Cli {
     ///
     /// | | Media phase |
     /// | --- | --- |
-    /// | Default (GStreamer) | **4.80 s**, every boot |
-    /// | `--prefer-av1-cache`, cold | **36.08 s** once (intro 30.33, backdrop 5.74) |
-    /// | `--prefer-av1-cache`, warm | **0.05 s** |
+    /// | GStreamer, nothing cached | **4.80 s**, and again on every boot |
+    /// | This flag, nothing cached | **36.08 s** once (intro 30.33, backdrop 5.74) |
+    /// | A cache file present - no flag needed | **0.05 s** |
     ///
-    /// So it pays for itself after about eight boots. Pair it with `--prefetch`
-    /// once to get the transcode over with up front.
+    /// So it pays for itself after about eight boots.
     #[arg(long)]
     prefer_av1_cache: bool,
 

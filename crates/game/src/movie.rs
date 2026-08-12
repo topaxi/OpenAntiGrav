@@ -1006,13 +1006,21 @@ pub struct Decode {
     /// cache is keyed by *content*, so a changed encoder produces the same key
     /// and the stale file would otherwise be reused forever.
     pub refresh: bool,
-    /// Take the AV1 cache path even where a platform decoder is available.
+    /// **Build** the AV1 cache rather than using a platform decoder, when there
+    /// is no cache file yet.
+    ///
+    /// **This is not what decides whether a cache file is used.** A cache file
+    /// that already exists is preferred over the platform decoder always, with
+    /// no flag - see the [`cached`] call in `open_psmf`, which is the ordinary
+    /// path on every run after the one that built it. What this decides is the
+    /// *other* case: with nothing cached, whether to transcode now or let the
+    /// platform decode and leave the cache empty.
     ///
     /// **Only the `.PMF` path has a choice to make.** A PS2 `.PSS` or `.IPF`
     /// goes through the cache whatever this says, because there is no platform
     /// decoder for either; this is about H.264 on a `native-video` Linux build,
-    /// where [ADR-0017] made GStreamer the default. That default stands - see
-    /// its own reasoning - and this is the way past it.
+    /// where [ADR-0017] made GStreamer the default for a first, uncached run.
+    /// That default stands - see its own reasoning - and this is the way past it.
     ///
     /// Two callers want it, for different reasons:
     ///
@@ -1021,12 +1029,11 @@ pub struct Decode {
     ///   decodes into memory and hands back frames. A prefetch that took that
     ///   path would report every movie converted, leave the cache empty, and
     ///   plan the same 22 movies again on the next run.
-    /// - `--prefer-av1-cache` sets it for the boot's own reels, as an opt-in.
-    ///   The trade is a one-off transcode against a faster start every time
-    ///   after it: `GstDecoder::open` decodes every wanted frame into memory
-    ///   before it returns - 4.9 s of a 5.0 s boot of the EU disc, ~288 MiB for
-    ///   the two reels - where the cache is opened lazily and decoded a frame at
-    ///   a time.
+    /// - `--prefer-av1-cache` sets it for the boot's own reels, so that one run
+    ///   pays the transcode and every run afterwards picks the file up by
+    ///   itself. [`Self::refresh`] implies it, because a re-conversion is what
+    ///   that flag asks for and the platform decoder writes nothing to
+    ///   re-convert.
     ///
     /// [ADR-0017]: ../../../docs/architecture/adr/0017-gstreamer-native-video.md
     pub prefer_cache: bool,
@@ -1161,11 +1168,53 @@ fn open_psmf(
 
     let wanted = extent.limit(frame_count);
 
-    // Said before the attempt, not after: `GstDecoder::open` decodes every
-    // wanted frame into memory before it returns, so this word has to be on
-    // screen while that happens rather than once it has.
+    let conversion = Conversion {
+        key,
+        cache_dir,
+        width,
+        height,
+        refresh: how.refresh,
+        watch,
+    };
+
+    // **A cache file that is already there beats the platform decoder**, and
+    // this is the ordinary path on any run after the first that built one.
+    // `GstDecoder::open` decodes every wanted frame into memory before it
+    // returns - 4.80 s for the EU disc's two reels, every boot - where the cache
+    // is opened lazily and decoded a frame at a time, which is 0.05 s. The
+    // pictures are the same either way: the cache is lossless (ADR-0008), which
+    // `movie_ground_truth.rs` checks byte for byte.
+    //
+    // Asking costs a parse of the frame headers, so a miss is not worth
+    // avoiding. `refresh` makes `cached` answer `None`, which is what sends
+    // `--refresh-video` past both this and GStreamer to the transcode it asked
+    // for.
+    if let Some(frames) = cached(conversion, Frames::capped(wanted)) {
+        watched(watch, Step::Cached);
+        return Ok(Movie {
+            header: Some(header),
+            frame_count,
+            width,
+            height,
+            frame_rate: FRAME_RATE,
+            display_aspect: (width, height),
+            frames: Some(frames),
+            no_picture_reason: None,
+            audio,
+        });
+    }
+
+    // Nothing cached, so the choice is the platform decoder or building one.
+    // [ADR-0017] makes the decoder the default; `prefer_cache` is the opt-in
+    // past it, and `refresh` implies it because a re-conversion is exactly what
+    // that flag asks for and the decoder writes no file to re-convert.
+    //
+    // Said before the attempt, not after: the decode is one call that returns
+    // when it is done, so the word has to be on screen while it happens.
+    //
+    // [ADR-0017]: ../../../docs/architecture/adr/0017-gstreamer-native-video.md
     #[cfg(all(target_os = "linux", feature = "native-video"))]
-    if !how.prefer_cache {
+    if !how.prefer_cache && !how.refresh {
         watched(watch, Step::Decoding);
         if let Some(frames) = gst_frame_store(&demuxed.video, key, width, height, wanted) {
             return Ok(Movie {
@@ -1182,18 +1231,7 @@ fn open_psmf(
         }
     }
 
-    match transcode(
-        &demuxed.video,
-        Conversion {
-            key,
-            cache_dir,
-            width,
-            height,
-            refresh: how.refresh,
-            watch,
-        },
-        wanted,
-    ) {
+    match transcode(&demuxed.video, conversion, wanted) {
         Ok(frames) => Ok(Movie {
             header: Some(header),
             frame_count,
@@ -1558,6 +1596,37 @@ struct Conversion<'a> {
     watch: Watch<'a>,
 }
 
+/// The cache file for this conversion, if it is there and holds what was asked
+/// for. **Never converts anything.**
+///
+/// Asking without converting is the point: it is what lets the `.PMF` path
+/// prefer a cache file that already exists over the platform decoder without
+/// committing to a transcode when there is none. The three `transcode_*`
+/// functions ask the same question through the same code, so "is it cached?"
+/// cannot come to mean two things.
+///
+/// A previous run's file is reused only if it opens **and** holds the frames
+/// asked for. Unlike a raw frame cache this cannot be checked by file length, so
+/// it is checked by decoding the container - cheap, since that is a parse of the
+/// frame headers and not of the pictures. An uncapped conversion asks only that
+/// it opens: it was written as "all of it", and how many that turned out to be
+/// is what the file itself says.
+///
+/// `refresh` answers `None` to everything, which is the whole of what that flag
+/// does: the file is there and perfectly readable, and the point is to overwrite
+/// it. See [`Decode::refresh`].
+fn cached(to: Conversion<'_>, frames: Frames) -> Option<FrameStore> {
+    if to.refresh {
+        return None;
+    }
+    let out = to
+        .cache_dir
+        .join(cache_name(to.key, to.width, to.height, frames.cap));
+    FrameStore::open(out, to.width, to.height)
+        .ok()
+        .filter(|store| frames.cap.is_none_or(|n| store.len == n))
+}
+
 /// Converts a PS2 `.IPF`'s IPU bitstream into lossless AV1 under the cache.
 fn transcode_ipu(parsed: &ipf::Ipf<'_>, to: Conversion<'_>, frames: usize) -> Result<FrameStore> {
     let Conversion {
@@ -1565,20 +1634,17 @@ fn transcode_ipu(parsed: &ipf::Ipf<'_>, to: Conversion<'_>, frames: usize) -> Re
         cache_dir,
         width,
         height,
-        refresh,
+        // Read by `cached` alone now: whether a conversion is skipped is that
+        // function's whole question, and asking it twice is how the two answers
+        // would drift.
+        refresh: _,
         watch,
     } = to;
-    let out = cache_dir.join(cache_name(key, width, height, Some(frames)));
-
-    let ready = (!refresh)
-        .then(|| FrameStore::open(out.clone(), width, height).ok())
-        .flatten()
-        .filter(|store| store.len == frames);
-
-    if let Some(store) = ready {
+    if let Some(store) = cached(to, Frames::capped(frames)) {
         watched(watch, Step::Cached);
         return Ok(store);
     }
+    let out = cache_dir.join(cache_name(key, width, height, Some(frames)));
 
     std::fs::create_dir_all(cache_dir)
         .with_context(|| format!("creating {}", cache_dir.display()))?;
@@ -1606,27 +1672,17 @@ fn transcode(video: &[u8], to: Conversion<'_>, frames: usize) -> Result<FrameSto
         cache_dir,
         width,
         height,
-        refresh,
+        // Read by `cached` alone now: whether a conversion is skipped is that
+        // function's whole question, and asking it twice is how the two answers
+        // would drift.
+        refresh: _,
         watch,
     } = to;
-    let out = cache_dir.join(cache_name(key, width, height, Some(frames)));
-
-    // A previous run's file is reused only if it opens *and* holds the frames
-    // asked for. Unlike the raw cache this cannot be checked by file length, so
-    // it is checked by decoding the container - cheap, since that is a parse of
-    // the frame headers and not of the pictures.
-    //
-    // `refresh` skips the question rather than answering it `false`: the point
-    // is to overwrite a file that would have opened perfectly well.
-    let ready = (!refresh)
-        .then(|| FrameStore::open(out.clone(), width, height).ok())
-        .flatten()
-        .filter(|store| store.len == frames);
-
-    if let Some(store) = ready {
+    if let Some(store) = cached(to, Frames::capped(frames)) {
         watched(watch, Step::Cached);
         return Ok(store);
     }
+    let out = cache_dir.join(cache_name(key, width, height, Some(frames)));
 
     std::fs::create_dir_all(cache_dir)
         .with_context(|| format!("creating {}", cache_dir.display()))?;
@@ -1658,24 +1714,21 @@ fn transcode_mpeg2_ps(video: &[u8], to: Conversion<'_>, frames: Frames) -> Resul
         cache_dir,
         width,
         height,
-        refresh,
+        // Read by `cached` alone now: whether a conversion is skipped is that
+        // function's whole question, and asking it twice is how the two answers
+        // would drift.
+        refresh: _,
         watch,
     } = to;
-    // `cap` rather than `total` in both: the cache file is named for what was
-    // asked for, and an uncapped conversion is spelled `-all` whatever the
-    // container turned out to measure. Naming it for the count would orphan
-    // every file already in the cache and make the name depend on `ffprobe`.
-    let out = cache_dir.join(cache_name(key, width, height, frames.cap));
-
-    let ready = (!refresh)
-        .then(|| FrameStore::open(out.clone(), width, height).ok())
-        .flatten()
-        .filter(|store| frames.cap.is_none_or(|n| store.len == n));
-
-    if let Some(store) = ready {
+    if let Some(store) = cached(to, frames) {
         watched(watch, Step::Cached);
         return Ok(store);
     }
+    // `cap` rather than `total`: the cache file is named for what was asked for,
+    // and an uncapped conversion is spelled `-all` whatever the container turned
+    // out to measure. Naming it for the count would orphan every file already in
+    // the cache and make the name depend on `ffprobe`.
+    let out = cache_dir.join(cache_name(key, width, height, frames.cap));
 
     std::fs::create_dir_all(cache_dir)
         .with_context(|| format!("creating {}", cache_dir.display()))?;
@@ -2503,6 +2556,59 @@ mod tests {
             Some(30),
             "a capped encode makes exactly its cap, so the two agree"
         );
+    }
+
+    /// **A cache file that is there is used; one that is not is not invented.**
+    ///
+    /// [`cached`] is what makes an existing cache file beat the platform decoder
+    /// with no flag, so the two ways it can be wrong both matter: a false miss
+    /// sends every boot back through GStreamer for 4.80 s, and a false hit hands
+    /// back a file that is not this movie. It answers from the name
+    /// [`cache_name`] builds and from opening the container, and never converts.
+    #[test]
+    fn a_cache_lookup_finds_only_a_file_that_is_really_there() {
+        let dir = std::env::temp_dir().join("oag-cached-unit");
+        std::fs::create_dir_all(&dir).expect("the temp directory");
+        let to = Conversion {
+            key: "0badcafe-1234",
+            cache_dir: &dir,
+            width: 480,
+            height: 272,
+            refresh: false,
+            watch: None,
+        };
+
+        assert!(
+            cached(to, Frames::capped(1200)).is_none(),
+            "nothing is cached under a key nothing has ever written"
+        );
+        assert!(
+            cached(to, Frames::whole(950)).is_none(),
+            "and an uncapped lookup does not find one either"
+        );
+
+        // A file at the right name that is not a decodable container is a miss,
+        // not a hit and not an error: `FrameStore::open` is the check.
+        let name = cache_name(to.key, to.width, to.height, Some(1200));
+        std::fs::write(dir.join(&name), b"not an IVF file").expect("writing the decoy");
+        assert!(
+            cached(to, Frames::capped(1200)).is_none(),
+            "{name} opened as a movie, which it is not"
+        );
+
+        assert!(
+            cached(
+                Conversion {
+                    refresh: true,
+                    ..to
+                },
+                Frames::capped(1200)
+            )
+            .is_none(),
+            "refresh answers None to everything - that is the whole of the flag"
+        );
+
+        std::fs::remove_file(dir.join(&name)).expect("cleaning up");
     }
 
     #[test]

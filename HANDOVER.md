@@ -938,11 +938,19 @@ machine and this checkout.
   success/failure check (`report_picture`) that asks "did this produce a
   picture?" cannot see that the *side effect* the caller actually wanted did not
   happen.
-- **`--prefer-av1-cache` is opt-in and ADR-0017's default stands.** Measured on
-  `pulse-psp-eu.chd`, both reels: 4.80 s of media phase on every boot with
-  GStreamer, against 36.08 s once (intro 30.33, backdrop 5.74) and 0.05 s
-  thereafter with the cache. Eight boots to pay for itself. ADRs are immutable,
-  so this did not edit 0017; if the default ever changes it needs a new ADR.
+- **An existing AV1 cache file now beats the platform decoder with no flag, and
+  ADR-0017's default still stands.** Those are compatible because 0017 is about
+  the case that has a choice: with nothing cached, GStreamer still wins. What
+  changed is that `open_psmf` asks `movie::cached` *first*, so the run after the
+  one that built a cache picks it up by itself. Measured on `pulse-psp-eu.chd`,
+  both reels: 4.80 s of media phase every boot through GStreamer, 36.08 s once
+  to build the cache (intro 30.33, backdrop 5.74), 0.06 s on every run after
+  that. `--prefer-av1-cache` is the opt-in that builds it for the boot's reels;
+  `--prefetch` does it for all 22; `--refresh-video` implies it. All three paths
+  were checked against the real disc, including the negative one - a plain boot
+  with the cache files moved aside still takes GStreamer at 4.78 s and
+  transcodes nothing. ADRs are immutable, so nothing edited 0017; making the
+  *uncached* default the cache would need a new one.
 
 ## Verification status: what to lean on
 

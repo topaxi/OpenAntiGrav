@@ -54,20 +54,31 @@ That figure is the *backdrop*; the intro is 1200 frames, so the two together
 are nearer 288 MiB and five seconds. The AV1 cache path (ADR-0008) decodes a
 frame at a time on demand and so costs nothing here.
 
-**`--prefer-av1-cache` takes that second column on a `native-video` build**, by
-skipping the GStreamer attempt for the `.PMF` reels. Opt-in, and ADR-0017's
-default stands: it trades a one-off transcode for a faster start every time
-afterwards. Measured on the same disc and both reels - 4.80 s of media phase on
-every boot with GStreamer, against 36.08 s once (intro 30.33, backdrop 5.74) and
-0.05 s thereafter with the cache, so about eight boots to pay for itself.
-`--prefetch` gets the transcode over with up front.
+**A cache file that is already there beats the platform decoder, with no flag**,
+so a `native-video` build lands in that second column on every run after the one
+that built the cache. `open_psmf` asks `movie::cached` before it tries GStreamer;
+the question costs a parse of the frame headers, and the pictures are the same
+either way because the cache is lossless (ADR-0008, checked byte for byte by
+`movie_ground_truth.rs`). Measured on the EU PSP disc, both reels:
+
+| | Media phase |
+| --- | --- |
+| GStreamer, nothing cached | **4.80 s**, and again on every boot |
+| `--prefer-av1-cache`, nothing cached | **36.08 s** once (intro 30.33, backdrop 5.74) |
+| A cache file present, no flag | **0.06 s** |
+
+**ADR-0017's default is untouched**, because it is about the case that has a
+choice: with nothing cached, the platform decoder still wins. `--prefer-av1-cache`
+is the opt-in past that for one run, so the cache exists and every later run
+picks it up by itself; `--prefetch` does the same for every movie on the disc.
+`--refresh-video` implies it - a re-conversion is what that flag asks for, and
+the decoder writes nothing to re-convert.
 
 **`--prefetch` takes it unconditionally, and has to.** The GStreamer path writes
-no cache file at all - it decodes into memory and hands back frames - so a
-prefetch that took it reported every movie converted, left the cache empty, and
-planned the same 22 movies again on the next run. `prefetch::convert` therefore
-sets `movie::Decode::prefer_cache` rather than leaving it to a flag: filling the
-cache is the worker's entire job.
+no cache file at all, so a prefetch that took it reported every movie converted,
+left the cache empty, and planned the same 22 movies again on the next run.
+`prefetch::convert` therefore sets `movie::Decode::prefer_cache` rather than
+leaving it to a flag: filling the cache is the worker's entire job.
 
 Either way the load is now in two halves, which is what lets the window come
 first:
