@@ -1154,6 +1154,43 @@ respawns are 13_Track**, the circuit with the authored jump. A slow craft does
 not clear it, falls in, is recovered, and does it again. So the geometry demands
 a *minimum* speed in one place and is indifferent to speed in the others.
 
+#### The player falls off too, which settles it
+
+**Reported from a hand-driven lap of Vertica (`06_Track`) on 2026-08-12, and it
+is the single most important fact on this page.** A human at the controls falls
+through the same drop:
+
+```
+tick  1920  grounded 1.0  height   3.94  at [-308.8,  20.8, 184.4]
+tick  1980  grounded 0.0  height  14.07  at [-288.7,   8.1, 306.5]
+tick  2040  grounded 0.0  height -57.18  at [-248.9, -58.4, 409.4]
+```
+
+Nearest line index at those three positions: 1146, **1230**, 1306. The AI loses
+contact at 1195-1230. **Same drop, same place, no AI involved.** Every
+opponent-side reading on this page was downstream of this.
+
+The three casts say what happens. At 1920 the floor is 4.0 under the craft -
+normal. At 1980 it is **14.0 under the craft**, and the probes reach
+`ride_height`, which is **5.5**. The surface is still there; the craft simply
+cannot see it. `grounded` goes to zero, and with it the spring, the damper and
+`DOWNFORCE_SCALE`, all of which are gated on it. By 2040 there is nothing under
+the craft at all: it has flown beyond the geometry while falling.
+
+Under the *line* the cast reads `Floor at 8.5` at all three indices - the
+healthy value. The track is fine. The craft is off it.
+
+So the mechanism, exactly: **a step down bigger than the probe reach takes the
+surface out of view in a single tick, and once the craft is airborne it travels
+forward faster than gravity brings it down.** At 125 units/s a craft covers 2.1
+units a tick, so any surface falling away faster than 5.5 units per 2.1 of
+travel - about 69 degrees - is lost outright, and 06 adds a 12.4-unit spline
+step on top of a 66-degree ramp.
+
+That is a hair's breadth from what an instantaneous downward ray can do, and it
+is what "collision detection missing" means here: the probe is a point ray at
+one instant, not a sweep from where the craft was to where it is.
+
 #### What is left, and what an alternative would have to do
 
 The remaining question is genuinely a reverse-engineering one: **what holds the
