@@ -107,11 +107,40 @@ pub struct Tuning {
     /// | **180** | **116** | **8%** | 36 |
     /// | 220 | 99 | 4% | 46 |
     ///
-    /// **The curve turns over**, which is what makes 180 a measurement and not
-    /// a preference: past it a craft is not cornering faster, it is sliding
-    /// wide, and the mean speed and the lap count both fall while the distance
-    /// off the line climbs. Nothing wrecked at any of these, so the ceiling is
-    /// where the craft stops being quick rather than where it crashes.
+    /// **The curve turns over**, which is what made 180 a measurement and not
+    /// a preference: past it a craft was not cornering faster, it was sliding
+    /// wide, and the mean speed and the lap count both fell while the distance
+    /// off the line climbed. Nothing wrecked at any of these.
+    ///
+    /// # Re-swept at 260 on 2026-08-12, and the old sweep was measuring a bug
+    ///
+    /// That sweep ran on one circuit and, worse, on a build where craft fell
+    /// through the track: the twelve-circuit benchmark managed two clean laps
+    /// at the time and the respawn count did not respond to grip at all, which
+    /// is the signature of a number that is not answering the question asked of
+    /// it. With the hover fixed - see `oag_physics::hover::sweep` and
+    /// `FAST_PROBE_SPEED` - all twelve circuits lap cleanly and the sweep
+    /// finally measures driving. A lone Ace, every circuit, five minutes each:
+    ///
+    /// | value | clean laps | recoveries | mean clean lap |
+    /// | --- | --- | --- | --- |
+    /// | 120 | 12 | 1 | 43.5s |
+    /// | 180 | 12 | 2 | 40.3s |
+    /// | **260** | **12** | **2** | **39.2s** |
+    /// | 340 | 12 | 8 | 39.1s |
+    /// | 440 | 12 | 5 | 39.2s |
+    /// | 560 | 11 | 6 | 38.1s |
+    /// | 700 | 11 | 9 | 38.0s |
+    ///
+    /// **260 is the knee.** 340 buys a tenth of a second and quadruples the
+    /// recoveries; 440 is slower than 340 despite believing in more grip; past
+    /// 560 a circuit stops managing a clean lap at all. The lap time keeps
+    /// drifting down after that only because a craft that is recovered mid-lap
+    /// does not count that lap, so the survivors are a flattering sample - which
+    /// is exactly why the recovery column is next to it.
+    ///
+    /// `sweep_grip` in `race_ground_truth.rs` is the harness; it is
+    /// `#[ignore]`d and gated on `OAG_SWEEP`.
     pub lateral_accel: f32,
     /// How far ahead the speed target looks for the sharpest bend, as a multiple
     /// of the lookahead. A corner has to be seen before it is entered.
@@ -187,7 +216,7 @@ impl Default for Tuning {
             look_max: 90.0,
             rate_gain: 5.0,
             max_turn_rate: 1.8,
-            lateral_accel: 180.0,
+            lateral_accel: 260.0,
             brake_lookahead: 2.5,
             brake_margin: 0.05,
             corridor_use: 0.6,

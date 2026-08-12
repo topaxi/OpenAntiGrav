@@ -2075,7 +2075,7 @@ fn sweep_grip() {
         return;
     }
     let mut report = String::from("\ngrip   clean  round  respawns  mean clean lap\n");
-    for grip in [120.0f32, 150.0, 180.0, 220.0, 260.0] {
+    for grip in [120.0f32, 180.0, 260.0, 340.0, 440.0, 560.0, 700.0] {
         let tuning = oag_ai::Tuning {
             lateral_accel: grip,
             ..oag_ai::Tuning::default()
