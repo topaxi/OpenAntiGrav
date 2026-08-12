@@ -91,13 +91,20 @@ pub mod states {
     /// confirmed against `Data\Plugins\PI001\GUI\Skin.xml`'s own
     /// `<Screen type="Title" name="Title Screen">`.
     ///
-    /// **What advances past it is not established.** The screen's only
+    /// **The button that leaves it is measured; where it goes is not.** The
+    /// screen declares a text widget whose `idstring` is the literal
+    /// `PRESS START`, drawn beside a blinking `_` in the same face, and the
+    /// session above watched the firmware hold here until START - so reading
+    /// START is evidence, at the same 90 as the rest of this comment.
+    ///
+    /// Its destination is a different question and still open. The screen's only
     /// `Redirect` (`TitleRedirect`) carries no `forward` attribute at all -
-    /// unlike `Show Logo`'s explicit `forward="start"` - so whatever leaves
-    /// this screen on the original is not modelled here, the same way Pulse's
-    /// own unnamed `Show Logo` redirect is left unfired rather than guessed.
-    /// Its `Default goto="Profile Manager"`, a screen this build does not
-    /// have either.
+    /// unlike `Show Logo`'s explicit `forward="start"` - and its
+    /// `Default goto="Profile Manager"` names a screen this build does not have.
+    /// `oag_game::frontend::Frontend::update_title_screen` therefore fires
+    /// `Launch Game` and opens the menus, which is a **deliberate divergence**
+    /// and exactly the one Pulse already makes from `Show Logo`. See
+    /// `docs/architecture/pure-boot.md`.
     pub const TITLE_SCREEN: &str = "Title Screen";
 
     /// The screen that plays the second boot movie
@@ -164,12 +171,13 @@ pub const FALLBACK_GLOBALS: &[(&str, &str)] = &[
 /// - Pure's `Skin.xml` is plain `<?xml`, not `<code>`-shortened, and it
 ///   declares **six** layout globals where Pulse declares dozens.
 /// - There is **no `MainMenu_Definition.xml`** on this disc. Its `LoadXML` list
-///   names `Teaser_`, `Options_`, `Selection_` and `Multiplayer_Definition`
-///   instead, and none of them has been read for row geometry - hence
-///   [`oag_title::MenuSkin::first_row_y`] and
-///   [`oag_title::MenuSkin::row_extra_leading`] left `None`.
-/// - Pure's menus name **three** font roles (`Title`, `Stats`, `scroll`) and
-///   which one its main list uses is unread, so `menu_font` is `None` too.
+///   names twelve other `*_Definition.xml` files instead, so
+///   [`oag_title::MenuSkin::first_row_y`] below is measured across all of them
+///   rather than off one named screen the way Pulse's `y="32"` is.
+/// - [`oag_title::MenuSkin::row_extra_leading`] stays `None`. Pure's 33 `<Menu>`
+///   widgets carry exactly **one** `gap` between them (`gap="25"`), and that
+///   field's own docs already record that `gap` is not row pitch on Pulse. No
+///   capture of a Pure menu exists to measure a pitch off instead.
 /// - There is **no `LeftLayer` element anywhere** in Pure's GUI definitions,
 ///   so where its `transition` attaches is unknown even though the durations
 ///   are authored.
@@ -185,10 +193,35 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     title_x: 21.0,
     title_y: 20.0,
     title_scale: 0.97,
-    // Unread: this disc carries no main-menu definition to read a first row or
-    // a pitch out of, and Pulse's measurements are Pulse's.
-    first_row_y: None,
+    // **Authored, and measured across the whole GUI tree rather than off one
+    // screen.** Pure has no `MainMenu_Definition.xml` to read a single number
+    // out of, so every `<Menu>` widget in `Skin.xml` and the twelve
+    // `*_Definition.xml` files its `LoadXML` list names was counted: 33 widgets,
+    // **19 of them `y="45"`** and no other value reached four. The runners-up
+    // are `y="106"` (3), `y="25"` (2) and nine singletons - screens with
+    // something above the list rather than a different row origin. Confidence
+    // **80**: authored and strongly dominant, but read off the files alone with
+    // no capture of a Pure menu to confirm where the ink lands.
+    first_row_y: Some(45.0),
     row_extra_leading: None,
+    // **`None` because Pure's menus are drawn in the default face, which is a
+    // measurement rather than a gap.** This field exists so a title whose rows
+    // use a *bigger* face than its body text says so - Pulse's rows are
+    // `font="menu"`, which its language plugins resolve to `Pulse_20.fnt` where
+    // the default is `pulse_text.fnt`. Pure has no such split, on two counts that
+    // agree:
+    //
+    // - Of its 33 `<Menu>` widgets, only five name a font at all - two
+    //   `font="Default"` and three `font="InGame"` on the in-race pause menu -
+    //   and the remaining 28 name none, which is the default face too.
+    // - Its language plugins fill in **eight** `<Font>` slots, the same number
+    //   Pulse's do, but the set differs by one: Pulse has `Menu` and Pure has
+    //   `Scroll` in its place. There is no `Menu` slot on this disc to resolve.
+    //
+    // Pure's `Scroll` face (`LTe50325.fnt`) is not the menus' - `Skin.xml` uses
+    // it for the `Confirm button` and `Back button` prompt rows - so nothing here
+    // substitutes it. Pinned across both titles by
+    // `crates/game/tests/font_roles_ground_truth.rs`.
     menu_font: None,
     // The same pixel measurements [`FALLBACK_GLOBALS`] carries, restated in the
     // units this type uses. Confidence 65, and of the *effect* rather than of

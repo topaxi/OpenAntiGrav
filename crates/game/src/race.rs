@@ -64,6 +64,7 @@
 
 use std::path::PathBuf;
 
+use crate::language::roles;
 use anyhow::{Context, Result};
 use oag_core::math::frustum::Frustum;
 use oag_core::math::{Mat4, Quat, Vec3};
@@ -77,7 +78,6 @@ use oag_gameplay::{
 };
 use oag_input::Keyboard;
 use oag_physics::{CollisionWorld, Environment, Evaluated, Handling, SpeedClass};
-use oag_pulse as pulse;
 use oag_pulse::race::ships;
 use oag_race::{Course, Mode, RaceState};
 use oag_render::camera::chase::{Chase, ChaseParams, Target};
@@ -456,8 +456,20 @@ pub struct Options {
     /// a pack to its own territory's disc and this does not. See
     /// `docs/formats/dlc-pack.md`.
     pub dlc: Vec<PathBuf>,
-    /// Archive entry name of the track's `.vex`.
-    pub track: String,
+    /// Archive entry name of the track's `.vex`, or `None` for the source's own.
+    ///
+    /// **`None` rather than a constant, because the two titles share no circuit
+    /// directory.** `Data\Environments\16_Track\track.vex` resolves on no Pure
+    /// pressing, so a default baked in here - which is what this field used to
+    /// carry - meant every Pure race asked for a name that hashes to nothing and
+    /// failed inside the archive with a message about a missing entry rather than
+    /// about a missing circuit.
+    ///
+    /// Resolved by [`load`] once the source is open and its title known, from
+    /// [`oag_title::RaceDefaults::track`], and the choice is reported. It cannot
+    /// be resolved earlier: which title a source is comes from the serial in its
+    /// own filesystem, which is read by opening it.
+    pub track: Option<String>,
     /// Team name, which selects both the handling stats and the model.
     pub team: String,
     /// Speed class the handling parameters are read for.
@@ -582,7 +594,7 @@ impl Default for Options {
             // the developer happens to have downloaded. The composition root
             // fills this in from `source::resolve_dlc`.
             dlc: Vec::new(),
-            track: DEFAULT_TRACK.to_string(),
+            track: None,
             team: DEFAULT_TEAM.to_string(),
             class: SpeedClass::Venom,
             mode: Mode::default(),
@@ -845,8 +857,13 @@ pub const NOISE_TEXTURE: &str = r"Data\Tex\engineFlare\Engine_noise.mip";
 /// Takes the **first** node if a model somehow had several. Every team checked has
 /// exactly one, so this is a total order on a set of size one rather than a policy.
 fn engine_flare(ship_blob: &[u8]) -> Option<Vec3> {
+    // The id from the file's own version word, not the version-6 constant: on a
+    // version-4 ship `0x3bf` is some other class entirely, so a hit would be a
+    // flare mounted on whatever that is. `None` means no flare, which is what an
+    // unrecovered id honestly gives.
+    let class = vex::classes_of(ship_blob).ok()?.engine_flare?;
     let nodes = vex::nodes(ship_blob).ok()?;
-    let m = vex::class_world_transforms(ship_blob, &nodes, vex::CLASS_ENGINE_FLARE)
+    let m = vex::class_world_transforms(ship_blob, &nodes, class)
         .into_iter()
         .next()?;
     Some(Vec3::new(m[12], m[13], m[14]))
@@ -856,10 +873,14 @@ fn engine_flare(ship_blob: &[u8]) -> Option<Vec3> {
 /// space - the same 4x4-payload decode as [`engine_flare`], kept all rather
 /// than first: the original picks the nearest to each contact.
 fn collision_fx_locators(ship_blob: &[u8]) -> Vec<Vec3> {
+    // Version-keyed, on the same terms as [`engine_flare`].
+    let Ok(Some(class)) = vex::classes_of(ship_blob).map(|c| c.ship_collision_fx) else {
+        return Vec::new();
+    };
     let Ok(nodes) = vex::nodes(ship_blob) else {
         return Vec::new();
     };
-    vex::class_world_transforms(ship_blob, &nodes, vex::CLASS_SHIP_COLLISION_FX)
+    vex::class_world_transforms(ship_blob, &nodes, class)
         .into_iter()
         .map(|m| Vec3::new(m[12], m[13], m[14]))
         .collect()
@@ -949,27 +970,53 @@ pub fn load(options: &Options) -> Result<Loaded> {
     //
     // Downloadable content is mounted behind them. A pack is not tied to the
     // release it was sold for here, so this is the same call whichever image
-    // `source` names - see `docs/formats/dlc-pack.md`.
+    // `source` names - see `docs/formats/dlc-pack.md`. **A Pure source mounts no
+    // packs at all**, which `crate::title::open_source` decides rather than this
+    // call site; see its own docs for why silently mounting Pulse's DLC behind a
+    // different title would be worse than mounting none.
     let (packs, problems) = crate::dlc::packs(&options.dlc, &crate::boot::default_dlc_cache_dir());
-    let mut archives = pulse::open_with_packs(&options.source, packs)?;
+    // **Opened as whichever title the source turned out to be**, the same way the
+    // boot path already does it. This used to be `oag_pulse::open_with_packs`
+    // outright, which refused a Pure disc by name (`WrongTitle`) - so `--race`
+    // and the menus' own `Launch Game` could not reach a second title at all,
+    // however much of the rest of the path was ready for one.
+    let opened = crate::title::open_source(&options.source, packs)?;
+    let title = opened.title;
+    let mut archives = opened.archives;
+    report.push(format!("racing on {}", title.name));
     report.push(archives.layout.describe());
     for pack in &archives.packs {
         report.push(format!("dlc: {}", pack.label()));
     }
     report.extend(problems.into_iter().map(|p| format!("dlc: {p}")));
 
+    // **The circuit this source actually offers**, resolved here because this is
+    // the first point the title is known - see [`Options::track`]. Reported
+    // either way, so a run that took a default says which title's default it was
+    // rather than leaving a reader to work it out from the path.
+    let track = match &options.track {
+        Some(asked) => asked.clone(),
+        None => {
+            report.push(format!(
+                "no track named: {}'s own default, {}",
+                title.name, title.race.track
+            ));
+            title.race.track.to_string()
+        }
+    };
+
     let spec = archives
-        .locate(&options.track)
+        .locate(&track)
         .ok_or_else(|| {
             anyhow::anyhow!(
                 "{} is in none of this source's archives ({})",
-                options.track,
+                track,
                 archives.layout.describe()
             )
         })?
         .to_string();
 
-    let (ai, label) = track_render::load(&spec, &options.track)?;
+    let (ai, label) = track_render::load(&spec, &track)?;
     report.push(format!(
         "{label}: {} path(s), {} junction(s), {} control point(s)",
         ai.paths.len(),
@@ -988,7 +1035,20 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // wanted-change note in `docs/tools/oag-game.md`. On the PS2 that costs more
     // than it does on the PSP, where nothing is compressed at all: 5,861 of
     // `WADS2.WAD`'s 7,200 entries are LZSS.
-    let track_blob = read(&mut archives, &options.track)?;
+    let track_blob = read(&mut archives, &track)?;
+    // **This track file's own class numbering.** Read once, off its version word,
+    // and consulted everywhere below that used to spell a `vex::CLASS_*`
+    // constant - all of which are version 6's. A version-4 track (Pure's are)
+    // uses different numbers entirely, so the constants would find nothing here
+    // or, worse, find the wrong node type. An id this project has not recovered
+    // for this version comes back `None`, and each site below says what it does
+    // with that rather than substituting version 6's answer. See
+    // `oag_formats::vex::classes`.
+    let track_classes =
+        oag_formats::vex::classes_of(&track_blob).map_err(|e| anyhow::anyhow!("{}: {e}", track))?;
+    let speedup_pad_class = track_classes.speedup_pad;
+    let weapon_pad_class = track_classes.weapon_pad;
+    let mesh_class = track_classes.mesh;
     let start_position = start_position_of(&track_blob);
     match start_position {
         Some(slot) => report.push(format!(
@@ -997,8 +1057,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         )),
         None => report.push("no Start Position node: spawning on the spline instead".to_string()),
     }
-    let nodes =
-        collision::from_vex(&track_blob).map_err(|e| anyhow::anyhow!("{}: {e}", options.track))?;
+    let nodes = collision::from_vex(&track_blob).map_err(|e| anyhow::anyhow!("{}: {e}", track))?;
     let collision = collision_world(&nodes);
     report.push(format!(
         "{} collision node(s) -> {} collider(s), {} triangle(s)",
@@ -1018,7 +1077,9 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // in a screenshot.
     let speedup_pads = oag_formats::vex::nodes(&track_blob)
         .map(|nodes| {
-            oag_formats::pads::volumes(&track_blob, &nodes, oag_formats::vex::CLASS_SPEEDUP_PAD)
+            speedup_pad_class
+                .map(|class| oag_formats::pads::volumes(&track_blob, &nodes, class))
+                .unwrap_or_default()
         })
         .unwrap_or_default();
     if speedup_pads.is_empty() {
@@ -1048,7 +1109,9 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // below says plainly rather than repeating here.
     let weapon_pads = oag_formats::vex::nodes(&track_blob)
         .map(|nodes| {
-            oag_formats::pads::volumes(&track_blob, &nodes, oag_formats::vex::CLASS_WEAPON_PAD)
+            weapon_pad_class
+                .map(|class| oag_formats::pads::volumes(&track_blob, &nodes, class))
+                .unwrap_or_default()
         })
         .unwrap_or_default();
     report.push(if weapon_pads.is_empty() {
@@ -1061,6 +1124,28 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let stats_blob = read(&mut archives, &stats_name)?;
     let stats =
         handling::from_blob(&stats_blob).map_err(|e| anyhow::anyhow!("{stats_name}: {e}"))?;
+    // **A borrowed pitch response is never silent.** Pure authors no `<pitch>` in
+    // any `<Class>`, so `handling_for` substitutes
+    // `oag_gameplay::handling::PITCH_STAND_IN` - another title's tuning on a ship
+    // whose own is unknown. That is exactly the kind of substitution that looks
+    // like a physics bug three sessions later if nobody wrote it down, so it is
+    // named here with the classes it applied to.
+    let unauthored: Vec<&str> = stats
+        .classes
+        .iter()
+        .filter(|class| class.pitch.is_none())
+        .map(|class| class.raw_name.as_str())
+        .collect();
+    if !unauthored.is_empty() {
+        report.push(format!(
+            "{stats_name}: {} of {} class(es) author no <pitch> ({}); flying on \
+             oag_gameplay::handling::PITCH_STAND_IN, which is Pulse's block and \
+             not this title's",
+            unauthored.len(),
+            stats.classes.len(),
+            unauthored.join(", ")
+        ));
+    }
     // The engine-wide block, out of `Data\XML\HandlingStats.xml` rather than this
     // team's file - see `handling::GLOBAL_ENTRY`. Read on **every** mode now, not
     // only Zone: the speed-pad tunables live here too and every mode has pads.
@@ -1356,7 +1441,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
                 boost_uv_transform = oag_formats::vex::nodes(&blob).ok().and_then(|nodes| {
                     nodes
                         .iter()
-                        .filter(|n| n.class_id == oag_formats::vex::CLASS_MESH)
+                        .filter(|n| Some(n.class_id) == mesh_class)
                         .find_map(|n| oag_formats::vex::mesh_tex_transform(&blob[n.payload()]))
                 });
                 if let Some(transform) = &boost_uv_transform {
@@ -1422,8 +1507,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let track_model = if options.ribbon {
         track_render::build_model(&label, &ai)
     } else {
-        let mut track_model =
-            mesh::build_with_textures(&options.track, &track_blob, None, options.lod)?;
+        let mut track_model = mesh::build_with_textures(&track, &track_blob, None, options.lod)?;
         // Same PS2 signature and the same directory-position heuristic as the
         // ship above. Checked separately for tracks specifically (not just
         // assumed from the ship result): the entry directly before a track's
@@ -1433,15 +1517,11 @@ pub fn load(options: &Options) -> Result<Loaded> {
         // rest - see `docs/formats/ps2-texture.md`.
         if !track_model.textures.is_empty()
             && track_model.textures.iter().all(Option::is_none)
-            && let Some(external) = ps2_texture_set(&mut archives, &options.track)
+            && let Some(external) = ps2_texture_set(&mut archives, &track)
         {
             ps2_track_textures = Some(external.clone());
-            track_model = mesh::build_with_textures(
-                &options.track,
-                &track_blob,
-                Some(external),
-                options.lod,
-            )?;
+            track_model =
+                mesh::build_with_textures(&track, &track_blob, Some(external), options.lod)?;
         }
         track_model
     };
@@ -1472,9 +1552,14 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let sky_model = if options.ribbon {
         None
     } else {
-        let sky = mesh::build_sky(&options.track, &track_blob, ps2_track_textures.clone())?;
+        let sky = mesh::build_sky(&track, &track_blob, ps2_track_textures.clone())?;
         if sky.indices.is_empty() {
-            report.push("the track authors no Skycube; the sky stays black".to_string());
+            report.push(unrecovered_or_absent(
+                track_classes,
+                track_classes.skycube,
+                "Skycube",
+                "the sky stays black",
+            ));
             None
         } else {
             report.push(format!(
@@ -1491,9 +1576,14 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let pad_model = if options.ribbon {
         None
     } else {
-        let pads = mesh::build_pads(&options.track, &track_blob, ps2_track_textures.clone())?;
+        let pads = mesh::build_pads(&track, &track_blob, ps2_track_textures.clone())?;
         if pads.indices.is_empty() {
-            report.push("the track authors no Speedup Pad geometry".to_string());
+            report.push(unrecovered_or_absent(
+                track_classes,
+                track_classes.speedup_pad,
+                "Speedup Pad",
+                "no pad plates are drawn",
+            ));
             None
         } else {
             report.push(format!(
@@ -1519,10 +1609,14 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let weapon_pad_model = if options.ribbon {
         None
     } else {
-        let pads =
-            mesh::build_weapon_pads(&options.track, &track_blob, ps2_track_textures.clone())?;
+        let pads = mesh::build_weapon_pads(&track, &track_blob, ps2_track_textures.clone())?;
         if pads.indices.is_empty() {
-            report.push("the track authors no Weapon Pad geometry".to_string());
+            report.push(unrecovered_or_absent(
+                track_classes,
+                track_classes.weapon_pad,
+                "Weapon Pad",
+                "no pickup plates are drawn",
+            ));
             None
         } else {
             report.push(format!(
@@ -1826,42 +1920,55 @@ fn load_hud(
     // through the sheet rather than binding the atlas directly means the HUD
     // shares the renderer every other screen uses, `Draw::Sprite` and all.
     let mut sheet = crate::sprite::Sheet::default();
-    // `read_image`, not `read_name`: the PS2 keeps this atlas under an entry
-    // its own XML's name does not hash to. See `pulse::PS2_IMAGES`.
-    match oag_pulse::read_image(archives, crate::hud::ATLAS) {
-        Ok(blob) => {
-            let mut notes = Vec::new();
-            let built =
-                crate::sprite::Sheet::build(&[(crate::hud::ATLAS.to_string(), blob)], &mut notes);
-            report.extend(notes);
-            if built.get(crate::hud::ATLAS).is_some() {
-                report.push(format!(
-                    "HUD atlas {}: {}x{} sheet",
-                    crate::hud::ATLAS,
-                    built.width,
-                    built.height
-                ));
-                sheet = built;
-            } else {
-                report.push(format!("HUD atlas {} did not decode", crate::hud::ATLAS));
-            }
-        }
-        Err(why) => report.push(format!(
-            "HUD atlas {} unavailable ({why})",
-            crate::hud::ATLAS
+    // **The layout names its own texture**; this used to name it instead. See
+    // `crate::hud::Layout::atlas` for why that mattered - Pure's HUDs name none
+    // at all, so a constant sent a Pure race looking for a Pulse file.
+    match layout.as_ref().and_then(crate::hud::Layout::atlas) {
+        None => report.push(format!(
+            "HUD {entry} names no texture; its sprites are drawn from <Model> \
+             geometry rather than an atlas"
         )),
+        // `read_image`, not `read_name`: the PS2 keeps its atlas under an entry
+        // its own XML's name does not hash to (see `oag_pulse::PS2_IMAGES`). That
+        // substitution table is keyed on Pulse-PSP names and is inert on any other
+        // source - a name it does not hold falls through to the original error -
+        // so it stays here rather than becoming a per-title lookup.
+        Some(atlas) => match oag_pulse::read_image(archives, atlas) {
+            Ok(blob) => {
+                let mut notes = Vec::new();
+                let built = crate::sprite::Sheet::build(&[(atlas.to_string(), blob)], &mut notes);
+                report.extend(notes);
+                if built.get(atlas).is_some() {
+                    report.push(format!(
+                        "HUD atlas {atlas}: {}x{} sheet",
+                        built.width, built.height
+                    ));
+                    sheet = built;
+                } else {
+                    report.push(format!("HUD atlas {atlas} did not decode"));
+                }
+            }
+            Err(why) => report.push(format!("HUD atlas {atlas} unavailable ({why})")),
+        },
     }
-
-    let font = hud_font(archives, pulse::names::fonts::HUD, report);
-    let small_font = hud_font(archives, pulse::names::fonts::SMALL, report);
 
     // The HUD's captions are `idstring` keys - `IG_HUD_LAP`, `IG_HUD_BEST` - and
     // without a table `StringTable::get_or_id` falls back to the key itself, which
     // put `ig_hud_lap` on screen where `LAP` belongs. The preferred language is the
     // player's saved one; a race reached through `--race` has no settings to read,
     // so this takes the chain's default rather than threading one through.
+    //
+    // **Before the fonts now**, because the plugins parsed here are also what
+    // name the two faces below - the same reordering `boot::load_shell` needed.
     let languages = crate::boot::load_languages(archives, report);
     let strings = crate::boot::load_strings(archives, &languages, None, report);
+
+    // One role each, and no fallback to a second: both titles fill in both of
+    // these slots, so a chain of alternatives would be an unexercised guess about
+    // a disc nobody has. A source filling in neither draws in 5x7 and says so,
+    // which is the honest answer to a question its data has not been asked.
+    let font = hud_font(archives, &languages, roles::HUD, report);
+    let small_font = hud_font(archives, &languages, roles::HUD_SMALL, report);
 
     crate::hud::Assets {
         layout,
@@ -1872,26 +1979,42 @@ fn load_hud(
     }
 }
 
-/// Reads one `.fnt`, falling back to the built-in glyphs and saying so.
+/// Reads the `.fnt` this source's language plugins fill `role` in with.
 ///
 /// The same shape as `crate::boot::load_font`, which reads the front end's
-/// `Default` font, and now the same read: both go through
-/// [`oag_assets::Archives::read_font`], so a PS2 source finds the glyph atlas the
-/// disc keeps in the entry after the `.fnt` rather than falling back to 5x7.
+/// `Default` face, and now the same read *and* the same resolution: both take
+/// the filename off a `<Font>` slot rather than naming one, and both go through
+/// [`oag_assets::Archives::read_font`], so a PS2 source finds the glyph atlas
+/// the disc keeps in the entry after the `.fnt` rather than falling back to 5x7.
 /// Kept separate only so the report line says which font is being talked about.
 ///
-/// Both HUD fonts are pre-outlined on both discs - six distinct greys, alpha
-/// covering glyph *plus* border - so `Atlas::from_font`'s body/outline split
-/// applies unchanged here; see `docs/formats/fnt.md`.
+/// A source whose plugins fill in no such slot draws in 5x7 and says which role
+/// went unanswered - see [`crate::language::roles`] for what each disc fills in.
+///
+/// Both HUD fonts are pre-outlined on both Pulse pressings - six distinct greys,
+/// alpha covering glyph *plus* border - so `Atlas::from_font`'s body/outline
+/// split applies unchanged there; see `docs/formats/fnt.md`. Whether Pure's own
+/// `HUDFont.fnt` is outlined the same way has not been measured.
 fn hud_font(
     archives: &mut oag_assets::Archives,
-    name: &str,
+    languages: &[crate::language::Language],
+    role: &str,
     report: &mut Vec<String>,
 ) -> crate::font::Atlas {
-    match archives.read_font(name).map_err(|e| e.to_string()) {
+    let Some(name) = languages
+        .iter()
+        .find_map(|language| language.font(role))
+        .map(str::to_string)
+    else {
+        report.push(format!(
+            "no language plugin names a {role:?} font on this source; drawing with 5x7"
+        ));
+        return crate::font::Atlas::build();
+    };
+    match archives.read_font(&name).map_err(|e| e.to_string()) {
         Ok(font) => {
             report.push(format!(
-                "HUD font {name}: {}x{} atlas, {} glyph(s), line height {}",
+                "HUD font {name} (role {role:?}): {}x{} atlas, {} glyph(s), line height {}",
                 font.width,
                 font.height,
                 font.glyphs.len(),
@@ -1901,7 +2024,7 @@ fn hud_font(
         }
         Err(why) => {
             report.push(format!(
-                "HUD font {name} unavailable ({why}); drawing with 5x7"
+                "HUD font {name} (role {role:?}) unavailable ({why}); drawing with 5x7"
             ));
             crate::font::Atlas::build()
         }
@@ -2037,10 +2160,37 @@ fn ground_under(collision: &CollisionWorld, slot: &StartPosition) -> Option<f32>
 #[must_use]
 fn start_position_of(blob: &[u8]) -> Option<StartPosition> {
     let nodes = vex::nodes(blob).ok()?;
-    let node = nodes
-        .iter()
-        .find(|node| node.class_id == vex::CLASS_START_POSITION)?;
+    // Version-keyed: unrecovered on version 4, and `None` there puts the ship on
+    // the spline instead - which `load`'s own report line already describes.
+    let class = vex::classes_of(blob).ok()?.start_position?;
+    let node = nodes.iter().find(|node| node.class_id == class)?;
     oag_formats::track::start_position(blob.get(node.payload())?)
+}
+
+/// Why a class produced nothing: the file authors none, or nobody has recovered
+/// its id for this format version.
+///
+/// **Two very different findings that look identical in a draw list**, and
+/// collapsing them is how a decoding gap gets filed as authored content. A Pure
+/// track really does author no `Speedup Pad` under version 6's `0x3bd` - but it
+/// authors none under *any* id this project knows, because version 4's numbering
+/// for that class has never been recovered, and saying "the track authors no
+/// pads" would close a question that is still open. See
+/// `docs/formats/pure-status.md`.
+fn unrecovered_or_absent(
+    classes: oag_formats::vex::classes::Classes,
+    id: Option<u32>,
+    what: &str,
+    consequence: &str,
+) -> String {
+    match id {
+        Some(_) => format!("the track authors no {what} geometry; {consequence}"),
+        None => format!(
+            "no {what} class id is recovered for .vex version {}, so this track was \
+             never asked for any; {consequence}",
+            classes.version
+        ),
+    }
 }
 
 #[must_use]

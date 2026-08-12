@@ -193,6 +193,37 @@ pub fn airbrake_graphics_for(stats: &fmt::Stats) -> AirbrakeGraphics {
 /// takes the index so that when it lands, only this line moves.
 pub const DEFAULT_SKILL_LEVEL: u8 = 1;
 
+/// The pitch response used for a `<Class>` block that authors no `<pitch>`.
+///
+/// **An invention, and labelled one.** Wipeout Pure omits the element from every
+/// `<Class>` on both pressings, so a Pure race needs *some* pitch response and
+/// the disc supplies none. What the original Pure engine does instead has not
+/// been read out of its binary - it may carry a compiled-in table, or a
+/// different pitch model, or none at all - so nothing here claims to reproduce
+/// it. This is a stand-in that keeps a ship flyable, not a recovered value, and
+/// `oag_game::race::load` reports it by name whenever it is reached.
+///
+/// The numbers are **Pulse's**, and near-uniform there: sweeping all 32
+/// `<pitch>` blocks on `pulse-psp-eu.chd` (8 teams x 4 classes) gives
+/// `pitch_air="0.3" pitch_ground="1.0" pitch_damping="3"` on **32 of 32**, and
+/// `antigrav_height_adjust="1.0"` on 29 with `0.75` on the other three. So the
+/// borrowed block is the one Pulse itself uses almost everywhere, which is the
+/// most defensible stand-in available - and still a different title's tuning
+/// applied to a title whose own is unknown.
+///
+/// Borrowing Pulse's numbers here rather than in `oag-formats` is the point of
+/// the split: the parser reports what the file says, and choosing what to do
+/// about a file that says nothing is a decision about *titles*, which belongs
+/// above it. See [ADR-0022] and `docs/formats/pure-status.md`.
+///
+/// [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
+pub const PITCH_STAND_IN: Pitch = Pitch {
+    pitch_air: 0.3,
+    pitch_ground: 1.0,
+    pitch_damping: 3.0,
+    antigrav_height_adjust: 1.0,
+};
+
 #[must_use]
 pub fn handling_for(
     stats: &fmt::Stats,
@@ -254,12 +285,15 @@ pub fn handling_for(
             normal_gravity: block.physical.normal_gravity,
             track_gravity: block.physical.track_gravity,
         },
-        pitch: Pitch {
-            pitch_air: block.pitch.pitch_air,
-            pitch_ground: block.pitch.pitch_ground,
-            pitch_damping: block.pitch.pitch_damping,
-            antigrav_height_adjust: block.pitch.antigrav_height_adjust,
-        },
+        // **A stand-in when the file authors no block, not a zero.** See
+        // [`PITCH_STAND_IN`]: zeroing would give a ship no pitch authority and no
+        // damping at all, which is not what an unauthored element means.
+        pitch: block.pitch.map_or(PITCH_STAND_IN, |pitch| Pitch {
+            pitch_air: pitch.pitch_air,
+            pitch_ground: pitch.pitch_ground,
+            pitch_damping: pitch.pitch_damping,
+            antigrav_height_adjust: pitch.antigrav_height_adjust,
+        }),
         dimensions: Dimensions {
             height: stats.misc.height,
             length: stats.misc.length,
@@ -515,12 +549,17 @@ mod tests {
             );
             assert_eq!(mapped.physical.track_gravity, block.physical.track_gravity);
 
-            assert_eq!(mapped.pitch.pitch_air, block.pitch.pitch_air);
-            assert_eq!(mapped.pitch.pitch_ground, block.pitch.pitch_ground);
-            assert_eq!(mapped.pitch.pitch_damping, block.pitch.pitch_damping);
+            // `expect`, not a fallback: this fixture authors a `<pitch>` in
+            // every class, so reaching `PITCH_STAND_IN` here would mean the
+            // parser dropped a block it was given - which is the failure the
+            // `Option` could otherwise hide.
+            let pitch = block.pitch.expect("this fixture authors <pitch>");
+            assert_eq!(mapped.pitch.pitch_air, pitch.pitch_air);
+            assert_eq!(mapped.pitch.pitch_ground, pitch.pitch_ground);
+            assert_eq!(mapped.pitch.pitch_damping, pitch.pitch_damping);
             assert_eq!(
                 mapped.pitch.antigrav_height_adjust,
-                block.pitch.antigrav_height_adjust
+                pitch.antigrav_height_adjust
             );
         }
     }

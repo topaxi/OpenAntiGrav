@@ -62,9 +62,38 @@ pub fn open_source(source: &str, packs: Vec<Pack>) -> Result<Opened> {
     }
 }
 
+/// Which title a source is, for a caller that needs the answer before it has
+/// any other reason to open the archives.
+///
+/// **`None` means "could not tell", not "neither"** - an unreadable path, a
+/// directory with nothing recognisable in it. Every caller so far is choosing a
+/// *default* (`oag-game`'s `--track` and `--team`, which name different files on
+/// the two discs), and there the right response to not knowing is to carry on
+/// and let the real load report the real problem. An error return would make
+/// that awkward for no gain.
+///
+/// This does open the source, so it is not free - the same work [`open_source`]
+/// does, with the archives dropped. Deliberate rather than an oversight:
+/// threading a half-opened source through argument parsing to save one archive
+/// open would put the disc's layout into the shape of the command line. If it
+/// ever shows up in a profile, the serial in `UMD_DATA.BIN` is what actually
+/// answers this and reading it alone is far cheaper than mounting anything.
+#[must_use]
+pub fn identify(source: &str) -> Option<&'static Title> {
+    open_source(source, Vec::new())
+        .ok()
+        .map(|opened| opened.title)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A source that will not open is `None` rather than a guess.
+    #[test]
+    fn a_source_that_cannot_be_opened_identifies_as_nothing() {
+        assert!(identify("does/not/exist.chd").is_none());
+    }
 
     /// A source neither title's deny-list names anything about - the
     /// ordinary "no such file" case - stays Pulse's error, unchanged by this

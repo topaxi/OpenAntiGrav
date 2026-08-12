@@ -19,7 +19,7 @@ reading of this same sequence was wrong.
 | 2 | `Developer Publisher Screen` | Plays the dev/pub reel off the parent's `IntroMovie1` widget, holding at frames 144 and 231 | the reel running out, ~12.7 s | 95 |
 | 3 | `MemoryStickWarning` | Storage-access disclaimer, six text widgets from the XML | cross ("PRESS X TO CONTINUE") | 90 |
 | 4 | `FMV Intro` | Plays `Data\Movies\WoFMVNew_US.PMF`, 2847 frames, ~95 s | plays out, or a skip | 90 |
-| 5 | `Title Screen` | "wipEout pure" and PRESS START BUTTON | **not established** | 90 |
+| 5 | `Title Screen` | "wipEout pure" and PRESS START BUTTON | START; **where it goes is this build's, not the disc's** - see below | 90 |
 
 Observed on **both** pressings, `pure-psp-usa.chd` and `pure-psp-eu.chd`, with
 the same shape and the same timings. The only difference found between them is
@@ -34,10 +34,41 @@ redirect: `Language Selection`'s `LanguageAutoRedirect` goes to
 to `FMV Intro`, whose `FMVRedirect` goes to `Title Screen`. Runtime and data
 agree, which is what puts these rows at 90 rather than lower.
 
-**What advances past `Title Screen` is not established.** Its `TitleRedirect`
-carries no `forward` attribute and its `Default goto` names
-`Profile Manager`, a screen this build does not have. Do not guess; see
-`oag_pure::frontend::states::TITLE_SCREEN`'s own doc comment.
+### Leaving `Title Screen`: the button is measured, the destination is not
+
+Two separate questions, and they have different answers.
+
+**Which button, on the original**: START, confidence **90**. The screen declares
+a text widget whose `idstring` is the literal `PRESS START`, drawn beside a
+blinking `_` in the same face, and the PPSSPP session that established this
+chain watched the real firmware sit on the screen until START was pressed. That
+is authored evidence plus a runtime observation, which is what a 90 means here.
+
+**Where it goes, on the original**: **still not established**, and this is the
+part not to guess at. `TitleRedirect` carries no `forward` attribute at all -
+unlike Pulse's `Show Logo`, whose redirect says `forward="start"` outright - and
+its `Default goto` names `Profile Manager`, a screen this build does not have.
+So what the disc does with a START press here is one screen further than
+anything measured.
+
+**What this build does**: fires `Launch Game` and hands off to the menus. A
+**deliberate divergence**, and the same one Pulse already makes at the same
+point in its own boot - `Show Logo` leads to `RemoveMemoryStickWarning`,
+`NameSetup2FromBoot`, `TagSetup2FromBoot` and `CreateFromBoot` on that disc, four
+screens serving Memory Stick mechanics this build does not have either, and it
+skips all four. Both titles now leave their last boot screen by the same edge,
+into the menu tree that is this project's own (`assets/ui/menu.toml`, see
+[menus](menus.md)). The alternative is a title that boots correctly and then
+cannot be left.
+
+Implemented in `oag_game::frontend::Frontend::update_title_screen`, and pinned
+against both pressings by
+`pures_picker_leads_to_its_second_boot_movie_then_the_title_screen` in
+`crates/game/tests/pure_boot_ground_truth.rs` - which also holds every *other*
+button the abstract layer carries for ten seconds first, so a hidden timeout or
+a wider button set would fail rather than pass quietly. See
+`oag_pure::frontend::states::TITLE_SCREEN`'s own doc comment for the screen
+itself.
 
 ## No movie before the picker - and two after it
 
@@ -246,7 +277,10 @@ from a global, so the value has not been read out of this title); that the
 pause site found in Pure's binary is the one this screen reaches, it being the
 only such site rather than a traced call path.
 
-**Not established**: what advances past `Title Screen`; what the original selects
+**Not established**: where the original goes from `Title Screen` (the *button*
+is measured - see above - but its `Default goto` names a screen this build does
+not have, so the hand-off to the menus is this build's divergence); what the
+original selects
 a regional cut on; where Pulse's language picker belongs; why Pulse carries the
 reel and its pause code but never enters that state at boot.
 

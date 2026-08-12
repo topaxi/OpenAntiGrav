@@ -204,10 +204,69 @@ table, and the [Pure probe](pure-status.md#the-class-id-space-is-renumbered)
 pins `Transform`, `Mesh`, `Texture` and `WO Track` there by exact invariants.
 The five collision classes remain the ones it could not place.
 
-**Which of the three is floor, wall or reset is not determined.** The object
-counts look like Pulse's shape - two large classes and one small one - and
-analogy is not evidence. Confidence **45**, so nothing is named and no constants
-were added for them.
+### Two of the three are now named, by facing rather than by counting
+
+**Superseded 2026-08-12.** This page previously said "which of the three is
+floor, wall or reset is not determined", because the object counts look like
+Pulse's shape - two large classes and one small one - and analogy is not
+evidence. That was the right call on that evidence. A different statistic settles
+two of the three.
+
+**The discriminator.** A floor and a wall differ in *where they face*, which is a
+property of the geometry rather than of how much of it there is. For every
+triangle of a candidate class: take its area-weighted normal, find the nearest
+sample of the track's own `WO Track` spline, and take `|dot(normal, up)|` against
+that sample's local up axis. The spline is the reference and world `+y` is not -
+these circuits bank and climb, and a world-up test calls a banked floor a wall.
+
+**Calibrated before it was trusted.** The same statistic was run over Pulse
+first, where the identities are established at 90 from
+`Collision_RegisterNodeClasses`, and it separates the known classes cleanly. Only
+then was it pointed at Pure's three. Both halves live in
+`crates/pure/tests/collision_classes_ground_truth.rs`, which re-derives this
+table on every `just test-data`:
+
+| class | mean abs dot | area within 45 deg of up | area per object | triangles per object |
+| --- | ---: | ---: | ---: | ---: |
+| Pulse `Floor` | 0.979 | 98.1 % | 2,348 | 31.9 |
+| **Pure `0x36b`** | **0.992** | **99.4 %** | **4,214** | **31.8** |
+| Pulse `Wall` | 0.087 | 3.7 % | 1,127 | 31.7 |
+| **Pure `0x36c`** | **0.104** | **1.2 %** | **3,204** | **31.8** |
+| Pulse `Reset` | 0.834 | 81.0 % | 18,984 | 26.6 |
+| Pulse `Mag Floor` | 0.998 | 100.0 % | 4,125 | 31.0 |
+| **Pure `0x37f`** | **0.402** | **35.4 %** | **173,803** | **29.4** |
+
+So `0x36b` is **`Floor Collision`** and `0x36c` is **`Wall Collision`**, at
+confidence **88** each: an exact-property match against a corpus whose answer is
+known, on three statistics that do not follow from one another, over all 16 Pure
+circuits, with no emulator verification - which is what holds them below the 90
+the Pulse IDs carry. Both are in `vex::classes::V4` now, and a Pure track decodes
+2,398 collision triangles where it decoded none.
+
+Reading Pure's own `BOOT.BIN` for the registration function that lists the five
+IDs is what would raise this to 90. It has not been done.
+
+### The third is still unnamed, and `Cage` is why
+
+`0x37f` matches **none** of Pulse's four measurable signatures. It is
+mixed-facing (0.402, against 0.834 for `Reset` and 0.998 for `Mag Floor`) and
+carries 173,803 area units per object - nine times the largest Pulse class and
+forty times Pure's own floor. That is an enclosing shell rather than a surface or
+a trigger volume, which makes `Cage` the obvious reading.
+
+**And `Cage` is precisely the one Pulse class whose signature cannot be
+measured**, for the reason the section above gives: the PSP disc ships none, and
+the PS2 disc's six sit on no circuit either disc declares raceable - which
+`no_cage_geometry_is_reachable_from_either_pressings_race_circuits` checks
+directly rather than assuming. A guess with no reference to check it against is
+confidence **45**, so per `CLAUDE.md` it gets no name and no constant: the same
+verdict this page reached before, now for a specific reason rather than for want
+of a method.
+
+What that costs a Pure race is **respawn-on-fall**, which is `Reset`'s job. A
+craft that leaves the circuit stays left. `vex::classes::V4`'s own comment says
+so, and `a_craft_under_power_drives_a_pure_circuit_and_a_wall_stops_it` in
+`crates/game/tests/pure_race_ground_truth.rs` is what would notice.
 
 ## The per-vertex scalar is authored and unused
 

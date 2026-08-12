@@ -527,3 +527,44 @@ fn the_global_file_authors_a_fifth_class_and_authors_it_first() {
         }
     }
 }
+
+/// Every Pulse `<Class>` on both pressings authors a `<pitch>`.
+///
+/// **The guard that keeps a label true.** `Class::pitch` is an `Option` because
+/// Pure authors the element nowhere, and
+/// `oag_gameplay::handling::PITCH_STAND_IN` substitutes Pulse's own block when
+/// it is `None` - a substitution `oag_game::race::load` reports by name, on the
+/// stated grounds that it never happens on Pulse.
+///
+/// If that ever stopped being true, a Pulse ship would fly on borrowed numbers
+/// while the report said nothing, because the report line only fires for the
+/// classes that are missing one. So it is asserted rather than assumed: 8 teams
+/// times 4 classes on the PSP disc, and the PS2 disc's own set beside it.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn no_pulse_class_reaches_the_pitch_stand_in() {
+    for (label, image_name, archive) in [
+        ("PSP", "pulse-psp-usa.chd", PSP_ARCHIVE),
+        ("PS2", "pulse-ps2-eu.chd", PS2_ARCHIVE),
+    ] {
+        let Some(blobs) = ship_blobs(image_name, archive) else {
+            continue;
+        };
+        let mut checked = 0;
+        for (team, blob) in &blobs {
+            let stats = handling::from_blob(blob).unwrap_or_else(|e| panic!("{team}: {e}"));
+            for class in &stats.classes {
+                assert!(
+                    class.pitch.is_some(),
+                    "{label}: {team}'s {} class authors no <pitch>, so it would fly \
+                     on `oag_gameplay::handling::PITCH_STAND_IN` - which is labelled \
+                     Pure-only and reported as such",
+                    class.raw_name
+                );
+                checked += 1;
+            }
+        }
+        assert!(checked > 0, "{label}: nothing was checked");
+        println!("{label}: {checked} classes, all authoring <pitch>");
+    }
+}

@@ -37,10 +37,12 @@
 
 pub mod boot;
 pub mod menu;
+pub mod race;
 
 pub use boot::{BootProfile, BootStep};
 pub use menu::MenuSkin;
 pub use oag_disc::Platform;
+pub use race::RaceDefaults;
 
 /// One title's release-level facts.
 ///
@@ -84,6 +86,19 @@ pub struct Title {
     /// asset layer holds a field of screen names it has no business in. Inert
     /// data, and cheaper than two things to keep in step.
     pub boot: &'static boot::BootProfile,
+    /// What a race falls back to when the caller names no circuit or team. See
+    /// [`race::RaceDefaults`].
+    ///
+    /// Hung off `Title` for the same reason [`Self::boot`] is: it is needed
+    /// **before** the archives are open, because a command line has to name a
+    /// circuit, and the alternative is a caller comparing titles to pick a
+    /// constant.
+    ///
+    /// That comparison is not merely awkward, it does not work: a title package
+    /// declares its `Title` as a `const`, so `std::ptr::eq` against it compares
+    /// promoted temporaries whose addresses need not be equal. Carrying the
+    /// answer removes the question.
+    pub race: &'static race::RaceDefaults,
 }
 
 /// The archive names a title's releases carry, in the order they are tried.

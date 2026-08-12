@@ -88,9 +88,17 @@ pub struct MenuSkin {
     pub row_extra_leading: Option<f32>,
     /// The font role menu rows are drawn in, as the language plugin names it.
     ///
-    /// Authored - Pulse's `Main Menu` rows say `font="menu"`. `None` where the
-    /// title's own menu definitions have not been read; Pure's menus name three
-    /// different roles and which one its main list uses is unread.
+    /// Authored - Pulse's `Main Menu` rows say `font="menu"`, which its language
+    /// plugins resolve to a face two-thirds taller than the body one.
+    ///
+    /// **`None` means "draw the rows in the default face", which covers two
+    /// different findings.** A title whose menu definitions were never read
+    /// leaves this `None` because nothing is known; a title whose definitions
+    /// *were* read and name no separate role leaves it `None` because there is
+    /// nothing to name - Pure's measured case, recorded in
+    /// `oag_pure::frontend::MENU_SKIN`. The caller does the same thing either
+    /// way, so the distinction lives in each title crate's own comment rather
+    /// than in this type.
     pub menu_font: Option<&'static str>,
     /// Unselected row text. Authored, `FEGlobals->TextColor`.
     ///

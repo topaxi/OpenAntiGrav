@@ -373,6 +373,33 @@ pub struct Model {
     pub anim_tracks: Vec<vex::TexTransform>,
 }
 
+impl Model {
+    /// A model with no geometry, named so a report can still say which file it
+    /// came from.
+    ///
+    /// Not a `Default` impl: "no geometry" is a *result* here - the file authors
+    /// none, or its class id is unrecovered for this version - and every caller
+    /// already reads `indices.is_empty()` as exactly that. A `Default` would also
+    /// be constructible by accident, which this must not be.
+    #[must_use]
+    pub fn none(label: &str) -> Self {
+        Self {
+            label: label.to_string(),
+            vertices: Vec::new(),
+            indices: Vec::new(),
+            draws: Vec::new(),
+            alpha_tested_draws: Vec::new(),
+            transparent_draws: Vec::new(),
+            textures: Vec::new(),
+            centre: [0.0; 3],
+            radius: 0.0,
+            mesh_count: 0,
+            airbrakes: [None, None],
+            anim_tracks: Vec::new(),
+        }
+    }
+}
+
 /// One authored airbrake flap: which vertices are its own, and what it hinges
 /// about.
 ///
@@ -474,7 +501,7 @@ pub fn build_with_textures(
     external: Option<Vec<Option<ModelTexture>>>,
     lod: Lod,
 ) -> Result<Model> {
-    build_class(label, data, external, lod, vex::CLASS_MESH)
+    build_class(label, data, external, lod, |c| c.mesh)
 }
 
 /// The track's sky, as a model in its own right.
@@ -500,7 +527,7 @@ pub fn build_sky(
     data: &[u8],
     external: Option<Vec<Option<ModelTexture>>>,
 ) -> Result<Model> {
-    build_class(label, data, external, Lod::Both, vex::CLASS_SKYCUBE)
+    build_optional_class(label, data, external, |c| c.skycube)
 }
 
 /// The track's speedup pads, as a model in their own right.
@@ -528,7 +555,7 @@ pub fn build_pads(
     data: &[u8],
     external: Option<Vec<Option<ModelTexture>>>,
 ) -> Result<Model> {
-    build_class(label, data, external, Lod::Both, vex::CLASS_SPEEDUP_PAD)
+    build_optional_class(label, data, external, |c| c.speedup_pad)
 }
 
 /// The track's `Weapon Pad` geometry, the same way as [`build_pads`].
@@ -547,7 +574,32 @@ pub fn build_weapon_pads(
     data: &[u8],
     external: Option<Vec<Option<ModelTexture>>>,
 ) -> Result<Model> {
-    build_class(label, data, external, Lod::Both, vex::CLASS_WEAPON_PAD)
+    build_optional_class(label, data, external, |c| c.weapon_pad)
+}
+
+/// [`build_class`] for a node type whose absence is ordinary.
+///
+/// The sky and the two pad classes are all optional geometry: plenty of shipped
+/// `.vex` files author none, and every caller already treats an empty model as
+/// "there is none here". **An id this project has not recovered for the file's
+/// version is folded into that same empty answer**, deliberately, because the
+/// alternative is failing a whole race over a sky - and the caller is the one
+/// holding the class table, so it is the caller that can tell the two apart and
+/// word its report accordingly. `oag_game::race::load` does exactly that.
+///
+/// [`build`] itself does **not** go through this: a track or ship whose `Mesh`
+/// id is unrecovered has no geometry at all, and returning an empty model there
+/// would be a black screen reported as a success.
+fn build_optional_class(
+    label: &str,
+    data: &[u8],
+    external: Option<Vec<Option<ModelTexture>>>,
+    pick: fn(vex::classes::Classes) -> Option<u32>,
+) -> Result<Model> {
+    if vex::classes_of(data).is_ok_and(|classes| pick(classes).is_none()) {
+        return Ok(Model::none(label));
+    }
+    build_class(label, data, external, Lod::Both, pick)
 }
 
 /// Flattens every node of one class into one buffer pair.
@@ -559,17 +611,32 @@ fn build_class(
     data: &[u8],
     external: Option<Vec<Option<ModelTexture>>>,
     lod: Lod,
-    class_id: u32,
+    pick: fn(vex::classes::Classes) -> Option<u32>,
 ) -> Result<Model> {
     if !vex::has_magic(data) {
         bail!("{label} is not a .vex file (no VEXX magic)");
     }
 
+    // **The ids come from the file's own version word, not from a constant.**
+    // Every `vex::CLASS_*` spells version 6's numbering, and a class id is a
+    // table index rather than a stable enum - so comparing one against a
+    // version-4 file matches nothing at best and the wrong node type at worst.
+    // Not hypothetical: this function's `CLASS_MESH` is exactly why a Pure ship
+    // reported `decoded to no triangles` while its node tree parsed perfectly.
+    // See [`vex::classes`], which states the rule and the evidence for it.
+    let classes = vex::classes_of(data).with_context(|| format!("{label}: class table"))?;
+    let Some(class_id) = pick(classes) else {
+        bail!(
+            "{label} is .vex version {}, and the class id for this node type has not \
+             been recovered for it - see docs/formats/pure-status.md",
+            classes.version
+        );
+    };
+
     let nodes = vex::nodes(data).context("walking the node tree")?;
-    let slots = nodes
-        .iter()
-        .filter(|n| n.class_id == vex::CLASS_TEXTURE)
-        .count();
+    let slots = classes.texture.map_or(0, |texture| {
+        nodes.iter().filter(|n| n.class_id == texture).count()
+    });
 
     // `Lod::Single` skips every node under a two-child `LodGroup`'s second
     // child - see `Lod`'s own doc comment for why this is an invented
@@ -590,8 +657,13 @@ fn build_class(
             }
         }
         let mut skip = std::collections::HashSet::new();
+        // `None` for a version whose `LodGroup` id is unrecovered, and then
+        // nothing is skipped - which is `Lod::Both`, the safe direction. Matching
+        // version 6's `0x2ee` against a version-4 file would be the unsafe one:
+        // that number is some *other* class there, so the skip would delete real
+        // geometry rather than a level of detail.
         for (i, node) in nodes.iter().enumerate() {
-            if node.class_id != vex::CLASS_LOD_GROUP {
+            if Some(node.class_id) != classes.lod_group {
                 continue;
             }
             let payload = &data[node.payload()];
@@ -806,7 +878,10 @@ fn build_class(
         if let Some(brake) = node.parent
             && nodes
                 .get(brake)
-                .is_some_and(|n| n.class_id == vex::CLASS_AIRBRAKE)
+                // Version-keyed for the same reason the `LodGroup` check above
+                // is: `None` leaves a ship with no recovered flaps rather than
+                // mounting whatever version 4 happens to number `0x3c0`.
+                .is_some_and(|n| Some(n.class_id) == classes.airbrake)
             && let Some(hinge) = nodes[brake].parent
         {
             let name = nodes[brake].name.as_deref().unwrap_or_default();

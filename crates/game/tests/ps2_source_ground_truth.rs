@@ -353,7 +353,7 @@ fn every_ps2_track_s_texture_set_is_found_by_directory_position() {
             let track = format!(r"Data\Environments\{n:02}_Track\{variant}");
             let loaded = race::load(&race::Options {
                 source: image.display().to_string(),
-                track: track.clone(),
+                track: Some(track.clone()),
                 class: SpeedClass::Venom,
                 ..race::Options::default()
             })

@@ -405,12 +405,16 @@ pub fn load_shell(options: &Options) -> Result<(Shell, oag_assets::Archives)> {
     }
 
     steps.lap("open");
-    let font = load_font(&mut archives, &mut report);
+    // **Languages before fonts**, because every face this source draws with is
+    // named by a language plugin's `<Font>` slots - see [`load_font`], which
+    // used to reach for a constant here and so did not need them.
+    let languages = load_languages(&mut archives, &mut report);
+    let offered = languages.clone();
+    steps.lap("languages");
+    let font = load_font(&mut archives, &languages, &mut report);
     steps.lap("font");
     let screens = load_screens(&mut archives, profile.fallback_globals, &mut report)?;
     steps.lap("screens");
-    let languages = load_languages(&mut archives, &mut report);
-    let offered = languages.clone();
     let strings = load_strings(
         &mut archives,
         &languages,
@@ -1178,13 +1182,34 @@ fn read_front_end_first(
 /// archive's problem, not the front end's. The two archives hold byte-identical
 /// copies of all five fonts on the PSP, checked, so reading the bulk one costs
 /// nothing there.
-fn load_font(archives: &mut oag_assets::Archives, report: &mut Vec<String>) -> crate::font::Atlas {
-    let name = oag_pulse::names::DEFAULT_FONT;
-    match archives.read_font(name).map_err(|e| e.to_string()) {
+/// **Which file that is comes from the disc**, through the same `<Font>` slots
+/// [`load_menu_font`] already resolved its own role through. This used to name
+/// `Data\FE\Fonts\pulse_text.fnt` outright, which is what Pulse's own `PI008`
+/// resolves `Default` to - correct there, and the reason a Pure boot drew its
+/// entire front end in 5x7: Pure resolves the same role to `FX300ANG.fnt` and
+/// shares no font filename with Pulse at all. Asking the plugin is not a new
+/// mechanism for a second title, it is the mechanism that was already there
+/// being asked one role earlier. See [`crate::language::roles`].
+fn load_font(
+    archives: &mut oag_assets::Archives,
+    languages: &[Language],
+    report: &mut Vec<String>,
+) -> crate::font::Atlas {
+    let role = crate::language::roles::DEFAULT;
+    let Some(name) = role_font(languages, role) else {
+        // Reported rather than fallen back to a remembered filename: a source
+        // whose plugins name no body face is a finding about that source, and a
+        // constant here would hide it behind another title's answer.
+        report.push(format!(
+            "no language plugin names a {role:?} font on this source; drawing with 5x7"
+        ));
+        return crate::font::Atlas::build();
+    };
+    match archives.read_font(&name).map_err(|e| e.to_string()) {
         Ok(font) => {
             let atlas = crate::font::Atlas::from_font(&font);
             report.push(format!(
-                "font {name}: {}x{} atlas, {} glyphs, line height {}",
+                "font {name} (role {role:?}): {}x{} atlas, {} glyphs, line height {}",
                 font.width,
                 font.height,
                 font.glyphs.len(),
@@ -1199,6 +1224,19 @@ fn load_font(archives: &mut oag_assets::Archives, report: &mut Vec<String>) -> c
     }
 }
 
+/// The `.fnt` a role resolves to on this source, from its language plugins.
+///
+/// Any language will do: the plugins differ in which glyphs a face carries, not
+/// in which file a role names. `None` for a role no plugin on this source fills
+/// in - which is an ordinary answer rather than a failure, because the two discs
+/// fill in different subsets: Pure declares four slots to Pulse's eight.
+fn role_font(languages: &[Language], role: &str) -> Option<String> {
+    languages
+        .iter()
+        .find_map(|language| language.font(role))
+        .map(str::to_string)
+}
+
 /// Reads the face this title draws menu *rows* in, when it names one.
 ///
 /// Separate from [`load_font`] rather than replacing it: the default face is
@@ -1209,9 +1247,10 @@ fn load_font(archives: &mut oag_assets::Archives, report: &mut Vec<String>) -> c
 /// The role comes from the title's own `MenuSkin` and the file it resolves to
 /// comes from the language plugin's `<Font>` slots, so neither the role list nor
 /// the filenames are hard-coded here. `None` whenever any link in that chain is
-/// missing - a title that never read its menu definitions, a plugin with no such
-/// slot, an unreadable `.fnt` - and the menus then draw in the default face
-/// exactly as they did before this existed.
+/// missing - a title whose menus name no role of their own, a plugin with no
+/// such slot, an unreadable `.fnt` - and the menus then draw in the default
+/// face, which is Pure's measured case as much as it is an absence of evidence.
+/// See [`oag_title::MenuSkin::menu_font`].
 fn load_menu_font(
     archives: &mut oag_assets::Archives,
     languages: &[Language],
@@ -1219,10 +1258,8 @@ fn load_menu_font(
     report: &mut Vec<String>,
 ) -> Option<crate::font::Atlas> {
     let role = skin.menu_font?;
-    // Any language will do: the plugins differ in which glyphs a face carries,
-    // not in which file a role names.
-    let name = languages.iter().find_map(|language| language.font(role))?;
-    match archives.read_font(name) {
+    let name = role_font(languages, role)?;
+    match archives.read_font(&name) {
         Ok(font) => {
             report.push(format!(
                 "menu font {name} (role {role:?}): line height {}",

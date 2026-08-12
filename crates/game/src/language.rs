@@ -21,6 +21,69 @@ use std::collections::HashMap;
 
 use crate::screen::{Node, parse};
 
+/// Font role names, as a `<Font><Values name="...">` slot spells them.
+///
+/// **A property of the front-end format, not of either release**, which is why
+/// these are here rather than in a title package: a `<Font>` slot is spelled the
+/// same way whichever disc declares it, and what differs is only *which* slots a
+/// disc fills in and what file each resolves to. Both of those are read off the
+/// plugin at runtime by [`Language::font`], so nothing here needs a per-title
+/// table of filenames - and the one place that had one is what this exists to
+/// remove.
+///
+/// The two discs fill in **eight slots each, and share exactly one file between
+/// them**, which is the whole reason to resolve rather than hard-code. Read off
+/// every language plugin on `pulse-psp-eu.chd` and `pure-psp-eu.chd`,
+/// 2026-08-12; confidence **94**, the files state it and nothing here has been
+/// watched under an emulator.
+///
+/// | role | Pulse | Pure |
+/// | --- | --- | --- |
+/// | [`DEFAULT`] | `pulse_text.fnt` | `FX300ANG.fnt` |
+/// | [`SMALL`] | `Pulse_14.fnt` | `small.fnt` |
+/// | [`TITLE`] | `Pulse_14.fnt` | `FX300ANG.fnt` |
+/// | [`HUD`] | `PulseHud.fnt` | `HUDFont.fnt` |
+/// | [`HUD_SMALL`] | `small.fnt` | `small.fnt` |
+/// | `InGame` | `Pulse_14.fnt` | `FX300ANG.fnt` |
+/// | `Stats` | `Pulse_14.fnt` | `LTe50325.fnt` |
+/// | `Menu` | `Pulse_20.fnt` | **no such slot** |
+/// | `Scroll` | **no such slot** | `LTe50325.fnt` |
+///
+/// `small.fnt` is the one name in common, and it is not the body face. So the
+/// build that named Pulse's files outright - which is what this replaced - drew
+/// the whole of Pure's front end in the 5x7 fallback while looking entirely
+/// correct on Pulse and on the PS2 port.
+///
+/// **`Menu` against `Scroll` is a slot difference, not a rename.** Pure's own
+/// `<Menu>` widgets draw in `Default` (see `oag_pure::frontend::MENU_SKIN`);
+/// what its `Scroll` face is for is the `Confirm button` / `Back button` prompt
+/// rows, which say `font="scroll"` in `Skin.xml`. Nothing here maps one title's
+/// slot onto the other's.
+///
+/// # A role is not the same file in every language
+///
+/// The resolver takes the first plugin that fills a slot, on the reasoning that
+/// plugins differ in which *glyphs* a face carries rather than in which file a
+/// role names. **That holds for every plugin either title's picker offers, and
+/// is false in general**: Pure ships a Japanese plugin, `PI005`, resolving
+/// `Default` and `Title` to `jap_default.fnt` and `Scroll`/`Stats` to
+/// `jap_scroll.fnt` - four different files across four of the eight roles. It is
+/// out of reach only because it is not one of the plugins scanned, so the
+/// reasoning holds here by accident rather than by construction. A title whose
+/// picker offered Japanese would have to ask the *chosen* language's plugin.
+pub mod roles {
+    /// Body text: the picker's rows, the loading tips, most captions.
+    pub const DEFAULT: &str = "Default";
+    /// The smaller face, where a screen asks for one.
+    pub const SMALL: &str = "Small";
+    /// Screen titles.
+    pub const TITLE: &str = "Title";
+    /// The in-race readouts.
+    pub const HUD: &str = "HUD";
+    /// The HUD's own smaller face. Both titles fill it in, both with `small.fnt`.
+    pub const HUD_SMALL: &str = "HUDSmall";
+}
+
 /// One language the disc ships.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Language {

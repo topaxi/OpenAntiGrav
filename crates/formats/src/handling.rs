@@ -979,8 +979,24 @@ pub struct Class {
     pub antigrav: Antigrav,
     /// `<Physical/>`.
     pub physical: Physical,
-    /// `<pitch/>`.
-    pub pitch: Pitch,
+    /// `<pitch/>`, when the file authors one.
+    ///
+    /// **`None` on Pure, which omits the element from every `<Class>` block on
+    /// both pressings** - enumerated with the rest of that title's schema delta
+    /// by `crates/pure/tests/handling_schema_ground_truth.rs`. The same shape as
+    /// [`Stats::fe`] and for the same reason: a block a file does not author is
+    /// a fact about that file, and `Option` is how this parser states it rather
+    /// than handing back a zeroed struct that reads like authored data.
+    ///
+    /// Unlike `fe`, this one is **not** presentation - it feeds
+    /// `oag_physics::Pitch`, so somebody has to decide what a ship with no
+    /// authored pitch response does. That decision is deliberately not made
+    /// here: `oag_gameplay::handling::handling_for` substitutes a stand-in and
+    /// says which, because picking a number is a claim about a *title* and this
+    /// crate must not make one. See [ADR-0022].
+    ///
+    /// [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
+    pub pitch: Option<Pitch>,
 }
 
 impl Class {
@@ -1005,7 +1021,15 @@ impl Class {
             airbrake: Airbrake::from_node(child(node, Airbrake::ELEMENT)?)?,
             antigrav: Antigrav::from_node(child(node, Antigrav::ELEMENT)?)?,
             physical: Physical::from_node(child(node, Physical::ELEMENT)?)?,
-            pitch: Pitch::from_node(child(node, Pitch::ELEMENT)?)?,
+            // Absent from every Pure `<Class>`. A *malformed* one still fails:
+            // `transpose` propagates a parse error and only a missing element
+            // becomes `None`, so a typo'd attribute cannot arrive here disguised
+            // as an older schema.
+            pitch: node
+                .children_named(Pitch::ELEMENT)
+                .next()
+                .map(Pitch::from_node)
+                .transpose()?,
         })
     }
 }
@@ -1471,7 +1495,13 @@ mod tests {
         assert_eq!(phantom.airbrake.sideshift, Some(18.0));
         assert_eq!(phantom.antigrav.ride_height, 24.0);
         assert_eq!(phantom.physical.mass, 26.0);
-        assert_eq!(phantom.pitch.antigrav_height_adjust, 32.0);
+        assert_eq!(
+            phantom
+                .pitch
+                .expect("this document authors <pitch>")
+                .antigrav_height_adjust,
+            32.0
+        );
     }
 
     /// The invariant that matters most. A silently absent attribute defaulting
@@ -1522,18 +1552,20 @@ mod tests {
             "ExternalCameraClose",
             "AirbrakeGraphics",
             "Misc",
-            // `FE` is deliberately absent from this list: Pure omits the
-            // element entirely, so its absence is a schema difference rather
-            // than a defect, and `Stats::fe` is an `Option`. Every other element
-            // here is still required, which is what keeps this test meaningful
-            // rather than a formality.
+            // **`FE` and `pitch` are deliberately absent from this list.** Pure
+            // omits both from every file on both pressings, so their absence is
+            // a schema difference rather than a defect, and `Stats::fe` and
+            // `Class::pitch` are `Option` for it. Everything else here is still
+            // required, which is what keeps this test meaningful rather than a
+            // formality - and the two optional ones get their own test below,
+            // because "may be absent" must not quietly become "may be
+            // malformed".
             "Engine",
             "Brakes",
             "Turning",
             "Airbrake",
             "Antigrav",
             "Physical",
-            "pitch",
         ] {
             let open = format!("<{element} ");
             let at = doc.find(&open).expect("element in the fixture");
@@ -1546,6 +1578,63 @@ mod tests {
                 "dropping <{element}> was tolerated"
             );
         }
+    }
+
+    /// Dropping `<pitch>` gives `None`; breaking one still fails.
+    ///
+    /// The pair of claims `Class::pitch`'s `Option` makes, and they have to be
+    /// tested together: an `Option` that swallowed a parse error would turn a
+    /// typo in a Pulse file into a silent fall-through to
+    /// `oag_gameplay::handling::PITCH_STAND_IN` - another title's tuning, applied
+    /// because of a typo, with nothing on screen to say so.
+    #[test]
+    fn an_absent_pitch_is_none_and_a_broken_one_is_still_an_error() {
+        let doc = all_four();
+        assert!(
+            doc.contains("<pitch "),
+            "the fixture has to author one for either half of this to mean anything"
+        );
+
+        let mut dropped = doc.clone();
+        while let Some(at) = dropped.find("<pitch ") {
+            let end = dropped[at..].find("/>").expect("self-closing") + at + 2;
+            dropped.replace_range(at..end, "");
+        }
+        let stats = parse(&dropped).expect("a file with no <pitch> is Pure-shaped, not broken");
+        for class in &stats.classes {
+            assert_eq!(
+                class.pitch, None,
+                "{}: an unauthored block is None, not a zeroed one",
+                class.raw_name
+            );
+        }
+
+        let broken = doc.replace(r#"pitch_air="29""#, r#"pitch_air="oops""#);
+        assert!(
+            broken != doc,
+            "the fixture's pitch_air is 29; update this if it changes"
+        );
+        assert_eq!(
+            parse(&broken),
+            Err(Error::NotANumber {
+                element: "pitch",
+                attribute: "pitch_air",
+                value: "oops".to_string(),
+            }),
+            "a malformed <pitch> must not pass as an absent one"
+        );
+
+        // And an attribute *dropped* from a present block is still an error too,
+        // which is the shape a half-written element would take.
+        let short = doc.replace(r#"pitch_air="29" "#, "");
+        assert_eq!(
+            parse(&short),
+            Err(Error::MissingAttribute {
+                element: "pitch",
+                attribute: "pitch_air",
+            }),
+            "a <pitch> missing an attribute is not an absent <pitch>"
+        );
     }
 
     #[test]

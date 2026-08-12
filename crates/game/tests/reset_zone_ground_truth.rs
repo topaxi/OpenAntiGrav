@@ -72,7 +72,7 @@ fn load(track: &str) -> Option<race::Loaded> {
     race::load(&race::Options {
         source: image.display().to_string(),
         class: SpeedClass::Venom,
-        track: track.to_string(),
+        track: Some(track.to_string()),
         ..race::Options::default()
     })
     .ok()

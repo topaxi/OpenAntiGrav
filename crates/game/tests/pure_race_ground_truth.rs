@@ -1,0 +1,268 @@
+//! A Wipeout Pure disc loads a race, and a craft stays on the circuit.
+//!
+//! **`#[ignore]`d and never run in CI.** It needs game content, which this
+//! project does not ship. See
+//! `docs/architecture/adr/0006-no-copyrighted-content.md`.
+//!
+//! ```sh
+//! just test-data
+//! # or only this file:
+//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run --release -p oag-game \
+//!     --run-ignored all -E 'binary(pure_race_ground_truth)'
+//! ```
+//!
+//! # What this is for
+//!
+//! `race_ground_truth.rs` is Pulse's, and every one of its assertions is a
+//! measurement against Pulse's own recorded behaviour. This file is deliberately
+//! much weaker: **Pure's physics is not implemented**, the race runs on Pulse's
+//! force law with Pulse's `<pitch>` block standing in for the one Pure's files do
+//! not author, and no lap time here means anything. What it pins is the load
+//! path and the one property that makes a race a race rather than a fall.
+//!
+//! Four things had to be true for any of this to run, and each is asserted
+//! separately so a regression names itself rather than showing up as "the craft
+//! fell through the track":
+//!
+//! 1. The source opens as Pure at all - `race::load` used to be
+//!    `oag_pulse::open_with_packs` outright and refused the disc by serial.
+//! 2. The track's geometry decodes - its `.vex` is **version 4**, whose class
+//!    numbering shares nothing with the version 6 the constants spell.
+//! 3. Its **collision** geometry decodes, which needs `vex::classes::V4`'s
+//!    floor and wall ids - recovered at confidence 88, see
+//!    `crates/pure/tests/collision_classes_ground_truth.rs`.
+//! 4. Its `handlingstats.xml` parses, which needs `<pitch>` to be optional.
+//!
+//! # What is deliberately not asserted
+//!
+//! No lap time, no clean-lap count, no comparison against Pulse. Pure ships a
+//! five-rung speed ladder to Pulse's four, no `<pitch>`, and its own handling
+//! model is unread; a lap-time bound here would be pinning this project's
+//! stand-ins, not the original. It would also fail for reasons already written
+//! down, which is noise. See `docs/formats/pure-status.md`.
+
+use oag_game::{catalogue, race};
+use oag_physics::SpeedClass;
+use std::path::{Path, PathBuf};
+
+/// Both Pure pressings, whichever are present.
+fn images() -> Vec<(&'static str, PathBuf)> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut found = Vec::new();
+    for (label, name) in [
+        ("pure-psp-eu", "data/images/pure-psp-eu.chd"),
+        ("pure-psp-usa", "data/images/pure-psp-usa.chd"),
+    ] {
+        let path = root.join(name);
+        if path.exists() {
+            found.push((label, path));
+        } else {
+            assert!(
+                std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
+                "OAG_REQUIRE_GAME_DATA is set but {} is missing",
+                path.display()
+            );
+            println!("skipping: {} not present", path.display());
+        }
+    }
+    found
+}
+
+/// Every circuit the disc's own plugin definition declares as a `Race`.
+///
+/// Read off the disc for the reason `oag_game::catalogue` gives: a list of
+/// circuit names in this repository would be shipped content. Pure declares no
+/// `Reversed` entry anywhere, which is itself a difference from Pulse and is
+/// asserted below rather than assumed here.
+fn circuits(image: &Path) -> Vec<catalogue::Track> {
+    let mut archives = oag_pure::open(&image.display().to_string()).expect("opening Pure");
+    let blob = archives
+        .read_name(oag_pure::names::GAME_PLUGIN_DEFINITION)
+        .expect("the game plugin definition");
+    let xml = oag_formats::fexml::text(&blob).expect("Pure's XML is not shortened");
+    catalogue::tracks(&xml)
+}
+
+/// The default Pure race, as `just play --race` on a Pure source resolves it.
+fn load(image: &Path, track: &str) -> race::Loaded {
+    race::load(&race::Options {
+        source: image.display().to_string(),
+        class: SpeedClass::Venom,
+        // Time Trial: the milestone's mode, and the one with no weapons - which
+        // matters here because Pure's weapon pads have no recovered class id, so
+        // a mode that handed pickups out would be racing on absences.
+        mode: oag_race::Mode::TimeTrial,
+        track: Some(track.to_string()),
+        ..race::Options::default()
+    })
+    .unwrap_or_else(|e| panic!("loading {track}: {e:#}"))
+}
+
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_pure_source_opens_as_pure_and_loads_its_default_circuit() {
+    for (label, image) in images() {
+        let track = oag_pure::race::DEFAULT_TRACK;
+        let loaded = load(&image, track);
+        assert!(
+            loaded
+                .report
+                .iter()
+                .any(|line| line.contains("Wipeout Pure")),
+            "{label}: the load report should name the title it opened as; was {:#?}",
+            loaded.report
+        );
+        assert!(
+            loaded.track_model.indices.len() > 3,
+            "{label}: {track} decoded to no geometry - its .vex is version 4, so \
+             this is the class table rather than the file"
+        );
+        assert!(
+            loaded.ship_model.indices.len() > 3,
+            "{label}: the ship decoded to no geometry"
+        );
+    }
+}
+
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn every_pure_circuit_decodes_geometry_collision_and_a_spline() {
+    for (label, image) in images() {
+        let tracks = circuits(&image);
+        assert!(!tracks.is_empty(), "{label}: the disc declares circuits");
+        assert!(
+            tracks.iter().all(|track| !track.reversed),
+            "{label}: Pure declares no reversed circuit, and this build would look \
+             for a track_reversed.vex that is not on the disc"
+        );
+
+        let mut checked = 0;
+        for track in &tracks {
+            let entry = track.entry_name();
+            // A `Classic` or `Zone` entry points at a directory this build has no
+            // circuit for; skipping is not a silent pass because `checked` below
+            // asserts that some remained.
+            let Ok(loaded) = race::load(&race::Options {
+                source: image.display().to_string(),
+                class: SpeedClass::Venom,
+                mode: oag_race::Mode::TimeTrial,
+                track: Some(entry.clone()),
+                ..race::Options::default()
+            }) else {
+                println!("{label}: {entry} did not load, skipped");
+                continue;
+            };
+            checked += 1;
+
+            let triangles: usize = loaded
+                .setup
+                .collision
+                .colliders()
+                .iter()
+                .map(oag_physics::TriangleSoup::triangle_count)
+                .sum();
+            assert!(
+                triangles > 0,
+                "{label}: {} has no collision geometry, so a craft would fall \
+                 through it. That is what `vex::classes::V4`'s floor and wall ids \
+                 exist for - see crates/pure/tests/collision_classes_ground_truth.rs",
+                track.id
+            );
+            assert!(
+                !loaded.setup.spline.is_empty(),
+                "{label}: {} has no spline, so there is nothing to spawn on and no \
+                 lap to time",
+                track.id
+            );
+        }
+        assert!(
+            checked > 0,
+            "{label}: no circuit loaded at all, so nothing above was tested"
+        );
+        println!("{label}: {checked} of {} circuits load", tracks.len());
+    }
+}
+
+/// A craft under full throttle drives a Pure circuit, and a wall stops it.
+///
+/// **The only behavioural claim in this file, and a deliberately narrow one.** It
+/// does not say the craft laps, or how quickly: Pure's handling is unread and its
+/// `<pitch>` block is Pulse's stand-in, so a lap bound would pin a substitution
+/// rather than measure the original. What it says is that the collision geometry
+/// recovered for version 4 is **load-bearing**, on both of its classes.
+///
+/// That distinction cannot be made from the load report. A track whose floor and
+/// wall ids were assigned the wrong way round reports exactly the same collider
+/// and triangle counts as one that is right - the difference only appears in what
+/// happens to a craft on it. So this drives one:
+///
+/// - **Full throttle, stick centred.** Not a driving test: a centred stick means
+///   the craft runs the opening straight and then meets the outside of the first
+///   corner, which is the point. Steering it round would make the distance figure
+///   a statement about this test's inputs.
+/// - **It travels**, which needs a floor under it. Measured at 265 units on both
+///   pressings before it stops.
+/// - **It stops, and stays stopped**, 16 units off the spline with the circuit's
+///   half-width at over a hundred - which needs a wall beside it. A craft with no
+///   wall carries straight on into scenery and keeps going.
+///
+/// Both bounds below are far from the measured values on purpose. This should
+/// fail when the collision classes are wrong and at no other time; it is not a
+/// performance ratchet, and Pure's physics being Pulse's means it could not
+/// honestly be one.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_craft_under_power_drives_a_pure_circuit_and_a_wall_stops_it() {
+    for (label, image) in images() {
+        let loaded = load(&image, oag_pure::race::DEFAULT_TRACK);
+        let mut race = race::Race::start(loaded.setup);
+        for slot in 1..oag_gameplay::MAX_SHIPS {
+            race.world.ships[slot].active = false;
+        }
+
+        // Cross is thrust; see `oag_gameplay::controls`.
+        let mut input = oag_gameplay::InputSnapshot::default();
+        input
+            .buttons
+            .begin_frame(1 << oag_gameplay::input::button::CROSS);
+
+        let start = race.world.ships[0].physics.body.position;
+        let mut furthest_from_spline = 0.0f32;
+        let mut travelled = 0.0f32;
+        for _ in 0..1_200 {
+            race.tick(&input);
+            let at = race.world.ships[0].physics.body.position;
+            // Distance to the spline is the honest measure of "on the circuit":
+            // these tracks climb and bank, so comparing height against the start
+            // would read a hill as a fall.
+            if let Some(distance) = race.spline().distance_to(at) {
+                furthest_from_spline = furthest_from_spline.max(distance);
+            }
+            travelled = travelled.max(at.distance(start));
+        }
+        let resting = race.world.ships[0].physics.body.position;
+
+        println!(
+            "{label}: travelled {travelled:.0} units, furthest from the spline \
+             {furthest_from_spline:.1}, resting {:.1} out, respawns {}",
+            race.spline().distance_to(resting).unwrap_or(-1.0),
+            race.respawns()
+        );
+
+        assert!(
+            travelled > 150.0,
+            "{label}: the craft moved only {travelled:.0} units under full throttle, \
+             so nothing is carrying it - `vex::classes::V4`'s floor id is what to \
+             re-check"
+        );
+        // The widest half-width measured on these circuits is about 144 units, so
+        // 400 sits well outside any of them and nowhere near the thousands a craft
+        // in free fall covers in twenty seconds.
+        assert!(
+            furthest_from_spline < 400.0,
+            "{label}: the craft reached {furthest_from_spline:.1} units from the \
+             spline. **No reset volumes are recovered on this title**, so nothing \
+             puts it back - see `vex::classes::V4`'s own comment"
+        );
+    }
+}

@@ -661,6 +661,12 @@ mod tests {
             picker_backdrop_parent: None,
             fallback_globals: &[],
         },
+        // Present for the same reason and equally unread: resolving archives has
+        // nothing to do with which circuit a race opens on.
+        race: &oag_title::RaceDefaults {
+            track: r"Data\Environments\00_Nowhere\track.vex",
+            team: "Nobody",
+        },
     };
 
     /// The bulk archive's PSP and PS2 names, as the fixture spells them.

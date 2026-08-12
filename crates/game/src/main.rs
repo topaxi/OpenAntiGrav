@@ -293,17 +293,25 @@ struct Cli {
     race: bool,
 
     /// The track's `.vex` entry name, for either way into a race. The same name
-    /// on both releases.
-    #[arg(long, default_value = race::DEFAULT_TRACK)]
-    track: String,
+    /// on both **Pulse** releases, PSP and PS2.
+    ///
+    /// **Left out, it comes from whichever title the source turns out to be**,
+    /// which is why there is no `default_value` here: the two titles share no
+    /// circuit directory at all, so a constant default would name a path that is
+    /// not on a Pure disc and fail at the archive with a message about a missing
+    /// entry rather than about a missing circuit. See [`default_track`].
+    #[arg(long)]
+    track: Option<String>,
 
     /// The team, which selects both the handling stats and the model.
     ///
     /// A team **id**, which is the folder under `Data\Ships\` and not always
     /// the name on screen - the Mirage pack's team is `Mantis`. Teams a mounted
     /// pack adds are accepted here like any other; see `--dlc`.
-    #[arg(long, default_value = race::DEFAULT_TEAM)]
-    team: String,
+    /// Left out, it comes from the source's own title, the same way `--track`
+    /// does: Pulse's default team is not on a Pure disc under that spelling.
+    #[arg(long)]
+    team: Option<String>,
 
     /// A directory holding downloadable content: a pack's `.edat` files, or the
     /// `.zip` they were downloaded as. Repeatable.
@@ -751,8 +759,14 @@ fn main() -> Result<()> {
     let race_options = race::Options {
         source: source.clone(),
         dlc: dlc.clone(),
+        // Passed straight through, `None` included: `race::load` resolves an
+        // unnamed circuit from the title it opened, which is the only place the
+        // title is known. See `race::Options::track`.
         track: cli.track.clone(),
-        team: cli.team.clone(),
+        team: cli
+            .team
+            .clone()
+            .unwrap_or_else(|| oag_pulse::race::DEFAULT_TEAM.to_string()),
         class,
         mode,
         ribbon: cli.ribbon,
@@ -4112,19 +4126,39 @@ impl Session {
             menu::MenuEvent::Changed { setting, value } => self.apply_setting(setting, value),
             menu::MenuEvent::Fired(menu::Action::LaunchRace) => {
                 // The stored id names a *race*, and only this source can say
-                // which file that is. A source that no longer offers it keeps
-                // whatever track the options already held rather than guessing
-                // a path, which would fail at the archive with a message about
-                // a missing entry instead of about a missing circuit.
-                match self
-                    .shell
-                    .as_ref()
-                    .and_then(|shell| shell.track(&self.settings.race.track))
-                {
-                    Some(track) => self.race_options.track = track.entry_name(),
+                // which file that is.
+                //
+                // **A source that does not offer the stored circuit races the
+                // first one it *does* offer**, which is what the menu is already
+                // showing. Keeping the previous option instead - which is what
+                // this did - meant the menu displayed one circuit and the race
+                // loaded another: `Menu::supply` resets the visible row to index
+                // 0 when the stored id is gone, and nothing told the options.
+                // The failure was then a missing archive entry naming a circuit
+                // that was never on screen.
+                //
+                // Not a Pure bug, though Pure is where it became unmissable (no
+                // circuit id is shared between the titles, so *every* stored
+                // Pulse circuit misses): a settings file naming a pack circuit
+                // the player no longer has takes the same path on Pulse.
+                let chosen = self.shell.as_ref().and_then(|shell| {
+                    shell
+                        .track(&self.settings.race.track)
+                        .or_else(|| {
+                            eprintln!(
+                                "this source does not offer {:?}; racing the first \
+                                 circuit it does offer, which is what the menu shows",
+                                self.settings.race.track
+                            );
+                            shell.tracks.first().map(|(track, _)| track)
+                        })
+                        .map(catalogue::Track::entry_name)
+                });
+                match chosen {
+                    Some(entry) => self.race_options.track = Some(entry),
                     None => eprintln!(
-                        "this source does not offer {:?}, racing {} instead",
-                        self.settings.race.track, self.race_options.track
+                        "this source offers no circuit at all; racing whatever was \
+                         already selected"
                     ),
                 }
                 // The same shape as the circuit above, and needed for the same
@@ -4163,7 +4197,13 @@ impl Session {
                 {
                     self.race_options.difficulty = difficulty;
                 }
-                println!("\nloading {}", self.race_options.track);
+                println!(
+                    "\nloading {}",
+                    self.race_options
+                        .track
+                        .as_deref()
+                        .unwrap_or("this source's own default circuit")
+                );
                 match self.launch_race() {
                     Ok(()) => println!("\n{RACE_KEYS}{ESC_TO_MENU}"),
                     // Reported rather than fatal: leaving the menus on screen

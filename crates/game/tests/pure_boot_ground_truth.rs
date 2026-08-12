@@ -223,21 +223,44 @@ fn pures_picker_leads_to_its_second_boot_movie_then_the_title_screen() {
             "{label}: the movie is over by Title Screen, so its sound has to stop"
         );
 
-        // **What advances past `Title Screen` is not established.** Its
-        // `TitleRedirect` carries no `forward` and its `Default goto` names a
-        // screen this build does not have, so the screen is inert here on
-        // purpose. This pins that rather than asserting a guess.
+        // **`Title Screen` waits for START and for nothing else.** Its
+        // `TitleRedirect` carries no `forward` at all, so the button is not
+        // authored there - it comes from the screen's own `idstring="PRESS
+        // START"` widget and from watching the real firmware sit on this screen
+        // until START. Ten seconds of every other button the abstract layer
+        // carries, alternated with none, must leave it exactly where it is; a
+        // hidden timeout would show up here.
         for tick in 0..600 {
-            input.begin_frame(if tick % 2 == 0 { u32::MAX } else { 0 });
+            let held = !(1u32 << button::START);
+            input.begin_frame(if tick % 2 == 0 { held } else { 0 });
             loaded.frontend.update(1.0 / 60.0, &mut input, None);
         }
         assert!(
             loaded.frontend.machine().is(pure_states::TITLE_SCREEN),
-            "{label}: nothing evidenced advances past Title Screen yet"
+            "{label}: only START leaves Title Screen, and it does not time out; got {:?}",
+            loaded.frontend.machine().current()
         );
         assert!(
             !loaded.frontend.is_finished(),
-            "{label}: Title Screen does not hand off to a race"
+            "{label}: and nothing has been handed off yet"
+        );
+
+        // START does leave, for the menus. **The destination is this build's
+        // divergence, not the disc's** - `TitleRedirect`'s `Default goto` names
+        // `Profile Manager`, a screen this build does not have, exactly as
+        // Pulse's `Show Logo` leads to four Memory Stick screens it does not
+        // have either. Both titles reach the menus by the same edge; see
+        // `docs/architecture/pure-boot.md`.
+        input.begin_frame(1 << button::START);
+        loaded.frontend.update(1.0 / 60.0, &mut input, None);
+        assert!(
+            loaded.frontend.machine().is(states::LAUNCH_GAME),
+            "{label}: START on Title Screen hands off to the menus; got {:?}",
+            loaded.frontend.machine().current()
+        );
+        assert!(
+            loaded.frontend.is_finished(),
+            "{label}: and the composition root is told, or the menus never open"
         );
     }
 }

@@ -28,8 +28,8 @@ payloads themselves - is what stops `oag-view` drawing a Pure ship today.
 | `.vex` file header, node tree, mesh batches, texture block | Reads unchanged; **found by different class IDs** |
 | `WO Track` payload | Reads unchanged; **found by a different class ID** |
 | Front-end XML | Reads; the name-shortening optimisation **does not exist yet** |
-| Handling stats | Same addressing, schema enumerated in full; **one absent element still refuses the file** |
-| Collision classes | Not located - see [collision](collision.md#the-same-format-is-in-wipeout-pure) |
+| Handling stats | Same addressing, schema enumerated in full; the absent `<pitch>` is now optional and a labelled stand-in fills it |
+| Collision classes | **Floor and wall recovered 2026-08-12**; the third candidate stays unnamed - see [collision](collision.md#two-of-the-three-are-now-named-by-facing-rather-than-by-counting) |
 | `SBlk` sound bank | **Not present on Pure at all** |
 
 ## Disc layout
@@ -73,11 +73,11 @@ Counts below are over all three archives, 1,229 entries, unless stated.
 | [`.vex` mesh batches](vex.md#vertex-format) | reads (v4) | **11,025/11,025** v4 mesh nodes walk: 20,832 batches, 2,116,976 vertices, same batch header, same `vertex_type` encoding, same per-batch `f32` scale. Every decoded vertex falls inside the batch's **own declared bounding box**, **20,832/20,832** | 94 |
 | [`.vex` mesh batches](#version-3-shortens-the-batch-header) | **breaks** (v3) | 8 of 26 v3 mesh nodes walk under the Pulse header; a shifted-header hypothesis raises that to 23 of 26 | 65 |
 | [`.vex` embedded textures](vex.md) | reads | `sum(clut_size + texel_size)` over `Texture` nodes equals the declared texture-block length on **156/156** v4 files, to the byte | 92 |
-| [`.vex` embedded textures](#pures-model-textures-ship-pre-swizzled) | **breaks** | Pure sets the pre-swizzle flag on model textures; `vex::textures` never reads that byte | 88 |
+| [`.vex` embedded textures](#pures-model-textures-ship-pre-swizzled) | reads | Pure sets the pre-swizzle flag on model textures. `vex::textures` reads `+0x06` and unswizzles **on version <= 4 only** since 2026-08-12; version 6 is deliberately untouched | 88 |
 | `WO Track` payload | reads | 16 nodes carry the magic; version `0x103` against Pulse's `0x105`; `encoded_len == payload length` exact on **16/16** under the documented layout, reserved block included. Reported separately, see [below](#reported-elsewhere) | 94 |
-| [Collision geometry](collision.md#the-same-format-is-in-wipeout-pure) | **breaks** | Already recorded: none of the five Pulse collision class IDs appears; three candidates decode exactly but which is which is undetermined | 90 / 45 |
+| [Collision geometry](collision.md#the-same-format-is-in-wipeout-pure) | reads | None of Pulse's five class IDs appears; three candidates decode exactly, and **two are now named by a facing statistic calibrated on Pulse** - `0x36b` floor, `0x36c` wall. The third matches no Pulse signature and stays unnamed | 90 / 88 / 45 |
 | [Front-end XML](fexml.md) | reads | 291 XML entries across the three archives. **Zero** begin `<code`, so the name shortening is a Pulse-era addition and `--expand` is correctly a no-op on Pure | 94 |
-| [Handling stats](handling-stats.md) | **breaks** | Addressing holds and the schema is enumerated in full; one element, `<pitch>`, still stops the parser. See [below](#handling-stats-the-schema-holds-the-parser-does-not) | 94 |
+| [Handling stats](handling-stats.md) | reads | Addressing holds and the schema is enumerated in full. `<pitch>` became **optional** on 2026-08-12 - Pure authors none in any `<Class>` - and `oag_gameplay::handling::PITCH_STAND_IN` fills it, reported by name. See [below](#handling-stats-the-schema-holds-the-parser-does-not) | 94 |
 | [Bitmap font](fnt.md) | reads | 6 fonts. Version `1` + `"FNT"`, codepoint table at `0x30`, offset table at `0x30 + 2*count`, and `atlas + 0x40 + clut_size + texel_size == file length` exact on **6/6**, with `texel_size == width * height / 2`. The atlas flag bit is set on 6/6, same as Pulse | 94 |
 | [PSP movie](pmf.md) | reads | 14 movies. `stream_offset == 0x800` and `stream_offset + stream_size == file length` exact on **14/14**; two streams each, ids `0xe0` and `0xbd`. Version string `"0012"` only, where Pulse ships both `"0012"` and `"0014"` | 94 |
 | [PSP sound bank](psp-audio.md) | **absent** | No entry in any Pure archive begins `SBlk`, though the executable names `Data\Sound\*.bnk` paths. Pure's 25 RIFF entries are `WAVE_FORMAT_EXTENSIBLE`, 2 channels, 44.1 kHz | 85 |
@@ -185,11 +185,20 @@ is set only on [font atlases](fnt.md#the-texels-are-stored-already-swizzled).
 On Pure it is set on model textures too: the Feisar ship's five embedded
 textures read flags `0x61`, where Pulse's eight read `0xe4`.
 
-[`vex::textures`](../../crates/formats/src/vex.rs) reads width, height,
-`bits_per_pixel`, `mip_count`, `clut_size` and `texel_size`, and **never looks
-at `+0x06`**. On Pulse that was thought harmless, and the correction above is
-that it is not: On Pure it would return scrambled
-texels for every model. Unswizzling by the block rule the font path already
+**Implemented 2026-08-12, gated on the version word.**
+[`vex::textures`](../../crates/formats/src/vex.rs) now reads `+0x06` and
+unswizzles through `texture::unswizzle` when bit 0 is set **and the file's
+version is 4 or below**. That is the generation where the evidence is
+unambiguous, and the gate is what keeps the correction above from becoming a
+silent Pulse regression: 88 version-6 PSP nodes carry the bit too, no
+ground-truth screenshot covers the models they belong to, and whether they are
+really swizzled is still open. Version 6 is therefore left reading as it did.
+
+The effect is visible rather than inferred. Before the change, a Pure race drew
+its circuit with scrambled texels on every surface; after it, `01_Vineta_K`
+renders its chevron start line, glass tunnel and hex-panel walls cleanly. Pulse's
+own first race frame is **byte-identical** across the change, which is the
+regression check the gate exists for. Unswizzling by the block rule the font path already
 implements turns the ship's environment map back into a clean radial highlight,
 which is what confirms both the flag's meaning and that nothing else is wrong
 with the block. Confidence **88** as written; the Pulse half of it is now
@@ -254,7 +263,7 @@ What Pulse authors and Pure does not - **this list is complete**:
 | Element | Absent from Pure | Consequence |
 | --- | --- | --- |
 | `<Stats><FE speed thrust handling shield/>` | the whole element | Presentation, the ship-select bars. `Stats::fe` is an `Option` |
-| `<Class><pitch pitch_air pitch_ground pitch_damping antigrav_height_adjust/>` | the whole element | Feeds `oag_physics::Pitch`. **The live blocker** |
+| `<Class><pitch pitch_air pitch_ground pitch_damping antigrav_height_adjust/>` | the whole element | Feeds `oag_physics::Pitch`. **Was the live blocker; optional since 2026-08-12.** `Class::pitch` is an `Option` and `oag_gameplay::handling::PITCH_STAND_IN` substitutes Pulse's own block, which `race::load` reports by name. A malformed one is still an error - see `an_absent_pitch_is_none_and_a_broken_one_is_still_an_error` |
 | `<Class><Airbrake sideshift>` | one attribute | Optional; `oag_physics::Airbrake` already defaults it to `0.0` |
 | `<Misc easyshield>`, `<Misc weight_distribution>` | two attributes | Optional, same defaulting argument |
 
@@ -375,14 +384,20 @@ Ordered by cost, from the measurements above:
    geometry path already works, on 2.1 M vertices of evidence.
 2. **Tracks: a day on top of that**, and mostly the same change - the `WO
    Track` payload already decodes exactly under one more class ID.
-3. **Collision: unknown, and the first real research.** Three candidate classes
-   decode; deciding which is floor, wall and reset needs the loader read out of
-   Pure's own executable. Days, not hours.
-4. **Handling: hours, and the cheapest item here.** The fifth speed class and
-   the four absent attributes are already handled; `<pitch>` is one optional
-   field behind ADR-0009 item 2's gate. What is *not* costed is deciding what a
-   `<Stats>` with no `<Class>` ladder means, which is a design question rather
-   than a parser one.
+3. **Collision: done for floor and wall, and it took hours rather than days.**
+   The costing here said "needs the loader read out of Pure's own executable" -
+   and that turned out to be one way rather than the only one. A facing statistic
+   calibrated against Pulse names two of the three candidates at confidence 88
+   without opening Ghidra at all; see
+   [collision](collision.md#two-of-the-three-are-now-named-by-facing-rather-than-by-counting).
+   The third stays unnamed because the class it most resembles is the one Pulse
+   ships no measurable example of. Reading the executable is still what would
+   raise 88 to 90 and settle the third.
+4. **Handling: done, and it was the cheapest item here as costed.** The fifth
+   speed class and the four absent attributes were already handled; `<pitch>` is
+   now optional with a labelled stand-in. What is *not* costed, and remains
+   open, is deciding what a `<Stats>` with no `<Class>` ladder means, which is a
+   design question rather than a parser one.
 5. **Audio: a new format.** `SBlk` does not exist on Pure; whatever indexes its
    RIFF streams has not been looked at.
 
@@ -413,14 +428,25 @@ What it does **not** have matters as much, and is why `oag-pure`'s
   fallbacks - see `FALLBACK_GLOBALS`, confidence 65, pixel-sampled rather than
   read - and Pure's `TitleColor` is pink where Pulse's is black, so borrowing
   would have been wrong rather than merely unevidenced.
-- **No `MainMenu_Definition.xml`.** Its `LoadXML` list names `Teaser_`,
-  `Options_`, `Selection_` and `Multiplayer_Definition` instead, and none has
-  been read for row geometry. So Pure states no first row and no row pitch.
+- **No `MainMenu_Definition.xml`.** Its `LoadXML` list names twelve other
+  `*_Definition.xml` files instead. All twelve have now been read for row
+  geometry: 19 of the 33 `<Menu>` widgets across them say `y="45"` and no other
+  value reaches four, so `MenuSkin::first_row_y` is `Some(45.0)` at confidence
+  80. Row *pitch* is still `None` - one authored `gap` is not a measurement, and
+  no capture of a Pure menu exists.
 - **No `LeftLayer` element anywhere.** Its `transition` durations are authored
   (0, 0.25, 0.3, 0.5, against Pulse's 0, 0.2, 0.5, 0.7) but what they attach to
   is unread.
-- **Three menu font roles** (`Title`, `Stats`, `scroll`) where Pulse names
-  `menu`, and which one its main list uses is unread.
+- **Eight font roles, the same number Pulse fills, differing by one.** An
+  earlier reading here said "three roles" and was an artefact of reading one
+  plugin through a truncating pager. Measured across every language plugin on
+  both discs: both titles fill `Default`, `Small`, `Title`, `HUD`, `HUDSmall`,
+  `InGame` and `Stats`, and the eighth is `Menu` on Pulse against `Scroll` on
+  Pure. They share exactly one filename, `small.fnt`, and it is not the body
+  face - so a build naming Pulse's files drew Pure's whole front end in the 5x7
+  fallback. `oag_game::language::roles` carries the table;
+  `crates/game/tests/font_roles_ground_truth.rs` re-derives it. Pure's menus
+  draw in `Default`, which is why `MenuSkin::menu_font` stays `None`.
 
 See [front-end menu definitions](fe-menu-definitions.md) and
 [the original's menus](../ui/menus-original.md).

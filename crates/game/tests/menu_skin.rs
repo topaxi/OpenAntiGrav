@@ -37,15 +37,37 @@ fn the_two_titles_disagree_on_every_number_they_both_state() {
 /// Pure states less, and the gaps are `None` rather than filled in.
 ///
 /// `docs/formats/pure-status.md` holds `oag-pure` to what has actually been
-/// measured. Pure's disc carries no `MainMenu_Definition.xml`, so it has no
-/// first row, no row pitch and no menu font role to state, and no capture of a
-/// Pure menu cursor exists.
+/// measured. Two of these three stayed `None` after its GUI tree was read, and
+/// for different reasons - see `oag_pure::frontend::MENU_SKIN`'s own comments:
+/// nothing has ever captured a Pure menu, so there is no row pitch and no
+/// cursor colour; and the menus turned out to name no font role of their own,
+/// so there is none to state rather than one still unread.
 #[test]
 fn pure_leaves_unread_fields_empty_rather_than_borrowing_pulses() {
-    assert!(pure().first_row_y.is_none(), "Pure has no menu definition");
     assert!(pure().row_extra_leading.is_none(), "never captured");
-    assert!(pure().menu_font.is_none(), "three roles, none confirmed");
+    assert!(
+        pure().menu_font.is_none(),
+        "Pure's menus draw in the default face - its language plugins declare no \
+         Menu slot at all"
+    );
     assert!(pure().selected.is_none(), "never captured");
+}
+
+/// Pure's first row is its own measurement, not Pulse's number.
+///
+/// Read across the whole GUI tree because this disc has no
+/// `MainMenu_Definition.xml` to read one screen out of: 19 of its 33 `<Menu>`
+/// widgets say `y="45"`, and no other value reaches four. Pinned apart from
+/// `pulse_states_what_its_disc_and_its_capture_gave` so that the two cannot
+/// quietly converge.
+#[test]
+fn pures_first_row_is_measured_off_its_own_gui_tree() {
+    assert_eq!(pure().first_row_y, Some(45.0), "19 of 33 <Menu> widgets");
+    assert_ne!(
+        pure().first_row_y,
+        pulse().first_row_y,
+        "the two discs disagree here, so borrowing would have been wrong"
+    );
 }
 
 /// Pulse states all four, because all four were read or measured.

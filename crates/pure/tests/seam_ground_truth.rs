@@ -80,11 +80,9 @@ fn pulse_refuses_pures_disc_by_serial() {
     );
 }
 
-/// The evidence the handling-schema change was missing: Pure's own
-/// `handlingstats.xml` parses, with the five-rung ladder and the three absent
-/// attributes that used to make this parser refuse it outright.
+/// Pure's own `handlingstats.xml` parses, chain of schema differences and all.
 ///
-/// # Currently red, deliberately, and this is the finding
+/// # This test was red on purpose for a while, and clearing it is the finding
 ///
 /// Pointing the parser at a real Pure file turned up **more schema differences
 /// than `pure-status.md` recorded at the time**, one behind the other, each only
@@ -94,23 +92,31 @@ fn pulse_refuses_pures_disc_by_serial() {
 /// 2. `easyshield`, `weight_distribution`, `sideshift` absent - was recorded,
 ///    and handled
 /// 3. **no `<FE>` element at all** - unrecorded until this test found it.
-///    Handled: `Stats::fe` is now an `Option`, which costs nothing because
-///    `<FE>` is presentation and no simulation path reads it
-/// 4. **no `<pitch>` element** - unrecorded too, and *not* handled here
+///    Handled: `Stats::fe` is an `Option`, which costs nothing because `<FE>` is
+///    presentation and no simulation path reads it
+/// 4. **no `<pitch>` element** - unrecorded too, and deliberately left unhandled
+///    for a while
 ///
-/// Four is where this stops on purpose. `<pitch>` feeds `oag_physics::Pitch`,
-/// so making it optional is a change to a simulation input, and ADR-0009 item 2
-/// keeps second-title simulation work behind M4's exit. Doing it under the
-/// momentum of a chain of small fixes is exactly how a physics regression gets
-/// in unnoticed.
+/// Four is where this test used to stop, on the grounds that `<pitch>` feeds
+/// `oag_physics::Pitch`, so making it optional changes a simulation input and
+/// ADR-0009 item 2 keeps second-title simulation work behind M4's exit.
 ///
-/// **There are no more elements behind `<pitch>`**, and that is now a
-/// measurement rather than a hope: `handling_schema_ground_truth` walks every
-/// shipped file on both discs and asserts the entire element and attribute
-/// difference in one comparison. `<pitch>` is the last of it. The same pass
-/// found two things this one-file probe could not - a Pure file with no
-/// `<Class>` blocks at all, and the engine-wide `Data\XML\HandlingStats.xml`,
-/// which parses unchanged - both recorded in `pure-status.md`.
+/// **Cleared 2026-08-12**, and the reasoning that changed is worth keeping: the
+/// gate is on *implementing Pure's physics*, and making the parser report what
+/// the file says is not that. `Class::pitch` is an `Option`, so `oag-formats`
+/// now describes the document faithfully - which is its whole job - and the
+/// decision about what a ship with no authored pitch response does was moved up
+/// to `oag_gameplay::handling::PITCH_STAND_IN`, where it is labelled an
+/// invention, reported by name at every race load, and asserted unreachable on
+/// Pulse by `no_pulse_class_reaches_the_pitch_stand_in`. That is a different
+/// thing from quietly defaulting a physics input, which is what the old comment
+/// was right to refuse.
+///
+/// **There are no more elements behind `<pitch>`**, and that is a measurement
+/// rather than a hope: `handling_schema_ground_truth` walks every shipped file
+/// on both discs and asserts the entire element and attribute difference in one
+/// comparison. `<pitch>` was the last of it, which is why this test now asserts
+/// a successful parse rather than the next blocker.
 #[test]
 #[ignore = "needs data/images/pure-psp-usa.chd"]
 fn pures_handlingstats_is_read_up_to_its_next_schema_difference() {
@@ -125,16 +131,36 @@ fn pures_handlingstats_is_read_up_to_its_next_schema_difference() {
     let blob = archives
         .read_name(&entry)
         .unwrap_or_else(|e| panic!("{entry}: {e}"));
-    // Pinned as it is, not as it should be: this asserts the *next* blocker, so
-    // it fails loudly the day someone clears it and has to come back here and
-    // record what the file then does. Same shape as `pvs_ground_truth`'s
-    // "Pure finds zero sections" assertion.
-    let error = handling::from_blob(&blob).expect_err(
-        "if Pure's handlingstats.xml now parses, the schema chain has moved - \
-         re-read this test's doc comment and record what changed",
+    let stats = handling::from_blob(&blob).unwrap_or_else(|e| {
+        panic!(
+            "{entry} no longer parses: {e:?}. A schema difference has appeared \
+             behind the four this test's doc comment lists - record it in \
+             docs/formats/pure-status.md rather than only fixing it"
+        )
+    });
+
+    // The three differences that made it parse, asserted rather than assumed, so
+    // "it parses" cannot come to mean "the parser got laxer than the file is".
+    assert_eq!(
+        stats.classes.len(),
+        5,
+        "Pure authors a fifth rung below Pulse's slowest"
     );
+    assert!(stats.fe.is_none(), "Pure authors no <FE> element");
     assert!(
-        matches!(error, handling::Error::MissingElement { element: "pitch" }),
-        "the next blocker moved from <pitch> to something else: {error:?}"
+        stats.classes.iter().all(|class| class.pitch.is_none()),
+        "Pure authors no <pitch> in any class; if one appears, \
+         `oag_gameplay::handling::PITCH_STAND_IN` is no longer what this title \
+         flies on and its docs need re-reading"
+    );
+    // The fifth rung is outside `SpeedClass`, which is what `raw_name` exists
+    // for. Named rather than counted, because "five classes" would also be true
+    // of a file whose ladder was Pulse's plus a duplicate.
+    assert!(
+        stats
+            .classes
+            .iter()
+            .any(|class| class.name.is_none() && !class.raw_name.is_empty()),
+        "one rung should sit outside Pulse's four-name ladder"
     );
 }

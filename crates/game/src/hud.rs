@@ -49,7 +49,7 @@ use crate::screen::{argb_to_rgba, parse_argb};
 /// the draw list - is this module and is title-blind.
 ///
 /// [ADR-0022]: ../../../docs/architecture/adr/0022-title-packages.md
-pub use oag_pulse::hud::{ATLAS, layouts};
+pub use oag_pulse::hud::layouts;
 
 /// Which of the disc's fonts a widget draws in.
 ///
@@ -110,7 +110,7 @@ impl VertAlign {
     }
 }
 
-/// One `<Image>`: a rectangle cut out of [`ATLAS`] and drawn somewhere.
+/// One `<Image>`: a rectangle cut out of the layout's own atlas, drawn somewhere.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Sprite {
     /// The `name` attribute, which is how [`draw_list`] finds a widget.
@@ -126,7 +126,7 @@ pub struct Sprite {
     pub uv: [f32; 4],
     /// Modulating colour, already resolved through the constant table.
     pub color: [f32; 4],
-    /// The `Src` entry name. Almost always [`ATLAS`].
+    /// The `Src` entry name. See [`Layout::atlas`], which is what resolves it.
     pub src: String,
 }
 
@@ -954,7 +954,7 @@ pub struct Context<'a> {
     pub layout: &'a Layout,
     /// The language's string table, for `idstring` captions.
     pub strings: &'a crate::language::StringTable,
-    /// Where [`ATLAS`] sits in the shared sprite sheet, in sheet pixels.
+    /// Where the layout's atlas sits in the shared sprite sheet, in sheet pixels.
     pub atlas_origin: (f32, f32),
     /// Line height of the `HUD` font, **as actually loaded**.
     ///
@@ -1114,7 +1114,10 @@ pub struct Assets {
     /// A HUD invented on the spot would be a worse failure than none, because it
     /// would look like a working HUD in the wrong place.
     pub layout: Option<Layout>,
-    /// The `PulseHUD.mip` atlas, packed into a sheet with its placement known.
+    /// The layout's own atlas, packed into a sheet with its placement known.
+    ///
+    /// Empty for a layout that names none - Pure's HUDs are `<Model>` geometry
+    /// and name no texture at all. See [`Layout::atlas`].
     pub sheet: crate::sprite::Sheet,
     /// The `HUD` font, or the built-in 5x7 set when the disc's is unreadable.
     pub font: crate::font::Atlas,
@@ -1125,15 +1128,46 @@ pub struct Assets {
 }
 
 impl Assets {
-    /// Where [`ATLAS`] sits in [`Self::sheet`], in sheet pixels.
+    /// Where this layout's own atlas sits in [`Self::sheet`], in sheet pixels.
     ///
-    /// `(0, 0)` when the atlas is not in the sheet, which pairs with a `None`
-    /// layout - nothing is drawn either way, so the value never reaches a shader.
+    /// `(0, 0)` when there is no layout, when the layout names no texture, or
+    /// when the named one is not in the sheet. All three pair with nothing being
+    /// drawn, so the value never reaches a shader - see [`Layout::atlas`].
     #[must_use]
     pub fn atlas_origin(&self) -> (f32, f32) {
-        self.sheet
-            .get(ATLAS)
+        self.layout
+            .as_ref()
+            .and_then(Layout::atlas)
+            .and_then(|atlas| self.sheet.get(atlas))
             .map_or((0.0, 0.0), |placed| (placed.x as f32, placed.y as f32))
+    }
+}
+
+impl Layout {
+    /// The texture this layout's sprites sample, as the layout itself names it.
+    ///
+    /// **Read off the file rather than named by this build**, which is
+    /// `CLAUDE.md`'s "never invent what the assets already author" rule applied
+    /// to one more constant: `PulseHUD.mip` appears ten times inside
+    /// `TimeTrial_HUD.xml` and once in this repository, and the one in this
+    /// repository was the only copy that could be wrong. It was: Pure's four HUD
+    /// layouts name no `.mip` at all - their art is `<Model>` geometry off
+    /// `Data\HUD\*.vex` - so a Pure race went looking for a Pulse texture.
+    ///
+    /// `None` for a layout whose sprites name no texture, which covers both that
+    /// case and Pulse's own `MPTag_HUD.xml`.
+    ///
+    /// **One name rather than a set**, and that is measured rather than assumed:
+    /// every one of the nine layouts shipped across the two titles names at most
+    /// one distinct `.mip`, checked 2026-08-12. `the_layouts_name_at_most_one_texture`
+    /// in `crates/game/tests/hud_layout_ground_truth.rs` fails the day one does
+    /// not, rather than silently drawing eight sprites from the wrong sheet.
+    #[must_use]
+    pub fn atlas(&self) -> Option<&str> {
+        self.sprites
+            .iter()
+            .map(|sprite| sprite.src.as_str())
+            .find(|src| !src.is_empty())
     }
 }
 
@@ -1836,7 +1870,7 @@ mod tests {
             rect: [1.0, 2.0, 3.0, 4.0],
             uv: [10.0, 20.0, 30.0, 40.0],
             color: [1.0; 4],
-            src: ATLAS.to_string(),
+            src: oag_pulse::hud::ATLAS.to_string(),
         };
         let Draw::Sprite { rect, uv, .. } = sprite_draw(&sprite, (100.0, 200.0)) else {
             panic!("expected a sprite draw");
@@ -1945,7 +1979,7 @@ mod tests {
             rect: [306.0, 220.0, 168.0, 26.0],
             uv: [6.0, 0.0, 168.0, 26.0],
             color: [1.0; 4],
-            src: ATLAS.to_string(),
+            src: oag_pulse::hud::ATLAS.to_string(),
         };
         let half = crop_horizontally(&sprite, 0.5);
         assert_eq!(half.rect, [306.0, 220.0, 84.0, 26.0]);

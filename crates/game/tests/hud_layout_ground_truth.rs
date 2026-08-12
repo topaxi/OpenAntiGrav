@@ -271,7 +271,7 @@ fn every_sprite_samples_the_hud_atlas_and_every_constant_resolves() {
         for sprite in &layout.sprites {
             assert_eq!(
                 sprite.src,
-                hud::ATLAS,
+                oag_pulse::hud::ATLAS,
                 "{entry}: {} samples {} rather than the HUD atlas",
                 sprite.name,
                 sprite.src
@@ -396,13 +396,13 @@ fn the_atlas_and_both_hud_fonts_are_readable() {
     };
 
     let atlas = archives
-        .read_name(hud::ATLAS)
-        .unwrap_or_else(|e| panic!("reading {}: {e}", hud::ATLAS));
+        .read_name(oag_pulse::hud::ATLAS)
+        .unwrap_or_else(|e| panic!("reading {}: {e}", oag_pulse::hud::ATLAS));
     let texture = oag_formats::texture::Texture::parse(&atlas)
-        .unwrap_or_else(|e| panic!("decoding {}: {e}", hud::ATLAS));
+        .unwrap_or_else(|e| panic!("decoding {}: {e}", oag_pulse::hud::ATLAS));
     println!(
         "{}: {}x{}, {} bpp, {} palette entry(s), {} index(es)",
-        hud::ATLAS,
+        oag_pulse::hud::ATLAS,
         texture.width,
         texture.height,
         texture.bits_per_pixel,
@@ -551,4 +551,68 @@ fn every_weapon_has_an_icon_widget_named_after_it() {
         "{} authors pickup widgets {zone_icons:?}",
         hud::layouts::ZONE
     );
+}
+
+/// Every shipped layout names **at most one** texture, on either title.
+///
+/// The assumption `oag_game::hud::Layout::atlas` rests on. It returns one name
+/// because nine of nine layouts across the two discs carry one; a layout that
+/// broke the rule would have its later sprites drawn from the wrong sheet, which
+/// looks like a UV bug rather than a missing texture. Failing here instead names
+/// the file and the second name.
+///
+/// Pure is walked as well as Pulse, and by its own layout list rather than
+/// [`EXPECTED`] - Pure ships four of Pulse's five (no `Elimination_HUD.xml`,
+/// which is a mode it does not have) and **names no texture in any of them**,
+/// its HUD being `<Model>` geometry off `Data\HUD\*.vex`. A zero is as much a
+/// pass here as a one.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_layouts_name_at_most_one_texture() {
+    for (label, path) in [
+        ("pulse", "data/images/pulse-psp-eu.chd"),
+        ("pure", "data/images/pure-psp-eu.chd"),
+    ] {
+        let full = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .join(path);
+        if !full.exists() {
+            println!("skipping: {} not present", full.display());
+            continue;
+        }
+        let mut archives = oag_game::title::open_source(&full.display().to_string(), Vec::new())
+            .expect("opening the source")
+            .archives;
+
+        for &(entry, ..) in EXPECTED {
+            let Ok(blob) = archives.read_name(entry) else {
+                println!("{label}: {entry} is not on this disc, skipped");
+                continue;
+            };
+            let Ok(xml) = oag_formats::fexml::text(&blob) else {
+                continue;
+            };
+            let layout = hud::Layout::from_xml(&xml);
+            let mut names: Vec<&str> = layout
+                .sprites
+                .iter()
+                .map(|sprite| sprite.src.as_str())
+                .filter(|src| !src.is_empty())
+                .collect();
+            names.sort_unstable();
+            names.dedup();
+            assert!(
+                names.len() <= 1,
+                "{label}: {entry} names {} distinct textures ({names:?}); \
+                 `Layout::atlas` returns one and the rest would draw from the \
+                 wrong sheet",
+                names.len()
+            );
+            assert_eq!(
+                layout.atlas(),
+                names.first().copied(),
+                "{label}: {entry}: `Layout::atlas` should return the one it names"
+            );
+        }
+    }
 }

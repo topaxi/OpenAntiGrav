@@ -38,6 +38,7 @@ pub const TITLE: &Title = &Title {
     foreign_serials: FOREIGN_SERIALS,
     menu: frontend::MENU_SKIN,
     boot: frontend::BOOT_PROFILE,
+    race: race::DEFAULTS,
 };
 
 /// The bulk archive's candidates, in the order they are tried.

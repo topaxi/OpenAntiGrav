@@ -706,7 +706,7 @@ fn the_captured_start_pose_faces_along_the_forward_layout() {
         let name = format!(r"Data\Environments\16_Track\{variant}");
         let loaded = race::load(&race::Options {
             source: image.display().to_string(),
-            track: name.clone(),
+            track: Some(name.clone()),
             class: SpeedClass::Venom,
             ..race::Options::default()
         })
@@ -1905,7 +1905,7 @@ fn every_difficulty_is_quicker_than_the_one_below_it() {
 ///
 /// Returns the best lap the craft managed, in ticks.
 fn solo_lap_ticks(level: oag_ai::Difficulty) -> Option<u64> {
-    solo_lap_on(level, &race::Options::default().track).best
+    solo_lap_on(level, oag_pulse::race::DEFAULT_TRACK).best
 }
 
 /// What a lone craft managed on one circuit.
@@ -1945,7 +1945,7 @@ fn solo_lap_tuned(level: oag_ai::Difficulty, track: &str, tuning: Option<oag_ai:
         class: SpeedClass::Venom,
         mode: oag_race::Mode::SingleRace,
         difficulty: level,
-        track: track.to_string(),
+        track: Some(track.to_string()),
         ..race::Options::default()
     }) else {
         return Solo::default();
@@ -2135,7 +2135,7 @@ fn every_craft_starts_on_its_line_on_every_circuit() {
             source: image.display().to_string(),
             class: SpeedClass::Venom,
             mode: oag_race::Mode::SingleRace,
-            track: track.entry_name(),
+            track: Some(track.entry_name()),
             ..race::Options::default()
         }) else {
             continue;
@@ -2334,7 +2334,7 @@ fn the_racing_line_has_track_under_it_where_it_is_known_to() {
             source: image.display().to_string(),
             class: SpeedClass::Venom,
             mode: oag_race::Mode::SingleRace,
-            track: track.entry_name(),
+            track: Some(track.entry_name()),
             ..race::Options::default()
         }) else {
             continue;

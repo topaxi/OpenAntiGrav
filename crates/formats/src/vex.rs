@@ -116,6 +116,14 @@ pub mod classes {
         pub reset_collision: Option<u32>,
         pub mag_floor_collision: Option<u32>,
         pub cage_collision: Option<u32>,
+        /// The node whose second child is a mesh's low-detail alternative.
+        pub lod_group: Option<u32>,
+        /// The `Airbrake` node a flap `Mesh` hangs under.
+        pub airbrake: Option<u32>,
+        /// The engine flare locator on a ship.
+        pub engine_flare: Option<u32>,
+        /// The collision-spark locator on a ship.
+        pub ship_collision_fx: Option<u32>,
     }
 
     /// The table used by every file Pulse ships except one.
@@ -139,6 +147,10 @@ pub mod classes {
         reset_collision: Some(super::CLASS_RESET_COLLISION),
         mag_floor_collision: Some(super::CLASS_MAG_FLOOR_COLLISION),
         cage_collision: Some(super::CLASS_CAGE_COLLISION),
+        lod_group: Some(super::CLASS_LOD_GROUP),
+        airbrake: Some(super::CLASS_AIRBRAKE),
+        engine_flare: Some(super::CLASS_ENGINE_FLARE),
+        ship_collision_fx: Some(super::CLASS_SHIP_COLLISION_FX),
     };
 
     /// The table Pure's 156 version-4 files use, and Pulse's one legacy
@@ -151,7 +163,8 @@ pub mod classes {
     /// file on the *Pulse* disc.
     ///
     /// `mesh`, `transform` and `wo_track` come from `pure-status.md` alone, at
-    /// confidences 92, 90 and 94.
+    /// confidences 92, 90 and 94. `floor_collision` and `wall_collision` are
+    /// this table's own measurement; see their comments below.
     pub const V4: Classes = Classes {
         version: 4,
         mesh: Some(0x11e),
@@ -164,11 +177,59 @@ pub mod classes {
         speedup_pad: None,
         weapon_pad: None,
         start_position: None,
-        floor_collision: None,
-        wall_collision: None,
+        // **Recovered 2026-08-12 by matching a facing signature against Pulse's
+        // own known classes**, rather than by matching object counts - which is
+        // all an earlier pass had, and why these two stayed `None` at 45.
+        //
+        // The statistic: for every triangle of every candidate class, the
+        // area-weighted `|dot(normal, up)|` taken against the nearest sample of
+        // the track's own `WO Track` spline. A floor faces along that axis and a
+        // wall across it, and the spline is the reference rather than world `+y`
+        // because these circuits bank and climb. Calibrated on Pulse first, where
+        // the answer is already established at 90, then run over all 16 Pure
+        // circuits:
+        //
+        // | class        | mean abs dot | area within 45 deg of up | area per object |
+        // | ------------ | -----------: | -----------------------: | --------------: |
+        // | Pulse Floor  |        0.979 |                   98.1 % |           2,348 |
+        // | Pure  0x36b  |        0.992 |                   99.4 % |           4,214 |
+        // | Pulse Wall   |        0.087 |                    3.7 % |           1,127 |
+        // | Pure  0x36c  |        0.104 |                    1.2 % |           3,204 |
+        //
+        // Each lands on its Pulse counterpart within the spread Pulse's own
+        // circuits show, on three statistics that do not follow from one another,
+        // and both carry ~31.8 triangles per object against Pulse's 31.9 and
+        // 31.7. Confidence **88**: an exact-property match on a discriminator
+        // calibrated against a corpus whose answer is known, over 16 circuits,
+        // with no emulator verification - which is what holds it below the 90 the
+        // Pulse ids carry. Finding the registration function in Pure's own
+        // `BOOT.BIN` is what would raise it.
+        //
+        // `crates/pure/tests/collision_classes_ground_truth.rs` re-derives that
+        // table and fails if either id stops matching. See
+        // `docs/formats/collision.md`.
+        floor_collision: Some(0x36b),
+        wall_collision: Some(0x36c),
+        // **Unrecovered, and the third candidate is deliberately not put here.**
+        // `0x37f` is the remaining class whose payloads decode - 16 nodes, 101
+        // objects - and it matches *none* of Pulse's four measurable signatures:
+        // mixed-facing (0.402, against 0.834 for `Reset` and 0.998 for
+        // `Mag Floor`) and 173,803 area units per object, nine times the largest
+        // Pulse class and forty times Pure's own floor. That is an enclosing
+        // shell rather than a surface or a trigger volume, which makes `Cage` the
+        // obvious guess - and `Cage` is precisely the one Pulse class whose
+        // signature cannot be measured, because the PSP disc ships none and the
+        // PS2 disc's six sit on no raceable circuit. A guess with no reference to
+        // check it against is 45, so per `CLAUDE.md` it gets no name at all.
+        //
+        // What this costs a Pure race is respawn-on-fall, which is `Reset`'s job.
         reset_collision: None,
         mag_floor_collision: None,
         cage_collision: None,
+        lod_group: None,
+        airbrake: None,
+        engine_flare: None,
+        ship_collision_fx: None,
     };
 
     /// The table Pure's 15 version-3 files use.
@@ -194,6 +255,10 @@ pub mod classes {
         reset_collision: None,
         mag_floor_collision: None,
         cage_collision: None,
+        lod_group: None,
+        airbrake: None,
+        engine_flare: None,
+        ship_collision_fx: None,
     };
 
     /// The class table for a file's version word, or `None` for a version this
@@ -1318,6 +1383,13 @@ pub fn transform_point(m: &[f32; 16], p: [f32; 3]) -> [f32; 3] {
 /// space of whichever transform encloses them, and on `01_Track` a mesh sits
 /// under up to 25 nested transforms.
 pub fn world_transforms(data: &[u8], nodes: &[Node]) -> Vec<[f32; 16]> {
+    // **From the file's own version word.** `CLASS_TRANSFORM` is version 6's
+    // `0x6e`; a version-4 file numbers `Transform` `0x6d`, so composing against
+    // the constant would leave every matrix at identity and pile a whole track
+    // into one space. `None` for a version whose id is unrecovered, which gives
+    // the same identity-everywhere result - but only where nobody has measured
+    // otherwise, rather than on a title that has been.
+    let transform_class = classes_of(data).ok().and_then(|classes| classes.transform);
     let mut out: Vec<[f32; 16]> = Vec::with_capacity(nodes.len());
     for node in nodes {
         let parent = node
@@ -1325,7 +1397,7 @@ pub fn world_transforms(data: &[u8], nodes: &[Node]) -> Vec<[f32; 16]> {
             .and_then(|p| out.get(p).copied())
             .unwrap_or(IDENTITY);
 
-        let local = if node.class_id == CLASS_TRANSFORM {
+        let local = if Some(node.class_id) == transform_class {
             data.get(node.payload())
                 .and_then(transform)
                 .unwrap_or(IDENTITY)
@@ -1385,9 +1457,15 @@ pub fn textures(data: &[u8]) -> Result<Vec<Option<EmbeddedTexture>>> {
     // known; every texture in the model comes back `None` until it is.
     let embedded = texture_len(data)? > 0;
 
+    // **The `Texture` id from this file's version**, not version 6's `0x3c1`.
+    // A version-4 file numbers it `0x373`, so the constant matched nothing and
+    // every material resolved to no texture at all - which draws a whole track
+    // white rather than failing, and is exactly what a Pure race looked like.
+    let classes = classes_of(data)?;
+    let texture_class = classes.texture;
     for node in nodes(data)?
         .into_iter()
-        .filter(|n| n.class_id == CLASS_TEXTURE)
+        .filter(|n| Some(n.class_id) == texture_class)
     {
         if !embedded {
             out.push(None);
@@ -1431,9 +1509,37 @@ pub fn textures(data: &[u8]) -> Result<Vec<Option<EmbeddedTexture>>> {
 
         // Only the base level; mips follow it and are not needed for viewing.
         let pixels = usize::from(width) * usize::from(height);
-        let texels = &data[at + clut_size..end];
         let row = texture_row_bytes(width, bits_per_pixel);
         let stride = texture_row_stride(width, bits_per_pixel);
+        // **The pre-swizzle flag, read on version 4 and below only.**
+        //
+        // Bit 0 of the flags byte at `+0x06` means the texels are already in the
+        // GE's 16-byte by 8-row block order, so a literal read comes out
+        // scrambled - which is what every Pure model texture looked like, the
+        // flag being `0x61` there against Pulse's `0xe4`.
+        //
+        // **Gated on the version rather than read unconditionally**, and that is
+        // not caution for its own sake: a corpus sweep found bit 0 set on 88 of
+        // Pulse PSP's 5,375 `Texture` nodes and 120 of the PS2 pressing's 8,972,
+        // on ship liveries and effects rather than on the font atlases the
+        // original claim was about. So reading it on version 6 would change what
+        // those 88 decode to, and no ground-truth screenshot covers the one model
+        // that changed - the regression would pass `just test-data`. Whether
+        // those nodes really are swizzled is an open question with its own row on
+        // `docs/formats/pure-status.md`; this change deliberately does not
+        // settle it, and version 4 is the generation where the evidence is
+        // unambiguous.
+        let swizzled = matches!(classes.version, 0..=4)
+            && p.get(6)
+                .is_some_and(|flags| flags & crate::texture::FLAG_SWIZZLED != 0);
+        let linear;
+        let texels = if swizzled {
+            linear =
+                crate::texture::unswizzle(&data[at + clut_size..end], stride, usize::from(height));
+            &linear[..]
+        } else {
+            &data[at + clut_size..end]
+        };
 
         let mut indices = Vec::with_capacity(pixels);
         for y in 0..usize::from(height) {

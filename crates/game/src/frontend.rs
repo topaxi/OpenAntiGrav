@@ -63,6 +63,14 @@
 //! that exist to serve Memory Stick mechanics this build deliberately does not
 //! have; they are skipped rather than unimplemented. See `HANDOVER.md`.
 //!
+//! **Pure diverges in the same shape and at the same point.** Its chain ends on
+//! [`pure_states::TITLE_SCREEN`] - the WipEout Pure logo and PRESS START - and
+//! that screen's own `TitleRedirect` goes to `Profile Manager`, a screen this
+//! build does not have any more than it has Pulse's four Memory Stick ones. So
+//! START there fires [`states::LAUNCH_GAME`] too, and the two titles reach the
+//! menus by the same edge from their own last boot screen. See
+//! [`Frontend::update_title_screen`] and `docs/architecture/pure-boot.md`.
+//!
 //! And [`states::LAUNCH_GAME`] goes straight into a race. The original has a main
 //! menu in between - the root XML's `LoadXML` list pulls in
 //! `MainMenu_Definition.xml` - and none of it is built, so a state whose whole
@@ -743,7 +751,10 @@ impl Frontend {
     /// [`Self::is_playing_movie`].
     ///
     /// Nothing happens at the end of the chain. On Pure that is `Title Screen`,
-    /// whose own way out is not established, so staying put is the honest answer.
+    /// which the chain does not advance *past* - it is left by
+    /// [`Self::update_title_screen`] on a START press, the same way Pulse's own
+    /// last step `Show Logo` is, and for the same reason: both hand off to the
+    /// menus rather than to another boot screen.
     fn advance(&mut self, why: &str) {
         let Some(step) = self.next_step().cloned() else {
             return;
@@ -987,6 +998,8 @@ impl Frontend {
             self.update_show_logo(input);
         } else if self.machine.is(pure_states::FMV_INTRO) {
             self.update_fmv_intro(dt, input, movie_playhead);
+        } else if self.machine.is(pure_states::TITLE_SCREEN) {
+            self.update_title_screen(input);
         }
 
         let events = self.machine.apply();
@@ -1305,6 +1318,42 @@ impl Frontend {
             self.notes.push(format!(
                 "START pressed on {}, firing {}",
                 states::SHOW_LOGO,
+                states::LAUNCH_GAME
+            ));
+            self.machine.fire(states::LAUNCH_GAME);
+        }
+    }
+
+    /// `Title Screen`: Pure's logo, PRESS START, and the hand-off to the menus.
+    ///
+    /// **The button is evidenced; the destination is this build's.** The screen
+    /// declares a `Text` widget whose `idstring` is the literal `PRESS START`
+    /// (`Data\Plugins\PI001\GUI\Skin.xml`, both pressings), drawn beside a
+    /// blinking `_` in the same face, and a PPSSPP session watched the real
+    /// firmware sit on it until START - see [`pure_states::TITLE_SCREEN`], which
+    /// carries that observation and its confidence of 90. So reading START here
+    /// is a measurement.
+    ///
+    /// Where it *goes* is not. `TitleRedirect` carries no `forward` attribute at
+    /// all - unlike `Show Logo`'s explicit `forward="start"` - and its
+    /// `Default goto` names `Profile Manager`, a screen this build does not
+    /// have. Firing [`states::LAUNCH_GAME`] instead is a **deliberate
+    /// divergence**, the same one [`Self::update_show_logo`] makes on Pulse and
+    /// for the same reason: `Launch Game` is where this project's own menu tree
+    /// (`assets/ui/menu.toml`, see `docs/architecture/menus.md`) is opened, and
+    /// the alternative is a title that boots and then cannot be left. Recorded
+    /// in `docs/architecture/pure-boot.md` beside Pulse's.
+    ///
+    /// Note this leaves the screen's *own* unnamed redirect unfired, exactly as
+    /// `Show Logo`'s is: a redirect with no button and no name is something the
+    /// original's code fires, and what fires it has not been found on either
+    /// title. Guessing a hidden timeout here would be inventing a duration.
+    fn update_title_screen(&mut self, input: &mut Input) {
+        if input.is_pressed(button::START) {
+            input.consume_press(button::START);
+            self.notes.push(format!(
+                "START pressed on {}, firing {}",
+                pure_states::TITLE_SCREEN,
                 states::LAUNCH_GAME
             ));
             self.machine.fire(states::LAUNCH_GAME);
@@ -1894,12 +1943,29 @@ impl Frontend {
 
 /// The line height of a font id, in the PSP's own pixel units.
 ///
-/// Matches the `.fnt` files named in `oag_pulse::names::fonts`:
+/// Matches the `.fnt` files Pulse's language plugins resolve each role to:
 /// `Default` is `pulse_text.fnt` (13px), `Menu` is `Pulse_20.fnt` (22px),
 /// `Title`, `Small`, `InGame` and `Stats` are `Pulse_14.fnt` (17px), `HUD` is
 /// `PulseHud.fnt` (25px) and `HUDSmall` is `small.fnt` (10px). The XML is
 /// inconsistent about case (`font="menu"` and `font="Menu"` both appear), so
 /// this matches case-insensitively.
+///
+/// # This is Pulse's table, and it is wrong on Pure
+///
+/// **A known, bounded gap, recorded rather than papered over.** These numbers
+/// are the line heights of *Pulse's* faces, and a role does not resolve to the
+/// same file on both discs - see [`crate::language::roles`]. Measured on
+/// `pure-psp-eu.chd`, Pure's `Default` is `FX300ANG.fnt` at **15px** against
+/// the 13 here, and its `Title` is the same file rather than a 17px one. So a
+/// Pure front-end screen with more than one line of text spaces those lines by
+/// up to a couple of pixels wrong.
+///
+/// The fix is not another table: it is reading the height back off the atlas the
+/// way `boot::load_menu_font`'s caller already does for menu rows
+/// (`menu::Skin::new(skin, rows_face.line_height)`), which needs each role's
+/// `.fnt` actually loaded rather than only the `Default` one. That is real work
+/// and it is not what the boot path is blocked on, so it is named here and left.
+/// Nothing about it is title-specific once done - it deletes this function.
 fn font_line_height(font: &str) -> f32 {
     match font.to_ascii_lowercase().as_str() {
         "menu" => 22.0,
@@ -2562,6 +2628,50 @@ mod tests {
                 pure_states::TITLE_SCREEN,
             ],
             "the disc's own chain, cold-boot confirmed on both pressings"
+        );
+    }
+
+    /// START on `Title Screen` hands off to the menus, and nothing else does.
+    ///
+    /// The counterpart to [`start_on_show_logo_launches_the_game`], and pinned
+    /// for the same reason: the button is measured (the screen's own
+    /// `idstring="PRESS START"` widget, plus a PPSSPP session) and the
+    /// destination is this build's divergence, so a change to either should
+    /// have to come here and say so. See [`Frontend::update_title_screen`].
+    #[test]
+    fn start_on_pures_title_screen_launches_the_game() {
+        let mut frontend = pure(60);
+        let mut input = Input::new();
+        reach_the_second_movie(&mut frontend, &mut input);
+        run_until(&mut frontend, &mut input, 600, |f| {
+            f.machine().is(pure_states::TITLE_SCREEN)
+        });
+
+        // Every button the abstract layer carries except START, held for ten
+        // seconds. The screen has no timeout of its own either - its unnamed
+        // redirect is left unfired on purpose - so this must not move.
+        for _ in 0..600 {
+            input.begin_frame(!(1u32 << button::START));
+            frontend.update(FRAME, &mut input, None);
+        }
+        assert!(
+            frontend.machine().is(pure_states::TITLE_SCREEN),
+            "only START leaves Title Screen, and it does not time out; got {:?}",
+            frontend.machine().current()
+        );
+        assert!(!frontend.is_finished());
+
+        input.begin_frame(1 << button::START);
+        frontend.update(FRAME, &mut input, None);
+        assert!(
+            frontend.machine().is(states::LAUNCH_GAME),
+            "START hands off to the menus, the way Pulse's own last boot screen \
+             does; got {:?}",
+            frontend.machine().current()
+        );
+        assert!(
+            frontend.is_finished(),
+            "and the composition root is told, or the menus never open"
         );
     }
 

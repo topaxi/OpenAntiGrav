@@ -1025,7 +1025,8 @@ paths.
 ## M8 - Beyond Pulse
 
 - [ ] Networking
-- [ ] Wipeout Pure
+- [x] **Wipeout Pure: intro to menu into a Time Trial** (2026-08-12)
+- [ ] Wipeout Pure: its own physics, HUD, boost plume, Zone mode, reset volumes
 - [ ] Wipeout HD / Fury
 - [ ] Wipeout 2048
 - [ ] Omega Collection, if feasible
@@ -1035,6 +1036,30 @@ Pure shares the most format DNA with Pulse and is the cheapest second title;
 2048 is the long-term prize.
 
 **Exit criterion:** a second title boots and plays on the same engine.
+
+### What Pure does today
+
+`just play --source data/images/pure-psp-eu.chd` walks the disc's own five-screen
+boot chain, hands off to the menus on START at `Title Screen`, and races. The
+evidence is in [pure-status](../formats/pure-status.md) and
+[pure-boot](../architecture/pure-boot.md); the load-bearing recoveries were the
+version-4 `.vex` class table - floor and wall collision at confidence 88, by a
+facing statistic calibrated against Pulse, see
+[collision](../formats/collision.md#two-of-the-three-are-now-named-by-facing-rather-than-by-counting) -
+the font roles, and making `<pitch>` optional.
+
+**It runs on Pulse's physics, deliberately.** ADR-0009 item 2 still gates
+second-title *simulation* work behind M4's exit, and Pure's own handling has not
+been read: `oag_gameplay::handling::PITCH_STAND_IN` is Pulse's block standing in
+for the element Pure authors nowhere, and `race::load` reports it by name. No lap
+time on Pure means anything yet, and no test pretends otherwise.
+
+**Known gaps, every one of them reported rather than silent**: no reset volumes
+(a craft that leaves the circuit stays off it), no boost plume, no HUD atlas
+(Pure's HUD is `.vex` models rather than a `.mip`), no loading-screen wave, no
+speedup or weapon pads, no sky, no visibility sections. Each is a class id or an
+entry name that is *unrecovered* rather than absent, which is what the second row
+above covers.
 
 ---
 

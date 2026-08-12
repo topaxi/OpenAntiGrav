@@ -8,6 +8,16 @@
 //!
 //! [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
 
+/// The three things a race needs before it has opened anything, as
+/// [`oag_title::Title::race`] carries them.
+///
+/// The constants below are the same values, kept as named items because that is
+/// where their evidence is written down; this is the table the engine reads.
+pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
+    track: DEFAULT_TRACK,
+    team: DEFAULT_TEAM,
+};
+
 /// The circuit a race loads when the caller names none.
 ///
 /// **`16_Track` is Talon's Junction**, and the mapping is not guessable from the

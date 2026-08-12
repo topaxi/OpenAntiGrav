@@ -120,8 +120,17 @@ impl Assets {
         let mut tips = Vec::new();
         let mut strip = None;
 
-        match oag_pulse::open(source) {
-            Ok(mut archives) => {
+        // **Opened as whichever title the source is**, not as Pulse. A Pure disc
+        // through `oag_pulse::open` comes back `WrongTitle`, which reads as "you
+        // pointed at the wrong disc" when the truth is "this title ships no
+        // loading screen": neither `Data\Plugins\loading\Definition.xml` nor
+        // `Data\Defaults\Loading\LoadingPulseOverlay.mip` is in any of Pure's
+        // three archives, checked 2026-08-12. The two entry names stay Pulse's -
+        // see this module's own docs - because a title that ships neither has
+        // nothing to put in a table.
+        match crate::title::open_source(source, Vec::new()) {
+            Ok(opened) => {
+                let mut archives = opened.archives;
                 match archives
                     .read_name(TIPS_ENTRY)
                     .map_err(|e| e.to_string())
