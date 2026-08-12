@@ -422,6 +422,8 @@ fn the_ps2_front_end_either_boots_or_says_what_it_could_not_find() {
         extent: oag_game::movie::Extent::Frames(1),
         // No transcode: this is about what is found, not about ffmpeg.
         no_video: true,
+        refresh_video: false,
+        prefer_av1_cache: false,
     };
 
     match oag_game::boot::load(&options) {
@@ -461,4 +463,201 @@ fn the_ps2_front_end_either_boots_or_says_what_it_could_not_find() {
             );
         }
     }
+}
+
+/// **A transcode reports its frame counter while it runs**, which is what the
+/// loading screen draws over the minute `ffmpeg` takes on `INTRO512.PSS`.
+///
+/// The plumbing under this is easy to break silently and impossible to notice
+/// from a unit test: `movie::Watch` is threaded through five functions, the
+/// counts come out of `ffmpeg -progress pipe:1` in a format this workspace does
+/// not control, and every parse failure there is deliberately silent (see
+/// `ffmpeg_progress` - a build of `ffmpeg` that spelled its keys differently
+/// would simply stop reporting, and every other test would still pass).
+///
+/// **The PS2's loose movies rather than the PSP's reel, deliberately.** A `.PSS`
+/// always goes through the AV1 cache; a `.PMF` on a `native-video` build is
+/// decoded by GStreamer and never transcodes at all, so the PSP disc would make
+/// this test pass or skip depending on which features it was built with.
+///
+/// `refresh: true` is the point of the setup: the assertion is about what a
+/// *conversion* reports, and any earlier run would otherwise turn it into a
+/// `Step::Cached` that reports once and says nothing about `ffmpeg`.
+///
+/// Capped to a couple of dozen frames to stay quick. The **uncapped** case has a
+/// test of its own next door and costs a minute, because that is the one that
+/// was actually broken.
+#[test]
+#[ignore = "needs data/images/ and ffmpeg"]
+fn a_transcode_reports_its_frames_as_it_encodes_them() {
+    const FRAMES: usize = 24;
+
+    let Some(image) = image(PS2_IMAGE) else {
+        return;
+    };
+    if !std::process::Command::new("ffmpeg")
+        .arg("-version")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .is_ok_and(|s| s.success())
+    {
+        println!("skipping: ffmpeg is not on PATH");
+        return;
+    }
+
+    let source = image.display().to_string();
+    let Some((path, blob)) =
+        oag_assets::read_loose_file(&source, &["DATA/MOVIES/INTRO512.PSS"]).expect("reading it")
+    else {
+        panic!("the PS2 disc's loose INTRO512.PSS was not found");
+    };
+
+    let seen = std::sync::Mutex::new(Vec::new());
+    let watch = |step: oag_game::movie::Step| seen.lock().expect("the watch's lock").push(step);
+    let movie = oag_game::movie::open(
+        &blob,
+        &format!("{}-{}", path.replace(['/', '\\'], "_"), blob.len()),
+        &std::env::temp_dir().join("oag-ps2-progress-ground-truth"),
+        oag_game::movie::Extent::Frames(FRAMES),
+        oag_game::movie::Decode {
+            no_video: false,
+            refresh: true,
+            // The PS2's loose movies have no platform decoder, so this changes
+            // nothing here; stated rather than defaulted because the assertion
+            // below is about a transcode.
+            prefer_cache: true,
+        },
+        Some(&watch),
+    )
+    .expect("transcoding the PS2's loose intro");
+    assert!(
+        movie.frames.is_some(),
+        "no picture, so nothing transcoded: {:?}",
+        movie.no_picture_reason
+    );
+
+    let seen = seen.into_inner().expect("the watch's lock");
+    let counts: Vec<usize> = seen
+        .iter()
+        .filter_map(|step| match step {
+            oag_game::movie::Step::Transcoding { done, .. } => Some(*done),
+            _ => None,
+        })
+        .collect();
+
+    assert!(
+        !counts.is_empty(),
+        "the transcode reported nothing at all: {seen:?}"
+    );
+    assert_eq!(
+        counts.first(),
+        Some(&0),
+        "the first report is made before ffmpeg is spawned, so a screen says \
+         \"transcoding\" for the whole wait rather than from the first frame: {counts:?}"
+    );
+    assert!(
+        counts.windows(2).all(|pair| pair[0] <= pair[1]),
+        "the frame counter went backwards: {counts:?}"
+    );
+    assert_eq!(
+        counts.last(),
+        Some(&FRAMES),
+        "the last report should be the frame count asked for: {counts:?}"
+    );
+    assert!(
+        !seen
+            .iter()
+            .any(|step| matches!(step, oag_game::movie::Step::Cached)),
+        "refresh: true must convert rather than read the cache: {seen:?}"
+    );
+}
+
+/// **An uncapped transcode reports a total, so the bar can move through it.**
+///
+/// The regression this pins, and it shipped: `Extent::Whole` became a bare
+/// `None` that meant both "do not pass `-frames:v`" and "there is no total", so
+/// the loading screen got frame numbers with nothing to divide them by and its
+/// bar stood still through the longest wait in the boot. The container's length
+/// was known the whole time - `probe` reads it as duration times frame rate,
+/// 38.0 s at 25/1 for `INTRO512.PSS`.
+///
+/// **This is the expensive one**, about a minute of `libaom` on this workspace,
+/// and it is uncapped deliberately: capping it is what made the sibling test
+/// above pass while the real path was broken. The cheap half of the same
+/// coverage is `an_uncapped_conversion_keeps_the_count_it_was_measured_at`, a
+/// unit test on `Frames::plan`, which runs in CI where this never does.
+#[test]
+#[ignore = "needs data/images/ and ffmpeg; transcodes the whole reel, about a minute"]
+fn an_uncapped_transcode_still_reports_a_total_to_divide_by() {
+    let Some(image) = image(PS2_IMAGE) else {
+        return;
+    };
+    if !std::process::Command::new("ffmpeg")
+        .arg("-version")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .is_ok_and(|s| s.success())
+    {
+        println!("skipping: ffmpeg is not on PATH");
+        return;
+    }
+
+    let source = image.display().to_string();
+    let Some((path, blob)) =
+        oag_assets::read_loose_file(&source, &["DATA/MOVIES/INTRO512.PSS"]).expect("reading it")
+    else {
+        panic!("the PS2 disc's loose INTRO512.PSS was not found");
+    };
+
+    let seen = std::sync::Mutex::new(Vec::new());
+    let watch = |step: oag_game::movie::Step| seen.lock().expect("the watch's lock").push(step);
+    let movie = oag_game::movie::open(
+        &blob,
+        &format!("{}-{}", path.replace(['/', '\\'], "_"), blob.len()),
+        &std::env::temp_dir().join("oag-ps2-progress-ground-truth"),
+        // The whole reel: the case that was broken.
+        oag_game::movie::Extent::Whole,
+        oag_game::movie::Decode {
+            no_video: false,
+            refresh: true,
+            // The PS2's loose movies have no platform decoder, so this changes
+            // nothing here; stated rather than defaulted because the assertion
+            // below is about a transcode.
+            prefer_cache: true,
+        },
+        Some(&watch),
+    )
+    .expect("transcoding the PS2's loose intro");
+
+    let seen = seen.into_inner().expect("the watch's lock");
+    let totals: Vec<Option<usize>> = seen
+        .iter()
+        .filter_map(|step| match step {
+            oag_game::movie::Step::Transcoding { total, .. } => Some(*total),
+            _ => None,
+        })
+        .collect();
+
+    assert!(
+        !totals.is_empty(),
+        "the transcode reported nothing at all: {seen:?}"
+    );
+    assert!(
+        totals.iter().all(Option::is_some),
+        "an uncapped transcode reported no total, so a bar drawn from it cannot \
+         move: {totals:?}"
+    );
+    // Not asserted as an exact figure: `probe` derives it from a duration, so it
+    // is an estimate of what the encode produces, and the bar clamps rather than
+    // depending on it being right. What matters is that it is in the right
+    // order of magnitude rather than, say, the byte length.
+    let total = totals[0].expect("checked above");
+    let produced = movie.frames.as_ref().expect("a picture").len;
+    assert!(
+        total.abs_diff(produced) * 20 <= produced,
+        "the stated total {total} is not within 5% of the {produced} frames \
+         actually encoded, so it is measuring the wrong thing"
+    );
 }

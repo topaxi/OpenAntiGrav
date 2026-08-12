@@ -90,6 +90,14 @@ pub struct Options {
     pub movies: PathBuf,
     /// Where decoded PCM lands - [`crate::boot::default_audio_cache_dir`].
     pub audio: PathBuf,
+    /// Convert every movie again even when the cache already holds it, and
+    /// overwrite what is there. See [`movie::Decode::refresh`].
+    ///
+    /// **Only the pictures.** The planning pass still skips the sounds it finds
+    /// cached, so a refreshed run is the movie conversion over again and not the
+    /// ATRAC3+ one - which is what the flag says on the tin, and is also the
+    /// half that is worth ten minutes rather than five seconds.
+    pub refresh_video: bool,
 }
 
 /// How far the conversion has got.
@@ -366,7 +374,20 @@ fn convert(task: &Task, archives: &mut [oag_assets::Archive], options: &Options)
                 key,
                 &options.movies,
                 Extent::Whole,
-                false,
+                movie::Decode {
+                    refresh: options.refresh_video,
+                    // Always, and this is not a preference. The GStreamer path
+                    // writes no cache file - it decodes into memory and hands
+                    // back frames - so a prefetch that took it would report
+                    // every movie converted, leave the cache empty, and plan the
+                    // same movies again next run. See `Decode::prefer_cache`.
+                    prefer_cache: true,
+                    ..movie::Decode::default()
+                },
+                // The worker prints its progress rather than drawing it, and it
+                // already names each asset as it starts one. A per-frame report
+                // would be a second progress display on the same stdout.
+                None,
             )?)
         }
         Task::Loose { path, .. } => {
@@ -382,7 +403,20 @@ fn convert(task: &Task, archives: &mut [oag_assets::Archive], options: &Options)
                 &key,
                 &options.movies,
                 Extent::Whole,
-                false,
+                movie::Decode {
+                    refresh: options.refresh_video,
+                    // Always, and this is not a preference. The GStreamer path
+                    // writes no cache file - it decodes into memory and hands
+                    // back frames - so a prefetch that took it would report
+                    // every movie converted, leave the cache empty, and plan the
+                    // same movies again next run. See `Decode::prefer_cache`.
+                    prefer_cache: true,
+                    ..movie::Decode::default()
+                },
+                // The worker prints its progress rather than drawing it, and it
+                // already names each asset as it starts one. A per-frame report
+                // would be a second progress display on the same stdout.
+                None,
             )?)
         }
     }
@@ -462,7 +496,11 @@ fn plan(options: &Options) -> Result<Plan> {
 
             if head.starts_with(oag_formats::pmf::MAGIC) {
                 let key = format!("{hash:08x}-{size}");
-                if movie_is_cached(archive, index, &key, &cached_movies) {
+                // The question is not asked at all under `--refresh-video`: the
+                // point of that flag is to convert the ones that *are* cached,
+                // so counting them as `cached` and skipping them would leave it
+                // with nothing to do.
+                if !options.refresh_video && movie_is_cached(archive, index, &key, &cached_movies) {
                     cached += 1;
                     continue;
                 }

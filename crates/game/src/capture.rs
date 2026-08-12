@@ -752,6 +752,9 @@ pub struct LoadingOptions {
     /// window's own [`crate::loading::Screen::draw_list`] with a known input,
     /// not a second layout.
     pub progress: crate::prefetch::Progress,
+    /// Which of the screen's two waits to draw, and what the current load is
+    /// doing - `--loading-step`. Stated for the same reason `progress` is.
+    pub phase: crate::loading::Phase,
     /// Which adapter to draw with, from `[graphics] renderer`.
     pub renderer: crate::display::Renderer,
     /// The shape the game is drawn in, from `[display] aspect`.
@@ -826,7 +829,7 @@ pub fn loading(
         &queue,
         &mut encoder,
         &view,
-        &screen.draw_list(&options.progress, &atlas),
+        &screen.draw_list(options.phase, &options.progress, &atlas),
         viewport,
     );
     draw_wave(&mut encoder, &view, &wave, viewport);

@@ -7,6 +7,7 @@
 //! stays free of file I/O.
 
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 
 use anyhow::{Context, Result};
 use oag_formats::fexml;
@@ -161,6 +162,23 @@ pub struct Options {
     pub extent: Extent,
     /// Skip conversion entirely.
     pub no_video: bool,
+    /// Convert every movie again even when the cache already holds it, and
+    /// overwrite what is there. See [`crate::movie::Decode::refresh`].
+    pub refresh_video: bool,
+    /// Take the AV1 cache path even where a platform decoder is available. See
+    /// [`crate::movie::Decode::prefer_cache`].
+    pub prefer_av1_cache: bool,
+}
+
+impl Options {
+    /// How the movie loaders should open a picture, from these options.
+    fn decode(&self) -> crate::movie::Decode {
+        crate::movie::Decode {
+            no_video: self.no_video,
+            refresh: self.refresh_video,
+            prefer_cache: self.prefer_av1_cache,
+        }
+    }
 }
 
 /// A step the load has to be quick enough at for nobody to notice. Anything
@@ -232,7 +250,15 @@ impl Steps {
 /// line falls where it does.
 pub fn load(options: &Options) -> Result<Boot> {
     let (mut shell, archives) = load_shell(options)?;
-    let media = load_media(archives, &shell.screens, &shell.media_plan(), options);
+    // A throwaway tally: this caller is the one that blocks, so there is nothing
+    // on screen to read it.
+    let media = load_media(
+        archives,
+        &shell.screens,
+        &shell.media_plan(),
+        options,
+        &Mutex::new(MediaProgress::default()),
+    );
     shell.report.extend(media.report.iter().cloned());
     Ok(assemble(shell, media))
 }
@@ -525,27 +551,44 @@ pub fn load_shell(options: &Options) -> Result<(Shell, oag_assets::Archives)> {
 /// threads should be reaching into. Never fails: every movie that will not load
 /// degrades into a report line and a `None`, which is what the sequence already
 /// copes with everywhere.
+///
+/// `progress` is written before and after each load so the loading screen can
+/// draw a bar over the seconds this takes; a caller with nothing to draw passes
+/// a throwaway, the way [`load`] does.
 pub fn load_media(
     mut archives: oag_assets::Archives,
     screens: &Screens,
     plan: &MediaPlan,
     options: &Options,
+    progress: &Mutex<MediaProgress>,
 ) -> Media {
     let mut report = Vec::new();
     let mut steps = Steps::new();
+    // The denominator before the first load rather than after it: a bar that
+    // appeared one movie in would be up for the shortest part of the wait.
+    lock_media(progress).total = plan.loads();
+    // One watch for all three movie loads: each `starting` clears the step, so
+    // there is no state here to carry between them.
+    let watch = watching(progress);
+    let watch: crate::movie::Watch<'_> = Some(&watch);
     // Kept as a report line rather than propagated: by the time this runs the
     // window is up and the loading screen is drawing, so a movie that will not
     // open has to be survivable. `load` above is the caller that used to be
     // able to fail here, and its `?` only ever fired on a *named* entry being
     // absent - which `Movie: None` already describes.
     let movie = match &plan.movie_name {
-        Some(name) => match load_movie(&mut archives, name, options, &mut report) {
-            Ok(movie) => movie,
-            Err(error) => {
-                report.push(format!("{name}: {error:#}"));
-                None
-            }
-        },
+        Some(name) => {
+            starting(progress, name);
+            let movie = match load_movie(&mut archives, name, options, &mut report, watch) {
+                Ok(movie) => movie,
+                Err(error) => {
+                    report.push(format!("{name}: {error:#}"));
+                    None
+                }
+            };
+            loaded(progress);
+            movie
+        }
         None => None,
     };
     steps.lap("intro");
@@ -553,17 +596,32 @@ pub fn load_media(
     // `screens` is still in hand: the widget that decides whether this movie is
     // heard at all is in that XML.
     let movie_sound = match &plan.movie_name {
-        Some(name) => load_movie_sound(movie.as_ref(), screens, name, options, &mut report),
+        Some(name) => {
+            starting(progress, &format!("{name} (sound)"));
+            let sound = load_movie_sound(movie.as_ref(), screens, name, options, &mut report);
+            loaded(progress);
+            sound
+        }
         None => None,
     };
     steps.lap("intro sound");
     let backdrop = match plan.menu_backdrop {
-        Some(name) => load_backdrop(&mut archives, name, options, &mut report),
+        Some(name) => {
+            starting(progress, name);
+            let backdrop = load_backdrop(&mut archives, name, options, &mut report, watch);
+            loaded(progress);
+            backdrop
+        }
         None => None,
     };
     steps.lap("backdrop");
     let mut after_language_movie = match plan.second_movie_name {
-        Some(name) => load_second_movie(&mut archives, name, options, &mut report),
+        Some(name) => {
+            starting(progress, name);
+            let second = load_second_movie(&mut archives, name, options, &mut report, watch);
+            loaded(progress);
+            second
+        }
         None => None,
     };
     // The same one-pipeline guard the backdrop goes through: `upload_frame`
@@ -580,17 +638,25 @@ pub fn load_media(
         after_language_movie = None;
     }
     let after_language_movie_sound = match plan.second_movie_name {
-        Some(name) => load_movie_sound(
-            after_language_movie.as_ref(),
-            screens,
-            name,
-            options,
-            &mut report,
-        ),
+        Some(name) => {
+            starting(progress, &format!("{name} (sound)"));
+            let sound = load_movie_sound(
+                after_language_movie.as_ref(),
+                screens,
+                name,
+                options,
+                &mut report,
+            );
+            loaded(progress);
+            sound
+        }
         None => None,
     };
     steps.lap("second movie");
     report.push(steps.describe("the boot's movies"));
+    // Nothing is loading any more, and the name of the last thing that was
+    // would otherwise stay under the bar for the whole fade.
+    lock_media(progress).current = None;
 
     Media {
         movie,
@@ -614,6 +680,88 @@ pub struct MediaPlan {
     pub menu_backdrop: Option<&'static str>,
 }
 
+impl MediaPlan {
+    /// How many loads [`load_media`] will attempt for this plan.
+    ///
+    /// Counted from the names rather than from what succeeds, because this is
+    /// the denominator of a bar that goes up while the loads are still running:
+    /// a total that shrank when a movie failed would make the fraction jump
+    /// backwards. A load that degrades to `None` still counts as done - the wait
+    /// it represents happened either way, which is the only thing the bar
+    /// measures.
+    ///
+    /// Each named movie is **two** loads, its picture and its ATRAC3+ track, and
+    /// they are counted apart because they are two out-of-process decodes with
+    /// nothing but the name in common. The backdrop has no track and is one.
+    #[must_use]
+    pub fn loads(&self) -> usize {
+        usize::from(self.movie_name.is_some()) * 2
+            + usize::from(self.second_movie_name.is_some()) * 2
+            + usize::from(self.menu_backdrop.is_some())
+    }
+}
+
+/// How far the media phase has got.
+///
+/// A snapshot handed out by value, on the same terms as
+/// [`crate::prefetch::Progress`]: the loading screen polls it from the frame
+/// loop it already has and holds no lock while it draws.
+///
+/// There is no `finished` here because [`MediaWorker::is_finished`] already
+/// answers that, and the thread is what knows - `done == total` is true for the
+/// moment between the last load returning and the thread handing back its
+/// [`Media`].
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct MediaProgress {
+    /// What [`MediaPlan::loads`] counted, or `0` before the phase starts.
+    pub total: usize,
+    /// Loads that have returned, successfully or not.
+    pub done: usize,
+    /// What is loading right now, by the entry name the plan gave.
+    pub current: Option<String>,
+    /// What that load is actually doing - see [`crate::movie::Step`].
+    ///
+    /// **This is the difference between a wait nobody notices and eighty
+    /// seconds of one.** `Some(Step::Cached)` and `Some(Step::Transcoding)` sit
+    /// under the same entry name and mean entirely different things to whoever
+    /// is looking at the screen. `None` before a load has said anything, which
+    /// includes the sound loads: [`crate::at3`] has its own cache and does not
+    /// report through this.
+    pub step: Option<crate::movie::Step>,
+}
+
+/// Names what is about to load. Overwrites rather than clears, so the label
+/// under the bar never blinks empty between two loads.
+///
+/// The step is cleared, though, and must be: it described the *previous* load,
+/// and carrying it over would caption a cache hit with the last transcode's
+/// frame counter.
+fn starting(progress: &Mutex<MediaProgress>, what: &str) {
+    let mut at = lock_media(progress);
+    at.current = Some(what.to_string());
+    at.step = None;
+}
+
+/// Counts a load that has returned, however it returned. See [`MediaPlan::loads`].
+fn loaded(progress: &Mutex<MediaProgress>) {
+    lock_media(progress).done += 1;
+}
+
+/// The callback the movie loaders report their [`crate::movie::Step`] through.
+fn watching(progress: &Mutex<MediaProgress>) -> impl Fn(crate::movie::Step) + Sync {
+    move |step| lock_media(progress).step = Some(step)
+}
+
+/// The same rule [`crate::prefetch`]'s own `lock` follows: a poisoned lock is a
+/// worker that panicked, and the last snapshot it wrote is still a true
+/// statement about what got done. Bringing the window down over it would swap a
+/// boot with no movies for no boot at all.
+fn lock_media(progress: &Mutex<MediaProgress>) -> std::sync::MutexGuard<'_, MediaProgress> {
+    progress
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 /// [`load_media`] running on a thread of its own, so a window can open first.
 ///
 /// **This is the whole reason the boot is in halves.** On a `native-video`
@@ -626,6 +774,8 @@ pub struct MediaPlan {
 pub struct MediaWorker {
     /// `None` once joined, which is what makes [`Self::join`] idempotent.
     handle: Option<std::thread::JoinHandle<Media>>,
+    /// What the loading screen draws its bar from while the thread runs.
+    progress: Arc<Mutex<MediaProgress>>,
 }
 
 impl MediaWorker {
@@ -639,14 +789,25 @@ impl MediaWorker {
         let screens = shell.screens.clone();
         let plan = shell.media_plan();
         let options = options.clone();
+        // The total is filled in on the thread, by `load_media` - but it is
+        // known here, and a bar that only appeared once the thread had been
+        // scheduled would flicker in on the first frame. So it starts correct.
+        let progress = Arc::new(Mutex::new(MediaProgress {
+            total: plan.loads(),
+            ..MediaProgress::default()
+        }));
         let handle = std::thread::Builder::new()
             // Named so it is obvious in a debugger and in `top` which thread
             // the boot is waiting on, the same way `movie-decode` is.
             .name("boot-media".to_string())
-            .spawn(move || load_media(archives, &screens, &plan, &options))
+            .spawn({
+                let progress = Arc::clone(&progress);
+                move || load_media(archives, &screens, &plan, &options, &progress)
+            })
             .expect("spawning the boot's media thread");
         Self {
             handle: Some(handle),
+            progress,
         }
     }
 
@@ -656,6 +817,12 @@ impl MediaWorker {
         self.handle
             .as_ref()
             .is_none_or(std::thread::JoinHandle::is_finished)
+    }
+
+    /// How far the movies have got, right now.
+    #[must_use]
+    pub fn progress(&self) -> MediaProgress {
+        lock_media(&self.progress).clone()
     }
 
     /// Waits for the movies and takes them.
@@ -1045,6 +1212,7 @@ fn load_backdrop(
     name: &str,
     options: &Options,
     report: &mut Vec<String>,
+    watch: crate::movie::Watch<'_>,
 ) -> Option<Movie> {
     if options.no_video {
         return None;
@@ -1053,7 +1221,7 @@ fn load_backdrop(
         extent: Extent::Whole,
         ..options.clone()
     };
-    match load_movie(archives, name, &wanted, report) {
+    match load_movie(archives, name, &wanted, report, watch) {
         Ok(movie) => movie,
         // Reported and dropped. `load_movie` only errors here on an entry it
         // cannot read, and the backdrop is not worth failing a boot over.
@@ -1082,12 +1250,13 @@ fn load_second_movie(
     name: &str,
     options: &Options,
     report: &mut Vec<String>,
+    watch: crate::movie::Watch<'_>,
 ) -> Option<Movie> {
     let wanted = Options {
         extent: Extent::Whole,
         ..options.clone()
     };
-    match load_movie(archives, name, &wanted, report) {
+    match load_movie(archives, name, &wanted, report, watch) {
         Ok(movie) => movie,
         Err(e) => {
             report.push(format!("no second boot movie: {e:#}"));
@@ -1662,6 +1831,7 @@ fn load_movie(
     movie_name: &str,
     options: &Options,
     report: &mut Vec<String>,
+    watch: crate::movie::Watch<'_>,
 ) -> Result<Option<Movie>> {
     let entry = EntryRef::parse(movie_name);
     let hash = entry.hash();
@@ -1672,7 +1842,7 @@ fn load_movie(
         // it is the PS2's own intro, a plain file outside every WAD. See
         // `load_loose_intro`.
         None if loose_candidates(movie_name).is_some() => {
-            if let Some(movie) = load_loose_movie(movie_name, options, report)? {
+            if let Some(movie) = load_loose_movie(movie_name, options, report, watch)? {
                 return Ok(Some(movie));
             }
             report.push(format!(
@@ -1730,7 +1900,14 @@ fn load_movie(
         .read(index)
         .with_context(|| format!("reading {movie_name} out of {}", data.label()))?;
     let key = format!("{hash:08x}-{size}");
-    let movie = movie::open(&blob, &key, &options.cache, options.extent, false)?;
+    let movie = movie::open(
+        &blob,
+        &key,
+        &options.cache,
+        options.extent,
+        options.decode(),
+        watch,
+    )?;
 
     if let Some(header) = &movie.header {
         report.push(format!(
@@ -1787,6 +1964,7 @@ fn load_loose_movie(
     name: &str,
     options: &Options,
     report: &mut Vec<String>,
+    watch: crate::movie::Watch<'_>,
 ) -> Result<Option<Movie>> {
     let Some(candidates) = loose_candidates(name) else {
         return Ok(None);
@@ -1801,7 +1979,8 @@ fn load_loose_movie(
         &key,
         &options.cache,
         options.extent,
-        options.no_video,
+        options.decode(),
+        watch,
     )?;
 
     // Named from the blob's own magic, the same way `movie::open` dispatches,
@@ -1894,7 +2073,113 @@ fn cache_dir_named(what: &str) -> std::path::PathBuf {
 
 #[cfg(test)]
 mod tests {
-    use super::{DEVPUB_REEL, EntryRef, pulse};
+    use super::{DEVPUB_REEL, EntryRef, MediaPlan, pulse};
+
+    /// The two picture flags reach the loaders, and neither implies the other.
+    ///
+    /// The wiring rather than the behaviour: `Decode::refresh` is three lines
+    /// inside [`super::super::movie::transcode`] and its friends, but which
+    /// `Options` field arrives there is the part that silently rots - a new
+    /// caller building `Decode` by hand would not fail to compile.
+    #[test]
+    fn the_picture_flags_reach_the_movie_loaders_independently() {
+        let base = super::Options {
+            source: String::new(),
+            dlc: Vec::new(),
+            language: None,
+            leg: crate::frontend::Leg::LogoFmv,
+            movie: None,
+            cache: std::path::PathBuf::new(),
+            audio_cache: std::path::PathBuf::new(),
+            extent: crate::movie::Extent::Whole,
+            no_video: false,
+            refresh_video: false,
+            prefer_av1_cache: false,
+        };
+        assert_eq!(
+            base.decode(),
+            crate::movie::Decode::default(),
+            "the ordinary run decodes the picture and reuses the cache"
+        );
+
+        let refreshing = super::Options {
+            refresh_video: true,
+            ..base.clone()
+        };
+        assert_eq!(
+            refreshing.decode(),
+            crate::movie::Decode {
+                no_video: false,
+                refresh: true,
+                prefer_cache: false,
+            },
+            "--refresh-video must not imply --no-video"
+        );
+
+        let cached = super::Options {
+            prefer_av1_cache: true,
+            ..base.clone()
+        };
+        assert_eq!(
+            cached.decode(),
+            crate::movie::Decode {
+                no_video: false,
+                refresh: false,
+                prefer_cache: true,
+            },
+            "--prefer-av1-cache asks for the cache path, not for a reconversion"
+        );
+
+        let silent = super::Options {
+            no_video: true,
+            ..base
+        };
+        assert_eq!(
+            silent.decode(),
+            crate::movie::Decode {
+                no_video: true,
+                refresh: false,
+                prefer_cache: false,
+            },
+            "--no-video must not imply --refresh-video"
+        );
+    }
+
+    /// Each named movie is its picture and its track; the backdrop has no track.
+    ///
+    /// The denominator of the loading screen's bar, so an off-by-one here is a
+    /// bar that never reaches its end or reaches it early. Pulse's own plan -
+    /// both movies and a backdrop - is the five-load case.
+    #[test]
+    fn the_media_plan_counts_two_loads_per_movie_and_one_backdrop() {
+        let nothing = MediaPlan {
+            movie_name: None,
+            second_movie_name: None,
+            menu_backdrop: None,
+        };
+        assert_eq!(nothing.loads(), 0, "nothing named is nothing to count");
+
+        let one_reel = MediaPlan {
+            movie_name: Some(r"Data\Movies\Intro.PMF".to_string()),
+            ..nothing.clone()
+        };
+        assert_eq!(one_reel.loads(), 2, "the picture and its ATRAC3+ track");
+
+        let backdrop_only = MediaPlan {
+            menu_backdrop: Some(r"Data\Movies\Bg.PMF"),
+            ..nothing.clone()
+        };
+        assert_eq!(backdrop_only.loads(), 1, "a backdrop has no track");
+
+        let whole = MediaPlan {
+            second_movie_name: Some(r"Data\Movies\IntroMovieP2.PMF"),
+            ..MediaPlan {
+                menu_backdrop: backdrop_only.menu_backdrop,
+                ..one_reel
+            }
+        };
+        assert_eq!(whole.loads(), 5);
+    }
 
     /// The CLI default names the reel, and the title package holds its hash as a
     /// number. Two spellings of one fact can drift silently - nothing would fail,

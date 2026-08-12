@@ -167,8 +167,18 @@ fn both_ipf_files_decode_through_the_movie_cache() {
 
         // Without a transcode first: the geometry and the count come straight
         // off the container, so they must be exact even with no decoder.
-        let described = movie::open(&blob, &key, &cache, movie::Extent::Whole, true)
-            .unwrap_or_else(|e| panic!("{path}: {e:#}"));
+        let described = movie::open(
+            &blob,
+            &key,
+            &cache,
+            movie::Extent::Whole,
+            movie::Decode {
+                no_video: true,
+                ..movie::Decode::default()
+            },
+            None,
+        )
+        .unwrap_or_else(|e| panic!("{path}: {e:#}"));
         assert_eq!(described.width, width, "{path}: width");
         assert_eq!(described.height, height, "{path}: height");
         assert_eq!(described.frame_count, frames, "{path}: frame count");
@@ -193,7 +203,8 @@ fn both_ipf_files_decode_through_the_movie_cache() {
             &key,
             &cache,
             movie::Extent::Frames(DECODE_FRAMES),
-            false,
+            movie::Decode::default(),
+            None,
         )
         .unwrap_or_else(|e| panic!("{path}: {e:#}"));
         let store = movie.frames.unwrap_or_else(|| {
@@ -235,6 +246,8 @@ fn the_front_ends_own_backdrop_name_resolves_to_the_pal_cut() {
         extent: movie::Extent::Whole,
         // The resolution is what is under test, not the transcode.
         no_video: true,
+        refresh_video: false,
+        prefer_av1_cache: false,
     };
 
     let loaded = oag_game::boot::load(&options).expect("booting the PS2 front end");

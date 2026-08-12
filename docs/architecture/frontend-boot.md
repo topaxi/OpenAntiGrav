@@ -54,6 +54,32 @@ That figure is the *backdrop*; the intro is 1200 frames, so the two together
 are nearer 288 MiB and five seconds. The AV1 cache path (ADR-0008) decodes a
 frame at a time on demand and so costs nothing here.
 
+**A cache file that is already there beats the platform decoder, with no flag**,
+so a `native-video` build lands in that second column on every run after the one
+that built the cache. `open_psmf` asks `movie::cached` before it tries GStreamer;
+the question costs a parse of the frame headers, and the pictures are the same
+either way because the cache is lossless (ADR-0008, checked byte for byte by
+`movie_ground_truth.rs`). Measured on the EU PSP disc, both reels:
+
+| | Media phase |
+| --- | --- |
+| GStreamer, nothing cached | **4.80 s**, and again on every boot |
+| `--prefer-av1-cache`, nothing cached | **36.08 s** once (intro 30.33, backdrop 5.74) |
+| A cache file present, no flag | **0.06 s** |
+
+**ADR-0017's default is untouched**, because it is about the case that has a
+choice: with nothing cached, the platform decoder still wins. `--prefer-av1-cache`
+is the opt-in past that for one run, so the cache exists and every later run
+picks it up by itself; `--prefetch` does the same for every movie on the disc.
+`--refresh-video` implies it - a re-conversion is what that flag asks for, and
+the decoder writes nothing to re-convert.
+
+**`--prefetch` takes it unconditionally, and has to.** The GStreamer path writes
+no cache file at all, so a prefetch that took it reported every movie converted,
+left the cache empty, and planned the same 22 movies again on the next run.
+`prefetch::convert` therefore sets `movie::Decode::prefer_cache` rather than
+leaving it to a flag: filling the cache is the worker's entire job.
+
 Either way the load is now in two halves, which is what lets the window come
 first:
 
@@ -71,12 +97,79 @@ first:
 them has anywhere to show a wait.
 
 The loading screen therefore now appears on **every** windowed boot rather than
-only under `--prefetch`. With no conversion to count it draws the wave, a tip
-and the word `LOADING` - no bar and no `0 / 0`, because there is no count
-behind them. `--prefetch` adds its own wait to the same screen, and the
-conversion deliberately does not start until the boot's own movies are done:
-both write `ffmpeg` output into `data/cache/movies`, and two processes writing
-one file is a corrupt cache.
+only under `--prefetch`, and **both of its waits are counted**. The media phase
+reports its own progress through `boot::MediaWorker::progress`, whose
+denominator is `boot::MediaPlan::loads` - two loads per named movie, its picture
+and its ATRAC3+ track, plus one for the backdrop, so Pulse's plan is five. The
+screen heads that `LOADING MOVIES`; `--prefetch`'s own wait, on the same screen,
+is headed `CONVERTING ASSETS`. `loading::Phase` is which of the two is being
+counted, and they never overlap: the conversion deliberately does not start
+until the boot's own movies are done, because both write `ffmpeg` output into
+`data/cache/movies` and two processes writing one file is a corrupt cache.
+
+Only a genuinely empty count draws no bar - a title whose chain names no movie,
+on a run with no `--prefetch`. Then the screen is the wave, a tip and the word
+`LOADING`, with no `0 / 0` beside a full bar reading `100%`. An earlier build hid
+the bar on *every* ordinary boot, because the media phase reported no counts at
+all and so looked like that empty case.
+
+### Loading is not transcoding
+
+The three things a movie load can be doing differ by three orders of magnitude,
+so the screen names which one it is - `movie::Step`, reported through
+`movie::Watch` and carried on `loading::Phase::Media`:
+
+| Step | What it is | How long |
+| --- | --- | --- |
+| `Cached` | Reading a cache file that already holds the frames | milliseconds |
+| `Decoding` | GStreamer decoding H.264 - see [ADR-0017](adr/0017-gstreamer-native-video.md) | seconds |
+| `Transcoding` | `ffmpeg` converting to lossless AV1 - see [ADR-0008](adr/0008-av1-movie-cache.md) | 55 s for `INTRO512.PSS`, measured |
+
+A transcode heads the screen `TRANSCODING MOVIES` rather than `LOADING MOVIES`
+and draws a frame counter under the entry name, read out of `ffmpeg -progress
+pipe:1` about once a second. **The counter is the point**: eighty seconds of a
+number that moves is a wait, and eighty seconds of a still screen is a hang.
+
+**The bar fills continuously rather than stepping once per load.** Each load owns
+one slice of the width - a fifth of it, on Pulse's five-load plan - and the
+current load fills its own slice from its step (`loading::fraction`):
+
+| Step | Share of its slice |
+| --- | --- |
+| nothing reported yet | none: the slice has not started |
+| `Cached` | all of it - the hit *is* that load's whole work |
+| `Decoding` | the first fifth, held: a decode reports no progress and can still fall back to a transcode |
+| `Transcoding` | the first fifth, then the frame counter drives the remaining four |
+| `Transcoding` with no stated total | the first fifth, held: no denominator, so no fraction to invent |
+
+So the third of five loads spends its minute crossing 40% → 60% instead of
+sitting at 40%. The head is a fifth because the two parts are not the same work
+and the proportion is what has to be right: opening and demuxing the container is
+2.6 s against 55 s of `ffmpeg` on `INTRO512.PSS`. **Monotonic by construction** -
+`Cached` takes exactly the whole slice, so the bar is already where `done + 1`
+puts it a moment later, and `Decoding` holds at the head `Transcoding` counts up
+from. The percentage beside the bar is the same number, so the figure and the
+width cannot disagree.
+
+The sound loads hold their slices at the boundary: `at3` has its own cache and
+does not report through `movie::Watch`. They are normally the fast ones, and on a
+cold audio cache they are two slices where the bar stands still.
+Every parse failure on that pipe is deliberately silent - a `ffmpeg` build
+spelling its keys differently stops the counter and does not fail the
+conversion - which is why the reporting has a ground-truth test of its own
+(`a_transcode_reports_its_frames_as_it_encodes_them`, in
+`crates/game/tests/ps2_source_ground_truth.rs`, against the PS2's loose `.PSS`
+because a `.PMF` on a `native-video` build never transcodes at all).
+
+```sh
+# Both media states, without a display or a cold cache.
+just play ps2 --screenshot /tmp/transcoding.png \
+  --loading-screen 2/5 --loading-step transcoding:340/1200 --ticks 1
+just play ps2 --screenshot /tmp/cached.png \
+  --loading-screen 4/5 --loading-step cached --ticks 1
+# The real thing, which transcodes for about a minute on a cold cache:
+just play ps2 --refresh-video
+```
 
 ```sh
 # Both states, without a display.

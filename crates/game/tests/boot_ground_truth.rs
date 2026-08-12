@@ -69,6 +69,8 @@ fn load_leg(leg: oag_game::frontend::Leg, movie: &str) -> Option<boot::Boot> {
         audio_cache: oag_game::boot::default_audio_cache_dir(),
         extent: oag_game::movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
         no_video: true,
+        refresh_video: false,
+        prefer_av1_cache: false,
     };
     Some(boot::load(&options).expect("loading the boot sequence"))
 }
