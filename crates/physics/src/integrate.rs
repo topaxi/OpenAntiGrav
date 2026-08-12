@@ -46,6 +46,7 @@ use oag_core::math::{Quat, Vec3};
 
 use crate::collide::Raycaster;
 use crate::forces::{self, Environment, Evaluated};
+use crate::hover;
 use crate::params::Handling;
 use crate::ship::{Body, MAX_DT, SUBSTEPS, ShipControls, ShipState};
 use crate::wall;
@@ -254,6 +255,22 @@ pub fn step<R: Raycaster + ?Sized>(
 
     let before_integration = state.body.position;
     integrate(&mut state.body, dt);
+
+    // **Ours, and the only place this crate adds a mechanism rather than
+    // reproducing one.** The recovered contact test casts downward only, so a
+    // hull that crosses a surface between two ticks is on the wrong side of it
+    // for ever after and no probe can find its way back. See [`hover::sweep`].
+    //
+    // Unconditional, and the first attempt at this gated it on `state.grounded`
+    // being zero, which is exactly wrong: `grounded` is set by `evaluate`
+    // *before* the integrator moves the craft, so on the one tick that matters -
+    // the tick the hull crosses the surface - it still reads the contact the
+    // craft had on the way in. The gate skipped the only case it was for.
+    if let Some((correction, velocity)) = hover::sweep(state, env, raycaster, before_integration) {
+        state.body.position += correction;
+        state.body.linear_velocity = velocity;
+    }
+
     evaluated.wall = wall::resolve(state, handling, env, raycaster, before_integration);
     evaluated.shield = crate::damage::apply_contact(
         state,

@@ -2196,18 +2196,21 @@ fn every_craft_starts_on_its_line_on_every_circuit() {
 /// times, respawn counts and loss indices exactly - which is what said the
 /// mapping was right.
 ///
-/// # What is left, and it is not one bug
+/// # What is left
 ///
-/// - **02, 06, 14 lap but never cleanly.** The craft loses ground contact at
-///   one particular place, every lap, and falls. Not a driving fault at all - a
-///   human driver does the same thing in the same place. See
-///   `docs/gameplay/ai.md`.
-/// - **Five circuits left this list on 2026-08-12**, none of them by anything
-///   to do with the AI. Gating the landing response on `rebound_jump_time` took
-///   01 from eight recoveries to three; deriving the rear hover probe above
-///   `hover::FAST_PROBE_SPEED` instead of casting it took 05 from never
-///   completing a second lap to a clean one with **zero** recoveries, and gave
-///   09 its first clean lap.
+/// **Nothing, as of 2026-08-12**: all twelve circuits complete every lap and
+/// all twelve manage a clean one, eleven of them without being recovered once.
+/// 01 keeps two recoveries, one of them on the standing-start lap.
+///
+/// It took four fixes and none of them were the AI. Dropping the paths a lap
+/// never drives out of the racing line ([`race::Race::ai_sample`]) took *round*
+/// from nine to eleven. Gating the landing response on `rebound_jump_time` took
+/// 01 from eight recoveries to three. Deriving the rear hover probe above
+/// `oag_physics::hover::FAST_PROBE_SPEED` instead of casting it took clean laps
+/// from seven to nine and 05 from never lapping to lapping without a scratch.
+/// And a swept contact test (`oag_physics::hover::sweep`) - the one mechanism in
+/// that crate that is ours rather than recovered - took the last three, because
+/// a downward-only probe cannot find a surface the hull has already crossed.
 ///
 /// Both bounds are "no worse than today" rather than targets: a number that
 /// asserted twelve would be a test failing for a reason already written down,
@@ -2243,14 +2246,14 @@ fn a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round() {
         );
     }
     println!("clean laps: {lapped:?}\nno clean lap: {missed:?}");
-    // 07 and 09 are the marginal ones, at 48.3s and 47.4s against a 34-42s
-    // field, so a change that costs one of them its clean lap fails this
-    // assertion without anything having regressed. Check which circuit dropped
-    // before assuming a driving fault.
-    assert!(
-        lapped.len() >= 9,
-        "only {} of {} circuits saw a clean lap, which is worse than the \
-         recorded nine: {missed:?}",
+    // The full set, so this is now a plain regression bound rather than a
+    // record of an incomplete state: any circuit that stops managing a clean
+    // lap is a regression, and the message names it.
+    assert_eq!(
+        lapped.len(),
+        laps.len(),
+        "only {} of {} circuits saw a clean lap, and all of them used to: \
+         {missed:?}",
         lapped.len(),
         laps.len()
     );
