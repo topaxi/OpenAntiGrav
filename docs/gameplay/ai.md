@@ -835,24 +835,30 @@ ratchets so neither number can quietly fall, and
 `an_opponent_that_flies_off_the_circuit_is_put_back_on_it` pins the rescue
 without needing the disc.
 
-### Where a craft comes off, and it is not the seam between two paths
+### Where a craft comes off: two wrong answers and the measurement that settled it
 
-**A hypothesis this page carried and a direct measurement then killed**, written
-up as both because the wrong version is the more instructive half.
+**Read this section as a record of method, not just of a finding.** The
+conclusion changed twice, both times because the measurement was of the wrong
+quantity, and the two wrong answers are more instructive than the right one. The
+answer is at the bottom: craft come off **at the path boundary**, which is where
+the first pass said they did, for a reason it had not established.
+
+#### Wrong answer one: the rescue index, reconstructed backwards
 
 Recording each rescue against the driver's index gave one tight cluster per
 circuit - 06 at 1520-1522 on all six of its rescues. The rescue fires
 `RESCUE_TICKS` after the craft leaves, so the index at the rescue is not the
 index it left at; subtracting an estimated 325-sample flight put 06's cluster on
 its path boundary at 1196, and that arithmetic became "craft come off at the
-seam". **It was wrong.** The flight offset is not a constant: it is however far
-the index keeps advancing while the craft is airborne, which depends on the
-craft.
+seam". **The arithmetic was not sound.** The flight offset is not a constant: it
+is however far the index keeps advancing while the craft is airborne, which
+depends on the craft. A right answer reached this way is still a guess.
 
-The honest measurement watches the craft leave rather than reconstructing it
-backwards. A lone Ace, every circuit, recording the driver index the first time
-the craft is more than **two max half-widths** off the line point its own driver
-is standing on - far enough out that no amount of ordinary cornering reaches it:
+#### Wrong answer two: distance from the line
+
+Watching the craft leave, rather than reconstructing it - a lone Ace, every
+circuit, recording the driver index the first time the craft is more than **two
+max half-widths** off the line point its own driver is standing on:
 
 | circuit | path boundary | left the corridor at | laps cleanly |
 | --- | --- | --- | --- |
@@ -869,20 +875,17 @@ is standing on - far enough out that no amount of ordinary cornering reaches it:
 | 14 | 892, 1784 | 823 | no |
 | 07 | 992, 1984 | **never** | no |
 
-Nothing leaves at a boundary. 06 leaves 94 samples past its own, 02 114 past,
-09 142 past; 01 leaves at 118 with its only boundary at 1764, and 07 never
-leaves the corridor at all yet still never completes a second lap. Craft come
-off at **corners**, one particular corner per circuit, which is a driving fault
-and nothing to do with how the sample table was concatenated.
+This says nothing leaves at a boundary: 06 94 samples past its own, 02 114 past,
+09 142 past, 01 at 118 with its only boundary at 1764. **It is also wrong, and
+for the same reason as the first.** A threshold on distance is crossed when the
+craft has *finished* leaving, and a craft that has already been falling for a
+second and a half has carried its index a long way with it. The number is real;
+it just does not date the event.
 
-Two seam observations survive as facts with no observed consequence, and are
-recorded so the next reader does not re-derive them and draw the same
-conclusion. Every path ends in near-coincident samples - steps of 0.6, 0.3, 0.1
-into the boundary against a 1.50-unit median - on all twelve circuits including
-the four that never put a wheel wrong. And 06's step *across* its boundary is a
-14.8-unit outlier at `cos 0.79` where every other circuit's is 6-7 units at
-`cos 1.00`; 06 does lose craft, but 94 samples further on, so the outlier is
-unexplained rather than exonerated.
+One fact from this pass survives and is worth keeping: every path ends in
+near-coincident samples - steps of 0.6, 0.3, 0.1 into the boundary against a
+1.50-unit median - on all twelve circuits including the four that never put a
+wheel wrong. Degenerate tails alone are harmless.
 
 #### The one ordering fault that is real: a path the lap never drives
 
@@ -950,7 +953,7 @@ ends up physically on the split's other branch now has no line beneath it at
 all. That is strictly better than stalling at the seam, and the rescue net
 catches it, but it is a gap.
 
-#### And the corner departures are not a driving fault either
+#### The measurement that settled it: watch contact, not distance
 
 **Found 2026-08-12, and it moves this out of the AI entirely.** Tracing 06
 through its departure showed the craft is already 22 units *below* its own line
@@ -977,9 +980,10 @@ and every failing circuit shows the same signature, a fall of 500 to 780 units:
 | 06 | 1195 | 1230 | 600-710 |
 | 02 | 1159 | 1232 | 625-720 |
 
-Still not the boundaries, so the retraction above stands - but the margin is 35
-to 73 samples rather than 94 to 142, and on 14, 01, 05 and 07 the loss is
-nowhere near one.
+This reads 35 to 73 samples past a boundary rather than 94 to 142 - closer, and
+still not it, because sixty ticks of no contact is itself a delay. The version
+that finally dates the event is the tick trace below, which reads the *first*
+tick of lost contact and puts 06 at 1195 against a boundary at 1195.
 
 `the_racing_line_has_track_under_it_where_it_is_known_to` then casts down the
 surface normal at every sample of the line, one probe reach either way, which is
@@ -996,12 +1000,11 @@ result in two:
   05's 134, 01's 12, 07's 13. Not a gap in the track - a racing line running
   *above* the track.
 
-Three of those runs start within eight samples of a path boundary (09 at 967
-against 963, 02 at 1167 against 1159, 06 at 1196 against 1195), which is a lead
-and not yet a finding.
+**Three of those runs start within eight samples of a path boundary** (09 at 967
+against 963, 02 at 1167 against 1159, 06 at 1196 against 1195), and that is the
+lead the tick trace below cashes in.
 
-Reading what is actually down there settles the first split and unsettles the
-correlation. On a healthy stretch the cast finds `Floor` at **half a ride height
+Reading what is actually down there settles the first split. On a healthy stretch the cast finds `Floor` at **half a ride height
 below the line**, everywhere, on every circuit. On 13's 20-48 it finds nothing
 within sixty reaches - an authored jump. On 09's 967-1021 it finds a `Wall` at
 the first sample and then `Floor` sinking to 4.8 ride heights and climbing back
@@ -1016,11 +1019,12 @@ lost, on every failing circuit, the craft is comfortably inside its own
 corridor - 06 at +0.3 in a corridor running -23.3 to 0.0, 09 at +0.7 in -16.0 to
 10.8, 02 at +2.9 in -11.9 to 12.1 - at ordinary racing speed, with `Floor` half a
 ride height beneath it. Then it is airborne for three hundred ticks and seven
-hundred units down.
+hundred units down. The floor half a ride height beneath it is the last floor
+there is: one tick later it is gone.
 
-So it is neither cornering wide nor driving off an edge. **A craft in the middle
-of a supported piece of circuit stops being held by it, and that is a physics or
-collision question rather than an AI one.**
+So it is neither cornering wide nor driving off an edge. **A craft stops being
+held by a piece of circuit it is driving straight down the middle of, and that is
+a physics or collision question rather than an AI one.**
 
 #### What the tick trace says: the floor drops away at the path boundary
 
@@ -1064,12 +1068,58 @@ Three things that follows from this, and one that does not:
   running `-23.3` to `0.0`. 06's authored AI corridor there is entirely to the
   *left* of the line, and the craft is marginally outside its right bound.
 
-**The question this now turns on is whether the hole is the disc's or ours.**
-Nine of twelve circuits have one, most within a few samples of a path boundary,
-and a junction is exactly the place a collision decoder would drop a mesh. The
-three circuits with no hole are three of the circuits that never lose a craft.
-Nothing has yet compared what the collision decoder produces at 06's 1196
-against what the WAD holds there.
+#### The decoder drops nothing, and the spline is above the track
+
+Two measurements settle it, and the second retracts the retraction above.
+
+**Every triangle in the file reaches the collision world.** 06_Track decodes
+three nodes - Floor 3,178 triangles, Wall 1,836, MagFloor 520 - for 5,534, and
+the world holds 5,534. 09_Track: 5,833 and 5,833. Nothing is dropped, so the
+missing floor is not a mesh this repository failed to load. (That rules out a
+dropped mesh, not a misplaced one: matching counts do not prove the vertices
+land where the original puts them.)
+
+**The craft comes off at the path boundary after all.** Printing the line's own
+height through 06's join:
+
+| sample | y |
+| --- | --- |
+| 1190 | 15.3 |
+| 1194 | 14.2 |
+| **1196** | **1.8** |
+| 1198 | -1.5 |
+| 1200 | -5.0 |
+| 1204 | -7.7 |
+
+The line **drops 12.4 units between 1194 and 1196** and keeps diving. That is the
+same discontinuity the first pass on this page called out and the second pass
+retracted: `across 14.78, cos 0.79`. The retraction was wrong, and it was wrong
+because both corrected measurements - "94 to 142 samples past the boundary", then
+"35 to 73 past" - were thresholds crossed *long after* the event, by a craft
+whose index had gone on advancing. Watching contact itself puts 06 at 1195/1196
+against a boundary at 1195, 02 at 1163-1167 against 1159, 09 at 963-964 against
+963. **On the nose.**
+
+09 has no jump - it descends smoothly at about 1.4 units per 1.5-unit sample,
+which is a 43-degree dive - and it comes off just as reliably. What it shares
+with 06 is the other half: through the dive the collision floor is **up to 26
+units below the line**, `Floor` at 4.8 ride heights where a healthy stretch reads
+0.5, recovering over sixty samples.
+
+So the shape of it: **the authored spline runs above the track surface through a
+steep descent, and a craft cannot be pulled down as fast as the line falls
+away.** It separates at the top of the drop, glides, and by the time it has sunk
+to where the surface was, it has flown past the end of it. The path boundary
+matters where there is one because a 12-unit step is a drop the craft meets in a
+single sample.
+
+What is still open is which end of that is wrong. Either the disc's AI spline
+genuinely leaves its own track and the original holds craft down by something not
+yet recovered, or the sample positions are being reconstructed slightly wrong on
+steep ground - `Sample::pos` minus `HOVER_LIFT * down` is what puts the line on
+the surface, and a lift applied along the wrong axis would show up exactly here
+and nowhere on the flat. The lateral racing-line offset is already excluded: the
+bare track centre is unsupported too.
 
 What is settled either way: **tuning the driver cannot fix this**, and a grip
 figure fitted against it would be fitted against whatever this turns out to be.
@@ -1434,7 +1484,7 @@ left it since.
 is far from its line, which catches one flying into open space and misses one
 beached against the scenery at zero speed - `05_Track` spends seventy of its
 three hundred seconds exactly there. See
-[Where a craft comes off](#where-a-craft-comes-off-and-it-is-not-the-seam-between-two-paths).
+[Where a craft comes off](#where-a-craft-comes-off-two-wrong-answers-and-the-measurement-that-settled-it).
 
 **And it does not know the other craft are there.** A personality spreads the
 field across the corridor, which is what stopped the single file, but nothing
