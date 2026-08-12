@@ -170,8 +170,19 @@ pub enum ColourMode {
 pub struct EmitterSpec {
     /// The record's authored name, for tests and diagnostics.
     pub name: String,
-    /// Ticks the emitter emits for.
+    /// Ticks the emitter emits for. Ignored under [`EmitterSpec::looping`].
     pub duration_ticks: f32,
+    /// The emitter runs until its owner stops it, and
+    /// [`EmitterSpec::duration_ticks`] is not a countdown -
+    /// [`oag_formats::pob::flags::LOOPING`].
+    ///
+    /// This is what separates an effect a caller *attaches* - the rocket's
+    /// flare, a craft's engine flare, the rain - from one it *fires*. An
+    /// attached effect authors a duration anyway (the flare's is 100 ticks,
+    /// under three seconds of a ten-second flight) and it means nothing;
+    /// reading it as a countdown makes the effect stop halfway through and
+    /// invites inventing a re-trigger to cover the gap.
+    pub looping: bool,
     /// Ticks between emissions, min and max.
     pub interval_ticks: (u32, u32),
     /// Particles per emission, min and max.
@@ -353,6 +364,18 @@ impl Effect {
 }
 
 impl EmitterSpec {
+    /// How long one instance of this emitter runs, in ticks - infinite
+    /// under [`EmitterSpec::looping`], which is what stops the schedule
+    /// ever expiring on its own.
+    #[must_use]
+    pub fn run_ticks(&self) -> f32 {
+        if self.looping {
+            f32::INFINITY
+        } else {
+            self.duration_ticks
+        }
+    }
+
     /// Translates one parsed record.
     fn from_record(record: &pob::Emitter) -> Result<Self, Error> {
         let emitter = || record.name.clone();
@@ -429,6 +452,7 @@ impl EmitterSpec {
         Ok(Self {
             name: record.name.clone(),
             duration_ticks: record.duration_ticks.max(0.0),
+            looping: record.looping(),
             interval_ticks: interval,
             per_emission,
             lifetime_ticks: (
@@ -601,9 +625,23 @@ impl System {
         self.anchor = point;
         for &root in effect.roots() {
             let spec = &effect.emitters[root];
-            self.start(root, spec.duration_ticks, point, Vec3::ZERO, Vec3::ZERO);
+            self.start(root, spec.run_ticks(), point, Vec3::ZERO, Vec3::ZERO);
         }
         self.ignitions += 1;
+    }
+
+    /// Stops every emitter without touching the live particles.
+    ///
+    /// What the owner of an attached effect calls when it goes away: a
+    /// rocket that detonates takes its flare's *emission* with it and
+    /// leaves the flare's last particles to finish their own lives, which
+    /// is why smoke can outlive the thing that made it.
+    ///
+    /// A [`EmitterSpec::looping`] effect ends no other way.
+    pub fn stop(&mut self) {
+        for state in &mut self.emitters {
+            state.active = false;
+        }
     }
 
     /// Emits due particles, then ages, moves and expires live ones, by `dt`
@@ -786,7 +824,7 @@ impl System {
         }
         self.start_at(
             child,
-            spec.duration_ticks,
+            spec.run_ticks(),
             anchor,
             velocity,
             velocity * spec.velocity_inherit,
@@ -942,6 +980,345 @@ impl System {
             ));
         }
         (additive, alpha_over)
+    }
+}
+
+/// Where the original looks an effect up: `Data\Psys\<name>.POB`, built at
+/// `FUN_089156a0` and hashing to the blob's own WAD entry on all 35 PSP
+/// systems.
+///
+/// Backslashes, the way the executable writes them.
+#[must_use]
+pub fn effect_path(name: &str) -> String {
+    format!(r"Data\Psys\{name}.POB")
+}
+
+/// The effects a caller has loaded, by name.
+///
+/// The generic half of playing the disc's own effects: every
+/// `Data\Psys\*.POB` reaches a [`Stage`] the same way, so nothing about an
+/// effect needs code of its own. What is *not* generic, and cannot be, is
+/// **when** each one fires - that is per-effect reverse-engineering, and the
+/// caller that recovered a trigger is the one that names the effect here.
+///
+/// A `Vec` rather than a map: a race loads a handful of effects, lookups
+/// happen at trigger time rather than per particle, and the order stays the
+/// caller's so a loader report reads the same way twice.
+#[derive(Debug, Clone, Default)]
+pub struct Library {
+    effects: Vec<(String, std::sync::Arc<Effect>)>,
+}
+
+impl Library {
+    /// An empty library.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Adds `effect` under `name`, replacing any effect already there.
+    pub fn insert(&mut self, name: &str, effect: Effect) {
+        let effect = std::sync::Arc::new(effect);
+        match self.effects.iter_mut().find(|(key, _)| key == name) {
+            Some(slot) => slot.1 = effect,
+            None => self.effects.push((name.to_string(), effect)),
+        }
+    }
+
+    /// The effect loaded under `name`, if it loaded at all.
+    ///
+    /// `None` is the normal answer in a headless test with no disc, and the
+    /// answer a caller must handle by drawing nothing.
+    #[must_use]
+    pub fn get(&self, name: &str) -> Option<&std::sync::Arc<Effect>> {
+        self.effects
+            .iter()
+            .find(|(key, _)| key == name)
+            .map(|(_, effect)| effect)
+    }
+
+    /// How many effects loaded.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.effects.len()
+    }
+
+    /// Whether nothing loaded.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.effects.is_empty()
+    }
+
+    /// Their names, in load order.
+    pub fn names(&self) -> impl Iterator<Item = &str> {
+        self.effects.iter().map(|(name, _)| name.as_str())
+    }
+}
+
+/// Effects a [`Stage`] plays at once.
+///
+/// A [`System`] is one effect's pool, so a second rocket needs a second
+/// [`System`], not a bigger one: `WO_ROCKET_EXPLO` alone schedules about 150
+/// concurrent particles and four of its seven emitters author a `2000` cap
+/// that never binds, so two explosions sharing a pool would evict each
+/// other's particles rather than queue. Sixteen covers what a race actually
+/// puts on screen - a handful of rockets in flight, each carrying a flare,
+/// plus their detonations - at about 340 KB of pool.
+pub const MAX_INSTANCES: usize = 16;
+
+/// Instances [`Stage::attach`] refuses to take, so a detonation always has
+/// somewhere to play.
+///
+/// Without it a grid holding sixteen rockets in flight would own every
+/// instance and the explosions - the effect the player is actually looking
+/// at - would be the ones dropped.
+const RESERVED_FOR_BURSTS: usize = 4;
+
+/// A [`Stage`] instance a caller still owns.
+///
+/// Carries the instance's generation, so a handle kept past
+/// [`Stage::detach`] is inert rather than aimed at whatever took the slot
+/// next.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Playing {
+    index: u16,
+    generation: u32,
+}
+
+/// One slot of a [`Stage`].
+#[derive(Debug, Clone)]
+struct Instance {
+    /// `None` on a slot that has never been used.
+    effect: Option<std::sync::Arc<Effect>>,
+    system: System,
+    /// Where the root emitters are. Fixed for a burst; the owner's current
+    /// position for an attached instance.
+    anchor: Vec3,
+    /// Set while a caller owns this instance. An attached instance is never
+    /// recycled out from under its owner.
+    attached: bool,
+    /// Bumped every time the slot is claimed.
+    generation: u32,
+}
+
+impl Instance {
+    const IDLE: Self = Self {
+        effect: None,
+        system: System::new(),
+        anchor: Vec3::ZERO,
+        attached: false,
+        generation: 0,
+    };
+
+    fn busy(&self) -> bool {
+        self.attached
+            || self
+                .effect
+                .as_deref()
+                .is_some_and(|_| self.system.is_running())
+    }
+}
+
+/// Several [`Effect`]s playing at once, each in its own [`System`].
+///
+/// This is the general mechanism the whole `Data\Psys` set wants and the
+/// reason no effect needs a hand-authored stand-in any more: an effect is
+/// either **fired** ([`Stage::play`]) - a detonation, an impact burst, one
+/// position for its whole life - or **attached** ([`Stage::attach`]) to
+/// something that moves, followed every tick ([`Stage::follow`]) and stopped
+/// when its owner goes away ([`Stage::detach`]). The two cases are the
+/// original's own: `Rocket_Init` attaches `WO_ROCKET_FLARE` to the rocket
+/// while `Rocket_Update` fires `WO_ROCKET_EXPLO_TRACK` where it hits.
+///
+/// Render-only state, like the [`System`]s in it. What is *not* here is any
+/// decision about which effect plays when - that is per-effect
+/// reverse-engineering and lives with the caller that recovered it.
+#[derive(Debug, Clone)]
+pub struct Stage {
+    instances: Box<[Instance]>,
+}
+
+impl Default for Stage {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Stage {
+    /// An empty stage, with every pool allocated up front.
+    ///
+    /// Boxed rather than inline: [`MAX_INSTANCES`] pools is a few hundred
+    /// kilobytes and the owner of a stage is itself often moved.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            instances: vec![Instance::IDLE; MAX_INSTANCES].into_boxed_slice(),
+        }
+    }
+
+    /// Fires `effect` at `point` and forgets it.
+    ///
+    /// `scale` is the original's severity - see [`System::ignite`]. Returns
+    /// `None` only when every instance is attached, which
+    /// [`RESERVED_FOR_BURSTS`] is there to prevent.
+    ///
+    /// Recycles the *unattached* instance with the fewest live particles
+    /// when nothing is free: a burst that has thinned out is the least
+    /// visible thing to cut short.
+    pub fn play(
+        &mut self,
+        effect: &std::sync::Arc<Effect>,
+        point: Vec3,
+        scale: f32,
+    ) -> Option<Playing> {
+        let index = self.free_slot().or_else(|| {
+            self.instances
+                .iter()
+                .enumerate()
+                .filter(|(_, instance)| !instance.attached)
+                .min_by_key(|(_, instance)| instance.system.alive_count())
+                .map(|(index, _)| index)
+        })?;
+        Some(self.claim(index, effect, point, scale, false))
+    }
+
+    /// Starts `effect` at `point` and hands the caller a handle to keep it
+    /// there.
+    ///
+    /// The caller must [`Stage::follow`] it every tick and [`Stage::detach`]
+    /// it when whatever carries it goes away; an attached instance is never
+    /// recycled, so a handle that is never detached leaks its slot for as
+    /// long as the stage lives.
+    ///
+    /// Returns `None` when fewer than [`RESERVED_FOR_BURSTS`] instances
+    /// would be left free. A caller that gets `None` draws nothing rather
+    /// than something invented.
+    pub fn attach(
+        &mut self,
+        effect: &std::sync::Arc<Effect>,
+        point: Vec3,
+        scale: f32,
+    ) -> Option<Playing> {
+        if self.free_count() <= RESERVED_FOR_BURSTS {
+            return None;
+        }
+        let index = self.free_slot()?;
+        Some(self.claim(index, effect, point, scale, true))
+    }
+
+    /// Moves an attached instance's root emitters to `point`.
+    ///
+    /// A no-op on a stale handle. Particles already emitted stay where they
+    /// were, which is what strings a flare out behind a moving rocket.
+    pub fn follow(&mut self, playing: Playing, point: Vec3) {
+        if let Some(instance) = self.get_mut(playing) {
+            instance.anchor = point;
+        }
+    }
+
+    /// Stops an attached instance emitting and releases the slot back to the
+    /// stage.
+    ///
+    /// Live particles finish their own lives - see [`System::stop`] - so the
+    /// slot stays busy for a moment longer and only then becomes reusable.
+    pub fn detach(&mut self, playing: Playing) {
+        if let Some(instance) = self.get_mut(playing) {
+            instance.attached = false;
+            instance.system.stop();
+        }
+    }
+
+    /// Advances every playing instance by `dt` seconds.
+    pub fn advance(&mut self, dt: f32, rng: &mut Rng) {
+        for instance in &mut self.instances {
+            let Some(effect) = instance.effect.as_deref() else {
+                continue;
+            };
+            if !instance.attached && !instance.system.is_running() {
+                continue;
+            }
+            instance.system.advance(effect, dt, instance.anchor, rng);
+        }
+    }
+
+    /// Every playing instance's geometry, split by blend class the same way
+    /// [`System::vertices`] splits one.
+    #[must_use]
+    pub fn vertices(&self, right: Vec3, up: Vec3) -> (Vec<GpuVertex>, Vec<GpuVertex>) {
+        let mut additive = Vec::new();
+        let mut alpha_over = Vec::new();
+        for instance in &self.instances {
+            let Some(effect) = instance.effect.as_deref() else {
+                continue;
+            };
+            let (mut a, mut b) = instance.system.vertices(effect, right, up);
+            additive.append(&mut a);
+            alpha_over.append(&mut b);
+        }
+        (additive, alpha_over)
+    }
+
+    /// How many instances are emitting or still hold live particles.
+    #[must_use]
+    pub fn playing_count(&self) -> usize {
+        self.instances.iter().filter(|i| i.busy()).count()
+    }
+
+    /// Live particles across the whole stage - what
+    /// [`Pipeline::upload`]'s buffer has to hold.
+    #[must_use]
+    pub fn alive_count(&self) -> usize {
+        self.instances
+            .iter()
+            .map(|instance| instance.system.alive_count())
+            .sum()
+    }
+
+    /// Whether `playing` still names the instance it was handed out for.
+    #[must_use]
+    pub fn is_playing(&self, playing: Playing) -> bool {
+        self.instance(playing).is_some()
+    }
+
+    fn free_slot(&self) -> Option<usize> {
+        self.instances.iter().position(|instance| !instance.busy())
+    }
+
+    fn free_count(&self) -> usize {
+        self.instances.iter().filter(|i| !i.busy()).count()
+    }
+
+    fn claim(
+        &mut self,
+        index: usize,
+        effect: &std::sync::Arc<Effect>,
+        point: Vec3,
+        scale: f32,
+        attached: bool,
+    ) -> Playing {
+        let instance = &mut self.instances[index];
+        instance.generation = instance.generation.wrapping_add(1);
+        instance.effect = Some(effect.clone());
+        instance.system = System::new();
+        instance.anchor = point;
+        instance.attached = attached;
+        instance.system.ignite(effect, point, scale);
+        Playing {
+            index: index as u16,
+            generation: instance.generation,
+        }
+    }
+
+    fn instance(&self, playing: Playing) -> Option<&Instance> {
+        self.instances
+            .get(usize::from(playing.index))
+            .filter(|instance| instance.generation == playing.generation && instance.attached)
+    }
+
+    fn get_mut(&mut self, playing: Playing) -> Option<&mut Instance> {
+        self.instances
+            .get_mut(usize::from(playing.index))
+            .filter(|instance| instance.generation == playing.generation && instance.attached)
     }
 }
 
@@ -1110,8 +1487,14 @@ pub const BLEND_ALPHA_OVER: wgpu::BlendState = wgpu::BlendState {
     },
 };
 
-/// The maximum vertices [`Pipeline`]'s buffer holds: one quad per [`MAX_PARTICLES`].
-pub const MAX_VERTICES: usize = MAX_PARTICLES * 6;
+/// The maximum vertices [`Pipeline`]'s buffer holds: one quad for every
+/// particle a full [`Stage`] can hold.
+///
+/// Derived rather than picked. A buffer sized for one [`System`] would
+/// silently drop whole effects off a busy grid - the truncation in
+/// [`Pipeline::upload`] cuts at a vertex, so an over-long frame loses the
+/// tail of the last quads and reads as an explosion that never happened.
+pub const MAX_VERTICES: usize = MAX_INSTANCES * MAX_PARTICLES * 6;
 
 /// The particle draw pipeline - two of them, one per blend class, sharing
 /// the shader and layout.
@@ -1282,6 +1665,16 @@ impl Pipeline {
         block[7] = [0.0, 0.0, 0.0, 1.0];
         queue.write_buffer(&self.uniforms, 0, bytemuck::cast_slice(&block));
 
+        // A `Stage` cannot produce more than this, so an overflow means the
+        // buffer and the pool have drifted apart rather than that the scene
+        // is busy - worth failing on in a debug build instead of quietly
+        // losing the tail.
+        debug_assert!(
+            additive.len() <= MAX_VERTICES && alpha_over.len() <= MAX_VERTICES,
+            "particle vertices past the buffer: {} additive, {} alpha, cap {MAX_VERTICES}",
+            additive.len(),
+            alpha_over.len(),
+        );
         let n = additive.len().min(MAX_VERTICES);
         queue.write_buffer(
             &self.additive_vertices,
@@ -1320,5 +1713,188 @@ impl Pipeline {
             pass.set_vertex_buffer(0, self.additive_vertices.slice(..));
             pass.draw(0..self.additive_count, 0..1);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const DT: f32 = 1.0 / TICK_HZ;
+
+    fn constant(value: f32) -> Channel {
+        Channel {
+            period: 0.0,
+            mode: ChannelMode::Constant,
+            lo: 0.0,
+            hi: value,
+            keys: Vec::new(),
+        }
+    }
+
+    /// One emitter that drops a stationary particle a tick, each living ten
+    /// ticks - enough to tell "still emitting" from "still fading".
+    fn effect(name: &str, looping: bool, duration_ticks: f32) -> std::sync::Arc<Effect> {
+        std::sync::Arc::new(Effect {
+            name: name.to_string(),
+            emitters: vec![EmitterSpec {
+                name: name.to_string(),
+                duration_ticks,
+                looping,
+                interval_ticks: (1, 1),
+                per_emission: (1, 1),
+                lifetime_ticks: (10.0, 0.0),
+                speed_per_tick: (0.0, 0.0),
+                direction: Direction::Cone { half_angle: 0.0 },
+                drag_per_tick: Vec3::ONE,
+                gravity_per_tick2: 0.0,
+                live_cap: 100,
+                size: constant(1.0),
+                alpha: constant(255.0),
+                palette: Box::new([[1.0; 4]; 256]),
+                colour_mode: ColourMode::RandomEntry,
+                render: Render::Billboard,
+                blend: Blend::Additive,
+                particle_child: None,
+                death_child: None,
+                spawn_probability: 1.0,
+                velocity_inherit: 0.0,
+            }],
+            roots: vec![0],
+        })
+    }
+
+    fn run(system: &mut System, effect: &Effect, ticks: usize, rng: &mut Rng) {
+        for _ in 0..ticks {
+            system.advance(effect, DT, Vec3::ZERO, rng);
+        }
+    }
+
+    /// The rocket flare's case: an authored duration far shorter than the
+    /// flight it has to cover, which the `LOOPING` flag says to ignore.
+    #[test]
+    fn a_looping_emitter_outlives_its_authored_duration() {
+        let mut rng = Rng::new(1);
+        let brief = effect("brief", false, 10.0);
+        let forever = effect("forever", true, 10.0);
+
+        let mut one_shot = System::new();
+        one_shot.ignite(&brief, Vec3::ZERO, 1.0);
+        run(&mut one_shot, &brief, 200, &mut rng);
+        assert!(!one_shot.is_running(), "a 10-tick emitter ran for 200");
+
+        let mut looping = System::new();
+        looping.ignite(&forever, Vec3::ZERO, 1.0);
+        run(&mut looping, &forever, 200, &mut rng);
+        assert!(
+            looping.is_running() && looping.alive_count() > 0,
+            "a looping emitter stopped at its authored duration"
+        );
+    }
+
+    #[test]
+    fn stopping_leaves_the_live_particles_to_finish() {
+        let mut rng = Rng::new(2);
+        let forever = effect("forever", true, 10.0);
+        let mut system = System::new();
+        system.ignite(&forever, Vec3::ZERO, 1.0);
+        run(&mut system, &forever, 30, &mut rng);
+        assert!(system.alive_count() > 0);
+
+        system.stop();
+        // One tick later the emitters are silent but the particles are not.
+        run(&mut system, &forever, 1, &mut rng);
+        assert!(system.alive_count() > 0, "stop() killed the live particles");
+        // A lifetime later there is nothing left and nothing making more.
+        run(&mut system, &forever, 12, &mut rng);
+        assert_eq!(system.alive_count(), 0);
+        assert!(!system.is_running());
+    }
+
+    #[test]
+    fn attach_keeps_instances_free_for_bursts() {
+        let mut stage = Stage::new();
+        let forever = effect("forever", true, 10.0);
+        let mut attached = Vec::new();
+        while let Some(handle) = stage.attach(&forever, Vec3::ZERO, 1.0) {
+            attached.push(handle);
+        }
+        assert_eq!(attached.len(), MAX_INSTANCES - RESERVED_FOR_BURSTS);
+        assert!(
+            stage.play(&forever, Vec3::ZERO, 1.0).is_some(),
+            "a burst had nowhere to play with the reserve in place"
+        );
+    }
+
+    /// The failure this guards is invisible rather than loud: a recycled
+    /// flare would leave a rocket with no glow while another rocket's glow
+    /// jumped to it.
+    #[test]
+    fn a_burst_never_recycles_an_attached_instance() {
+        let mut stage = Stage::new();
+        let forever = effect("forever", true, 10.0);
+        let burst = effect("burst", false, 4.0);
+        let attached: Vec<_> =
+            std::iter::from_fn(|| stage.attach(&forever, Vec3::ZERO, 1.0)).collect();
+
+        for _ in 0..MAX_INSTANCES * 2 {
+            assert!(stage.play(&burst, Vec3::ZERO, 1.0).is_some());
+        }
+        for handle in attached {
+            assert!(
+                stage.is_playing(handle),
+                "a burst evicted an attached flare"
+            );
+        }
+    }
+
+    #[test]
+    fn a_handle_kept_past_detach_moves_nothing() {
+        let mut stage = Stage::new();
+        let forever = effect("forever", true, 10.0);
+        let mut rng = Rng::new(3);
+
+        let stale = stage.attach(&forever, Vec3::ZERO, 1.0).expect("attach");
+        stage.detach(stale);
+        assert!(
+            !stage.is_playing(stale),
+            "a detached handle still owns a slot"
+        );
+
+        // Let the detached instance's particles finish so the slot frees,
+        // then hand it to someone else.
+        for _ in 0..16 {
+            stage.advance(DT, &mut rng);
+        }
+        let fresh = stage.attach(&forever, Vec3::ONE, 1.0).expect("re-attach");
+        stage.follow(stale, Vec3::splat(100.0));
+        stage.advance(DT, &mut rng);
+        assert!(stage.is_playing(fresh));
+        let (additive, _) = stage.vertices(Vec3::X, Vec3::Y);
+        assert!(
+            additive.iter().all(|vertex| vertex.position[0] < 50.0),
+            "a stale handle dragged the instance that took its slot"
+        );
+    }
+
+    #[test]
+    fn a_library_keeps_load_order_and_replaces_by_name() {
+        let mut library = Library::new();
+        assert!(library.is_empty());
+        library.insert("a", (*effect("a", false, 1.0)).clone());
+        library.insert("b", (*effect("b", false, 1.0)).clone());
+        library.insert("a", (*effect("a2", false, 1.0)).clone());
+        assert_eq!(library.len(), 2);
+        assert_eq!(library.names().collect::<Vec<_>>(), ["a", "b"]);
+        assert_eq!(library.get("a").expect("a").name, "a2");
+        assert!(library.get("missing").is_none());
+    }
+
+    #[test]
+    fn the_effect_path_is_the_one_the_original_builds() {
+        assert_eq!(
+            effect_path("WO_ROCKET_EXPLO"),
+            r"Data\Psys\WO_ROCKET_EXPLO.POB"
+        );
     }
 }

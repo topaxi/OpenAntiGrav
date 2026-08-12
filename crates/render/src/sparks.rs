@@ -43,11 +43,11 @@
 //!
 //! # The pipeline lives here for compatibility
 //!
-//! [`Pipeline`], [`BLEND`], [`BLEND_ALPHA_OVER`] and [`MAX_VERTICES`] are
-//! re-exports of [`crate::psys`]'s, which is where they moved when they
-//! stopped being spark-specific.
+//! [`Pipeline`], [`BLEND`], [`BLEND_ALPHA_OVER`], [`MAX_VERTICES`] and
+//! [`effect_path`] are re-exports of [`crate::psys`]'s, which is where they
+//! moved when they stopped being spark-specific.
 
-pub use crate::psys::{BLEND, BLEND_ALPHA_OVER, MAX_VERTICES, Pipeline};
+pub use crate::psys::{BLEND, BLEND_ALPHA_OVER, MAX_VERTICES, Pipeline, effect_path};
 
 /// The effect `ShipCollisionFx_Trigger` spawns when the contact dealt
 /// damage: a four-emitter tree - orange smoke puffs, a bright spark
@@ -57,12 +57,6 @@ pub const DAMAGE_EFFECT: &str = "WO_SHIP_COLL_SPARK_DAMAGE";
 /// The effect it spawns when the contact dealt none: the same fountain and
 /// `bits`, without the smoke or the embers.
 pub const NO_DAMAGE_EFFECT: &str = "WO_SHIP_COLL_SPARK_NODAMAGE";
-
-/// The `Data\Psys\%s.POB` path the original builds at `FUN_089156a0`.
-#[must_use]
-pub fn effect_path(name: &str) -> String {
-    format!(r"Data\Psys\{name}.POB")
-}
 
 /// Seconds a wall contact must persist before another burst is allowed.
 ///

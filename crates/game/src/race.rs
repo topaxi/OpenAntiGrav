@@ -243,6 +243,11 @@ fn exhaust_seed(slot: usize) -> u64 {
 /// [`EXHAUST_SEED`] for the same determinism reason.
 pub const SPARKS_SEED: u64 = 0x5_9a_2b_00;
 
+/// Seed for the [`psys::Stage`]'s spawn parameters - the rocket flares and
+/// the detonations. Distinct from [`SPARKS_SEED`] for the same reason that
+/// one is distinct from [`SEED`].
+pub const STAGE_SEED: u64 = 0x5_9a_2b_01;
+
 /// A pad index for [`Race::state_hash`], with a discriminant byte.
 ///
 /// Or "not on a pad" hashes the same as "on pad zero", which is precisely the
@@ -273,52 +278,39 @@ pub const ROCKET_MODEL_ENTRY: &str = r"Data\Weapons\Rocket.vex";
 /// at the distance a rocket is fired from.
 pub const PROJECTILE_SPRITE_HALF_SIZE: f32 = 1.5;
 
-/// Half-width of the flare carried by a rocket that *is* drawn as a model.
+/// The effect the original attaches to every rocket at launch.
 ///
-/// **The flare itself is recovered and its size is not.** The original attaches
-/// a `WO_ROCKET_FLARE` particle system to every rocket at launch
-/// (`Rocket_Init`, tag `ROFL`). Its parameters **are** readable - the emitter
-/// tree parses and `oag_render::psys` plays it (`docs/formats/pob.md`) - but
-/// nothing here reads them yet: a flare is per-rocket state and the particle
-/// pool is per-effect, so wiring it needs one shared pool rather than another
-/// constant. Until then the *presence* of a glow is recovered and every number
-/// here is invented, sized to sit around a model of radius 1.34 rather than to
-/// replace it.
+/// **Recovered, confidence 72.** `Rocket_Init` (`0x0885cdb8`) spawns it through
+/// `Psys_Spawn_q` with the tag `ROFL`; the string is at `0x08a7c100`. Two
+/// emitters, both [`oag_formats::pob::flags::LOOPING`], so it runs for as long
+/// as the rocket does rather than for its authored 100 ticks - see
+/// `docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`.
 ///
-/// **Kept well under the model's own radius on purpose**, by reasoning rather
-/// than by measurement: this is an *additive* sprite at full alpha, so at
-/// anything near the model's size it would blow the dart out to a flat white
-/// blob and undo the point of drawing the mesh. No rendered frame has yet been
-/// captured with a rocket in it to check the balance against - see the note on
-/// [`Race::rocket_model_matrices`].
-pub const ROCKET_FLARE_HALF_SIZE: f32 = 0.55;
+/// **There is no separate trail effect.** The Shuriken authors a `_HEAD` and a
+/// `_TRAIL`; the rocket has only this, so the one emitter draws both the glow
+/// at the nose and the streak behind it.
+pub const ROCKET_FLARE_EFFECT: &str = "WO_ROCKET_FLARE";
 
-/// How far behind a rocket's centre its flare sits, in world units.
+/// The explosion a rocket that hits **track geometry** plays.
 ///
-/// **Invented**, and set from the model rather than picked: `Rocket.vex` spans
-/// `2.684` along its own forward axis (pinned by
-/// `the_rocket_model_is_longest_along_the_axis_it_is_flown_down`), so half of
-/// that puts the glow at the tail instead of over the fuselage.
-pub const ROCKET_FLARE_SETBACK: f32 = 1.34;
+/// **Recovered, confidence 72.** Both of `Rocket_Update`'s (`0x0885d2a8`)
+/// detonating branches spawn it, tag `ROD2`, string `0x08a7c110`. Four
+/// emitters: a root glow, `fat_streaks`, a `SMOKERING` and `Fire_Emitter`.
+pub const TRACK_BLAST_EFFECT: &str = "WO_ROCKET_EXPLO_TRACK";
 
-/// Half-width a blast flash reaches at the end of its fade, in world units.
+/// The explosion a rocket that hits a **craft** plays.
 ///
-/// **Invented**, and deliberately *not* the disc's `<Rocket blastradius>`: that
-/// is a gameplay distance and drawing it would claim the picture shows the
-/// damage volume, which nothing has measured.
-pub const BLAST_FLASH_HALF_SIZE: f32 = 8.0;
-
-/// How much larger a blast on track geometry is drawn than one on a hull.
+/// **Recovered, confidence 72.** `Rocket_SpawnCraftExplosion_q` (`0x0886ed34`),
+/// reached only from the craft-hit path `Rocket_HitCraft_q` (`0x0886ebdc`), tag
+/// `ROEX`, string `0x08a7ca74`. Seven emitters, the largest tree on the disc:
+/// a root that hangs a `SMOKEMUSHROOM` off every particle, 32 pieces of
+/// `DEBRIS` a tick, a `SMOKERING`, a `GLOW`, and a second per-particle pair of
+/// `FIREMUSHROOM` glows.
 ///
-/// **The split is recovered; the ratio is invented.** The original authors two
-/// separate particle systems and picks between them by what was struck -
-/// `WO_ROCKET_EXPLO_TRACK` from `Rocket_Update`'s collision branches,
-/// `WO_ROCKET_EXPLO` from `Rocket_HitCraft_q` - so drawing one flash for both
-/// was a real mismatch rather than a missing flourish. What the two *look* like
-/// is decoded but not yet played (`oag_render::psys`), so this engine still
-/// distinguishes them only by size and by where they sit; a track hit reads
-/// bigger, which is what the emulator's frames show.
-pub const TRACK_BLAST_SIZE_RATIO: f32 = 1.45;
+/// That the two explosions are separately authored is confirmed rather than
+/// inferred from the names, which is why this engine plays two files rather
+/// than one file at two sizes.
+pub const CRAFT_BLAST_EFFECT: &str = "WO_ROCKET_EXPLO";
 
 /// How far below a struck craft's centre its blast is drawn, in world units.
 ///
@@ -327,56 +319,19 @@ pub const TRACK_BLAST_SIZE_RATIO: f32 = 1.45;
 /// from the rocket's impact point.
 pub const CRAFT_BLAST_DROP: f32 = 2.5;
 
-/// How many puffs of smoke a projectile leaves behind it.
+/// Every `Data\Psys` effect this race loads, and what triggers it.
 ///
-/// **The trail is recovered; its shape is not.** The original attaches
-/// `WO_ROCKET_FLARE` to every rocket at launch and it is the only effect the
-/// rocket carries in flight - there is no separate `WO_ROCKET_TRAIL` on the
-/// disc, unlike the Shuriken, which has both a `_HEAD` and a `_TRAIL`. So one
-/// emitter draws both the glow at the nose and the streak behind it. What that
-/// emitter's particles look like now parses (`docs/formats/pob.md`) and is not
-/// yet played, so the count, the spacing and the fade here are all still
-/// invented.
-///
-/// One puff a tick at 60 Hz, so eight of them is an eighth of a second of
-/// travel - about 35 units at a Venom rocket's speed, or two craft lengths.
-/// Counted in `oag_render::exhaust::MAX_SPRITES`' budget table; **raising it
-/// means raising that too**, or the extra puffs are silently truncated.
-pub const PROJECTILE_TRAIL_PUFFS: usize = 8;
-
-/// Half-width of the youngest smoke puff, in world units. **Invented.**
-pub const TRAIL_PUFF_HALF_SIZE: f32 = 0.7;
-
-/// How much wider the oldest puff is than the youngest.
-///
-/// **Invented**, and the reason the trail reads as smoke rather than as a row of
-/// dots: real exhaust spreads as it is left behind, so the puffs grow while they
-/// fade.
-pub const TRAIL_PUFF_SPREAD: f32 = 2.6;
-
-/// Alpha of the youngest smoke puff.
-///
-/// **Invented, and deliberately low.** These are drawn through the engine
-/// flare's *additive* pipeline, where several overlapping puffs sum: at a high
-/// alpha a trail turns into a solid white bar and swallows the rocket in front
-/// of it. The trail's density comes from the count, not from any one puff.
-pub const TRAIL_PUFF_ALPHA: f32 = 0.32;
-
-/// How long a blast flash is drawn for, in seconds.
-///
-/// **Invented**, and raised from `0.35` once a real volley could be watched: at
-/// a third of a second an impact was over before it registered as anything.
-pub const BLAST_FLASH_SECONDS: f32 = 0.6;
-
-/// How many overlapping puffs one blast is drawn as.
-///
-/// **Invented.** One additive billboard reads as a flat disc whatever its size;
-/// three at different sizes and offsets, expanding at different rates, read as
-/// a fireball. The original draws a whole authored particle system
-/// (`WO_ROCKET_EXPLO`, seven emitters, and `WO_ROCKET_EXPLO_TRACK`, five) whose
-/// parameters now parse and are not yet played, so this is a stand-in that is
-/// *legible*, not one that is right.
-pub const BLAST_PUFFS: usize = 3;
+/// **The list is the trigger set, not the asset set.** There are 35 effects on
+/// the PSP disc and 41 on the PS2 one; what decides whether one appears here is
+/// whether the *executable's* reason for playing it has been recovered, because
+/// an effect with no recovered trigger would just be this engine guessing when
+/// to fire it. See `HANDOVER.md` for the ones still waiting on that.
+pub const RACE_EFFECTS: [&str; 4] = [
+    sparks::DAMAGE_EFFECT,
+    ROCKET_FLARE_EFFECT,
+    TRACK_BLAST_EFFECT,
+    CRAFT_BLAST_EFFECT,
+];
 
 /// How much faster a craft assumes a Turbo will make it, when deciding whether
 /// it can afford to fire one.
@@ -709,15 +664,16 @@ pub struct Setup {
     /// node as it rides the hull. Empty means the model authors none, and
     /// the burst falls back to anchoring at the contact point itself.
     pub collision_fx: Vec<Vec3>,
-    /// The collision-spark effect, parsed from the disc's own
-    /// `WO_SHIP_COLL_SPARK_DAMAGE.POB`.
+    /// Every [`RACE_EFFECTS`] entry that loaded, parsed from the disc's own
+    /// `Data\Psys\*.POB`.
     ///
-    /// `None` means the archive set had no such entry or it would not
-    /// parse, and the burst is then **not drawn** rather than approximated:
-    /// every number that shapes it lives in that file (see
-    /// `oag_render::sparks`), so there is nothing left to fall back to.
-    /// Headless tests that build a `Race` by hand leave it `None`.
-    pub spark_effect: Option<std::sync::Arc<psys::Effect>>,
+    /// An effect missing from here - no such archive entry, or a blob that
+    /// would not parse - is **not drawn** rather than approximated: every
+    /// number that shapes one lives in its file, so there is nothing left to
+    /// fall back to and a stand-in would be this engine's invention rather
+    /// than the game's. Headless tests that build a `Race` by hand leave the
+    /// library empty, which is the same path.
+    pub effects: psys::Library,
     /// The track's speedup pads, as trigger volumes.
     ///
     /// The same nodes [`Loaded::pad_model`] draws, decoded for what they *do*
@@ -1651,16 +1607,18 @@ pub fn load(options: &Options) -> Result<Loaded> {
         )
     });
 
-    let spark_effect = match particle_effect(&mut archives, sparks::DAMAGE_EFFECT) {
-        Ok((effect, note)) => {
-            report.push(note);
-            Some(std::sync::Arc::new(effect))
+    // One loop for all of them, and one report line each: adding an effect
+    // is adding its name to `RACE_EFFECTS` and a trigger, never a loader.
+    let mut effects = psys::Library::new();
+    for name in RACE_EFFECTS {
+        match particle_effect(&mut archives, name) {
+            Ok((effect, note)) => {
+                report.push(note);
+                effects.insert(name, effect);
+            }
+            Err(why) => report.push(format!("{why} - {name} will not be drawn")),
         }
-        Err(why) => {
-            report.push(format!("{why} - collision sparks will not be drawn"));
-            None
-        }
-    };
+    }
 
     let noise = match mip_texture(&mut archives, NOISE_TEXTURE) {
         Ok((texture, note)) => {
@@ -1749,7 +1707,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             internal,
             nozzle,
             collision_fx,
-            spark_effect,
+            effects,
             speedup_pads,
             weapon_pads,
             weapons,
@@ -2552,8 +2510,26 @@ pub struct Race {
     /// Here rather than in `World`, for the same reason [`Self::exhaust`] is -
     /// see `oag_render::psys`'s module doc comment.
     sparks: psys::System,
-    /// The `.pob` [`Self::sparks`] plays - see [`Setup::spark_effect`].
-    spark_effect: Option<std::sync::Arc<psys::Effect>>,
+    /// Every `.pob` this race loaded - see [`Setup::effects`].
+    effects: psys::Library,
+    /// The multi-instance pool everything *except* the hull-mounted sparks
+    /// plays in: the rockets' flares and their detonations today, and
+    /// whatever gets a recovered trigger next.
+    ///
+    /// [`Self::sparks`] stays its own [`psys::System`] because it is one
+    /// permanently hull-mounted emitter re-ignited on a cooldown rather than
+    /// an effect that comes and goes - see [`Self::sparks_anchor`].
+    stage: psys::Stage,
+    /// The flare instance riding each live projectile, indexed by its
+    /// [`oag_gameplay::projectile`] slot.
+    ///
+    /// The slot **is** the identity: it is fixed for a projectile's whole
+    /// life and reused the moment the projectile is gone, which is exactly
+    /// when the flare should be a fresh one.
+    projectile_flare: [Option<psys::Playing>; oag_gameplay::projectile::MAX_PROJECTILES],
+    /// The stage's generator, deliberately **not** `world.rng` - see
+    /// [`Self::exhaust_rng`].
+    stage_rng: Rng,
     /// How many bursts the *trigger* has fired, whether or not an effect
     /// was loaded to play them.
     ///
@@ -2643,32 +2619,6 @@ pub struct Race {
     weapons: Option<oag_formats::weapons::WeaponStats>,
     /// The speed class, which indexes the pickup odds - see [`Setup::class`].
     class: SpeedClass,
-    /// Seconds left on each blast flash, indexed the same as its point below.
-    ///
-    /// **Render-only state**, on `Race` rather than in `World` for the reason
-    /// [`Self::boost_kick`] is - and here the case is unusually clear, because
-    /// the whole effect is a placeholder. See [`Self::ignite_blast_flash`].
-    blast_flash_left: [f32; oag_gameplay::projectile::MAX_PROJECTILES],
-    /// Where each blast flash is, in world space. Read only where the timer
-    /// beside it is positive.
-    blast_flash_point: [Vec3; oag_gameplay::projectile::MAX_PROJECTILES],
-    /// Whether each blast flash went off on track geometry rather than a hull.
-    ///
-    /// **The distinction is the original's**, even though what this engine draws
-    /// for either is not: `WO_ROCKET_EXPLO_TRACK` and `WO_ROCKET_EXPLO` are
-    /// separately authored particle systems, chosen by exactly this question.
-    /// See [`TRACK_BLAST_SIZE_RATIO`] and
-    /// `docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`.
-    blast_flash_on_track: [bool; oag_gameplay::projectile::MAX_PROJECTILES],
-    /// Where each projectile has been, newest first, for its smoke trail.
-    ///
-    /// **Render-only state**, like the blast flashes beside it: a trail is drawn
-    /// and never read back, so it cannot reach the simulation and is not hashed.
-    /// Indexed by projectile slot, and reset when a slot empties so a new
-    /// projectile never inherits the last one's streak.
-    projectile_trail: [[Vec3; PROJECTILE_TRAIL_PUFFS]; oag_gameplay::projectile::MAX_PROJECTILES],
-    /// How many entries of each [`Self::projectile_trail`] row are real.
-    projectile_trail_len: [usize; oag_gameplay::projectile::MAX_PROJECTILES],
     /// How far the boost's field-of-view kick has opened, `0.0` to `1.0`.
     ///
     /// Render-only state, on `Race` rather than in `World` for the same reason
@@ -2774,7 +2724,7 @@ impl Race {
             internal,
             nozzle,
             collision_fx,
-            spark_effect,
+            effects,
             speedup_pads,
             weapon_pads,
             weapons,
@@ -2973,7 +2923,10 @@ impl Race {
             nozzle,
             collision_fx,
             sparks: psys::System::new(),
-            spark_effect,
+            effects,
+            stage: psys::Stage::new(),
+            projectile_flare: [None; oag_gameplay::projectile::MAX_PROJECTILES],
+            stage_rng: Rng::new(STAGE_SEED),
             sparks_ignitions: 0,
             sparks_rng: Rng::new(SPARKS_SEED),
             // No sync frame to be mid-scrape on, so the first tick's contact -
@@ -2998,12 +2951,6 @@ impl Race {
             class_gravity_scale,
             pad_current: [None; MAX_SHIPS],
             pad_previous_position: [None; MAX_SHIPS],
-            blast_flash_left: [0.0; oag_gameplay::projectile::MAX_PROJECTILES],
-            blast_flash_point: [Vec3::ZERO; oag_gameplay::projectile::MAX_PROJECTILES],
-            blast_flash_on_track: [false; oag_gameplay::projectile::MAX_PROJECTILES],
-            projectile_trail: [[Vec3::ZERO; PROJECTILE_TRAIL_PUFFS];
-                oag_gameplay::projectile::MAX_PROJECTILES],
-            projectile_trail_len: [0; oag_gameplay::projectile::MAX_PROJECTILES],
             boost_kick: 0.0,
             boost_fov_kick: crate::display::BoostFovKick::DEFAULT,
             flaps: [0.0, 0.0],
@@ -3737,13 +3684,13 @@ impl Race {
             rocket.as_ref(),
             damage_rules,
         );
-        self.advance_blast_flashes();
-        // After `projectile::step`, so a puff is laid where the projectile
-        // actually ended the tick.
-        self.advance_projectile_trails();
+        // After `projectile::step`, so a flare rides where its rocket
+        // actually ended the tick rather than a tick behind it.
+        self.advance_projectile_flares();
         for impact in impacts.iter().flatten() {
-            self.ignite_blast_flash(impact.point, impact.struck.map(usize::from));
+            self.ignite_blast(impact.point, impact.struck.map(usize::from));
         }
+        self.stage.advance(self.dt, &mut self.stage_rng);
 
         self.respawn_cooldown = self.respawn_cooldown.saturating_sub(1);
         if self.reset_zone_touched(&env, before) {
@@ -3896,8 +3843,8 @@ impl Race {
         // rather than spawn once and go silent.
         self.sparks_cooldown = (self.sparks_cooldown - self.dt).max(0.0);
         // The trigger rule runs whether or not the disc's own effect
-        // loaded - see `Setup::spark_effect`. Only the pool needs it.
-        let effect = self.spark_effect.clone();
+        // loaded - see `Setup::effects`. Only the pool needs it.
+        let effect = self.effects.get(sparks::DAMAGE_EFFECT).cloned();
         let can_fire = evaluated.wall.impact && self.sparks_cooldown <= 0.0;
         let model_matrix = self.ship_model_matrix();
         if can_fire && let Some(contact) = evaluated.wall.resolved {
@@ -4218,104 +4165,111 @@ impl Race {
         hasher.finish()
     }
 
-    /// Arms a blast flash where a rocket went off.
+    /// Plays the explosion a rocket that just went off authored.
     ///
-    /// # What is recovered here, and what is still a placeholder
+    /// **Recovered end to end.** Which of the two files plays:
+    /// [`TRACK_BLAST_EFFECT`] from `Rocket_Update`'s (`0x0885d2a8`) two
+    /// collision branches, [`CRAFT_BLAST_EFFECT`] from
+    /// `Rocket_SpawnCraftExplosion_q` (`0x0886ed34`) on the craft-hit path.
+    /// Where it plays: a craft hit is drawn at the *struck craft's* own
+    /// position dropped by [`CRAFT_BLAST_DROP`], not at the rocket's impact
+    /// point. What it looks like: everything, out of the file, through
+    /// [`psys::Stage`]. A craft that has since gone inactive falls back to
+    /// the impact point rather than reading a stale pose.
     ///
-    /// **Recovered: that there are two of these, and which one goes off.** The
-    /// original authors `WO_ROCKET_EXPLO_TRACK` and `WO_ROCKET_EXPLO`
-    /// separately and picks between them by whether the rocket struck track
-    /// geometry or a craft - `Rocket_Update` (`0x0885d2a8`) spawns the first at
-    /// both of its collision branches, `Rocket_HitCraft_q` (`0x0886ebdc`) the
-    /// second. It also places the craft-hit one at the *struck craft's* position
-    /// dropped by [`CRAFT_BLAST_DROP`], not at the rocket's impact point. See
-    /// `docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`.
+    /// Nothing is drawn when the effect did not load. That is deliberate and
+    /// it is the rule for every effect here: an authored particle system is
+    /// not something to approximate with billboards, because a stand-in that
+    /// reads as *plausible* is how a wrong picture survives review. Until
+    /// 2026-08-12 this method drew three expanding additive puffs and a
+    /// separate eight-billboard smoke trail, all invented.
     ///
-    /// **Still a placeholder: what either one looks like.** The `.pob` that
-    /// gives colour, size and lifetime parses and plays
-    /// (`oag_render::psys`) but is not wired here yet, and the original's
-    /// other weapon effects -
-    /// `Ship Muzzle` (`0x3e2`), `cannon_flash` (`0x3eb`), the per-team
-    /// `<Team>shield.vex` - are not built at all. What this draws for both is
-    /// one additive billboard in the engine flare's own texture, fading over
-    /// [`BLAST_FLASH_SECONDS`], with the track variant drawn
-    /// [`TRACK_BLAST_SIZE_RATIO`] larger.
-    ///
-    /// [`Race::sparks`] is deliberately **not** reused for it, and the reason is
-    /// worth recording: `psys::System::advance` re-anchors the whole system to the
-    /// hull on every tick, so a burst ignited at a rocket's impact would emit
-    /// its particles from the craft instead of from the impact. It is one
-    /// hull-mounted emitter, not a general particle system.
-    ///
-    /// First free slot, or the shortest-lived one when every slot is busy: a
-    /// flash is decoration, so overwriting the one closest to finishing is the
-    /// least visible loss. Render-only state, so this ordering cannot reach the
-    /// simulation.
-    fn ignite_blast_flash(&mut self, point: Vec3, struck: Option<usize>) {
-        let slot = self
-            .blast_flash_left
-            .iter()
-            .enumerate()
-            .min_by(|(_, a), (_, b)| a.total_cmp(b))
-            .map_or(0, |(index, _)| index);
-        self.blast_flash_left[slot] = BLAST_FLASH_SECONDS;
-        // A hull hit is drawn at the struck craft, dropped, rather than at the
-        // impact point - the original's own choice, and the reason this takes
-        // `struck` rather than deriving everything from `point`. A craft that
-        // has since gone inactive falls back to the impact point rather than
-        // reading a stale pose.
-        self.blast_flash_point[slot] = match struck {
-            Some(slot) if self.world.ships[slot].active => {
-                self.world.ships[slot].physics.body.position - Vec3::Y * CRAFT_BLAST_DROP
-            }
-            _ => point,
+    /// [`Race::sparks`] is deliberately not reused for it: that system
+    /// re-anchors to the hull every tick, so a burst ignited at a rocket's
+    /// impact would emit from the craft instead. It is one hull-mounted
+    /// emitter, and this is why the stage exists alongside it.
+    fn ignite_blast(&mut self, point: Vec3, struck: Option<usize>) {
+        let (name, at) = self.blast_for(point, struck);
+        let Some(effect) = self.effects.get(name).cloned() else {
+            return;
         };
-        self.blast_flash_on_track[slot] = struck.is_none();
+        // Neutral severity: the field the collision sparks derive from an
+        // impulse is the *hull's*, and nothing on the rocket path has been
+        // read as feeding it. See `oag_render::sparks::severity`.
+        self.stage.play(&effect, at, 1.0);
     }
 
-    /// Ages every blast flash by one tick.
-    fn advance_blast_flashes(&mut self) {
-        for left in &mut self.blast_flash_left {
-            *left = (*left - self.dt).max(0.0);
+    /// Which explosion a hit plays and where, split out from
+    /// [`Race::ignite_blast`] so the recovered part can be asserted without a
+    /// disc to load the effect from.
+    fn blast_for(&self, point: Vec3, struck: Option<usize>) -> (&'static str, Vec3) {
+        match struck {
+            Some(slot) if self.world.ships[slot].active => (
+                CRAFT_BLAST_EFFECT,
+                self.world.ships[slot].physics.body.position - Vec3::Y * CRAFT_BLAST_DROP,
+            ),
+            // A craft that has gone inactive since the hit falls back to the
+            // impact point rather than reading a stale pose - still its own
+            // effect, because what was struck is what chose the file.
+            Some(_) => (CRAFT_BLAST_EFFECT, point),
+            None => (TRACK_BLAST_EFFECT, point),
         }
     }
 
-    /// Lays down one smoke puff behind every projectile still in the air.
+    /// Keeps a [`ROCKET_FLARE_EFFECT`] instance riding every projectile in
+    /// the air, and takes it off the ones that are gone.
     ///
-    /// Newest first, so the render can fade by index without knowing the tick.
-    /// **Called after the projectiles have flown**, so the head of the trail is
-    /// where the projectile is now rather than a tick behind it.
+    /// **Recovered.** `Rocket_Init` (`0x0885cdb8`) attaches the flare at
+    /// launch and it rides the rocket for the whole flight; both emitters are
+    /// [`oag_formats::pob::flags::LOOPING`], so the 100-tick duration they
+    /// author is not a countdown and the effect does not need re-triggering
+    /// to outlast it.
     ///
-    /// A slot with nothing in it has its trail dropped rather than left to
-    /// linger. Smoke that outlived its rocket would be the nicer picture, but
-    /// the slot is reused the moment anything else is fired and the streak would
-    /// then belong to two projectiles at once.
-    fn advance_projectile_trails(&mut self) {
+    /// A detonated rocket has its flare **detached, not killed**: emission
+    /// stops and the particles already out finish their own lives, so the
+    /// smoke outlives the rocket the way it does in the original. That is
+    /// also the bug the invented trail could not avoid - it had to drop the
+    /// whole streak the instant the slot vacated, or the next projectile to
+    /// take that slot would have inherited it.
+    ///
+    /// **Called after `projectile::step`**, so a flare is anchored where its
+    /// rocket ended the tick.
+    fn advance_projectile_flares(&mut self) {
+        let effect = self.effects.get(ROCKET_FLARE_EFFECT).cloned();
         for (slot, projectile) in self.world.projectiles.slots.iter().enumerate() {
-            if projectile.kind.is_none() {
-                self.projectile_trail_len[slot] = 0;
-                continue;
+            match (projectile.kind.is_none(), self.projectile_flare[slot]) {
+                // Gone: hand the instance back and let it fade out.
+                (true, Some(playing)) => {
+                    self.stage.detach(playing);
+                    self.projectile_flare[slot] = None;
+                }
+                (true, None) => {}
+                (false, Some(playing)) => self.stage.follow(playing, projectile.position),
+                // Freshly in the air. `attach` returning `None` means the
+                // stage is full of flares already, and this rocket simply
+                // flies without one rather than evicting someone else's.
+                (false, None) => {
+                    if let Some(effect) = effect.as_ref() {
+                        self.projectile_flare[slot] =
+                            self.stage.attach(effect, projectile.position, 1.0);
+                    }
+                }
             }
-            let row = &mut self.projectile_trail[slot];
-            let filled = self.projectile_trail_len[slot].min(PROJECTILE_TRAIL_PUFFS - 1);
-            row.copy_within(0..filled, 1);
-            row[0] = projectile.position;
-            self.projectile_trail_len[slot] = (filled + 1).min(PROJECTILE_TRAIL_PUFFS);
         }
     }
 
-    /// This frame's projectile and blast sprites, in the engine flare's shape.
+    /// This frame's fallback projectile sprites, in the engine flare's shape.
     ///
     /// `right` and `up` are the camera's, read out of the view matrix the same
-    /// way the exhaust's are. Empty when nothing is in the air and nothing has
-    /// just gone off, which is the overwhelmingly common case.
+    /// way the exhaust's are.
     ///
     /// `modelled` says the caller is drawing the rockets as
-    /// [`ROCKET_MODEL_ENTRY`]'s mesh. When it is, the billboard here shrinks to
-    /// [`ROCKET_FLARE_HALF_SIZE`] and becomes the *flare around* the model - the
-    /// original carries one, `WO_ROCKET_FLARE`, attached at launch - rather than
-    /// standing in for the rocket itself at
-    /// [`PROJECTILE_SPRITE_HALF_SIZE`].
+    /// [`ROCKET_MODEL_ENTRY`]'s mesh, in which case this draws **nothing**:
+    /// the glow around a modelled rocket is [`ROCKET_FLARE_EFFECT`], played
+    /// off the disc through [`Race::stage`], and a billboard on top of it
+    /// would be a second invented one. What is left here is the case where
+    /// the model did not load and a projectile would otherwise be invisible -
+    /// see [`PROJECTILE_SPRITE_HALF_SIZE`].
     #[must_use]
     pub fn projectile_sprites(
         &self,
@@ -4324,77 +4278,20 @@ impl Race {
         modelled: bool,
     ) -> Vec<oag_render::mesh::GpuVertex> {
         let mut vertices = Vec::new();
-        let half = if modelled {
-            ROCKET_FLARE_HALF_SIZE
-        } else {
-            PROJECTILE_SPRITE_HALF_SIZE
-        };
+        if modelled {
+            return vertices;
+        }
         for projectile in &self.world.projectiles.slots {
             if projectile.kind.is_none() {
                 continue;
             }
-            // Behind the nose rather than on it, so the glow reads as coming off
-            // the tail of the model instead of swallowing it. A no-op for the
-            // billboard fallback, whose "model" is the sprite itself.
-            let centre = if modelled {
-                projectile.position - projectile.velocity.normalize_or_zero() * ROCKET_FLARE_SETBACK
-            } else {
-                projectile.position
-            };
-            vertices.extend(exhaust::sprite(centre, right, up, half, 1.0));
-        }
-        // The smoke behind them. Oldest puffs are widest and faintest, which is
-        // what makes a row of billboards read as a spreading streak rather than
-        // as beads on a string.
-        for (slot, len) in self.projectile_trail_len.iter().enumerate() {
-            for (age, point) in self.projectile_trail[slot][..*len].iter().enumerate() {
-                // `age` 0 is the newest. Fades linearly to nothing at the tail,
-                // so the oldest puff is invisible rather than popping out.
-                let along = age as f32 / PROJECTILE_TRAIL_PUFFS as f32;
-                vertices.extend(exhaust::sprite(
-                    *point,
-                    right,
-                    up,
-                    TRAIL_PUFF_HALF_SIZE * (1.0 + along * TRAIL_PUFF_SPREAD),
-                    TRAIL_PUFF_ALPHA * (1.0 - along),
-                ));
-            }
-        }
-        for ((left, point), on_track) in self
-            .blast_flash_left
-            .iter()
-            .zip(&self.blast_flash_point)
-            .zip(&self.blast_flash_on_track)
-            .filter(|((left, _), _)| **left > 0.0)
-        {
-            // Grows as it fades, which is what an expanding blast looks like and
-            // is not a reading of anything. The track/hull ratio *is* a reading
-            // that the two differ, though not of by how much - see
-            // `TRACK_BLAST_SIZE_RATIO`.
-            let age = 1.0 - left / BLAST_FLASH_SECONDS;
-            let scale = if *on_track {
-                TRACK_BLAST_SIZE_RATIO
-            } else {
-                1.0
-            };
-            // [`BLAST_PUFFS`] overlapping billboards rather than one. Each is a
-            // different size and expands at a different rate, and they are
-            // spread along the camera's own axes so the group has an outline
-            // instead of being one concentric disc.
-            for puff in 0..BLAST_PUFFS {
-                let bias = puff as f32 / BLAST_PUFFS as f32;
-                let offset = BLAST_FLASH_HALF_SIZE * 0.35 * bias;
-                let centre = *point + right * offset * (1.0 - 2.0 * bias) + up * offset * 0.5;
-                vertices.extend(exhaust::sprite(
-                    centre,
-                    right,
-                    up,
-                    BLAST_FLASH_HALF_SIZE * scale * (0.35 + bias * 0.4) * (0.4 + age * 1.4),
-                    // The core fades fastest, so the blast collapses to its
-                    // outer smoke rather than dimming uniformly.
-                    (1.0 - age).powf(1.0 + bias) * 0.85,
-                ));
-            }
+            vertices.extend(exhaust::sprite(
+                projectile.position,
+                right,
+                up,
+                PROJECTILE_SPRITE_HALF_SIZE,
+                1.0,
+            ));
         }
         vertices
     }
@@ -5042,10 +4939,34 @@ impl Race {
         Vec<oag_render::mesh::GpuVertex>,
         Vec<oag_render::mesh::GpuVertex>,
     ) {
-        self.spark_effect
-            .as_ref()
+        self.effects
+            .get(sparks::DAMAGE_EFFECT)
             .map(|effect| self.sparks.vertices(effect, right, up))
             .unwrap_or_default()
+    }
+
+    /// Everything the [`psys::Stage`] is playing this frame, split by blend
+    /// class the same way [`Self::spark_vertices`] is.
+    ///
+    /// The rocket flares and the detonations today. Uploaded through the same
+    /// [`oag_render::psys::Pipeline`] as the sparks - one pass, two buffers,
+    /// no third pipeline per effect.
+    #[must_use]
+    pub fn stage_vertices(
+        &self,
+        right: Vec3,
+        up: Vec3,
+    ) -> (
+        Vec<oag_render::mesh::GpuVertex>,
+        Vec<oag_render::mesh::GpuVertex>,
+    ) {
+        self.stage.vertices(right, up)
+    }
+
+    /// The pool the rocket effects play in.
+    #[must_use]
+    pub fn stage(&self) -> &psys::Stage {
+        &self.stage
     }
 
     /// How many spark bursts the contact rule has triggered.
@@ -6733,9 +6654,9 @@ impl Scene {
             vertices.extend(exhaust.vertices(nozzle, right, up));
             trail.extend(exhaust.trail_vertices(right, up));
         }
-        // Rockets in flight and their blast flashes, appended to the flare's own
-        // buffer: same additive pipeline, same texture, no second pass. See
-        // `Race::ignite_blast_flash` for why the whole effect is a placeholder.
+        // Only the billboard *fallback* for a rocket whose model did not
+        // load - the flare around one that did is an asset now, and goes
+        // through the particle pipeline below with everything else.
         vertices.extend(race.projectile_sprites(right, up, !self.rockets.is_empty()));
         self.exhaust.borrow_mut().upload(
             queue,
@@ -6743,12 +6664,19 @@ impl Scene {
             &vertices,
             &trail,
         );
-        let (spark_additive, spark_alpha) = race.spark_vertices(right, up);
+        // The hull's collision sparks and the stage's rocket effects share
+        // one pipeline and one pair of buffers: both are `.pob` particles in
+        // the same two blend classes, so a second pipeline would buy nothing
+        // but a second pass.
+        let (mut additive, mut alpha) = race.spark_vertices(right, up);
+        let (stage_additive, stage_alpha) = race.stage_vertices(right, up);
+        additive.extend(stage_additive);
+        alpha.extend(stage_alpha);
         self.sparks.borrow_mut().upload(
             queue,
             &view_projection.to_cols_array_2d(),
-            &spark_additive,
-            &spark_alpha,
+            &additive,
+            &alpha,
         );
 
         let depth_view = self
@@ -7790,9 +7718,11 @@ mod tests {
             // likewise fall back to anchoring at the contact point.
             nozzle: None,
             collision_fx: Vec::new(),
-            // No disc, so no `.pob`: a headless test that wants sparks
-            // parses one itself and sets this.
-            spark_effect: None,
+            // No disc, so no `.pob` at all: every effect trigger runs and
+            // draws nothing, which is the same path a missing entry takes.
+            // A headless test that wants real particles parses a blob itself
+            // and inserts it here.
+            effects: psys::Library::new(),
             // A synthetic track authors no pads, which is also what every Pure
             // track does: an empty set is an ordinary state, not a stub.
             speedup_pads: Vec::new(),
@@ -9016,8 +8946,8 @@ mod tests {
         );
     }
 
-    /// A rocket in the air is drawn, and the whole worst case fits the buffer it
-    /// is drawn into.
+    /// A rocket whose model did not load is drawn as a billboard, and the whole
+    /// worst case fits the buffer it is drawn into.
     ///
     /// **The second half is the regression.** `oag_render::exhaust::Pipeline::upload`
     /// clamps with `min`, and `MAX_VERTICES` was six - the flare's one quad -
@@ -9025,9 +8955,11 @@ mod tests {
     /// logs and nothing on screen. A budget test is the only thing that catches
     /// a silent truncation, because every other symptom is "it does not appear".
     ///
-    /// The worst case grew when the field gained flares of its own: the sprite
-    /// buffer now carries **one flare per craft** as well as the projectiles, so
-    /// the headroom checked here is a whole grid's worth rather than one quad.
+    /// The buffer shrank on 2026-08-12 rather than grew: the smoke trail and
+    /// the blast puffs that used to share it were inventions, and both now come
+    /// out of the disc's own `.pob` files through the particle pipeline. What
+    /// is left here is one quad per projectile, on the fallback path only,
+    /// plus one flare per craft.
     #[test]
     fn every_projectile_is_drawn_and_the_worst_case_fits_the_buffer() {
         let mut race =
@@ -9039,10 +8971,7 @@ mod tests {
             "an empty sky must draw nothing rather than a quad at the origin"
         );
 
-        // The worst case: every slot in the air with a full-length smoke trail,
-        // and every flash burning. A trail only reaches its full length after
-        // `PROJECTILE_TRAIL_PUFFS` ticks, so it is filled here directly rather
-        // than by flying the array for long enough.
+        // The worst case: every slot in the air at once.
         for slot in 0..oag_gameplay::projectile::MAX_PROJECTILES {
             race.world.projectiles.spawn(
                 oag_formats::weapons::Weapon::Rocket,
@@ -9050,22 +8979,18 @@ mod tests {
                 Vec3::Z,
                 0,
             );
-            race.blast_flash_left[slot] = BLAST_FLASH_SECONDS;
-            race.projectile_trail_len[slot] = PROJECTILE_TRAIL_PUFFS;
         }
-        // The billboard fallback, which is the worst case for this buffer: the
-        // modelled path emits the same count of (smaller) flare quads, so
-        // asserting the fallback bounds both.
         let vertices = race.projectile_sprites(right, up, false);
-        // One head sprite and `PROJECTILE_TRAIL_PUFFS` smoke puffs per
-        // projectile, plus `BLAST_PUFFS` per burning flash. This arithmetic is
-        // `oag_render::exhaust::MAX_SPRITES`' own table, restated as an
-        // assertion so the two cannot drift apart silently.
-        let per_slot = 1 + PROJECTILE_TRAIL_PUFFS + BLAST_PUFFS;
         assert_eq!(
             vertices.len(),
-            oag_gameplay::projectile::MAX_PROJECTILES * per_slot * 6,
-            "six vertices per head, per smoke puff and per blast puff"
+            oag_gameplay::projectile::MAX_PROJECTILES * 6,
+            "six vertices per projectile, and nothing else in this buffer"
+        );
+        // A modelled rocket's glow comes off the disc instead, so this buffer
+        // gets nothing at all from it.
+        assert!(
+            race.projectile_sprites(right, up, true).is_empty(),
+            "a modelled rocket must not also get an invented billboard"
         );
         // Every craft's flare shares this buffer with the projectiles, so the
         // worst case is a full grid of flares *plus* a full sky of rockets.
@@ -9172,35 +9097,64 @@ mod tests {
     /// `WO_ROCKET_EXPLO_TRACK` separately, and `Rocket_HitCraft_q`
     /// (`0x0886ebdc`) puts the hull one at the *struck craft's* position dropped
     /// by [`CRAFT_BLAST_DROP`] rather than at the impact point. This engine drew
-    /// one flash at the impact point for both.
+    /// one invented flash at the impact point for both until 2026-08-12.
+    ///
+    /// Asserted through [`Race::blast_for`] rather than through the pool,
+    /// because *which file and where* is the recovered fact and it holds on a
+    /// headless fixture with no disc to load either file from.
     #[test]
     fn a_hull_blast_sits_under_the_craft_and_a_track_blast_where_it_struck() {
         let mut race =
             race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_rocket_table());
         let impact = Vec3::new(5.0, 1.0, -3.0);
 
-        race.ignite_blast_flash(impact, None);
-        assert!(race.blast_flash_on_track[0], "no craft struck means track");
         assert_eq!(
-            race.blast_flash_point[0], impact,
-            "a track blast goes where the rocket struck"
+            race.blast_for(impact, None),
+            (TRACK_BLAST_EFFECT, impact),
+            "no craft struck means the track effect, where the rocket struck"
         );
 
         let struck = 1;
         race.world.ships[struck].active = true;
         let craft = Vec3::new(-20.0, 4.0, 11.0);
         race.world.ships[struck].physics.body.position = craft;
-        race.ignite_blast_flash(impact, Some(struck));
-        let slot = race
-            .blast_flash_on_track
-            .iter()
-            .position(|on_track| !on_track)
-            .expect("the hull blast must have taken a slot");
         assert_eq!(
-            race.blast_flash_point[slot],
-            craft - Vec3::Y * CRAFT_BLAST_DROP,
-            "a hull blast is drawn under the craft, not at the impact point"
+            race.blast_for(impact, Some(struck)),
+            (CRAFT_BLAST_EFFECT, craft - Vec3::Y * CRAFT_BLAST_DROP),
+            "a hull blast is its own effect, drawn under the craft"
         );
+
+        // Two separately authored files, which is the whole point of the
+        // split - one file at two sizes would be this engine's invention.
+        assert_ne!(TRACK_BLAST_EFFECT, CRAFT_BLAST_EFFECT);
+    }
+
+    /// A rocket in the air carries a flare, and gives it back when it is gone.
+    ///
+    /// `Rocket_Init` attaches `WO_ROCKET_FLARE` at launch and it rides the
+    /// rocket for the whole flight - see [`Race::advance_projectile_flares`].
+    /// The bookkeeping is asserted here without a disc; what the flare *looks*
+    /// like is `crates/render/tests/psys_ground_truth.rs`' business.
+    #[test]
+    fn a_projectile_takes_a_flare_slot_and_hands_it_back() {
+        let mut race =
+            race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_rocket_table());
+        race.world
+            .projectiles
+            .spawn(oag_formats::weapons::Weapon::Rocket, Vec3::ZERO, Vec3::Z, 0);
+        race.advance_projectile_flares();
+        // No disc in a headless fixture, so no effect loaded and no instance
+        // is taken - the trigger still has to run, and still has to be a
+        // no-op rather than a panic.
+        assert!(race.effects.is_empty(), "the fixture loaded no effects");
+        assert_eq!(race.projectile_flare[0], None);
+
+        // With the slot vacated the bookkeeping must clear either way, or the
+        // next projectile in that slot inherits a flare it never started.
+        race.world.projectiles.slots[0].kind = None;
+        race.advance_projectile_flares();
+        assert_eq!(race.projectile_flare[0], None);
+        assert_eq!(race.stage().playing_count(), 0);
     }
 
     /// The pad half of the determinism gate, and the reason it is here rather

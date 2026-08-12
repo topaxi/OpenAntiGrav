@@ -412,6 +412,33 @@ pub const MAX_CHANNEL_KEYS: usize = (CHANNEL_LEN - 0x14) / 8;
 /// `docs/ghidra/functions/psp-pulse-usa/particle-system.md`. Bits with no
 /// constant here were not traced to a consumer.
 pub mod flags {
+    /// The emitter never stops on its own: [`super::Emitter::duration_ticks`]
+    /// is not a countdown and the effect runs until whatever owns it says
+    /// otherwise.
+    ///
+    /// **Corpus-derived, confidence 75.** The split is clean on both discs -
+    /// 76 emitters over 35 PSP effects and 41 PS2 ones, with no effect
+    /// mixing set and clear emitters. Every attached or environmental
+    /// effect has it: `WO_ROCKET_FLARE`, `WO_MISSILE_HEAD`,
+    /// `WO_SHURIKEN_HEAD`, `WO_SHURIKEN_TRAIL`, `WO_PLASMA_HEAD`,
+    /// `WO_LEACHBEAM_*`, `WO_REPULSER`, `WO_QUAKE`, `WO_RAIN`, `WO_SNOW`,
+    /// `WO_MODESTO_STEAM_*`, and on the PS2 disc `WO_SHIP_ENGINEFLARE` and
+    /// `WO_UNDERWATER_DEBRIS`. Every impact does not: all five explosions,
+    /// both bounces, every spark burst, `WO_PLASMA_FLASH`,
+    /// `WO_TRACK_ROCK_DEBRIS`. `WO_RAIN`, `WO_SNOW` and `WO_BLUE_WELDER`
+    /// settle it on their own - all three author a **one-tick** duration
+    /// and none of the three can be a one-tick effect.
+    ///
+    /// The executable has the matching mechanism, at
+    /// `ParticleSystem_Update` (`0x088f5b9c`): under instance flag `0x10`
+    /// at `+0x160` the duration counter at `+0x138` counts *up* by one per
+    /// update instead of down by the frame's ticks, the emitter-level
+    /// channel age becomes `counter / 60` rather than `1 - counter /
+    /// duration`, and the branch that sets the finished bit is skipped
+    /// entirely. What is **not** traced is the spec-`0x1`-to-instance-`0x10`
+    /// assignment: the initialiser is behind an unresolved import stub, so
+    /// the two are joined by the corpus rather than by a read.
+    pub const LOOPING: u32 = 0x1;
     /// Spawn offsets and velocities skip the emitter node's matrix.
     pub const WORLD_SPACE: u32 = 0x2;
     /// Each particle takes a random initial billboard roll.
@@ -679,6 +706,13 @@ impl Emitter {
     #[must_use]
     pub fn gravity_enabled(&self) -> bool {
         self.flags & flags::GRAVITY != 0
+    }
+
+    /// Whether this emitter runs until its owner stops it rather than for
+    /// [`Emitter::duration_ticks`] - see [`flags::LOOPING`].
+    #[must_use]
+    pub fn looping(&self) -> bool {
+        self.flags & flags::LOOPING != 0
     }
 }
 

@@ -91,14 +91,22 @@ def screenshot(display, directory, name):
     `import -window root` rather than a compositor call, so this works under the
     Xvfb that `docs/reverse-engineering/ppsspp-debugger.md` prefers as well as on
     a real display.
+
+    ImageMagick 7 dropped the standalone `import` binary in favour of the
+    `magick import` subcommand, and the failure is a bare exit 1 with no
+    message - so try the subcommand first and keep the old spelling as the
+    fallback for a version 6 install.
     """
     path = Path(directory) / name
-    subprocess.run(
-        ["import", "-window", "root", str(path)],
-        env={"DISPLAY": display, "PATH": "/usr/bin:/bin"},
-        check=True,
-    )
-    return path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    env = {"DISPLAY": display, "PATH": "/usr/bin:/bin"}
+    for argv in (["magick", "import"], ["import"]):
+        done = subprocess.run(
+            [*argv, "-window", "root", str(path)], env=env, check=False
+        )
+        if done.returncode == 0:
+            return path
+    raise RuntimeError("no working ImageMagick import; tried `magick import` and `import`")
 
 
 def probe_dispatch(dbg):

@@ -203,6 +203,19 @@ fn walk_archive(label: &str, spec: &str, expected: usize) {
             parsed[0].name, system.name,
             "{label}: the root emitter's name is the resource's own"
         );
+        // `flags::LOOPING` is what its doc comment claims - a property of
+        // the whole effect - only while no file mixes set and clear
+        // emitters. This is the assertion that claim rests on.
+        let looping = parsed[0].looping();
+        for emitter in &parsed {
+            assert_eq!(
+                emitter.looping(),
+                looping,
+                "{label} {}: {} disagrees with the root about LOOPING",
+                system.name,
+                emitter.name
+            );
+        }
         for emitter in &parsed {
             check(&system.name, emitter);
             // Every tree index a record hands out must name a real record.
