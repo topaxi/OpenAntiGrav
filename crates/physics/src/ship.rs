@@ -364,7 +364,24 @@ pub struct ShipState {
     /// Seconds since the ship last touched down, in seconds.
     ///
     /// Below 0.2 the suspension uses `landing_rebound` in place of `rebound`.
+    ///
+    /// **Armed in the air, not on touchdown** - see [`Self::time_airborne`].
     pub time_since_landing: f32,
+    /// Seconds the ship has been off the ground, `craft+0x284`.
+    ///
+    /// `Ship_UpdateCraft` (`0x08849df0`) keeps this and its mirror
+    /// `craft+0x288` as a pair: whichever of grounded and airborne is true this
+    /// tick accumulates `dt` while the other is zeroed. The disassembly is
+    /// unambiguous, so confidence **95**; only `+0x288`, the grounded twin,
+    /// goes unmodelled, because nothing else reads it.
+    ///
+    /// It exists for one job. `Ship_HoverTwoPoint` zeroes
+    /// [`Self::time_since_landing`] **while the craft is still in the air**,
+    /// and only once this has passed `Antigrav::rebound_jump_time`. So a hop
+    /// shorter than that never arms the landing response and the craft touches
+    /// back down on the ordinary `rebound`; only a real flight earns the
+    /// `landing_rebound` bounce. See `docs/ghidra/functions/psp-pulse-usa/engine.md`.
+    pub time_airborne: f32,
     /// The 0-to-1 magstrip blend. At 1.0 the ordinary suspension is fully
     /// cancelled and the magnetic hold has taken over.
     ///
@@ -536,9 +553,14 @@ impl Default for ShipState {
             shift_tap_windows: [0.0, 0.0],
             shift_armed: false,
             shift_lockout: 0.0,
-            // Starting at zero would put a freshly spawned ship inside the
-            // landing window, so it starts outside it.
-            time_since_landing: 1.0,
+            // `Ship_InitCraft` (`0x08849354`) sets `craft+0x2b4` to `10.0` -
+            // recovered, replacing an invented `1.0` that was chosen for the
+            // same reason the original's value serves: a freshly spawned ship
+            // must not begin inside the 0.2 s landing window. Both are outside
+            // it, so this is faithfulness rather than a behaviour change. See
+            // `docs/ghidra/functions/psp-pulse-usa/engine.md`.
+            time_since_landing: 10.0,
+            time_airborne: 0.0,
             mag_lock_blend: 0.0,
             pad_timer: 0.0,
             pad_direction: Vec3::ZERO,

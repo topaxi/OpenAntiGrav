@@ -136,6 +136,14 @@ fn run(ticks: u32) -> (u64, u64) {
 ///
 /// # History
 ///
+/// - **Moved 2026-08-12**, and by a *force-law* change rather than a wider hash.
+///   `oag_physics` now reads `Antigrav::rebound_jump_time`, which it parsed and
+///   ignored: the landing response is armed while a craft is in the air and only
+///   once the flight has outlasted that parameter, so a short hop no longer
+///   applies `landing_rebound`. `ShipState` also gained `time_airborne`, and
+///   `time_since_landing`'s initial value became `Ship_InitCraft`'s recovered
+///   `10.0`. See that crate's own determinism history for the isolation; the
+///   scenario here inherits the movement because it steps real craft.
 /// - **Recorded 2026-08-11**, with the module itself. There is no earlier value
 ///   to compare against - this is the first race-level gate the project has had.
 /// - **Moved 2026-08-11**, when `Ship::driver` joined the hash. The field is the
@@ -249,8 +257,8 @@ fn run(ticks: u32) -> (u64, u64) {
 /// beneath this comment and isolate the cause first, by removing the new field's
 /// own write and checking that the previous constants reproduce bit for bit.
 const REFERENCE: &[(u32, u64, u64)] = &[
-    (60, 0xa5da_c62a_2212_9d4e, 0x6bee_c82b_ab07_f1b0),
-    (600, 0x66f0_b689_1a11_14d7, 0x2fce_d7b6_4514_e12d),
+    (60, 0x86c3_7eae_232b_caba, 0x4e1f_368e_1f13_b9ec),
+    (600, 0xbd24_86ff_da6a_56b3, 0x7dc5_c309_e8f9_8311),
 ];
 
 #[test]

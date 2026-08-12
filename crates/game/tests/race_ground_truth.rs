@@ -2155,10 +2155,12 @@ fn every_craft_starts_on_its_line_on_every_circuit() {
 ///
 /// # What is left, and it is not one bug
 ///
-/// - **02, 09, 01, 06, 14 lap but never cleanly.** The craft leaves the
-///   corridor at one particular corner, every lap, and is put back. A driving
-///   fault, and the thing to tune next - see `docs/gameplay/ai.md` for the
-///   measurement that separated it from the path boundaries it was blamed on.
+/// - **02, 09, 06, 14 lap but never cleanly.** The craft loses ground contact
+///   at one particular place, every lap, and falls. Not a driving fault at all -
+///   a human driver does the same thing in the same place. See
+///   `docs/gameplay/ai.md`. 01 left this list on 2026-08-12 when the landing
+///   response was gated on `rebound_jump_time`: 8 respawns to 3, and a clean
+///   36.9s lap.
 /// - **05 never registers a second lap**, and no longer for a line reason: it
 ///   drives into the scenery at index ~590, ends up grounded at two units per
 ///   second slowing to zero, and sits there for the remaining seventy seconds.
@@ -2200,14 +2202,14 @@ fn a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round() {
         );
     }
     println!("clean laps: {lapped:?}\nno clean lap: {missed:?}");
-    // 07 is the marginal one: its clean lap is 48.5s against a 36-42s field,
+    // 07 is the marginal one: its clean lap is 48.4s against a 36-42s field,
     // so a tuning change that costs it that lap fails this assertion without
     // anything having regressed. Check which circuit dropped before assuming a
     // driving fault.
     assert!(
-        lapped.len() >= 6,
+        lapped.len() >= 7,
         "only {} of {} circuits saw a clean lap, which is worse than the \
-         recorded six: {missed:?}",
+         recorded seven: {missed:?}",
         lapped.len(),
         laps.len()
     );

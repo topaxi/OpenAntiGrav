@@ -1210,6 +1210,26 @@ because the craft is in the air.
 What is settled either way: **tuning the driver cannot fix this**, and a grip
 figure fitted against it would be fitted against whatever this turns out to be.
 
+#### One of the five went away, and not from the AI
+
+Reading `Antigrav::rebound_jump_time` - parsed since the handling loader landed
+and never read by the force law - took **Basilico (01_Track) from eight
+respawns and no clean lap to three and a 36.9s one**, and clean circuits from
+six to seven. 09 dropped from six respawns to five and 05 from two to one.
+
+The parameter arms the `landing_rebound` response, and it arms it *in the air*:
+`Ship_UpdateCraft` (`0x08849df0`) keeps an airborne clock and
+`Ship_HoverTwoPoint` zeroes the landing clock only once that clock has passed
+the parameter, so a hop shorter than it lands on the ordinary `rebound`. This
+crate had been resetting on every touchdown edge, which meant a craft flickering
+in and out of contact was under `landing_rebound` almost permanently. On a
+circuit whose losses were marginal that was the difference between recovering
+and not. See `docs/ghidra/functions/psp-pulse-usa/engine.md`.
+
+It changes nothing about the four that remain: those craft leave contact where
+there is nothing within a probe reach to come back to, and a damping coefficient
+does not reach that.
+
 **Grip stays at 180 until the corner departures are understood.** A sweep across
 all twelve circuits says 220 and 260 are quicker (38.6s and 38.4s mean clean lap
 against 39.8s) and reach six clean circuits rather than five - but the respawn
