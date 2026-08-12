@@ -1018,12 +1018,58 @@ corridor - 06 at +0.3 in a corridor running -23.3 to 0.0, 09 at +0.7 in -16.0 to
 ride height beneath it. Then it is airborne for three hundred ticks and seven
 hundred units down.
 
-So it is neither cornering wide nor driving off an edge nor a hole in the track.
-A craft in the middle of a supported piece of circuit stops being held by it.
-**That is a physics or collision question, not an AI one**, and the next step is
-a tick trace through 06's 1196-1230 asking what the hover hold and the wall
-contact do across the notch at 1196 - the one-sample gap the craft crosses
-thirty-five samples before it lets go.
+So it is neither cornering wide nor driving off an edge. **A craft in the middle
+of a supported piece of circuit stops being held by it, and that is a physics or
+collision question rather than an AI one.**
+
+#### What the tick trace says: the floor drops away at the path boundary
+
+Casting straight down from the craft itself, every tick, through 06's departure -
+and the same shape appears on 02 and 09:
+
+```
+i1195  moved 1.16  grounded 0.50  floor below   4.0
+i1195  moved 1.17  grounded 0.50  floor below  12.3
+i1195  moved 1.18  grounded 0.50  floor below  25.5
+i1195  moved 1.18  grounded 0.50  floor below  27.9
+i1195  moved 1.21  grounded 0.00  floor below  27.1
+```
+
+**The floor goes from four units under the craft to twenty-eight over five units
+of travel.** 02 goes 3.8 to 39.4 in one tick, 09 goes 4.6 to 29.5. All three are
+at the path boundary: 06's is 1195/1196, 02's 1159, 09's 963.
+
+Then the craft glides - descending a fifth of a unit a tick, nowhere near fast -
+and closes on that lower surface, 27.9 down to 16.0 by index 1218. **And then at
+1244 the cast returns nothing at all.** It has flown past the end of whatever was
+down there, and from that point it accelerates into open air: 2.7 units a tick,
+speed 163, for the rest of the race.
+
+Three things that follows from this, and one that does not:
+
+- **It is not falling *through* a floor.** Every cast agrees the surface is
+  genuinely absent, before and after the craft passes.
+- **It is not a jump the physics fails to complete.** The hole at 1196-1200 is
+  five samples, about seven units - a tenth of a second at the speed the craft
+  is doing. It descends 0.2 units crossing it. There is nothing to clear.
+- **It is not a missing magnetic floor.** `Surface::MagFloor` is decoded,
+  hoverable, and `oag_physics::maglock` gates on it. It is also heavily used:
+  1,730 of 03_Track's line samples sit over MagFloor and 03 laps perfectly
+  cleanly, as does 16 with 346. Meanwhile 04, 10, 13 and 14 have **no** MagFloor
+  collider at all, and 04 is clean while the other three are not. The surface
+  kind does not sort the circuits.
+- **What is not explained**: the track is back at its normal height five samples
+  later, and the craft only sank 0.2 units - so why it never regains contact.
+  One lead: at its last contact the craft sits at lateral `+0.3` in a corridor
+  running `-23.3` to `0.0`. 06's authored AI corridor there is entirely to the
+  *left* of the line, and the craft is marginally outside its right bound.
+
+**The question this now turns on is whether the hole is the disc's or ours.**
+Nine of twelve circuits have one, most within a few samples of a path boundary,
+and a junction is exactly the place a collision decoder would drop a mesh. The
+three circuits with no hole are three of the circuits that never lose a craft.
+Nothing has yet compared what the collision decoder produces at 06's 1196
+against what the WAD holds there.
 
 What is settled either way: **tuning the driver cannot fix this**, and a grip
 figure fitted against it would be fitted against whatever this turns out to be.
