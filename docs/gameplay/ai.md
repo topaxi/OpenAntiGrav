@@ -1113,13 +1113,62 @@ to where the surface was, it has flown past the end of it. The path boundary
 matters where there is one because a 12-unit step is a drop the craft meets in a
 single sample.
 
-What is still open is which end of that is wrong. Either the disc's AI spline
-genuinely leaves its own track and the original holds craft down by something not
-yet recovered, or the sample positions are being reconstructed slightly wrong on
-steep ground - `Sample::pos` minus `HOVER_LIFT * down` is what puts the line on
-the surface, and a lift applied along the wrong axis would show up exactly here
-and nowhere on the flat. The lateral racing-line offset is already excluded: the
-bare track centre is unsupported too.
+#### The reconstruction is right, and the craft does pitch
+
+Two candidates were open: a spline that genuinely leaves its track, or sample
+positions reconstructed wrongly on steep ground. **The second is dead.** `down`
+is a unit vector everywhere (0.9905 to 1.0000 across all twelve circuits) and
+`Sample::pos - HOVER_LIFT * down` lands *exactly* on the collision surface -
+median 0.0, ninetieth percentile 0.4 or better, on every circuit. The
+reconstruction is correct. It is the top one per cent of samples that stand 20
+to 50 units clear, and 04's worst is 0.2 against 14's 50.5.
+
+**Nor is the craft flying level off a slope.** Its nose tracks the surface
+closely while it has contact - on 09, track diving `+0.387` against a nose at
+`+0.381`. What it cannot do is keep up with a dive that *steepens*: over ten
+samples 09 goes `+0.387` to `+0.514` while the nose reaches only `+0.426`, and
+the craft leaves at the point the gap opens.
+
+And **04_Track does exactly the same thing and is fine.** It lifts off on its own
+dive - `grounded` 1.00 to 0.50 to 0.00 over twenty samples, nose lagging the
+slope the whole way - and lands, because the surface stays under it. So going
+airborne on a dive is normal. Failing to come back is the bug.
+
+#### It is not how fast the craft arrives
+
+The obvious AI-side fix - slow into the dive so the pitch response keeps up - is
+ruled out by measurement. The same benchmark at all four difficulties:
+
+| difficulty | clean | round | respawns | 09 | 02 | 01 | 06 | 14 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Novice | 5 | 11 | 254 | 5 | 5 | 6 | 4 | 4 |
+| Skilled | 7 | 11 | 30 | 5 | 6 | 7 | 6 | 5 |
+| Elite | 6 | 12 | 40 | 6 | 7 | 8 | 6 | 5 |
+| Ace | 6 | 11 | 41 | 6 | 7 | 8 | 6 | 6 |
+
+**A novice falls off the same places just as often as an ace**, at a fraction of
+the speed. Nothing a driver does with the throttle reaches this.
+
+The novice total hides the other half of the same coin: **226 of those 254
+respawns are 13_Track**, the circuit with the authored jump. A slow craft does
+not clear it, falls in, is recovered, and does it again. So the geometry demands
+a *minimum* speed in one place and is indifferent to speed in the others.
+
+#### What is left, and what an alternative would have to do
+
+The remaining question is genuinely a reverse-engineering one: **what holds the
+original's craft onto a steepening dive**, given ours is faithful to a force law
+scored at confidence 91 in which the suspension is compression-only, the probes
+reach exactly `ride_height`, and `DOWNFORCE_SCALE` scales by `grounded` - so an
+airborne craft has no downforce at all, by construction and on purpose.
+
+Worth stating because it is the tempting fix and it is the wrong one: nothing
+here should be solved by pulling a craft down onto the spline. The craft *should*
+fly off a crest; that is what the model is for, and 04 demonstrates it working.
+An alternative has to make the craft **reconnect**, not stop it leaving - and the
+measurement says reconnection fails because on those stretches there is no
+surface within a probe reach for fifty to a hundred and thirty samples, not
+because the craft is in the air.
 
 What is settled either way: **tuning the driver cannot fix this**, and a grip
 figure fitted against it would be fitted against whatever this turns out to be.
