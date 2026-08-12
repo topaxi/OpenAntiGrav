@@ -128,6 +128,31 @@ struct Cli {
     #[arg(long)]
     refresh_video: bool,
 
+    /// Decode the boot's movies from the AV1 cache even when this build has a
+    /// platform decoder that could do it directly.
+    ///
+    /// **Opt-in, and the platform decoder stays the default** - see
+    /// [ADR-0017](../../docs/architecture/adr/0017-gstreamer-native-video.md).
+    /// Only affects the PSP's H.264 `.PMF` reels on a Linux `native-video`
+    /// build; the PS2's `.PSS` and `.IPF` have no platform decoder and always
+    /// went through the cache.
+    ///
+    /// The trade is a one-off transcode against a faster start every time after
+    /// it. GStreamer decodes every wanted frame into memory before it returns;
+    /// the cache is opened lazily and decoded a frame at a time. Measured on
+    /// this workspace against the EU PSP disc, both reels:
+    ///
+    /// | | Media phase |
+    /// | --- | --- |
+    /// | Default (GStreamer) | **4.80 s**, every boot |
+    /// | `--prefer-av1-cache`, cold | **36.08 s** once (intro 30.33, backdrop 5.74) |
+    /// | `--prefer-av1-cache`, warm | **0.05 s** |
+    ///
+    /// So it pays for itself after about eight boots. Pair it with `--prefetch`
+    /// once to get the transcode over with up front.
+    #[arg(long)]
+    prefer_av1_cache: bool,
+
     /// Convert every movie and every sound on the disc up front, on a
     /// background thread, instead of one at a time on first use.
     ///
@@ -860,6 +885,7 @@ fn main() -> Result<()> {
             .map_or(movie::Extent::Whole, movie::Extent::Frames),
         no_video: cli.no_video,
         refresh_video: cli.refresh_video,
+        prefer_av1_cache: cli.prefer_av1_cache,
     };
 
     // Every leg with no window loads the whole boot here and now, blocking, and

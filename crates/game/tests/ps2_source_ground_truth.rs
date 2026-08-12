@@ -423,6 +423,7 @@ fn the_ps2_front_end_either_boots_or_says_what_it_could_not_find() {
         // No transcode: this is about what is found, not about ffmpeg.
         no_video: true,
         refresh_video: false,
+        prefer_av1_cache: false,
     };
 
     match oag_game::boot::load(&options) {
@@ -522,6 +523,10 @@ fn a_transcode_reports_its_frames_as_it_encodes_them() {
         oag_game::movie::Decode {
             no_video: false,
             refresh: true,
+            // The PS2's loose movies have no platform decoder, so this changes
+            // nothing here; stated rather than defaulted because the assertion
+            // below is about a transcode.
+            prefer_cache: true,
         },
         Some(&watch),
     )
@@ -617,6 +622,10 @@ fn an_uncapped_transcode_still_reports_a_total_to_divide_by() {
         oag_game::movie::Decode {
             no_video: false,
             refresh: true,
+            // The PS2's loose movies have no platform decoder, so this changes
+            // nothing here; stated rather than defaulted because the assertion
+            // below is about a transcode.
+            prefer_cache: true,
         },
         Some(&watch),
     )

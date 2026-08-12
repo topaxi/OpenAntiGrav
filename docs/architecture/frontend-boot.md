@@ -54,6 +54,21 @@ That figure is the *backdrop*; the intro is 1200 frames, so the two together
 are nearer 288 MiB and five seconds. The AV1 cache path (ADR-0008) decodes a
 frame at a time on demand and so costs nothing here.
 
+**`--prefer-av1-cache` takes that second column on a `native-video` build**, by
+skipping the GStreamer attempt for the `.PMF` reels. Opt-in, and ADR-0017's
+default stands: it trades a one-off transcode for a faster start every time
+afterwards. Measured on the same disc and both reels - 4.80 s of media phase on
+every boot with GStreamer, against 36.08 s once (intro 30.33, backdrop 5.74) and
+0.05 s thereafter with the cache, so about eight boots to pay for itself.
+`--prefetch` gets the transcode over with up front.
+
+**`--prefetch` takes it unconditionally, and has to.** The GStreamer path writes
+no cache file at all - it decodes into memory and hands back frames - so a
+prefetch that took it reported every movie converted, left the cache empty, and
+planned the same 22 movies again on the next run. `prefetch::convert` therefore
+sets `movie::Decode::prefer_cache` rather than leaving it to a flag: filling the
+cache is the worker's entire job.
+
 Either way the load is now in two halves, which is what lets the window come
 first:
 

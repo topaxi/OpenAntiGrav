@@ -1006,6 +1006,30 @@ pub struct Decode {
     /// cache is keyed by *content*, so a changed encoder produces the same key
     /// and the stale file would otherwise be reused forever.
     pub refresh: bool,
+    /// Take the AV1 cache path even where a platform decoder is available.
+    ///
+    /// **Only the `.PMF` path has a choice to make.** A PS2 `.PSS` or `.IPF`
+    /// goes through the cache whatever this says, because there is no platform
+    /// decoder for either; this is about H.264 on a `native-video` Linux build,
+    /// where [ADR-0017] made GStreamer the default. That default stands - see
+    /// its own reasoning - and this is the way past it.
+    ///
+    /// Two callers want it, for different reasons:
+    ///
+    /// - [`crate::prefetch`] sets it **always**, and must. Its whole job is to
+    ///   fill the cache, and the GStreamer path writes no cache file at all - it
+    ///   decodes into memory and hands back frames. A prefetch that took that
+    ///   path would report every movie converted, leave the cache empty, and
+    ///   plan the same 22 movies again on the next run.
+    /// - `--prefer-av1-cache` sets it for the boot's own reels, as an opt-in.
+    ///   The trade is a one-off transcode against a faster start every time
+    ///   after it: `GstDecoder::open` decodes every wanted frame into memory
+    ///   before it returns - 4.9 s of a 5.0 s boot of the EU disc, ~288 MiB for
+    ///   the two reels - where the cache is opened lazily and decoded a frame at
+    ///   a time.
+    ///
+    /// [ADR-0017]: ../../../docs/architecture/adr/0017-gstreamer-native-video.md
+    pub prefer_cache: bool,
 }
 
 /// What a movie load is doing, for a caller that is drawing a wait.
@@ -1141,20 +1165,21 @@ fn open_psmf(
     // wanted frame into memory before it returns, so this word has to be on
     // screen while that happens rather than once it has.
     #[cfg(all(target_os = "linux", feature = "native-video"))]
-    watched(watch, Step::Decoding);
-    #[cfg(all(target_os = "linux", feature = "native-video"))]
-    if let Some(frames) = gst_frame_store(&demuxed.video, key, width, height, wanted) {
-        return Ok(Movie {
-            header: Some(header),
-            frame_count,
-            width,
-            height,
-            frame_rate: FRAME_RATE,
-            display_aspect: (width, height),
-            frames: Some(frames),
-            no_picture_reason: None,
-            audio,
-        });
+    if !how.prefer_cache {
+        watched(watch, Step::Decoding);
+        if let Some(frames) = gst_frame_store(&demuxed.video, key, width, height, wanted) {
+            return Ok(Movie {
+                header: Some(header),
+                frame_count,
+                width,
+                height,
+                frame_rate: FRAME_RATE,
+                display_aspect: (width, height),
+                frames: Some(frames),
+                no_picture_reason: None,
+                audio,
+            });
+        }
     }
 
     match transcode(

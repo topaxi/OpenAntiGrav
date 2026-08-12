@@ -172,6 +172,7 @@ fn a_pack_team_is_named_by_the_disc_and_its_id_is_not_always_that_name() {
         extent: oag_game::movie::Extent::Frames(1),
         no_video: true,
         refresh_video: false,
+        prefer_av1_cache: false,
     })
     .expect("booting with the packs mounted");
 

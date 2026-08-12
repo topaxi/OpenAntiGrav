@@ -297,6 +297,7 @@ fn the_front_end_hands_off_into_a_driveable_race() {
         extent: movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
         no_video: true,
         refresh_video: false,
+        prefer_av1_cache: false,
     })
     .expect("loading the boot sequence");
 

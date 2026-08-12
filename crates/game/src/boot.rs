@@ -165,6 +165,9 @@ pub struct Options {
     /// Convert every movie again even when the cache already holds it, and
     /// overwrite what is there. See [`crate::movie::Decode::refresh`].
     pub refresh_video: bool,
+    /// Take the AV1 cache path even where a platform decoder is available. See
+    /// [`crate::movie::Decode::prefer_cache`].
+    pub prefer_av1_cache: bool,
 }
 
 impl Options {
@@ -173,6 +176,7 @@ impl Options {
         crate::movie::Decode {
             no_video: self.no_video,
             refresh: self.refresh_video,
+            prefer_cache: self.prefer_av1_cache,
         }
     }
 }
@@ -2053,6 +2057,7 @@ mod tests {
             extent: crate::movie::Extent::Whole,
             no_video: false,
             refresh_video: false,
+            prefer_av1_cache: false,
         };
         assert_eq!(
             base.decode(),
@@ -2069,8 +2074,23 @@ mod tests {
             crate::movie::Decode {
                 no_video: false,
                 refresh: true,
+                prefer_cache: false,
             },
             "--refresh-video must not imply --no-video"
+        );
+
+        let cached = super::Options {
+            prefer_av1_cache: true,
+            ..base.clone()
+        };
+        assert_eq!(
+            cached.decode(),
+            crate::movie::Decode {
+                no_video: false,
+                refresh: false,
+                prefer_cache: true,
+            },
+            "--prefer-av1-cache asks for the cache path, not for a reconversion"
         );
 
         let silent = super::Options {
@@ -2082,6 +2102,7 @@ mod tests {
             crate::movie::Decode {
                 no_video: true,
                 refresh: false,
+                prefer_cache: false,
             },
             "--no-video must not imply --refresh-video"
         );

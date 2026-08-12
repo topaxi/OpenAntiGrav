@@ -87,6 +87,7 @@ fn load() -> Option<boot::Boot> {
         extent: movie::Extent::Frames(FRAMES),
         no_video: false,
         refresh_video: false,
+        prefer_av1_cache: false,
     };
     Some(boot::load(&options).expect("loading the boot sequence"))
 }
@@ -113,6 +114,7 @@ fn load_whole() -> Option<boot::Boot> {
         extent: movie::Extent::Whole,
         no_video: false,
         refresh_video: false,
+        prefer_av1_cache: false,
     };
     Some(boot::load(&options).expect("loading the boot sequence"))
 }

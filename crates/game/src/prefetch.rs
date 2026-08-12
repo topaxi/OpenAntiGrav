@@ -376,6 +376,12 @@ fn convert(task: &Task, archives: &mut [oag_assets::Archive], options: &Options)
                 Extent::Whole,
                 movie::Decode {
                     refresh: options.refresh_video,
+                    // Always, and this is not a preference. The GStreamer path
+                    // writes no cache file - it decodes into memory and hands
+                    // back frames - so a prefetch that took it would report
+                    // every movie converted, leave the cache empty, and plan the
+                    // same movies again next run. See `Decode::prefer_cache`.
+                    prefer_cache: true,
                     ..movie::Decode::default()
                 },
                 // The worker prints its progress rather than drawing it, and it
@@ -399,6 +405,12 @@ fn convert(task: &Task, archives: &mut [oag_assets::Archive], options: &Options)
                 Extent::Whole,
                 movie::Decode {
                     refresh: options.refresh_video,
+                    // Always, and this is not a preference. The GStreamer path
+                    // writes no cache file - it decodes into memory and hands
+                    // back frames - so a prefetch that took it would report
+                    // every movie converted, leave the cache empty, and plan the
+                    // same movies again next run. See `Decode::prefer_cache`.
+                    prefer_cache: true,
                     ..movie::Decode::default()
                 },
                 // The worker prints its progress rather than drawing it, and it

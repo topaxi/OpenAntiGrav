@@ -924,6 +924,25 @@ machine and this checkout.
   `done + 1` will a millisecond later, and the percentage text reads the same
   function the width does. See
   [frontend boot](docs/architecture/frontend-boot.md#loading-is-not-transcoding).
+- **`--prefetch` could not fill the movie cache on a `native-video` build, and
+  said it had.** Found 2026-08-12 while adding `--prefer-av1-cache`. The
+  GStreamer path writes no cache file - it decodes into memory and hands back
+  frames with a `{key}-gst` pseudo-path - so `prefetch::convert` took it,
+  `report_picture` saw a picture and called it converted, and the planning pass
+  found nothing cached and listed the same 22 movies again on the next run. Ten
+  minutes of work, every run, for an empty cache. **Fixed by making
+  `prefetch::convert` set `movie::Decode::prefer_cache` unconditionally** -
+  filling the cache is the worker's whole job, so this is not a preference.
+  Confirmed empirically: the cache went from 9 to 21 `.ivf` files in the first
+  three minutes of a run that used to add none. The general trap: a
+  success/failure check (`report_picture`) that asks "did this produce a
+  picture?" cannot see that the *side effect* the caller actually wanted did not
+  happen.
+- **`--prefer-av1-cache` is opt-in and ADR-0017's default stands.** Measured on
+  `pulse-psp-eu.chd`, both reels: 4.80 s of media phase on every boot with
+  GStreamer, against 36.08 s once (intro 30.33, backdrop 5.74) and 0.05 s
+  thereafter with the cache. Eight boots to pay for itself. ADRs are immutable,
+  so this did not edit 0017; if the default ever changes it needs a new ADR.
 
 ## Verification status: what to lean on
 
