@@ -365,6 +365,7 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
         shift_armed,
         shift_lockout,
         time_since_landing,
+        time_airborne,
         mag_lock_blend,
         pad_timer,
         pad_direction,
@@ -400,6 +401,7 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
     hasher.write_u8(u8::from(shift_armed));
     hasher.write_f32(shift_lockout);
     hasher.write_f32(time_since_landing);
+    hasher.write_f32(time_airborne);
     hasher.write_f32(mag_lock_blend);
     // Both stay at their defaults through every probe script - none crosses a
     // pad - so these two contribute a fixed run of bytes per tick and nothing

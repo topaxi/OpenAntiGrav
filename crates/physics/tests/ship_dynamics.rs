@@ -696,16 +696,22 @@ fn a_ship_rolled_off_level_is_pulled_back_toward_level() {
 }
 
 /// The landing window drives `landing_rebound` in place of `rebound` for its
-/// first 0.2 s, so the clock behind it has to actually reset on touchdown and
-/// advance otherwise.
+/// first 0.2 s, and the clock behind it is armed **in the air**, not on
+/// touchdown.
+///
+/// `Ship_UpdateCraft` (`0x08849df0`) runs the airborne clock and
+/// `Ship_HoverTwoPoint` zeroes the landing clock once that airborne clock has
+/// passed `rebound_jump_time` - so by the time a craft touches down the
+/// landing clock is already sitting at zero and simply starts counting. See
+/// `ShipState::time_airborne`.
 #[test]
-fn the_landing_clock_resets_on_touchdown_and_advances_in_the_air() {
+fn the_landing_clock_is_armed_in_the_air_and_runs_from_touchdown() {
+    // The fixture's `rebound_jump_time` is zero, so any flight at all arms it.
     let handling = fixture();
     let world = flat_floor(Surface::Floor);
 
     // Well above `ride_height`, so the probes find nothing.
     let mut state = ship_at(60.0, &handling);
-    let airborne_before = state.time_since_landing;
 
     for _ in 0..30 {
         step(
@@ -717,10 +723,15 @@ fn the_landing_clock_resets_on_touchdown_and_advances_in_the_air() {
             TICK,
         );
     }
-    assert!(state.time_since_landing > airborne_before);
     assert!(!state.is_grounded());
+    assert!(state.time_airborne > 0.0, "the airborne clock did not run");
+    assert_eq!(
+        state.time_since_landing, 0.0,
+        "a flight past `rebound_jump_time` should have armed the landing response"
+    );
 
-    // Now drop it into contact and watch the clock reset on the edge.
+    // Now drop it into contact. The landing clock starts from the zero it was
+    // armed at, and the airborne clock is the one that resets.
     state.body.position.y = 10.0;
     step(
         &mut state,
@@ -731,9 +742,10 @@ fn the_landing_clock_resets_on_touchdown_and_advances_in_the_air() {
         TICK,
     );
     assert!(state.is_grounded());
-    assert_eq!(state.time_since_landing, 0.0);
+    assert_eq!(state.time_airborne, 0.0);
+    assert_eq!(state.time_since_landing, TICK);
 
-    // And that it does not reset again while it stays in contact.
+    // And it keeps counting while it stays in contact.
     step(
         &mut state,
         &ShipControls::default(),
@@ -742,7 +754,59 @@ fn the_landing_clock_resets_on_touchdown_and_advances_in_the_air() {
         &world,
         TICK,
     );
-    assert_eq!(state.time_since_landing, TICK);
+    assert_eq!(state.time_since_landing, TICK * 2.0);
+}
+
+/// A hop shorter than `rebound_jump_time` never arms the landing response.
+///
+/// **The point of the parameter, and the bug its absence caused.** A craft
+/// flickers in and out of contact constantly on rough ground; resetting the
+/// landing clock on every touchdown edge - which is what this crate did until
+/// `rebound_jump_time` was read - applies `landing_rebound` almost permanently
+/// instead of on the landings a player would call landings.
+#[test]
+fn a_hop_shorter_than_rebound_jump_time_never_arms_the_landing_response() {
+    let mut handling = fixture();
+    handling.antigrav.rebound_jump_time = 1.0;
+    let world = flat_floor(Surface::Floor);
+
+    let mut state = ship_at(10.0, &handling);
+    for _ in 0..10 {
+        step(
+            &mut state,
+            &ShipControls::default(),
+            &handling,
+            &Environment::default(),
+            &world,
+            TICK,
+        );
+    }
+    assert!(state.is_grounded(), "the fixture should settle in contact");
+    let settled = state.time_since_landing;
+
+    // Lift it clear for a quarter of a second - a real hop, and a long way
+    // short of the second the parameter asks for.
+    state.body.position.y = 60.0;
+    for _ in 0..15 {
+        step(
+            &mut state,
+            &ShipControls::default(),
+            &handling,
+            &Environment::default(),
+            &world,
+            TICK,
+        );
+    }
+    assert!(!state.is_grounded());
+    assert!(
+        state.time_airborne > 0.2 && state.time_airborne < 1.0,
+        "the hop should be shorter than `rebound_jump_time`, was {}",
+        state.time_airborne
+    );
+    assert_eq!(
+        state.time_since_landing, settled,
+        "a short hop must leave the landing clock alone"
+    );
 }
 
 /// A settled ship with no sideshift is unchanged by a frame the outer clock

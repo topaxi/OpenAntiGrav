@@ -70,6 +70,25 @@ use oag_physics::{CraftState, Environment, ShipState, step};
 ///   3,600-tick hashes moved; the 600-tick `Corridor` entry is untouched
 ///   because that scenario never reaches a wall in 600 ticks, which is the
 ///   expected shape of a change scoped to contact geometry.
+/// - **Regenerated 2026-08-12, and behaviour *did* change** - the first entry
+///   here that is not a pure hash-input change, so it is isolated differently.
+///   `Ship_UpdateCraft` (`0x08849df0`) keeps an airborne clock at `craft+0x284`
+///   and `Ship_HoverTwoPoint` zeroes the landing clock **while the craft is in
+///   the air**, once that airborne clock has passed `Antigrav::rebound_jump_time`,
+///   a parameter this crate parsed and never read. So a hop shorter than the
+///   parameter never arms `landing_rebound`, where this crate previously reset
+///   the landing clock on every touchdown edge. `ShipState` gains
+///   `time_airborne`, and `time_since_landing`'s initial value goes from an
+///   invented `1.0` to `Ship_InitCraft`'s recovered `10.0`, which is
+///   behaviourally identical because both sit outside the 0.2 s window.
+///
+///   **Isolated by removing only `write_f32(time_airborne)` and keeping the
+///   force-law change**: all three rows still moved, which is the honest result
+///   and the opposite of the 2026-08-03 tell below. A hash-input change moves
+///   every row *because* the stream is longer; here every row moves because
+///   every script leaves the ground and the landing response now fires on fewer
+///   ticks than it did. The reference was regenerated on that understanding, not
+///   on an assumption that nothing moved.
 /// - **Regenerated 2026-08-03**, and **no behaviour changed**. `ShipState` gained
 ///   `pad_timer` and `pad_direction` for the speed-pad boost
 ///   (`crates/physics/src/engine.rs`, `speedup_pad`), so `probe::hash_state`
@@ -189,20 +208,20 @@ const REFERENCE: &[(u32, Script, u64, u64)] = &[
     (
         600,
         Script::Corridor,
-        0x1bb8_fded_1804_caa8,
-        0x8244_ebec_90a0_bcfb,
+        0xe80d_4d99_628f_488f,
+        0x687c_0b28_a703_0a5d,
     ),
     (
         3_600,
         Script::Corridor,
-        0x395c_010f_8f11_e3ec,
-        0xf34a_d031_fc7c_40fa,
+        0xf5ee_ff09_4f1e_d55e,
+        0x4bae_4481_3240_6862,
     ),
     (
         3_600,
         Script::Aerobatic,
-        0x88f8_13c8_191d_598b,
-        0xbbff_c797_6921_ca81,
+        0xe71f_223f_f37f_a160,
+        0x2c4c_6494_a320_e57f,
     ),
 ];
 

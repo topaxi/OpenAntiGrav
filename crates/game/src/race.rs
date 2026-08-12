@@ -2206,11 +2206,12 @@ fn advance_standings(world: &mut World, course: &Course) {
 /// property and narrows where the artists narrowed it. See
 /// `docs/gameplay/ai.md`.
 ///
-/// Index-parallel to the sample table on purpose - see [`Race::racing_line`].
+/// Index-parallel to [`ai_order`] on purpose - see [`Race::racing_line`].
 #[must_use]
-fn racing_line(spline: &Spline) -> oag_ai::Line {
-    let samples: Vec<_> = (0..spline.len())
-        .filter_map(|index| spline.sample(index))
+fn racing_line(spline: &Spline, order: &[u32]) -> oag_ai::Line {
+    let samples: Vec<_> = order
+        .iter()
+        .filter_map(|&index| spline.sample(index as usize))
         .collect();
     let points = samples
         .iter()
@@ -2233,6 +2234,47 @@ fn racing_line(spline: &Spline) -> oag_ai::Line {
         })
         .collect();
     oag_ai::Line::with_corridor(points, corridor)
+}
+
+/// Which spline samples the AI line is made of, in the order a lap drives them.
+///
+/// **The one place the two index spaces are related**, and the reason there are
+/// two. [`Spline`] is every path the track authors, concatenated in *file*
+/// order, because the hover hold and the culler have to be able to locate a
+/// craft wherever it physically is - including on the branch of a split that
+/// this lap does not use. A driver wants the opposite: the circuit, once round,
+/// with nothing in it that a lap does not drive.
+///
+/// On nine of the disc's twelve circuits those are the same list and this is the
+/// identity permutation. On `05_Track`, `14_Track` and `07_Track` the file holds
+/// three paths and the lap ring walks two; the third is the other side of a
+/// split, and file order dropped a thousand samples of it into the middle of the
+/// lap, pointing the wrong way. A driver reaching the end of path 0 found its
+/// next samples a kilometre away, its 48-sample window could not follow, and the
+/// index stuck - those three circuits were exactly the three a lone craft never
+/// got a second lap out of. See `docs/gameplay/ai.md`.
+///
+/// Falls back to the whole table in file order when the track has no closed
+/// ring. A driveable ribbon with no lap counter still wants a line, and "every
+/// sample there is" is the honest answer when nothing knows which way round is
+/// forward.
+#[must_use]
+fn ai_order(spline: &Spline, course: Option<&Course>) -> Vec<u32> {
+    let every = || (0..spline.len() as u32).collect::<Vec<_>>();
+    let Some(course) = course else {
+        return every();
+    };
+    let mut order = Vec::with_capacity(spline.len());
+    for path in course.path_order() {
+        // The samples of one path, which the table holds contiguously. Scanning
+        // rather than assuming the two crates resample identically: `Course` and
+        // `Spline` each carry their own `STEPS_PER_SEGMENT` and a mapping built
+        // on them being equal would break silently if either moved.
+        order.extend(
+            (0..spline.len() as u32).filter(|&index| spline.path_of(index as usize) == Some(path)),
+        );
+    }
+    if order.is_empty() { every() } else { order }
 }
 
 /// The spline resampled into a flat table, for locating a ship on the track.
@@ -2441,12 +2483,17 @@ pub struct Race {
     spline: Spline,
     /// The authored racing line, as the opponents' drivers want it.
     ///
-    /// Built once from [`Self::spline`] and **index-parallel to it**, so a
-    /// driver's place on the line is also its place in the sample table and no
+    /// Built once from [`Self::spline`] and **index-parallel to [`Self::ai_order`]**,
+    /// so a driver's place on the line is also its place in that table and no
     /// craft pays for two searches. Track data rather than world state, which is
     /// why it is here and the drivers themselves are on the ships. See
     /// [`racing_line`] and `docs/gameplay/ai.md`.
     racing_line: oag_ai::Line,
+    /// Which spline sample each racing-line index is, in lap order.
+    ///
+    /// The identity permutation on nine of the disc's twelve circuits. See
+    /// [`ai_order`], and [`Self::ai_sample`] for the lookup itself.
+    ai_order: Vec<u32>,
     /// What the opponents' drivers are flown with. One set for the whole field:
     /// per-craft variation is the skill work, and this is the basic driver.
     ai_tuning: oag_ai::Tuning,
@@ -2485,17 +2532,36 @@ pub struct Race {
     /// Render from this pose instead of [`Self::camera`]. See [`CameraOverride`].
     camera_override: Option<CameraOverride>,
     dt: f32,
-    /// Ticks left before a `Reset` contact can respawn again.
+    /// Ticks left before a `Reset` contact can respawn each craft again.
     ///
     /// See [`RESPAWN_COOLDOWN_TICKS`].
-    respawn_cooldown: u32,
-    /// How many respawns have happened back to back, for [`RESPAWN_GIVE_UP`].
-    respawns_in_a_row: u32,
-    /// Set once respawning has given up, so the complaint is printed once.
-    respawn_disabled: bool,
-    /// How many times the ship has been respawned this race, for tests and for
-    /// the load report.
-    respawns: u32,
+    ///
+    /// **Per slot, and all four of these are, which is not tidiness.** One
+    /// shared set of counters would let an opponent stuck in a corner exhaust
+    /// [`RESPAWN_GIVE_UP`] and switch off the *player's* recovery, and a
+    /// cooldown armed by one craft would strand another that fell off in the
+    /// same half second. Indexed by ship slot, like [`Self::exhaust`].
+    respawn_cooldown: [u32; oag_gameplay::MAX_SHIPS],
+    /// How many respawns each craft has had back to back, for
+    /// [`RESPAWN_GIVE_UP`].
+    respawns_in_a_row: [u32; oag_gameplay::MAX_SHIPS],
+    /// Set once respawning has given up on a craft, so the complaint is printed
+    /// once.
+    respawn_disabled: [bool; oag_gameplay::MAX_SHIPS],
+    /// How many times each craft has been respawned this race, for tests and
+    /// for the load report.
+    respawns: [u32; oag_gameplay::MAX_SHIPS],
+    /// How many consecutive ticks each opponent has spent away from the sample
+    /// its driver believes it is on. See [`RESCUE_TICKS`].
+    ///
+    /// Slot 0's entry is never written: the player is recovered by the authored
+    /// reset volumes and by their own hands, and teleporting a craft somebody is
+    /// flying is a much bigger decision than teleporting one nobody can see.
+    lost_ticks: [u32; oag_gameplay::MAX_SHIPS],
+    /// [`RESCUE_HALF_WIDTHS`] in track units, resolved once against this
+    /// circuit's widest half-width rather than folded over the sample table
+    /// every tick.
+    rescue_distance: f32,
     /// Each craft's exhaust animation state, advanced on the simulation tick.
     ///
     /// **One per racer, slot 0 the player's**, because the original runs
@@ -2724,6 +2790,40 @@ pub const RESPAWN_COOLDOWN_TICKS: u32 = 30;
 /// recovered, and a visible complaint beats an invisible freeze.
 pub const RESPAWN_GIVE_UP: u32 = 5;
 
+/// How far an opponent may drift from the sample its own driver believes it is
+/// on before it counts as lost, in multiples of the track's widest half-width.
+///
+/// # Invented, and the reason it is not the reset volumes
+///
+/// A `Reset` contact is authored geometry and it is what recovers a craft that
+/// falls through the floor. It does **not** recover a craft that leaves the
+/// circuit sideways into open space: measured on the disc's twelve circuits, a
+/// lone opponent that came off receded from the track at racing speed for the
+/// rest of the race - eight thousand units in fifty seconds - and touched no
+/// reset volume at any point, because there is none out there to touch. Seven
+/// of the twelve never completed a lap for that reason alone.
+///
+/// So this is a second, invented trigger, and it is deliberately keyed on the
+/// *driver's* index rather than on a global search of the sample table: it
+/// costs one distance instead of four thousand per craft per tick, and it
+/// measures the thing that actually went wrong, which is that the craft and the
+/// driver's idea of where it is have come apart. See
+/// [ADR-0006](../../docs/architecture/adr/0006-no-copyrighted-content.md) - it
+/// is ours, not the original's, and nothing in the RE tree describes what the
+/// original does here.
+///
+/// Eight half-widths is wide enough that a leap, a barrel roll off a crest or a
+/// shove into a wall does not trip it, and the failure it catches overshoots it
+/// by two orders of magnitude within seconds.
+pub const RESCUE_HALF_WIDTHS: f32 = 8.0;
+
+/// How long an opponent has to stay that far away before it is put back.
+///
+/// A second and a half at 60 Hz. **The dwell matters more than the distance**:
+/// airborne over a gap is briefly indistinguishable from gone, and the two are
+/// told apart by whether the craft comes back.
+pub const RESCUE_TICKS: u32 = 90;
+
 impl Race {
     /// Starts a race: one ship, on the racing line, at the start of the spline.
     ///
@@ -2824,7 +2924,9 @@ impl Race {
         // nobody authored and the seven opponents would be a guess wearing the
         // shape of a measurement.
         let mut ai_pilots = [oag_ai::Pilot::BALANCED; oag_gameplay::MAX_SHIPS];
-        let line = racing_line(&spline);
+        let order = ai_order(&spline, course.as_ref());
+        let line = racing_line(&spline, &order);
+        let rescue_distance = spline.max_half_width() * RESCUE_HALF_WIDTHS;
         let mut pilot_names: [String; oag_gameplay::MAX_SHIPS] = Default::default();
         // The built-ins, plus whatever the player has authored. A directory
         // that cannot be read is not a reason to refuse to race: the built-ins
@@ -2910,6 +3012,7 @@ impl Race {
 
         Self {
             racing_line: line,
+            ai_order: order,
             // **Degraded from the measured tuning**, never boosted toward it -
             // see `oag_ai::Difficulty`. At the top level this is the
             // measurement unchanged.
@@ -2936,10 +3039,12 @@ impl Race {
             // ADR-0007: 60 Hz, from the clock rather than from a literal, so there
             // is one place the rate is decided.
             dt: TickClock::new(TickRate::DEFAULT).rate().dt(),
-            respawn_cooldown: 0,
-            respawns_in_a_row: 0,
-            respawn_disabled: false,
-            respawns: 0,
+            respawn_cooldown: [0; oag_gameplay::MAX_SHIPS],
+            respawns_in_a_row: [0; oag_gameplay::MAX_SHIPS],
+            respawn_disabled: [false; oag_gameplay::MAX_SHIPS],
+            respawns: [0; oag_gameplay::MAX_SHIPS],
+            lost_ticks: [0; oag_gameplay::MAX_SHIPS],
+            rescue_distance,
             // Cold, then snapped on the first tick. A race starts from a standing
             // start with no thrust, so there is nothing to snap *to* here.
             //
@@ -3096,10 +3201,20 @@ impl Race {
         self.view.draws_own_ship()
     }
 
-    /// How many times a `Reset` contact has respawned the ship this race.
+    /// How many times a `Reset` contact has respawned the player this race.
     #[must_use]
     pub fn respawns(&self) -> u32 {
-        self.respawns
+        self.respawns[0]
+    }
+
+    /// The same, for any craft on the grid.
+    ///
+    /// Out of bounds reads zero rather than panicking: a caller sweeping
+    /// [`oag_gameplay::MAX_SHIPS`] slots on a six-craft grid is asking a fair
+    /// question and the answer is "none".
+    #[must_use]
+    pub fn respawns_of(&self, slot: usize) -> u32 {
+        self.respawns.get(slot).copied().unwrap_or(0)
     }
 
     /// The fixed timestep, from [`TickRate::DEFAULT`].
@@ -3128,6 +3243,64 @@ impl Race {
     #[must_use]
     pub fn spline(&self) -> &Spline {
         &self.spline
+    }
+
+    /// Replaces what the opponents are flown with, mid-race.
+    ///
+    /// **For measurement, and it is the only way to sweep a knob across a
+    /// circuit.** The tuning is otherwise decided once at
+    /// [`Self::start`] from the difficulty, which is right for a race and
+    /// useless for finding out what a number is worth: a sweep that had to
+    /// recompile between points could not be a test, and a tuning fitted on the
+    /// one circuit that happens to be the default is how this page got a grip
+    /// figure that was wrong on the other eleven.
+    ///
+    /// It is not a difficulty setting and nothing in the game calls it.
+    pub fn set_ai_tuning(&mut self, tuning: oag_ai::Tuning) {
+        self.ai_tuning = tuning;
+    }
+
+    /// The line the opponents' drivers follow, index-parallel to
+    /// [`Self::ai_order`] rather than to [`Self::spline`].
+    ///
+    /// Read-only, and it exists so a test can ask the question that matters
+    /// when an opponent misbehaves: *is the craft where its driver believes it
+    /// is?* Comparing a ship's position against `point(driver.index)` separates
+    /// a driver that has lost its place on the line from one that is simply
+    /// driving badly, and those two have nothing in common as bugs.
+    #[must_use]
+    pub fn racing_line(&self) -> &oag_ai::Line {
+        &self.racing_line
+    }
+
+    /// The spline sample a driver's index stands on.
+    ///
+    /// **`driver.index` is an index into the racing line, not into the sample
+    /// table**, and on the three circuits where those differ using one as the
+    /// other reads a sample from the wrong side of the track. Wraps, because the
+    /// line is a closed ring and the caller that wants the *next* sample is
+    /// asking a lap question rather than a table question - `ai_order[i + 1]`,
+    /// never `ai_order[i] + 1`, which at the end of a path is a different place
+    /// entirely.
+    #[must_use]
+    pub fn ai_sample(&self, ai_index: usize) -> Option<&Sample> {
+        self.sample_index_of(ai_index)
+            .and_then(|index| self.spline.sample(index))
+    }
+
+    /// The same lookup, as an index into [`Self::spline`].
+    ///
+    /// For the one caller that needs the number rather than the sample:
+    /// [`Self::respawn`] takes a *sample* index, because the player reaches it
+    /// from `Spline::nearest` and an opponent from its driver, and a single
+    /// parameter carrying two index spaces depending on the caller is the bug
+    /// this pair of accessors exists to make impossible to write.
+    #[must_use]
+    fn sample_index_of(&self, ai_index: usize) -> Option<usize> {
+        if self.ai_order.is_empty() {
+            return None;
+        }
+        Some(self.ai_order[ai_index % self.ai_order.len()] as usize)
     }
 
     /// Drives and steps every craft that is not the player's.
@@ -3200,12 +3373,11 @@ impl Race {
             self.spend_opponent_pickup(slot, &controls, &field);
 
             // The driver just located itself, and the line is index-parallel to
-            // the sample table, so this costs a lookup rather than a search.
+            // `ai_order`, so this costs a lookup rather than a search.
             let index = self.world.ships[slot].driver.index as usize;
-            let track_sample = self.spline.sample(index).map(Spline::track_sample);
+            let track_sample = self.ai_sample(index).map(Spline::track_sample);
             let track_sample_next = self
-                .spline
-                .sample(index + 1)
+                .ai_sample(index + 1)
                 .map(Spline::track_sample)
                 .or(track_sample);
             let env = Environment {
@@ -3230,6 +3402,31 @@ impl Race {
                 &self.collision,
                 self.dt,
             );
+
+            // **The same recovery the player gets**, and it is not a nicety.
+            // Without it an opponent that leaves the geometry keeps going: the
+            // solo benchmark measured craft receding from the track at racing
+            // speed, 1,500 units per ten seconds, for the rest of the race.
+            // Seven of the disc's twelve circuits never saw a completed lap for
+            // this reason, and it read as a driving fault rather than as a
+            // missing mechanism.
+            //
+            // Same `env` and same pre-step position the force law just ran with,
+            // for the reason `reset_zone_touched` gives, and `index` is the
+            // sample the craft was on before the step - the last place it is
+            // known to have been on the track. Mapped out of the driver's index
+            // space, because [`Self::respawn`] speaks the sample table's.
+            let last_good = self.sample_index_of(index);
+            self.respawn_cooldown[slot] = self.respawn_cooldown[slot].saturating_sub(1);
+            // Unconditionally, and before the `||` could skip it: the dwell
+            // counter has to see every tick or a craft banks time it never
+            // spent away.
+            let lost = self.lost_off_the_circuit(slot);
+            if lost || self.reset_zone_touched(slot, &env, position) {
+                self.respawn(slot, last_good);
+            } else if self.respawn_cooldown[slot] == 0 {
+                self.respawns_in_a_row[slot] = 0;
+            }
         }
     }
 
@@ -3640,6 +3837,11 @@ impl Race {
         // successor through a junction. The original follows the junction graph;
         // this is one sample out of 34,000 per lap and is recorded rather than
         // pretended away.
+        //
+        // Still table order, deliberately: the player's locator works in sample
+        // space, where every path the track authors is reachable. An opponent's
+        // equivalent goes through [`Self::ai_sample`] instead, because a driver
+        // is asking a lap question. See [`ai_order`].
         let track_sample_next = index
             .and_then(|index| self.spline.sample(index + 1))
             .map(Spline::track_sample);
@@ -3724,15 +3926,15 @@ impl Race {
         self.advance_engine_flares();
         self.stage.advance(self.dt, &mut self.stage_rng);
 
-        self.respawn_cooldown = self.respawn_cooldown.saturating_sub(1);
-        if self.reset_zone_touched(&env, before) {
+        self.respawn_cooldown[0] = self.respawn_cooldown[0].saturating_sub(1);
+        if self.reset_zone_touched(0, &env, before) {
             // `index` is where the ship was *before* this tick moved it, which is
             // as close to "last known good" as this loop can cheaply get.
-            self.respawn(index);
-        } else if self.respawn_cooldown == 0 {
+            self.respawn(0, index);
+        } else if self.respawn_cooldown[0] == 0 {
             // Clear of the trigger with the cooldown expired: whatever run of
             // back-to-back respawns was happening is over.
-            self.respawns_in_a_row = 0;
+            self.respawns_in_a_row[0] = 0;
         }
 
         self.step_opponents();
@@ -4191,8 +4393,17 @@ impl Race {
                 }
             }
         }
-        hasher.write_u32(self.respawn_cooldown);
-        hasher.write_u32(self.respawns_in_a_row);
+        // Every slot, because every craft recovers now. Fixed length, so the
+        // stream's shape does not depend on how many craft are on the grid.
+        for cooldown in self.respawn_cooldown {
+            hasher.write_u32(cooldown);
+        }
+        for run in self.respawns_in_a_row {
+            hasher.write_u32(run);
+        }
+        for dwell in self.lost_ticks {
+            hasher.write_u32(dwell);
+        }
 
         hasher.finish()
     }
@@ -4665,15 +4876,49 @@ impl Race {
         self.world.ships[slot].pickup.weapon = drawn;
     }
 
+    /// Whether this opponent has been away from its own driver's idea of where
+    /// it is for long enough to count as lost.
+    ///
+    /// Advances the dwell counter as a side effect, so it must be called once
+    /// per craft per tick and not conditionally - a caller that skipped it
+    /// while a cooldown ran would let a craft bank dwell it never spent.
+    ///
+    /// See [`RESCUE_HALF_WIDTHS`] for why this exists next to the reset volumes
+    /// rather than instead of them.
+    fn lost_off_the_circuit(&mut self, slot: usize) -> bool {
+        let ship = &self.world.ships[slot];
+        let index = ship.driver.index as usize;
+        let away = ship
+            .physics
+            .body
+            .position
+            .distance(self.racing_line.point(index))
+            > self.rescue_distance;
+        self.lost_ticks[slot] = if away {
+            self.lost_ticks[slot].saturating_add(1)
+        } else {
+            0
+        };
+        // An empty line puts every point at the origin, so a track with no
+        // spline would read every craft as lost and respawn it onto nothing.
+        //
+        // The same two guards `reset_zone_touched` applies, applied *after* the
+        // counter so the dwell is still measured while they hold.
+        !self.racing_line.is_empty()
+            && !self.respawn_disabled[slot]
+            && self.respawn_cooldown[slot] == 0
+            && self.lost_ticks[slot] >= RESCUE_TICKS
+    }
+
     /// Whether this tick ended in contact with `Reset` geometry.
     ///
     /// Suppressed while the cooldown runs and once respawning has given up, so
     /// the two guards live in one place rather than at the call site.
-    fn reset_zone_touched(&self, env: &Environment, before: Vec3) -> bool {
-        if self.respawn_disabled || self.respawn_cooldown > 0 {
+    fn reset_zone_touched(&self, slot: usize, env: &Environment, before: Vec3) -> bool {
+        if self.respawn_disabled[slot] || self.respawn_cooldown[slot] > 0 {
             return false;
         }
-        let ship = &self.world.ships[0];
+        let ship = &self.world.ships[slot];
         // The same `env` the force law just ran with, so the self-collider
         // exclusion cannot differ between the two.
         oag_physics::reset::contact(&ship.physics, &ship.handling, env, &self.collision, before)
@@ -4702,38 +4947,57 @@ impl Race {
     /// [`Ship::place_at`] resets the whole physics state and keeps only mass and
     /// inertia. Whether the original preserves any speed through a respawn is also
     /// unrecorded.
-    fn respawn(&mut self, sample_index: Option<usize>) {
+    fn respawn(&mut self, slot: usize, sample_index: Option<usize>) {
+        // **The fallback is the lap's first sample, not the table's.** They are
+        // the same on every circuit the disc ships, and this arm fires exactly
+        // when the caller had no index to give - which for an opponent means
+        // `ai_order` was empty, the one case where "sample zero" has no
+        // relationship to any lap at all.
         let sample = sample_index
             .and_then(|index| self.spline.sample(index))
+            .or_else(|| self.ai_sample(0))
             .or_else(|| self.spline.start());
         let Some(sample) = sample.copied() else {
             return;
         };
 
-        let ship = &mut self.world.ships[0];
+        let ship = &mut self.world.ships[slot];
         let height = spawn_height(&ship.handling);
-        ship.place_at(Pose::from_sample(&sample, sample.racing_line, height));
+        let pose = Pose::from_sample(&sample, sample.racing_line, height);
+        ship.place_at(pose);
 
-        self.respawns += 1;
-        self.respawns_in_a_row += 1;
-        self.respawn_cooldown = RESPAWN_COOLDOWN_TICKS;
+        // **The driver has to be told where it has been put.** `Driver::drive`
+        // locates a craft in a 48-sample window around its last index, so a
+        // teleport of more than that leaves the driver steering at the piece of
+        // track the craft fell off - the same failure the grid had when
+        // `Driver::index` started at zero, except mid-race and invisible,
+        // because a craft that recovered and then drove into the scenery reads
+        // as bad driving rather than as a lost index.
+        ship.driver.index = self
+            .racing_line
+            .nearest(pose.position, 0, self.racing_line.len()) as u32;
+
+        self.respawns[slot] += 1;
+        self.respawns_in_a_row[slot] += 1;
+        self.respawn_cooldown[slot] = RESPAWN_COOLDOWN_TICKS;
+        // The craft is back on its line by definition, so the dwell starts
+        // again rather than carrying over and rescuing it a second time on the
+        // tick the cooldown expires.
+        self.lost_ticks[slot] = 0;
 
         // Otherwise the ribbon spans the teleport: ten samples of history from
         // wherever the craft fell off, stretched across the track to where it was
-        // put back. The camera is snapped for the same reason.
-        //
-        // Slot 0's, because this whole function is the player's - nothing respawns
-        // an opponent yet. When something does, it has to clear that craft's
-        // ribbon too, or the teleport draws as a streak across the track.
-        self.exhaust[0].clear_trail();
+        // put back. The camera is snapped for the same reason, and only for the
+        // player, who is the only craft one is flown from.
+        self.exhaust[slot].clear_trail();
 
-        if self.respawns_in_a_row >= RESPAWN_GIVE_UP {
-            self.respawn_disabled = true;
+        if self.respawns_in_a_row[slot] >= RESPAWN_GIVE_UP {
+            self.respawn_disabled[slot] = true;
             eprintln!(
-                "reset: {} respawns in a row without getting clear, giving up. \
-                 The recovery pose is probably inside a Reset volume; see \
-                 Race::respawn.",
-                self.respawns_in_a_row
+                "reset: craft {slot} respawned {} times in a row without getting \
+                 clear, giving up on it. The recovery pose is probably inside a \
+                 Reset volume; see Race::respawn.",
+                self.respawns_in_a_row[slot]
             );
         }
     }
@@ -4770,6 +5034,11 @@ impl Race {
     /// `Spline::from_track` concatenates paths in file order rather than travel
     /// order, and on a slow capture most windows step by zero. The dot product has
     /// neither failure mode and reads `+0.9999` against `-0.9999`.
+    ///
+    /// [`ai_order`] did not change that. It gives the *drivers* a travel-ordered
+    /// view; this reads `Spline::nearest`, which is still the whole table in
+    /// file order, and has to be - the player can be anywhere the track is,
+    /// including on a branch the lap never drives.
     ///
     /// `false` when the ship is not near the spline at all, which is the safe way
     /// round: a spurious warning is worse than a missing one.
@@ -5165,7 +5434,9 @@ impl Race {
     /// degrades only the camera's half.
     #[must_use]
     pub fn visibility_sections(&self) -> (u8, u8) {
-        if self.respawn_cooldown > 0 {
+        // The player's, because this places the player's camera. An opponent
+        // recovering across the circuit must not blank the shot.
+        if self.respawn_cooldown[0] > 0 {
             return (UNPLACED, UNPLACED);
         }
         let ship = self.ship();
@@ -8391,6 +8662,92 @@ mod tests {
         }
     }
 
+    /// An opponent that leaves the circuit is put back on it.
+    ///
+    /// **The failure this pins is not hypothetical.** Before it, an opponent
+    /// that came off receded from the track at racing speed for the rest of the
+    /// race, touching no `Reset` volume because there is none out in open
+    /// space, and seven of the disc's twelve circuits never saw a completed lap
+    /// as a result. See [`RESCUE_HALF_WIDTHS`].
+    #[test]
+    fn an_opponent_that_flies_off_the_circuit_is_put_back_on_it() {
+        let mut race = race_with_a_grid();
+        race.tick(&InputSnapshot::default());
+        assert_eq!(race.respawns_of(1), 0);
+
+        // Straight up and far away, which no reset volume in this fixture
+        // covers - the point being that geometry cannot catch this.
+        let away = race.world.ships[1].physics.body.position + Vec3::Y * 100_000.0;
+        race.world.ships[1].physics.body.position = away;
+
+        // Not on the first tick: a craft is only lost once it stays lost, or a
+        // leap over a gap would teleport it mid-flight.
+        race.tick(&InputSnapshot::default());
+        assert_eq!(
+            race.respawns_of(1),
+            0,
+            "one tick away is a jump, not a craft that is gone"
+        );
+
+        // Held out there until it is recovered, and then let go: putting it back
+        // out on the tick after the rescue would measure the shove, not the
+        // recovery.
+        for _ in 0..RESCUE_TICKS {
+            if race.respawns_of(1) > 0 {
+                break;
+            }
+            race.world.ships[1].physics.body.position = away;
+            race.tick(&InputSnapshot::default());
+        }
+        assert_eq!(race.respawns_of(1), 1, "the craft was never recovered");
+
+        // Back on the line, and - the part that is easy to get wrong - its
+        // driver knows where it was put. A driver left pointing at the old index
+        // steers at the piece of track the craft fell off.
+        let ship = &race.world.ships[1];
+        let residual = ship
+            .physics
+            .body
+            .position
+            .distance(race.racing_line().point(ship.driver.index as usize));
+        assert!(
+            residual < race.rescue_distance,
+            "recovered {residual} from where its driver thinks it is"
+        );
+
+        // And nobody else was touched.
+        for slot in [0usize, 2, 3] {
+            assert_eq!(race.respawns_of(slot), 0, "craft {slot} was recovered too");
+        }
+    }
+
+    /// Giving up on one craft must not give up on the rest of them.
+    ///
+    /// The counters were a single set until opponents could respawn, so one
+    /// opponent wedged in a corner would have exhausted [`RESPAWN_GIVE_UP`] and
+    /// switched off the *player's* recovery for the remainder of the race.
+    #[test]
+    fn giving_up_on_one_craft_leaves_the_others_recoverable() {
+        let mut race = race_with_a_grid();
+        race.respawn_disabled[1] = true;
+        race.respawns_in_a_row[1] = RESPAWN_GIVE_UP;
+
+        let away = race.world.ships[2].physics.body.position + Vec3::Y * 100_000.0;
+        for _ in 0..=RESCUE_TICKS {
+            race.world.ships[1].physics.body.position += Vec3::Y * 100_000.0;
+            race.world.ships[2].physics.body.position = away;
+            race.tick(&InputSnapshot::default());
+        }
+
+        assert_eq!(race.respawns_of(1), 0, "a craft given up on was recovered");
+        assert_eq!(
+            race.respawns_of(2),
+            1,
+            "giving up on craft 1 switched off craft 2's recovery"
+        );
+        assert!(!race.respawn_disabled[0], "the player's was switched off");
+    }
+
     /// A wreck must not go on racing. A single race runs with `Damage` on, so an
     /// opponent can empty its pool, and `oag_physics::step` integrates whatever
     /// it is handed - which before this was a destroyed craft at full throttle.
@@ -9974,6 +10331,133 @@ mod tests {
         assert!((spline.max_half_width() - 12.0).abs() < 1e-3);
     }
 
+    /// The shape of `05_Track`, `14_Track` and `07_Track`: paths 0 and 1 are the
+    /// two branches of a split and path 2 is the merge, so a lap drives 0 and 2
+    /// and never touches 1.
+    fn split_track() -> AiTrack {
+        let base = straight_track();
+        let path = base.paths[0].clone();
+        AiTrack {
+            version: base.version,
+            paths: vec![
+                oag_formats::track::Path {
+                    entry: Some(0),
+                    exit: Some(1),
+                    ..path.clone()
+                },
+                oag_formats::track::Path {
+                    entry: Some(0),
+                    exit: Some(1),
+                    ..path.clone()
+                },
+                oag_formats::track::Path {
+                    entry: Some(1),
+                    exit: Some(0),
+                    ..path
+                },
+            ],
+            junctions: vec![
+                oag_formats::track::Junction {
+                    prev: [Some(2), None],
+                    next: [Some(0), Some(1)],
+                },
+                oag_formats::track::Junction {
+                    prev: [Some(0), Some(1)],
+                    next: [Some(2), None],
+                },
+            ],
+        }
+    }
+
+    #[test]
+    fn a_branch_the_lap_never_drives_is_not_in_the_ai_line() {
+        let ai = split_track();
+        let spline = Spline::from_track(&ai);
+        let course = Course::from_track(&ai, None).expect("the split's chain closes");
+        let order = ai_order(&spline, Some(&course));
+
+        let per_path = spline.len() / 3;
+        assert_eq!(
+            order.len(),
+            2 * per_path,
+            "the alternate branch is still in the line"
+        );
+        assert!(
+            order
+                .iter()
+                .all(|&index| spline.path_of(index as usize) != Some(1)),
+            "a sample of the branch the lap never drives reached the line"
+        );
+        // And in travel order rather than file order: the merge follows the
+        // branch it merges from.
+        assert_eq!(spline.path_of(order[0] as usize), Some(0));
+        assert_eq!(spline.path_of(order[order.len() - 1] as usize), Some(2));
+    }
+
+    /// The nine circuits where nothing changes, and the assertion that says so:
+    /// file order already is travel order, so the mapping is the identity and
+    /// every index means exactly what it meant before `ai_order` existed.
+    #[test]
+    fn a_track_whose_lap_drives_every_path_maps_a_line_index_onto_itself() {
+        let ai = straight_track();
+        let spline = Spline::from_track(&ai);
+        let course = Course::from_track(&ai, None).expect("this fixture does close");
+        let order = ai_order(&spline, Some(&course));
+        assert_eq!(order, (0..spline.len() as u32).collect::<Vec<_>>());
+    }
+
+    /// A track with no closed ring still gets a line - every sample, in file
+    /// order, because nothing knows which way round is forward.
+    #[test]
+    fn a_track_with_no_ring_still_gets_every_sample_in_file_order() {
+        let spline = Spline::from_track(&straight_track());
+        let order = ai_order(&spline, None);
+        assert_eq!(order, (0..spline.len() as u32).collect::<Vec<_>>());
+    }
+
+    /// The lookup a driver's index goes through, and the wrap that makes
+    /// "the next sample" a lap question rather than a table one.
+    ///
+    /// **Asserted against `path_of` rather than against `ai_order`**, because
+    /// `ai_sample` *is* a lookup through `ai_order` and comparing the two would
+    /// assert a function equals its own definition - true on a mapping that had
+    /// dropped the wrong path entirely. Which path each index lands on is a
+    /// claim the mapping can fail.
+    #[test]
+    fn an_ai_index_reads_the_sample_the_lap_puts_there() {
+        let ai = split_track();
+        let mut race = Race::start(Setup {
+            ai: ai.clone(),
+            spline: Spline::from_track(&ai),
+            course: Course::from_track(&ai, None),
+            ..setup(hulled_handling())
+        });
+        race.world.ships[0].active = true;
+
+        let length = race.racing_line().len();
+        assert!(length > 0);
+        let walked: Vec<u16> = (0..length)
+            .map(|ai_index| {
+                let sample = race.sample_index_of(ai_index).expect("a sample index");
+                race.spline.path_of(sample).expect("a path")
+            })
+            .collect();
+        assert!(
+            !walked.contains(&1),
+            "a line index reads the branch the lap never drives"
+        );
+        // Two contiguous runs, one per path the lap drives, in travel order.
+        let handovers = walked.windows(2).filter(|pair| pair[0] != pair[1]).count();
+        assert_eq!(handovers, 1, "the two paths are not contiguous: {walked:?}");
+        assert_eq!((walked[0], walked[length - 1]), (0, 2));
+
+        // One past the end is the start again, and the assertion is which
+        // *path* it lands on: this fixture's three paths are clones of one
+        // straight, so comparing positions would hold even on a wrap into the
+        // branch the lap skips.
+        assert_eq!(race.sample_index_of(length), race.sample_index_of(0));
+    }
+
     /// A local search finds what a whole-table search would, when the answer is
     /// inside the window.
     #[test]
@@ -10053,8 +10537,16 @@ mod tests {
     #[test]
     fn a_respawn_in_flight_makes_everything_visible() {
         let mut race = Race::start(setup(Handling::default()));
-        race.respawn_cooldown = 1;
+        race.respawn_cooldown[0] = 1;
         assert_eq!(race.visibility_sections(), (UNPLACED, UNPLACED));
+
+        // And an opponent recovering across the circuit does not blank the
+        // shot: the camera is the player's, and only the player's respawn can
+        // make it untrustworthy.
+        race.respawn_cooldown[0] = 0;
+        race.respawn_cooldown[3] = 1;
+        assert_ne!(race.visibility_sections(), (UNPLACED, UNPLACED));
+        race.respawn_cooldown[0] = 1;
 
         // And the resulting set really is everything, not merely two unknown
         // ids - this is the property the whole conservative path exists for.

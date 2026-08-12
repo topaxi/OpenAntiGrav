@@ -1862,22 +1862,55 @@ fn every_difficulty_is_quicker_than_the_one_below_it() {
 ///
 /// Returns the best lap the craft managed, in ticks.
 fn solo_lap_ticks(level: oag_ai::Difficulty) -> Option<u64> {
-    solo_lap_on(level, &race::Options::default().track)
+    solo_lap_on(level, &race::Options::default().track).best
+}
+
+/// What a lone craft managed on one circuit.
+#[derive(Debug, Default, Clone)]
+struct Solo {
+    /// The quickest **clean** lap, in ticks.
+    ///
+    /// A lap the craft had to be recovered during is not counted, and that is
+    /// the point of carrying [`Self::respawns`] alongside it. Respawning is a
+    /// safety net for a race with seven other craft shoving; on an empty
+    /// circuit a competent driver should never need it, so a benchmark that let
+    /// recovery paper over a craft flying into the scenery would report the
+    /// driving as fixed when only the symptom was.
+    best: Option<u64>,
+    /// How many times the craft had to be put back on the track.
+    respawns: u32,
+    /// How far round it got, in laps.
+    laps: u32,
+    /// The driver index the craft was on when each rescue fired, and the line's
+    /// length, so a reader can tell whether the losses cluster anywhere.
+    lost_at: Vec<u32>,
+    line_len: u32,
 }
 
 /// The same, on a named circuit.
-fn solo_lap_on(level: oag_ai::Difficulty, track: &str) -> Option<u64> {
-    let image = image()?;
-    let loaded = race::load(&race::Options {
+fn solo_lap_on(level: oag_ai::Difficulty, track: &str) -> Solo {
+    solo_lap_tuned(level, track, None)
+}
+
+/// The same, with the drivers' tuning overridden - what a sweep calls.
+fn solo_lap_tuned(level: oag_ai::Difficulty, track: &str, tuning: Option<oag_ai::Tuning>) -> Solo {
+    let Some(image) = image() else {
+        return Solo::default();
+    };
+    let Ok(loaded) = race::load(&race::Options {
         source: image.display().to_string(),
         class: SpeedClass::Venom,
         mode: oag_race::Mode::SingleRace,
         difficulty: level,
         track: track.to_string(),
         ..race::Options::default()
-    })
-    .ok()?;
+    }) else {
+        return Solo::default();
+    };
     let mut race = race::Race::start(loaded.setup);
+    if let Some(tuning) = tuning {
+        race.set_ai_tuning(tuning);
+    }
     // Everyone but one opponent off the track, so nothing it does is about
     // anybody else.
     for slot in 2..8 {
@@ -1888,19 +1921,36 @@ fn solo_lap_on(level: oag_ai::Difficulty, track: &str) -> Option<u64> {
     let mut best: Option<u64> = None;
     let mut lap = race.world.ships[1].standing.lap;
     let mut started = 0u64;
+    let mut recovered_this_lap = false;
+    let mut lost_at = Vec::new();
     for tick in 0..18_000u64 {
+        let before = race.respawns_of(1);
+        let was_at = race.world.ships[1].driver.index;
         race.tick(&oag_gameplay::InputSnapshot::default());
+        if race.respawns_of(1) != before {
+            recovered_this_lap = true;
+            lost_at.push(was_at);
+        }
         let now = race.world.ships[1].standing.lap;
         if now != lap {
-            if lap > 1 {
+            // The first lap is the standing start, and a lap the craft had to
+            // be recovered during is not a lap it drove.
+            if lap > 1 && !recovered_this_lap {
                 let taken = tick - started;
                 best = Some(best.map_or(taken, |held: u64| held.min(taken)));
             }
             started = tick;
             lap = now;
+            recovered_this_lap = false;
         }
     }
-    best
+    Solo {
+        best,
+        respawns: race.respawns_of(1),
+        laps: lap,
+        lost_at,
+        line_len: race.racing_line().len() as u32,
+    }
 }
 
 /// A solo craft laps, and laps faster at a harder setting.
@@ -1922,30 +1972,21 @@ fn a_solo_craft_laps_faster_at_a_harder_setting() {
     );
 }
 
-#[test]
-#[ignore = "needs a disc image in data/images/"]
-fn probe_solo() {
-    let t = oag_ai::Tuning::default();
-    let ace = solo_lap_ticks(oag_ai::Difficulty::Ace).unwrap_or(0);
-    panic!(
-        "la={:.0} mtr={:.1} lookmax={:.0} lookspd={:.2} brakeahead={:.1} margin={:.2} -> {ace} ticks ({:.1}s)",
-        t.lateral_accel,
-        t.max_turn_rate,
-        t.look_max,
-        t.look_speed,
-        t.brake_lookahead,
-        t.brake_margin,
-        ace as f32 / 60.0
-    );
-}
-
 /// Every circuit on the disc, one craft, best lap.
 ///
 /// **The benchmark that stops a tuning being fitted to one track.** Talon's
 /// Junction is the default and therefore the one every other measurement here
 /// happens to use; a knob that helps there and hurts everywhere else would look
 /// like an improvement right up until someone played a different circuit.
-fn solo_laps_everywhere(level: oag_ai::Difficulty) -> Vec<(String, Option<u64>)> {
+fn solo_laps_everywhere(level: oag_ai::Difficulty) -> Vec<(String, Solo)> {
+    solo_laps_tuned(level, None)
+}
+
+/// The same, with the drivers' tuning overridden.
+fn solo_laps_tuned(
+    level: oag_ai::Difficulty,
+    tuning: Option<oag_ai::Tuning>,
+) -> Vec<(String, Solo)> {
     let Some(image) = image() else {
         return Vec::new();
     };
@@ -1960,9 +2001,60 @@ fn solo_laps_everywhere(level: oag_ai::Difficulty) -> Vec<(String, Option<u64>)>
         .filter(|track| !track.reversed)
         .map(|track| {
             let entry = track.entry_name();
-            (track.id.clone(), solo_lap_on(level, &entry))
+            (track.id.clone(), solo_lap_tuned(level, &entry, tuning))
         })
         .collect()
+}
+
+/// What a grip figure is worth across the whole disc rather than on one
+/// circuit.
+///
+/// A scratch sweep, kept `#[ignore]`d and printing rather than asserting: the
+/// number it produces goes into `Tuning::lateral_accel` by hand, with the table
+/// written into `docs/gameplay/ai.md` so the choice has its measurement next to
+/// it. It exists because a solo lap on Talon's Junction said 260 was quicker
+/// than 180, and Talon's Junction is one of the five circuits a craft gets
+/// round cleanly - exactly the subset that cannot see the failure.
+/// Twelve circuits times five grip figures times five minutes of simulation is
+/// minutes of wall clock in a debug build, so it is off unless asked for:
+///
+/// ```sh
+/// OAG_SWEEP=1 OAG_REQUIRE_GAME_DATA=1 \
+///   cargo nextest run --release -p oag-game --run-ignored all sweep_grip --no-capture
+/// ```
+///
+/// `#[ignore]` alone would not do it - `just test-data` runs ignored tests, and
+/// a five-minute entry in that suite is how a suite stops being run.
+#[test]
+#[ignore = "a scratch sweep: set OAG_SWEEP=1, read the table, choose"]
+fn sweep_grip() {
+    if std::env::var_os("OAG_SWEEP").is_none() {
+        return;
+    }
+    let mut report = String::from("\ngrip   clean  round  respawns  mean clean lap\n");
+    for grip in [120.0f32, 150.0, 180.0, 220.0, 260.0] {
+        let tuning = oag_ai::Tuning {
+            lateral_accel: grip,
+            ..oag_ai::Tuning::default()
+        };
+        let laps = solo_laps_tuned(oag_ai::Difficulty::Ace, Some(tuning));
+        if laps.is_empty() {
+            return;
+        }
+        let clean: Vec<u64> = laps.iter().filter_map(|(_, solo)| solo.best).collect();
+        let mean = if clean.is_empty() {
+            f32::NAN
+        } else {
+            clean.iter().sum::<u64>() as f32 / clean.len() as f32 / 60.0
+        };
+        report.push_str(&format!(
+            "{grip:<6} {:<6} {:<6} {:<9} {mean:.1}s\n",
+            clean.len(),
+            laps.iter().filter(|(_, solo)| solo.laps >= 2).count(),
+            laps.iter().map(|(_, solo)| solo.respawns).sum::<u32>(),
+        ));
+    }
+    println!("{report}");
 }
 
 /// Every craft starts on its own racing line, on **every** circuit.
@@ -2011,8 +2103,7 @@ fn every_craft_starts_on_its_line_on_every_circuit() {
         for slot in 1..race.ship_count() as usize {
             let ship = &race.world.ships[slot];
             let sample = race
-                .spline()
-                .sample(ship.driver.index as usize)
+                .ai_sample(ship.driver.index as usize)
                 .expect("the driver stands on a sample");
             let lateral = Vec3::from_array(sample.lateral).normalize_or_zero();
             let line = Vec3::from_array(sample.pos)
@@ -2035,18 +2126,51 @@ fn every_craft_starts_on_its_line_on_every_circuit() {
 /// How many of the disc's circuits a lone craft can actually get round.
 ///
 /// **A record of a known-incomplete state, pinned so it cannot quietly get
-/// worse.** As of 2026-08-11 the answer is five of twelve. It was two before
-/// `Driver::index` was seeded from the spawn - see
-/// [`every_craft_starts_on_its_line_on_every_circuit`] - and the seven that
-/// still fail are no longer *stuck*: they cover seven to eleven thousand units
-/// in a minute at racing speed. What they do not do is complete a lap, and on
-/// those circuits the craft sits thousands of units from the sample its driver
-/// believes it is on, which points at the racing line or the lap ring rather
-/// than at the controller. That is the next thing to chase.
+/// worse**, and it holds two separate ratchets because there are two separate
+/// failures behind the one symptom.
 ///
-/// The bound is deliberately "no worse than today" rather than a target: a
-/// number that asserted twelve would be a test that fails for a reason already
-/// written down, which is noise rather than signal.
+/// # What the numbers were, and what moved them
+///
+/// Two of twelve until `Driver::index` was seeded from the spawn (see
+/// [`every_craft_starts_on_its_line_on_every_circuit`]), then five. Adding a
+/// rescue for a craft that leaves the circuit ([`race::RESCUE_HALF_WIDTHS`])
+/// took *laps completed* to nine of twelve without moving *clean* laps at all,
+/// and that gap is the finding: the craft were not failing to drive round, they
+/// were driving off and never coming back, because a `Reset` volume cannot
+/// catch something receding into open space.
+///
+/// # The two ratchets, and why a clean lap is the one that matters
+///
+/// A lap the craft had to be recovered during is not a lap it drove. On an
+/// empty circuit at the top difficulty a competent driver should never need
+/// recovering, so the respawn count *is* the driving-quality metric here and
+/// the rescue must not be allowed to launder a craft that flies into the
+/// scenery. Four circuits complete every lap and never manage a clean one.
+///
+/// and that gap is the finding. Dropping the paths a lap never drives out of
+/// the AI line ([`race::Race::ai_sample`]) then took *round* to eleven and
+/// *clean* to six, and the nine circuits it did not touch reproduced their lap
+/// times, respawn counts and loss indices exactly - which is what said the
+/// mapping was right.
+///
+/// # What is left, and it is not one bug
+///
+/// - **02, 09, 06, 14 lap but never cleanly.** The craft loses ground contact
+///   at one particular place, every lap, and falls. Not a driving fault at all -
+///   a human driver does the same thing in the same place. See
+///   `docs/gameplay/ai.md`. 01 left this list on 2026-08-12 when the landing
+///   response was gated on `rebound_jump_time`: 8 respawns to 3, and a clean
+///   36.9s lap.
+/// - **05 never registers a second lap**, and no longer for a line reason: it
+///   drives into the scenery at index ~590, ends up grounded at two units per
+///   second slowing to zero, and sits there for the remaining seventy seconds.
+///   It is only 70 units off its line, so nothing rescues it. A craft that has
+///   stopped making progress needs its own recovery, which is a mechanism that
+///   does not exist.
+///
+/// Both bounds are "no worse than today" rather than targets: a number that
+/// asserted twelve would be a test failing for a reason already written down,
+/// which is noise rather than signal.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round() {
@@ -2056,22 +2180,184 @@ fn a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round() {
     }
     let lapped: Vec<&String> = laps
         .iter()
-        .filter(|(_, ticks)| ticks.is_some())
+        .filter(|(_, solo)| solo.best.is_some())
         .map(|(id, _)| id)
         .collect();
     let missed: Vec<&String> = laps
         .iter()
-        .filter(|(_, ticks)| ticks.is_none())
+        .filter(|(_, solo)| solo.best.is_none())
         .map(|(id, _)| id)
         .collect();
-    println!("lapped: {lapped:?}\nstill cannot: {missed:?}");
+    for (id, solo) in &laps {
+        println!(
+            "{id:<12} clean lap {:>6}  laps {:<3} respawns {:<3} of {} lost at {:?}",
+            solo.best.map_or("none".to_string(), |ticks| format!(
+                "{:.1}s",
+                ticks as f32 / 60.0
+            )),
+            solo.laps,
+            solo.respawns,
+            solo.line_len,
+            solo.lost_at
+        );
+    }
+    println!("clean laps: {lapped:?}\nno clean lap: {missed:?}");
+    // 07 is the marginal one: its clean lap is 48.4s against a 36-42s field,
+    // so a tuning change that costs it that lap fails this assertion without
+    // anything having regressed. Check which circuit dropped before assuming a
+    // driving fault.
     assert!(
-        lapped.len() >= 5,
-        "only {} of {} circuits were lapped, which is worse than the recorded \
-         five: {missed:?}",
+        lapped.len() >= 7,
+        "only {} of {} circuits saw a clean lap, which is worse than the \
+         recorded seven: {missed:?}",
         lapped.len(),
         laps.len()
     );
+
+    // The second ratchet: got round at all, recovered or not. It is the one the
+    // rescue moved, and keeping it separate is what stops a driving regression
+    // hiding behind a recovery that still gets the craft home.
+    let round: Vec<&String> = laps
+        .iter()
+        .filter(|(_, solo)| solo.laps >= 2)
+        .map(|(id, _)| id)
+        .collect();
+    assert!(
+        round.len() >= 11,
+        "only {} of {} circuits were completed at all, which is worse than the \
+         recorded eleven",
+        round.len(),
+        laps.len()
+    );
+}
+
+/// Whether there is anything under the line an opponent is told to drive.
+///
+/// **The measurement that turned "the AI flies off at one corner" into
+/// something that is not an AI question at all.** Craft were leaving six
+/// circuits at a repeatable place every lap, falling five to eight hundred
+/// units while only a few units laterally off their own line - straight down,
+/// not wide. So the question stopped being how the driver steers and became
+/// whether the surface it is steering along is there.
+///
+/// Casting down the surface normal at **every** sample of the racing line, from
+/// one probe reach above to one below, which is exactly what a craft's own
+/// antigravity probes reach:
+///
+/// | circuit | line samples with nothing under them | where |
+/// | --- | --- | --- |
+/// | 16, 03, 04 | **0** | - |
+/// | 06 | 5 | 1196-1200 |
+/// | 01 | 12 | 31-42 |
+/// | 07 | 13 | 2364-2376 |
+/// | 13 | 31 | 19-49 |
+/// | 09 | 55 | 967-1021 |
+/// | 02 | 70 | 1167-1236 |
+/// | 10 | 72 | 135-206 |
+/// | 14 | 82 | 684-765 |
+/// | 05 | 134 | 161-211, 811-893 |
+///
+/// Each is a single contiguous run, and **the three circuits with none are
+/// three of the circuits that never lose a craft**. A second, deeper cast
+/// separates two different things wearing the same result: on 13 and most of 10
+/// there is nothing within sixty reaches, which is an authored *jump* - 13 flies
+/// it, lands, and laps cleanly. On 09, 02, 05, 14, 01 and 07 there is a surface,
+/// one to sixty ride-heights **below** the line. That is not a gap in the track;
+/// it is a racing line running above the track.
+///
+/// Which of those two this is per circuit is not settled, and neither is whether
+/// the deeper cases are the disc's data or this repository's collision loading.
+/// See `docs/gameplay/ai.md`.
+///
+/// The assertion is only that the three clean circuits stay clean, because that
+/// is the part that is understood. The table prints so a reader gets the whole
+/// picture rather than the one bound.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_racing_line_has_track_under_it_where_it_is_known_to() {
+    let Some(image) = image() else { return };
+    let mut archives = oag_pulse::open(&image.display().to_string()).expect("mounting the disc");
+    let blob = archives
+        .read_name(oag_pulse::names::GAME_PLUGIN_DEFINITION)
+        .expect("the game plugin definition");
+    let definition = oag_formats::fexml::expand(&blob).expect("expanding it");
+
+    let mut measured: Vec<(String, usize)> = Vec::new();
+    for track in catalogue::tracks(&definition)
+        .into_iter()
+        .filter(|track| !track.reversed)
+    {
+        let Ok(loaded) = race::load(&race::Options {
+            source: image.display().to_string(),
+            class: SpeedClass::Venom,
+            mode: oag_race::Mode::SingleRace,
+            track: track.entry_name(),
+            ..race::Options::default()
+        }) else {
+            continue;
+        };
+        let reach = loaded.setup.handling.antigrav.ride_height;
+        let collision = loaded.setup.collision.clone();
+        let race = race::Race::start(loaded.setup);
+        let line = race.racing_line();
+
+        // Two casts per unsupported sample: one probe reach, which is what a
+        // craft holds onto, then sixty, which says whether there is a surface
+        // down there at all.
+        let (mut gaps, mut below) = (Vec::new(), 0u32);
+        for index in 0..line.len() {
+            let Some(sample) = race.ai_sample(index) else {
+                continue;
+            };
+            let up = (-Vec3::from_array(sample.down)).normalize_or_zero();
+            let from = line.point(index) + up * reach;
+            let cast = |length: f32| {
+                collision
+                    .raycast(oag_physics::Ray::new(from, -up, length), None, false)
+                    .is_some()
+            };
+            if cast(reach * 2.0) {
+                continue;
+            }
+            gaps.push(index);
+            if cast(reach * 60.0) {
+                below += 1;
+            }
+        }
+        let mut runs: Vec<(usize, usize)> = Vec::new();
+        for index in &gaps {
+            match runs.last_mut() {
+                Some(last) if *index == last.1 + 1 => last.1 = *index,
+                _ => runs.push((*index, *index)),
+            }
+        }
+        println!(
+            "{:<12} {:>4} of {} line samples unsupported ({below} have a surface further \
+             below) in runs {:?}",
+            track.id,
+            gaps.len(),
+            line.len(),
+            runs.iter()
+                .filter(|(from, to)| to - from >= 4)
+                .map(|(from, to)| format!("{from}..{to}"))
+                .collect::<Vec<_>>(),
+        );
+        measured.push((track.id.clone(), gaps.len()));
+    }
+    if measured.is_empty() {
+        return;
+    }
+
+    for id in ["16_Track", "03_Track", "04_Track"] {
+        let Some((_, gaps)) = measured.iter().find(|(name, _)| name == id) else {
+            continue;
+        };
+        assert_eq!(
+            *gaps, 0,
+            "{id} used to have track under every sample of its racing line and now has \
+             {gaps} without"
+        );
+    }
 }
 
 /// The Rocket's model is longest along the axis `Race::rocket_model_matrices`

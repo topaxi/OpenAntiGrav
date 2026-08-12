@@ -779,12 +779,464 @@ where the cost is paid once - and
 `race_ground_truth::every_craft_starts_on_its_line_on_every_circuit` is the test
 that was missing.
 
-**Seven circuits still do not complete a lap**, and they are no longer stuck:
-they cover seven to eleven thousand units a minute at racing speed. On those the
-craft sits thousands of units from the sample its driver thinks it is on, which
-points at the racing line or the lap ring rather than at the controller.
-`a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round` pins the five so
-the number cannot quietly fall again.
+### Nothing recovered an opponent that left the circuit
+
+**Found 2026-08-12, chasing the seven circuits the fix above did not reach.** On
+those the craft was covering seven to eleven thousand units a minute at racing
+speed while sitting thousands of units from the sample its driver believed it
+was on. The obvious reading - that the racing line was built wrong, since
+`Spline::from_track` concatenates every path in file order - is **wrong**, and a
+probe killed it in one run: every circuit on the disc carries two or three
+paths, the working ones included, and a healthy craft crosses path boundaries
+with the index following it and a residual of three to nine units throughout.
+
+What the probe actually showed is a craft leaving the geometry and *continuing
+in a straight line for the rest of the race* - eight thousand units in fifty
+seconds, off-track distance and residual growing together. Two mechanisms were
+missing, not one:
+
+1. **`Race::respawn` was the player's alone.** The code said so in a comment.
+   Nothing on the grid but slot 0 could be put back.
+2. **A `Reset` volume cannot catch a craft receding into open space.** With
+   per-slot respawn wired in, the twelve circuits produced **zero** respawns
+   between them: there is no authored geometry out there to touch.
+
+So there is a second, **invented** trigger next to the reset volumes -
+`RESCUE_HALF_WIDTHS`, eight times the track's widest half-width, held for
+`RESCUE_TICKS` (a second and a half) - keyed on the distance from the craft to
+the sample *its own driver* believes it is on. That measures the thing that went
+wrong rather than a proxy for it, and it costs one distance per craft per tick
+instead of a search of the whole sample table. It is ours under
+[ADR-0006](../architecture/adr/0006-no-copyrighted-content.md); nothing in the
+RE tree describes what the original does here.
+
+| | before | after |
+| --- | --- | --- |
+| circuits a lone craft completes laps on | five | **nine** |
+| circuits with a **clean** lap (no recovery) | five | five |
+
+**The clean-lap number deliberately did not move**, and that gap is the finding.
+Four circuits now complete every lap and never manage one without being
+recovered. A lap the craft had to be rescued during is not a lap it drove, so
+the benchmark counts them separately and the respawn count is the
+driving-quality metric: on an empty circuit at the top difficulty a competent
+driver should never need recovering at all. The rescue is a safety net for a
+race with seven other craft shoving, not a fix for a driver that flies into the
+scenery.
+
+Three circuits - 05, 14 and 07 - still never registered a second lap at this
+point, and 07 did it *without being rescued once*. All three are the circuits
+whose spline carries three paths rather than two, which was the lead the next
+section followed: two of the three were an AI line built out of a path the lap
+never drives, and the third turned out to be a beached craft.
+
+`a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round` carries both
+ratchets so neither number can quietly fall, and
+`an_opponent_that_flies_off_the_circuit_is_put_back_on_it` pins the rescue
+without needing the disc.
+
+### Where a craft comes off: two wrong answers and the measurement that settled it
+
+**Read this section as a record of method, not just of a finding.** The
+conclusion changed twice, both times because the measurement was of the wrong
+quantity, and the two wrong answers are more instructive than the right one. The
+answer is at the bottom: craft come off **at the path boundary**, which is where
+the first pass said they did, for a reason it had not established.
+
+#### Wrong answer one: the rescue index, reconstructed backwards
+
+Recording each rescue against the driver's index gave one tight cluster per
+circuit - 06 at 1520-1522 on all six of its rescues. The rescue fires
+`RESCUE_TICKS` after the craft leaves, so the index at the rescue is not the
+index it left at; subtracting an estimated 325-sample flight put 06's cluster on
+its path boundary at 1196, and that arithmetic became "craft come off at the
+seam". **The arithmetic was not sound.** The flight offset is not a constant: it
+is however far the index keeps advancing while the craft is airborne, which
+depends on the craft. A right answer reached this way is still a guess.
+
+#### Wrong answer two: distance from the line
+
+Watching the craft leave, rather than reconstructing it - a lone Ace, every
+circuit, recording the driver index the first time the craft is more than **two
+max half-widths** off the line point its own driver is standing on:
+
+| circuit | path boundary | left the corridor at | laps cleanly |
+| --- | --- | --- | --- |
+| 16 | 1752 | never | yes |
+| 03 | 1748 | never | yes |
+| 04 | 1684 | never | yes |
+| 13 | 1524 | never | yes |
+| 10 | 132 | 336-381 | yes, and is rescued 5× |
+| 06 | 1196 | 1290-1291 | no |
+| 02 | 1160 | 1274-1357 | no |
+| 09 | 964 | 1106-1123 | no |
+| 01 | 1764 | 114-118 | no |
+| 05 | 1016, 2048 | 195-283 | no |
+| 14 | 892, 1784 | 823 | no |
+| 07 | 992, 1984 | **never** | no |
+
+This says nothing leaves at a boundary: 06 94 samples past its own, 02 114 past,
+09 142 past, 01 at 118 with its only boundary at 1764. **It is also wrong, and
+for the same reason as the first.** A threshold on distance is crossed when the
+craft has *finished* leaving, and a craft that has already been falling for a
+second and a half has carried its index a long way with it. The number is real;
+it just does not date the event.
+
+One fact from this pass survives and is worth keeping: every path ends in
+near-coincident samples - steps of 0.6, 0.3, 0.1 into the boundary against a
+1.50-unit median - on all twelve circuits including the four that never put a
+wheel wrong. Degenerate tails alone are harmless.
+
+#### The one ordering fault that is real: a path the lap never drives
+
+The same probe found something else, and it is a different bug wearing the same
+clothes. Three circuits carry **three** paths where the rest carry two, and on
+all three the lap ring walks only two of them:
+
+| circuit | paths in file order | paths the ring walks | step from path 0 into path 1 |
+| --- | --- | --- | --- |
+| 05 | 0, 1, 2 | 0, 2 | 816 units, `cos -0.36` |
+| 14 | 0, 1, 2 | 0, 2 | 1,249 units, `cos -0.89` |
+| 07 | 0, 1, 2 | 0, 2 | 1,160 units, `cos -0.97` |
+
+Path 1 is the other branch of a split. `Spline::from_track` concatenates every
+path in file order, so the AI line spliced a stretch of track the lap never
+drives into the middle of the lap - and pointing the wrong way. A driver
+reaching the end of path 0 finds its next thousand samples a kilometre away, its
+48-sample window cannot follow, and the index sticks. **These three circuits are
+exactly the three that never register a second lap**, and 07 does it without
+being rescued once: it is not flying off, it is stuck at sample 991 going
+nowhere.
+
+The fix is to walk the lap ring rather than the file, `Race::ai_order`: the AI
+line is the ring's paths in travel order, and a path the ring never walks is not
+in it. `Course::path_order` supplies the sequence; the mapping scans the sample
+table per path rather than assuming `Course` and `Spline` resample identically,
+because they carry a `STEPS_PER_SEGMENT` each and a mapping resting on those
+being equal would break silently if either moved.
+
+**Two index spaces exist from here on**, and conflating them is the bug this
+introduces if it is done carelessly. `driver.index` indexes the racing line;
+`Spline::nearest` returns a sample index. `Race::ai_sample` is the only bridge,
+and it wraps, because the caller asking for the sample after this one is asking
+a lap question - `ai_order[i + 1]`, never `ai_order[i] + 1`, which at the end of
+a path is somewhere else entirely. `Race::respawn` speaks the sample table's
+space for both its callers, since the player reaches it from `Spline::nearest`.
+
+What it was worth, against the same solo benchmark:
+
+| | before | after |
+| --- | --- | --- |
+| circuits completing a lap | 9 | 11 |
+| circuits managing a *clean* lap | 5 | 6 |
+| 07 | 1 lap, never rescued, stuck at 991 | 4 laps, clean 48.5s |
+| 14 | 1 lap | 4 laps, still no clean one |
+| 05 | 1 lap | 1 lap |
+| the other nine | - | **identical**, to the lap time, the respawn count and every loss index |
+
+That last row is the check that matters: on those nine the mapping is the
+identity permutation, so anything moving there would have meant the bridge was
+wrong. Nothing moved.
+
+**05 did not improve, and it is not a line fault.** Its line is now the ring's
+2,976 samples against a 2,976-point course, so the ordering is right. Traced
+tick by tick, the craft drives into the scenery around index 590, ends up
+grounded doing two units per second, decays to zero, and sits there for the
+remaining seventy seconds of the run. It is 70 units off its line and the rescue
+triggers at 336, so nothing recovers it. **A craft that has stopped making
+progress has no recovery at all** - the rescue asks "is it far from its line",
+which a beached craft is not. That is a missing mechanism rather than a tuning
+question, and it is the next one.
+
+One limitation this buys, stated rather than discovered later: an opponent that
+ends up physically on the split's other branch now has no line beneath it at
+all. That is strictly better than stalling at the seam, and the rescue net
+catches it, but it is a gap.
+
+#### The measurement that settled it: watch contact, not distance
+
+**Found 2026-08-12, and it moves this out of the AI entirely.** Tracing 06
+through its departure showed the craft is already 22 units *below* its own line
+at index 1240 and falling - `grounded` at zero, thrust at zero, speed climbing
+109 to 151 while it drops. Of the 23 units it is off the line, 22 are vertical
+and 6 lateral against a 70-unit half-width. It is not cornering wide. It is
+falling straight down through where the track should be.
+
+So the useful detector is not distance from the line but **loss of contact**:
+the driver index at the last grounded tick before a flight of a second or more.
+That reads much earlier than the corridor test - 06 at 1230 rather than 1290 -
+and every failing circuit shows the same signature, a fall of 500 to 780 units:
+
+| circuit | boundary | last contact | falls |
+| --- | --- | --- | --- |
+| 16, 03, 04 | - | never leaves the ground | - |
+| 13 | 1523 | 20 | flies 60 ticks, **lands**, laps cleanly |
+| 01 | 1763 | 78 | 510-550 |
+| 05 | 1015 | 215 | 500-660 |
+| 07 | 991 | 268 | 680 |
+| 10 | 131 | 137 then 345 | first flight lands; the second falls 500-690 |
+| 14 | 891 | 762 | 750-775 |
+| 09 | 963 | 1026 | 570-600 |
+| 06 | 1195 | 1230 | 600-710 |
+| 02 | 1159 | 1232 | 625-720 |
+
+This reads 35 to 73 samples past a boundary rather than 94 to 142 - closer, and
+still not it, because sixty ticks of no contact is itself a delay. The version
+that finally dates the event is the tick trace below, which reads the *first*
+tick of lost contact and puts 06 at 1195 against a boundary at 1195.
+
+`the_racing_line_has_track_under_it_where_it_is_known_to` then casts down the
+surface normal at every sample of the line, one probe reach either way, which is
+what a craft's own antigravity probes hold onto. **Nine of the twelve circuits
+have a stretch of racing line with nothing under it**, each one a single
+contiguous run, and the three with none - 16, 03 and 04 - are three of the
+circuits that never lose a craft. A second cast sixty reaches deep splits the
+result in two:
+
+- **Nothing down there at all**: 13's 31 samples and 40 of 10's 72. That is an
+  authored **jump**, and 13 flies it, lands and laps cleanly, which is what a
+  jump is supposed to look like.
+- **A surface, one to sixty ride-heights below**: 09's 55, 02's 70, 14's 82,
+  05's 134, 01's 12, 07's 13. Not a gap in the track - a racing line running
+  *above* the track.
+
+**Three of those runs start within eight samples of a path boundary** (09 at 967
+against 963, 02 at 1167 against 1159, 06 at 1196 against 1195), and that is the
+lead the tick trace below cashes in.
+
+Reading what is actually down there settles the first split. On a healthy stretch the cast finds `Floor` at **half a ride height
+below the line**, everywhere, on every circuit. On 13's 20-48 it finds nothing
+within sixty reaches - an authored jump. On 09's 967-1021 it finds a `Wall` at
+the first sample and then `Floor` sinking to 4.8 ride heights and climbing back
+over sixty samples: a dip the line flies straight over. **But 06's notch is a
+single sample at 1196 with `Floor` at 0.5 either side of it**, and 06 loses its
+craft at 1230, where the floor is exactly where it should be. So the unsupported
+stretches are real and previously unmeasured, and they are *not* where the craft
+comes off.
+
+**Where it does come off is the middle of the track.** At the tick contact is
+lost, on every failing circuit, the craft is comfortably inside its own
+corridor - 06 at +0.3 in a corridor running -23.3 to 0.0, 09 at +0.7 in -16.0 to
+10.8, 02 at +2.9 in -11.9 to 12.1 - at ordinary racing speed, with `Floor` half a
+ride height beneath it. Then it is airborne for three hundred ticks and seven
+hundred units down. The floor half a ride height beneath it is the last floor
+there is: one tick later it is gone.
+
+So it is neither cornering wide nor driving off an edge. **A craft stops being
+held by a piece of circuit it is driving straight down the middle of, and that is
+a physics or collision question rather than an AI one.**
+
+#### What the tick trace says: the floor drops away at the path boundary
+
+Casting straight down from the craft itself, every tick, through 06's departure -
+and the same shape appears on 02 and 09:
+
+```
+i1195  moved 1.16  grounded 0.50  floor below   4.0
+i1195  moved 1.17  grounded 0.50  floor below  12.3
+i1195  moved 1.18  grounded 0.50  floor below  25.5
+i1195  moved 1.18  grounded 0.50  floor below  27.9
+i1195  moved 1.21  grounded 0.00  floor below  27.1
+```
+
+**The floor goes from four units under the craft to twenty-eight over five units
+of travel.** 02 goes 3.8 to 39.4 in one tick, 09 goes 4.6 to 29.5. All three are
+at the path boundary: 06's is 1195/1196, 02's 1159, 09's 963.
+
+Then the craft glides - descending a fifth of a unit a tick, nowhere near fast -
+and closes on that lower surface, 27.9 down to 16.0 by index 1218. **And then at
+1244 the cast returns nothing at all.** It has flown past the end of whatever was
+down there, and from that point it accelerates into open air: 2.7 units a tick,
+speed 163, for the rest of the race.
+
+Three things that follows from this, and one that does not:
+
+- **It is not falling *through* a floor.** Every cast agrees the surface is
+  genuinely absent, before and after the craft passes.
+- **It is not a jump the physics fails to complete.** The hole at 1196-1200 is
+  five samples, about seven units - a tenth of a second at the speed the craft
+  is doing. It descends 0.2 units crossing it. There is nothing to clear.
+- **It is not a missing magnetic floor.** `Surface::MagFloor` is decoded,
+  hoverable, and `oag_physics::maglock` gates on it. It is also heavily used:
+  1,730 of 03_Track's line samples sit over MagFloor and 03 laps perfectly
+  cleanly, as does 16 with 346. Meanwhile 04, 10, 13 and 14 have **no** MagFloor
+  collider at all, and 04 is clean while the other three are not. The surface
+  kind does not sort the circuits.
+- **What is not explained**: the track is back at its normal height five samples
+  later, and the craft only sank 0.2 units - so why it never regains contact.
+  One lead: at its last contact the craft sits at lateral `+0.3` in a corridor
+  running `-23.3` to `0.0`. 06's authored AI corridor there is entirely to the
+  *left* of the line, and the craft is marginally outside its right bound.
+
+#### The decoder drops nothing, and the spline is above the track
+
+Two measurements settle it, and the second retracts the retraction above.
+
+**Every triangle in the file reaches the collision world.** 06_Track decodes
+three nodes - Floor 3,178 triangles, Wall 1,836, MagFloor 520 - for 5,534, and
+the world holds 5,534. 09_Track: 5,833 and 5,833. Nothing is dropped, so the
+missing floor is not a mesh this repository failed to load. (That rules out a
+dropped mesh, not a misplaced one: matching counts do not prove the vertices
+land where the original puts them.)
+
+**The craft comes off at the path boundary after all.** Printing the line's own
+height through 06's join:
+
+| sample | y |
+| --- | --- |
+| 1190 | 15.3 |
+| 1194 | 14.2 |
+| **1196** | **1.8** |
+| 1198 | -1.5 |
+| 1200 | -5.0 |
+| 1204 | -7.7 |
+
+The line **drops 12.4 units between 1194 and 1196** and keeps diving. That is the
+same discontinuity the first pass on this page called out and the second pass
+retracted: `across 14.78, cos 0.79`. The retraction was wrong, and it was wrong
+because both corrected measurements - "94 to 142 samples past the boundary", then
+"35 to 73 past" - were thresholds crossed *long after* the event, by a craft
+whose index had gone on advancing. Watching contact itself puts 06 at 1195/1196
+against a boundary at 1195, 02 at 1163-1167 against 1159, 09 at 963-964 against
+963. **On the nose.**
+
+09 has no jump - it descends smoothly at about 1.4 units per 1.5-unit sample,
+which is a 43-degree dive - and it comes off just as reliably. What it shares
+with 06 is the other half: through the dive the collision floor is **up to 26
+units below the line**, `Floor` at 4.8 ride heights where a healthy stretch reads
+0.5, recovering over sixty samples.
+
+So the shape of it: **the authored spline runs above the track surface through a
+steep descent, and a craft cannot be pulled down as fast as the line falls
+away.** It separates at the top of the drop, glides, and by the time it has sunk
+to where the surface was, it has flown past the end of it. The path boundary
+matters where there is one because a 12-unit step is a drop the craft meets in a
+single sample.
+
+#### The reconstruction is right, and the craft does pitch
+
+Two candidates were open: a spline that genuinely leaves its track, or sample
+positions reconstructed wrongly on steep ground. **The second is dead.** `down`
+is a unit vector everywhere (0.9905 to 1.0000 across all twelve circuits) and
+`Sample::pos - HOVER_LIFT * down` lands *exactly* on the collision surface -
+median 0.0, ninetieth percentile 0.4 or better, on every circuit. The
+reconstruction is correct. It is the top one per cent of samples that stand 20
+to 50 units clear, and 04's worst is 0.2 against 14's 50.5.
+
+**Nor is the craft flying level off a slope.** Its nose tracks the surface
+closely while it has contact - on 09, track diving `+0.387` against a nose at
+`+0.381`. What it cannot do is keep up with a dive that *steepens*: over ten
+samples 09 goes `+0.387` to `+0.514` while the nose reaches only `+0.426`, and
+the craft leaves at the point the gap opens.
+
+And **04_Track does exactly the same thing and is fine.** It lifts off on its own
+dive - `grounded` 1.00 to 0.50 to 0.00 over twenty samples, nose lagging the
+slope the whole way - and lands, because the surface stays under it. So going
+airborne on a dive is normal. Failing to come back is the bug.
+
+#### It is not how fast the craft arrives
+
+The obvious AI-side fix - slow into the dive so the pitch response keeps up - is
+ruled out by measurement. The same benchmark at all four difficulties:
+
+| difficulty | clean | round | respawns | 09 | 02 | 01 | 06 | 14 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Novice | 5 | 11 | 254 | 5 | 5 | 6 | 4 | 4 |
+| Skilled | 7 | 11 | 30 | 5 | 6 | 7 | 6 | 5 |
+| Elite | 6 | 12 | 40 | 6 | 7 | 8 | 6 | 5 |
+| Ace | 6 | 11 | 41 | 6 | 7 | 8 | 6 | 6 |
+
+**A novice falls off the same places just as often as an ace**, at a fraction of
+the speed. Nothing a driver does with the throttle reaches this.
+
+The novice total hides the other half of the same coin: **226 of those 254
+respawns are 13_Track**, the circuit with the authored jump. A slow craft does
+not clear it, falls in, is recovered, and does it again. So the geometry demands
+a *minimum* speed in one place and is indifferent to speed in the others.
+
+#### The player falls off too, which settles it
+
+**Reported from a hand-driven lap of Vertica (`06_Track`) on 2026-08-12, and it
+is the single most important fact on this page.** A human at the controls falls
+through the same drop:
+
+```
+tick  1920  grounded 1.0  height   3.94  at [-308.8,  20.8, 184.4]
+tick  1980  grounded 0.0  height  14.07  at [-288.7,   8.1, 306.5]
+tick  2040  grounded 0.0  height -57.18  at [-248.9, -58.4, 409.4]
+```
+
+Nearest line index at those three positions: 1146, **1230**, 1306. The AI loses
+contact at 1195-1230. **Same drop, same place, no AI involved.** Every
+opponent-side reading on this page was downstream of this.
+
+The three casts say what happens. At 1920 the floor is 4.0 under the craft -
+normal. At 1980 it is **14.0 under the craft**, and the probes reach
+`ride_height`, which is **5.5**. The surface is still there; the craft simply
+cannot see it. `grounded` goes to zero, and with it the spring, the damper and
+`DOWNFORCE_SCALE`, all of which are gated on it. By 2040 there is nothing under
+the craft at all: it has flown beyond the geometry while falling.
+
+Under the *line* the cast reads `Floor at 8.5` at all three indices - the
+healthy value. The track is fine. The craft is off it.
+
+So the mechanism, exactly: **a step down bigger than the probe reach takes the
+surface out of view in a single tick, and once the craft is airborne it travels
+forward faster than gravity brings it down.** At 125 units/s a craft covers 2.1
+units a tick, so any surface falling away faster than 5.5 units per 2.1 of
+travel - about 69 degrees - is lost outright, and 06 adds a 12.4-unit spline
+step on top of a 66-degree ramp.
+
+That is a hair's breadth from what an instantaneous downward ray can do, and it
+is what "collision detection missing" means here: the probe is a point ray at
+one instant, not a sweep from where the craft was to where it is.
+
+#### What is left, and what an alternative would have to do
+
+The remaining question is genuinely a reverse-engineering one: **what holds the
+original's craft onto a steepening dive**, given ours is faithful to a force law
+scored at confidence 91 in which the suspension is compression-only, the probes
+reach exactly `ride_height`, and `DOWNFORCE_SCALE` scales by `grounded` - so an
+airborne craft has no downforce at all, by construction and on purpose.
+
+Worth stating because it is the tempting fix and it is the wrong one: nothing
+here should be solved by pulling a craft down onto the spline. The craft *should*
+fly off a crest; that is what the model is for, and 04 demonstrates it working.
+An alternative has to make the craft **reconnect**, not stop it leaving - and the
+measurement says reconnection fails because on those stretches there is no
+surface within a probe reach for fifty to a hundred and thirty samples, not
+because the craft is in the air.
+
+What is settled either way: **tuning the driver cannot fix this**, and a grip
+figure fitted against it would be fitted against whatever this turns out to be.
+
+#### One of the five went away, and not from the AI
+
+Reading `Antigrav::rebound_jump_time` - parsed since the handling loader landed
+and never read by the force law - took **Basilico (01_Track) from eight
+respawns and no clean lap to three and a 36.9s one**, and clean circuits from
+six to seven. 09 dropped from six respawns to five and 05 from two to one.
+
+The parameter arms the `landing_rebound` response, and it arms it *in the air*:
+`Ship_UpdateCraft` (`0x08849df0`) keeps an airborne clock and
+`Ship_HoverTwoPoint` zeroes the landing clock only once that clock has passed
+the parameter, so a hop shorter than it lands on the ordinary `rebound`. This
+crate had been resetting on every touchdown edge, which meant a craft flickering
+in and out of contact was under `landing_rebound` almost permanently. On a
+circuit whose losses were marginal that was the difference between recovering
+and not. See `docs/ghidra/functions/psp-pulse-usa/engine.md`.
+
+It changes nothing about the four that remain: those craft leave contact where
+there is nothing within a probe reach to come back to, and a damping coefficient
+does not reach that.
+
+**Grip stays at 180 until the corner departures are understood.** A sweep across
+all twelve circuits says 220 and 260 are quicker (38.6s and 38.4s mean clean lap
+against 39.8s) and reach six clean circuits rather than five - but the respawn
+count barely moves across the whole range (29 at grip 120, 35 at 180, 33 at
+260). A number that does not respond to grip is not answering a grip question,
+and fitting grip against it would be fitting to whatever is actually throwing
+craft off those corners. `sweep_grip` is the harness; re-run it after.
 
 ### A solo lap is the benchmark
 
@@ -1128,10 +1580,17 @@ and the same run now places that player 8th of 8.
 ### What an opponent still does not get
 
 Each is separate work, and each is listed so nobody assumes otherwise: a lap
-*time* of its own (the standing counts laps; only the player has a clock), a
-respawn when it falls off, anything at all happening when it is eliminated, a
-weapon aimed at anybody, and a livery that is not the player's. The exhaust left
-this list on 2026-08-11 - see [The field burns](#the-field-burns).
+*time* of its own (the standing counts laps; only the player has a clock),
+anything at all happening when it is eliminated, and a livery that is not the
+player's. The exhaust left this list on 2026-08-11 - see
+[The field burns](#the-field-burns); the respawn and a weapon aimed at somebody
+left it since.
+
+**And it does not get recovered when it stops.** The rescue asks whether a craft
+is far from its line, which catches one flying into open space and misses one
+beached against the scenery at zero speed - `05_Track` spends seventy of its
+three hundred seconds exactly there. See
+[Where a craft comes off](#where-a-craft-comes-off-two-wrong-answers-and-the-measurement-that-settled-it).
 
 **And it does not know the other craft are there.** A personality spreads the
 field across the corridor, which is what stopped the single file, but nothing
@@ -1241,6 +1700,11 @@ rebase onto a function start, so they were left alone rather than guessed at.
 | Two pilots differing in one number digest differently, and no built-in digests to zero | two tests in `pilots::tests` | yes |
 | **The suite never reads the developer's own pilot directory** | structural: every test goes through `parse` or `load_from` with a path it made itself | yes |
 | **The determinism scenario flies no pilot**, so its constants cannot become machine-dependent | tripwire in `determinism::the_run_visits_the_paths_it_claims_to_cover` | yes |
+| A branch the lap never drives is not in the AI line, and the lap's own path order is not the file's | `race::tests::a_branch_the_lap_never_drives_is_not_in_the_ai_line`, `course::tests::an_alternate_branch_is_left_off_the_ring` | yes |
+| **A track whose lap drives every path maps a line index onto itself**, which is what says the two index spaces agree where they should | `race::tests::a_track_whose_lap_drives_every_path_maps_a_line_index_onto_itself`, `..._a_track_with_no_ring_still_gets_every_sample_in_file_order` | yes |
+| A driver's index reads the sample the lap puts there, and one past the end wraps to the start | `race::tests::an_ai_index_reads_the_sample_the_lap_puts_there` | yes |
+| Eleven of twelve circuits complete a lap and six manage a clean one | `race_ground_truth::a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round` | **no** - needs a disc image. **Run and passing 2026-08-12.** |
+| **Three circuits have track under every sample of their racing line, and nine do not** | `race_ground_truth::the_racing_line_has_track_under_it_where_it_is_known_to` | **no** - needs a disc image. **Run and passing 2026-08-12**: 16, 03 and 04 at zero; the other nine between 5 and 134 samples. |
 
 `race::tests`' craft is built on `Handling::ZERO` with an empty collision world,
 so no force law runs there at all and those tests assert only that the controls

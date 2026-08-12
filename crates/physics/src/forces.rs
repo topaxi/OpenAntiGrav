@@ -613,10 +613,22 @@ pub fn evaluate<R: Raycaster + ?Sized>(
 
     // From here on, this frame's contacts.
     state.grounded = ShipState::quantise_grounded(hover.contacts);
-    if control_grounded == 0.0 && state.grounded > 0.0 {
-        state.time_since_landing = 0.0;
-    } else {
+    // **The landing response is armed in the air, not on touchdown**, and only
+    // once the flight has outlasted `rebound_jump_time`. `Ship_UpdateCraft`
+    // (`0x08849df0`) keeps `craft+0x284` as the airborne clock, zeroed the
+    // moment anything touches; `Ship_HoverTwoPoint` then does the arming. A hop
+    // shorter than the parameter never arms it, so the craft comes back down on
+    // the ordinary `rebound` - which is what makes the `landing_rebound` bounce
+    // an event rather than something that fires on every flicker of contact.
+    // Confidence 95, from the disassembly. See `ShipState::time_airborne`.
+    if state.grounded > 0.0 {
+        state.time_airborne = 0.0;
         state.time_since_landing += dt;
+    } else {
+        if handling.antigrav.rebound_jump_time < state.time_airborne {
+            state.time_since_landing = 0.0;
+        }
+        state.time_airborne += dt;
     }
     let contact_grounded = state.grounded;
     let contact = contact_grounded > 0.0;

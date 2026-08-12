@@ -324,6 +324,30 @@ impl Course {
             .collect()
     }
 
+    /// The paths a lap drives, in the order it drives them.
+    ///
+    /// **Not the same as the track's paths, and that is the whole point of
+    /// exposing it.** A split authors both branches as paths and the primary
+    /// chain walks one of them, so on `05_Track`, `14_Track` and `07_Track` the
+    /// file holds three paths and a lap drives paths 0 and 2. Anything that
+    /// wants "the track, once round" - the line an opponent follows, say - has
+    /// to ask this rather than walk the file, or it splices a stretch the lap
+    /// never drives into the middle of the lap. See `docs/gameplay/ai.md`.
+    ///
+    /// Deduplicated by neighbour rather than by set, because the ring is
+    /// contiguous per path by construction and a set would need an iteration
+    /// order that simulation state must not depend on.
+    #[must_use]
+    pub fn path_order(&self) -> Vec<u16> {
+        let mut order: Vec<u16> = Vec::new();
+        for &path in &self.paths {
+            if order.last() != Some(&path) {
+                order.push(path);
+            }
+        }
+        order
+    }
+
     /// The ring point `by` units further along than `from`.
     ///
     /// Walks point to point rather than doing arithmetic on the cumulative table,
@@ -548,6 +572,25 @@ mod tests {
             !ring.contains(&1),
             "the alternate branch is a shortcut, not the line"
         );
+
+        // And the same answer through the accessor an AI line is built from:
+        // the branch the lap does not drive is not in the order it drives.
+        let course = Course::from_track(&ai, None).expect("a ring");
+        let order = course.path_order();
+        assert!(!order.contains(&1), "path order kept the alternate branch");
+        assert_eq!(
+            order.len(),
+            2,
+            "a lap drives two of the three paths, once each: {order:?}"
+        );
+    }
+
+    #[test]
+    fn the_path_order_of_a_plain_ring_is_the_file_order() {
+        // The nine circuits where nothing changes: file order already is travel
+        // order, so anything mapping through this gets the identity.
+        let course = Course::from_track(&square_track(4), None).expect("a ring");
+        assert_eq!(course.path_order(), vec![0, 1, 2, 3]);
     }
 
     #[test]
