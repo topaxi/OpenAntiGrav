@@ -537,10 +537,13 @@ pub struct HoverProbe {
     /// Position correction for the penetration-escape constraint, or
     /// [`Vec3::ZERO`].
     ///
-    /// When `h < 1.0` on a hoverable surface the original **teleports** the body
-    /// by `up * (1 - h)` with no velocity change. That is penetration escape for
-    /// the last unit only; it is not the hover mechanism and must not be mistaken
-    /// for one.
+    /// When `h < 1.0` the original **teleports** the body by `up * (1 - h)` with
+    /// no velocity change. That is penetration escape for the last unit only; it
+    /// is not the hover mechanism and must not be mistaken for one.
+    ///
+    /// **On any surface, not only a hoverable one** - the original escapes
+    /// before it looks at the collider's type, so this is set even on a probe
+    /// that reports no contact.
     pub escape: Vec3,
 }
 
@@ -718,12 +721,36 @@ pub fn probe<R: Raycaster + ?Sized>(
     let Some(hit) = raycaster.raycast(ray, env.self_collider, false) else {
         return HoverProbe::miss(point);
     };
-    // Contact is accepted only for surface types 1 (Floor) and 3 (Mag Floor).
-    if !hit.surface.is_hoverable() {
-        return HoverProbe::miss(point);
-    }
 
     let height = (point - hit.point).dot(up);
+
+    // **Penetration escape happens before the surface check, and therefore on
+    // any surface at all.** `Ship_HoverTwoPoint` computes `craft+0x308`, escapes
+    // on it, and *then* asks whether the collider's type is 1 or 3 - so a probe
+    // a hand's breadth inside a `Wall` is pushed out of it just as a probe
+    // inside a `Floor` is, even though no spring force follows. Reading it the
+    // other way round, which this crate did until 2026-08-12, leaves a craft
+    // free to sink into wall geometry the original would extrude it from.
+    //
+    // One divergence, stated because it is a real one: the original also gates
+    // this on `craft+0x208 == 1`, a field of the raycast's hit record written
+    // from a local in `Collision_RaycastWorld` whose meaning is **not
+    // recovered**. Ungated, this escapes in cases the original may not. See
+    // `docs/ghidra/functions/psp-pulse-usa/engine.md`.
+    let escape = if height < PENETRATION_LIMIT {
+        up * (PENETRATION_LIMIT - height)
+    } else {
+        Vec3::ZERO
+    };
+
+    // Contact - and so the spring - is accepted only for surface types 1
+    // (Floor) and 3 (Mag Floor).
+    if !hit.surface.is_hoverable() {
+        return HoverProbe {
+            escape,
+            ..HoverProbe::miss(point)
+        };
+    }
 
     // The page writes this as `bodyLinearVel + M * cross(probeLocal, angularVel)`,
     // which reads like the negation of the conventional rigid-body point
@@ -753,12 +780,6 @@ pub fn probe<R: Raycaster + ?Sized>(
     // are gated on one field (`craft+0x280`) and drive each other - the blend is
     // ramped by `maglock::ramp` from the mag-floor probe, and read here.
     let force = up * spring * (1.0 + rebound * damping) * (1.0 - state.mag_lock_blend);
-
-    let escape = if height < PENETRATION_LIMIT {
-        up * (PENETRATION_LIMIT - height)
-    } else {
-        Vec3::ZERO
-    };
 
     HoverProbe {
         point,
@@ -1060,6 +1081,58 @@ mod tests {
             5.0,
         );
         assert!(!probe.contact);
+    }
+
+    /// A probe inside a wall is still pushed out of it, even though the wall
+    /// carries no spring.
+    ///
+    /// **The ordering `Ship_HoverTwoPoint` uses**: escape first, surface check
+    /// second. Reading it the other way round - which this module did until
+    /// 2026-08-12 - lets a craft sink into wall geometry the original extrudes
+    /// it from, and nothing else in the suite notices because the spring is
+    /// correctly absent either way.
+    #[test]
+    fn a_probe_inside_a_wall_escapes_it_without_hovering_on_it() {
+        let mut world = CollisionWorld::new();
+        world.push(TriangleSoup::new(
+            vec![
+                [-500.0, 0.0, -500.0],
+                [-500.0, 0.0, 500.0],
+                [500.0, 0.0, 0.0],
+            ],
+            vec![[0, 1, 2]],
+            Vec::new(),
+            Surface::Wall,
+            0,
+        ));
+
+        // Half a unit above the surface, so inside `PENETRATION_LIMIT`.
+        let inside = probe(
+            &state_at(0.5),
+            &test_handling(),
+            &Environment::default(),
+            &world,
+            Vec3::ZERO,
+            5.0,
+        );
+        assert!(!inside.contact, "a wall must never carry the suspension");
+        assert_eq!(inside.force, Vec3::ZERO);
+        assert!(
+            (inside.escape.y - (PENETRATION_LIMIT - 0.5)).abs() < 1e-5,
+            "the body should be pushed out by the shortfall, got {:?}",
+            inside.escape
+        );
+
+        // And clear of it there is nothing to escape from.
+        let clear = probe(
+            &state_at(3.0),
+            &test_handling(),
+            &Environment::default(),
+            &world,
+            Vec3::ZERO,
+            5.0,
+        );
+        assert_eq!(clear.escape, Vec3::ZERO);
     }
 
     #[test]

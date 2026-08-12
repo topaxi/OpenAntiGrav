@@ -1878,8 +1878,24 @@ if (local_510 < 1.0 && craft+0x208 == 1) {
 
 Within one unit of the probe origin the hull is treated as through the surface
 and the body is **moved** out along `up` by the shortfall, before any spring
-force. Confidence **80** - the guard on `craft+0x208` is unidentified, so what
-selects a craft for this is not known.
+force.
+
+`crates/physics/src/hover.rs` already had this as `HoverProbe::escape`. What it
+had wrong was the **ordering**: it returned early on a non-hoverable surface and
+so never escaped from one, where the original escapes first and only then asks
+whether the collider's type is 1 or 3. A probe a hand's breadth inside a `Wall`
+is extruded from it in the original and was not here. Fixed 2026-08-12; neither
+determinism reference moved, because no probe in either scenario is ever inside
+a wall.
+
+**One divergence remains and it is deliberate.** The original also gates the
+escape on `craft+0x208 == 1`. That field is written at `0x08816e14` by
+`Collision_RaycastWorld` from a stack local (`sp+0x68`), alongside the collider
+index at `+0x20` and a float at `+0x24`; the hit record is `0x30` bytes and this
+is its last identified-by-offset-only member. **Its meaning is not recovered**,
+so nothing here reproduces the gate, which makes ours escape in cases the
+original may not. Confidence **80** on the mechanism, and the missing gate is
+the reason it is not higher.
 
 ### Resolved: neither reading was refuted, the load was
 
