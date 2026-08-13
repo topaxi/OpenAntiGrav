@@ -228,12 +228,17 @@ and it holds exactly:
 `0x3b9 + 19 + 1 = 0x3cd` is Pulse's own `Reset Collision`, so the arithmetic that
 puts Pure's reset at `0x37f` is the arithmetic that reproduces Pulse's at `0x3cd`.
 
-**Two honest limits.** The anchors are not all independent of that read: upstream
-records that ten of those IDs were in the file from unrelated evidence *before*
-the table was disassembled and every one agreed, so ten are independent and the
-rest are the same source seen twice. And **Pure's own table has not been read at
-all** - only its string run - which is why this section exists rather than simply
-citing a second `CLASS_NAMES`.
+**Two honest limits.** The anchors are not established as independent of that
+read. `exhaust.md` records that **ten IDs of that ~55-entry table** were already
+in `vex.rs` from unrelated earlier passes and every one agreed - but it names only
+two of them (`Mag Floor Collision 0x3e6`, `Cage Collision 0x3e7`), and *neither is
+one of the fifteen anchors used here*. **How many of the ten fall inside these
+fifteen is not established**, so this section does not claim a count. What it does
+claim is weaker and checkable: the fifteen constants were in the file before this
+string run was searched for, and the run reproduces all fifteen.
+
+And **Pure's own table has not been read at all** - only its string run - which is
+why this section exists rather than simply citing a second `CLASS_NAMES`.
 
 **What this still does not establish** is *why* the numbering shifted, or what
 occupies the IDs the run does not name. **No Ghidra name was recovered here and

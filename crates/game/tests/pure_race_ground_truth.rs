@@ -258,11 +258,16 @@ fn a_craft_under_power_drives_a_pure_circuit_and_a_wall_stops_it() {
         // The widest half-width measured on these circuits is about 144 units, so
         // 400 sits well outside any of them and nowhere near the thousands a craft
         // in free fall covers in twenty seconds.
+        // Pure's reset volumes *are* recovered now (`0x37f`, by the class-name
+        // table index), so a craft that leaves does get put back. This bound is
+        // therefore about the craft staying on the circuit under power, not about
+        // the absence of a safety net: a respawn would show up as a *small*
+        // distance here, never a large one.
         assert!(
             furthest_from_spline < 400.0,
             "{label}: the craft reached {furthest_from_spline:.1} units from the \
-             spline. **No reset volumes are recovered on this title**, so nothing \
-             puts it back - see `vex::classes::V4`'s own comment"
+             spline, which is off the circuit and further than a reset respawn \
+             leaves it - see `vex::classes::V4`'s floor and wall ids"
         );
     }
 }
