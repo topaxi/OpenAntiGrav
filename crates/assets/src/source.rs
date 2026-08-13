@@ -862,7 +862,11 @@ mod tests {
         let message = error.to_string();
         assert!(message.contains("UCUS-98612"), "{message}");
         assert!(message.contains("Wipeout Pure"), "{message}");
-        assert!(message.contains("M8"), "{message}");
+        // **Points at the call that chooses, not at a milestone.** This asserted
+        // "M8" until Pure actually opened: `oag_game::title::open_source` catches
+        // this error and opens the disc as Pure, so the advice to wait for a
+        // milestone became wrong while the error itself stayed right.
+        assert!(message.contains("open_source"), "{message}");
     }
 
     #[test]

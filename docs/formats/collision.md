@@ -244,29 +244,49 @@ the Pulse IDs carry. Both are in `vex::classes::V4` now, and a Pure track decode
 2,398 collision triangles where it decoded none.
 
 Reading Pure's own `BOOT.BIN` for the registration function that lists the five
-IDs is what would raise this to 90. It has not been done.
+IDs is what would raise this to 90. **The registration function has still not
+been disassembled**, but the executable has since been read as a *file* for the
+class-name string run it draws its names from, which names all three
+independently and carries both these IDs to 94 - see below.
 
-### The third is still unnamed, and `Cage` is why
+### The third looked like `Cage`, and is `Reset Collision`
 
 `0x37f` matches **none** of Pulse's four measurable signatures. It is
 mixed-facing (0.402, against 0.834 for `Reset` and 0.998 for `Mag Floor`) and
 carries 173,803 area units per object - nine times the largest Pulse class and
 forty times Pure's own floor. That is an enclosing shell rather than a surface or
-a trigger volume, which makes `Cage` the obvious reading.
+a trigger volume, which made `Cage` the obvious reading, at confidence 45.
 
 **And `Cage` is precisely the one Pulse class whose signature cannot be
 measured**, for the reason the section above gives: the PSP disc ships none, and
 the PS2 disc's six sit on no circuit either disc declares raceable - which
 `no_cage_geometry_is_reachable_from_either_pressings_race_circuits` checks
-directly rather than assuming. A guess with no reference to check it against is
-confidence **45**, so per `CLAUDE.md` it gets no name and no constant: the same
-verdict this page reached before, now for a specific reason rather than for want
-of a method.
+directly rather than assuming. So the facing statistic had no reference to check
+the guess against, and correctly refused to name it.
 
-What that costs a Pure race is **respawn-on-fall**, which is `Reset`'s job. A
-craft that leaves the circuit stays left. `vex::classes::V4`'s own comment says
-so, and `a_craft_under_power_drives_a_pure_circuit_and_a_wall_stops_it` in
-`crates/game/tests/pure_race_ground_truth.rs` is what would notice.
+**Settled by the class-name table instead** (derived 2026-08-11, landed
+2026-08-13). Both executables carry the exporter's 22 class names as one
+contiguous string run in the same order, and the IDs are that order with three
+gaps forced by Pulse's own recovered constants. `Reset Collision` sits at index
+19, which is `0x37f`. The full derivation, its 15-anchor constraint and the
+`Texture` prediction that corroborates the gap structure are in
+[`pure-status.md`](pure-status.md#the-renumbering-is-a-table-index-and-both-executables-carry-the-table);
+`crates/pure/tests/class_table_ground_truth.rs` re-derives it on both discs.
+
+**Why the signature was misleading, rather than wrong.** Pure authors `Reset`
+differently from Pulse. A downward raycast sweep puts `0x37f` under **99.9 %** of
+the spline at a consistent ~10.7 units below the road; Pulse's `Reset` covers
+**5.8 %** at ~21.5, only at the points a craft can leave. A continuous under-road
+surface produces exactly the huge area per object and the mixed facing that
+matched no Pulse `Reset` - the discriminator was separating *authoring styles*,
+not classes. That is also why the guess landed on `Cage`: "enclosing shell" and
+"continuous under-surface" look alike to an area statistic.
+
+The behavioural check closes it:
+`reset_zone_ground_truth::pures_reset_surface_respawns_the_ship_too` flies a craft
+through that surface on Pure's own default circuit and it respawns on the spline.
+So a Pure race has respawn-on-fall, and `vex::classes::V4` carries
+`reset_collision: Some(0x37f)` at confidence **94**.
 
 ## The per-vertex scalar is authored and unused
 

@@ -163,20 +163,41 @@ pub mod classes {
     /// file on the *Pulse* disc.
     ///
     /// `mesh`, `transform` and `wo_track` come from `pure-status.md` alone, at
-    /// confidences 92, 90 and 94. `floor_collision` and `wall_collision` are
-    /// this table's own measurement; see their comments below.
+    /// confidences 92, 90 and 94. `floor_collision` and `wall_collision` were
+    /// this table's own measurement first; see their comments below.
+    ///
+    /// **Everything else here is the class-name table index** (2026-08-11), which
+    /// is a second and independent chain reaching the same `0x36b` and `0x36c`
+    /// and the reason `reset_collision` can be named at all. `mesh` and
+    /// `transform` are the exception on purpose - they sit far outside this run's
+    /// `0x36b..=0x383` span because they belong to a separate registration table
+    /// whose names are not in the string run, and each was pinned by a property
+    /// of its own payload instead.
     pub const V4: Classes = Classes {
         version: 4,
         mesh: Some(0x11e),
         texture: Some(0x373),
         transform: Some(0x6d),
         wo_track: Some(0x36d),
-        section: None,
-        skycube: None,
+        // **The eight ids below, and the two collision ids after them, are the
+        // table index** - see `the_class_ids_are_the_table_index_with_three_gaps`
+        // in `crates/pure/tests/class_table_ground_truth.rs`. Both executables
+        // carry the exporter's class-name run in the same order, so an id is its
+        // position in that run counted from `Floor Collision`, plus three gaps
+        // that Pulse's own recovered constants force rather than fit. 13 of
+        // Pulse's 15 land with nothing adjusted and the other 2 set the gaps.
+        //
+        // The prediction that makes it more than arithmetic: the first gap skips
+        // exactly one id, and that id is `Texture` - independently measured at
+        // `0x373` across 156 of 156 Pure files by closing
+        // `sum(clut_size + texel_size)` against each declared texture-block
+        // length, before this table was found.
+        section: Some(0x37b),
+        skycube: Some(0x378),
         fogcube: None,
-        speedup_pad: None,
-        weapon_pad: None,
-        start_position: None,
+        speedup_pad: Some(0x36f),
+        weapon_pad: Some(0x370),
+        start_position: Some(0x36e),
         // **Recovered 2026-08-12 by matching a facing signature against Pulse's
         // own known classes**, rather than by matching object counts - which is
         // all an earlier pass had, and why these two stayed `None` at 45.
@@ -210,26 +231,40 @@ pub mod classes {
         // `docs/formats/collision.md`.
         floor_collision: Some(0x36b),
         wall_collision: Some(0x36c),
-        // **Unrecovered, and the third candidate is deliberately not put here.**
-        // `0x37f` is the remaining class whose payloads decode - 16 nodes, 101
-        // objects - and it matches *none* of Pulse's four measurable signatures:
-        // mixed-facing (0.402, against 0.834 for `Reset` and 0.998 for
-        // `Mag Floor`) and 173,803 area units per object, nine times the largest
-        // Pulse class and forty times Pure's own floor. That is an enclosing
-        // shell rather than a surface or a trigger volume, which makes `Cage` the
-        // obvious guess - and `Cage` is precisely the one Pulse class whose
-        // signature cannot be measured, because the PSP disc ships none and the
-        // PS2 disc's six sit on no raceable circuit. A guess with no reference to
-        // check it against is 45, so per `CLAUDE.md` it gets no name at all.
+        // **`Reset`, by the table index, and this overturns a `Cage` guess.**
         //
-        // What this costs a Pure race is respawn-on-fall, which is `Reset`'s job.
-        reset_collision: None,
+        // The facing pass above could not name `0x37f` and said so at 45: it
+        // matches none of Pulse's four measurable signatures - mixed-facing
+        // (0.402, against 0.834 for `Reset` and 0.998 for `Mag Floor`) and
+        // 173,803 area units per object, nine times the largest Pulse class. That
+        // reads as an enclosing shell, which made `Cage` the obvious guess, and
+        // `Cage` is the one Pulse class whose signature cannot be measured at all.
+        //
+        // The class-name run answers it directly instead of by resemblance:
+        // `Reset Collision` sits at index 19, which is this id. The two readings
+        // are not in conflict once Pure's geometry is looked at rather than
+        // Pulse's assumed - a downward raycast sweep puts `0x37f` under **99.9 %**
+        // of the spline at a consistent ~10.7 units below the road, where Pulse's
+        // `Reset` covers **5.8 %** at ~21.5 and only where a craft can leave. A
+        // continuous under-road surface is what produces both the huge area per
+        // object and the mixed facing, so the signature that refuted every Pulse
+        // `Reset` was measuring a different *authoring style* for the same class.
+        //
+        // Confidence **94**: the exporter's own ordering, cross-checked on both
+        // executables, with 15 Pulse anchors constraining the run and Pure's own
+        // files decoding under it.
+        reset_collision: Some(0x37f),
         mag_floor_collision: None,
         cage_collision: None,
         lod_group: None,
+        // `Airbrake` *is* in the name run, at index 11, so the same arithmetic
+        // gives `0x377`. It stays `None` because nothing has looked for it in
+        // Pure's own files and nothing consumes it yet - the derivation is
+        // written down here so the next reader does not redo it, which is not the
+        // same as this table asserting the id.
         airbrake: None,
-        engine_flare: None,
-        ship_collision_fx: None,
+        engine_flare: Some(0x371),
+        ship_collision_fx: Some(0x382),
     };
 
     /// The table Pure's 15 version-3 files use.

@@ -35,10 +35,11 @@ use oag_game::race;
 use oag_gameplay::input::InputSnapshot;
 use oag_physics::{SpeedClass, Surface};
 
-fn image() -> Option<PathBuf> {
+fn disc(name: &str) -> Option<PathBuf> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
-        .join("data/images/pulse-psp-usa.chd");
+        .join("data/images")
+        .join(name);
 
     if path.exists() {
         return Some(path);
@@ -50,6 +51,10 @@ fn image() -> Option<PathBuf> {
     );
     println!("skipping: {} not present", path.display());
     None
+}
+
+fn image() -> Option<PathBuf> {
+    disc("pulse-psp-usa.chd")
 }
 
 /// Tracks to try, in order, until one has `Reset` geometry.
@@ -68,14 +73,134 @@ const CANDIDATES: &[&str] = &[
 ];
 
 fn load(track: &str) -> Option<race::Loaded> {
-    let image = image()?;
+    load_from(&image()?, Some(track))
+}
+
+/// Loads a race off any disc, taking the source's own default circuit when
+/// `track` is `None` - which is what the Pure case wants, since naming a Pulse
+/// circuit against a Pure disc finds nothing.
+fn load_from(source: &Path, track: Option<&str>) -> Option<race::Loaded> {
     race::load(&race::Options {
-        source: image.display().to_string(),
+        source: source.display().to_string(),
         class: SpeedClass::Venom,
-        track: Some(track.to_string()),
+        track: track.map(str::to_string),
         ..race::Options::default()
     })
     .ok()
+}
+
+/// Fires the craft through `soup`'s first triangle and returns how far from the
+/// spline it came back, or `None` if it never respawned.
+///
+/// The body of what [`touching_a_real_reset_volume_respawns_the_ship`] always
+/// did, lifted out so a second title can be put through the identical check
+/// rather than a similar one.
+fn fly_through_first_reset(setup: race::Setup) -> Option<f32> {
+    let reset = setup
+        .collision
+        .colliders()
+        .iter()
+        .find(|c| c.surface() == Surface::Reset && c.triangle_count() > 0)
+        .map(|c| (c.collider(), c.triangle(0)));
+
+    let Some((collider, Some([a, b, c]))) = reset else {
+        panic!("this track has no non-empty reset collider");
+    };
+    let centroid = (a + b + c) / 3.0;
+    let normal = (b - a)
+        .cross(c - a)
+        .try_normalize()
+        .expect("the first reset triangle is degenerate");
+    println!("reset collider {collider}, triangle at {centroid:?}, normal {normal:?}");
+
+    let mut race = race::Race::start(setup);
+    assert_eq!(race.respawns(), 0);
+
+    // Clear of the trigger and straight through it. Which side it starts on does
+    // not matter: the swept ray crosses the plane either way.
+    {
+        let body = &mut race.world.ships[0].physics.body;
+        body.position = centroid + normal * 20.0;
+        body.linear_velocity = -normal * 600.0;
+        body.angular_velocity = Vec3::ZERO;
+    }
+
+    for _ in 0..20 {
+        race.tick(&InputSnapshot::default());
+        if race.respawns() > 0 {
+            let position = race.ship().physics.body.position;
+            assert!(position.is_finite());
+            return race.spline().distance_to(position);
+        }
+    }
+    None
+}
+
+/// **Pure's reset surface is authored differently from Pulse's, and it works.**
+///
+/// The class identity was settled by the class-name table both executables carry
+/// (`docs/formats/pure-status.md`), not by behaviour, and the raycast evidence
+/// behind it left a real residual: Pure's `Reset Collision` covers **99.9 %** of
+/// its spline at a consistent ~10.7 units below the road, where Pulse's covers
+/// **5.8 %** at ~21.5 and is placed at the points a craft can leave. So Pure
+/// carries a continuous under-surface and Pulse carries patches.
+///
+/// That difference is exactly the kind that makes a class *identity* correct and
+/// the *behaviour* still untested, which is what this closes: flying through
+/// Pure's surface has to respawn the craft on Pure's track, through the same
+/// `oag_physics::reset` path and with no Pure-specific branch anywhere.
+///
+/// Its own circuit and its own default team, because a Pulse track name resolves
+/// to nothing in Pure's archives.
+#[test]
+#[ignore = "needs data/images/pure-psp-usa.chd"]
+fn pures_reset_surface_respawns_the_ship_too() {
+    let Some(source) = disc("pure-psp-usa.chd") else {
+        return;
+    };
+    let loaded = load_from(&source, None).expect("a Pure race loads");
+    let setup = loaded.setup;
+
+    // The census first, because the shape of Pure's collision is the finding and
+    // it should be in the output whether the assertion below passes or fails.
+    for surface in [
+        Surface::Wall,
+        Surface::Floor,
+        Surface::MagFloor,
+        Surface::Reset,
+    ] {
+        let count = setup
+            .collision
+            .colliders()
+            .iter()
+            .filter(|c| c.surface() == surface)
+            .count();
+        println!("{surface:?}: {count} collider(s)");
+    }
+    // Pure ships neither string in its executable, so this is a claim about the
+    // title rather than about one circuit.
+    assert_eq!(
+        setup
+            .collision
+            .colliders()
+            .iter()
+            .filter(|c| c.surface() == Surface::MagFloor)
+            .count(),
+        0,
+        "Pure names no Mag Floor Collision class at all"
+    );
+
+    let max_half_width = {
+        let race = race::Race::start(setup.clone());
+        race.spline().max_half_width()
+    };
+    let distance = fly_through_first_reset(setup)
+        .expect("flying through Pure's reset surface did not respawn the ship");
+    println!("respawned {distance} from the nearest spline sample");
+    assert!(
+        distance < max_half_width * 2.0,
+        "respawned {distance} from the spline, which is off the track"
+    );
 }
 
 fn reset_colliders(world: &oag_physics::CollisionWorld) -> usize {

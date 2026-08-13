@@ -478,10 +478,18 @@ fn the_discriminator_separates_pulses_known_classes() {
 /// path never loads, and there is no reference signature for a cage to compare
 /// Pure's third candidate against.
 ///
-/// Recorded as a test rather than left unwritten because it is the reason that
-/// candidate stays unnamed: it is not that nobody looked, it is that the only
-/// Pulse class with no measurable signature is also the only one whose
-/// signature would have settled the question.
+/// Recorded as a test rather than left unwritten because it is why *this* method
+/// could not name that candidate: it is not that nobody looked, it is that the
+/// only Pulse class with no measurable signature is also the one the third
+/// candidate most resembles.
+///
+/// **The candidate is named now, and not by this file.** `0x37f` is
+/// `Reset Collision`, settled by the exporter's class-name ordering in
+/// `class_table_ground_truth.rs`. This test keeps its original job unchanged -
+/// it still records that no cage signature exists to measure - and the facing
+/// statistic still legitimately declines to name `0x37f`, because Pure authors
+/// reset as a continuous under-road surface whose area and facing match no Pulse
+/// `Reset`. See `docs/formats/collision.md`.
 #[test]
 #[ignore = "needs data/images/pulse-ps2-eu.chd"]
 fn no_cage_geometry_is_reachable_from_either_pressings_race_circuits() {

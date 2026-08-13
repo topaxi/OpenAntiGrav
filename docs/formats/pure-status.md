@@ -29,7 +29,7 @@ payloads themselves - is what stops `oag-view` drawing a Pure ship today.
 | `WO Track` payload | Reads unchanged; **found by a different class ID** |
 | Front-end XML | Reads; the name-shortening optimisation **does not exist yet** |
 | Handling stats | Same addressing, schema enumerated in full; the absent `<pitch>` is now optional and a labelled stand-in fills it |
-| Collision classes | **Floor and wall recovered 2026-08-12**; the third candidate stays unnamed - see [collision](collision.md#two-of-the-three-are-now-named-by-facing-rather-than-by-counting) |
+| Collision classes | **All three named**: floor and wall by facing 2026-08-12, and the whole renumbering by [class-name table index](#the-renumbering-is-a-table-index-and-both-executables-carry-the-table) - which also settles reset at `0x37f` |
 | `SBlk` sound bank | **Not present on Pure at all** |
 
 ## Disc layout
@@ -75,7 +75,7 @@ Counts below are over all three archives, 1,229 entries, unless stated.
 | [`.vex` embedded textures](vex.md) | reads | `sum(clut_size + texel_size)` over `Texture` nodes equals the declared texture-block length on **156/156** v4 files, to the byte | 92 |
 | [`.vex` embedded textures](#pures-model-textures-ship-pre-swizzled) | reads | Pure sets the pre-swizzle flag on model textures. `vex::textures` reads `+0x06` and unswizzles **on version <= 4 only** since 2026-08-12; version 6 is deliberately untouched | 88 |
 | `WO Track` payload | reads | 16 nodes carry the magic; version `0x103` against Pulse's `0x105`; `encoded_len == payload length` exact on **16/16** under the documented layout, reserved block included. Reported separately, see [below](#reported-elsewhere) | 94 |
-| [Collision geometry](collision.md#the-same-format-is-in-wipeout-pure) | reads | None of Pulse's five class IDs appears; three candidates decode exactly, and **two are now named by a facing statistic calibrated on Pulse** - `0x36b` floor, `0x36c` wall. The third matches no Pulse signature and stays unnamed | 90 / 88 / 45 |
+| [Collision geometry](collision.md#the-same-format-is-in-wipeout-pure) | reads | None of Pulse's five class IDs appears. All three that do are now named - `0x36b` floor, `0x36c` wall, `0x37f` reset - by the [class-name table index](#the-renumbering-is-a-table-index-and-both-executables-carry-the-table), with floor and wall independently corroborated by a facing statistic and reset by a ship respawning on Pure's own circuit | 94 |
 | [Front-end XML](fexml.md) | reads | 291 XML entries across the three archives. **Zero** begin `<code`, so the name shortening is a Pulse-era addition and `--expand` is correctly a no-op on Pure | 94 |
 | [Handling stats](handling-stats.md) | reads | Addressing holds and the schema is enumerated in full. `<pitch>` became **optional** on 2026-08-12 - Pure authors none in any `<Class>` - and `oag_gameplay::handling::PITCH_STAND_IN` fills it, reported by name. See [below](#handling-stats-the-schema-holds-the-parser-does-not) | 94 |
 | [Bitmap font](fnt.md) | reads | 6 fonts. Version `1` + `"FNT"`, codepoint table at `0x30`, offset table at `0x30 + 2*count`, and `atlas + 0x40 + clut_size + texel_size == file length` exact on **6/6**, with `texel_size == width * height / 2`. The atlas flag bit is set on 6/6, same as Pulse | 94 |
@@ -90,8 +90,10 @@ class table grew between the two titles and every ID after an insertion point
 shifted. Pulse's `Transform` at `0x6e` is Pure's `0x6d`; Pulse's `Mesh` at
 `0x125` is Pure's `0x11e`. None of Pulse's constants appears in any Pure file.
 
-Each mapping below was recovered by an exact property of the payload, not by
-counting nodes and matching:
+The first four mappings below were recovered by an exact property of the payload,
+one class at a time. The collision classes were not reachable that way and came
+from the exporter's own class-name ordering instead - see
+[below](#the-renumbering-is-a-table-index-and-both-executables-carry-the-table):
 
 | Node type | Pulse | Pure | How it was pinned | Confidence |
 | --- | ---: | ---: | --- | ---: |
@@ -99,7 +101,10 @@ counting nodes and matching:
 | `Mesh` | `0x125` | `0x11e` | 11,025 nodes whose payloads walk as batch lists, and whose 2.1 M decoded vertices all fall inside the batches' own declared boxes | 92 |
 | `Texture` | `0x3c1` | `0x373` | `sum(clut_size + texel_size)` over these nodes equals the file's declared texture-block length on 156/156 files | 92 |
 | `WO Track` | `0x3bb` | `0x36d` | 16 nodes, each carrying the `WOtd` magic at `+0x00` | 94 |
-| The five collision classes | `0x3b9`, `0x3ba`, `0x3cd`, `0x3e6`, `0x3e7` | not determined | Three candidates decode exactly; see [collision](collision.md#the-same-format-is-in-wipeout-pure) | 45 |
+| `Floor Collision` | `0x3b9` | `0x36b` | Table index, plus 98.8 % of 23,286 downward casts hitting at median depth `0.00` | 94 |
+| `Wall Collision` | `0x3ba` | `0x36c` | Table index, plus the exact complement: 0.5 % downward, 68 % lateral | 94 |
+| `Reset Collision` | `0x3cd` | `0x37f` | Table index. The facing statistic could **not** settle this one - see [below](#the-renumbering-is-a-table-index-and-both-executables-carry-the-table) | 94 |
+| `Mag Floor`, `Cage` | `0x3e6`, `0x3e7` | absent | Pure authors neither on any circuit | 90 |
 
 **The consequence for the code is smaller than it looks.** `CLASS_MESH`,
 `CLASS_TEXTURE`, `CLASS_TRANSFORM` in
@@ -120,6 +125,126 @@ Error: Data\Ships\Feisar\Ship.vex decoded to no triangles
 The node tree behind that message parsed perfectly: 39 nodes, tree closing to
 the byte, `child_count` summing to 38. There were simply no nodes with class
 `0x125` in it.
+
+### The renumbering is a table index, and both executables carry the table
+
+The four payload-property rows above were each recovered one class at a time, and
+that method cannot reach a class whose payload has no distinguishing invariant -
+which is why the collision classes sat undetermined at confidence 45, and why the
+[facing statistic](collision.md) that later named floor and wall still could not
+name the third.
+
+**`PSP_GAME/SYSDIR/BOOT.BIN` holds the exporter's class names as one contiguous
+run of NUL-terminated strings, and the run is identical on both titles** - string
+for string, index for index, all 22 of them. At file offset `0x280e38` on
+`pulse-psp-usa.chd` and `0x2463e0` on `pure-psp-usa.chd`:
+
+```
+Floor Collision, Wall Collision, WO Track, Start Position, Speedup Pad,
+Weapon Pad, Engine Flare, Anim Transform, Dynamic Point Light,
+Dynamic Shadow Occluder, ParticleSystem, Airbrake, Skycube, Quake, Trail,
+section, gate, shadow, speaker, Reset Collision, Ship Collision Fx, wospot
+```
+
+Class IDs run **consecutively along that order, with three gaps**. The gaps are
+not free parameters: each is forced by the next already-recovered Pulse constant
+after it, and there is nothing left to adjust afterwards.
+
+- **13 of Pulse's 15 independently recovered constants land exactly**, with the
+  mapping fixed by the other two.
+- The ID skipped at the first gap - after `Anim Transform` - is
+  `CLASS_TEXTURE`, `0x3c1`: a class the numbering contains and this table does not
+  name.
+
+Anchor it on Pure's `WO Track` at `0x36d`, measured on 16 of 16 tracks by the
+`WOtd` magic and long before this table was found, and every Pure ID follows:
+
+| Index | Class | Pure ID | Independently confirmed by |
+| ---: | --- | ---: | --- |
+| 0 | `Floor Collision` | `0x36b` | 98.8 % of 23,286 downward casts, median depth `0.00`, and the facing statistic |
+| 1 | `Wall Collision` | `0x36c` | 0.5 % downward, 68 % lateral - the floor's complement |
+| 2 | `WO Track` | `0x36d` | **the anchor**: `WOtd` magic, 16/16 |
+| 3 | `Start Position` | `0x36e` | one node per circuit, decoding to a unit forward axis |
+| 4 | `Speedup Pad` | `0x36f` | 14 nodes on Vineta K, and 14 trigger volumes off a *separate* decode path |
+| 5 | `Weapon Pad` | `0x370` | 11 nodes, 11 volumes, same cross-check |
+| 6 | `Engine Flare` | `0x371` | exactly one locator on `Feisar\Ship.vex`, centred on `x`, at the tail |
+| 7 | `Anim Transform` | `0x372` | - |
+| *(gap)* | `Texture` | `0x373` | **`sum(clut_size + texel_size)` closing on 156/156 files** |
+| 12 | `Skycube` | `0x378` | 477 triangles of sky on Vineta K |
+| 15 | `section` | `0x37b` | **1,335 of 1,335 draw calls governed by an authored section** |
+| 19 | `Reset Collision` | `0x37f` | a ship flown into it respawns, on Pure's own circuit |
+| 20 | `Ship Collision Fx` | `0x382` | 4 locators on `Feisar\Ship.vex` |
+
+Two of those are worth separating from the rest, because they are what makes this
+a determination rather than a consistent story. **`Texture` at `0x373` was
+measured off the assets earlier, by an invariant with no connection to any string
+table**, and the run predicts it as the ID its first gap skips - so the gap is not
+a fudge, it is a prediction that came true. And **`section` at `0x37b` places
+100.0 % of a circuit's draw calls in an authored visibility section**; a wrong ID
+cannot produce 100 %, it produces zero.
+
+#### This overturns the `Cage` reading of `0x37f`
+
+The facing pass concluded `0x37f` matched none of Pulse's four measurable
+signatures and that `Cage` was the obvious guess. The table says `Reset
+Collision`, and the two are reconcilable once Pure's geometry is measured rather
+than Pulse's assumed: `0x37f` sits under **99.9 %** of the spline at a consistent
+~10.7 units below the road, where Pulse's `Reset` covers **5.8 %** at ~21.5 and
+only where a craft can leave. A continuous under-road surface is what produces
+both the huge area per object and the mixed facing that refuted every Pulse
+`Reset` signature - so the discriminator was reading a different *authoring
+style* for the same class, not a different class.
+
+`reset_zone_ground_truth::pures_reset_surface_respawns_the_ship_too` closes it
+behaviourally: a craft flown through that surface on Pure's own circuit respawns
+on the spline.
+
+Confidence **94**: an exact ordering shared by two executables, fitted against 15
+constants recovered independently of it, and confirmed on Pure's own assets by
+seven separate properties of four different node types. The cap is the rubric's
+for anything not watched executing under an emulator.
+
+#### Pulse's side of this was already disassembled, and it agrees
+
+The string run above was found by searching the file. **Pulse's `id -> name`
+table had already been read properly** - `vex::CLASS_NAMES`, stride 12
+`{u32 id, char *name, ptr}` at `0x08ab2370`, names at `0x08a84d40`, confidence 95
+(`docs/ghidra/functions/psp-pulse-usa/exhaust.md`). The two are the same bytes:
+this run's runtime address works out to `0x08a84db8`, which is `0x78` into that
+names region - the space the nine generic Maya class names ahead of
+`Floor Collision` occupy.
+
+That makes the disassembled table an **independent check on the gap structure**,
+and it holds exactly:
+
+| | Pulse id, disassembled | index in the run |
+| --- | ---: | ---: |
+| `Floor Collision` | `0x3b9` | 0 |
+| `Anim Transform` | `0x3c0` | 7 |
+| `Texture` | `0x3c1` | *the first gap - named by the table, absent from the run* |
+| `Dynamic Point Light` | `0x3c2` | 8, i.e. shifted by one |
+| `Reset Collision` | `0x3cd` | 19, still shifted by one |
+
+`0x3b9 + 19 + 1 = 0x3cd` is Pulse's own `Reset Collision`, so the arithmetic that
+puts Pure's reset at `0x37f` is the arithmetic that reproduces Pulse's at `0x3cd`.
+
+**Two honest limits.** The anchors are not all independent of that read: upstream
+records that ten of those IDs were in the file from unrelated evidence *before*
+the table was disassembled and every one agreed, so ten are independent and the
+rest are the same source seen twice. And **Pure's own table has not been read at
+all** - only its string run - which is why this section exists rather than simply
+citing a second `CLASS_NAMES`.
+
+**What this still does not establish** is *why* the numbering shifted, or what
+occupies the IDs the run does not name. **No Ghidra name was recovered here and
+none was written to `docs/ghidra/functions/psp-pulse-usa/names.tsv`**; the
+`0x08a84db8` arithmetic is unverified in Ghidra. Reading Pure's registration
+table the way Pulse's was read is what would take this to 100.
+
+`Airbrake` is in the run at index 11, so the same arithmetic gives `0x377`.
+[`vex::classes::V4`](../../crates/formats/src/vex.rs) leaves it `None` anyway:
+nothing has looked for it in Pure's files and nothing consumes it, and the
+derivation being written down is not the same as the table asserting it.
 
 ### The geometry is there and it is sane
 
@@ -426,15 +551,16 @@ Ordered by cost, from the measurements above:
    geometry path already works, on 2.1 M vertices of evidence.
 2. **Tracks: a day on top of that**, and mostly the same change - the `WO
    Track` payload already decodes exactly under one more class ID.
-3. **Collision: done for floor and wall, and it took hours rather than days.**
+3. **Collision: done, all three, and it took hours rather than days.**
    The costing here said "needs the loader read out of Pure's own executable" -
-   and that turned out to be one way rather than the only one. A facing statistic
-   calibrated against Pulse names two of the three candidates at confidence 88
-   without opening Ghidra at all; see
-   [collision](collision.md#two-of-the-three-are-now-named-by-facing-rather-than-by-counting).
-   The third stays unnamed because the class it most resembles is the one Pulse
-   ships no measurable example of. Reading the executable is still what would
-   raise 88 to 90 and settle the third.
+   and that turned out to be one way rather than the only one, twice over. A
+   facing statistic calibrated against Pulse named two of the three candidates at
+   88 without opening Ghidra
+   ([collision](collision.md#two-of-the-three-are-now-named-by-facing-rather-than-by-counting)),
+   and the [class-name string run](#the-renumbering-is-a-table-index-and-both-executables-carry-the-table)
+   then named all three at 94 - the executable as a *file* rather than as
+   disassembly. Reading the registration function is still what would reach 100
+   and say what the unnamed IDs are.
 4. **Handling: done, and it was the cheapest item here as costed.** The fifth
    speed class and the four absent attributes were already handled; `<pitch>` is
    now optional with a labelled stand-in. What is *not* costed, and remains
