@@ -902,12 +902,21 @@ change how this list should be read:
       [`ship-parts.md`](../ghidra/functions/psp-pulse-usa/ship-parts.md)
 - [ ] `engine_fire` `0x3e5` and `exitglow` `0x3e4` - both authored, neither
       registered; see the caution above
-- [ ] Livery and team variants across all twelve teams. No longer blocked on
-      name mining: the four teams whose `Ship.vex` did not resolve are
-      [downloadable content](../formats/dlc-pack.md), the packs are mounted, and
-      all twelve are loadable. What is left is the *variants* - each
-      `PI_TeamModel` and `PI_ModelSkin` a definition declares, which nothing
-      collects or draws yet
+- [~] Livery and team variants across all twelve teams. **The per-team hulls
+      are done** (2026-08-15): every grid slot loads its own team's
+      `Ship.vex`, plume and `Engine Flare` locator, so a race fields eight
+      different models rather than one repainted - measured at 845 to 1,497
+      triangles across the eight teams the disc declares, and pinned by
+      `crates/game/tests/livery_ground_truth.rs`. The four teams whose
+      `Ship.vex` did not resolve are [downloadable content](../formats/dlc-pack.md)
+      and the packs mount, so all twelve are loadable; with them the catalogue
+      is twelve teams for eight slots and the extras simply do not race.
+      **What is left is the *variants*** - each `PI_TeamModel` and
+      `PI_ModelSkin` a definition declares (the concept, zone and unlockable
+      paints, with their `loyalty` thresholds), which nothing collects or draws
+      yet - and **which team the original puts in which slot**, unrecovered:
+      `Race_SpawnAiRacer` takes an `id` from a racer list nothing has read, so
+      the ordering in use is this project's own
 
 ### Particles
 

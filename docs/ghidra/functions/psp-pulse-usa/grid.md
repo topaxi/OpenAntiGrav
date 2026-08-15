@@ -180,9 +180,14 @@ not named**: it is only inferred from the call site's position in the
   as the last racer, which the identity row also puts in slot 8, so **that run
   cannot separate the permutation from `Ai_Construct`'s forcing either**.
 - **Whether the constants are authored or derived**, above.
-- **Nothing drives the opponents.** Eight craft take the grid and hold station;
-  the AI is a separate M5 item. They also all wear the player's hull, because
-  nothing collects the `PI_TeamModel` variants a team declares.
+- ~~**Nothing drives the opponents**, and they all wear the player's hull.~~
+  Both closed: the AI landed 2026-08-11 and per-team hulls on 2026-08-15. A
+  slot now flies its own team's `Data\Ships\<Team>\Ship.vex` - eight
+  different models, 845 to 1,497 triangles - with its own nozzle and plume. See
+  `crates/game/src/livery.rs`. **Which team flies which slot is still
+  unrecovered**: `Race_SpawnAiRacer`'s `id` comes from a racer list built
+  upstream that nothing has read, so the ordering in use is this project's and
+  is labelled as such in the load report.
 
 ## History
 

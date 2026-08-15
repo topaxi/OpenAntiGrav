@@ -274,7 +274,7 @@ fn every_pack_team_loads_a_ship_and_a_full_set_of_handling_stats() {
         .unwrap_or_else(|e| panic!("loading {team} off {IMAGE} with the packs: {e:#}"));
 
         assert!(
-            !loaded.ship_model.draws.is_empty(),
+            !loaded.liveries[0].hull.draws.is_empty(),
             "{team}'s ship decoded to nothing"
         );
         // Every speed class, not just the one loaded: a stats file short a

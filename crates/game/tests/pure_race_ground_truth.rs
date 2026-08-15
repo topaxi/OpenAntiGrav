@@ -118,7 +118,7 @@ fn a_pure_source_opens_as_pure_and_loads_its_default_circuit() {
              this is the class table rather than the file"
         );
         assert!(
-            loaded.ship_model.indices.len() > 3,
+            loaded.liveries[0].hull.indices.len() > 3,
             "{label}: the ship decoded to no geometry"
         );
     }

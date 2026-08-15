@@ -173,7 +173,7 @@ fn the_ps2_disc_loads_a_driveable_race() {
          on the spline instead"
     );
     assert!(
-        !loaded.ship_model.indices.is_empty(),
+        !loaded.liveries[0].hull.indices.is_empty(),
         "the PS2 ship model decoded no triangles"
     );
 
@@ -310,7 +310,7 @@ fn every_ps2_ship_s_texture_set_is_found_by_directory_position() {
         })
         .unwrap_or_else(|e| panic!("loading {team} off {PS2_IMAGE}: {e:#}"));
 
-        let ship = &loaded.ship_model;
+        let ship = &loaded.liveries[0].hull;
         let decoded = ship.textures.iter().filter(|t| t.is_some()).count();
         assert!(
             !ship.textures.is_empty(),

@@ -65,6 +65,7 @@
 use std::path::PathBuf;
 
 use crate::language::roles;
+use crate::livery::{self, Livery};
 use anyhow::{Context, Result};
 use oag_core::math::frustum::Frustum;
 use oag_core::math::{Mat4, Quat, Vec3};
@@ -436,7 +437,7 @@ pub fn boost_entry_name(team: &str, mode: Mode) -> String {
 ///
 /// See [`oag_assets::Archives::read_preceding`] for the rule itself and the
 /// evidence behind it.
-fn ps2_texture_set(
+pub(crate) fn ps2_texture_set(
     archives: &mut oag_assets::Archives,
     entry_name: &str,
 ) -> Option<Vec<Option<mesh::ModelTexture>>> {
@@ -472,6 +473,18 @@ pub struct Options {
     pub track: Option<String>,
     /// Team name, which selects both the handling stats and the model.
     pub team: String,
+    /// The team ids the *opponents* may fly, in the caller's own order.
+    ///
+    /// The caller supplies them because they come off the player's own disc -
+    /// `catalogue::all_teams` over the plugin definition and any mounted DLC
+    /// pack - and `load` may not invent a team id any more than it may invent a
+    /// path. **Empty means the whole grid wears the player's hull**, which is
+    /// what this engine did before liveries and what a source with no readable
+    /// definition still gets.
+    ///
+    /// Which of them ends up in which slot is [`crate::livery::teams_for_slots`],
+    /// and is this project's rule rather than the original's.
+    pub opponent_teams: Vec<String>,
     /// Speed class the handling parameters are read for.
     pub class: SpeedClass,
     /// How good the opponents are.
@@ -596,6 +609,10 @@ impl Default for Options {
             dlc: Vec::new(),
             track: None,
             team: DEFAULT_TEAM.to_string(),
+            // Empty for the same reason `dlc` is: the ids come off the
+            // player's own disc, and `load` may not invent one. The
+            // composition root fills it from the catalogue.
+            opponent_teams: Vec::new(),
             class: SpeedClass::Venom,
             mode: Mode::default(),
             ribbon: false,
@@ -678,14 +695,19 @@ pub struct Setup {
     pub chase_close: ChaseParams,
     /// The cockpit view's five values, from `<InternalCamera>`.
     pub internal: InternalParams,
-    /// The `engine_flare` locator, in the ship model's own space.
+    /// Each grid slot's `engine_flare` locator, in **that slot's own hull's**
+    /// model space. Slot 0 is the player's.
     ///
-    /// `None` means the model carries no `Engine Flare` node, and the exhaust is
-    /// then not drawn rather than guessed at. Every team whose `Ship.vex`
+    /// `None` means that hull carries no `Engine Flare` node, and the exhaust
+    /// is then not drawn rather than guessed at. Every team whose `Ship.vex`
     /// resolves by name has **exactly one**, a direct child of `world` - see
-    /// `docs/ghidra/functions/psp-pulse-usa/exhaust.md`. One nozzle, centred, not one
-    /// per visible engine.
-    pub nozzle: Option<Vec3>,
+    /// `docs/ghidra/functions/psp-pulse-usa/exhaust.md`. One nozzle, centred,
+    /// not one per visible engine.
+    ///
+    /// **Per slot since liveries landed.** The eight hulls are different
+    /// models, so one team's locator carried onto another's craft puts the
+    /// flare inside the fuselage.
+    pub nozzles: Vec<Option<Vec3>>,
     /// The `Ship Collision Fx` locators, in the ship model's own space.
     ///
     /// The original attaches up to 10 and `Ship_DispatchCollisionFx`
@@ -756,20 +778,14 @@ pub struct Loaded {
     pub hud: crate::hud::Assets,
     /// What to draw for the track.
     pub track_model: Model,
-    /// What to draw for the ship.
-    pub ship_model: Model,
-    /// What to draw for the boost plume, additively, while
-    /// [`Exhaust::plume_visible`] is true.
+    /// One hull, plume, nozzle and spark-anchor set per grid slot, each off
+    /// its own team's directory. Slot 0 is the player's.
     ///
-    /// `Data\Ships\<Team>\shipboost.vex`, loaded beside [`Self::ship_model`].
-    /// `None` when the source carries no entry under that name for this
-    /// team - reported rather than failing the race, since the PS2 set may
-    /// not carry it under the same name as the PSP one does. Two meshes,
-    /// already spread apart in the file's own space (confirmed by rendering
-    /// it with `oag-view --mesh` and by its node tree having no `Transform`
-    /// between `World` and the two `Mesh` nodes), so this is drawn once in
-    /// ship space rather than mounted on a locator.
-    pub boost_model: Option<Model>,
+    /// Per slot rather than one shared model since 2026-08-15: the eight teams
+    /// the disc declares are eight *different* hulls (845 to 1,497 triangles),
+    /// not one hull repainted, so a shared model was visibly one team's ship
+    /// eight times over. See [`crate::livery`], which also records which half
+    /// of this is recovered and which half is this project's.
     /// The model a Rocket in flight is drawn as: `Data\Weapons\Rocket.vex`.
     ///
     /// **Recovered, confidence 85.** `Rocket_Ctor` (`0x0885cc24`) builds the
@@ -784,13 +800,7 @@ pub struct Loaded {
     /// terms as [`Self::boost_model`] - a missing rocket model falls back to the
     /// billboard rather than failing the race.
     pub rocket_model: Option<Model>,
-    /// The plume's authored texture-transform animation, from the keyframe
-    /// block after its mesh's material array - the mechanism the original
-    /// samples the plume's authored UVs through (`TEXMAPMODE` 0; see
-    /// `docs/ghidra/functions/psp-pulse-usa/texture-animation.md`, "The
-    /// values gap is closed"). `None` when the model is absent or its meshes
-    /// carry no keys, which is the engine's own identity default.
-    pub boost_uv_transform: Option<oag_formats::vex::TexTransform>,
+    pub liveries: Vec<Livery>,
     /// The collision soup, if [`Options::collision`] asked for it.
     pub collision_model: Option<Model>,
     /// The track's authored `fogCube` volumes, for [`Scene`] to sample per
@@ -847,44 +857,6 @@ pub const FLARE_TEXTURE: &str = r"Data\Tex\EngineFlare\grabbedEngineFlare128x64x
 /// [`FLARE_TEXTURE`]'s - `engineFlare` here, `EngineFlare` there - which does not
 /// matter, since the WAD hash is case-insensitive.
 pub const NOISE_TEXTURE: &str = r"Data\Tex\engineFlare\Engine_noise.mip";
-
-/// The `engine_flare` locator's position in the ship model's own space.
-///
-/// A locator class stores a 4x4 in its 64-byte payload exactly as a `Transform`
-/// does, which is why [`vex::class_world_transforms`] can compose it with the
-/// parent chain. Row 3 is the translation.
-///
-/// Takes the **first** node if a model somehow had several. Every team checked has
-/// exactly one, so this is a total order on a set of size one rather than a policy.
-fn engine_flare(ship_blob: &[u8]) -> Option<Vec3> {
-    // The id from the file's own version word, not the version-6 constant: on a
-    // version-4 ship `0x3bf` is some other class entirely, so a hit would be a
-    // flare mounted on whatever that is. `None` means no flare, which is what an
-    // unrecovered id honestly gives.
-    let class = vex::classes_of(ship_blob).ok()?.engine_flare?;
-    let nodes = vex::nodes(ship_blob).ok()?;
-    let m = vex::class_world_transforms(ship_blob, &nodes, class)
-        .into_iter()
-        .next()?;
-    Some(Vec3::new(m[12], m[13], m[14]))
-}
-
-/// Every `Ship Collision Fx` locator's position in the ship model's own
-/// space - the same 4x4-payload decode as [`engine_flare`], kept all rather
-/// than first: the original picks the nearest to each contact.
-fn collision_fx_locators(ship_blob: &[u8]) -> Vec<Vec3> {
-    // Version-keyed, on the same terms as [`engine_flare`].
-    let Ok(Some(class)) = vex::classes_of(ship_blob).map(|c| c.ship_collision_fx) else {
-        return Vec::new();
-    };
-    let Ok(nodes) = vex::nodes(ship_blob) else {
-        return Vec::new();
-    };
-    vex::class_world_transforms(ship_blob, &nodes, class)
-        .into_iter()
-        .map(|m| Vec3::new(m[12], m[13], m[14]))
-        .collect()
-}
 
 /// Decodes a `.mip` texture out of the archive set.
 ///
@@ -1048,7 +1020,6 @@ pub fn load(options: &Options) -> Result<Loaded> {
         oag_formats::vex::classes_of(&track_blob).map_err(|e| anyhow::anyhow!("{}: {e}", track))?;
     let speedup_pad_class = track_classes.speedup_pad;
     let weapon_pad_class = track_classes.weapon_pad;
-    let mesh_class = track_classes.mesh;
     let start_position = start_position_of(&track_blob);
     match start_position {
         Some(slot) => report.push(format!(
@@ -1333,142 +1304,45 @@ pub fn load(options: &Options) -> Result<Loaded> {
         oag_render::camera::internal::AIM_DISTANCE,
     ));
 
-    let ship_name = ship_entry_name(&options.team, options.mode);
-    let ship_blob = read(&mut archives, &ship_name)?;
-    let mut ship_model = mesh::build_with_textures(&ship_name, &ship_blob, None, options.lod)?;
-    // The PS2 signature: `Texture` nodes exist (the model wants textures) but
-    // every one is missing (its embedded block was empty). Only then is the
-    // directory-position heuristic worth trying - see `ps2_texture_set`.
-    if !ship_model.textures.is_empty()
-        && ship_model.textures.iter().all(Option::is_none)
-        && let Some(external) = ps2_texture_set(&mut archives, &ship_name)
-    {
-        ship_model =
-            mesh::build_with_textures(&ship_name, &ship_blob, Some(external), options.lod)?;
-    }
-    report.push(format!(
-        "{ship_name}: {} triangle(s), model centre {:?}, radius {:.2}",
-        ship_model.indices.len() / 3,
-        ship_model.centre,
-        ship_model.radius
-    ));
-
-    // The plume `ExhaustFlare_Init` reveals once `boost_timer` passes
-    // `exhaust::BOOST_GATE` - `shipboost.vex`, or `Zoneboost.vex` in Zone mode,
-    // matching whichever hull `ship_entry_name` picked. Absence is reported
-    // rather than failing the race: the PS2 set may not carry it under the
-    // same name the PSP one does, and a missing boost plume is a missing
-    // feature, not a broken load.
-    let boost_name = boost_entry_name(&options.team, options.mode);
-    let mut boost_uv_transform = None;
-    let boost_model = match archives.read_name(&boost_name) {
-        Ok(blob) => match mesh::build_with_textures(&boost_name, &blob, None, options.lod) {
-            Ok(model) => {
-                report.push(format!(
-                    "{boost_name}: {} triangle(s) - drawn additively while the plume is up",
-                    model.indices.len() / 3
-                ));
-                // **The authored vertex alpha is left alone here, and the
-                // blend at the draw site weights by it per fragment.** This
-                // used to premultiply alpha into the RGB, and that was a real
-                // bug rather than a compensation: premultiplying at a vertex
-                // and then letting the rasteriser interpolate is not the same
-                // arithmetic as interpolating and then multiplying, and for
-                // this model the difference is the whole visual.
-                //
-                // What the authored data holds, measured on every batch of
-                // every PSP team's `shipboost.vex` and pinned by
-                // `boost_plume_ground_truth.rs`, is why:
-                //
-                // - the vertex colours are exactly **two** values,
-                //   `(255, 98, 5, 0)` on the rim and `(255, 255, 255, 255)` in
-                //   the core, 29 and 22 of a 51-vertex batch, nothing between;
-                // - `pulse_boost2_ADD` is 64x16 with a **constant alpha of
-                //   238**, so the texture supplies no gradient either.
-                //
-                // Premultiplied per vertex, the rim becomes `(0, 0, 0)` and
-                // what crosses the fin is black-to-white: **the authored
-                // orange exists nowhere on it**, which is exactly the
-                // "reads white and un-orange" symptom. Weighted per fragment,
-                // colour interpolates orange-to-white while alpha
-                // interpolates `0`-to-`1` and the two meet at the fragment,
-                // leaving a dimmed orange fringe that fades out - the
-                // original's own feathered edge.
-                //
-                // Measured against the first matched-pose pad capture, over
-                // the magenta signature in a crop around the craft: the
-                // original reads `(224, 166, 227)`, the premultiplied build
-                // `(151, 93, 212)` - blue-dominant, hue lost - and the raw
-                // build `(222, 168, 230)`, within three units per channel on
-                // all three. See the draw site in `Scene::new` for the full
-                // table and for what remains unrecovered: the GE's own route
-                // for this alpha, since `Mesh_SetBatchDrawState` programs
-                // `GU_FIX` white on both sides *after* the material's own
-                // display list.
-                //
-                // Two suspects were raised and **refuted** earlier, recorded
-                // so nobody spends the same afternoon on them. The plume's
-                // authored `u` never leaves the first texel (`[0.000, 0.008]`
-                // against a `v` of `[0.031, 0.953]`), so it samples one column
-                // of `pulse_boost2_ADD`; rendering with `u` scaled by 128, and
-                // again with `u`/`v` swapped, changed the picture not at all.
-                // And the texture is neither dropped nor mis-bound: replacing
-                // it with hard horizontal stripes banded the two trailing
-                // streaks while leaving the wedges flat. What that second test
-                // did expose is still open - the two short batches (9 and 10
-                // vertices) decode to a **single** UV point, `u [0.008,
-                // 0.008]`, `v [0.031, 0.031]`, so no texture content can reach
-                // them whatever the scale, while the 51-vertex batches carry a
-                // real `v` sweep and do band.
-                // **The load-time texel re-encode that used to sit here is
-                // gone, and putting it back would be a double-encode.** It
-                // existed only to cancel `Drawable`'s `Rgba8UnormSrgb` upload,
-                // whose sampler linearised the disc's bytes before the shader
-                // saw them. That upload is raw now
-                // ([ADR-0020](../../../docs/architecture/adr/0020-gamma-authoritative-colour-space.md)),
-                // so the sampler already hands the shader the disc's own
-                // values and there is nothing left to compensate for. The
-                // effect it was compensating for is real - `One`/`One` on
-                // linearised texels crushes the halo's mid-tones by ~30% of
-                // encoded brightness - which is why the fix moved to the
-                // upload rather than being dropped.
-                //
-                // The authored u-scroll: the keyframe block after each mesh's
-                // material array, which the engine lerps per frame and feeds
-                // the GE as `TEXOFFSET`/`TEXSCALE`. Both plume meshes carry
-                // the identical track on every team read, so the first mesh
-                // that has one speaks for the model.
-                boost_uv_transform = oag_formats::vex::nodes(&blob).ok().and_then(|nodes| {
-                    nodes
-                        .iter()
-                        .filter(|n| Some(n.class_id) == mesh_class)
-                        .find_map(|n| oag_formats::vex::mesh_tex_transform(&blob[n.payload()]))
-                });
-                if let Some(transform) = &boost_uv_transform {
-                    report.push(format!(
-                        "{boost_name}: authored uv scroll, {} offset key(s) over {} frames",
-                        transform.offset.times.len(),
-                        transform.offset.period(),
-                    ));
-                }
-                Some(model)
-            }
-            Err(e) => {
-                report.push(format!(
-                    "{boost_name}: {} bytes, does not parse ({e}) - no boost plume this run",
-                    blob.len()
-                ));
-                None
-            }
-        },
-        Err(e) => {
-            report.push(format!(
-                "{boost_name}: not in the archive set ({e}) - no boost plume this run"
-            ));
-            None
-        }
+    // One hull, plume and nozzle per grid slot, each off its own team's
+    // directory - see `crate::livery`, which also records what is recovered
+    // here (the paths) and what is this project's (which team flies which
+    // slot). Slot 0 is the player's.
+    // Which teams the field may fly. The caller's list wins, because only the
+    // caller can know about mounted DLC packs - the front end passes the whole
+    // catalogue. When it is empty the disc's own plugin definition is read
+    // here instead, which is what makes `--race`, a capture and a test field a
+    // varied grid rather than eight identical ships; an entry point that
+    // forgot to pass the list is exactly how this was first found.
+    let available: Vec<String> = if options.opponent_teams.is_empty() {
+        let declared = archives
+            .read_name(oag_pulse::names::GAME_PLUGIN_DEFINITION)
+            .ok()
+            .and_then(|blob| oag_formats::fexml::expand(&blob).ok())
+            .map(|xml| crate::catalogue::teams(&xml))
+            .unwrap_or_default();
+        report.push(format!(
+            "{}: {} team(s) for the grid, read here because the caller passed none",
+            oag_pulse::names::GAME_PLUGIN_DEFINITION,
+            declared.len()
+        ));
+        declared.into_iter().map(|team| team.id).collect()
+    } else {
+        options.opponent_teams.clone()
     };
-
+    let slot_teams = livery::teams_for_slots(&options.team, &available, oag_gameplay::MAX_SHIPS);
+    let liveries = livery::load(
+        &mut archives,
+        &slot_teams,
+        options.mode,
+        options.lod,
+        &mut report,
+    )?;
+    report.push(format!(
+        "grid liveries: {} - which team flies which slot is this project's, not \
+         the original's (livery.rs)",
+        slot_teams.join(", ")
+    ));
     // The Rocket's own model, on the same terms as the boost plume: absence is
     // reported, not fatal. It is not per-team and not per-track - one entry
     // serves every rocket in the game, which is why it loads here once and the
@@ -1644,7 +1518,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     ));
 
     for model in [
-        Some(&ship_model),
+        Some(&liveries[0].hull),
         Some(&track_model),
         sky_model.as_ref(),
         pad_model.as_ref(),
@@ -1706,25 +1580,11 @@ pub fn load(options: &Options) -> Result<Loaded> {
         None
     };
 
-    let nozzle = engine_flare(&ship_blob);
-    match nozzle {
-        Some(at) => report.push(format!(
-            "{ship_name}: engine_flare locator at {at:?} in model space"
-        )),
-        None => report.push(format!(
-            "{ship_name}: no Engine Flare node - the exhaust will not be drawn"
-        )),
-    }
-
-    let collision_fx = collision_fx_locators(&ship_blob);
-    report.push(if collision_fx.is_empty() {
-        format!("{ship_name}: no Ship Collision Fx nodes - sparks anchor at the contact point")
-    } else {
-        format!(
-            "{ship_name}: {} Ship Collision Fx locator(s) for the spark anchor",
-            collision_fx.len()
-        )
-    });
+    // The player's own, and reported by `livery::load` beside the hull it was
+    // read off. Sparks are slot 0's today - `oag_render::sparks` triggers off
+    // the player's contacts alone - so this takes slot 0's locators rather than
+    // carrying eight sets nothing reads.
+    let collision_fx = liveries[0].collision_fx.clone();
 
     // One loop for all of them, and one report line each: adding an effect
     // is adding its name to `RACE_EFFECTS` and a trigger, never a loader.
@@ -1824,7 +1684,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             chase,
             chase_close,
             internal,
-            nozzle,
+            nozzles: liveries.iter().map(|livery| livery.nozzle).collect(),
             collision_fx,
             effects,
             speedup_pads,
@@ -1842,10 +1702,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
         pad_model,
         weapon_pad_model,
         fog_volumes,
-        ship_model,
-        boost_model,
+        liveries,
         rocket_model,
-        boost_uv_transform,
         visibility,
         flare,
         noise,
@@ -2745,7 +2603,7 @@ pub struct Race {
     /// today - see `Scene::new`. It becomes one per craft when per-team models
     /// land, at which point the locator moves with the model rather than with the
     /// race.
-    nozzle: Option<Vec3>,
+    nozzles: Vec<Option<Vec3>>,
     /// Collision sparks' particle pool, advanced on the simulation tick.
     ///
     /// Here rather than in `World`, for the same reason [`Self::exhaust`] is -
@@ -3000,7 +2858,7 @@ impl Race {
             chase,
             chase_close,
             internal,
-            nozzle,
+            nozzles,
             collision_fx,
             effects,
             speedup_pads,
@@ -3203,7 +3061,7 @@ impl Race {
             // the track from the origin to its grid slot on the opening ticks.
             exhaust: [Exhaust::new(); MAX_SHIPS],
             exhaust_rng: std::array::from_fn(|slot| Rng::new(exhaust_seed(slot))),
-            nozzle,
+            nozzles,
             collision_fx,
             sparks: psys::System::new(),
             effects,
@@ -5523,7 +5381,7 @@ impl Race {
     /// If `slot` is not a ship slot.
     #[must_use]
     pub fn nozzle_of(&self, slot: usize) -> Option<Vec3> {
-        let local = self.nozzle?;
+        let local = self.nozzles.get(slot).copied().flatten()?;
         Some(model_matrix_of(&self.world.ships[slot]).transform_point3(local))
     }
 
@@ -6492,7 +6350,7 @@ pub struct Scene {
     /// are written into, and two craft boosting at once need two of each. Empty
     /// rather than `Option<Vec<_>>` so the no-plume source and the iteration read
     /// the same way `ships` does.
-    boost: Vec<Drawable>,
+    boost: Vec<Option<Drawable>>,
     /// One drawable per projectile slot, for rockets drawn as their own model.
     ///
     /// **Empty** when `Data\Weapons\Rocket.vex` did not load, and the sprite
@@ -6502,12 +6360,16 @@ pub struct Scene {
     /// its model matrix goes in, and three rockets in the air at once need three
     /// matrices. Eighty-four vertices apiece makes sixteen copies cheap.
     rockets: Vec<Drawable>,
-    /// The plume's authored texture-transform keyframes, sampled per frame
-    /// and applied to its authored UVs - the recovered mechanism
-    /// (`TEXMAPMODE` 0 plus the animated `TEXOFFSET` u-scroll; see
-    /// `Loaded::boost_uv_transform`). `None` falls back to the engine's own
-    /// identity default.
-    boost_uv_transform: Option<oag_formats::vex::TexTransform>,
+    /// Each slot's own plume's authored texture-transform keyframes, sampled
+    /// per frame and applied to that plume's authored UVs - the recovered
+    /// mechanism (`TEXMAPMODE` 0 plus the animated `TEXOFFSET` u-scroll; see
+    /// `crate::livery::Livery::boost_uv`). `None` falls back to the engine's
+    /// own identity default.
+    ///
+    /// **Per slot, because the plumes are.** Every team read so far carries
+    /// the identical track, so sharing one would be invisible today and wrong
+    /// the moment a team did not.
+    boost_uv_transforms: Vec<Option<oag_formats::vex::TexTransform>>,
     /// The collision soup overlay, present only when `Options::collision` asked
     /// for it. Drawn with the identity transform, same as the track: the
     /// collision geometry is already in world space.
@@ -6568,15 +6430,13 @@ impl Scene {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         track_model: Model,
-        ship_model: Model,
+        liveries: &[Livery],
         collision_model: Option<Model>,
         sky_model: Option<Model>,
         pad_model: Option<Model>,
         weapon_pad_model: Option<Model>,
         mode: Mode,
-        boost_model: Option<Model>,
         rocket_model: Option<Model>,
-        boost_uv_transform: Option<oag_formats::vex::TexTransform>,
         flare: Option<FlareTexture>,
         noise: Option<FlareTexture>,
         format: wgpu::TextureFormat,
@@ -6620,18 +6480,19 @@ impl Scene {
             mesh_render::TRANSPARENT_BLEND,
             mesh_render::GlowMask::Protected,
         )?;
-        // One per grid slot. Built up front rather than on demand, because a
-        // `Drawable` needs the device and the pass does not have it.
-        // Every craft wears the player's hull for now. Per-team models are a
-        // separate item - the twelve teams load, but nothing collects the
-        // `PI_TeamModel` variants a definition declares. See the roadmap's
-        // livery item.
+        // One per grid slot, each drawing **its own team's hull**. Built up
+        // front rather than on demand, because a `Drawable` needs the device
+        // and the pass does not have it. A grid shorter than `GRID_SLOTS`
+        // liveries repeats the last one rather than panicking - `livery::load`
+        // returns one per slot, so that is a defensive floor and not a path
+        // any caller takes.
         let mut ships = Vec::with_capacity(GRID_SLOTS as usize);
-        for _ in 0..GRID_SLOTS {
+        for slot in 0..GRID_SLOTS as usize {
+            let livery = &liveries[slot.min(liveries.len().saturating_sub(1))];
             ships.push(Drawable::new(
                 device,
                 queue,
-                ship_model.clone(),
+                livery.hull.clone(),
                 format,
                 anisotropy,
                 sample_count,
@@ -6820,10 +6681,28 @@ impl Scene {
         // One per grid slot, cloned the way the hulls above are: every craft can
         // be on a speed pad at once, and eight plumes need eight model matrices
         // and eight sampled UV transforms a frame.
+        //
+        // **Each slot's own team's plume, sampled through its own team's
+        // keyframes.** Eight per-team plumes played through one team's UV
+        // track is the kind of wrong that renders plausibly, so the transform
+        // is carried per slot beside the model. A slot whose team ships no
+        // plume simply has none, which is why this is a `Vec` of `Option`
+        // rather than a shorter `Vec` - the draw loop indexes by slot.
         let mut boost = Vec::new();
-        if let Some(model) = boost_model.filter(|model| !model.indices.is_empty()) {
-            for _ in 0..GRID_SLOTS {
-                boost.push(Drawable::new(
+        let mut boost_uv_transforms = Vec::new();
+        for slot in 0..GRID_SLOTS as usize {
+            let livery = &liveries[slot.min(liveries.len().saturating_sub(1))];
+            boost_uv_transforms.push(livery.boost_uv.clone());
+            let Some(model) = livery
+                .boost
+                .as_ref()
+                .filter(|model| !model.indices.is_empty())
+            else {
+                boost.push(None);
+                continue;
+            };
+            {
+                boost.push(Some(Drawable::new(
                     device,
                     queue,
                     model.clone(),
@@ -6838,7 +6717,7 @@ impl Scene {
                     // boost's brightest surface contributes nothing to the glow
                     // mask, which is the shape of the effect a player notices.
                     mesh_render::GlowMask::Written,
-                )?);
+                )?));
             }
         }
         // One per projectile slot, cloned the way the hulls and plumes above are.
@@ -6895,7 +6774,7 @@ impl Scene {
             ships,
             boost,
             rockets,
-            boost_uv_transform,
+            boost_uv_transforms,
             collision,
             sky,
             pads,
@@ -7107,11 +6986,17 @@ impl Scene {
         // not `zip`ped over `ship_model_matrices`, which filters inactive craft
         // and so does not keep slot alignment.
         for (slot, boost) in self.boost.iter().enumerate().take(drawn) {
+            // `None` is a slot whose *team* ships no plume, which is a
+            // reported absence rather than a hidden one - see `livery::plume`.
+            let Some(boost) = boost else {
+                continue;
+            };
             if !race.exhaust_of(slot).plume_visible() {
                 continue;
             }
             boost.write(queue, view_projection, race.ship_model_matrix_of(slot));
-            let (scale, offset) = match &self.boost_uv_transform {
+            let (scale, offset) = match self.boost_uv_transforms.get(slot).and_then(Option::as_ref)
+            {
                 Some(transform) => {
                     let t = race.exhaust_of(slot).plume_timer() * 60.0;
                     (transform.scale.sample(t), transform.offset.sample(t))
@@ -7303,6 +7188,9 @@ impl Scene {
         // uniform buffer that was not written this frame would be last frame's
         // pose.
         for (slot, boost) in self.boost.iter().enumerate().take(drawn) {
+            let Some(boost) = boost else {
+                continue;
+            };
             if !race.exhaust_of(slot).plume_visible() {
                 continue;
             }
@@ -7568,14 +7456,12 @@ pub fn capture(
         setup,
         hud,
         track_model,
-        ship_model,
+        liveries,
         collision_model,
         sky_model,
         pad_model,
         weapon_pad_model,
-        boost_model,
         rocket_model,
-        boost_uv_transform,
         fog_volumes,
         visibility,
         flare,
@@ -7663,15 +7549,13 @@ pub fn capture(
         &device,
         &queue,
         track_model,
-        ship_model,
+        &liveries,
         collision_model,
         sky_model,
         pad_model,
         weapon_pad_model,
         mode,
-        boost_model,
         rocket_model,
-        boost_uv_transform,
         flare,
         noise,
         format,
@@ -8228,7 +8112,7 @@ mod tests {
             // exhaust still ticks; it just has nowhere to be drawn, which is the
             // same path a model with no `Engine Flare` node takes. Sparks
             // likewise fall back to anchoring at the contact point.
-            nozzle: None,
+            nozzles: vec![None; MAX_SHIPS],
             collision_fx: Vec::new(),
             // No disc, so no `.pob` at all: every effect trigger runs and
             // draws nothing, which is the same path a missing entry takes.
@@ -8465,7 +8349,7 @@ mod tests {
         // what the test needs is only that the eight are far enough apart to tell
         // one craft's ribbon from another's, and the grid's own 19.79-unit step
         // is 25 times this.
-        setup.nozzle = Some(Vec3::new(0.0, 0.0, -0.8));
+        setup.nozzles = vec![Some(Vec3::new(0.0, 0.0, -0.8)); MAX_SHIPS];
         let mut race = Race::start(setup);
         // `Exhaust::trail_ready` gates the ribbon on a full ring, which is the
         // original's own gate, so this needs one tick per sample.

@@ -819,7 +819,7 @@ fn main() -> Result<()> {
         ),
     };
 
-    let race_options = race::Options {
+    let mut race_options = race::Options {
         source: source.clone(),
         dlc: dlc.clone(),
         // Passed straight through, `None` included: `race::load` resolves an
@@ -832,6 +832,11 @@ fn main() -> Result<()> {
             .unwrap_or_else(|| oag_pulse::race::DEFAULT_TEAM.to_string()),
         class,
         mode,
+        // The disc's own team list arrives with the boot shell, below - it is
+        // read from the plugin definition and any mounted DLC pack, so it
+        // cannot be known here. Empty until then, which is the whole grid in
+        // the player's hull.
+        opponent_teams: Vec::new(),
         ribbon: cli.ribbon,
         collision: cli.collision,
         lod: cli.lod.unwrap_or(settings.graphics.lod),
@@ -956,6 +961,15 @@ fn main() -> Result<()> {
     // on a circuit or a team those are different strings - `16_Track` and
     // `Mantis` against their localised names, which are shipped content and
     // only ever live in memory.
+    // Every team the player's own source declares, in the definition's file
+    // order, DLC packs included. `livery::teams_for_slots` decides which slot
+    // flies which; that ordering is this project's, not the original's.
+    race_options.opponent_teams = boot_shell
+        .teams
+        .iter()
+        .map(|team| team.id.clone())
+        .collect();
+
     let shell = Shell {
         definition,
         modes: menu::mode_choices(&boot_shell.strings),
@@ -2527,14 +2541,12 @@ impl Stage {
             setup,
             hud,
             track_model,
-            ship_model,
+            liveries,
             collision_model,
             sky_model,
             pad_model,
             weapon_pad_model,
-            boost_model,
             rocket_model,
-            boost_uv_transform,
             fog_volumes,
             visibility,
             flare,
@@ -2545,15 +2557,13 @@ impl Stage {
             &gpu.device,
             &gpu.queue,
             track_model,
-            ship_model,
+            &liveries,
             collision_model,
             sky_model,
             pad_model,
             weapon_pad_model,
             setup.mode,
-            boost_model,
             rocket_model,
-            boost_uv_transform,
             flare,
             noise,
             gpu.config.format,
