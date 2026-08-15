@@ -16,7 +16,7 @@ for what is actually done versus planned before assuming a subsystem exists.
 ## Commands
 
 ```sh
-just              # fmt-check + lint + test + check-docs + check-deps + check-determinism - the gate every commit must pass
+just              # fmt-check + lint + test + check-docs + check-deps + check-determinism + check-size - the gate every commit must pass
 just fmt          # cargo fmt --all
 just lint         # cargo clippy --workspace --all-targets -- -D warnings
 just test         # cargo nextest run --workspace
@@ -24,6 +24,7 @@ just test-data    # also runs #[ignore]d ground-truth tests that need data/image
 just check-docs   # validates internal links in docs/ (scripts/check-doc-links.py)
 just check-deps   # asserts the two dependency-boundary rules below (scripts/check-dependency-rules.py)
 just check-determinism # asserts no platform transcendental reaches simulation code (scripts/check-transcendentals.py)
+just check-size   # ratchet on file length: nothing new over 1k lines, nothing big grows (scripts/check-file-size.py)
 just build        # cargo build --workspace
 just docs         # cargo doc --workspace --no-deps --document-private-items
 just audit-leakage # asserts no tracked game content or reproduction (scripts/check-leakage.py)

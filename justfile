@@ -25,7 +25,7 @@ default_scenario := "verification/scenarios/talons-junction-time-trial-lap.input
 native_video_flags := if os() == "linux" { "--features native-video" } else { "" }
 
 # fmt + lint + test + docs + architecture rules, the gate every commit must pass
-check: fmt-check lint test check-docs check-deps check-determinism
+check: fmt-check lint test check-docs check-deps check-determinism check-size
 
 # Documentation is a deliverable, so its links are checked like any other build output
 check-docs:
@@ -362,3 +362,8 @@ check-deps:
 # months without anything failing
 check-determinism:
     python3 scripts/check-transcendentals.py
+
+# A ratchet on file length: nothing new over 1,000 lines, and nothing already
+# over it grows. race.rs reached 11,294 lines before anything measured it
+check-size:
+    python3 scripts/check-file-size.py
