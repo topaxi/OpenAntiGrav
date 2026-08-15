@@ -25,7 +25,7 @@ default_scenario := "verification/scenarios/talons-junction-time-trial-lap.input
 native_video_flags := if os() == "linux" { "--features native-video" } else { "" }
 
 # fmt + lint + test + docs + architecture rules, the gate every commit must pass
-check: fmt-check lint test check-docs check-deps
+check: fmt-check lint test check-docs check-deps check-determinism
 
 # Documentation is a deliverable, so its links are checked like any other build output
 check-docs:
@@ -356,3 +356,9 @@ audit-leakage:
 # Assert the two architecture dependency rules from CLAUDE.md still hold
 check-deps:
     python3 scripts/check-dependency-rules.py
+
+# Assert no platform transcendental reaches simulation code - determinism.md's
+# rule, which was enforced by review alone until an `acos` sat in `oag-ai` for
+# months without anything failing
+check-determinism:
+    python3 scripts/check-transcendentals.py

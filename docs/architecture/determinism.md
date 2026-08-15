@@ -170,6 +170,21 @@ machine's `f32::acos` and `libm::acosf` differ on **8.6 % of samples**, by up to
 one ULP - `2.4e-7` rad at the extreme and `3e-8` in the band a racing line lands
 in. One ULP in an angle that sets a speed target is one bit in the world hash.
 
+**And it is enforced now, not merely stated.**
+[`scripts/check-transcendentals.py`](../../scripts/check-transcendentals.py)
+fails the `just` gate and the `check` CI job on any of the forbidden calls in
+`crates/{core,physics,gameplay,ai,race}/src`, outside `#[cfg(test)]`. Two files
+are allowed by name and each says why: `oag_core::math` holds the wrappers, and
+`oag_core::probe` calls `sin` deliberately so that a platform whose libm
+differs shows up as a failing gate rather than as a mystery desync. Adding a
+third entry is a decision about determinism, not a formality. The script was
+checked against the bug that motivated it - restoring `f32::acos` in
+`Line::curvature` makes it fail, naming the line.
+
+`sqrt` is deliberately not on its list, and neither are `to_radians` and
+`to_degrees`: the first is required to be correctly rounded, the other two are
+a multiply by a constant.
+
 **The fix is the one this page already named**: bring the implementation in
 rather than weaken the rule. [`oag_core::math::acos`](../../crates/core/src/math.rs)
 wraps the `libm` crate - a pure-Rust port of MUSL's libm, so every target runs

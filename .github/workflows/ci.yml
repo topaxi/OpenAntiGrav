@@ -25,6 +25,11 @@ jobs:
       - run: cargo nextest run --workspace
       - name: Assert the two architecture dependency rules still hold
         run: python3 scripts/check-dependency-rules.py
+      # Cheap and early: a transcendental in simulation code is a divergence
+      # the determinism job below would only find after three matrix runs, and
+      # only if somebody reads which hash moved.
+      - name: Assert no platform transcendental reaches simulation code
+        run: python3 scripts/check-transcendentals.py
 
   docs:
     name: documentation links
