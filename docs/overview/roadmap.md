@@ -844,17 +844,23 @@ change how this list should be read:
       all 40 sky nodes on the disc. **The handler is still unrecovered**, so the
       GE state is chosen rather than measured. See
       [`skycube.md`](../formats/skycube.md)
-- [ ] `fogCube` `0x3d3`, and the fog *curve* separately - see the look below.
-      The **payload is decoded** (a 64-byte 4x4 defining a box volume, then two
-      `{rgb, 0, near, far}` sets; 36 of the 40 track files author one, and
-      `06_Track` authors none) and the per-track colours corroborate the sky
-      decode independently. **The runtime path is now fully recovered too** -
+- [x] `fogCube` `0x3d3` - **decoded, recovered and drawn.** The payload is a
+      64-byte 4x4 defining a box volume, then two `{rgb, 0, near, far}` sets;
+      36 of the 40 track files author one, `06_Track` authors none, and the
+      per-track colours corroborate the sky decode independently. The runtime
+      path is recovered in full -
       `FogCube_RegisterClass`/`_Init`/`_Sample`, `Fog_FindVolume`, `Fog_Apply`
       and `Gu_Fog`, in
-      [`fog.md`](../ghidra/functions/psp-pulse-usa/fog.md) - including that the two
-      parameter sets are the ends of a lerp across the volume's local Z. Nothing
-      draws it yet, which is why a race now has its authored sky and a hard
-      horizon
+      [`fog.md`](../ghidra/functions/psp-pulse-usa/fog.md) - including that the
+      two parameter sets are the ends of a lerp across the volume's local Z.
+      `oag_formats::fog` parses it, `race::load` reports what a circuit authors
+      ("1 volume(s), 500 units across, 450..1850 at the near end" on
+      `16_Track`), the camera samples the lerp per frame and `mesh.wgsl`'s
+      `fogged()` applies the linear ramp `Gu_Fog` defines. A track that authors
+      no volume renders unfogged through the same pipeline rather than a second
+      one. **The fog *curve* is a separate entry below, and it is resolved
+      too**: there is no curve - the ramp is flat, and what varies is its
+      parameters
 - [ ] `cloudCube` `0x3d8` and `cloudGroup` `0x3d9`
 - [ ] `sea` `0x3d5`, `seareflect` `0x3d7`, `seaweed` `0x3d6`
 - [ ] `weatherPos` `0x3da`
@@ -1071,7 +1077,7 @@ above covers.
 | How is a ship assigned a grid slot? **The order is answered, the geometry is not.** `Race_SpawnGrid` (`0x088247e0`) assigns slots from a shipped permutation table and packs a short grid to the back; the local player is forced to slot 8 in the AI's own view. What turns a slot index into a world pose is still unfound. | M5 | [grid](../ghidra/functions/psp-pulse-usa/grid.md) |
 | What does the per-vertex collision scalar mean? **Not answerable from assets**: all 602,086 are exactly `1.0`, so only the consumer can say. | M4 | [collision](../ghidra/functions/psp-pulse-usa/collision.md) |
 | How does the sweep-and-prune packing hold coordinates beyond +/-1024, when real tracks reach 1,554? **Narrowed by survey**: all 16 environments measured; 7 reach past ±1024, but nothing on either disc *spans* more than 2,048 (widest 2026.6057, `10_Track`, 98.96% of the window). So the geometry is not at fault and the packed input cannot be raw world space - the open part is reading `Sap_Init` (`0x0882f8f4`) for the base it must subtract. | M4 | [collision](../ghidra/functions/psp-pulse-usa/collision.md) |
-| What is the original PRNG? | M5 (AI, pickups) | [`oag-core::rng`](../../crates/core/src/rng.rs) |
+| What is the original PRNG? **No longer a blocker; it is a ceiling on confidence.** Both consumers shipped on this project's own seeded `Rng` - the pickup draw (2026-08-11) and the drivers' personality and decision streams (2026-08-11/12) - because no grant call site exists in the executable to read a generator out of. What that costs is permanent and worth stating: only the *distribution* of a draw can ever be checked against the original, never the sequence. | M5 (AI, pickups) | [`oag-core::rng`](../../crates/core/src/rng.rs), [pickups](../gameplay/pickups.md) |
 | What are the coordinate conventions? **Handedness answered**: `cross(row0, row1) = row2` exactly on 200/200 ticks, so the basis is positively oriented under ordinary component arithmetic - and turning left rotates forward toward `+row0`, so **row 0 is left, not right**. Units and angles still open. | M4 | [engine](../ghidra/functions/psp-pulse-usa/engine.md) |
 | ~~What calls `Ship_UpdateCraft`?~~ **Answered**: `0x0884ff70`, a virtual call through slot `0x70` of the vtable at `object+0x38`, inside a per-entity update loop beginning at `0x0884f70c`. | M4 | [engine](../ghidra/functions/psp-pulse-usa/engine.md) |
 | ~~Do the angular accumulators hold torque or angular acceleration?~~ **Answered: torque.** `body+0x120`/`+0x130` integrate into `body+0x160` with no inertia division - `+0x160` is body-frame angular *momentum*, and the inertia is applied once in the `L -> omega` map (`omega = I_world^-1 * L`, rebuilt per sub-step). `body+0x40` is the body-space inverse inertia tensor, and its writer is now read too - `Body_SetBoxInertia` (`0x0884e1ac`), a solid box with the literal dimensions `(12, 8, 12)` and the constructor's mass `0.9`, giving `I = (15.6, 21.6, 15.6)` against the captures' fitted `~(15, 21.2, 15)`. `YAW_DRIVE_CALIBRATION` is retired for the recovered `oag_physics::forces::YAW_INVERSE_INERTIA`. | M4 | [rigid-body](../ghidra/functions/psp-pulse-usa/rigid-body.md) |
