@@ -75,14 +75,32 @@ jobs:
         run: cargo run -q -p oag-physics --example determinism_report
       - name: Assert simulation hashes match the committed reference (release)
         run: cargo test -p oag-physics --release --test determinism -- --nocapture
+      # What a race carries around the dynamics: the inventory, the
+      # projectiles, the lap state and the generator's position. It needs no
+      # disc image either, so it belongs on all three targets rather than only
+      # in the Linux-only workspace run.
+      - name: Assert race-level hashes match the committed reference (release)
+        run: cargo test -p oag-gameplay --release --test determinism -- --nocapture
+      # The force law above is driven by a *scripted* input, so no controller
+      # decision is in its hash. This one drives the drivers, which is where
+      # `Line::curvature` lives - the platform `acos` it used to call was
+      # outside every gate for exactly this reason.
+      - name: Print driver determinism hashes (release)
+        run: cargo run -q -p oag-ai --example determinism_report
+      - name: Assert driver hashes match the committed reference (release)
+        run: cargo test -p oag-ai --release --test determinism -- --nocapture
       # determinism.md requires bit-identical state in debug too, not just
       # release. Linux-debug is also covered by the `check` job's `cargo
-      # nextest run --workspace`; these two make Windows-debug and
+      # nextest run --workspace`; these three make Windows-debug and
       # macOS-debug actually run instead of being claimed by the doc alone.
       - name: Assert hashes match the committed reference (debug)
         run: cargo test -p oag-core determinism -- --nocapture
       - name: Assert simulation hashes match the committed reference (debug)
         run: cargo test -p oag-physics --test determinism -- --nocapture
+      - name: Assert race-level hashes match the committed reference (debug)
+        run: cargo test -p oag-gameplay --test determinism -- --nocapture
+      - name: Assert driver hashes match the committed reference (debug)
+        run: cargo test -p oag-ai --test determinism -- --nocapture
 
   leakage:
     name: no game content committed

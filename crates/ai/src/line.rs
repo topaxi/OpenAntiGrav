@@ -313,8 +313,12 @@ impl Line {
         }
         let into = into.normalize_or_zero();
         let out_of = out_of.normalize_or_zero();
-        // `acos` of a dot product that rounding can push outside `-1..=1`.
-        let turned = into.dot(out_of).clamp(-1.0, 1.0).acos();
+        // `oag_core::math::acos` and not `f32::acos`: this angle reaches the
+        // speed target every craft brakes against, and so the world hash, and
+        // the platform's own `acos` is not required to be correctly rounded.
+        // The clamp is still ours - a dot of two unit vectors can leave
+        // `-1..=1` by a rounding error and `acos` of `1.0000001` is `NaN`.
+        let turned = oag_core::math::acos(into.dot(out_of).clamp(-1.0, 1.0));
         turned / travelled
     }
 

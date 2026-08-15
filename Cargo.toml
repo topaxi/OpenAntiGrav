@@ -48,6 +48,13 @@ oag-trace = { path = "crates/trace" }
 anyhow = "1"
 thiserror = "2"
 
+# Our own transcendentals, for the simulation only. `determinism.md` names
+# bringing an implementation into `oag-core` as the fix when platform libm
+# differences would otherwise reach simulation state; this is that
+# implementation. A pure-Rust port of MUSL's libm, so it is the same code, and
+# so the same bits, on every target we ship.
+libm = "0.2"
+
 # The AV1 decoder the movie cache is played back through: a Rust port of dav1d,
 # so no C toolchain enters the build. `default-features = false` drops the `asm`
 # feature, which would require `nasm`. See docs/architecture/adr/0008.

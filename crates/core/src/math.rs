@@ -38,6 +38,30 @@ pub use glam::{Mat3, Mat4, Quat, Vec2, Vec3, Vec4, mat3, mat4, quat, vec2, vec3,
 /// is a second thing to get wrong.
 pub const SPEED_TO_KMH: f32 = 3.6;
 
+/// `acos`, from our own libm rather than the platform's.
+///
+/// **Simulation code must call this instead of [`f32::acos`].** IEEE-754
+/// requires `sqrt` to be correctly rounded and does *not* require it of the
+/// transcendentals, so `f32::acos` resolves to whatever the platform's libm
+/// does and two targets may legitimately differ in the last bit. One bit in an
+/// angle that feeds a speed target is one bit in the simulation's state hash,
+/// which is the thing the determinism gate exists to keep identical. See
+/// `docs/architecture/determinism.md`, which names bringing an implementation
+/// into this crate as the fix rather than weakening the rule.
+///
+/// The implementation is the `libm` crate: a pure-Rust port of MUSL's libm, so
+/// every target runs the same source and produces the same bits. It is not
+/// promised to be *correctly rounded* - no libm is - only to be the same
+/// everywhere, which is what determinism needs.
+///
+/// The caller still owes the clamp. A dot product of two unit vectors can leave
+/// `-1..=1` by a rounding error, and `acos` of `1.0000001` is `NaN` on any
+/// implementation.
+#[must_use]
+pub fn acos(x: f32) -> f32 {
+    libm::acosf(x)
+}
+
 /// Right-handed camera matrices with a 0..1 depth range.
 ///
 /// That range is what wgpu, Metal and DX12 expect; the OpenGL -1..1 convention

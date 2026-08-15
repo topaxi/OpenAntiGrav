@@ -133,62 +133,66 @@ integrator has not been read yet and may turn out to want different treatment.
 
 | Layer | What it catches | Scope |
 | --- | --- | --- |
-| [`oag-core::probe`](../../crates/core/src/probe.rs) | Float divergence in the shared foundation | `oag-core` only |
-| [`crates/core/tests/determinism.rs`](../../crates/core/tests/determinism.rs) | Drift against committed reference hashes | `oag-core` only |
-| CI `determinism` job | Divergence between Linux, Windows and macOS | runs `-p oag-core` only |
-| [`StateHasher`](../../crates/core/src/hash.rs) | Per-tick state comparison | **no callers outside `oag-core`** |
+| [`oag-core::probe`](../../crates/core/src/probe.rs) | Float divergence in the shared foundation | `oag-core` |
+| [`oag_physics::probe`](../../crates/physics/src/probe.rs) | Drift in the real force law, under a scripted input | `oag-physics` |
+| [`crates/gameplay/tests/determinism.rs`](../../crates/gameplay/tests/determinism.rs) | Drift in what a race carries around the dynamics: inventory, projectiles, lap state, the generator's position | `oag-gameplay` |
+| [`oag_ai::probe`](../../crates/ai/src/probe.rs) | Drift in what the *drivers decide* - the aim point, the curvature, the speed target, the personality draws | `oag-ai` |
+| CI `determinism` job | Divergence between Linux, Windows and macOS | all four of the above, release **and** debug |
+| [`StateHasher`](../../crates/core/src/hash.rs) | Per-tick state comparison | every gate above is built on it |
 
-The probe exercises what the real simulation will lean on hardest: accumulated
+The core probe exercises what the real simulation leans on hardest: accumulated
 arithmetic, `sqrt`, `sin`, quaternion composition and normalisation, seeded
-random draws, and a data-dependent branch.
+random draws, and a data-dependent branch. The three above it step the real
+code.
 
-### The gate does not cover `oag-physics` or `oag-gameplay`
+### Each gate covers the layer below it, and one thing more
 
-Audited 2026-07-27, and worth stating plainly because the table above used to
-end with "once there is state". **There is state now, and nothing hashes it.**
+Audited 2026-07-27, when the honest summary was that the gate proved the *floor*
+was portable and nothing about the crates built on it. That is no longer true,
+and the order the holes were closed in is worth keeping, because each was closed
+by adding the layer that could see what the one below could not:
 
-- [`probe::run`](../../crates/core/src/probe.rs) is a hand-built miniature
-  simulation living inside `oag-core`. It hashes exactly **three quantities** -
-  a position, a velocity and an orientation, ten `f32` - plus one `u32` drawn
-  from the RNG. It cannot reach the simulation crates, because `oag-core` is the
-  bottom of the dependency graph and nothing may point upward from it.
-- `oag_gameplay::World` is `tick`, an `Rng`, and `[Ship; 8]`; each `Ship` holds a
-  `ShipState` of eleven fields, whose `Body` alone is four `Vec3`, a `Quat`, a
-  scalar mass and an inertia `Vec3`. **None of it is hashed by anything.**
-- `StateHasher` has no caller anywhere outside `oag-core`.
-- The CI job that runs on three operating systems runs `-p oag-core`. The job
-  that runs the whole workspace runs on Linux only, so the physics and gameplay
-  tests are not even *executed* on Windows or macOS, let alone compared.
+- **`oag-physics` (2026-07-29)**: the force law itself, over a synthetic
+  corridor. The core probe cannot reach it - `oag-core` is the bottom of the
+  dependency graph and nothing may point upward from it.
+- **`oag-gameplay` (2026-08-11)**: a race's own state, which the pickups opened
+  a hole in and `hash_world` closed.
+- **`oag-ai` (2026-08-15)**: the controller. The physics gate drives a
+  *scripted* input, so until this landed **no cross-platform run had ever asked
+  a driver to decide anything**, and every arithmetic path in `oag-ai` was
+  outside the gate.
 
-**What this does and does not mean.** The foundation-level risk is genuinely
-covered, and by a superset of what the simulation currently does: the probe uses
-`sin`, and the simulation crates today call **no transcendental at all** - three
-`sqrt` sites and glam's own `length`/`normalize`, which are `sqrt`. So a
-platform whose float pipeline diverges would still be caught.
+That last gap was not hypothetical. `oag_ai::Line::curvature` called the
+platform's own `acos` from the day it was written, in violation of the rule
+above, and nothing failed for months because nothing cross-platform ran it.
+Measured over the domain a clamped unit-vector dot actually produces, this
+machine's `f32::acos` and `libm::acosf` differ on **8.6 % of samples**, by up to
+one ULP - `2.4e-7` rad at the extreme and `3e-8` in the band a racing line lands
+in. One ULP in an angle that sets a speed target is one bit in the world hash.
 
-What is not covered is anything a simulation crate could introduce *for itself*.
-Specifically, and none of these has any equivalent in the probe:
+**The fix is the one this page already named**: bring the implementation in
+rather than weaken the rule. [`oag_core::math::acos`](../../crates/core/src/math.rs)
+wraps the `libm` crate - a pure-Rust port of MUSL's libm, so every target runs
+the same source - and simulation code calls that instead of `f32::acos`. It is
+not promised to be correctly rounded, because no libm is; it is promised to be
+the *same everywhere*, which is what determinism needs. Any further
+transcendental the simulation turns out to want goes in beside it.
+
+### What is still not covered
 
 - **Order-dependent reductions over collections.** The nearest-hit scan across
   `CollisionWorld::colliders()`, the deepest-of-eight hull probe comparison, and
   the nearest-sample scan in the race loop are all reductions whose result
   depends on iteration order. They are over `Vec`s today, which is correct - but
   nothing would fail if one became a `HashMap`.
-- **Accumulation order.** `forces::evaluate` sums roughly fourteen terms into
-  four accumulators in a fixed order that is itself evidence. The probe sums
-  three.
-- **`Quat::inverse` and quaternion-vector rotation**, which the integrator uses
-  every tick to move torque in and out of the body frame. The probe composes and
-  normalises quaternions but does neither of these.
-
-So the honest summary is that the gate proves the *floor* is portable and proves
-nothing about the two crates built on it. Closing that needs a hash-and-compare
-over a real `World` after N ticks, with its own committed reference and its own
-place in the CI matrix. It is deliberately **not** done as part of this audit:
-the reference constant has to be generated from the simulation as it stands, and
-generating one while the force law is actively being changed would commit a
-number that is stale on arrival - which, under this page's own "never update the
-constants" rule, is worse than the gap it closes.
+- **`oag-race`**, which has no gate of its own; lap timing reaches the committed
+  hashes only through `oag_gameplay`'s scenario.
+- **Anything that needs a disc image.** Every gate above builds its world in its
+  own file, deliberately: `data/` is gitignored and absent in CI, so a
+  disc-backed scenario would never run on Windows or macOS, which is precisely
+  where a portability bug shows up. What that costs is that no *authored* track,
+  hull or racing line is under a cross-platform hash - those are covered by the
+  disc-backed ground-truth suites, on one machine, via `just test-data`.
 
 **When the determinism test fails, do not update the constants.** That converts
 a real bug into a silent one. The failure output names the platform, and each CI

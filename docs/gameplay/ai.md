@@ -423,6 +423,22 @@ The speed target is `sqrt(lateral_accel / curvature)`, the ordinary cornering
 limit, taken over the **sharpest** bend within a braking window rather than at
 one point ahead - a corner has to be seen before it is entered.
 
+**The angle that curvature is built from goes through `oag_core::math::acos`,
+not `f32::acos`** (2026-08-15). `Line::curvature` called the platform's own from
+the day it was written, which `docs/architecture/determinism.md` forbids:
+IEEE-754 does not require correct rounding for a transcendental, so two targets
+may differ in the last bit, and a bit in a speed target is a bit in the world
+hash. Nothing failed for months because **no cross-platform gate had ever run a
+driver** - the physics gate drives a scripted input. `oag_ai::probe` and
+`crates/ai/tests/determinism.rs` are that gate now, on all three targets in
+release and debug, and its scenario asserts its own curvature *spread* so a
+circuit that flattened could not pass by testing nothing. The whole disc-backed
+`oag-game` suite - every AI ground-truth test on this page among it - was re-run
+after the swap, 643 of 643 green, so no bound quoted here moved. The *sweeps*
+above (mean speed, time off throttle) were not re-measured: they are manual
+runs, not assertions, and a one-ULP angle would not be visible in a figure
+reported to three significant digits.
+
 **`lateral_accel` was measured rather than guessed, after it was guessed once.**
 It sat at 55 until 2026-08-11, when it was reported from play as "my craft is
 faster than the AI, first place within a few seconds". It was, and the reason

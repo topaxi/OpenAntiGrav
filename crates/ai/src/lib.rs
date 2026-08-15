@@ -77,6 +77,7 @@ mod field;
 mod line;
 mod noise;
 mod pilot;
+pub mod probe;
 
 pub use difficulty::Difficulty;
 pub use driver::{AWARENESS_RANGE, Context, Driver, Personality, Tuning};
