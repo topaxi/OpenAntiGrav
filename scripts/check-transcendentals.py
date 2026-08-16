@@ -18,6 +18,15 @@ somebody else's macOS runner three weeks later.
 What it does not do: parse Rust. It strips comments and `#[cfg(test)]` blocks
 and then matches method calls textually, which is enough for a rule about a
 fixed list of method names and cheap enough to run on every `just`.
+
+One interaction worth knowing about, because it is a way this gate could have
+gone wrong quietly. `scripts/check-file-size.py` requires a `#[cfg(test)]`
+module over 200 lines to move into a file of its own, and what lands there is
+the module's *body* - the `#[cfg(test)]` this script strips on stays behind on
+the `mod tests;` declaration. So a `tests.rs` under a simulation crate's `src/`
+is test code with no marker in it, and is skipped because **something declared
+it** `#[cfg(test)]` - not because of what it is called. Trusting the name would
+quietly exempt the first `src/lap_tests.rs` somebody writes as real code.
 """
 
 from __future__ import annotations
@@ -158,18 +167,54 @@ def strip_test_modules(source: str) -> str:
     return out
 
 
+TEST_MOD_DECL = re.compile(r"#\[cfg\(test\)\]\s*\n\s*mod\s+(\w+)\s*;")
+
+
+def declared_test_files(root: Path) -> set[Path]:
+    """Every file in `root` that is a `#[cfg(test)]` module's body, and its subtree.
+
+    `crates/physics/src/airbrake/tests.rs` is what `check-file-size.py` asks a
+    long test module to become, and it carries no `#[cfg(test)]` of its own for
+    `strip_test_modules` to find. Same licence as an inline block: test code may
+    call anything.
+
+    Found by **reading the declaration**, not by trusting the file name. A rule
+    of "any file called `tests.rs`" would hand the same licence to a future
+    `src/lap_tests.rs` that is ordinary simulation code, and it would do it
+    silently, which is the failure this script exists to stop happening twice.
+    """
+    found: set[Path] = set()
+    for path in root.rglob("*.rs"):
+        # A crate root or `mod.rs` declares its children in its own directory;
+        # any other file declares them in the directory named after it.
+        parent = path.parent if path.stem in ("lib", "main", "mod") else path.with_suffix("")
+        for name in TEST_MOD_DECL.findall(path.read_text()):
+            for candidate in (parent / f"{name}.rs", parent / name / "mod.rs"):
+                if candidate.is_file():
+                    found.add(candidate.resolve())
+            subtree = parent / name
+            if subtree.is_dir():
+                found.update(child.resolve() for child in subtree.rglob("*.rs"))
+    return found
+
+
 def main() -> int:
     findings: list[str] = []
     scanned = 0
+    test_files = 0
 
     for crate in SIMULATION_CRATES:
         root = ROOT / "crates" / crate / "src"
         if not root.is_dir():
             print(f"no such crate directory: {root.relative_to(ROOT)}")
             return 1
+        test_bodies = declared_test_files(root)
         for path in sorted(root.rglob("*.rs")):
             relative = path.relative_to(ROOT).as_posix()
             if relative in ALLOWED:
+                continue
+            if path.resolve() in test_bodies:
+                test_files += 1
                 continue
             scanned += 1
             source = strip_test_modules(strip_comments(path.read_text()))
@@ -195,7 +240,7 @@ def main() -> int:
 
     print(
         f"OK: no platform transcendentals in {scanned} simulation source file(s), "
-        f"{len(ALLOWED)} allowed by name"
+        f"{len(ALLOWED)} allowed by name, {test_files} dedicated test file(s) skipped"
     )
     return 0
 

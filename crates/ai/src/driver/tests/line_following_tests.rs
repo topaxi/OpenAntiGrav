@@ -1,0 +1,355 @@
+//! Following the line: thrust, steering lock, the corner-speed brake and the
+//! braking differential.
+//!
+//! One theme of `driver.rs`'s tests. They were an inline `#[cfg(test)]`
+//! module of 1,185 lines, which is over both caps in
+//! `scripts/check-file-size.py` at once - 200 inline, 1,000 in a file - so
+//! they are split by subject, and the fixtures they share stay in
+//! [`super`].
+
+use super::*;
+
+#[test]
+fn no_line_means_no_input() {
+    let mut driver = Driver::default();
+    let controls = driver.drive(
+        &craft(Vec3::ZERO, 0.0),
+        &Context::new(&Line::default(), &Tuning::default()),
+    );
+    assert_eq!(controls, ShipControls::default());
+}
+
+#[test]
+fn a_craft_on_a_straight_holds_full_thrust_and_no_steering() {
+    let mut driver = Driver::default();
+    let controls = driver.drive(
+        &craft(Vec3::ZERO, 50.0),
+        &Context::new(&straight(), &Tuning::default()),
+    );
+    assert_eq!(controls.thrust, 1.0);
+    assert!(controls.steer_x.abs() < 1e-3, "steer {}", controls.steer_x);
+    assert_eq!(controls.airbrake_left, 0.0);
+    assert_eq!(controls.airbrake_right, 0.0);
+}
+
+/// The sign is the whole thing: a craft to the *right* of its line must steer
+/// *left*, and getting it backwards drives the field into the outside wall on
+/// the first corner - which is exactly the trap the grid's lateral offset
+/// already sprung once. See `docs/ghidra/functions/psp-pulse-usa/grid.md`.
+#[test]
+fn a_craft_beside_the_line_steers_back_toward_it() {
+    let tuning = Tuning::default();
+
+    let mut driver = Driver::default();
+    let right_of_line = driver.drive(
+        &craft(Vec3::new(6.0, 0.0, 0.0), 40.0),
+        &Context::new(&straight(), &tuning),
+    );
+    assert!(
+        right_of_line.steer_x < 0.0,
+        "steer {} should be left of centre",
+        right_of_line.steer_x
+    );
+
+    let mut driver = Driver::default();
+    let left_of_line = driver.drive(
+        &craft(Vec3::new(-6.0, 0.0, 0.0), 40.0),
+        &Context::new(&straight(), &tuning),
+    );
+    assert!(
+        left_of_line.steer_x > 0.0,
+        "steer {} should be right of centre",
+        left_of_line.steer_x
+    );
+}
+
+/// The damping, and the reason the rewrite happened: a craft already turning
+/// the way the geometry wants must be asked for *less* lock, not the same.
+#[test]
+fn a_craft_already_turning_is_asked_for_less_lock() {
+    let tuning = Tuning::default();
+    let mut state = craft(Vec3::new(6.0, 0.0, 0.0), 40.0);
+
+    let mut driver = Driver::default();
+    let still = driver.drive(&state, &Context::new(&straight(), &tuning));
+
+    // Yawing left, which is positive about the craft's own up axis, and is
+    // the direction the controller wants to go.
+    state.body.angular_velocity = Vec3::new(0.0, 0.3, 0.0);
+    let mut driver = Driver::default();
+    let turning = driver.drive(&state, &Context::new(&straight(), &tuning));
+    assert!(
+        turning.steer_x > still.steer_x,
+        "already turning: {} should be less left lock than {}",
+        turning.steer_x,
+        still.steer_x
+    );
+}
+
+/// Braking uses both sides while the steering loop still has authority. A
+/// single airbrake yaws the craft, so tying one to the steering below
+/// saturation would close a second loop around it - see [`trail`].
+#[test]
+fn braking_is_symmetric_until_the_steering_loop_saturates() {
+    let tuning = Tuning::default();
+    let line = Line::new(
+        (0..128)
+            .map(|step| {
+                let angle = std::f32::consts::TAU * step as f32 / 128.0;
+                Vec3::new(60.0 * angle.cos(), 0.0, 60.0 * angle.sin())
+            })
+            .collect(),
+    );
+    // Well over the corner's target, so the brakes are on throughout; the
+    // craft's own turn rate is swept to find the one that leaves the
+    // steering loop short of lock. `actual` is `-angular_velocity.y` while
+    // the orientation is the identity, so this is sweeping the rate error
+    // through zero.
+    let mut unsaturated = 0;
+    for step in -200..=200 {
+        let mut state = craft(line.point(0), 200.0);
+        state.body.angular_velocity = Vec3::new(0.0, step as f32 * 0.02, 0.0);
+        let controls = Driver::default().drive(&state, &Context::new(&line, &tuning));
+        if controls.steer_x.abs() >= tuning.trail_saturation {
+            continue;
+        }
+        unsaturated += 1;
+        assert_eq!(
+            controls.airbrake_left, controls.airbrake_right,
+            "unsaturated at steer {}, but the airbrakes differ",
+            controls.steer_x
+        );
+        assert!(
+            controls.airbrake_left > 0.0,
+            "a 60-unit circle at 200 needs brakes"
+        );
+    }
+    assert!(
+        unsaturated > 0,
+        "the sweep never left the loop unsaturated, so this proves nothing"
+    );
+}
+
+/// The other half of the pair above, and the feature itself: once the loop
+/// is out of lock and the craft is over the corner's speed, the brakes stop
+/// being symmetric and the extra goes on the side it is turning toward.
+#[test]
+fn a_saturated_driver_over_its_corner_speed_brakes_asymmetrically() {
+    let tuning = Tuning::default();
+    let line = Line::new(
+        (0..128)
+            .map(|step| {
+                let angle = std::f32::consts::TAU * step as f32 / 128.0;
+                Vec3::new(60.0 * angle.cos(), 0.0, 60.0 * angle.sin())
+            })
+            .collect(),
+    );
+    let controls =
+        Driver::default().drive(&craft(line.point(0), 200.0), &Context::new(&line, &tuning));
+    assert!(
+        controls.steer_x.abs() >= tuning.trail_saturation,
+        "a 60-unit circle at 200 should have the loop at lock, got {}",
+        controls.steer_x
+    );
+    assert_ne!(controls.airbrake_left, controls.airbrake_right);
+    // Steering left means the nose is going left, so the left side carries
+    // the extra.
+    if controls.steer_x < 0.0 {
+        assert!(controls.airbrake_left > controls.airbrake_right);
+    } else {
+        assert!(controls.airbrake_right > controls.airbrake_left);
+    }
+}
+
+/// The sign that `5ad69f3` shipped backwards for months. Positive rate
+/// error is a craft wanting to turn further right; a nose-right yaw needs
+/// `imbalance = L - R` negative, so the **right** side is braked.
+#[test]
+fn the_differential_brakes_the_side_the_nose_is_turning_toward() {
+    let tuning = Tuning::default();
+    let hard_right = Steer {
+        command: 1.0,
+        rate_error: 1.0,
+    };
+    let hard_left = Steer {
+        command: -1.0,
+        rate_error: -1.0,
+    };
+    // Over the target, so the overspeed gate is open.
+    assert!(trail(&hard_right, 100.0, 50.0, &tuning, &Personality::NEUTRAL) > 0.0);
+    assert!(trail(&hard_left, 100.0, 50.0, &tuning, &Personality::NEUTRAL) < 0.0);
+
+    let (left, right) = airbrakes(
+        0.0,
+        trail(&hard_right, 100.0, 50.0, &tuning, &Personality::NEUTRAL),
+        tuning.brake_floor,
+    );
+    assert!(right > left, "turning right brakes the right side");
+}
+
+#[test]
+fn the_differential_is_dead_inside_its_deadband() {
+    let tuning = Tuning::default();
+    let saturated_but_settled = Steer {
+        command: 1.0,
+        rate_error: tuning.trail_deadband,
+    };
+    assert_eq!(
+        trail(
+            &saturated_but_settled,
+            100.0,
+            50.0,
+            &tuning,
+            &Personality::NEUTRAL
+        ),
+        0.0
+    );
+}
+
+#[test]
+fn the_differential_waits_for_the_steering_loop_to_run_out_of_lock() {
+    let tuning = Tuning::default();
+    let unsaturated = Steer {
+        command: tuning.trail_saturation - 0.01,
+        rate_error: 1.0,
+    };
+    assert_eq!(
+        trail(&unsaturated, 100.0, 50.0, &tuning, &Personality::NEUTRAL),
+        0.0
+    );
+}
+
+/// Below the corner's target speed is corner exit, where the grip is wanted
+/// for accelerating. A straight has an infinite target, so this is also
+/// what keeps the differential off one.
+#[test]
+fn the_differential_never_acts_on_corner_exit() {
+    let tuning = Tuning::default();
+    let hard = Steer {
+        command: 1.0,
+        rate_error: 1.0,
+    };
+    assert_eq!(
+        trail(&hard, 49.0, 50.0, &tuning, &Personality::NEUTRAL),
+        0.0
+    );
+    assert_eq!(
+        trail(&hard, 300.0, f32::INFINITY, &tuning, &Personality::NEUTRAL),
+        0.0
+    );
+}
+
+/// A yaw request must never drop a side to zero while braking: both sides
+/// strictly positive is the only thing that engages `ShipState::brake`.
+#[test]
+fn a_differential_never_cancels_the_brake_it_is_layered_on() {
+    let floor = Tuning::default().brake_floor;
+    for brake in [floor, 0.5, 0.8, 1.0] {
+        for differential in [-1.0f32, -0.6, -0.1, 0.0, 0.1, 0.6, 1.0] {
+            let (left, right) = airbrakes(brake, differential, floor);
+            assert!(
+                left > 0.0 && right > 0.0,
+                "brake {brake} with differential {differential} broke the \
+                 both-held gate: {left}, {right}"
+            );
+            assert!((0.0..=1.0).contains(&left) && (0.0..=1.0).contains(&right));
+        }
+    }
+}
+
+/// The reason the interval slides rather than being clipped: a craft
+/// braking flat out has no headroom above, and that is the corner it most
+/// needs to rotate in.
+#[test]
+fn a_differential_survives_a_craft_already_braking_flat_out() {
+    let floor = Tuning::default().brake_floor;
+    let (left, right) = airbrakes(1.0, 0.6, floor);
+    assert!((right - left - 0.6).abs() < 1.0e-6, "got {left}, {right}");
+    assert_eq!(right, 1.0);
+    assert!(left >= floor);
+}
+
+/// With the brake off, one side rises from nothing: yaw and no
+/// deceleration, which is what a differential airbrake physically is.
+#[test]
+fn a_differential_with_no_brake_engages_no_brake() {
+    let (left, right) = airbrakes(0.0, 0.4, Tuning::default().brake_floor);
+    assert_eq!(left, 0.0);
+    assert!((right - 0.4).abs() < 1.0e-6);
+}
+
+#[test]
+fn a_straight_has_no_speed_limit() {
+    let tuning = Tuning::default();
+    let target = corner_target(0.0, &tuning, &Personality::NEUTRAL);
+    assert_eq!(target, f32::INFINITY);
+    assert_eq!(throttle(500.0, target, &tuning), (1.0, 0.0));
+}
+
+#[test]
+fn a_corner_taken_too_fast_brakes_and_taken_slowly_does_not() {
+    let tuning = Tuning::default();
+    let target = corner_target(0.01, &tuning, &Personality::NEUTRAL);
+    assert_eq!(throttle(target * 0.5, target, &tuning), (1.0, 0.0));
+    assert_eq!(throttle(target * 2.0, target, &tuning), (0.0, 1.0));
+}
+
+/// The finding that makes a proportional brake worth having: the command
+/// level is not a deceleration, it is how much cornering grip the
+/// deceleration is bought with. See [`Tuning::brake_floor`].
+#[test]
+fn a_brake_climbs_with_the_overspeed_and_never_starts_below_the_floor() {
+    let tuning = Tuning::default();
+    let target = 100.0;
+
+    // Inside the margin: lift off, but do not touch the airbrakes.
+    assert_eq!(throttle(target * 1.02, target, &tuning), (0.0, 0.0));
+
+    // Just past it: braking begins at the floor, not at an epsilon.
+    let (_, just_past) = throttle(target * 1.051, target, &tuning);
+    assert!(
+        (just_past - tuning.brake_floor).abs() < 0.01,
+        "braking should start at the floor, got {just_past}"
+    );
+
+    // Further past it: more grip spent, monotonically, up to full.
+    let (_, further) = throttle(target * 1.2, target, &tuning);
+    assert!(further > just_past);
+    assert_eq!(throttle(target * 3.0, target, &tuning).1, 1.0);
+}
+
+#[test]
+fn a_driver_never_brakes_below_the_floor() {
+    let tuning = Tuning::default();
+    let target = 100.0;
+    for step in 0..400 {
+        let speed = target * (1.0 + step as f32 * 0.01);
+        let (_, brake) = throttle(speed, target, &tuning);
+        assert!(
+            brake == 0.0 || brake >= tuning.brake_floor,
+            "speed {speed} gave a brake of {brake}, between zero and the floor"
+        );
+    }
+}
+
+/// The turn rate the geometry asks for is bounded, or a craft thrown clear of
+/// the track holds full lock through the whole recovery.
+#[test]
+fn the_requested_turn_rate_is_clamped() {
+    let tuning = Tuning {
+        rate_gain: 1.0,
+        ..Tuning::default()
+    };
+    let mut driver = Driver::default();
+    // Absurdly far off the line, at speed: the raw curvature is enormous.
+    let controls = driver.drive(
+        &craft(Vec3::new(500.0, 0.0, 0.0), 150.0),
+        &Context::new(&straight(), &tuning),
+    );
+    assert!(
+        controls.steer_x >= -1.0,
+        "steer {} left the input range",
+        controls.steer_x
+    );
+    assert!(controls.steer_x.abs() <= tuning.max_turn_rate * tuning.rate_gain + 1e-3);
+}

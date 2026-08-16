@@ -24,7 +24,7 @@ just test-data    # also runs #[ignore]d ground-truth tests that need data/image
 just check-docs   # validates internal links in docs/ (scripts/check-doc-links.py)
 just check-deps   # asserts the two dependency-boundary rules below (scripts/check-dependency-rules.py)
 just check-determinism # asserts no platform transcendental reaches simulation code (scripts/check-transcendentals.py)
-just check-size   # ratchet on file length: nothing new over 1k lines, nothing big grows (scripts/check-file-size.py)
+just check-size   # ratchet on file length (1k lines) and on inline #[cfg(test)] modules (200) (scripts/check-file-size.py)
 just build        # cargo build --workspace
 just docs         # cargo doc --workspace --no-deps --document-private-items
 just audit-leakage # asserts no tracked game content or reproduction (scripts/check-leakage.py)
@@ -134,6 +134,19 @@ review:
    The simulation consumes an input *snapshot type* owned by `oag-gameplay`, never the
    input system itself.
 2. No crate depends on `oag-game` (the composition root).
+
+Two size rules, both enforced by `just check-size` (`scripts/check-file-size.py`) as
+ratchets over a frozen baseline. `BASELINE` holds the 27 files still over rule 1 and each
+may shrink but not grow; `TEST_BASELINE` is **empty**, so rule 2 has no exemptions at all:
+
+1. A Rust file may not exceed **1,000 lines**.
+2. An inline `#[cfg(test)] mod` body may not exceed **200 lines**. Past that it moves to a
+   file of its own - `#[cfg(test)] mod tests;` where the block was and `<module>/tests.rs`
+   beside it, as `crates/physics/src/airbrake.rs` does; `use super::*` still reaches every
+   private item. The rule keys on `#[cfg(test)]` and nothing else, so a `mod` of shared
+   helpers colocates freely, and a dedicated test file is bound by rule 1 alone. Check a
+   move with `cargo nextest list -p <crate>` either side of it: a `mod tests;` that never
+   landed looks exactly like a green run with fewer tests in it.
 
 Gameplay state will be one `World` struct of plain data with fixed-size arrays, no ECS
 (see [ADR-0003](docs/architecture/adr/0003-no-ecs.md)) - deliberately, so the whole world

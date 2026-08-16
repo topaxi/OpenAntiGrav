@@ -1,0 +1,178 @@
+//! What the AI driver in [`super`] is asserted to do, and the fixtures every
+//! theme of it is built from.
+//!
+//! Split out of `driver.rs` under the 200-line cap on inline `#[cfg(test)]`
+//! modules, and split again by subject under the 1,000-line cap on a file;
+//! see `scripts/check-file-size.py`.
+//!
+//! The themes are named `<theme>_tests.rs` rather than `<theme>.rs` because
+//! `scripts/check-transcendentals.py` decides what is test code from the file
+//! stem alone, and a theme that builds a fixture corner with `cos` is only
+//! legal under a name that stem recognises.
+
+use super::*;
+use crate::field::Rival;
+use crate::line::Frame;
+use oag_core::math::{Quat, Vec3};
+use oag_physics::Body;
+
+mod line_following_tests;
+mod personality_tests;
+mod provocation_tests;
+mod ramming_tests;
+mod yielding_tests;
+
+fn placed(place: u8) -> Field {
+    Field {
+        place,
+        ..Field::EMPTY
+    }
+}
+
+fn stewing(driver: &mut Driver, line: &Line, field: &Field, personality: &Personality) {
+    let tuning = Tuning::default();
+    driver.stew(
+        &Context {
+            line,
+            tuning: &tuning,
+            pilot: &Pilot::BALANCED,
+            field,
+        },
+        personality,
+    );
+}
+
+fn alongside(offset: f32) -> Field {
+    Field {
+        alongside: Some(Rival {
+            slot: 2,
+            gap: 1.0,
+            offset,
+            closing: 0.0,
+            range: offset.abs(),
+            cos_bearing: 0.0,
+        }),
+        ..Field::EMPTY
+    }
+}
+
+fn shove(driver: &Driver, state: &ShipState, line: &Line, field: &Field, ram: f32) -> Sideshift {
+    let tuning = Tuning::default();
+    driver.ram(
+        state,
+        &Context {
+            line,
+            tuning: &tuning,
+            pilot: &Pilot::BALANCED,
+            field,
+        },
+        &Personality {
+            ram,
+            ..Personality::NEUTRAL
+        },
+    )
+}
+
+fn rival_behind(offset: f32, gap: f32, closing: f32) -> Field {
+    Field {
+        behind: Some(Rival {
+            slot: 2,
+            gap: -gap,
+            offset,
+            closing,
+            range: gap,
+            cos_bearing: -1.0,
+        }),
+        ..Field::EMPTY
+    }
+}
+
+fn across(personality: &Personality, line: &Line, field: &Field) -> f32 {
+    let tuning = Tuning::default();
+    let aim = line.aim(0, 40.0);
+    let lateral = aim.corridor.expect("fixture has a corridor").lateral;
+    Driver::seeded(11)
+        .drift(
+            &aim,
+            40.0,
+            &Context {
+                line,
+                tuning: &tuning,
+                pilot: &Pilot::BALANCED,
+                field,
+            },
+            personality,
+        )
+        .dot(lateral)
+}
+
+fn straight() -> Line {
+    Line::new(
+        (0..64)
+            .map(|step| Vec3::new(0.0, 0.0, -10.0 * step as f32))
+            .collect(),
+    )
+}
+
+/// A craft at the origin pointing down `-Z`, which is [`Body::forward`].
+fn craft(position: Vec3, speed: f32) -> ShipState {
+    ShipState {
+        body: Body {
+            position,
+            orientation: Quat::IDENTITY,
+            linear_velocity: Vec3::new(0.0, 0.0, -speed),
+            ..Body::default()
+        },
+        ..ShipState::default()
+    }
+}
+
+/// A straight with a corridor 8 units either side of the line.
+fn straight_with_corridor() -> Line {
+    let points: Vec<Vec3> = (0..64)
+        .map(|step| Vec3::new(0.0, 0.0, -10.0 * step as f32))
+        .collect();
+    let corridor = points
+        .iter()
+        .map(|_| Frame {
+            // The line runs along `-Z` and `Body::right` is `orientation *
+            // X`, so the driver's right is `+X`. The disc's own
+            // `sample.lateral` points the same way.
+            lateral: Vec3::X,
+            left: -8.0,
+            right: 8.0,
+        })
+        .collect();
+    Line::with_corridor(points, corridor)
+}
+
+/// An arc bending to the driver's right, with an even corridor.
+///
+/// Built the same way `tests/closed_loop.rs` builds the oval's: the chord
+/// direction crossed with world up, which is only legitimate because this
+/// fixture is flat.
+fn right_hand_corner(radius: f32) -> Line {
+    let points: Vec<Vec3> = (0..96)
+        .map(|step| {
+            let angle = step as f32 * 0.02;
+            // Toward `+X`, which is the driver's right on a line running
+            // along `-Z`.
+            Vec3::new(radius - radius * angle.cos(), 0.0, -radius * angle.sin())
+        })
+        .collect();
+    let corridor = points
+        .iter()
+        .enumerate()
+        .map(|(at, _)| {
+            let next = points[(at + 1).min(points.len() - 1)];
+            let here = points[at.min(points.len() - 2)];
+            let along = (next - here).normalize_or_zero();
+            Frame {
+                lateral: along.cross(Vec3::Y).normalize_or_zero(),
+                left: -8.0,
+                right: 8.0,
+            }
+        })
+        .collect();
+    Line::with_corridor(points, corridor)
+}

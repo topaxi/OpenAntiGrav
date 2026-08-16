@@ -30,7 +30,7 @@ jobs:
       # only if somebody reads which hash moved.
       - name: Assert no platform transcendental reaches simulation code
         run: python3 scripts/check-transcendentals.py
-      - name: Assert no Rust file grew past its ceiling
+      - name: Assert no Rust file or inline test module grew past its ceiling
         run: python3 scripts/check-file-size.py
 
   docs:
