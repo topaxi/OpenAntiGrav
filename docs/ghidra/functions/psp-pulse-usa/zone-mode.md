@@ -65,7 +65,7 @@ flies one shared hull regardless of team - the per-team folder only supplies tha
 elsewhere in the format. Not checked against the PS2 disc (a different WAD
 layout, `WADS2.WAD` rather than `Data.wad`), so this is PSP-only for now.
 
-Implemented in [`oag_game::race::ship_entry_name`](../../../../crates/game/src/race.rs).
+Implemented in [`oag_game::race::ship_entry_name`](../../../../crates/game/src/race/assets.rs).
 
 ## A speed pad is worth 100 points
 

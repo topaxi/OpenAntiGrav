@@ -1,0 +1,121 @@
+//! What a running race says about itself: one tick's telemetry, the wrong-way
+//! test, and the HUD's readout.
+//!
+//! Split out of `race.rs` under the 1,000-line rule in
+//! `scripts/check-file-size.py`; a move, with no behaviour change.
+
+use super::*;
+
+impl Race {
+    /// What the ship did, as of the last tick.
+    #[must_use]
+    pub fn telemetry(&self) -> Telemetry {
+        let ship = self.ship();
+        let position = ship.physics.body.position;
+        let (spline_distance, height_above_spline) =
+            self.spline
+                .nearest(position)
+                .map_or((f32::NAN, f32::NAN), |(_, sample, distance)| {
+                    let up = (-Vec3::from_array(sample.down)).normalize_or_zero();
+                    (distance, (position - Vec3::from_array(sample.pos)).dot(up))
+                });
+
+        Telemetry {
+            tick: self.world.tick,
+            position,
+            speed: ship.physics.body.linear_velocity.length(),
+            pickup: ship.pickup.weapon,
+            projectiles: self.world.projectiles.live(),
+            grounded: ship.physics.grounded,
+            spline_distance,
+            height_above_spline,
+        }
+    }
+
+    /// Whether the ship is pointing back down the track.
+    ///
+    /// `dot(craft_forward, sample.tangent) < 0`. **The tangent, not the sample
+    /// index** - `HANDOVER.md` records index order as unusable for this, because
+    /// `Spline::from_track` concatenates paths in file order rather than travel
+    /// order, and on a slow capture most windows step by zero. The dot product has
+    /// neither failure mode and reads `+0.9999` against `-0.9999`.
+    ///
+    /// [`ai_order`] did not change that. It gives the *drivers* a travel-ordered
+    /// view; this reads `Spline::nearest`, which is still the whole table in
+    /// file order, and has to be - the player can be anywhere the track is,
+    /// including on a branch the lap never drives.
+    ///
+    /// `false` when the ship is not near the spline at all, which is the safe way
+    /// round: a spurious warning is worse than a missing one.
+    #[must_use]
+    pub fn wrong_way(&self) -> bool {
+        let ship = self.ship();
+        let Some((_, sample, _)) = self.spline.nearest(ship.physics.body.position) else {
+            return false;
+        };
+        let tangent = Vec3::from_array(sample.tangent).normalize_or_zero();
+        ship.physics.body.forward().dot(tangent) < 0.0
+    }
+
+    /// What the HUD shows, as of the last tick.
+    ///
+    /// Separate from [`Telemetry`], which is a log line and carries diagnostics
+    /// no player sees. The fields with no source yet are left at their "unknown"
+    /// value rather than filled with a plausible number - `lap` and `place` read
+    /// zero, and [`crate::hud`] omits a widget rather than claiming a value it does
+    /// not have. See `docs/ui/hud.md`.
+    #[must_use]
+    pub fn readout(&self) -> crate::hud::Readout {
+        let ship = self.ship();
+        let race = &self.world.race;
+        // Zero still means "unknown", and a track with no closed ring still has
+        // no lap counter - the widget is omitted rather than reading 1 of 3 on a
+        // course that cannot tell.
+        let counted = self.course.is_some();
+        crate::hud::Readout {
+            speed_kmh: ship.physics.body.linear_velocity.length()
+                * oag_render::exhaust::SPEED_TO_KMH,
+            speed_full_kmh: crate::hud::DEFAULT_SPEED_FULL_KMH,
+            // The ship's own pool, which wall contact spends and absorbing a
+            // pickup pays back into - `oag_physics::damage`. (This comment said
+            // "nothing depletes this yet" until 2026-08-11, three subsystems
+            // after it stopped being true.)
+            shield: ship.physics.shield,
+            shield_max: ship.handling.dimensions.shield,
+            lap: if counted { race.lap } else { 0 },
+            // A speed lap and a Zone run have no lap target. Zero is what the HUD
+            // already reads as "unknown" and it omits the "of N" half.
+            laps: race.laps_target.filter(|_| counted).unwrap_or(0),
+            // The player's place in the field, from the same table the results
+            // will read - [`Self::player_place`], slot 0 of [`Self::places`].
+            //
+            // Two gates, both meaning "there is no place to report" rather than
+            // "the place is one". `counted`, because with no closed ring there is
+            // no distance round the circuit to order the field by and
+            // [`Self::places`] answers "everyone is first" - honest as a return
+            // value and a lie on screen. And a field of **more than one craft**,
+            // because a place is a position among opponents: a time trial, a speed
+            // lap and a Zone run all grid the player alone, and so does a single
+            // race on a track with no authored `Start Position` node. `1 / 1` is
+            // arithmetic rather than a standing, and the widget group is omitted
+            // the same way the lap group is on a track that cannot count.
+            place: if counted && self.world.ship_count > 1 {
+                u32::from(self.player_place())
+            } else {
+                0
+            },
+            ships: u32::from(self.world.ship_count),
+            race_ticks: self.world.tick,
+            lap_ticks: if counted {
+                race.lap_ticks(self.world.tick)
+            } else {
+                self.world.tick
+            },
+            best_lap_ticks: race.best_lap_ticks,
+            wrong_way: self.wrong_way(),
+            zone: race.zone.into(),
+            score: race.score,
+            pickup: ship.pickup.weapon,
+        }
+    }
+}

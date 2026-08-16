@@ -1,0 +1,486 @@
+//! The headless capture path: advance a race a fixed number of ticks, draw one
+//! frame without a window, and write it out.
+//!
+//! Split out of `race.rs` under the 1,000-line rule in
+//! `scripts/check-file-size.py`; a move, with no behaviour change.
+
+use super::*;
+
+/// What a headless capture should do before it draws.
+#[derive(Debug, Clone)]
+pub struct CaptureOptions {
+    /// Where to write the PNG.
+    pub path: std::path::PathBuf,
+    /// Ticks to advance the simulation first.
+    pub ticks: u32,
+    /// Buttons held on every one of those ticks.
+    pub held: u32,
+    /// Drive the run from a committed `.inputs` script instead of `held`/
+    /// `pressed` - the same file `scripts/psp-trace.py --script` feeds the
+    /// emulator, so one authored input produces both sides of a visual
+    /// comparison. Ticks past the script's end coast with everything
+    /// released.
+    pub input_script: Option<oag_trace::script::Script>,
+    /// Which control scheme maps the buttons. `[controls] scheme`.
+    ///
+    /// Here rather than left at the default because the novice sideshift is a
+    /// *gesture*, and a headless run is the only way to exercise one without a
+    /// window: `--scheme novice --hold cross,l --press left` is the flick.
+    pub scheme: ControlScheme,
+    /// Buttons pressed and released on alternating ticks, for gestures that read
+    /// an edge rather than a level.
+    ///
+    /// The same convention the front-end capture uses, so `--press` means one
+    /// thing across the whole tool. A tap every other tick is well inside the
+    /// veteran sideshift's `0.25 s` window, which makes `--press l` a double-tap
+    /// generator.
+    pub pressed: u32,
+    /// Image size.
+    pub size: (u32, u32),
+    /// Print a telemetry line every this many ticks. Zero prints none.
+    pub log_every: u32,
+    /// Keep the player's pickup slot topped up with this weapon.
+    ///
+    /// **A debug affordance for captures, and the reason it exists is worth
+    /// keeping.** A weapon is only visible once something fires it, and a
+    /// capture holds the throttle without steering, so it never crosses a
+    /// `Weapon Pad` and never receives a pickup. Every visual change to a
+    /// projectile was therefore unverifiable from a screenshot - two rocket
+    /// changes shipped blind before this existed, and one was wrong: three
+    /// pieces of track scenery were read as a fanned volley. See
+    /// [`Race::rocket_model_matrices`].
+    ///
+    /// Written **outside** [`Race::tick`], only when the slot is already empty,
+    /// so firing still spends it and nothing here reaches a determinism hash.
+    pub give: Option<oag_formats::weapons::Weapon>,
+    /// The shape to draw at inside the frame, leaving bars.
+    ///
+    /// A capture is a picture of a window, so it letterboxes the way a window
+    /// does. At the default `--size`, which is the PSP's own shape, every value
+    /// of this fills the frame and nothing changes.
+    pub aspect: crate::display::Aspect,
+    /// Anisotropic filtering level for the track and ship textures.
+    pub anisotropy: Anisotropy,
+    /// Whether the recovered bloom runs - see `crate::settings::Graphics::bloom`,
+    /// which defaults it **off** until its magnitude is calibrated.
+    pub bloom: bool,
+    /// Which adapter to draw with, for the same reason `aspect` and `fov` are
+    /// here: a capture is only evidence about what a player sees if it was
+    /// drawn on the device they see it on. A driver is exactly the kind of
+    /// thing a rendering difference gets blamed on, so a capture that quietly
+    /// used a different one would be the wrong picture to argue from.
+    ///
+    /// There is no surface here, so an adapter that could not present is still
+    /// eligible - which is the one way this list can be wider than the menu's.
+    pub renderer: crate::display::Renderer,
+    /// The field-of-view setting, for the same reason `aspect` is here: a
+    /// capture should frame what a player at these settings would have seen.
+    pub fov: crate::display::Fov,
+    /// Whether the view frustum culls before the frame is drawn.
+    ///
+    /// Honoured rather than forced off, so that the screenshot comparison this
+    /// project already claims for `[graphics] frustum_culling` can actually be
+    /// run from a capture, and so a report of geometry going missing can be
+    /// attributed to a tier rather than guessed at.
+    pub frustum_culling: bool,
+    /// Whether the authored PVS culls before the frame is drawn.
+    ///
+    /// Here, and honoured, so that `--screenshot` with `[graphics] pvs_culling`
+    /// on and off produces two images to compare. **That comparison is the only
+    /// way to show the association rule in `oag_render::pvs` places geometry in
+    /// the right sections rather than merely in some section**, and it is the
+    /// bar that setting has to clear before it can default on - the same one
+    /// frustum culling passed. Frustum culling stays off in a capture either
+    /// way, so the two images differ by this tier alone.
+    pub pvs_culling: bool,
+    /// Whether the inferred trackside texture animations run.
+    ///
+    /// Honoured for the same reason the two culling tiers are: two captures
+    /// differing only by this setting are how `[graphics] animated_textures`
+    /// gets checked against the running original, and that check is the whole
+    /// reason the setting exists.
+    pub animated_textures: bool,
+    /// How strong the boost's field-of-view kick is. Honoured for a sharper
+    /// version of the same reason: the effect is **authored**, so a capture meant
+    /// to be compared against the running original wants it at
+    /// [`crate::display::BoostFovKick::OFF`], and that comparison is the only
+    /// way anyone will find out whether the original has something like it.
+    pub boost_fov_kick: crate::display::BoostFovKick,
+    /// Which of the three perspectives to render from.
+    ///
+    /// Honoured because a headless capture is the **only** way to get a frame of
+    /// the cockpit view without a window, and therefore the only way anyone
+    /// checks it: `--camera-view internal --screenshot`. `[graphics] camera_view`.
+    pub camera_view: crate::display::CameraView,
+    /// Which anti-aliasing the scene draws with. Honoured for the same reason
+    /// the two culling tiers are: a capture is how `[graphics] anti_aliasing`
+    /// gets compared against itself off and against the running original.
+    pub anti_aliasing: crate::display::AntiAliasing,
+    /// Force the exhaust into the state it holds this many seconds after a
+    /// speed pad entry, at saturated intensity, before the frame is drawn.
+    ///
+    /// `--pose-boost`. A posed capture (`--pose-from --ticks 0`) never crosses
+    /// a pad, so this is the only way a frame comparison can see the boost
+    /// visuals at a chosen age. The state is reached by replaying
+    /// [`Exhaust::advance`] rather than by poking fields, so what is captured
+    /// is the same trajectory a real crossing produces.
+    pub pose_boost: Option<f32>,
+    /// With [`Self::pose_boost`]: the intensity at the entry tick, instead of a
+    /// saturated ramp. `--pose-intensity`.
+    ///
+    /// See [`Race::force_boost_state`] for why a saturated default is the wrong
+    /// one to compare a teleported capture against.
+    pub pose_intensity: Option<f32>,
+    /// With [`Self::pose_boost`]: the speed in units/s to advance the exhaust
+    /// at, instead of `120`. `--pose-speed`.
+    pub pose_speed: Option<f32>,
+    /// Capture the frame the way a **window** presents it, rather than the
+    /// scene the way it is drawn.
+    ///
+    /// `None` is the ordinary capture: the scene, straight out of the target it
+    /// was drawn into, ungraded, at exactly `size`. That is the right default
+    /// for a bug report, and it is deliberately not a picture of a window - see
+    /// [`crate::upscale`].
+    ///
+    /// `Some` puts the whole presentation path in the way: the render scale,
+    /// the upscaler, the grade and the aspect bars. **This is the only way to
+    /// see an upscaler's output at all**, because the ordinary path never
+    /// reaches the blit, and it is therefore what a still-frame comparison
+    /// between resamplers has to use. It is also, necessarily, an sRGB pipeline
+    /// throughout, exactly as a window is.
+    pub presented: Option<Presented>,
+}
+
+/// [`Presented`] with the scene size worked out.
+#[derive(Debug, Clone, Copy)]
+struct PresentedState {
+    scene_size: (u32, u32),
+    presentation: crate::upscale::Presentation,
+}
+
+/// The settings a `--presented` capture needs that an ordinary one does not.
+#[derive(Debug, Clone, Copy)]
+pub struct Presented {
+    /// What fraction of the aspect rectangle the scene is drawn at.
+    pub render_scale: crate::display::Scale,
+    /// The upscaler, its sharpness, and the grade.
+    pub presentation: crate::upscale::Presentation,
+}
+
+/// Runs a race headless and writes one frame to a PNG.
+///
+/// Through the same [`Scene`] the window draws, for the same reason
+/// [`crate::capture`] goes through the same renderer the front end's window does: a
+/// separate capture path would prove nothing about what a player sees.
+///
+/// `audio` is advanced one step per simulation tick, in the same loop, so a
+/// `--dump-audio` capture is as long as the ticks it was given whatever the
+/// machine's speed. Writing the WAV is the caller's, not this function's: a
+/// capture reached from [`crate::capture::run`] has already accumulated the
+/// front end's ticks into the same buffer, and finishing here would truncate
+/// the file to the race leg.
+///
+/// # Errors
+///
+/// Propagates adapter and device creation, pipeline building, the readback map and
+/// the file write.
+pub fn capture(
+    loaded: Loaded,
+    options: &CaptureOptions,
+    audio: &mut crate::audio::Audio,
+) -> Result<()> {
+    let (width, height) = options.size;
+    let Loaded {
+        setup,
+        hud,
+        track_model,
+        liveries,
+        collision_model,
+        sky_model,
+        pad_model,
+        weapon_pad_model,
+        rocket_model,
+        fog_volumes,
+        visibility,
+        flare,
+        noise,
+        ..
+    } = loaded;
+    let mode = setup.mode;
+    let mut race = Race::start(setup);
+    race.set_boost_fov_kick(options.boost_fov_kick);
+    race.set_camera_view(options.camera_view);
+    race.set_control_scheme(options.scheme);
+
+    let mut held = HeldButtons::new(options.held);
+    for tick in 0..options.ticks {
+        if let Some(script) = &options.input_script {
+            held.set_held(script.at(tick as usize).buttons);
+        } else {
+            held.pulse(options.pressed, options.held, tick.is_multiple_of(2));
+        }
+        let snapshot = held.snapshot();
+        // Before the tick, so `spend_pickup` can fire it on this tick's edge.
+        if let Some(weapon) = options.give
+            && race.world.ships[0].pickup.weapon.is_none()
+        {
+            race.world.ships[0].pickup.weapon = Some(weapon);
+        }
+        race.tick(&snapshot);
+        // Inside the tick loop and not beside it, for the reason the exhaust
+        // and the chase camera are advanced from inside `Race::tick`: what a
+        // capture produces has to be a function of the tick count and nothing
+        // else, or the same command line gives a different file on a slower
+        // machine.
+        audio.tick();
+        if options.log_every > 0 && race.world.tick.is_multiple_of(u64::from(options.log_every)) {
+            println!("{}", describe(&race.telemetry()));
+        }
+    }
+    if let Some(age) = options.pose_boost {
+        race.force_boost_state(age, options.pose_intensity, options.pose_speed);
+    }
+    println!(
+        "after {} tick(s): {}",
+        race.world.tick,
+        describe(&race.telemetry())
+    );
+
+    let instance = crate::adapter::instance();
+    let adapter = crate::adapter::choose(&instance, None, &options.renderer)?.adapter;
+    let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+        label: Some("oag-game race offscreen"),
+        ..Default::default()
+    }))
+    .context("requesting the device")?;
+
+    // **`Rgba8Unorm` on both paths now**, because every shader in this pipeline
+    // writes gamma-space values and nothing may encode them again - see
+    // [ADR-0020](../../../docs/architecture/adr/0020-gamma-authoritative-colour-space.md).
+    //
+    // `--presented` used to be `Rgba8UnormSrgb` on the grounds that it is a
+    // picture of a *window* and should take the window's format. It still is,
+    // and it still does: the window stopped encoding in the same change. That
+    // the two agreed on the label and not on the value is what made a
+    // `--screenshot` and a `--presented` capture of the same frame disagree
+    // about the boost plume by up to 73/255, the plume being the one surface
+    // whose texels were already re-encoded to compensate for the old upload.
+    // The offscreen target's non-sRGB twin, and therefore FSR 1, still work -
+    // `remove_srgb_suffix` on a format that has no suffix is the identity. See
+    // `crate::upscale`.
+    let format = wgpu::TextureFormat::Rgba8Unorm;
+    // The scene's own size, which presented is the aspect rectangle scaled and
+    // otherwise is the whole capture.
+    let presented = options.presented.map(|state| PresentedState {
+        scene_size: crate::upscale::target_size(
+            crate::display::viewport((width, height), options.aspect),
+            state.render_scale,
+            device.limits().max_texture_dimension_2d,
+        ),
+        presentation: state.presentation,
+    });
+    // What the scene - and so its depth buffer - is actually drawn at. A depth
+    // attachment whose size does not match the colour one is a validation
+    // error, not a bad picture.
+    let scene_size = presented.map_or((width, height), |state| state.scene_size);
+    let scene = Scene::new(
+        &device,
+        &queue,
+        track_model,
+        &liveries,
+        collision_model,
+        sky_model,
+        pad_model,
+        weapon_pad_model,
+        mode,
+        rocket_model,
+        flare,
+        noise,
+        format,
+        scene_size,
+        options.anisotropy,
+        options.bloom,
+        visibility,
+        options.anti_aliasing,
+        fog_volumes,
+    )?;
+
+    let target = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("race capture"),
+        size: wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format,
+        // `TEXTURE_BINDING` because the bloom's bright pass samples the frame
+        // it was just drawn into - see `oag_render::post::bloom`.
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+            | wgpu::TextureUsages::COPY_SRC
+            | wgpu::TextureUsages::TEXTURE_BINDING,
+        view_formats: &[],
+    });
+    let surface = target.create_view(&wgpu::TextureViewDescriptor::default());
+    // Where the scene is drawn. Presented, that is an offscreen target at the
+    // render scale which the blit later stretches into the aspect rectangle -
+    // the same two-step a window does. Otherwise it is the capture texture
+    // itself, and the scene draws into a sub-rectangle of it directly.
+    let mut framebuffer = match presented {
+        Some(state) => Some(
+            crate::upscale::Framebuffer::new(&device, format, state.scene_size)
+                .context("building the upscale pipeline")?,
+        ),
+        None => None,
+    };
+    let view = match &framebuffer {
+        Some(framebuffer) => framebuffer.view().clone(),
+        None => surface.clone(),
+    };
+
+    // Texture copies want rows aligned to 256 bytes, so the readback buffer is
+    // usually wider than the image and needs unpadding.
+    let unpadded = width as usize * 4;
+    let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as usize;
+    let padded = unpadded.div_ceil(align) * align;
+    let readback = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("readback"),
+        size: (padded * height as usize) as u64,
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        label: Some("race capture"),
+    });
+    // Shaped the same way a window is, so a screenshot frames what a player
+    // would have seen at that size rather than a differently-cropped picture.
+    // Presented, the offscreen target *is* that rectangle and the bars are what
+    // the blit clears around it, so the scene fills its target instead.
+    let rect = crate::display::viewport((width, height), options.aspect);
+    let viewport = match presented {
+        Some(state) => (
+            0.0,
+            0.0,
+            state.scene_size.0 as f32,
+            state.scene_size.1 as f32,
+        ),
+        None => rect,
+    };
+    // Both tiers follow their settings, because two captures differing only by
+    // one of them are how that tier gets validated - see
+    // `CaptureOptions::frustum_culling` and `CaptureOptions::pvs_culling`.
+    scene.render(
+        &device,
+        &queue,
+        &mut encoder,
+        &view,
+        &race,
+        viewport,
+        options.fov,
+        options.frustum_culling,
+        options.pvs_culling,
+        options.animated_textures,
+    );
+
+    // The HUD, into the same target. Without this a race screenshot would show
+    // the track and no HUD at all, because unlike the front end's capture this
+    // path has no `Framebuffer` and so no overlay pass of its own - which would
+    // make `--screenshot` useless for the one thing it is most wanted for.
+    //
+    // **Every path is `Rgba8Unorm` since ADR-0020** - this capture, a
+    // `--presented` capture and the window alike - so `Renderer::new`'s fork of
+    // the sprite sheet's texture format on `format.is_srgb()` now always takes
+    // the raw side, and the HUD's art reaches all three the same way. It used
+    // to differ: an ordinary capture was raw while the window and `--presented`
+    // were sRGB, which is exactly the disagreement the ADR removed (measured at
+    // up to `73/255` on the plume). Text and fills go through the R8 coverage
+    // atlas and were unaffected either way. See `docs/ui/hud.md`.
+    match crate::hud::Overlay::new(&device, &queue, format, &hud) {
+        Ok(Some(mut overlay)) => overlay.draw(
+            &device,
+            &queue,
+            &mut encoder,
+            &view,
+            &race.readout(),
+            viewport,
+        ),
+        Ok(None) => println!("no HUD layout: capturing without one"),
+        Err(why) => println!("the HUD overlay did not build ({why}); capturing without one"),
+    }
+    // The upscaler, the grade and the blit, through exactly the call the
+    // window's frame loop makes.
+    if let (Some(framebuffer), Some(state)) = (framebuffer.as_mut(), presented) {
+        framebuffer.resolve(
+            &device,
+            &queue,
+            &mut encoder,
+            &surface,
+            rect,
+            &state.presentation,
+        );
+    }
+
+    encoder.copy_texture_to_buffer(
+        target.as_image_copy(),
+        wgpu::TexelCopyBufferInfo {
+            buffer: &readback,
+            layout: wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(padded as u32),
+                rows_per_image: Some(height),
+            },
+        },
+        wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        },
+    );
+    queue.submit(Some(encoder.finish()));
+
+    let slice = readback.slice(..);
+    slice.map_async(wgpu::MapMode::Read, |_| {});
+    device
+        .poll(wgpu::PollType::wait_indefinitely())
+        .context("waiting for the GPU")?;
+    let mapped = slice
+        .get_mapped_range()
+        .context("mapping the readback buffer")?;
+    let mut pixels = Vec::with_capacity(unpadded * height as usize);
+    for row in mapped.chunks(padded).take(height as usize) {
+        pixels.extend_from_slice(&row[..unpadded]);
+    }
+    drop(mapped);
+    readback.unmap();
+
+    let png = oag_formats::png::encode_rgba(width, height, &pixels);
+    std::fs::write(&options.path, png)
+        .with_context(|| format!("writing {}", options.path.display()))?;
+    println!("wrote {} ({width}x{height})", options.path.display());
+    Ok(())
+}
+
+/// One telemetry line, for a log or a report.
+#[must_use]
+pub fn describe(telemetry: &Telemetry) -> String {
+    format!(
+        "tick {:>5}  speed {:>8.2}  grounded {:>3.1}  spline {:>8.2}  height {:>8.2}  at {:.1}\
+         {}",
+        telemetry.tick,
+        telemetry.speed,
+        telemetry.grounded,
+        telemetry.spline_distance,
+        telemetry.height_above_spline,
+        telemetry.position,
+        match (telemetry.pickup, telemetry.projectiles) {
+            (None, 0) => String::new(),
+            (held, count) => {
+                let held = held.map_or("-", oag_formats::weapons::Weapon::as_type);
+                format!("  holding {held}  in the air {count}")
+            }
+        },
+    )
+}

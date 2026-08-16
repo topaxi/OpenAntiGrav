@@ -396,7 +396,7 @@ types - see
 [shield.md](shield.md#g_weapons_enableds-per-mode-default-spelled-out-and-checked-against-every-race-type),
 which is where `Race_ReadSetupOptions` (the writer of the global this branch
 reads) is decoded in full. `oag_race::Mode::weapons_enabled` is the port, and
-`Scene::new` in `crates/game/src/race.rs` is where the reimplementation makes
+`Scene::new` in `crates/game/src/race/scene.rs` is where the reimplementation makes
 the same "decoded, but never uploaded to the GPU" choice this branch does -
 see its own doc comment for why the mesh decode itself stays unconditional
 where this branch's visibility clear does not.

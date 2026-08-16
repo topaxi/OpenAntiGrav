@@ -4,7 +4,9 @@
 `crates/game/src/race.rs` reached **11,294 lines** before anything measured it,
 which is thirty times this tree's median file and more than twice its next
 largest. Nothing was wrong with any single commit that grew it; that is the
-failure mode a review cannot catch, because every diff was small.
+failure mode a review cannot catch, because every diff was small. It is 795
+lines now, and the twenty-four modules it split into are the worked example of
+what these two rules ask for.
 
 A plain limit is not adoptable here - 40 of 250 files were already over 1,000
 lines when this landed, and failing the gate on all of them means turning the
@@ -104,13 +106,13 @@ TEST_LIMIT = 200
 # the original 40 outright. These are ceilings, not targets: each may shrink,
 # none may grow, and a row is deleted the moment its file fits under `LIMIT`.
 #
-# `crates/game/src/race.rs` is the one that motivated the script and is still the
-# highest-priority split in the tree, at 7,751 lines from 11,294 - it is four
-# things (asset loading, the race, the renderer composition, headless capture)
-# with visible seams, and only its tests have moved so far. See HANDOVER.md's
-# open thread.
+# **`crates/game/src/race.rs` is not here any more, and that is what this script
+# was written for.** It motivated the ratchet at 11,294 lines, dropped to 7,751
+# when its test module moved out, and was split along its own seams on
+# 2026-08-16 into `race.rs` plus twenty-four modules under `crates/game/src/race/`
+# - none over 800 lines, all of it move-only. `crates/game/src/main.rs` is the
+# largest thing left.
 BASELINE = {
-    "crates/game/src/race.rs": 7751,
     "crates/game/src/main.rs": 4808,
     "crates/game/tests/race_ground_truth.rs": 2464,
     "crates/formats/src/vex.rs": 2408,
