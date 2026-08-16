@@ -1,11 +1,14 @@
 //! What the composition root in [`super`] is asserted to do: trace-row poses,
 //! the backdrop playhead carried into the menus, and the conversion-state flag.
 //!
-//! Its own file rather than a `#[cfg(test)]` block at the end of `main.rs`:
-//! the boot logic is 4,800 lines and already at the file-length ceiling, so
-//! the tests move out to leave it room. `main.rs` is a crate root and has no
-//! `main/` directory available to it, hence `main_tests.rs` beside it. See
-//! `scripts/check-file-size.py`, which is the rule as a gate.
+//! Its own file rather than a `#[cfg(test)]` block at the end of `main.rs`, and
+//! `main/tests.rs` rather than the `crates/game/tests/` beside it: **an
+//! integration test links the library, not the binary**, so nothing under
+//! `crates/game/tests/` can see `pose_from_trace`, `menu_playhead` or
+//! `parse_progress` at all. This is `crates/physics/src/airbrake.rs`'s
+//! arrangement - `#[cfg(test)] mod tests;` and a `tests.rs` in the module's own
+//! directory - which `main.rs` could not use until the 2026-08-16 split gave a
+//! crate root a directory. See `scripts/check-file-size.py`, the rule as a gate.
 
 use super::*;
 

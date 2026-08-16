@@ -1,0 +1,249 @@
+//! The surface, the device and the queue: one window's worth of wgpu.
+
+use std::sync::Arc;
+
+use anyhow::{Context, Result};
+
+use oag_game::{adapter, display, perf, settings};
+
+use winit::event_loop::ActiveEventLoop;
+use winit::window::Window;
+
+use crate::hints::TITLE;
+use crate::window::{centred_on, choose_monitor, fullscreen, present_modes};
+
+/// The window and the GPU objects, which both stages draw through.
+///
+/// One window and one device for the whole process: the front end reaching
+/// `Launch Game` swaps what is drawn, not what it is drawn with.
+pub(crate) struct Gpu {
+    pub(crate) window: Arc<Window>,
+    pub(crate) device: wgpu::Device,
+    pub(crate) queue: wgpu::Queue,
+    pub(crate) surface: wgpu::Surface<'static>,
+    pub(crate) config: wgpu::SurfaceConfiguration,
+    /// The present modes this surface actually has. See [`Gpu::present_mode`].
+    offered: Vec<wgpu::PresentMode>,
+    /// What the RENDERER row offers. See [`adapter::Chosen::offered`].
+    pub(crate) adapters: Vec<String>,
+    /// What the RENDERER row would have to say to describe this run, which is
+    /// not necessarily what the settings file says: a named adapter that would
+    /// not make a device fell back to the default, and the default is drawing
+    /// with something in particular. See [`adapter::Chosen::in_use`] and the
+    /// row's restart note.
+    pub(crate) in_use: Vec<String>,
+}
+
+/// What one adapter has to hand over before it can be drawn with.
+///
+/// A struct rather than four statements inline because **all four have to
+/// succeed or none of them count**: a named adapter that enumerates fine can
+/// still refuse the device or the surface config, and the recovery for that is
+/// to run the whole sequence again on a different adapter. See
+/// [`Gpu::bring_up`].
+pub(crate) struct BroughtUp {
+    device: wgpu::Device,
+    queue: wgpu::Queue,
+    config: wgpu::SurfaceConfiguration,
+    offered: Vec<wgpu::PresentMode>,
+    adapters: Vec<String>,
+    in_use: Vec<String>,
+}
+
+impl Gpu {
+    /// Everything downstream of picking an adapter, so it can be *re*-run.
+    ///
+    /// Split out because `apply_setting` saves on every keypress: the moment a
+    /// player nudges the RENDERER row, that adapter is in their settings file,
+    /// and if it then cannot make a device the game would not start again. A
+    /// setting you can change from inside the game must not be able to lock you
+    /// out of it, which is the same promise `choose_monitor` makes about a
+    /// screen that has been unplugged - one step further down, where the
+    /// adapter is found but will not serve.
+    fn bring_up(
+        instance: &wgpu::Instance,
+        surface: &wgpu::Surface<'static>,
+        size: winit::dpi::PhysicalSize<u32>,
+        renderer: &display::Renderer,
+    ) -> Result<BroughtUp> {
+        let chosen = adapter::choose(instance, Some(surface), renderer)?;
+        let (device, queue) =
+            pollster::block_on(chosen.adapter.request_device(&wgpu::DeviceDescriptor {
+                label: Some("oag-game"),
+                ..Default::default()
+            }))
+            .context("requesting the device")?;
+        let mut config = surface
+            .get_default_config(&chosen.adapter, size.width.max(1), size.height.max(1))
+            .context("surface is not supported by this adapter")?;
+        // **The window does not encode.** Every shader in this pipeline writes
+        // gamma-space values - the GE blends stored bytes, so that is the space
+        // the whole thing works in - and an sRGB surface would encode them a
+        // second time. See
+        // [ADR-0020](../../../docs/architecture/adr/0020-gamma-authoritative-colour-space.md).
+        //
+        // Forced rather than accepted: `get_default_config` returns whichever
+        // format the adapter lists first, which is the sRGB variant on some
+        // backends and not on others, so leaving it alone would make the
+        // pipeline's colour space a property of the driver. `Renderer::new`
+        // forks the sprite sheet's texture format on `format.is_srgb()` and now
+        // always takes the raw side, which is what keeps authored sprite and
+        // text colours reaching the screen as authored on every path.
+        config.format = config.format.remove_srgb_suffix();
+        config.view_formats = vec![config.format];
+        // Kept because the adapter is not: every later change of the vsync row
+        // has to be checked against this same list, and re-requesting an
+        // adapter to ask would be a second answer to the same question.
+        let offered = surface.get_capabilities(&chosen.adapter).present_modes;
+        // Said here, after the device and the surface config, so the line is
+        // about an adapter that *worked*: an attempt that dies at either of them
+        // prints its own failure and falls back, and one line naming the loser
+        // and another naming the winner would leave a bug report to guess which
+        // one drew the picture. It also has to be said at all - `default` names
+        // nothing a player could look up, and a name this machine no longer has
+        // silently becomes the default. The driver comes with it because "which
+        // llvmpipe" and "which Mesa" are the next questions.
+        let info = chosen.adapter.get_info();
+        println!(
+            "renderer: {} (setting: {renderer}, driver: {} {})",
+            adapter::label(info.backend, &info.name, info.device_type),
+            if info.driver.is_empty() {
+                "unnamed"
+            } else {
+                &info.driver
+            },
+            if info.driver_info.is_empty() {
+                "-"
+            } else {
+                &info.driver_info
+            },
+        );
+        Ok(BroughtUp {
+            device,
+            queue,
+            config,
+            offered,
+            adapters: chosen.offered,
+            in_use: chosen.in_use,
+        })
+    }
+
+    pub(crate) fn new(
+        event_loop: &ActiveEventLoop,
+        settings: &settings::Display,
+        renderer: &display::Renderer,
+    ) -> Result<Self> {
+        // **A windowed window is fixed size, and that is a measurement.** Setting
+        // the minimum and maximum to the same thing is the signal a tiling
+        // compositor floats a window on rather than squeezing it into a column -
+        // measured under niri, which tiles it to a portrait slot without this and
+        // honours the requested size with it. Borderless has to be resizable,
+        // because the compositor is about to resize it to the monitor.
+        //
+        // The renderer does not depend on either: `Race::projection` fits the
+        // field of view to whatever viewport it is given, and `display::viewport`
+        // shapes that viewport, so any window still frames the track correctly.
+        let size = settings.window_size;
+        let borderless = settings.window_mode == display::WindowMode::Borderless;
+        let monitor = choose_monitor(event_loop.available_monitors().collect(), &settings.monitor);
+        let mut attributes = Window::default_attributes()
+            .with_title(TITLE)
+            .with_inner_size(winit::dpi::LogicalSize::new(size.width, size.height))
+            .with_resizable(borderless)
+            .with_fullscreen(fullscreen(settings.window_mode, monitor.clone()));
+        // Borderless carries the choice in the fullscreen request; windowed has
+        // nothing to carry it, so the window is placed on the screen instead.
+        // Asked for at creation rather than moved afterwards, which would open
+        // it on one monitor and jump it to another in view of the player.
+        if let (false, Some(monitor)) = (borderless, &monitor) {
+            attributes = attributes.with_position(centred_on(monitor, size));
+        }
+        let window = Arc::new(
+            event_loop
+                .create_window(attributes)
+                .context("creating the window")?,
+        );
+        // Racing is keyboard/gamepad-only; the cursor has nothing to click on.
+        window.set_cursor_visible(false);
+
+        let instance = adapter::instance();
+        let surface = instance
+            .create_surface(window.clone())
+            .context("creating the surface")?;
+        let size = window.inner_size();
+
+        let brought = match Self::bring_up(&instance, &surface, size, renderer) {
+            Ok(brought) => brought,
+            // A *named* adapter that will not serve is recoverable, and the
+            // recovery has to happen here rather than being left to the player:
+            // the settings file is the only other way back, and a player who
+            // cannot start the game cannot be told that from inside it.
+            Err(e) if !renderer.is_default() => {
+                eprintln!("renderer {renderer} could not be brought up: {e:#}");
+                eprintln!(
+                    "falling back to the default; set graphics.renderer = \"{}\" to keep it there",
+                    display::Renderer::DEFAULT
+                );
+                Self::bring_up(
+                    &instance,
+                    &surface,
+                    size,
+                    &display::Renderer::default_renderer(),
+                )
+                .context("the default renderer would not start either")?
+            }
+            Err(e) => return Err(e),
+        };
+        let BroughtUp {
+            device,
+            queue,
+            config,
+            offered,
+            adapters,
+            in_use,
+        } = brought;
+
+        let mut gpu = Self {
+            window,
+            device,
+            queue,
+            surface,
+            config,
+            offered,
+            adapters,
+            in_use,
+        };
+        gpu.config.present_mode = gpu.present_mode(settings.vsync);
+        gpu.surface.configure(&gpu.device, &gpu.config);
+        Ok(gpu)
+    }
+
+    /// The best present mode this surface offers for a vsync setting.
+    ///
+    /// Falls back to `Fifo`, which Vulkan requires every device to have, and
+    /// says so once rather than silently: "vsync off did nothing" is otherwise
+    /// a bug report about this build rather than a fact about the driver.
+    fn present_mode(&self, vsync: perf::Vsync) -> wgpu::PresentMode {
+        for wanted in present_modes(vsync) {
+            if self.offered.contains(wanted) {
+                return *wanted;
+            }
+        }
+        println!(
+            "note: this surface offers {:?}, so vsync {vsync} falls back to Fifo",
+            self.offered
+        );
+        wgpu::PresentMode::Fifo
+    }
+
+    /// Puts `vsync` into effect.
+    pub(crate) fn set_vsync(&mut self, vsync: perf::Vsync) {
+        self.config.present_mode = self.present_mode(vsync);
+        self.surface.configure(&self.device, &self.config);
+    }
+
+    /// The viewport, which every stage draws into.
+    pub(crate) fn size(&self) -> (u32, u32) {
+        (self.config.width, self.config.height)
+    }
+}

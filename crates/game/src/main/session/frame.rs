@@ -1,0 +1,381 @@
+//! One frame: the fixed timestep, the stage update, and the draw.
+
+use anyhow::Result;
+
+use oag_game::frontend::{self};
+use oag_game::keys;
+use oag_game::{boot, display, menu, movie, perf, race, report, settings, upscale};
+use oag_gameplay::input::button;
+
+use crate::hints::SHELL_KEYS;
+use crate::stage::Stage;
+
+use super::Session;
+
+impl Session {
+    pub(crate) fn frame(&mut self) -> Result<()> {
+        // Before this frame's ticks, so the front end's own first frame is drawn
+        // on the frame after the fade ended rather than a frame later still.
+        if let Err(e) = self.finish_loading() {
+            eprintln!("cannot open the front end: {e:#}");
+            self.quit = true;
+            return Ok(());
+        }
+
+        // Checked before this frame's ticks rather than after them, so the frame
+        // that entered `Launch Game` is drawn once before the load stalls the
+        // window.
+        // `Launch Game` opens **our menus**, not a race. The original has a main
+        // menu between the picker and a track and this build now has one too; it
+        // is simply not the original's, which is why the state whose transition
+        // gets us here is still spelled the way the disc spells it while what it
+        // reaches is not a recovered screen at all. See `oag_game::menu`.
+        if !self.launched
+            && matches!(&self.stage, Stage::Frontend(stage) if stage.frontend.is_finished())
+        {
+            self.launched = true;
+            println!("\n{}: opening the menus", frontend::states::LAUNCH_GAME);
+            // Whatever the picker settled on, remembered for next time. Taken
+            // here rather than in the picker because this is where the front
+            // end is known to be finished with it, and because `menu.rs` and
+            // `frontend.rs` both stay ignorant of where settings live.
+            if let Stage::Frontend(stage) = &self.stage
+                && let Some(language) = stage.frontend.chosen()
+                && self.settings.language.as_deref() != Some(language)
+            {
+                self.settings.language = Some(language.to_string());
+                if let Err(e) = settings::save(&self.settings) {
+                    eprintln!("could not save the chosen language: {e:#}");
+                }
+            }
+            if let Err(e) = self.open_menus() {
+                eprintln!("cannot open the menus: {e:#}");
+            } else {
+                println!("\n{SHELL_KEYS}");
+            }
+        }
+
+        // Fixed timestep, per ADR-0007: the simulation steps at exactly 1/60
+        // whatever the window is doing. The clock's own catch-up cap is what keeps
+        // the race load above from being paid back as a burst of ticks.
+        let now = std::time::Instant::now();
+        let elapsed = now.duration_since(self.last);
+        self.last = now;
+        self.schedule_next_frame(now);
+        // The presentation layer's only reader of the clock, and it reads the
+        // same value the timestep does rather than taking its own.
+        //
+        // **A load is not a frame time.** Opening the menus or building a race
+        // stalls the loop for a few hundred milliseconds, and that stall lands
+        // in exactly one `elapsed` - the same one, whichever side of this the
+        // stage change happened on, because a stage only ever changes above or
+        // below here. Recording it would put one 1000 ms column across the
+        // graph for the two seconds a player is most likely to be looking at
+        // it, so the frame that carries a load is dropped instead.
+        if self.stalled {
+            self.meter.clear();
+            self.stalled = false;
+        } else {
+            self.meter.record(elapsed.as_secs_f32());
+        }
+        let nanos = u64::try_from(elapsed.as_nanos()).unwrap_or(u64::MAX);
+        let steps = self.clock.advance(nanos);
+        let dt = f64::from(self.clock.rate().dt());
+
+        // Before the snapshot below, because it is what makes the snapshot
+        // start meaning anything: `--prefetch` may not run until the boot's own
+        // movies are done with the cache, so this is the frame that starts it.
+        // A no-op on every frame but one, and on every run without the flag.
+        if matches!(&self.stage, Stage::Loading(stage) if stage.media_ready()) {
+            self.start_prefetch();
+        }
+
+        // One snapshot for the whole frame, taken outside the tick loop: it is a
+        // lock and a clone, and the ticks in one frame cannot have seen the
+        // worker at different points anyway.
+        let (phase, progress) = self.loading_progress();
+
+        for _ in 0..steps {
+            // Ends the devices' tick for both stages. A race reads the snapshot's
+            // axes; the front end reads the button edges the same call computed,
+            // through `buttons_mut`, because it needs `consume_press` and a
+            // snapshot is a value.
+            let snapshot = self.controls.snapshot();
+            // The audio's whole tick, and it is inside this loop rather than
+            // beside it on purpose. Cue emission and mixer control are driven by
+            // the tick count, exactly as the exhaust and the chase camera are
+            // (see `race::Race::tick`), so a headless capture and a window
+            // produce the same sound at the same tick. There is deliberately no
+            // per-frame counterpart: with a device attached `cpal` drains the
+            // mixer from its own callback thread, and with none the offline
+            // dump below is the only reader.
+            //
+            // The movie's playhead is read **before** that call, so that this
+            // loop and `capture::run` pace the picture against the same
+            // measurement - where the sound had got to at the end of the
+            // previous tick - rather than differing by one tick depending on
+            // which side of `tick` each happened to sit. See
+            // `movie::Player::follow`.
+            let movie_playhead = self.audio.movie_playhead();
+            self.audio.tick();
+            // The in-race camera cycle, read off the shared `Input` and consumed,
+            // exactly as the front end and the menus consume their own presses -
+            // a press seen on two devices is one press and there is one place to
+            // clear it.
+            //
+            // Deliberately here and **not** inside `Race::tick`. The tick takes an
+            // `InputSnapshot` by value and the selected view is not part of one, so
+            // keeping the cycle outside is what makes "cycling the camera cannot
+            // move a simulation bit" true by construction rather than by argument.
+            // It also puts the settings file - which `Race` cannot see - in reach,
+            // which is what persists the choice across a restart. Before the tick
+            // rather than after, so the frame this tick produces is already drawn
+            // from the new view.
+            if matches!(self.stage, Stage::Race(_))
+                && self.controls.buttons().is_pressed(button::SELECT)
+            {
+                self.controls.buttons_mut().consume_press(button::SELECT);
+                self.cycle_camera_view();
+            }
+            match &mut self.stage {
+                // Stepped in the tick loop with everything else, so the wave's
+                // heartbeat runs at the simulation's fixed 60 Hz rather than at
+                // whatever the window is managing. The original's own loading
+                // thread ran it at 30; ours is one beat per 24 ticks either way,
+                // and a frame-rate-dependent heartbeat is exactly the thing
+                // ADR-0007 fixed the timestep to avoid.
+                // Two waits, one screen: the boot's own movies, and the
+                // `--prefetch` conversion when there is one. The fade starts
+                // when both are done - `Screen::advance` holds at full opacity
+                // until then - and `finish_loading` hands the window on when it
+                // has run out.
+                Stage::Loading(stage) => {
+                    stage
+                        .screen
+                        .advance(progress.finished && stage.media_ready());
+                }
+                Stage::Frontend(stage) => {
+                    let events =
+                        stage
+                            .frontend
+                            .update(dt, self.controls.buttons_mut(), movie_playhead);
+                    // One set of planes and one voice serve every movie the front
+                    // end draws, so each is installed on the tick its own screen
+                    // is entered - picture and sound together, which is what makes
+                    // `movie_playhead` report *that* movie's position for the
+                    // screen's own update to pace against.
+                    //
+                    // Every entered state is offered rather than one named screen:
+                    // which screens play movies came out of the title's own chain,
+                    // and Pure's two are neither its boot step nor the step after
+                    // its picker.
+                    for event in &events {
+                        if let oag_game::state_machine::Event::Enter(name) = event {
+                            stage.install_movie(name, &mut self.audio);
+                        }
+                    }
+                    report(&events, stage.trace);
+                    for note in stage.frontend.take_notes() {
+                        println!("{note}");
+                    }
+                    // The movie's sound outlives neither leg, and a skip leaves
+                    // the state without finishing the player - see
+                    // `Frontend::is_playing_movie`.
+                    //
+                    if !stage.frontend.is_playing_movie() {
+                        self.audio.stop_movie();
+                    }
+                    // The menu music's cue is **no movies left**, not "not in one
+                    // right now". The two are the same question only on a title
+                    // whose boot opens on its movie: Pure opens on its language
+                    // picker, so "not in a movie" is true before its reel has
+                    // played at all, and starting the loop there put it under the
+                    // reel - which is the overlap this test was written to stop.
+                    // `pending` empties as each movie is installed, so it is
+                    // exactly "none still to come".
+                    //
+                    // Every tick rather than on the edge - the state is what is
+                    // asked, not a transition - which `start_music` absorbs by
+                    // being idempotent.
+                    if !stage.frontend.is_playing_movie() && stage.pending.is_empty() {
+                        self.audio.start_music(
+                            &self.music_discs,
+                            self.settings.audio.music_source,
+                            &boot::default_audio_cache_dir(),
+                        );
+                    }
+                }
+                Stage::Menu(stage) => {
+                    stage.tick(dt);
+                    // Snapshotted *before* the input is consumed, because the
+                    // page being left stops existing the moment the model
+                    // moves. Compared by page id rather than by stack depth:
+                    // `back` and `open` both change the page, and a jump
+                    // between two pages at the same depth is still a change.
+                    let before = stage.menu.page().id.clone();
+                    let leaving =
+                        menu::draw_list(&stage.menu, &stage.skin, &keys::bound_keys, None);
+                    let events = stage.menu.update(self.controls.buttons_mut());
+                    if stage.menu.page().id != before {
+                        stage.begin_change(leaving);
+                    }
+                    for event in events {
+                        self.handle_menu(&event);
+                    }
+                }
+                Stage::Race(stage) => {
+                    // Outside `Race::tick`, so this cannot reach the hash: it
+                    // tops the slot up the way a pad grant would, and only when
+                    // the slot is already empty, so firing still spends it.
+                    if let Some(weapon) = self.give {
+                        let ship = &mut stage.race.world.ships[0];
+                        if ship.pickup.weapon.is_none() {
+                            ship.pickup.weapon = Some(weapon);
+                        }
+                    }
+                    stage.race.tick(&snapshot);
+                    if self.log_every > 0 && stage.race.world.tick % u64::from(self.log_every) == 0
+                    {
+                        println!("{}", race::describe(&stage.race.telemetry()));
+                    }
+                }
+            }
+        }
+
+        let frame = match self.gpu.surface.get_current_texture() {
+            wgpu::CurrentSurfaceTexture::Success(frame)
+            | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => frame,
+            wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
+                self.gpu
+                    .surface
+                    .configure(&self.gpu.device, &self.gpu.config);
+                return Ok(());
+            }
+            other => {
+                eprintln!("skipping frame: {other:?}");
+                return Ok(());
+            }
+        };
+
+        let view = frame
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+        let mut encoder = self
+            .gpu
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("frame"),
+            });
+        // Where the game goes on the surface, and how many pixels it is drawn
+        // with. One rectangle for every stage, so a change moves the whole game
+        // rather than only what happens to be on screen.
+        let rect = display::viewport(self.gpu.size(), self.settings.display.aspect);
+        let wanted = upscale::target_size(
+            rect,
+            self.settings.graphics.render_scale,
+            self.gpu.device.limits().max_texture_dimension_2d,
+        );
+        if self.framebuffer.resize(&self.gpu.device, wanted) {
+            // A depth attachment whose size does not match the colour one is a
+            // validation error, so the race's has to follow.
+            if let Stage::Race(stage) = &mut self.stage {
+                stage.scene.resize(
+                    &self.gpu.device,
+                    self.gpu.config.format,
+                    self.framebuffer.size(),
+                );
+            }
+        }
+
+        // Each stage fills the target, and the target *is* the game's
+        // rectangle: the bars are the surface the blit does not cover.
+        let size = self.framebuffer.size();
+        let inside = (0.0, 0.0, size.0 as f32, size.1 as f32);
+        let target = self.framebuffer.view();
+        let (scene_stats, video_label) = match &mut self.stage {
+            Stage::Loading(stage) => {
+                stage.render(&self.gpu, &mut encoder, target, inside, phase, &progress);
+                (None, None)
+            }
+            Stage::Frontend(stage) => {
+                // The same feed the menus will borrow, and it is alive from the
+                // session opening rather than from the menus opening - so the
+                // backdrop under `Show Logo` is the one already looping, not a
+                // second decoder.
+                stage.render(
+                    &self.gpu,
+                    &mut encoder,
+                    target,
+                    inside,
+                    self.backdrop.as_mut(),
+                )?;
+                (None, stage.video_label())
+            }
+            Stage::Menu(stage) => {
+                stage.render(
+                    &self.gpu,
+                    &mut encoder,
+                    target,
+                    inside,
+                    self.backdrop.as_mut(),
+                )?;
+                (None, self.backdrop.as_ref().map(movie::Feed::decoder_label))
+            }
+            Stage::Race(stage) => (
+                Some(stage.render(
+                    &self.gpu,
+                    &mut encoder,
+                    target,
+                    inside,
+                    self.settings.graphics.fov,
+                    self.settings.graphics.frustum_culling,
+                    self.settings.graphics.pvs_culling,
+                    self.settings.graphics.animated_textures,
+                )),
+                None,
+            ),
+        };
+
+        // Over the stage and inside the offscreen target, so the overlay is
+        // drawn at the render scale the game is - measuring a frame nobody is
+        // presenting would be the one way to get this wrong. One pass, skipped
+        // entirely when the setting is off.
+        let list = perf::draw_list(
+            &self.meter,
+            self.settings.graphics.perf_overlay,
+            self.presentation_hz(),
+            scene_stats,
+            video_label,
+        );
+        if !list.is_empty() {
+            self.overlay.overlay(
+                &self.gpu.device,
+                &self.gpu.queue,
+                &mut encoder,
+                target,
+                &list,
+                inside,
+            );
+        }
+
+        // The whole back half of the frame - the upscaler, the grade and the
+        // blit - so that this and a `--presented` capture cannot drift apart.
+        self.framebuffer.resolve(
+            &self.gpu.device,
+            &self.gpu.queue,
+            &mut encoder,
+            &view,
+            rect,
+            &upscale::Presentation {
+                upscaler: self.settings.graphics.upscaler,
+                sharpness: self.settings.graphics.upscale_sharpness.stops(),
+                anti_aliasing: self.settings.graphics.anti_aliasing,
+                brightness: self.settings.display.brightness,
+                gamma: self.settings.display.gamma,
+            },
+        );
+        self.gpu.queue.submit(Some(encoder.finish()));
+        self.gpu.queue.present(frame);
+        Ok(())
+    }
+}

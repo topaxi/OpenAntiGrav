@@ -106,14 +106,15 @@ TEST_LIMIT = 200
 # the original 40 outright. These are ceilings, not targets: each may shrink,
 # none may grow, and a row is deleted the moment its file fits under `LIMIT`.
 #
-# **`crates/game/src/race.rs` is not here any more, and that is what this script
-# was written for.** It motivated the ratchet at 11,294 lines, dropped to 7,751
-# when its test module moved out, and was split along its own seams on
-# 2026-08-16 into `race.rs` plus twenty-four modules under `crates/game/src/race/`
-# - none over 800 lines, all of it move-only. `crates/game/src/main.rs` is the
-# largest thing left.
+# **Neither `crates/game/src/race.rs` nor `crates/game/src/main.rs` is here any
+# more, and that is what this script was written for.** `race.rs` motivated the
+# ratchet at 11,294 lines, dropped to 7,751 when its test module moved out, and
+# was split along its own seams on 2026-08-16 into `race.rs` plus twenty-four
+# modules under `crates/game/src/race/`. `main.rs` followed it the same day:
+# 4,808 lines into 430 plus eighteen modules under `crates/game/src/main/`.
+# Both splits were move-only and left nothing over 800 lines. The largest thing
+# left is `crates/game/tests/race_ground_truth.rs`.
 BASELINE = {
-    "crates/game/src/main.rs": 4808,
     "crates/game/tests/race_ground_truth.rs": 2464,
     "crates/formats/src/vex.rs": 2408,
     "crates/game/src/boot.rs": 2254,

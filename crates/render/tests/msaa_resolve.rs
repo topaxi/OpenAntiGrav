@@ -343,7 +343,7 @@ fn msaa_4x_resolves_a_triangle_onto_a_single_sample_target() {
 /// Pins *why* `display::AntiAliasing` has no `Msaa2x` variant: not because 2x
 /// hardware support varies, but because this game's device is created with
 /// `wgpu::DeviceDescriptor::default()` everywhere (`Gpu::bring_up` in
-/// `crates/game/src/main.rs`, and `crates/game/src/capture.rs`'s headless
+/// `crates/game/src/main/gpu.rs`, and `crates/game/src/capture.rs`'s headless
 /// path), and without `wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`
 /// the WebGPU spec guarantees only `[1, 4]` samples for a colour-renderable,
 /// resolvable format - `sample_count: 2` is a validation error on *every*
