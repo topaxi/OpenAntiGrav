@@ -805,6 +805,8 @@ used, kept because commits and docs cite them.
 | **The PS3 Ghidra path works; two improvements to it are still open** | 2026-08-17. Importing `EBOOT.elf` needs no processor module - stock Ghidra decodes the Cell PPU as `PowerPC:BE:64:A2ALT-32addr` - but it does need a decrypt step, a hand-edited compiler spec and a script pack. Full procedure and its traps in [toolchain.md](docs/reverse-engineering/toolchain.md#ps3). **Three improvements, ranked; the third is done.** (1) **Fork Ps3GhidraScripts to ship a language** rather than patching Ghidra: `ghidra-allegrex` and `ghidra-emotionengine-reloaded` both carry their own `data/languages/` with a `.cspec`, `.ldefs` and an `.opinion`, which is proof an extension can do this. A vendored cspec **retires `scripts/patch-ghidra-ppc-cspec.sh` entirely** - that script exists only because the stock spec is wrong and root-owned - and an `.opinion` gets the language auto-selected on import instead of chosen by hand. Cost, measured: sleigh `@include` resolves relative to the including file, so an extension cannot reach `/opt/ghidra/Ghidra/Processors/PowerPC/`, and the fork must vendor **21 `.sinc` files, 19,842 lines**, re-synced on every Ghidra upgrade. Half a day for the cspec-only version, which needs no vendoring at all if it reuses the stock `.sla`. (2) **Teach sleigh `lvlx`** - one instruction, not the eight the README implies: `EBOOT.elf` has **851 `lvlx`** and zero `lvrx`/`stvlx`/`stvrx` or `l`-variants. This is what forces the vendoring, so do it only once those 851 sites are in the way. Worth asking clienthax first; upstream is active and a cspec-shipping extension helps every user of that repo. (3) **A headless import script** - *done, 2026-08-17*: `scripts/import-ps3-eboot.sh` drives `analyzeHeadless` with the loader, the processor and the pre/post scripts in one command, decrypts the SELF first if the ELF is missing, and refuses to run without the cspec fix or while Ghidra holds the project lock. `scripts/apply-ghidra-names.py`'s `BINARY_PROGRAMS` also has its `ps3-hdfury-eu` row now. |
 | **Wipeout HD Fury's executable is 26,100 functions with 26 of them named, and no gameplay behaviour yet** | 2026-08-17, five sweeps in one session. Pages under [`docs/ghidra/functions/ps3-hdfury-eu/`](docs/ghidra/functions/ps3-hdfury-eu/); 26 rows in its `names.tsv`. **Read `memory.md` before anything else**: every function has its own TOC declared in its OPD entry, this binary has two (`0x008ad4d8` over `0x010200`-`0x758110`, `0x008bd3c4` over `0x32d5e0`-`0x7579c0`, overlapping), and Ghidra uses the entry point's for all of them - so **59% of functions resolve every TOC-relative load against the wrong base** and a string xref comes out as a real string that is not the one the code loads. `AssignPs3R2FromOpd.java` fixes it and **the current database predates it**: re-run `scripts/import-ps3-eboot.sh` before trusting any new string xref above `0x32d5e0`. Everything named so far was chosen to be immune to this - control flow, argument counts, named-import calls, or an address below `0x32d5e0` where Ghidra is right. **What is mapped**: the framework memory layer (allocator, heap, mutex); the collision arena, class and MeshAABB narrowphase, whose shape-type dispatch is a *pair matrix* with type 6 a compound shape; `RaceManager` with eleven direct subclasses and fifteen concrete race modes; `ModeManager` with ten; and `Hud_LoadDefinition`, which every race manager calls once per HUD file, with three skins on disc (`wo3_HUD` and `2097_HUD` are Wipeout 3 and 2097). **What is not**: any gameplay behaviour whatsoever - no lap counting, no positions, no scoring - and no `.psarc` reader, so **no asset has come off this disc at all**. **The next step is a vtable diff, not another constructor**: `SPZone_RaceManager` installs its own vtable from TOC slot `0x008a6b8c` and `RaceManager`'s is at `0x008628e0`; the slots that differ are exactly the virtuals Zone overrides, and that is the shortest path from here to behaviour. **One rule worth keeping**: a C++ constructor pair can only be told apart when both are called - the referenced member is the base-object constructor, the unreferenced one the complete-object constructor. That is why `ModeManager`'s pair and `MPRaceManager_Construct` could be named and the twenty leaf-class pairs could not. |
 
+| **The alpha-test cutout reference is recovered as three values, not one, and the per-batch selector is not** | `docs/ghidra/functions/psp-pulse-usa/mesh-draw.md` reads `is_alpha_tested()`'s branch of `Gfx_BuildBatchStateList` as `Gu_AlphaFunc(GU_GREATER, ref, 0xff)` with `ref` one of `0x7f`, `0` or `0x10` depending on the batch - three real call sites already in that decompiled function, not a guess. `mesh.wgsl`'s `ALPHA_TEST_THRESHOLD` (2026-08-17) uses `0`, the most permissive, chosen because it is provably safe (a batch authored for a stricter reference only shows a few extra near-zero-alpha texels, never hides real geometry) rather than because it is *right*. **Next step**: read what selects between the three in `Gfx_BuildBatchStateList` itself - the function is already open from this pass, and `mesh-draw.md`'s own recommendation 5 names this as the place a correct per-batch value comes from. |
+
 ## Pending maintainer decision: shipped design data in tracked docs
 
 [`handling-stats.md`](docs/formats/handling-stats.md)'s own rule, per
@@ -821,6 +823,16 @@ load-bearing in the arithmetic.
 agent's**, which is why it is flagged rather than done. Git history retains
 everything regardless, so a sweep would clean the distributable snapshot, not
 the past.
+
+**One new instance was resolved by the maintainer rather than flagged,
+2026-08-17.** The `Weapon Pad` ready-state colour cycle - a 6-entry `[r,g,b]`
+keyframe table recovered from `WeaponPad_UpdateRefreshTimer`
+(`docs/ghidra/functions/psp-pulse-usa/pads.md`) - is exactly this kind of
+tuning table. Asked directly, the maintainer chose to commit it
+(`oag_render::weapon_pad::READY_KEYFRAMES`) rather than defer or build a
+runtime BOOT.BIN reader, so it is tracked source now. Recorded here as the
+precedent for the next one of these that comes up: ask, do not assume either
+answer.
 
 ## Scope decisions that look like gaps
 
@@ -887,6 +899,22 @@ writers in it at the same time:
   everything.** Do not read that session as an argument for more agents.
 
 ## Traps that are live
+
+**A model reports the right triangle count and still renders nothing - check
+the alpha test, not the class table.** 2026-08-17. Wipeout Pure's `Speedup
+Pad`/`Weapon Pad` class ids were recovered 2026-08-13, `mesh::build_pads` is
+title-agnostic through `vex::classes::V4`, and `Data\Environments\01_Vineta_K\track.vex`
+decoded 14 `Speedup Pad` nodes, 952 triangles, correctly - every load report
+line said so. **The pad still drew zero pixels**, because `mesh.wgsl`'s
+`ALPHA_TEST_THRESHOLD` was an invented `0.5` and the pad's own glow texture
+(`speedup_GLOW_KEY.tga`) tops out at alpha 58/255 (~0.23): every fragment of
+every cutout batch discarded. A geometry decode that reports a plausible
+triangle count is not evidence a model draws anything - `oag-view --pads
+--screenshot` (or the new `crates/render/tests/pad_alpha_test_ground_truth.rs`)
+is the check that would have caught this, and neither ran until the picture
+was asked for directly. Fixed by lowering `ALPHA_TEST_THRESHOLD` to `1/255`
+(`0`, one of three real GE references `docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`
+recovered for this branch) - see `docs/formats/vex.md`'s materials section.
 
 **A one-seed race comparison cannot resolve two adjacent difficulties, and the
 test that did it read as a regression on an improvement.** 2026-08-17.

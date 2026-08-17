@@ -786,11 +786,31 @@ flag set), `alpha_tested_draws` (`is_alpha_tested()`), `transparent_draws`
   `TRANSPARENT_BLEND`, drawn last so the opaque and cutout geometry's depth is
   already resolved.
 
-**What is not recovered:** the GE's real alpha-test reference value and
-comparison function. `ALPHA_TEST_THRESHOLD` (0.5, in `mesh.wgsl`) is an
-invented placeholder, the same status this file already gives the blink-light
-period and `oag_render::mesh_render::TRANSPARENT_BLEND` gives its blend
-state - revise the moment the real threshold is known.
+**The comparison function is recovered, the reference value only partly.**
+[`mesh-draw.md`](../ghidra/functions/psp-pulse-usa/mesh-draw.md#four-_q-names-in-this-path-are-wrong-and-three-of-them-mattered)
+reads `is_alpha_tested()`'s branch of `Gfx_BuildBatchStateList` as
+`Gu_AlphaFunc(GU_GREATER, ref, 0xff)`, with `ref` one of `0x7f`, `0` or
+`0x10` depending on the batch - so the function is `GU_GREATER`, always, and
+the reference is per-batch with no recovered selector. `ALPHA_TEST_THRESHOLD`
+(`1.0 / 255.0`, in `mesh.wgsl`) uses `0`, the most permissive of the three
+recovered values: real evidence found it necessary (Wipeout Pure's `Speedup
+Pad` glow texture, `speedup_GLOW_KEY.tga`, tops out at alpha 58/255 and was
+rendering nothing at all under this project's earlier `0.5` guess), and it is
+the same reference the same function programs unconditionally on every
+*transparent* batch, so it is not a fresh invention. What is still open is the
+per-batch selector between `0x7f`, `0` and `0x10` - revise `ALPHA_TEST_THRESHOLD`
+to read it once that selector is found.
+
+**This was not only a Pure fix.** The earlier `0.5` was checked against
+*vertex* alpha alone (the census two paragraphs up), never the *texture*
+alpha `shaded.a` actually gates on - and that same census records
+alpha-tested textures whose range is a partial band like `58-78`, up to
+0.306, still under `0.5`. A direct 1024x1024 capture of each full track model
+(lit pixels = channel sum > 100) puts a number on it: `01_Track` 16,159 ->
+16,156 (edge-antialiasing noise), `16_Track` 369,534 -> 370,987, **+1,453
+pixels newly drawn (+0.4%)**. Small, and in the direction the fix predicts -
+the old threshold was already discarding a sliver of real Pulse geometry too,
+not only Pure's pad.
 
 **Geometry is never indexed** — the index argument to `sceGuDrawArray` is always
 zero. The material array is reached through `mesh+0x5c` at runtime, stride 0x14,

@@ -105,9 +105,12 @@ shipped data rather than a runtime trace.
 - ~~**Whether `Weapon Pad` shares more than the payload**~~ - the geometry, the
   volumes and the trigger are all shared with `Speedup Pad`; what differs is only
   what happens on a hit. See [pickups](../gameplay/pickups.md).
-- **The pad's own colour cycle is still unimplemented.**
-  `WeaponPad_UpdateRefreshTimer` packs a grey into `pad+0x6c` while the pad is
-  cooling down and cross-fades a small colour table once it is collectable, so
-  the original shows a spent pad differently. Observed, not built.
+- ~~**The pad's own colour cycle is still unimplemented.**~~ **Implemented
+  2026-08-17** - `oag_render::weapon_pad` and
+  `oag_game::race::drawable::Drawable::tint_weapon_pads`. See
+  [`docs/ghidra/functions/psp-pulse-usa/pads.md`](../ghidra/functions/psp-pulse-usa/pads.md#retired-pad0x1a0s-writer-is-weaponpad-refresh_time-exactly-as-guessed)
+  for the recovered grey, the `WeaponPad_ColourKeyframes` table and the one
+  simplification (every ready pad shares one phase rather than each resuming
+  its own).
 - **Nothing here has been verified under an emulator.** This is static reading
   plus agreement with shipped data, which is what caps the scores at 94.

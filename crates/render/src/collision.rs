@@ -249,6 +249,7 @@ pub fn build_model(
     }];
     Model {
         airbrakes: [None, None],
+        node_vertex_ranges: Vec::new(),
         label: label.to_string(),
         vertices,
         indices,

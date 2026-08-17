@@ -164,8 +164,28 @@ disassembly, both classes' slots decode without a decompiler needed:
   the timer reaches zero it instead cross-fades `pad+0x6c` through a small
   colour keyframe table at `1/3`-second steps (`param+500` ramping at `dt*3`,
   indexing `pad+0x1f0`) - the pad's ready-to-collect colour cycle. `pad+0x6c`
-  and the colour table are observed, not named or implemented; recorded here
-  so a future weapon-pickup pass has the addresses rather than re-deriving them.
+  is a full colour *replacement*, not a modulation of the mesh's own baked
+  vertex colour - `Pad_Bind` calls `Mesh_Bind` first, which already builds
+  the GE colour commands from the file's own materials, and the timer
+  overwrites that slot every tick regardless.
+
+  **`WeaponPad_ColourKeyframes` (`0x08ac00c8`), the table itself, is now
+  named, addressed and read.** `WeaponPad_UpdateRefreshTimer` builds the
+  pointer from a bare `lui`/`addiu` pair (`0x0892c0b0`/`0x0892c0b8`,
+  immediate `0x002bc0c8`) that Ghidra's loader never relocated, so
+  `get_xrefs_to`/`get_xrefs_from` find nothing at either end. Image base
+  (`0x08804000`) plus that immediate predicts `0x08ac00c8`, inside `.data`
+  (`08ab0600`-`08ad9717`); `read_memory` there returns 72 clean bytes - six
+  `[r, g, b]` triples, `0..255` per channel, stride 12, matching the
+  disassembly's own `* 0xc` and wraparound-at-5 arithmetic exactly - and
+  `search_byte_patterns` for the first entry's 12 bytes
+  (`00 00 4c 43 00 00 cc 42 00 00 cc 42`) finds **exactly one** match in the
+  whole image, at that address. Confidence **85**: exact agreement with
+  shipped data plus a structural prediction (stride, entry count, section),
+  capped below a live trace because the relocation is inferred rather than
+  read. Values: `[204,102,102]`, `[121,210,121]`, `[121,121,210]`,
+  `[210,210,121]`, `[140,216,216]`, `[216,140,216]` - a rainbow cycle,
+  reproduced in `oag_render::weapon_pad`.
 
 `crates/formats/src/pads.rs` can drop "carries the term inert" - the term is
 identified, just still unconsumed because there is no pickup system yet (see
@@ -506,13 +526,19 @@ arrays, most likely by breakpointing `0x08849db4` in a live race.
 
 ## What is not implemented
 
-- **The `Weapon Pad`'s colour cycle, `pad+0x1a0`/`pad+0x6c`.** The pickup system
-  itself landed on 2026-08-11 and consumes the trigger and the refresh timer -
-  see [pickups.md](../../../gameplay/pickups.md). What is still unimplemented is
-  the *look*: `WeaponPad_UpdateRefreshTimer` (`0x0892c034`) packs a grey into
-  `pad+0x6c` while the pad cools down and cross-fades a colour keyframe table
-  once it is collectable, so in this engine a spent pad looks the same as a
-  fresh one.
+- ~~**The `Weapon Pad`'s colour cycle, `pad+0x1a0`/`pad+0x6c`.**~~ **Implemented
+  2026-08-17.** The pickup system landed 2026-08-11 and consumes the trigger
+  and the refresh timer - see [pickups.md](../../../gameplay/pickups.md). The
+  *look* is `oag_render::weapon_pad` (the recovered grey and
+  `WeaponPad_ColourKeyframes` table, above) plus
+  `oag_game::race::drawable::Drawable::tint_weapon_pads`, which recolours
+  each pad's own vertices by its refresh timer every frame. One simplification,
+  recorded rather than silent: the original only advances a pad's phase while
+  *that* pad is ready, so two pads that became ready at different moments are
+  out of phase with each other; this port has no per-pad phase to resume from
+  and samples every ready pad at the race clock instead, which cross-fades at
+  the right rate but keeps them in lockstep. See `oag_render::weapon_pad`'s
+  own doc comment.
 - **The `"SPEEDUPPAD"` sound.** There is no audio system yet, so neither emitter
   path is reproduced. `oag_game::race` arms the flare and nothing else.
 - **`craft+0x318`'s curve.** See the open question above.

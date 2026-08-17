@@ -276,6 +276,21 @@ impl Race {
         &self.speedup_pads
     }
 
+    /// Seconds each weapon pad has left before it can hand out another
+    /// pickup - `0.0` (or less) means armed and ready. Empty on a track with
+    /// no weapon pads, or when the mode disarms them (`Race::weapon_pads`'s
+    /// own doc comment has why an empty list is the disarmed state rather
+    /// than a per-tick check).
+    ///
+    /// One entry per weapon pad, in the track file's own node order - the
+    /// same order `oag_render::mesh::Model::node_vertex_ranges` walks the
+    /// weapon pad model in, which is what lets a caller pair position `i`
+    /// here with that list's `i`-th vertex range.
+    #[must_use]
+    pub fn weapon_pad_refresh_left(&self) -> &[f32] {
+        &self.weapon_pad_refresh_left
+    }
+
     /// The player's `engine_flare` locator in **world** space, or `None` when the
     /// ship model carries no `Engine Flare` node.
     ///

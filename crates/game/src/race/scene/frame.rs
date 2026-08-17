@@ -216,6 +216,20 @@ impl Scene {
         {
             pads.write(queue, view_projection, Mat4::IDENTITY);
         }
+        // Ready-to-collect vs cooling down - see `Drawable::tint_weapon_pads`
+        // and `oag_render::weapon_pad` for the recovered mechanism this
+        // reproduces. `seconds` rather than `track_seconds`: unlike the
+        // authored texture-transform tracks this is gameplay state, not
+        // scenery, so `[graphics] animated_textures` freezing scenery must
+        // not freeze it too.
+        if let Some(weapon_pads) = &self.weapon_pads {
+            let ready: Vec<bool> = race
+                .weapon_pad_refresh_left()
+                .iter()
+                .map(|&left| left <= 0.0)
+                .collect();
+            weapon_pads.tint_weapon_pads(queue, seconds, &ready);
+        }
 
         // The camera's own axes, read out of the view matrix: for a view matrix
         // `V`, world-space right and up are rows 0 and 1 of its rotation part.

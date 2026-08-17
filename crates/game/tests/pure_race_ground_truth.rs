@@ -88,9 +88,11 @@ fn load(image: &Path, track: &str) -> race::Loaded {
     race::load(&race::Options {
         source: image.display().to_string(),
         class: SpeedClass::Venom,
-        // Time Trial: the milestone's mode, and the one with no weapons - which
-        // matters here because Pure's weapon pads have no recovered class id, so
-        // a mode that handed pickups out would be racing on absences.
+        // Time Trial: the milestone's mode, and the one with no weapons. Pure's
+        // `Weapon Pad` class id is recovered now (`vex::classes::V4::weapon_pad`,
+        // 2026-08-13), but Pure's own weapon-pickup behaviour has not been
+        // measured against anything, so this file still races the mode that
+        // asks nothing of it.
         mode: oag_race::Mode::TimeTrial,
         track: Some(track.to_string()),
         ..race::Options::default()
