@@ -10,6 +10,11 @@
 use super::*;
 use crate::vex::classes::V6;
 
+/// [`parse_chunks`] on a fixture, every one of which is written little-endian.
+fn parse_chunks_le(payload: &[u8]) -> Result<CollisionGeometry> {
+    parse_chunks(payload, ByteOrder::Little)
+}
+
 /// Encodes one chunk: `{u32 kind, u16 stride, u16 count, body}`.
 fn chunk_with_stride(kind: u32, stride: u16, count: usize, body: &[u8]) -> Vec<u8> {
     let mut out = kind.to_le_bytes().to_vec();
@@ -87,7 +92,7 @@ const QUAD_SCALARS: [f32; 4] = [0.25, 0.5, 0.75, 1.0];
 #[test]
 fn a_well_formed_object_decodes_to_its_triangle_soup() {
     let payload = build(HEADER_WORD, &[quad()]);
-    let geometry = parse_chunks(&payload).expect("parse");
+    let geometry = parse_chunks_le(&payload).expect("parse");
 
     assert_eq!(geometry.version, HEADER_WORD);
     assert_eq!(geometry.meshes.len(), 1);
@@ -137,7 +142,7 @@ fn the_decoded_structure_accounts_for_every_byte() {
 
     for objects in cases {
         let payload = build(HEADER_WORD, &objects);
-        let geometry = parse_chunks(&payload).expect("parse");
+        let geometry = parse_chunks_le(&payload).expect("parse");
         assert_eq!(
             geometry.encoded_len(),
             payload.len(),
@@ -153,7 +158,7 @@ fn the_decoded_structure_accounts_for_every_byte() {
 #[test]
 fn the_payload_closes_after_its_alignment_padding() {
     let payload = build(HEADER_WORD, &[quad()]);
-    let geometry = parse_chunks(&payload).expect("parse");
+    let geometry = parse_chunks_le(&payload).expect("parse");
     // The fixture happens to be 16-byte aligned already.
     assert_eq!(geometry.encoded_len() % PAYLOAD_ALIGN, 0);
     assert_eq!(geometry.padded_len(), geometry.encoded_len());
@@ -167,7 +172,7 @@ fn the_payload_closes_after_its_alignment_padding() {
             triangle_chunk(&[[0, 1, 2]]),
         ]],
     );
-    let geometry = parse_chunks(&odd).expect("parse");
+    let geometry = parse_chunks_le(&odd).expect("parse");
     assert_eq!(geometry.encoded_len(), odd.len());
     assert!(geometry.padded_len() > geometry.encoded_len());
     assert_eq!(geometry.padded_len() % PAYLOAD_ALIGN, 0);
@@ -186,7 +191,7 @@ fn chunks_may_appear_in_any_order() {
             scalar_chunk(&QUAD_SCALARS),
         ]],
     );
-    let mesh = &parse_chunks(&ordered).expect("parse").meshes[0];
+    let mesh = &parse_chunks_le(&ordered).expect("parse").meshes[0];
     assert_eq!(mesh.vertices, QUAD_VERTICES);
     assert_eq!(mesh.triangles, QUAD_TRIANGLES);
     assert_eq!(mesh.vertex_scalars, QUAD_SCALARS);
@@ -206,7 +211,7 @@ fn a_truncated_payload_is_refused_rather_than_read_past() {
     let payload = build(HEADER_WORD, &[quad(), quad()]);
     for len in 0..payload.len() {
         assert!(
-            parse_chunks(&payload[..len]).is_err(),
+            parse_chunks_le(&payload[..len]).is_err(),
             "truncating to {len} of {} bytes should not parse",
             payload.len()
         );
@@ -223,7 +228,7 @@ fn an_out_of_range_triangle_index_is_rejected() {
         ]],
     );
     assert_eq!(
-        parse_chunks(&payload),
+        parse_chunks_le(&payload),
         Err(Error::BadTriangleIndex {
             object: 0,
             triangle: 1,
@@ -242,7 +247,7 @@ fn an_absent_scalar_chunk_yields_neutral_scalars() {
             triangle_chunk(&QUAD_TRIANGLES),
         ]],
     );
-    let mesh = &parse_chunks(&payload).expect("parse").meshes[0];
+    let mesh = &parse_chunks_le(&payload).expect("parse").meshes[0];
     assert!(!mesh.has_vertex_scalars());
     assert_eq!(mesh.vertex_scalars, vec![DEFAULT_VERTEX_SCALAR; 4]);
     // Which is what the original's averaging function returns when the array
@@ -265,7 +270,7 @@ fn a_scalar_chunk_that_is_not_one_per_vertex_is_refused() {
         ]],
     );
     assert_eq!(
-        parse_chunks(&payload),
+        parse_chunks_le(&payload),
         Err(Error::ScalarCountMismatch {
             object: 0,
             scalars: 2,
@@ -277,7 +282,7 @@ fn a_scalar_chunk_that_is_not_one_per_vertex_is_refused() {
 
 #[test]
 fn averaging_a_triangles_scalars_is_the_mean_of_its_corners() {
-    let mesh = &parse_chunks(&build(HEADER_WORD, &[quad()]))
+    let mesh = &parse_chunks_le(&build(HEADER_WORD, &[quad()]))
         .expect("parse")
         .meshes[0];
     // Triangle 0 is vertices 0, 1, 2: 0.25, 0.5, 0.75.
@@ -302,7 +307,7 @@ fn an_unknown_chunk_type_is_fatal_rather_than_skipped() {
         ]],
     );
     assert_eq!(
-        parse_chunks(&payload),
+        parse_chunks_le(&payload),
         Err(Error::UnknownChunk { object: 0, kind: 4 })
     );
     assert_eq!(chunk_stride(4), None);
@@ -318,7 +323,7 @@ fn a_chunk_whose_declared_stride_contradicts_its_type_is_refused() {
         &[vec![chunk_with_stride(CHUNK_VERTICES, 16, 1, &[0u8; 12])]],
     );
     assert_eq!(
-        parse_chunks(&payload),
+        parse_chunks_le(&payload),
         Err(Error::StrideMismatch {
             object: 0,
             kind: CHUNK_VERTICES,
@@ -338,7 +343,7 @@ fn a_repeated_chunk_type_is_refused_rather_than_resolved() {
         ]],
     );
     assert_eq!(
-        parse_chunks(&payload),
+        parse_chunks_le(&payload),
         Err(Error::DuplicateChunk {
             object: 0,
             kind: CHUNK_VERTICES,
@@ -352,7 +357,7 @@ fn an_impossible_object_count_is_refused_before_allocating() {
     let mut payload = build(HEADER_WORD, &[quad()]);
     payload[4..8].copy_from_slice(&0xffff_ffffu32.to_le_bytes());
     assert!(matches!(
-        parse_chunks(&payload),
+        parse_chunks_le(&payload),
         Err(Error::OutOfBounds { .. })
     ));
 }
@@ -362,7 +367,7 @@ fn an_impossible_chunk_count_is_refused_before_allocating() {
     let mut payload = build(HEADER_WORD, &[quad()]);
     payload[8..12].copy_from_slice(&0xffff_ffffu32.to_le_bytes());
     assert!(matches!(
-        parse_chunks(&payload),
+        parse_chunks_le(&payload),
         Err(Error::OutOfBounds { .. })
     ));
 }
@@ -376,7 +381,7 @@ fn a_chunk_count_larger_than_the_payload_is_refused() {
     let count_at = HEADER_LEN + OBJECT_HEADER_LEN + 6;
     payload[count_at..count_at + 2].copy_from_slice(&0xffffu16.to_le_bytes());
     assert!(matches!(
-        parse_chunks(&payload),
+        parse_chunks_le(&payload),
         Err(Error::OutOfBounds {
             what: "chunk payload",
             ..
@@ -386,8 +391,8 @@ fn a_chunk_count_larger_than_the_payload_is_refused() {
 
 #[test]
 fn a_payload_shorter_than_its_header_is_refused() {
-    assert_eq!(parse_chunks(&[]), Err(Error::TooShort { got: 0 }));
-    assert_eq!(parse_chunks(&[0u8; 7]), Err(Error::TooShort { got: 7 }));
+    assert_eq!(parse_chunks_le(&[]), Err(Error::TooShort { got: 0 }));
+    assert_eq!(parse_chunks_le(&[0u8; 7]), Err(Error::TooShort { got: 7 }));
 }
 
 #[test]
@@ -395,7 +400,7 @@ fn trailing_bytes_are_tolerated_but_visible() {
     let mut payload = build(HEADER_WORD, &[quad()]);
     let exact = payload.len();
     payload.extend([0u8; 32]);
-    let geometry = parse_chunks(&payload).expect("parse");
+    let geometry = parse_chunks_le(&payload).expect("parse");
     assert_eq!(geometry.encoded_len(), exact);
     assert_ne!(geometry.padded_len(), payload.len());
 }
@@ -544,4 +549,67 @@ fn a_vex_walk_failure_is_propagated_rather_than_swallowed() {
 fn a_node_payload_that_is_not_collision_data_is_refused() {
     let file = build_vex(&[(vex::CLASS_FLOOR_COLLISION, vec![0xff; 0x20])]);
     assert!(from_vex(&file).is_err());
+}
+
+/// The same object, written both ways round, decodes to the same geometry.
+///
+/// A collision payload is the one shape in this file that **cannot** say which
+/// way round it is: its first word is `0xffffffff`, which is a palindrome, and
+/// its chunk kinds are 1, 2 and 3, which are not. So the order comes from the
+/// containing `.vex`, whose magic does say - `from_vex` is where that happens.
+///
+/// Written with a builder of its own rather than by parameterising the twenty
+/// fixtures above: the structure is four words and three chunk bodies, and one
+/// object is all this claim needs.
+#[test]
+fn a_big_endian_object_decodes_to_the_same_geometry_as_its_little_endian_twin() {
+    let mut be: Vec<u8> = Vec::new();
+    be.extend(HEADER_WORD.to_be_bytes());
+    be.extend(1u32.to_be_bytes()); // one object
+    be.extend(3u32.to_be_bytes()); // three chunks, in the shipped order 1, 3, 2
+
+    let mut chunk = |kind: u32, count: usize, body: &[u8]| {
+        be.extend(kind.to_be_bytes());
+        be.extend((chunk_stride(kind).unwrap() as u16).to_be_bytes());
+        be.extend((count as u16).to_be_bytes());
+        be.extend_from_slice(body);
+    };
+
+    let mut vertices = Vec::new();
+    for v in &QUAD_VERTICES {
+        for c in v {
+            vertices.extend(c.to_be_bytes());
+        }
+    }
+    chunk(CHUNK_VERTICES, QUAD_VERTICES.len(), &vertices);
+
+    let mut scalars = Vec::new();
+    for s in &QUAD_SCALARS {
+        scalars.extend(s.to_be_bytes());
+    }
+    chunk(CHUNK_VERTEX_SCALARS, QUAD_SCALARS.len(), &scalars);
+
+    let mut triangles = Vec::new();
+    for t in &QUAD_TRIANGLES {
+        for i in t {
+            triangles.extend(i.to_be_bytes());
+        }
+    }
+    chunk(CHUNK_TRIANGLES, QUAD_TRIANGLES.len(), &triangles);
+
+    let le = build(HEADER_WORD, &[quad()]);
+    assert_eq!(be.len(), le.len(), "the same layout, only byte-swapped");
+
+    let from_be = parse_chunks(&be, ByteOrder::Big).expect("the big-endian payload");
+    let from_le = parse_chunks_le(&le).expect("the little-endian payload");
+    assert_eq!(from_be, from_le);
+    assert_eq!(from_be.meshes[0].vertices, QUAD_VERTICES.to_vec());
+
+    // And the negative half: the wrong order does not quietly decode. The
+    // stride word is what catches it, which is why the parser checks a field
+    // the game's own loader ignores.
+    assert!(
+        parse_chunks(&be, ByteOrder::Little).is_err(),
+        "a big-endian payload read little-endian must not produce geometry"
+    );
 }

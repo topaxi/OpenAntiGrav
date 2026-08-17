@@ -186,7 +186,7 @@ fn facing_of(blob: &[u8], class_id: u32, frames: &[([f32; 3], [f32; 3])]) -> Opt
         let Some(payload) = blob.get(node.payload()) else {
             continue;
         };
-        let Ok(geometry) = collision::parse_chunks(payload) else {
+        let Ok(geometry) = collision::parse_chunks(payload, vex::byte_order(blob)) else {
             continue;
         };
         objects += geometry.meshes.len();

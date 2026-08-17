@@ -34,7 +34,7 @@
 use std::path::{Path, PathBuf};
 
 use oag_assets::psarc::Archive;
-use oag_formats::{ByteOrder, track, vex};
+use oag_formats::{ByteOrder, collision, track, vex};
 
 /// The decrypted PS3 image.
 const PS3_IMAGE: &str = "hdfury-ps3-eu-dec.iso";
@@ -57,6 +57,16 @@ const HD_POINT_COUNT: usize = 862;
 /// Nodes in Talon's Junction's tree. Measured here, and far below Pulse's own
 /// count for the same circuit because HD's geometry has left the `.vex`.
 const HD_NODE_COUNT: usize = 826;
+
+/// Collision objects and vertices per class, from `docs/formats/hd-status.md`'s
+/// survey - which counted them with `scripts/hd-survey.py`, so this is the Rust
+/// reader reproducing an independent measurement rather than restating itself.
+const HD_COLLISION: [(collision::SurfaceKind, usize, usize); 4] = [
+    (collision::SurfaceKind::Floor, 246, 7_588),
+    (collision::SurfaceKind::Wall, 122, 4_269),
+    (collision::SurfaceKind::MagFloor, 14, 357),
+    (collision::SurfaceKind::Reset, 18, 627),
+];
 
 fn image(name: &str) -> Option<PathBuf> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -195,4 +205,94 @@ fn talons_junction_is_pulses_16_track_in_the_same_world_coordinates() {
         worst < 20.0,
         "worst point-for-point distance is {worst} world units"
     );
+}
+
+/// The collision soup reads byte-swapped, with the counts the survey measured.
+///
+/// A collision payload is the one shape here that **cannot** declare its own
+/// order: its first word is `0xffffffff`, a palindrome. `collision::from_vex`
+/// takes it from the containing file's magic, and the check that says it got it
+/// right is the same one that settled the layout on the PSP - every node
+/// consuming its payload down to the 16-byte alignment padding, which
+/// `from_vex` enforces rather than merely offering.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn the_hd_collision_soup_reads_byte_swapped_with_every_payload_accounted_for() {
+    let Some(data) = hd_track_vex() else { return };
+
+    let nodes = collision::from_vex(&data).expect("every collision node decodes");
+
+    for (kind, objects, vertices) in HD_COLLISION {
+        let of_kind: Vec<_> = nodes.iter().filter(|n| n.kind == kind).collect();
+        assert_eq!(
+            of_kind
+                .iter()
+                .map(|n| n.geometry.meshes.len())
+                .sum::<usize>(),
+            objects,
+            "{kind:?} objects"
+        );
+        assert_eq!(
+            of_kind
+                .iter()
+                .flat_map(|n| &n.geometry.meshes)
+                .map(|m| m.vertices.len())
+                .sum::<usize>(),
+            vertices,
+            "{kind:?} vertices"
+        );
+    }
+
+    // Read the other way round it does not merely disagree, it does not parse:
+    // the chunk headers stop being 1, 2 and 3 and the declared stride stops
+    // matching what the type implies.
+    let node = vex::nodes(&data).expect("walk")[nodes[0].node_index].clone();
+    assert!(
+        collision::parse_chunks(&data[node.payload()], ByteOrder::Little).is_err(),
+        "a big-endian payload read little-endian must not produce geometry"
+    );
+}
+
+/// The collision surface lies under the spline it belongs to.
+///
+/// Cross-format rather than within one: the soup and the spline are separate
+/// payloads in separate nodes, so this is what says both were decoded in the
+/// same coordinate system rather than each self-consistently in its own.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn the_hd_collision_floor_bounds_contain_the_circuit_it_belongs_to() {
+    let Some(data) = hd_track_vex() else { return };
+
+    let nodes = vex::nodes(&data).expect("walk");
+    let node = track::find_node(&data, &nodes).expect("a WO Track node");
+    let ai = track::parse(&data[node.payload()]).expect("the spline");
+
+    let (mut lo, mut hi) = ([f32::MAX; 3], [f32::MIN; 3]);
+    for mesh in collision::from_vex(&data)
+        .expect("collision")
+        .iter()
+        .filter(|n| n.kind == collision::SurfaceKind::Floor)
+        .flat_map(|n| &n.geometry.meshes)
+    {
+        for v in &mesh.vertices {
+            for axis in 0..3 {
+                lo[axis] = lo[axis].min(v[axis]);
+                hi[axis] = hi[axis].max(v[axis]);
+            }
+        }
+    }
+
+    // Generous on the vertical axis: a control point sits on the surface, and
+    // the floor soup is a shell around a circuit that climbs and dives.
+    let slack = [0.0f32, 40.0, 0.0];
+    for point in ai.paths.iter().flat_map(|p| &p.points) {
+        for axis in 0..3 {
+            assert!(
+                point.pos[axis] >= lo[axis] - slack[axis]
+                    && point.pos[axis] <= hi[axis] + slack[axis],
+                "control point {:?} is outside the floor soup {lo:?}..{hi:?}",
+                point.pos
+            );
+        }
+    }
 }

@@ -192,7 +192,7 @@ fn survey(disc: &mut DiscImage, archive_path: &str, into: &mut Survey) {
                 continue;
             }
             let payload = &model[range];
-            if let Ok(geometry) = collision::parse_chunks(payload)
+            if let Ok(geometry) = collision::parse_chunks(payload, vex::byte_order(&model))
                 && geometry.padded_len() == payload.len()
                 && geometry.vertex_count() > 2
             {
@@ -533,7 +533,7 @@ fn collision_shaped(
                 continue;
             }
             let payload = &model[range];
-            if let Ok(geometry) = collision::parse_chunks(payload)
+            if let Ok(geometry) = collision::parse_chunks(payload, vex::byte_order(&model))
                 && geometry.padded_len() == payload.len()
                 && geometry.version == collision::HEADER_WORD
                 && geometry.vertex_count() > 2

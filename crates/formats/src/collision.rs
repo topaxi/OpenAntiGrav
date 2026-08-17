@@ -99,6 +99,7 @@
 use std::fmt;
 use std::ops::Range;
 
+use crate::ByteOrder;
 use crate::vex;
 
 /// Bytes of payload header before the first object.
@@ -674,13 +675,13 @@ impl CollisionGeometry {
 /// its input is a whole node. Compare
 /// [`CollisionGeometry::padded_len`] against the payload length to check, which
 /// is what [`from_vex`] does.
-pub fn parse_chunks(payload: &[u8]) -> Result<CollisionGeometry> {
+pub fn parse_chunks(payload: &[u8], order: ByteOrder) -> Result<CollisionGeometry> {
     if payload.len() < HEADER_LEN {
         return Err(Error::TooShort { got: payload.len() });
     }
 
-    let version = u32_at(payload, 0);
-    let object_count = u32_at(payload, 4) as usize;
+    let version = u32_at(order, payload, 0);
+    let object_count = u32_at(order, payload, 4) as usize;
 
     // The count is a u32 out of a file, so it is not a capacity. An object is at
     // least its chunk count, which bounds how many can possibly be present.
@@ -689,7 +690,7 @@ pub fn parse_chunks(payload: &[u8]) -> Result<CollisionGeometry> {
 
     let mut at = HEADER_LEN;
     for object in 0..object_count {
-        let (mesh, next) = parse_object(payload, at, object)?;
+        let (mesh, next) = parse_object(payload, order, at, object)?;
         meshes.push(mesh);
         at = next;
     }
@@ -698,7 +699,12 @@ pub fn parse_chunks(payload: &[u8]) -> Result<CollisionGeometry> {
 }
 
 /// Decodes one object, returning it and the offset just past it.
-fn parse_object(payload: &[u8], at: usize, object: usize) -> Result<(CollisionMesh, usize)> {
+fn parse_object(
+    payload: &[u8],
+    order: ByteOrder,
+    at: usize,
+    object: usize,
+) -> Result<(CollisionMesh, usize)> {
     let mut cursor = end_of(
         "object header",
         object,
@@ -706,7 +712,7 @@ fn parse_object(payload: &[u8], at: usize, object: usize) -> Result<(CollisionMe
         OBJECT_HEADER_LEN,
         payload.len(),
     )?;
-    let chunk_count = u32_at(payload, at) as usize;
+    let chunk_count = u32_at(order, payload, at) as usize;
 
     let capacity = chunk_count.min((payload.len() - cursor) / CHUNK_HEADER_LEN);
     let mut chunks: Vec<Chunk> = Vec::with_capacity(capacity);
@@ -720,9 +726,9 @@ fn parse_object(payload: &[u8], at: usize, object: usize) -> Result<(CollisionMe
             payload.len(),
         )?;
 
-        let kind = u32_at(payload, cursor);
-        let declared = u16_at(payload, cursor + 4);
-        let count = usize::from(u16_at(payload, cursor + 6));
+        let kind = u32_at(order, payload, cursor);
+        let declared = u16_at(order, payload, cursor + 4);
+        let count = usize::from(u16_at(order, payload, cursor + 6));
 
         let stride = chunk_stride(kind).ok_or(Error::UnknownChunk { object, kind })?;
         // The exporter writes the stride into the header and the loader ignores
@@ -758,14 +764,26 @@ fn parse_object(payload: &[u8], at: usize, object: usize) -> Result<(CollisionMe
     let vertices = find(CHUNK_VERTICES).map_or_else(Vec::new, |chunk| {
         let body = &payload[chunk.payload.clone()];
         body.chunks_exact(VERTEX_STRIDE)
-            .map(|v| [f32_at(v, 0), f32_at(v, 4), f32_at(v, 8)])
+            .map(|v| {
+                [
+                    f32_at(order, v, 0),
+                    f32_at(order, v, 4),
+                    f32_at(order, v, 8),
+                ]
+            })
             .collect()
     });
 
     let triangles: Vec<[u16; 3]> = find(CHUNK_TRIANGLES).map_or_else(Vec::new, |chunk| {
         let body = &payload[chunk.payload.clone()];
         body.chunks_exact(TRIANGLE_STRIDE)
-            .map(|t| [u16_at(t, 0), u16_at(t, 2), u16_at(t, 4)])
+            .map(|t| {
+                [
+                    u16_at(order, t, 0),
+                    u16_at(order, t, 2),
+                    u16_at(order, t, 4),
+                ]
+            })
             .collect()
     });
 
@@ -799,7 +817,7 @@ fn parse_object(payload: &[u8], at: usize, object: usize) -> Result<(CollisionMe
             }
             payload[chunk.payload.clone()]
                 .chunks_exact(SCALAR_STRIDE)
-                .map(|s| f32_at(s, 0))
+                .map(|s| f32_at(order, s, 0))
                 .collect()
         }
         None => vec![DEFAULT_VERTEX_SCALAR; vertices.len()],
@@ -860,6 +878,8 @@ pub fn from_vex(file: &[u8]) -> Result<Vec<CollisionNode>> {
     // is what `a_vex_walk_failure_is_propagated_rather_than_swallowed` exists to
     // stop.
     let classes = vex::classes_of(file)?;
+    // From the file's own magic, not from any platform: see `vex::byte_order`.
+    let order = vex::byte_order(file);
 
     for (node_index, node) in vex::nodes(file)?.into_iter().enumerate() {
         let Some(kind) = SurfaceKind::from_class_id(node.class_id, classes) else {
@@ -873,7 +893,7 @@ pub fn from_vex(file: &[u8]) -> Result<Vec<CollisionNode>> {
             len: file.len(),
         })?;
 
-        let geometry = parse_chunks(payload)?;
+        let geometry = parse_chunks(payload, order)?;
         // The closure check, enforced rather than merely available: a class ID
         // that is not really a collision node, or a walk that drifted, does not
         // land on the payload's 16-byte boundary.
@@ -915,16 +935,16 @@ fn end_of(what: &'static str, object: usize, at: usize, bytes: usize, len: usize
     Ok(end)
 }
 
-fn u16_at(data: &[u8], at: usize) -> u16 {
-    u16::from_le_bytes([data[at], data[at + 1]])
+fn u16_at(order: ByteOrder, data: &[u8], at: usize) -> u16 {
+    order.u16(data, at)
 }
 
-fn u32_at(data: &[u8], at: usize) -> u32 {
-    u32::from_le_bytes([data[at], data[at + 1], data[at + 2], data[at + 3]])
+fn u32_at(order: ByteOrder, data: &[u8], at: usize) -> u32 {
+    order.u32(data, at)
 }
 
-fn f32_at(data: &[u8], at: usize) -> f32 {
-    f32::from_bits(u32_at(data, at))
+fn f32_at(order: ByteOrder, data: &[u8], at: usize) -> f32 {
+    order.f32(data, at)
 }
 
 #[cfg(test)]
