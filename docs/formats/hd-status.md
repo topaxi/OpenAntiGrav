@@ -1,13 +1,28 @@
 # Wipeout HD / Fury: what the Pulse format layer already reads
 
-**This page is a measurement, not a milestone.** It records what happened when
-this project's existing format readings were pointed at *Wipeout HD / Fury*'s
-disc, per [ADR-0009](../architecture/adr/0009-multi-game-fanout.md)'s cheap
-probe - the same probe [pure-status](pure-status.md) is the write-up of, one
-title further along the lineage and one console generation across. Nothing here
-starts HD support; the [roadmap](../overview/roadmap.md#m8---beyond-pulse) has no
-milestone open on it. Every success is a fourth validation corpus for a format
-page; every failure is a finding about where the parsers overfit to the PSP.
+**This page started as a measurement, and part of it is now code.** It records
+what happened when this project's existing format readings were pointed at
+*Wipeout HD / Fury*'s disc, per
+[ADR-0009](../architecture/adr/0009-multi-game-fanout.md)'s cheap probe - the
+same probe [pure-status](pure-status.md) is the write-up of, one title further
+along the lineage and one console generation across. Every success is a fourth
+validation corpus for a format page; every failure is a finding about where the
+parsers overfit to the PSP.
+
+**A circuit draws, as of 2026-08-17:**
+
+```sh
+just view data/images/hdfury-ps3-eu-dec.iso:PS3_GAME/USRDIR/DATA00.PSARC \
+    --track /data/environments/talons_junction/track.vex
+```
+
+The [roadmap](../overview/roadmap.md#a-circuit-draws-as-of-2026-08-17) is where
+that is accounted for. Three things it is worth knowing here: the
+[`.psarc` reader](psarc.md) is in `oag-formats` now; `oag_formats::ByteOrder`
+exists and **neither `vex::nodes` nor `track::parse` takes it as an argument**,
+because each file declares its own order in its own magic; and `--mesh` still
+draws nothing, for the reason [the geometry has left the
+file](#the-geometry-has-left-the-file) gives.
 
 Nothing on this page has been verified under an emulator, and no PS3 executable
 has been read for any of it. Every score rests on static reading plus exact
@@ -177,7 +192,8 @@ identical nodes, which is the obvious candidate for the reference into
 `.rcsmodel` - unread, and named as unread.
 
 So `oag-view --mesh` cannot draw an HD track, and the reason is not the `.vex`
-layer at all.
+layer at all. `--track` can, and does: the ribbon is built from the `WO Track`
+spline, which is authored data that never moved.
 
 ## `WO Track`: version `0x106`, the same control point
 
@@ -451,16 +467,27 @@ Estimated from the [Pure fan-out](../architecture/pure-boot.md), which `git log`
 puts at four days elapsed from the title-axis split to a Pure race, plus the two
 things Pure did not need.
 
-**A driveable circuit - a fortnight.** A `.psarc` reader in `oag-formats` and an
-`oag_assets::Archive` source beside the WAD one (1-2 days; paths are real
-strings, and `Archive` is already `index_of_name`/`read(index)` shaped); a byte
-order threaded through `vex`, `track`, `collision`, `pads` and `pvs` (2-4 days -
-52 `from_le_bytes` sites across `crates/formats` and `crates/assets`, but only
-four in `vex.rs` and one in `track.rs`, because each module already funnels its
-reads through a helper); an `oag-hd` title crate (2-3 days); integration, a
-ground-truth test per claim, and docs (2-3 days). That reaches the `--ribbon`
-view on real geometry with Pulse's physics under a named stand-in, the way
-[Pure races today](pure-status.md).
+**The first two items are done, and the estimate for them was about right in
+total and wrong in shape.** A `.psarc` reader in `oag-formats` plus an
+`oag_assets::psarc::Archive` beside the WAD one was estimated at 1-2 days and
+was closer to half of one - the layout is 60 lines and the only judgement call
+was taking `miniz_oxide` for inflate rather than hand-rolling deflate.
+
+The byte order was estimated at 2-4 days, on a count of 52 `from_le_bytes`
+sites, and cost an afternoon: **the count was the wrong measure**. What mattered
+was that the two files a ribbon needs each carry a magic that *is* the
+discriminator, so `vex::byte_order` and `track::byte_order` sniff it and **no
+call site changed at all**. Only `vex::transform` and `track::start_position`
+take an order, because a bare matrix payload has no magic. The 52 sites are
+still there, in the mesh, batch, vertex and embedded-texture decoders - and they
+are correctly still little-endian, because a PS3 `.vex` has no geometry in it to
+reach them.
+
+What is left of the fortnight: an `oag-hd` title crate (2-3 days) and the boot
+path, for a *driveable* circuit on Pulse's physics under a named stand-in, the
+way [Pure races today](pure-status.md). Collision, both pad classes, the grid
+node and the PVS mask are all measured to read byte-swapped already, so that
+work is composition rather than format recovery.
 
 **Something that looks like Wipeout HD - months, and mostly one unknown.**
 `.gtf` is days. `.rcsmodel` is the variance: 686 MiB in an RSX vertex format

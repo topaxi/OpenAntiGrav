@@ -1079,9 +1079,10 @@ paths.
 - [ ] Networking
 - [x] **Wipeout Pure: intro to menu into a Time Trial** (2026-08-12)
 - [ ] Wipeout Pure: its own physics, HUD, boost plume, Zone mode, reset volumes
-- [~] Wipeout HD / Fury - **surveyed, not started.** Its disc opens, its archives
-      read, and the answer to "how much of this is new" is: less than expected.
-      See [hd-status](../formats/hd-status.md) and the section below
+- [~] Wipeout HD / Fury - **a circuit draws** (2026-08-17). Its disc opens, its
+      archives read, and `oag-view --track` renders Talon's Junction's spline
+      straight off the PS3 disc. See [hd-status](../formats/hd-status.md) and
+      the section below
 - [ ] Wipeout 2048
 - [ ] Omega Collection, if feasible
 
@@ -1147,12 +1148,41 @@ the same world coordinates**, Talon's Junction - this project's own reference
 circuit - among them. That is the finding that changes what a future HD effort
 costs: a Pulse capture and an HD run are comparable on identical geometry.
 
-Cost, if the milestone ever opens: about **a fortnight** to a driveable circuit
-in the `--ribbon` view on Pulse's physics under a named stand-in, the way Pure
-races today; **months** to something that looks like HD, nearly all of it
-`.rcsmodel`; and HD's own simulation is not estimable, being gated by
-[ADR-0009](../architecture/adr/0009-multi-game-fanout.md) item 2 *and* by the
-absence of any RPCS3 equivalent of the M3 harness.
+#### A circuit draws, as of 2026-08-17
+
+```sh
+just view data/images/hdfury-ps3-eu-dec.iso:PS3_GAME/USRDIR/DATA00.PSARC \
+    --track /data/environments/talons_junction/track.vex
+```
+
+That is Talon's Junction's ribbon, coloured per authored section, read out of
+the PS3 disc with nothing extracted to a file first. Four pieces landed to get
+there, each with a ground-truth test against the disc:
+
+1. **[`oag_formats::psarc`](../formats/psarc.md)** - the container, ported from
+   `scripts/psarc.py`. 11,664 of 11,664 entries carry the MD5 of their own
+   uppercased path.
+2. **[`oag_formats::ByteOrder`](../formats/hd-status.md)**, and both files that
+   need it read big-endian. Neither `vex::nodes` nor `track::parse` gained an
+   argument: **each file declares its own order in its own magic** - `VEXX`
+   against `XXEV`, `dtOW` against `WOtd` - so the order is read from the data,
+   never from the console, which is the rule
+   `oag_assets::source::Layout` states.
+3. **`oag_assets::psarc::Archive` and `oag_assets::Container`** - the runtime
+   half, and the dispatch that picks WAD or PSARC off the archive's magic.
+4. `oag_render::mesh::read_blob` goes through that dispatch, so every existing
+   viewer mode is pointed at a PS3 archive by changing the spec alone.
+
+**`--mesh` still draws nothing on an HD file, and that is not a bug in any of
+the above**: HD's render geometry left the `.vex` for `.rcsmodel`, which is
+unread. A `Mesh` node on HD is a bounding-box pair and a 32-bit reference.
+
+What is still ahead: about a week to a *driveable* circuit - collision, pads and
+the grid all read byte-swapped already, so the work is the title crate and the
+boot path rather than any format; **months** to something that looks like HD,
+nearly all of it `.rcsmodel`; and HD's own simulation is not estimable, being
+gated by [ADR-0009](../architecture/adr/0009-multi-game-fanout.md) item 2 *and*
+by the absence of any RPCS3 equivalent of the M3 harness.
 
 ---
 

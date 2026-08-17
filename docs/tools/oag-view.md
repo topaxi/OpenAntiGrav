@@ -141,6 +141,24 @@ built from each control point's own half-widths, coloured per visibility
 `section`, with the authored racing line and the AI corridor edges drawn at hover
 height above it. It also prints the path and junction graph.
 
+### It reads a PS3 archive too
+
+```sh
+oag-view data/images/hdfury-ps3-eu-dec.iso:PS3_GAME/USRDIR/DATA00.PSARC \
+    --track /data/environments/talons_junction/track.vex --screenshot /tmp/hd.png
+```
+
+Same flag, different container. The archive spec is the only thing that changes:
+`oag_assets::Container` picks WAD or [PSARC](../formats/psarc.md) off the
+archive's own magic, a PSARC names its entries by real path rather than by a
+hash, and the `.vex` and `WO Track` payload inside each declare their own byte
+order. The image has to be
+[layer-1 decrypted](../formats/ps3-disc.md) first.
+
+**`--mesh` on that same file draws nothing**, and that is not a bug in the
+viewer: Wipeout HD's render geometry lives in `.rcsmodel`, which is unread. See
+[hd-status](../formats/hd-status.md#the-geometry-has-left-the-file).
+
 Two reasons it draws the spline rather than the geometry. It needs nothing from
 the scene hierarchy, which is still undecoded, so it works now. And a wrong
 spline decode does not look subtly off, it looks like scribble, which makes this
