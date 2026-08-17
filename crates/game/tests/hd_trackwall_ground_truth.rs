@@ -22,8 +22,9 @@
 //! table on the strength of a name. These tests are what replaced the name with
 //! measurements, and they are three separate claims:
 //!
-//! 1. **It is collision geometry, everywhere.** All 16 circuits author exactly
-//!    one, all 16 payloads parse to a clean end.
+//! 1. **It is collision geometry, everywhere.** All 28 circuit files author
+//!    exactly one - 16 forward and 12 reversed, which is the whole `0x3ed`
+//!    census - and all 28 payloads parse to a clean end.
 //! 2. **It behaves as a wall and not as any other class.** Its triangles stand
 //!    on end where the floor's lie flat, and it occupies the road's own volume
 //!    rather than [`SurfaceKind::Wall`]'s much larger one. That is the same
@@ -45,24 +46,42 @@ use oag_physics::{Body, Environment, ShipControls, ShipState, SpeedClass, Surfac
 /// The decrypted PS3 image.
 const PS3_IMAGE: &str = "hdfury-ps3-eu-dec.iso";
 
-/// Every circuit on the disc, with the archive holding it.
-const CIRCUITS: &[(&str, &str)] = &[
-    ("DATA00.PSARC", "amphiseum"),
-    ("DATA00.PSARC", "modesto_heights"),
-    ("DATA00.PSARC", "talons_junction"),
-    ("DATA00.PSARC", "tech_de_ra"),
-    ("DATA00.PSARC", "zone_1"),
-    ("DATA00.PSARC", "zone_2"),
-    ("DATA00.PSARC", "zone_3"),
-    ("DATA00.PSARC", "zone_4"),
-    ("DATA02.PSARC", "01_vineta_k"),
-    ("DATA02.PSARC", "02_track"),
-    ("DATA02.PSARC", "03_track"),
-    ("DATA02.PSARC", "04_chenghou_project"),
-    ("DATA02.PSARC", "05_ubermall"),
-    ("DATA02.PSARC", "10_sebenco_climb"),
-    ("DATA02.PSARC", "12_sol_2"),
-    ("DATA02.PSARC", "15_anulpha_pass"),
+/// Every circuit file on the disc: 16 forward and 12 reversed, which is
+/// **all 28** the class census in `docs/formats/hd-status.md` counts.
+///
+/// The four Zone circuits ship no reversed variant, and the reversed files sit
+/// in a *different archive* from their forward twin on the eight `DATA02`
+/// circuits - `DATA03`, the one that also holds four of the twelve teams. A
+/// list built from one archive comes back 12 short and looks complete.
+const CIRCUITS: &[(&str, &str, &str)] = &[
+    ("DATA00.PSARC", "amphiseum", "track"),
+    ("DATA00.PSARC", "modesto_heights", "track"),
+    ("DATA00.PSARC", "talons_junction", "track"),
+    ("DATA00.PSARC", "tech_de_ra", "track"),
+    ("DATA00.PSARC", "zone_1", "track"),
+    ("DATA00.PSARC", "zone_2", "track"),
+    ("DATA00.PSARC", "zone_3", "track"),
+    ("DATA00.PSARC", "zone_4", "track"),
+    ("DATA00.PSARC", "amphiseum", "track_reversed"),
+    ("DATA00.PSARC", "modesto_heights", "track_reversed"),
+    ("DATA00.PSARC", "talons_junction", "track_reversed"),
+    ("DATA00.PSARC", "tech_de_ra", "track_reversed"),
+    ("DATA02.PSARC", "01_vineta_k", "track"),
+    ("DATA02.PSARC", "02_track", "track"),
+    ("DATA02.PSARC", "03_track", "track"),
+    ("DATA02.PSARC", "04_chenghou_project", "track"),
+    ("DATA02.PSARC", "05_ubermall", "track"),
+    ("DATA02.PSARC", "10_sebenco_climb", "track"),
+    ("DATA02.PSARC", "12_sol_2", "track"),
+    ("DATA02.PSARC", "15_anulpha_pass", "track"),
+    ("DATA03.PSARC", "01_vineta_k", "track_reversed"),
+    ("DATA03.PSARC", "02_track", "track_reversed"),
+    ("DATA03.PSARC", "03_track", "track_reversed"),
+    ("DATA03.PSARC", "04_chenghou_project", "track_reversed"),
+    ("DATA03.PSARC", "05_ubermall", "track_reversed"),
+    ("DATA03.PSARC", "10_sebenco_climb", "track_reversed"),
+    ("DATA03.PSARC", "12_sol_2", "track_reversed"),
+    ("DATA03.PSARC", "15_anulpha_pass", "track_reversed"),
 ];
 
 /// A fixed 60 Hz tick, matching the rest of the simulation.
@@ -97,13 +116,13 @@ fn image() -> Option<PathBuf> {
     None
 }
 
-/// One circuit's `track.vex`, straight out of its archive.
-fn track(archive: &str, circuit: &str) -> Option<Vec<u8>> {
+/// One circuit file, straight out of its archive.
+fn track(archive: &str, circuit: &str, file: &str) -> Option<Vec<u8>> {
     let image = image()?;
     let spec = format!("{}:PS3_GAME/USRDIR/{archive}", image.display());
     let mut open = oag_assets::psarc::Archive::open(&spec).expect("the archive opens");
     Some(
-        open.read_path(&format!("/data/environments/{circuit}/track.vex"))
+        open.read_path(&format!("/data/environments/{circuit}/{file}.vex"))
             .expect("the circuit's .vex reads"),
     )
 }
@@ -185,8 +204,9 @@ fn shape_of(nodes: &[CollisionNode], kind: SurfaceKind) -> Shape {
 fn every_circuit_authors_one_barrier_that_stands_on_end_over_the_road() {
     let mut measured = 0;
     let mut worst = f32::MAX;
-    for (archive, circuit) in CIRCUITS {
-        let Some(blob) = track(archive, circuit) else {
+    for (archive, circuit, file) in CIRCUITS {
+        let label = format!("{circuit}/{file}");
+        let Some(blob) = track(archive, circuit, file) else {
             return;
         };
         let nodes = collision::from_vex(&blob).expect("the collision nodes decode");
@@ -197,14 +217,14 @@ fn every_circuit_authors_one_barrier_that_stands_on_end_over_the_road() {
             .count();
         assert_eq!(
             barriers, 1,
-            "{circuit}: {barriers} collision_trackwall node(s), expected exactly one"
+            "{label}: {barriers} collision_trackwall node(s), expected exactly one"
         );
 
         let barrier = shape_of(&nodes, SurfaceKind::TrackWall);
         let floor = shape_of(&nodes, SurfaceKind::Floor);
         let wall = shape_of(&nodes, SurfaceKind::Wall);
         println!(
-            "{circuit:>20}: barrier {:5} tri {:5.1} % upright, extent {:?}; \
+            "{label:>32}: barrier {:5} tri {:5.1} % upright, extent {:?}; \
              floor {:5} tri {:5.1} %, extent {:?}; wall {:5} tri {:5.1} %",
             barrier.triangles,
             100.0 * barrier.upright_fraction(),
@@ -218,7 +238,7 @@ fn every_circuit_authors_one_barrier_that_stands_on_end_over_the_road() {
 
         assert!(
             barrier.triangles > 1_000,
-            "{circuit}: the barrier decoded to only {} triangle(s)",
+            "{label}: the barrier decoded to only {} triangle(s)",
             barrier.triangles
         );
         // Calibrated, not chosen: the floor is 2 % upright on Talon's Junction
@@ -227,7 +247,7 @@ fn every_circuit_authors_one_barrier_that_stands_on_end_over_the_road() {
         // at 64.6 % and it is the only one under 86 %.
         assert!(
             barrier.upright_fraction() > 0.6,
-            "{circuit}: only {:.1} % of the barrier stands on end, which is not \
+            "{label}: only {:.1} % of the barrier stands on end, which is not \
              a wall-shaped statistic",
             100.0 * barrier.upright_fraction()
         );
@@ -237,7 +257,7 @@ fn every_circuit_authors_one_barrier_that_stands_on_end_over_the_road() {
             let (b, f) = (barrier.extent()[axis], floor.extent()[axis]);
             assert!(
                 b <= f * 1.25 && b >= f * 0.75,
-                "{circuit}: barrier extent {b} on axis {axis} against the floor's \
+                "{label}: barrier extent {b} on axis {axis} against the floor's \
                  {f}, so it is not co-extensive with the road"
             );
         }
@@ -256,7 +276,7 @@ fn every_circuit_authors_one_barrier_that_stands_on_end_over_the_road() {
 #[test]
 #[ignore = "needs a decrypted PS3 disc image in data/images"]
 fn the_barrier_reaches_the_collision_world_the_race_queries() {
-    let Some(blob) = track("DATA00.PSARC", "talons_junction") else {
+    let Some(blob) = track("DATA00.PSARC", "talons_junction", "track") else {
         return;
     };
     let nodes = collision::from_vex(&blob).expect("the collision nodes decode");
@@ -302,7 +322,7 @@ fn a_ship_thrown_at_hds_barrier_does_not_pass_through_it() {
     let Some(image) = image() else {
         return;
     };
-    let Some(blob) = track("DATA00.PSARC", "talons_junction") else {
+    let Some(blob) = track("DATA00.PSARC", "talons_junction", "track") else {
         return;
     };
     let nodes = collision::from_vex(&blob).expect("the collision nodes decode");

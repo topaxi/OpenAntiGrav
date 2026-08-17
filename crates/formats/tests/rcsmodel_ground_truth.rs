@@ -19,7 +19,7 @@
 //! against, and the one that made `docs/formats/psarc.md`'s per-entry digest
 //! check worth writing.
 //!
-//! Four claims, in order of how much they would cost to get wrong:
+//! Five claims, in order of how much they would cost to get wrong:
 //!
 //! 1. **Every `Mesh` node's hash resolves to a chunk.** The link is the whole
 //!    reason the two files can be read together at all.
@@ -33,6 +33,9 @@
 //!    one that does not need the `.vex` at all - it is arithmetic on two fields
 //!    of the `.rcsmodel` - and it agrees with the box on 19 and with the
 //!    compactness rule on 96, contradicting neither anywhere.
+//! 5. **What the box-less rules decide stays inside the circuit.** The
+//!    unreferenced path has no authored box to filter a stray submesh against,
+//!    so this is the check that stands in for one.
 
 use std::path::{Path, PathBuf};
 
@@ -293,6 +296,79 @@ fn the_stride_the_buffer_layout_gives_is_the_one_the_box_and_the_span_give() {
         vs_box >= 15 && vs_span >= 90,
         "{vs_box} and {vs_span} is too few to mean anything"
     );
+}
+
+/// Claim 5: nothing the box-less rules decide lands outside the circuit.
+///
+/// **The guard the unreferenced path does not otherwise have.** A referenced
+/// mesh is filtered submesh by submesh through
+/// [`rcsmodel::Mesh::submesh_fits`], because a stride right for a mesh can be
+/// wrong for one of its submeshes and that submesh's attribute bytes then come
+/// out as positions - trap 2 in `docs/formats/rcsmodel.md`, the one that framed
+/// Assegai as a speck. A chunk no node references has no box to filter against.
+///
+/// So this measures the shape of what those rules produce. A misread submesh
+/// reads bytes normalised over the whole `i16` range as positions, which at the
+/// `1/128` scale puts points up to 256 units from the chunk's own bias in
+/// *every* axis - and a circuit is flat: Talon's Junction's floor collision
+/// spans 194 units vertically over 1,476 by 1,088.
+///
+/// **Measured: not one of the 868 submeshes drawn this way leaves +/-400.** The
+/// widest world-space `y` span is 306 units on a chunk only the layout rule
+/// decides, 237 where both rules agree and 189 where only compactness does.
+/// The layout-only chunks being the largest is expected rather than alarming -
+/// the compactness rule needs the true reading to be *decisively* smaller than
+/// the wrong one, and that margin is narrowest on a big chunk, so it declines
+/// on exactly those.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn nothing_the_box_less_rules_decide_lands_outside_the_circuit() {
+    /// Generous against the 306 measured, tight against the 256-per-axis
+    /// scatter a misread would produce on a chunk anywhere but the middle.
+    const ENVELOPE: f32 = 400.0;
+
+    let Some((blob, model_blob)) = pair(
+        "DATA00.PSARC",
+        "/data/environments/talons_junction/track.vex",
+        "/data/environments/talons_junction/track.rcsmodel",
+    ) else {
+        return;
+    };
+    let model = rcsmodel::Model::parse(&model_blob).expect("the .rcsmodel parses");
+    let placed: std::collections::BTreeSet<u32> = mesh_nodes(&blob)
+        .into_iter()
+        .map(|(_, hash, ..)| hash)
+        .collect();
+
+    let (mut checked, mut widest) = (0usize, 0.0f32);
+    for mesh in &model.meshes {
+        if placed.contains(&mesh.hash) {
+            continue;
+        }
+        let Some(stride) = mesh.solve_stride_without_a_box(&model_blob) else {
+            continue;
+        };
+        for submesh in &mesh.submeshes {
+            let Ok(points) = mesh.positions(&model_blob, submesh, stride) else {
+                continue;
+            };
+            let (lo, hi) = points.iter().fold((f32::MAX, f32::MIN), |(lo, hi), p| {
+                (lo.min(p[1]), hi.max(p[1]))
+            });
+            if points.is_empty() {
+                continue;
+            }
+            checked += 1;
+            widest = widest.max(hi - lo);
+            assert!(
+                lo > -ENVELOPE && hi < ENVELOPE,
+                "a chunk decoded at stride {stride} spans y {lo}..{hi}, which is \
+                 not a piece of a circuit"
+            );
+        }
+    }
+    println!("{checked} box-less submeshes, widest world y span {widest}");
+    assert!(checked >= 800, "only {checked} submeshes reach this path");
 }
 
 /// Claim 3: the recovered vertex stride fills the box the `.vex` authors.

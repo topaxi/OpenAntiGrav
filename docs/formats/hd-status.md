@@ -161,26 +161,29 @@ name it; what changed is below.
 ### `0x3ed` is the barrier along the road
 
 **Confidence 85, and the name in the code is still HD's own, not a table
-entry.** Every circuit on the disc authors exactly one node of this class, under
-the node name `collision_trackwall`. Four measurements settle what it *is*,
-taken over all 16 circuits by
+entry.** Every circuit file on the disc authors exactly one node of this class,
+under the node name `collision_trackwall` - all **28** of them, which is 16
+forward circuits and the 12 `track_reversed.vex` that account for the rest of
+the census row above. Four measurements settle what it *is*, taken over all 28
+by
 [`hd_trackwall_ground_truth.rs`](../../crates/game/tests/hd_trackwall_ground_truth.rs):
 
-1. **Its payload is collision geometry.** All 16 carry the all-ones header word
+1. **Its payload is collision geometry.** All 28 carry the all-ones header word
    every [collision](collision.md) payload carries and parse to a clean end
-   through the existing decoder with nothing left over - 3,036 to 4,974
+   through the existing decoder with nothing left over - 2,174 to 4,974
    triangles each.
 2. **Its triangles stand on end.** 97 % of them are more than 60 degrees off
-   horizontal, median over the 16, worst 64.6 % on `03_track` and 13 of 16 above
-   89 %. On the same circuits `Floor Collision` reads 0 - 19 % and
-   `Wall Collision` 12 - 89 %. This is the facing statistic
+   horizontal, median over the 28, worst **64.5 %** on `03_track/track_reversed`
+   and 24 of 28 above 89 %. On the same files `Floor Collision` reads 0 - 19 %
+   and `Wall Collision` 12 - 89 %. This is the facing statistic
    [collision](collision.md) settled Pure's classes with, and here it is
    calibrated against two classes on the *same file* rather than across discs.
 3. **It occupies the road, not the environment.** Talon's Junction's barrier
    spans 1476 x 194 x 1088 against its floor's 1482 x 189 x 1095 - within 1 % on
    every axis - where `Wall Collision` spans 2185 x 511 x 2300. The test asserts
    the barrier stays within a quarter of the floor's extent on all three axes of
-   all 16 circuits, and all 16 pass.
+   all 28 files, and all 28 pass - the tightest being `12_sol_2` at 220 against
+   258 in `y`.
 4. **A craft stops at it.** Thrown at one of its triangles at 150 units/s, a
    hull penetrates 5.5 units and comes back - which is the point of the other
    three.

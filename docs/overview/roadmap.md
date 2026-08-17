@@ -1246,7 +1246,8 @@ just view data/images/hdfury-ps3-eu-dec.iso:PS3_GAME/USRDIR/DATA02.PSARC \
 **[`.rcsmodel`](../formats/rcsmodel.md) is read** - the container the "months,
 nearly all of it `.rcsmodel`" estimate above was about. Assegai draws from its
 own PS3 geometry, 18,911 triangles over 13 of its 15 mesh nodes; Talon's
-Junction draws 357,790, and both go through the race path as well as the viewer.
+Junction draws **411,617** over 70 of its 126 plus 655 chunks no node
+references, and both go through the race path as well as the viewer.
 
 Four things worth knowing before touching it:
 
@@ -1256,11 +1257,15 @@ Four things worth knowing before touching it:
     three. The 8 to 16 attribute bytes after each position are undecoded and are
     not read, so the models are untextured and lit off **computed face
     normals** - a derivation from the decoded geometry, called out as such.
-12. **The vertex stride is in no field of the file.** Searched exhaustively over
-    138 submeshes whose stride an authored box settles: nothing in the 0x80-byte
-    descriptor matches it on more than one of them. It is recovered from the
-    `.vex` node's own bounding box instead, requiring the points to *fill* the
-    box rather than merely fit inside it - 0 ambiguous across 89 meshes.
+12. **The vertex stride is in no field of the file**, and it is not in the
+    `.rcsmaterial` either - that was the leading guess at confidence 40, one was
+    read, and it is a compiled RSX shader container. Three rules recover the
+    number without it: the `.vex` node's authored box, requiring the points to
+    *fill* it rather than merely fit inside; the file's own **buffer packing**,
+    where the step between two submeshes' vertex buffers over the first's vertex
+    count *is* the stride; and the geometry's compactness. They agree everywhere
+    more than one of them answers - 19 of 19 against the box and 96 of 96
+    against compactness, with no contradiction anywhere.
 13. **HD's road is not in the `.vex` at all.** All 126 `Mesh` nodes of
     `talons_junction/track.vex` are props; the circuit is among the 904 of 983
     chunks nothing references, each carrying a world-space bias. A first render
@@ -1269,6 +1274,30 @@ Four things worth knowing before touching it:
     many nodes addressed no chunk, how many had no recoverable stride, how many
     submeshes were dropped. A circuit that silently drew two thirds of itself
     would look like a working feature.
+
+#### HD's track walls collide, the same day
+
+```sh
+cargo run -p oag-game --bin oag-game -- --race --hold cross --ticks 600 \
+    --screenshot /tmp/hd.png data/images/hdfury-ps3-eu-dec.iso
+```
+
+**Class `0x3ed` is a sixth collision class**, and every one of HD's 28 circuit
+files authors exactly one node of it under the name `collision_trackwall`. This
+page's earlier account of the HD collision pass left it deliberately unnamed,
+because a node name is not evidence; what named it is geometry, over all 28:
+every payload parses, **97 % of its triangles stand on end** against the floor's
+0 - 19 % and `Wall Collision`'s 12 - 89 % on the same file, and its extent
+matches the *floor's* within 1 % on every axis where `Wall Collision` is half
+again as large. It is the barrier along the road; HD's `Wall Collision` is the
+scenery beyond it.
+
+A circuit's collision world went from `4 node(s) -> 400 collider(s), 12,737
+triangle(s)` to `5 -> 530, 16,883`, and a craft thrown at the barrier at 150
+units/s stops. What is still open, and stated as such: whether *Pulse's* class
+table names this ID, and HD's own surface-type byte, which needs a PS3
+disassembly nobody has done. See
+[hd-status](../formats/hd-status.md#0x3ed-is-the-barrier-along-the-road).
 
 What is still ahead: the attribute layout and `.gtf`, for a *textured* HD;
 `.pvs`, for drawing a section at a time rather than all 904 chunks; and HD's own
