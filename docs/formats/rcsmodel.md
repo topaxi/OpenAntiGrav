@@ -27,8 +27,8 @@ just view data/images/hdfury-ps3-eu-dec.iso:PS3_GAME/USRDIR/DATA00.PSARC \
 | Position format | `i16` triple through a per-mesh `bias + q * scale` | 92 |
 | Scale | `1/128` on all but 24 of `talons_junction`'s 983 chunks | 90 |
 | Index format | Big-endian `u16` triangle list | 95 |
-| Vertex stride | **Not in the file.** 14, 18 or 22, recovered by consequence | 80 |
-| Where the stride really is | Unknown; the `.rcsmaterial` is the leading guess | 40 |
+| Vertex stride | **In no field of the file.** 14, 18 or 22, recovered three ways | 88 |
+| Where the stride is declared | Unknown, and **not** in the `.rcsmaterial` - see below | - |
 | Attributes after the position | Undecoded, and not read | - |
 
 ## What is decoded, and what is not
@@ -55,8 +55,10 @@ This format cannot be read on its own, and that is a property of the format:
 - **A chunk is addressed by hash.** The 32-bit word at a `Mesh` node's `+0x30`
   is the chunk's own first word. Without the `.vex` you have geometry and no
   idea which node - and therefore which world transform - it belongs to.
-- **The vertex stride is not stored.** It is recovered from the bounding box the
-  `.vex` node authors; see below.
+- **The vertex stride is not stored**, and the `.vex` node's authored box is the
+  tightest oracle for it. Not the only one any more - the buffer layout settles
+  it without leaving the file, and that is what the `.vex`-free rules below rest
+  on - but the box is what every other rule was checked against.
 
 ## Layout
 
@@ -148,14 +150,43 @@ stride an authored bounding box settles independently:
 `8308...` appears with all three widths, so the word is not a format id in the
 sense that would fix a stride.
 
-**The leading hypothesis, at confidence 40, is the `.rcsmaterial`**: it binds a
-shader, a shader declares its input layout, and a model file that stores paths
-to materials would not need to repeat it. 1,632 of them ship, unread. Reading
-one is what closes this.
+### The `.rcsmaterial` was the leading hypothesis, and it is not the answer
+
+This page used to say, at confidence 40, that the `.rcsmaterial` was where the
+stride would turn out to live: it binds a shader, a shader declares its input
+layout, and a model file that stores paths to materials would not need to repeat
+it. **One was read on 2026-08-17 and that is not what it is.**
+
+`data/materials/billboards/cf_fx350.rcsmaterial`, 1,536 bytes, is a **compiled
+RSX shader container**. Its shape, so nobody reads it twice for this:
+
+```text
++0x000  u32     2, then a 0x100-byte header block
++0x010  u32[9]  parameter name hashes
++0x100  ...     two shader-object records: source offsets, sizes, a 'SHO' block each
++0x1a0  'SHO'   shader object, then Cg/RSX microcode to the end of the file
++0x1d0  ...     bindings: (name hash, u16 type, u16 count, u16 register, 0xffff)
+```
+
+The bindings are shader *parameters* - constants and samplers, addressed by
+hashed name and by RSX register - not a vertex input layout, and the microcode
+after them would have to be disassembled to recover one. That is a real piece of
+work and it is no longer on the critical path, because the layout rule below
+answers the question the `.rcsmaterial` was being read for. **Nothing in this
+project reads a `.rcsmaterial` today**, and the hypothesis is withdrawn rather
+than left standing at 40.
+
+There is also no *link* from a submesh to a material. The 0x80-byte descriptor
+has no field that partitions the 123 stride-labelled submeshes into few enough
+groups to be a material index: every candidate is either the buffer offsets
+(123 distinct values over 123 submeshes, so "pure" by being unique) or a field
+that mixes strides. Finding the binding would be the first step of that work,
+not a detail of it.
 
 ### How it is recovered instead
 
-Two rules, both validated against an oracle the format itself supplies.
+Three rules. The first two are validated against an oracle the format supplies;
+the third validates *them*.
 
 **Where a `.vex` node references the chunk** - every craft mesh, and the props
 on a circuit - the node's authored bounding box settles it. `min <= max` holds
@@ -194,6 +225,38 @@ median 0.02. The one disagreement is a mesh where the box admitted 36 and this
 picks 18 - half of it, so the box was matching every second vertex and the
 compactness rule is the better answer rather than a worse one.
 
+**Third, and structural rather than statistical: the file's own buffer layout.**
+A mesh's vertex buffers are packed back to back, so the step from one submesh's
+buffer to the next one's, over the first one's vertex count, *is* the stride -
+arithmetic on two numbers the file states outright, with no oracle and nothing
+decoded. Every consecutive pair votes and the majority wins.
+
+This is the strongest evidence on this page, and most of its value is what it
+says about the other two rules:
+
+| Against | Agrees | Disagrees |
+| --- | ---: | ---: |
+| The authored `.vex` box | 19 | **0** |
+| The compactness rule | 96 | **0** |
+
+Two rules that share no input - one about where bytes sit, one about what they
+decode to - agreeing exactly on 96 chunks is a better argument for the
+compactness rule than the compactness rule can make for itself. It also decides
+16 chunks compactness cannot, taking `talons_junction` from 718 to **734 of 983**,
+and lifts the three referenced meshes whose box settled nothing.
+
+It says nothing about a chunk with one submesh, which is most of a circuit's -
+so it is `solve_stride_by_layout` first and `solve_stride_by_extent` after, and
+the two are complements rather than alternatives.
+
+**One thing about it is unexplained.** The step is exactly `count * stride` on 38
+of 46 measured pairs and otherwise 16, 32 or 96 bytes *short* - always negative,
+always a multiple of 16. Why a buffer starts before the previous one's declared
+length ends is unrecovered, and the rule rounds rather than modelling it: the
+error is at most 96 bytes over at least 33 vertices, well inside the 2-byte gaps
+between the three widths, and a correction nobody can justify is worse than a
+rounding everybody can see.
+
 **Only 14, 18 and 22 are considered.** Searching every even width from 6 to 64
 is strictly worse on a circuit: 814 of `talons_junction`'s 983 chunks still
 choose one of the three, and the other 169 choose a width no measurement
@@ -225,21 +288,27 @@ chunks a section draws. Nothing here has read one.
 
 Named explicitly, with what each would take.
 
-1. **Where the vertex stride is stored.** Read a `.rcsmaterial`; it is the only
-   file in the chain that plausibly declares an input layout.
+1. **Where the vertex stride is *declared*.** Still nowhere anyone has found -
+   and no longer the `.rcsmaterial`, which was read and is compiled RSX shader
+   code. Three rules recover the number without it, so this is now a question
+   about the format rather than a blocker. The remaining routes are
+   disassembling a shader's microcode, or HD's own executable.
 2. **The attribute layout after the position** - normals, texture coordinates,
    tangents. Blocked behind the same question, and behind `.gtf` for anything to
    address.
-3. **56 of Talon's Junction's 126 `Mesh` nodes address no chunk.** All are
+3. **Why a vertex buffer sometimes ends 16, 32 or 96 bytes short** of
+   `vertex_count * stride`. 8 of 46 measured pairs, always negative, always a
+   multiple of 16. Harmless to the layout rule, unexplained all the same.
+4. **56 of Talon's Junction's 126 `Mesh` nodes address no chunk.** All are
    scenery (`Skycar_1Shape`, `tanker1aShape`, `shipintersteller1Shape`,
    `HyperContintentCraft1Shape`). No word anywhere in their payloads is a chunk
    hash in this file, and the circuit's directory holds no second model file. A
    shared props archive elsewhere on the disc is the obvious guess and has not
    been looked for.
-4. **Which chunk a `Skycube` or a pad belongs to.** Their `.vex` classes carry
+5. **Which chunk a `Skycube` or a pad belongs to.** Their `.vex` classes carry
    the same payload shape as a `Mesh` on the PSP, and on the PS3 the tie to a
    chunk has not been made - so a PS3 race draws neither.
-5. **The `.pvs` mapping**, which is what would let a renderer draw a section at
+6. **The `.pvs` mapping**, which is what would let a renderer draw a section at
    a time rather than all 904 chunks at once.
 
 ## See also

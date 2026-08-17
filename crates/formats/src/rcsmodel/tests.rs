@@ -197,6 +197,78 @@ fn a_mesh_whose_stride_is_not_determined_reports_nothing_rather_than_guessing() 
     assert_eq!(mesh.solve_stride(&data, CUBE_BOUNDS, 2.0 / 128.0), None);
 }
 
+/// A mesh whose only content is where its buffers sit, which is all
+/// [`Mesh::solve_stride_by_layout`] reads.
+fn packed(counts: &[usize], stride: usize) -> Mesh {
+    let mut at = 0x1000;
+    let submeshes = counts
+        .iter()
+        .map(|&vertex_count| {
+            let sub = SubMesh {
+                vertex_count,
+                vertex_offset: at,
+                index_count: 3,
+                index_offset: 0,
+            };
+            at += vertex_count * stride;
+            sub
+        })
+        .collect();
+    Mesh {
+        hash: 0xdead_beef,
+        bias: [0.0; 3],
+        scale: [1.0 / 128.0; 3],
+        submeshes,
+    }
+}
+
+#[test]
+fn packed_vertex_buffers_give_up_the_stride_they_were_written_at() {
+    for stride in [14, 18, 22] {
+        assert_eq!(
+            packed(&[424, 376, 56, 1240], stride).solve_stride_by_layout(),
+            Some(stride),
+            "stride {stride}"
+        );
+    }
+}
+
+/// The residual the disc actually carries: a buffer that starts up to 96 bytes
+/// before `count * stride` would end. Why is unrecovered; that it must not
+/// change the answer is the point.
+#[test]
+fn a_step_short_of_the_declared_length_still_rounds_to_the_right_width() {
+    let mut mesh = packed(&[1224, 1232, 1240], 22);
+    mesh.submeshes[1].vertex_offset -= 16;
+    mesh.submeshes[2].vertex_offset -= 16 + 96;
+    assert_eq!(mesh.solve_stride_by_layout(), Some(22));
+}
+
+#[test]
+fn one_submesh_is_no_step_to_measure_and_reports_nothing() {
+    assert_eq!(packed(&[424], 22).solve_stride_by_layout(), None);
+    assert_eq!(packed(&[], 22).solve_stride_by_layout(), None);
+}
+
+/// Equal support for two widths is not a majority, and there is no principle
+/// here that breaks the tie - so it is unknown, like every other unresolved
+/// stride in this module.
+#[test]
+fn two_widths_with_the_same_support_are_unknown_rather_than_the_first_one() {
+    let mut mesh = packed(&[100, 100, 100], 14);
+    // Leave pair one at 14 and put pair two at 22.
+    mesh.submeshes[2].vertex_offset = mesh.submeshes[1].vertex_offset + 100 * 22;
+    assert_eq!(mesh.solve_stride_by_layout(), None);
+}
+
+/// A step that is not one of the three widths the disc uses votes for nothing
+/// rather than widening the set, which is the trap that decoded a circuit to
+/// spikes - see [`STRIDES`].
+#[test]
+fn a_step_at_an_unsupported_width_votes_for_nothing() {
+    assert_eq!(packed(&[100, 100], 32).solve_stride_by_layout(), None);
+}
+
 /// No stride explains the box: `None`, not a guess.
 #[test]
 fn a_box_nothing_explains_is_none() {

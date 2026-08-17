@@ -215,9 +215,10 @@ pub fn build_scene(label: &str, data: &[u8], model_blob: &[u8]) -> Result<(Model
         if placed.contains(&mesh.hash) {
             continue;
         }
-        // No authored box to check against, so the stride comes from the
-        // geometry's own compactness - see `rcsmodel::Mesh::solve_stride_by_extent`.
-        let Some(stride) = mesh.solve_stride_by_extent(model_blob) else {
+        // No authored box to check against, so the stride comes from where the
+        // file puts its buffers, and failing that from the geometry's own
+        // compactness - see `rcsmodel::Mesh::solve_stride_without_a_box`.
+        let Some(stride) = mesh.solve_stride_without_a_box(model_blob) else {
             continue;
         };
         let mut emitted = false;
@@ -341,7 +342,14 @@ pub fn build(
         };
         report.addressed += 1;
         let tolerance = mesh.scale.iter().fold(0.0f32, |a, &b| a.max(b)) * TOLERANCE_STEPS;
-        let Some(stride) = mesh.solve_stride(model_blob, (min, max), tolerance) else {
+        // The box first, because it is the tightest oracle there is. Where it
+        // settles nothing, the buffer layout can - and that is safe to fall back
+        // to here rather than merely plausible, because every submesh still has
+        // to fit the authored box below before a triangle of it is drawn.
+        let Some(stride) = mesh
+            .solve_stride(model_blob, (min, max), tolerance)
+            .or_else(|| mesh.solve_stride_by_layout())
+        else {
             continue;
         };
 

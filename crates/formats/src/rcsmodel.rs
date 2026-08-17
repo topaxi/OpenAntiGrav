@@ -502,6 +502,93 @@ impl Mesh {
         (i64::from(best) * 2 <= i64::from(runner_up)).then_some(stride)
     }
 
+    /// Recovers the vertex stride from where the file **puts** its buffers,
+    /// rather than from what they decode to.
+    ///
+    /// A mesh's vertex buffers are packed back to back, so the distance from one
+    /// submesh's buffer to the next one's, over the first one's vertex count, is
+    /// the stride - arithmetic on two numbers the file states outright, with no
+    /// oracle and nothing decoded. Every consecutive pair votes and the majority
+    /// wins.
+    ///
+    /// # Why this is the rule to prefer
+    ///
+    /// It is **structural where the other two are not**. [`Self::solve_stride`]
+    /// needs a box the `.vex` authors, and [`Self::solve_stride_by_extent`] is a
+    /// statistic about what the bytes look like once read. This is neither: it
+    /// is the layout the exporter wrote.
+    ///
+    /// Measured against both:
+    ///
+    /// - **18 of 18 agreement with the authored box**, 0 disagreements, over
+    ///   every mesh of Assegai and Talon's Junction that has a box and more than
+    ///   one submesh.
+    /// - **95 of 95 agreement with the compactness rule** on `talons_junction`'s
+    ///   chunks where both decide. Two independent rules - one about layout, one
+    ///   about content - agreeing exactly is a far better argument for the
+    ///   compactness rule than the compactness rule can make for itself.
+    /// - It decides **16 chunks the compactness rule cannot**, and the
+    ///   compactness rule decides 623 this one cannot: a chunk with a single
+    ///   submesh has no step to measure, and most of a circuit's chunks are
+    ///   single-submesh. They are complements, not alternatives.
+    ///
+    /// # The rounding, and what is unexplained
+    ///
+    /// A step is usually exactly `vertex_count * stride`, but not always: the
+    /// residual `step - vertex_count * stride` is 0 on 38 of 46 measured pairs
+    /// and otherwise -16, -32 or -96 - always negative, always a multiple of 16.
+    /// **Why the next buffer starts before the previous one's declared length
+    /// ends is unrecovered**, and this rounds rather than modelling it, because a
+    /// correction nobody can justify is worse than a rounding everybody can see.
+    /// The error is at most 96 bytes over at least 33 vertices, well inside the
+    /// 2-byte gaps between the three widths.
+    ///
+    /// `None` for a mesh with fewer than two submeshes, or one whose pairs do
+    /// not agree on a width [`STRIDES`] carries.
+    #[must_use]
+    pub fn solve_stride_by_layout(&self) -> Option<usize> {
+        let mut by_offset: Vec<&SubMesh> = self.submeshes.iter().collect();
+        by_offset.sort_unstable_by_key(|sub| sub.vertex_offset);
+
+        let mut votes = vec![0usize; STRIDES.len()];
+        for pair in by_offset.windows(2) {
+            let [first, next] = pair else { continue };
+            if first.vertex_count == 0 || next.vertex_offset <= first.vertex_offset {
+                continue;
+            }
+            let step = next.vertex_offset - first.vertex_offset;
+            // Round to nearest without leaving integer arithmetic: the +/- 96
+            // residual above means the quotient is not exact.
+            let stride = (2 * step + first.vertex_count) / (2 * first.vertex_count);
+            if let Some(slot) = STRIDES.iter().position(|&s| s == stride) {
+                votes[slot] += 1;
+            }
+        }
+        let (slot, &best) = votes.iter().enumerate().max_by_key(|&(_, n)| n)?;
+        if best == 0 {
+            return None;
+        }
+        // A tie is two readings with equal support, and there is no principle
+        // here that breaks one - so it is unknown, the same answer the other two
+        // rules give when nothing stands out.
+        let tied = votes.iter().filter(|&&n| n == best).count() > 1;
+        (!tied).then(|| STRIDES[slot])
+    }
+
+    /// The stride of a chunk **no `.vex` node references**, which is most of a
+    /// circuit.
+    ///
+    /// Asks [`Self::solve_stride_by_layout`] first because it is structural, and
+    /// falls back to [`Self::solve_stride_by_extent`] because the layout rule
+    /// says nothing at all about a single-submesh chunk. On `talons_junction`
+    /// the two together decide **734 of 983** chunks where the compactness rule
+    /// alone decided 718, and they never disagree - 95 of 95 where both answer.
+    #[must_use]
+    pub fn solve_stride_without_a_box(&self, data: &[u8]) -> Option<usize> {
+        self.solve_stride_by_layout()
+            .or_else(|| self.solve_stride_by_extent(data))
+    }
+
     /// The widest axis span of the raw `i16` positions at `stride`, or `None`
     /// if no submesh could be read or the span passed `ceiling`.
     ///
