@@ -88,19 +88,32 @@ fn the_ids_differ_from_the_psp_titles_in_exactly_the_two_measured_ways() {
     assert_eq!(oag_pure::race::DEFAULT_TEAM, oag_pulse::race::DEFAULT_TEAM);
 }
 
-/// The front end is recovered as data and deliberately not wired.
+/// The front end is wired, and its boot chain still says it is only declared.
 ///
-/// **Asserted rather than left implicit**, because `front_end: None` next to a
-/// populated `frontend` module reads exactly like an oversight. It is not: see
-/// that module's docs. Whoever sets this to `Some` should have measured the boot
-/// chain, and this test is where they will be told so.
+/// **This test used to assert the opposite** - that `front_end` was `None` - and
+/// it was there to stop an unmeasured chain being shipped as a measured one.
+/// That intent is unchanged; only the seam it is enforced at has moved.
+/// `oag_title::Provenance` lets the order be expressed and labelled at once, so
+/// the thing to guard is no longer whether HD has a front end but whether
+/// anyone has quietly upgraded its provenance.
+///
+/// **Whoever changes this to `Measured` should have watched a PS3 boot**, and
+/// this test is where they will be told so. Reading the XML harder is not it -
+/// the XML is where `DECLARED_CHAIN` already came from, and Pulse is the proof
+/// that a disc's declaration and its runtime can simply disagree.
 #[test]
-fn the_layout_is_recovered_and_the_boot_chain_is_still_only_declared() {
-    assert!(
-        TITLE.front_end.is_none(),
-        "the declared chain is a hypothesis; BootProfile::chain is a measurement"
+fn the_front_end_is_wired_and_its_chain_is_still_only_declared() {
+    let front_end = TITLE
+        .front_end
+        .expect("HD's front end is wired; see frontend::FRONT_END");
+    assert_eq!(
+        front_end.boot.provenance,
+        oag_title::Provenance::Declared,
+        "no capture of a PS3 running this title exists in this project"
     );
+    assert!(!front_end.boot.provenance.is_measured());
     assert_eq!(frontend::MENU_SKIN.menu_x, 800.0, "1920-wide, not 480-wide");
+    assert_eq!(frontend::BOOT.chain, frontend::DECLARED_CHAIN);
     assert_eq!(frontend::DECLARED_CHAIN.len(), 8);
     assert_eq!(
         frontend::DECLARED_CHAIN

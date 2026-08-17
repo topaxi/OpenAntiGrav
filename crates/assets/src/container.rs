@@ -48,6 +48,20 @@ impl Container {
         Self::from_source(BlobSource::open_file(path)?, path.display().to_string())
     }
 
+    /// Whether this is a WAD, and so whether the hash-addressed reads are
+    /// available.
+    ///
+    /// Asked by a caller that has a *second* route for the other container
+    /// rather than one that is about to fail - [`Self::as_wad_mut`] is still how
+    /// a WAD-only path says so, and its error names what it wanted. The boot
+    /// movie is the case this exists for: a WAD addresses it by name hash and a
+    /// PSARC by path, and both work, so "which container is this?" is a real
+    /// question there rather than a prelude to an apology.
+    #[must_use]
+    pub fn is_wad(&self) -> bool {
+        matches!(self, Self::Wad(_))
+    }
+
     fn from_source(mut source: BlobSource, label: String) -> Result<Self> {
         let magic = source.read(0, 4)?;
         if magic == oag_formats::psarc::MAGIC {

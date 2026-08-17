@@ -81,6 +81,13 @@ pub const MUSIC: &oag_title::Music = &oag_title::Music {
 /// nothing they share and the two chains differ in length - which is the
 /// evidence [`oag_title::FrontEnd`] exists on.
 pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
+    root: names::FRONTEND_ROOT,
+    // The same five numbered plugins Pulse uses, and Pure resolves all of them;
+    // what it does *not* resolve is their string tables, which is a separate gap
+    // recorded in `HANDOVER.md`. Written out here for the reason
+    // `names::FRONTEND_ROOT` is: two titles agreeing is a measurement worth
+    // seeing rather than an arrangement to depend on.
+    language_plugins: &["PI008", "PI009", "PI010", "PI011", "PI012"],
     menu: frontend::MENU_SKIN,
     boot: frontend::BOOT_PROFILE,
 };
@@ -109,6 +116,19 @@ pub mod archives {
 /// Pulse-shaped path hits Pure's directory when Pure really has that entry.
 /// These are the ones confirmed present.
 pub mod names {
+    /// The front-end root: every boot screen, the `FEGlobals` variables, and
+    /// the `LoadXML` list that pulls in the rest of the menus.
+    ///
+    /// **The same path Pulse uses, and written out here rather than borrowed.**
+    /// Both PSP titles keep their front end in the numbered plugin `PI001`, and
+    /// on a two-title corpus that made one constant in `oag-pulse` the obvious
+    /// home for it. Wipeout HD names its plugins instead, so the path became a
+    /// per-title axis ([`oag_title::FrontEnd::root`]) and every title now states
+    /// its own - including the two that agree, since "these two happen to
+    /// match" is a measurement worth being able to see rather than an
+    /// arrangement to depend on.
+    pub const FRONTEND_ROOT: &str = r"Data\Plugins\PI001\GUI\Skin.xml";
+
     /// The game plugin's own definition.
     ///
     /// Carries Pure's `PI_Music` declarations as well as its circuits and

@@ -408,24 +408,33 @@ pub fn load_shell(options: &Options) -> Result<(Shell, oag_assets::Archives)> {
     // Which title this is was settled by the serial, here, and everything below
     // asks `profile` rather than asking the XML again. See ADR-0023.
     //
-    // **A title with no wired front end is refused by name.** Wipeout HD's menu
-    // layout *is* recovered (`oag_hd::frontend::MENU_SKIN`, off six agreeing
-    // copies of its `skin.xml`) and its boot chain is only what the XML
-    // declares, which is not what `BootProfile::chain` promises - so it holds at
-    // `None` rather than walking a hypothesis. Substituting a sibling title's
-    // chain would boot a sequence attributed to a disc nobody watched; see
-    // `oag_title::FrontEnd`. Its circuits still race - the refusal is this
-    // entry point's, not the whole title's.
+    // **A title with no recovered front end is still refused by name**, and no
+    // title is in that state today. What used to be refused here as well was a
+    // front end whose *chain* was only declared - Wipeout HD's - and that is now
+    // expressed rather than withheld: see `oag_title::Provenance` and ADR-0025.
+    // Substituting a sibling title's chain would still be wrong, and is still
+    // not done.
     let front_end = title.front_end.ok_or_else(|| {
         anyhow::anyhow!(
-            "{}'s front end is not wired up (its boot chain is declared, not \
-             measured): race on it with --race instead",
+            "{}'s front end is not recovered, so there is no sequence to walk: \
+             race on it with --race instead",
             title.name
         )
     })?;
     let profile = front_end.boot;
     report.push(archives.layout.describe());
     report.push(format!("{}: boot sequence", title.name));
+    // Said on every boot of such a title, and near the top where the reader is
+    // still looking: a sequence read out of the disc's XML is not a sequence
+    // anyone has watched, and a screenshot of it must not be filed as evidence
+    // of what the original does.
+    if !profile.provenance.is_measured() {
+        report.push(format!(
+            "{}: this order is what its front-end XML declares, not a boot \
+             anyone has watched",
+            title.name
+        ));
+    }
     if !archives.packs.is_empty() {
         report.push(format!(
             "dlc: {} archive(s) mounted behind this source",
@@ -446,12 +455,17 @@ pub fn load_shell(options: &Options) -> Result<(Shell, oag_assets::Archives)> {
     // **Languages before fonts**, because every face this source draws with is
     // named by a language plugin's `<Font>` slots - see [`load_font`], which
     // used to reach for a constant here and so did not need them.
-    let languages = load_languages(&mut archives, &mut report);
+    let languages = load_languages(&mut archives, front_end.language_plugins, &mut report);
     let offered = languages.clone();
     steps.lap("languages");
     let font = load_font(&mut archives, &languages, &mut report);
     steps.lap("font");
-    let screens = load_screens(&mut archives, profile.fallback_globals, &mut report)?;
+    let screens = load_screens(
+        &mut archives,
+        front_end.root,
+        profile.fallback_globals,
+        &mut report,
+    )?;
     steps.lap("screens");
     let strings = load_strings(
         &mut archives,
@@ -1349,116 +1363,9 @@ fn read_front_end_first(
     oag_pulse::read_image(archives, name)
 }
 
-/// Reads the front end's own font, falling back to the built-in glyphs.
-///
-/// A missing or undecodable font is not fatal: the menu still draws, in the 5x7
-/// approximation, and the report says which one is on screen. That matters more
-/// than it sounds - the two look very different, and a silent fallback would
-/// make a rendering bug indistinguishable from a loading one. The PS2 spent a
-/// while in exactly that state: its `.fnt` decodes as far as the metrics and
-/// then stops, because the glyph sheet is a separate archive entry.
-///
-/// Which is why this goes through [`oag_assets::Archives::read_font`]
-/// rather than [`read_front_end_first`] plus a parse: locating the atlas is the
-/// archive's problem, not the front end's. The two archives hold byte-identical
-/// copies of all five fonts on the PSP, checked, so reading the bulk one costs
-/// nothing there.
-/// **Which file that is comes from the disc**, through the same `<Font>` slots
-/// [`load_menu_font`] already resolved its own role through. This used to name
-/// `Data\FE\Fonts\pulse_text.fnt` outright, which is what Pulse's own `PI008`
-/// resolves `Default` to - correct there, and the reason a Pure boot drew its
-/// entire front end in 5x7: Pure resolves the same role to `FX300ANG.fnt` and
-/// shares no font filename with Pulse at all. Asking the plugin is not a new
-/// mechanism for a second title, it is the mechanism that was already there
-/// being asked one role earlier. See [`crate::language::roles`].
-fn load_font(
-    archives: &mut oag_assets::Archives,
-    languages: &[Language],
-    report: &mut Vec<String>,
-) -> crate::font::Atlas {
-    let role = crate::language::roles::DEFAULT;
-    let Some(name) = role_font(languages, role) else {
-        // Reported rather than fallen back to a remembered filename: a source
-        // whose plugins name no body face is a finding about that source, and a
-        // constant here would hide it behind another title's answer.
-        report.push(format!(
-            "no language plugin names a {role:?} font on this source; drawing with 5x7"
-        ));
-        return crate::font::Atlas::build();
-    };
-    match archives.read_font(&name).map_err(|e| e.to_string()) {
-        Ok(font) => {
-            let atlas = crate::font::Atlas::from_font(&font);
-            report.push(format!(
-                "font {name} (role {role:?}): {}x{} atlas, {} glyphs, line height {}",
-                font.width,
-                font.height,
-                font.glyphs.len(),
-                font.line_height
-            ));
-            atlas
-        }
-        Err(why) => {
-            report.push(format!("font {name} unavailable ({why}); drawing with 5x7"));
-            crate::font::Atlas::build()
-        }
-    }
-}
-
-/// The `.fnt` a role resolves to on this source, from its language plugins.
-///
-/// Any language will do: the plugins differ in which glyphs a face carries, not
-/// in which file a role names. `None` for a role no plugin on this source fills
-/// in - which is an ordinary answer rather than a failure, because the two discs
-/// fill in different subsets: Pure declares four slots to Pulse's eight.
-fn role_font(languages: &[Language], role: &str) -> Option<String> {
-    languages
-        .iter()
-        .find_map(|language| language.font(role))
-        .map(str::to_string)
-}
-
-/// Reads the face this title draws menu *rows* in, when it names one.
-///
-/// Separate from [`load_font`] rather than replacing it: the default face is
-/// what the language picker, the loading tips and the HUD are drawn with, and
-/// the picker's layout is measured against it at confidence 95. Only the menus
-/// move to the bigger face.
-///
-/// The role comes from the title's own `MenuSkin` and the file it resolves to
-/// comes from the language plugin's `<Font>` slots, so neither the role list nor
-/// the filenames are hard-coded here. `None` whenever any link in that chain is
-/// missing - a title whose menus name no role of their own, a plugin with no
-/// such slot, an unreadable `.fnt` - and the menus then draw in the default
-/// face, which is Pure's measured case as much as it is an absence of evidence.
-/// See [`oag_title::MenuSkin::menu_font`].
-fn load_menu_font(
-    archives: &mut oag_assets::Archives,
-    languages: &[Language],
-    skin: &oag_title::MenuSkin,
-    report: &mut Vec<String>,
-) -> Option<crate::font::Atlas> {
-    let role = skin.menu_font?;
-    let name = role_font(languages, role)?;
-    match archives.read_font(&name) {
-        Ok(font) => {
-            report.push(format!(
-                "menu font {name} (role {role:?}): line height {}",
-                font.line_height
-            ));
-            Some(crate::font::Atlas::from_font(&font))
-        }
-        Err(why) => {
-            report.push(format!(
-                "menu font {name} (role {role:?}) unavailable ({why}); menus draw in the default face"
-            ));
-            None
-        }
-    }
-}
-
 fn load_screens(
     archives: &mut oag_assets::Archives,
+    root: &str,
     fallback_globals: &[(&str, &str)],
     report: &mut Vec<String>,
 ) -> Result<Screens> {
@@ -1466,14 +1373,8 @@ fn load_screens(
     // front end. The message names the archives searched, because on a source
     // whose front-end root has never been located that is the useful half.
     let blob = archives
-        .read_name(pulse::names::FRONTEND_ROOT)
-        .with_context(|| {
-            format!(
-                "reading {} out of {}",
-                pulse::names::FRONTEND_ROOT,
-                archives.layout.describe()
-            )
-        })?;
+        .read_name(root)
+        .with_context(|| format!("reading {} out of {}", root, archives.layout.describe()))?;
 
     // Front-end XML is stored with its element and attribute names shortened
     // through a per-file dictionary. Files that begin `<?xml` are already plain.
@@ -1490,7 +1391,7 @@ fn load_screens(
     let screens = Screens::from_xml_with_fallback_globals(&xml, fallback_globals);
     report.push(format!(
         "{}: {} screens, {} globals, {} LoadXML includes",
-        pulse::names::FRONTEND_ROOT,
+        root,
         screens.screens.len(),
         screens.globals.len(),
         screens.load_xml.len()
@@ -1517,10 +1418,11 @@ fn load_screens(
 /// caller. See [`load_strings`].
 pub fn load_languages(
     archives: &mut oag_assets::Archives,
+    plugins: &[&str],
     report: &mut Vec<String>,
 ) -> Vec<Language> {
     let mut out = Vec::new();
-    for plugin in pulse::LANGUAGE_PLUGINS {
+    for plugin in plugins {
         let name = pulse::names::language_definition(plugin);
         let Ok(blob) = archives.read_name(&name) else {
             continue;
@@ -1769,8 +1671,10 @@ pub const DEFAULT_BOOT_MOVIE: &str = pulse::names::INTRO_MOVIE;
 /// See `docs/architecture/frontend-boot.md`.
 pub const DEVPUB_REEL: &str = pulse::names::DEVPUB_REEL;
 
+mod fonts;
 mod movies;
 
+use fonts::{load_font, load_menu_font};
 pub use movies::EntryRef;
 use movies::load_movie;
 

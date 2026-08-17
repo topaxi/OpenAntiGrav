@@ -5,18 +5,27 @@
 //! layout global across all six. The evidence, quoted, is in
 //! [`hd-frontend.md`]; this module is the table that page produces.
 //!
-//! # Why [`crate::TITLE`] still says `front_end: None`
+//! # Why [`crate::TITLE`] ships a front end, and what it is not claiming
 //!
-//! Because half of what an [`oag_title::FrontEnd`] promises is not here, and the
-//! missing half is the boot chain rather than the layout.
+//! It ships one as of 2026-08-17, and **the thing that changed is the type, not
+//! the evidence**. This section used to say `front_end: None`, and its reasoning
+//! was sound: [`oag_title::BootProfile::chain`] was defined as a
+//! **measurement** - its own module doc opens by recording that "a front-end
+//! XML's declared entry point is not the runtime's" - and [`DECLARED_CHAIN`] is
+//! the declared order and nothing more. Shipping it as `chain` would have put a
+//! hypothesis in the one field whose contract was that it never held one.
 //!
-//! [`oag_title::BootProfile::chain`] is defined as a **measurement**: its own
-//! module doc opens by recording that "a front-end XML's declared entry point is
-//! not the runtime's", and it says so because both PSP titles were cold-booted
-//! and Pulse's runtime disagreed with Pulse's XML. [`DECLARED_CHAIN`] below is
-//! the declared order and nothing more, so shipping it as `chain` would put a
-//! hypothesis in the one field of `oag-title` whose contract is that it is not
-//! one.
+//! [`oag_title::Provenance`] is the way out, and it is a third answer rather
+//! than a compromise on either of the first two. [`BOOT`] carries
+//! [`oag_title::Provenance::Declared`], so the order is expressed *and* labelled
+//! as read rather than watched, and `oag-game` says so on every boot report it
+//! prints. Nothing below is claimed to be what a PS3 does. See
+//! [ADR-0025](https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0025-a-boot-chain-carries-its-provenance.md).
+//!
+//! **What an emulator capture would still settle**, and what this build shows in
+//! the meantime, is on [`hd-frontend.md`]. The short version: the order, whether
+//! the picker runs at all on a machine that takes its language from the XMB,
+//! and which of the six `skin.xml` copies is live.
 //!
 //! **The entry point specifically is in better shape than the rest of the
 //! chain**, and it is the one part the PS3 executable has been read for.
@@ -39,9 +48,9 @@
 //! all**. The reel is chosen by the XML, so the question folds back into which
 //! `skin.xml` is live.
 //!
-//! So the layout is recovered and sits here as [`MENU_SKIN`], ready for the
-//! change that also settles the chain. That change is an emulator capture, not a
-//! decision.
+//! So the layout is recovered and sits here as [`MENU_SKIN`], and what a capture
+//! would now do is *upgrade* [`BOOT`]'s provenance rather than unlock the front
+//! end.
 //!
 //! [`hd-frontend.md`]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/formats/hd-frontend.md
 
@@ -98,9 +107,8 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
 /// as the order it boots in.
 ///
 /// Confidence **80** that this is what the XML says, and **no claim at all**
-/// about the runtime. See this module's own docs for why that keeps
-/// [`crate::TITLE`]'s `front_end` at `None`, and `hd-frontend.md` for the
-/// redirects this was read out of.
+/// about the runtime - which is what [`BOOT`] labels it, rather than what its
+/// use is gated on. `hd-frontend.md` has the redirects this was read out of.
 ///
 /// **Three of the nine steps exist only because the game is online**:
 /// [`states::PRE_FMV_CONNECT`] runs a connection check before the logo, and
@@ -115,6 +123,86 @@ pub const DECLARED_CHAIN: &[oag_title::BootStep] = &[
     oag_title::BootStep::screen(states::SAVE_WARNING),
     oag_title::BootStep::screen(states::EULA),
     oag_title::BootStep::screen(states::UPDATE_ANNOUNCEMENT),
+];
+
+/// HD's boot sequence, as data, with [`DECLARED_CHAIN`] as its order.
+///
+/// **The provenance is the field to read first.** Everything else here is a
+/// reading of the disc; `provenance` is what says the order among those
+/// readings has never been watched. See [`oag_title::Provenance`] and this
+/// module's own docs.
+///
+/// Three fields are `None`/empty and each is a measurement rather than a gap:
+///
+/// - **No reel.** Pulse's `--reel` is an off-path dev/pub state; HD's two logo
+///   reels are both on the declared boot path, so there is nothing off it to
+///   point the flag at.
+/// - **No menu backdrop.** HD's menus sit on a real-time `.vex` scene
+///   ([`names::FRONT_END_SCENE`]), not a looping movie, so there is no entry to
+///   name. This is the same shape of `None` as Pure's, for a different reason:
+///   Pure ships no backdrop movie, HD ships something that is not a movie.
+/// - **No fallback globals.** All 64 `FEGlobals` the screens name are declared
+///   in `skin.xml` itself - `hd-frontend.md` checked, and found none referenced
+///   but undeclared in any of the six copies.
+pub const BOOT: &oag_title::BootProfile = &oag_title::BootProfile {
+    // Read, never watched. No PS3 emulator capture of this title exists in this
+    // project, and the executable settles only the entry point (confidence 70).
+    provenance: oag_title::Provenance::Declared,
+    chain: DECLARED_CHAIN,
+    reel: None,
+    menu_backdrop: None,
+    picker_backdrop_parent: None,
+    fallback_globals: &[],
+};
+
+/// HD's front end: the layout it authors and the boot order it declares.
+///
+/// The two halves are recovered to very different standards and
+/// [`oag_title::FrontEnd`] cannot say so - which is why [`BOOT`] carries the
+/// caveat rather than this. [`MENU_SKIN`] is confidence 92 off six agreeing
+/// copies of an authored file; the chain is a declaration.
+pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
+    root: names::FRONTEND_ROOT,
+    language_plugins: LANGUAGE_PLUGINS,
+    menu: MENU_SKIN,
+    boot: BOOT,
+};
+
+/// The sixteen plugins that carry a language, named rather than numbered.
+///
+/// **Sixteen against the PSP titles' five**, and the difference is the release
+/// rather than the format: each is a `Data\Plugins\Languages\<name>` directory
+/// holding the same `Definition.xml` and `entries.xml` pair a numbered PSP
+/// plugin holds, so `oag-game` joins the token into a path with no change.
+///
+/// Listed in the order the archive lists them, which is alphabetical and
+/// therefore **not** a menu order: what the picker shows is each plugin's own
+/// declared name, read back out of its definition. `American` and `English`
+/// being separate entries is the disc's, not a duplicate - the two differ in
+/// their string tables.
+///
+/// Read off `DATA02`, which is one of the two archives carrying the full set;
+/// every one of the sixteen resolves. Confidence **94** on the list, being a
+/// directory listing rather than an inference, and no claim at all about which
+/// of them a PS3 offers on a given machine - the console's XMB language is what
+/// the executable would consult, and that has not been read.
+pub const LANGUAGE_PLUGINS: &[&str] = &[
+    r"Languages\American",
+    r"Languages\Danish",
+    r"Languages\Dutch",
+    r"Languages\English",
+    r"Languages\Finnish",
+    r"Languages\French",
+    r"Languages\German",
+    r"Languages\Italian",
+    r"Languages\Japanese",
+    r"Languages\Korean",
+    r"Languages\Norwegian",
+    r"Languages\Portuguese",
+    r"Languages\Russian",
+    r"Languages\Spanish",
+    r"Languages\Swedish",
+    r"Languages\TraditionalChinese",
 ];
 
 /// Screen names, spelled exactly as HD's XML spells them.
@@ -150,6 +238,22 @@ pub mod states {
 
 /// The three assets HD's front-end XML names for itself.
 pub mod names {
+    /// The front-end root: every boot screen, the `FEGlobals` block, and the
+    /// `LoadXML` list that pulls in the rest.
+    ///
+    /// **A named plugin where both PSP titles use a numbered one**
+    /// (`Data\Plugins\PI001\GUI\Skin.xml`), which is the difference that made
+    /// this a per-title axis at all - see [`oag_title::FrontEnd::root`]. It is
+    /// the same shape of divergence HD's soundtrack showed: its `PI_Music`
+    /// declarations are under `Data\Plugins\Frontend` too.
+    ///
+    /// **This path resolves in six of the seven archives and they differ by
+    /// MD5**, so which copy is served is decided by
+    /// `oag_assets::ArchiveCandidates`' order and is a documented choice rather
+    /// than a measurement of what a PS3 loads. All six agree on every layout
+    /// global; they do not agree on the screen list. See `hd-frontend.md`.
+    pub const FRONTEND_ROOT: &str = r"Data\Plugins\Frontend\Gui\Skin.xml";
+
     /// The logo reel, as `DATA06`'s `skin.xml` spells it.
     ///
     /// **The forward slashes are the disc's**, not a transcription slip: the

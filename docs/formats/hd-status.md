@@ -645,10 +645,12 @@ Two things, neither of them about MP3:
 ### Confidence
 
 **88.** The templates and the declaration are each read off the disc and every
-expansion resolves, but nothing has been watched running under an emulator, and
-HD's front end is not wired (`oag_hd::TITLE.front_end` is `None`) - so which of
-the four front-end cuts the original plays, and which track it starts on, are
-unobserved. `crates/game/tests/hd_music_ground_truth.rs` asserts every claim
+expansion resolves, but nothing has been watched running under an emulator - so
+which of the four front-end cuts the original plays, and which track it starts
+on, are unobserved. HD's front end **is** wired as of 2026-08-17
+([ADR-0025](../architecture/adr/0025-a-boot-chain-carries-its-provenance.md)),
+which is what makes those cuts reachable and does not make them observed: the
+boot walks an order read out of the disc's own XML. `crates/game/tests/hd_music_ground_truth.rs` asserts every claim
 above against the disc.
 
 ### Reproducing it

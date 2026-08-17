@@ -85,6 +85,11 @@ pub mod states {
 ///
 /// [ADR-0023]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0023-boot-sequence-as-title-data.md
 pub const BOOT_PROFILE: &oag_title::BootProfile = &oag_title::BootProfile {
+    // Cold-booted under PPSSPP, and **this title is why the field exists**: the
+    // disc's own `Skin.xml` declares the picker first and its runtime opens on
+    // `LogoFMV` instead, so the declaration and the measurement disagree here in
+    // exactly the way that makes reading one for the other a real bug.
+    provenance: oag_title::Provenance::Measured,
     chain: &[
         oag_title::BootStep::playing(states::LOGO_FMV, crate::names::INTRO_MOVIE),
         oag_title::BootStep::screen(states::LANGUAGE_SELECTION),

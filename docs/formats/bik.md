@@ -22,6 +22,7 @@ nothing read.
 | Does it decode? | Yes, through `ffmpeg`, losslessly into the AV1 cache | 94 |
 | What is in the logo reel? | The Studio Liverpool ident, 8.86 s of it | 94 |
 | Is a pure-Rust decoder available? | One exists and its **licence excludes it** | - |
+| Does the game draw one? | **Yes.** `Studio Logo` plays the reel on HD's own boot | - |
 | Is the audio played? | **No.** Measured, not decoded - see [below](#the-audio-is-inside-the-video-file) |
 | Is any of this verified under an emulator? | **No.** Nothing on this page is | - |
 
@@ -207,17 +208,41 @@ audio is inside the same container, so playing it needs a second route through
 `ffmpeg` and a widened `Movie::audio`, which is a change to a shared type and to
 `boot::load_movie_sound`'s report.
 
-It is not built because **nothing would consume it**: HD's front end is not
-wired at all ([hd-frontend](hd-frontend.md) records why), so no HD movie plays
-yet and there is no playhead for a track to pace. The
-[ADR-0019](../architecture/adr/0019-atrac3plus-out-of-process.md) consequence
-applies whenever it is built - a movie clocked by its own sound is a playhead
-two consumers pace against rather than one.
+**The reason it was deferred has since changed, and this paragraph is the
+correction rather than the original.** It was left out on the grounds that
+nothing would consume it - HD's front end was not wired, so no HD movie played
+and there was no playhead for a track to pace against. That stopped being true
+in the same session:
+[ADR-0025](../architecture/adr/0025-a-boot-chain-carries-its-provenance.md)
+wired the front end, and `Studio Logo` now plays the reel on screen. So the
+blocker today is only the shape of `Movie::audio`, and the boot reports
+`audio: Studio Logo plays silently` where it would otherwise name a track.
+
+The [ADR-0019](../architecture/adr/0019-atrac3plus-out-of-process.md)
+consequence applies whenever it is built - a movie clocked by its own sound is a
+playhead two consumers pace against rather than one - and it now has a real
+consumer to be got wrong for.
+
+## Playing one
+
+```sh
+# The reel the boot plays, in the boot that plays it.
+just play hd
+
+# Any of the 37, by path, capped so the first run is seconds rather than minutes.
+just play hd --movie 'Data/FE/Images/StudioLiverpool_fury.bik' --movie-frames 300
+just play hd --movie '/data/environments/talons_junction/fe/preview.bik'
+```
+
+`--movie` reaches a `.bik` by **path**, not by name hash: a PSARC stores real
+paths and has no hash to address, so `boot::movies` branches on the container.
+`hash:` addressing is a WAD-only spelling and means nothing here.
 
 ## See also
 
 - [hd-status](hd-status.md) - the format-layer probe this continues
-- [hd-frontend](hd-frontend.md) - which screen names the reel, and why the boot is not wired
+- [hd-frontend](hd-frontend.md) - the screen that names the reel, and what its chain is and is not evidence of
+- [ADR-0025](../architecture/adr/0025-a-boot-chain-carries-its-provenance.md) - what let that chain be walked at all
 - [pmf](pmf.md) and [ipf](ipf.md) - the other two containers through the same cache
 - [ADR-0008](../architecture/adr/0008-av1-movie-cache.md) - the cache itself
 - [ADR-0024](../architecture/adr/0024-in-process-codecs-and-ffmpeg-as-a-last-resort.md) - the rule this page applies

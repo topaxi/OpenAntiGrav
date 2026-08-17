@@ -22,6 +22,42 @@ The disc is `hdfury-ps3-eu-dec.iso`, serial `BCES-00664`, layer-1 decrypted per
 [ps3-disc](ps3-disc.md); everything is read through the
 [`.psarc` reader](psarc.md).
 
+## This front end is wired now, and it is still a declaration
+
+**Added 2026-08-17.** When this page was written, everything on it was recovered
+data that nothing consumed: `oag_hd::TITLE.front_end` was `None`, because
+`oag_title::BootProfile::chain` was defined as a *measurement* and the chain
+below is a *declaration*, so there was no honest way to ship it.
+
+[ADR-0025](../architecture/adr/0025-a-boot-chain-carries-its-provenance.md)
+changed the type rather than the evidence: a chain now carries a `Provenance`,
+HD's is `Declared`, and every boot of it prints
+
+```text
+Wipeout HD: this order is what its front-end XML declares, not a boot anyone has watched
+```
+
+before anything is drawn. **Nothing on this page became more certain.** The
+order, whether the picker runs at all on a machine that takes its language from
+the XMB, and which of the six skins is live are all exactly as open as they
+were, and each is still an emulator capture away.
+
+What the wiring bought is that HD's own screens draw in its own 1920x1080 grid,
+its sixteen language plugins and 1,602 strings resolve, and `Studio Logo` plays
+the [Studio Liverpool reel](bik.md) out of the disc's own `.bik`. What this
+build **cannot** drive - the connection check, the three dialogs, the EULA and
+the save warning - is stepped over and named on the report, so a shortened
+sequence says it was shortened. See
+`crates/game/tests/hd_boot_ground_truth.rs`, which pins all of it against the
+disc.
+
+Two things that surfaced only once something walked this data, both recorded
+where they belong rather than here: HD ships **no Latin `.fnt` this build can
+read**, so its whole front end draws in the built-in 5x7 glyphs (its language
+plugins name `helv.fnt`, which is present and fails `oag_formats::fnt`'s magic
+check - unread, and probably the byte-order story again); and its `<Image>`
+widgets are `.gtf`, which is undecoded, so they draw nothing and say so.
+
 ## The headline
 
 | Question | Answer | Confidence |
@@ -226,7 +262,12 @@ order, because that was not measured.** [ADR-0023] exists precisely because a
 front-end XML's declared entry point is not the runtime's: Pulse's XML declares
 the language picker first and its runtime opens on `LogoFMV` instead. HD may
 well do the same. **Anyone filling in `BootProfile` from this table is filling
-in a declaration, and the doc comment must say so.**
+in a declaration, and the type must say so** - which it does now:
+`oag_hd::frontend::BOOT` carries `Provenance::Declared`, and the sentence this
+paragraph used to end with ("the doc comment must say so") is what
+[ADR-0025](../architecture/adr/0025-a-boot-chain-carries-its-provenance.md)
+rejected as insufficient. A caveat in a doc comment is not carried by the value,
+so nothing downstream can print it, test it, or refuse to trust it.
 
 Two specific ambiguities inside the declaration, both unresolved:
 

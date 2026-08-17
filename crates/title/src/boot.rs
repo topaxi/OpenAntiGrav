@@ -69,9 +69,63 @@ impl BootStep {
     }
 }
 
+/// Where a chain's order came from, which is not the same question as what the
+/// order is.
+///
+/// **This field exists because the alternative was a lie or a refusal.** This
+/// module's own docs open by recording that a front-end XML's declared entry
+/// point is not the runtime's, and [`BootProfile::chain`] was therefore defined
+/// as a measurement - so a title whose order is only declared could not be
+/// expressed at all. Wipeout HD is that title: its `skin.xml` declares nine
+/// screens in order and no capture of a PS3 running exists, so filling `chain`
+/// in silently would have put a hypothesis in the one field whose contract was
+/// that it never held one, and leaving it empty refused a front end whose layout
+/// is fully recovered.
+///
+/// Widening the type is the third answer, and it is the honest one: the chain
+/// still says what the order is, and this says how much that is worth. Every
+/// caller that shows a boot to a person is expected to say which it got - see
+/// [ADR-0025].
+///
+/// [ADR-0025]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0025-a-boot-chain-carries-its-provenance.md
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Provenance {
+    /// A cold boot of the original was watched, and this is the order it went
+    /// in.
+    ///
+    /// Both PSP titles. Pulse's is the reason the distinction is needed at all:
+    /// its XML declares the picker first and its runtime opens on `LogoFMV`
+    /// instead, so a build that had trusted the declaration would have shipped
+    /// the wrong sequence and had no way to know.
+    Measured,
+    /// The title's own front-end XML declares this order, and nothing has
+    /// watched it run.
+    ///
+    /// A real reading of real data - the redirects were followed screen by
+    /// screen - and **not** evidence about the runtime. Anything user-facing
+    /// that walks such a chain says so rather than presenting it as the disc's
+    /// behaviour.
+    Declared,
+}
+
+impl Provenance {
+    /// Whether this order has been watched rather than only read.
+    #[must_use]
+    pub fn is_measured(self) -> bool {
+        matches!(self, Self::Measured)
+    }
+}
+
 /// One title's boot sequence, as data.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BootProfile {
+    /// Where [`Self::chain`]'s order came from. See [`Provenance`].
+    ///
+    /// Deliberately not defaulted and not an `Option`: a profile is a
+    /// compile-time constant in a title package, and making the author write
+    /// one of two words is what stops a fourth title's declaration from
+    /// arriving as a measurement by omission.
+    pub provenance: Provenance,
     /// Every screen a default boot walks, in order, starting at index 0.
     ///
     /// An ordered chain rather than a set of decision points, because the
@@ -157,6 +211,7 @@ mod tests {
     const C: &str = "C";
 
     static CHAIN: BootProfile = BootProfile {
+        provenance: Provenance::Measured,
         chain: &[
             BootStep::screen(A),
             BootStep::screen(B),

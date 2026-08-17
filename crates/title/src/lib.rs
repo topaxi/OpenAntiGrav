@@ -39,7 +39,7 @@ pub mod boot;
 pub mod menu;
 pub mod race;
 
-pub use boot::{BootProfile, BootStep};
+pub use boot::{BootProfile, BootStep, Provenance};
 pub use menu::MenuSkin;
 pub use oag_disc::Platform;
 pub use race::RaceDefaults;
@@ -156,6 +156,33 @@ pub struct DeclaredTracks {
 /// name and says so, which is a visible absence rather than a wrong picture.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct FrontEnd {
+    /// The archive entry holding this title's front-end root: every boot
+    /// screen, the `FEGlobals` block, and the `LoadXML` list pulling in the
+    /// rest.
+    ///
+    /// **An axis because a third title disagreed**, which is the bar
+    /// [ADR-0022] sets. Both PSP titles keep it at
+    /// `Data\Plugins\PI001\GUI\Skin.xml` - a *numbered* plugin - and sharing
+    /// one constant between them was correct while the corpus was two. Wipeout
+    /// HD names its plugins instead (`Data\Plugins\Frontend\Gui\Skin.xml`), the
+    /// same way its soundtrack plugin is named rather than numbered, so a
+    /// constant in `oag-pulse` reached for by every title is now a constant
+    /// that is wrong for one of three.
+    ///
+    /// [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
+    pub root: &'static str,
+    /// The plugins that carry a language, in the order the disc lists them.
+    ///
+    /// A *token* rather than a path, joined into
+    /// `Data\Plugins\{token}\Definition.xml` by the caller - which is why the
+    /// PSP titles' `PI008` and Wipeout HD's `Languages\English` can share one
+    /// mechanism despite one being a numbered plugin and the other a named
+    /// directory two deep. Same divergence as [`Self::root`], same fix.
+    ///
+    /// The plugin token is the only stable handle: a language's own name is
+    /// inside its definition, not in its path, so this list is what is read back
+    /// from the archive rather than trusted.
+    pub language_plugins: &'static [&'static str],
     /// How this title lays menus out. See [`menu::MenuSkin`].
     ///
     /// A measured axis: both PSP titles' `Skin.xml` files were read and they

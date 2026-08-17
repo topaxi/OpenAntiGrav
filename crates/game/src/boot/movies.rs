@@ -86,6 +86,15 @@ pub(super) fn load_movie(
     report: &mut Vec<String>,
     watch: crate::movie::Watch<'_>,
 ) -> Result<Option<Movie>> {
+    // **A PSARC stores real paths and no name hash**, so every WAD-shaped step
+    // below - `index_of_hash`, `entry_len`, `peek` - is unavailable on a Wipeout
+    // HD source, and `EntryRef` is meaningless there: `hash:` addressing exists
+    // because a WAD directory holds only hashes, which is the opposite of this
+    // container's problem. `read_name` is the route both understand, so the
+    // branch is on the container rather than on the console.
+    if !archives.data.is_wad() {
+        return load_movie_by_path(archives, movie_name, options, report, watch);
+    }
     let entry = EntryRef::parse(movie_name);
     let hash = entry.hash();
     // Every path below is WAD-shaped - by hash, by index, peeking a header -
@@ -188,6 +197,80 @@ pub(super) fn load_movie(
         (None, None) => {}
     }
     Ok(Some(movie))
+}
+
+/// Reads the boot movie out of a path-addressed archive - Wipeout HD's PSARCs.
+///
+/// Shorter than [`load_movie`] because three of that function's four
+/// complications do not exist here. There is no loose-file fallback (HD keeps
+/// every `.bik` inside an archive), no `hash:` spelling to accept, and no
+/// `peek`-the-header shortcut for `--no-video`: [`oag_formats::bik`] reads a
+/// header out of a blob rather than off a container, and a PSARC entry is
+/// compressed in blocks, so there is no cheap prefix to peek at anyway. The
+/// whole entry is read and `movie::open` is asked for a picture-less movie,
+/// which costs one read and no transcode.
+///
+/// **A movie the caller named and this source does not have is still an
+/// error**, exactly as in [`load_movie`]: `--movie` is a request.
+fn load_movie_by_path(
+    archives: &mut oag_assets::Archives,
+    movie_name: &str,
+    options: &Options,
+    report: &mut Vec<String>,
+    watch: crate::movie::Watch<'_>,
+) -> Result<Option<Movie>> {
+    let blob = archives
+        .read_name(movie_name)
+        .with_context(|| format!("reading {movie_name} out of {}", archives.layout.describe()))?;
+
+    // **The entry's own length, not a directory field.** A WAD key is
+    // `{hash:08x}-{size}` off the directory; here the bytes are already in hand
+    // and their length is the same thing measured one step later. The name is
+    // folded into the key as well, because unlike a hash it is not already
+    // unique across archives - and it is sanitised because this key becomes a
+    // filename in the movie cache.
+    let key = format!("{}-{}", cache_key_for(movie_name), blob.len());
+    let movie = movie::open(
+        &blob,
+        &key,
+        &options.cache,
+        options.extent,
+        options.decode(),
+        watch,
+    )?;
+
+    report.push(format!(
+        "{movie_name}: {}x{}, {:.2}s, {} frames",
+        movie.width,
+        movie.height,
+        movie.frame_count as f64 * movie.frame_rate.1 as f64 / movie.frame_rate.0 as f64,
+        movie.frame_count,
+    ));
+    match (&movie.frames, &movie.no_picture_reason) {
+        (Some(frames), _) => report.push(format!(
+            "  {} frame(s) cached in {}",
+            frames.len,
+            frames.path().display()
+        )),
+        (None, Some(reason)) => report.push(format!("  no picture: {reason}")),
+        (None, None) => {}
+    }
+    Ok(Some(movie))
+}
+
+/// Turns an archive path into something that can be part of a filename.
+///
+/// The movie cache writes `{key}-{w}x{h}-...` files, and HD's movie names are
+/// paths - `Data/FE/Images/StudioLiverpool.bik` - so an unsanitised key would
+/// ask for a file three directories deep that nothing created. Every character
+/// that is not alphanumeric becomes `_`, which is lossy and does not matter: the
+/// length is in the key beside it, and two different entries of the same length
+/// whose paths differ only in punctuation is not a collision this disc can
+/// produce.
+fn cache_key_for(name: &str) -> String {
+    name.chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+        .collect()
 }
 
 // The loose-file table `loose_candidates` searches. Which movie a name resolves

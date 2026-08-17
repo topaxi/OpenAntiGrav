@@ -561,15 +561,30 @@ pub fn run(
                     (backdrop, format, list, frontend.space())
                 }
                 // **`Video::Intro` names two different movies over a boot.** The
-                // first one, and - on a title whose chain has one - the movie its
-                // after-language step plays. The draw cannot say which, the
-                // variant being reused rather than a third added, so the state
-                // picks, exactly as `App::tick`'s own feed swap does. Without this
-                // the capture reads the *first* movie's frame at the *second*
-                // movie's playhead: the wrong picture, silently, which is the
-                // class of mistake this module's own docs above exist to rule out.
+                // first one, and - on a title whose chain has two - the second.
+                // The draw cannot say which, the variant being reused rather
+                // than a third added, so the state picks, exactly as
+                // `App::tick`'s own feed swap does. Without this the capture
+                // reads the *first* movie's frame at the *second* movie's
+                // playhead: the wrong picture, silently, which is the class of
+                // mistake this module's own docs above exist to rule out.
+                //
+                // **Asked as "is this the chain's second movie screen?"**, which
+                // is the same question `boot::assemble` answers when it hands
+                // each step its plan, and so cannot disagree with it. It used to
+                // ask whether the state was the one the picker confirms into -
+                // true of Pure's second movie by arithmetic rather than by
+                // meaning, and **wrong for Wipeout HD**, whose chain has exactly
+                // one movie and whose `Studio Logo` *is* the after-language
+                // screen. That mismatch handed this path `after_language_movie`,
+                // which on HD is `None`, so the renderer was built with no video
+                // pipeline and every capture of the logo reel came out black
+                // with the frame counter drawn over it.
                 Some(crate::frontend::Video::Intro)
-                    if frontend.machine().is(frontend.language_confirm_target()) =>
+                    if frontend
+                        .machine()
+                        .current()
+                        .is_some_and(|state| frontend.movie_states().get(1) == Some(&state)) =>
                 {
                     let showing = after_language_movie
                         .as_ref()

@@ -38,6 +38,7 @@ pub const fn hud_layout(mode: Mode) -> &'static str {
 pub(super) fn load_hud(
     archives: &mut oag_assets::Archives,
     mode: Mode,
+    language_plugins: &[&str],
     report: &mut Vec<String>,
 ) -> crate::hud::Assets {
     let entry = hud_layout(mode);
@@ -113,7 +114,7 @@ pub(super) fn load_hud(
     //
     // **Before the fonts now**, because the plugins parsed here are also what
     // name the two faces below - the same reordering `boot::load_shell` needed.
-    let languages = crate::boot::load_languages(archives, report);
+    let languages = crate::boot::load_languages(archives, language_plugins, report);
     let strings = crate::boot::load_strings(archives, &languages, None, report);
 
     // One role each, and no fallback to a second: both titles fill in both of

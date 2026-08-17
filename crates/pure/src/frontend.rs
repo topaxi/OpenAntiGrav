@@ -255,6 +255,11 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
 ///
 /// [ADR-0023]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0023-boot-sequence-as-title-data.md
 pub const BOOT_PROFILE: &oag_title::BootProfile = &oag_title::BootProfile {
+    // Cold-booted on both pressings, with the savedata profile moved aside; see
+    // `docs/architecture/pure-boot.md`. Pure's runtime *does* agree with its own
+    // XML about the entry point, which is a second measurement rather than a
+    // reason to trust the next title's declaration.
+    provenance: oag_title::Provenance::Measured,
     chain: &[
         oag_title::BootStep::screen(states::LANGUAGE_SELECTION),
         oag_title::BootStep::playing(states::DEVELOPER_PUBLISHER, crate::names::INTRO_MOVIE),

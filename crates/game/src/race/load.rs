@@ -743,7 +743,15 @@ pub fn load(options: &Options) -> Result<Loaded> {
         }
     };
 
-    let hud = load_hud(&mut archives, options.mode, &mut report);
+    // The plugin list is the title's, and an empty one is a real answer rather
+    // than a missing case: a title whose front end is unrecovered has no
+    // declared languages, so the HUD draws its captions as their own `idstring`
+    // keys and says so, which is what it already did for a source whose plugins
+    // would not parse.
+    let language_plugins = title
+        .front_end
+        .map_or::<&[&str], _>(&[], |front_end| front_end.language_plugins);
+    let hud = load_hud(&mut archives, options.mode, language_plugins, &mut report);
 
     // The ring the lap counter runs on. Reported either way: "this track has no
     // lap counting" is exactly the kind of thing that otherwise gets discovered

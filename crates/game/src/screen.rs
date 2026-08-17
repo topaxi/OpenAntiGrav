@@ -30,7 +30,11 @@ pub use oag_formats::fexml::{Node, parse};
 /// The PS2 front-end XML spells them lower case; the disc's own ISO 9660
 /// directory spells the files upper case, so the test ignores case rather than
 /// picking a side.
-pub const MOVIE_EXTENSIONS: [&str; 3] = [".pmf", ".pss", ".ipf"];
+/// `.bik` is Wipeout HD's, and it is here for the same reason the PS2's two
+/// are: its `<Movie>` widget names `Data/FE/Images/StudioLiverpool.bik`,
+/// extension included, and appending `.PMF` to that would ask for nothing at
+/// all.
+pub const MOVIE_EXTENSIONS: [&str; 4] = [".pmf", ".pss", ".ipf", ".bik"];
 
 fn has_movie_extension(src: &str) -> bool {
     let lower = src.to_ascii_lowercase();

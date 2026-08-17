@@ -28,11 +28,13 @@
 //! Nothing here names a `.rcsmodel`, a `.gtf` or a `.bik` beyond the two logo
 //! reels the front-end XML names itself. A table of paths into formats nothing
 //! reads would be a list of names rather than a measurement - and that is still
-//! the reason for `.gtf`, still partly the reason for `.rcsmodel` (see
-//! [`rcsmodel.md`]), and **no longer the reason for `.bik`**: that container is
-//! read now ([`bik.md`]), and what keeps its paths out of this crate is instead
-//! that nothing plays an HD movie yet. See [`frontend`] for what that is
-//! waiting on.
+//! the reason for `.gtf` and still partly the reason for `.rcsmodel` (see
+//! [`rcsmodel.md`]). **It is no longer the reason for `.bik`**, which is read
+//! ([`bik.md`]) and played: `frontend::names::STUDIO_LOGO_MOVIE` is named here
+//! because the disc's own `Studio Logo` screen names it, and the boot draws it.
+//! The other 35 stay out for the original reason - the front-end XML does not
+//! name them, so a list of them here would be this crate inventing an index the
+//! disc does not author.
 //!
 //! [`bik.md`]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/formats/bik.md
 //! [`rcsmodel.md`]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/formats/rcsmodel.md
@@ -57,7 +59,10 @@ pub const TITLE: &Title = &Title {
         extra: EXTRA_CANDIDATES,
     },
     foreign_serials: FOREIGN_SERIALS,
-    front_end: None,
+    // **A declared order, and it says so.** See `frontend::BOOT`'s provenance
+    // and ADR-0025; this field held `None` until the type could carry that
+    // difference.
+    front_end: Some(frontend::FRONT_END),
     race: race::DEFAULTS,
     music: Some(MUSIC),
 };
@@ -86,9 +91,11 @@ pub const TITLE: &Title = &Title {
 ///
 /// Confidence **88**: the templates and the declarations are each read off the
 /// disc and every expansion hits, but nothing has been watched running under an
-/// emulator - and HD's front end is not wired at all
-/// ([`oag_title::Title::front_end`] is `None` here), so which of the four the
-/// original picks has not been observed.
+/// emulator - so which of the four the original picks has not been observed.
+/// The front end is wired now (see [`frontend::BOOT`] and ADR-0025), which
+/// changes what is *reachable* and not what has been *watched*: the boot walks
+/// an order read out of the disc's XML, so a run of this build picking a cut is
+/// this build's behaviour rather than evidence about a PS3's.
 pub const MUSIC: &oag_title::Music = &oag_title::Music {
     front_end: names::FRONT_END_MUSIC,
     tracks: Some(oag_title::DeclaredTracks {
@@ -206,9 +213,10 @@ pub mod names {
     ///
     /// A literal in the executable rather than a template, and named for the
     /// ship-selection screen it presumably belongs to - but
-    /// [`oag_title::Music`] carries **one** front-end track and HD's front end
-    /// is not wired at all, so this is recorded and left alone. Its trigger is
-    /// unread, which is the part that would have to be recovered first.
+    /// [`oag_title::Music`] carries **one** front-end track, so this is
+    /// recorded and left alone. Its trigger is unread, which is the part that
+    /// would have to be recovered first and which wiring the front end did not
+    /// supply: no screen in any of the six skins names this file.
     pub const SHIP_SELECT_MUSIC: &str = r"Data\Music\FEMusic\FEship.mp3";
 
     /// One circuit's `.vex`, by its environment directory.
