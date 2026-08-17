@@ -42,3 +42,5 @@
 0x00057468	function	RaceManager_DestructAndFree	80	race-manager.md
 0x00039cc0	function	Collision_GetSubShape	82	collision.md
 0x00045178	function	MPRaceManager_Construct	78	race-manager.md
+0x0003c580	function	ModeManager_Construct	84	mode-manager.md
+0x0003c480	function	ModeManager_ConstructComplete	82	mode-manager.md
