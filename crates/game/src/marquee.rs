@@ -108,12 +108,12 @@ pub fn apply(
     skin: &Skin,
     measure: &dyn Fn(&str) -> f32,
     elapsed: f32,
-) -> (Vec<Draw>, Option<(f32, f32, f32)>) {
+) -> (Vec<Draw>, Option<(usize, f32, f32)>) {
     let focused_y = focus(menu).map(|_| {
         skin.first_row_y() + menu.selected().saturating_sub(menu.scroll()) as f32 * skin.row_pitch()
     });
     let mut clip = None;
-    for draw in &mut list {
+    for (index, draw) in list.iter_mut().enumerate() {
         let Draw::Text {
             x,
             y,
@@ -140,7 +140,14 @@ pub fn apply(
             // edge, so nothing here needs to land on a character boundary.
             *x = left - crate::anim::marquee_offset(elapsed, overflow);
             *align = Align::Left;
-            clip = Some((*y, left, right));
+            // The list's own index, not `y`: the label shares this row's
+            // `y` with its value, and a clip keyed on `y` alone would have
+            // culled every one of the label's glyphs right along with the
+            // value's overflow - which is `RENDERER` disappearing outright,
+            // not just crowded. `menu_stage.rs` hands this `Vec` straight to
+            // `Renderer::render` with nothing in between that would reorder
+            // it, so the index still names this same entry there.
+            clip = Some((index, left, right));
         } else {
             *text = fit_right(text, measure, MAX_WIDTH / *scale).to_string();
         }

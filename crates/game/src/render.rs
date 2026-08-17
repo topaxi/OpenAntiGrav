@@ -430,7 +430,7 @@ impl Renderer {
     ///
     /// What a stage does: it owns the frame, so it starts from black and the
     /// bars outside `viewport` are what it leaves uncovered. `clip` is
-    /// `(y, left, right)` for a marquee row - see `crate::marquee`.
+    /// `(index, left, right)` for a marquee row - see `crate::marquee`.
     #[expect(clippy::too_many_arguments, reason = "clip is one more fact")]
     pub fn render(
         &mut self,
@@ -440,7 +440,7 @@ impl Renderer {
         view: &wgpu::TextureView,
         list: &[Draw],
         viewport: (f32, f32, f32, f32),
-        clip: Option<(f32, f32, f32)>,
+        clip: Option<(usize, f32, f32)>,
     ) {
         self.render_with(
             wgpu::LoadOp::Clear(wgpu::Color::BLACK),
@@ -493,7 +493,7 @@ impl Renderer {
         view: &wgpu::TextureView,
         list: &[Draw],
         viewport: (f32, f32, f32, f32),
-        clip: Option<(f32, f32, f32)>,
+        clip: Option<(usize, f32, f32)>,
     ) {
         self.quads.clear();
         // Where the movie sits in the quad order. The list is painted back to
@@ -506,7 +506,7 @@ impl Renderer {
         // than filling it the way a `.PMF` always has. See
         // `crate::frontend::pillarbox`.
         let mut video_rect = [0.0, 0.0, self.space.size.0, self.space.size.1];
-        for draw in list {
+        for (index, draw) in list.iter().enumerate() {
             match draw {
                 Draw::Fill { rect, color } => self.push_solid(*rect, *color),
                 Draw::Video { rect, .. } => {
@@ -535,10 +535,8 @@ impl Renderer {
                     // mask, and the picked default for the HUD fonts. See
                     // `docs/ui/hud.md` for the fuller reasoning and open question.
                     let border = border.unwrap_or(TRANSPARENT);
-                    // Only the row `marquee::apply` names by its `y` clips.
-                    let bounds = clip
-                        .filter(|(row, ..)| (*row - *y).abs() < f32::EPSILON)
-                        .map(|(_, left, right)| (left, right));
+                    // By index, not `y` - a label shares its row's `y`.
+                    let bounds = clip.filter(|(at, ..)| *at == index).map(|(_, l, r)| (l, r));
                     self.push_text(*x, *y, *scale, *color, border, *align, text, bounds);
                 }
             }
