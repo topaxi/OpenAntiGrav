@@ -8,6 +8,13 @@
 //! - **PS2** DVDs carry `SYSTEM.CNF`, an INI-ish file whose `BOOT2` line names
 //!   the boot ELF, from which the serial is derived (for example
 //!   `cdrom0:\SLES_557.12;1` gives `SLES-55712`).
+//! - **PS3** BD-ROMs carry `PS3_DISC.SFB`, a small keyed table whose `TITLE_ID`
+//!   field holds the serial already hyphenated (for example `BCES-00664`).
+//!
+//! Identification reads only the plain part of a PS3 disc, so an **encrypted**
+//! image identifies exactly as well as a decrypted one: `PS3_DISC.SFB` is never
+//! inside an encrypted region. `docs/formats/ps3-disc.md` covers what reading
+//! the rest of such a disc needs, which is a key this crate never sees.
 
 use crate::error::Result;
 use crate::iso9660::Entry;
@@ -20,6 +27,15 @@ pub enum Platform {
     Psp,
     /// Sony PlayStation 2 (DVD).
     Ps2,
+    /// Sony PlayStation 3 (BD-ROM).
+    ///
+    /// Identified, but nothing downstream can use one: no PS3 release ships a
+    /// Wipeout Pulse archive or soundtrack, and a PS3 disc's assets are behind
+    /// [encryption](https://github.com/topaxi/OpenAntiGrav/blob/main/docs/formats/ps3-disc.md)
+    /// this crate deliberately knows nothing about. Code that matches on a
+    /// platform therefore groups `Ps3` with [`Platform::Unknown`] rather than
+    /// with `Psp` or `Ps2` - it is a disc we can name, not one we can read.
+    Ps3,
     /// Recognised as an ISO 9660 volume, but not as a console we handle.
     Unknown,
 }
@@ -29,6 +45,7 @@ impl std::fmt::Display for Platform {
         let s = match self {
             Self::Psp => "PSP",
             Self::Ps2 => "PS2",
+            Self::Ps3 => "PS3",
             Self::Unknown => "unknown",
         };
         f.write_str(s)
@@ -54,6 +71,9 @@ pub fn identify(source: &mut dyn SectorSource, entries: &[Entry]) -> Result<Titl
         return Ok(info);
     }
     if let Some(info) = identify_ps2(source, entries)? {
+        return Ok(info);
+    }
+    if let Some(info) = identify_ps3(source, entries)? {
         return Ok(info);
     }
     Ok(TitleInfo {
@@ -130,6 +150,71 @@ fn identify_ps2(source: &mut dyn SectorSource, entries: &[Entry]) -> Result<Opti
     }))
 }
 
+fn identify_ps3(source: &mut dyn SectorSource, entries: &[Entry]) -> Result<Option<TitleInfo>> {
+    let Some(sfb) = find(entries, "PS3_DISC.SFB") else {
+        return Ok(None);
+    };
+
+    let data = source.read_range(sfb.lba, sfb.size.min(4096))?;
+    let raw = sfb_field(&data, "TITLE_ID");
+    let serial = raw.as_deref().map(normalise_serial);
+
+    let boot_path =
+        find(entries, "PS3_GAME/USRDIR/EBOOT.BIN").map(|_| "PS3_GAME/USRDIR/EBOOT.BIN".to_string());
+
+    Ok(Some(TitleInfo {
+        platform: Platform::Ps3,
+        serial,
+        boot_path,
+        raw,
+    }))
+}
+
+/// Reads one field out of a `PS3_DISC.SFB` table.
+///
+/// The file is magic `.SFB`, a version word, then 32-byte entries from `0x20`:
+/// a 16-byte NUL-padded key, then the value's big-endian offset and length,
+/// then padding. Values live past the entry table, at those offsets.
+///
+/// A reader this small lives here rather than in `oag-formats` because that
+/// crate depends on this one - identification cannot reach forwards to it
+/// without a cycle. It handles exactly the one field identification needs.
+fn sfb_field(data: &[u8], key: &str) -> Option<String> {
+    const HEADER: usize = 0x20;
+    const ENTRY: usize = 0x20;
+    const KEY_LEN: usize = 16;
+
+    if data.len() < HEADER || &data[..4] != b".SFB" {
+        return None;
+    }
+
+    let mut at = HEADER;
+    while at + KEY_LEN + 8 <= data.len() {
+        let name = &data[at..at + KEY_LEN];
+        // The table ends at the first empty slot rather than at a count.
+        if name[0] == 0 {
+            return None;
+        }
+        if trim_nul(name) == key {
+            let offset = u32::from_be_bytes(data[at + KEY_LEN..at + KEY_LEN + 4].try_into().ok()?);
+            let len = u32::from_be_bytes(data[at + KEY_LEN + 4..at + KEY_LEN + 8].try_into().ok()?);
+            let start = offset as usize;
+            let end = start.checked_add(len as usize)?;
+            let value = data.get(start..end.min(data.len()))?;
+            let value = trim_nul(value);
+            return (!value.is_empty()).then_some(value);
+        }
+        at += ENTRY;
+    }
+    None
+}
+
+/// Trims trailing NUL padding and surrounding whitespace from a fixed field.
+fn trim_nul(bytes: &[u8]) -> String {
+    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
+    String::from_utf8_lossy(&bytes[..end]).trim().to_string()
+}
+
 /// Extracts `SLES-55712` from something like `cdrom0:\SLES_557.12;1`.
 fn serial_from_boot_path(boot: &str) -> Option<String> {
     let file = boot
@@ -198,5 +283,57 @@ mod tests {
     fn platform_displays_readably() {
         assert_eq!(Platform::Psp.to_string(), "PSP");
         assert_eq!(Platform::Ps2.to_string(), "PS2");
+        assert_eq!(Platform::Ps3.to_string(), "PS3");
+    }
+
+    /// Builds a `PS3_DISC.SFB` from nothing, laid out the way a real one is:
+    /// magic, version, a 32-byte entry per field, then the values after the
+    /// table. No disc content is involved.
+    fn sfb(fields: &[(&str, &str)]) -> Vec<u8> {
+        let mut out = vec![0u8; 0x200];
+        out[..4].copy_from_slice(b".SFB");
+        out[4..8].copy_from_slice(&0x0001_0000u32.to_be_bytes());
+
+        for (i, (key, value)) in fields.iter().enumerate() {
+            let at = 0x20 + i * 0x20;
+            out[at..at + key.len()].copy_from_slice(key.as_bytes());
+            let offset = u32::try_from(out.len()).expect("fixture fits");
+            out[at + 16..at + 20].copy_from_slice(&offset.to_be_bytes());
+            out[at + 20..at + 24].copy_from_slice(&0x20u32.to_be_bytes());
+
+            let mut padded = vec![0u8; 0x20];
+            padded[..value.len()].copy_from_slice(value.as_bytes());
+            out.extend_from_slice(&padded);
+        }
+        out
+    }
+
+    #[test]
+    fn reads_a_title_id_out_of_an_sfb() {
+        let data = sfb(&[("HYBRID_FLAG", "gu"), ("TITLE_ID", "BCES-00664")]);
+        assert_eq!(sfb_field(&data, "TITLE_ID").as_deref(), Some("BCES-00664"));
+        assert_eq!(sfb_field(&data, "HYBRID_FLAG").as_deref(), Some("gu"));
+        assert_eq!(sfb_field(&data, "NOT_A_FIELD"), None);
+    }
+
+    #[test]
+    fn a_ps3_serial_survives_normalising() {
+        // The SFB writes it hyphenated already, unlike a PS2 boot path.
+        assert_eq!(normalise_serial("BCES-00664"), "BCES-00664");
+    }
+
+    #[test]
+    fn refuses_anything_that_is_not_an_sfb() {
+        assert_eq!(sfb_field(b"", "TITLE_ID"), None);
+        assert_eq!(sfb_field(&[0u8; 0x400], "TITLE_ID"), None);
+        assert_eq!(sfb_field(b".SFB not long enough", "TITLE_ID"), None);
+    }
+
+    #[test]
+    fn a_field_pointing_past_the_end_yields_nothing_rather_than_panicking() {
+        let mut data = sfb(&[("TITLE_ID", "BCES-00664")]);
+        // Point the value at an offset far beyond the file.
+        data[0x20 + 16..0x20 + 20].copy_from_slice(&0xffff_0000u32.to_be_bytes());
+        assert_eq!(sfb_field(&data, "TITLE_ID"), None);
     }
 }

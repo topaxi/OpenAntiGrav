@@ -1,4 +1,4 @@
-//! Reading PSP UMD and PS2 DVD disc images.
+//! Reading PSP UMD, PS2 DVD and PS3 BD-ROM disc images.
 //!
 //! Two container formats are supported, sniffed by magic rather than by file
 //! extension:

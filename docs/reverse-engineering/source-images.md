@@ -149,16 +149,18 @@ for the same opportunistic-corroboration reason as the USA disc above.
 container      raw ISO, 1103104 sectors (2.1 GiB capacity)
 platform       PS3
 serial         BCES-00664
-title          WipEout(R) HD Fury, version 01.03, app 02.00
 boot           PS3_GAME/USRDIR/EBOOT.BIN
+identified by  BCES-00664
 volume id      PS3VOLUME
 contents       22 files in 5 directories, 2.1 GiB
 ```
 
-Later target per [scope](../overview/goals.md#scope). `oag-disc` still has no PS3
-identification, so `oag-unpack info` reports `unknown` for this disc - that is a
-gap in the tool, not in the disc: the serial and title above are read straight
-out of `PS3_GAME/PARAM.SFO`, which sits in a plain region and needs no key.
+Later target per [scope](../overview/goals.md#scope). `oag-disc` identifies PS3
+discs as of 2026-08-17, from `PS3_DISC.SFB`'s `TITLE_ID` field. That file sits in
+a plain region, so the disc identifies while still encrypted - identification
+never needs a key, and the ground-truth test asserts exactly that. The title is
+`WipEout(R) HD Fury`, version 01.03, from `PS3_GAME/PARAM.SFO`, which no tool
+here parses yet.
 
 **The image is encrypted, and 1.85 GiB of it - every `.psarc`, `DFEngine.sprx`
 and `EBOOT.BIN` - is unreadable without the disc's own 16-byte key.** The key is

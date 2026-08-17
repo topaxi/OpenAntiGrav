@@ -73,7 +73,7 @@ Pure does not ship that thing - no firmware update payload, no
 
 | Format | Extension | Platform | Titles | Status | Notes |
 | --- | --- | --- | --- | --- | --- |
-| ISO 9660 | - | all three | Pulse, Pure, HD Fury | **understood** | [`oag-disc`](../../crates/disc/src/iso9660.rs). Reads the PS3 disc unchanged - 22 files in 5 directories - even though [platform identification](../reverse-engineering/source-images.md#hdfury-ps3-euiso---wipeout-hd--fury-ps3) does not know PS3 yet. |
+| ISO 9660 | - | all three | Pulse, Pure, HD Fury | **understood** | [`oag-disc`](../../crates/disc/src/iso9660.rs). Reads the PS3 disc unchanged - 22 files in 5 directories - and [identifies it](../reverse-engineering/source-images.md#hdfury-ps3-euiso---wipeout-hd--fury-ps3) from `PS3_DISC.SFB` without needing its key. |
 | CHD | `.chd` | - | Pulse, Pure | **understood** | Via the `chd` crate; layout detection in [`chd_source.rs`](../../crates/disc/src/chd_source.rs) |
 | ELF | `.BIN`, `.IRX` | both | Pulse, Pure | identified | Both main executables are unencrypted ELF |
 | PSP `~PSP` | `.prx`, `.BIN` | PSP | Pulse, Pure | identified | Compressed/encrypted executable. Not needed: `BOOT.BIN` is plaintext. `sniff` finds 2 on Pulse's UMD and **9 on Pure's**, all `.prx` - Pure ships its network stack loose where Pulse packs most of it. |
@@ -86,6 +86,7 @@ Pure does not ship that thing - no firmware update payload, no
 | IOP module archive | `.IMG` | PS2 | Pulse | unknown | `IOPRP310.IMG`, magic `RESET`. Not relevant to gameplay. |
 | PNG | `.PNG` | PSP | Pulse | **understood** | Standard |
 | [PS3 disc encryption](ps3-disc.md) | - | PS3 | HD Fury | **understood** | Per-sector AES-128-CBC over the spans sector 0's region table declares encrypted, IV from the absolute LBA. Implemented in [`scripts/ps3iso.py`](../../scripts/ps3iso.py) rather than `oag-formats` - it is a disc layer, not an asset - and verified by decrypting three files the disc also ships in the clear and getting byte-identical results. Needs the disc's own `.dkey`, which is never in the image. |
+| SFB | `.SFB` | PS3 | HD Fury | **understood** | Magic `.SFB`. A 32-byte-entry keyed table - 16-byte key, big-endian offset and length - over values that follow it. `PS3_DISC.SFB` is what identifies a PS3 disc, and its `TITLE_ID` field holds the serial already hyphenated. Read in [`oag-disc`](../../crates/disc/src/platform.rs) rather than `oag-formats`, which depends on it; only the one field identification needs. |
 | PSARC | `.psarc` | PS3 | HD Fury | identified | The PS3 asset archive - `PSAR` 1.3, zlib, 64 KiB blocks. All seven of Wipeout HD / Fury's parse far enough to inflate a table of contents into real paths; no reader is implemented. |
 | SELF | `.BIN`, `.sprx` | PS3 | HD Fury | identified | Magic `SCE\0`. `EBOOT.BIN` and `DFEngine.sprx`. Encrypted with console keys, a layer entirely separate from the disc above; nothing here reads PS3 code yet. |
 | PUP | `.PUP` | PS3 | HD Fury | identified | Magic `SCEUF`. The 256 MiB firmware update payload every PS3 disc carries. In the clear, and not relevant. |

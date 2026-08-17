@@ -254,7 +254,7 @@ impl MusicDiscs {
         match layout.platform {
             Platform::Psp => discs.psp = Some(booted.to_string()),
             Platform::Ps2 => discs.ps2 = Some(booted.to_string()),
-            Platform::Unknown => return discs,
+            Platform::Ps3 | Platform::Unknown => return discs,
         }
 
         // The booted disc's own soundtrack is what a candidate has to match,
@@ -316,7 +316,7 @@ impl MusicDiscs {
         chosen.or_else(|| match self.booted? {
             Platform::Psp => self.psp.as_deref().map(|at| (at, Platform::Psp)),
             Platform::Ps2 => self.ps2.as_deref().map(|at| (at, Platform::Ps2)),
-            Platform::Unknown => None,
+            Platform::Ps3 | Platform::Unknown => None,
         })
     }
 }
@@ -1450,7 +1450,7 @@ impl Soundtrack {
         let tracks = match platform {
             Platform::Ps2 => ps2_soundtrack(source)?,
             Platform::Psp => psp_soundtrack(source)?,
-            Platform::Unknown => None,
+            Platform::Ps3 | Platform::Unknown => None,
         };
         Ok(tracks.map(|tracks| Self { tracks }))
     }

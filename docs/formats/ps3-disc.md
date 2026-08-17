@@ -161,9 +161,13 @@ Decryption of the whole 2.1 GiB image takes about five seconds.
 
 `EBOOT.BIN` and `DFEngine.sprx` are readable as SELF containers and their code
 is still encrypted - layer 2, untouched. Nothing in this project reads a PS3
-executable yet, and [`oag-disc`](../../crates/disc/src/lib.rs) still does not
-identify PS3 images, so `oag-unpack info` reports the platform as unknown for
-this disc even though `PS3_DISC.SFB` and `PARAM.SFO` name it outright.
+executable, and nothing reads a `.psarc` either, so no asset has come off this
+disc yet.
+
+Identification, by contrast, is done and needs nothing from this page:
+[`oag-disc`](../../crates/disc/src/platform.rs) reads a PS3 disc's serial out of
+`PS3_DISC.SFB` as of 2026-08-17, which is in a plain region, so `oag-unpack info`
+works on the encrypted image exactly as it does on the decrypted one.
 
 ## See also
 

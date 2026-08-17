@@ -1,4 +1,5 @@
-//! Inspects and extracts the contents of PSP UMD and PS2 DVD disc images.
+//! Inspects and extracts the contents of PSP UMD, PS2 DVD and PS3 BD-ROM disc
+//! images.
 //!
 //! ```text
 //! oag-unpack info      <image>              platform, serial, volume descriptor
@@ -29,7 +30,7 @@ const SNIFF_BYTES: u64 = 64 * 1024;
 #[derive(Parser, Debug)]
 #[command(
     name = "oag-unpack",
-    about = "Inspect and extract PSP UMD and PS2 DVD disc images",
+    about = "Inspect and extract PSP UMD, PS2 DVD and PS3 BD-ROM disc images",
     version
 )]
 struct Cli {

@@ -1,8 +1,12 @@
 # `oag-unpack`
 
-Inspects and extracts PSP UMD and PS2 DVD disc images. Handles CHD and raw ISO,
-detected by magic rather than by file extension, so a CHD named `.iso` still
-works.
+Inspects and extracts PSP UMD, PS2 DVD and PS3 BD-ROM disc images. Handles CHD
+and raw ISO, detected by magic rather than by file extension, so a CHD named
+`.iso` still works.
+
+A PS3 disc identifies from `PS3_DISC.SFB`, which is never encrypted, so `info`
+and `list` work on an encrypted image as shipped. Reading a file *out* of one is
+a different matter - see [PS3 disc encryption](../formats/ps3-disc.md).
 
 ```
 oag-unpack info      <image>              platform, serial, volume descriptor

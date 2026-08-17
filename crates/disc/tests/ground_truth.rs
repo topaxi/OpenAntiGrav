@@ -115,6 +115,43 @@ fn pure_uses_the_same_disc_structure_as_pulse() {
 }
 
 #[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_ps3_disc_identifies_itself_even_while_encrypted() {
+    let Some(path) = image("hdfury-ps3-eu.iso") else {
+        return;
+    };
+    let mut disc = DiscImage::open(&path).expect("open");
+
+    // `PS3_DISC.SFB` is in a plain region, so this holds for the encrypted
+    // image as shipped - nothing here needs the disc key, and nothing here
+    // should ever start needing it.
+    let title = disc.identify().expect("identify");
+    assert_eq!(title.platform, Platform::Ps3);
+    assert_eq!(title.serial.as_deref(), Some("BCES-00664"));
+    assert_eq!(
+        title.boot_path.as_deref(),
+        Some("PS3_GAME/USRDIR/EBOOT.BIN")
+    );
+
+    // The archives are encrypted and stay that way; what this asserts is that
+    // the filesystem walk reaches them, which is what identification rests on.
+    let paths: Vec<_> = disc
+        .entries()
+        .expect("entries")
+        .iter()
+        .map(|e| e.path.clone())
+        .collect();
+
+    for expected in [
+        "PS3_DISC.SFB",
+        "PS3_GAME/PARAM.SFO",
+        "PS3_GAME/USRDIR/EBOOT.BIN",
+    ] {
+        assert!(paths.iter().any(|p| p == expected), "missing {expected}");
+    }
+}
+
+#[test]
 #[ignore = "needs a disc image in data/images/ and chdman on PATH"]
 fn listing_matches_chdman_and_the_reference_iso() {
     let Some(path) = image("pulse-psp-usa.chd") else {
