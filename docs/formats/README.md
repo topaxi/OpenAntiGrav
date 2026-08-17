@@ -57,28 +57,38 @@ remove. Pure is PSP-only, so a PS2-only row can only ever say `Pulse`.
 
 Documented elsewhere; we only need to read them.
 
-The `Titles` column means the same thing here. Five of the twelve rows say
-`Pulse, Pure`, and the reason is worth stating: these are the console's formats
-rather than a game's, so where a second title on the same hardware ships one it
-goes through unchanged. That is the null result the format layer wants, and
-recording it is what stops the next person re-running the probe. The other seven
-are `Pulse` because Pure simply does not ship that thing - no firmware update
-payload, no `GSHARE/SHARE.BIN`, no `~SCE` modules - not because anything failed.
+The `Titles` column means the same thing here, and the reason a platform row
+often carries more than one title is worth stating: these are the console's
+formats rather than a game's, so where another title on the same hardware ships
+one it goes through unchanged. That is the null result the format layer wants,
+and recording it is what stops the next person re-running the probe.
+
+Two rows now cross a console generation rather than only a second title.
+`ISO 9660` and `SFO` say `Pulse, Pure, HD Fury`: `oag-disc`'s walker reads the
+PS3 disc's 22 files with no change at all, and a PS3 `PARAM.SFO` is the same
+`\0PSF` key/value file the PSP writes. Rows that say only `Pulse` do so because
+Pure does not ship that thing - no firmware update payload, no
+`GSHARE/SHARE.BIN`, no `~SCE` modules - not because anything failed. The four
+`HD Fury` rows are PS3-only formats, from the one PS3 image this project holds.
 
 | Format | Extension | Platform | Titles | Status | Notes |
 | --- | --- | --- | --- | --- | --- |
-| ISO 9660 | - | both | Pulse, Pure | **understood** | [`oag-disc`](../../crates/disc/src/iso9660.rs) |
+| ISO 9660 | - | all three | Pulse, Pure, HD Fury | **understood** | [`oag-disc`](../../crates/disc/src/iso9660.rs). Reads the PS3 disc unchanged - 22 files in 5 directories - even though [platform identification](../reverse-engineering/source-images.md#hdfury-ps3-euiso---wipeout-hd--fury-ps3) does not know PS3 yet. |
 | CHD | `.chd` | - | Pulse, Pure | **understood** | Via the `chd` crate; layout detection in [`chd_source.rs`](../../crates/disc/src/chd_source.rs) |
 | ELF | `.BIN`, `.IRX` | both | Pulse, Pure | identified | Both main executables are unencrypted ELF |
 | PSP `~PSP` | `.prx`, `.BIN` | PSP | Pulse, Pure | identified | Compressed/encrypted executable. Not needed: `BOOT.BIN` is plaintext. `sniff` finds 2 on Pulse's UMD and **9 on Pure's**, all `.prx` - Pure ships its network stack loose where Pulse packs most of it. |
 | PSP `~SCE` | `.prx` | PSP | Pulse | identified | Relocatable library. **Pulse only**: `sniff` finds 6 on Pulse's UMD and **zero on Pure's**, whose modules are all `~PSP` or plain ELF. |
 | PBP | `.BIN` | PSP | Pulse | identified | `GSHARE/SHARE.BIN` |
-| SFO | `.SFO` | PSP | Pulse, Pure | identified | Magic `\0PSF`. Key/value metadata. |
-| PSAR | `.BIN` | PSP | Pulse | identified | Firmware update archive. Not relevant. |
+| SFO | `.SFO` | all three | Pulse, Pure, HD Fury | identified | Magic `\0PSF`. Key/value metadata. Unchanged on the PS3, where `PS3_GAME/PARAM.SFO` is what names the disc: `BCES-00664`, `WipEout(R) HD Fury`. It sits in a plain region, so it reads without the disc key. |
+| PSAR | `.BIN` | PSP | Pulse | identified | Firmware update archive. Not relevant. **Not** the PS3's `.psarc` below, despite both starting `PSAR` - different container, same four bytes. |
 | ATRAC3 | `.AT3` | PSP | Pulse | identified | RIFF wrapped. `ffmpeg` decodes it. |
 | MPEG-2 PS | `.PSS` | PS2 | Pulse | identified | `ffmpeg` decodes it. |
 | IOP module archive | `.IMG` | PS2 | Pulse | unknown | `IOPRP310.IMG`, magic `RESET`. Not relevant to gameplay. |
 | PNG | `.PNG` | PSP | Pulse | **understood** | Standard |
+| [PS3 disc encryption](ps3-disc.md) | - | PS3 | HD Fury | **understood** | Per-sector AES-128-CBC over the spans sector 0's region table declares encrypted, IV from the absolute LBA. Implemented in [`scripts/ps3iso.py`](../../scripts/ps3iso.py) rather than `oag-formats` - it is a disc layer, not an asset - and verified by decrypting three files the disc also ships in the clear and getting byte-identical results. Needs the disc's own `.dkey`, which is never in the image. |
+| PSARC | `.psarc` | PS3 | HD Fury | identified | The PS3 asset archive - `PSAR` 1.3, zlib, 64 KiB blocks. All seven of Wipeout HD / Fury's parse far enough to inflate a table of contents into real paths; no reader is implemented. |
+| SELF | `.BIN`, `.sprx` | PS3 | HD Fury | identified | Magic `SCE\0`. `EBOOT.BIN` and `DFEngine.sprx`. Encrypted with console keys, a layer entirely separate from the disc above; nothing here reads PS3 code yet. |
+| PUP | `.PUP` | PS3 | HD Fury | identified | Magic `SCEUF`. The 256 MiB firmware update payload every PS3 disc carries. In the clear, and not relevant. |
 
 ## How to add a format
 

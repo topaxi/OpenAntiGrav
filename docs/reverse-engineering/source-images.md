@@ -15,9 +15,11 @@ against exactly the same data.
 | `pulse-ps2-eu.chd` | `9b352295d4e35e3a4275ad2c1167aa3c2ab8bb7eb4b3abc877fd4b936b39e2fe` | PS2 | `SCES-54748` | 2009-05-15 17:11:10 |
 | `pure-psp-usa.chd` | `851075e2a894524bd89703f2f930098c99302a488424328cf77ec33da325a3f1` | PSP | `UCUS-98612` | 2005-06-02 14:29:23 |
 | `pure-psp-eu.chd` | `9390d1ff457be45c518bff4aa66974b3c4cf4c4f0d0c2388d770600b41ec264f` | PSP | `UCES-00001` | 2005-06-29 14:18:53 |
-| `hdfury-ps3-eu.iso` | `6702a1b064c966e30ad878f7dded9a787bbab459ed4a7232007f6f1e7870f987` | PS3 | unknown | 2009-08-28 10:02:56 |
+| `hdfury-ps3-eu.iso` | `6702a1b064c966e30ad878f7dded9a787bbab459ed4a7232007f6f1e7870f987` | PS3 | `BCES-00664` | 2009-08-28 10:02:56 |
 
-Reproduce with `just hash-images`.
+Reproduce with `just hash-images`. It hashes everything in `data/images/`, so it
+also reports any *derived* file kept there - a decrypted copy, a disc key - which
+the table above deliberately does not list. Only source images belong in it.
 
 ## Details
 
@@ -145,14 +147,40 @@ for the same opportunistic-corroboration reason as the USA disc above.
 
 ```
 container      raw ISO, 1103104 sectors (2.1 GiB capacity)
-platform       unknown (no PS3 identification yet)
+platform       PS3
+serial         BCES-00664
+title          WipEout(R) HD Fury, version 01.03, app 02.00
+boot           PS3_GAME/USRDIR/EBOOT.BIN
 volume id      PS3VOLUME
 contents       22 files in 5 directories, 2.1 GiB
 ```
 
-Later target per [scope](../overview/goals.md#scope). `oag-disc` has no PS3
-serial/publisher identification yet, so `platform`/`serial` read `unknown` -
-that's expected, not a bug. Not otherwise explored yet.
+Later target per [scope](../overview/goals.md#scope). `oag-disc` still has no PS3
+identification, so `oag-unpack info` reports `unknown` for this disc - that is a
+gap in the tool, not in the disc: the serial and title above are read straight
+out of `PS3_GAME/PARAM.SFO`, which sits in a plain region and needs no key.
+
+**The image is encrypted, and 1.85 GiB of it - every `.psarc`, `DFEngine.sprx`
+and `EBOOT.BIN` - is unreadable without the disc's own 16-byte key.** The key is
+never inside a PC dump; it comes from BD-drive authentication, which is why
+redump publishes a `.dkey` per disc separately. Layout, cipher, where the key
+comes from and how a candidate key is proved correct are all in
+[PS3 disc encryption](../formats/ps3-disc.md).
+
+Decrypted 2026-08-17 and verified: three files this disc ships twice, once in a
+plain region and once inside an encrypted one, are byte-identical afterwards.
+
+```sh
+python3 scripts/ps3iso.py decrypt data/images/hdfury-ps3-eu.iso <key> out.iso
+```
+
+Neither the key nor the decrypted image is committed, and neither belongs in the
+table above - `data/images/hdfury-ps3-eu-dec.iso` is derived, regenerable in
+about five seconds, and hashes to
+`a1e2aef2beb9ea489f29b3d5379f05881164f1cceefcd518de5107244d795c16`.
+
+Nothing has been read out of the assets yet. `.psarc` is a documented Sony
+container and the archives parse, but no `oag-formats` reader exists for it.
 
 ## Region asymmetry
 

@@ -203,6 +203,12 @@ wad *ARGS:
 mine-names image:
     python3 scripts/mine-names.py {{image}}
 
+# Inspect or decrypt a PS3 disc image: map|extract|oracle|decrypt. `map` and a
+# plain-region `extract` need no key; `decrypt` needs the disc's own .dkey,
+# which is never committed. See docs/formats/ps3-disc.md.
+ps3iso *ARGS:
+    python3 scripts/ps3iso.py {{ARGS}}
+
 # Extract a raw ISO from a CHD, which is what the emulators want
 extract-iso image="data/images/pulse-psp-usa.chd" out="data/cache/pulse-psp-usa.iso":
     chdman extractdvd -i {{image}} -o {{out}} -f
