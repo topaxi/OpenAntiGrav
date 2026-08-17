@@ -858,6 +858,72 @@ ratchets so neither number can quietly fall, and
 `an_opponent_that_flies_off_the_circuit_is_put_back_on_it` pins the rescue
 without needing the disc.
 
+### And nothing recovered the player either
+
+**Found 2026-08-17, from a hand-driven lap.** A player took a Turbo onto a crest
+on Vertica reversed (`14_Track`), left the circuit at about 240 units per second
+and fell for the remaining eight seconds of the log - distance to the spline 59,
+147, 227, 355, 521, 666, 802, 954, height down to -866 - with no recovery of any
+kind. The race did not end and could not continue.
+
+The two mechanisms above were per-slot by then, but only one of them applied to
+slot 0: the player had the authored `Reset` volumes and nothing else.
+`Race::lost_off_the_circuit` cannot be reused for the player, because it measures
+the craft against the sample its own *driver* believes it is on and nobody
+steers the player's craft - `driver.index` sits wherever it was left.
+
+**The `Reset` volumes were assumed to be the player's net, and they are not.**
+Counted for the first time here, across ten circuits in both directions:
+
+| circuits | `Reset` colliders |
+| --- | --- |
+| `06_Track`, `14_Track`, `16_Track` | **0** |
+| `01`, `04`, `07`, `09`, `13` | 1 |
+| `03` | 3 |
+| `05` | 7 |
+
+Three circuits author **none at all** - including `16_Track`, the default, and
+`14_Track`, the one the failure was reported on, and `06_Track`, the circuit this
+page already records a human falling through. On those, a craft that leaves has
+nothing to touch by construction, and no amount of work on the reset path could
+have recovered it.
+
+So slot 0 gets a trigger of its own, `Race::lost_off_the_track`: the **true**
+distance to the nearest spline sample, past `PLAYER_RESCUE_HALF_WIDTHS` (two
+half-widths) for `PLAYER_RESCUE_TICKS` (three quarters of a second). Both are
+ours, both were measured before they were chosen, and both differ from the
+opponents' pair because the quantity is different - a true distance rather than a
+believed one. One autopiloted craft alone on ten circuits at ace, 6,000 ticks
+each, peaked at **0.74 half-widths** on the worst circuit and 13.7 units on
+`13_Track`, the one with the authored jump: a circuit's racing line runs *through*
+its jump, so a craft in the air over one is near the spline rather than far from
+it. Two half-widths is between 2.7x and 5.8x the worst healthy excursion.
+
+Where the craft is put back is **latched**, not reconstructed: `Race::last_on_track`
+is the last sample the craft was within the threshold of. By the time the dwell
+expires the craft is hundreds of units below the circuit, where the nearest
+sample can belong to a different part of it - which is
+[the same trap](#wrong-answer-one-the-rescue-index-reconstructed-backwards) the
+opponents' side already paid for once.
+
+Measured after: thrown off `14_Track` reversed at 240 units per second, the craft
+peaks 119.5 units out and is back within 4.0 units of the spline ten seconds
+later. On `05_Track`, where a craft leaves unprompted, the peak falls from
+**7,983 units to 193.7**.
+
+**What the player deliberately does not get is the stall rescue.** Being
+teleported off a wall one is scraping along, while holding the throttle, is a
+thing done *to* a player rather than for them, and a human who is wedged can see
+it and back off - which is exactly what an opponent cannot do. The consequence is
+visible on `05_Track`: the craft is recovered when it leaves and still does not
+lap, because that circuit's line runs above its own collision surface and the
+craft beaches. That is the open thread the section below records, not a gap in
+this one.
+
+`crates/game/tests/off_track_rescue_ground_truth.rs` carries all of it against
+the disc; `race/tests/respawn.rs` pins the trigger, the control and the latch
+without needing one.
+
 ### Where a craft comes off: two wrong answers and the measurement that settled it
 
 **Read this section as a record of method, not just of a finding.** The
@@ -1662,9 +1728,14 @@ assumed speed-up, ours and a rule of thumb - erring high is the safe direction,
 because it makes a craft keep the pickup rather than spend it into a wall.
 
 **It does not close the hole**: with the gate in, one craft in 28 craft-minutes
-on `16_Track` still leaves the track after a Turbo, and because nothing respawns
-an opponent it is gone for the race. The speed target and the lookahead ceiling
-(`look_max`, 90 units - a third of a second at 270) are the next places to look.
+on `16_Track` still leaves the track after a Turbo. It is no longer gone for the
+race - that measurement predates the rescues, and both halves of the grid are
+recovered now (`Race::lost_off_the_circuit` for an opponent,
+`Race::lost_off_the_track` for the player, who does the same thing with a Turbo
+and was the last one left falling). What the gate is still for is the craft not
+leaving in the first place: a recovered lap is not a lap it drove. The speed
+target and the lookahead ceiling (`look_max`, 90 units - a third of a second at
+270) are the next places to look.
 
 ### The field burns
 
