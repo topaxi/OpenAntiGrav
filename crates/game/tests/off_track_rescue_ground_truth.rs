@@ -19,11 +19,13 @@
 //! geometry that a step down bigger than the hover probes' reach takes the surface
 //! out of view, after which the craft travels forward faster than gravity brings
 //! it back. Measured here before the rescue existed, one autopiloted craft alone
-//! at ace: on `05_Track` it left at tick 591 and was **7,983 units** from the
-//! circuit by tick 6,000, having completed one lap.
+//! at ace: on `05_Track` it passed 20 units from the sample table at tick 591,
+//! never came back, and was **7,983 units** away by tick 6,000.
 //!
-//! So the two tests are the mechanism's bound on the circuit that produces the
-//! failure, and a control on the circuits that do not.
+//! So the four tests are: the bound on the circuit that produces the failure
+//! unprompted, the reported failure reproduced on the circuit it was reported on,
+//! the count of `Reset` colliders that says why those volumes cannot be the
+//! answer, and a control on the circuits that never leave at all.
 
 use std::path::{Path, PathBuf};
 
@@ -111,7 +113,7 @@ fn solo_player(level: oag_ai::Difficulty, track: &str, ticks: u64) -> Option<Sol
     Some(solo)
 }
 
-/// **A player who comes off a real circuit is put back, and the race goes on.**
+/// **A player who comes off a real circuit stops receding.**
 ///
 /// `05_Track` is the circuit that produces the failure with no input from a
 /// driver: the craft leaves early in the first lap and, before this, never came
@@ -121,7 +123,7 @@ fn solo_player(level: oag_ai::Difficulty, track: &str, ticks: u64) -> Option<Sol
 /// craft travels in three quarters of a second.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn a_player_that_leaves_a_real_circuit_is_put_back() {
+fn a_player_that_leaves_a_real_circuit_stops_receding() {
     let Some(solo) = solo_player(
         oag_ai::Difficulty::Ace,
         "Data\\Environments\\05_Track\\track.vex",

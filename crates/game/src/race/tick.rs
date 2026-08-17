@@ -62,7 +62,12 @@ impl Race {
         if let (Some(index), Some(distance)) = (index, spline_distance)
             && distance <= self.player_rescue_distance
         {
-            self.last_on_track = u32::try_from(index).unwrap_or(u32::MAX);
+            // Zero on an index that will not fit, matching `Race::start` - the
+            // arm is unreachable on any real table, and the value it writes is
+            // read back as a sample index, so it has to be a *valid* one. A
+            // saturating `u32::MAX` here would make `Race::respawn` find no
+            // sample and return having recovered nothing, silently.
+            self.last_on_track = u32::try_from(index).unwrap_or(0);
         }
 
         if let Some(index) = index {

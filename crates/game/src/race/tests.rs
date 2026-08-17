@@ -263,7 +263,11 @@ pub(super) fn race_with_a_grid() -> Race {
         up: [0.0, 1.0, 0.0],
         forward: [1.0, 0.0, 0.0],
     });
-    without_player_rescue(Race::start(setup))
+    // **Not `without_player_rescue`**, unlike the two fixtures that drive: this
+    // one's craft have no engine, so nothing here reaches the end of the straight
+    // - and the opponent-rescue tests built on it assert that slot 0 was *not*
+    // recovered, which is worth nothing if slot 0's recovery is switched off.
+    Race::start(setup)
 }
 
 /// A weapon table with one Turbo in it, weighted for a human.
