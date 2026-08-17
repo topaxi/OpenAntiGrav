@@ -34,7 +34,7 @@
 use std::path::{Path, PathBuf};
 
 use oag_assets::psarc::Archive;
-use oag_formats::{ByteOrder, collision, track, vex};
+use oag_formats::{ByteOrder, collision, pads, track, vex};
 
 /// The decrypted PS3 image.
 const PS3_IMAGE: &str = "hdfury-ps3-eu-dec.iso";
@@ -295,4 +295,66 @@ fn the_hd_collision_floor_bounds_contain_the_circuit_it_belongs_to() {
             );
         }
     }
+}
+
+/// Both pad classes read, and every trigger volume is the right way up.
+///
+/// A pad's payload is a `Mesh` payload, and HD's `Mesh` payload is where the
+/// large structural change is: the batches went to `.rcsmodel` and what stayed
+/// behind is the bounding-box pair at `+0x10`/`+0x20` - which is exactly the
+/// field a pad's trigger volume is. So the pads survive the change that stops
+/// `--mesh` drawing anything, and `docs/formats/hd-status.md` counted them:
+/// 416 speedup and 208 weapon pads across the 28 circuits, `min <= max`
+/// componentwise on all 624.
+///
+/// The counts here are Talon's Junction's share of that, measured by this
+/// reader. The `min <= max` half is not asserted separately because
+/// `PadVolume::parse` already refuses an inverted box - a pad that came back at
+/// all passed it.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn both_hd_pad_classes_read_and_sit_on_the_circuit() {
+    let Some(data) = hd_track_vex() else { return };
+    let nodes = vex::nodes(&data).expect("walk");
+
+    let speedup = pads::volumes(&data, &nodes, vex::CLASS_SPEEDUP_PAD);
+    let weapon = pads::volumes(&data, &nodes, vex::CLASS_WEAPON_PAD);
+    assert_eq!(speedup.len(), 18, "speedup pads");
+    assert_eq!(weapon.len(), 9, "weapon pads");
+
+    // Every pad's centre is near the driveable surface. This is the check that
+    // says the *transform chain* composed big-endian too: a pad's own payload
+    // is a box in local space, and only the parent chain puts it on a circuit.
+    let node = track::find_node(&data, &nodes).expect("a WO Track node");
+    let ai = track::parse(&data[node.payload()]).expect("the spline");
+    let points: Vec<[f32; 3]> = ai
+        .paths
+        .iter()
+        .flat_map(|p| &p.points)
+        .map(|p| p.pos)
+        .collect();
+
+    // Horizontal distance, deliberately: `PadVolume::parse` applies the bind's
+    // own vertical expansion (2 units down, 8 up), so a pad's centre is lifted
+    // above the surface by construction and a 3-D distance would be measuring
+    // that as much as the placement.
+    let worst = speedup
+        .iter()
+        .chain(&weapon)
+        .map(|pad| {
+            let c = pad.centre();
+            points
+                .iter()
+                .map(|p| ((c[0] - p[0]).powi(2) + (c[2] - p[2]).powi(2)).sqrt())
+                .fold(f32::MAX, f32::min)
+        })
+        .fold(0.0f32, f32::max);
+
+    // A circuit's half-widths are of order 20 units and a pad sits within one.
+    // What this rules out is the failure that matters: an untransformed pad
+    // reads at the origin, hundreds of units from the nearest control point.
+    assert!(
+        worst < 20.0,
+        "furthest pad is {worst} units from the nearest control point, horizontally"
+    );
 }

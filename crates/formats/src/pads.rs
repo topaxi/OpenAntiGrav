@@ -33,6 +33,7 @@
 //!
 //! Evidence and confidence scores: `docs/formats/pads.md`.
 
+use crate::ByteOrder;
 use crate::vex::{self, Node};
 
 /// Where the bounding-box minimum sits in a pad's payload.
@@ -88,14 +89,18 @@ impl PadVolume {
     /// [`Self::distance`] report a positive distance from every point including
     /// the ones inside it, which reads as "no pad here" rather than as a
     /// failure.
+    /// `order` is the containing file's, from [`vex::byte_order`]. A mesh
+    /// payload carries no magic, so it cannot say which way round it is - and
+    /// this is the one HD `Mesh` field that is still *there*, the box pair
+    /// having survived the move of the geometry into `.rcsmodel`.
     #[must_use]
-    pub fn parse(payload: &[u8], to_world: [f32; 16]) -> Option<Self> {
+    pub fn parse(payload: &[u8], to_world: [f32; 16], order: ByteOrder) -> Option<Self> {
         if payload.len() < MIN_PAYLOAD {
             return None;
         }
         let f = |at: usize| -> Option<f32> {
-            let b = payload.get(at..at + 4)?;
-            Some(f32::from_le_bytes(b.try_into().ok()?))
+            payload.get(at..at + 4)?;
+            Some(order.f32(payload, at))
         };
         let mut min = [f(MIN)?, f(MIN + 4)?, f(MIN + 8)?];
         let mut max = [f(MAX)?, f(MAX + 4)?, f(MAX + 8)?];
@@ -203,13 +208,14 @@ impl PadVolume {
 #[must_use]
 pub fn volumes(data: &[u8], nodes: &[Node], class_id: u32) -> Vec<PadVolume> {
     let chain = vex::world_transforms(data, nodes);
+    let order = vex::byte_order(data);
     nodes
         .iter()
         .enumerate()
         .filter(|(_, node)| node.class_id == class_id)
         .filter_map(|(index, node)| {
             let to_world = chain.get(index).copied()?;
-            PadVolume::parse(data.get(node.payload())?, to_world)
+            PadVolume::parse(data.get(node.payload())?, to_world, order)
         })
         .collect()
 }
@@ -238,7 +244,7 @@ mod tests {
 
     #[test]
     fn the_bind_expands_the_box_vertically_and_asymmetrically() {
-        let pad = PadVolume::parse(&payload(), vex::IDENTITY).expect("parse");
+        let pad = PadVolume::parse(&payload(), vex::IDENTITY, ByteOrder::Little).expect("parse");
         assert_eq!(pad.min[1], -0.15 - EXPAND_DOWN);
         assert_eq!(pad.max[1], -0.0016 + EXPAND_UP);
         // The horizontal extents are untouched.
@@ -248,7 +254,7 @@ mod tests {
 
     #[test]
     fn a_point_on_the_plate_is_inside_and_one_beside_it_is_not() {
-        let pad = PadVolume::parse(&payload(), vex::IDENTITY).expect("parse");
+        let pad = PadVolume::parse(&payload(), vex::IDENTITY, ByteOrder::Little).expect("parse");
         assert!(pad.contains([0.0, 0.0, 0.0]));
         assert!(pad.contains([0.0, 4.0, 0.0]), "the expanded ceiling");
         assert!(!pad.contains([0.0, 9.0, 0.0]), "above the expanded ceiling");
@@ -257,7 +263,7 @@ mod tests {
 
     #[test]
     fn distance_is_zero_inside_and_grows_outside() {
-        let pad = PadVolume::parse(&payload(), vex::IDENTITY).expect("parse");
+        let pad = PadVolume::parse(&payload(), vex::IDENTITY, ByteOrder::Little).expect("parse");
         assert_eq!(pad.distance([0.0, 0.0, 0.0]), 0.0);
         // 20.0 is 15.225 past the +x face, and nothing else is out of range.
         let d = pad.distance([20.0, 0.0, 0.0]);
@@ -266,7 +272,8 @@ mod tests {
 
     #[test]
     fn the_disabled_gate_suppresses_a_hit_that_is_geometrically_inside() {
-        let mut pad = PadVolume::parse(&payload(), vex::IDENTITY).expect("parse");
+        let mut pad =
+            PadVolume::parse(&payload(), vex::IDENTITY, ByteOrder::Little).expect("parse");
         assert!(pad.contains([0.0, 0.0, 0.0]));
         pad.disabled = 1.0;
         assert!(!pad.contains([0.0, 0.0, 0.0]));
@@ -285,7 +292,7 @@ mod tests {
             1.0, 0.0, 0.0, 0.0, //
             100.0, 0.0, 0.0, 1.0, //
         ];
-        PadVolume::parse(&payload(), m).expect("parse")
+        PadVolume::parse(&payload(), m, ByteOrder::Little).expect("parse")
     }
 
     #[test]
@@ -309,7 +316,7 @@ mod tests {
             C, 0.0, C, 0.0, //
             0.0, 0.0, 0.0, 1.0, //
         ];
-        let pad = PadVolume::parse(&payload(), m).expect("parse");
+        let pad = PadVolume::parse(&payload(), m, ByteOrder::Little).expect("parse");
 
         // Local (4.7, 0, 4.9): inside, near the far corner. Its world x of
         // 6.788 is well outside the box's own `max.x`, so an axis-aligned test
@@ -341,19 +348,19 @@ mod tests {
 
     #[test]
     fn a_payload_too_short_for_the_box_pair_is_not_a_pad() {
-        assert!(PadVolume::parse(&[0u8; 0x2f], vex::IDENTITY).is_none());
+        assert!(PadVolume::parse(&[0u8; 0x2f], vex::IDENTITY, ByteOrder::Little).is_none());
     }
 
     #[test]
     fn an_inverted_box_is_rejected_rather_than_silently_never_hit() {
         let mut p = payload();
         p[MAX..MAX + 4].copy_from_slice(&(-100.0f32).to_le_bytes());
-        assert!(PadVolume::parse(&p, vex::IDENTITY).is_none());
+        assert!(PadVolume::parse(&p, vex::IDENTITY, ByteOrder::Little).is_none());
     }
 
     #[test]
     fn a_degenerate_direction_row_is_reported_rather_than_returned_as_nan() {
-        let pad = PadVolume::parse(&payload(), [0.0; 16]).expect("parse");
+        let pad = PadVolume::parse(&payload(), [0.0; 16], ByteOrder::Little).expect("parse");
         assert!(pad.direction().is_none());
     }
 }

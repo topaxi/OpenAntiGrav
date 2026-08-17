@@ -416,7 +416,7 @@ fn pad_payloads_are_mesh_payloads() {
                 // A pad carries geometry, so the payload must also decode as the
                 // mesh it claims to be.
                 assert!(
-                    PadVolume::parse(payload, vex::IDENTITY).is_some(),
+                    PadVolume::parse(payload, vex::IDENTITY, vex::byte_order(model)).is_some(),
                     "{name}: class {class:#x} payload did not decode"
                 );
                 sizes.insert(payload.len());
