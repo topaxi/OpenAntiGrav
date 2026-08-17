@@ -159,12 +159,21 @@ Decryption of the whole 2.1 GiB image takes about five seconds.
 
 ## What is still closed
 
-`EBOOT.BIN` and `DFEngine.sprx` are readable as SELF containers and their code
-is still encrypted - layer 2, untouched. Nothing in this project reads a PS3
-executable, and nothing reads a `.psarc` either, so no asset has come off this
-disc yet.
+**`.psarc` is.** No reader exists, so **no asset has come off this disc** - not a
+texture, not a model, not a table. Everything below is about the executable,
+which is a separate half of the layer-2 problem and is open.
 
-Identification, by contrast, is done and needs nothing from this page:
+**Layer 2 on `EBOOT.BIN` turned out to be free.** `rpcs3 --decrypt` writes a real
+PPC64 ELF using keys RPCS3 carries, with no firmware install - it prints
+`Missing Firmware` and works. That ELF is imported, analysed and partly named:
+see [`docs/ghidra/functions/ps3-hdfury-eu/`](../ghidra/functions/ps3-hdfury-eu/)
+and, for the import procedure, [toolchain.md](../reverse-engineering/toolchain.md#ps3).
+
+`DFEngine.sprx` is still closed, for a different reason than encryption: its ELF
+type is `0xffa4` (`ET_SCE_PPURELEXEC`, a relocatable PRX) and Ps3GhidraScripts
+does not support relocations.
+
+Identification needs nothing from this page at all:
 [`oag-disc`](../../crates/disc/src/platform.rs) reads a PS3 disc's serial out of
 `PS3_DISC.SFB` as of 2026-08-17, which is in a plain region, so `oag-unpack info`
 works on the encrypted image exactly as it does on the decrypted one.

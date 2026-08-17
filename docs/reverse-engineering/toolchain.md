@@ -149,15 +149,27 @@ env -u JAVA_TOOL_OPTIONS \
 
 Then `File > Install Extensions > +` and restart.
 
-**4. Import, in this order.** The script pack must run *before* auto-analysis,
-not after:
+**4. Import.** Use the script, which does all of the below in one command and
+checks the prerequisites first. Close Ghidra before running it - headless cannot
+open a project the GUI holds:
+
+```sh
+scripts/import-ps3-eboot.sh
+```
+
+By hand, the order matters and is easy to get wrong:
 
 1. Import `EBOOT.elf`, language `PowerPC:BE:64:A2ALT-32addr`, big endian, with
    auto-analysis **off**. There is no `.opinion` file, so the language has to be
    chosen by hand - untick "recommended" in the import dialog to see it.
 2. Run `AnalyzePs3Binary.java` from the Script Manager.
 3. Run auto-analysis.
-4. Run `DefinePS3Syscalls.java`.
+4. Run `AssignPs3R2FromOpd.java`. **Not optional, and not in upstream's README** -
+   see the TOC trap below.
+5. Run `DefinePS3Syscalls.java`.
+
+A correct import of Wipeout HD / Fury reports 26,100 functions, 159 memory
+blocks, and imports named from the NID database.
 
 #### PS3 traps
 
@@ -174,6 +186,16 @@ processor together.
 `GHIDRA_MCP_ALLOW_SCRIPTS=1` in the environment of the *Ghidra process*, so
 enabling it means restarting Ghidra. Without it the pre/post-analysis flow above
 has to be driven from the Script Manager by hand.
+
+**Every function has its own TOC, and Ghidra uses one for all of them.** The OPD
+declares a TOC per function, and this executable has two - `0x008ad4d8` over
+`0x010200`-`0x758110` and `0x008bd3c4` over `0x32d5e0`-`0x7579c0`, overlapping,
+so an address does not determine which. Ghidra uses the entry point's for
+everything, which means **59% of functions have every TOC-relative load resolved
+against the wrong base**, and a string cross-reference comes out as a real string
+at a real address that is not the one the code loads. `AssignPs3R2FromOpd.java`
+is the fix. Worked example and the manual three-read check:
+[memory.md](../ghidra/functions/ps3-hdfury-eu/memory.md).
 
 **`DFEngine.sprx` is not importable.** Its ELF type is `0xffa4`
 (`ET_SCE_PPURELEXEC`, a relocatable PRX) and Ps3GhidraScripts states outright

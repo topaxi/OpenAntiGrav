@@ -181,8 +181,17 @@ table above - `data/images/hdfury-ps3-eu-dec.iso` is derived, regenerable in
 about five seconds, and hashes to
 `a1e2aef2beb9ea489f29b3d5379f05881164f1cceefcd518de5107244d795c16`.
 
-Nothing has been read out of the assets yet. `.psarc` is a documented Sony
-container and the archives parse, but no `oag-formats` reader exists for it.
+**Nothing has been read out of the assets.** `.psarc` is a documented Sony
+container and the archives parse, but no `oag-formats` reader exists for it, so
+no texture, model or table has come off this disc.
+
+**The executable is a different story.** `rpcs3 --decrypt` turns `EBOOT.BIN`
+into a PPC64 ELF with no firmware install needed, and that ELF is imported and
+analysed - 26,100 functions, with a first pass of names under
+[`docs/ghidra/functions/ps3-hdfury-eu/`](../ghidra/functions/ps3-hdfury-eu/).
+Reproduce the whole import with `scripts/import-ps3-eboot.sh`; the procedure and
+its traps are in [toolchain.md](toolchain.md#ps3). Neither the decrypted ELF nor
+the decrypted image is committed.
 
 ## Region asymmetry
 

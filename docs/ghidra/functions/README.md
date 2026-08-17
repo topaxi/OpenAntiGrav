@@ -36,6 +36,13 @@ different hardware:
 
 Maintained as pages are added, sorted by subsystem.
 
+The PS3 pages are not in the table below, which is a PSP-versus-PS2 comparison
+and has no column that would mean anything for a third platform on different
+hardware. They are listed in
+[`ps3-hdfury-eu/README.md`](ps3-hdfury-eu/README.md), and cover the framework
+memory layer, the collision narrowphase, the `RaceManager` and `ModeManager`
+hierarchies, and the race HUD.
+
 | Subsystem | PSP (`BOOT.BIN`) | PS2 (`SCES_547.48`) |
 | --- | --- | --- |
 | WAD subsystem | [psp-pulse-usa/wad-subsystem.md](psp-pulse-usa/wad-subsystem.md) | [ps2-pulse-eu/wad-subsystem.md](ps2-pulse-eu/wad-subsystem.md) |
