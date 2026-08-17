@@ -192,8 +192,15 @@ hash, and the `.vex` and `WO Track` payload inside each declare their own byte
 order. The image has to be
 [layer-1 decrypted](../formats/ps3-disc.md) first.
 
-**`--mesh` on that same file draws nothing**, and that is not a bug in the
-viewer: Wipeout HD's render geometry lives in `.rcsmodel`, which is unread. See
+**`--mesh` on that same file reads the `.rcsmodel` beside it.** Wipeout HD's
+render geometry left the `.vex`, so a `Mesh` node there is a bounding-box pair
+and a hash; `--mesh` follows the hash into the sibling `.rcsmodel` and draws
+what it addresses, plus - on a circuit - the chunks no node references at all,
+which is where HD keeps its road. Positions and triangles only: the attribute
+bytes after each position are undecoded and the `.gtf` textures they would
+address are a separate unread container, so these models are lit off face
+normals computed from their own triangles and carry no texture. See
+[rcsmodel](../formats/rcsmodel.md) and
 [hd-status](../formats/hd-status.md#the-geometry-has-left-the-file).
 
 Two reasons it draws the spline rather than the geometry. It needs nothing from

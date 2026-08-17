@@ -1189,9 +1189,13 @@ the disc the same day:
    Identical on little-endian by construction, and the fix for the only silent
    failure in the whole byte-order pass.
 
-**`--mesh` still draws nothing on an HD file, and that is not a bug in any of
-the above**: HD's render geometry left the `.vex` for `.rcsmodel`, which is
-unread. A `Mesh` node on HD is a bounding-box pair and a 32-bit reference.
+**`--mesh` drew nothing on an HD file at this point, and that was not a bug in
+any of the above**: HD's render geometry left the `.vex` for `.rcsmodel`, and a
+`Mesh` node on HD is a bounding-box pair and a 32-bit reference into it. That
+reference is what [`.rcsmodel`](../formats/rcsmodel.md) was read through later
+the same day - see [the level and the craft
+draw](#the-level-and-the-craft-draw-later-still-on-2026-08-17) below - so
+`--mesh` draws an HD craft and an HD circuit now.
 
 #### The circuit drives, later the same day
 
