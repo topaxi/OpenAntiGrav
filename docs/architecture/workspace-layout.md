@@ -275,6 +275,28 @@ The four `matches_the_committed_reference` determinism tests - `oag-core`,
 which is the check that matters before touching this: see
 [determinism](determinism.md).
 
+`just scripted-sim` - the loop the paragraph at the top of this section is
+actually about, and a `cargo run` rather than a test - goes from **2.20s to
+0.96s** on the whole-lap scenario, prebuilt both times so the figure is the run
+and not the compile.
+
+### It costs nothing at build time, which is not what you would guess
+
+The obvious objection is that `just test`'s inner loop pays for this. Measured,
+it does not. Touching `crates/core/src/lib.rs` - the worst case, since
+everything depends on it - and rebuilding every test binary, three runs each way
+after a warm-up run to settle the fingerprints:
+
+| | rebuild after touching `oag-core` |
+| --- | --- |
+| `opt-level = 0` | 26.3s, 27.2s, 31.2s |
+| `opt-level = 2` | 21.6s, 23.1s, 23.8s |
+
+If anything it is *faster*, though the gap is close enough to machine noise that
+the honest claim is only "no penalty". Either way there is no build-time reason
+to prefer `opt-level = 1` here, which is the compromise this table was measured
+to test.
+
 ### The suite is tail-bound, so ordering is worth as much as speed
 
 1,508s of work over 16 cores would finish in about 95s. The gap is shape, not
