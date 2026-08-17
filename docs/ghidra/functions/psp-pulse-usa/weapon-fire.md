@@ -47,6 +47,13 @@ jal 0x000645cc      ; calls 0x088685cc
 
 Every "no callers found" in this page's history was this, not an absent caller.
 
+**But the wart is regional, established 2026-08-17.** A sweep working in
+`0x0882xxxx` and `0x0885xxxx` found `jal` and `lui` operands rendering absolute
+and in range there, with `get_function_callers` working normally. So applying
+the workaround where it is not needed makes you search for immediates that do
+not exist - which produced one confident wrong conclusion in this session.
+Check that a `jal` in your region resolves to a plausible function first.
+
 ## The Rocket's `<Stats>` struct
 
 `WeaponStats_ParseRocket` (`0x0880c058`) is the same shape as the three simple

@@ -308,12 +308,17 @@ fire-only. Even wired exactly, it would barely move an opponent's behaviour.
 
 ### And nothing reads it
 
-**The record is parsed and never read.** Confidence **85**, from three sweeps that
-each close a different escape route:
+**The record is parsed and never read.** Confidence **92** - three static sweeps
+that each close a different escape route, plus a runtime watchpoint with a working
+positive control (see [below](#measured-in-the-running-game-which-is-what-settles-it)).
+The static half:
 
 1. **Nothing else forms its address.** The record is an *inline member* at
    `object + 0x708` - `FUN_08829124` does `addiu s6, s1, 0x708` at `0x08829184`
-   and hands `s6` to the loader. Program-wide there are exactly **two**
+   and hands `s6` to the loader. `s1` is that function's own `a0`, a `this`
+   pointer, stored to the singleton global `0x08b317b4` at `0x088291ac`; `s6`
+   never escapes the function (its only other uses are the callee-save store and
+   `li s6, 0x1` afterwards). Program-wide there are exactly **two**
    `addiu <reg>, <reg>, 0x708` instructions: that one, and
    `FUN_08826cac`'s `FUN_08851ce4(object + 0x708, 2)`, which is the destructor.
    Nothing stores the base anywhere, so no consumer can have received it.
@@ -346,10 +351,68 @@ it did not exist**, which is exactly what one expects of a table nothing consume
 This is the same shape as [`BaseStartThrust`](#basestartthrust-is-authored-and-never-read)
 on this page: authored in the shipped data, parsed correctly, read by nothing.
 
-**Residual gap, stated so nobody treats 85 as 100**: the sweep is by base
-formation and by displacement. A consumer that reached the fields through a
-pointer written to memory somewhere else would escape both - though sweep 1 finds
-nothing that could write such a pointer.
+### Measured in the running game, which is what settles it
+
+**Confidence 92**, because the static case above now has a runtime leg. The
+record was located in live PSP RAM by its own authored fingerprint - the 39-float
+run `1.1, 1.2, 1.0` repeated with `1.0, 1.0, 1.0` at ids 2 and 7 - which found
+exactly one full-table match, at `0x09881900` in a single race with a full grid.
+
+**That address is on the heap** (`0x0988xxxx`, well past the executable's data),
+which independently kills the worst worry about the static sweep: if the object
+had been a fixed global, the fields would sit at link-time-known addresses and a
+consumer could read them with absolute `lui`/`lwc1` immediates that a
+displacement sweep would never match. It is not, so any consumer must form the
+address from the object pointer - which is exactly what sweeps 1 and 2 cover.
+
+Then a **read watchpoint** over the whole 156-byte table, via
+`memory.breakpoint.add` (see
+[ppsspp-debugger.md](../../../reverse-engineering/ppsspp-debugger.md#memory-watchpoints-and-the-control-that-makes-a-zero-mean-something)):
+
+| Armed | Table | Control: a live craft struct |
+| --- | --- | --- |
+| read, 60 s | **0** | 402,040 |
+| read+write split, 90 s | **0** reads, **0** writes | - |
+| read+write, 60 s | **0** | 348,257 |
+
+**The control is the point.** A watchpoint that never fires is
+indistinguishable from a watchpoint that does not work, and this project has been
+caught by that shape twice - the `hover::sweep` gate that was gated wrong and
+never fired, and `just apply-names` reporting 383 renames it never made. So every
+arming above ran a second watchpoint, same flags, same process, over 156-256
+bytes of a live craft struct, which the physics reads every frame. It counted
+hundreds of thousands of reads while the table counted none.
+
+Also checked, because it would have been the obvious way for a zero to be a lie:
+**the debugger's own `memory.read`/`memory.write` do not count as hits**, so the
+zeros are not an artifact of reading around the watchpoint.
+
+### One anomaly, unexplained and recorded rather than dropped
+
+The **first** arming - a single 156-byte watchpoint with `read` and `write` both
+true - reported **6,488 hits at 15 s and 9,706 at 30 s, then stopped growing.**
+The identical arming, repeated later with a control beside it, reported **0**.
+Splitting the range into a read half and a write half also reported 0 for both.
+
+So it did not reproduce, and nothing here explains it. Candidates that were
+tested and eliminated: debugger-side accesses (do not count), and a stale
+watchpoint from an earlier probe (different address). Candidates not eliminated: a
+transient during the race's own load, or a wide watchpoint over-matching. **Do not
+treat a single non-zero hit count from this mechanism as evidence without
+re-arming it**, which is the same rule the flaky `ps2_source_ground_truth` tests
+get in `HANDOVER.md`.
+
+### Residual gaps, stated so nobody treats 92 as 100
+
+- The static sweep is by base formation and by displacement; a consumer reaching
+  the fields through a pointer written to memory elsewhere would escape both -
+  though sweep 1 finds nothing that could write such a pointer.
+- The runtime measurement is **one track, one speed class, one race type, about
+  four minutes**, with the player parked and seven AI craft driving. A reader that
+  only fires in Eliminator, or on a track this one is not, or at a race's end,
+  would not have been caught.
+- `lb`/`lbu`/`lh`/`lhu`/`lwl`/`lwr` in range were not swept. Implausible for
+  floats.
 
 **What this closes.** `ai.md` and `crates/game/src/race/field.rs` both recorded
 this file as where the original decides what an opponent does with a pickup. It

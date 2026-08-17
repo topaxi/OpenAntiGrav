@@ -1134,3 +1134,68 @@ protocol, these are about running the emulator at all.
   restart` nor `menu` can leave it: press `cross`/`start`/`circle` in a loop for
   about five rounds to walk out through `EndRace Results`/`Rewards`/`Menu` to
   `Main Menu`.
+
+
+## Memory watchpoints, and the control that makes a zero mean something
+
+**Verified 2026-08-17, PPSSPP v1.20.4.** `memory.breakpoint.add` works and is not
+in the API table above because nothing had used it until now. It is the tool for
+"does anything read this?", which no amount of static sweeping answers as well.
+
+```python
+dbg.call("memory.breakpoint.add", address=0x09881900, size=156,
+         enabled=False, log=True, read=True, write=False, change=False)
+```
+
+- `memory.breakpoint.list` returns each watchpoint with a **`hits` counter**, so
+  a run needs no break/resume round trip at all: arm it, let the emulator run at
+  full speed, and poll the count. That sidesteps the 520 ms cost of
+  `memory.read` while running, and it sidesteps the execution-breakpoint bug
+  above entirely.
+- `enabled: False, log: True` **counts without halting the CPU**, which is what a
+  full-speed observation wants.
+- Two watchpoints on two ranges both fire, unlike execution breakpoints where
+  only the most recently added one ever does. Measured with a read watchpoint and
+  a write watchpoint armed at once.
+- **The debugger's own `memory.read` and `memory.write` do not count as hits.**
+  Checked directly - five reads and a write over an armed range left the counter
+  at zero. So reading around a watchpoint does not poison it.
+
+### Always arm a positive control
+
+**A watchpoint that never fires looks exactly like a watchpoint that does not
+work.** This repository has been caught by that shape twice already - the first
+`hover::sweep` was gated so it never fired, which reads as "the fix did nothing",
+and `just apply-names` reported 383 renames it had not made. So a zero is only
+evidence if something else was counting at the same time.
+
+The control that works: arm a second watchpoint, same flags, same process, over a
+couple of hundred bytes of a **live craft struct**, which the physics, the camera
+and the HUD all read every frame. It counts 350,000-400,000 reads a minute. A
+target that counts zero beside it is genuinely not being read.
+
+Getting a craft address needs no new tooling: `psp-drive.py state` prints one.
+
+### Locating a heap structure without a breakpoint
+
+If a structure's contents are authored and distinctive, **scan for them** rather
+than breakpointing the code that builds it. A full sweep of PSP user RAM
+(`0x08800000`-`0x0A000000`) in 64 KB `memory.read` chunks takes **about 21
+seconds** while the CPU is stepping, and an authored float run is usually unique
+in it - the `WeaponAIstats` table's 39 floats matched in exactly one place.
+
+That also answers a question a static sweep cannot: whether the structure is on
+the heap or at a link-time address. A heap address rules out any consumer reading
+it through absolute `lui`/`lwc1` immediates, which is the escape route a
+displacement-based static sweep would miss.
+
+### A hit count that does not reproduce is not a hit count
+
+The first wide watchpoint armed over the `WeaponAIstats` table reported 6,488
+hits at 15 s and 9,706 at 30 s and then stopped growing. The identical arming,
+repeated with a control beside it, reported **zero**, and so did the same range
+split into read and write halves. It has no explanation; debugger-side accesses
+and a stale watchpoint were both tested and eliminated.
+
+**So re-arm before believing a non-zero count**, the same rule the flaky
+`ps2_source_ground_truth` transcode tests get in `HANDOVER.md`.
