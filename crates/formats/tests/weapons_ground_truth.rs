@@ -195,6 +195,84 @@ fn the_rocket_authors_a_speed_for_every_class() {
     }
 }
 
+/// Claim 1c: the Missile authors a usable lock window and its own four speeds,
+/// in both shipped tables.
+///
+/// Shape only, never values - ADR-0006. What "usable" means here is the part
+/// worth asserting rather than the part that is obvious:
+///
+/// - `lock_min_dist < lock_max_dist`, because a window that is empty or inverted
+///   is a missile that can never lock anything, and the two attributes are read
+///   into adjacent fields by adjacent lines of a hand-written parse arm - exactly
+///   the shape a transposition survives unnoticed.
+/// - The Missile's speeds are read from the Missile's own block. The Rocket's
+///   parse arm sits directly above it and reads four identically-named
+///   attributes, so a decoder that fell through to the wrong block would still
+///   produce four plausible ascending numbers. Comparing the two weapons' Venom
+///   speeds is what catches it, and it works because the shipped tables give them
+///   the same value only by coincidence if at all - so the assertion is that
+///   *some* class differs, not that every one does.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_missile_authors_a_lock_window_and_its_own_speeds() {
+    use oag_formats::handling::SpeedClass;
+
+    let Some(tables) = tables() else { return };
+    for (name, blob) in &tables {
+        let stats = weapons::from_blob(blob).unwrap_or_else(|e| panic!("{name}: {e}"));
+        let missile = stats
+            .missile()
+            .unwrap_or_else(|| panic!("{name}: no Missile authored"));
+
+        assert!(
+            missile.blastradius > 0.0 && missile.damage > 0.0 && missile.blastforce > 0.0,
+            "{name}: a missile that hits nobody or hurts nobody - {missile:?}"
+        );
+        assert!(
+            missile.lock_min_dist >= 0.0 && missile.lock_min_dist < missile.lock_max_dist,
+            "{name}: a lock window nothing can sit inside - min {} max {}",
+            missile.lock_min_dist,
+            missile.lock_max_dist
+        );
+
+        let speeds: Vec<f32> = SpeedClass::ALL
+            .iter()
+            .map(|&class| missile.speed_for(class))
+            .collect();
+        println!(
+            "{name}: missile speeds by class {speeds:?}, lock window {}..{}",
+            missile.lock_min_dist, missile.lock_max_dist
+        );
+        assert!(
+            speeds.iter().all(|&s| s > 0.0),
+            "{name}: a missile that does not fly - {speeds:?}"
+        );
+        for (i, a) in speeds.iter().enumerate() {
+            for b in &speeds[i + 1..] {
+                assert!(
+                    (a - b).abs() > f32::EPSILON,
+                    "{name}: two classes share a speed, so the four reads may be one - {speeds:?}"
+                );
+            }
+        }
+
+        // The two blocks are genuinely two. See the doc comment.
+        let rocket = stats
+            .rocket()
+            .unwrap_or_else(|| panic!("{name}: no Rocket authored"));
+        assert!(
+            SpeedClass::ALL
+                .iter()
+                .any(|&c| (rocket.speed_for(c) - missile.speed_for(c)).abs() > f32::EPSILON)
+                || (rocket.absorb - missile.absorb).abs() > f32::EPSILON
+                || (rocket.damage - missile.damage).abs() > f32::EPSILON,
+            "{name}: the Missile reads identical to the Rocket on every compared \
+             field, which is what falling through to the wrong <Stats> block looks \
+             like - rocket {rocket:?} missile {missile:?}"
+        );
+    }
+}
+
 /// Claim 2: `absorb` is on every weapon the file authors.
 ///
 /// Stated as "every weapon the *decoder recognises* that the file authors",

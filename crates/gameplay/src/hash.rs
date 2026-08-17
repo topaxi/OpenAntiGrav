@@ -275,6 +275,9 @@ fn write_projectile(hasher: &mut StateHasher, projectile: &Projectile) {
         owner,
         lifetime,
         surface,
+        target,
+        bounces,
+        launch_speed_kmh,
     } = projectile;
 
     // Every field of every slot, free or not - the same argument the inactive
@@ -289,6 +292,14 @@ fn write_projectile(hasher: &mut StateHasher, projectile: &Projectile) {
     // The surface being ridden decides which way next tick probes, so it is
     // simulation state and not a cached convenience.
     hasher.write_vec3(*surface);
+    // All three are guidance state and all three steer a missile, so all three
+    // are hashed. `target` is written as a discriminant plus a slot rather than
+    // as a slot with a sentinel, so "no lock" and "locked slot 0" cannot collide
+    // - slot 0 is the player, which is the one every opponent shoots at.
+    hasher.write_u8(u8::from(target.is_some()));
+    hasher.write_u8(target.unwrap_or(0));
+    hasher.write_u8(*bounces);
+    hasher.write_f32(*launch_speed_kmh);
 }
 
 fn write_option_u32(hasher: &mut StateHasher, value: Option<u32>) {
@@ -373,6 +384,7 @@ mod tests {
             owner: 0,
             lifetime: 1.0,
             surface: Vec3::Y,
+            ..Projectile::default()
         };
         let mut second = World::new(1);
         second.projectiles.slots[1] = first.projectiles.slots[0];

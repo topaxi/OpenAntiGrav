@@ -41,11 +41,17 @@
 //!   what a pad hands out, weighted per speed class and separately for AI,
 //!   human, front and back of the grid.
 //! - **`<Global>`'s `slowdown_limit`**.
+//! - **The Rocket's block**, since [`crate::weapons`]'s first consumer -
+//!   `oag_gameplay::projectile` - flies one.
+//! - **The Missile's block, lock distances included**, since a missile now locks
+//!   and homes. That is what moved them out of the undecoded list below: the
+//!   rule is "only what a consumer exists for", and the consumer is
+//!   `oag_gameplay::projectile::lock`.
 //!
-//! Everything else - blast radii, projectile speeds, lock distances, the seven
-//! disturber effects - is named on `docs/formats/weapon-stats.md` and left
-//! undecoded, because nothing fires a projectile yet and a field decoded with no
-//! consumer is a field nobody has checked.
+//! Everything else - the other ten weapons' blocks and the seven disturber
+//! effects - is named on `docs/formats/weapon-stats.md` and left undecoded,
+//! because a field decoded with no consumer is a field nobody has checked.
+//! `slowdown_time` stays out on both decoded weapons for exactly that reason.
 //!
 //! # Nothing here defaults
 //!
@@ -234,6 +240,83 @@ impl RocketStats {
     }
 }
 
+/// The Missile's `<Stats>`: the Rocket's, less `spread`, plus its lock distances.
+///
+/// # The offsets are read, not guessed
+///
+/// `WeaponStats_ParseMissile` (`0x0880c31c`) is the same shape as the Rocket's
+/// parser - match an attribute name, `swc1` the float at a fixed offset - and its
+/// twelve stores land in the per-speed-class stats struct immediately after the
+/// Rocket's eleven:
+///
+/// | Offset | Attribute | | Offset | Attribute |
+/// | --- | --- | --- | --- | --- |
+/// | `+0x30` | `damage` | | `+0x48` | `blastradius` |
+/// | `+0x34` | `venomspeed` | | `+0x4c` | `blastforce` |
+/// | `+0x38` | `flashspeed` | | `+0x50` | `lock_min_dist` |
+/// | `+0x3c` | `rapierspeed` | | `+0x54` | `lock_max_dist` |
+/// | `+0x40` | `phantomspeed` | | `+0x58` | `absorb` |
+/// | `+0x44` | `launchspeed` | | `+0x5c` | `slowdown_time` |
+///
+/// Confidence 90. See `docs/ghidra/functions/psp-pulse-usa/missile.md`.
+///
+/// `slowdown_time` is left out for the reason [`RocketStats`] leaves it out: the
+/// slowdown mechanic it feeds has no consumer here yet. **It does have one in the
+/// original** - the missile's own impact accumulates it into the victim's
+/// `weapon_record+0x130` - which is recorded on that page so whoever builds the
+/// mechanic starts from a known consumer rather than from nothing.
+///
+/// # A separate struct rather than a widened [`RocketStats`]
+///
+/// The original parses the two with two different functions into two different
+/// sub-blocks, and the two weapons differ in a way that is not a superset
+/// relation: the Rocket has `spread` and no lock, the Missile a lock and no
+/// `spread`. Folding them together would mean an `Option` per field and a struct
+/// that cannot say which weapon it describes.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct MissileStats {
+    /// Energy paid back for absorbing it rather than firing it.
+    pub absorb: f32,
+    /// The impulse the blast pushes a craft with.
+    pub blastforce: f32,
+    /// How far from the impact the blast reaches.
+    pub blastradius: f32,
+    /// Energy the blast costs a craft inside that radius.
+    pub damage: f32,
+    /// Added to the *firing craft's own speed* at launch - see
+    /// `oag_gameplay::projectile::launch_missile`, which is where that
+    /// distinction is argued and where the recovered arithmetic lives.
+    pub launch_speed: f32,
+    /// How far ahead a target must be before it can be locked.
+    ///
+    /// **Measured along the firer's forward axis, not as a straight-line
+    /// range** - `Ship_AcquireLock` (`0x08844784`) compares
+    /// `dot(target - origin, forward)` against this pair. A craft alongside is
+    /// therefore near zero on this axis however far away it is.
+    pub lock_min_dist: f32,
+    /// The far end of that same longitudinal window.
+    pub lock_max_dist: f32,
+    /// `venomspeed`, `flashspeed`, `rapierspeed`, `phantomspeed`, in
+    /// [`crate::handling::SpeedClass::ALL`]'s order so the class indexes it.
+    ///
+    /// Private for the reason [`RocketStats::speeds`] is: the index *is* the
+    /// meaning. Read it through [`MissileStats::speed_for`].
+    speeds: [f32; 4],
+}
+
+impl MissileStats {
+    /// The speed a missile settles at in one speed class, in km/h.
+    ///
+    /// **The unit matters and it is not units per second.** A missile does not
+    /// fly at this from launch either: `Missile_SpeedNow` (`0x0885a038`) ramps
+    /// linearly from the launch speed to this over one second. See
+    /// `oag_gameplay::projectile::missile_speed_kmh`.
+    #[must_use]
+    pub fn speed_for(&self, class: crate::handling::SpeedClass) -> f32 {
+        self.speeds[class as usize]
+    }
+}
+
 /// How likely a pad is to hand out one weapon, from one `<Pickupodds>` block.
 ///
 /// Four weights, and their shape is the pickup design: the same weapon is
@@ -295,6 +378,10 @@ pub struct WeaponStats {
     ///
     /// Read it through [`Self::rocket`].
     rocket: Option<RocketStats>,
+    /// The Missile's own block, or `None` for a file that omits it.
+    ///
+    /// Read it through [`Self::missile`].
+    missile: Option<MissileStats>,
     /// `absorb` for every weapon the file authors, in document order.
     pub absorb: Vec<(Weapon, f32)>,
     /// One entry per `<Pickupodds>` block, in document order.
@@ -326,6 +413,16 @@ impl WeaponStats {
     #[must_use]
     pub fn rocket(&self) -> Option<RocketStats> {
         self.rocket
+    }
+
+    /// The Missile's `<Stats>`, or `None` when the file authors no Missile.
+    ///
+    /// `None` is a real state rather than a failure, exactly as [`Self::rocket`]'s
+    /// is. Both shipped tables do author one, and they differ: the Eliminator's
+    /// missile hits twice as hard for half the absorb.
+    #[must_use]
+    pub fn missile(&self) -> Option<MissileStats> {
+        self.missile
     }
 
     /// One weapon's `absorb`, or `None` when the file authors no such weapon.
@@ -431,6 +528,7 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
     let mut slowdown_limit = None;
     let mut simple: [Option<Simple>; 3] = [None; 3];
     let mut rocket = None;
+    let mut missile = None;
     let mut absorb = Vec::new();
 
     // One pass over `<Weapon>` children, so an unknown `type` is skipped and a
@@ -463,6 +561,24 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
                 // this is the string a lookup is matched against.
                 launch_speed: number(block, "Stats", "launchSpeed")?,
                 spread: number(block, "Stats", "spread")?,
+                speeds: [
+                    number(block, "Stats", "venomspeed")?,
+                    number(block, "Stats", "flashspeed")?,
+                    number(block, "Stats", "rapierspeed")?,
+                    number(block, "Stats", "phantomspeed")?,
+                ],
+            });
+            continue;
+        }
+        if weapon_kind == Weapon::Missile {
+            missile = Some(MissileStats {
+                absorb: number(block, "Stats", "absorb")?,
+                blastforce: number(block, "Stats", "blastforce")?,
+                blastradius: number(block, "Stats", "blastradius")?,
+                damage: number(block, "Stats", "damage")?,
+                launch_speed: number(block, "Stats", "launchSpeed")?,
+                lock_min_dist: number(block, "Stats", "lock_min_dist")?,
+                lock_max_dist: number(block, "Stats", "lock_max_dist")?,
                 speeds: [
                     number(block, "Stats", "venomspeed")?,
                     number(block, "Stats", "flashspeed")?,
@@ -521,6 +637,7 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
         })?,
         simple,
         rocket,
+        missile,
         absorb,
         pickups,
     })

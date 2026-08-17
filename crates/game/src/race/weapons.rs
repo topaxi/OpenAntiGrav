@@ -160,12 +160,31 @@ impl Race {
                         return;
                     }
                 }
-                // The other ten have no effect to run. Deliberately *not* spent:
+                oag_formats::weapons::Weapon::Missile => {
+                    let Some(stats) = weapons.missile() else {
+                        // As the Rocket: nothing to put in the air.
+                        return;
+                    };
+                    if !self.fire_missile(0, &stats) {
+                        // No slot, or nothing worth locking. Keep the pickup -
+                        // firing a missile at nobody is spending it on nothing,
+                        // and unlike a rocket it cannot usefully be thrown
+                        // downrange on the off chance.
+                        return;
+                    }
+                }
+                // The other nine have no effect to run. Deliberately *not* spent:
                 // a pickup that vanishes when fired and does nothing is worse
-                // than one the player can still absorb. They cannot reach here
-                // anyway while `pickup::IMPLEMENTED` excludes them; the arm
-                // exists so adding to that list is a compile-visible choice
-                // rather than a silent no-op.
+                // than one the player can still absorb.
+                //
+                // **This arm is a runtime no-op, not a compile error** - an
+                // earlier version of this comment claimed adding to
+                // `pickup::IMPLEMENTED` was "a compile-visible choice", and it is
+                // not: a weapon added to that list with no arm here compiles
+                // clean and hands the player a pickup that does nothing when
+                // fired. What actually guards it is
+                // `every_implemented_weapon_has_an_arm_here` in
+                // `crate::race::tests::weapons`.
                 _ => return,
             }
         } else {
@@ -180,6 +199,72 @@ impl Race {
             );
         }
         self.world.ships[0].pickup.weapon = None;
+    }
+
+    /// Locks a target and puts one missile in the air for `slot`.
+    ///
+    /// Returns whether anything left the rail, so a caller can decline to spend
+    /// the pickup - `false` means either that nothing was worth locking or that
+    /// the array was full.
+    ///
+    /// # The player and an opponent use the same rule, on purpose
+    ///
+    /// `oag_ai::Driver::wants_to_fire` decides whether an *opponent* pulls the
+    /// trigger, and its five gates are about that decision - is there somebody
+    /// ahead, is the road straight enough, has the trigger rolled. They are not
+    /// the weapon's rule. `Ship_AcquireLock` (`0x08844784`) is, and the original
+    /// runs it for the player's craft; running it here for both means a missile's
+    /// target does not depend on who fired it.
+    ///
+    /// So an opponent's shot is gated twice - by its own willingness *and* by the
+    /// lock - which is the original's arrangement rather than an extra of ours.
+    ///
+    /// `pub` rather than `pub(super)` so `crates/game/tests/missile_ground_truth.rs`
+    /// can reach it: an integration test links the *library*, so nothing narrower
+    /// is visible to one. `oag-game` is the composition root and
+    /// `scripts/check-dependency-rules.py` forbids anything depending on it, so
+    /// `pub` here reaches the tests and the binary and nothing else.
+    pub fn fire_missile(
+        &mut self,
+        slot: usize,
+        stats: &oag_formats::weapons::MissileStats,
+    ) -> bool {
+        let count = self.world.ship_count as usize;
+        let ship = &self.world.ships[slot];
+        let (position, velocity, launch_kmh) = oag_gameplay::projectile::missile::launch(
+            &ship.physics,
+            &ship.handling.dimensions,
+            stats,
+            to_format_class(self.class),
+        );
+        // The lock is taken from the **nose**, where the missile actually starts,
+        // rather than from the craft's centre: the near bound of the authored
+        // window is ten units and a hull is four long, so measuring from the
+        // wrong end moves the boundary by most of a craft.
+        let target = oag_gameplay::projectile::missile::lock(
+            &self.world.ships[..count],
+            slot as u8,
+            position,
+            ship.physics.body.forward(),
+            stats,
+            self.course.as_ref().map(oag_race::Course::length),
+        );
+        // **No lock, no launch.** A missile with no target flies straight and is
+        // simply a worse rocket, and the original does not fire one: its handler
+        // takes the target from the craft and `Ship_FireHeldWeapon` passes a null
+        // when the lock flag is clear. Keeping the pickup is ours - what the
+        // original does with an unlocked press has not been read.
+        let Some(target) = target else {
+            return false;
+        };
+        self.world.projectiles.spawn_guided(
+            oag_formats::weapons::Weapon::Missile,
+            position,
+            velocity,
+            slot as u8,
+            Some(target),
+            launch_kmh,
+        )
     }
 
     /// Plays the explosion a rocket that just went off authored.

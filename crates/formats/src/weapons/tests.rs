@@ -16,6 +16,7 @@ use super::*;
 const FIXTURE: &str = r#"<WeaponStats>
 <Weapon type="Global"><Stats slowdown_limit="1"/></Weapon>
 <Weapon type="Rocket"><Stats absorb="2" blastforce="3" blastradius="4" damage="5" slowdown_time="6" venomspeed="100" flashspeed="200" rapierspeed="300" phantomspeed="400" launchSpeed="7" spread="0.25"/></Weapon>
+<Weapon type="Missile"><Stats absorb="22" blastforce="23" blastradius="24" damage="25" slowdown_time="26" venomspeed="500" flashspeed="600" rapierspeed="700" phantomspeed="800" launchSpeed="27" lock_min_dist="28" lock_max_dist="29"/></Weapon>
 <Weapon type="Turbo"><Stats absorb="4" time="5"/></Weapon>
 <Weapon type="Shield"><Stats absorb="6" time="7"/></Weapon>
 <Weapon type="Autopilot"><Stats absorb="8" time="9"/></Weapon>
@@ -124,6 +125,93 @@ fn a_file_without_a_rocket_has_no_rocket_stats() {
 fn the_rocket_reads_its_fan_angle() {
     let rocket = parse(FIXTURE).expect("parses").rocket().expect("a Rocket");
     assert_eq!(rocket.spread, 0.25);
+}
+
+#[test]
+fn the_missile_reads_its_blast_its_speeds_and_its_lock() {
+    let missile = parse(FIXTURE)
+        .expect("the fixture parses")
+        .missile()
+        .expect("the fixture authors a Missile");
+    assert_eq!(
+        missile,
+        MissileStats {
+            absorb: 22.0,
+            blastforce: 23.0,
+            blastradius: 24.0,
+            damage: 25.0,
+            launch_speed: 27.0,
+            lock_min_dist: 28.0,
+            lock_max_dist: 29.0,
+            speeds: [500.0, 600.0, 700.0, 800.0],
+        }
+    );
+}
+
+/// The same positional argument [`each_speed_class_reads_its_own_projectile_speed`]
+/// makes for the Rocket, and it needs making twice: the two structs fill their
+/// arrays in two separate places, so one being right says nothing about the other.
+///
+/// The fixture's missile speeds are deliberately **different numbers from the
+/// rocket's**, so a parser that filled the missile's array from the rocket's block
+/// - the copy-paste this arm was written by - fails here rather than passing.
+#[test]
+fn each_speed_class_reads_its_own_missile_speed() {
+    use crate::handling::SpeedClass;
+    let missile = parse(FIXTURE)
+        .expect("parses")
+        .missile()
+        .expect("a Missile");
+    assert_eq!(missile.speed_for(SpeedClass::Venom), 500.0);
+    assert_eq!(missile.speed_for(SpeedClass::Flash), 600.0);
+    assert_eq!(missile.speed_for(SpeedClass::Rapier), 700.0);
+    assert_eq!(missile.speed_for(SpeedClass::Phantom), 800.0);
+}
+
+/// The two lock distances are what make the Missile a Missile rather than a
+/// Rocket that costs more, so losing one has to fail loudly.
+#[test]
+fn a_missile_missing_a_lock_distance_is_an_error() {
+    let broken = FIXTURE.replace(r#" lock_max_dist="29""#, "");
+    assert_eq!(
+        parse(&broken),
+        Err(Error::MissingAttribute {
+            element: "Stats",
+            attribute: "lock_max_dist"
+        })
+    );
+}
+
+/// A file with no Missile is not an error, for [`a_file_without_a_rocket_has_no_rocket_stats`]'s
+/// reason - and asking a Missile for a simple pair is still a caller error.
+#[test]
+fn a_file_without_a_missile_has_no_missile_stats() {
+    let none =
+        "<WeaponStats><Weapon type=\"Global\"><Stats slowdown_limit=\"1\"/></Weapon></WeaponStats>";
+    assert_eq!(parse(none).expect("parses").missile(), None);
+    assert_eq!(
+        parse(FIXTURE).expect("parses").simple(Weapon::Missile),
+        None
+    );
+}
+
+/// The Missile authors no `spread` and the Rocket no lock, which is the whole
+/// reason the two are separate structs. Pinned because a later widening that
+/// merged them would have to answer this test rather than quietly default a
+/// field to zero.
+#[test]
+fn the_missile_and_the_rocket_do_not_share_a_schema() {
+    let stats = parse(FIXTURE).expect("parses");
+    let rocket = stats.rocket().expect("a Rocket");
+    let missile = stats.missile().expect("a Missile");
+    // Distinct blocks, not one block read twice.
+    assert_ne!(rocket.absorb, missile.absorb);
+    assert_ne!(
+        rocket.speed_for(crate::handling::SpeedClass::Venom),
+        missile.speed_for(crate::handling::SpeedClass::Venom)
+    );
+    // A missile whose lock window is empty or inverted could never lock anything.
+    assert!(missile.lock_min_dist < missile.lock_max_dist);
 }
 
 #[test]

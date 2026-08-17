@@ -73,7 +73,7 @@ a union:
 | --- | --- | --- |
 | `Global` | `0x0880dab0` | `slowdown_limit` |
 | **`Rocket`** | **`0x0880c058`** | **`absorb blastforce blastradius damage venomspeed flashspeed rapierspeed phantomspeed launchSpeed spread`**, plus `slowdown_time` |
-| `Missile` | `0x0880c31c` | the rocket's, less `spread`, plus `lock_max_dist lock_min_dist` |
+| **`Missile`** | `0x0880c31c` | the rocket's, less `spread`, plus `lock_max_dist lock_min_dist` - **decoded**, offsets and all, on [missile.md](../ghidra/functions/psp-pulse-usa/missile.md) |
 | `Quake` | `0x0880c60c` | `absorb damage radius slowdown_time` |
 | `Cannon` | `0x0880c774` | `absorb rounds rate damage_per_bullet slowdown_time` |
 | **`Turbo`** | **`0x0880c92c`** | **`absorb time`** |

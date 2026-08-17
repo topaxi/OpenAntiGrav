@@ -101,7 +101,13 @@ fn over_empty_space_a_projectile_keeps_its_heading_and_falls() {
     // then accelerates - and is kept rather than tidied.
     let mut last_drop = 0.0;
     for tick in 1..=10 {
-        let impacts = projectiles.advance(dt, &world, &ships(&[]));
+        let impacts = projectiles.advance(
+            dt,
+            &world,
+            &ships(&[]),
+            None,
+            oag_formats::handling::SpeedClass::Venom,
+        );
         assert!(impacts.iter().all(Option::is_none), "nothing to hit");
         let p = projectiles.slots[0];
         // Forward is untouched: gravity is on Y and nothing steers.
@@ -135,7 +141,13 @@ fn a_projectile_over_a_floor_rides_it_rather_than_detonating() {
     let dt = 1.0 / 60.0;
 
     for tick in 1..=30 {
-        let impacts = projectiles.advance(dt, &world, &ships(&[]));
+        let impacts = projectiles.advance(
+            dt,
+            &world,
+            &ships(&[]),
+            None,
+            oag_formats::handling::SpeedClass::Venom,
+        );
         assert!(
             impacts.iter().all(Option::is_none),
             "tick {tick}: the floor is not a target"
@@ -172,7 +184,13 @@ fn a_rocket_hits_a_wall_it_would_tunnel_through_in_one_tick() {
 
     let mut impact = None;
     for _ in 0..10 {
-        let impacts = projectiles.advance(dt, &world, &ships(&[]));
+        let impacts = projectiles.advance(
+            dt,
+            &world,
+            &ships(&[]),
+            None,
+            oag_formats::handling::SpeedClass::Venom,
+        );
         if let Some(hit) = impacts.into_iter().flatten().next() {
             impact = Some(hit);
             break;
@@ -199,7 +217,13 @@ fn a_rocket_strikes_a_craft_that_is_not_its_owner() {
     let mut impact = None;
     for _ in 0..20 {
         if let Some(hit) = projectiles
-            .advance(1.0 / 60.0, &world, &grid)
+            .advance(
+                1.0 / 60.0,
+                &world,
+                &grid,
+                None,
+                oag_formats::handling::SpeedClass::Venom,
+            )
             .into_iter()
             .flatten()
             .next()
@@ -223,7 +247,13 @@ fn an_inactive_slot_is_not_a_target() {
     let world = empty_world();
 
     for _ in 0..20 {
-        let impacts = projectiles.advance(1.0 / 60.0, &world, &grid);
+        let impacts = projectiles.advance(
+            1.0 / 60.0,
+            &world,
+            &grid,
+            None,
+            oag_formats::handling::SpeedClass::Venom,
+        );
         assert!(
             impacts.iter().all(Option::is_none),
             "a rocket detonated on an empty grid slot"
@@ -243,7 +273,13 @@ fn geometry_in_front_of_a_craft_stops_the_rocket_first() {
     let mut impact = None;
     for _ in 0..20 {
         if let Some(hit) = projectiles
-            .advance(1.0 / 60.0, &world, &grid)
+            .advance(
+                1.0 / 60.0,
+                &world,
+                &grid,
+                None,
+                oag_formats::handling::SpeedClass::Venom,
+            )
             .into_iter()
             .flatten()
             .next()
@@ -272,7 +308,13 @@ fn a_rocket_that_hits_nothing_is_reaped_without_detonating() {
 
     let ticks = (MAX_FLIGHT_SECONDS / dt).ceil() as u32 + 2;
     for _ in 0..ticks {
-        let impacts = projectiles.advance(dt, &world, &ships(&[]));
+        let impacts = projectiles.advance(
+            dt,
+            &world,
+            &ships(&[]),
+            None,
+            oag_formats::handling::SpeedClass::Venom,
+        );
         assert!(
             impacts.iter().all(Option::is_none),
             "a reaped rocket must not blast"
@@ -377,9 +419,7 @@ fn a_rocket_fired_at_a_parked_craft_takes_its_energy() {
                    rapierspeed="800" phantomspeed="900" launchSpeed="0" spread="1"/></Weapon>
                </WeaponStats>"#,
     )
-    .expect("the fixture parses")
-    .rocket()
-    .expect("a Rocket");
+    .expect("the fixture parses");
 
     let mut world = crate::World::new(1);
     world.ship_count = 2;
@@ -410,6 +450,7 @@ fn a_rocket_fired_at_a_parked_craft_takes_its_energy() {
             1.0 / 60.0,
             &empty,
             Some(&stats),
+            oag_formats::handling::SpeedClass::Venom,
             oag_physics::DamageRules::default(),
         );
         if impacts.iter().flatten().count() > 0 {
@@ -449,6 +490,7 @@ fn without_rocket_stats_an_impact_only_frees_its_slot() {
             1.0 / 60.0,
             &wall,
             None,
+            oag_formats::handling::SpeedClass::Venom,
             oag_physics::DamageRules::default(),
         );
     }
@@ -618,4 +660,141 @@ fn a_zero_spread_still_fires_three() {
         assert!(velocity.is_finite(), "{velocity:?}");
         assert!((velocity - shots[0].1).length() < 1e-4);
     }
+}
+
+/// A Missile's stats, with a wide lock window. Every number invented, ADR-0006.
+fn missile_stats() -> oag_formats::weapons::MissileStats {
+    oag_formats::weapons::parse(
+        r#"<WeaponStats>
+             <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
+             <Weapon type="Missile"><Stats absorb="1" blastforce="10" blastradius="12"
+               damage="25" slowdown_time="1" venomspeed="600" flashspeed="700"
+               rapierspeed="800" phantomspeed="900" launchSpeed="100"
+               lock_min_dist="10" lock_max_dist="200"/></Weapon>
+           </WeaponStats>"#,
+    )
+    .expect("the fixture parses")
+    .missile()
+    .expect("a Missile")
+}
+
+/// **The Missile's sharpest departure from the Rocket**: it mirrors off a wall
+/// and carries on, where a rocket detonates on the first face-on hit.
+///
+/// The reflection is a perfect mirror with no restitution loss, so the speed out
+/// matches the speed in - asserted, because a reflection that quietly halved the
+/// speed would still look like a bounce.
+#[test]
+fn a_missile_mirrors_off_a_wall_where_a_rocket_detonates() {
+    let stats = missile_stats();
+    let world = wall_at_z(60.0);
+    let class = oag_formats::handling::SpeedClass::Venom;
+    let ships: Vec<crate::world::Ship> = Vec::new();
+
+    let mut projectiles = Projectiles::new();
+    // Launch speed equal to the Venom class speed, so the one-second ramp is flat
+    // and the only thing that can change the magnitude is the mirror itself.
+    projectiles.spawn_guided(Weapon::Missile, Vec3::ZERO, Vec3::Z * 200.0, 0, None, 600.0);
+    let mut before = 0.0;
+    let mut bounced = None;
+    for _ in 0..40 {
+        let live = projectiles.slots[0];
+        if live.kind.is_some() {
+            before = live.velocity.length();
+        }
+        projectiles.advance(1.0 / 60.0, &world, &ships, Some(&stats), class);
+        let after = projectiles.slots[0];
+        if after.kind.is_some() && after.bounces > 0 {
+            bounced = Some((before, after));
+            break;
+        }
+    }
+    let (speed_in, after) = bounced.expect("the missile never bounced off the wall");
+    assert_eq!(after.bounces, 1);
+    assert!(
+        after.velocity.z < 0.0,
+        "it did not turn around: {:?}",
+        after.velocity
+    );
+    // The mirror itself is lossless, but the tick that contains it also contains
+    // one step of the fall term - there is no floor here, so nothing pins the
+    // speed - so the bound is one tick of gravity rather than zero.
+    assert!(
+        (after.velocity.length() - speed_in).abs() < FALL_ACCELERATION / 60.0 + 1e-3,
+        "the mirror lost or gained more than gravity explains: {} out against \
+         {speed_in} in",
+        after.velocity.length()
+    );
+
+    // The same shot as a Rocket dies on that wall rather than coming back.
+    let mut rockets = Projectiles::new();
+    rockets.spawn(Weapon::Rocket, Vec3::ZERO, Vec3::Z * 200.0, 0);
+    for _ in 0..40 {
+        rockets.advance(1.0 / 60.0, &world, &ships, Some(&stats), class);
+    }
+    assert_eq!(
+        rockets.live(),
+        0,
+        "a rocket survived a wall, so the bounce is not Missile-only"
+    );
+}
+
+/// The bounce budget is finite: past `MAX_BOUNCES` a missile detonates like
+/// anything else. Without this a missile that found a corner could ricochet for
+/// its whole lifetime.
+#[test]
+fn a_missile_gives_up_after_its_bounce_budget() {
+    let stats = missile_stats();
+    // Two walls facing each other, so a missile between them keeps hitting one.
+    //
+    // **Both are built here rather than from `wall_at_z`**, for two reasons that
+    // each cost a run. The far one must be wound the *other* way: the raycaster is
+    // single-sided, so a copy of `wall_at_z` moved to the far end faces away from
+    // anything flying toward it and is simply not there - the symptom was one
+    // bounce and then a missile sailing off through the scenery. And both must be
+    // very tall: nothing pins a missile's speed with no floor under it, so the
+    // fall term runs for the whole flight, and at `wall_at_z`'s 100-unit
+    // half-height the missile drops out of the bottom of the corridor after three
+    // traverses.
+    let mut world = CollisionWorld::new();
+    let tall = 10_000.0;
+    for (z, indices) in [
+        (60.0, [[0, 1, 2], [0, 2, 3]]),
+        (-60.0, [[0, 2, 1], [0, 3, 2]]),
+    ] {
+        world.push(TriangleSoup::new(
+            vec![
+                [-100.0, -tall, z],
+                [-100.0, tall, z],
+                [100.0, tall, z],
+                [100.0, -tall, z],
+            ],
+            indices.to_vec(),
+            Vec::new(),
+            Surface::Wall,
+            0,
+        ));
+    }
+    let class = oag_formats::handling::SpeedClass::Venom;
+    let ships: Vec<crate::world::Ship> = Vec::new();
+
+    let mut projectiles = Projectiles::new();
+    // Launch speed equal to the Venom class speed, so the one-second ramp is flat
+    // and the only thing that can change the magnitude is the mirror itself.
+    projectiles.spawn_guided(Weapon::Missile, Vec3::ZERO, Vec3::Z * 200.0, 0, None, 600.0);
+    let mut highest = 0;
+    for _ in 0..600 {
+        projectiles.advance(1.0 / 60.0, &world, &ships, Some(&stats), class);
+        highest = highest.max(projectiles.slots[0].bounces);
+        if projectiles.live() == 0 {
+            break;
+        }
+    }
+    assert_eq!(projectiles.live(), 0, "the missile ricocheted forever");
+    assert_eq!(
+        highest,
+        super::missile::MAX_BOUNCES,
+        "it gave up after {highest} bounces rather than {}",
+        super::missile::MAX_BOUNCES
+    );
 }

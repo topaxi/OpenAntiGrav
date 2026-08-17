@@ -54,7 +54,15 @@ fn corridor() -> CollisionWorld {
 }
 
 /// Invented numbers, per ADR-0006 - **not** any ship's or any weapon's.
-fn rocket_stats() -> oag_formats::weapons::RocketStats {
+/// The whole table, since `projectile::step` looks a blast up by weapon.
+///
+/// **It authors a Rocket and nothing else on purpose.** The scenario below flies
+/// a Rocket, and the committed constants are what say the Rocket's flight has not
+/// changed; adding a Missile block here would put a second weapon's numbers inside
+/// the thing the reference is measuring. A Missile that never flies would move no
+/// hash either, but the next person to add a projectile to this scenario should
+/// have to think about it rather than find one already half-wired.
+fn weapon_stats() -> oag_formats::weapons::WeaponStats {
     oag_formats::weapons::parse(
         r#"<WeaponStats>
              <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
@@ -64,8 +72,6 @@ fn rocket_stats() -> oag_formats::weapons::RocketStats {
            </WeaponStats>"#,
     )
     .expect("the fixture parses")
-    .rocket()
-    .expect("a Rocket")
 }
 
 /// The scenario: two craft, a rocket in the air, and a draw from the generator
@@ -83,7 +89,7 @@ fn rocket_stats() -> oag_formats::weapons::RocketStats {
 /// - the **inventory and the lap state** are written on fixed ticks.
 fn run(ticks: u32) -> (u64, u64) {
     let world_geometry = corridor();
-    let stats = rocket_stats();
+    let stats = weapon_stats();
 
     let mut world = World::new(0xC0FFEE);
     world.ship_count = 2;
@@ -112,6 +118,7 @@ fn run(ticks: u32) -> (u64, u64) {
             TICK,
             &world_geometry,
             Some(&stats),
+            oag_formats::handling::SpeedClass::Venom,
             DamageRules::default(),
         );
         // A draw a tick, so the generator's position is not a function of
@@ -136,6 +143,19 @@ fn run(ticks: u32) -> (u64, u64) {
 ///
 /// # History
 ///
+/// - **Moved 2026-08-17**, when `Projectile` grew the three fields a guided
+///   weapon needs: `target`, `bounces` and `launch_speed_kmh`. All three steer a
+///   missile - the lock it is chasing, how many walls it has left to glance off,
+///   and the speed its ramp blends away from - so all three are simulation state
+///   and all three are hashed, across all 128 slots. **Isolated the documented
+///   way**: with only the four new `write_*` calls in
+///   `oag_gameplay::hash::write_projectile` removed and nothing else changed, the
+///   previous constants - `0xf4f1_bc0c_30a7_27fa` / `0x780b_1ec5_4754_1bdc` at 60
+///   ticks and `0xf63d_86b8_9120_e523` / `0x6688_3fef_ea90_5441` at 600 -
+///   reproduce bit for bit. So what moved is four more writes per slot entering
+///   the stream, and **not** the Rocket's flight, which this scenario is the only
+///   committed guard on. The scenario flies no missile, so all three fields are
+///   `None`/`0`/`0.0` throughout.
 /// - **Moved 2026-08-12**, and by a *force-law* change rather than a wider hash.
 ///   `oag_physics` now reads `Antigrav::rebound_jump_time`, which it parsed and
 ///   ignored: the landing response is armed while a craft is in the air and only
@@ -274,8 +294,8 @@ fn run(ticks: u32) -> (u64, u64) {
 /// beneath this comment and isolate the cause first, by removing the new field's
 /// own write and checking that the previous constants reproduce bit for bit.
 const REFERENCE: &[(u32, u64, u64)] = &[
-    (60, 0xf4f1_bc0c_30a7_27fa, 0x780b_1ec5_4754_1bdc),
-    (600, 0xf63d_86b8_9120_e523, 0x6688_3fef_ea90_5441),
+    (60, 0x2d22_d564_7848_a77a, 0x81c4_2326_bf0f_8ddc),
+    (600, 0x9dee_92a4_2631_48a3, 0x95b8_b6ad_9886_1d41),
 ];
 
 #[test]
@@ -307,7 +327,7 @@ fn the_race_state_matches_the_committed_reference() {
 #[test]
 fn the_run_visits_the_paths_it_claims_to_cover() {
     let world_geometry = corridor();
-    let stats = rocket_stats();
+    let stats = weapon_stats();
 
     let mut world = World::new(0xC0FFEE);
     world.ship_count = 2;
@@ -337,6 +357,7 @@ fn the_run_visits_the_paths_it_claims_to_cover() {
             TICK,
             &world_geometry,
             Some(&stats),
+            oag_formats::handling::SpeedClass::Venom,
             DamageRules::default(),
         );
         impacts += reported.iter().flatten().count();

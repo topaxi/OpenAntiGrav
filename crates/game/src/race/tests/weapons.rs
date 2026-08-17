@@ -481,3 +481,68 @@ fn absorbing_pays_the_pool_and_never_past_its_maximum() {
         race.ship().physics.shield
     );
 }
+
+/// Every weapon a pad can hand out has a fire arm on **both** paths.
+///
+/// # Why this is a tripwire rather than a real assertion
+///
+/// Neither dispatch can be introspected from a test. The player's
+/// (`Race::spend_pickup`) is a `match` whose last arm is `_ => return`, and the
+/// opponent's (`Race::spend_opponent_pickup`) is an `==` chain whose fallthrough
+/// is the *absorb* branch. So a weapon added to `oag_gameplay::pickup::IMPLEMENTED`
+/// and nowhere else compiles clean, passes every other test, and reaches a player
+/// as a pickup that does nothing when fired and quietly turns into energy for an
+/// opponent.
+///
+/// An earlier comment in `race/weapons.rs` claimed the `_` arm made that "a
+/// compile-visible choice". It does not, and this test is what that comment
+/// should have been: growing the list fails here, with the sites named.
+#[test]
+fn every_implemented_weapon_has_a_fire_arm_on_both_paths() {
+    use oag_formats::weapons::Weapon;
+
+    const WIRED: &[Weapon] = &[
+        Weapon::Turbo,
+        Weapon::Shield,
+        Weapon::Rocket,
+        Weapon::Missile,
+    ];
+
+    assert_eq!(
+        oag_gameplay::pickup::IMPLEMENTED,
+        WIRED,
+        "`pickup::IMPLEMENTED` and this list disagree. A pad can now hand out a \
+         weapon that may have no effect. Three places grow together:\n  \
+         1. `oag_gameplay::pickup::IMPLEMENTED`\n  \
+         2. the `match` in `Race::spend_pickup` (crates/game/src/race/weapons.rs)\n  \
+         3. the `==` chain in `Race::spend_opponent_pickup` (crates/game/src/race/field.rs)\n\
+         Then update this list."
+    );
+}
+
+/// A missile fired at nothing is not fired at all, and the pickup survives.
+///
+/// The player's arm returns early when `Race::fire_missile` finds no lock, which
+/// is the one place a fire press legitimately does nothing and keeps the pickup.
+/// Built on an empty grid so there is provably nothing to lock.
+#[test]
+fn a_missile_with_nothing_to_lock_is_not_spent() {
+    let mut race = race_with_weapon_pads(Mode::SingleRace, enveloping_pad(), 1.0);
+    race.tick(&InputSnapshot::default());
+    race.world.ships[0].pickup.weapon = Some(oag_formats::weapons::Weapon::Missile);
+
+    let mut buttons = Buttons::new();
+    buttons.tick(0);
+    race.tick(&buttons.tick(SQUARE));
+
+    assert_eq!(
+        race.world.projectiles.live(),
+        0,
+        "a missile left the rail with nobody to chase"
+    );
+    assert_eq!(
+        race.ship_pickup(),
+        Some(oag_formats::weapons::Weapon::Missile),
+        "the pickup was spent on a shot that never happened"
+    );
+}

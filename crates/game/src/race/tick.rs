@@ -110,13 +110,15 @@ impl Race {
         // ended up - which is the same argument that puts the Turbo's boost on
         // the tick it was fired. Before the rules, so a craft blown up by a
         // blast this tick is blown up before the lap counter reads it.
-        let rocket = self.weapons.as_ref().and_then(|w| w.rocket());
+        // The whole table rather than the Rocket's block: a blast is looked up by
+        // the weapon that made it now that more than one weapon can make one.
         let damage_rules = oag_gameplay::damage_rules(self.world.race.mode);
         let impacts = oag_gameplay::projectile::step(
             &mut self.world,
             self.dt,
             &self.collision,
-            rocket.as_ref(),
+            self.weapons.as_ref(),
+            super::to_format_class(self.class),
             damage_rules,
         );
         // After `projectile::step`, so a flare rides where its rocket

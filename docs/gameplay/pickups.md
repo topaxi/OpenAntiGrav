@@ -42,6 +42,13 @@ This subsystem is unusually mixed, so the split comes before anything else.
 | **That a rocket flies straight at a constant speed** | **ours** | - |
 | **A sphere for a hull, and full damage inside `blastradius` with no falloff** | **ours** | - |
 | **The launch offset, the flight speed being class + `launchSpeed`, the lifetime cap** | **ours** | - |
+| `<Missile>`: `damage`, `blastforce`, `blastradius`, `launchSpeed`, a speed per class, **and its two lock distances** | **recovered** | 90 |
+| **A Missile press puts exactly one in the air**, where a Rocket puts three | **recovered** | 90 |
+| The lock: longitudinal window, `0.9` cone, along-track screen, nearest-by-distance | **recovered** | 88 |
+| The guidance: a chord-clamped move-towards at `dt * 4.0`, applied a tick late | **recovered** | 95 |
+| A missile's speed ramps from its launcher's own speed to the class speed over one second | **recovered** | 90 |
+| A missile glances off walls up to five times where a rocket detonates on the first | **recovered** | 92 |
+| **Not firing at all when nothing locks** | **ours** | - |
 
 The three "ours" rows in the middle are not a gap anyone can close by looking
 harder in the obvious place. `WeaponPads_TestCraft` (`0x0888727c`) stamps the
@@ -51,6 +58,19 @@ that would hold the result (`*(entity+0x4c) + 0x1b8`, and `craft+0x1c0`) has
 one bit identified out of fourteen. So the machinery *around* the grant is
 recovered in detail and the grant itself is this project's reading of what a
 weapon pad is for.
+
+**Three of the "ours" rows above are probably retirable, and were not retired
+here.** `WeaponPickup_Grant` (`0x08861d20`) *was* found on 2026-08-17 - called
+from `Weapons_DispatchFire` right after a `WEAPONPICKUP` cue - and it does a
+`rand() % total` cumulative walk over a per-column weight table, with a separate
+AI path that interpolates two columns by race position and refuses to repeat the
+last weapon. So "no grant call site exists anywhere in the executable" is **no
+longer true**. What is *not* established is that the table it walks is
+`<Pickupodds>`: that is inference from stride and plausibility at confidence 60.
+The cheap way to settle it is to decompile `WeaponStats_Parse` (`0x0880db7c`) and
+compare its store offsets against `0x178`/`0x1b8`/`0x1f8`/... Until somebody
+does, these rows stay as they are rather than being upgraded on a guess. Details
+on [missile.md](../ghidra/functions/psp-pulse-usa/missile.md#by-catch-the-pickup-grant).
 
 **The PRNG bounds what can ever be checked.** The original's generator is an
 open question on the [roadmap](../overview/roadmap.md), so the *sequence* of
@@ -176,8 +196,12 @@ term entirely - see below.
 `oag_gameplay::pickup::IMPLEMENTED` is the pool a pad draws from, and it holds
 **Turbo, Shield and Rocket** (2026-08-11).
 
-- **Missile** needs the lock distances its own `<Stats>` authors, and a target
-  worth locking - which needs the AI.
+- ~~**Missile** needs the lock distances its own `<Stats>` authors, and a target
+  worth locking - which needs the AI.~~ **Built 2026-08-17**, and what unblocked
+  it was not the AI but a reading: the lock is recovered whole from
+  `Ship_AcquireLock` (`0x08844784`) and the guidance from `Missile_Update`
+  (`0x0885a918`). See
+  [missile.md](../ghidra/functions/psp-pulse-usa/missile.md).
 - **Quake** needs track deformation, **LeachBeam** a beam and a victim, and most
   of the remaining seven need the slowdown mechanic behind
   `<Global slowdown_limit>`, which has no consumer.
@@ -404,7 +428,7 @@ the original does: the stamp is unconditional and the grant is not.
 
 ## What is not built
 
-- **Ten of the thirteen weapons.** Missile needs a lock and a target, Quake
+- **Nine of the thirteen weapons.** Quake
   needs track deformation, LeachBeam a beam, and most of the rest the slowdown
   mechanic. Autopilot is AI work.
 - **The pad's ready-to-collect colour cycle.** `WeaponPad_UpdateRefreshTimer`

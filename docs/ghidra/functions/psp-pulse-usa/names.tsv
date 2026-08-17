@@ -499,3 +499,14 @@
 0x0886ebdc	function	Rocket_HitCraft_q	78	rocket-visuals.md
 0x0886ed34	function	Rocket_SpawnCraftExplosion_q	78	rocket-visuals.md
 0x08915484	function	Psys_Spawn_q	72	rocket-visuals.md
+0x0880c31c	function	WeaponStats_ParseMissile	90	missile.md
+0x088685cc	function	Weapon_FireMissile	90	missile.md
+0x088685bc	function	WeaponPickup_ArmMissile	80	missile.md
+0x0885a160	function	Missile_Init	90	missile.md
+0x0885a918	function	Missile_Update	92	missile.md
+0x0885a038	function	Missile_SpeedNow	90	missile.md
+0x08862d9c	function	Weapon_RequestFire	92	missile.md
+0x08844784	function	Ship_AcquireLock	88	missile.md
+0x08844ae8	function	Ship_FireHeldWeapon	85	missile.md
+0x08861d20	function	WeaponPickup_Grant	80	missile.md
+0x0886e0f8	function	WeaponPickup_ArmRocket	80	missile.md

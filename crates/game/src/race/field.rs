@@ -472,6 +472,42 @@ impl Race {
     /// `projectile::step` would then fly straight through the player and
     /// detonate on whoever actually fired them.
     /// `an_opponents_rocket_is_owned_by_the_slot_that_fired_it` pins it.
+    /// The same, for a Missile.
+    ///
+    /// **Two gates rather than one**, and they answer different questions.
+    /// `wants_to_fire` is the *driver's*: is there somebody ahead, is the road
+    /// straight enough, has the trigger rolled this tick. `Race::fire_missile`
+    /// then runs the *weapon's* - `Ship_AcquireLock`'s recovered window, cone and
+    /// along-track screen - and declines if nothing is lockable.
+    ///
+    /// The driver's chosen slot is deliberately **not** used as the target. It is
+    /// its reason to press the button, not the missile's lock; letting it pick
+    /// would make a missile's target depend on who fired it, and the player's
+    /// path has no `wants_to_fire` to consult at all.
+    pub(super) fn fire_opponent_missile(&mut self, slot: usize, field: &oag_ai::Field) -> bool {
+        let context = oag_ai::Context {
+            line: &self.racing_line,
+            tuning: &self.ai_tuning,
+            pilot: &self.ai_pilots[slot],
+            field,
+        };
+        if self.world.ships[slot]
+            .driver
+            .wants_to_fire(&context)
+            .is_none()
+        {
+            return false;
+        }
+        let Some(stats) = self
+            .weapons
+            .as_ref()
+            .and_then(oag_formats::weapons::WeaponStats::missile)
+        else {
+            return false;
+        };
+        self.fire_missile(slot, &stats)
+    }
+
     pub(super) fn fire_opponent_rocket(&mut self, slot: usize, field: &oag_ai::Field) -> bool {
         let context = oag_ai::Context {
             line: &self.racing_line,
@@ -627,6 +663,14 @@ impl Race {
             // Fired. `fire_opponent_rocket` reports false when there was no
             // target, no authored rocket or no free slot, and then the pickup is
             // kept rather than spent - the same rule the player's path follows.
+        } else if weapon == oag_formats::weapons::Weapon::Missile
+            && self.fire_opponent_missile(slot, field)
+        {
+            // Likewise. Note this chain's shape: **anything not named here falls
+            // through to the absorb branch**, silently, which is how a weapon
+            // added to `pickup::IMPLEMENTED` without an arm reaches a player as a
+            // pickup that quietly turns into energy. `oag_gameplay`'s
+            // `IMPLEMENTED` and this chain have to grow together.
         } else {
             let Some(amount) = absorb else {
                 return;

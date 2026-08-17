@@ -65,6 +65,8 @@
 //! operation - `docs/architecture/adr/0003-no-ecs.md`. A full array drops the
 //! shot rather than growing, and [`Projectiles::spawn`] says so.
 
+pub mod missile;
+
 use oag_core::math::Vec3;
 use oag_formats::weapons::{RocketStats, Weapon};
 use oag_physics::params::Dimensions;
@@ -145,6 +147,31 @@ pub struct Projectile {
     pub owner: u8,
     /// Seconds left before [`MAX_FLIGHT_SECONDS`] reaps it.
     pub lifetime: f32,
+    /// The ship slot a guided projectile is chasing, or `None` for an unguided
+    /// one and for a guided one that locked nothing.
+    ///
+    /// **A slot index where the original keeps a pointer.** `Missile_Init` copies
+    /// a raw pointer to the target object into `self+0xe0`; an index is what
+    /// survives being inside a `Copy` world snapshot, and it is what
+    /// [`crate::hash`] can hash.
+    ///
+    /// Set once at launch and **never re-evaluated** - that is the original's
+    /// behaviour, not a simplification: `Missile_Update` reads `+0xe0` twice and
+    /// writes it never, so there is no re-targeting, no range re-check and no
+    /// give-up when the target gets away. See [`missile::lock`].
+    pub target: Option<u8>,
+    /// How many walls this projectile has already glanced off.
+    ///
+    /// Only a Missile ever raises it - see [`missile::MAX_BOUNCES`]. A Rocket
+    /// detonates on its first wall, so its counter is always zero.
+    pub bounces: u8,
+    /// The speed this projectile left the rail at, in km/h.
+    ///
+    /// Only a Missile reads it, as the base its speed ramp blends away from over
+    /// [`missile::SPEED_RAMP_SECONDS`]; see [`missile::speed_kmh`]. It is
+    /// per-shot rather than per-weapon because it carries the firing craft's own
+    /// speed at the moment of launch.
+    pub launch_speed_kmh: f32,
 }
 
 /// What a projectile did when it stopped.
@@ -204,6 +231,9 @@ impl Projectiles {
                 owner: 0,
                 lifetime: 0.0,
                 surface: Vec3::Y,
+                target: None,
+                bounces: 0,
+                launch_speed_kmh: 0.0,
             }; MAX_PROJECTILES],
         }
     }
@@ -245,6 +275,25 @@ impl Projectiles {
     /// Returns whether the shot was taken, so a caller can decline to spend the
     /// pickup on nothing.
     pub fn spawn(&mut self, kind: Weapon, position: Vec3, velocity: Vec3, owner: u8) -> bool {
+        self.spawn_guided(kind, position, velocity, owner, None, 0.0)
+    }
+
+    /// The same, for a projectile that carries a lock and a launch speed.
+    ///
+    /// [`Self::spawn`] is this with both left empty, so an unguided weapon needs
+    /// no new call site and - more to the point - lands in exactly the same slot
+    /// with exactly the same fields it always did. That is what keeps a
+    /// rocket-only run's determinism hash a question about the hash *stream*
+    /// rather than about the rocket's flight.
+    pub fn spawn_guided(
+        &mut self,
+        kind: Weapon,
+        position: Vec3,
+        velocity: Vec3,
+        owner: u8,
+        target: Option<u8>,
+        launch_speed_kmh: f32,
+    ) -> bool {
         let Some(slot) = self.slots.iter_mut().find(|p| p.kind.is_none()) else {
             return false;
         };
@@ -256,6 +305,9 @@ impl Projectiles {
             lifetime: MAX_FLIGHT_SECONDS,
             // World up until the first probe corrects it - see the field.
             surface: Vec3::Y,
+            target,
+            bounces: 0,
+            launch_speed_kmh,
         };
         true
     }
@@ -283,6 +335,8 @@ impl Projectiles {
         dt: f32,
         raycaster: &R,
         ships: &[crate::world::Ship],
+        missile: Option<&oag_formats::weapons::MissileStats>,
+        class: oag_formats::handling::SpeedClass,
     ) -> [Option<Impact>; MAX_PROJECTILES] {
         let mut impacts = [None; MAX_PROJECTILES];
 
@@ -290,6 +344,17 @@ impl Projectiles {
             let Some(kind) = projectile.kind else {
                 continue;
             };
+            let guided = kind == Weapon::Missile;
+
+            // A missile's speed is pinned to its ramp every tick rather than
+            // integrated, so the whole flight needs to know how old it is. Age
+            // is derived from the lifetime rather than stored beside it: the two
+            // would be one number written twice, and the second one is what goes
+            // wrong.
+            let age = MAX_FLIGHT_SECONDS - projectile.lifetime;
+            let pinned_kmh = missile.filter(|_| guided).map(|stats| {
+                missile::speed_kmh(projectile.launch_speed_kmh, stats.speed_for(class), age)
+            });
 
             let from = projectile.position;
             let mut to = from + projectile.velocity * dt;
@@ -297,9 +362,18 @@ impl Projectiles {
             // **The surface probe, before the flight sweep** - the order is the
             // original's. Look along the normal being ridden for something to
             // ride; conform to it if it is floor-like, fall if there is nothing.
+            //
+            // A missile looks **twice as far** as a rocket: `Missile_Update`
+            // scales its normal by 12.0 where `Rocket_Update` uses 6.0. Two
+            // recovered numbers, so two constants.
+            let probe_length = if guided {
+                missile::SURFACE_PROBE_LENGTH
+            } else {
+                SURFACE_PROBE_LENGTH
+            };
             let probe = Raycaster::raycast(
                 raycaster,
-                Ray::new(to, -projectile.surface, SURFACE_PROBE_LENGTH),
+                Ray::new(to, -projectile.surface, probe_length),
                 None,
                 false,
             );
@@ -311,7 +385,15 @@ impl Projectiles {
                 Some(hit) if hit.normal.dot(projectile.surface) > RIDEABLE_COS => {
                     projectile.surface = hit.normal;
                     to = hit.point + hit.normal * RIDE_HEIGHT;
-                    let speed = projectile.velocity.length();
+                    // A missile re-pins its speed to the ramp here rather than
+                    // preserving what it had - `Missile_Update` normalises and
+                    // rescales on this exact branch, and by a **divide** by 3.6
+                    // where its guidance path multiplies by a bit pattern that is
+                    // not quite 1/3.6. Both roundings are the original's.
+                    let speed = pinned_kmh.map_or_else(
+                        || projectile.velocity.length(),
+                        missile::speed_units_on_surface,
+                    );
                     let along =
                         projectile.velocity - hit.normal * projectile.velocity.dot(hit.normal);
                     // A projectile aimed straight at the floor has nothing left
@@ -339,22 +421,61 @@ impl Projectiles {
                 None
             };
 
-            if let Some((point, struck)) = hit {
-                impacts[index] = Some(Impact {
-                    point,
-                    kind,
-                    owner: projectile.owner,
-                    struck,
-                });
-                *projectile = Projectile::default();
-                continue;
+            let mut bounced = false;
+            if let Some((point, struck, normal)) = hit {
+                // **A missile glances off a wall; a rocket dies on it.** The
+                // original's missile counts wall hits at `self+0x6c`, mirrors its
+                // velocity about the hit normal with no restitution loss, pushes
+                // out along that normal, and only takes the detonating branch
+                // once the count reaches `MAX_BOUNCES`. A hull hit is a different
+                // collision code and always detonates, which is why this arm asks
+                // for `struck.is_none()`.
+                let may_bounce =
+                    guided && struck.is_none() && projectile.bounces < missile::MAX_BOUNCES;
+                if may_bounce {
+                    projectile.bounces += 1;
+                    projectile.velocity -= normal * (2.0 * projectile.velocity.dot(normal));
+                    projectile.position = point + normal * missile::BOUNCE_PUSH_OFF;
+                    bounced = true;
+                } else {
+                    impacts[index] = Some(Impact {
+                        point,
+                        kind,
+                        owner: projectile.owner,
+                        struck,
+                    });
+                    *projectile = Projectile::default();
+                    continue;
+                }
+            } else {
+                projectile.position = to;
             }
 
-            projectile.position = to;
+            // **Guidance runs last, writes only the velocity, and reads `from`.**
+            // All three are the original's, and the third is the one that looks
+            // wrong: `Missile_Update` steers off the position the missile had at
+            // the *start* of the tick, after the move is already committed, so a
+            // correction takes effect on the following tick. It is also skipped
+            // outright on the tick a missile bounces.
+            if let (Some(speed_kmh), Some(target), false) = (pinned_kmh, projectile.target, bounced)
+                && let Some(ship) = ships.get(target as usize).filter(|s| s.active)
+            {
+                projectile.velocity = missile::steer(
+                    projectile.velocity,
+                    from,
+                    ship.physics.body.position,
+                    dt,
+                    missile::speed_units_guided(speed_kmh),
+                );
+            }
+
             projectile.lifetime -= dt;
             if projectile.lifetime <= 0.0 {
                 // Reaped, not detonated: nothing was struck, so nothing takes a
-                // blast. A rocket that leaves the world simply stops existing.
+                // blast. A projectile that leaves the world simply stops
+                // existing. **Ours** - the original's missile has no lifetime cap
+                // at all, only the bounce budget, so this is the same safety net
+                // the Rocket already had rather than a recovered rule.
                 *projectile = Projectile::default();
             }
         }
@@ -371,7 +492,7 @@ fn nearest_hit<R: Raycaster + ?Sized>(
     raycaster: &R,
     ships: &[crate::world::Ship],
     owner: u8,
-) -> Option<(Vec3, Option<u8>)> {
+) -> Option<(Vec3, Option<u8>, Vec3)> {
     let direction = (to - from) / distance;
 
     // `include_reset` is false: a `Reset Collision` volume is a respawn trigger
@@ -386,7 +507,7 @@ fn nearest_hit<R: Raycaster + ?Sized>(
     // projectile runs *into* is a wall and stops it. See [`WALL_FACING`].
     let mut best = Raycaster::raycast(raycaster, Ray::new(from, direction, distance), None, false)
         .filter(|hit| -hit.normal.dot(direction) > WALL_FACING)
-        .map(|hit| (hit.distance, hit.point, None));
+        .map(|hit| (hit.distance, hit.point, None, hit.normal));
 
     for (slot, ship) in ships.iter().enumerate() {
         if !ship.active || slot as u8 == owner {
@@ -397,12 +518,21 @@ fn nearest_hit<R: Raycaster + ?Sized>(
             continue;
         };
         let travelled = t * distance;
-        if best.is_none_or(|(nearest, _, _)| travelled < nearest) {
-            best = Some((travelled, from + direction * travelled, Some(slot as u8)));
+        if best.is_none_or(|(nearest, _, _, _)| travelled < nearest) {
+            // A hull hit carries the incoming direction reversed where a geometry
+            // hit carries a surface normal. Nothing reads it - a hull hit always
+            // detonates, never bounces - and it is here so the tuple has one
+            // shape rather than an `Option` nobody unwraps.
+            best = Some((
+                travelled,
+                from + direction * travelled,
+                Some(slot as u8),
+                -direction,
+            ));
         }
     }
 
-    best.map(|(_, point, struck)| (point, struck))
+    best.map(|(_, point, struck, normal)| (point, struck, normal))
 }
 
 /// Flies the world's projectiles and detonates whatever stopped, in one call.
@@ -412,10 +542,20 @@ fn nearest_hit<R: Raycaster + ?Sized>(
 /// owns neither. Returns the impacts so a caller can put a spark where each one
 /// landed, which is the only thing left for it to do.
 ///
-/// `rocket` is `None` for a race whose weapon table did not load, in which case
+/// `weapons` is `None` for a race whose weapon table did not load, in which case
 /// an impact does nothing but free its slot. That is the same "gated on the
 /// table" rule the pickup grant follows, and for the same reason: a blast with
-/// no authored radius or damage would be an invented number.
+/// no authored radius or damage would be an invented number. The same is true per
+/// *weapon*: a table that authors no Missile gives a missile impact no blast.
+///
+/// # The blast is looked up per weapon, and it used to not be
+///
+/// This took `Option<&RocketStats>` and spent it on **every** impact whatever
+/// `Impact::kind` said, which was invisible while the Rocket was the only thing
+/// in the air and would have quietly given a missile the rocket's `damage`,
+/// `blastradius` and `blastforce`. The two differ on the shipped disc - the
+/// Missile hits harder and pushes harder - so the bug would have read as a tuning
+/// disagreement rather than as a wiring one.
 ///
 /// # Ordering
 ///
@@ -427,28 +567,58 @@ pub fn step<R: Raycaster + ?Sized>(
     world: &mut crate::World,
     dt: f32,
     raycaster: &R,
-    rocket: Option<&RocketStats>,
+    weapons: Option<&oag_formats::weapons::WeaponStats>,
+    class: oag_formats::handling::SpeedClass,
     rules: oag_physics::DamageRules,
 ) -> [Option<Impact>; MAX_PROJECTILES] {
     let count = world.ship_count as usize;
-    let impacts = world
-        .projectiles
-        .advance(dt, raycaster, &world.ships[..count]);
+    let missile_stats = weapons.and_then(oag_formats::weapons::WeaponStats::missile);
+    let impacts = world.projectiles.advance(
+        dt,
+        raycaster,
+        &world.ships[..count],
+        missile_stats.as_ref(),
+        class,
+    );
 
-    if let Some(stats) = rocket {
-        for impact in impacts.iter().flatten() {
-            blast(
-                &mut world.ships[..count],
-                impact.point,
-                stats.blastradius,
-                stats.damage,
-                stats.blastforce,
-                rules,
-            );
-        }
+    for impact in impacts.iter().flatten() {
+        let Some((radius, damage, force)) = blast_stats(weapons, impact.kind) else {
+            continue;
+        };
+        blast(
+            &mut world.ships[..count],
+            impact.point,
+            radius,
+            damage,
+            force,
+            rules,
+        );
     }
 
     impacts
+}
+
+/// One weapon's `blastradius`, `damage` and `blastforce`, or `None`.
+///
+/// `None` for a table that did not load, for a weapon it does not author, and for
+/// a weapon whose block this crate does not decode - all three are the same
+/// answer to the caller, which is "spend no blast". A weapon that reaches an
+/// impact with no authored numbers is a bug upstream in
+/// [`crate::pickup::IMPLEMENTED`], not something to paper over with a default.
+fn blast_stats(
+    weapons: Option<&oag_formats::weapons::WeaponStats>,
+    kind: Weapon,
+) -> Option<(f32, f32, f32)> {
+    let weapons = weapons?;
+    match kind {
+        Weapon::Rocket => weapons
+            .rocket()
+            .map(|s| (s.blastradius, s.damage, s.blastforce)),
+        Weapon::Missile => weapons
+            .missile()
+            .map(|s| (s.blastradius, s.damage, s.blastforce)),
+        _ => None,
+    }
 }
 
 /// Spends one blast against every craft inside its radius.

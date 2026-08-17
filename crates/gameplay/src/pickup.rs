@@ -35,15 +35,21 @@
 //!
 //! # Only what has an effect is handed out
 //!
-//! [`IMPLEMENTED`] is the pool a pad draws from: Turbo, Shield and Rocket.
+//! [`IMPLEMENTED`] is the pool a pad draws from: Turbo, Shield, Rocket and
+//! Missile.
 //!
-//! Of the ten still out, nine need a lock, a beam, a mechanic nothing has read
-//! or a second flight model - Missile needs the lock distances its `<Stats>`
-//! authors, Quake needs track deformation, LeachBeam needs a beam and a victim,
-//! and most of the rest need the slowdown mechanic behind
-//! `<Global slowdown_limit>`. Autopilot is the AI's own controller taking over
-//! (`Ai_Construct` names the local player's input source the literal
-//! `"autopilot input"`), so it is AI work rather than pickup work.
+//! Of the nine still out, most need a beam, track deformation or the slowdown
+//! mechanic behind `<Global slowdown_limit>` - Quake needs to deform the track,
+//! LeachBeam needs a beam and a victim. Autopilot is the AI's own controller
+//! taking over (`Ai_Construct` names the local player's input source the literal
+//! `"autopilot input"`), so it is AI work rather than pickup work; it is
+//! **weapon id 6, fire-request bit `0x1000`**, which
+//! `docs/ghidra/functions/psp-pulse-usa/missile.md` records on the way past.
+//!
+//! **The Missile left that list on 2026-08-17**, and what let it was not a
+//! mechanic but a reading: its lock is recovered whole from `Ship_AcquireLock`
+//! (`0x08844784`) and its guidance from `Missile_Update` (`0x0885a918`). See
+//! [`crate::projectile::missile`], which carries the split for that half.
 //!
 //! **What Shield and Rocket do is ours**, more so than the Turbo's effect was:
 //! the Turbo at least has a recovered magnitude in `<Engine turbo>`, while
@@ -73,7 +79,12 @@ use oag_formats::weapons::{PickupTable, Weapon, WeaponStats};
 /// subset with an effect. A slice rather than a fixed-size array precisely
 /// because it is expected to grow, which is the opposite of
 /// [`oag_race::Mode::ALL`]'s reason for being one.
-pub const IMPLEMENTED: &[Weapon] = &[Weapon::Turbo, Weapon::Shield, Weapon::Rocket];
+pub const IMPLEMENTED: &[Weapon] = &[
+    Weapon::Turbo,
+    Weapon::Shield,
+    Weapon::Rocket,
+    Weapon::Missile,
+];
 
 /// Which column of `<Pickupodds>` a craft draws from.
 ///

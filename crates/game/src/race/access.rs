@@ -160,3 +160,19 @@ impl Race {
         &self.spline
     }
 }
+
+impl Race {
+    /// The Missile's authored `<Stats>`, or `None` when the table did not load or
+    /// authors no Missile.
+    ///
+    /// An accessor rather than a public field, because `weapons` is the whole
+    /// table and only the blocks with a consumer should be reachable from
+    /// outside. Read by `crates/game/tests/missile_ground_truth.rs`, which links
+    /// the library and so cannot see the field.
+    #[must_use]
+    pub fn missile_stats(&self) -> Option<oag_formats::weapons::MissileStats> {
+        self.weapons
+            .as_ref()
+            .and_then(oag_formats::weapons::WeaponStats::missile)
+    }
+}

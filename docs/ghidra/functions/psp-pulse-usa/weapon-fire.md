@@ -114,7 +114,7 @@ are now read even though its **writer still is not**.
 
 ```c
 world->flags |= 2;
-craft->target    = -1;            // craft + 0x1bc
+craft->held      = -1;            // craft + 0x1bc - see the correction below
 craft->fire_flags &= ~0x80;       // craft + 0x1b8 - one shot, cleared immediately
 
 if (world->live < 0x2e) {
@@ -172,7 +172,7 @@ if (world->live < 0x40 && (craft->reload -= dt) <= 0.0f) {
     craft->rounds -= 1;                      // craft + 0x1ac
     ... spawn exactly one ...
     if (craft->rounds == 0) {
-        craft->target = -1;                  // craft + 0x1bc
+        craft->held = -1;                    // craft + 0x1bc - see below
         craft->fire_flags &= ~0x2;           // craft + 0x1b8
     }
 }
@@ -186,6 +186,22 @@ interval being a code literal rather than the authored `rate` is what keeps it
 off 84. It is **not** the Rocket, which is settled above, and not the Missile,
 whose constructor (`0x0885a160`, twin `Trail_InitPreset` - see
 [exhaust.md](exhaust.md)) differs from this one's `0x08859ac8`.
+
+## Correction: `craft+0x1bc` is the held weapon, not a target
+
+**This page called `craft+0x1bc` a target and that was wrong** (corrected
+2026-08-17). It is the **held-weapon slot**, and `-1` means "carrying nothing" -
+which is why every fire handler writes it.
+
+The evidence is on [missile.md](missile.md#a-correction-craft0x1bc-is-not-a-target):
+two two-instruction arm functions write weapon *ids* to the same offset at the
+same base (`0` for the Rocket, `1` for the Missile), `Weapon_RequestFire`
+(`0x08862d9c`) switches on it to choose which bit of `+0x1b8` to set, and the
+weapon-record reset writes `-1`.
+
+That page also carries the **complete weapon-id to fire-bit map**, which is the
+thing this page's sixteen-bit dispatch was missing, and the Missile's own half of
+the subsystem.
 
 ## What is not verified
 

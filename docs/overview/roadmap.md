@@ -571,10 +571,25 @@ seen from the authoring side.
       refresh timers and the generator's own position, which were the known hole
       pickups.md recorded when the pickups landed. Both halves run in CI on all
       three platforms and neither needs a disc.
-      **Ten weapons still hand out nothing**: Missile needs a lock and a target,
-      Quake track deformation, LeachBeam a beam, and most of the rest the
-      slowdown mechanic behind `<Global slowdown_limit>`, which has no consumer.
-      Autopilot is the AI's own controller taking over and belongs with the AI.
+      **The Missile flies as of 2026-08-17, and it is the first weapon whose
+      whole behaviour is recovered rather than partly invented.** Its two lock
+      distances are authored; the lock rule, the guidance law, the speed ramp and
+      the wall-bounce are read at instruction level from `Ship_AcquireLock`
+      (`0x08844784`), `Missile_Update` (`0x0885a918`) and `Missile_SpeedNow`
+      (`0x0885a038`). It locks the nearest craft inside a longitudinal window and
+      a `0.9` cone, chases it with a chord-clamped move-towards, and glances off
+      walls up to five times where a rocket detonates on its first. Evidence and
+      the short list of what is still ours:
+      [missile.md](../ghidra/functions/psp-pulse-usa/missile.md). It also settled
+      what `launchSpeed` is for - a muzzle velocity added to the *launcher's* own
+      speed - and turned up the pickup-grant call site that
+      [pickups.md](../gameplay/pickups.md) had recorded as not existing.
+      **Nine weapons still hand out nothing**: Quake needs track deformation,
+      LeachBeam a beam, and most of the rest the slowdown mechanic behind
+      `<Global slowdown_limit>` - whose consumer is now *known* (a missile impact
+      accumulates it into the victim's `weapon_record+0x130`) even though nothing
+      spends it. Autopilot is the AI's own controller taking over and belongs
+      with the AI; it is weapon id 6, fire-request bit `0x1000`.
       **A rocket now has something to hit**: the AI landed the same day and
       `Mode::SingleRace::has_opponents()` returns `true`, so a single race
       fields seven driven craft. **Aiming landed with the AI's fifth stage** -
