@@ -25,6 +25,13 @@ fuzzy matching (`find_similar_functions_fuzzy`), verified per function with
 | [`psp-pure-usa/`](psp-pure-usa/) | `BOOT.BIN` from Pure PSP (UCUS-98612), format ancestor only |
 | [`psp-pure-eu/`](psp-pure-eu/) | `BOOT.BIN` from Pure PSP EU (UCES-00001), format ancestor only |
 
+One more is neither a target nor corroboration, but a **lineage probe** on
+different hardware:
+
+| Directory | Binary |
+| --- | --- |
+| [`ps3-hdfury-eu/`](ps3-hdfury-eu/) | `EBOOT.elf` from Wipeout HD Fury (BCES-00664) - the *decrypted* form of the disc's `EBOOT.BIN`, the only entry here that is not the file the disc ships |
+
 ## Index
 
 Maintained as pages are added, sorted by subsystem.

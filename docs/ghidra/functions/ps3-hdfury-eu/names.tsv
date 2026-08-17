@@ -1,0 +1,19 @@
+# Applied symbol names for ps3-hdfury-eu EBOOT.elf (BCES-00664).
+#
+# The analysed file is the decrypted ELF, not the disc's EBOOT.BIN - see
+# README.md. Addresses are the ELF's own virtual addresses: code lives at
+# 0x00010000..0x00858e48 and data at 0x00860000, so a PS3 row is easy to tell
+# from a PSP one (0x088xxxxx) or a PS2 one (0x002xxxxx) at a glance.
+#
+# Rows are address<TAB>kind<TAB>name<TAB>confidence<TAB>page, `kind` being
+# `function` or `data`. The evidence lives in the page named in the last
+# column; this file exists so the names can be re-applied to a fresh Ghidra
+# database without hand-editing, and apply-ghidra-names.py refuses any row
+# whose address and name do not both still appear on that page.
+#
+# Apply with the program open in a bridge-connected Ghidra:
+#
+#   scripts/apply-ghidra-names.py ps3-hdfury-eu
+#
+# Empty so far: the first sweep has not run. Names recovered here are
+# opportunistic - this is not a milestone target, see README.md.
