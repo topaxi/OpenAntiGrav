@@ -157,10 +157,20 @@ roads supply the two axes that pin the split:
 Neither works at 10 bits: `0x3ff` is `-1` there, not `+1023`. Two checks then
 hold across whole models:
 
-- **It is a unit vector on 99.5 % or more** of every model's vertices - 23,841
-  of 23,888 on Assegai, 63,006 of 63,248 on Talon's Junction. No other reading
+- **It is a unit vector on 91,376 of 91,480** vertices across the three models
+  read, 99.9 %. Per stride the minority widths are thin and noisier - stride 14
+  is 97 % on 206 vertices of Assegai and 100 % on 186 of the circuit, stride 22
+  is 99.9 % on 23,593 of Assegai and 91.5 % on 437 of the circuit - so the
+  ground truth asserts 90 % per width and 99 % pooled rather than one number
+  that hides which widths carry real evidence. No other reading
   of any other offset in the vertex exceeds 51 %, and that comparison is what
   located the field before anything asked what it meant.
+- **A zero word is an unused vertex, not a misdecode.** 27 of Assegai's records
+  and 166 of Talon's Junction's are zero from the position onward - padding at
+  the end of a buffer. They are excluded from the statistic above, `emit`
+  derives a normal for them from the triangles, and `Report::authored_normals`
+  does **not** count them: 530,359 of Talon's Junction's 531,904 vertices are
+  lit off the file, and the report says so rather than claiming all of them.
 - **It agrees with the geometry**, against an oracle the `.rcsmodel` does not
   state: the area-weighted average of the faces touching each vertex, over
   meshes more than a unit across where `1/128` quantisation cannot make the
@@ -184,6 +194,14 @@ On `ship_lod1` and on Talon's Junction the same bytes give a median `|dot|` of
 **0.577**, which is `1/sqrt(3)` - exactly what a constant `(-1,-1,-1)` scores
 against any axis-aligned normal, so those records hold `00 00 00` there. What
 the field is in general is unrecovered, and no code reads it.
+
+**The most promising lead on it is the descriptor byte.** A submesh's
+vertex-format word is `83 XX 10 10 10 10 10 00` with `XX` running `07` to `0d`,
+and that byte is already known *not* to determine the stride. Whether it
+determines the **field set** - which optional attributes a vertex carries, and
+therefore why `+0x0a` is a tangent on one mesh and zero on another - is a
+different question and has not been tested. It would also settle the layout
+table above, which today rests on three hex dumps plus the widths adding up.
 
 ## The vertex stride is not in the file
 
@@ -354,22 +372,25 @@ Named explicitly, with what each would take.
    code. Three rules recover the number without it, so this is now a question
    about the format rather than a blocker. The remaining routes are
    disassembling a shader's microcode, or HD's own executable.
-2. **The attribute layout after the position** - normals, texture coordinates,
-   tangents. Blocked behind the same question, and behind `.gtf` for anything to
-   address.
-3. **Why a vertex buffer sometimes ends 16, 32 or 96 bytes short** of
+2. **The texture coordinate**, which is located and unconfirmed: the last four
+   bytes read as two `f16` in a plausible range and there is no way to check
+   that until [`.gtf`](hd-status.md#what-is-genuinely-new) is read. Nothing
+   consumes it, and the code does not call it a UV.
+3. **What `+0x0a` is, and whether `83 XX` names the field set.** The two are
+   probably one question; see above.
+4. **Why a vertex buffer sometimes ends 16, 32 or 96 bytes short** of
    `vertex_count * stride`. 8 of 46 measured pairs, always negative, always a
    multiple of 16. Harmless to the layout rule, unexplained all the same.
-4. **56 of Talon's Junction's 126 `Mesh` nodes address no chunk.** All are
+5. **56 of Talon's Junction's 126 `Mesh` nodes address no chunk.** All are
    scenery (`Skycar_1Shape`, `tanker1aShape`, `shipintersteller1Shape`,
    `HyperContintentCraft1Shape`). No word anywhere in their payloads is a chunk
    hash in this file, and the circuit's directory holds no second model file. A
    shared props archive elsewhere on the disc is the obvious guess and has not
    been looked for.
-5. **Which chunk a `Skycube` or a pad belongs to.** Their `.vex` classes carry
+6. **Which chunk a `Skycube` or a pad belongs to.** Their `.vex` classes carry
    the same payload shape as a `Mesh` on the PSP, and on the PS3 the tie to a
    chunk has not been made - so a PS3 race draws neither.
-6. **The `.pvs` mapping**, which is what would let a renderer draw a section at
+7. **The `.pvs` mapping**, which is what would let a renderer draw a section at
    a time rather than all 904 chunks at once.
 
 ## See also

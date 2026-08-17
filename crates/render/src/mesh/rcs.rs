@@ -240,7 +240,7 @@ pub fn build_scene(label: &str, data: &[u8], model_blob: &[u8]) -> Result<(Model
                 continue;
             };
             let normals = mesh.normals(model_blob, submesh, stride).ok();
-            report.authored_normals += normals.as_ref().map_or(0, Vec::len);
+            report.authored_normals += normals.as_deref().map_or(0, authored);
             emit(
                 &mut out,
                 &points,
@@ -263,6 +263,20 @@ pub fn build_scene(label: &str, data: &[u8], model_blob: &[u8]) -> Result<(Model
     out.centre = centre;
     out.radius = radius;
     Ok((out, report))
+}
+
+/// How many of a submesh's decoded normals the file actually authored.
+///
+/// **A zero one did not come from the file**, it came from a vertex record that
+/// is zero from the position onward - padding at the end of a buffer, and
+/// `cockpit_screenShape` is one that carries some. `emit` derives a normal for
+/// those from the triangles, so counting them here would make the load report
+/// claim the disc's data where the fallback ran.
+fn authored(normals: &[[f32; 3]]) -> usize {
+    normals
+        .iter()
+        .filter(|n| Vec3::from_array(**n).length_squared() > 1e-12)
+        .count()
 }
 
 /// Appends one submesh's geometry to a model, as its own draw call.
@@ -413,7 +427,7 @@ pub fn build(
             };
 
             let normals = mesh.normals(model_blob, submesh, stride).ok();
-            report.authored_normals += normals.as_ref().map_or(0, Vec::len);
+            report.authored_normals += normals.as_deref().map_or(0, authored);
             emit(
                 &mut out,
                 &points,

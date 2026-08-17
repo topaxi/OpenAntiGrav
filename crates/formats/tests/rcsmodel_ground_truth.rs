@@ -380,8 +380,11 @@ fn the_four_bytes_after_a_position_are_the_vertex_normal() {
         };
         let model = rcsmodel::Model::parse(&model_blob).expect("the .rcsmodel parses");
 
-        let (mut unit, mut vertices) = (0usize, 0usize);
-        let (mut agree, mut scored) = (0usize, 0usize);
+        // Per stride, because the three widths are separate claims and stride
+        // 14 rests on the least data of the three.
+        let mut unit: std::collections::BTreeMap<usize, (usize, usize)> = Default::default();
+        let mut agree: std::collections::BTreeMap<usize, (usize, usize)> = Default::default();
+        let mut zeroes = 0usize;
         // Split by stride: what sits at `+10` is not the same field on all
         // three, and averaging over them would hide that.
         let mut tangent_dots: std::collections::BTreeMap<usize, Vec<f32>> = Default::default();
@@ -404,10 +407,22 @@ fn the_four_bytes_after_a_position_are_the_vertex_normal() {
                     continue;
                 };
                 for n in &normals {
-                    vertices += 1;
                     let len = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
+                    // **An all-zero word is not a misdecode, it is an unused
+                    // vertex.** The records that carry one are zero from the
+                    // position onward - `cockpit_screenShape` pads its buffer
+                    // that way. `oag_render` reads it as "the file authored no
+                    // normal here", derives one from the triangles, and does not
+                    // count it as authored; counting it in the statistic below
+                    // would be the same mistake in the other direction.
+                    if len == 0.0 {
+                        zeroes += 1;
+                        continue;
+                    }
+                    let e = unit.entry(stride).or_default();
+                    e.1 += 1;
                     if (0.93..=1.07).contains(&len) {
-                        unit += 1;
+                        e.0 += 1;
                     }
                 }
                 if span(&points) < MIN_SPAN {
@@ -418,9 +433,10 @@ fn the_four_bytes_after_a_position_are_the_vertex_normal() {
                     else {
                         continue;
                     };
-                    scored += 1;
+                    let e = agree.entry(stride).or_default();
+                    e.1 += 1;
                     if dot(got, *want) > 0.95 {
-                        agree += 1;
+                        e.0 += 1;
                     }
                     // The tangent, read the same way the recovery read it.
                     let at = submesh.vertex_offset + k * stride + 10;
@@ -444,18 +460,42 @@ fn the_four_bytes_after_a_position_are_the_vertex_normal() {
                 (stride, d[d.len() / 2])
             })
             .collect();
+        let total = |m: &std::collections::BTreeMap<usize, (usize, usize)>| {
+            m.values().fold((0, 0), |(a, b), (c, d)| (a + c, b + d))
+        };
+        let (units, vertices) = total(&unit);
+        let (agreed, scored) = total(&agree);
         println!(
-            "{model_path}: {unit} of {vertices} normals are unit, {agree} of {scored} \
-             within 18 degrees of the smooth average; median |dot| of the +10 field with \
-             the normal, by stride: {medians:?}"
+            "{model_path}: {units} of {vertices} normals are unit {unit:?}, \
+             {agreed} of {scored} within 18 degrees of the smooth average {agree:?}, \
+             {zeroes} all-zero; median |dot| of the +10 field with the normal, \
+             by stride: {medians:?}"
         );
+        // **Per stride, not pooled.** Pooling would let stride 22's 23,000
+        // vertices carry a claim about stride 14's few hundred.
+        for (&stride, &(hits, n)) in &unit {
+            // **90 per stride, 99 overall**, and the gap between the two bars
+            // is the honest one. Pooled, 91,376 of 91,480 non-zero normals are
+            // unit. Per stride the minority widths are thin and noisier -
+            // stride 14 reads 97 % on 206 vertices of Assegai and 100 % on 186
+            // of the circuit, stride 22 reads 99.9 % on 23,593 of Assegai and
+            // 91.5 % on 437 of the circuit. Setting the per-stride bar by the
+            // worst of those keeps the claim honest about which widths carry
+            // real evidence and which carry a few hundred vertices.
+            assert!(
+                hits * 10 >= n * 9,
+                "{model_path}: at stride {stride}, only {hits} of {n} decode to a unit vector"
+            );
+        }
+        for (&stride, &(hits, n)) in &agree {
+            assert!(
+                hits * 4 >= n * 3,
+                "{model_path}: at stride {stride}, only {hits} of {n} agree with the geometry"
+            );
+        }
         assert!(
-            unit * 100 >= vertices * 99,
-            "{model_path}: only {unit} of {vertices} decode to a unit vector"
-        );
-        assert!(
-            agree * 4 >= scored * 3,
-            "{model_path}: only {agree} of {scored} agree with the geometry"
+            units * 100 >= vertices * 99,
+            "{units} of {vertices} overall"
         );
         // **Nothing about `+10` is asserted, and that is the finding.** On
         // Assegai's hull it is perpendicular to the normal to a median `|dot|`
