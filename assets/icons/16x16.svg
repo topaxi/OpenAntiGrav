@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
+  <defs>
+    <mask id="ring-cut-16">
+      <rect width="16" height="16" fill="#fff"/>
+      <g fill="#000" stroke="#000" stroke-width="0.9" stroke-linejoin="miter">
+        <polygon points="5.2,8.7 6.5,7.5 8.7,6.6 15.8,6.75 9.55,8.7"/>
+        <polygon points="15.8,6.75 9.55,8.7 11.1,9.35 15.3,7.4"/>
+        <polygon points="7.6,9.1 9.3,10.05 6.5,12.1 4.7,11.8"/>
+        <polygon points="3.5,9.78 6.65,8.73 6.2,9.97 2.3,11.02"/>
+        <polygon points="2.4,11.68 5.85,10.58 5.4,11.82 1.2,12.92"/>
+      </g>
+      <g fill="#000">
+        <polygon points="8.14,1.5 9.34,1.5 7.98,4.3 6.78,4.3"/>
+        <polygon points="8.14,12.3 9.34,12.3 8.02,15.0 6.82,15.0"/>
+        <polygon points="4.59,11.0 5.79,11.0 4.47,13.7 3.27,13.7"/>
+      </g>
+    </mask>
+    <mask id="streak-cut-16">
+      <rect width="16" height="16" fill="#fff"/>
+      <g fill="#000" stroke="#000" stroke-width="0.7" stroke-linejoin="miter">
+        <polygon points="5.2,8.7 6.5,7.5 8.7,6.6 15.8,6.75 9.55,8.7"/>
+        <polygon points="7.6,9.1 9.3,10.05 6.5,12.1 4.7,11.8"/>
+      </g>
+    </mask>
+  </defs>
+
+  <g fill="none" stroke-width="1.5" mask="url(#ring-cut-16)">
+    <path stroke="#06ABE9" d="M 8.1 2.8 A 5.4 5.4 0 0 0 4.77 12.46"/>
+    <path stroke="#3A4A60" d="M 4.35 12.08 A 5.4 5.4 0 0 0 8.48 13.59"/>
+    <path stroke="#C22A63" d="M 7.72 13.59 A 5.4 5.4 0 1 0 8.1 2.8"/>
+  </g>
+
+  <g fill="#06ABE9" mask="url(#streak-cut-16)">
+    <polygon points="3.5,9.78 6.65,8.73 6.2,9.97 2.3,11.02"/>
+    <polygon points="2.4,11.68 5.85,10.58 5.4,11.82 1.2,12.92"/>
+  </g>
+
+  <polygon fill="#A1A2A8" points="15.8,6.75 9.55,8.7 11.1,9.35 15.3,7.4"/>
+  <polygon fill="#F8F8F8" points="5.2,8.7 6.5,7.5 8.7,6.6 15.8,6.75 9.55,8.7"/>
+  <polygon fill="#F8F8F8" points="7.6,9.1 9.3,10.05 6.5,12.1 4.7,11.8"/>
+</svg>

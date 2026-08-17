@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <!-- Punches transparent gaps into the ring where the ship and streaks cross it,
+         plus the three slanted ring cutouts -->
+    <mask id="ring-cut">
+      <rect width="64" height="64" fill="#fff"/>
+      <g fill="#000" stroke="#000" stroke-width="2.4" stroke-linejoin="miter">
+        <polygon points="20.9,34.7 25.9,30.0 34.6,26.6 63.3,26.9 38.2,34.8 35.1,35.9"/>
+        <polygon points="63.3,26.9 38.2,34.8 43.7,36.7 60.8,29.9"/>
+        <polygon points="37.0,37.6 52.5,36.0 37.8,39.9"/>
+        <polygon points="30.8,36.3 36.7,39.8 26.1,48.3 18.6,47.25"/>
+        <polygon points="11.5,38.6 19.77,35.5 18.87,37.9 10.0,41.0"/>
+        <polygon points="21.05,35.05 23.7,34.12 22.8,36.52 20.15,37.45"/>
+        <polygon points="3.7,43.2 14.97,40.01 14.07,42.41 2.2,45.6"/>
+        <polygon points="16.67,39.55 24.3,37.5 23.4,39.9 15.77,41.95"/>
+        <polygon points="5.6,48.7 14.89,46.26 13.99,48.66 4.1,51.1"/>
+        <polygon points="16.61,45.84 26.5,43.4 25.6,45.8 15.71,48.24"/>
+      </g>
+      <g fill="#000">
+        <polygon points="33.3,7.5 35.3,7.5 31.5,16.0 29.5,16.0"/>
+        <polygon points="33.34,50.0 35.34,50.0 31.96,57.5 29.96,57.5"/>
+        <polygon points="20.56,46.5 22.56,46.5 19.18,54.0 17.18,54.0"/>
+      </g>
+    </mask>
+    <!-- Keeps a transparent gap between the streaks and the ship -->
+    <mask id="streak-cut">
+      <rect width="64" height="64" fill="#fff"/>
+      <g fill="#000" stroke="#000" stroke-width="1.8" stroke-linejoin="miter">
+        <polygon points="20.9,34.7 25.9,30.0 34.6,26.6 63.3,26.9 38.2,34.8 35.1,35.9"/>
+        <polygon points="30.8,36.3 36.7,39.8 26.1,48.3 18.6,47.25"/>
+      </g>
+    </mask>
+    <!-- Canopy notch and hull facet line, cut out of the white hull -->
+    <mask id="hull-cut">
+      <rect width="64" height="64" fill="#fff"/>
+      <polygon fill="#000" points="35.6,26.3 39.9,26.6 36.7,29.2"/>
+      <polygon fill="#000" points="25.29,30.09 25.72,29.41 35.32,35.54 34.89,36.22"/>
+    </mask>
+  </defs>
+
+  <g fill="none" stroke-width="4.0" mask="url(#ring-cut)">
+    <path stroke="#06ABE9" d="M 32.4 11.7 A 21.3 21.3 0 0 0 20.80 50.86"/>
+    <path stroke="#3A4A60" d="M 18.99 49.55 A 21.3 21.3 0 0 0 33.14 54.29"/>
+    <path stroke="#C22A63" d="M 31.66 54.29 A 21.3 21.3 0 1 0 32.4 11.7"/>
+  </g>
+
+  <g fill="#06ABE9" mask="url(#streak-cut)">
+    <polygon points="11.5,38.6 19.77,35.5 18.87,37.9 10.0,41.0"/>
+    <polygon points="21.05,35.05 23.7,34.12 22.8,36.52 20.15,37.45"/>
+    <polygon points="3.7,43.2 14.97,40.01 14.07,42.41 2.2,45.6"/>
+    <polygon points="16.67,39.55 24.3,37.5 23.4,39.9 15.77,41.95"/>
+    <polygon points="5.6,48.7 14.89,46.26 13.99,48.66 4.1,51.1"/>
+    <polygon points="16.61,45.84 26.5,43.4 25.6,45.8 15.71,48.24"/>
+  </g>
+
+  <polygon fill="#A1A2A8" points="63.3,26.9 38.2,34.8 43.7,36.7 60.8,29.9"/>
+  <polygon fill="#3A4A60" points="37.0,37.6 52.5,36.0 37.8,39.9"/>
+  <polygon fill="#F8F8F8" mask="url(#hull-cut)" points="20.9,34.7 25.9,30.0 34.6,26.6 63.3,26.9 38.2,34.8 35.1,35.9"/>
+  <polygon fill="#F8F8F8" points="30.8,36.3 36.7,39.8 26.1,48.3 18.6,47.25"/>
+</svg>
