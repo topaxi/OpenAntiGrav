@@ -1251,12 +1251,14 @@ references, and both go through the race path as well as the viewer.
 
 Four things worth knowing before touching it:
 
-11. **Positions and triangles, and nothing else.** `i16` triples through a
+11. **Positions, triangles and vertex normals.** `i16` triples through a
     per-mesh bias and a `1/128` scale, big-endian `u16` triangle lists - 1,274
     of 1,274 submeshes have an in-range index buffer whose count divides by
-    three. The 8 to 16 attribute bytes after each position are undecoded and are
-    not read, so the models are untextured and lit off **computed face
-    normals** - a derivation from the decoded geometry, called out as such.
+    three - and a packed **11:11:10 signed** normal at `+6`, unit on 99.5 % of
+    every model's vertices and within 18 degrees of the area-weighted face
+    average on 82-93 %. The models are still untextured: of the rest of a vertex
+    only the texture coordinate is even located, and it has no oracle until
+    `.gtf` is read.
 12. **The vertex stride is in no field of the file**, and it is not in the
     `.rcsmaterial` either - that was the leading guess at confidence 40, one was
     read, and it is a compiled RSX shader container. Three rules recover the
