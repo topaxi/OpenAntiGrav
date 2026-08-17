@@ -13,7 +13,16 @@
 #
 # Apply with the program open in a bridge-connected Ghidra:
 #
-#   scripts/apply-ghidra-names.py ps3-hdfury-eu
+#   scripts/apply-ghidra-names.py            # every binary, this one included
+#   scripts/apply-ghidra-names.py docs/ghidra/functions/ps3-hdfury-eu/names.tsv \
+#       --program /ps3-hdfury-eu/EBOOT.elf   # just this one
 #
-# Empty so far: the first sweep has not run. Names recovered here are
+# Names recovered here are
 # opportunistic - this is not a milestone target, see README.md.
+0x00392478	function	FwMemAllocator_Allocate	85	memory.md
+0x00392220	function	FwMemAllocator_AllocateAligned	85	memory.md
+0x00392790	function	FwMemAllocator_AllocateDefault	88	memory.md
+0x003914b0	function	FwMemHeap_Create	80	memory.md
+0x003a1e78	function	FwMemHeap_AddChunk	88	memory.md
+0x003931e0	function	FwMutex_Lock	90	memory.md
+0x003931b8	function	FwMutex_Unlock	90	memory.md

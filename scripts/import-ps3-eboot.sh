@@ -3,7 +3,7 @@
 # Imports a PS3 `EBOOT.elf` into the Ghidra project, headless and in the one
 # order that works.
 #
-# Three things make a PS3 import easy to get subtly wrong, and this script
+# Four things make a PS3 import easy to get subtly wrong, and this script
 # exists so none of them has to be remembered:
 #
 #   1. The language must be `PowerPC:BE:64:A2ALT-32addr`. Ghidra's ELF loader
@@ -14,7 +14,15 @@
 #   2. `AnalyzePs3Binary.java` must run *before* auto-analysis, not after. It
 #      defines the imports, exports and TOC that analysis then works from.
 #      `-preScript` is exactly that hook.
-#   3. `DefinePS3Syscalls.java` runs after. `-postScript` is that one.
+#   3. `AssignPs3R2FromOpd.java` must run *after* analysis, because it walks
+#      functions that analysis creates and gives each the `r2` value its OPD
+#      entry declares. Skip it and Ghidra resolves TOC-relative loads against no
+#      `r2` at all, so data references land on neighbouring TOC slots: strings
+#      come out as the wrong strings, in code that otherwise decompiles fine.
+#      Upstream's README does not mention this script; the first sweep of this
+#      binary was made without it and had to discount every name that rested on
+#      a TOC read. See docs/ghidra/functions/ps3-hdfury-eu/memory.md.
+#   4. `DefinePS3Syscalls.java` runs after that.
 #
 # The executable on the disc is a SELF and cannot be imported at all; if the
 # decrypted ELF is missing this decrypts it first with RPCS3, which needs no
@@ -116,7 +124,9 @@ args=(
 )
 
 if [[ $analysis -eq 1 ]]; then
-    args+=(-postScript DefinePS3Syscalls.java)
+    # Order matters between these two as well: syscall definitions are read
+    # through the TOC, so r2 has to be assigned first.
+    args+=(-postScript AssignPs3R2FromOpd.java -postScript DefinePS3Syscalls.java)
 else
     # -noanalysis also skips the post-script's reason to exist: syscalls are
     # resolved against functions analysis has not created yet.
@@ -142,5 +152,5 @@ Reopen Ghidra and check, in this order:
 
 Then apply this project's own names:
 
-  scripts/apply-ghidra-names.py ps3-hdfury-eu
+  scripts/apply-ghidra-names.py
 EOF
