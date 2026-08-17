@@ -92,12 +92,22 @@ system reports (`sys_memory_container_create`), calls
 initialises it, frees the temporary, and then prints a heap-usage table through
 `printf`/`puts`.
 
-**80** rests on the syscall sequence alone, which is unambiguous: `0x144`
+**80** rests on the syscall sequence, which is unambiguous: `0x144`
 (`sys_memory_container_create`) on one branch, then `0x15c`
 (`sys_memory_allocate`) and `0x15d` (`sys_memory_free`) around a
 `malloc(0x1c8)` whose result becomes the heap pointer both allocate entry points
-test for null. It does not rest on the report it then prints - see the open
-question below.
+test for null.
+
+Its report, read through the function's own TOC (see below - Ghidra's rendering
+of it is wrong), corroborates that and **names the three pools**:
+`"*******PS3 Heap Initial Sizes*********************"`, then
+`"Small is  %3.2f MB (%d bytes)"` for the pool at `heap + 0x88`,
+`"String is %3.2f MB (%d bytes)"` for `heap + 0x128`, and `"Large is …"` for
+`heap + 0`. So the sub-`0x400` fast path in the allocate entry points is the
+**Small** pool by the game's own name for it, and the main heap is **Large**.
+The score stays at 80 rather than rising, because this is one binary read one
+way with no runtime trace and no second binary - the rubric's ceiling for that
+is 84 and nothing here has earned the top of it.
 
 ### `FwMemHeap_AddChunk`
 
@@ -123,40 +133,64 @@ The `FwMutex` prefix is **inferred**, not recovered: `Fw` is the framework prefi
 the binary itself uses in `Live::FwMemAllocator`, but nothing names the mutex
 class. If a string ever gives it a real name, rename both.
 
-## Open question: two TOC reads that make no sense
+## Every function has its own TOC, and Ghidra uses one for all of them
 
-**Corrects an earlier reading on this page.** These were first written up as
-Ghidra resolving `r2` wrongly. That diagnosis was wrong and is withdrawn: TOC
-resolution here is **correct**, checked at eight displacements across two
-functions against the TOC base `0x008ad4d8` that the ELF entry point's own OPD
-entry declares. For example `lwz r3,-0x663c(r2)` at `0x003916bc` resolves to
-`0x008a6e9c`, which is exactly the slot Ghidra names. What remains is not a tool
-problem but an unexplained one.
+**This is the single most important thing to know before reading data
+references in this binary, and it took two wrong write-ups on this page to
+pin down.** It was first recorded as a `r2` problem, then withdrawn on the
+grounds that Ghidra's arithmetic checked out, then confirmed properly. The
+arithmetic did check out - against the base Ghidra had chosen. That proved
+self-consistency, not correctness, and withdrawing on it was the wrong call.
 
-Two sites read strangely, and the instruction stream really does say so:
+The evidence is the OPD. `FwMemHeap_Create` is at `0x003914b0`; searching the
+image for that word finds exactly one hit, `0x0088acb8`, its OPD entry:
 
-- **`FwMemHeap_Create` passes string pointers to `printf` that read as
-  telemetry labels.** `-0x6634(r2)` → slot `0x008a6ea4` → `0x0077db68` →
-  `"forward"`, and `-0x6630(r2)` → `0x008a6ea8` → `0x0077db70` →
-  `"EndRace Results"`. Read three ways - displacement arithmetic, TOC slot
-  contents, raw string bytes - and all three agree. A heap-usage report does not
-  print `"forward"`.
-- **`FUN_006be928` stores zero through the pointer in slot `0x008a5ec8`**, and
-  that slot holds `0x0077afe0`, which is where `"Collision.cpp"` lives.
-  `lwz r9,-0x7610(r2)` then `stw r0,0x0(r9)`, with `r0` zero.
+```
+0088acb8:  003914b0 008bd3c4      {func, toc}
+```
 
-**The lead worth following**: `0x00455018` and `0x0043b438` are named `printf`
-and `puts` by Ghidra's analysis, not by any symbol in this stripped binary. If
-either guess is wrong, both oddities dissolve - a function that is not `printf`
-has no format-string argument, and the "string" pointers are just pointers.
-Check what those two thunks actually reach before spending time on the TOC.
+Its TOC is **`0x008bd3c4`**. Ghidra uses `0x008ad4d8` - the TOC from the ELF
+entry point's OPD entry - for every function in the program. The two differ by
+`0xfeec`, so every TOC-relative load in this function lands `0xfeec` away from
+where it should.
 
-None of the seven names above depends on this. Each rests on control flow,
-argument counts, or calls to imports the NID database named, and that was the
-deliberate stopping line for a first sweep rather than a consequence of the
-oddity. The obvious next targets - `Collision.cpp`'s own functions and the
-subsystem attribution behind all 462 filename strings - do lean on TOC string
-reads, so settle the `printf` question first.
+What that does to one instruction, `lwz r3,-0x6634(r2)` at `0x00391594`:
+
+| TOC used | Slot | Points at | Reads |
+| --- | --- | --- | --- |
+| Ghidra's `0x008ad4d8` | `0x008a6ea4` | `0x0077db68` | `"forward"` |
+| The function's `0x008bd3c4` | `0x008b6d90` | `0x007afe68` | `"Small is  %3.2f MB (%d bytes)\n"` |
+
+Both are real strings at real addresses. Only one is the one this code loads.
+With the correct TOC the whole function resolves coherently - the header string
+is `"*******PS3 Heap Initial Sizes*********************"`, and the float at
+`-0x6628(r2)` is `0x35800000`, which is exactly `2^-20`, the bytes-to-MB
+conversion its `%3.2f` needs. Under Ghidra's TOC that slot reads `1.0f` and the
+format strings read as race telemetry.
+
+**So: do not trust a Ghidra string cross-reference in this program.** It yields
+both false positives and false negatives, and the failure mode is a plausible
+wrong string rather than a visible error. To check one by hand, three reads and
+no guessing:
+
+1. `disassemble_function` the caller and find the real `lwz rX, disp(r2)`.
+2. `search_byte_patterns` for the function's own entry address; the single hit
+   is its OPD entry. Read 8 bytes: `{func, toc}`.
+3. Read `toc + disp` for the pointer, then read the pointer for the bytes.
+
+**The fix is `AssignPs3R2FromOpd.java`**, which walks the OPD and gives each
+function the `r2` its own entry declares. It is in the script pack, upstream's
+README does not mention it, and it was missing from
+`scripts/import-ps3-eboot.sh` when this database was built. It is there now, as
+a post-script, and this database predates it.
+
+A closed lead, recorded so nobody re-opens it: `0x00455018` really is `printf` -
+it has the varargs save area at `r1+0xd8`, builds a `va_list`, locks a stream,
+calls a `vfprintf` worker and unlocks. The libc naming was never the problem.
+
+None of the seven names above depends on any of this. Each rests on control
+flow, argument counts, or calls to imports the NID database named, which is what
+made them safe to land from a database with this defect in it.
 
 ## Not recorded
 
