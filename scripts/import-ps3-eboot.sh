@@ -15,13 +15,13 @@
 #      defines the imports, exports and TOC that analysis then works from.
 #      `-preScript` is exactly that hook.
 #   3. `AssignPs3R2FromOpd.java` must run *after* analysis, because it walks
-#      functions that analysis creates and gives each the `r2` value its OPD
-#      entry declares. Skip it and Ghidra resolves TOC-relative loads against no
-#      `r2` at all, so data references land on neighbouring TOC slots: strings
-#      come out as the wrong strings, in code that otherwise decompiles fine.
-#      Upstream's README does not mention this script; the first sweep of this
-#      binary was made without it and had to discount every name that rested on
-#      a TOC read. See docs/ghidra/functions/ps3-hdfury-eu/memory.md.
+#      functions that analysis creates and gives each the `r2` value its own OPD
+#      entry declares. Upstream's README does not mention it, and it refuses to
+#      run on anything but `ET_EXEC` - so an `EBOOT.elf` is exactly what it is
+#      for. Belt and braces rather than a fix for an observed defect: the first
+#      import was made without it and TOC loads still resolved correctly, this
+#      binary having one TOC for everything. Cheap, and right per function
+#      rather than right on average.
 #   4. `DefinePS3Syscalls.java` runs after that.
 #
 # The executable on the disc is a SELF and cannot be imported at all; if the

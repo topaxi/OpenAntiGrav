@@ -92,9 +92,12 @@ system reports (`sys_memory_container_create`), calls
 initialises it, frees the temporary, and then prints a heap-usage table through
 `printf`/`puts`.
 
-**80 rather than higher because its own output cannot be read yet** - see the r2
-caveat below. The structure is clear; the format strings Ghidra attributes to it
-are wrong.
+**80** rests on the syscall sequence alone, which is unambiguous: `0x144`
+(`sys_memory_container_create`) on one branch, then `0x15c`
+(`sys_memory_allocate`) and `0x15d` (`sys_memory_free`) around a
+`malloc(0x1c8)` whose result becomes the heap pointer both allocate entry points
+test for null. It does not rest on the report it then prints - see the open
+question below.
 
 ### `FwMemHeap_AddChunk`
 
@@ -120,30 +123,40 @@ The `FwMutex` prefix is **inferred**, not recovered: `Fw` is the framework prefi
 the binary itself uses in `Live::FwMemAllocator`, but nothing names the mutex
 class. If a string ever gives it a real name, rename both.
 
-## The r2 caveat, which is why this sweep stopped at seven
+## Open question: two TOC reads that make no sense
 
-**Do not trust any name derived from a TOC-relative data reference in this
-database yet.** `AssignPs3R2FromOpd.java` from the script pack was not run - it
-was missing from `scripts/import-ps3-eboot.sh` when this import was made, and is
-in it now. Without it Ghidra has no per-function `r2` value and resolves
-TOC-relative displacements to the wrong slot.
+**Corrects an earlier reading on this page.** These were first written up as
+Ghidra resolving `r2` wrongly. That diagnosis was wrong and is withdrawn: TOC
+resolution here is **correct**, checked at eight displacements across two
+functions against the TOC base `0x008ad4d8` that the ELF entry point's own OPD
+entry declares. For example `lwz r3,-0x663c(r2)` at `0x003916bc` resolves to
+`0x008a6e9c`, which is exactly the slot Ghidra names. What remains is not a tool
+problem but an unexplained one.
 
-Two confirmed misreadings, both in code that is otherwise fine:
+Two sites read strangely, and the instruction stream really does say so:
 
-- `FwMemHeap_Create` appears to print format strings called `Race End Photo`,
-  `forward` and `EndRace Results`. It does not; those are neighbouring TOC
-  entries.
-- `FUN_006be928` appears to write zero into the first four bytes of the string
-  constant `"Collision.cpp"`. It does not.
+- **`FwMemHeap_Create` passes string pointers to `printf` that read as
+  telemetry labels.** `-0x6634(r2)` → slot `0x008a6ea4` → `0x0077db68` →
+  `"forward"`, and `-0x6630(r2)` → `0x008a6ea8` → `0x0077db70` →
+  `"EndRace Results"`. Read three ways - displacement arithmetic, TOC slot
+  contents, raw string bytes - and all three agree. A heap-usage report does not
+  print `"forward"`.
+- **`FUN_006be928` stores zero through the pointer in slot `0x008a5ec8`**, and
+  that slot holds `0x0077afe0`, which is where `"Collision.cpp"` lives.
+  `lwz r9,-0x7610(r2)` then `stw r0,0x0(r9)`, with `r0` zero.
 
-The TOC table itself is intact - `0x008a5ec8` really does hold `0x0077afe0`, the
-address of `"Collision.cpp"` - so this is purely a per-function `r2` problem and
-the fix is one script run.
+**The lead worth following**: `0x00455018` and `0x0043b438` are named `printf`
+and `puts` by Ghidra's analysis, not by any symbol in this stripped binary. If
+either guess is wrong, both oddities dissolve - a function that is not `printf`
+has no format-string argument, and the "string" pointers are just pointers.
+Check what those two thunks actually reach before spending time on the TOC.
 
-Everything named above rests on control flow, argument counts and calls to named
-imports, none of which the `r2` problem touches. The obvious next targets -
-`Collision.cpp`'s own functions, and the 462 files' worth of subsystem
-attribution behind them - all rest on TOC data, so they wait.
+None of the seven names above depends on this. Each rests on control flow,
+argument counts, or calls to imports the NID database named, and that was the
+deliberate stopping line for a first sweep rather than a consequence of the
+oddity. The obvious next targets - `Collision.cpp`'s own functions and the
+subsystem attribution behind all 462 filename strings - do lean on TOC string
+reads, so settle the `printf` question first.
 
 ## Not recorded
 
