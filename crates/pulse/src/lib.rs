@@ -41,6 +41,23 @@ pub const TITLE: &Title = &Title {
     foreign_serials: FOREIGN_SERIALS,
     front_end: Some(FRONT_END),
     race: race::DEFAULTS,
+    music: Some(MUSIC),
+};
+
+/// Where Pulse keeps its music.
+///
+/// The front-end path is **named, not guessed**: the executable builds it at
+/// run time from the template at `0x08a88e94`, `Data\Music\FEMusic\frontend%d.at3`
+/// (see `docs/formats/vex.md`), and hashing the expansion finds an entry for
+/// every `%d` from 1 to 8 and none for 0, so the numbering starts at one. All
+/// eight are stereo ATRAC3+ at 44,100 Hz. Which of the eight belongs to which
+/// menu is not established, so the first is what this names.
+///
+/// [`oag_title::Music::tracks`] is `None` here; its doc comment carries the
+/// whole of why.
+pub const MUSIC: &oag_title::Music = &oag_title::Music {
+    front_end: names::FRONT_END_MUSIC,
+    tracks: None,
 };
 
 /// Pulse's front end: the layout its `Skin.xml` authors and the boot chain a
@@ -191,6 +208,15 @@ pub mod names {
     /// `oag_game::catalogue` - and they are **entries rather than directories**:
     /// two of them can name one environment and differ only by `Reversed`.
     pub const GAME_PLUGIN_DEFINITION: &str = r"Data\Plugins\PI001\Definition.xml";
+
+    /// The music the front end loops under its menus.
+    ///
+    /// The first expansion of the executable's own template - see
+    /// [`crate::MUSIC`] for the evidence and for why it is the first. Its
+    /// `fact` chunk declares 1,302,720 samples, which decodes to **29.5
+    /// seconds**, and that is what a `--dump-audio` capture of a PSP boot
+    /// reports.
+    pub const FRONT_END_MUSIC: &str = r"Data\Music\FEMusic\frontend1.at3";
 
     /// The intro movie played by the `LogoFMV` and `Play Intro` screens.
     ///

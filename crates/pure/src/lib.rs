@@ -13,9 +13,19 @@
 //! a format version rather than of a release - which the Pulse disc's own
 //! version-4 `Data\Defaults\Skycube.vex` settles.
 //!
-//! Nothing about Pure's collision classes, its sound banks or its HUD is here,
-//! because none of it is recovered. An empty module is the honest record of
-//! that; a plausible guess would not be.
+//! Nothing about Pure's collision classes or its HUD is here, because none of
+//! it is recovered. An empty module is the honest record of that; a plausible
+//! guess would not be.
+//!
+//! Its **music** is the one axis that has since been recovered, and by
+//! measurement rather than by analogy: [`MUSIC`] carries a front-end path read
+//! out of `BOOT.BIN` and a soundtrack the disc's own plugin definition
+//! declares. Its **sound banks** are located but not decoded -
+//! `Data\Sound\frontend.bnk`, `hud.bnk` and `generaltrack.bnk` are named in the
+//! same strings dump and present on both pressings - so they are recorded in
+//! `docs/formats/pure-status.md` and deliberately absent here: a constant
+//! nothing can read is a constant nothing can be wrong about, but it is also
+//! not a recovery.
 //!
 //! [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
 //! [`pure-status.md`]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/formats/pure-status.md
@@ -36,6 +46,32 @@ pub const TITLE: &Title = &Title {
     foreign_serials: FOREIGN_SERIALS,
     front_end: Some(FRONT_END),
     race: race::DEFAULTS,
+    music: Some(MUSIC),
+};
+
+/// Where Pure keeps its music.
+///
+/// **Both halves come off the disc itself**, and neither is Pulse's shape.
+///
+/// The front-end path is a literal in `BOOT.BIN`, sitting between
+/// `c:/Work/Wipeout/Code/System/Sound/MusicManager.cpp` and the sound-bank
+/// names that follow it. Pulse expands a `frontend%d.at3` template there; Pure
+/// names one file and has no such template, and none of Pulse's eight
+/// expansions hashes to an entry on either Pure pressing.
+///
+/// The soundtrack tracks are `music.at3` inside the directory each `PI_Music`
+/// node of [`names::GAME_PLUGIN_DEFINITION`] declares - `MusicManager.cpp`'s
+/// other two strings, `%s\%s` and `music.at3`, joined. All **nineteen**
+/// resolve to real entries on both `pure-psp-usa.chd` and `pure-psp-eu.chd`.
+/// Confidence **90**: the path template and the declaration are each read off
+/// the disc and every expansion hits, but nothing has been watched running
+/// under an emulator. See `docs/formats/pure-status.md`.
+pub const MUSIC: &oag_title::Music = &oag_title::Music {
+    front_end: names::FRONT_END_MUSIC,
+    tracks: Some(oag_title::DeclaredTracks {
+        declared_in: names::GAME_PLUGIN_DEFINITION,
+        file: names::MUSIC_TRACK_FILE,
+    }),
 };
 
 /// Pure's front end: the layout its own `Skin.xml` authors and the boot chain a
@@ -74,7 +110,21 @@ pub mod archives {
 /// These are the ones confirmed present.
 pub mod names {
     /// The game plugin's own definition.
+    ///
+    /// Carries Pure's `PI_Music` declarations as well as its circuits and
+    /// teams: one node per soundtrack track, each naming the directory the
+    /// track lives in. See [`crate::MUSIC`].
     pub const GAME_PLUGIN_DEFINITION: &str = r"Data\Plugins\PI001\Definition.xml";
+
+    /// The music the front end loops under its menus.
+    ///
+    /// A literal in `BOOT.BIN`, not a template - see [`crate::MUSIC`]. Present
+    /// on both pressings.
+    pub const FRONT_END_MUSIC: &str = r"Data\Music\frontend.at3";
+
+    /// The file a `PI_Music` location holds, joined onto that location to
+    /// address one soundtrack track. See [`crate::MUSIC`].
+    pub const MUSIC_TRACK_FILE: &str = "music.at3";
 
     /// One team's `handlingstats.xml`.
     ///

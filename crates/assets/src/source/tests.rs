@@ -47,6 +47,9 @@ const TITLE: &Title = &Title {
         track: r"Data\Environments\00_Nowhere\track.vex",
         team: "Nobody",
     },
+    // Unread here for the third time and the same reason: an archive is found
+    // by name, and what is inside one is nothing this crate looks at.
+    music: None,
 };
 
 /// The bulk archive's PSP and PS2 names, as the fixture spells them.

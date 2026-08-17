@@ -91,10 +91,16 @@ const PS2_MUSIC_PATH: &str = "54748/PS2MUSIC.WAD";
 /// Which track the menu plays, by index into the booted release's own
 /// soundtrack.
 ///
-/// The first, because nothing yet maps a circuit or a menu to a track: the
-/// entries are addressed by name hash on both discs and no name for any of them
-/// has been recovered. Playing a fixed one proves the path end to end without
-/// claiming a mapping that has not been established.
+/// The first, because nothing yet maps a circuit or a menu to a track. **Both
+/// titles' names have since been recovered** - each disc's own plugin
+/// definition declares one `PI_Music` node per track - but a name is not a
+/// mapping, and which of them a given menu or circuit plays is still
+/// unestablished. Playing a fixed one proves the path end to end without
+/// claiming otherwise.
+///
+/// What the names did buy is that "the first" now means the *release's* first
+/// wherever [`crate::music`] reads the declaration: see
+/// [`oag_title::DeclaredTracks`].
 ///
 /// **Not the only index in play any more.** [`Audio::race_index`] addresses
 /// the same booted-disc order for the race playlist below, starting one past
@@ -224,9 +230,9 @@ impl std::fmt::Display for MusicSource {
 /// any serial: a disc that passes it demonstrably carries this soundtrack.
 #[derive(Debug, Clone, Default)]
 pub struct MusicDiscs {
-    /// A Pulse PSP source, if one was found.
+    /// The booted title's PSP source, if one was found.
     psp: Option<String>,
-    /// A Pulse PS2 source, if one was found.
+    /// The booted title's PS2 source, if one was found.
     ps2: Option<String>,
     /// Which release the game booted from, when it is one of the two.
     booted: Option<Platform>,
@@ -247,7 +253,11 @@ impl MusicDiscs {
     #[must_use]
     pub fn survey(booted: &str) -> Self {
         let mut discs = Self::default();
-        let Ok(layout) = oag_assets::Layout::resolve(booted, oag_pulse::TITLE) else {
+        // **As whichever title it is**, not as Pulse. Pulse's own deny-list
+        // names both Pure pressings, so resolving against `oag_pulse::TITLE`
+        // used to return `WrongTitle` here and leave a Pure boot with no
+        // platform, no listing, and silence under its menus.
+        let Some((title, layout)) = identify(booted) else {
             return discs;
         };
         discs.booted = Some(layout.platform);
@@ -269,7 +279,7 @@ impl MusicDiscs {
             Platform::Psp => Platform::Ps2,
             _ => Platform::Psp,
         };
-        let Some(found) = find_release(booted, wanted, &mine) else {
+        let Some(found) = find_release(booted, title, wanted, &mine) else {
             return discs;
         };
         match wanted {
@@ -321,16 +331,38 @@ impl MusicDiscs {
     }
 }
 
+/// Which title `source` is, and how its archives are laid out.
+///
+/// The one place this module asks the question, so that the answer cannot
+/// disagree with itself between the survey and the search. `None` for every
+/// source that will not open as any title this build knows.
+fn identify(source: &str) -> Option<(&'static oag_title::Title, oag_assets::Layout)> {
+    let opened = crate::title::open_source(source, Vec::new()).ok()?;
+    Some((opened.title, opened.archives.layout))
+}
+
 /// The first source on the search path carrying `wanted`'s encode of `mine`.
 ///
 /// Every container in every directory [`crate::source::search_path`] lists is
-/// tried, in that order. `Layout::resolve` is only the **prefilter** - it says
-/// what platform a disc is and skips one that carries no archives at all - and
-/// [`Soundtrack::pairs_with`] is the test that decides, for the reason
-/// [`MusicDiscs`] records at length: a serial cannot rule a disc *in*, and a
-/// counterpart nobody named has to be ruled in rather than merely not ruled
-/// out.
-fn find_release(booted: &str, wanted: Platform, mine: &Soundtrack) -> Option<String> {
+/// tried, in that order. Identifying a candidate is only the **prefilter** - it
+/// says which title and platform a disc is and skips one that carries no
+/// archives at all - and [`Soundtrack::pairs_with`] is the test that decides,
+/// for the reason [`MusicDiscs`] records at length: a serial cannot rule a disc
+/// *in*, and a counterpart nobody named has to be ruled in rather than merely
+/// not ruled out.
+///
+/// **A different title is refused outright**, before the pairing test rather
+/// than by it. The pairing test would refuse Pulse's sixteen against Pure's
+/// nineteen on the count alone, but that is a property of these two discs and
+/// not a rule: two titles with equally many tracks of similar length would slip
+/// through it. `title` costs nothing and does not depend on how the corpus
+/// grows.
+fn find_release(
+    booted: &str,
+    title: &'static oag_title::Title,
+    wanted: Platform,
+    mine: &Soundtrack,
+) -> Option<String> {
     for directory in crate::source::search_path() {
         let Ok(entries) = std::fs::read_dir(&directory) else {
             continue;
@@ -349,9 +381,10 @@ fn find_release(booted: &str, wanted: Platform, mine: &Soundtrack) -> Option<Str
             if source == booted {
                 continue;
             }
-            if !oag_assets::Layout::resolve(&source, oag_pulse::TITLE)
-                .is_ok_and(|layout| layout.platform == wanted)
-            {
+            let Some((theirs, layout)) = identify(&source) else {
+                continue;
+            };
+            if theirs.name != title.name || layout.platform != wanted {
                 continue;
             }
             if Soundtrack::read(&source, wanted)
@@ -365,21 +398,6 @@ fn find_release(booted: &str, wanted: Platform, mine: &Soundtrack) -> Option<Str
     }
     None
 }
-
-/// The PSP front end's music, in `Data.wad`.
-///
-/// **Named, not guessed.** The executable builds this path at run time from the
-/// template at `0x08a88e94`, `Data\Music\FEMusic\frontend%d.at3` - see
-/// `docs/formats/vex.md` - and hashing the expansion finds an entry for every
-/// `%d` from 1 to 8 and none for 0, so the numbering starts at one. All eight
-/// are stereo ATRAC3+ at 44,100 Hz; the first declares 1,302,720 samples in its
-/// `fact` chunk and decodes to **29.5 seconds**, which is what a `--dump-audio`
-/// capture of a PSP boot reports.
-///
-/// Which of the eight belongs to which menu is **not** established, so the
-/// first is played, for the same reason [`MUSIC_TRACK`] is zero: it proves the
-/// path end to end without claiming a mapping nobody has recovered.
-const PSP_MUSIC_NAME: &str = r"Data\Music\FEMusic\frontend1.at3";
 
 /// The mixer, the device behind it, and what the composition root plays.
 ///
@@ -1377,12 +1395,13 @@ fn ps2_directory(archive: &mut MusicArchive) -> Result<ps2_music::Directory> {
 /// One release's soundtrack, as that release lists it.
 ///
 /// The two discs share nothing that could address a track: the PS2 keys its
-/// archive by position and the PSP keys `Data.wad` by name hash, no name for
-/// any of the sixteen has been recovered on either side, and the two orders are
-/// **not** the same - PS2 track 12 is the second of the PSP's sixteen in
-/// `Data.wad` order. What they do share is length, to within 11 milliseconds
-/// over all sixteen, which is what `docs/formats/ps2-audio.md` establishes and
-/// what [`Self::nearest`] pairs on.
+/// archive by position and the PSP keys `Data.wad` by name hash, and the two
+/// orders are **not** the same - PS2 track 12 is the second of the PSP's
+/// sixteen in `Data.wad` order. The PSP names have since been recovered from
+/// the disc's own plugin definition and the PS2 archive still carries none, so
+/// they remain unpairable by name. What they do share is length, to within 11
+/// milliseconds over all sixteen, which is what `docs/formats/ps2-audio.md`
+/// establishes and what [`Self::nearest`] pairs on.
 #[derive(Debug, Clone)]
 struct Soundtrack {
     /// The tracks, in the disc's own order. [`Track::at`] is addressed the way
@@ -1416,25 +1435,6 @@ struct Track {
 /// complete one-for-one assignment rather than a match, and why it checks the
 /// count first - Pure has nineteen tracks, Pulse sixteen.
 const PAIR_TOLERANCE: f64 = 1.0;
-
-/// The smallest a `Data.wad` entry can be and still hold a soundtrack track.
-///
-/// **Arithmetic, not a round number picked by eye.** The shortest of the
-/// sixteen PS2 tracks is 177.2 seconds; at 44,100 Hz and ATRAC3+'s 560 bytes
-/// per 2,048 samples that is `177.2 * 44100 / 2048 * 560` = 2,137,000 bytes of
-/// stored stream, so nothing shorter than about 2 MiB can be one of them. It is
-/// a prefilter and not the test - [`psp_soundtrack`] still checks the codec,
-/// the channel count and the rate - and it exists because applying those checks
-/// to all 1,142 entries would mean 1,142 reads off a disc image where 61 will
-/// do.
-const MIN_SOUNDTRACK_BYTES: u32 = 2_000_000;
-
-/// Bytes of each candidate entry read to find its `fmt ` and `fact` chunks.
-///
-/// Both sit in front of `data` on every entry the disc carries, within the
-/// first 100 bytes; a kibibyte is slack for an entry that orders its chunks
-/// differently, and it is what stops this reading 2 MiB per candidate.
-const RIFF_HEADER_PEEK: u64 = 1024;
 
 impl Soundtrack {
     /// Reads the soundtrack `source` carries, for the release it is.
@@ -1538,62 +1538,21 @@ fn ps2_soundtrack(source: &str) -> Result<Option<Vec<Track>>> {
     ))
 }
 
-/// The soundtrack entries of a PSP `Data.wad`, by name hash.
+/// The soundtrack entries of a PSP `Data.wad`, addressed by name hash.
 ///
-/// The population is picked out by what the entries *are* rather than by where
-/// they sit: stereo ATRAC3+ at 44,100 Hz, over [`MIN_SOUNDTRACK_BYTES`]. On
-/// both PSP pressings that is exactly sixteen entries, matching the PS2
-/// archive's sixteen - the channel count is what carries it, because the disc
-/// also holds 32 *mono* ATRAC3+ streams at the same bitrate and a dozen shorter
-/// stereo ones. This is the same population argument `docs/formats/ps2-voice.md`
-/// makes for the pre-race clips, and for the same reason: a size filter alone
-/// gets it wrong in both directions.
-///
-/// The length comes from the `fact` chunk, never from the stored size: ATRAC3+
-/// pads its last block, so block count times samples per block overstates a
-/// track by a few hundred samples and the pairing tolerance would be spent on
-/// an avoidable error.
+/// Which entries those are is the one question here whose answer depends on
+/// **which title booted**, so it is asked in [`crate::music`] rather than in
+/// this module.
 fn psp_soundtrack(source: &str) -> Result<Option<Vec<Track>>> {
-    // Resolved through the layout rather than a literal `PSP_GAME/USRDIR/...`
-    // path, so a directory somebody extracted with `oag-unpack` answers the
-    // same as a disc image does.
-    let Ok(mut archives) = oag_pulse::open(source) else {
-        return Ok(None);
-    };
-    if archives.layout.platform != Platform::Psp {
-        return Ok(None);
-    }
-
-    let data = archives.data.as_wad_mut("the entry directory")?; // WAD-shaped
-    let candidates: Vec<(usize, u32)> = data
-        .directory()
-        .entries
-        .iter()
-        .enumerate()
-        .filter(|(_, entry)| entry.size >= MIN_SOUNDTRACK_BYTES)
-        .map(|(index, entry)| (index, entry.name_hash))
-        .collect();
-
-    let mut tracks = Vec::new();
-    for (index, name_hash) in candidates {
-        let Ok(header) = data.peek(index, RIFF_HEADER_PEEK) else {
-            continue;
-        };
-        let Ok(stream) = crate::at3::describe(&header) else {
-            continue;
-        };
-        let Some(seconds) = stream.seconds() else {
-            continue;
-        };
-        if stream.format.channels != 2 || stream.format.sample_rate != 44_100 {
-            continue;
-        }
-        tracks.push(Track {
-            at: name_hash,
-            seconds,
-        });
-    }
-    Ok(Some(tracks))
+    Ok(crate::music::listing(source)?.map(|entries| {
+        entries
+            .into_iter()
+            .map(|entry| Track {
+                at: entry.name_hash,
+                seconds: entry.seconds,
+            })
+            .collect()
+    }))
 }
 
 /// Reads one soundtrack track off `source` and turns it into a sound.
@@ -1607,27 +1566,8 @@ fn load_track(source: &str, platform: Platform, track: Track, cache_dir: &Path) 
     match platform {
         Platform::Ps2 => load_ps2_track(source, track.at as usize)?
             .with_context(|| format!("{source} carries no {PS2_MUSIC_PATH}")),
-        _ => load_psp_entry(source, track.at, cache_dir),
+        _ => crate::music::load_entry(source, track.at, cache_dir),
     }
-}
-
-/// Reads one ATRAC3+ soundtrack entry out of `Data.wad` by name hash and
-/// decodes it.
-///
-/// The whole entry is read rather than ranged, unlike the PS2 path: 2.2 MiB of
-/// ATRAC3+ is a moment's work and the whole thing has to go to `ffmpeg` anyway.
-/// It is the *decoded* form that is large - 33 MiB of PCM for three minutes -
-/// and that is what the cache in [`crate::at3`] exists to avoid paying twice.
-fn load_psp_entry(source: &str, name_hash: u32, cache_dir: &Path) -> Result<Sound> {
-    let mut archives = oag_pulse::open(source).with_context(|| format!("opening {source}"))?;
-    let data = archives.data.as_wad_mut("a name hash")?;
-    let at3 = data
-        .read_hash(name_hash)
-        .with_context(|| format!("reading Data.wad entry {name_hash:08x}"))?;
-    let pcm = crate::at3::decode(&at3, cache_dir)
-        .with_context(|| format!("decoding Data.wad entry {name_hash:08x}"))?;
-    Sound::new(pcm.samples, pcm.channels, pcm.sample_rate)
-        .with_context(|| format!("Data.wad entry {name_hash:08x}"))
 }
 
 /// The music the front end plays, for a source that has its own.
@@ -1635,60 +1575,22 @@ fn load_psp_entry(source: &str, name_hash: u32, cache_dir: &Path) -> Result<Soun
 /// The PSP's front-end music and nothing else, which is what
 /// [`Audio::start_music`] wants for every source that is not the PS2 release.
 /// It is deliberately **not** routed through [`Audio::fetch`]: what comes back
-/// is not one of the sixteen, it has no counterpart on the other disc, and the
-/// caller records that by leaving [`Audio::music_from`] unset.
+/// is not one of the soundtrack tracks, it has no counterpart on the other
+/// disc, and the caller records that by leaving [`Audio::music_from`] unset.
 fn front_end_music(discs: &MusicDiscs, cache_dir: &Path) -> Result<Option<Loaded>> {
     let Some((source, _)) = discs.pick(MusicSource::Auto) else {
         return Ok(None);
     };
-    Ok(load_psp_track(source, cache_dir)?.map(|sound| Loaded {
-        // **Unstamped, and that is the whole of the row's scope.** This track
-        // has no counterpart on the other disc, so nothing may swap it.
-        from: None,
-        sound: Arc::new(sound),
-        what: PSP_MUSIC_NAME.to_string(),
-    }))
-}
-
-/// Reads the PSP front end's music out of `Data.wad` and decodes it.
-///
-/// **Not one of the sixteen soundtrack tracks, and that is the point.** It is a
-/// *named* entry where the sixteen are not - the executable builds this path at
-/// run time - and no PS2 entry has ever been matched to it, which is why
-/// [`MusicSource`] cannot reach it.
-///
-/// `Ok(None)` when the source holds no such entry, which is every PS2 source
-/// and any partially extracted directory - an ordinary outcome, not an error,
-/// the same way [`load_ps2_track`] treats a missing archive.
-///
-/// The whole entry is read rather than ranged, unlike the PS2 path: 349 KiB of
-/// ATRAC3+ is a fifth of a second's work and the whole thing has to go to
-/// `ffmpeg` anyway. It is the *decoded* form that is large - 5 MiB of PCM for
-/// 30 seconds - and that is what the cache exists to avoid paying twice.
-///
-/// # Errors
-///
-/// A source that will not open at all, an entry that is not a readable RIFF,
-/// or a decode that failed - including `ffmpeg` being absent, which the caller
-/// reports rather than treating as fatal.
-fn load_psp_track(source: &str, cache_dir: &Path) -> Result<Option<Sound>> {
-    // Resolved through the layout rather than a literal `PSP_GAME/USRDIR/...`
-    // path, so a directory somebody extracted with `oag-unpack` answers the
-    // same as a disc image does.
-    let Ok(mut archives) = oag_pulse::open(source) else {
-        return Ok(None);
-    };
-    if archives.locate(PSP_MUSIC_NAME).is_none() {
-        return Ok(None);
-    }
-
-    let at3 = archives
-        .read_name(PSP_MUSIC_NAME)
-        .with_context(|| format!("reading {PSP_MUSIC_NAME}"))?;
-    let pcm = crate::at3::decode(&at3, cache_dir)
-        .with_context(|| format!("decoding {PSP_MUSIC_NAME}"))?;
-    let sound = Sound::new(pcm.samples, pcm.channels, pcm.sample_rate).context(PSP_MUSIC_NAME)?;
-    Ok(Some(sound))
+    Ok(
+        crate::music::load_front_end(source, cache_dir)?.map(|(what, sound)| Loaded {
+            // **Unstamped, and that is the whole of the row's scope.** This
+            // track has no counterpart on the other disc, so nothing may swap
+            // it.
+            from: None,
+            sound: Arc::new(sound),
+            what,
+        }),
+    )
 }
 
 /// A seekable handle on `PS2MUSIC.WAD`, wherever it lives.

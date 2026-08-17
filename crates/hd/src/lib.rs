@@ -52,6 +52,12 @@ pub const TITLE: &Title = &Title {
     foreign_serials: FOREIGN_SERIALS,
     front_end: None,
     race: race::DEFAULTS,
+    // `DATA01.PSARC` is sound and music and nothing else, so this is a hole
+    // rather than an absence - but not one number out of it has been read, and
+    // a path borrowed from a PSP title would be a guess attributed to a disc
+    // nobody measured. See `oag_title::FrontEnd` for the same reasoning applied
+    // to the front end.
+    music: None,
 };
 
 /// The seven archives a Wipeout HD / Fury disc ships, under `PS3_GAME/USRDIR/`.

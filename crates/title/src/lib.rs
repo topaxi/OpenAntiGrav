@@ -84,6 +84,55 @@ pub struct Title {
     /// promoted temporaries whose addresses need not be equal. Carrying the
     /// answer removes the question.
     pub race: &'static race::RaceDefaults,
+    /// Where this title keeps its music, or `None` when none of it has been
+    /// located. See [`Music`].
+    pub music: Option<&'static Music>,
+}
+
+/// Where a title keeps the music its front end and its races play.
+///
+/// # A measured axis, not a designed one
+///
+/// Both PSP titles build their front end's music path in the executable rather
+/// than reading it from any file, and the two paths differ in shape as well as
+/// in spelling: Pulse expands a `Data\Music\FEMusic\frontend%d.at3` template
+/// and Pure names one literal file. Neither is derivable from the other, which
+/// is what ADR-0022 asks for before an axis becomes a type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Music {
+    /// The front end's own looping track, by entry name in the bulk archive.
+    ///
+    /// Not one of the soundtrack tracks on either title: it is short, it loops,
+    /// and it is addressed by a name the executable spells out where a
+    /// soundtrack track is addressed by [`Self::track_file`] or not at all.
+    pub front_end: &'static str,
+    /// How the soundtrack tracks are addressed, for a title whose entries this
+    /// build has recovered **by name**. See [`DeclaredTracks`].
+    ///
+    /// `None` for Wipeout Pulse, and that is a statement about **this build**
+    /// rather than about the disc. Pulse's `Definition.xml` declares its sixteen
+    /// tracks exactly the way Pure's declares nineteen and every one of them
+    /// resolves to a real entry; switching Pulse over would reorder its race
+    /// playlist and change which track a PS2 boot's menu plays, which is a
+    /// separate change with its own evidence to record. `oag_game::audio` finds
+    /// Pulse's sixteen by what the entries *are* until then - see `HANDOVER.md`.
+    pub tracks: Option<DeclaredTracks>,
+}
+
+/// Where a title declares its soundtrack, and what a declaration points at.
+///
+/// One `PI_Music` node per track, each naming the directory the track lives in;
+/// the audio itself is [`Self::file`] inside that directory. Reading the
+/// declaration is what makes the soundtrack order the **disc's own** rather
+/// than whatever order the archive directory happens to be in - which matters
+/// because "the first track" is then something the release decides.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DeclaredTracks {
+    /// The plugin definition whose `PI_Music` nodes declare them, by entry name
+    /// in the bulk archive.
+    pub declared_in: &'static str,
+    /// The file inside each declared location.
+    pub file: &'static str,
 }
 
 /// One title's front end: how it lays menus out, and how it boots into them.

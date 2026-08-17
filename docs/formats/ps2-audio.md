@@ -344,14 +344,28 @@ own requantisation. `ffmpeg` logs a "non monotonically increasing dts" error per
 ATRAC3+ block and none of them mean anything - see `crates/game/src/at3.rs`.
 
 The engine reads the same populations at run time rather than from a table:
-`crates/game/src/audio.rs`, `psp_soundtrack` and `Soundtrack::nearest`.
+`crates/game/src/music.rs` and `Soundtrack::nearest` in
+`crates/game/src/audio.rs`.
+
+## The PSP names are recovered; the PS2 archive still has none
+
+**Settled 2026-08-17, and only on one side.** Both PSP titles' plugin
+definitions, `Data\Plugins\PI001\Definition.xml`, declare a `PI_Music` node per
+track carrying the directory it lives in; `MusicManager.cpp`'s own `%s\%s` and
+`music.at3` strings supply the join. Every one of Pulse's sixteen and Pure's
+nineteen resolves to a real `Data.wad` entry - so `Data\Music\...` was indeed
+the prefix, and the missing half was the *leaf*, which is `music.at3` on both
+and not a per-track name at all.
+
+`PS2MUSIC.WAD` is unaffected: it keys by position and stores no name, so the
+length pairing above remains the only bridge between the two releases. Nothing
+in this page's measurements changes.
+
+This build reads the declaration for **Pure only**, deliberately - see
+[`pure-status.md`](pure-status.md#music-recovered-by-name-and-played), `HANDOVER.md`
+and `oag_title::Music::tracks`.
 
 ## Not determined
-
-- **The names.** Entries are keyed by the same name hash as the WAD container
-  and, as there, the names are not stored. `Data\Music\...` is the likely prefix
-  from the PSP's [path templates](vex.md#path-templates), but nothing has been
-  matched.
 - **Whether the game streams these directly.** The PS2 disc carries Sony's
   `SCREAM.IRX` audio module, and how the streaming path is set up - including
   where the 48 kHz comes from at runtime - is a question for the executable,

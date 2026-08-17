@@ -31,6 +31,7 @@ payloads themselves - is what stops `oag-view` drawing a Pure ship today.
 | Handling stats | Same addressing, schema enumerated in full; the absent `<pitch>` is now optional and a labelled stand-in fills it |
 | Collision classes | **All three named**: floor and wall by facing 2026-08-12, and the whole renumbering by [class-name table index](#the-renumbering-is-a-table-index-and-both-executables-carry-the-table) - which also settles reset at `0x37f` |
 | `SBlk` sound bank | **Not present on Pure at all** |
+| [Music](#music-recovered-by-name-and-played) | **Recovered by name and played**: front end and all nineteen soundtrack tracks |
 
 ## Disc layout
 
@@ -623,6 +624,91 @@ What it does **not** have matters as much, and is why `oag-pure`'s
 
 See [front-end menu definitions](fe-menu-definitions.md) and
 [the original's menus](../ui/menus-original.md).
+
+## Music: recovered by name, and played
+
+Pure's front end and its races both have music now, and neither is found by
+guessing at a population: **every path came off the disc.**
+
+### Both halves are in `BOOT.BIN`
+
+`strings` on the unencrypted ELF puts four `.at3` paths in the binary, three of
+them adjacent to `c:/Work/Wipeout/Code/System/Sound/MusicManager.cpp`:
+
+```text
+242b20  MusicManager
+242b30  c:/Work/Wipeout/Code/System/Sound/MusicManager.cpp
+242b64  %s\%s
+242b6c  music.at3
+242b78  Data\Music\frontend.at3
+242b90  SoundManager
+242bd4  Data\Sound\frontend.bnk
+242bec  Data\Sound\hud.bnk
+242c00  Data\Sound\generaltrack.bnk
+```
+
+- **The front end's own music is `Data\Music\frontend.at3`**, a literal. Pulse
+  expands a `Data\Music\FEMusic\frontend%d.at3` template instead, and none of
+  that template's eight expansions hashes to an entry on either Pure pressing -
+  so this is a different shape, not a different spelling.
+- **A soundtrack track is `music.at3` inside a directory**, `%s\%s` supplying
+  the join. The directory comes from the plugin definition below.
+
+The three `Data\Sound\*.bnk` names are present on both pressings and are
+**not** decoded: Pure ships no `SBlk`, and what its banks are is unread.
+Recorded here so the next contributor starts from a name rather than a search.
+
+### The directories are declared, not derived
+
+`Data\Plugins\PI001\Definition.xml` carries a `PI_Music` node per track beside
+its `PI_Track` and `PI_Team` ones, in the same schema
+[`oag_game::catalogue`](../../crates/game/src/catalogue.rs) already reads:
+
+```xml
+<PI_Music name="A Piece Of Music">
+  <Values location="Data\Music\SomeArtist"></Values>
+  <Entry Artist="Some Artist"></Entry>
+  <Entry Label="Some Label"></Entry>
+</PI_Music>
+```
+
+(Shape only - the shipped titles, artists and labels are content and are read at
+run time, never written down here. See
+[ADR-0006](../architecture/adr/0006-no-copyrighted-content.md).)
+
+There are **nineteen** of them to Pulse's sixteen, and joining each `location`
+with `music.at3` resolves to a real `Data.wad` entry **19 of 19 on both
+pressings**. `Artist` and `Label` are parsed past rather than kept: nothing
+displays them yet.
+
+### Why this matters beyond Pure
+
+The order is now the release's own rather than the archive directory's, which
+is what makes "track 0" mean something. Pure's longest track is 326 s against
+205-229 s for the other eighteen, it is *not* first in `Data.wad` offset order,
+and the declaration puts it first - which is the single assertion that
+distinguishes the two orderings, pinned in
+`crates/game/tests/pure_music_ground_truth.rs`.
+
+**Pulse declares its sixteen the same way**, and every one of those resolves
+too. This build still finds Pulse's by what the entries are, because switching
+it over reorders its race playlist and changes which track a PS2 boot's menu
+plays - a separate change with its own evidence to record. See `HANDOVER.md`
+and [`oag_title::Music::tracks`](../../crates/title/src/lib.rs).
+
+Confidence **90**: both path halves are read off the executable, the
+declaration is read off the disc, and every expansion hits on both pressings -
+but nothing has been watched running under an emulator, so which track the
+original's own menus start on is not established.
+
+### Reproducing it
+
+```sh
+just wad cat "data/images/pure-psp-usa.chd:PSP_GAME/USRDIR/Data.wad" \
+    'Data\Plugins\PI001\Definition.xml' | grep -A3 PI_Music
+just wad hash 'Data\Music\frontend.at3'          # -> 1ddc4f8e
+cargo nextest run -p oag-game --test pure_music_ground_truth --run-ignored all
+```
 
 ## Reported elsewhere
 
