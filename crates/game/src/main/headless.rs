@@ -132,6 +132,7 @@ pub(crate) fn run_windowless(
             video_format,
             &capture::Options {
                 give: give_weapon(cli.give.as_deref())?,
+                autopilot: cli.autopilot,
                 path,
                 until: cli.until.clone(),
                 ticks: cli.ticks,
@@ -351,6 +352,7 @@ pub(crate) fn run_race(
             loaded,
             &race::CaptureOptions {
                 give: give_weapon(cli.give.as_deref())?,
+                autopilot: cli.autopilot,
                 path,
                 ticks: cli.ticks,
                 held: button_mask(cli.hold.as_deref()),
@@ -411,6 +413,7 @@ pub(crate) fn run_race(
         boot_overlay: false,
         pick_language: false,
         give,
+        autopilot: cli.autopilot,
         race: Some(loaded),
         race_options: options,
         trace: cli.trace,

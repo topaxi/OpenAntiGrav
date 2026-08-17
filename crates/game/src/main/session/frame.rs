@@ -137,6 +137,28 @@ impl Session {
                 self.controls.buttons_mut().consume_press(button::SELECT);
                 self.cycle_camera_view();
             }
+            // What leaves the results table, and it is the same thing escape
+            // does from a race: hand the window back to the menus, or quit a
+            // `--race` run that never had any. There is nothing else the table
+            // can do - the original's `Race End Proceed` chain, which is where a
+            // photo, a save and the records go, is not built. See
+            // `oag_game::scoreboard`.
+            //
+            // **A rising edge**, so the thrust the player was holding as they
+            // crossed the line cannot dismiss the board they have not read yet.
+            if matches!(&self.stage, Stage::Race(stage) if stage.race.finished())
+                && [button::CROSS, button::START]
+                    .into_iter()
+                    .any(|press| self.controls.buttons().is_pressed(press))
+            {
+                for press in [button::CROSS, button::START] {
+                    self.controls.buttons_mut().consume_press(press);
+                }
+                self.escape();
+                // The remaining steps this frame owed belong to whatever is on
+                // screen now, and it has not been drawn once yet.
+                break;
+            }
             match &mut self.stage {
                 // Stepped in the tick loop with everything else, so the wave's
                 // heartbeat runs at the simulation's fixed 60 Hz rather than at
@@ -222,6 +244,19 @@ impl Session {
                     for event in events {
                         self.handle_menu(&event);
                     }
+                }
+                Stage::Race(stage) if stage.race.finished() => {
+                    // **The race is over, so nothing is stepped.** The world is
+                    // left exactly as the finishing tick left it and the frame
+                    // loop goes on drawing it under the results table, which is
+                    // what makes "the race is complete" a state rather than a
+                    // banner over a race that is still going.
+                    //
+                    // Stopping here rather than inside `Race::tick` is
+                    // deliberate: the tick is what the trace harness, the
+                    // headless capture and the disc-backed AI tests all drive,
+                    // and a tick that quietly became a no-op would change what
+                    // every one of them produces. See `race::results`.
                 }
                 Stage::Race(stage) => {
                     // Outside `Race::tick`, so this cannot reach the hash: it

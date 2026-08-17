@@ -236,6 +236,60 @@ nothing until now.
   and no single race has been watched long enough to read what a Custom Race is
   set to. `Mode::SINGLE_RACE_LAPS`, flagged as a guess where it is defined.
 
+## What happens when a race ends
+
+**The flag is the player's own last crossing.** `RaceState::finished` is set by
+the lap counter when the player wraps past `laps_target`, which is the same rule
+that counts every other lap - so a time trial and a single race both end after
+lap 3, and a speed lap and a Zone run have no target and never end this way. An
+opponent crossing ahead takes a `Standing::finish_tick` and stops being ordered
+by distance; it does not end the event.
+
+Three things happen on that tick, and they are in three layers on purpose:
+
+1. **`oag-race` decides it.** Nothing was changed here - the condition and the
+   ordering (`places`: finishers by when they finished, then racers by distance,
+   then by slot) both predate this.
+2. **`Race::capture_results` takes a snapshot**, once, at the end of that tick.
+   The field is still moving when the player crosses, so a table recomputed a
+   second later would show a different result; the board is fixed at the flag
+   and never revised. `Race::tick` itself is unchanged and goes on stepping if
+   something keeps calling it, which is what keeps the trace harness and the
+   headless capture honest.
+3. **The composition root stops stepping it.** `Session::frame` stops calling
+   `tick` once `Race::finished` answers yes, the HUD is replaced by the results
+   table, and X or escape hands the window back to the menus. That is the same
+   place the camera cycle is handled, and for the same reason: a race that
+   stopped itself inside `tick` would change what every fixed-tick-count caller
+   produces.
+
+**The table is ours and is labelled as one.** The original ends a race in a
+sequence of screens whose names are recovered - `"Race End Photo"`,
+`"Race End Save"`, `"Race End Records"`, `"Race End Proceed"`,
+`"Race End Alone"`, and `"EndRace_Results"` from `Zone_UpdateResults` - and
+**none of them has had its screen, its layout or its transitions read**, so none
+is reproduced. What is drawn instead is a plain list of positions in the built-in
+grid, the same kind of stand-in [our own menus](../ui/menus-original.md) are.
+See `crates/game/src/scoreboard.rs`, which carries the argument and what would
+retire it. A row names its grid slot rather than a team, because the team a slot
+flies is an id held by the renderer's liveries and is not reachable from the race.
+
+**Reaching the end without driving:** `--autopilot` flies the player's craft with
+an opponent's driver. A verification aid, not a mode - the flag falls on the
+player's crossing, so nothing that holds the throttle in a straight line ever
+gets there, and without it no test could assert on a finished race and no
+screenshot could show one:
+
+```sh
+cargo run -p oag-game -- --race --mode single_race --autopilot \
+    --ticks 9000 --screenshot /tmp/scoreboard.png <image>
+```
+
+The capture stops on the tick the race ends and says so, so a `--ticks` past the
+flag lands on the board rather than overshooting it. Measured on
+`pulse-psp-usa.chd`, default circuit, Venom, elite AI: the race ends around tick
+7,500, a little over two minutes.
+
 ## What no mode has yet
 
 A countdown. `ReadyText`, `GoText`, `CountdownTime` and the `<Mode3D>` models all

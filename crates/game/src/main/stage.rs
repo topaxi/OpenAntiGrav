@@ -193,6 +193,10 @@ impl Stage {
         // because `--anisotropy` *can* override it.
         settings: &settings::Settings,
         scheme: ControlScheme,
+        // `--autopilot`, its own parameter for the same reason `anisotropy` is:
+        // it is a run flag rather than a stored preference, and nothing in the
+        // settings file has any business turning it on.
+        autopilot: bool,
     ) -> Result<Self> {
         let race::Loaded {
             setup,
@@ -235,6 +239,15 @@ impl Stage {
         // the HUD is composited into the offscreen target which shares it.
         let overlay = oag_game::hud::Overlay::new(&gpu.device, &gpu.queue, gpu.config.format, &hud)
             .context("building the HUD overlay")?;
+        // The results table, built from the same assets and drawn into the same
+        // target - see `oag_game::scoreboard`, which is where the "this is ours,
+        // the disc's own Race End chain is not built" argument lives. Built with
+        // the race rather than when it ends: a load is the one moment a stage may
+        // stall, and doing it at the finish would drop frames on the lap the
+        // player is most likely to be watching.
+        let scoreboard =
+            oag_game::scoreboard::Overlay::new(&gpu.device, &gpu.queue, gpu.config.format, &hud)
+                .context("building the scoreboard overlay")?;
         let mut race = race::Race::start(setup);
         race.set_boost_fov_kick(settings.graphics.boost_fov_kick);
         // Applied before the first tick, but unlike the kick this one is also
@@ -242,10 +255,15 @@ impl Stage {
         // `Session::cycle_camera_view`.
         race.set_camera_view(settings.graphics.camera_view);
         race.set_control_scheme(scheme);
+        race.set_autopilot(autopilot);
+        if autopilot {
+            println!("--autopilot: the player's craft is being flown for them");
+        }
         Ok(Self::Race(Box::new(RaceStage {
             scene,
             race,
             hud: overlay,
+            scoreboard,
         })))
     }
 }

@@ -386,6 +386,24 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) opponents: bool,
 
+    /// Let an opponent's driver fly the player's craft.
+    ///
+    /// A verification aid - see `race::Race::set_autopilot` - and the only way
+    /// to reach the **end** of a race without a human at the keyboard for four
+    /// minutes: a race finishes when the player crosses the line for the last
+    /// time, so nothing that holds the throttle in a straight line ever gets
+    /// there. It is what makes a screenshot of the results table possible:
+    ///
+    /// ```sh
+    /// cargo run -p oag-game -- --race --mode single_race --autopilot \
+    ///     --ticks 8000 --screenshot /tmp/scoreboard.png
+    /// ```
+    ///
+    /// The capture stops on the tick the race ends, so a `--ticks` past the
+    /// flag lands on the board rather than overshooting it.
+    #[arg(long)]
+    pub(crate) autopilot: bool,
+
     /// Seed the world generator, instead of `race::SEED`.
     ///
     /// A verification aid - see `race::Options::seed`. The one thing in a race

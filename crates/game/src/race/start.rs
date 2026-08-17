@@ -249,6 +249,8 @@ impl Race {
             // if any - is always read as a fresh impact.
             sparks_cooldown: 0.0,
             sparks_anchor: None,
+            autopilot: false,
+            results: None,
             // Every pad starts due for a real test. `Pad_Bind` zeroes the same
             // cache at load, so the first tick measures rather than trusting a
             // distance nothing has computed yet.

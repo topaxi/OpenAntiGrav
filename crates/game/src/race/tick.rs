@@ -12,7 +12,16 @@ impl Race {
     /// The snapshot is mapped through [`oag_gameplay::ship_controls`], which is the
     /// one place "cross is thrust" is written down.
     pub fn tick(&mut self, snapshot: &InputSnapshot) -> Evaluated {
-        let controls = ship_controls(snapshot, self.scheme);
+        // Under autopilot the snapshot is not consulted at all - see
+        // [`Race::set_autopilot`], which is a verification aid and not a mode.
+        // Before `spend_pickup`, which still reads the snapshot: an autopiloted
+        // craft is steered for and fires nothing, because nothing picks a target
+        // for anybody yet.
+        let controls = if self.autopilot {
+            self.autopilot_controls()
+        } else {
+            ship_controls(snapshot, self.scheme)
+        };
 
         // Before the force law, so a Turbo fired this tick boosts this tick.
         self.spend_pickup(snapshot);
@@ -193,6 +202,13 @@ impl Race {
         // counted a second time - see `Ship::standing`. Outside the borrow above
         // rather than inside it because this walks the whole ship array.
         self.update_standings();
+
+        // **After the standings**, so the last crossing is in the table this
+        // reads, and a no-op on every tick but the one the race ends on. It
+        // takes a snapshot and touches no simulation state, which is what lets
+        // it sit inside the tick without moving a hash - see
+        // [`Race::capture_results`].
+        self.capture_results();
 
         let target = target_of(&self.world.ships[0]);
         self.camera.advance(target, &self.chase_params, self.dt);

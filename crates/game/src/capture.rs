@@ -57,6 +57,9 @@ pub struct Options {
     /// `--give`: keep the player's pickup slot topped up. See
     /// `race::CaptureOptions::give`.
     pub give: Option<oag_formats::weapons::Weapon>,
+    /// `--autopilot`: fly the race this hands off to with an opponent's
+    /// driver. See `race::CaptureOptions::autopilot`.
+    pub autopilot: bool,
     /// Image size.
     pub size: (u32, u32),
     /// Render one named screen straight out of the XML and stop.
@@ -457,6 +460,7 @@ pub fn run(
                 held: options.held,
                 pressed: options.pressed,
                 input_script: None,
+                autopilot: options.autopilot,
                 scheme: options.scheme,
                 size: (width, height),
                 log_every: options.log_every,
