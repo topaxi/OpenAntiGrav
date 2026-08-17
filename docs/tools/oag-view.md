@@ -13,9 +13,46 @@ oag-view <archive> --names data/extracted/psp/all.names
 ```
 
 Left and right arrows change asset, Escape quits. With `--mesh`, `--track` or
-`--collision` the window shows one model instead, and arrow keys orbit the
-camera; see [Models](#models). The disc image is opened read-only and nothing is
-written.
+`--collision` the window shows one model instead, under the
+[orbit camera](#moving-the-camera); see [Models](#models). The disc image is
+opened read-only and nothing is written.
+
+## Moving the camera
+
+| | |
+| --- | --- |
+| Drag left mouse | rotate |
+| Drag right or middle mouse | pan |
+| Wheel | zoom |
+| Arrow keys | rotate |
+| `W` `A` `S` `D` | pan |
+| `+` / `-`, or PageUp / PageDown | zoom |
+| `R` | recentre |
+| Escape | quit |
+
+**Panning is the one worth knowing about.** The camera orbits the model's own
+bounding-sphere centre, which frames a ship perfectly and is useless on a
+circuit: Talon's Junction spans 2,370 units, so its centre is a point in mid-air
+over the infield and every corner is a long way from it. Panning moves the
+look-at point, so a corner can be brought into the middle of the frame and then
+looked at from any angle.
+
+Two properties it is built to have, both pinned by tests in
+`oag_render::camera::orbit` and `oag_render::mesh_render::uniforms`:
+
+- **The drag holds the model, not the camera.** Drag right and the model goes
+  right, which means the camera goes left. Getting that backwards is the classic
+  orbit-viewer bug and it is invisible in a screenshot.
+- **Rotating after panning keeps the point you panned to.** The pan is stored as
+  a 3-D offset rather than as the two screen-plane numbers that produced it, so
+  turning swings the eye *around* that point instead of dragging it along.
+
+Panning is measured in bounding-sphere radii rather than world units, so the
+same gesture covers the same fraction of a 13-unit ship and a 2,370-unit
+circuit, and it is clamped to three radii - far enough to reach past any corner,
+near enough that `R` is rarely needed. `--screenshot` does not pan: it frames
+the whole model from its centre, because there is no cursor in an offscreen
+render.
 
 The 3D renderer itself is no longer part of this tool. The mesh loader, the wgpu
 pipeline and its shader, the track-ribbon builder, the offscreen capture and the

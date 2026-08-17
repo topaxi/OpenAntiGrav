@@ -19,6 +19,7 @@
 //! picture rather than a black or garbage target. This is the only place that
 //! runs the resolve at all.
 
+use oag_render::camera::orbit::Orbit;
 use oag_render::mesh::{Bounds, DrawCall, GpuVertex, Model};
 use oag_render::mesh_render::{self, Anisotropy, UNIFORMS_SIZE, write_uniforms};
 
@@ -134,7 +135,7 @@ fn render_and_resolve(
             resource: uniform_buffer.as_entire_binding(),
         }],
     });
-    write_uniforms(queue, &uniform_buffer, model, 1.0, 0.0, 0.0, 1.0);
+    write_uniforms(queue, &uniform_buffer, model, 1.0, Orbit::default());
 
     let resolve_target = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("msaa_resolve target"),

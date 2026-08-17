@@ -5,81 +5,13 @@
 //! reproduce Pulse's look.
 
 use anyhow::Result;
-use oag_core::math::{Mat4, Vec3, camera};
 
 use crate::mesh::{GpuVertex, Model};
 
-#[repr(C)]
-#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
-struct Uniforms {
-    view_projection: [[f32; 4]; 4],
-    model: [[f32; 4]; 4],
-    /// Unused. Was the phase of a global texture-animation clock; the authored
-    /// per-material keyframe blocks in [`TexAnims`] replaced it. Kept as
-    /// padding because this layout is mirrored by `mesh.wgsl`, by four other
-    /// pipelines in this crate and by the asset viewer's own buffer sizing.
-    _unused: f32,
-    _pad0: f32,
-    _pad1: f32,
-    _pad2: f32,
-}
+mod uniforms;
 
-/// Builds the camera and model matrices for a given orbit angle.
-///
-/// The model is framed from its own bounding sphere, so any model fills the
-/// view regardless of the scale baked into the file. That also means a wrong
-/// scale looks *right* here, so this is not a check on the scale factor; the
-/// bounding-box assertion in `oag-formats` is.
-///
-/// `zoom` scales the orbit distance; 1.0 is the default framing described above.
-fn matrices(model: &Model, aspect: f32, yaw: f32, pitch: f32, zoom: f32) -> Uniforms {
-    let distance = model.radius * 3.0 * zoom;
-    let eye = Vec3::new(
-        distance * yaw.cos() * pitch.cos(),
-        distance * pitch.sin(),
-        distance * yaw.sin() * pitch.cos(),
-    );
-
-    let projection = camera::perspective(45f32.to_radians(), aspect, 0.01, distance * 10.0);
-    let view = camera::look_at(eye, Vec3::ZERO, Vec3::Y);
-    let centre = Vec3::from_array(model.centre);
-
-    Uniforms {
-        view_projection: (projection * view).to_cols_array_2d(),
-        model: Mat4::from_translation(-centre).to_cols_array_2d(),
-        _unused: 0.0,
-        _pad0: 0.0,
-        _pad1: 0.0,
-        _pad2: 0.0,
-    }
-}
-
-/// The depth format `build`'s pipeline is fixed to; a caller's own depth
-/// texture must match it.
-pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
-
-/// Recomputes the camera and model matrices and uploads them to `buffer`.
-///
-/// Returns the view-projection matrix it just wrote, so a caller can build a
-/// [`oag_core::math::frustum::Frustum`] from the same camera without
-/// recomputing it.
-#[allow(clippy::too_many_arguments)]
-pub fn write_uniforms(
-    queue: &wgpu::Queue,
-    buffer: &wgpu::Buffer,
-    model: &Model,
-    aspect: f32,
-    yaw: f32,
-    pitch: f32,
-    zoom: f32,
-) -> Mat4 {
-    let uniforms = matrices(model, aspect, yaw, pitch, zoom);
-    queue.write_buffer(buffer, 0, bytemuck::bytes_of(&uniforms));
-    Mat4::from_cols_array_2d(&uniforms.view_projection)
-}
-
-/// Size, in bytes, of the uniform buffer `write_uniforms` expects.
-pub const UNIFORMS_SIZE: u64 = std::mem::size_of::<Uniforms>() as u64;
+use uniforms::Uniforms;
+pub use uniforms::{DEPTH_FORMAT, UNIFORMS_SIZE, write_uniforms};
 
 /// The fog block `mesh.wgsl` reads from bind group 2.
 ///

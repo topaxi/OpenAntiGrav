@@ -131,7 +131,6 @@ BASELINE = {
     "crates/physics/tests/ship_dynamics.rs": 1366,
     "crates/trace/src/trace.rs": 1300,
     "crates/game/src/display.rs": 1295,
-    "crates/render/src/mesh_render.rs": 1015,
     "crates/render/src/mesh.rs": 1130,
     "crates/formats/tests/audio_ground_truth.rs": 1226,
     "crates/view/src/main.rs": 1170,

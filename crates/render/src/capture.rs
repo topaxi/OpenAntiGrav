@@ -9,6 +9,7 @@
 use anyhow::{Context, Result};
 use std::path::Path;
 
+use crate::camera::orbit::Orbit;
 use crate::mesh::Model;
 use crate::mesh_render::{
     Anisotropy, Built, DEPTH_FORMAT, Depth, GlowMask, TRANSPARENT_BLEND, TexAnims, UNIFORMS_SIZE,
@@ -146,9 +147,13 @@ pub fn capture_pixels_from(
         &uniform_buffer,
         model,
         width as f32 / height as f32,
-        yaw,
-        pitch,
-        1.0,
+        // The capture path frames the whole model from its centre; panning is
+        // an interactive affordance and there is no cursor here.
+        Orbit {
+            yaw,
+            pitch,
+            ..Orbit::default()
+        },
     );
 
     queue.write_buffer(

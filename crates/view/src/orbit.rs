@@ -16,19 +16,56 @@ use std::time::Instant;
 use anyhow::{Context, Result};
 
 use winit::application::ApplicationHandler;
-use winit::event::{ElementState, WindowEvent};
+use winit::event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::keyboard::{Key, NamedKey};
 use winit::window::{Window, WindowId};
 
-use oag_render::camera::orbit::{Held, Orbit, PITCH_LIMIT, advance};
+use oag_render::camera::orbit::{Held, Orbit, PITCH_LIMIT, ZOOM_RANGE, advance};
 use oag_render::mesh::Model;
 use oag_render::mesh_render::{self, Anisotropy, DEPTH_FORMAT, UNIFORMS_SIZE};
 
-/// Opens a window and orbits `model` under keyboard control until closed.
+/// What a drag of one window height turns the camera through, in radians.
 ///
-/// Left/Right rotate, Up/Down pitch, `+`/`-` (or PageUp/PageDown) zoom, Escape
-/// quits.
+/// A screen-relative rate rather than a per-pixel one, so the same gesture
+/// covers the same arc whatever the window is: dragging the full height sweeps
+/// most of a half-turn.
+const DRAG_ROTATE: f32 = 2.5;
+
+/// What a drag of one window height pans, in bounding-sphere radii.
+///
+/// Chosen so the model tracks the cursor roughly one-for-one at the default
+/// framing, which is the only thing that makes a pan drag feel like dragging
+/// rather than like nudging.
+const DRAG_PAN: f32 = 1.6;
+
+/// What one wheel notch does to the zoom multiplier.
+const WHEEL_ZOOM: f32 = 0.1;
+
+/// Pixels per wheel notch, for the trackpads that report a pixel delta rather
+/// than a line count.
+const PIXELS_PER_NOTCH: f32 = 40.0;
+
+/// Which mouse button is dragging, and where the cursor was last seen.
+#[derive(Debug, Default)]
+struct Drag {
+    /// The camera turns while the left button is down.
+    rotating: bool,
+    /// The look-at point moves while the right or middle button is down.
+    panning: bool,
+    /// The previous cursor position, so a move is a delta. `None` until the
+    /// first move of a drag, because the position at button-down is not
+    /// reported with the button.
+    last: Option<(f32, f32)>,
+}
+
+/// Opens a window and orbits `model` under keyboard and mouse control until
+/// closed.
+///
+/// Keys: Left/Right rotate, Up/Down pitch, `W`/`A`/`S`/`D` pan, `+`/`-` (or
+/// PageUp/PageDown) zoom, `R` recentres, Escape quits.
+///
+/// Mouse: drag left to rotate, drag right or middle to pan, wheel to zoom.
 pub fn run(model: Model, yaw: f32, pitch: f32, anisotropy: Anisotropy) -> Result<()> {
     let event_loop = EventLoop::new()?;
     // Poll rather than Wait: the camera moves continuously while a key is held.
@@ -39,7 +76,7 @@ pub fn run(model: Model, yaw: f32, pitch: f32, anisotropy: Anisotropy) -> Result
         orbit: Orbit {
             yaw,
             pitch: pitch.clamp(-PITCH_LIMIT, PITCH_LIMIT),
-            zoom: 1.0,
+            ..Orbit::default()
         },
         anisotropy,
         state: None,
@@ -83,6 +120,22 @@ impl ApplicationHandler for App {
             WindowEvent::CloseRequested => event_loop.exit(),
 
             WindowEvent::Resized(size) => session.resize(size.width, size.height),
+
+            WindowEvent::MouseInput { button, state, .. } => {
+                session.button(button, state == ElementState::Pressed);
+            }
+
+            WindowEvent::CursorMoved { position, .. } => {
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    reason = "a cursor position in a window fits an f32 exactly"
+                )]
+                session.cursor(position.x as f32, position.y as f32);
+            }
+
+            WindowEvent::CursorLeft { .. } => session.drag_ended(),
+
+            WindowEvent::MouseWheel { delta, .. } => session.wheel(delta),
 
             WindowEvent::KeyboardInput { event, .. } => {
                 if event.logical_key == Key::Named(NamedKey::Escape)
@@ -140,6 +193,8 @@ struct Session {
     model: Model,
     orbit: Orbit,
     held: Held,
+    /// Which mouse button is dragging, and from where.
+    drag: Drag,
     last: Instant,
     /// When this session opened, driving the texture animation.
     ///
@@ -267,6 +322,7 @@ impl Session {
             model,
             orbit,
             held: Held::default(),
+            drag: Drag::default(),
             last: Instant::now(),
             opened: Instant::now(),
         })
@@ -290,13 +346,85 @@ impl Session {
             Key::Named(NamedKey::ArrowDown) => self.held.pitch_neg = down,
             Key::Named(NamedKey::PageUp) => self.held.zoom_in = down,
             Key::Named(NamedKey::PageDown) => self.held.zoom_out = down,
-            Key::Character(c) => match c.as_str() {
+            Key::Character(c) => match c.to_ascii_lowercase().as_str() {
                 "+" | "=" => self.held.zoom_in = down,
                 "-" | "_" => self.held.zoom_out = down,
+                // Panning on WASD rather than on more arrows: the arrows are
+                // taken, and a viewer that opens a 2,370-unit circuit needs to
+                // reach a corner of it without leaving the keyboard.
+                "a" => self.held.pan_left = down,
+                "d" => self.held.pan_right = down,
+                "w" => self.held.pan_up = down,
+                "s" => self.held.pan_down = down,
+                // A way back. Without one a pan far enough to lose the model
+                // leaves nothing on screen to steer by.
+                "r" if down => self.orbit = self.orbit.recentred(),
                 _ => {}
             },
             _ => {}
         }
+    }
+
+    fn button(&mut self, button: MouseButton, down: bool) {
+        match button {
+            MouseButton::Left => self.drag.rotating = down,
+            MouseButton::Right | MouseButton::Middle => self.drag.panning = down,
+            _ => return,
+        }
+        if !(self.drag.rotating || self.drag.panning) {
+            self.drag_ended();
+        }
+    }
+
+    /// Ends any drag in progress, so the next one starts from its own first
+    /// move rather than from wherever the cursor was last seen.
+    fn drag_ended(&mut self) {
+        self.drag = Drag::default();
+    }
+
+    fn cursor(&mut self, x: f32, y: f32) {
+        let previous = self.drag.last.replace((x, y));
+        if !(self.drag.rotating || self.drag.panning) {
+            return;
+        }
+        let Some((px, py)) = previous else {
+            // The first move of a drag has no delta to take; it establishes the
+            // origin the next one is measured from.
+            return;
+        };
+
+        // Both deltas are in window heights, so a gesture means the same thing
+        // whatever the window is - and using the *height* for both keeps a
+        // diagonal drag diagonal instead of skewing with the aspect ratio.
+        let height = self.config.height.max(1) as f32;
+        let (dx, dy) = ((x - px) / height, (y - py) / height);
+
+        if self.drag.rotating {
+            // Dragging right turns the model right, which means moving the eye
+            // the other way. Dragging down pitches the camera up, for the same
+            // reason: the cursor holds the model, not the camera.
+            self.orbit.yaw -= dx * DRAG_ROTATE;
+            self.orbit.pitch =
+                (self.orbit.pitch + dy * DRAG_ROTATE).clamp(-PITCH_LIMIT, PITCH_LIMIT);
+        }
+        if self.drag.panning {
+            // Same convention: the point under the cursor comes with it, so the
+            // look-at point moves opposite the drag.
+            self.orbit = self.orbit.panned(-dx * DRAG_PAN, dy * DRAG_PAN);
+        }
+    }
+
+    fn wheel(&mut self, delta: MouseScrollDelta) {
+        let notches = match delta {
+            MouseScrollDelta::LineDelta(_, y) => y,
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "a scroll delta in pixels is far inside f32"
+            )]
+            MouseScrollDelta::PixelDelta(p) => p.y as f32 / PIXELS_PER_NOTCH,
+        };
+        self.orbit.zoom =
+            (self.orbit.zoom - notches * WHEEL_ZOOM).clamp(*ZOOM_RANGE.start(), *ZOOM_RANGE.end());
     }
 
     fn frame(&mut self) -> Result<()> {
@@ -319,9 +447,7 @@ impl Session {
             &self.uniform_buffer,
             &self.model,
             aspect,
-            self.orbit.yaw,
-            self.orbit.pitch,
-            self.orbit.zoom,
+            self.orbit,
         );
 
         let frame = match self.surface.get_current_texture() {
