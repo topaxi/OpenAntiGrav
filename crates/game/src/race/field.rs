@@ -34,10 +34,11 @@ impl Race {
     /// assert on a finished race, and no `--screenshot` could show one.
     ///
     /// It replaces the mapped input snapshot outright rather than blending with
-    /// it, so a run under autopilot is a run nobody is steering. What it does
-    /// **not** get is the off-circuit rescue the opponents have
-    /// (`Self::lost_off_the_circuit` is opponent-only) - so an autopiloted
-    /// player that leaves the geometry stays lost, exactly as a human one does.
+    /// it, so a run under autopilot is a run nobody is steering. It is flown with
+    /// the *player's* recovery - [`Self::lost_off_the_track`], not the opponents'
+    /// [`Self::lost_off_the_circuit`] - because it is still slot 0 going through
+    /// [`Self::tick`]. That is the same net a human gets, which is what makes a
+    /// measurement taken under it mean anything about a hand-driven lap.
     ///
     /// **Not the Autopilot pickup**, and the distinction is worth keeping.
     /// `Ai_Construct` names the local player's input source the literal

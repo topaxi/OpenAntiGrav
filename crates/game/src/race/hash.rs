@@ -85,6 +85,10 @@ impl Race {
         for dwell in self.stalled_ticks {
             hasher.write_u32(dwell);
         }
+        // Not a dwell but the same argument: this is *where* the player's next
+        // recovery puts them, so two machines that disagree on it produce
+        // different races the moment one is needed. See [`Race::last_on_track`].
+        hasher.write_u32(self.last_on_track);
 
         hasher.finish()
     }

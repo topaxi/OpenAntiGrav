@@ -87,6 +87,54 @@ impl Race {
             && self.stalled_ticks[slot] >= STALL_TICKS
     }
 
+    /// Whether the **player** has been off the track for long enough to be put
+    /// back.
+    ///
+    /// `distance` is the player's distance to the nearest spline sample, measured
+    /// where the tick already measures it - `None` on a track with no samples,
+    /// which is a track this cannot recover anybody onto.
+    ///
+    /// # Why the player needs a trigger of their own
+    ///
+    /// The authored `Reset` volumes catch a craft that falls *through* the floor.
+    /// They do not catch one that leaves the circuit sideways into open space -
+    /// [`RESCUE_HALF_WIDTHS`] records the measurement, and the player reaches that
+    /// state the same way an opponent does: `docs/gameplay/ai.md` has a
+    /// hand-driven lap of `06_Track` going through the same drop the AI does,
+    /// with no AI involved. Measured again for this: an autopiloted craft on
+    /// `05_Track` left at tick 591 and was 7,983 units away by the end of the run.
+    ///
+    /// [`Self::lost_off_the_circuit`] cannot be reused for it. That one asks
+    /// whether the craft and *its driver's* idea of where it is have come apart,
+    /// and slot 0 has no driver unless `Self::set_autopilot` is on - its
+    /// `driver.index` would sit wherever it was left, which is sample zero on an
+    /// ordinary race.
+    ///
+    /// **The stall rescue is deliberately not extended to the player.** Being
+    /// teleported off a wall one is scraping along, while holding the throttle, is
+    /// a thing done *to* a player rather than for them; a human who is wedged can
+    /// see it and back off, which is exactly what an opponent cannot do.
+    ///
+    /// Advances the dwell counter as a side effect, so it must be called once per
+    /// tick and not conditionally, for the reason [`Self::lost_off_the_circuit`]
+    /// gives.
+    pub(super) fn lost_off_the_track(&mut self, distance: Option<f32>) -> bool {
+        let away = distance.is_some_and(|distance| distance > self.player_rescue_distance);
+        self.lost_ticks[0] = if away {
+            self.lost_ticks[0].saturating_add(1)
+        } else {
+            0
+        };
+        // A circuit that authors no width at all states no scale for "off the
+        // track", so it gets no threshold rather than one at zero. The same
+        // shape as the racing-line emptiness guard next door, and applied after
+        // the counter for the same reason.
+        self.player_rescue_distance > 0.0
+            && !self.respawn_disabled[0]
+            && self.respawn_cooldown[0] == 0
+            && self.lost_ticks[0] >= PLAYER_RESCUE_TICKS
+    }
+
     /// Whether this tick ended in contact with `Reset` geometry.
     ///
     /// Suppressed while the cooldown runs and once respawning has given up, so

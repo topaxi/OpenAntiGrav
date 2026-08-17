@@ -540,12 +540,14 @@ pub struct Race {
     /// How many times each craft has been respawned this race, for tests and
     /// for the load report.
     respawns: [u32; oag_gameplay::MAX_SHIPS],
-    /// How many consecutive ticks each opponent has spent away from the sample
-    /// its driver believes it is on. See [`RESCUE_TICKS`].
+    /// How many consecutive ticks each craft has spent away from the track.
     ///
-    /// Slot 0's entry is never written: the player is recovered by the authored
-    /// reset volumes and by their own hands, and teleporting a craft somebody is
-    /// flying is a much bigger decision than teleporting one nobody can see.
+    /// **The two halves of the grid measure "away" differently and share this
+    /// counter.** An opponent's distance is to the sample its own driver believes
+    /// it is on, over [`RESCUE_TICKS`]; the player's is the true distance to the
+    /// nearest spline sample, over [`PLAYER_RESCUE_TICKS`]. Nobody steers the player's
+    /// craft for them, so there is no believed index to compare against - see
+    /// [`Self::lost_off_the_track`].
     lost_ticks: [u32; oag_gameplay::MAX_SHIPS],
     /// How many consecutive ticks each opponent has spent stopped while asking to
     /// move. See [`STALL_TICKS`].
@@ -559,6 +561,28 @@ pub struct Race {
     /// circuit's widest half-width rather than folded over the sample table
     /// every tick.
     rescue_distance: f32,
+    /// [`PLAYER_RESCUE_HALF_WIDTHS`] in track units, resolved once the same way
+    /// [`Self::rescue_distance`] is.
+    ///
+    /// Zero on a track whose samples author no width at all, which switches the
+    /// player's rescue off rather than making every position "off the track":
+    /// the threshold is a scale read from the circuit, and a circuit that states
+    /// no scale has not stated one.
+    player_rescue_distance: f32,
+    /// The last spline sample the player was within [`Self::player_rescue_distance`]
+    /// of, and therefore where [`Self::respawn`] puts them back.
+    ///
+    /// **Latched rather than reconstructed at the respawn.** By the time the
+    /// dwell expires the craft is hundreds of units below the circuit, where the
+    /// nearest sample can belong to a different part of it - recovering there
+    /// would silently teleport the player across the lap counter.
+    /// `docs/gameplay/ai.md` records the same trap on the opponents' side under
+    /// "the rescue index, reconstructed backwards".
+    ///
+    /// Seeded at [`Self::start`] from where the craft is placed, not at zero, for
+    /// the reason `Self::set_autopilot` gives about `Driver::index`: on a circuit
+    /// whose grid sits at sample 2,791, zero is a different piece of track.
+    last_on_track: u32,
     /// Each craft's exhaust animation state, advanced on the simulation tick.
     ///
     /// **One per racer, slot 0 the player's**, because the original runs
@@ -836,6 +860,69 @@ pub const RESCUE_HALF_WIDTHS: f32 = 8.0;
 /// airborne over a gap is briefly indistinguishable from gone, and the two are
 /// told apart by whether the craft comes back.
 pub const RESCUE_TICKS: u32 = 90;
+
+/// How far the *player* may get from the nearest spline sample before they count
+/// as off the track, in multiples of the circuit's widest half-width.
+///
+/// # Not [`RESCUE_HALF_WIDTHS`], and the numbers differ because the measurements do
+///
+/// That constant measures an opponent against the sample its own driver *believes*
+/// it is on, which inflates from along-track drift as well as from leaving, so it
+/// has to be loose. Nobody steers the player's craft, so this measures the true
+/// distance to the nearest sample - a much tighter quantity, and a much smaller
+/// multiple.
+///
+/// **Measured before it was chosen**, one autopiloted craft alone on ten of the
+/// disc's circuits at ace, 6,000 ticks each, recording the peak distance of every
+/// excursion the craft *came back* from:
+///
+/// | circuit | widest half-width | peak returned from |
+/// | --- | --- | --- |
+/// | 07 | 49.1 | 33.7 (**0.69x**) |
+/// | 01 | 33.2 | 24.7 (0.74x) |
+/// | 16 | 57.0 | 26.0 (0.46x) |
+/// | 06 | 70.3 | 24.3 (0.35x) |
+/// | 14 | 73.3 | 22.8 (0.31x) |
+/// | 04 | 61.6 | 20.9 (0.34x) |
+/// | 03, 09, 13 | 79.0, 51.8, 70.0 | never left at all |
+///
+/// **No healthy craft reached three quarters of one half-width**, jumps included:
+/// a circuit's racing line runs *through* its authored jump, so a craft in the air
+/// over one is near the spline rather than far from it - 13, the circuit with the
+/// jump, peaks at 13.7 units. Two half-widths is therefore between 2.7x and 5.8x
+/// the worst healthy excursion, on every circuit measured.
+///
+/// The failure this exists for is in the same measurement: on `05_Track` the craft
+/// passed 20 units at tick 591 and never came back, reaching **7,983 units** with
+/// nothing to recover it. It took 91 ticks to go from one half-width out to four,
+/// so a craft crossing this threshold is already committed to leaving rather than
+/// passing through it.
+///
+/// **And the authored `Reset` volumes cannot be the answer**, which was assumed
+/// rather than checked until this landed: `06_Track`, `14_Track` and `16_Track` -
+/// including the default circuit, and including the one the failure was reported
+/// on - author **no `Reset` geometry at all**, in either direction. See
+/// `crates/game/tests/off_track_rescue_ground_truth.rs`.
+///
+/// It also sits just inside the one number in this crate that already means "too
+/// far off the spline to be trusted": `visibility::OFF_TRACK_HALF_WIDTHS`, three
+/// half-widths, past which the culling stops believing the craft's own section id.
+/// A craft this recovers was already somewhere the partition was not drawn around.
+///
+/// Ours, not the original's, exactly as [`RESCUE_HALF_WIDTHS`] is.
+pub const PLAYER_RESCUE_HALF_WIDTHS: f32 = 2.0;
+
+/// How long the player has to stay that far out before they are put back.
+///
+/// Three quarters of a second at 60 Hz, and **half [`RESCUE_TICKS`] because the
+/// measurement behind it is direct**: the opponents' dwell absorbs the noise in a
+/// believed index, and there is no believed index here. What it still buys is the
+/// tick or two either side of a hard landing where a craft is momentarily far from
+/// the sample table and about to be near it again.
+///
+/// It is also the whole latency budget the player feels: a craft that leaves is
+/// falling, and every tick of dwell is a tick further down before the recovery.
+pub const PLAYER_RESCUE_TICKS: u32 = 45;
 
 /// How slowly a craft has to be moving to count as stopped, in units per second.
 ///

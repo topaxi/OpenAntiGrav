@@ -211,6 +211,22 @@ fn pad_at(at: Vec3, half: f32) -> oag_formats::pads::PadVolume {
     }
 }
 
+/// Switches the player's off-track rescue off for a fixture that drives.
+///
+/// **The synthetic straight is 70 units long.** Any fixture whose ship holds the
+/// throttle down for more than a second leaves the far end of the sample table,
+/// and [`Race::lost_off_the_track`] reads that - correctly - as a craft off the
+/// track and puts it back, resetting the timers the test was measuring. A real
+/// circuit's table closes on itself, so travelling forward never increases the
+/// distance to it: this is a property of the fixture, not of the trigger.
+///
+/// Applied to the fixtures that drive rather than to `setup`, so a test *about*
+/// the rescue still gets one - see `race/tests/respawn.rs`.
+fn without_player_rescue(mut race: Race) -> Race {
+    race.player_rescue_distance = f32::INFINITY;
+    race
+}
+
 /// A race whose ship is inside a pad from its first tick, and one that is
 /// nowhere near one, so a test can difference them.
 fn race_with_pads(mode: Mode, pads: Vec<oag_formats::pads::PadVolume>) -> Race {
@@ -226,7 +242,7 @@ fn race_with_pads(mode: Mode, pads: Vec<oag_formats::pads::PadVolume>) -> Race {
     let mut setup = setup(handling);
     setup.mode = mode;
     setup.speedup_pads = pads;
-    Race::start(setup)
+    without_player_rescue(Race::start(setup))
 }
 
 /// A pad big enough to hold the ship wherever `spawn_pose` puts it, so the
@@ -247,7 +263,7 @@ pub(super) fn race_with_a_grid() -> Race {
         up: [0.0, 1.0, 0.0],
         forward: [1.0, 0.0, 0.0],
     });
-    Race::start(setup)
+    without_player_rescue(Race::start(setup))
 }
 
 /// A weapon table with one Turbo in it, weighted for a human.
@@ -339,7 +355,7 @@ fn race_with_weapon_table(
     setup.weapon_pads = pads;
     setup.weapons = Some(table);
     setup.weapon_pad_refresh = refresh;
-    Race::start(setup)
+    without_player_rescue(Race::start(setup))
 }
 
 /// The Rocket's own fixture. Invented numbers, all distinct, and the four

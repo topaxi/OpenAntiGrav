@@ -35,6 +35,12 @@ impl Race {
             .spline
             .nearest(self.world.ships[0].physics.body.position);
         let index = nearest.map(|(index, _, _)| index);
+        // The same scan, read a third way: how far off the sample table the craft
+        // is, which is the player's own off-track trigger below. Taken from here
+        // rather than scanned again after the step - the table is ~3,400 samples
+        // and a second fold would double the tick's hottest loop to move a
+        // measurement one tick, under a dwell of [`PLAYER_RESCUE_TICKS`].
+        let spline_distance = nearest.map(|(_, _, distance)| distance);
         let track_sample = nearest.map(|(_, sample, _)| Spline::track_sample(sample));
         // The neighbour is the next entry in table order, which at the end of a
         // path is the *next path's* first sample rather than the geometric
@@ -49,6 +55,15 @@ impl Race {
         let track_sample_next = index
             .and_then(|index| self.spline.sample(index + 1))
             .map(Spline::track_sample);
+
+        // **Latched on the distance itself**, not on the counters below, so where
+        // the craft is put back cannot depend on the order the two are updated
+        // in. See [`Race::last_on_track`].
+        if let (Some(index), Some(distance)) = (index, spline_distance)
+            && distance <= self.player_rescue_distance
+        {
+            self.last_on_track = u32::try_from(index).unwrap_or(u32::MAX);
+        }
 
         if let Some(index) = index {
             // An index into this module's own sample table, which is *not* what
@@ -133,10 +148,16 @@ impl Race {
         self.stage.advance(self.dt, &mut self.stage_rng);
 
         self.respawn_cooldown[0] = self.respawn_cooldown[0].saturating_sub(1);
-        if self.reset_zone_touched(0, &env, before) {
-            // `index` is where the ship was *before* this tick moved it, which is
-            // as close to "last known good" as this loop can cheaply get.
-            self.respawn(0, index);
+        // Unconditionally and before the `||`, so the dwell sees every tick -
+        // the same argument `step_opponents` makes for its two counters.
+        let off_the_track = self.lost_off_the_track(spline_distance);
+        if off_the_track || self.reset_zone_touched(0, &env, before) {
+            // The last sample the craft was *on the track* at, which for a reset
+            // contact is where it was a tick or two ago and for the off-track
+            // trigger is where it left. `index` - the nearest sample to wherever
+            // the craft is now - would be that same place for the first and a
+            // sample on some other part of the circuit for the second.
+            self.respawn(0, Some(self.last_on_track as usize));
         } else if self.respawn_cooldown[0] == 0 {
             // Clear of the trigger with the cooldown expired: whatever run of
             // back-to-back respawns was happening is over.
