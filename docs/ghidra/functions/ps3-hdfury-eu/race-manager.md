@@ -160,6 +160,53 @@ destructor" rests on it being byte-identical to the vtable's complete-object
 destructor while having its own call sites; nothing distinguishes the two
 bodies directly.
 
+## The eleven derived race managers, and why none of them is named
+
+Following up the "22 derived-class constructors" this page called the obvious
+next work. They are all identified, and **none is named**, for reasons worth
+recording so nobody re-runs the sweep expecting a different answer.
+
+`RaceManager_Construct` has 22 callers. Taking each `*_RaceManager.cpp` string
+and asking which functions store it gives a clean pairing - two constructors per
+class, both calling the base:
+
+| Class | Constructors | File string |
+| --- | --- | --- |
+| `SPArcade` | `0x00061770`, `0x000623a8` | `0x0077cf90` |
+| `SPDetonator` | `0x00064470`, `0x000649f0` | `0x0077d598` |
+| `SPElimination` | `0x00069780`, `0x00069ee8` | `0x0077d8e8` |
+| `SPFreePlay` | `0x0006acd0`, `0x0006b058` | `0x0077dac0` |
+| `SPNitro` | `0x0006e738`, `0x0006ee38` | `0x0077dc08` |
+| `SPTimeTrial` | `0x000709c0`, `0x000710e8` | `0x0077de98` |
+| `SPTournament` | `0x00073428`, `0x00074600` | `0x0077e0a8` |
+| `SPZone` | `0x00076940`, `0x00076e00` | `0x0077e578` |
+| `AIBatch` | `0x0007b488`, `0x0007b788` | `0x0077e7c8` |
+| `Demo` | `0x0007d4a0`, `0x0007d8e0` | `0x0077e8c0` |
+| unidentified | `0x00044780`, `0x00045178` | - |
+
+**The two constructors of a class cannot be told apart.** Diffing SPArcade's
+pair: 781 instructions each, 93.9% identical, and every difference is register
+allocation - `r19` and `r20` swapped throughout. Identical call sets, identical
+string sets, no structural difference at all. That is the C++ ABI's
+complete-object and base-object constructor emitted as two compilations of the
+same source, and nothing in the binary says which is which. Naming them would be
+a coin flip on every row, so the table records the attribution and the renames
+are left undone. Same reasoning as `0x000569f0` below.
+
+**None of the 22 is called from anywhere.** Each is referenced only by its own
+OPD entry, and searching the image for those OPD addresses as data finds no
+constructor table either. Whatever creates a race manager does not reach these
+through a call or a function-pointer table that this image contains.
+
+**The MP\* race managers are not in this set**, which is the finding that changes
+the shape of the hierarchy. `MPArcade_RaceManager.cpp` `0x0003d620`/`0x0003d8d0`,
+`MPElimination` `0x0003df68`/`0x0003e530`, `MPNitro` `0x00040560`/`0x000409e8`
+and `MPTimeTrial` `0x00041248`/`0x00041780` all have the same two-constructor
+shape and their own `__FILE__` store, but **none of them calls
+`RaceManager_Construct`**. So the multiplayer modes descend from something
+between them and `RaceManager`, and finding that intermediate class is the real
+next step here - not renaming the eleven above.
+
 ## Not recorded
 
 - **`0x000569f0`.** The constructor's other half - 639 instructions to

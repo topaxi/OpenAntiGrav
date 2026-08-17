@@ -283,6 +283,52 @@ inlined cases at `0x000389ec`, `0x00038a48`, `0x00038acc`, `0x00038ae8` and
 `0x00038af4` were not. Reading them would raise this row, and would document
 the shape-type enum.
 
+## The shape-type dispatch is two-level, and type 6 is a compound shape
+
+Following the switch cases this page previously left unread. The picture is
+different from the one the switch table alone suggests: the table dispatches on
+**the first object's** shape type, and each landing block then compares **the
+second object's** type. It is a pair matrix written as nested comparisons, not a
+list of narrowphase routines.
+
+Type 1's block at `0x000389ec`:
+
+```
+cmpwi cr7,r10,0x4 ; beq 0x00038b94      (1,4)
+ble  cr7,0x00038b38                     (1,<4)
+cmpwi cr7,r10,0x5 ; beq 0x00038bbc      (1,5)
+cmpwi cr7,r10,0x6 ; bne 0x00038858      (1,6), else skip the pair
+```
+
+Type 6's block at `0x00038a48` mirrors it, testing `1` then `6` and skipping
+everything else.
+
+**Type 6 is a compound shape.** Both blocks handle it the same way: read a count
+from the object's `+0x150`, and loop that many times calling
+`Collision_GetSubShape(object, i)` and feeding each result into the pairwise test
+at `0x00036da0`. The `(6, 6)` case at `0x00038a48` does it for both objects at
+once, reading `+0x150` from each. So a type-6 object is a container of sub-shapes
+and the narrowphase expands it before testing.
+
+| Address | Name | Confidence |
+| --- | --- | --- |
+| `0x00039cc0` | `Collision_GetSubShape` | 82 |
+
+`0x00039cc0(object, index)` is one line - `return *(u32 *)(object + index*0x20 +
+0x90)` - a `0x20`-stride array based at `+0x90`. The arithmetic closes: `0x90 +
+6 * 0x20 = 0x150`, exactly where the count lives, so the array holds six entries
+and the count sits immediately after it. That, plus every call being inside a
+loop bounded by that same `+0x150`, is the evidence. 82 and not higher because
+an accessor proves the layout it reads and not what the elements *are*; "sub
+shape" comes from how the two call sites use the result, one function away.
+
+**The enum is still not documented.** Types `1`, `4`, `5` and `6` all appear as
+live pairs, and `Collision_TestMeshAabb` is reached from `(4, 1)`. What each
+number *means* needs the three remaining blocks at `0x00038acc`, `0x00038ae8` and
+`0x00038af4` plus the shared targets at `0x00038b38`, `0x00038b54`, `0x00038b94`
+and `0x00038bbc`, none of which were read. `Collision_ProcessPairs` keeps its 80
+for the same reason it had it.
+
 ## Not recorded
 
 - **`0x00034438`.** Byte-identical to `Collision_Construct` (same opcode hash

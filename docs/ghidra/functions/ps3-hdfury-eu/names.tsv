@@ -40,3 +40,4 @@
 0x000568e0	function	RaceManager_DestructBase	78	race-manager.md
 0x00057580	function	RaceManager_Destruct	80	race-manager.md
 0x00057468	function	RaceManager_DestructAndFree	80	race-manager.md
+0x00039cc0	function	Collision_GetSubShape	82	collision.md
