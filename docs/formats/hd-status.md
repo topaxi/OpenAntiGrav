@@ -53,7 +53,7 @@ render geometry lifted out of `.vex` into a PS3 container of its own.
 | Handling stats | Same schema, plain-text XML - **parses**, after making `headtilt` optional |
 | HUD layouts | Same dialect and the same widget model - **all 18 compose**, once includes are followed and offsets composed. [hd-hud](hd-hud.md) |
 | `.pob` particle container | Reads byte-swapped; **one declared length no longer agrees** |
-| Textures | **New.** `.gtf`, the PS3's own container |
+| Textures | **New.** [`.gtf`](gtf.md), the PS3's own container - **read**, 7,333 of 7,333, 7,280 of them decoding |
 | Sound bank | `.bnk` present, unexamined |
 
 **And most of HD's circuits are the PSP's circuits**, in the same world

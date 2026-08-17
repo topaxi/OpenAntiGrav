@@ -12,12 +12,16 @@ Pinned by `crates/game/tests/hd_hud_ground_truth.rs`; the entry names are
 [`oag_game::hud::compose`](../../crates/game/src/hud/compose.rs). Measured
 2026-08-17 on `hdfury-ps3-eu-dec.iso`, serial `BCES-00664`.
 
-90 rather than higher because **no pixel has been drawn and no executable path
-has been read**: every number here is static reading plus exact agreement with
-shipped data, and the two rules recovered below ([offset composition](#the-rule-offsetxoffsety-translate-xy-place)
-and the [texture extension](#the-layouts-name-source-art)) are inferred from the
-data agreeing with them rather than from code that implements them. See the
-[confidence rubric](../reverse-engineering/confidence-rubric.md).
+90 rather than higher because **nothing here has reached a shader and no
+executable path has been read**: every number is static reading plus exact
+agreement with shipped data, and the two rules recovered below ([offset
+composition](#the-rule-offsetxoffsety-translate-xy-place) and the [texture
+extension](#the-layouts-name-source-art)) are inferred from the data agreeing
+with them rather than from code that implements them. See the [confidence
+rubric](../reverse-engineering/confidence-rubric.md). The textures themselves
+**do** decode - [gtf](gtf.md), landed the same day - and every sprite's source
+rectangle is checked against them, which is what a score of 90 rests on rather
+than the layout arithmetic alone.
 
 ```sh
 OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
@@ -40,7 +44,7 @@ global=>` table. What changed is *where the widgets are*.
 | Coordinate space | 480x272 | [1920x1080](hd-frontend.md#the-coordinate-space-is-1920x1080) |
 | Widgets holding widgets | **0** | 242 |
 | Elements carrying an offset | 26, all `<Item>` | 218, 116 of them widgets |
-| Atlas | one `.mip` per layout | up to 6 `.gtf` per layout |
+| Atlas | one `.mip` per layout | up to 6 [`.gtf`](gtf.md) per layout |
 | Nameless widgets | 0 | 106 |
 
 ## The eighteen roots
@@ -270,13 +274,23 @@ choice is not made by composing a name at runtime. See
 
 ## What is not done
 
-- **No pixels.** `.gtf` is not implemented, so nothing HD-HUD draws. Twelve
-  headers were read while measuring the references above and they are exact and
-  self-checking - `bullet.gtf` is 16x50 `A8R8G8B8` with `pitch` 64 = 16x4 and
-  `size` 3,200 = 64x50, and 128 + 3,200 is the file; `fury_hud.gtf` is 1024x1024
-  `DXT45` at 1,048,576 bytes, which is 1024x1024 exactly - so a decoder looks
-  cheap. **Nothing has been drawn from one**, and per `CLAUDE.md`'s "never invent
-  what the assets already author", no stand-in atlas exists and none should.
+- **The pixels exist and nothing draws them.** [`.gtf` is read](gtf.md) as of
+  2026-08-17, so all twelve of the HUD's textures decode and every one of the
+  **1,029 sprites' source rectangles has been checked against the dimensions of
+  the texture it names** - a check that tests both readings at once, and one that
+  turned up the disc's own single overhang (`VoiceCom0`-`VoiceCom7` sampling a
+  62x64 patch from `V="1"` of a 64x64 image, 32 of 56 copies). Per `CLAUDE.md`'s
+  "never invent what the assets already author", no stand-in atlas exists and
+  none should.
+- **One atlas per layout, and HD has six.** This is the blocker on drawing an HD
+  HUD, and it is in `oag_game::hud` rather than in the renderer.
+  `Layout::atlas()` returns *the* texture a layout samples, and
+  `the_layouts_name_at_most_one_texture` measured that as true of all nine Pulse
+  and Pure layouts. HD names **twelve across eighteen layouts, up to six in
+  one**, so `Assets::atlas_origin`, `sprite_draw`'s single origin and `Overlay`
+  all inherit an assumption that does not hold. A sprite has to carry which
+  texture it samples through to the draw call. `oag_render` also has no `.gtf`
+  upload path, but that is the second problem, not the first.
 - **No draw list.** `oag_game::hud::draw_list` selects widgets by Pulse's own
   names (`SpeedBar`, `Lap`, `PosTag0`). HD's names differ and nothing has
   checked which are live when. The geometry is read; what drives it is not.
@@ -294,4 +308,5 @@ choice is not made by composing a name at runtime. See
 - [ui/hud](../ui/hud.md) - Pulse's HUD, and the reader both titles share
 - [fexml](fexml.md) - the XML dialect
 - [psarc](psarc.md) - the container
+- [gtf](gtf.md) - the textures, and the reading this page needed
 - [race-hud](../ghidra/functions/ps3-hdfury-eu/race-hud.md) - `Hud_LoadDefinition`

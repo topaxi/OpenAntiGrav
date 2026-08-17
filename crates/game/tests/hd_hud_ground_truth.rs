@@ -315,6 +315,83 @@ fn the_anonymous_widgets_are_kept_rather_than_dropped() {
     assert_eq!(anonymous, 106);
 }
 
+/// The check that ties the two readings together.
+///
+/// A sprite carries `U`, `V`, `TxtrWidth` and `TxtrHeight` - a rectangle inside
+/// the texture its `src` names - and until `.gtf` was read there was nothing to
+/// check that rectangle against. Now there is, and it tests **both** halves at
+/// once: a layout misread would put a sub-rectangle outside its texture, and a
+/// texture whose dimensions were misread would fail to contain rectangles that
+/// really do fit. 1,029 sprites over 12 textures, and every one lands.
+///
+/// It is also the check that would catch the extension rule
+/// [`oag_hd::hud::texture_entry`] states being wrong in the one way that would
+/// otherwise be invisible: resolving to *some* texture that happens to exist.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn every_sprite_s_source_rectangle_fits_inside_the_texture_it_names() {
+    let Some(mut archives) = open() else {
+        return;
+    };
+    let mut sizes: BTreeMap<String, (f32, f32)> = BTreeMap::new();
+    let mut overhanging: Vec<(String, String, f32)> = Vec::new();
+    let mut checked = 0usize;
+
+    for &(root, ..) in EXPECTED {
+        for sprite in composed(&mut archives, root).layout.sprites {
+            let size = match sizes.get(&sprite.src) {
+                Some(size) => *size,
+                None => {
+                    let entry = oag_hd::hud::texture_entry(&sprite.src);
+                    let blob = archives
+                        .read_name(&entry)
+                        .unwrap_or_else(|e| panic!("{} -> {entry}: {e}", sprite.src));
+                    let parsed = oag_formats::gtf::Gtf::parse(&blob)
+                        .unwrap_or_else(|e| panic!("{entry}: {e}"));
+                    let texture = parsed.only().expect("one texture");
+                    let size = (f32::from(texture.width), f32::from(texture.height));
+                    sizes.insert(sprite.src.clone(), size);
+                    size
+                }
+            };
+
+            let [u, v, w, h] = sprite.uv;
+            let over = (u + w - size.0).max(v + h - size.1).max(0.0);
+            assert!(u >= 0.0 && v >= 0.0, "{root}: {} at {u},{v}", sprite.name);
+            if over > 0.0 {
+                overhanging.push((sprite.name.clone(), sprite.src.clone(), over));
+            }
+            checked += 1;
+        }
+    }
+
+    assert_eq!(sizes.len(), 12, "textures named: {:?}", sizes.keys());
+    assert_eq!(checked, 1029);
+
+    // **One widget in the disc's own data samples off the edge of its texture**,
+    // and it is authored that way rather than misread: `VoiceCom0`-`VoiceCom7`
+    // take a 62x64 patch from `V="1"` of a 64x64 image, so the last row is one
+    // texel past the bottom. 32 of the 56 voice-chat sprites do it - the copies
+    // in the fragments that were edited later use `V="0"` - which is how a
+    // duplicated fragment diverges. Pinned rather than tolerated, because the
+    // check is only worth having if its exceptions are named.
+    let worst = overhanging
+        .iter()
+        .map(|(.., over)| *over)
+        .fold(0.0f32, f32::max);
+    assert_eq!(
+        worst, 1.0,
+        "an overhang bigger than one texel: {overhanging:?}"
+    );
+    assert!(
+        overhanging
+            .iter()
+            .all(|(name, src, _)| name.starts_with("VoiceCom") && src.ends_with(r"voiceCom.gtf")),
+        "something other than the voice-chat icon overhangs: {overhanging:?}"
+    );
+    assert_eq!(overhanging.len(), 32);
+}
+
 /// A second reading of the same include graph, deliberately naive.
 ///
 /// Counts `<Image>` and `<Text>` elements at any depth, following `SrcRel` by
