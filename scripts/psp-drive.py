@@ -520,6 +520,12 @@ def menu(args):
     tap(dbg, "down")  # SPEED CLASS
     tap(dbg, "left", SATURATE, wait=0.3)  # -> VENOM
     tap(dbg, "up")
+    # **The Talon's Junction check below is mis-calibrated for a full grid.**
+    # A single race spawns the player on the grid, which sits about 139.9 units
+    # behind the time-trial start line - so the distance test reports "this is a
+    # different track" on the right track. Measured 2026-08-17; the race itself is
+    # fine and only the assertion is wrong. Do not chase it as a track-selection
+    # bug, and do not loosen the threshold for a time trial, which needs it.
     print(
         "set %s / VENOM" % ("SINGLE RACE" if args.single_race else "TIME TRIAL"),
         file=sys.stderr,

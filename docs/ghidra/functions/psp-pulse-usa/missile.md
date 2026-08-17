@@ -53,7 +53,13 @@ attribute strings sit in one contiguous run.
 | `+0x44` | `launchspeed` | | `+0x5c` | `slowdown_time` |
 
 The stats struct for the live speed class is
-`*(&DAT_08b32420 + DAT_08b32428 * 4)` throughout.
+`*(&DAT_08b32420 + DAT_08b32428 * 4)` throughout. **`DAT_08b32428` is measured**:
+`0` in a Single Race and `1` in Eliminator, both at Venom, so it selects the stats
+*file* - `WeaponStats_Race.xml` against `WeaponStats_Elimination.xml` - and not the
+speed class. The speed class is the separate `DAT_08b31040`, and the *race mode* is
+a third global, `DAT_08b31048`, which reads `3` in a Single Race and `8` in
+Eliminator. Three globals it is easy to conflate; see
+[weapon-ai.md](weapon-ai.md), which spends the third.
 
 **LeachBeam's lock distances are at `+0x114`/`+0x118`** in the same struct, read
 by the same function as the Missile's - see the lock below. It is the only other

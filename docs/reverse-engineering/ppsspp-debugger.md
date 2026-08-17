@@ -1189,6 +1189,19 @@ the heap or at a link-time address. A heap address rules out any consumer readin
 it through absolute `lui`/`lwc1` immediates, which is the escape route a
 displacement-based static sweep would miss.
 
+**Once you know the owner, stop scanning.** A 21-second scan is fine once and
+tedious every run, and a heap address changes between runs. If the structure hangs
+off a singleton stored in a global - which Ghidra will show you - dereference that
+instead. For the `WeaponAIstats` record it is one read:
+
+```python
+table = dbg.read_u32(0x08b317b4) + 0x710
+```
+
+Verify the fingerprint at the computed address before arming anything, and again
+afterwards: that is what rules out having watched a recycled heap block rather
+than the structure you meant.
+
 ### `log: True` will fill your disk and wedge the emulator
 
 **This is the trap to know before arming anything wide.** A logging watchpoint
@@ -1197,7 +1210,7 @@ writes a line per hit. A 256-byte watchpoint over a live craft struct fires abou
 `/tmp` and wedged the emulator: every `memory.read` then times out, hit counters
 freeze, and the shell starts returning exit 1 with no output. `/tmp` here is a
 6.8 G tmpfs, which is also why
-[the `chchdman` ground-truth test fails](../../HANDOVER.md) - the same disk.
+[the `chdman` ground-truth test fails](../../HANDOVER.md) - the same disk.
 
 **That also explains the one anomaly this page used to record as unexplained**: a
 wide watchpoint reporting 6,488 hits at 15 s and 9,706 at 30 s and then freezing
