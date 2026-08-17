@@ -51,6 +51,7 @@ fn a_release_that_is_not_there_falls_back_to_the_booted_one() {
     let psp_only = MusicDiscs {
         psp: Some("psp.chd".into()),
         ps2: None,
+        ps3: None,
         booted: Some(Platform::Psp),
     };
     assert!(!psp_only.both(), "one disc is not a choice");
@@ -65,6 +66,7 @@ fn a_release_that_is_not_there_falls_back_to_the_booted_one() {
     let both = MusicDiscs {
         psp: Some("psp.chd".into()),
         ps2: Some("ps2.chd".into()),
+        ps3: None,
         booted: Some(Platform::Psp),
     };
     assert!(both.both());
@@ -258,6 +260,7 @@ fn changing_the_music_source_seeks_rather_than_restarting() {
     let discs = MusicDiscs {
         psp: Some("psp.chd".into()),
         ps2: Some("ps2.chd".into()),
+        ps3: None,
         booted: Some(Platform::Ps2),
     };
     // Three minutes of silence at each release's own rate. What is measured
@@ -352,6 +355,7 @@ fn asking_for_the_music_again_never_restarts_it() {
     let discs = MusicDiscs {
         psp: Some("psp.chd".into()),
         ps2: Some("ps2.chd".into()),
+        ps3: None,
         booted: Some(Platform::Ps2),
     };
     let ps2 = Arc::new(Sound::new(vec![0i16; 180 * 48_000 * 2], 2, 48_000).expect("a sound"));
@@ -402,6 +406,7 @@ fn a_source_with_no_music_is_not_retried_every_tick() {
     let nothing = MusicDiscs {
         psp: None,
         ps2: None,
+        ps3: None,
         booted: None,
     };
     let mut audio = Audio {
@@ -430,6 +435,7 @@ fn a_source_with_no_music_is_not_retried_every_tick() {
     let discs = MusicDiscs {
         psp: None,
         ps2: Some("ps2.chd".into()),
+        ps3: None,
         booted: Some(Platform::Ps2),
     };
     audio.held.push((
@@ -455,6 +461,7 @@ fn music_with_no_counterpart_is_left_alone_whatever_the_row_says() {
     let discs = MusicDiscs {
         psp: Some("psp.chd".into()),
         ps2: Some("ps2.chd".into()),
+        ps3: None,
         booted: Some(Platform::Psp),
     };
     // The PSP front end's own music: 28 seconds, not three minutes, and
@@ -770,6 +777,7 @@ fn starting_a_race_stops_the_menu_voice_and_starts_a_race_voice() {
     let discs = MusicDiscs {
         psp: Some("psp.chd".into()),
         ps2: Some("ps2.chd".into()),
+        ps3: None,
         booted: Some(Platform::Psp),
     };
     let menu_voice = audio.music.expect("the fixture starts the menu playing");
@@ -801,6 +809,7 @@ fn ending_a_race_saves_the_position_and_the_menu_voice_sounds_again() {
     let discs = MusicDiscs {
         psp: Some("psp.chd".into()),
         ps2: Some("ps2.chd".into()),
+        ps3: None,
         booted: Some(Platform::Psp),
     };
     audio.start_race_music(&discs, MusicSource::Auto, Path::new("unused"));
@@ -836,6 +845,7 @@ fn a_second_race_resumes_within_a_sixtieth_of_a_second_of_the_saved_position() {
     let discs = MusicDiscs {
         psp: Some("psp.chd".into()),
         ps2: Some("ps2.chd".into()),
+        ps3: None,
         booted: Some(Platform::Psp),
     };
     audio.start_race_music(&discs, MusicSource::Auto, Path::new("unused"));
@@ -863,6 +873,7 @@ fn music_source_changed_while_a_race_is_live_moves_the_race_voice() {
     let discs = MusicDiscs {
         psp: Some("psp.chd".into()),
         ps2: Some("ps2.chd".into()),
+        ps3: None,
         booted: Some(Platform::Ps2),
     };
     let psp_track = silence(180.0, 2, 44_100);
@@ -919,6 +930,7 @@ fn a_source_with_no_decodable_race_music_still_resumes_menu_music_cleanly() {
     let discs = MusicDiscs {
         psp: Some("psp.chd".into()),
         ps2: None,
+        ps3: None,
         booted: Some(Platform::Psp),
     };
     let menu_sound = silence(28.0, 2, 44_100);

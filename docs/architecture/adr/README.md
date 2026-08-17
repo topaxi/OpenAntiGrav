@@ -34,6 +34,7 @@ out to be wrong.
 | [0021](0021-region-independent-dlc.md) | Mount downloadable content independently of region | Accepted |
 | [0022](0022-title-packages.md) | Title packages, and title as a data axis rather than a code axis | Accepted; supersedes [ADR-0009](0009-multi-game-fanout.md) item 3; item 4 partly superseded by [ADR-0023](0023-boot-sequence-as-title-data.md) |
 | [0023](0023-boot-sequence-as-title-data.md) | The boot sequence is a measured table per title | Accepted; supersedes [ADR-0022](0022-title-packages.md) item 4 in part |
+| [0024](0024-in-process-codecs-and-ffmpeg-as-a-last-resort.md) | Decode in process where a light library exists; `ffmpeg` is the last resort | Accepted; narrows [ADR-0019](0019-atrac3plus-out-of-process.md) to ATRAC3+ |
 
 ## Format
 

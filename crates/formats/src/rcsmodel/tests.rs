@@ -97,6 +97,122 @@ fn model(stride: usize, filler: i16) -> Vec<u8> {
 /// The unit cube the fixture builds, as a `.vex` node would author it.
 const CUBE_BOUNDS: ([f32; 3], [f32; 3]) = ([-1.0, -1.0, -1.0], [1.0, 1.0, 1.0]);
 
+/// [`model`] with a two-entry material table, and its chunk pointing at
+/// whichever of the two `pick` names.
+fn model_with_materials(pick: u32) -> Vec<u8> {
+    const CHUNK: usize = 0x100;
+
+    let mut b = Builder {
+        bytes: model(14, 30_000),
+    };
+    // Past everything `model` laid out, so the table cannot land on a chunk
+    // header or a vertex buffer.
+    let table = b.bytes.len();
+    let records = [table + 0x10, table + 0x90];
+    let names = [table + 0x110, table + 0x140];
+
+    b.u32(0x2c, 2);
+    b.u32(0x30, table as u32);
+    for (i, (&record, &name)) in records.iter().zip(&names).enumerate() {
+        b.u32(table + i * 4, record as u32);
+        b.u32(record + 0x04, name as u32);
+        // Slot 0 is an opaque road surface holding the default pair nothing
+        // consumes; slot 1 is glass, blended over what is behind it.
+        b.u32(record + 0x10, if i == 0 { 0x007c } else { 0x0039 });
+        b.u16(record + 0x14, 0x0302);
+        b.u16(record + 0x16, 0x0303);
+    }
+    b.at(names[0], b"data/env/track_surface.rcsmaterial\0");
+    b.at(names[1], b"data/env/glass_texture.rcsmaterial\0");
+    b.u32(CHUNK + 0x20, pick);
+    b.bytes
+}
+
+/// The table walks, and a chunk's `+0x20` picks an entry out of it.
+#[test]
+fn a_chunk_points_at_one_entry_of_the_material_table() {
+    let data = model_with_materials(1);
+    let parsed = Model::parse(&data).expect("a model");
+    assert_eq!(parsed.materials.len(), 2);
+    assert_eq!(
+        parsed.materials[0].name,
+        "data/env/track_surface.rcsmaterial"
+    );
+    let mesh = &parsed.meshes[0];
+    assert_eq!(mesh.material, 1);
+    assert_eq!(
+        parsed.material_of(mesh).map(|m| m.name.as_str()),
+        Some("data/env/glass_texture.rcsmaterial")
+    );
+}
+
+/// The low two state bits are what say see-through, and the factor pair alone
+/// does not: both fixture materials carry the identical `0302`/`0303` pair.
+#[test]
+fn the_state_word_and_not_the_factor_pair_is_what_says_see_through() {
+    let data = model_with_materials(0);
+    let parsed = Model::parse(&data).unwrap();
+    let [road, glass] = [&parsed.materials[0], &parsed.materials[1]];
+    assert_eq!(
+        (road.src_factor, road.dst_factor),
+        (glass.src_factor, glass.dst_factor),
+        "the fixture gives both the same equation on purpose"
+    );
+    assert_eq!(road.transparency(), Some(Transparency::Opaque));
+    assert!(!road.is_see_through());
+    assert_eq!(road.blend(), Blend::Opaque);
+    assert_eq!(glass.transparency(), Some(Transparency::Blended));
+    assert!(glass.is_see_through());
+    assert_eq!(
+        glass.blend(),
+        Blend::Class(crate::vex::BlendClass::AlphaOver)
+    );
+}
+
+/// A destination of `GL_ONE` is the additive family, and a pair outside both is
+/// reported rather than folded into the nearer one.
+#[test]
+fn the_destination_factor_is_what_picks_the_blend_class() {
+    let blended = |src, dst| Material {
+        name: String::new(),
+        state: 1,
+        src_factor: src,
+        dst_factor: dst,
+    };
+    for src in [0x0001, 0x0300, 0x0302] {
+        assert_eq!(
+            blended(src, material::FACTOR_ONE).blend(),
+            Blend::Class(crate::vex::BlendClass::Additive),
+            "src {src:#06x}"
+        );
+    }
+    assert_eq!(
+        blended(0x0300, 0x0302).blend(),
+        Blend::Unmapped {
+            src: 0x0300,
+            dst: 0x0302
+        },
+        "`hologram`'s pair has no member of Pulse's BlendClass and is not given one"
+    );
+}
+
+/// The fourth encoding of the transparency field, which nothing on the disc
+/// uses, is `None` and reads as opaque rather than as some third blend.
+#[test]
+fn the_unused_transparency_encoding_is_not_guessed_at() {
+    let odd = Material {
+        name: String::new(),
+        state: 0x0003,
+        src_factor: 0x0302,
+        dst_factor: 0x0303,
+    };
+    assert_eq!(odd.transparency(), None);
+    assert!(
+        !odd.is_see_through(),
+        "an unknown mode draws its geometry rather than hiding it"
+    );
+}
+
 #[test]
 fn a_blob_that_is_not_one_of_these_is_refused_by_version() {
     assert_eq!(Model::parse(&[]), Err(Error::TooShort { got: 0 }));
@@ -289,6 +405,7 @@ fn packed(counts: &[usize], stride: usize) -> Mesh {
         hash: 0xdead_beef,
         bias: [0.0; 3],
         scale: [1.0 / 128.0; 3],
+        material: 0,
         submeshes,
     }
 }

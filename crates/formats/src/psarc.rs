@@ -478,7 +478,22 @@ impl Directory {
             let chunk = &stored[at..end];
             at = end;
 
-            let plain = if chunk.first() == Some(&ZLIB_CMF) {
+            // **A full-size block is raw by definition, and must not be
+            // sniffed.** A stored length of zero is the table's way of saying
+            // "this block did not shrink, so it is here as it is" - there is
+            // nothing to inflate, and testing its first byte asks a question
+            // that has no meaning. The test only sorts *short* blocks, where a
+            // deflate stream and a payload that merely did not pay are both
+            // possible.
+            //
+            // This is not a tidiness point. `ZLIB_CMF` is `0x78`, which is an
+            // ordinary byte in the middle of arbitrary content, so a raw block
+            // beginning with it was handed to the inflater and failed:
+            // `Data\Music\Exceeder\music_stereo.mp3` is `DATA01.PSARC` entry
+            // 16, its block 574 is exactly that, and the entry was unreadable
+            // until this line distinguished the two cases. See
+            // `docs/formats/psarc.md`.
+            let plain = if stored_len != 0 && chunk.first() == Some(&ZLIB_CMF) {
                 miniz_oxide::inflate::decompress_to_vec_zlib(chunk)
                     .map_err(|_| Error::BadBlock { index, block })?
             } else {

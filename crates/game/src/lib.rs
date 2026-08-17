@@ -52,6 +52,7 @@ pub mod loading;
 pub mod marquee;
 pub mod menu;
 pub mod movie;
+pub mod mp3;
 pub mod music;
 pub mod perf;
 pub mod pilots;

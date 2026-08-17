@@ -89,6 +89,23 @@ the size is the *compressed* length, and this project decides between inflating
 and copying by looking for zlib's `0x78` header byte rather than by trusting the
 size alone.
 
+**The `0x78` test applies to short blocks only, and getting that wrong cost a
+file.** A full-size block is raw *by definition* - the size of zero is the table
+saying so - and there is nothing left for the marker to disambiguate. Asking
+anyway is asking a question with no meaning, because `0x78` is an ordinary byte
+in the middle of arbitrary content: on `hdfury-ps3-eu-dec.iso`,
+`Data\Music\Exceeder\music_stereo.mp3` is `DATA01.PSARC` entry 16, its block 574
+is a raw MP3 block that happens to begin `78`, and the reader handed it to
+`miniz_oxide` and reported the whole entry unreadable. One music track of
+fifteen, dropped from a listing rather than reported.
+
+Fixed on 2026-08-17; `psarc::tests::a_full_stored_block_beginning_with_the_zlib_marker_is_not_inflated`
+pins it with a body that is *entirely* `0x78`, so every block of the fixture is
+the pathological case. [`scripts/psarc.py`](../../scripts/psarc.py) never had
+the bug - it emits a full block and `continue`s without testing anything - which
+is what made the two implementations disagree on one file and agree on 11,663,
+and is the argument for keeping the reference script around.
+
 ## The check the confidence rests on
 
 The 16-byte field is the **MD5 of the path with every character uppercased**,

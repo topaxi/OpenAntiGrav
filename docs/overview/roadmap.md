@@ -1302,6 +1302,29 @@ table names this ID, and HD's own surface-type byte, which needs a PS3
 disassembly nobody has done. See
 [hd-status](../formats/hd-status.md#0x3ed-is-the-barrier-along-the-road).
 
+#### The holes in the floor close, 2026-08-17
+
+A circuit drew with **252 of its 983 chunks missing**, because none of the three
+stride rules could decide them - and the one that could was sitting in the
+vertex all along. A vertex's `+6` word is a packed *unit* vector; read the same
+four bytes at the wrong stride and they are a position or a texture coordinate
+and come out unit about a third of the time. So the stride is the one whose
+normals decode, and unlike the authored box (needs a `.vex` node), the buffer
+layout (needs two submeshes) or compactness (needs a decisive margin, which
+narrows on exactly the large chunks a road is made of), that is per-vertex
+evidence at every chunk size.
+
+| | before | after |
+| --- | ---: | ---: |
+| Chunks that decide a stride | 731 | **968** of 983 |
+| Triangles drawn | 411,617 | 445,630 |
+| Collision-floor triangles with art within 4 units | 58.8 % | **71.6 %** |
+
+It contradicts the other three rules on none of the 729 chunks where more than
+one answers, and every chunk any of them decides has unit normals at the stride
+it chose - worst 0.80, on the compactness-decided ones, which share no input
+with it.
+
 What is still ahead: the attribute layout and `.gtf`, for a *textured* HD;
 `.pvs`, for drawing a section at a time rather than all 904 chunks; and HD's own
 simulation, which is not estimable, being gated by

@@ -55,6 +55,7 @@ render geometry lifted out of `.vex` into a PS3 container of its own.
 | `.pob` particle container | Reads byte-swapped; **one declared length no longer agrees** |
 | Textures | **New.** [`.gtf`](gtf.md), the PS3's own container - **read**, 7,333 of 7,333, 7,280 of them decoding |
 | Sound bank | `.bnk` present, unexamined |
+| [Music](#music-plain-mp3-declared-the-way-the-psp-titles-declare-theirs) | **New container, same declaration.** Plain MP3, named by the executable and declared as `PI_Music`; recovered and played |
 
 **And most of HD's circuits are the PSP's circuits**, in the same world
 coordinates - see [the circuits are the PSP's](#the-circuits-are-the-psps).
@@ -563,21 +564,105 @@ rather than explained away.
 ## What is genuinely new
 
 - **`.rcsmodel`** - 643 files, 686.5 MiB, all render geometry. **Positions,
-  triangles and vertex normals read**, see [rcsmodel](rcsmodel.md); the vertex
+  triangles, vertex normals and the material table read**, see
+  [rcsmodel](rcsmodel.md); the vertex
   stride is in no field of the file, and of the rest of a vertex a tangent
-  (stride 22 only) and a texture coordinate are located but not decoded.
+  (stride 22 only) and a texture coordinate are located but not decoded. A
+  chunk's `+0x20` indexes the material table, and the low two bits of a
+  material's state word say whether the surface is see-through - which is what
+  keeps a circuit's glass, cloud plates, fences and crowd billboards from being
+  drawn as solid white sheets.
 - **`.rcsmaterial`** - 1,632 files, wall-to-wall 32-bit hashes. A track authors
   around fifty by name (`track_surface`, `track_wall`, `glass_reflect`,
   `emissive_bloom`), and a second identical set under `materials_reversed/`.
 - **`.gtf`** - 7,333 files, the PS3's own texture container and publicly
   documented. One sample header reads version `0x0105`, one texture, payload at
-  `+0x80` behind an RSX texture descriptor. Not surveyed.
+  `+0x80` behind an RSX texture descriptor. Not surveyed. **This is now the
+  single thing between a read circuit and a drawn one**: it holds the alpha
+  every see-through surface's coverage comes from, and nothing else on the disc
+  does, so until it is read those surfaces are left out rather than painted
+  solid.
 - **`.pvs`, `.pvspatch`, `.probes`** - one of each per circuit direction, 28
   apiece. `talons_junction/track.pvs` is 114 KiB against 19 `section` nodes, so
   it is a finer structure than the mask in the `.vex`, not the same table moved.
-- **`.bik`, `.mp3`, `.stencilvolume`, `.svml`, `.xfx`, `.points2`, `.effectsettings`,
+- **`.bik`, `.stencilvolume`, `.svml`, `.xfx`, `.points2`, `.effectsettings`,
   `.envsettings`** - the last of these is plain text, a key/value list starting
   `"Lighting.Constant ambient color"=0.403922 0.392157 0.509804`.
+- **`.mp3`** - the music, and the one item on this list that is no longer new to
+  this build. See below.
+
+## Music: plain MP3, declared the way the PSP titles declare theirs
+
+**Recovered and played, 2026-08-17.** HD's music is the least exotic thing on
+the disc: 36 plain MPEG-1 Layer III files under `/data/music/`, 48 kHz stereo,
+no console container around them at all. The PSP titles wrap ATRAC3+ in RIFF and
+the PS2 stores raw PCM; HD ships something any desktop player opens.
+
+### Both halves of the path are in the executable
+
+`strings` on the decrypted `EBOOT.elf` (see
+[source-images.md](../reverse-engineering/source-images.md#hdfury-ps3-euiso---wipeout-hd--fury-ps3))
+puts the templates a few bytes before `MusicManager.cpp`:
+
+```text
+793858  %s\%s_stereo%s
+793868  music
+793870  .mp3
+793878  %s\%s_surround%s
+793890  Data\Music\FEMusic\frontend%d_stereo_fury.mp3
+7938c0  Data\Music\FEMusic\frontend%d_surr_fury.mp3
+7938f0  Data\Music\FEMusic\frontend%d_stereo.mp3
+793920  Data\Music\FEMusic\frontend%d_surround.mp3
+```
+
+A soundtrack track is a `PI_Music` location joined with `music`, `_stereo` and
+`.mp3`. The **fifteen** `PI_Music` nodes in
+`/data/plugins/frontend/definition.xml` all resolve - the same schema and the
+same reader (`oag_game::catalogue::music`) the PSP titles use, under a plugin
+named rather than numbered.
+
+### Two front-end axes, one of them unread
+
+Four front-end candidates exist and only the channel-count axis is understood.
+`frontend1_stereo.mp3` is 4,097,664 bytes and `frontend1_stereo_fury.mp3` is
+1,057,536 - a 4x gap, so base and Fury are **different pieces of music**, not
+two encodes of one. What the original selects on has not been read, so
+`oag_hd::names::FRONT_END_MUSIC` picks the base stereo cut and
+`FRONT_END_MUSIC_VARIANTS` records all four with the axis named. `FEship.mp3`
+is a second front-end track, a literal rather than a template, and is recorded
+and unwired - its trigger is unread.
+
+### What it cost, and what it found
+
+Two things, neither of them about MP3:
+
+- **A [PSARC](psarc.md) bug that dropped exactly one file.** `Exceeder`'s track
+  is `DATA01.PSARC` entry 16 and its block 574 is a raw block beginning `0x78`,
+  which the reader tried to inflate. Fourteen of fifteen tracks listed and the
+  fifteenth vanished silently. Fixed and pinned; see
+  [the block-layout section](psarc.md#a-block-size-of-zero-means-stored).
+- **`symphonia` in the build, and `ffmpeg` out of this path.** ATRAC3+ has no
+  Rust decoder and stays out of process per
+  [ADR-0019](../architecture/adr/0019-atrac3plus-out-of-process.md); MP3 has
+  several, so HD's music plays with no `ffmpeg` installed at all.
+
+### Confidence
+
+**88.** The templates and the declaration are each read off the disc and every
+expansion resolves, but nothing has been watched running under an emulator, and
+HD's front end is not wired (`oag_hd::TITLE.front_end` is `None`) - so which of
+the four front-end cuts the original plays, and which track it starts on, are
+unobserved. `crates/game/tests/hd_music_ground_truth.rs` asserts every claim
+above against the disc.
+
+### Reproducing it
+
+```sh
+just psarc cat data/images/hdfury-ps3-eu-dec.iso \
+    /data/plugins/frontend/definition.xml | grep -A3 PI_Music
+just play hd --race --hold cross --ticks 600
+cargo nextest run -p oag-game --test hd_music_ground_truth --run-ignored all
+```
 
 ## The AI is not a racing-line follower
 

@@ -30,15 +30,18 @@ just view data/images/hdfury-ps3-eu-dec.iso:PS3_GAME/USRDIR/DATA00.PSARC \
 | Position format | `i16` triple through a per-mesh `bias + q * scale` | 92 |
 | Scale | `1/128` on all but 24 of `talons_junction`'s 983 chunks | 90 |
 | Index format | Big-endian `u16` triangle list | 95 |
-| Vertex stride | **In no field of the file.** 14, 18 or 22, recovered three ways | 88 |
+| Vertex stride | **In no field of the file.** 14, 18 or 22, recovered four ways | 88 |
 | Where the stride is declared | Unknown, and **not** in the `.rcsmaterial` - see below | - |
 | Vertex normal | **`+6`, packed 11:11:10 signed, big-endian** | 88 |
 | The rest of a vertex | A tangent at stride 22 and a texture coordinate, both located; not decoded | - |
 | Chunk layouts | **Two**, selected by byte `+0x06`. All 643 files read | 88 |
+| Material index | **A chunk's `+0x20`**, resolved by name on a craft | 90 |
+| Which surfaces are see-through | **The low two bits of a material's `+0x10`** | 88 |
 
 ## What is decoded, and what is not
 
-**Positions, triangle indices and vertex normals.** The normals landed on
+**Positions, triangle indices, vertex normals and the material table.** The
+normals landed on
 2026-08-17 and the renderer uses them; before that it lit these models off face
 normals it computed itself, and it still does for any vertex the file has none
 for. That fallback is reported per model rather than silent - a load report line
@@ -314,8 +317,8 @@ not a detail of it.
 
 ### How it is recovered instead
 
-Three rules. The first two are validated against an oracle the format supplies;
-the third validates *them*.
+Four rules. The first is the tightest oracle, the second is what filled in the
+road, and the last two corroborate.
 
 **Where a `.vex` node references the chunk** - every craft mesh, and the props
 on a circuit - the node's authored bounding box settles it. `min <= max` holds
@@ -354,7 +357,41 @@ median 0.02. The one disagreement is a mesh where the box admitted 36 and this
 picks 18 - half of it, so the box was matching every second vertex and the
 compactness rule is the better answer rather than a worse one.
 
-**Third, and structural rather than statistical: the file's own buffer layout.**
+**Third, and the one that filled in the road: do the normals decode?** A
+vertex's `+6` word is a packed unit vector, and that is a property nothing else
+in the record has - read the same four bytes at the wrong stride and they are a
+position, a texture coordinate or the tail of a previous vertex, and they come
+out unit about a third of the time by chance. So the stride is the one whose
+normals are unit.
+
+**This is the only rule that is per-vertex evidence at every chunk size**, and
+that is why it mattered: the box needs a `.vex` node, the buffer layout needs
+two submeshes, and the compactness rule needs the true reading to be decisively
+smaller than the wrong one - a margin that narrows on exactly the large chunks a
+circuit's road is made of. Talon's Junction had **252 of its 983 chunks** drawn
+as nothing, which is what the holes in the floor were.
+
+| | before | after |
+| --- | ---: | ---: |
+| Chunks that decide a stride | 731 | **968** of 983 |
+| Chunks drawn on the box-less path | 655 | **808** |
+| Triangles | 411,617 | 445,630 |
+| Collision-floor triangles with art within 4 units | 58.8 % | **71.6 %** |
+
+It **disagrees with the other three on none** of the 729 chunks where more than
+one answers. Two bars: the winner must be unit on at least 0.8 of the chunk's
+vertices and beat the runner-up by 0.3, and both sit below the cluster the real
+answers form and well above the ~0.3 a wrong stride scores. Dropping them to 0.7
+and 0.2 decides three more chunks, so this is a knee rather than a tuned
+threshold.
+
+**And a fraction of eight is not evidence**: a chunk must carry at least 32
+vertices to be judged this way. Without that floor the rule accepted eight-vertex
+cards where 7 of 8 unit reads clear the bar by luck, and they decoded to
+2,000-unit planes that stretched the circuit's bounding sphere from 1,909 to
+8,761.
+
+**Fourth, and structural rather than statistical: the file's own buffer layout.**
 A mesh's vertex buffers are packed back to back, so the step from one submesh's
 buffer to the next one's, over the first one's vertex count, *is* the stride -
 arithmetic on two numbers the file states outright, with no oracle and nothing
@@ -375,8 +412,11 @@ compactness rule than the compactness rule can make for itself. It also decides
 and lifts the three referenced meshes whose box settled nothing.
 
 It says nothing about a chunk with one submesh, which is most of a circuit's -
-so it is `solve_stride_by_layout` first and `solve_stride_by_extent` after, and
-the two are complements rather than alternatives.
+so `solve_stride_without_a_box` asks the layout first, the normals next and
+compactness last, and the three are complements rather than alternatives. Every
+chunk any of them decides has unit normals at the stride it chose: worst 1.00
+over the layout's 91, 0.81 over the normals' 593, and **0.80 over compactness's
+133**, which is the cross-check that matters because those two share no input.
 
 **One thing about it is unexplained.** The step is exactly `count * stride` on 38
 of 46 measured pairs and otherwise 16, 32 or 96 bytes *short* - always negative,
@@ -412,6 +452,127 @@ second pass is empty; on a circuit it is nearly everything.
 **What drives it at runtime is unread.** HD moved visibility out of the `.vex`
 into 28 `.pvs` files, and the obvious hypothesis is that a `.pvs` names the
 chunks a section draws. Nothing here has read one.
+
+## The material table, and which surfaces are see-through
+
+**Confidence 85**, and it matters more than a material table sounds like it
+should: without it a circuit's glass, cloud plates, fences and crowd billboards
+are drawn as solid white sheets, and on Talon's Junction the largest surface in
+the whole file is a 63-triangle `clouds` plate spanning 2,011 x 2,195 world
+units. Seen from above, the track was one white blob.
+
+### Where it is
+
+The header names the table and a chunk indexes it:
+
+```text
++0x2c  u32   material count
++0x30  u32   offset of the material offset table: `count` big-endian u32s
+```
+
+```text
+material +0x04  u32   file offset of the material's own path, NUL-terminated
+material +0x10  u32   state word; the low two bits are the transparency mode
+material +0x14  u16   source blend factor
+material +0x16  u16   destination blend factor
+```
+
+Records are not fixed-length: consecutive offsets differ by 96 to 768 bytes,
+most often 128. Everything above sits inside the smallest of them.
+
+**A chunk's `+0x20` is the material index** - confidence 90. Range alone would
+not settle that, since any small per-chunk count would pass; what settles it is
+that it resolves *by name* on a craft whose mesh nodes say what each surface is:
+
+| Assegai `Mesh` node | resolves to |
+| --- | --- |
+| `WindscreenShape` | `glass_texture_n.rcsmaterial` |
+| `cockpit_screenShape` | `screen_test.rcsmaterial` |
+| `FlashybitsShape`, `Port_lightShape`, `rowoflights_*Shape` | `emissive_bloom.rcsmaterial` |
+| `ShipShape`, `PipesShape`, `PIlotShape`, `Airbrake_*Shape` | `diffuse_with_specular_from_alpha_n_vcol.rcsmaterial` |
+
+It is **per chunk and not per submesh**: no `u32` in the 0x80-byte submesh
+descriptor has all its values below the file's material count, and the chunk's
+does on every chunk of every model measured.
+
+### The low two bits of the state word gate the blend factors
+
+**Confidence 88, and the evidence is structural rather than a reading of
+material names.** Over all 15,762 materials on the disc the field takes three of
+its four values, and what separates them is whether the blend factor pair beside
+it varies at all:
+
+| Low two bits | Materials | Distinct factor pairs | Reading |
+| ---: | ---: | ---: | --- |
+| 0 | 13,188 | 3, and 13,183 hold one of them | Opaque; the pair is the default nothing consumes |
+| 1 | 2,362 | 7 | See-through, blended with the pair's own equation |
+| 2 | 212 | 2, and 211 hold `0302`/`0303` | See-through as well; what else it selects is unrecovered |
+
+Nothing writes seven distinct equations into a field a renderer ignores, and
+nothing leaves 13,183 of 13,188 records holding one default pair in a field it
+reads. The name evidence agrees and is *how the classification was found*, so it
+pins a regression rather than confirming anything: `glass_texture`, `basicalpha`,
+`fence_alpha`, `nr_crowd_bustle`, `clouds` and `scanlinebillboard` are all
+see-through everywhere they appear, and `track_surface`, `track_wall` and
+`weapon_pads` are opaque everywhere - as are `glasstestnoalpha`,
+`tunnel_fx_noalpha` and `diffuse_with_specular_from_alpha`, whose names carry a
+see-through word and whose state word does not.
+
+**The fourth encoding never appears**, which is why `Transparency` has three
+members and the accessor returns an `Option` rather than defaulting.
+
+**What separates value 2 from value 1 is left unnamed - deliberately.** The
+obvious hypothesis is an alpha test: `jd_alphalambert_alphatest`,
+`jd_alphalambert_test`, `fence_alpha` and `nr_crowd_bustle` are all here and are
+exactly what a cutout is for. It does not hold up. `hd_bombfire_glow`,
+`zone_death_electricity` and `cf_alpha4glow` are here too and are not cutouts,
+and the equation cannot tell the two apart either since 211 of the 212 carry the
+same alpha-over pair as the blended mode. Below 70, so the name is not written -
+see the [confidence rubric](../reverse-engineering/confidence-rubric.md).
+
+### The factor values, and which are mapped
+
+**Confidence 70 on the enum itself.** The four values the disc uses are
+`0x0001`, `0x0300`, `0x0302` and `0x0303`, which are exactly `GL_ONE`,
+`GL_SRC_COLOR`, `GL_SRC_ALPHA` and `GL_ONE_MINUS_SRC_ALPHA` - the numbering the
+RSX inherits from OpenGL. Four distinct values landing on four meaningful
+members of a published enum is strong, but nothing here has read the code that
+consumes them, so it is short of what an executed branch would carry.
+
+`oag_formats::rcsmodel::Material::blend` keys on the **destination** alone,
+because that is what separates the two families the disc actually uses:
+
+- `dst == 0x0001` -> additive. `0302`/`0001`, `0001`/`0001` and `0300`/`0001`
+  all appear, and `vex::BlendClass` has no member for the source distinction, so
+  folding it in would be inventing precision.
+- `dst == 0x0303` -> alpha-over. `0302`/`0303` and `0001`/`0303`.
+- anything else -> **unmapped and reported**. Three materials disc-wide:
+  `hologram` at `0300`/`0302`, `dg_zonelights1` at `0302`/`0300`,
+  `zone_death_electricity` at `0001`/`0302`. None is on any circuit's road.
+  Pulse's three classes are a recovered fact about *Pulse*, and there is no
+  evidence HD's equations are a subset of them.
+
+### What the renderer does with it, and what it does not
+
+**A see-through chunk is not drawn at all**, and that is a stopgap with a
+written-down reversal condition rather than a decode.
+
+The alpha a blend needs is in the [`.gtf`](hd-status.md#what-is-genuinely-new)
+texture, which is unread - 7,333 files and 2.4 GiB. Nothing else carries one:
+the four bytes at `+0x0a` were measured against the vertex-colour hypothesis and
+are not one, since no lane is `0xff`-dominant the way an alpha would be and on
+stride 22 the last is the bimodal `0`/`255` of a packed tangent's handedness.
+
+So the three options were to draw these solid, to blend them at `alpha = 1.0`,
+or to leave them out - and the middle one is not a middle. Alpha-over at alpha 1
+paints exactly the same pixels as opaque while additionally dropping depth
+write, and additive would blow every glass panel to white.
+
+Between the other two the disc decides it, and the fraction left out is
+**4.3 % (`zone_4`) to 35.9 % (`talons_junction`)** of chunks across all 16
+circuits, so no circuit is mostly this. The load report says how many, and the
+condition to reverse it is exactly one thing: when `.gtf` supplies an alpha,
+these chunks are drawn again, blended with the class each already resolves to.
 
 ## What is still open
 
@@ -455,6 +616,14 @@ Named explicitly, with what each would take.
    chunk has not been made - so a PS3 race draws neither.
 8. **The `.pvs` mapping**, which is what would let a renderer draw a section at
    a time rather than all 904 chunks at once.
+9. **What separates transparency mode 2 from mode 1**, and what the other 15
+   bits of the state word select - 17 distinct combinations disc-wide, none of
+   them decoded. Reading a `.rcsmaterial`'s microcode or HD's own executable are
+   the routes; nothing in this project has disassembled a PS3 binary.
+10. **The `.gtf` textures**, which is now the single thing standing between a
+    read circuit and a *drawn* one: it carries the alpha every see-through
+    surface's coverage comes from, and until it is read those surfaces are left
+    out rather than painted solid.
 
 ## See also
 
