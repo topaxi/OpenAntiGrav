@@ -34,7 +34,7 @@ times larger" - because the finding is the coupling, not the number.
 | What the numbers *mean* - units, and what `AIThrust` multiplies | **unknown** - the consumer is not identified | - |
 | The sign convention on Pure's `Position` attribute | hypothesis | 55 |
 | Which of Pure's two per-class blocks the engine reads | **unknown** | - |
-| Weapon selection and firing | **still unlocated.** `WeaponAIstats.xml` was the assumed hook and is **ruled out** (2026-08-17): loader and schema read, and the record is parsed and never consulted | 85 that the file is dead data |
+| Weapon selection and firing | **located** (2026-08-17). `WeaponAIstats.xml` is the hook after all: `FUN_088518b4` reads the record every frame and writes the fire request. Loader, schema and reader all read; neither the reader nor its caller is named yet | 97 that it is read; ~70 on any name |
 | **Everything under [what we build instead](#what-we-build-instead)** | **ours** | - |
 
 Nothing here has been run under a debugger. Every score above rests on
@@ -267,10 +267,11 @@ doing.
    `WeaponAiStats_Load` (`0x08851d88`), called from `AiStats_LoadAll`'s own caller
    on the very next line. The schema is three floats a weapon -
    `useAgainstPlayer`, `useAgainstAI`, `absorb` - and the shipped values are
-   nearly uniform - and **nothing reads the record at all**, so it is not the
-   fire-or-absorb decision this list assumed it was, and it is not consulted in
-   the shipped build either. The `WEAPON AI %d` string is the better remaining
-   lead. See
+   nearly uniform, which briefly led to a wrong conclusion that nothing read it -
+   **retracted**: `FUN_088518b4` reads it about 400 times a second and compares
+   the values against a normalised random draw, so near-uniform weights are
+   probabilities rather than dead data. This *is* the fire-or-absorb decision.
+   What is open is naming the reader and its caller. See
    [ai-stats.md](../ghidra/functions/psp-pulse-usa/ai-stats.md#the-sixth-ai-file-weaponaistatsxml).
 
 **Where the next session starts:** the consumer, not the parser. The parser is
@@ -1702,13 +1703,13 @@ opponent draws from the `ai` column of the shipped `<Pickupodds>` table rather
 than the `human` one - a distinction the disc's own data makes. `front` and
 `back` remain unreachable: they need race *positions*.
 
-**What an opponent does with what it draws is a policy, and nothing about it is
-recovered.** `Data\XML\WeaponAIstats.xml` was the assumed source and **it is not
-one**: its loader was found on 2026-08-17 and the file holds three multipliers a
-weapon - `useAgainstPlayer`, `useAgainstAI`, `absorb` - all within 20 % of one,
-with nothing marked fire-only or absorb-only - and **nothing reads the record**,
-so in the shipped build the file is not consulted at all. The decision lives
-elsewhere and has not been located. So this is still invention, and it is
+**What an opponent does with what it draws is a policy, and the original's is now
+located but not ported.** `Data\XML\WeaponAIstats.xml` holds three values a weapon
+- `useAgainstPlayer`, `useAgainstAI`, `absorb` - and `FUN_088518b4` reads them
+every frame, compares them against a normalised random draw and writes the fire
+request. So it is a **weighted random choice gated on an along-track range test**,
+not the flat rule below. Porting it needs the reader named and its other inputs
+read. Until then this is still invention, and it is
 kept small enough to be obviously provisional: **Turbo is fired at once but only
 where the driver is not braking, the line stays clear for as far as the boost
 carries, and there is nobody close enough ahead to arrive in the back of**; a

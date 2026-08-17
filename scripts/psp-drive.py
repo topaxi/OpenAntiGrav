@@ -326,8 +326,17 @@ def drive(args):
 # comfortably past the longest of them.
 SATURATE = 8
 
-# `right` presses from the saturated first entry to TIME TRIAL: the list runs
-# SINGLE RACE, TOURNAMENT, TIME TRIAL. Screenshot-verified 2026-07-28, and
+# `right` presses from the saturated first entry to TIME TRIAL.
+#
+# **The list is seven entries, not three** - re-measured 2026-08-17 by
+# screenshotting every press on a profile that has never finished an event:
+# `0 SINGLE RACE, 1 HEAD TO HEAD, 2 TIME TRIAL, 3 SPEED LAP, 4 TOURNAMENT,
+# 5 ZONE, 6 ELIMINATOR`, with a seventh press clamping. That reproduces
+# `shield.md`'s own table, greyed cells included, and it means **Eliminator needs
+# no campaign progression**. The two constants below happen to still be right.
+#
+# The 2026-07-28 comment this replaces said the list ran SINGLE RACE, TOURNAMENT,
+# TIME TRIAL, and
 # selecting it also flips WEAPONS to OFF and AI DIFFICULTY to N/A on its own,
 # which is the reference scenario's configuration.
 RACE_TYPE_TIME_TRIAL = 2

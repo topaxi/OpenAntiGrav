@@ -300,123 +300,124 @@ Read off `pulse-psp-usa.chd`. Every weapon authors `absorb="1.0"`; every weapon
 except `Plasma` and `Quake` authors `useAgainstAI="1.2" useAgainstPlayer="1.1"`,
 and those two author `1.0`/`1.0`.
 
-**So this file is not the fire-or-absorb decision.** `docs/gameplay/ai.md` and
-`crates/game/src/race/field.rs` have both recorded it as where the original
-decides what an opponent does with a pickup, and it is not: it is three
-multipliers, all within 20 % of one, with no weapon marked as absorb-only or
-fire-only. Even wired exactly, it would barely move an opponent's behaviour.
+**That nearly-uniform table led to a wrong conclusion here, twice.** Because no
+weapon is marked absorb-only or fire-only, this page previously argued the file
+could not be the fire-or-absorb decision. It is. The consumer compares these
+values against a normalised random draw, so `1.1` versus `1.2` is a *probability*
+and near-uniform weights are exactly what a designer would author for "usually
+fire, slightly more readily at another AI". See the retraction below.
 
-### And nothing reads it
+### RETRACTED: it *is* read, about 400 times a second
 
-**The record is parsed and never read.** Confidence **92** - three static sweeps
-that each close a different escape route, plus a runtime watchpoint with a working
-positive control (see [below](#measured-in-the-running-game-which-is-what-settles-it)).
-The static half:
+**This section previously said the record was parsed and never read, at
+confidence 92. That was wrong, and it was committed and pushed before it was
+checked properly.** Corrected 2026-08-17 by a runtime measurement in Eliminator
+and in Single Race.
 
-1. **Nothing else forms its address.** The record is an *inline member* at
-   `object + 0x708` - `FUN_08829124` does `addiu s6, s1, 0x708` at `0x08829184`
-   and hands `s6` to the loader. `s1` is that function's own `a0`, a `this`
-   pointer, stored to the singleton global `0x08b317b4` at `0x088291ac`; `s6`
-   never escapes the function (its only other uses are the callee-save store and
-   `li s6, 0x1` afterwards). Program-wide there are exactly **two**
-   `addiu <reg>, <reg>, 0x708` instructions: that one, and
-   `FUN_08826cac`'s `FUN_08851ce4(object + 0x708, 2)`, which is the destructor.
-   Nothing stores the base anywhere, so no consumer can have received it.
-2. **Nothing reads a field by weapon index.** Reading weapon `N` means a
-   displacement of `0x710`, `0x714` or `0x718` off a computed base. Searched with
-   *no* mnemonic filter, so `lw`, `lwc1` and the VFPU loads alike: `0x714` gives
-   ten hits and `0x718` eight, **every one of them `sp`-relative** in an unrelated
-   stack frame, and `0x710` the same. `addiu` against those displacements is
-   likewise `sp` only.
-3. **The class has no accessor.** Its whole block is a constructor
-   (`0x08851c94`), a destructor (`0x08851ce4`), the reset (`0x08851d3c`), a thunk
-   to the reset (`0x08851d6c`), the loader and the per-weapon parser.
-   `FUN_0885227c` next door is a generic vector lerp, not a getter.
+The reader is `FUN_088518b4`, whose only caller is `FUN_08851550`. **Neither is
+named here or anywhere in `docs/`**, which is why three static sweeps and a
+watchpoint run all missed it. Read out of memory at a halted watchpoint and
+confirmed against Ghidra:
 
-The **reset** is worth quoting because it makes the dead data visible from a
-second angle - `WeaponAiStats_Reset` (`0x08851d3c`) fills all thirteen records
-with `1.0` in every field:
-
-```c
-do {
-    record[0x08] = 1.0f;  record[0x0c] = 1.0f;  record[0x10] = 1.0f;
-    record += 0xc;
-} while (++i < 0xd);
+```text
+08851ae8: sll   a3, a3, 2        ; a3 = weapon_id * 12
+08851aec: addu  a0, a0, a3
+08851af0: addiu a0, a0, 8        ; a0 = record + id*0xc + 8
+08851af4: lwc1  f15, 8(a0)       ; record[id].absorb           (+0x10)
+08851af8: beq   a1, zero, +3
+08851b04: lwc1  f16, 0(a0)       ; record[id].useAgainstPlayer (+0x08)
+08851b08: lwc1  f16, 4(a0)       ; record[id].useAgainstAI     (+0x0c)
 ```
 
-So the defaults are `1.0`/`1.0`/`1.0` and the shipped file authors
-`1.0`/`1.2`/`1.1`. **The file barely departs from the values it would have had if
-it did not exist**, which is exactly what one expects of a table nothing consumes.
+**And it is the fire-or-absorb decision after all.** It compares those floats
+against `FUN_089731c4() * 4.656613e-10` - a normalised random draw - and writes
+two request bytes at `*(param_1 + 0x10) + 0x15` and `+0x17`. So this file *is*
+what decides whether an opponent fires or absorbs, which the previous text also
+denied.
 
-This is the same shape as [`BaseStartThrust`](#basestartthrust-is-authored-and-never-read)
-on this page: authored in the shipped data, parsed correctly, read by nothing.
+### Why every sweep missed it, and the lesson
 
-### Measured in the running game, which is what settles it
+**The reader computes the field address into a register first**: `record +
+id*0xc + 8` lands in `a0`, and the loads are `0(a0)`, `4(a0)`, `8(a0)`. Every
+static sweep in this file's history keyed on the operand text `0x7...`, so none
+of them could ever have seen it.
 
-**Confidence 92**, because the static case above now has a runtime leg. The
-record was located in live PSP RAM by its own authored fingerprint - the 39-float
-run `1.1, 1.2, 1.0` repeated with `1.0, 1.0, 1.0` at ids 2 and 7 - which found
-exactly one full-table match, at `0x09881900` in a single race with a full grid.
+**That exact hole was written down as residual gap 1 and gap 4 of the previous
+verdict, and then the conclusion was reported at 92 anyway.** Naming a gap is not
+closing it. If a sweep's method cannot see a whole class of access, the
+confidence has to be bounded by that, not by how many variations of the same
+blind method were run.
 
-**That address is on the heap** (`0x0988xxxx`, well past the executable's data),
-which independently kills the worst worry about the static sweep: if the object
-had been a fixed global, the fields would sit at link-time-known addresses and a
-consumer could read them with absolute `lui`/`lwc1` immediates that a
-displacement sweep would never match. It is not, so any consumer must form the
-address from the object pointer - which is exactly what sweeps 1 and 2 cover.
+### The measurement
 
-Then a **read watchpoint** over the whole 156-byte table, via
-`memory.breakpoint.add` (see
-[ppsspp-debugger.md](../../../reverse-engineering/ppsspp-debugger.md#memory-watchpoints-and-the-control-that-makes-a-zero-mean-something)):
+The record is located from the singleton rather than by scanning:
+`table = *(0x08b317b4) + 0x710`. Fingerprint verified before every arming, and
+still intact after each, so no run measured a recycled heap block.
 
-| Armed | Table | Control: a live craft struct |
-| --- | --- | --- |
-| read, 60 s | **0** | 402,040 |
-| read+write split, 90 s | **0** reads, **0** writes | - |
-| read+write, 60 s | **0** | 348,257 |
+| Mode | Player | Armed | Table hits | Control hits |
+| --- | --- | --- | --- | --- |
+| Eliminator (`DAT_08b31048 = 8`) | driving | 44 s | **1,130** | 272,443 |
+| Eliminator | driving | 45 s | **5,742** | 346,359 |
+| Single Race (`= 3`) | driving | 52 s | **21,170** | 458,669 |
 
-**The control is the point.** A watchpoint that never fires is
-indistinguishable from a watchpoint that does not work, and this project has been
-caught by that shape twice - the `hover::sweep` gate that was gated wrong and
-never fired, and `just apply-names` reporting 383 renames it never made. So every
-arming above ran a second watchpoint, same flags, same process, over 156-256
-bytes of a live craft struct, which the physics reads every frame. It counted
-hundreds of thousands of reads while the table counted none.
+Every non-zero reproduced. Two arithmetic identities corroborate a single code
+path: per weapon row `absorb = useAgainstPlayer + useAgainstAI` (Single Race
+Shield: 687 + 5,989 = 6,676 exactly; 14 of 15 rows exact, one off by one at a
+sampling-window edge), and each caught PC maps to exactly one field offset in
+every row. Only weapons actually in play appear - six rows in Eliminator, nine in
+Single Race.
 
-Also checked, because it would have been the obvious way for a zero to be a lie:
-**the debugger's own `memory.read`/`memory.write` do not count as hits**, so the
-zeros are not an artifact of reading around the watchpoint.
+### The earlier zero was a false negative, and the mode was not the cause
 
-### One anomaly, unexplained and recorded rather than dropped
+The previous run's watch address (`0x09881900`) and control craft
+(`0x09b72610`) are byte-identical to the Single Race run above, so a wrong
+address is ruled out. What differed is that **the player was parked**. The
+reader gates on a signed along-track range test (`ahead < 150`, `behind > -200`)
+and on a random draw, and a stationary player never satisfies it. A second,
+undiscriminated candidate is that the earlier race had `WEAPONS Off`.
 
-The **first** arming - a single 156-byte watchpoint with `read` and `write` both
-true - reported **6,488 hits at 15 s and 9,706 at 30 s, then stopped growing.**
-The identical arming, repeated later with a control beside it, reported **0**.
-Splitting the range into a read half and a write half also reported 0 for both.
+So the lesson is not "test more modes" - it is that **a scenario where the thing
+under test cannot happen produces a zero that looks like evidence.** The positive
+control proved the *instrument* worked and said nothing about whether the
+*scenario* exercised the code.
 
-So it did not reproduce, and nothing here explains it. Candidates that were
-tested and eliminated: debugger-side accesses (do not count), and a stale
-watchpoint from an earlier probe (different address). Candidates not eliminated: a
-transient during the race's own load, or a wide watchpoint over-matching. **Do not
-treat a single non-zero hit count from this mechanism as evidence without
-re-arming it**, which is the same rule the flaky `ps2_source_ground_truth` tests
-get in `HANDOVER.md`.
+### The anomaly is explained, and it was the instrument
 
-### Residual gaps, stated so nobody treats 92 as 100
+The unreproduced 9,706 hits recorded here previously are almost certainly the
+`log=True` trap: a watchpoint with logging on writes a line per hit, a 256-byte
+control fires about 6,000 times a second, and the log grew to roughly 6 GB,
+**filled `/tmp` and wedged the emulator** - after which `memory.read` times out
+and counters freeze. That also explains one run's counter stalling at 8,944.
 
-- The static sweep is by base formation and by displacement; a consumer reaching
-  the fields through a pointer written to memory elsewhere would escape both -
-  though sweep 1 finds nothing that could write such a pointer.
-- The runtime measurement is **one track, one speed class, one race type, about
-  four minutes**, with the player parked and seven AI craft driving. A reader that
-  only fires in Eliminator, or on a track this one is not, or at a race's end,
-  would not have been caught.
-- `lb`/`lbu`/`lh`/`lhu`/`lwl`/`lwr` in range were not swept. Implausible for
-  floats.
+**But the same log is the prize.** Its lines read
+`CHK Read32(CPU) at 09881944 ((09881944)), PC=08851af4` - address *and* program
+counter, at full emulation speed, with no halting. That is strictly more than the
+`hits` counter, and it is how the reader was finally caught. See
+[ppsspp-debugger.md](../../../reverse-engineering/ppsspp-debugger.md#memory-watchpoints-and-the-control-that-makes-a-zero-mean-something).
 
-**What this closes.** `ai.md` and `crates/game/src/race/field.rs` both recorded
-this file as where the original decides what an opponent does with a pickup. It
-is not, twice over: it holds no fire-or-absorb flag, and in the shipped PSP build
-it is not consulted at all. **The weapon-AI decision is somewhere else entirely
-and has not been located** - and the `WEAPON AI %d` string this file was paired
-with is now the better lead of the two.
+### What is open now
+
+- **Both functions need naming and an evidence page**, and neither is nameable
+  above about 70, so anything landed for them takes a `_q` suffix. Deliberately
+  **not** named or added to `names.tsv` in this change: the rules require the row
+  and its evidence to land together, and the evidence is one runtime capture plus
+  one disassembly read.
+- **`FUN_08851550`'s identity**, and what object carries the record pointer at
+  `+0x18` with a weapon id at `+0x20`.
+- **A doc conflict the consumer opens.** It selects `+0x08` versus `+0x0c` on a
+  *signed range test*, not visibly on whether the target is the player or an AI.
+  So the parser's attribute names - `useAgainstPlayer`, `useAgainstAI` - and the
+  consumer's actual behaviour disagree, and one of the two readings is wrong.
+- **Weapons-off modes are untested** and should read nothing; Tournament and the
+  three other race types were skipped on the grounds that two weapons-on modes
+  both read, so a third cannot change the verdict.
+- **A clean race-that-ends measurement.** One run crossed into `Race End Photo`
+  armed, but the emulator was stalled by the log at the time, so that leg is
+  void rather than negative.
+
+**What this actually establishes.** `ai.md` and `crates/game/src/race/field.rs`
+recorded this file as where the original decides what an opponent does with a
+pickup, and **they were right** - `FUN_088518b4` reads it every frame and writes
+the fire request. So the weapon-AI hook is located, and what is left is naming the
+two functions and reading the decision's other inputs, not hunting for the
+mechanism. The `WEAPON AI %d` string is no longer the better lead.

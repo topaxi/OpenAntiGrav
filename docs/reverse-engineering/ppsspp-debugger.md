@@ -1189,13 +1189,58 @@ the heap or at a link-time address. A heap address rules out any consumer readin
 it through absolute `lui`/`lwc1` immediates, which is the escape route a
 displacement-based static sweep would miss.
 
-### A hit count that does not reproduce is not a hit count
+### `log: True` will fill your disk and wedge the emulator
 
-The first wide watchpoint armed over the `WeaponAIstats` table reported 6,488
-hits at 15 s and 9,706 at 30 s and then stopped growing. The identical arming,
-repeated with a control beside it, reported **zero**, and so did the same range
-split into read and write halves. It has no explanation; debugger-side accesses
-and a stale watchpoint were both tested and eliminated.
+**This is the trap to know before arming anything wide.** A logging watchpoint
+writes a line per hit. A 256-byte watchpoint over a live craft struct fires about
+**6,000 times a second**, and PPSSPP's stdout reached roughly **6 GB**, filled
+`/tmp` and wedged the emulator: every `memory.read` then times out, hit counters
+freeze, and the shell starts returning exit 1 with no output. `/tmp` here is a
+6.8 G tmpfs, which is also why
+[the `chchdman` ground-truth test fails](../../HANDOVER.md) - the same disk.
 
-**So re-arm before believing a non-zero count**, the same rule the flaky
+**That also explains the one anomaly this page used to record as unexplained**: a
+wide watchpoint reporting 6,488 hits at 15 s and 9,706 at 30 s and then freezing
+was the log filling, not the game reading. A frozen counter and a quiet one look
+identical.
+
+So: redirect the log somewhere with room, cap the run, or watch a narrow range.
+And **re-arm before believing any non-zero count** - the same rule the flaky
 `ps2_source_ground_truth` transcode tests get in `HANDOVER.md`.
+
+### But the log is the prize, not just a hazard
+
+Its lines carry the **address and the program counter**, at full emulation speed,
+with no halting:
+
+```text
+CHK Read32(CPU) at 09881944 ((09881944)), PC=08851af4
+```
+
+That is strictly more than the `hits` counter gives, and it is how the
+`WeaponAIstats` reader was finally identified after three static sweeps and one
+watchpoint run had missed it. **Prefer the log over the counter** whenever the
+question is *who* rather than *whether*.
+
+Two mechanics that each cost time:
+
+- Restarting the emulator: kill with `-9` and **wait for port 47810 to free**,
+  or the new instance cannot bind and the debugger talks to the dying race.
+- **Delete the log rather than truncate it.** PPSSPP's fd keeps its offset, so a
+  truncated file becomes sparse and stale hit lines survive in it; grep then reads
+  them as the new run's data. That produced one bogus intermediate result.
+
+### A zero means the instrument worked, not that the scenario happened
+
+The hardest lesson of the run this page documents. A read watchpoint on the
+`WeaponAIstats` table measured **0 hits over four minutes with a control counting
+400,000 a minute** - and the record was being read all along, about 400 times a
+second, in a race where the player was *driving*.
+
+The earlier race had the player **parked**, and the reader gates on a signed
+along-track range test (`ahead < 150`, `behind > -200`). A stationary player never
+satisfies it. Same watch address, same control craft, opposite answer.
+
+**So a positive control proves the instrument, and nothing about the scenario.**
+Before reporting a zero, ask what would have to happen in the game for the code
+under test to run at all, and then make it happen.

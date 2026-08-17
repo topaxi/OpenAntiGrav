@@ -561,10 +561,13 @@ impl Race {
     /// `AiStats_LoadAll` in the same race-setup function) and its schema is three
     /// floats a weapon: `useAgainstPlayer`, `useAgainstAI`, `absorb`. The shipped
     /// values are nearly uniform - `1.0` absorb throughout, `1.2`/`1.1` for
-    /// everything but Plasma and Quake - so **there is no weapon the file marks
-    /// as absorb-only or fire-only**. Worse for anyone hoping to port it:
-    /// **nothing reads the record**, so the shipped build does not consult the
-    /// file at all. See
+    /// everything but Plasma and Quake - so there is no weapon the file marks as
+    /// absorb-only or fire-only. **That is because they are probabilities, not
+    /// flags**: `FUN_088518b4` reads the record every frame and compares each
+    /// value against a normalised random draw, gated on an along-track range
+    /// test. So the original's policy is a **weighted random choice**, and what
+    /// stands between this comment and a port is naming that function and reading
+    /// the decision's other inputs. See
     /// `docs/ghidra/functions/psp-pulse-usa/ai-stats.md`. The decision below is
     /// therefore still invention, and still kept small enough to be obviously
     /// provisional:
