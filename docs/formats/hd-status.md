@@ -20,9 +20,10 @@ The [roadmap](../overview/roadmap.md#a-circuit-draws-as-of-2026-08-17) is where
 that is accounted for. Three things it is worth knowing here: the
 [`.psarc` reader](psarc.md) is in `oag-formats` now; `oag_formats::ByteOrder`
 exists and **neither `vex::nodes` nor `track::parse` takes it as an argument**,
-because each file declares its own order in its own magic; and `--mesh` still
-draws nothing, for the reason [the geometry has left the
-file](#the-geometry-has-left-the-file) gives.
+because each file declares its own order in its own magic; and `--mesh` **now
+draws**, because the container the geometry left for has since been read - see
+[rcsmodel](rcsmodel.md), and [the geometry has left the
+file](#the-geometry-has-left-the-file) below for what that section used to say.
 
 Nothing on this page has been verified under an emulator, and no PS3 executable
 has been read for any of it. Every score rests on static reading plus exact
@@ -188,12 +189,21 @@ The same circuit, measured both ways:
 guessed: floats at `+0x10` and `+0x20` are a bounding-box pair, `min <= max`
 componentwise on **1,638 of 1,638** `Mesh` nodes across the `DATA00` circuits.
 There is a per-node 32-bit word after them that differs between otherwise
-identical nodes, which is the obvious candidate for the reference into
-`.rcsmodel` - unread, and named as unread.
+identical nodes, which this page called "the obvious candidate for the reference
+into `.rcsmodel`" while that file was unread. **It is the reference**: it is the
+chunk's own first word, and every one of Assegai's 15 mesh nodes resolves
+through it. See [rcsmodel](rcsmodel.md).
 
-So `oag-view --mesh` cannot draw an HD track, and the reason is not the `.vex`
-layer at all. `--track` can, and does: the ribbon is built from the `WO Track`
-spline, which is authored data that never moved.
+So `oag-view --mesh` draws an HD craft and an HD circuit, as of 2026-08-17.
+Positions and triangles only - normals, texture coordinates and the `.gtf`
+textures are all still unread, so it is untextured and lit off computed face
+normals. `--track` still draws the ribbon from the `WO Track` spline, which is
+authored data that never moved.
+
+**One thing this section's own framing got wrong**, and it cost a render: the
+geometry did not merely leave the payload, it left the *node tree*. All 126
+`Mesh` nodes of `talons_junction/track.vex` are props; the road is among the 904
+of 983 chunks no node references at all, carrying a world-space bias instead.
 
 ## `WO Track`: version `0x106`, the same control point
 
@@ -503,7 +513,9 @@ rather than explained away.
 
 ## What is genuinely new
 
-- **`.rcsmodel`** - 643 files, 686.5 MiB, all render geometry. Nothing read.
+- **`.rcsmodel`** - 643 files, 686.5 MiB, all render geometry. **Positions and
+  triangles read**, see [rcsmodel](rcsmodel.md); the vertex stride is in no
+  field of the file and the attributes after each position are undecoded.
 - **`.rcsmaterial`** - 1,632 files, wall-to-wall 32-bit hashes. A track authors
   around fifty by name (`track_surface`, `track_wall`, `glass_reflect`,
   `emissive_bloom`), and a second identical set under `materials_reversed/`.

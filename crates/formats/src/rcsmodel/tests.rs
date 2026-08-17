@@ -186,7 +186,8 @@ fn a_mesh_whose_stride_is_not_determined_reports_nothing_rather_than_guessing() 
     let mesh = &parsed.meshes[0];
 
     let contained: Vec<usize> = STRIDES
-        .step_by(2)
+        .iter()
+        .copied()
         .filter(|&stride| mesh.extent(&data, stride, CUBE_BOUNDS).is_some())
         .collect();
     assert!(

@@ -724,14 +724,13 @@ fn main() -> Result<()> {
             );
         }
         let data = mesh::read_blob(&cli.archive, name)?;
-        // Both tiers by default: an asset inspector's job is to show what is on
-        // the disc, not to apply a performance divergence from it. `--lod
-        // single` is how you see what the duplication is costing.
-        let model = inspect(
-            mesh::build_with_textures(name, &data, external, cli.lod)?,
-            &data,
-            &cli,
-        );
+        let ps3 = mesh::rcs::scene_from(&cli.archive, name, &data)?
+            .inspect(|(_, report)| println!("{}", report.describe()));
+        let model = match ps3 {
+            Some((model, _)) => model,
+            None => mesh::build_with_textures(name, &data, external, cli.lod)?,
+        };
+        let model = inspect(model, &data, &cli);
         println!(
             "{}: {} meshes, {} vertices, {} triangles, radius {:.2}",
             model.label,

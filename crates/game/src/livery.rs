@@ -192,22 +192,35 @@ fn one(
     let blob = archives
         .read_name(&hull_name)
         .with_context(|| format!("reading {hull_name}"))?;
-    // **A PS3 hull has no geometry in it at all**, and that is the disc's doing
-    // rather than a decode failure: Wipeout HD moved every mesh into a
-    // `.rcsmodel` beside the `.vex` and nothing here decodes one. So the model
-    // is empty and *reported* empty, which is CLAUDE.md's "draw nothing and say
-    // so" - a substitute hull would be an invention, and refusing the race
-    // outright would stop a circuit that otherwise loads completely.
+    // **A PS3 hull's geometry is in the `.rcsmodel` beside it**, so it is read
+    // from the pair. Untextured and lit off computed face normals; see
+    // `oag_render::mesh::rcs` for what is decoded and what is not. A source
+    // with no sibling draws nothing and says so rather than substituting
+    // anything.
     if mesh::geometry_is_external(&blob) {
-        report.push(format!(
-            "{hull_name}: a PS3 .vex, so the hull is in the .rcsmodel beside it and \
-             nothing draws for this craft - the race still runs"
-        ));
+        let sibling = mesh::rcs::sibling_name(&hull_name);
+        let geometry = sibling.as_deref().and_then(|s| archives.read_name(s).ok());
+        let Some(geometry) = geometry else {
+            report.push(format!(
+                "{hull_name}: a PS3 .vex with no .rcsmodel beside it - nothing draws \
+                 for this craft, and the race still runs"
+            ));
+            return Ok(Livery {
+                team: team.to_string(),
+                hull: mesh::Model::none(&hull_name),
+                nozzle: None,
+                collision_fx: Vec::new(),
+                boost: None,
+                boost_uv: None,
+            });
+        };
+        let (hull, built) = mesh::rcs::build(&hull_name, &blob, &geometry, |c| c.mesh)?;
+        report.push(format!("{hull_name}: {}", built.describe()));
         return Ok(Livery {
             team: team.to_string(),
-            hull: mesh::Model::none(&hull_name),
-            nozzle: None,
-            collision_fx: Vec::new(),
+            nozzle: engine_flare(&blob),
+            collision_fx: collision_fx_locators(&blob),
+            hull,
             boost: None,
             boost_uv: None,
         });

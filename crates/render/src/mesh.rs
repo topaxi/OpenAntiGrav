@@ -412,6 +412,8 @@ impl Model {
 mod flap;
 pub use flap::Flap;
 
+pub mod rcs;
+
 /// Reads one named blob out of an archive inside a disc image.
 ///
 /// `spec` is `<image>:<path-on-disc>`, matching `oag-wad`. Either container

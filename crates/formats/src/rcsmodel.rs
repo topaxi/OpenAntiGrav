@@ -97,13 +97,21 @@ const SUBMESH_BASE: usize = 0x60;
 /// Bytes of position in a vertex: three big-endian `i16`s.
 const POSITION_LEN: usize = 6;
 
-/// The strides [`Mesh::solve_stride`] will consider, in bytes.
+/// The strides the searches will consider, in bytes.
 ///
-/// **14, 18 and 22 are the only values measured**, and they are 6 bytes of
-/// position plus 8, 12 or 16 of attributes - so the range below is wider than
-/// what the disc uses, deliberately, and steps by 2 because a `.rcsmodel`
-/// vertex is `i16`-aligned on every file read.
-const STRIDES: std::ops::RangeInclusive<usize> = 6..=64;
+/// **These three and nothing else, and that is a measurement rather than an
+/// optimisation.** They are 6 bytes of position plus 8, 12 or 16 of attributes,
+/// and they are the only widths an authored bounding box has ever settled on -
+/// across all 89 meshes of Assegai, its LOD1 and Talon's Junction.
+///
+/// Searching every even width from 6 to 64 instead, as this did first, is
+/// strictly worse on a circuit: 814 of `talons_junction`'s 983 chunks still
+/// choose one of these three, and the other 169 choose a width no measurement
+/// supports and decode to spikes radiating out of the level. A width outside
+/// this set is not evidence of a fourth format; it is the search finding
+/// nothing and picking the least bad noise. Skipping the chunk and saying so is
+/// the honest answer, and it is what the callers do.
+pub const STRIDES: &[usize] = &[14, 18, 22];
 
 /// Everything that can go wrong reading one.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -161,6 +169,12 @@ impl std::error::Error for Error {}
 
 /// Shorthand for this module's results.
 pub type Result<T> = std::result::Result<T, Error>;
+
+/// An axis-aligned box, as a `(min, max)` pair.
+///
+/// The shape a `.vex` `Mesh` node authors, and the oracle
+/// [`Mesh::solve_stride`] reads the vertex stride out of.
+pub type Bounds = ([f32; 3], [f32; 3]);
 
 /// A `.rcsmodel`, parsed as far as its mesh directory.
 ///
@@ -402,18 +416,21 @@ impl Mesh {
     /// `bounds` is the node's `(min, max)`. `tolerance` is how far a face may
     /// be missed by; two quantisation steps is what the callers use.
     #[must_use]
-    pub fn solve_stride(
-        &self,
-        data: &[u8],
-        bounds: ([f32; 3], [f32; 3]),
-        tolerance: f32,
-    ) -> Option<usize> {
+    pub fn solve_stride(&self, data: &[u8], bounds: Bounds, tolerance: f32) -> Option<usize> {
         let (min, max) = bounds;
+        let populated = self.submeshes.iter().filter(|s| s.vertex_count > 0).count();
         let mut found = None;
-        for stride in STRIDES.step_by(2) {
-            let Some((lo, hi)) = self.extent(data, stride, bounds) else {
+        for &stride in STRIDES {
+            let Some(((lo, hi), fitted)) = self.extent(data, stride, bounds) else {
                 continue;
             };
+            // **The majority rule.** `extent` skips a submesh that does not fit,
+            // so without this a stride could qualify by fitting one submesh out
+            // of nineteen and skipping the rest. Half is enough: the case this
+            // exists for is one stray submesh, not a coin toss.
+            if fitted * 2 < populated {
+                continue;
+            }
             let tight = (0..3).all(|i| {
                 (lo[i] - min[i]).abs() <= tolerance && (hi[i] - max[i]).abs() <= tolerance
             });
@@ -430,42 +447,173 @@ impl Mesh {
         found
     }
 
-    /// The bounding box of every submesh's positions at `stride`, or `None` if
-    /// any point falls outside `bounds`.
+    /// Recovers the vertex stride with no bounding box to check against, by
+    /// taking the one whose decoded positions are most compact.
     ///
-    /// Bails on the first stray point, which is what keeps the search over
-    /// [`STRIDES`] cheap: a wrong stride usually leaves the box within a few
-    /// vertices.
-    fn extent(
+    /// # Why a circuit needs this and a craft does not
+    ///
+    /// **Wipeout HD's road is not in the `.vex`.** All 126 `Mesh` nodes of
+    /// `talons_junction/track.vex` are props - blimps, girders, sky traffic -
+    /// and the circuit itself is among the **904 of 983** chunks no node
+    /// references at all, drawn from the visibility set instead. Those chunks
+    /// have no authored box, so [`Self::solve_stride`] has nothing to ask.
+    ///
+    /// # Why the most compact reading is the right one
+    ///
+    /// A position is a quantised `i16`; the attribute bytes after it are
+    /// normalised across the whole `i16` range. So a wrong stride reads
+    /// attributes as positions and spreads them over the full +/-32768 - two
+    /// orders of magnitude wider than a real mesh, which occupies a tile.
+    /// Taking the minimum is therefore not a heuristic dressed as a rule, it is
+    /// reading the one interpretation that is not noise.
+    ///
+    /// **Checked against the oracle it replaces**: on the 78 meshes of Assegai
+    /// and Talon's Junction where an authored box settles the stride, this
+    /// picks the same value on **77**. The one disagreement is a mesh where the
+    /// box admitted 36 and this picks 18 - half of it, so the box was matching
+    /// every second vertex and this is the better answer rather than a worse
+    /// one.
+    ///
+    /// # The winner has to be decisive
+    ///
+    /// Smallest-wins alone is not enough: on a circuit the three widths often
+    /// produce spans within a few per cent of each other, and picking one of
+    /// those by a hair decodes to spikes radiating out of the level. So the
+    /// winner must be **at most half** the runner-up - a relative test with no
+    /// threshold to tune, and the reading either stands out from the noise or
+    /// there is no answer.
+    ///
+    /// Validated on the same oracle: all **70 of 70** of `talons_junction`'s
+    /// box-labelled chunks clear it, the worst at 0.35 and the median at 0.02.
+    /// It keeps 718 of the circuit's 983 chunks; the rest draw nothing.
+    ///
+    /// `None` for a chunk with no readable vertex buffer, or none whose reading
+    /// stands out.
+    #[must_use]
+    pub fn solve_stride_by_extent(&self, data: &[u8]) -> Option<usize> {
+        let mut spans: Vec<(usize, i32)> = STRIDES
+            .iter()
+            .filter_map(|&stride| Some((stride, self.quantised_span(data, stride, None)?)))
+            .collect();
+        spans.sort_by_key(|&(_, span)| span);
+        let [(stride, best), (_, runner_up), ..] = spans[..] else {
+            return None;
+        };
+        (i64::from(best) * 2 <= i64::from(runner_up)).then_some(stride)
+    }
+
+    /// The widest axis span of the raw `i16` positions at `stride`, or `None`
+    /// if no submesh could be read or the span passed `ceiling`.
+    ///
+    /// Measured before the bias and scale are applied, so it compares strides
+    /// on one chunk without a multiply per vertex. `ceiling` stops a read that
+    /// has already exceeded a span the caller has no use for.
+    fn quantised_span(&self, data: &[u8], stride: usize, ceiling: Option<i32>) -> Option<i32> {
+        let mut lo = [i32::MAX; 3];
+        let mut hi = [i32::MIN; 3];
+        let mut any = false;
+        for submesh in &self.submeshes {
+            if submesh.vertex_count == 0 {
+                continue;
+            }
+            let end = submesh.vertex_offset + stride * (submesh.vertex_count - 1) + POSITION_LEN;
+            if end > data.len() {
+                continue;
+            }
+            any = true;
+            for k in 0..submesh.vertex_count {
+                let at = submesh.vertex_offset + k * stride;
+                for i in 0..3 {
+                    let v = i32::from(ByteOrder::Big.i16(data, at + i * 2));
+                    lo[i] = lo[i].min(v);
+                    hi[i] = hi[i].max(v);
+                }
+                if let Some(ceiling) = ceiling
+                    && (0..3).any(|i| hi[i] - lo[i] >= ceiling)
+                {
+                    return None;
+                }
+            }
+        }
+        any.then(|| (0..3).map(|i| hi[i] - lo[i]).max().unwrap_or(0))
+    }
+
+    /// Whether one submesh's positions all land inside `bounds` at `stride`.
+    ///
+    /// **A caller that draws has to ask this too, not just [`solve_stride`].**
+    /// The stride search tolerates a submesh that does not fit - see
+    /// [`Mesh::extent`] - so the stride it returns is right for the mesh and
+    /// wrong for that one submesh, whose positions then come out of the
+    /// attribute bytes and scatter across the world. Assegai's hull has exactly
+    /// one such submesh and it stretched the ship's own bounding sphere from 7
+    /// units to 130, which framed the craft as a speck.
+    ///
+    /// [`solve_stride`]: Mesh::solve_stride
+    #[must_use]
+    pub fn submesh_fits(
         &self,
         data: &[u8],
+        submesh: &SubMesh,
         stride: usize,
-        bounds: ([f32; 3], [f32; 3]),
-    ) -> Option<([f32; 3], [f32; 3])> {
+        bounds: Bounds,
+    ) -> bool {
+        let (min, max) = bounds;
+        let slack = 1e-2;
+        self.positions(data, submesh, stride).is_ok_and(|points| {
+            points
+                .iter()
+                .all(|p| (0..3).all(|i| p[i] >= min[i] - slack && p[i] <= max[i] + slack))
+        })
+    }
+
+    /// The box the submeshes that *fit* inside `bounds` at `stride` occupy, and
+    /// how many of them there were.
+    ///
+    /// # A submesh that does not fit is skipped, not fatal
+    ///
+    /// **Measured, and it is the difference between drawing a craft and drawing
+    /// its airbrakes.** Assegai's hull is one `Mesh` node of 19 submeshes; 18 of
+    /// them fit at stride 22 and exactly one - `sub13` - fits at no stride at
+    /// all. Requiring every submesh to fit therefore rejected 22 for the whole
+    /// node and the hull vanished, while the 18 that do fit reconstruct it
+    /// exactly. Why that one submesh reads differently is unrecovered.
+    ///
+    /// The guard against a stride surviving by skipping almost everything is
+    /// [`Mesh::solve_stride`]'s majority rule, which is why the count comes back
+    /// with the box rather than being swallowed here.
+    fn extent(&self, data: &[u8], stride: usize, bounds: Bounds) -> Option<(Bounds, usize)> {
         let (min, max) = bounds;
         // A hair of slack, because the authored box is stored as `f32` and the
         // positions are reconstructed from a quantised integer.
         let slack = 1e-2;
         let mut lo = [f32::MAX; 3];
         let mut hi = [f32::MIN; 3];
-        let mut any = false;
+        let mut fitted = 0;
         for submesh in &self.submeshes {
             if submesh.vertex_count == 0 {
                 continue;
             }
-            let points = self.positions(data, submesh, stride).ok()?;
+            let Ok(points) = self.positions(data, submesh, stride) else {
+                continue;
+            };
+            // Bails on the first stray point, which is what keeps the search
+            // over `STRIDES` cheap: a wrong stride usually leaves the box within
+            // a few vertices.
+            if points
+                .iter()
+                .any(|p| (0..3).any(|i| p[i] < min[i] - slack || p[i] > max[i] + slack))
+            {
+                continue;
+            }
+            fitted += 1;
             for point in points {
-                any = true;
                 for i in 0..3 {
-                    if point[i] < min[i] - slack || point[i] > max[i] + slack {
-                        return None;
-                    }
                     lo[i] = lo[i].min(point[i]);
                     hi[i] = hi[i].max(point[i]);
                 }
             }
         }
-        any.then_some((lo, hi))
+        (fitted > 0).then_some(((lo, hi), fitted))
     }
 }
 

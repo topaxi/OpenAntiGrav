@@ -1232,8 +1232,43 @@ entry point (`FUN_000186f0`) returns `Language Selection`, which agrees with the
 XML at confidence 70; the eight-step order behind it, and which of the six
 `skin.xml` copies is live, both need an emulator.
 
-What is still ahead: **months** to something that looks like HD, nearly all of
-it `.rcsmodel`; and HD's own simulation is not estimable, being gated by
+#### The level and the craft draw, later still on 2026-08-17
+
+```sh
+just view data/images/hdfury-ps3-eu-dec.iso:PS3_GAME/USRDIR/DATA02.PSARC \
+    --mesh /data/ships/assegai/ship.vex
+```
+
+**[`.rcsmodel`](../formats/rcsmodel.md) is read** - the container the "months,
+nearly all of it `.rcsmodel`" estimate above was about. Assegai draws from its
+own PS3 geometry, 18,911 triangles over 13 of its 15 mesh nodes; Talon's
+Junction draws 357,790, and both go through the race path as well as the viewer.
+
+Four things worth knowing before touching it:
+
+11. **Positions and triangles, and nothing else.** `i16` triples through a
+    per-mesh bias and a `1/128` scale, big-endian `u16` triangle lists - 1,274
+    of 1,274 submeshes have an in-range index buffer whose count divides by
+    three. The 8 to 16 attribute bytes after each position are undecoded and are
+    not read, so the models are untextured and lit off **computed face
+    normals** - a derivation from the decoded geometry, called out as such.
+12. **The vertex stride is in no field of the file.** Searched exhaustively over
+    138 submeshes whose stride an authored box settles: nothing in the 0x80-byte
+    descriptor matches it on more than one of them. It is recovered from the
+    `.vex` node's own bounding box instead, requiring the points to *fill* the
+    box rather than merely fit inside it - 0 ambiguous across 89 meshes.
+13. **HD's road is not in the `.vex` at all.** All 126 `Mesh` nodes of
+    `talons_junction/track.vex` are props; the circuit is among the 904 of 983
+    chunks nothing references, each carrying a world-space bias. A first render
+    showed sky traffic over an empty void, which is what that looks like.
+14. **What is still missing is stated in the loader report, per model**: how
+    many nodes addressed no chunk, how many had no recoverable stride, how many
+    submeshes were dropped. A circuit that silently drew two thirds of itself
+    would look like a working feature.
+
+What is still ahead: the attribute layout and `.gtf`, for a *textured* HD;
+`.pvs`, for drawing a section at a time rather than all 904 chunks; and HD's own
+simulation, which is not estimable, being gated by
 [ADR-0009](../architecture/adr/0009-multi-game-fanout.md) item 2 *and* by the
 absence of any RPCS3 equivalent of the M3 harness.
 
