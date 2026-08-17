@@ -100,7 +100,37 @@ hash-images:
 # oag-game does not play Pure yet, so these fail fast with a named
 # `WrongTitle` error rather than booting a race; they exist so that error
 # path stays reachable by keyword, ready for whenever Pure becomes playable
-# (roadmap M8). A bare flag (`--ticks 5`) still gets the EU default; anything
+# (roadmap M8).
+#
+# `hd`/`fury`/`hd-ps3-eu` swaps in Wipeout HD / Fury, and that one needs
+# `--race`:
+#
+#     just play hd --race
+#
+# **Only the decrypted image works**, so the keyword names
+# `hdfury-ps3-eu-dec.iso` and never the `.iso` beside it; a PS3 disc has to be
+# layer-1 decrypted before a single `.psarc` header reads. `just ps3iso decrypt`
+# does it, and docs/formats/ps3-disc.md is why. The recipe says so rather than
+# letting the archive open fail with something obscure.
+#
+# **Without `--race` this refuses by name**, the way the Pure keywords do and
+# for a nearer-miss reason: `oag_hd::TITLE` sets `front_end: None`, so the boot
+# path stops with "Wipeout HD's front end is not wired up (its boot chain is
+# declared, not measured)". The layout half is in fact recovered - see
+# docs/formats/hd-frontend.md, and `oag_hd::frontend::MENU_SKIN`, read off six
+# agreeing copies of `skin.xml` - and it is the *chain* that is still only what
+# the XML declares rather than something anyone watched HD do. That is a
+# deliberate hold, not a gap waiting on this recipe.
+#
+# **With `--race` it runs**, verified on this disc: Talon's Junction with
+# Assegai, which is `oag_hd::race::DEFAULTS` and the same circuit as Pulse's
+# `16_Track` in the same coordinates, so an HD run is directly comparable with
+# an existing Pulse capture. Expect an honest half-picture rather than a
+# finished frame - HD keeps its render geometry in `.rcsmodel`, which nothing
+# here decodes, so the ships do not draw and the circuit comes up as the derived
+# ribbon. The simulation, the spline, the collision and the pads are all real.
+#
+# A bare flag (`--ticks 5`) still gets the EU default; anything
 # else (a path or `image:entry` spec) is passed straight through unchanged,
 # so `just play data/images/foo.chd --ticks 5` still works.
 play *ARGS:
@@ -126,6 +156,28 @@ play *ARGS:
             ;;
         pure-psp-usa|pure-usa)
             args=("data/images/pure-psp-usa.chd" "${args[@]:1}")
+            ;;
+        hd|fury|hd-fury|hd-ps3-eu)
+            img="data/images/hdfury-ps3-eu-dec.iso"
+            # A PS3 disc reads as noise until it is layer-1 decrypted, and the
+            # encrypted image sits right beside the decrypted one under the same
+            # stem - so the likely mistake is having only the wrong one. Name the
+            # fix rather than letting the archive open fail on a bad header.
+            if [ ! -f "$img" ]; then
+                echo "$img is missing." >&2
+                if [ -f "data/images/hdfury-ps3-eu.iso" ]; then
+                    echo "The encrypted image is there. Decrypt it first, with" >&2
+                    echo "the disc's own .dkey as the key:" >&2
+                    echo "  just ps3iso decrypt data/images/hdfury-ps3-eu.iso \\" >&2
+                    echo "      \"\$(cat data/images/hdfury-ps3-eu.dkey)\" $img" >&2
+                    echo "See docs/formats/ps3-disc.md." >&2
+                else
+                    echo "No HD image at all under data/images/; this recipe reads" >&2
+                    echo "your own disc and none is shipped. See data/README.md." >&2
+                fi
+                exit 1
+            fi
+            args=("$img" "${args[@]:1}")
             ;;
     esac
     ${OAG_PLAY_WRAPPER:-} cargo run --release -p oag-game {{native_video_flags}} -- "${args[@]}"

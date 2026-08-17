@@ -408,17 +408,18 @@ pub fn load_shell(options: &Options) -> Result<(Shell, oag_assets::Archives)> {
     // Which title this is was settled by the serial, here, and everything below
     // asks `profile` rather than asking the XML again. See ADR-0023.
     //
-    // **A title with no recovered front end is refused by name.** Wipeout HD
-    // ships a `skin.xml` and a directory of screen definitions and not one
-    // number out of either has been read, so there is no layout to lay out with
-    // and no chain to walk. Substituting a sibling title's would draw a menu
-    // that looks right and is attributed to a disc nobody measured; see
+    // **A title with no wired front end is refused by name.** Wipeout HD's menu
+    // layout *is* recovered (`oag_hd::frontend::MENU_SKIN`, off six agreeing
+    // copies of its `skin.xml`) and its boot chain is only what the XML
+    // declares, which is not what `BootProfile::chain` promises - so it holds at
+    // `None` rather than walking a hypothesis. Substituting a sibling title's
+    // chain would boot a sequence attributed to a disc nobody watched; see
     // `oag_title::FrontEnd`. Its circuits still race - the refusal is this
     // entry point's, not the whole title's.
     let front_end = title.front_end.ok_or_else(|| {
         anyhow::anyhow!(
-            "{} has no recovered front end (no menu layout, no boot chain): \
-             race on it with --race instead",
+            "{}'s front end is not wired up (its boot chain is declared, not \
+             measured): race on it with --race instead",
             title.name
         )
     })?;
