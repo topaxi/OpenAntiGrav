@@ -11,11 +11,11 @@
 use oag_title::MenuSkin;
 
 fn pulse() -> &'static MenuSkin {
-    oag_pulse::TITLE.menu
+    oag_pulse::FRONT_END.menu
 }
 
 fn pure() -> &'static MenuSkin {
-    oag_pure::TITLE.menu
+    oag_pure::FRONT_END.menu
 }
 
 /// Every layout number the two discs both state, they state differently.

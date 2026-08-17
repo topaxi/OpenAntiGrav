@@ -31,32 +31,12 @@ const TITLE: &Title = &Title {
         serial: "UCUS-98612",
         title: "Wipeout Pure",
     }],
-    // Present for the same reason `boot` below is, and read even less: menu
-    // layout is the front end's business, and this crate opens archives.
-    menu: &oag_title::MenuSkin {
-        menu_x: 0.0,
-        menu_scale: 1.0,
-        title_x: 0.0,
-        title_y: 0.0,
-        title_scale: 1.0,
-        first_row_y: None,
-        row_extra_leading: None,
-        menu_font: None,
-        text: None,
-        title: None,
-        selected: None,
-        transition_secs: 0.0,
-    },
-    // Present because `Title` carries it, and never read here: `oag-assets`
-    // resolves archives and has no business in a boot sequence. One screen is
-    // enough to be a valid profile.
-    boot: &oag_title::BootProfile {
-        chain: &[oag_title::BootStep::screen("Language Selection")],
-        reel: None,
-        menu_backdrop: None,
-        picker_backdrop_parent: None,
-        fallback_globals: &[],
-    },
+    // `None` rather than a filled-in fixture, and it costs these tests nothing:
+    // `oag-assets` resolves archives and has no business in a menu layout or a
+    // boot sequence, so neither half was ever read here. What it buys is that
+    // the archive rules below are now exercised against a title shaped like the
+    // one that has no front end, which is the case that motivated the field.
+    front_end: None,
     // Present for the same reason and equally unread: resolving archives has
     // nothing to do with which circuit a race opens on.
     race: &oag_title::RaceDefaults {

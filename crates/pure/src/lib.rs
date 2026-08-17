@@ -31,9 +31,19 @@ pub const TITLE: &Title = &Title {
         fe: FE_CANDIDATES,
     },
     foreign_serials: FOREIGN_SERIALS,
+    front_end: Some(FRONT_END),
+    race: race::DEFAULTS,
+};
+
+/// Pure's front end: the layout its own `Skin.xml` authors and the boot chain a
+/// cold boot was measured to walk.
+///
+/// A separate measurement from Pulse's in both halves - the two skins agree on
+/// nothing they share and the two chains differ in length - which is the
+/// evidence [`oag_title::FrontEnd`] exists on.
+pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     menu: frontend::MENU_SKIN,
     boot: frontend::BOOT_PROFILE,
-    race: race::DEFAULTS,
 };
 
 pub mod frontend;

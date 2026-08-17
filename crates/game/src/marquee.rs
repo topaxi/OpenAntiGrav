@@ -196,7 +196,7 @@ mod tests {
     }
 
     fn skin() -> Skin {
-        Skin::new(oag_pulse::TITLE.menu, 22.0)
+        Skin::new(oag_pulse::FRONT_END.menu, 22.0)
     }
 
     /// Two rows, cursor on the first: `RENDERER` (the second) overflows

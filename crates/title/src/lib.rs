@@ -65,27 +65,12 @@ pub struct Title {
     /// Serials known to belong to a *different* title. See
     /// [`ArchiveCandidates`] for why name matching alone cannot tell them apart.
     pub foreign_serials: &'static [ForeignSerial],
-    /// How its front end lays menus out and moves between them. See
-    /// [`menu::MenuSkin`].
+    /// This title's front end, or `None` when none of it has been recovered.
     ///
-    /// A second measured axis, on the same footing as [`Self::boot`]: both
-    /// titles' `Skin.xml` files were read and they agree on nothing they share.
-    /// Presentation only - the menu tree itself is this project's, not the
-    /// disc's, and lives in `assets/ui/menu.toml`.
-    pub menu: &'static menu::MenuSkin,
-    /// How this title's own boot sequence goes. See [`boot::BootProfile`].
-    ///
-    /// Hung off `Title` rather than selected separately so that there is **one**
-    /// selection point: opening one title's archives while driving another's
-    /// chain is then not an inconsistency to be avoided but a state that cannot
-    /// be constructed. The build reached this design after three independent
-    /// screen-name probes had each been answering "which title is this?" in their
-    /// own words, with three chances to disagree.
-    ///
-    /// `oag-assets` receives this and never reads it, which is the price: the
-    /// asset layer holds a field of screen names it has no business in. Inert
-    /// data, and cheaper than two things to keep in step.
-    pub boot: &'static boot::BootProfile,
+    /// See [`FrontEnd`] for why the layout and the boot chain are one field
+    /// rather than two, and why `None` is a measurement rather than a hole
+    /// waiting to be filled.
+    pub front_end: Option<&'static FrontEnd>,
     /// What a race falls back to when the caller names no circuit or team. See
     /// [`race::RaceDefaults`].
     ///
@@ -99,6 +84,48 @@ pub struct Title {
     /// promoted temporaries whose addresses need not be equal. Carrying the
     /// answer removes the question.
     pub race: &'static race::RaceDefaults,
+}
+
+/// One title's front end: how it lays menus out, and how it boots into them.
+///
+/// # Why the two are one field
+///
+/// They are recovered together and they are useless apart. A boot chain walks
+/// screens whose layout comes from the skin; a skin with no chain has nothing
+/// to open it. Carrying them as two independent `Option`s would admit three
+/// states, two of which no title can be in - and `oag-game`'s `load_shell`
+/// would then need two refusals where one is the honest answer.
+///
+/// # Why `None` is a result
+///
+/// Wipeout HD ships `/data/plugins/frontend/gui/skin.xml` and a directory of
+/// screen definitions beside it, and **not one number out of either has been
+/// read**. A [`MenuSkin`](menu::MenuSkin) filled in from Pulse's would be a
+/// table of measurements attributed to a disc nobody measured, which is exactly
+/// what `CLAUDE.md`'s "never invent what the assets already author" forbids.
+/// `None` says the front end is unrecovered; a caller that needs one refuses by
+/// name and says so, which is a visible absence rather than a wrong picture.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct FrontEnd {
+    /// How this title lays menus out. See [`menu::MenuSkin`].
+    ///
+    /// A measured axis: both PSP titles' `Skin.xml` files were read and they
+    /// agree on nothing they share. Presentation only - the menu tree itself is
+    /// this project's, not the disc's, and lives in `assets/ui/menu.toml`.
+    pub menu: &'static menu::MenuSkin,
+    /// How this title's own boot sequence goes. See [`boot::BootProfile`].
+    ///
+    /// Hung off [`Title`] rather than selected separately so that there is
+    /// **one** selection point: opening one title's archives while driving
+    /// another's chain is then not an inconsistency to be avoided but a state
+    /// that cannot be constructed. The build reached this design after three
+    /// independent screen-name probes had each been answering "which title is
+    /// this?" in their own words, with three chances to disagree.
+    ///
+    /// `oag-assets` receives this and never reads it, which is the price: the
+    /// asset layer holds a field of screen names it has no business in. Inert
+    /// data, and cheaper than two things to keep in step.
+    pub boot: &'static boot::BootProfile,
 }
 
 /// The archive names a title's releases carry, in the order they are tried.

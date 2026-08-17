@@ -36,9 +36,19 @@ pub const TITLE: &Title = &Title {
         fe: FE_CANDIDATES,
     },
     foreign_serials: FOREIGN_SERIALS,
+    front_end: Some(FRONT_END),
+    race: race::DEFAULTS,
+};
+
+/// Pulse's front end: the layout its `Skin.xml` authors and the boot chain a
+/// cold boot was measured to walk.
+///
+/// Both halves are recovered, so this is `Some` on [`TITLE`]. See
+/// [`oag_title::FrontEnd`] for why a title that has neither says `None` rather
+/// than borrowing this one.
+pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     menu: frontend::MENU_SKIN,
     boot: frontend::BOOT_PROFILE,
-    race: race::DEFAULTS,
 };
 
 /// The bulk archive's candidates, in the order they are tried.
