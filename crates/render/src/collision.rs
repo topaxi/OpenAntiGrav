@@ -92,6 +92,9 @@ pub fn is_collidable(kind: SurfaceKind) -> bool {
 pub fn colour_for(kind: SurfaceKind) -> [f32; 4] {
     match kind {
         SurfaceKind::Wall => [1.0, 0.25, 0.2, 1.0],
+        // Wall-red pulled towards orange: it collides as a wall and the two are
+        // meant to be told apart on a circuit that ships both.
+        SurfaceKind::TrackWall => [1.0, 0.6, 0.15, 1.0],
         SurfaceKind::Floor => [0.35, 0.6, 1.0, 1.0],
         SurfaceKind::Reset => [1.0, 0.3, 0.95, 1.0],
         SurfaceKind::MagFloor => [0.4, 1.0, 0.45, 1.0],

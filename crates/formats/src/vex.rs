@@ -84,25 +84,12 @@ pub const CLASS_MESH: u32 = 0x125;
 /// Version 6 only; [`classes::for_version`] is what a decoder should ask.
 pub const CLASS_TEXTURE: u32 = 0x3c1;
 
-/// Class ID of a `Floor Collision` node.
-///
-/// One of the five collision classes, all registered with the same vtable by
-/// `Collision_RegisterNodeClasses` (`0x08934d44`). Their payloads are decoded by
-/// [`collision`](crate::collision), which also documents what is inferred rather
-/// than observed about them.
-pub const CLASS_FLOOR_COLLISION: u32 = 0x3b9;
-
-/// Class ID of a `Wall Collision` node.
-pub const CLASS_WALL_COLLISION: u32 = 0x3ba;
-
-/// Class ID of a `Reset Collision` node.
-pub const CLASS_RESET_COLLISION: u32 = 0x3cd;
-
-/// Class ID of a `Mag Floor Collision` node: the magstrip surface.
-pub const CLASS_MAG_FLOOR_COLLISION: u32 = 0x3e6;
-
-/// Class ID of a `Cage Collision` node, which the loader parses and then skips.
-pub const CLASS_CAGE_COLLISION: u32 = 0x3e7;
+/// The six collision class IDs, defined in [`classes`] beside the tables that
+/// select them and re-exported here so every `CLASS_*` name lives in one place.
+pub use classes::{
+    CLASS_CAGE_COLLISION, CLASS_FLOOR_COLLISION, CLASS_MAG_FLOOR_COLLISION, CLASS_RESET_COLLISION,
+    CLASS_TRACK_WALL_COLLISION, CLASS_WALL_COLLISION,
+};
 
 /// Class ID of a `WO Track` node: the AI spline graph, decoded by
 /// [`track::parse`](crate::track::parse).

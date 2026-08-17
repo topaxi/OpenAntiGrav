@@ -57,10 +57,21 @@ pub fn collision_world(nodes: &[CollisionNode]) -> CollisionWorld {
 /// `Cage` is the only `None`. It is not an error and not a gap: the original
 /// parses cage nodes and then skips them, so a cage that produced a collider
 /// would be a wall the real game does not have.
+///
+/// [`SurfaceKind::TrackWall`] is the one mapping that is a **decision rather
+/// than a reading**, and it is taken here rather than in `oag_formats` on
+/// purpose. What the disc settles is that HD's `collision_trackwall` is
+/// collision geometry standing on end along the road, 97 % of its triangles
+/// near-vertical; what it does not settle is which surface type HD's own loader
+/// gives it, because that lives in a PS3 binary nobody has disassembled. Every
+/// other reading of it - a floor, a reset volume, a magstrip - is contradicted
+/// by the facing statistic, and leaving it uncollidable is contradicted by the
+/// craft driving through the barrier. So it drives [`Surface::Wall`], and this
+/// comment is the record that the last step is inference.
 #[must_use]
 pub fn surface_for(kind: SurfaceKind) -> Option<Surface> {
     Some(match kind {
-        SurfaceKind::Wall => Surface::Wall,
+        SurfaceKind::Wall | SurfaceKind::TrackWall => Surface::Wall,
         SurfaceKind::Floor => Surface::Floor,
         SurfaceKind::Reset => Surface::Reset,
         SurfaceKind::MagFloor => Surface::MagFloor,

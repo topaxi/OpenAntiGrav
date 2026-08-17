@@ -1368,17 +1368,23 @@ count minus one.
 
 **The class IDs are Pulse's**, not a renumbering like [Pure's](pure-status.md#the-class-id-space-is-renumbered):
 `Transform 0x06e`, `Mesh 0x125`, `WO Track 0x3bb`, `section 0x3c9`, both pad
-classes, all five collision classes and the whole environment group resolve
-against `classes::V6` unchanged. One class does not: **`0x3ed`**, authored once
-per circuit under the node name `collision_trackwall`. Note what that does and
-does not say - the table above was **read only as far as `0x08ab26a0` and its
-terminator was never reached**, so `0x3ed` is past the last entry anyone has
-read rather than past the table, and Pulse may name it too. Its payload has not
-been read either, and it is deliberately **not** added to any table here: the
-name is a hypothesis, and
-[the rubric](../reverse-engineering/confidence-rubric.md) is explicit about what
-naming one costs. Reading further in this binary's own table is the cheap way to
-settle it.
+classes, all five of Pulse's collision classes and the whole environment
+group resolve
+against `classes::V6` unchanged. One class was not in that table until
+2026-08-17: **`0x3ed`**, authored once per circuit under the node name
+`collision_trackwall`, and it is **a sixth collision class** - the barrier along
+the road, where `Wall Collision` on HD is the wider scenery. What established
+that is not the node name but its geometry, over all 16 circuits: see
+[hd-status](hd-status.md#0x3ed-is-the-barrier-along-the-road).
+
+Note what listing it in `classes::V6` does and does not say. The table above was
+**read only as far as `0x08ab26a0` and its terminator was never reached**, so
+`0x3ed` is past the last entry anyone has read rather than past the table, and
+whether *this binary* names it is still unknown. Version 6 is a format
+generation and HD's files are version 6, so the ID belongs in the version-6
+table; the constant's name is HD's spelling of the node, not a recovered table
+entry. Reading further in this binary's own table is still the cheap way to
+settle the remaining half.
 
 **What is not there is the geometry.** Everything under
 ["Geometry is pre-batched GE display lists"](#geometry-is-pre-batched-ge-display-lists)

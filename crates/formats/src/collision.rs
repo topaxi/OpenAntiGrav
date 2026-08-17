@@ -356,9 +356,11 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 /// Which collision class a node is, and therefore how it behaves.
 ///
-/// All five share one vtable and one parser. The class ID selects a surface type
-/// and a friction constant, nothing else, which is why a magstrip is not
-/// special geometry.
+/// Pulse's five share one vtable and one parser. The class ID selects a surface
+/// type and a friction constant, nothing else, which is why a magstrip is not
+/// special geometry. [`TrackWall`](Self::TrackWall) is a sixth that only Wipeout
+/// HD authors; it takes the same parser, and what selects its surface type on
+/// HD is unread - see its own note.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SurfaceKind {
     /// `Wall Collision`, surface type 0. The only springy surface. 40 nodes on
@@ -380,16 +382,27 @@ pub enum SurfaceKind {
     /// still drops it, which fits the per-track `collisionCageEnabled` attribute
     /// in the plugin definitions.
     Cage,
+    /// `collision_trackwall`: the barrier along the road, and **Wipeout HD
+    /// only**.
+    ///
+    /// Exactly one node per circuit on all 16 of HD's, 3,036 to 4,974 triangles
+    /// each, 97 % of them near-vertical, and co-extensive with the floor rather
+    /// than with [`Wall`](Self::Wall)'s much larger scenery volume. Neither
+    /// Pulse disc authors one. See
+    /// [`vex::CLASS_TRACK_WALL_COLLISION`](crate::vex::CLASS_TRACK_WALL_COLLISION)
+    /// for the four measurements and what they do and do not settle.
+    TrackWall,
 }
 
 impl SurfaceKind {
     /// Every kind, in class-ID order.
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 6] = [
         Self::Floor,
         Self::Wall,
         Self::Reset,
         Self::MagFloor,
         Self::Cage,
+        Self::TrackWall,
     ];
 
     /// The kind a `.vex` class ID selects, or `None` if it is not a collision
@@ -425,10 +438,15 @@ impl SurfaceKind {
             Self::Reset => classes.reset_collision,
             Self::MagFloor => classes.mag_floor_collision,
             Self::Cage => classes.cage_collision,
+            Self::TrackWall => classes.track_wall_collision,
         }
     }
 
     /// The node name from the class table, as the exporter writes it.
+    ///
+    /// [`TrackWall`](Self::TrackWall) is the one that does not come from a class
+    /// table: it is the name HD's own circuits give the node, spelled as they
+    /// spell it.
     #[must_use]
     pub fn node_name(self) -> &'static str {
         match self {
@@ -437,12 +455,18 @@ impl SurfaceKind {
             Self::Reset => "Reset Collision",
             Self::MagFloor => "Mag Floor Collision",
             Self::Cage => "Cage Collision",
+            Self::TrackWall => "collision_trackwall",
         }
     }
 
     /// The surface-type enum the loader stores at `+0x6c`.
     ///
-    /// `None` for [`Cage`](Self::Cage), which never reaches a collider object.
+    /// `None` twice over, for opposite reasons. [`Cage`](Self::Cage) never
+    /// reaches a collider object at all. [`TrackWall`](Self::TrackWall)
+    /// certainly does, but the loader that would write its type is **HD's**, and
+    /// nothing here has disassembled a PS3 binary - so the honest answer is that
+    /// the number is unread, not that there isn't one. What the *physics* does
+    /// with it is a separate decision, taken in `oag_gameplay::collision`.
     #[must_use]
     pub fn surface_type(self) -> Option<u8> {
         match self {
@@ -450,7 +474,7 @@ impl SurfaceKind {
             Self::Floor => Some(1),
             Self::Reset => Some(2),
             Self::MagFloor => Some(3),
-            Self::Cage => None,
+            Self::Cage | Self::TrackWall => None,
         }
     }
 
@@ -461,10 +485,16 @@ impl SurfaceKind {
     /// makes the distinction impossible to lose, because a negative coefficient
     /// would *add* tangential velocity in the contact response instead of
     /// removing it.
+    ///
+    /// [`TrackWall`](Self::TrackWall) reports [`WALL_FRICTION`] because that is
+    /// what the surface it behaves as carries, and the alternative - `None` -
+    /// is not a neutral placeholder here: it means *frictionless*, a barrier a
+    /// craft would grind along losing no speed at all. HD's own value is unread,
+    /// and this is a stated assumption rather than a measurement.
     #[must_use]
     pub fn friction(self) -> Option<f32> {
         match self {
-            Self::Wall => Some(WALL_FRICTION),
+            Self::Wall | Self::TrackWall => Some(WALL_FRICTION),
             Self::Floor | Self::Reset | Self::MagFloor => None,
             Self::Cage => None,
         }

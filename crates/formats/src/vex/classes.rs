@@ -27,6 +27,38 @@
 //! unrecovered ID gets no entry rather than a plausible one. `docs/formats/pure-status.md`
 //! costs out what filling them in would take.
 
+/// Class ID of a `Floor Collision` node.
+///
+/// One of Pulse's five collision classes, all registered with the same vtable by
+/// `Collision_RegisterNodeClasses` (`0x08934d44`). Their payloads are decoded by
+/// [`collision`](crate::collision), which also documents what is inferred rather
+/// than observed about them.
+pub const CLASS_FLOOR_COLLISION: u32 = 0x3b9;
+
+/// Class ID of a `Wall Collision` node.
+pub const CLASS_WALL_COLLISION: u32 = 0x3ba;
+
+/// Class ID of a `Reset Collision` node.
+pub const CLASS_RESET_COLLISION: u32 = 0x3cd;
+
+/// Class ID of a `Mag Floor Collision` node: the magstrip surface.
+pub const CLASS_MAG_FLOOR_COLLISION: u32 = 0x3e6;
+
+/// Class ID of a `Cage Collision` node, which the loader parses and then skips.
+pub const CLASS_CAGE_COLLISION: u32 = 0x3e7;
+
+/// Class ID of a `collision_trackwall` node: the barrier along the road, as
+/// distinct from [`CLASS_WALL_COLLISION`]'s wider scenery.
+///
+/// **Only Wipeout HD authors it, and this ID is not from a class table.**
+/// Confidence 85, on four measurements over all 16 of HD's circuits -
+/// one node each, all parsing, 97 % of their triangles near-vertical, and an
+/// extent matching the floor's rather than the wall's. The numbers and what
+/// they deliberately do *not* settle about Pulse's own table are in
+/// `docs/formats/hd-status.md`; the tests are
+/// `crates/game/tests/hd_trackwall_ground_truth.rs`.
+pub const CLASS_TRACK_WALL_COLLISION: u32 = 0x3ed;
+
 /// One format version's class-ID assignments.
 ///
 /// `None` means the ID has not been recovered for that version. A decoder
@@ -53,6 +85,14 @@ pub struct Classes {
     pub reset_collision: Option<u32>,
     pub mag_floor_collision: Option<u32>,
     pub cage_collision: Option<u32>,
+    /// The barrier along the road, which only Wipeout HD authors.
+    ///
+    /// Kept apart from [`Self::wall_collision`] because on HD they are two
+    /// different things: this one is co-extensive with the floor and 97 %
+    /// near-vertical, that one spans the whole environment. See
+    /// [`vex::CLASS_TRACK_WALL_COLLISION`](CLASS_TRACK_WALL_COLLISION)
+    /// for the measurements and for what is deliberately not claimed.
+    pub track_wall_collision: Option<u32>,
     /// The node whose second child is a mesh's low-detail alternative.
     pub lod_group: Option<u32>,
     /// The `Airbrake` node a flap `Mesh` hangs under.
@@ -79,11 +119,18 @@ pub const V6: Classes = Classes {
     speedup_pad: Some(super::CLASS_SPEEDUP_PAD),
     weapon_pad: Some(super::CLASS_WEAPON_PAD),
     start_position: Some(super::CLASS_START_POSITION),
-    floor_collision: Some(super::CLASS_FLOOR_COLLISION),
-    wall_collision: Some(super::CLASS_WALL_COLLISION),
-    reset_collision: Some(super::CLASS_RESET_COLLISION),
-    mag_floor_collision: Some(super::CLASS_MAG_FLOOR_COLLISION),
-    cage_collision: Some(super::CLASS_CAGE_COLLISION),
+    floor_collision: Some(CLASS_FLOOR_COLLISION),
+    wall_collision: Some(CLASS_WALL_COLLISION),
+    reset_collision: Some(CLASS_RESET_COLLISION),
+    mag_floor_collision: Some(CLASS_MAG_FLOOR_COLLISION),
+    cage_collision: Some(CLASS_CAGE_COLLISION),
+    // **The one entry here that no Pulse file exercises.** Version 6 is the
+    // format generation, not the title, and HD's circuits are version 6 - so
+    // the id belongs in this table, while the *table* is not where it was
+    // recovered from. Pulse authors no node of this class at all, which
+    // `collision_ground_truth.rs` establishes over every `.vex` on both its
+    // discs, so listing it changes nothing Pulse decodes.
+    track_wall_collision: Some(CLASS_TRACK_WALL_COLLISION),
     lod_group: Some(super::CLASS_LOD_GROUP),
     airbrake: Some(super::CLASS_AIRBRAKE),
     engine_flare: Some(super::CLASS_ENGINE_FLARE),
@@ -193,6 +240,9 @@ pub const V4: Classes = Classes {
     reset_collision: Some(0x37f),
     mag_floor_collision: None,
     cage_collision: None,
+    // No version-4 or version-3 file authors one; only HD does, and HD is
+    // version 6.
+    track_wall_collision: None,
     lod_group: None,
     // `Airbrake` *is* in the name run, at index 11, so the same arithmetic
     // gives `0x377`. It stays `None` because nothing has looked for it in
@@ -227,6 +277,9 @@ pub const V3: Classes = Classes {
     reset_collision: None,
     mag_floor_collision: None,
     cage_collision: None,
+    // No version-4 or version-3 file authors one; only HD does, and HD is
+    // version 6.
+    track_wall_collision: None,
     lod_group: None,
     airbrake: None,
     engine_flare: None,

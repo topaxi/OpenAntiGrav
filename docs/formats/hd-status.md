@@ -146,7 +146,7 @@ one. Over the 40 files, by count:
 | 416 | `0x3bd` | Speedup Pad | | 28 | `0x3ba` | Wall Collision |
 | 324 | `0x0f7` | Camera | | 28 | `0x3bb` | WO Track |
 | 208 | `0x3be` | Weapon Pad | | 28 | `0x3cd` | Reset Collision |
-| 170 | `0x3d8` | cloudCube | | 28 | `0x3ed` | **unrecovered** |
+| 170 | `0x3d8` | cloudCube | | 28 | `0x3ed` | collision_trackwall |
 | 89 | `0x3da` | weatherPos | | 17 | `0x12c` | AmbientLight |
 | 56 | `0x3ce` | wospot | | 17 | `0x131` | DirectionalLight |
 
@@ -154,16 +154,60 @@ plus `exitglow` `0x3e4` and `Mag Floor Collision` `0x3e6` at 10 each, `Skycube`
 `0x3c6` at 9, `fogCube` `0x3d3` at 5, `soundcone` `0x3e9` at 3, and
 `Dynamic Shadow Occluder` `0x3c3` and `gridCamera` `0x3dd` at 2.
 
-**`0x3ed` is past the last entry anyone has read out of Pulse's table.** That is
-a weaker statement than it looks and it is the accurate one: `vex.md` records
-the table as read only as far as `0x08ab26a0`, with the terminator never
-reached, so Pulse's own class space may well extend to `0x3ed` and nobody has
-looked. HD authors it exactly once per track file, always under the node name
-`collision_trackwall`, and its payload has not been read. The name and the count
-both suggest a sixth collision class; that is a hypothesis, written down as one
-rather than added to any table. **The cheap next step is not on this disc**:
-read further in Pulse's own class table past `0x08ab26a0` and the ID may name
-itself for free.
+`0x3ed` is [the barrier along the road](#0x3ed-is-the-barrier-along-the-road),
+recovered on 2026-08-17. This page used to call it "unrecovered" and refuse to
+name it; what changed is below.
+
+### `0x3ed` is the barrier along the road
+
+**Confidence 85, and the name in the code is still HD's own, not a table
+entry.** Every circuit on the disc authors exactly one node of this class, under
+the node name `collision_trackwall`. Four measurements settle what it *is*,
+taken over all 16 circuits by
+[`hd_trackwall_ground_truth.rs`](../../crates/game/tests/hd_trackwall_ground_truth.rs):
+
+1. **Its payload is collision geometry.** All 16 carry the all-ones header word
+   every [collision](collision.md) payload carries and parse to a clean end
+   through the existing decoder with nothing left over - 3,036 to 4,974
+   triangles each.
+2. **Its triangles stand on end.** 97 % of them are more than 60 degrees off
+   horizontal, median over the 16, worst 64.6 % on `03_track` and 13 of 16 above
+   89 %. On the same circuits `Floor Collision` reads 0 - 19 % and
+   `Wall Collision` 12 - 89 %. This is the facing statistic
+   [collision](collision.md) settled Pure's classes with, and here it is
+   calibrated against two classes on the *same file* rather than across discs.
+3. **It occupies the road, not the environment.** Talon's Junction's barrier
+   spans 1476 x 194 x 1088 against its floor's 1482 x 189 x 1095 - within 1 % on
+   every axis - where `Wall Collision` spans 2185 x 511 x 2300. The test asserts
+   the barrier stays within a quarter of the floor's extent on all three axes of
+   all 16 circuits, and all 16 pass.
+4. **A craft stops at it.** Thrown at one of its triangles at 150 units/s, a
+   hull penetrates 5.5 units and comes back - which is the point of the other
+   three.
+
+So it decodes as `SurfaceKind::TrackWall` and drives `oag_physics::Surface::Wall`.
+The load report went from `4 collision node(s) -> 400 collider(s), 12737
+triangle(s)` to `5 -> 530, 16883`, which is the barrier's own 130 meshes and
+4,146 triangles exactly.
+
+**What is deliberately still open**, and it is the part the earlier caution was
+right about: whether *Pulse's* class table names this ID at all. `vex.md`
+records that table as read only as far as `0x08ab26a0` with the terminator never
+reached, so `0x3ed` is past the last entry anyone has read rather than past the
+table. Pulse authors no node of this class - the survey in
+[`collision_ground_truth.rs`](../../crates/formats/tests/collision_ground_truth.rs)
+walks every `.vex` on both its discs and finds no sixth class carrying a
+collision payload - so listing the ID in `classes::V6` changes nothing Pulse
+decodes, and version 6 is a format generation rather than a title. Reading
+further in Pulse's own table is still the cheap way to learn whether it has a
+name there, and it is no longer blocking anything.
+
+Two things this does *not* claim. HD's own loader has not been disassembled, so
+the surface-type byte it would write is unread and `SurfaceKind::surface_type`
+returns `None` for this class rather than guessing at a number. And its friction
+is Pulse's `0.05` wall value by assumption, stated as one in
+`SurfaceKind::friction`, because the alternative - `None` - would mean
+*frictionless*, a barrier a craft grinds along losing no speed at all.
 
 Two counts worth noticing against Pulse's own: HD authors **722 `PointLight`
 nodes**, a class a
@@ -590,9 +634,13 @@ task.
 - **The byte-order pass is wide, not hard, and its failures are silent.** The
   PVS mask above is the worked example: a mechanically correct per-field swap
   produces a mask that is 100 % wrong on 15 of 24 circuits and raises no error.
-- **`0x3ed` is not in any table.** Adding it to `classes::V6` on the strength of
-  its node name would be exactly the guess-dressed-as-a-name the
-  [rubric](../reverse-engineering/confidence-rubric.md) forbids.
+- **`0x3ed` earns its name from its geometry, not from its node name.** It is
+  in `classes::V6` now, and what put it there is four measurements over 16
+  circuits - see [above](#0x3ed-is-the-barrier-along-the-road). Naming it on the
+  node name alone would have been exactly the guess-dressed-as-a-name the
+  [rubric](../reverse-engineering/confidence-rubric.md) forbids, and the trap is
+  still live for the *other* half: whether Pulse's table names this ID is
+  unestablished, and the constant's name is HD's spelling of the node.
 - **`.psarc` paths are lowercase, the digest is over the uppercase spelling.**
   See [psarc](psarc.md#the-check-the-confidence-rests-on).
 - **A `.psarc` inside an encrypted image reads as noise.** Decrypt first;
