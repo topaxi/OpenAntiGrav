@@ -80,14 +80,23 @@ pub fn focus(menu: &Menu) -> Option<(String, usize, String)> {
     Some((page.id.clone(), row, entry.value()?.to_string()))
 }
 
-/// Slides the focused row's value, if it is too wide for [`MAX_WIDTH`], and
-/// says where to clip it - `(y, left, right)`, for `Renderer::render`.
+/// Fixes up every overflowing value on the page, and says where to clip the
+/// one that is also scrolling - `(y, left, right)`, for `Renderer::render`.
 ///
-/// Every other row is left exactly as `menu::draw_list` drew it, and so is
-/// this one when its value already fits - `Align::Right` against the same
-/// edge it always drew against, which is what makes a row that stops
-/// overflowing (a shorter adapter name chosen, a narrower language picked)
-/// look identical to one that never did, with `None` back instead of a clip.
+/// **Every overflowing row is fixed, not only the selected one.** The bug
+/// this module exists for - a long adapter name burying its own label - is
+/// there whether or not the cursor happens to be on that row; a marquee that
+/// only ever touched the focused row would leave every *other* row exactly
+/// as broken as before the moment a player looked away from it. So a row
+/// that overflows but is not focused gets a static excerpt instead of
+/// motion: its tail, clipped to [`MAX_WIDTH`] the same way the scrolling row
+/// eventually reads at rest, just never animated - nothing here should catch
+/// a player's eye that they are not currently adjusting.
+///
+/// Every row whose value already fits is left exactly as `menu::draw_list`
+/// drew it - `Align::Right` against the same edge it always drew against -
+/// which is what makes a row that stops overflowing (a shorter adapter name
+/// chosen, a narrower language picked) look identical to one that never did.
 ///
 /// `measure` is `font::measure` behind the same closure indirection
 /// `menu::draw_list`'s own `bindings` argument already uses, so this module
@@ -100,39 +109,57 @@ pub fn apply(
     measure: &dyn Fn(&str) -> f32,
     elapsed: f32,
 ) -> (Vec<Draw>, Option<(f32, f32, f32)>) {
-    if focus(menu).is_none() {
-        return (list, None);
+    let focused_y = focus(menu).map(|_| {
+        skin.first_row_y() + menu.selected().saturating_sub(menu.scroll()) as f32 * skin.row_pitch()
+    });
+    let mut clip = None;
+    for draw in &mut list {
+        let Draw::Text {
+            x,
+            y,
+            scale,
+            align,
+            text,
+            ..
+        } = draw
+        else {
+            continue;
+        };
+        if *align != Align::Right {
+            continue;
+        }
+        let overflow = measure(text) * *scale - MAX_WIDTH;
+        if overflow <= 0.0 {
+            continue;
+        }
+        let right = *x;
+        let left = right - MAX_WIDTH;
+        if focused_y == Some(*y) {
+            // A continuous pixel offset, not a character count: the clip in
+            // `Renderer::push_text` trims a glyph's own quad at the box
+            // edge, so nothing here needs to land on a character boundary.
+            *x = left - crate::anim::marquee_offset(elapsed, overflow);
+            *align = Align::Left;
+            clip = Some((*y, left, right));
+        } else {
+            *text = fit_right(text, measure, MAX_WIDTH / *scale).to_string();
+        }
     }
-    let row_y = skin.first_row_y()
-        + menu.selected().saturating_sub(menu.scroll()) as f32 * skin.row_pitch();
-    let Some(draw) = list.iter_mut().find(|draw| {
-        matches!(draw, Draw::Text { y, align: Align::Right, .. } if (*y - row_y).abs() < f32::EPSILON)
-    }) else {
-        return (list, None);
-    };
-    let Draw::Text {
-        x,
-        scale,
-        align,
-        text,
-        ..
-    } = draw
-    else {
-        unreachable!("just matched Draw::Text above");
-    };
-    let width = measure(text) * *scale;
-    let overflow = width - MAX_WIDTH;
-    if overflow <= 0.0 {
-        return (list, None);
-    }
-    let right = *x;
-    let left = right - MAX_WIDTH;
-    // A continuous pixel offset, not a character count: the clip in
-    // `Renderer::push_text` trims a glyph's own quad at the box edge, so
-    // there is nothing here that needs to land on a character boundary.
-    *x = left - crate::anim::marquee_offset(elapsed, overflow);
-    *align = Align::Left;
-    (list, Some((row_y, left, right)))
+    (list, clip)
+}
+
+/// The longest suffix of `text` whose measured width (at `measure`'s scale of
+/// 1) is no more than `budget`.
+///
+/// Static, not scrolled - a row nobody is reading right now shows its tail
+/// and stops there, exactly where the scrolling row rests at the end of its
+/// own cycle. `O(n^2)` in `measure` calls, which is fine for a menu row: this
+/// runs on at most a handful of characters, once a frame, for rows that are
+/// not the one actually animating.
+fn fit_right<'a>(text: &'a str, measure: &dyn Fn(&str) -> f32, budget: f32) -> &'a str {
+    text.char_indices()
+        .find(|(i, _)| measure(&text[*i..]) <= budget)
+        .map_or("", |(i, _)| &text[i..])
 }
 
 #[cfg(test)]
@@ -165,6 +192,33 @@ mod tests {
         Skin::new(oag_pulse::TITLE.menu, 22.0)
     }
 
+    /// Two rows, cursor on the first: `RENDERER` (the second) overflows
+    /// while nothing has it focused - the case the machine this was written
+    /// on hit, where the cursor sits on a nearer row while the adapter
+    /// name's own row stays broken.
+    fn unfocused_fixture(value: &str) -> Menu {
+        let definition = crate::menu::Definition::parse(&format!(
+            r#"
+            version = 1
+            root = "main"
+            [[page]]
+            id = "main"
+            [[page.entry]]
+            kind = "choice"
+            label = "FILTERING"
+            setting = "graphics.filtering"
+            values = ["off"]
+            [[page.entry]]
+            kind = "choice"
+            label = "RENDERER"
+            setting = "graphics.renderer"
+            values = ["{value}"]
+            "#
+        ))
+        .expect("parse");
+        Menu::new(definition)
+    }
+
     #[test]
     fn a_row_that_fits_is_left_exactly_as_drawn() {
         let menu = fixture("off");
@@ -189,6 +243,38 @@ mod tests {
             panic!("an overflowing value needs a clip window");
         };
         assert!((right - left - MAX_WIDTH).abs() < f32::EPSILON);
+    }
+
+    /// The bug this whole module exists to fix: a long adapter name buries
+    /// its own label whether or not the cursor happens to be sitting on that
+    /// row. An unfocused overflowing row gets no motion, but it must still
+    /// stop covering its label.
+    #[test]
+    fn an_unfocused_overflowing_row_is_still_clipped_though_not_scrolled() {
+        let long = "vulkan: a very generationally long laptop gpu name";
+        let menu = unfocused_fixture(long);
+        assert_eq!(menu.selected(), 0, "FILTERING, not RENDERER, is focused");
+        let before = crate::menu::draw_list(&menu, &skin(), &|_| Vec::new(), None).flatten();
+        let (after, clip) = apply(before.clone(), &menu, &skin(), &measure, 5.0);
+        assert_ne!(
+            before, after,
+            "RENDERER's value still has to stop overflowing"
+        );
+        assert_eq!(
+            clip, None,
+            "nothing is scrolling, so there is nothing to clip in the renderer"
+        );
+        let width: f32 = after
+            .iter()
+            .filter_map(|draw| match draw {
+                Draw::Text { text, scale, .. } if long.ends_with(text.as_str()) => {
+                    Some(measure(text) * scale)
+                }
+                _ => None,
+            })
+            .next()
+            .expect("the shortened RENDERER value is still on screen somewhere");
+        assert!(width <= MAX_WIDTH, "{width} still overflows {MAX_WIDTH}");
     }
 
     /// [`Timer`] starts at zero and only resets when the identity it is
