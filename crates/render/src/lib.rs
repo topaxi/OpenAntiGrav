@@ -32,6 +32,7 @@
 //!   crate's one 2D overlay pipeline - no camera, no depth.
 
 pub mod camera;
+pub mod capture;
 pub mod collision;
 pub mod exhaust;
 pub mod loading;
@@ -43,3 +44,4 @@ pub mod pvs;
 pub mod sparks;
 pub mod texgen;
 pub mod track;
+pub mod weapon_pad;

@@ -149,6 +149,7 @@ pub fn build_model(label: &str, ai: &AiTrack) -> Model {
 
     Model {
         airbrakes: [None, None],
+        node_vertex_ranges: Vec::new(),
         label: label.to_string(),
         vertices,
         indices,

@@ -236,6 +236,48 @@ impl Drawable {
         }
     }
 
+    /// Recolours each weapon pad's own geometry by whether it currently hands
+    /// out a pickup - see [`oag_render::weapon_pad`] for the recovered
+    /// mechanism this reproduces. `ready[i]` pairs with this drawable's
+    /// `i`-th [`mesh::Model::node_vertex_ranges`] entry - positional, not by
+    /// name, for the reason that field's own doc comment gives.
+    ///
+    /// Rewrites the *replacement* colour, not a multiply against the pad's
+    /// authored one - `pad+0x6c` overwrites the mesh's own GE colour command
+    /// every tick in the original, it does not modulate it. Always from
+    /// `self.model.vertices`, never from the last frame's buffer, for the
+    /// same accumulation reason [`Self::deflect_airbrakes`] gives.
+    ///
+    /// A no-op on a model with no weapon pads - every track and the sky -
+    /// since `ready` is empty there.
+    pub(super) fn tint_weapon_pads(&self, queue: &wgpu::Queue, seconds: f32, ready: &[bool]) {
+        let stride = std::mem::size_of::<mesh::GpuVertex>() as u64;
+        for (range, &is_ready) in self.model.node_vertex_ranges.iter().zip(ready) {
+            let span = range.start as usize..range.end as usize;
+            let Some(base) = self.model.vertices.get(span) else {
+                continue;
+            };
+            let colour = if is_ready {
+                oag_render::weapon_pad::ready_colour(seconds)
+            } else {
+                oag_render::weapon_pad::COOLDOWN_COLOUR
+            };
+            let tinted: Vec<mesh::GpuVertex> = base
+                .iter()
+                .map(|v| {
+                    let mut out = *v;
+                    out.colour = [colour[0], colour[1], colour[2], out.colour[3]];
+                    out
+                })
+                .collect();
+            queue.write_buffer(
+                &self.vertices,
+                u64::from(range.start) * stride,
+                bytemuck::cast_slice(&tinted),
+            );
+        }
+    }
+
     /// Draws every list, in pipeline order, and reports what it submitted.
     ///
     /// `frustum` is `None` for the ship and the collision overlay: both draw a

@@ -803,6 +803,8 @@ used, kept because commits and docs cite them.
 | **The PS3 disc is open, and nothing reads what is inside it** | 2026-08-17. `hdfury-ps3-eu.iso` is `BCES-00664`, *WipEout HD Fury*, and it was **encrypted** - 1.85 GiB of per-sector AES-128-CBC that the earlier "not otherwise explored yet" entry did not mention because nobody had looked. Decrypted and verified: three files the disc ships twice, once plain and once inside an encrypted region, are byte-identical afterwards, and the archives inflate to real paths. [`docs/formats/ps3-disc.md`](docs/formats/ps3-disc.md), [`scripts/ps3iso.py`](scripts/ps3iso.py). **The key is not in the image and never can be** - it comes from BD-drive authentication, so this needs the maintainer's redump `.dkey`, which is gitignored and leakage-checked along with `.psarc`/`.sprx`. **Identification landed the same day**: `oag-disc` reads the serial out of `PS3_DISC.SFB`, which is in a plain region, so `oag-unpack info` identifies the disc while it is still encrypted - `crates/disc/tests/ground_truth.rs::a_ps3_disc_identifies_itself_even_while_encrypted` asserts exactly that, and it is the one PS3 assertion CI can never run. **Layer 2 turned out to be free**: `rpcs3 --decrypt EBOOT.BIN` writes a real PPC64 ELF using keys RPCS3 carries, and prints `Missing Firmware` while doing it - no PUP install, no scetool, no key hunting. So the one next step left on the disc itself is a `.psarc` reader (documented Sony container, `PSAR` 1.3/zlib/64 KiB blocks, seven archives). M-later per [scope](docs/overview/goals.md#scope) - this thread exists so the next person knows the disc is readable, not to open the milestone. The Ghidra side has its own thread below. |
 | **The PS3 Ghidra path works, and three things about it should be better** | 2026-08-17. Importing `EBOOT.elf` needs no processor module - stock Ghidra decodes the Cell PPU as `PowerPC:BE:64:A2ALT-32addr` - but it does need a decrypt step, a hand-edited compiler spec and a script pack. Full procedure and its traps in [toolchain.md](docs/reverse-engineering/toolchain.md#ps3). **Three improvements, ranked, none taken.** (1) **Fork Ps3GhidraScripts to ship a language** rather than patching Ghidra: `ghidra-allegrex` and `ghidra-emotionengine-reloaded` both carry their own `data/languages/` with a `.cspec`, `.ldefs` and an `.opinion`, which is proof an extension can do this. A vendored cspec **retires `scripts/patch-ghidra-ppc-cspec.sh` entirely** - that script exists only because the stock spec is wrong and root-owned - and an `.opinion` gets the language auto-selected on import instead of chosen by hand. Cost, measured: sleigh `@include` resolves relative to the including file, so an extension cannot reach `/opt/ghidra/Ghidra/Processors/PowerPC/`, and the fork must vendor **21 `.sinc` files, 19,842 lines**, re-synced on every Ghidra upgrade. Half a day for the cspec-only version, which needs no vendoring at all if it reuses the stock `.sla`. (2) **Teach sleigh `lvlx`** - one instruction, not the eight the README implies: `EBOOT.elf` has **851 `lvlx`** and zero `lvrx`/`stvlx`/`stvrx` or `l`-variants. This is what forces the vendoring, so do it only once those 851 sites are in the way. Worth asking clienthax first; upstream is active and a cspec-shipping extension helps every user of that repo. (3) **A headless import script** - `analyzeHeadless` takes `-loader`, `-processor`, `-preScript` and `-postScript` in one command, which is exactly the order this pack needs, and would make the import reproducible the way `just apply-names` is. Blocked today only by the GUI holding the project lock. Also outstanding: `scripts/apply-ghidra-names.py`'s `BINARY_PROGRAMS` needs a `"ps3-hdfury-eu": "/ps3-hdfury-eu/EBOOT.elf"` row before any PS3 `names.tsv` is applied - note it is the only entry that names a **decrypted** file, since every other binary imports as shipped. |
 
+| **The alpha-test cutout reference is recovered as three values, not one, and the per-batch selector is not** | `docs/ghidra/functions/psp-pulse-usa/mesh-draw.md` reads `is_alpha_tested()`'s branch of `Gfx_BuildBatchStateList` as `Gu_AlphaFunc(GU_GREATER, ref, 0xff)` with `ref` one of `0x7f`, `0` or `0x10` depending on the batch - three real call sites already in that decompiled function, not a guess. `mesh.wgsl`'s `ALPHA_TEST_THRESHOLD` (2026-08-17) uses `0`, the most permissive, chosen because it is provably safe (a batch authored for a stricter reference only shows a few extra near-zero-alpha texels, never hides real geometry) rather than because it is *right*. **Next step**: read what selects between the three in `Gfx_BuildBatchStateList` itself - the function is already open from this pass, and `mesh-draw.md`'s own recommendation 5 names this as the place a correct per-batch value comes from. |
+
 ## Pending maintainer decision: shipped design data in tracked docs
 
 [`handling-stats.md`](docs/formats/handling-stats.md)'s own rule, per
@@ -819,6 +821,16 @@ load-bearing in the arithmetic.
 agent's**, which is why it is flagged rather than done. Git history retains
 everything regardless, so a sweep would clean the distributable snapshot, not
 the past.
+
+**One new instance was resolved by the maintainer rather than flagged,
+2026-08-17.** The `Weapon Pad` ready-state colour cycle - a 6-entry `[r,g,b]`
+keyframe table recovered from `WeaponPad_UpdateRefreshTimer`
+(`docs/ghidra/functions/psp-pulse-usa/pads.md`) - is exactly this kind of
+tuning table. Asked directly, the maintainer chose to commit it
+(`oag_render::weapon_pad::READY_KEYFRAMES`) rather than defer or build a
+runtime BOOT.BIN reader, so it is tracked source now. Recorded here as the
+precedent for the next one of these that comes up: ask, do not assume either
+answer.
 
 ## Scope decisions that look like gaps
 
@@ -885,6 +897,22 @@ writers in it at the same time:
   everything.** Do not read that session as an argument for more agents.
 
 ## Traps that are live
+
+**A model reports the right triangle count and still renders nothing - check
+the alpha test, not the class table.** 2026-08-17. Wipeout Pure's `Speedup
+Pad`/`Weapon Pad` class ids were recovered 2026-08-13, `mesh::build_pads` is
+title-agnostic through `vex::classes::V4`, and `Data\Environments\01_Vineta_K\track.vex`
+decoded 14 `Speedup Pad` nodes, 952 triangles, correctly - every load report
+line said so. **The pad still drew zero pixels**, because `mesh.wgsl`'s
+`ALPHA_TEST_THRESHOLD` was an invented `0.5` and the pad's own glow texture
+(`speedup_GLOW_KEY.tga`) tops out at alpha 58/255 (~0.23): every fragment of
+every cutout batch discarded. A geometry decode that reports a plausible
+triangle count is not evidence a model draws anything - `oag-view --pads
+--screenshot` (or the new `crates/render/tests/pad_alpha_test_ground_truth.rs`)
+is the check that would have caught this, and neither ran until the picture
+was asked for directly. Fixed by lowering `ALPHA_TEST_THRESHOLD` to `1/255`
+(`0`, one of three real GE references `docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`
+recovered for this branch) - see `docs/formats/vex.md`'s materials section.
 
 **A one-seed race comparison cannot resolve two adjacent difficulties, and the
 test that did it read as a regression on an improvement.** 2026-08-17.

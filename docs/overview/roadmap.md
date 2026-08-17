@@ -1109,9 +1109,17 @@ time on Pure means anything yet, and no test pretends otherwise.
 **Known gaps, every one of them reported rather than silent**: no reset volumes
 (a craft that leaves the circuit stays off it), no boost plume, no HUD atlas
 (Pure's HUD is `.vex` models rather than a `.mip`), no loading-screen wave, no
-speedup or weapon pads, no sky, no visibility sections. Each is a class id or an
-entry name that is *unrecovered* rather than absent, which is what the second row
-above covers.
+sky, no visibility sections. Each is a class id or an entry name that is
+*unrecovered* rather than absent, which is what the second row above covers.
+
+**Speedup and weapon pads are no longer on this list.** `vex::classes::V4`
+recovered both ids 2026-08-13 (see `docs/formats/pure-status.md`), and
+`mesh::build_pads`/`build_weapon_pads` are already title-agnostic through that
+table - the gap that was actually stopping them from drawing was
+`mesh.wgsl`'s `ALPHA_TEST_THRESHOLD`, an invented `0.5` that discarded Pure's
+`Speedup Pad` glow texture whole (its brightest texel is alpha 58/255). Fixed
+2026-08-17, see
+[`vex.md`](../formats/vex.md#a-batchs-own-attributes-decide-its-pipeline-not-which-list-it-came-from).
 
 ---
 

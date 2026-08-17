@@ -80,6 +80,7 @@ fn draw_of_node(node: Option<u32>) -> DrawCall {
 fn model_of(draws: Vec<DrawCall>) -> Model {
     Model {
         airbrakes: [None, None],
+        node_vertex_ranges: Vec::new(),
         label: "test".into(),
         vertices: Vec::new(),
         indices: vec![0, 1, 2],
