@@ -208,6 +208,32 @@ fn the_front_ends_own_music_resolves_and_is_not_a_soundtrack_track() {
     );
 }
 
+/// The front end's music loads **through the path the engine would use**, and
+/// not merely through a name that resolves.
+///
+/// The only thing that reaches `music::load_front_end` for an HD source. HD's
+/// `Title::front_end` is `None`, so `Audio::start_music` is never called on an
+/// HD boot and the race playlist is all a player hears - which makes this
+/// branch unreachable in practice and a test the only thing that can exercise
+/// it. Without this, "HD's front-end music works" would rest on `locate`
+/// returning `Some`, which is true of any real entry.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_front_ends_music_loads_through_the_engines_own_path() {
+    let Some(image) = image() else { return };
+    let cache = std::env::temp_dir().join("oag-hd-music-ground-truth");
+    let (name, sound) = music::load_front_end(&image.display().to_string(), &cache)
+        .expect("loading the front end's music")
+        .expect("HD names one");
+
+    assert_eq!(name, oag_hd::MUSIC.front_end);
+    assert!(
+        (sound.seconds() - 170.7).abs() < 1.0,
+        "the base stereo cut is {} s",
+        sound.seconds()
+    );
+}
+
 /// All four front-end candidates are on the disc, and the two the base/Fury
 /// axis chooses between are **different pieces of music**.
 ///
