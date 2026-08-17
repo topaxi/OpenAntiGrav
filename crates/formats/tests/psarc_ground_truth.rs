@@ -1,0 +1,248 @@
+//! Validates the PSARC reader against the real PS3 disc.
+//!
+//! **`#[ignore]`d and never run in CI.** They need game content, which this
+//! project does not ship. See `docs/architecture/adr/0006-no-copyrighted-content.md`.
+//!
+//! ```sh
+//! just test-data
+//! ```
+//!
+//! The tests skip with a printed message when the disc image is absent. Set
+//! `OAG_REQUIRE_GAME_DATA=1` to turn absence into a failure, which is what a
+//! release check wants: a skipped ground-truth test is green and proves nothing.
+//!
+//! # The image has to be decrypted first
+//!
+//! `hdfury-ps3-eu.iso` is per-sector AES-128-CBC and a `.psarc` inside it reads
+//! as noise. These tests want `hdfury-ps3-eu-dec.iso`, which
+//! `scripts/ps3iso.py decrypt` writes from the maintainer's own `.dkey`; see
+//! `docs/formats/ps3-disc.md`. Neither the key nor the decrypted image is
+//! committed.
+//!
+//! # What these are for
+//!
+//! The load-bearing one is [`every_entry_carries_md5_of_its_own_uppercased_path`].
+//! A single check ties three readings together that could each be wrong on
+//! their own: the manifest parse (a path off by one line hashes to nothing),
+//! the entry ordering (the manifest is in entry order and nothing states so),
+//! and the entry stride (30-byte entries read one byte adrift shift every
+//! digest). The lowercase spelling matches zero entries, so the uppercasing is
+//! measured rather than assumed.
+//!
+//! The rest corroborate the *decompression* half, which no digest can reach:
+//! a deflate stream does not survive a container misread, so an entry whose
+//! inflated bytes carry the magic its extension predicts is a check on the
+//! block walk and the block-width probe together.
+
+use std::path::{Path, PathBuf};
+
+use oag_disc::{DiscImage, Entry};
+use oag_formats::psarc::{self, Directory, Header};
+
+/// The decrypted PS3 image. See the module docs for where it comes from.
+const PS3_IMAGE: &str = "hdfury-ps3-eu-dec.iso";
+
+/// Archives on the disc, all under `PS3_GAME/USRDIR/`.
+const ARCHIVE_COUNT: usize = 7;
+
+/// Entries across all seven, the manifests excluded. From
+/// `docs/formats/psarc.md`.
+const ENTRY_COUNT: usize = 11_664;
+
+/// A circuit whose `.vex` is the one `docs/formats/hd-status.md` measures.
+const TRACK_VEX: &str = "/data/environments/talons_junction/track.vex";
+
+fn image(name: &str) -> Option<PathBuf> {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("data/images")
+        .join(name);
+
+    if path.exists() {
+        return Some(path);
+    }
+    assert!(
+        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
+        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
+        path.display()
+    );
+    println!("skipping: {} not present", path.display());
+    None
+}
+
+/// One archive, read in place out of the image at the LBA the ISO walk reports.
+///
+/// Nothing is extracted: the header, the table of contents and each entry's
+/// blocks are read as ranges within the archive's own extent, which is why
+/// listing 2.1 GiB of archives takes seconds.
+struct Archive {
+    path: String,
+    entry: Entry,
+    directory: Directory,
+    paths: Vec<String>,
+}
+
+impl Archive {
+    fn open(disc: &mut DiscImage, entry: Entry) -> Self {
+        let head = disc
+            .read_entry_range(&entry, 0, psarc::HEADER_LEN as u64)
+            .expect("header");
+        let header = Header::parse(&head).unwrap_or_else(|e| panic!("{}: {e}", entry.path));
+        let toc = disc
+            .read_entry_range(&entry, 0, u64::from(header.toc_len))
+            .expect("toc");
+        let directory = Directory::parse(&toc).unwrap_or_else(|e| panic!("{}: {e}", entry.path));
+
+        let mut archive = Self {
+            path: entry.path.clone(),
+            entry,
+            directory,
+            paths: Vec::new(),
+        };
+        archive.paths = psarc::parse_manifest(&archive.read(0, disc));
+        archive
+    }
+
+    fn read(&self, index: usize, disc: &mut DiscImage) -> Vec<u8> {
+        let (offset, len) = self
+            .directory
+            .entry_range(index)
+            .unwrap_or_else(|e| panic!("{}: entry {index}: {e}", self.path));
+        let stored = disc
+            .read_entry_range(&self.entry, offset, len)
+            .expect("entry bytes");
+        self.directory
+            .read_entry(index, &stored)
+            .unwrap_or_else(|e| panic!("{}: entry {index}: {e}", self.path))
+    }
+}
+
+fn archives(disc: &mut DiscImage) -> Vec<Archive> {
+    let found: Vec<Entry> = disc
+        .entries()
+        .expect("iso walk")
+        .iter()
+        .filter(|e| !e.is_directory && e.path.to_ascii_lowercase().ends_with(".psarc"))
+        .cloned()
+        .collect();
+    found
+        .into_iter()
+        .map(|entry| Archive::open(disc, entry))
+        .collect()
+}
+
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn every_entry_carries_md5_of_its_own_uppercased_path() {
+    let Some(path) = image(PS3_IMAGE) else { return };
+    let mut disc = DiscImage::open(&path).expect("open image");
+    let archives = archives(&mut disc);
+
+    assert_eq!(
+        archives.len(),
+        ARCHIVE_COUNT,
+        "the disc ships seven .psarc archives"
+    );
+
+    let mut total = 0usize;
+    let mut matched = 0usize;
+    let mut lowercase_matched = 0usize;
+    for archive in &archives {
+        assert_eq!(
+            archive.paths.len(),
+            archive.directory.len() - 1,
+            "{}: the manifest names every entry but itself",
+            archive.path
+        );
+        assert_eq!(
+            archive.directory.entries[0].digest, [0u8; 16],
+            "{}: the manifest has no path to hash",
+            archive.path
+        );
+
+        for (n, entry_path) in archive.paths.iter().enumerate() {
+            total += 1;
+            let stored = archive.directory.entries[n + 1].digest;
+            matched += usize::from(stored == psarc::path_digest(entry_path));
+            lowercase_matched +=
+                usize::from(stored == psarc::md5_digest(entry_path.to_lowercase().as_bytes()));
+        }
+    }
+
+    assert_eq!(total, ENTRY_COUNT, "entries across all seven archives");
+    assert_eq!(
+        matched, total,
+        "every entry's digest is MD5 of its own path, uppercased"
+    );
+    assert_eq!(
+        lowercase_matched, 0,
+        "and the lowercase spelling - which is how the paths are stored - matches none"
+    );
+}
+
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn every_archive_is_psar_1_3_zlib_with_64_kib_blocks() {
+    let Some(path) = image(PS3_IMAGE) else { return };
+    let mut disc = DiscImage::open(&path).expect("open image");
+
+    for archive in archives(&mut disc) {
+        let header = archive.directory.header;
+        assert_eq!(
+            (header.version_major, header.version_minor),
+            (1, 3),
+            "{}",
+            archive.path
+        );
+        assert_eq!(header.compression_name(), "zlib", "{}", archive.path);
+        assert_eq!(header.block_size, 65_536, "{}", archive.path);
+        assert_eq!(
+            archive.directory.block_width, 2,
+            "{}: a 64 KiB block cannot deflate past 65,535 bytes",
+            archive.path
+        );
+    }
+}
+
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn an_inflated_entry_carries_the_magic_its_extension_predicts() {
+    let Some(path) = image(PS3_IMAGE) else { return };
+    let mut disc = DiscImage::open(&path).expect("open image");
+    let archives = archives(&mut disc);
+
+    let (archive, index) = archives
+        .iter()
+        .find_map(|a| {
+            a.paths
+                .iter()
+                .position(|p| p == TRACK_VEX)
+                .map(|n| (a, n + 1))
+        })
+        .expect("talons_junction/track.vex is on the disc");
+
+    let declared = archive.directory.entries[index].size;
+    let data = archive.read(index, &mut disc);
+
+    assert_eq!(
+        data.len() as u64,
+        declared,
+        "the inflated entry is exactly as long as its directory row says"
+    );
+    assert_eq!(
+        &data[0x0c..0x10],
+        b"XXEV",
+        "a .vex, byte-reversed - which a wrong block walk would not produce"
+    );
+    assert_eq!(
+        u32::from_be_bytes([data[0], data[1], data[2], data[3]]),
+        6,
+        "version 6, read big-endian"
+    );
+    assert_eq!(
+        16 + u32::from_be_bytes([data[4], data[5], data[6], data[7]]) as u64
+            + u32::from_be_bytes([data[8], data[9], data[10], data[11]]) as u64,
+        declared,
+        "and its two declared section lengths close on the file length"
+    );
+}

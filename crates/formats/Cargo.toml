@@ -18,6 +18,10 @@ av1 = ["dep:re_rav1d"]
 # faster than playback. `bitdepth_8` is all the 8-bit I420 path needs.
 re_rav1d = { workspace = true, optional = true }
 
+# Inflate, for `psarc`. See the workspace manifest for why this one format is
+# not hand-rolled like the rest.
+miniz_oxide.workspace = true
+
 # Ground-truth tests read real tracks out of a disc image. These are
 # dev-dependencies only: the library itself knows nothing about discs.
 #

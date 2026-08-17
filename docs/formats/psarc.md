@@ -70,9 +70,15 @@ the only entry in any of the seven for which that is true.
 
 It is whatever divides the table evenly, and here that is **2 bytes**: a 64 KiB
 block cannot deflate to more than 65,535 bytes and the exporter picked the
-narrowest width that fits. `scripts/psarc.py` tries 2, 3 and 4 and takes the
-first width that both divides the remaining table length and leaves room for the
-highest block index any entry names, rather than assuming the one this disc uses.
+narrowest width that fits. Both readers try 2, 3 and 4 and take the first width
+that both divides the remaining table length and leaves room for the highest
+block index any entry names, rather than assuming the one this disc uses.
+
+**The probe is only sound one way round**, and that is worth stating rather than
+leaving for someone to find. An odd table length rules pairs out, so a 3-byte
+width is recovered; an even one can *always* be read as pairs, so a 4-byte width
+is undecidable from the table alone and the narrowest wins. An archive declaring
+a block size above 65,535 would be the case to revisit it for, and none is known.
 
 ### A block size of zero means "stored"
 
@@ -155,13 +161,37 @@ still have to be [mined](../tools/oag-unpack.md), where a `.psarc` hands over
 
 ## Implemented where
 
-[`scripts/psarc.py`](../../scripts/psarc.py), not `oag-formats` - the same
-placement, and for the same reason, as [`ps3iso.py`](../../scripts/ps3iso.py).
-No milestone is open on Wipeout HD (see the [roadmap](../overview/roadmap.md)),
-so the reader exists to make the survey on [hd-status](hd-status.md)
-reproducible rather than to serve a runtime. Moving it into `oag-formats` is the
-first item of any real HD effort, and is small: the layout above is the whole
-format.
+**`oag_formats::psarc`**, since 2026-08-17, and
+[`scripts/psarc.py`](../../scripts/psarc.py) still, which is what `just psarc`
+and [`hd-survey`](hd-status.md#reproducing-this) drive. The two are independent
+readings of the same page, which is worth keeping: the script was written first
+and the Rust reader reproduces its counts.
+
+The Rust module does **no I/O**. An archive is gigabytes and lives inside a
+disc image, so `Directory::parse` takes the declared table of contents,
+`Directory::entry_range` names the bytes one entry needs, and
+`Directory::read_entry` turns exactly those bytes into the entry - the caller
+owns the seeking, the way `oag_assets::Archive` already does for the
+[WAD](wad.md).
+
+Two things it hand-rolls and one it does not. **MD5** is a page of RFC 1321 with
+published test vectors, so `psarc::path_digest` costs nothing to own.
+**Inflate** is not: deflate is a published standard whose failure mode is silent
+garbage, so `miniz_oxide` does it - pure Rust with no C toolchain, the same bar
+`re_rav1d` is held to, and the first third-party dependency in `oag-formats`'
+default build.
+
+The checks above run as `crates/formats/tests/psarc_ground_truth.rs`, `#[ignore]`d
+like every ground-truth test because they need the decrypted image:
+
+```sh
+cargo nextest run -p oag-formats --run-ignored all -E 'binary(psarc_ground_truth)'
+```
+
+**What is not implemented**: the `lzma` branch, which no archive here declares,
+and the block-width probe's 4-byte case, which is
+[undecidable from an even table](#the-block-tables-element-width-is-not-declared)
+and so falls back to 2.
 
 ## See also
 

@@ -65,6 +65,16 @@ clap = { version = "4", features = ["derive"] }
 chd = "0.3"
 bytemuck = "1"
 
+# Inflate, for the PS3 `.psarc` container. Pure Rust with no C toolchain, the
+# same bar `re_rav1d` is held to. `oag-formats` hand-rolls every *Wipeout*
+# format and the two checksums PNG needs, but deflate is a published standard
+# whose failure mode is silent garbage, so this one is not worth rewriting.
+# `default-features = false` drops `with-alloc`'s `simd` and the C-shim
+# feature; `with-alloc` is what provides `decompress_to_vec_zlib`.
+miniz_oxide = { version = "0.8", default-features = false, features = [
+  "with-alloc",
+] }
+
 # `scalar-math` disables SIMD. Vectorised paths are free to reassociate and to
 # differ between targets; the simulation must not. See docs/architecture/adr/0002.
 glam = { version = "0.33", default-features = false, features = [
