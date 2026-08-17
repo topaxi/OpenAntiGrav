@@ -22,7 +22,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use oag_core::math::Vec3;
-use oag_formats::{collision, handling, track};
+use oag_formats::{collision, handling, track, vex};
 use oag_gameplay::ControlScheme;
 use oag_gameplay::input::button_from_name;
 use oag_gameplay::spawn::{Pose, box_inertia, spawn_height};
@@ -859,9 +859,8 @@ fn plan_scenario(args: PlanArgs) -> Result<()> {
     // point and the spline's tangent there when there is not.
     let (gate, volume) = match (args.pad, args.gate) {
         (Some(index), _) => {
-            let nodes = oag_formats::vex::nodes(&blob).context("walking the node tree")?;
-            let volumes =
-                oag_formats::pads::volumes(&blob, &nodes, oag_formats::vex::CLASS_SPEEDUP_PAD);
+            let nodes = vex::nodes(&blob).context("walking the node tree")?;
+            let volumes = oag_formats::pads::volumes(&blob, &nodes, vex::CLASS_SPEEDUP_PAD);
             let pad = volumes.get(index).copied().with_context(|| {
                 format!(
                     "{} has {} speed pad(s), so there is no pad {index}",
@@ -1141,17 +1140,17 @@ fn load_start_position(source: &str, name: &str) -> Result<Option<track::StartPo
     let blob = archives
         .read_name(name)
         .with_context(|| format!("reading {name} out of {}", archives.layout.describe()))?;
-    let nodes = oag_formats::vex::nodes(&blob).context("walking the node tree")?;
+    let nodes = vex::nodes(&blob).context("walking the node tree")?;
     let Some(node) = nodes
         .iter()
-        .find(|n| n.class_id == oag_formats::vex::CLASS_START_POSITION)
+        .find(|n| n.class_id == vex::CLASS_START_POSITION)
     else {
         return Ok(None);
     };
     let payload = blob
         .get(node.payload())
         .context("the Start Position payload runs past the end of the file")?;
-    Ok(track::start_position(payload))
+    Ok(track::start_position(payload, vex::byte_order(&blob)))
 }
 
 /// Reads a track's `WO Track` spline graph out of its `.vex`, for `track` and
@@ -1164,7 +1163,7 @@ fn read_track_blob(source: &str, name: &str) -> Result<Vec<u8>> {
 }
 
 fn ai_of(blob: &[u8], name: &str) -> Result<track::AiTrack> {
-    let nodes = oag_formats::vex::nodes(blob).context("walking the node tree")?;
+    let nodes = vex::nodes(blob).context("walking the node tree")?;
     // By the class id this file's own version word implies, not by the version-6
     // constant: `CLASS_WO_TRACK` finds nothing in a version-4 `.vex`, which is
     // every track on Pure's disc.
@@ -1269,7 +1268,7 @@ fn dump_track(source: &str, name: &str, steps: usize) -> Result<()> {
 ///
 /// One row per pad, speedup pads first then weapon pads, each numbered within
 /// its class - `pad 3` of class `speedup` is stable across runs because
-/// [`oag_formats::vex::nodes`] walks the file in file order. `progress` is
+/// [`vex::nodes`] walks the file in file order. `progress` is
 /// arc-length distance from the start line along the course ring, and `offset`
 /// is how far the pad's centre sits from its nearest ring point - large means
 /// the pad is off the primary ring (a shortcut branch) and its `progress` and
@@ -1283,13 +1282,13 @@ fn dump_track(source: &str, name: &str, steps: usize) -> Result<()> {
 fn dump_pads(source: &str, name: &str, before: &[f32]) -> Result<()> {
     let blob = read_track_blob(source, name)?;
     let ai = ai_of(&blob, name)?;
-    let nodes = oag_formats::vex::nodes(&blob).context("walking the node tree")?;
+    let nodes = vex::nodes(&blob).context("walking the node tree")?;
 
     let start = nodes
         .iter()
-        .find(|n| n.class_id == oag_formats::vex::CLASS_START_POSITION)
+        .find(|n| n.class_id == vex::CLASS_START_POSITION)
         .and_then(|n| blob.get(n.payload()))
-        .and_then(track::start_position);
+        .and_then(|payload| track::start_position(payload, vex::byte_order(&blob)));
     let course = Course::from_track(&ai, start.map(|s| Vec3::from_array(s.position)))
         .context("the track's primary spline chain does not close into a ring")?;
 
@@ -1309,8 +1308,8 @@ fn dump_pads(source: &str, name: &str, before: &[f32]) -> Result<()> {
     println!("{}", header.join(","));
 
     let classes = [
-        ("speedup", oag_formats::vex::CLASS_SPEEDUP_PAD),
-        ("weapon", oag_formats::vex::CLASS_WEAPON_PAD),
+        ("speedup", vex::CLASS_SPEEDUP_PAD),
+        ("weapon", vex::CLASS_WEAPON_PAD),
     ];
     let mut total = 0usize;
     for (label, class_id) in classes {

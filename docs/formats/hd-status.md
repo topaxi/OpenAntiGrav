@@ -181,9 +181,20 @@ layer at all.
 
 ## `WO Track`: version `0x106`, the same control point
 
-**Confidence 90.** [Pulse's layout](track.md) reads unchanged: magic `WOtd`, a
-`0x20` header, the `0x20` reserved block every version from `0x101` claims, then
-paths at `0x20` bytes each, junctions at `0x10`, and control points at `0x70`.
+**Confidence 90.** [Pulse's layout](track.md) reads unchanged: a `0x20` header,
+the `0x20` reserved block every version from `0x101` claims, then paths at `0x20`
+bytes each, junctions at `0x10`, and control points at `0x70`.
+
+**The magic is a byte-order discriminator, and this page used to say otherwise.**
+It read "magic `WOtd`" for both games, which invites the conclusion that a `WO
+Track` payload cannot say which way round it is and that a parser has to be told
+by its container. Measured on the shipped files, `16_Track` opens `64 74 4f 57`
+(`dtOW`) and `talons_junction` opens `57 4f 74 64` (`WOtd`) - the same word
+`0x574f7464`, written on hosts of opposite endianness, exactly like
+`VEXX`/`XXEV`. So `oag_formats::track::parse` sniffs it and reads a Wipeout HD
+circuit with no argument and no caller change; `track::byte_order` is the sniff,
+and `a_big_endian_payload_parses_to_the_same_spline_as_its_little_endian_twin`
+pins it.
 
 Across all 28 circuits:
 

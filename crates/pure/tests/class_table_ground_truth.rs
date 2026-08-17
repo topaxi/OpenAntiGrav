@@ -387,7 +387,7 @@ fn the_predicted_classes_are_in_pures_own_files() {
     let slot = nodes
         .iter()
         .find(|n| Some(n.class_id) == v4.start_position)
-        .and_then(|n| track::start_position(&blob[n.payload()]))
+        .and_then(|n| track::start_position(&blob[n.payload()], vex::byte_order(&blob)))
         .expect("the Start Position payload decodes");
     let forward = slot.forward;
     let length =

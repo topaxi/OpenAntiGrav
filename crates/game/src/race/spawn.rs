@@ -144,5 +144,5 @@ pub(super) fn start_position_of(blob: &[u8]) -> Option<StartPosition> {
     // the spline instead - which `load`'s own report line already describes.
     let class = vex::classes_of(blob).ok()?.start_position?;
     let node = nodes.iter().find(|node| node.class_id == class)?;
-    oag_formats::track::start_position(blob.get(node.payload())?)
+    oag_formats::track::start_position(blob.get(node.payload())?, vex::byte_order(blob))
 }

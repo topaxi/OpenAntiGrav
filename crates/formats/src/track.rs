@@ -55,6 +55,7 @@
 
 use std::fmt;
 
+use crate::ByteOrder;
 use crate::vex;
 
 /// Bytes of `WO Track` header.
@@ -396,16 +397,19 @@ pub struct StartPosition {
 /// re-orthonormalisation that forces up and keeps the frame right-handed lands
 /// within that angle of any other. The fix-up is nonetheless not a no-op, which
 /// is why it is applied rather than skipped.
+/// `order` is the containing `.vex`'s, from [`vex::byte_order`]. A `Start
+/// Position` payload is a bare 4x4 matrix with no magic, so unlike the spline
+/// itself it cannot say which way round it is.
 #[must_use]
-pub fn start_position(payload: &[u8]) -> Option<StartPosition> {
+pub fn start_position(payload: &[u8], order: ByteOrder) -> Option<StartPosition> {
     if payload.len() < START_POSITION_LEN {
         return None;
     }
     let row = |r: usize| {
         [
-            f32_at(payload, r * 16),
-            f32_at(payload, r * 16 + 4),
-            f32_at(payload, r * 16 + 8),
+            f32_at(order, payload, r * 16),
+            f32_at(order, payload, r * 16 + 4),
+            f32_at(order, payload, r * 16 + 8),
         ]
     };
 
@@ -480,10 +484,33 @@ pub fn reserved_len(version: u32) -> usize {
     if version >= 0x101 { RESERVED_LEN } else { 0 }
 }
 
-/// Whether a payload carries the `WO Track` magic.
+/// Which way round a payload's words are, from its own magic, or `None` when
+/// the magic is neither.
+///
+/// The four bytes spell `dtOW` on the PSP and PS2 and `WOtd` on the PS3 - the
+/// same [`MAGIC`] word, written on hosts of opposite endianness. So a `WO Track`
+/// payload says which it is even though it sits inside a `.vex` that already
+/// said, and this parser needs no argument and no caller change to read a
+/// Wipeout HD circuit.
+///
+/// That is worth stating because it was nearly got wrong:
+/// `docs/formats/hd-status.md` records the magic as "`WOtd`" on both, which
+/// reads as "the magic is not a discriminator". Measured on the shipped files,
+/// `16_Track` opens `64 74 4f 57` and `talons_junction` opens `57 4f 74 64`.
+#[must_use]
+pub fn byte_order(payload: &[u8]) -> Option<ByteOrder> {
+    if payload.len() < 4 {
+        return None;
+    }
+    [ByteOrder::Little, ByteOrder::Big]
+        .into_iter()
+        .find(|&order| order.u32(payload, 0) == MAGIC)
+}
+
+/// Whether a payload carries the `WO Track` magic, in either byte order.
 #[must_use]
 pub fn has_magic(payload: &[u8]) -> bool {
-    payload.len() >= 4 && u32_at(payload, 0) == MAGIC
+    byte_order(payload).is_some()
 }
 
 /// Decodes a `WO Track` node payload.
@@ -503,17 +530,18 @@ pub fn parse(payload: &[u8]) -> Result<AiTrack> {
         });
     }
 
-    let magic = u32_at(payload, 0);
-    if magic != MAGIC {
-        return Err(Error::BadMagic { magic });
-    }
-    let version = u32_at(payload, 4);
+    let Some(order) = byte_order(payload) else {
+        return Err(Error::BadMagic {
+            magic: ByteOrder::Little.u32(payload, 0),
+        });
+    };
+    let version = u32_at(order, payload, 4);
     if version < MIN_VERSION {
         return Err(Error::UnsupportedVersion { version });
     }
 
-    let path_count = u32_at(payload, 8) as usize;
-    let junction_count = u32_at(payload, 12) as usize;
+    let path_count = u32_at(order, payload, 8) as usize;
+    let junction_count = u32_at(order, payload, 12) as usize;
 
     let paths_at = HEADER_LEN + reserved_len(version);
     let junctions_at = end_of("paths", paths_at, path_count, PATH_LEN, payload.len())?;
@@ -531,7 +559,7 @@ pub fn parse(payload: &[u8]) -> Result<AiTrack> {
     let mut counts = Vec::with_capacity(path_count.min(payload.len() / PATH_LEN));
     let mut at = points_at;
     for i in 0..path_count {
-        let count = u32_at(payload, paths_at + i * PATH_LEN) as usize;
+        let count = u32_at(order, payload, paths_at + i * PATH_LEN) as usize;
         at = end_of("control points", at, count, POINT_LEN, payload.len())?;
         counts.push(count);
     }
@@ -539,7 +567,7 @@ pub fn parse(payload: &[u8]) -> Result<AiTrack> {
     let mut junctions = Vec::with_capacity(junction_count);
     for j in 0..junction_count {
         let base = junctions_at + j * JUNCTION_LEN;
-        let slot = |k: usize| index_at(payload, base + k * 4, "junction slot", path_count);
+        let slot = |k: usize| index_at(order, payload, base + k * 4, "junction slot", path_count);
         junctions.push(Junction {
             prev: [slot(0)?, slot(1)?],
             next: [slot(2)?, slot(3)?],
@@ -552,15 +580,15 @@ pub fn parse(payload: &[u8]) -> Result<AiTrack> {
         let base = paths_at + i * PATH_LEN;
         let mut points = Vec::with_capacity(count);
         for k in 0..count {
-            points.push(point_at(payload, points_from + k * POINT_LEN));
+            points.push(point_at(order, payload, points_from + k * POINT_LEN));
         }
         points_from += count * POINT_LEN;
 
         paths.push(Path {
             points,
-            max_spacing: f32_at(payload, base + 4),
-            entry: index_at(payload, base + 0x0c, "path entry", junction_count)?,
-            exit: index_at(payload, base + 0x10, "path exit", junction_count)?,
+            max_spacing: f32_at(order, payload, base + 4),
+            entry: index_at(order, payload, base + 0x0c, "path entry", junction_count)?,
+            exit: index_at(order, payload, base + 0x10, "path exit", junction_count)?,
         });
     }
 
@@ -588,8 +616,14 @@ fn end_of(what: &'static str, at: usize, count: usize, stride: usize, len: usize
 }
 
 /// Reads one index, mapping the null sentinel to `None`.
-fn index_at(payload: &[u8], at: usize, what: &'static str, count: usize) -> Result<Option<usize>> {
-    let raw = u32_at(payload, at);
+fn index_at(
+    order: ByteOrder,
+    payload: &[u8],
+    at: usize,
+    what: &'static str,
+    count: usize,
+) -> Result<Option<usize>> {
+    let raw = u32_at(order, payload, at);
     if raw == NULL_INDEX {
         return Ok(None);
     }
@@ -603,36 +637,36 @@ fn index_at(payload: &[u8], at: usize, what: &'static str, count: usize) -> Resu
     Ok(Some(raw as usize))
 }
 
-fn point_at(payload: &[u8], at: usize) -> SplinePoint {
+fn point_at(order: ByteOrder, payload: &[u8], at: usize) -> SplinePoint {
     SplinePoint {
-        pos: vec3_at(payload, at),
-        tangent: vec3_at(payload, at + 0x10),
-        down: vec3_at(payload, at + 0x20),
-        lateral: vec3_at(payload, at + 0x30),
-        half_width_left: f32_at(payload, at + 0x44),
-        half_width_right: f32_at(payload, at + 0x48),
-        ai_bound_left: f32_at(payload, at + 0x4c),
-        ai_bound_right: f32_at(payload, at + 0x50),
-        racing_line: f32_at(payload, at + 0x54),
+        pos: vec3_at(order, payload, at),
+        tangent: vec3_at(order, payload, at + 0x10),
+        down: vec3_at(order, payload, at + 0x20),
+        lateral: vec3_at(order, payload, at + 0x30),
+        half_width_left: f32_at(order, payload, at + 0x44),
+        half_width_right: f32_at(order, payload, at + 0x48),
+        ai_bound_left: f32_at(order, payload, at + 0x4c),
+        ai_bound_right: f32_at(order, payload, at + 0x50),
+        racing_line: f32_at(order, payload, at + 0x54),
         section_id: payload[at + 0x60],
         flags: payload[at + 0x61],
     }
 }
 
-fn vec3_at(payload: &[u8], at: usize) -> [f32; 3] {
+fn vec3_at(order: ByteOrder, payload: &[u8], at: usize) -> [f32; 3] {
     [
-        f32_at(payload, at),
-        f32_at(payload, at + 4),
-        f32_at(payload, at + 8),
+        f32_at(order, payload, at),
+        f32_at(order, payload, at + 4),
+        f32_at(order, payload, at + 8),
     ]
 }
 
-fn u32_at(data: &[u8], at: usize) -> u32 {
-    u32::from_le_bytes([data[at], data[at + 1], data[at + 2], data[at + 3]])
+fn u32_at(order: ByteOrder, data: &[u8], at: usize) -> u32 {
+    order.u32(data, at)
 }
 
-fn f32_at(data: &[u8], at: usize) -> f32 {
-    f32::from_bits(u32_at(data, at))
+fn f32_at(order: ByteOrder, data: &[u8], at: usize) -> f32 {
+    order.f32(data, at)
 }
 
 #[cfg(test)]

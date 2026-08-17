@@ -356,7 +356,8 @@ fn every_shipped_track_authors_exactly_one_start_position() {
             let tilt = dot(unit(up), [0.0, 1.0, 0.0]).clamp(-1.0, 1.0).acos();
             worst_tilt = worst_tilt.max(tilt.to_degrees());
 
-            let slot = track::start_position(payload).expect("a non-degenerate authored frame");
+            let slot = track::start_position(payload, vex::byte_order(&model))
+                .expect("a non-degenerate authored frame");
             assert_eq!(slot.up, [0.0, 1.0, 0.0], "{name}: the bind forces up");
             assert!(
                 (dot(slot.forward, slot.forward).sqrt() - 1.0).abs() < 1e-5,

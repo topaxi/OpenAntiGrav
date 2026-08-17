@@ -39,7 +39,7 @@ fn load() -> Option<(Vec<u8>, Course)> {
     let slot = nodes
         .iter()
         .find(|node| node.class_id == vex::CLASS_START_POSITION)
-        .and_then(|node| track::start_position(blob.get(node.payload())?))
+        .and_then(|node| track::start_position(blob.get(node.payload())?, vex::byte_order(&blob)))
         .expect("this track has an authored slot");
     let course =
         Course::from_track(&ai, Some(Vec3::from(slot.position))).expect("the primary chain closes");

@@ -8,10 +8,27 @@
 //! gate.
 
 use super::*;
+use crate::ByteOrder;
 
 /// Builds a payload with `paths` control-point counts, one junction per
 /// path, wired as a ring.
 fn build(version: u32, counts: &[usize]) -> Vec<u8> {
+    build_in(version, counts, ByteOrder::Little)
+}
+
+/// The same payload, written the way the console `order` names would write it.
+///
+/// A PS3 `WO Track` payload is this layout with every word the other way round
+/// and the magic reading `WOtd` rather than `dtOW`; see
+/// `docs/formats/hd-status.md`.
+fn build_in(version: u32, counts: &[usize], order: ByteOrder) -> Vec<u8> {
+    let w32 = |v: u32| -> [u8; 4] {
+        match order {
+            ByteOrder::Little => v.to_le_bytes(),
+            ByteOrder::Big => v.to_be_bytes(),
+        }
+    };
+    let wf32 = |v: f32| -> [u8; 4] { w32(v.to_bits()) };
     let reserved = reserved_len(version);
     let paths_at = HEADER_LEN + reserved;
     let junctions_at = paths_at + counts.len() * PATH_LEN;
@@ -19,43 +36,43 @@ fn build(version: u32, counts: &[usize]) -> Vec<u8> {
     let total: usize = counts.iter().sum();
 
     let mut out = vec![0u8; points_at + total * POINT_LEN];
-    out[0..4].copy_from_slice(&MAGIC.to_le_bytes());
-    out[4..8].copy_from_slice(&version.to_le_bytes());
-    out[8..12].copy_from_slice(&(counts.len() as u32).to_le_bytes());
-    out[12..16].copy_from_slice(&(counts.len() as u32).to_le_bytes());
+    out[0..4].copy_from_slice(&w32(MAGIC));
+    out[4..8].copy_from_slice(&w32(version));
+    out[8..12].copy_from_slice(&w32(counts.len() as u32));
+    out[12..16].copy_from_slice(&w32(counts.len() as u32));
 
     for (i, &count) in counts.iter().enumerate() {
         let base = paths_at + i * PATH_LEN;
-        out[base..base + 4].copy_from_slice(&(count as u32).to_le_bytes());
-        out[base + 4..base + 8].copy_from_slice(&7.5f32.to_le_bytes());
+        out[base..base + 4].copy_from_slice(&w32(count as u32));
+        out[base + 4..base + 8].copy_from_slice(&wf32(7.5));
         // entry is the junction before this path, exit the one after.
         let entry = (i + counts.len() - 1) % counts.len();
-        out[base + 0x0c..base + 0x10].copy_from_slice(&(entry as u32).to_le_bytes());
-        out[base + 0x10..base + 0x14].copy_from_slice(&(i as u32).to_le_bytes());
+        out[base + 0x0c..base + 0x10].copy_from_slice(&w32(entry as u32));
+        out[base + 0x10..base + 0x14].copy_from_slice(&w32(i as u32));
     }
 
     for j in 0..counts.len() {
         let base = junctions_at + j * JUNCTION_LEN;
         let next = (j + 1) % counts.len();
-        out[base..base + 4].copy_from_slice(&(j as u32).to_le_bytes());
-        out[base + 4..base + 8].copy_from_slice(&NULL_INDEX.to_le_bytes());
-        out[base + 8..base + 12].copy_from_slice(&(next as u32).to_le_bytes());
-        out[base + 12..base + 16].copy_from_slice(&NULL_INDEX.to_le_bytes());
+        out[base..base + 4].copy_from_slice(&w32(j as u32));
+        out[base + 4..base + 8].copy_from_slice(&w32(NULL_INDEX));
+        out[base + 8..base + 12].copy_from_slice(&w32(next as u32));
+        out[base + 12..base + 16].copy_from_slice(&w32(NULL_INDEX));
     }
 
     let mut at = points_at;
     for (i, &count) in counts.iter().enumerate() {
         for k in 0..count {
             // Position walks along +x so segment lengths are checkable.
-            write_vec3(&mut out, at, [k as f32 * 5.0, 0.0, i as f32 * 100.0]);
-            write_vec3(&mut out, at + 0x10, [1.0, 0.0, 0.0]);
-            write_vec3(&mut out, at + 0x20, [0.0, -1.0, 0.0]);
-            write_vec3(&mut out, at + 0x30, [0.0, 0.0, 1.0]);
-            out[at + 0x44..at + 0x48].copy_from_slice(&20.0f32.to_le_bytes());
-            out[at + 0x48..at + 0x4c].copy_from_slice(&20.0f32.to_le_bytes());
-            out[at + 0x4c..at + 0x50].copy_from_slice(&(-9.0f32).to_le_bytes());
-            out[at + 0x50..at + 0x54].copy_from_slice(&9.0f32.to_le_bytes());
-            out[at + 0x54..at + 0x58].copy_from_slice(&0.5f32.to_le_bytes());
+            write_vec3(&mut out, order, at, [k as f32 * 5.0, 0.0, i as f32 * 100.0]);
+            write_vec3(&mut out, order, at + 0x10, [1.0, 0.0, 0.0]);
+            write_vec3(&mut out, order, at + 0x20, [0.0, -1.0, 0.0]);
+            write_vec3(&mut out, order, at + 0x30, [0.0, 0.0, 1.0]);
+            out[at + 0x44..at + 0x48].copy_from_slice(&wf32(20.0));
+            out[at + 0x48..at + 0x4c].copy_from_slice(&wf32(20.0));
+            out[at + 0x4c..at + 0x50].copy_from_slice(&wf32(-9.0));
+            out[at + 0x50..at + 0x54].copy_from_slice(&wf32(9.0));
+            out[at + 0x54..at + 0x58].copy_from_slice(&wf32(0.5));
             out[at + 0x60] = k as u8;
             out[at + 0x61] = 1 << i;
             at += POINT_LEN;
@@ -64,9 +81,13 @@ fn build(version: u32, counts: &[usize]) -> Vec<u8> {
     out
 }
 
-fn write_vec3(out: &mut [u8], at: usize, v: [f32; 3]) {
+fn write_vec3(out: &mut [u8], order: ByteOrder, at: usize, v: [f32; 3]) {
     for (k, c) in v.iter().enumerate() {
-        out[at + k * 4..at + k * 4 + 4].copy_from_slice(&c.to_le_bytes());
+        let bytes = match order {
+            ByteOrder::Little => c.to_le_bytes(),
+            ByteOrder::Big => c.to_be_bytes(),
+        };
+        out[at + k * 4..at + k * 4 + 4].copy_from_slice(&bytes);
     }
 }
 
@@ -292,6 +313,11 @@ fn sample_or_accumulates_flags_across_the_window() {
 }
 
 /// Builds a `Start Position` payload from four rows.
+/// [`start_position`] on a fixture, which is written little-endian.
+fn start_position_le(payload: &[u8]) -> Option<StartPosition> {
+    start_position(payload, ByteOrder::Little)
+}
+
 fn slot(rows: [[f32; 3]; 4]) -> Vec<u8> {
     let mut out = vec![0u8; START_POSITION_LEN];
     for (r, row) in rows.iter().enumerate() {
@@ -313,7 +339,7 @@ fn a_start_position_reads_its_rows_as_left_up_forward() {
     // The identity every shipped slot satisfies exactly: cross(left, up) is
     // forward. A frame facing `+x` with `-z` to its left is the one
     // `16_Track` ships.
-    let position = start_position(&slot([
+    let position = start_position_le(&slot([
         [0.0, 0.0, -1.0],
         [0.0, 1.0, 0.0],
         [1.0, 0.0, 0.0],
@@ -333,7 +359,7 @@ fn a_start_position_reads_its_rows_as_left_up_forward() {
 #[test]
 fn the_bind_levels_a_tilted_slot() {
     let tilt = 0.25f32;
-    let position = start_position(&slot([
+    let position = start_position_le(&slot([
         [0.0, 0.0, -1.0],
         [-tilt, 1.0, 0.0],
         [1.0, tilt, 0.0],
@@ -358,7 +384,7 @@ fn the_bind_levels_a_tilted_slot() {
 #[test]
 fn a_vertical_forward_axis_has_no_slot_to_report() {
     assert!(
-        start_position(&slot([
+        start_position_le(&slot([
             [1.0, 0.0, 0.0],
             [0.0, 1.0, 0.0],
             [0.0, 1.0, 0.0],
@@ -370,5 +396,50 @@ fn a_vertical_forward_axis_has_no_slot_to_report() {
 
 #[test]
 fn a_short_start_position_payload_is_refused() {
-    assert!(start_position(&[0u8; 63]).is_none());
+    assert!(start_position_le(&[0u8; 63]).is_none());
+}
+
+/// The same spline, written both ways round, parses to the same thing.
+///
+/// A `WO Track` payload declares its byte order in its own magic - `dtOW` on
+/// the PSP and PS2, `WOtd` on the PS3 - so [`parse`] needs no argument and no
+/// caller had to change to read a Wipeout HD circuit. The four bytes are the
+/// discriminator, and this pins that they are, because
+/// `docs/formats/hd-status.md` reads as though they are not.
+#[test]
+fn a_big_endian_payload_parses_to_the_same_spline_as_its_little_endian_twin() {
+    let le = build(0x105, &[3, 4]);
+    let be = build_in(0x105, &[3, 4], ByteOrder::Big);
+
+    assert_eq!(&le[..4], b"dtOW", "the PSP and PS2 spelling");
+    assert_eq!(&be[..4], b"WOtd", "and the PS3's, which is the same word");
+    assert_eq!(byte_order(&le), Some(ByteOrder::Little));
+    assert_eq!(byte_order(&be), Some(ByteOrder::Big));
+    assert!(has_magic(&le) && has_magic(&be));
+
+    let from_le = parse(&le).expect("the little-endian payload");
+    let from_be = parse(&be).expect("the big-endian payload");
+    assert_eq!(from_le.version, from_be.version);
+    assert_eq!(from_le.junctions, from_be.junctions);
+    assert_eq!(from_le.paths.len(), from_be.paths.len());
+    for (a, b) in from_le.paths.iter().zip(&from_be.paths) {
+        assert_eq!(a.points, b.points);
+        assert_eq!(a.max_spacing, b.max_spacing);
+        assert_eq!((a.entry, a.exit), (b.entry, b.exit));
+    }
+    assert_eq!(
+        from_be.encoded_len(),
+        be.len(),
+        "and it accounts for every byte"
+    );
+}
+
+/// Neither spelling is a wrong magic that happens to parse.
+#[test]
+fn a_payload_whose_magic_is_neither_spelling_is_still_refused() {
+    let mut payload = build(0x105, &[2]);
+    payload[0..4].copy_from_slice(b"OhNo");
+    assert_eq!(byte_order(&payload), None);
+    assert!(!has_magic(&payload));
+    assert!(matches!(parse(&payload), Err(Error::BadMagic { .. })));
 }

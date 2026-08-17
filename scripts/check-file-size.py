@@ -123,7 +123,7 @@ BASELINE = {
     "crates/game/src/frontend.rs": 1995,
     "crates/render/src/psys.rs": 1956,
     "crates/game/src/audio.rs": 1798,
-    "crates/trace/src/main.rs": 1616,
+    "crates/trace/src/main.rs": 1615,
     "crates/render/src/exhaust.rs": 1506,
     "crates/formats/src/handling.rs": 1392,
     "crates/ai/src/driver.rs": 1382,
