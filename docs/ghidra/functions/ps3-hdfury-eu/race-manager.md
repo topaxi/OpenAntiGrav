@@ -95,8 +95,10 @@ That is the missing leg.
 ### `RaceManager_Construct`
 
 `0x0005d138(this)`, and the call sites are what make it readable. It is called
-from **22 distinct functions**, and the one that was read - `0x00045178` -
-does this:
+from **22 distinct functions** - which the later pass below resolves into
+**eleven direct subclasses, two constructors each**, not 22 subclasses. The one
+that was read first, `0x00045178`, turns out to be the multiplayer base class
+rather than a race mode, and does this:
 
 ```c
 RaceManager_Construct(param_1);              // chain to the base first
@@ -106,9 +108,9 @@ param_1[0xb8e] = ...;                        // then initialise fields past 0xb7
 
 That is a derived-class constructor calling its base. The base's own fields
 stop around index `0xb75`; every field `0x00045178` touches afterwards is above
-that. So `0x0005d138` is the base-object constructor of a class with at least
-22 subclasses, which for a title with this many race modes is the shape you
-would expect.
+that. So `0x0005d138` is the base-object constructor of a class with eleven
+direct subclasses and fifteen concrete race modes beneath it - the shape the
+table further down sets out in full.
 
 The body itself: chains to the shared base constructor `0x003271d8`, installs
 vtable `0x008628e0`, writes the `"RaceManager.cpp"` pointer to `+0x30`, fills a
@@ -182,7 +184,56 @@ class, both calling the base:
 | `SPZone` | `0x00076940`, `0x00076e00` | `0x0077e578` |
 | `AIBatch` | `0x0007b488`, `0x0007b788` | `0x0077e7c8` |
 | `Demo` | `0x0007d4a0`, `0x0007d8e0` | `0x0077e8c0` |
-| unidentified | `0x00044780`, `0x00045178` | - |
+| the MP base, below | `0x00044780`, `0x00045178` | - |
+
+### The eleventh pair is the multiplayer base class
+
+`0x00045178` is not a race mode. It is the class the five `MP*` race managers
+derive from, and finding it closes the hierarchy:
+
+```
+RaceManager                       0x0005d138  (+ unused pair member 0x000569f0)
+├── 10 direct subclasses          SPArcade SPDetonator SPElimination SPFreePlay
+│                                 SPNitro SPTimeTrial SPTournament SPZone
+│                                 AIBatch Demo
+└── MPRaceManager_Construct       0x00045178  (+ unused pair member 0x00044780)
+    └── 5 subclasses              MPArcade MPElimination MPNitro MPTimeTrial
+                                  MPTournament
+```
+
+**The arithmetic closes.** `RaceManager_Construct`'s 22 callers are 11 classes ×
+2 constructors: the ten above plus this one. Ten leaves plus five under the MP
+base is fifteen concrete race managers, and the disc carries exactly fifteen
+`*_RaceManager.cpp` strings. Nothing is left over in either direction.
+
+| Address | Name | Confidence |
+| --- | --- | --- |
+| `0x00045178` | `MPRaceManager_Construct` | 78 |
+
+Its ten callers are the five `MP*` constructor pairs - `0x0003d620`/`0x0003d8d0`
+(MPArcade), `0x0003df68`/`0x0003e530` (MPElimination), `0x00040560`/`0x000409e8`
+(MPNitro), `0x00041248`/`0x00041780` (MPTimeTrial) and
+`0x00042508`/`0x00042758` (MPTournament, which this pass identified). It chains
+to `RaceManager_Construct` at `0x000451b0`, installs its own vtable, and stores
+`this` into a global at `0x013c089c` - a second singleton, one level down from
+the race manager's own.
+
+**78, and the reason is the name rather than the role.** That this function is
+the base-object constructor of the class all five multiplayer race managers
+derive from is about as clear as this binary gets: ten callers, all of them MP
+constructors, and no other reference. What is *not* observed is what the class
+is called - it stores no `__FILE__`, and no string in the image names it.
+`MPRaceManager` is a description of its five subclasses, not something read out
+of the disc. Rename it the moment a string says otherwise.
+
+**This also distinguishes the constructor pair, for the two classes that have
+subclasses.** `0x00045178` has ten callers and `0x00044780` has none; likewise
+`RaceManager_Construct` has 22 and `0x000569f0` has none. Under the C++ ABI a
+derived constructor calls its base's *base-object* constructor, so in both pairs
+the referenced member is that one and the unreferenced member is the
+complete-object constructor. The discriminator does not help the ten leaf
+classes - nothing derives from them, so both members of each pair are
+unreferenced, which is why they stay unnamed.
 
 **The two constructors of a class cannot be told apart.** Diffing SPArcade's
 pair: 781 instructions each, 93.9% identical, and every difference is register
