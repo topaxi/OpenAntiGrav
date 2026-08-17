@@ -183,19 +183,35 @@ fn both_pressings_list_the_same_soundtrack() {
     }
 }
 
-/// The front end's own music is a real entry and is **not** one of the
-/// nineteen.
+/// The front end's own music is the **short loop** the name promises, and is
+/// not one of the nineteen.
 ///
-/// The second half is what stops `MusicSource` ever moving it: a menu loop that
-/// had a soundtrack track's length would be a track, and the row is scoped to
-/// the tracks alone.
+/// Locating the name is not enough on its own: a hash that resolved to some
+/// other entry would still locate, and would still not be one of the nineteen,
+/// so both of those assertions pass on a wrong-but-present entry. The length is
+/// what pins it - 40.1 s, against 205-326 s for every soundtrack track - and it
+/// is the number that would change silently if the name ever resolved
+/// elsewhere. Pulse's counterpart is 29.5 s; see `oag_pulse::MUSIC`.
+///
+/// Not being one of the nineteen is the separate claim that stops `MusicSource`
+/// ever moving it: the row is scoped to the tracks alone.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn the_front_ends_own_music_is_named_and_is_not_a_soundtrack_track() {
+fn the_front_ends_own_music_is_a_short_loop_and_not_a_soundtrack_track() {
     let name = oag_pure::MUSIC.front_end;
     for (label, image) in pure_images() {
-        let archives = oag_pure::open(&image.display().to_string()).expect("opening the disc");
+        let mut archives = oag_pure::open(&image.display().to_string()).expect("opening the disc");
         assert!(archives.locate(name).is_some(), "{label}: {name} is absent");
+
+        let at3 = archives.read_name(name).expect("reading the menu loop");
+        let seconds = oag_game::at3::describe(&at3)
+            .expect("a RIFF/WAVE")
+            .seconds()
+            .expect("a fact chunk");
+        assert!(
+            (seconds - 40.1).abs() < 0.1,
+            "{label}: the menu loop is {seconds} s"
+        );
 
         let hash = oag_formats::wad::hash_name(name);
         assert!(
