@@ -48,6 +48,7 @@ pub mod ps2_music;
 pub mod ps2_texture;
 pub mod psarc;
 pub mod pvs;
+pub mod rcsmodel;
 pub mod sblk;
 pub mod signature;
 pub mod texture;
