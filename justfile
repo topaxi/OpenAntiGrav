@@ -343,6 +343,14 @@ build-allegrex *ARGS:
 build-emotionengine *ARGS:
     ./scripts/build-ghidra-emotionengine.sh {{ARGS}}
 
+# Add r2 to the unaffected list of Ghidra's PowerPC 64/32-addr compiler spec,
+# which PS3 PPU code needs to decompile correctly - r2 is the TOC pointer and a
+# call does not clobber it. Edits the Ghidra install, so it needs sudo and does
+# not survive a Ghidra upgrade; `--check` reports whether it is still applied.
+# Run `scripts/patch-ghidra-ppc-cspec.sh --help` for the rest.
+patch-ppc-cspec *ARGS:
+    ./scripts/patch-ghidra-ppc-cspec.sh {{ARGS}}
+
 # Resolve the PSP import stubs from the binary's own NID tables
 resolve-imports boot="data/extracted/psp/PSP_GAME/SYSDIR/BOOT.BIN":
     python3 scripts/resolve-psp-imports.py {{boot}} --modules -o data/ghidra/psp-imports.tsv
