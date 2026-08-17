@@ -51,8 +51,9 @@ render geometry lifted out of `.vex` into a PS3 container of its own.
 | `section` PVS mask | Reads byte-swapped, with **one trap that a naive port walks into** - and `pvs` now avoids it |
 | `Speedup Pad` / `Weapon Pad` volumes | Read byte-swapped, and `pads::volumes` does |
 | Handling stats | Same schema, plain-text XML - **parses**, after making `headtilt` optional |
+| HUD layouts | Same dialect and the same widget model - **all 18 compose**, once includes are followed and offsets composed. [hd-hud](hd-hud.md) |
 | `.pob` particle container | Reads byte-swapped; **one declared length no longer agrees** |
-| Textures | **New.** `.gtf`, the PS3's own container |
+| Textures | **New.** [`.gtf`](gtf.md), the PS3's own container - **read**, 7,333 of 7,333, 7,280 of them decoding |
 | Sound bank | `.bnk` present, unexamined |
 | [Music](#music-plain-mp3-declared-the-way-the-psp-titles-declare-theirs) | **New container, same declaration.** Plain MP3, named by the executable and declared as `PI_Music`; recovered and played |
 | [Video](bik.md) | **New, and the one payload that is not byte-swapped.** `.bik` replaces `.PMF`; header read on all 37 files, pictures through the same cache |
@@ -564,15 +565,24 @@ rather than explained away.
 ## What is genuinely new
 
 - **`.rcsmodel`** - 643 files, 686.5 MiB, all render geometry. **Positions,
-  triangles and vertex normals read**, see [rcsmodel](rcsmodel.md); the vertex
+  triangles, vertex normals and the material table read**, see
+  [rcsmodel](rcsmodel.md); the vertex
   stride is in no field of the file, and of the rest of a vertex a tangent
-  (stride 22 only) and a texture coordinate are located but not decoded.
+  (stride 22 only) and a texture coordinate are located but not decoded. A
+  chunk's `+0x20` indexes the material table, and the low two bits of a
+  material's state word say whether the surface is see-through - which is what
+  keeps a circuit's glass, cloud plates, fences and crowd billboards from being
+  drawn as solid white sheets.
 - **`.rcsmaterial`** - 1,632 files, wall-to-wall 32-bit hashes. A track authors
   around fifty by name (`track_surface`, `track_wall`, `glass_reflect`,
   `emissive_bloom`), and a second identical set under `materials_reversed/`.
 - **`.gtf`** - 7,333 files, the PS3's own texture container and publicly
   documented. One sample header reads version `0x0105`, one texture, payload at
-  `+0x80` behind an RSX texture descriptor. Not surveyed.
+  `+0x80` behind an RSX texture descriptor. Not surveyed. **This is now the
+  single thing between a read circuit and a drawn one**: it holds the alpha
+  every see-through surface's coverage comes from, and nothing else on the disc
+  does, so until it is read those surfaces are left out rather than painted
+  solid.
 - **`.pvs`, `.pvspatch`, `.probes`** - one of each per circuit direction, 28
   apiece. `talons_junction/track.pvs` is 114 KiB against 19 `section` nodes, so
   it is a finer structure than the mask in the `.vex`, not the same table moved.

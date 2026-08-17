@@ -1,0 +1,27 @@
+# Test-runner configuration. Scheduling only - nothing here changes whether a
+# test runs or what it asserts.
+#
+# `just test-data` is tail-bound rather than throughput-bound: 2,323 tests over
+# 16 cores finish in about the time the *slowest single test* takes, so what
+# matters is that the long ones are already running while the short ones fill in
+# around them. Every ground-truth test that walks a disc takes minutes; almost
+# every other test takes milliseconds. Left to the default order the suite ends
+# with a handful of multi-minute tests running alone on an otherwise idle
+# machine.
+#
+# Priority runs from -100 to 100 and higher goes first.
+
+# The ground-truth binaries are the ones that need `data/images`, and so the ones
+# that are `#[ignore]`d in the ordinary run. Under plain `just test` they are
+# skipped and this ordering costs nothing.
+[[profile.default.overrides]]
+filter = 'binary(~ground_truth)'
+priority = 50
+
+# The longest test in the suite, and the one that sets the floor on
+# `just test-data`'s wall clock: it transcodes 950 frames of the PS2 intro, and
+# `refresh: true` is load-bearing for what it asserts, so the work cannot be
+# cached away. Nothing is gained by starting it late.
+[[profile.default.overrides]]
+filter = 'test(an_uncapped_transcode_still_reports_a_total_to_divide_by)'
+priority = 100

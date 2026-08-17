@@ -493,13 +493,17 @@ fn the_opponent_tags_are_not_screen_positioned() {
     assert!(is_screen_positioned("Lap"));
 }
 
+/// This asserted the opposite until 2026-08-17 - that a nameless widget was
+/// dropped and counted in `skipped`. It is drawn instead; see [`anonymous_or`].
 #[test]
-fn a_nameless_widget_is_reported_rather_than_dropped_quietly() {
+fn a_nameless_widget_keeps_its_geometry_and_gets_no_name() {
     let layout = Layout::from_xml(
         r#"<Screen><Image><Values x="0" y="0" width="1" height="1" Src="a.mip"/></Image></Screen>"#,
     );
-    assert!(layout.sprites.is_empty());
-    assert_eq!(layout.skipped.len(), 1);
+    assert_eq!(layout.sprites.len(), 1);
+    assert_eq!(layout.sprites[0].name, "");
+    assert_eq!(layout.sprites[0].rect, [0.0, 0.0, 1.0, 1.0]);
+    assert!(layout.skipped.is_empty());
 }
 
 #[test]

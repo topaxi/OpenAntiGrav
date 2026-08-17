@@ -39,6 +39,16 @@ use std::collections::HashMap;
 
 use oag_formats::fexml::{self, Node};
 
+mod assets;
+mod compose;
+mod overlay;
+mod widget;
+
+pub use assets::Assets;
+pub use compose::{Composed, compose};
+pub use overlay::Overlay;
+pub use widget::{Fill, Font, Label, Model, Sprite, VertAlign};
+
 use crate::frontend::{Align, Draw, SCREEN};
 use crate::screen::{argb_to_rgba, parse_argb};
 
@@ -50,155 +60,6 @@ use crate::screen::{argb_to_rgba, parse_argb};
 ///
 /// [ADR-0022]: ../../../docs/architecture/adr/0022-title-packages.md
 pub use oag_pulse::hud::layouts;
-
-/// Which of the disc's fonts a widget draws in.
-///
-/// The role names are the language plugin's, and the mapping to `.fnt` files is
-/// in [`crate::frontend`]'s line-height table and
-/// [`oag_pulse::names::fonts`]: `HUD` is `PulseHud.fnt` at 25 px,
-/// `HUDSmall` is `small.fnt` at 10 px, `Default` is `pulse_text.fnt` at 13 px.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum Font {
-    /// `font="HUD"`. Every value the HUD displays - speed, lap, times.
-    #[default]
-    Hud,
-    /// `font="HUDSmall"`. Every label beside those values.
-    Small,
-    /// `font="Default"`.
-    ///
-    /// Used by exactly eight widgets across all five layouts, `PosTag0` to
-    /// `PosTag7` - the floating opponent name tags. Nothing draws those yet,
-    /// since a race has one ship, but the variant exists so the parser does not
-    /// silently fold them into a font they are not.
-    Default,
-}
-
-impl Font {
-    fn parse(value: &str) -> Self {
-        match value.to_ascii_lowercase().as_str() {
-            "hudsmall" => Self::Small,
-            "default" => Self::Default,
-            _ => Self::Hud,
-        }
-    }
-}
-
-/// Vertical alignment of a text widget about its `y`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum VertAlign {
-    /// No `vertalign`: `y` is the top edge, which is what
-    /// [`crate::render::Renderer`] draws text at natively.
-    #[default]
-    Top,
-    /// `vertalign="middle"` or `vertalign="centre"`.
-    ///
-    /// **Both spellings ship**, 37 and 16 times respectively, and they mean the
-    /// same thing - unlike `align`, where `centre` is the only spelling used.
-    Middle,
-    /// `vertalign="bottom"`, the commonest at 41 uses: `y` is the baseline-ish
-    /// bottom edge, so a value grows upward from a fixed line.
-    Bottom,
-}
-
-impl VertAlign {
-    fn parse(value: &str) -> Self {
-        match value.to_ascii_lowercase().as_str() {
-            "middle" | "centre" | "center" => Self::Middle,
-            "bottom" => Self::Bottom,
-            _ => Self::Top,
-        }
-    }
-}
-
-/// One `<Image>`: a rectangle cut out of the layout's own atlas, drawn somewhere.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Sprite {
-    /// The `name` attribute, which is how [`draw_list`] finds a widget.
-    pub name: String,
-    /// Destination in screen space, `[x, y, width, height]`, absolute - the
-    /// enclosing `<Item>`'s offset and any `Centred="true"` are already applied.
-    pub rect: [f32; 4],
-    /// Source rectangle in atlas pixels, `[U, V, TxtrWidth, TxtrHeight]`.
-    ///
-    /// Separate from [`Self::rect`] because they genuinely differ: `TimeDiffIcon`
-    /// samples a 28x23 patch and draws it at 14x12, so the sprite is
-    /// half-size rather than 1:1.
-    pub uv: [f32; 4],
-    /// Modulating colour, already resolved through the constant table.
-    pub color: [f32; 4],
-    /// The `Src` entry name. See [`Layout::atlas`], which is what resolves it.
-    pub src: String,
-}
-
-/// One `<Text>`: a string, a font, and where it goes.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Label {
-    /// The `name` attribute.
-    pub name: String,
-    /// Anchor x in screen space, absolute; what it anchors depends on
-    /// [`Self::align`].
-    pub x: f32,
-    /// Anchor y in screen space, absolute; what it anchors depends on
-    /// [`Self::vertalign`].
-    pub y: f32,
-    /// Which disc font.
-    pub font: Font,
-    /// Scale multiplier on the font's own cell. Ranges 0.5 to 1.5 in the shipped
-    /// layouts.
-    pub scale: f32,
-    /// Text colour, resolved.
-    pub color: [f32; 4],
-    /// The `BorderColor`, when the widget has one.
-    ///
-    /// An outline colour, and 54 widgets carry one. **Not drawn yet** - the
-    /// renderer has no outline pass, and faking one with four offset copies
-    /// would quadruple the glyph count for something nobody has compared against
-    /// the original. Parsed rather than dropped because the attribute is real.
-    pub border: Option<[f32; 4]>,
-    /// Horizontal alignment about [`Self::x`].
-    pub align: Align,
-    /// Vertical alignment about [`Self::y`].
-    pub vertalign: VertAlign,
-    /// A localisation key, resolved against the language plugin's string table.
-    pub idstring: Option<String>,
-    /// A literal string, used instead of `idstring` by 11 widgets - `"0 kmh"`,
-    /// `"+0"`, `"/"`.
-    pub string: Option<String>,
-}
-
-/// One `<Image>` with **no** `Src`: a solid rectangle rather than a cut-out.
-///
-/// The same convention the front end's screens use, where
-/// [`crate::screen::Screen::fills`] holds the colour-only kind. Exactly one HUD
-/// widget is of this kind, `HeadToHeadBar` in the arcade and eliminator layouts,
-/// and it is authored `width="5" height="0"` - a zero-height bar, so its length
-/// is supplied at runtime and the authored height is a floor rather than a size.
-/// That is recorded rather than acted on: nothing here drives it.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Fill {
-    /// The `name` attribute.
-    pub name: String,
-    /// Destination in screen space, `[x, y, width, height]`, absolute.
-    pub rect: [f32; 4],
-    /// Colour, resolved.
-    pub color: [f32; 4],
-}
-
-/// One `<Mode3D><Model>`: a `.vex` model drawn in the 3D overlay layer.
-///
-/// Recorded and **not drawn**. The five referenced models are the countdown
-/// (`Pulse_Ready_Go`, `Cockpit_321GO`) and the weapon sights
-/// (`missile_sight_inner`/`_outer`, `leachbeam_sight`), all of which need a
-/// second pass with a projection of their own. See `docs/ui/hud.md`.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Model {
-    /// The `name` attribute.
-    pub name: String,
-    /// The `.vex` entry name.
-    pub src: String,
-    /// Position in the 3D overlay's own space.
-    pub position: [f32; 3],
-}
 
 /// A parsed HUD layout: pure geometry, straight off the disc.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -265,42 +126,88 @@ impl Layout {
     /// *silently* - see [`Self::skipped`].
     #[must_use]
     pub fn from_xml(xml: &str) -> Self {
-        let root = fexml::parse(xml);
+        Self::from_tree(&fexml::parse(xml))
+    }
+
+    /// Reads an already-parsed tree.
+    ///
+    /// The entry point for a layout that is **more than one file**: HD/Fury
+    /// composes each mode's HUD out of a shell plus a dozen `<LoadXML>`
+    /// fragments, and [`compose`] splices those into one tree before this runs.
+    /// Doing it on the tree rather than on text is what lets a fragment's
+    /// `<Variable>` constants reach a widget in a different file, since the
+    /// constant sweep below sees the whole composed document at once.
+    #[must_use]
+    pub fn from_tree(root: &Node) -> Self {
         let mut out = Self::default();
 
         // Constants first: a widget's colour can reference one declared anywhere
         // in the file, including after the widget itself.
-        collect_constants(&root, &mut out.constants);
-        out.collect(&root, 0.0, 0.0);
+        collect_constants(root, &mut out.constants);
+        out.collect(root, 0.0, 0.0);
         out
     }
 
-    /// Walks the tree, carrying the enclosing `<Item>`'s offset down.
+    /// Walks the tree, carrying the enclosing translation down.
+    ///
+    /// # `OffsetX`/`OffsetY` translate; `x`/`y` place
+    ///
+    /// Two coordinate attributes with two different meanings, and telling them
+    /// apart is the whole rule. `OffsetX`/`OffsetY` move the element **and
+    /// everything under it**; `x`/`y` place the element itself inside whatever
+    /// translation it inherited. So the offsets **compose** down the tree and the
+    /// positions do not.
+    ///
+    /// This paragraph said the opposite until 2026-08-17 - an `<Item>`'s offset
+    /// was read as absolute, "because nothing in the shipped data nests them, so
+    /// composing would be untested code". True of Pulse and false of the
+    /// lineage: measured across Pulse's five layouts and HD/Fury's 73 HUD files,
+    ///
+    /// | | Pulse | HD/Fury |
+    /// | --- | ---: | ---: |
+    /// | elements carrying an offset | 26, **all `<Item>`** | 218 |
+    /// | of those, widgets rather than `<Item>` | 0 | 116 |
+    /// | widgets holding a widget | **0** | 242 |
+    /// | offsets carried inside `<Values>` rather than on the element | 0 | 0 |
+    ///
+    /// so composing is a **strict no-op on Pulse** - nothing there ever inherits
+    /// a non-zero offset - and is required to read HD at all. `Data\XML\
+    /// HUD_Elim_info_text.xml` is the case that settles the second half:
+    /// `<Text name="Info1" OffsetX="600" OffsetY="330">` carries `x="0" y="20"`
+    /// of its own and holds three `<Image>` frame pieces at `x="-160"`, `0` and
+    /// `160`, all `centred`. The text lands in the middle of its own frame only
+    /// if the element's `x`/`y` and its children's are read in the *same*
+    /// translated space - which is to say an element's own offset applies to
+    /// itself too, not only to what it contains.
     fn collect(&mut self, node: &Node, offset_x: f32, offset_y: f32) {
         for child in &node.children {
             let name = child.name.as_str();
 
+            // Read off the element rather than through `Node::value`: no shipped
+            // layout on either disc puts an offset in a `<Values>` carrier, and
+            // reaching into one would let a child's carrier answer for its
+            // parent.
+            let x = offset_x + number(&self.constants, child.attr("OffsetX")).unwrap_or(0.0);
+            let y = offset_y + number(&self.constants, child.attr("OffsetY")).unwrap_or(0.0);
+
             if name.eq_ignore_ascii_case("Item") {
-                // An `<Item>` is a translation group, and its offset is absolute
-                // rather than relative to an enclosing one: nothing in the
-                // shipped data nests them, so composing would be untested code.
-                let x = number(&self.constants, child.attr("OffsetX")).unwrap_or(0.0);
-                let y = number(&self.constants, child.attr("OffsetY")).unwrap_or(0.0);
                 self.collect(child, x, y);
                 continue;
             }
 
             if name.eq_ignore_ascii_case("Image") {
-                if let Some(sprite) = self.sprite_from(child, offset_x, offset_y) {
+                if let Some(sprite) = self.sprite_from(child, x, y) {
                     self.sprites.push(sprite);
                 }
+                self.collect(child, x, y);
                 continue;
             }
 
             if name.eq_ignore_ascii_case("Text") {
-                if let Some(label) = self.label_from(child, offset_x, offset_y) {
+                if let Some(label) = self.label_from(child, x, y) {
                     self.labels.push(label);
                 }
+                self.collect(child, x, y);
                 continue;
             }
 
@@ -314,15 +221,12 @@ impl Layout {
             // `Screen`, `Mode3D`, `Variable` and `Values` are containers or
             // already-handled carriers; everything else is walked into so a
             // widget nested somewhere unexpected is still found.
-            self.collect(child, offset_x, offset_y);
+            self.collect(child, x, y);
         }
     }
 
     fn sprite_from(&mut self, node: &Node, offset_x: f32, offset_y: f32) -> Option<Sprite> {
-        let Some(name) = node.attr("name").map(str::to_string) else {
-            self.skipped.push("an <Image> with no name".to_string());
-            return None;
-        };
+        let name = anonymous_or(node);
         // No `Src` means a solid rectangle, not a broken widget - see [`Fill`].
         let Some(src) = node.value("Src").map(str::to_string) else {
             let width = number(&self.constants, node.value("width")).unwrap_or(0.0);
@@ -368,13 +272,8 @@ impl Layout {
     }
 
     fn label_from(&mut self, node: &Node, offset_x: f32, offset_y: f32) -> Option<Label> {
-        let Some(name) = node.attr("name").map(str::to_string) else {
-            self.skipped.push("a <Text> with no name".to_string());
-            return None;
-        };
-
         Some(Label {
-            name,
+            name: anonymous_or(node),
             x: offset_x + number(&self.constants, node.value("x")).unwrap_or(0.0),
             y: offset_y + number(&self.constants, node.value("y")).unwrap_or(0.0),
             font: node.value("font").map(Font::parse).unwrap_or_default(),
@@ -470,6 +369,24 @@ pub fn is_screen_positioned(name: &str) -> bool {
     !RUNTIME_ANCHORED
         .iter()
         .any(|prefix| name.starts_with(prefix))
+}
+
+/// A widget's `name`, or the empty string when it has none.
+///
+/// **A nameless widget is drawn, not broken**, and this used to drop it: both
+/// widget readers required a `name` and pushed "an `<Image>` with no name" onto
+/// [`Layout::skipped`] otherwise. Pulse authors none - all five layouts name
+/// every widget, which is why the rule survived - and HD/Fury authors **106**
+/// against 2,214 named across its eighteen composed HUDs, most of them the
+/// `BackgroundLayer="1"` panels sitting behind a named readout. Dropping those
+/// leaves the numbers with nothing behind them.
+///
+/// The empty name is not a placeholder to be matched on: nothing in
+/// [`draw_list`]'s tables is named `""`, so an anonymous widget carries geometry
+/// and is never selected by name - which is exactly what an unaddressable widget
+/// should do.
+fn anonymous_or(node: &Node) -> String {
+    node.attr("name").unwrap_or_default().to_string()
 }
 
 fn collect_constants(node: &Node, out: &mut HashMap<String, String>) {
@@ -1098,207 +1015,6 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
     }
 
     frame
-}
-
-/// Everything the HUD needs off the disc.
-///
-/// Grouped rather than spread across [`crate::race::Loaded`] because it is a
-/// unit: without the layout none of the rest is usable, and the whole thing
-/// degrades together.
-#[derive(Debug)]
-pub struct Assets {
-    /// The mode's parsed layout, or `None` when it could not be read.
-    ///
-    /// `None` means **no HUD is drawn at all**, and that is the honest outcome:
-    /// the geometry is the disc's and there is nothing of ours to stand in for it.
-    /// A HUD invented on the spot would be a worse failure than none, because it
-    /// would look like a working HUD in the wrong place.
-    pub layout: Option<Layout>,
-    /// The layout's own atlas, packed into a sheet with its placement known.
-    ///
-    /// Empty for a layout that names none - Pure's HUDs are `<Model>` geometry
-    /// and name no texture at all. See [`Layout::atlas`].
-    pub sheet: crate::sprite::Sheet,
-    /// The `HUD` font, or the built-in 5x7 set when the disc's is unreadable.
-    pub font: crate::font::Atlas,
-    /// The `HUDSmall` font, likewise.
-    pub small_font: crate::font::Atlas,
-    /// The language's string table, for the `IG_HUD_*` captions.
-    pub strings: crate::language::StringTable,
-}
-
-impl Assets {
-    /// Where this layout's own atlas sits in [`Self::sheet`], in sheet pixels.
-    ///
-    /// `(0, 0)` when there is no layout, when the layout names no texture, or
-    /// when the named one is not in the sheet. All three pair with nothing being
-    /// drawn, so the value never reaches a shader - see [`Layout::atlas`].
-    #[must_use]
-    pub fn atlas_origin(&self) -> (f32, f32) {
-        self.layout
-            .as_ref()
-            .and_then(Layout::atlas)
-            .and_then(|atlas| self.sheet.get(atlas))
-            .map_or((0.0, 0.0), |placed| (placed.x as f32, placed.y as f32))
-    }
-}
-
-impl Layout {
-    /// The texture this layout's sprites sample, as the layout itself names it.
-    ///
-    /// **Read off the file rather than named by this build**, which is
-    /// `CLAUDE.md`'s "never invent what the assets already author" rule applied
-    /// to one more constant: `PulseHUD.mip` appears ten times inside
-    /// `TimeTrial_HUD.xml` and once in this repository, and the one in this
-    /// repository was the only copy that could be wrong. It was: Pure's four HUD
-    /// layouts name no `.mip` at all - their art is `<Model>` geometry off
-    /// `Data\HUD\*.vex` - so a Pure race went looking for a Pulse texture.
-    ///
-    /// `None` for a layout whose sprites name no texture, which covers both that
-    /// case and Pulse's own `MPTag_HUD.xml`.
-    ///
-    /// **One name rather than a set**, and that is measured rather than assumed:
-    /// every one of the nine layouts shipped across the two titles names at most
-    /// one distinct `.mip`, checked 2026-08-12. `the_layouts_name_at_most_one_texture`
-    /// in `crates/game/tests/hud_layout_ground_truth.rs` fails the day one does
-    /// not, rather than silently drawing eight sprites from the wrong sheet.
-    #[must_use]
-    pub fn atlas(&self) -> Option<&str> {
-        self.sprites
-            .iter()
-            .map(|sprite| sprite.src.as_str())
-            .find(|src| !src.is_empty())
-    }
-}
-
-/// The HUD's two renderers and the data they draw.
-///
-/// # Why two renderers
-///
-/// [`crate::render::Renderer`] binds exactly one font atlas into an immutable
-/// bind group and picks its sampler filter once from `Atlas::is_real`. The HUD
-/// uses two fonts - `HUD` for values and `HUDSmall` for captions - so it needs two
-/// of them and two passes. The alternative, a second atlas binding plus a third
-/// `mode` value in `ui.wgsl`, touches the bind group every existing screen depends
-/// on; two renderers touch nothing. See `docs/ui/hud.md`.
-///
-/// Both are built with `video: None`. A video pipeline that is built and never
-/// filled draws a **green** rectangle rather than nothing, the planes being zeroed
-/// rather than absent - see `crate::render`.
-pub struct Overlay {
-    layout: Layout,
-    strings: crate::language::StringTable,
-    atlas_origin: (f32, f32),
-    hud_line_height: f32,
-    small_line_height: f32,
-    /// Draws the values, in `PulseHud.fnt`.
-    values: crate::render::Renderer,
-    /// Draws the captions, in `small.fnt`.
-    captions: crate::render::Renderer,
-}
-
-impl std::fmt::Debug for Overlay {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Overlay")
-            .field("widgets", &self.layout.widget_count())
-            .field("strings", &self.strings.len())
-            .field("atlas_origin", &self.atlas_origin)
-            .finish()
-    }
-}
-
-impl Overlay {
-    /// Builds the two renderers, or `None` when there is no layout to draw.
-    ///
-    /// # Errors
-    ///
-    /// Propagates pipeline creation.
-    pub fn new(
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        format: wgpu::TextureFormat,
-        assets: &Assets,
-    ) -> anyhow::Result<Option<Self>> {
-        let Some(layout) = assets.layout.clone() else {
-            return Ok(None);
-        };
-
-        let values = crate::render::Renderer::new(
-            device,
-            queue,
-            format,
-            None,
-            assets.font.clone(),
-            &assets.sheet,
-        )?;
-        // The captions renderer never draws a sprite, but it binds the sheet
-        // anyway: `Renderer::new` takes one unconditionally, and a second copy of
-        // a 256x256 atlas is cheaper than making the parameter optional.
-        let captions = crate::render::Renderer::new(
-            device,
-            queue,
-            format,
-            None,
-            assets.small_font.clone(),
-            &assets.sheet,
-        )?;
-
-        Ok(Some(Self {
-            hud_line_height: assets.font.line_height,
-            small_line_height: assets.small_font.line_height,
-            atlas_origin: assets.atlas_origin(),
-            strings: assets.strings.clone(),
-            layout,
-            values,
-            captions,
-        }))
-    }
-
-    /// The context [`draw_list`] takes.
-    #[must_use]
-    pub fn context(&self) -> Context<'_> {
-        Context {
-            layout: &self.layout,
-            strings: &self.strings,
-            atlas_origin: self.atlas_origin,
-            hud_line_height: self.hud_line_height,
-            small_line_height: self.small_line_height,
-            default_border: self.layout.default_border(),
-        }
-    }
-
-    /// Draws the HUD **over** whatever is already in `view`.
-    ///
-    /// Two passes, both `LoadOp::Load`: sprites and values through the `HUD`
-    /// renderer, then captions through the `HUDSmall` one. The sprites go with the
-    /// values because they share a renderer and the sprite sheet is bound in both.
-    pub fn draw(
-        &mut self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        encoder: &mut wgpu::CommandEncoder,
-        view: &wgpu::TextureView,
-        readout: &Readout,
-        viewport: (f32, f32, f32, f32),
-    ) {
-        let frame = draw_list(&self.context(), readout);
-        if frame.is_empty() {
-            return;
-        }
-
-        // Sprites first so text sits over the bars, and both in one pass because
-        // one renderer holds both the sheet and the value font.
-        let mut first = frame.sprites;
-        first.extend(frame.hud_text);
-        if !first.is_empty() {
-            self.values
-                .overlay(device, queue, encoder, view, &first, viewport);
-        }
-        if !frame.small_text.is_empty() {
-            self.captions
-                .overlay(device, queue, encoder, view, &frame.small_text, viewport);
-        }
-    }
 }
 
 /// Whether a rectangle lies wholly inside the PSP's screen.

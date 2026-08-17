@@ -1,0 +1,139 @@
+//! The HUD's GPU half: two [`crate::render::Renderer`]s and the pass that drives
+//! them.
+//!
+//! Split out of [`super`] so the layout model and the draw list stay testable
+//! without a GPU, which is the reason those two are separated from each other in
+//! the first place. Nothing here decides anything - every widget, string and
+//! colour is already resolved by the time [`Overlay::draw`] runs.
+
+use super::{Assets, Context, Layout, Readout, draw_list};
+
+/// The HUD's two renderers and the data they draw.
+///
+/// # Why two renderers
+///
+/// [`crate::render::Renderer`] binds exactly one font atlas into an immutable
+/// bind group and picks its sampler filter once from `Atlas::is_real`. The HUD
+/// uses two fonts - `HUD` for values and `HUDSmall` for captions - so it needs two
+/// of them and two passes. The alternative, a second atlas binding plus a third
+/// `mode` value in `ui.wgsl`, touches the bind group every existing screen depends
+/// on; two renderers touch nothing. See `docs/ui/hud.md`.
+///
+/// Both are built with `video: None`. A video pipeline that is built and never
+/// filled draws a **green** rectangle rather than nothing, the planes being zeroed
+/// rather than absent - see `crate::render`.
+pub struct Overlay {
+    layout: Layout,
+    strings: crate::language::StringTable,
+    atlas_origin: (f32, f32),
+    hud_line_height: f32,
+    small_line_height: f32,
+    /// Draws the values, in `PulseHud.fnt`.
+    values: crate::render::Renderer,
+    /// Draws the captions, in `small.fnt`.
+    captions: crate::render::Renderer,
+}
+
+impl std::fmt::Debug for Overlay {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Overlay")
+            .field("widgets", &self.layout.widget_count())
+            .field("strings", &self.strings.len())
+            .field("atlas_origin", &self.atlas_origin)
+            .finish()
+    }
+}
+
+impl Overlay {
+    /// Builds the two renderers, or `None` when there is no layout to draw.
+    ///
+    /// # Errors
+    ///
+    /// Propagates pipeline creation.
+    pub fn new(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        format: wgpu::TextureFormat,
+        assets: &Assets,
+    ) -> anyhow::Result<Option<Self>> {
+        let Some(layout) = assets.layout.clone() else {
+            return Ok(None);
+        };
+
+        let values = crate::render::Renderer::new(
+            device,
+            queue,
+            format,
+            None,
+            assets.font.clone(),
+            &assets.sheet,
+        )?;
+        // The captions renderer never draws a sprite, but it binds the sheet
+        // anyway: `Renderer::new` takes one unconditionally, and a second copy of
+        // a 256x256 atlas is cheaper than making the parameter optional.
+        let captions = crate::render::Renderer::new(
+            device,
+            queue,
+            format,
+            None,
+            assets.small_font.clone(),
+            &assets.sheet,
+        )?;
+
+        Ok(Some(Self {
+            hud_line_height: assets.font.line_height,
+            small_line_height: assets.small_font.line_height,
+            atlas_origin: assets.atlas_origin(),
+            strings: assets.strings.clone(),
+            layout,
+            values,
+            captions,
+        }))
+    }
+
+    /// The context [`draw_list`] takes.
+    #[must_use]
+    pub fn context(&self) -> Context<'_> {
+        Context {
+            layout: &self.layout,
+            strings: &self.strings,
+            atlas_origin: self.atlas_origin,
+            hud_line_height: self.hud_line_height,
+            small_line_height: self.small_line_height,
+            default_border: self.layout.default_border(),
+        }
+    }
+
+    /// Draws the HUD **over** whatever is already in `view`.
+    ///
+    /// Two passes, both `LoadOp::Load`: sprites and values through the `HUD`
+    /// renderer, then captions through the `HUDSmall` one. The sprites go with the
+    /// values because they share a renderer and the sprite sheet is bound in both.
+    pub fn draw(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        readout: &Readout,
+        viewport: (f32, f32, f32, f32),
+    ) {
+        let frame = draw_list(&self.context(), readout);
+        if frame.is_empty() {
+            return;
+        }
+
+        // Sprites first so text sits over the bars, and both in one pass because
+        // one renderer holds both the sheet and the value font.
+        let mut first = frame.sprites;
+        first.extend(frame.hud_text);
+        if !first.is_empty() {
+            self.values
+                .overlay(device, queue, encoder, view, &first, viewport);
+        }
+        if !frame.small_text.is_empty() {
+            self.captions
+                .overlay(device, queue, encoder, view, &frame.small_text, viewport);
+        }
+    }
+}

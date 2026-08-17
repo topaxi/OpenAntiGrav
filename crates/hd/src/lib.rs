@@ -25,19 +25,26 @@
 //! `WOtd`), never from the console it came off, which is why this crate needs no
 //! `ByteOrder` constant and why `oag_formats::track::parse` takes no argument.
 //!
-//! Nothing here names a `.rcsmodel`, a `.gtf` or a `.bik` beyond the two logo
-//! reels the front-end XML names itself. A table of paths into formats nothing
-//! reads would be a list of names rather than a measurement - and that is still
-//! the reason for `.gtf` and still partly the reason for `.rcsmodel` (see
-//! [`rcsmodel.md`]). **It is no longer the reason for `.bik`**, which is read
-//! ([`bik.md`]) and played: `frontend::names::STUDIO_LOGO_MOVIE` is named here
-//! because the disc's own `Studio Logo` screen names it, and the boot draws it.
-//! The other 35 stay out for the original reason - the front-end XML does not
-//! name them, so a list of them here would be this crate inventing an index the
-//! disc does not author.
+//! Nothing here names a `.rcsmodel` beyond what the disc's own files name, and
+//! a table of paths into a format nothing reads would be a list of names rather
+//! than a measurement. **Two of the three formats this paragraph used to cover
+//! have since earned their exceptions, and each earned it the same way** - by
+//! being named in the disc's own data rather than composed here:
+//!
+//! - **`.bik`** is read ([`bik.md`]) and played.
+//!   `frontend::names::STUDIO_LOGO_MOVIE` is here because HD's own `Studio Logo`
+//!   screen names it and the boot draws it. The other 35 stay out: the front-end
+//!   XML does not name them, so listing them would be this crate inventing an
+//!   index the disc does not author.
+//! - **`.gtf`** is read ([`gtf.md`]), and [`hud::TEXTURES`] names the twelve
+//!   textures the HUD layouts sample - ten of them `.gtf`. Those are not a list
+//!   this crate composed either: they are read off the eighteen layouts, and all
+//!   twelve resolve to a shipped entry under the extension rule
+//!   [`hud::texture_entry`] states. No texture path outside the HUD's own set is
+//!   named.
 //!
 //! [`bik.md`]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/formats/bik.md
-//! [`rcsmodel.md`]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/formats/rcsmodel.md
+//! [`gtf.md`]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/formats/gtf.md
 //!
 //! [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
 //! [`hd-status.md`]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/formats/hd-status.md
@@ -48,6 +55,7 @@ use oag_assets::{Archives, Result};
 use oag_title::{ArchiveCandidates, ForeignSerial, Platform, Title};
 
 pub mod frontend;
+pub mod hud;
 pub mod race;
 
 /// Wipeout HD / Fury, as the asset layer needs to know it.
@@ -140,6 +148,14 @@ pub mod archives {
     pub const DATA05: &str = "PS3_GAME/USRDIR/DATA05.PSARC";
     /// The Fury and campaign team variants.
     pub const DATA06: &str = "PS3_GAME/USRDIR/DATA06.PSARC";
+
+    /// All seven, in disc order.
+    ///
+    /// For a survey that has to look everywhere rather than through
+    /// `oag_assets::Archives`' precedence - which archive an entry comes out of
+    /// is a question of its own here, since the same path ships in more than one
+    /// of these. See `docs/formats/hd-hud.md`.
+    pub const ALL: &[&str] = &[DATA00, DATA01, DATA02, DATA03, DATA04, DATA05, DATA06];
 }
 
 /// Paths inside the archives.

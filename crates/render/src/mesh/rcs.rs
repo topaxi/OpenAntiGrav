@@ -48,6 +48,14 @@ pub struct Report {
     pub addressed: usize,
     /// Of those, the ones whose vertex stride the authored box settled.
     pub drawn: usize,
+    /// Of those, the ones no rule could settle a vertex stride for.
+    ///
+    /// Counted rather than derived from `addressed - drawn`, which that
+    /// difference used to be: it silently absorbed every other reason a mesh
+    /// contributes nothing - a chunk whose submeshes are all strays, and now a
+    /// [`see_through`] one - and so read as a stride failure whatever went
+    /// wrong.
+    pub no_stride: usize,
     /// Triangles emitted.
     pub triangles: usize,
     /// Submeshes dropped because they do not share their mesh's vertex stride.
@@ -59,6 +67,10 @@ pub struct Report {
     /// triangles. Reported because the difference is visible and the fallback
     /// is silent: see [`face_normals`].
     pub authored_normals: usize,
+    /// Chunks whose material says the surface is not drawn solid, and which are
+    /// therefore not drawn at all until `.gtf` supplies an alpha. See
+    /// [`see_through`].
+    pub see_through: usize,
 }
 
 impl Report {
@@ -72,13 +84,18 @@ impl Report {
             self.nodes,
             self.triangles,
             self.nodes - self.addressed,
-            self.addressed - self.drawn,
+            self.no_stride,
         ) + &match self.strays {
             0 => String::new(),
             n => format!(", {n} submesh(es) dropped as strays"),
         } + &match self.unreferenced {
             0 => String::new(),
             n => format!(", plus {n} chunk(s) no node references, drawn in world space"),
+        } + &match self.see_through {
+            0 => String::new(),
+            n => {
+                format!(", {n} chunk(s) left out as see-through, which needs an alpha out of .gtf")
+            }
         } + &match self.authored_normals {
             0 => ", lit off face normals computed from the triangles".to_string(),
             n => format!(", {n} authored vertex normal(s)"),
@@ -222,6 +239,10 @@ pub fn build_scene(label: &str, data: &[u8], model_blob: &[u8]) -> Result<(Model
         if placed.contains(&mesh.hash) {
             continue;
         }
+        if see_through(&model, mesh) {
+            report.see_through += 1;
+            continue;
+        }
         // No authored box to check against, so the stride comes from where the
         // file puts its buffers, and failing that from the geometry's own
         // compactness - see `rcsmodel::Mesh::solve_stride_without_a_box`.
@@ -263,6 +284,43 @@ pub fn build_scene(label: &str, data: &[u8], model_blob: &[u8]) -> Result<(Model
     out.centre = centre;
     out.radius = radius;
     Ok((out, report))
+}
+
+/// Whether a chunk's material says its surface is not drawn solid.
+///
+/// # Why this skips the chunk instead of blending it
+///
+/// **There is no alpha to blend with.** A see-through HD surface gets its
+/// coverage from the `.gtf` texture beside its `.rcsmaterial`, and `.gtf` is
+/// unread - 7,333 files and 2.4 GiB, the largest single thing in the archives.
+/// Nothing else in the file carries one: positions, indices and normals are
+/// decoded, and the four bytes at `+0x0a` were measured against the
+/// vertex-colour hypothesis and are not one.
+///
+/// So the three options were to draw these solid, to blend them at `alpha =
+/// 1.0`, or to leave them out, and the middle one is not a middle: alpha-over at
+/// alpha 1 paints exactly the same pixels as opaque while additionally dropping
+/// depth write, and additive would blow every glass panel to white.
+///
+/// Between the other two, the disc decides it. On Talon's Junction the largest
+/// surface in the file is a 63-triangle `clouds` plate spanning 2,011 x 2,195
+/// world units - a see-through sheet drawn solid *covers the entire circuit*,
+/// and seen from above the track was one white blob. Skipping it is what makes
+/// the road, the pit lane and the markings visible at all. The fraction skipped
+/// is 4.3 % to 35.9 % of chunks across all 16 circuits
+/// (`crates/formats/tests/rcsmodel_material_ground_truth.rs`), so no circuit is
+/// mostly this.
+///
+/// **This is not transparency and is not meant to stand.** It is an honest
+/// absence in place of a wrong picture, in the sense `CLAUDE.md` means, and
+/// [`Report::see_through`] counts it so a load says so out loud. The condition
+/// to reverse it is exactly one thing: when `.gtf` supplies an alpha, these
+/// chunks are drawn again, blended with the class
+/// [`rcsmodel::Material::blend`] already recovers for each of them.
+fn see_through(model: &rcsmodel::Model, mesh: &rcsmodel::Mesh) -> bool {
+    model
+        .material_of(mesh)
+        .is_some_and(rcsmodel::Material::is_see_through)
 }
 
 /// How many of a submesh's decoded normals the file actually authored.
@@ -393,6 +451,10 @@ pub fn build(
             continue;
         };
         report.addressed += 1;
+        if see_through(&model, mesh) {
+            report.see_through += 1;
+            continue;
+        }
         let tolerance = mesh.scale.iter().fold(0.0f32, |a, &b| a.max(b)) * TOLERANCE_STEPS;
         // The box first, because it is the tightest oracle there is. Where it
         // settles nothing, the buffer layout can - and that is safe to fall back
@@ -403,6 +465,7 @@ pub fn build(
             .or_else(|| mesh.solve_stride_by_layout())
             .or_else(|| mesh.solve_stride_by_normals(model_blob))
         else {
+            report.no_stride += 1;
             continue;
         };
 
@@ -559,14 +622,20 @@ mod tests {
             nodes: 126,
             addressed: 70,
             drawn: 59,
+            no_stride: 11,
             triangles: 4_000,
             strays: 2,
             unreferenced: 639,
+            see_through: 257,
             authored_normals: 531_904,
         };
         let line = report.describe();
         assert!(line.contains("59 of 126"), "{line}");
         assert!(line.contains("56 addressed no chunk"), "{line}");
+        assert!(
+            line.contains("257 chunk(s) left out as see-through"),
+            "the picture's largest remaining absence has to be in the line: {line}"
+        );
         assert!(
             line.contains("11 had no recoverable vertex stride"),
             "{line}"
