@@ -1,4 +1,5 @@
-//! `.rcsmodel` read off the PS3 disc, checked against the `.vex` beside it.
+//! `.rcsmodel` **as a container**, read off the PS3 disc and checked against
+//! the `.vex` beside it.
 //!
 //! **`#[ignore]`d and never run in CI.** They need game content, which this
 //! project does not ship. See `docs/architecture/adr/0006-no-copyrighted-content.md`.
@@ -10,183 +11,33 @@
 //! The image has to be layer-1 decrypted first - `scripts/ps3iso.py decrypt`,
 //! `docs/formats/ps3-disc.md`.
 //!
+//! What a *vertex* holds is the other binary,
+//! `rcsmodel_vertex_ground_truth.rs`; the two were one file until it passed a
+//! thousand lines.
+//!
 //! # What makes this a measurement rather than a restatement
 //!
 //! Every assertion here is against something **the `.vex` says and the
-//! `.rcsmodel` does not**: the authored bounding box, and the node's own hash.
-//! So a reader that decoded the wrong bytes cannot pass by being
-//! self-consistent - which is the failure mode a container test has to be built
-//! against, and the one that made `docs/formats/psarc.md`'s per-entry digest
-//! check worth writing.
+//! `.rcsmodel` does not**, or against the whole disc rather than the three
+//! files every other claim rests on. A reader that decoded the wrong bytes
+//! cannot pass by being self-consistent - which is the failure mode a container
+//! test has to be built against, and the one that made `docs/formats/psarc.md`'s
+//! per-entry digest check worth writing.
 //!
-//! Nine claims, in order of how much they would cost to get wrong:
+//! Four claims:
 //!
 //! 1. **Every `Mesh` node's hash resolves to a chunk.** The link is the whole
 //!    reason the two files can be read together at all.
-//! 2. **Every index is in range and every count is a multiple of three.** 1,274
-//!    of 1,274 submeshes, which says the index offsets and counts were read
-//!    correctly rather than plausibly.
-//! 3. **The recovered geometry fills the authored box.** The vertex stride is
-//!    not stored anywhere in the file, so this is both how it is found and the
-//!    only check that it was found rightly.
-//! 4. **The stride the buffer layout gives is the same one.** The fourth is the
-//!    one that does not need the `.vex` at all - it is arithmetic on two fields
-//!    of the `.rcsmodel` - and it agrees with the box on 19 and with the
-//!    compactness rule on 96, contradicting neither anywhere.
-//! 5. **What the box-less rules decide stays inside the circuit.** The
-//!    unreferenced path has no authored box to filter a stray submesh against,
-//!    so this is the check that stands in for one.
-//! 6. **The four bytes after a position are the vertex normal.** Unit on
-//!    99.5 % of every model's vertices, and agreeing with an oracle the file
-//!    does not state - the area-weighted average of the faces at each vertex.
-//! 7. **What a vertex carries follows the stride**, not the `83 XX` descriptor
-//!    byte. A negative result: the byte was the obvious candidate for naming
-//!    the field set and it names nothing.
-//! 8. **There is no shared props model**, so the 56 nodes that address no chunk
-//!    are not waiting in one. Another negative result, and it closes a
-//!    hypothesis this format page carried from the day it was written.
-//! 9. **How much of the disc this reader reads** - 419 files of 643, with the
-//!    224 failures all one shape. A ratchet, because every other number here
-//!    comes from three files.
+//! 2. **Every index is in range and every count is a multiple of three.**
+//! 3. **There is no shared props model**, so the 56 nodes that address no chunk
+//!    are not waiting in one. A negative result, and it closes a hypothesis
+//!    this format page carried from the day it was written.
+//! 4. **Every model on the disc parses**, in one of two chunk layouts.
 
-use std::path::{Path, PathBuf};
+mod rcsmodel_common;
 
-use oag_formats::{rcsmodel, vex};
-
-/// The decrypted PS3 image.
-const PS3_IMAGE: &str = "hdfury-ps3-eu-dec.iso";
-
-/// A `.vex` and the `.rcsmodel` beside it, with the archive holding both.
-const PAIRS: &[(&str, &str, &str)] = &[
-    (
-        "DATA02.PSARC",
-        "/data/ships/assegai/ship.vex",
-        "/data/ships/assegai/ship.rcsmodel",
-    ),
-    (
-        "DATA02.PSARC",
-        "/data/ships/assegai/ship_lod1.vex",
-        "/data/ships/assegai/ship_lod1.rcsmodel",
-    ),
-    (
-        "DATA00.PSARC",
-        "/data/environments/talons_junction/track.vex",
-        "/data/environments/talons_junction/track.rcsmodel",
-    ),
-];
-
-/// Two quantisation steps at the 1/128 scale every file on the disc uses.
-const TOLERANCE: f32 = 2.0 / 128.0;
-
-fn image() -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("data/images")
-        .join(PS3_IMAGE);
-
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    println!("skipping: {} not present", path.display());
-    None
-}
-
-/// Both halves of one pair, read straight out of the archive.
-fn pair(archive: &str, vex_path: &str, model_path: &str) -> Option<(Vec<u8>, Vec<u8>)> {
-    let image = image()?;
-    let spec = format!("{}:PS3_GAME/USRDIR/{archive}", image.display());
-    let mut open = oag_assets::psarc::Archive::open(&spec).expect("the archive opens");
-    Some((
-        open.read_path(vex_path).expect("the .vex reads"),
-        open.read_path(model_path).expect("the .rcsmodel reads"),
-    ))
-}
-
-/// Every `Mesh` node in a `.vex`, as (name, hash, min, max).
-fn mesh_nodes(blob: &[u8]) -> Vec<(String, u32, [f32; 3], [f32; 3])> {
-    let classes = vex::classes_of(blob).expect("a class table");
-    let mesh = classes.mesh.expect("version 6 numbers Mesh");
-    let order = vex::byte_order(blob);
-    vex::nodes(blob)
-        .expect("the node tree walks")
-        .into_iter()
-        .filter(|node| node.class_id == mesh)
-        .filter_map(|node| {
-            let payload = &blob[node.payload()];
-            // The box pair at +0x10/+0x20 and the chunk hash at +0x30, which is
-            // as much of a PS3 `Mesh` payload as anything has recovered.
-            if payload.len() < 0x34 {
-                return None;
-            }
-            let read3 = |at: usize| std::array::from_fn(|i| order.f32(payload, at + i * 4));
-            Some((
-                node.name.clone().unwrap_or_default(),
-                order.u32(payload, 0x30),
-                read3(0x10),
-                read3(0x20),
-            ))
-        })
-        .collect()
-}
-
-/// A `Mesh` node that found no chunk: its name, its hash, and the box it
-/// authors - which is the only thing that can say whether a chunk found
-/// elsewhere is the same mesh.
-type Orphan = (String, u32, ([f32; 3], [f32; 3]));
-
-/// The widest axis of a point set.
-fn span(points: &[[f32; 3]]) -> f32 {
-    (0..3)
-        .map(|i| {
-            let lo = points.iter().fold(f32::MAX, |a, p| a.min(p[i]));
-            let hi = points.iter().fold(f32::MIN, |a, p| a.max(p[i]));
-            hi - lo
-        })
-        .fold(0.0, f32::max)
-}
-
-fn dot(a: [f32; 3], b: [f32; 3]) -> f32 {
-    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
-}
-
-fn unit3(v: [f32; 3]) -> Option<[f32; 3]> {
-    let l = dot(v, v).sqrt();
-    (l > 1e-9).then(|| [v[0] / l, v[1] / l, v[2] / l])
-}
-
-/// Area-weighted vertex normals, which is what the `.rcsmodel` is checked
-/// against and what it does not itself state.
-///
-/// **Area-weighted on purpose**: summing raw cross products rather than
-/// normalising each face first is what an exporter writes, and unweighted
-/// averaging diverges wherever a mesh mixes large and small triangles - which a
-/// circuit does everywhere.
-fn smooth_normals(points: &[[f32; 3]], indices: &[u16]) -> Vec<Option<[f32; 3]>> {
-    let mut acc = vec![[0.0f32; 3]; points.len()];
-    for t in indices.chunks_exact(3) {
-        let [a, b, c] = [t[0], t[1], t[2]].map(|i| points[i as usize]);
-        let (u, v) = (
-            [b[0] - a[0], b[1] - a[1], b[2] - a[2]],
-            [c[0] - a[0], c[1] - a[1], c[2] - a[2]],
-        );
-        let n = [
-            u[1] * v[2] - u[2] * v[1],
-            u[2] * v[0] - u[0] * v[2],
-            u[0] * v[1] - u[1] * v[0],
-        ];
-        for &i in t {
-            for k in 0..3 {
-                acc[i as usize][k] += n[k];
-            }
-        }
-    }
-    acc.into_iter().map(unit3).collect()
-}
+use oag_formats::rcsmodel;
+use rcsmodel_common::*;
 
 /// Claim 1: the hash in a `Mesh` payload addresses a chunk in the `.rcsmodel`
 /// beside it - on every node of a craft, and on most of a circuit's.
@@ -277,362 +128,6 @@ fn every_index_buffer_is_a_triangle_list_within_its_own_vertex_count() {
     }
     assert!(total >= 1_200, "only {total} submeshes checked");
     println!("{total} submeshes are in-range triangle lists");
-}
-
-/// Claim 4: the stride read out of the file's own buffer layout is the same one
-/// the authored box gives, and the same one the compactness rule gives.
-///
-/// **This is the claim that turned the stride from a heuristic into a
-/// reading.** [`rcsmodel::Mesh::solve_stride_by_layout`] measures the step from
-/// one submesh's vertex buffer to the next and divides by the vertex count -
-/// arithmetic on two numbers the file states outright, decoding nothing. So it
-/// is independent of both of the other rules: of the box, which is in a
-/// different file, and of the compactness rule, which is about what the bytes
-/// look like once read.
-///
-/// Two agreements, and a **zero** that matters more than either: the rule must
-/// never contradict an oracle. It does not.
-#[test]
-#[ignore = "needs a decrypted PS3 disc image in data/images"]
-fn the_stride_the_buffer_layout_gives_is_the_one_the_box_and_the_span_give() {
-    let (mut vs_box, mut vs_span, mut disagreements) = (0, 0, 0);
-    for (archive, vex_path, model_path) in PAIRS {
-        let Some((blob, model_blob)) = pair(archive, vex_path, model_path) else {
-            return;
-        };
-        let model = rcsmodel::Model::parse(&model_blob).expect("the .rcsmodel parses");
-
-        for (_, hash, min, max) in mesh_nodes(&blob) {
-            let Some(mesh) = model.mesh(hash) else {
-                continue;
-            };
-            let (Some(layout), Some(boxed)) = (
-                mesh.solve_stride_by_layout(),
-                mesh.solve_stride(&model_blob, (min, max), TOLERANCE),
-            ) else {
-                continue;
-            };
-            vs_box += 1;
-            disagreements += usize::from(layout != boxed);
-            assert_eq!(
-                layout, boxed,
-                "{vex_path}: the layout says {layout} where the authored box says {boxed}"
-            );
-        }
-
-        // Over every chunk, referenced or not - which on a circuit is mostly
-        // the unreferenced ones, and the whole reason either rule exists.
-        for mesh in &model.meshes {
-            let (Some(layout), Some(span)) = (
-                mesh.solve_stride_by_layout(),
-                mesh.solve_stride_by_extent(&model_blob),
-            ) else {
-                continue;
-            };
-            vs_span += 1;
-            disagreements += usize::from(layout != span);
-            assert_eq!(
-                layout, span,
-                "{model_path}: the layout says {layout} where the span says {span}"
-            );
-        }
-        let decided = model
-            .meshes
-            .iter()
-            .filter(|m| m.solve_stride_without_a_box(&model_blob).is_some())
-            .count();
-        let span_only = model
-            .meshes
-            .iter()
-            .filter(|m| m.solve_stride_by_extent(&model_blob).is_some())
-            .count();
-        println!(
-            "{model_path}: {decided} of {} chunks decide a stride, against {span_only} \
-             for the span rule alone",
-            model.meshes.len()
-        );
-        assert!(
-            decided >= span_only,
-            "{model_path}: adding the layout rule decided fewer chunks, not more"
-        );
-    }
-    println!("the layout rule agrees with the box on {vs_box} and with the span on {vs_span}");
-    assert_eq!(disagreements, 0);
-    assert!(
-        vs_box >= 15 && vs_span >= 90,
-        "{vs_box} and {vs_span} is too few to mean anything"
-    );
-}
-
-/// Claim 6: the four bytes after a position are the vertex normal.
-///
-/// Two assertions, and the second is the one that makes it a normal rather than
-/// merely a unit vector:
-///
-/// 1. **It is a unit vector**, on 99 % or more of every model's vertices. No
-///    other reading of any offset in the vertex exceeds 51 %, which is what
-///    located the field before anything checked what it meant.
-/// 2. **It agrees with the geometry.** The oracle is the area-weighted average
-///    of the faces touching each vertex - which the `.rcsmodel` does not state -
-///    over meshes more than a unit across, where `1/128` quantisation cannot
-///    make the triangles degenerate. The bar is 75 %; the measurement is 82 %,
-///    and the shortfall is *expected*: a hard edge is exactly where the
-///    exporter splits a vertex and authors a normal no smooth average has.
-///
-/// The tangent at `+10` is checked the same way and for the same reason - a
-/// second unit field that is **perpendicular** to this one is what says the two
-/// are not the same quantity read twice.
-#[test]
-#[ignore = "needs a decrypted PS3 disc image in data/images"]
-fn the_four_bytes_after_a_position_are_the_vertex_normal() {
-    /// Below this span, `1/128` quantisation makes the face normals noise.
-    const MIN_SPAN: f32 = 1.0;
-
-    for (archive, vex_path, model_path) in PAIRS {
-        let Some((blob, model_blob)) = pair(archive, vex_path, model_path) else {
-            return;
-        };
-        let model = rcsmodel::Model::parse(&model_blob).expect("the .rcsmodel parses");
-
-        // Per stride, because the three widths are separate claims and stride
-        // 14 rests on the least data of the three.
-        let mut unit: std::collections::BTreeMap<usize, (usize, usize)> = Default::default();
-        let mut agree: std::collections::BTreeMap<usize, (usize, usize)> = Default::default();
-        let mut zeroes = 0usize;
-        // Split by stride: what sits at `+10` is not the same field on all
-        // three, and averaging over them would hide that.
-        let mut tangent_dots: std::collections::BTreeMap<usize, Vec<f32>> = Default::default();
-        for (_, hash, min, max) in mesh_nodes(&blob) {
-            let Some(mesh) = model.mesh(hash) else {
-                continue;
-            };
-            let Some(stride) = mesh.solve_stride(&model_blob, (min, max), TOLERANCE) else {
-                continue;
-            };
-            for submesh in &mesh.submeshes {
-                if !mesh.submesh_fits(&model_blob, submesh, stride, (min, max)) {
-                    continue;
-                }
-                let (Ok(points), Ok(indices), Ok(normals)) = (
-                    mesh.positions(&model_blob, submesh, stride),
-                    mesh.indices(&model_blob, submesh),
-                    mesh.normals(&model_blob, submesh, stride),
-                ) else {
-                    continue;
-                };
-                for n in &normals {
-                    let len = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
-                    // **An all-zero word is not a misdecode, it is an unused
-                    // vertex.** The records that carry one are zero from the
-                    // position onward - `cockpit_screenShape` pads its buffer
-                    // that way. `oag_render` reads it as "the file authored no
-                    // normal here", derives one from the triangles, and does not
-                    // count it as authored; counting it in the statistic below
-                    // would be the same mistake in the other direction.
-                    if len == 0.0 {
-                        zeroes += 1;
-                        continue;
-                    }
-                    let e = unit.entry(stride).or_default();
-                    e.1 += 1;
-                    if (0.93..=1.07).contains(&len) {
-                        e.0 += 1;
-                    }
-                }
-                if span(&points) < MIN_SPAN {
-                    continue;
-                }
-                for (k, want) in smooth_normals(&points, &indices).iter().enumerate() {
-                    let (Some(want), Some(got)) = (want, normals.get(k).copied().and_then(unit3))
-                    else {
-                        continue;
-                    };
-                    let e = agree.entry(stride).or_default();
-                    e.1 += 1;
-                    if dot(got, *want) > 0.95 {
-                        e.0 += 1;
-                    }
-                    // The tangent, read the same way the recovery read it.
-                    let at = submesh.vertex_offset + k * stride + 10;
-                    if stride > 14 && at + 3 <= model_blob.len() {
-                        let c = |o: usize| (f32::from(model_blob[at + o]) - 128.0) / 127.0;
-                        if let Some(t) = unit3([c(0), c(1), c(2)]) {
-                            tangent_dots
-                                .entry(stride)
-                                .or_default()
-                                .push(dot(t, *want).abs());
-                        }
-                    }
-                }
-            }
-        }
-
-        let medians: std::collections::BTreeMap<usize, f32> = tangent_dots
-            .into_iter()
-            .map(|(stride, mut d)| {
-                d.sort_by(|a, b| a.partial_cmp(b).expect("no NaN"));
-                (stride, d[d.len() / 2])
-            })
-            .collect();
-        let total = |m: &std::collections::BTreeMap<usize, (usize, usize)>| {
-            m.values().fold((0, 0), |(a, b), (c, d)| (a + c, b + d))
-        };
-        let (units, vertices) = total(&unit);
-        let (agreed, scored) = total(&agree);
-        println!(
-            "{model_path}: {units} of {vertices} normals are unit {unit:?}, \
-             {agreed} of {scored} within 18 degrees of the smooth average {agree:?}, \
-             {zeroes} all-zero; median |dot| of the +10 field with the normal, \
-             by stride: {medians:?}"
-        );
-        // **Per stride, not pooled.** Pooling would let stride 22's 23,000
-        // vertices carry a claim about stride 14's few hundred.
-        for (&stride, &(hits, n)) in &unit {
-            // **90 per stride, 99 overall**, and the gap between the two bars
-            // is the honest one. Pooled, 91,376 of 91,480 non-zero normals are
-            // unit. Per stride the minority widths are thin and noisier -
-            // stride 14 reads 97 % on 206 vertices of Assegai and 100 % on 186
-            // of the circuit, stride 22 reads 99.9 % on 23,593 of Assegai and
-            // 91.5 % on 437 of the circuit. Setting the per-stride bar by the
-            // worst of those keeps the claim honest about which widths carry
-            // real evidence and which carry a few hundred vertices.
-            assert!(
-                hits * 10 >= n * 9,
-                "{model_path}: at stride {stride}, only {hits} of {n} decode to a unit vector"
-            );
-        }
-        for (&stride, &(hits, n)) in &agree {
-            assert!(
-                hits * 4 >= n * 3,
-                "{model_path}: at stride {stride}, only {hits} of {n} agree with the geometry"
-            );
-        }
-        assert!(
-            units * 100 >= vertices * 99,
-            "{units} of {vertices} overall"
-        );
-        // **Nothing about `+10` is asserted, and that is the finding.** On
-        // Assegai's hull it is perpendicular to the normal to a median `|dot|`
-        // of 0.02-0.04 over 23,000 vertices, which is a tangent. On its LOD1 and
-        // on a circuit the same bytes come out at 0.577 - which is `1/sqrt(3)`,
-        // exactly what a *constant* `(-1,-1,-1)` direction scores against any
-        // axis-aligned normal, so those records hold `00 00 00` there and the
-        // field is something else. What `+10` is in general is unrecovered, and
-        // the number is printed rather than asserted so a future reading has the
-        // measurement to start from. See `docs/formats/rcsmodel.md`.
-        let _ = &medians;
-    }
-}
-
-/// Claim 7: what a vertex carries follows the **stride**, and the descriptor
-/// byte does not name it.
-///
-/// The four bytes at `+0x0a` are the worked case, because they are two
-/// different things on two widths:
-///
-/// - **On stride 22 they are a tangent.** Unit on 90 % or more of every group
-///   and perpendicular to the vertex's own normal at a median `|dot|` under
-///   0.01, over 78,456 vertices.
-/// - **On stride 18 they are not.** Unit on 7 to 59 %, and a median `|dot|` of
-///   0.52 to 0.57 - `1/sqrt(3)` is 0.577, which is what a constant `(-1,-1,-1)`
-///   scores against any axis-aligned normal, so a large share of those records
-///   are `00 00 00` there. What the field *is* on stride 18 is unrecovered.
-///
-/// **The point of grouping by `83 XX` is the negative result.** That byte runs
-/// `07` to `0d` and was the obvious candidate for naming the field set, since
-/// it is the only part of the descriptor that varies and is already known not
-/// to determine the stride. It does not: every `XX` group at stride 22 behaves
-/// like a tangent and every `XX` group at stride 18 does not, so the split is
-/// the width's and the byte explains nothing. Naming what it *does* select is
-/// still open - `docs/formats/rcsmodel.md`.
-#[test]
-#[ignore = "needs a decrypted PS3 disc image in data/images"]
-fn the_field_after_the_normal_follows_the_stride_and_not_the_descriptor_byte() {
-    /// Below this many vertices a group is noise rather than a measurement.
-    const ENOUGH: usize = 500;
-
-    // (stride, descriptor byte) -> (unit count, total, |dot| with the normal)
-    let mut groups: std::collections::BTreeMap<(usize, u8), (usize, usize, Vec<f32>)> =
-        Default::default();
-
-    for (archive, vex_path, model_path) in PAIRS {
-        let Some((blob, model_blob)) = pair(archive, vex_path, model_path) else {
-            return;
-        };
-        let model = rcsmodel::Model::parse(&model_blob).expect("the .rcsmodel parses");
-        let boxes: std::collections::BTreeMap<u32, ([f32; 3], [f32; 3])> = mesh_nodes(&blob)
-            .into_iter()
-            .map(|(_, hash, min, max)| (hash, (min, max)))
-            .collect();
-
-        for mesh in &model.meshes {
-            let stride = match boxes.get(&mesh.hash) {
-                Some(&bounds) => mesh.solve_stride(&model_blob, bounds, TOLERANCE),
-                None => mesh.solve_stride_without_a_box(&model_blob),
-            };
-            // Stride 14 has no field here at all: its 8 attribute bytes are the
-            // normal and the last four, with nothing between them.
-            let Some(stride) = stride.filter(|&s| s > 14) else {
-                continue;
-            };
-            for submesh in &mesh.submeshes {
-                let Ok(normals) = mesh.normals(&model_blob, submesh, stride) else {
-                    continue;
-                };
-                let entry = groups.entry((stride, submesh.format[1])).or_default();
-                for (k, n) in normals.iter().enumerate() {
-                    let at = submesh.vertex_offset + k * stride + 10;
-                    let Some(raw) = model_blob.get(at..at + 3) else {
-                        continue;
-                    };
-                    entry.1 += 1;
-                    let c = |o: usize| (f32::from(raw[o]) - 128.0) / 127.0;
-                    let v = [c(0), c(1), c(2)];
-                    let len = dot(v, v).sqrt();
-                    if !(0.93..=1.07).contains(&len) {
-                        continue;
-                    }
-                    entry.0 += 1;
-                    if let (Some(t), Some(n)) = (unit3(v), unit3(*n)) {
-                        entry.2.push(dot(t, n).abs());
-                    }
-                }
-            }
-        }
-    }
-
-    let mut checked = 0;
-    for ((stride, xx), (unit, total, mut dots)) in groups {
-        if total < ENOUGH {
-            continue;
-        }
-        dots.sort_by(|a, b| a.partial_cmp(b).expect("no NaN"));
-        let median = dots.get(dots.len() / 2).copied().unwrap_or(f32::NAN);
-        let unit_pct = 100.0 * unit as f32 / total as f32;
-        println!(
-            "stride {stride}, descriptor 83 {xx:02x}: {total:6} vertices, \
-             {unit_pct:5.1} % unit, median |dot| with the normal {median:.3}"
-        );
-        checked += 1;
-        if stride == 22 {
-            assert!(
-                unit_pct >= 90.0 && median < 0.1,
-                "stride 22 group 83 {xx:02x} does not look like a tangent \
-                 ({unit_pct} % unit, median |dot| {median})"
-            );
-        } else {
-            assert!(
-                median > 0.4,
-                "stride 18 group 83 {xx:02x} looks like a tangent after all \
-                 (median |dot| {median}), which would make the descriptor byte \
-                 the thing that selects the field"
-            );
-        }
-    }
-    assert!(
-        checked >= 8,
-        "only {checked} groups were big enough to measure"
-    );
 }
 
 /// Claim 8: the 56 `Mesh` nodes that address no chunk in their own circuit are
@@ -782,36 +277,38 @@ fn the_nodes_that_address_no_chunk_are_not_in_a_shared_props_file() {
     );
 }
 
-/// Claim 9: how much of the disc this reader actually reads.
+/// Claim 9: every `.rcsmodel` on the disc parses, in one of **two** chunk
+/// layouts.
 ///
-/// **419 of 643, and the 224 that fail all fail the same way.** Recorded as a
-/// ratchet rather than left implicit, because every other test in this file
-/// reads three files and this page's claims are phrased about 643.
+/// **This started as a ratchet at 419 of 643 and is now 643 of 643.** The 224
+/// that failed all failed identically - `OutOfBounds` on the submesh
+/// descriptors - and the reason was a second chunk layout nobody had noticed,
+/// because the three files every other claim on this page rests on do not use
+/// it. Byte `+0x06` of a chunk selects:
 ///
-/// What is *not* wrong on the failures, which is what makes them a bounded
-/// next job rather than a mystery:
+/// - `0x05`: a submesh count at `+0x50` and a table of `0x80`-byte descriptors
+///   at `+0x60`. The layout this reader was written against.
+/// - `0x01`: **no descriptor table at all.** One submesh, its buffers named in
+///   the chunk header - vertex offset `+0x54`, index count `+0x58`, index
+///   offset `+0x5c`, vertex count `+0x6c`. The word at `+0x50` is a file-wide
+///   pointer here, and reading it as a submesh count is what produced counts in
+///   the hundreds and descriptors past the end of a 1 KiB file.
 ///
-/// - The version word is `0x000a0000` on **643 of 643**, so the claim on
-///   `docs/formats/rcsmodel.md` holds across the whole disc.
-/// - The header arithmetic - `+0x04 == +0x20 + count * 4`, the invariant the
-///   directory layout rests on - holds on **643 of 643** too, failures
-///   included. So the directory is read correctly everywhere.
-/// - Every failure is `OutOfBounds` on *the submesh descriptors*: the count at
-///   a chunk's `+0x50` reads as hundreds or thousands, putting the descriptors
-///   far past the end of a file that is often only a few kilobytes.
-///
-/// So the chunk header is what differs, on small models - billboards, the
-/// aurora, the weapons - and not on the circuits and craft this project
-/// currently draws. `aurora.rcsmodel` is the smallest worked case: 1,236 bytes,
-/// one mesh, a chunk offset of `0x3a0` whose `+0x50` reads 544.
+/// **What settles the inline field mapping is claim 2, not this test.** Every
+/// index in every submesh of all 643 files is below its own submesh's vertex
+/// count, and those two numbers come from different fields - so a wrong offset
+/// for either would show up as an out-of-range index rather than as a
+/// plausible-looking mesh.
 #[test]
 #[ignore = "needs a decrypted PS3 disc image in data/images"]
-fn two_thirds_of_the_discs_models_parse_and_the_rest_fail_one_way() {
+fn every_model_on_the_disc_parses_in_one_of_two_chunk_layouts() {
     let Some(image) = image() else {
         return;
     };
     let (mut total, mut parsed, mut versioned, mut header_ok) = (0usize, 0usize, 0usize, 0usize);
-    let mut errors: std::collections::BTreeMap<&'static str, usize> = Default::default();
+    let mut layouts: std::collections::BTreeMap<u8, usize> = Default::default();
+    let mut errors: Vec<String> = Vec::new();
+    let (mut submeshes, mut in_range, mut triangles) = (0usize, 0usize, 0usize);
     for archive in [
         "DATA00", "DATA01", "DATA02", "DATA03", "DATA04", "DATA05", "DATA06",
     ] {
@@ -826,169 +323,77 @@ fn two_thirds_of_the_discs_models_parse_and_the_rest_fail_one_way() {
         for path in paths {
             let bytes = open.read_path(&path).expect("the entry reads");
             total += 1;
-            if bytes.len() >= 0x40 {
-                let big = oag_formats::ByteOrder::Big;
-                versioned += usize::from(big.u32(&bytes, 0) == rcsmodel::VERSION);
-                let count = big.u32(&bytes, 0x1c) as usize;
-                header_ok += usize::from(
-                    big.u32(&bytes, 0x04) as usize == big.u32(&bytes, 0x20) as usize + count * 4,
-                );
+            let big = oag_formats::ByteOrder::Big;
+            versioned += usize::from(big.u32(&bytes, 0) == rcsmodel::VERSION);
+            let count = big.u32(&bytes, 0x1c) as usize;
+            let table = big.u32(&bytes, 0x20) as usize;
+            header_ok += usize::from(big.u32(&bytes, 0x04) as usize == table + count * 4);
+            for i in 0..count {
+                let at = big.u32(&bytes, table + i * 4) as usize;
+                if let Some(&byte) = bytes.get(at + 0x06) {
+                    *layouts.entry(byte).or_default() += 1;
+                }
             }
             match rcsmodel::Model::parse(&bytes) {
-                Ok(_) => parsed += 1,
-                Err(rcsmodel::Error::OutOfBounds { what, .. }) => {
-                    *errors.entry(what).or_default() += 1;
+                Ok(model) => {
+                    parsed += 1;
+                    // **The check that settles the inline field mapping.** The
+                    // vertex count and the index buffer come from different
+                    // fields, so a wrong offset for either shows up here as an
+                    // out-of-range index rather than as a plausible mesh.
+                    for mesh in &model.meshes {
+                        for submesh in &mesh.submeshes {
+                            if submesh.index_count == 0 {
+                                continue;
+                            }
+                            submeshes += 1;
+                            triangles += usize::from(submesh.index_count % 3 == 0);
+                            in_range += usize::from(mesh.indices(&bytes, submesh).is_ok());
+                        }
+                    }
                 }
-                Err(_) => *errors.entry("something else").or_default() += 1,
+                Err(e) => {
+                    if errors.len() < 5 {
+                        errors.push(format!("{path}: {e}"));
+                    }
+                }
             }
         }
     }
     println!(
         "{parsed} of {total} .rcsmodel files parse; {versioned} carry the version word, \
-         {header_ok} satisfy the header arithmetic; failures: {errors:?}"
+         {header_ok} satisfy the header arithmetic; chunk layouts {layouts:?}; \
+         {in_range} of {submeshes} submeshes have every index in range, \
+         {triangles} a whole number of triangles"
     );
+    for e in &errors {
+        println!("  {e}");
+    }
     assert_eq!(
         versioned, total,
         "the version claim is disc-wide, or it is not"
     );
     assert_eq!(
         header_ok, total,
-        "the directory layout is disc-wide, or the failures are not only in the chunk header"
+        "the directory layout is disc-wide, or it is not"
+    );
+    assert_eq!(parsed, total, "not every model parses any more");
+    assert_eq!(
+        layouts.keys().copied().collect::<Vec<_>>(),
+        vec![0x01, 0x05],
+        "a third chunk layout turned up, and it is being read as one of the two"
     );
     assert_eq!(
-        errors.keys().collect::<Vec<_>>(),
-        vec![&"the submesh descriptors"],
-        "the failures stopped being one shape, which changes what fixing them costs"
+        in_range,
+        submeshes,
+        "{} submesh(es) name a vertex they do not have, so a buffer field is \
+         being read from the wrong offset",
+        submeshes - in_range
     );
-    // A ratchet: this may rise and must not fall.
-    assert!(
-        parsed >= 419,
-        "{parsed} of {total} parse, down from the 419 measured on 2026-08-17"
+    assert_eq!(
+        triangles,
+        submeshes,
+        "{} submesh(es) do not hold a whole number of triangles",
+        submeshes - triangles
     );
-}
-
-/// Claim 5: nothing the box-less rules decide lands outside the circuit.
-///
-/// **The guard the unreferenced path does not otherwise have.** A referenced
-/// mesh is filtered submesh by submesh through
-/// [`rcsmodel::Mesh::submesh_fits`], because a stride right for a mesh can be
-/// wrong for one of its submeshes and that submesh's attribute bytes then come
-/// out as positions - trap 2 in `docs/formats/rcsmodel.md`, the one that framed
-/// Assegai as a speck. A chunk no node references has no box to filter against.
-///
-/// So this measures the shape of what those rules produce. A misread submesh
-/// reads bytes normalised over the whole `i16` range as positions, which at the
-/// `1/128` scale puts points up to 256 units from the chunk's own bias in
-/// *every* axis - and a circuit is flat: Talon's Junction's floor collision
-/// spans 194 units vertically over 1,476 by 1,088.
-///
-/// **Measured: not one of the 868 submeshes drawn this way leaves +/-400.** The
-/// widest world-space `y` span is 306 units on a chunk only the layout rule
-/// decides, 237 where both rules agree and 189 where only compactness does.
-/// The layout-only chunks being the largest is expected rather than alarming -
-/// the compactness rule needs the true reading to be *decisively* smaller than
-/// the wrong one, and that margin is narrowest on a big chunk, so it declines
-/// on exactly those.
-#[test]
-#[ignore = "needs a decrypted PS3 disc image in data/images"]
-fn nothing_the_box_less_rules_decide_lands_outside_the_circuit() {
-    /// Generous against the 306 measured, tight against the 256-per-axis
-    /// scatter a misread would produce on a chunk anywhere but the middle.
-    const ENVELOPE: f32 = 400.0;
-
-    let Some((blob, model_blob)) = pair(
-        "DATA00.PSARC",
-        "/data/environments/talons_junction/track.vex",
-        "/data/environments/talons_junction/track.rcsmodel",
-    ) else {
-        return;
-    };
-    let model = rcsmodel::Model::parse(&model_blob).expect("the .rcsmodel parses");
-    let placed: std::collections::BTreeSet<u32> = mesh_nodes(&blob)
-        .into_iter()
-        .map(|(_, hash, ..)| hash)
-        .collect();
-
-    let (mut checked, mut widest) = (0usize, 0.0f32);
-    for mesh in &model.meshes {
-        if placed.contains(&mesh.hash) {
-            continue;
-        }
-        let Some(stride) = mesh.solve_stride_without_a_box(&model_blob) else {
-            continue;
-        };
-        for submesh in &mesh.submeshes {
-            let Ok(points) = mesh.positions(&model_blob, submesh, stride) else {
-                continue;
-            };
-            let (lo, hi) = points.iter().fold((f32::MAX, f32::MIN), |(lo, hi), p| {
-                (lo.min(p[1]), hi.max(p[1]))
-            });
-            if points.is_empty() {
-                continue;
-            }
-            checked += 1;
-            widest = widest.max(hi - lo);
-            assert!(
-                lo > -ENVELOPE && hi < ENVELOPE,
-                "a chunk decoded at stride {stride} spans y {lo}..{hi}, which is \
-                 not a piece of a circuit"
-            );
-        }
-    }
-    println!("{checked} box-less submeshes, widest world y span {widest}");
-    assert!(checked >= 800, "only {checked} submeshes reach this path");
-}
-
-/// Claim 3: the recovered vertex stride fills the box the `.vex` authors.
-///
-/// The number to watch is the unresolved count, not the resolved one: a mesh
-/// whose stride no single value explains is reported and drawn as nothing, so
-/// this test records how much of the disc that is rather than requiring zero.
-#[test]
-#[ignore = "needs a decrypted PS3 disc image in data/images"]
-fn the_recovered_geometry_fills_the_box_the_vex_authors() {
-    for (archive, vex_path, model_path) in PAIRS {
-        let Some((blob, model_blob)) = pair(archive, vex_path, model_path) else {
-            return;
-        };
-        let model = rcsmodel::Model::parse(&model_blob).expect("the .rcsmodel parses");
-        let nodes = mesh_nodes(&blob);
-
-        let mut solved = 0;
-        let mut unresolved = Vec::new();
-        let mut widths = std::collections::BTreeMap::new();
-        let mut addressed = 0;
-        for (name, hash, min, max) in &nodes {
-            // The nodes claim 1 records as unresolved have no geometry here to
-            // solve a stride for; they are that test's finding, not this one's.
-            let Some(mesh) = model.mesh(*hash) else {
-                continue;
-            };
-            addressed += 1;
-            match mesh.solve_stride(&model_blob, (*min, *max), TOLERANCE) {
-                Some(stride) => {
-                    solved += 1;
-                    *widths.entry(stride).or_insert(0usize) += 1;
-                }
-                None => unresolved.push(name.as_str()),
-            }
-        }
-
-        println!(
-            "{vex_path}: {solved} of {addressed} addressed meshes solved a stride, \
-             widths {widths:?}, unsolved e.g. {:?}",
-            &unresolved[..unresolved.len().min(4)]
-        );
-        assert!(
-            solved * 4 >= addressed * 3,
-            "{vex_path}: only {solved} of {addressed} meshes recovered a stride"
-        );
-        for stride in widths.keys() {
-            assert!(
-                (14..=22).contains(stride) && stride % 2 == 0,
-                "{vex_path}: unexpected stride {stride}"
-            );
-        }
-    }
 }

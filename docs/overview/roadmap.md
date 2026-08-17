@@ -1254,7 +1254,8 @@ Four things worth knowing before touching it:
 11. **Positions, triangles and vertex normals.** `i16` triples through a
     per-mesh bias and a `1/128` scale, big-endian `u16` triangle lists - 1,274
     of 1,274 submeshes have an in-range index buffer whose count divides by
-    three - and a packed **11:11:10 signed** normal at `+6`, unit on 99.5 % of
+    three, across all 643 models and 50,873 submeshes in the two chunk layouts
+    byte `+0x06` selects - and a packed **11:11:10 signed** normal at `+6`, unit on 99.5 % of
     every model's vertices and within 18 degrees of the area-weighted face
     average on 82-93 %. The models are still untextured: of the rest of a vertex
     a tangent (stride 22 only) and a texture coordinate are located and neither

@@ -56,6 +56,8 @@ fn model(stride: usize, filler: i16) -> Vec<u8> {
     b.u32(0x80, CHUNK as u32);
 
     b.u32(CHUNK, 0xdead_beef);
+    // Byte +0x06 selects the layout: this fixture is the described one.
+    b.u32(CHUNK + 0x04, u32::from(LAYOUT_DESCRIBED) << 8 | 0x02);
     for i in 0..3 {
         b.f32(CHUNK + 0x30 + i * 4, 0.0);
         b.f32(CHUNK + 0x40 + i * 4, 1.0 / 128.0);
@@ -195,6 +197,72 @@ fn a_mesh_whose_stride_is_not_determined_reports_nothing_rather_than_guessing() 
         "the fixture is meant to be ambiguous, got {contained:?}"
     );
     assert_eq!(mesh.solve_stride(&data, CUBE_BOUNDS, 2.0 / 128.0), None);
+}
+
+/// The other chunk layout: one submesh, its buffers named in the chunk header
+/// and no descriptor table at all. 2,489 of the disc's chunks are this.
+fn inline_model(vertices: usize, stride: usize) -> Vec<u8> {
+    const CHUNK: usize = 0x100;
+    const IBUF: usize = 0x200;
+    const VBUF: usize = 0x300;
+
+    let mut b = Builder::default();
+    b.u32(0x00, VERSION);
+    b.u32(0x1c, 1);
+    b.u32(0x20, 0x80);
+    b.u32(0x80, CHUNK as u32);
+
+    b.u32(CHUNK, 0xfeed_face);
+    b.u32(CHUNK + 0x04, u32::from(LAYOUT_INLINE) << 8 | 0x02);
+    for i in 0..3 {
+        b.f32(CHUNK + 0x30 + i * 4, 0.0);
+        b.f32(CHUNK + 0x40 + i * 4, 1.0 / 128.0);
+    }
+    // The four fields that replace a descriptor.
+    b.u32(CHUNK + 0x54, VBUF as u32);
+    b.u32(CHUNK + 0x58, 3);
+    b.u32(CHUNK + 0x5c, IBUF as u32);
+    b.u16(CHUNK + 0x6c, vertices as u16);
+
+    for (k, index) in [0u16, 1, 2].into_iter().enumerate() {
+        b.u16(IBUF + k * 2, index);
+    }
+    for k in 0..vertices {
+        for i in 0..3 {
+            b.i16(VBUF + k * stride + i * 2, i16::try_from(k).unwrap_or(0));
+        }
+    }
+    b.bytes.resize(VBUF + vertices * stride + 0x10, 0);
+    b.bytes
+}
+
+/// The inline layout reads, and its counts come from the fields that replace
+/// the descriptor rather than from `+0x50` - which is a file-wide pointer there
+/// and read as a submesh count until 2026-08-17.
+#[test]
+fn the_inline_chunk_layout_names_its_buffers_in_the_chunk_header() {
+    let data = inline_model(64, 18);
+    let model = Model::parse(&data).expect("a model");
+    let mesh = &model.meshes[0];
+    assert_eq!(mesh.submeshes.len(), 1, "the inline layout is one submesh");
+    let sub = mesh.submeshes[0];
+    assert_eq!((sub.vertex_count, sub.index_count), (64, 3));
+    assert_eq!(mesh.indices(&data, &sub), Ok(vec![0, 1, 2]));
+    assert_eq!(mesh.positions(&data, &sub, 18).map(|p| p.len()), Ok(64));
+}
+
+/// A layout byte that is neither is reported, not read as one of them.
+#[test]
+fn an_unknown_chunk_layout_is_an_error_rather_than_a_guess() {
+    let mut data = inline_model(8, 14);
+    data[0x100 + 0x06] = 0x03;
+    assert_eq!(
+        Model::parse(&data),
+        Err(Error::UnknownChunkLayout {
+            got: 0x03,
+            at: 0x100
+        })
+    );
 }
 
 /// A mesh whose only content is where its buffers sit, which is all

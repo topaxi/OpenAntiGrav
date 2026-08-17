@@ -9,7 +9,10 @@ bounding-box pair and a 32-bit word, and the vertices are here.
 Implemented in [`oag_formats::rcsmodel`](../../crates/formats/src/rcsmodel.rs),
 drawn by [`oag_render::mesh::rcs`](../../crates/render/src/mesh/rcs.rs), and
 checked against the disc by
-[`rcsmodel_ground_truth.rs`](../../crates/formats/tests/rcsmodel_ground_truth.rs).
+[`rcsmodel_ground_truth.rs`](../../crates/formats/tests/rcsmodel_ground_truth.rs)
+for the container and
+[`rcsmodel_vertex_ground_truth.rs`](../../crates/formats/tests/rcsmodel_vertex_ground_truth.rs)
+for what a vertex holds.
 
 ```sh
 just view data/images/hdfury-ps3-eu-dec.iso:PS3_GAME/USRDIR/DATA02.PSARC \
@@ -31,7 +34,7 @@ just view data/images/hdfury-ps3-eu-dec.iso:PS3_GAME/USRDIR/DATA00.PSARC \
 | Where the stride is declared | Unknown, and **not** in the `.rcsmaterial` - see below | - |
 | Vertex normal | **`+6`, packed 11:11:10 signed, big-endian** | 88 |
 | The rest of a vertex | A tangent at stride 22 and a texture coordinate, both located; not decoded | - |
-| How much of the disc reads | **419 of 643 files.** The other 224 all fail the same way | - |
+| Chunk layouts | **Two**, selected by byte `+0x06`. All 643 files read | 88 |
 
 ## What is decoded, and what is not
 
@@ -49,32 +52,45 @@ check that against until [`.gtf`](hd-status.md#what-is-genuinely-new) is read -
 so nothing consumes it, and it is not called a UV anywhere in the code. The
 bytes between the normal and it are partly identified; see below.
 
-## 224 of 643 files do not parse, and they all fail the same way
+## A chunk comes in two layouts, and byte `+0x06` says which
 
-**Stated here because every other number on this page comes from three files.**
-Measured across all seven archives by
-`two_thirds_of_the_discs_models_parse_and_the_rest_fail_one_way`:
+**Found by counting.** Every number on this page used to come from three files;
+counting how much of the disc actually read turned up **224 of 643 failing**,
+all identically, on a second chunk layout those three files never use. All 643
+parse now.
 
-| | of 643 |
-| --- | ---: |
-| Version word is `0x000a0000` | **643** |
-| Header arithmetic `+0x04 == +0x20 + count * 4` holds | **643** |
-| Parses to the end | 419 |
-| Fails, all on *the submesh descriptors* | 224 |
+| Byte `+0x06` of a chunk | Chunks | What follows |
+| --- | ---: | --- |
+| `0x05` | 39,372 | A submesh count at `+0x50` and a table of `0x80`-byte descriptors at `+0x60` |
+| `0x01` | 2,489 | **No descriptor table at all**: one submesh, its buffers named in the chunk header |
 
-So the container header and the mesh directory are read correctly on the whole
-disc, and what differs is the **chunk header**: the submesh count at a chunk's
-`+0x50` reads as hundreds or thousands and puts the descriptors far past the end
-of a file that is often a few kilobytes. The failures are the small models -
-billboards, the aurora, the weapons - not the circuits and craft this project
-draws, which is why nothing visible is missing and the shortfall was invisible
-until it was counted.
+The inline form:
 
-`aurora.rcsmodel` is the smallest worked case: 1,236 bytes, one mesh, a chunk
-offset of `0x3a0` whose `+0x50` reads 544. Whether those files use a shorter
-chunk header or a second layout is unread.
+```text
++0x54  u32   vertex buffer offset
++0x58  u32   index count
++0x5c  u32   index buffer offset
++0x6c  u16   vertex count
+```
 
-## The `.vex` is not optional
+The word at `+0x50` is a file-wide pointer in these chunks, not a submesh count,
+and reading it as one is what produced counts in the hundreds and a descriptor
+table past the end of a 1 KiB file. `aurora.rcsmodel` is the smallest worked
+case: 1,236 bytes, one chunk, three vertices at stride 18 and one triangle.
+
+**Confidence 88, and what settles it is the index-range invariant rather than
+the field names.** With both layouts read, **50,873 of 50,873 submeshes** across
+all 643 files hold a whole number of triangles and name no vertex they do not
+have - and the vertex count and the index buffer come from different fields, so
+a wrong offset for either would surface as an out-of-range index rather than as
+a plausible-looking mesh. That check used to cover 1,274 submeshes of three
+files.
+
+Two things still unexplained. Byte `+0x07` takes the values `01` and `02` and
+nothing here distinguishes them. And the byte above the layout selector counts
+chunks but reads `0xff` on many, which no reading accounts for.
+
+## The `.vex` is not optional## The `.vex` is not optional
 
 This format cannot be read on its own, and that is a property of the format:
 
@@ -144,11 +160,13 @@ material, immediately before the chunk that uses them - for example
 
 ## The index buffers, checked exhaustively
 
-**Confidence 95**, on the strongest invariant available: across `ship`,
-`ship_lod1` and `talons_junction` - **1,274 of 1,274 submeshes** - the index
-count is a multiple of three and every index is below its submesh's own vertex
-count. Neither would survive a wrong offset or a wrong width, and the second is
-checked against a number read from a different field.
+**Confidence 95**, on the strongest invariant available, and now across the
+**whole disc**: all 643 files, **50,873 of 50,873 submeshes**, index count a
+multiple of three and every index below its submesh's own vertex count. Neither
+would survive a wrong offset or a wrong width, and the second is checked against
+a number read from a different field. It stood at 1,274 of 1,274 over three
+files until the [second chunk layout](#a-chunk-comes-in-two-layouts-and-byte-0x06-says-which)
+was found.
 
 ## The vertex layout
 
@@ -415,8 +433,9 @@ Named explicitly, with what each would take.
 4. **Why a vertex buffer sometimes ends 16, 32 or 96 bytes short** of
    `vertex_count * stride`. 8 of 46 measured pairs, always negative, always a
    multiple of 16. Harmless to the layout rule, unexplained all the same.
-5. **What differs in the chunk header of the 224 files that do not parse.** The
-   biggest single gap in this page, newly measured; see above.
+5. **What byte `+0x07` of a chunk selects**, and why the chunk counter above
+   the layout selector reads `0xff` on many chunks. Both left over from the
+   two-layout finding.
 6. **56 of Talon's Junction's 126 `Mesh` nodes address no chunk**, and the
    shared-props-archive guess this page used to carry is **refuted**. Every
    `.rcsmodel` under `/data/environments/` sits in one of exactly 16 circuit

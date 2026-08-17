@@ -77,7 +77,7 @@
 //! +0x00  u8[8]   vertex-format descriptor, `83 XX 10 10 10 10 10 00`.
 //!                **Neither the stride nor the field set** - see `SubMesh::format`.
 //! +0x08  u16     vertex count
-//! +0x0a  u16     index count, divisible by 3 on 1,274 of 1,274 submeshes
+//! +0x0a  u16     index count, divisible by 3 on 50,873 of 50,873 submeshes
 //! +0x10  u32     index buffer offset: `count` big-endian u16s
 //! +0x18  u32     vertex buffer offset
 //! ```
@@ -105,6 +105,34 @@ const SUBMESH_BASE: usize = 0x60;
 
 /// Bytes of position in a vertex: three big-endian `i16`s.
 const POSITION_LEN: usize = 6;
+
+/// A chunk whose submeshes are a table of `0x80`-byte descriptors at `+0x60`.
+///
+/// **Byte `+0x06` of a chunk.** The `u32` it sits in reads `00 nn LL kk`: `nn`
+/// counts chunks (and is `0xff` on many), `LL` is this, and `kk` takes the
+/// values `01` and `02` for a reason nothing here has distinguished. See
+/// [`LAYOUT_INLINE`].
+const LAYOUT_DESCRIBED: u8 = 0x05;
+
+/// A chunk that names one buffer pair in its own header and has no descriptor
+/// table at all.
+///
+/// **This is what 224 of the disc's 643 models are made of**, and reading them
+/// as [`LAYOUT_DESCRIBED`] is what used to fail: the word at `+0x50` is a
+/// file-wide pointer there, not a submesh count, so it read as hundreds and put
+/// the descriptors past the end of the file. The fields instead are
+///
+/// ```text
+/// +0x54  u32   vertex buffer offset
+/// +0x58  u32   index count
+/// +0x5c  u32   index buffer offset
+/// +0x6c  u16   vertex count
+/// ```
+///
+/// with exactly one submesh per chunk. Confidence 88: it is settled by the
+/// index-range invariant, which holds on every submesh of all 643 files once
+/// this layout is read - and would not survive a wrong field on any of them.
+const LAYOUT_INLINE: u8 = 0x01;
 
 /// The strides the searches will consider, in bytes.
 ///
@@ -178,6 +206,17 @@ pub enum Error {
         /// The file length.
         len: usize,
     },
+    /// A chunk's `+0x04` word is neither of the two known layouts.
+    ///
+    /// Reported rather than assumed, because the two differ in where the
+    /// submesh buffers are named and reading one as the other produces
+    /// plausible-looking nonsense - see [`LAYOUT_INLINE`].
+    UnknownChunkLayout {
+        /// The byte at `+0x06`.
+        got: u8,
+        /// Where the chunk starts.
+        at: usize,
+    },
     /// An index buffer names a vertex the submesh does not have.
     ///
     /// A real corruption check rather than a formality: it is the invariant
@@ -204,6 +243,11 @@ impl std::fmt::Display for Error {
             Self::IndexOutOfRange { index, vertices } => {
                 write!(f, "an index names vertex {index} of {vertices}")
             }
+            Self::UnknownChunkLayout { got, at } => write!(
+                f,
+                "the chunk at {at:#x} declares layout {got:#04x}, \
+                 which is neither {LAYOUT_DESCRIBED:#04x} nor {LAYOUT_INLINE:#04x}"
+            ),
         }
     }
 }
@@ -341,28 +385,50 @@ impl Mesh {
                 ByteOrder::Big.f32(data, at + off + 8),
             ]
         };
-        let count = ByteOrder::Big.u32(data, at + 0x50) as usize;
-        let last = at + SUBMESH_BASE + count * SUBMESH_LEN;
-        if last > data.len() {
-            return Err(Error::OutOfBounds {
-                what: "the submesh descriptors",
-                end: last,
-                len: data.len(),
-            });
-        }
-
-        let submeshes = (0..count)
-            .map(|i| {
-                let b = at + SUBMESH_BASE + i * SUBMESH_LEN;
-                SubMesh {
-                    format: std::array::from_fn(|k| data[b + k]),
-                    vertex_count: ByteOrder::Big.u16(data, b + 0x08) as usize,
-                    vertex_offset: ByteOrder::Big.u32(data, b + 0x18) as usize,
-                    index_count: ByteOrder::Big.u16(data, b + 0x0a) as usize,
-                    index_offset: ByteOrder::Big.u32(data, b + 0x10) as usize,
+        let submeshes = match data[at + 0x06] {
+            LAYOUT_DESCRIBED => {
+                let count = ByteOrder::Big.u32(data, at + 0x50) as usize;
+                let last = at + SUBMESH_BASE + count * SUBMESH_LEN;
+                if last > data.len() {
+                    return Err(Error::OutOfBounds {
+                        what: "the submesh descriptors",
+                        end: last,
+                        len: data.len(),
+                    });
                 }
-            })
-            .collect();
+                (0..count)
+                    .map(|i| {
+                        let b = at + SUBMESH_BASE + i * SUBMESH_LEN;
+                        SubMesh {
+                            format: std::array::from_fn(|k| data[b + k]),
+                            vertex_count: ByteOrder::Big.u16(data, b + 0x08) as usize,
+                            vertex_offset: ByteOrder::Big.u32(data, b + 0x18) as usize,
+                            index_count: ByteOrder::Big.u16(data, b + 0x0a) as usize,
+                            index_offset: ByteOrder::Big.u32(data, b + 0x10) as usize,
+                        }
+                    })
+                    .collect()
+            }
+            LAYOUT_INLINE => {
+                if at + 0x6e > data.len() {
+                    return Err(Error::OutOfBounds {
+                        what: "an inline chunk's buffer fields",
+                        end: at + 0x6e,
+                        len: data.len(),
+                    });
+                }
+                vec![SubMesh {
+                    format: std::array::from_fn(|k| data[at + SUBMESH_BASE + k]),
+                    vertex_count: ByteOrder::Big.u16(data, at + 0x6c) as usize,
+                    vertex_offset: ByteOrder::Big.u32(data, at + 0x54) as usize,
+                    index_count: ByteOrder::Big.u32(data, at + 0x58) as usize,
+                    index_offset: ByteOrder::Big.u32(data, at + 0x5c) as usize,
+                }]
+            }
+            other => {
+                return Err(Error::UnknownChunkLayout { got: other, at });
+            }
+        };
 
         Ok(Self {
             hash: ByteOrder::Big.u32(data, at),
