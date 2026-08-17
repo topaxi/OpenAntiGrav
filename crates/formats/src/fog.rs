@@ -30,6 +30,7 @@
 //! parameters fed to it, re-sampled every frame from the camera's position. A
 //! shaping function on the ramp would be the wrong fix.
 
+use crate::ByteOrder;
 use crate::vex::{self, Node, transform_point};
 
 /// Length of a `fogCube` payload.
@@ -131,7 +132,9 @@ impl FogVolume {
             return None;
         }
         Some(Self {
-            to_local: vex::transform(&payload[..0x40])?,
+            // Explicitly little-endian, like every other read in this module:
+            // `fogCube` is a PSP class and no big-endian file reaches here.
+            to_local: vex::transform(&payload[..0x40], ByteOrder::Little)?,
             near_end: FogParams::read(payload, SET_A)?,
             far_end: FogParams::read(payload, SET_B)?,
             tiebreak: f32::from_le_bytes(payload.get(TIEBREAK..TIEBREAK + 4)?.try_into().ok()?),

@@ -54,13 +54,25 @@
 
 use std::fmt;
 
+use crate::ByteOrder;
+
 /// Bytes of file header before the node tree.
 pub const FILE_HEADER_LEN: usize = 16;
 
-/// File magic, at `+0x0c` of the header.
+/// File magic, at `+0x0c` of the header, as the PSP and PS2 spell it.
 pub const MAGIC: &[u8; 4] = b"VEXX";
 
+/// The same magic on the PS3, written by the same exporter on a big-endian
+/// host. It is the whole of how a file declares its [`ByteOrder`]; see
+/// [`byte_order`].
+pub const MAGIC_BE: &[u8; 4] = b"XXEV";
+
 pub mod classes;
+mod matrix;
+
+pub use matrix::{
+    IDENTITY, class_world_transforms, multiply, transform, transform_point, world_transforms,
+};
 
 /// Class ID of a `Mesh` node.
 ///
@@ -330,39 +342,6 @@ pub fn class_name(class_id: u32) -> Option<&'static str> {
 /// first thing anything reading a `.vex` wants.
 pub fn nodes_by_class(nodes: &[Node], class_id: u32) -> impl Iterator<Item = &Node> {
     nodes.iter().filter(move |n| n.class_id == class_id)
-}
-
-/// Model-space matrices of every node of `class_id` that carries a 4x4 payload.
-///
-/// The locator classes - `Engine Flare`, `Ship Muzzle`, `Ship Collision Fx`,
-/// `cannon_flash`, `Start Position` - all store a **64-byte payload in exactly
-/// the layout [`transform`] reads**: row-major, translation in row 3. That is not
-/// assumed here; [`crate::track::start_position`] already decodes `Start
-/// Position` that way, and its reading is corroborated against the running game
-/// to within 1.12 degrees of heading (see `docs/formats/track.md`).
-///
-/// [`world_transforms`] deliberately treats every non-`Transform` class as the
-/// identity, because a track's assembly must not depend on guessing at payloads
-/// it does not decode. This function is the opposite trade, taken explicitly for
-/// one class at a time, and it composes with the parent chain the same way.
-///
-/// Nodes whose payload is too short to be a matrix are skipped rather than
-/// defaulted to the identity: a locator at the origin and a locator that failed
-/// to decode should not look the same to a caller.
-pub fn class_world_transforms(data: &[u8], nodes: &[Node], class_id: u32) -> Vec<[f32; 16]> {
-    let chain = world_transforms(data, nodes);
-    nodes
-        .iter()
-        .filter(|node| node.class_id == class_id)
-        .filter_map(|node| {
-            let local = transform(data.get(node.payload())?)?;
-            let parent = node
-                .parent
-                .and_then(|p| chain.get(p).copied())
-                .unwrap_or(IDENTITY);
-            Some(multiply(&local, &parent))
-        })
-        .collect()
 }
 
 /// Divisor for `s16` positions and the `f32` scale.
@@ -888,16 +867,45 @@ impl Node {
     }
 }
 
-fn u16_at(data: &[u8], at: usize) -> u16 {
-    u16::from_le_bytes([data[at], data[at + 1]])
+/// Little-endian reads, for the parts of this module that are PSP and PS2 only.
+///
+/// The file header and the node walk go through [`byte_order`] instead, because
+/// a PS3 `.vex` has those and this project reads them. What it does **not** have
+/// is geometry: a PS3 `Mesh` node is a bounding-box pair and a reference into a
+/// `.rcsmodel`, so every batch, vertex and embedded-texture decoder below runs
+/// on little-endian files by construction. Threading an order through those
+/// would be untestable - no big-endian file reaches them.
+mod le {
+    use crate::ByteOrder;
+
+    pub fn u16_at(data: &[u8], at: usize) -> u16 {
+        ByteOrder::Little.u16(data, at)
+    }
+
+    pub fn u32_at(data: &[u8], at: usize) -> u32 {
+        ByteOrder::Little.u32(data, at)
+    }
+
+    pub fn f32_at(data: &[u8], at: usize) -> f32 {
+        ByteOrder::Little.f32(data, at)
+    }
 }
 
-fn u32_at(data: &[u8], at: usize) -> u32 {
-    u32::from_le_bytes([data[at], data[at + 1], data[at + 2], data[at + 3]])
-}
+use le::{f32_at, u16_at, u32_at};
 
-fn f32_at(data: &[u8], at: usize) -> f32 {
-    f32::from_bits(u32_at(data, at))
+/// Which way round a file's words are, from its own magic.
+///
+/// `VEXX` on the PSP and PS2, `XXEV` on the PS3 - the same four bytes, written
+/// by the same exporter on a big-endian host. So the file says which it is, and
+/// nothing here has to ask what console it came from. A file with neither
+/// spelling reads as [`ByteOrder::Little`]; [`has_magic`] is the check for "is
+/// this a `.vex`" and this is not it.
+#[must_use]
+pub fn byte_order(data: &[u8]) -> ByteOrder {
+    match data.get(12..16) {
+        Some(m) if m == MAGIC_BE => ByteOrder::Big,
+        _ => ByteOrder::Little,
+    }
 }
 
 /// Format version, from the file header.
@@ -905,7 +913,7 @@ pub fn version(data: &[u8]) -> Result<u32> {
     if data.len() < FILE_HEADER_LEN {
         return Err(Error::TooShort { got: data.len() });
     }
-    Ok(u32_at(data, 0))
+    Ok(byte_order(data).u32(data, 0))
 }
 
 /// The class table for a file, read from its own version word.
@@ -924,13 +932,14 @@ pub fn classes_of(data: &[u8]) -> Result<classes::Classes> {
     classes::for_version(version).ok_or(Error::UnknownVersion { version })
 }
 
-/// Whether the file carries the `VEXX` magic.
+/// Whether the file carries the `VEXX` magic, in either spelling.
 ///
 /// The magic sits at `+0x0c`, not at the start, so a naive signature check
-/// misses it.
+/// misses it. `XXEV` counts: it is the same magic on a big-endian host, and a
+/// caller that needs to know which asks [`byte_order`].
 #[must_use]
 pub fn has_magic(data: &[u8]) -> bool {
-    data.len() >= FILE_HEADER_LEN && &data[12..16] == MAGIC
+    matches!(data.get(12..16), Some(m) if m == MAGIC || m == MAGIC_BE)
 }
 
 /// Byte length of the node tree, from the file header.
@@ -938,7 +947,7 @@ pub fn tree_len(data: &[u8]) -> Result<usize> {
     if data.len() < FILE_HEADER_LEN {
         return Err(Error::TooShort { got: data.len() });
     }
-    Ok(u32_at(data, 4) as usize)
+    Ok(byte_order(data).u32(data, 4) as usize)
 }
 
 /// Byte length of the embedded texture block, from the file header.
@@ -946,7 +955,7 @@ pub fn texture_len(data: &[u8]) -> Result<usize> {
     if data.len() < FILE_HEADER_LEN {
         return Err(Error::TooShort { got: data.len() });
     }
-    Ok(u32_at(data, 8) as usize)
+    Ok(byte_order(data).u32(data, 8) as usize)
 }
 
 /// Reads a NUL-terminated name out of a node header.
@@ -984,6 +993,7 @@ pub fn nodes(data: &[u8]) -> Result<Vec<Node>> {
         return Err(Error::TooShort { got: data.len() });
     }
 
+    let order = byte_order(data);
     let mut out: Vec<Node> = Vec::new();
     // Children follow their parent, so a stack of remaining counts tracks depth,
     // and a parallel stack of their indices gives each node its parent.
@@ -1005,14 +1015,14 @@ pub fn nodes(data: &[u8]) -> Result<Vec<Node>> {
             remaining_parent.pop();
         }
 
-        let header_size = u16_at(data, at + 4) as usize;
+        let header_size = order.u16(data, at + 4) as usize;
         let node = Node {
-            class_id: u32_at(data, at),
+            class_id: order.u32(data, at),
             offset: at,
             header_size,
-            data_size: u32_at(data, at + 8) as usize,
-            child_count: usize::from(u16_at(data, at + 12)),
-            unk_0x0e: u16_at(data, at + 14),
+            data_size: order.u32(data, at + 8) as usize,
+            child_count: usize::from(order.u16(data, at + 12)),
+            unk_0x0e: order.u16(data, at + 14),
             name: name_at(data, at, header_size),
             depth: remaining.len(),
             parent: remaining_parent.last().copied(),
@@ -1096,102 +1106,20 @@ impl EmbeddedTexture {
     }
 }
 
-/// A `Transform` node's matrix, or `None` if the payload is not one.
+/// Offset of the runtime asset path inside a `Texture` node's payload.
 ///
-/// **Row-major, translation in row 3**, which is the row-vector convention:
-/// `v' = v * M`. Rows 0 to 2 are an orthonormal basis in every node checked, and
-/// row 3 ends in `1.0`.
+/// The two pointer fields at `+0x10` and `+0x14` are zero at rest and patched at
+/// load, so the path is the last field of the header that survives on disc.
+const TEXTURE_ASSET_PATH: usize = 0x38;
+
+/// The runtime asset path out of a `Texture` node's payload.
 ///
-/// A `Transform` with an empty payload is the identity, which is how 57 of
-/// `01_Track`'s 715 transforms are stored.
-///
-/// The convention is corroborated outside this format: the `Start Position` bind
-/// forces **row 1** to `(0, 1, 0)` when it re-orthonormalises a grid slot, so row
-/// 1 is the up axis and `+y` is world up. See `docs/formats/track.md`.
+/// Separate from [`textures`] because it needs only the node, not the embedded
+/// pixel block, so it also answers "what does this file reference" on a PS2
+/// scene whose texture block is empty.
 #[must_use]
-pub fn transform(payload: &[u8]) -> Option<[f32; 16]> {
-    if payload.is_empty() {
-        return Some(IDENTITY);
-    }
-    if payload.len() < 64 {
-        return None;
-    }
-    let mut m = [0.0f32; 16];
-    for (i, cell) in m.iter_mut().enumerate() {
-        *cell = f32_at(payload, i * 4);
-    }
-    Some(m)
-}
-
-/// The identity, in the same row-major layout as [`transform`].
-pub const IDENTITY: [f32; 16] = [
-    1.0, 0.0, 0.0, 0.0, //
-    0.0, 1.0, 0.0, 0.0, //
-    0.0, 0.0, 1.0, 0.0, //
-    0.0, 0.0, 0.0, 1.0, //
-];
-
-/// Multiplies two row-major matrices: the result applies `a` then `b`.
-#[must_use]
-pub fn multiply(a: &[f32; 16], b: &[f32; 16]) -> [f32; 16] {
-    let mut out = [0.0f32; 16];
-    for row in 0..4 {
-        for col in 0..4 {
-            let mut sum = 0.0;
-            for k in 0..4 {
-                sum += a[row * 4 + k] * b[k * 4 + col];
-            }
-            out[row * 4 + col] = sum;
-        }
-    }
-    out
-}
-
-/// Applies a row-major matrix to a point, with an implicit `w` of 1.
-#[must_use]
-pub fn transform_point(m: &[f32; 16], p: [f32; 3]) -> [f32; 3] {
-    [
-        p[0] * m[0] + p[1] * m[4] + p[2] * m[8] + m[12],
-        p[0] * m[1] + p[1] * m[5] + p[2] * m[9] + m[13],
-        p[0] * m[2] + p[1] * m[6] + p[2] * m[10] + m[14],
-    ]
-}
-
-/// World matrix of every node, composed down the tree.
-///
-/// One entry per node of [`nodes`], in the same order. A node's matrix is the
-/// product of every `Transform` matrix on its ancestor chain, itself included, so
-/// a `Mesh` can be placed with a single lookup.
-///
-/// This is what makes a whole track assemblable: mesh vertices are in the local
-/// space of whichever transform encloses them, and on `01_Track` a mesh sits
-/// under up to 25 nested transforms.
-pub fn world_transforms(data: &[u8], nodes: &[Node]) -> Vec<[f32; 16]> {
-    // **From the file's own version word.** `CLASS_TRANSFORM` is version 6's
-    // `0x6e`; a version-4 file numbers `Transform` `0x6d`, so composing against
-    // the constant would leave every matrix at identity and pile a whole track
-    // into one space. `None` for a version whose id is unrecovered, which gives
-    // the same identity-everywhere result - but only where nobody has measured
-    // otherwise, rather than on a title that has been.
-    let transform_class = classes_of(data).ok().and_then(|classes| classes.transform);
-    let mut out: Vec<[f32; 16]> = Vec::with_capacity(nodes.len());
-    for node in nodes {
-        let parent = node
-            .parent
-            .and_then(|p| out.get(p).copied())
-            .unwrap_or(IDENTITY);
-
-        let local = if Some(node.class_id) == transform_class {
-            data.get(node.payload())
-                .and_then(transform)
-                .unwrap_or(IDENTITY)
-        } else {
-            IDENTITY
-        };
-
-        out.push(multiply(&local, &parent));
-    }
-    out
+pub fn texture_asset_path(payload: &[u8]) -> Option<String> {
+    cstr_at(payload, TEXTURE_ASSET_PATH)
 }
 
 /// Extracts the textures appended after the node tree.
@@ -1212,22 +1140,6 @@ pub fn world_transforms(data: &[u8], nodes: &[Node]) -> Vec<[f32; 16]> {
 /// Dropping them instead would silently renumber every later texture, which is
 /// not a decoding error that shows up as an error: it shows up as a model wearing
 /// the wrong skins. Use `.iter().flatten()` for a plain list.
-/// Offset of the runtime asset path inside a `Texture` node's payload.
-///
-/// The two pointer fields at `+0x10` and `+0x14` are zero at rest and patched at
-/// load, so the path is the last field of the header that survives on disc.
-const TEXTURE_ASSET_PATH: usize = 0x38;
-
-/// The runtime asset path out of a `Texture` node's payload.
-///
-/// Separate from [`textures`] because it needs only the node, not the embedded
-/// pixel block, so it also answers "what does this file reference" on a PS2
-/// scene whose texture block is empty.
-#[must_use]
-pub fn texture_asset_path(payload: &[u8]) -> Option<String> {
-    cstr_at(payload, TEXTURE_ASSET_PATH)
-}
-
 pub fn textures(data: &[u8]) -> Result<Vec<Option<EmbeddedTexture>>> {
     let block = FILE_HEADER_LEN + tree_len(data)?;
     let mut at = block;

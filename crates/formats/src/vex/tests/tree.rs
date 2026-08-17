@@ -6,6 +6,7 @@
 //! a file may. See `scripts/check-file-size.py`, which is the rule as a
 //! gate.
 
+use crate::ByteOrder;
 use crate::vex::*;
 
 #[test]
@@ -56,24 +57,91 @@ fn the_version_6_table_is_the_documented_constants() {
 /// Builds a `.vex` file from `(class_id, child_count, payload_len)` nodes,
 /// in the depth-first pre-order the format stores them in.
 fn build_tree(nodes: &[(u32, usize, usize)]) -> Vec<u8> {
+    build_tree_in(nodes, ByteOrder::Little)
+}
+
+/// The same file, written the way the console `order` names would write it.
+///
+/// The PS3 export is not a different layout, only a different byte order and a
+/// reversed magic - which is the claim `docs/formats/hd-status.md` measures over
+/// 40 shipped files and this builder lets a unit test state.
+fn build_tree_in(nodes: &[(u32, usize, usize)], order: ByteOrder) -> Vec<u8> {
+    let u16 = |v: u16| -> Vec<u8> {
+        match order {
+            ByteOrder::Little => v.to_le_bytes().to_vec(),
+            ByteOrder::Big => v.to_be_bytes().to_vec(),
+        }
+    };
+    let u32 = |v: u32| -> Vec<u8> {
+        match order {
+            ByteOrder::Little => v.to_le_bytes().to_vec(),
+            ByteOrder::Big => v.to_be_bytes().to_vec(),
+        }
+    };
+
     let mut tree = Vec::new();
     for &(class_id, children, payload_len) in nodes {
-        tree.extend(class_id.to_le_bytes());
-        tree.extend(0x20u16.to_le_bytes()); // header_size
-        tree.extend(0u16.to_le_bytes()); // padding to +0x08
-        tree.extend((payload_len as u32).to_le_bytes());
-        tree.extend((children as u32).to_le_bytes());
+        tree.extend(u32(class_id));
+        tree.extend(u16(0x20)); // header_size
+        tree.extend(u16(0)); // padding to +0x08
+        tree.extend(u32(payload_len as u32));
+        // A `u16` count and the `u16` at `+0x0e`, not one `u32`: writing it
+        // as a word looks identical little-endian and is zero big-endian.
+        tree.extend(u16(children as u16));
+        tree.extend(u16(0));
         tree.extend([0u8; 0x10]); // the name area, left empty
         tree.extend(std::iter::repeat_n(0u8, payload_len));
     }
 
     let mut out = Vec::new();
-    out.extend(6u32.to_le_bytes());
-    out.extend((tree.len() as u32).to_le_bytes());
-    out.extend(0u32.to_le_bytes());
-    out.extend(MAGIC);
+    out.extend(u32(6));
+    out.extend(u32(tree.len() as u32));
+    out.extend(u32(0));
+    out.extend(match order {
+        ByteOrder::Little => MAGIC,
+        ByteOrder::Big => MAGIC_BE,
+    });
     out.extend(tree);
     out
+}
+
+/// The same tree, written both ways round, walks to the same nodes.
+///
+/// A file declares its order in its own magic, so nothing outside has to be
+/// told which console it came from - see `oag_formats::byte_order`. The
+/// negative half matters as much: read the big-endian file little-endian and
+/// the header alone is nonsense.
+#[test]
+fn a_big_endian_file_walks_to_the_same_tree_as_its_little_endian_twin() {
+    let shape = [(1, 1, 0), (2, 0, 16), (3, 0, 0)];
+    let le = build_tree(&shape);
+    let be = build_tree_in(&shape, ByteOrder::Big);
+
+    assert_eq!(byte_order(&le), ByteOrder::Little);
+    assert_eq!(byte_order(&be), ByteOrder::Big);
+    assert!(has_magic(&le) && has_magic(&be), "both spellings are .vex");
+    assert_eq!(version(&le).unwrap(), 6);
+    assert_eq!(
+        version(&be).unwrap(),
+        6,
+        "the version word follows the magic"
+    );
+
+    let walked = |data: &[u8]| -> Vec<(u32, usize, usize, usize)> {
+        nodes(data)
+            .expect("walk")
+            .iter()
+            .map(|n| (n.class_id, n.child_count, n.data_size, n.depth))
+            .collect()
+    };
+    assert_eq!(walked(&le), walked(&be));
+    assert_eq!(walked(&be), [(1, 1, 0, 0), (2, 0, 16, 1), (3, 0, 0, 0)]);
+
+    // And what the swap is worth: the same bytes with the magic left alone
+    // read as a version nobody has a table for, rather than as version 6.
+    let mut mislabelled = be.clone();
+    mislabelled[12..16].copy_from_slice(MAGIC);
+    assert_eq!(version(&mislabelled).unwrap(), 0x0600_0000);
 }
 
 #[test]
@@ -193,8 +261,12 @@ fn parents_follow_the_tree() {
 
 #[test]
 fn an_empty_transform_payload_is_the_identity() {
-    assert_eq!(transform(&[]), Some(IDENTITY));
-    assert_eq!(transform(&[0u8; 32]), None, "too short to be a matrix");
+    assert_eq!(transform(&[], ByteOrder::Little), Some(IDENTITY));
+    assert_eq!(
+        transform(&[0u8; 32], ByteOrder::Little),
+        None,
+        "too short to be a matrix"
+    );
 }
 
 #[test]

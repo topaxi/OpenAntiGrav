@@ -29,6 +29,7 @@
 
 #[cfg(feature = "av1")]
 pub mod av1;
+pub mod byte_order;
 pub mod collision;
 pub mod entropy;
 pub mod fexml;
@@ -56,4 +57,5 @@ pub mod vif;
 pub mod wad;
 pub mod weapons;
 
+pub use byte_order::ByteOrder;
 pub use signature::{Signature, identify};

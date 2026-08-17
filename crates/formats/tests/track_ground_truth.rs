@@ -342,7 +342,8 @@ fn every_shipped_track_authors_exactly_one_start_position() {
                 "{name}: a Start Position payload is a 4x4 matrix"
             );
 
-            let authored = vex::transform(payload).expect("a 64-byte payload is a matrix");
+            let authored = vex::transform(payload, vex::byte_order(&model))
+                .expect("a 64-byte payload is a matrix");
             let row = |r: usize| [authored[r * 4], authored[r * 4 + 1], authored[r * 4 + 2]];
             let (left, up, forward) = (row(0), row(1), row(2));
             let expected = cross(unit(left), unit(up));
