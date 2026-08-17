@@ -241,10 +241,11 @@ into `.rcsmodel`" while that file was unread. **It is the reference**: it is the
 chunk's own first word, and every one of Assegai's 15 mesh nodes resolves
 through it. See [rcsmodel](rcsmodel.md).
 
-So `oag-view --mesh` draws an HD craft and an HD circuit, as of 2026-08-17.
-Positions and triangles only - normals, texture coordinates and the `.gtf`
-textures are all still unread, so it is untextured and lit off computed face
-normals. `--track` still draws the ribbon from the `WO Track` spline, which is
+So `oag-view --mesh` draws an HD craft and an HD circuit, as of 2026-08-17,
+**lit off the file's own vertex normals** since later the same day - 23,888 of
+them on Assegai and 531,904 on Talon's Junction. It is still untextured: the
+texture coordinate is located but unconfirmed and the `.gtf` textures are
+unread. `--track` still draws the ribbon from the `WO Track` spline, which is
 authored data that never moved.
 
 **One thing this section's own framing got wrong**, and it cost a render: the
@@ -560,9 +561,10 @@ rather than explained away.
 
 ## What is genuinely new
 
-- **`.rcsmodel`** - 643 files, 686.5 MiB, all render geometry. **Positions and
-  triangles read**, see [rcsmodel](rcsmodel.md); the vertex stride is in no
-  field of the file and the attributes after each position are undecoded.
+- **`.rcsmodel`** - 643 files, 686.5 MiB, all render geometry. **Positions,
+  triangles and vertex normals read**, see [rcsmodel](rcsmodel.md); the vertex
+  stride is in no field of the file, and of the rest of a vertex only the
+  texture coordinate is even located.
 - **`.rcsmaterial`** - 1,632 files, wall-to-wall 32-bit hashes. A track authors
   around fifty by name (`track_surface`, `track_wall`, `glass_reflect`,
   `emissive_bloom`), and a second identical set under `materials_reversed/`.

@@ -29,24 +29,24 @@ just view data/images/hdfury-ps3-eu-dec.iso:PS3_GAME/USRDIR/DATA00.PSARC \
 | Index format | Big-endian `u16` triangle list | 95 |
 | Vertex stride | **In no field of the file.** 14, 18 or 22, recovered three ways | 88 |
 | Where the stride is declared | Unknown, and **not** in the `.rcsmaterial` - see below | - |
-| Attributes after the position | Undecoded, and not read | - |
+| Vertex normal | **`+6`, packed 11:11:10 signed, big-endian** | 88 |
+| The rest of a vertex | Texture coordinate located, tangent partly; not decoded | - |
 
 ## What is decoded, and what is not
 
-**Positions and triangle indices.** That is enough to draw the shape of a thing,
-which is what this was read for. Each vertex carries a further 8 to 16 bytes -
-normals, texture coordinates, colours, tangents - and **none of it is read**:
-the layout is unrecovered, and a normal taken from the wrong offset lights a
-model wrongly rather than visibly failing. The `.gtf` textures those coordinates
-would address are a separate undecoded container, so nothing downstream could
-use them yet either.
+**Positions, triangle indices and vertex normals.** The normals landed on
+2026-08-17 and the renderer uses them; before that it lit these models off face
+normals it computed itself, and it still does for any vertex the file has none
+for. That fallback is reported per model rather than silent - a load report line
+ending `531904 authored vertex normal(s)` is the file's own data, and one ending
+`lit off face normals computed from the triangles` is a derivation, which is the
+distinction [`CLAUDE.md`](../../CLAUDE.md) exists to keep.
 
-The renderer therefore lights these models off **face normals it computes from
-the triangles**. That is a derivation from geometry this project decoded, not a
-stand-in for data nobody has - and it is called out because the distinction is
-the one [`CLAUDE.md`](../../CLAUDE.md) exists to keep. An unlit model is a white
-silhouette, and a silhouette hides exactly the decoding mistakes a render is
-meant to expose.
+**The texture coordinate is located and not confirmed.** The last four bytes of
+every vertex read as two `f16` in a plausible range, and there is nothing to
+check that against until [`.gtf`](hd-status.md#what-is-genuinely-new) is read -
+so nothing consumes it, and it is not called a UV anywhere in the code. The
+bytes between the normal and it are partly identified; see below.
 
 ## The `.vex` is not optional
 
@@ -123,6 +123,67 @@ material, immediately before the chunk that uses them - for example
 count is a multiple of three and every index is below its submesh's own vertex
 count. Neither would survive a wrong offset or a wrong width, and the second is
 checked against a number read from a different field.
+
+## The vertex layout
+
+```text
++0x00  i16[3]  position, through the chunk's own bias and scale
++0x06  u32     normal, packed 11:11:10 signed - see below
++0x0a  ...     a unit direction on some meshes, a constant on others: unidentified
++0x0e  ...     stride 22 only; four bytes that look like an RGBA vertex colour
+last 4 bytes   two f16, in a texture-coordinate range. Located, not confirmed
+```
+
+The three widths are one layout with optional fields rather than three formats,
+which is what the constant normal offset says: stride 14 is position, normal and
+the last field; 18 adds the `+0x0a` field; 22 adds the colour as well.
+
+### The normal, at `+6`
+
+**Confidence 88.** Three signed fields packed low-to-high in a big-endian `u32`:
+**11 bits of x, 11 of y, 10 of z**, each divided by its own half-range.
+
+The odd split is what the recovery turned on, and it was read off rather than
+searched for. A **planar** submesh - one whose faces all point the same way -
+must carry the same normal on every vertex, so whatever encodes it is simply
+whatever is constant across those vertex records. Two of Talon's Junction's
+roads supply the two axes that pin the split:
+
+| The submesh's own normal | The constant word at `+6` | What fits |
+| --- | --- | --- |
+| `(+1, 0, 0)` | `0x000003ff` | `x = 1023` on an 11-bit low field, and nothing else |
+| `(0, -1, 0)` | `0x00200800` | `y = -1023` on an 11-bit field at bit 11, and nothing else |
+
+Neither works at 10 bits: `0x3ff` is `-1` there, not `+1023`. Two checks then
+hold across whole models:
+
+- **It is a unit vector on 99.5 % or more** of every model's vertices - 23,841
+  of 23,888 on Assegai, 63,006 of 63,248 on Talon's Junction. No other reading
+  of any other offset in the vertex exceeds 51 %, and that comparison is what
+  located the field before anything asked what it meant.
+- **It agrees with the geometry**, against an oracle the `.rcsmodel` does not
+  state: the area-weighted average of the faces touching each vertex, over
+  meshes more than a unit across where `1/128` quantisation cannot make the
+  triangles degenerate. **82 %** on Assegai, 92 % on its LOD1, 93 % on Talon's
+  Junction, within 18 degrees. The best reading of any other offset reaches
+  14.6 %.
+
+The shortfall is the point rather than a defect: **a hard edge is exactly where
+the exporter splits a vertex and authors a normal no smooth average has**, which
+is why a model stores normals instead of computing them. It is also why the
+renderer prefers these over its own.
+
+### `+0x0a` is a tangent on one mesh and something else on the others
+
+Recorded because the measurement is worth more than the guess. On Assegai's hull
+the four bytes at `+0x0a` are three biased `u8` that are unit on **99.9 %** of
+23,608 vertices and **perpendicular** to the normal above - median `|dot|` 0.02
+on its stride-18 meshes and 0.04 on its stride-22 ones. That is a tangent.
+
+On `ship_lod1` and on Talon's Junction the same bytes give a median `|dot|` of
+**0.577**, which is `1/sqrt(3)` - exactly what a constant `(-1,-1,-1)` scores
+against any axis-aligned normal, so those records hold `00 00 00` there. What
+the field is in general is unrecovered, and no code reads it.
 
 ## The vertex stride is not in the file
 

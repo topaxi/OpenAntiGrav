@@ -55,6 +55,10 @@ pub struct Report {
     /// Chunks no `.vex` node references, drawn in world space. On a circuit
     /// this is the circuit; see [`build_scene`].
     pub unreferenced: usize,
+    /// Vertices whose normal came out of the file rather than off the
+    /// triangles. Reported because the difference is visible and the fallback
+    /// is silent: see [`face_normals`].
+    pub authored_normals: usize,
 }
 
 impl Report {
@@ -75,6 +79,9 @@ impl Report {
         } + &match self.unreferenced {
             0 => String::new(),
             n => format!(", plus {n} chunk(s) no node references, drawn in world space"),
+        } + &match self.authored_normals {
+            0 => ", lit off face normals computed from the triangles".to_string(),
+            n => format!(", {n} authored vertex normal(s)"),
         }
     }
 }
@@ -232,7 +239,16 @@ pub fn build_scene(label: &str, data: &[u8], model_blob: &[u8]) -> Result<(Model
             ) else {
                 continue;
             };
-            emit(&mut out, &points, &indices, Mat4::IDENTITY, None);
+            let normals = mesh.normals(model_blob, submesh, stride).ok();
+            report.authored_normals += normals.as_ref().map_or(0, Vec::len);
+            emit(
+                &mut out,
+                &points,
+                normals.as_deref(),
+                &indices,
+                Mat4::IDENTITY,
+                None,
+            );
             report.triangles += indices.len() / 3;
             emitted = true;
         }
@@ -250,17 +266,39 @@ pub fn build_scene(label: &str, data: &[u8], model_blob: &[u8]) -> Result<(Model
 }
 
 /// Appends one submesh's geometry to a model, as its own draw call.
-fn emit(out: &mut Model, points: &[[f32; 3]], indices: &[u16], to_world: Mat4, node: Option<u32>) {
+///
+/// `normals` are the file's own, already decoded; `None` leaves the vertex
+/// normal zero, which is [`face_normals`]'s signal to derive one.
+fn emit(
+    out: &mut Model,
+    points: &[[f32; 3]],
+    normals: Option<&[[f32; 3]]>,
+    indices: &[u16],
+    to_world: Mat4,
+    node: Option<u32>,
+) {
     let first_vertex = u32::try_from(out.vertices.len()).unwrap_or(u32::MAX);
     let first_index = u32::try_from(out.indices.len()).unwrap_or(u32::MAX);
     let mut centre = Vec3::ZERO;
-    for point in points {
+    for (k, point) in points.iter().enumerate() {
         let p = to_world.transform_point3(Vec3::from_array(*point));
         centre += p;
+        // The node transforms in these files are rigid, so rotating the
+        // direction and renormalising is the whole of it - an inverse transpose
+        // would be needed only under non-uniform scale.
+        let normal = normals
+            .and_then(|n| n.get(k))
+            .map(|n| {
+                to_world
+                    .transform_vector3(Vec3::from_array(*n))
+                    .normalize_or_zero()
+                    .to_array()
+            })
+            .unwrap_or([0.0, 0.0, 0.0]);
         out.vertices.push(GpuVertex {
             position: p.to_array(),
-            // Filled in from the triangles by `face_normals`, once they exist.
-            normal: [0.0, 0.0, 0.0],
+            // Zero means the file gave none, and `face_normals` derives it.
+            normal,
             colour: [1.0, 1.0, 1.0, 1.0],
             texcoord: [0.0, 0.0],
             lit: 1.0,
@@ -374,9 +412,12 @@ pub fn build(
                 continue;
             };
 
+            let normals = mesh.normals(model_blob, submesh, stride).ok();
+            report.authored_normals += normals.as_ref().map_or(0, Vec::len);
             emit(
                 &mut out,
                 &points,
+                normals.as_deref(),
                 &indices,
                 to_world,
                 u32::try_from(index).ok(),
@@ -412,12 +453,11 @@ pub fn build(
 /// smoothed them by hand, so a model lit this way is a shape check and not a
 /// match against the original. Reading the real ones supersedes it.
 fn face_normals(model: &mut Model) {
-    // Reset first: `build_scene` adds a second pass of geometry after `build`
-    // has already run this once, and accumulating onto normalised vectors would
-    // weight the first pass's faces by however many they were.
-    for vertex in &mut model.vertices {
-        vertex.normal = [0.0, 0.0, 0.0];
-    }
+    // **Only where the file gave none.** A zero normal is `emit`'s signal that
+    // `rcsmodel::Mesh::normals` had nothing for that vertex; an authored one is
+    // better than anything derivable here, because it carries the hard edges the
+    // exporter split vertices for and a smooth average by construction cannot.
+    let mut derived = vec![Vec3::ZERO; model.vertices.len()];
     for triangle in model.indices.chunks_exact(3) {
         let [a, b, c] = [triangle[0], triangle[1], triangle[2]].map(|i| i as usize);
         let (pa, pb, pc) = (
@@ -427,18 +467,17 @@ fn face_normals(model: &mut Model) {
         );
         let face = (pb - pa).cross(pc - pa);
         for index in [a, b, c] {
-            let normal = &mut model.vertices[index].normal;
-            for i in 0..3 {
-                normal[i] += face[i];
-            }
+            derived[index] += face;
         }
     }
-    for vertex in &mut model.vertices {
-        let n = Vec3::from_array(vertex.normal);
+    for (vertex, derived) in model.vertices.iter_mut().zip(derived) {
+        if Vec3::from_array(vertex.normal).length_squared() > 1e-12 {
+            continue;
+        }
         // A vertex on no triangle, or on exactly cancelling ones, keeps a
         // usable up rather than a zero the shader would normalise to NaN.
-        vertex.normal = if n.length_squared() > 1e-12 {
-            n.normalize().to_array()
+        vertex.normal = if derived.length_squared() > 1e-12 {
+            derived.normalize().to_array()
         } else {
             [0.0, 1.0, 0.0]
         };
@@ -508,6 +547,7 @@ mod tests {
             triangles: 4_000,
             strays: 2,
             unreferenced: 639,
+            authored_normals: 531_904,
         };
         let line = report.describe();
         assert!(line.contains("59 of 126"), "{line}");
@@ -517,6 +557,20 @@ mod tests {
             "{line}"
         );
         assert!(line.contains("2 submesh(es) dropped as strays"), "{line}");
+        assert!(line.contains("531904 authored vertex normal(s)"), "{line}");
+        // And the other way round: a model whose vertices carry no normal says
+        // that the shading is this project's derivation, not the disc's data.
+        let derived = Report {
+            authored_normals: 0,
+            ..report
+        };
+        assert!(
+            derived
+                .describe()
+                .contains("lit off face normals computed from the triangles"),
+            "{}",
+            derived.describe()
+        );
         assert!(
             line.contains("639 chunk(s) no node references"),
             "a circuit is mostly this, so the line has to say it: {line}"

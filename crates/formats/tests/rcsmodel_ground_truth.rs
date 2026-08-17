@@ -19,7 +19,7 @@
 //! against, and the one that made `docs/formats/psarc.md`'s per-entry digest
 //! check worth writing.
 //!
-//! Five claims, in order of how much they would cost to get wrong:
+//! Six claims, in order of how much they would cost to get wrong:
 //!
 //! 1. **Every `Mesh` node's hash resolves to a chunk.** The link is the whole
 //!    reason the two files can be read together at all.
@@ -36,6 +36,9 @@
 //! 5. **What the box-less rules decide stays inside the circuit.** The
 //!    unreferenced path has no authored box to filter a stray submesh against,
 //!    so this is the check that stands in for one.
+//! 6. **The four bytes after a position are the vertex normal.** Unit on
+//!    99.5 % of every model's vertices, and agreeing with an oracle the file
+//!    does not state - the area-weighted average of the faces at each vertex.
 
 use std::path::{Path, PathBuf};
 
@@ -120,6 +123,55 @@ fn mesh_nodes(blob: &[u8]) -> Vec<(String, u32, [f32; 3], [f32; 3])> {
             ))
         })
         .collect()
+}
+
+/// The widest axis of a point set.
+fn span(points: &[[f32; 3]]) -> f32 {
+    (0..3)
+        .map(|i| {
+            let lo = points.iter().fold(f32::MAX, |a, p| a.min(p[i]));
+            let hi = points.iter().fold(f32::MIN, |a, p| a.max(p[i]));
+            hi - lo
+        })
+        .fold(0.0, f32::max)
+}
+
+fn dot(a: [f32; 3], b: [f32; 3]) -> f32 {
+    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+}
+
+fn unit3(v: [f32; 3]) -> Option<[f32; 3]> {
+    let l = dot(v, v).sqrt();
+    (l > 1e-9).then(|| [v[0] / l, v[1] / l, v[2] / l])
+}
+
+/// Area-weighted vertex normals, which is what the `.rcsmodel` is checked
+/// against and what it does not itself state.
+///
+/// **Area-weighted on purpose**: summing raw cross products rather than
+/// normalising each face first is what an exporter writes, and unweighted
+/// averaging diverges wherever a mesh mixes large and small triangles - which a
+/// circuit does everywhere.
+fn smooth_normals(points: &[[f32; 3]], indices: &[u16]) -> Vec<Option<[f32; 3]>> {
+    let mut acc = vec![[0.0f32; 3]; points.len()];
+    for t in indices.chunks_exact(3) {
+        let [a, b, c] = [t[0], t[1], t[2]].map(|i| points[i as usize]);
+        let (u, v) = (
+            [b[0] - a[0], b[1] - a[1], b[2] - a[2]],
+            [c[0] - a[0], c[1] - a[1], c[2] - a[2]],
+        );
+        let n = [
+            u[1] * v[2] - u[2] * v[1],
+            u[2] * v[0] - u[0] * v[2],
+            u[0] * v[1] - u[1] * v[0],
+        ];
+        for &i in t {
+            for k in 0..3 {
+                acc[i as usize][k] += n[k];
+            }
+        }
+    }
+    acc.into_iter().map(unit3).collect()
 }
 
 /// Claim 1: the hash in a `Mesh` payload addresses a chunk in the `.rcsmodel`
@@ -296,6 +348,126 @@ fn the_stride_the_buffer_layout_gives_is_the_one_the_box_and_the_span_give() {
         vs_box >= 15 && vs_span >= 90,
         "{vs_box} and {vs_span} is too few to mean anything"
     );
+}
+
+/// Claim 6: the four bytes after a position are the vertex normal.
+///
+/// Two assertions, and the second is the one that makes it a normal rather than
+/// merely a unit vector:
+///
+/// 1. **It is a unit vector**, on 99 % or more of every model's vertices. No
+///    other reading of any offset in the vertex exceeds 51 %, which is what
+///    located the field before anything checked what it meant.
+/// 2. **It agrees with the geometry.** The oracle is the area-weighted average
+///    of the faces touching each vertex - which the `.rcsmodel` does not state -
+///    over meshes more than a unit across, where `1/128` quantisation cannot
+///    make the triangles degenerate. The bar is 75 %; the measurement is 82 %,
+///    and the shortfall is *expected*: a hard edge is exactly where the
+///    exporter splits a vertex and authors a normal no smooth average has.
+///
+/// The tangent at `+10` is checked the same way and for the same reason - a
+/// second unit field that is **perpendicular** to this one is what says the two
+/// are not the same quantity read twice.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn the_four_bytes_after_a_position_are_the_vertex_normal() {
+    /// Below this span, `1/128` quantisation makes the face normals noise.
+    const MIN_SPAN: f32 = 1.0;
+
+    for (archive, vex_path, model_path) in PAIRS {
+        let Some((blob, model_blob)) = pair(archive, vex_path, model_path) else {
+            return;
+        };
+        let model = rcsmodel::Model::parse(&model_blob).expect("the .rcsmodel parses");
+
+        let (mut unit, mut vertices) = (0usize, 0usize);
+        let (mut agree, mut scored) = (0usize, 0usize);
+        // Split by stride: what sits at `+10` is not the same field on all
+        // three, and averaging over them would hide that.
+        let mut tangent_dots: std::collections::BTreeMap<usize, Vec<f32>> = Default::default();
+        for (_, hash, min, max) in mesh_nodes(&blob) {
+            let Some(mesh) = model.mesh(hash) else {
+                continue;
+            };
+            let Some(stride) = mesh.solve_stride(&model_blob, (min, max), TOLERANCE) else {
+                continue;
+            };
+            for submesh in &mesh.submeshes {
+                if !mesh.submesh_fits(&model_blob, submesh, stride, (min, max)) {
+                    continue;
+                }
+                let (Ok(points), Ok(indices), Ok(normals)) = (
+                    mesh.positions(&model_blob, submesh, stride),
+                    mesh.indices(&model_blob, submesh),
+                    mesh.normals(&model_blob, submesh, stride),
+                ) else {
+                    continue;
+                };
+                for n in &normals {
+                    vertices += 1;
+                    let len = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
+                    if (0.93..=1.07).contains(&len) {
+                        unit += 1;
+                    }
+                }
+                if span(&points) < MIN_SPAN {
+                    continue;
+                }
+                for (k, want) in smooth_normals(&points, &indices).iter().enumerate() {
+                    let (Some(want), Some(got)) = (want, normals.get(k).copied().and_then(unit3))
+                    else {
+                        continue;
+                    };
+                    scored += 1;
+                    if dot(got, *want) > 0.95 {
+                        agree += 1;
+                    }
+                    // The tangent, read the same way the recovery read it.
+                    let at = submesh.vertex_offset + k * stride + 10;
+                    if stride > 14 && at + 3 <= model_blob.len() {
+                        let c = |o: usize| (f32::from(model_blob[at + o]) - 128.0) / 127.0;
+                        if let Some(t) = unit3([c(0), c(1), c(2)]) {
+                            tangent_dots
+                                .entry(stride)
+                                .or_default()
+                                .push(dot(t, *want).abs());
+                        }
+                    }
+                }
+            }
+        }
+
+        let medians: std::collections::BTreeMap<usize, f32> = tangent_dots
+            .into_iter()
+            .map(|(stride, mut d)| {
+                d.sort_by(|a, b| a.partial_cmp(b).expect("no NaN"));
+                (stride, d[d.len() / 2])
+            })
+            .collect();
+        println!(
+            "{model_path}: {unit} of {vertices} normals are unit, {agree} of {scored} \
+             within 18 degrees of the smooth average; median |dot| of the +10 field with \
+             the normal, by stride: {medians:?}"
+        );
+        assert!(
+            unit * 100 >= vertices * 99,
+            "{model_path}: only {unit} of {vertices} decode to a unit vector"
+        );
+        assert!(
+            agree * 4 >= scored * 3,
+            "{model_path}: only {agree} of {scored} agree with the geometry"
+        );
+        // **Nothing about `+10` is asserted, and that is the finding.** On
+        // Assegai's hull it is perpendicular to the normal to a median `|dot|`
+        // of 0.02-0.04 over 23,000 vertices, which is a tangent. On its LOD1 and
+        // on a circuit the same bytes come out at 0.577 - which is `1/sqrt(3)`,
+        // exactly what a *constant* `(-1,-1,-1)` direction scores against any
+        // axis-aligned normal, so those records hold `00 00 00` there and the
+        // field is something else. What `+10` is in general is unrecovered, and
+        // the number is printed rather than asserted so a future reading has the
+        // measurement to start from. See `docs/formats/rcsmodel.md`.
+        let _ = &medians;
+    }
 }
 
 /// Claim 5: nothing the box-less rules decide lands outside the circuit.

@@ -113,6 +113,40 @@ const POSITION_LEN: usize = 6;
 /// the honest answer, and it is what the callers do.
 pub const STRIDES: &[usize] = &[14, 18, 22];
 
+/// Byte offset of the packed vertex normal, immediately after the position.
+///
+/// **The same on all three strides**, which is what says the widths are one
+/// layout with optional fields rather than three formats. See
+/// [`Mesh::normals`].
+pub const NORMAL_OFFSET: usize = POSITION_LEN;
+
+/// Turns the 32-bit word at [`NORMAL_OFFSET`] into a unit vector.
+///
+/// **11 bits of x, 11 of y, 10 of z**, each signed two's-complement, packed
+/// low-to-high in a big-endian `u32`. The odd split is what the recovery turned
+/// on: a planar submesh whose faces all point along `+x` carries the constant
+/// word `0x000003ff`, which is `x = 1023` and nothing else only under an
+/// 11-bit low field, and one pointing along `-y` carries `0x00200800`, which is
+/// `y = -1023` and nothing else only under an 11-bit field starting at bit 11.
+///
+/// The result is a unit vector on **99.9 %** of 23,608 vertices, and no other
+/// reading of any offset in the vertex exceeds 51 %.
+#[must_use]
+pub fn unpack_normal(word: u32) -> [f32; 3] {
+    let signed = |raw: u32, bits: u32| {
+        let mask = (1 << bits) - 1;
+        let half = 1 << (bits - 1);
+        let v = (raw & mask) as i32;
+        let v = if v >= half { v - (1 << bits) } else { v };
+        v as f32 / (half - 1) as f32
+    };
+    [
+        signed(word, 11),
+        signed(word >> 11, 11),
+        signed(word >> 22, 10),
+    ]
+}
+
 /// Everything that can go wrong reading one.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {
@@ -351,6 +385,60 @@ impl Mesh {
                     let q = f32::from(ByteOrder::Big.i16(data, at + i * 2));
                     self.bias[i] + q * self.scale[i]
                 })
+            })
+            .collect())
+    }
+
+    /// The authored vertex normals, one per vertex, in the mesh's own space.
+    ///
+    /// # How this was found, and how much of the vertex it settles
+    ///
+    /// The attribute bytes after a position were undecoded until 2026-08-17,
+    /// and the thing that decoded them is a **planar submesh**: one whose faces
+    /// all point the same way, so the encoding of that direction is whatever is
+    /// constant across its vertex records and can be read off rather than
+    /// searched for. Two of Talon's Junction's roads supplied the two axes that
+    /// pin the bit split - see [`unpack_normal`].
+    ///
+    /// Checked against geometry the file does not state: the **area-weighted
+    /// average of the faces touching each vertex**, over every mesh of Assegai
+    /// more than a unit across. 82.3 % of 23,241 vertices land within 18
+    /// degrees, where the best reading of any other offset reaches 14.6 %. The
+    /// remaining 18 % are what a hard edge looks like - the exporter splits the
+    /// vertex and authors a normal the smooth average does not have, which is
+    /// the whole reason a model stores normals instead of computing them.
+    ///
+    /// The rest of a vertex is **not** decoded here, and only one part of it is
+    /// even identified. The last four bytes read as two `f16` in a
+    /// texture-coordinate range on every stride, but **a texture coordinate has
+    /// no oracle** until `.gtf` is read, so that is located rather than
+    /// confirmed and nothing consumes it. The four bytes at `+10` are a *unit*
+    /// field perpendicular to this normal on Assegai's hull - a tangent, median
+    /// `|dot|` 0.02 to 0.04 over 23,000 vertices - and on its LOD1 and on a
+    /// circuit the same bytes read as a constant instead. What they hold in
+    /// general is unrecovered; the measurement is in
+    /// `the_four_bytes_after_a_position_are_the_vertex_normal`.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::OutOfBounds`] if the buffer runs past the file, as
+    /// [`Self::positions`].
+    pub fn normals(&self, data: &[u8], submesh: &SubMesh, stride: usize) -> Result<Vec<[f32; 3]>> {
+        let end = submesh.vertex_offset
+            + stride * submesh.vertex_count.saturating_sub(1)
+            + NORMAL_OFFSET
+            + 4;
+        if submesh.vertex_count > 0 && end > data.len() {
+            return Err(Error::OutOfBounds {
+                what: "a vertex buffer's normals",
+                end,
+                len: data.len(),
+            });
+        }
+        Ok((0..submesh.vertex_count)
+            .map(|k| {
+                let at = submesh.vertex_offset + k * stride + NORMAL_OFFSET;
+                unpack_normal(ByteOrder::Big.u32(data, at))
             })
             .collect())
     }
