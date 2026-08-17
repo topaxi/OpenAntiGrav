@@ -30,7 +30,7 @@ just view data/images/hdfury-ps3-eu-dec.iso:PS3_GAME/USRDIR/DATA00.PSARC \
 | Vertex stride | **In no field of the file.** 14, 18 or 22, recovered three ways | 88 |
 | Where the stride is declared | Unknown, and **not** in the `.rcsmaterial` - see below | - |
 | Vertex normal | **`+6`, packed 11:11:10 signed, big-endian** | 88 |
-| The rest of a vertex | Texture coordinate located, tangent partly; not decoded | - |
+| The rest of a vertex | A tangent at stride 22 and a texture coordinate, both located; not decoded | - |
 
 ## What is decoded, and what is not
 
@@ -129,7 +129,7 @@ checked against a number read from a different field.
 ```text
 +0x00  i16[3]  position, through the chunk's own bias and scale
 +0x06  u32     normal, packed 11:11:10 signed - see below
-+0x0a  ...     a unit direction on some meshes, a constant on others: unidentified
++0x0a  ...     tangent at stride 22; something else at stride 18. Not decoded
 +0x0e  ...     stride 22 only; four bytes that look like an RGBA vertex colour
 last 4 bytes   two f16, in a texture-coordinate range. Located, not confirmed
 ```
@@ -183,25 +183,31 @@ the exporter splits a vertex and authors a normal no smooth average has**, which
 is why a model stores normals instead of computing them. It is also why the
 renderer prefers these over its own.
 
-### `+0x0a` is a tangent on one mesh and something else on the others
+### `+0x0a` is a tangent at stride 22 and is not one at stride 18
 
-Recorded because the measurement is worth more than the guess. On Assegai's hull
-the four bytes at `+0x0a` are three biased `u8` that are unit on **99.9 %** of
-23,608 vertices and **perpendicular** to the normal above - median `|dot|` 0.02
-on its stride-18 meshes and 0.04 on its stride-22 ones. That is a tangent.
+**And the `83 XX` descriptor byte does not decide which**, which was the obvious
+hypothesis and is measured false. Grouping every submesh of the three models by
+`(stride, XX)` and asking what the four bytes at `+0x0a` are:
 
-On `ship_lod1` and on Talon's Junction the same bytes give a median `|dot|` of
-**0.577**, which is `1/sqrt(3)` - exactly what a constant `(-1,-1,-1)` scores
-against any axis-aligned normal, so those records hold `00 00 00` there. What
-the field is in general is unrecovered, and no code reads it.
+| stride | `XX` groups | vertices | unit vectors | median `\|dot\|` with the normal |
+| ---: | --- | ---: | --- | --- |
+| 22 | `08`-`0e`, all 7 | 78,440 | 90.4 - 99.9 % | **0.007 - 0.008** |
+| 18 | `07`-`11`, all 11 | 484,328 | 7.0 - 59.2 % | **0.518 - 0.574** |
 
-**The most promising lead on it is the descriptor byte.** A submesh's
-vertex-format word is `83 XX 10 10 10 10 10 00` with `XX` running `07` to `0d`,
-and that byte is already known *not* to determine the stride. Whether it
-determines the **field set** - which optional attributes a vertex carries, and
-therefore why `+0x0a` is a tangent on one mesh and zero on another - is a
-different question and has not been tested. It would also settle the layout
-table above, which today rests on three hex dumps plus the widths adding up.
+At stride 22 the field is a unit vector perpendicular to the vertex's own
+normal, in every group without exception: a **tangent**, stored as three biased
+`u8` with a fourth byte that is constant per submesh and reads as a handedness
+sign. At stride 18 it is a unit vector on a minority of vertices and its median
+`|dot|` sits at `1/sqrt(3)` = 0.577, which is what a constant `(-1,-1,-1)`
+scores against any axis-aligned normal - so a large share of those records hold
+`00 00 00` there and the field is something else. **What it is on stride 18 is
+unrecovered**, and no code reads it.
+
+Two things this measurement is worth beyond the conclusion. The split is by
+*width* and not by descriptor, so `83 XX` names neither the stride nor the field
+set and what it does select is still open. And it corrects this page: an earlier
+reading put Assegai's stride-18 meshes at a median `|dot|` of 0.02, on **62**
+vertices of one mesh; across 484,328 they are 0.55.
 
 ## The vertex stride is not in the file
 
@@ -376,8 +382,10 @@ Named explicitly, with what each would take.
    bytes read as two `f16` in a plausible range and there is no way to check
    that until [`.gtf`](hd-status.md#what-is-genuinely-new) is read. Nothing
    consumes it, and the code does not call it a UV.
-3. **What `+0x0a` is, and whether `83 XX` names the field set.** The two are
-   probably one question; see above.
+3. **What `+0x0a` holds on stride 18**, and what `83 XX` selects at all. The
+   second used to be the lead on the first and is now ruled out: the field
+   follows the width, not the byte. `XX` runs `07` to `11` and is the only part
+   of the descriptor that varies and is unaccounted for.
 4. **Why a vertex buffer sometimes ends 16, 32 or 96 bytes short** of
    `vertex_count * stride`. 8 of 46 measured pairs, always negative, always a
    multiple of 16. Harmless to the layout rule, unexplained all the same.

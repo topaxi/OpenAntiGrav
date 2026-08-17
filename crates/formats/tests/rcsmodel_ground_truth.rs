@@ -19,7 +19,7 @@
 //! against, and the one that made `docs/formats/psarc.md`'s per-entry digest
 //! check worth writing.
 //!
-//! Six claims, in order of how much they would cost to get wrong:
+//! Seven claims, in order of how much they would cost to get wrong:
 //!
 //! 1. **Every `Mesh` node's hash resolves to a chunk.** The link is the whole
 //!    reason the two files can be read together at all.
@@ -39,6 +39,9 @@
 //! 6. **The four bytes after a position are the vertex normal.** Unit on
 //!    99.5 % of every model's vertices, and agreeing with an oracle the file
 //!    does not state - the area-weighted average of the faces at each vertex.
+//! 7. **What a vertex carries follows the stride**, not the `83 XX` descriptor
+//!    byte. A negative result, and the only one here: the byte was the obvious
+//!    candidate for naming the field set and it names nothing.
 
 use std::path::{Path, PathBuf};
 
@@ -508,6 +511,117 @@ fn the_four_bytes_after_a_position_are_the_vertex_normal() {
         // measurement to start from. See `docs/formats/rcsmodel.md`.
         let _ = &medians;
     }
+}
+
+/// Claim 7: what a vertex carries follows the **stride**, and the descriptor
+/// byte does not name it.
+///
+/// The four bytes at `+0x0a` are the worked case, because they are two
+/// different things on two widths:
+///
+/// - **On stride 22 they are a tangent.** Unit on 90 % or more of every group
+///   and perpendicular to the vertex's own normal at a median `|dot|` under
+///   0.01, over 78,456 vertices.
+/// - **On stride 18 they are not.** Unit on 7 to 59 %, and a median `|dot|` of
+///   0.52 to 0.57 - `1/sqrt(3)` is 0.577, which is what a constant `(-1,-1,-1)`
+///   scores against any axis-aligned normal, so a large share of those records
+///   are `00 00 00` there. What the field *is* on stride 18 is unrecovered.
+///
+/// **The point of grouping by `83 XX` is the negative result.** That byte runs
+/// `07` to `0d` and was the obvious candidate for naming the field set, since
+/// it is the only part of the descriptor that varies and is already known not
+/// to determine the stride. It does not: every `XX` group at stride 22 behaves
+/// like a tangent and every `XX` group at stride 18 does not, so the split is
+/// the width's and the byte explains nothing. Naming what it *does* select is
+/// still open - `docs/formats/rcsmodel.md`.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn the_field_after_the_normal_follows_the_stride_and_not_the_descriptor_byte() {
+    /// Below this many vertices a group is noise rather than a measurement.
+    const ENOUGH: usize = 500;
+
+    // (stride, descriptor byte) -> (unit count, total, |dot| with the normal)
+    let mut groups: std::collections::BTreeMap<(usize, u8), (usize, usize, Vec<f32>)> =
+        Default::default();
+
+    for (archive, vex_path, model_path) in PAIRS {
+        let Some((blob, model_blob)) = pair(archive, vex_path, model_path) else {
+            return;
+        };
+        let model = rcsmodel::Model::parse(&model_blob).expect("the .rcsmodel parses");
+        let boxes: std::collections::BTreeMap<u32, ([f32; 3], [f32; 3])> = mesh_nodes(&blob)
+            .into_iter()
+            .map(|(_, hash, min, max)| (hash, (min, max)))
+            .collect();
+
+        for mesh in &model.meshes {
+            let stride = match boxes.get(&mesh.hash) {
+                Some(&bounds) => mesh.solve_stride(&model_blob, bounds, TOLERANCE),
+                None => mesh.solve_stride_without_a_box(&model_blob),
+            };
+            // Stride 14 has no field here at all: its 8 attribute bytes are the
+            // normal and the last four, with nothing between them.
+            let Some(stride) = stride.filter(|&s| s > 14) else {
+                continue;
+            };
+            for submesh in &mesh.submeshes {
+                let Ok(normals) = mesh.normals(&model_blob, submesh, stride) else {
+                    continue;
+                };
+                let entry = groups.entry((stride, submesh.format[1])).or_default();
+                for (k, n) in normals.iter().enumerate() {
+                    let at = submesh.vertex_offset + k * stride + 10;
+                    let Some(raw) = model_blob.get(at..at + 3) else {
+                        continue;
+                    };
+                    entry.1 += 1;
+                    let c = |o: usize| (f32::from(raw[o]) - 128.0) / 127.0;
+                    let v = [c(0), c(1), c(2)];
+                    let len = dot(v, v).sqrt();
+                    if !(0.93..=1.07).contains(&len) {
+                        continue;
+                    }
+                    entry.0 += 1;
+                    if let (Some(t), Some(n)) = (unit3(v), unit3(*n)) {
+                        entry.2.push(dot(t, n).abs());
+                    }
+                }
+            }
+        }
+    }
+
+    let mut checked = 0;
+    for ((stride, xx), (unit, total, mut dots)) in groups {
+        if total < ENOUGH {
+            continue;
+        }
+        dots.sort_by(|a, b| a.partial_cmp(b).expect("no NaN"));
+        let median = dots.get(dots.len() / 2).copied().unwrap_or(f32::NAN);
+        let unit_pct = 100.0 * unit as f32 / total as f32;
+        println!(
+            "stride {stride}, descriptor 83 {xx:02x}: {total:6} vertices, \
+             {unit_pct:5.1} % unit, median |dot| with the normal {median:.3}"
+        );
+        checked += 1;
+        if stride == 22 {
+            assert!(
+                unit_pct >= 90.0 && median < 0.1,
+                "stride 22 group 83 {xx:02x} does not look like a tangent \
+                 ({unit_pct} % unit, median |dot| {median})"
+            );
+        } else {
+            assert!(
+                median > 0.4,
+                "stride 18 group 83 {xx:02x} looks like a tangent after all \
+                 (median |dot| {median}), which would make the descriptor byte \
+                 the thing that selects the field"
+            );
+        }
+    }
+    assert!(
+        checked >= 8,
+        "only {checked} groups were big enough to measure"
+    );
 }
 
 /// Claim 5: nothing the box-less rules decide lands outside the circuit.

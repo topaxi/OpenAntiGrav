@@ -205,6 +205,9 @@ fn packed(counts: &[usize], stride: usize) -> Mesh {
         .iter()
         .map(|&vertex_count| {
             let sub = SubMesh {
+                // Not read by anything the layout rule does; a real one opens
+                // `83 XX 10 10 10 10 10 00`.
+                format: [0x83, 0x08, 0x10, 0x10, 0x10, 0x10, 0x10, 0x00],
                 vertex_count,
                 vertex_offset: at,
                 index_count: 3,

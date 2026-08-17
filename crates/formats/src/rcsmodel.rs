@@ -9,13 +9,21 @@
 //!
 //! # What is decoded here, and what is not
 //!
-//! **Positions and triangle indices, and nothing else.** That is enough to draw
-//! the shape of a thing, which is what this exists for. Each vertex is followed
-//! by 8 to 16 further bytes - normals, texture coordinates, colours, tangents -
-//! and none of them is read: their layout is not recovered, and a normal read
-//! from the wrong offset lights a model wrongly rather than visibly failing.
-//! The `.gtf` textures those coordinates would address are a separate undecoded
-//! container anyway, so nothing downstream could use them yet.
+//! **Positions, triangle indices and vertex normals.** The normals are a packed
+//! 11:11:10 signed triple at `+6` of every vertex, on all three strides - see
+//! [`unpack_normal`] and [`Mesh::normals`].
+//!
+//! The rest of a vertex is 4 to 12 further bytes and is **not** decoded. What is
+//! known about them:
+//!
+//! - The **last four** read as two `f16` in a texture-coordinate range on every
+//!   stride. That is where a UV would be, and there is no way to check it until
+//!   the `.gtf` textures are read - so nothing consumes it and the code does not
+//!   call it one.
+//! - The four at **`+0x0a`** are a *tangent* on stride 22 and something else on
+//!   stride 18. That split follows the **stride**, not the `83 XX` descriptor
+//!   byte, which was the obvious hypothesis and is measured false; see
+//!   [`SubMesh::format`].
 //!
 //! # The `.vex` is not optional
 //!
@@ -26,10 +34,11 @@
 //!   `+0x30` is the chunk's own first word. Without the `.vex` you have
 //!   geometry with no idea which node - and therefore which world transform -
 //!   it belongs to.
-//! - **The vertex stride is not in the file.** See [`solve_stride`]: it is
-//!   recovered from the authored bounding box the `.vex` node carries, which is
-//!   the same box `docs/formats/hd-status.md` measured `min <= max` on across
-//!   1,638 of 1,638 nodes.
+//! - **The vertex stride is not in the file.** See [`Mesh::solve_stride`]: the
+//!   tightest oracle for it is the authored bounding box the `.vex` node
+//!   carries, the same box `docs/formats/hd-status.md` measured `min <= max` on
+//!   across 1,638 of 1,638 nodes. A chunk no node references has no box, and
+//!   [`Mesh::solve_stride_without_a_box`] is what those go through.
 //!
 //! So the entry point is [`Model::parse`] for the container and
 //! [`Mesh::solve_stride`] per node, with the box supplied by the caller.
@@ -66,7 +75,7 @@
 //!
 //! ```text
 //! +0x00  u8[8]   vertex-format descriptor, `83 XX 10 10 10 10 10 00`.
-//!                **Not the stride** - see `solve_stride`.
+//!                **Neither the stride nor the field set** - see `SubMesh::format`.
 //! +0x08  u16     vertex count
 //! +0x0a  u16     index count, divisible by 3 on 1,274 of 1,274 submeshes
 //! +0x10  u32     index buffer offset: `count` big-endian u16s
@@ -236,6 +245,14 @@ pub struct Mesh {
 /// One draw call's worth of geometry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SubMesh {
+    /// The eight-byte word a descriptor opens with, `83 XX 10 10 10 10 10 00`.
+    ///
+    /// **It is not the stride and it is not the field set either**, which are
+    /// the two things it looks like it ought to be and the two that have been
+    /// measured. `XX` runs `07` to `0d`; `docs/formats/rcsmodel.md` has the
+    /// cross-tabulations. Kept because it is the only part of the descriptor
+    /// that varies and is not accounted for, so the next reading starts here.
+    pub format: [u8; 8],
     /// How many vertices its buffer holds.
     pub vertex_count: usize,
     /// Byte offset of the vertex buffer, from the start of the file.
@@ -338,6 +355,7 @@ impl Mesh {
             .map(|i| {
                 let b = at + SUBMESH_BASE + i * SUBMESH_LEN;
                 SubMesh {
+                    format: std::array::from_fn(|k| data[b + k]),
                     vertex_count: ByteOrder::Big.u16(data, b + 0x08) as usize,
                     vertex_offset: ByteOrder::Big.u32(data, b + 0x18) as usize,
                     index_count: ByteOrder::Big.u16(data, b + 0x0a) as usize,
@@ -413,11 +431,11 @@ impl Mesh {
     /// texture-coordinate range on every stride, but **a texture coordinate has
     /// no oracle** until `.gtf` is read, so that is located rather than
     /// confirmed and nothing consumes it. The four bytes at `+10` are a *unit*
-    /// field perpendicular to this normal on Assegai's hull - a tangent, median
-    /// `|dot|` 0.02 to 0.04 over 23,000 vertices - and on its LOD1 and on a
-    /// circuit the same bytes read as a constant instead. What they hold in
+    /// field perpendicular to this normal on **every** stride-22 submesh - a
+    /// tangent, median `|dot|` 0.007 to 0.008 over 78,440 vertices - and on
+    /// every stride-18 one they are not, at 0.52 to 0.57. What they hold in
     /// general is unrecovered; the measurement is in
-    /// `the_four_bytes_after_a_position_are_the_vertex_normal`.
+    /// `the_field_after_the_normal_follows_the_stride_and_not_the_descriptor_byte`.
     ///
     /// # Errors
     ///
