@@ -165,13 +165,41 @@ fn every_declared_language_plugin_resolves() {
         );
     }
 
+    // **Fifteen of the sixteen, and the missing one is named.** An inequality
+    // here would pass just as well at twelve, which is the "silent truncation
+    // reads as covered" shape this project keeps writing rules about - so this
+    // is the number that was measured, and a regression fails it.
     let languages = boot::load_languages(&mut archives, plugins, &mut report);
+    assert_eq!(
+        languages.len(),
+        15,
+        "fifteen of the sixteen parse; Portuguese is the one that does not"
+    );
     assert!(
-        languages.len() >= 15,
-        "at least fifteen of the sixteen parse into a language: {}",
-        languages.len()
+        !languages
+            .iter()
+            .any(|language| language.name == "Portuguese"),
+        "if Portuguese started parsing, this test and hd-frontend.md are both stale"
     );
     assert!(languages.iter().any(|language| language.name == "English"));
+
+    // **Three native names are wrong on the disc itself**, which is worth an
+    // assertion because the obvious reading of `Japanese (Svenska)` in a boot
+    // report is that this build mixed two plugins up. It did not:
+    // `japanese/definition.xml` literally contains
+    // `<Entry ID="Japanese" String="Svenska">`, and Korean and
+    // TraditionalChinese carry the same copy-paste. Pinned so that a future
+    // encoding fix which *changes* these is noticed rather than welcomed.
+    for wrong in ["Japanese", "Korean", "TraditionalChinese"] {
+        let language = languages
+            .iter()
+            .find(|language| language.name == wrong)
+            .unwrap_or_else(|| panic!("{wrong} parses"));
+        assert_eq!(
+            language.native_name, "Svenska",
+            "{wrong}'s native name is Swedish on the disc; see hd-frontend.md"
+        );
+    }
 }
 
 /// The chain reaches `Studio Logo`, and the six screens this build cannot drive

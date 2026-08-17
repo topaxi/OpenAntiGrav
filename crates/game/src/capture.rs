@@ -571,15 +571,25 @@ pub fn run(
                 //
                 // **Asked as "is this the chain's second movie screen?"**, which
                 // is the same question `boot::assemble` answers when it hands
-                // each step its plan, and so cannot disagree with it. It used to
-                // ask whether the state was the one the picker confirms into -
-                // true of Pure's second movie by arithmetic rather than by
-                // meaning, and **wrong for Wipeout HD**, whose chain has exactly
-                // one movie and whose `Studio Logo` *is* the after-language
-                // screen. That mismatch handed this path `after_language_movie`,
-                // which on HD is `None`, so the renderer was built with no video
-                // pipeline and every capture of the logo reel came out black
-                // with the frame counter drawn over it.
+                // each step its plan, and so cannot disagree with it.
+                //
+                // It used to ask whether the state was the one the picker
+                // confirms into, and that was **never the same question** -
+                // `language_confirm_target` is the step *after* the picker,
+                // which on Pure is `Developer Publisher Screen`, the screen that
+                // plays movie **zero**. So the old form selected the second
+                // movie for the first movie's screen. Verified against the disc
+                // rather than reasoned about: a capture of Pure's dev/pub screen
+                // is byte-for-byte identical either way, both cuts being 480x272
+                // and that screen's parent fills covering the frame at the tick
+                // this stops on - which is exactly why it survived.
+                //
+                // On Wipeout HD it does not survive. Its chain has one movie and
+                // its `Studio Logo` *is* the after-language screen, so the old
+                // form handed this path `after_language_movie`, which is `None`
+                // there: the renderer was built with no video pipeline and every
+                // capture of the logo reel came out black with the frame counter
+                // drawn over it.
                 Some(crate::frontend::Video::Intro)
                     if frontend
                         .machine()

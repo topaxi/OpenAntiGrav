@@ -51,12 +51,39 @@ sequence says it was shortened. See
 `crates/game/tests/hd_boot_ground_truth.rs`, which pins all of it against the
 disc.
 
-Two things that surfaced only once something walked this data, both recorded
-where they belong rather than here: HD ships **no Latin `.fnt` this build can
-read**, so its whole front end draws in the built-in 5x7 glyphs (its language
-plugins name `helv.fnt`, which is present and fails `oag_formats::fnt`'s magic
-check - unread, and probably the byte-order story again); and its `<Image>`
-widgets are `.gtf`, which is undecoded, so they draw nothing and say so.
+Two things that surfaced only once something walked this data: HD ships **no
+Latin `.fnt` this build can read**, so its whole front end draws in the built-in
+5x7 glyphs (its language plugins name `helv.fnt`, which is present and fails
+`oag_formats::fnt`'s magic check - unread, and probably the byte-order story
+again); and its `<Image>` widgets are `.gtf`, which is undecoded, so they draw
+nothing and say so.
+
+### The sixteen language plugins, and the three that lie about themselves
+
+`Data\Plugins\Languages\<name>`, sixteen of them, each holding the
+`Definition.xml` and `entries.xml` pair a numbered PSP plugin holds - which is
+what let one mechanism serve both once the plugin list became
+[`oag_title::FrontEnd::language_plugins`]. All sixteen resolve as entries.
+**Fifteen parse into a language**; German's table alone is 1,602 strings.
+
+Two findings, and the first is the disc's own bug rather than a reading error:
+
+- **Japanese, Korean and TraditionalChinese all report their native name as
+  `Svenska`.** Not a mix-up in this build: `japanese/definition.xml` contains
+  `<Entry ID="Japanese" String="Svenska">` literally, and the other two carry
+  the same copy-paste from Swedish. A boot report reading `Japanese (Svenska)`
+  is quoting the disc. Pinned in
+  `crates/game/tests/hd_boot_ground_truth.rs` so that a future change which
+  *fixes* these is noticed rather than assumed correct.
+- **Portuguese is the one plugin that does not parse**, and Russian's native
+  name comes through as `P??????`. Both look like an encoding fault rather than
+  a schema one: every file declares `encoding="utf-8"` and
+  `portuguese/definition.xml` writes `Portugu<0xea>s`, which is Latin-1. Not
+  chased - it costs one language in a picker this build's own menus do not
+  depend on - and recorded here so the next reader starts from the symptom
+  rather than from the plugin list.
+
+[`oag_title::FrontEnd::language_plugins`]: https://github.com/topaxi/OpenAntiGrav/blob/main/crates/title/src/lib.rs
 
 ## The headline
 
