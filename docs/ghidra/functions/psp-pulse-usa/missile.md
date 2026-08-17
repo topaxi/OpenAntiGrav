@@ -353,21 +353,91 @@ one twice running. Note this is a **different base** from the `craft+0x1c0` flag
 word [engine.md](engine.md) documents with eleven bits in use - a whole-word store
 of `1` would clobber those - and the two must not be conflated.
 
-## By-catch: the pickup grant
+## By-catch: the pickup grant, and it is `<Pickupodds>`
 
 `WeaponPickup_Grant` (`0x08861d20`) is called from `Weapons_DispatchFire` on the
 branch guarded by `craft+0x1c4`, right after a `WEAPONPICKUP` sound. It is the
 call site [pickups.md](../../../gameplay/pickups.md) has recorded across three
 passes as not existing.
 
-Recorded here because it was found on the way to the Missile, and **not chased
-to a conclusion**: the draw is `rand() % total` over a regular table of thirteen
-weights at stride `0x40` from `+0x178` to `+0x478` with the total at `+0x4b8`,
-plus a column selector `DAT_08b31040 * 4`; the AI path interpolates two columns by
-`(place - 1) / ship_count` and refuses to repeat the last weapon. Confidence **85**
-on the call site and its shape, **60** on the weight table being `<Pickupodds>` -
-that is inference from stride and plausibility, and the cheap way to settle it is
-to decompile `WeaponStats_Parse` (`0x0880db7c`) and compare its store offsets.
+**It walks `<Pickupodds>`, and that is measured rather than inferred.**
+Confidence **92**. Two independent things say so:
+
+1. `WeaponStats_ParsePickupOdds` (`0x0880e93c`) - the `<Pickupodds>` sub-parser,
+   reached from `WeaponStats_Parse` after it matches the `Pickupodds` element and
+   stores the class index to `+0x728` - writes every weight to
+   `base + class*4 + weapon_base + attribute_offset`, and its thirteen
+   `weapon_base` values are **exactly** the offsets the grant walks.
+2. `WeaponStats_Parse`'s own tail sums those same thirteen offsets into `+0x4b8`,
+   which is **the total the grant divides by**, and does it for four columns and
+   four classes.
+
+### The layout
+
+Each weapon owns `0x40` bytes: four attributes `0x10` apart, each a four-float
+array indexed by speed class. So a weight is
+`stats + weapon_base + attribute*0x10 + class*4`.
+
+| Attribute | Offset | | Weapon | Base | | Weapon | Base |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `ai` | `+0x00` | | Bomb | `0x178` | | Quake | `0x2b8` |
+| `human` | `+0x10` | | Rocket | `0x1b8` | | Turbo | `0x2f8` |
+| `front` | `+0x20` | | Cannon | `0x1f8` | | Shield | `0x338` |
+| `back` | `+0x30` | | Mine | `0x238` | | Plasma | `0x378` |
+| | | | Missile | `0x278` | | Autopilot | `0x3b8` |
+| | | | LeachBeam | `0x3f8` | | Repulser | `0x438` |
+| | | | Shuriken | `0x478` | | *totals* | `0x4b8` |
+
+The four precomputed totals sit at `0x4b8`, `0x4c8`, `0x4d8`, `0x4e8` - one per
+attribute column, each again a four-float array by class. `DAT_08b31040` is the
+live speed class throughout this subsystem, the same global `Missile_SpeedNow`
+indexes its four class speeds with.
+
+### The draw, and which branch is whose
+
+```c
+roll = rand() % total;
+// then a cumulative walk, first weight over the roll wins
+```
+
+`craft+0x23c` selects between two paths, and **the naming matters because the
+obvious reading is backwards**. One path reads the `ai` column flat; the other
+reads `human` and adds a race-position blend:
+
+```c
+t = (place - 1) / ship_count;
+weight = human + back * t + front * (1 - t);
+```
+
+So the path that consults `front`/`back` is the **human's**, not the AI's - the
+column it starts from is `human`. `t` is `0` for the leader, who therefore gets
+`front` added, and approaches `1` for the tail, who gets `back`. The shipped
+Venom table makes the intent plain: Shield authors `front="2" back="0"` and Turbo
+`back="2" front="0"`, so a player in front is likelier to draw a Shield and a
+player at the back likelier to draw a Turbo. **The pickup draw rubber-bands, and
+it rubber-bands the player rather than the field.**
+
+Confidence 92 on the arithmetic, 85 on `craft+0x23c != 0` meaning "human" - that
+rests on the column names rather than on a read of the writer.
+
+Both paths also refuse to hand out the same weapon twice running, comparing
+against the last one at `craft+0x230` (which is `weapon_record+0x1c0`, the
+second copy of the held id described above) and looping until they draw
+something else.
+
+### What this retires
+
+Three rows of [pickups.md](../../../gameplay/pickups.md)'s recovered-versus-ours
+table were **ours** on the grounds that no grant existed to read:
+
+- that a pad crossing grants anything at all;
+- the weighted draw;
+- the inventory being one slot.
+
+All three are recovered now. **The implementation in `oag_gameplay::pickup` was
+not changed in the same pass** - matching the original means adding the
+front/back blend, the no-repeat rule and the `ai`-versus-`human` split, and that
+moves the world hash for a reason that has nothing to do with the Missile.
 
 ## What is still ours
 

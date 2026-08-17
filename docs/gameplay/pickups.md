@@ -28,9 +28,9 @@ This subsystem is unusually mixed, so the split comes before anything else.
 | `Ship_SetShield`'s clamp, which absorb pays through | **recovered** | 84 |
 | Weapons off hides the pads and empties the trigger list | **recovered** | 88 |
 | The free Turbo once a lap in a time trial and a speed lap | **recovered**, from two shipped records | 85 |
-| **That a crossing grants anything at all** | **ours** | - |
-| **The weighted draw** | **ours** | - |
-| **The inventory's shape** (one slot, `Option<Weapon>`) | **ours** | - |
+| **That a crossing grants anything at all** | **recovered 2026-08-17** - `WeaponPickup_Grant` (`0x08861d20`), called on the pad-crossing flag | 85 |
+| **The weighted draw**: `rand() % total` then a cumulative walk over `<Pickupodds>` | **recovered 2026-08-17** | 92 |
+| **The inventory's shape** - one slot holding a weapon id, `-1` for empty (`craft+0x1bc`) | **recovered 2026-08-17** | 88 |
 | **Granting only into an empty slot** | **ours** | - |
 | **When in the lap the free Turbo arrives** | **ours** | - |
 | `<Rocket>`: `damage`, `blastforce`, `blastradius`, `launchSpeed`, a speed per class | **recovered** | 92 |
@@ -70,7 +70,7 @@ longer true**. What is *not* established is that the table it walks is
 The cheap way to settle it is to decompile `WeaponStats_Parse` (`0x0880db7c`) and
 compare its store offsets against `0x178`/`0x1b8`/`0x1f8`/... Until somebody
 does, these rows stay as they are rather than being upgraded on a guess. Details
-on [missile.md](../ghidra/functions/psp-pulse-usa/missile.md#by-catch-the-pickup-grant).
+on [missile.md](../ghidra/functions/psp-pulse-usa/missile.md#by-catch-the-pickup-grant-and-it-is-pickupodds).
 
 **The PRNG bounds what can ever be checked.** The original's generator is an
 open question on the [roadmap](../overview/roadmap.md), so the *sequence* of
