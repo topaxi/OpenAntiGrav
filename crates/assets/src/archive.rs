@@ -1,31 +1,14 @@
 //! One WAD archive, on the filesystem or inside a disc image.
 
-use std::path::PathBuf;
-
-use oag_disc::DiscImage;
 use oag_formats::wad::{self, Compression, Directory};
+
+use crate::blob_source::BlobSource;
 
 use crate::{Error, Result};
 
-/// Where an archive's bytes come from.
-///
-/// Both variants read lazily. The directory is a few kilobytes; the blobs are
-/// not, and on a CHD every read costs decompression, so slurping the archive
-/// would be several minutes wasted on a 315 MiB `Data.wad`.
-enum Source {
-    File {
-        file: std::fs::File,
-        len: u64,
-    },
-    Disc {
-        disc: Box<DiscImage>,
-        entry: oag_disc::Entry,
-    },
-}
-
 /// A WAD archive with its directory parsed.
 pub struct Archive {
-    source: Source,
+    source: BlobSource,
     label: String,
     directory: Directory,
 }
@@ -45,7 +28,7 @@ impl Archive {
     /// Splitting on the last colon rather than the first keeps Windows drive
     /// letters working.
     pub fn open(spec: &str) -> Result<Self> {
-        let source = Self::open_source(spec)?;
+        let source = BlobSource::open(spec)?;
         Self::from_source(source, spec.to_string())
     }
 
@@ -64,12 +47,10 @@ impl Archive {
     ///
     /// The file not opening, or its directory not parsing.
     pub fn open_file(path: &std::path::Path) -> Result<Self> {
-        let file = std::fs::File::open(path)?;
-        let len = file.metadata()?.len();
-        Self::from_source(Source::File { file, len }, path.display().to_string())
+        Self::from_source(BlobSource::open_file(path)?, path.display().to_string())
     }
 
-    fn from_source(mut source: Source, label: String) -> Result<Self> {
+    pub(crate) fn from_source(mut source: BlobSource, label: String) -> Result<Self> {
         let header = source.read(0, wad::HEADER_LEN as u64)?;
         let count = Directory::peek_entry_count(&header).map_err(|source| Error::BadDirectory {
             archive: label.clone(),
@@ -88,35 +69,6 @@ impl Archive {
             label,
             directory,
         })
-    }
-
-    fn open_source(spec: &str) -> Result<Source> {
-        if let Some((image, inner)) = split_disc_spec(spec) {
-            let mut disc = DiscImage::open(image)?;
-            let entry = disc
-                .entries()?
-                .iter()
-                .find(|e| !e.is_directory && e.path.eq_ignore_ascii_case(inner))
-                .cloned()
-                .ok_or_else(|| Error::NotOnDisc {
-                    image: image.to_string(),
-                    path: inner.to_string(),
-                })?;
-            return Ok(Source::Disc {
-                disc: Box::new(disc),
-                entry,
-            });
-        }
-
-        let path = PathBuf::from(spec);
-        if path.extension().is_none() {
-            // A bare word is far more likely to be a mistyped disc spec than a
-            // real file, and the error is much more useful this way.
-            return Err(Error::BadSpec(spec.to_string()));
-        }
-        let file = std::fs::File::open(&path)?;
-        let len = file.metadata()?.len();
-        Ok(Source::File { file, len })
     }
 
     /// How this archive was named, for error messages.
@@ -346,29 +298,6 @@ impl Archive {
     }
 }
 
-impl Source {
-    fn len(&self) -> u64 {
-        match self {
-            Self::File { len, .. } => *len,
-            Self::Disc { entry, .. } => entry.size,
-        }
-    }
-
-    fn read(&mut self, offset: u64, len: u64) -> Result<Vec<u8>> {
-        let len = len.min(self.len().saturating_sub(offset));
-        match self {
-            Self::File { file, .. } => {
-                use std::io::{Read, Seek, SeekFrom};
-                file.seek(SeekFrom::Start(offset))?;
-                let mut buf = vec![0u8; len as usize];
-                file.read_exact(&mut buf)?;
-                Ok(buf)
-            }
-            Self::Disc { disc, entry } => Ok(disc.read_entry_range(entry, offset, len)?),
-        }
-    }
-}
-
 /// Splits `<image>:<path>`, or returns `None` for a plain path.
 #[must_use]
 pub fn split_disc_spec(spec: &str) -> Option<(&str, &str)> {
@@ -382,6 +311,8 @@ pub fn split_disc_spec(spec: &str) -> Option<(&str, &str)> {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
     use super::*;
 
     #[test]

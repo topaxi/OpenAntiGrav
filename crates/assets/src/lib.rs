@@ -28,12 +28,16 @@
 //! the caller's problem, which is what keeps this testable without a GPU.
 
 pub mod archive;
+mod blob_source;
+pub mod container;
 pub mod dlc;
+pub mod psarc;
 pub mod source;
 #[cfg(test)]
 mod testing;
 
 pub use archive::Archive;
+pub use container::Container;
 pub use source::{Archives, Layout, Platform, read_loose_file};
 
 /// Something that went wrong reaching an asset.
@@ -156,6 +160,31 @@ pub enum Error {
         archive: String,
         /// What the WAD parser said.
         source: oag_formats::wad::Error,
+    },
+
+    /// A PSARC archive's own directory did not parse.
+    ///
+    /// Also what a `.psarc` inside an *encrypted* PS3 image produces: the
+    /// header read finds noise and the magic check says so. See
+    /// `docs/formats/ps3-disc.md`.
+    #[error("{archive}: {source}")]
+    BadPsarcDirectory {
+        /// Which archive.
+        archive: String,
+        /// What the PSARC parser said.
+        source: oag_formats::psarc::Error,
+    },
+
+    /// A PSARC archive has no entry with this path.
+    ///
+    /// Unlike [`Error::NoSuchEntry`], the archive knows every path it holds, so
+    /// this really does mean the path is absent rather than unmined.
+    #[error("{archive} has no entry at {path}")]
+    NoSuchPath {
+        /// Which archive.
+        archive: String,
+        /// The path asked for.
+        path: String,
     },
 
     /// A blob is stored with a compression this build cannot undo.

@@ -1,7 +1,7 @@
 //! Loads a `.vex` model out of an archive and flattens it for the GPU.
 
 use anyhow::{Context, Result, bail};
-use oag_assets::Archive;
+use oag_assets::Container;
 use oag_core::math::Mat4;
 use oag_formats::{ps2_texture, vex, wad};
 
@@ -414,12 +414,12 @@ pub use flap::Flap;
 
 /// Reads one named blob out of an archive inside a disc image.
 ///
-/// `spec` is `<image>:<path-on-disc>`, matching `oag-wad`.
+/// `spec` is `<image>:<path-on-disc>`, matching `oag-wad`. Either container
+/// opens - a WAD wants the game's own `Data\...` spelling, a PS3 `.psarc` its
+/// own stored path - and which it is comes off the archive's magic rather than
+/// its extension. See [`oag_assets::Container`], whose errors name the archive.
 pub fn read_blob(spec: &str, name: &str) -> Result<Vec<u8>> {
-    let mut archive = Archive::open(spec)?;
-    archive
-        .read_name(name)
-        .with_context(|| format!("reading {name} from {}", archive.label()))
+    Ok(Container::open(spec)?.read_entry(name)?)
 }
 
 /// Reads one `.vex` entry out of an archive inside a disc image.
