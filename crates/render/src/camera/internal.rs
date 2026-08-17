@@ -84,7 +84,12 @@ pub struct InternalParams {
     /// Kept on the type because the document has it and because a later pass
     /// that identifies that quantity should find the value already threaded
     /// here, not have to re-thread it.
-    pub headtilt: f32,
+    ///
+    /// `None` where the document omits the attribute, which Wipeout HD's team
+    /// files do. Carried as an absence rather than defaulted to zero at this
+    /// boundary: nothing applies it, so a zero would be indistinguishable from
+    /// an authored zero for no gain.
+    pub headtilt: Option<f32>,
     /// Eye offset along the ship's up axis.
     pub height: f32,
     /// Eye offset along the ship's forward axis, positive toward the nose.
@@ -138,7 +143,7 @@ mod tests {
     fn params() -> InternalParams {
         InternalParams {
             fov: 65.0,
-            headtilt: 7.0,
+            headtilt: Some(7.0),
             height: 2.0,
             length: 3.0,
             pitch: 0.0,
@@ -223,7 +228,7 @@ mod tests {
         let target = target();
         let flat = params();
         let tilted = InternalParams {
-            headtilt: 45.0,
+            headtilt: Some(45.0),
             ..flat
         };
         assert_eq!(view(target, &tilted), view(target, &flat));

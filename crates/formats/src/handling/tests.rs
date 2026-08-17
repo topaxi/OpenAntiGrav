@@ -89,7 +89,7 @@ fn parses_a_whole_document() {
     let stats = parse(&all_four()).expect("well-formed fixture");
     assert_eq!(stats.team, "Testers");
     assert_eq!(stats.internal_camera.fov, 1.0);
-    assert_eq!(stats.backward_camera.headtilt, 7.0);
+    assert_eq!(stats.backward_camera.headtilt, Some(7.0));
     assert_eq!(stats.bonnet_camera.pitch, 14.0);
     assert_eq!(stats.external_camera_far.spring_vert, 21.0);
     assert_eq!(stats.external_camera_close.lookat_height, 23.0);
@@ -135,14 +135,16 @@ fn a_missing_attribute_is_an_error_not_a_default() {
     );
 
     for span in spans {
-        // The three attributes Pulse *added*. Their absence is a fact about
-        // an earlier schema, not a defect, so they are exempt here and
-        // pinned separately by
-        // `the_three_pulse_era_attributes_are_absent_rather_than_missing`.
+        // Attributes whose absence is a fact about a *generation* of the
+        // schema rather than a defect in a file, so they are exempt here and
+        // pinned separately: the three Pulse added, by
+        // `the_three_pulse_era_attributes_are_absent_rather_than_missing`, and
+        // `headtilt`, which Wipeout HD's team files drop and its own mode
+        // ships keep.
         let text = &doc[span.clone()];
-        if ["easyshield", "weight_distribution", "sideshift"]
+        if ["easyshield", "weight_distribution", "sideshift", "headtilt"]
             .iter()
-            .any(|added| text.trim_start().starts_with(added))
+            .any(|optional| text.trim_start().starts_with(optional))
         {
             continue;
         }
@@ -195,6 +197,39 @@ fn a_missing_element_is_an_error() {
             "dropping <{element}> was tolerated"
         );
     }
+}
+
+/// Dropping `headtilt` gives `None`; breaking one still fails.
+///
+/// The same pair of claims as the `<pitch>` test below, for the same reason
+/// and one schema generation later. **Wipeout HD's team files omit the
+/// attribute** - `<InternalCamera fov="65" height="0" length="3" pitch="0"/>`
+/// on Feisar - where its own Zone and Detonator ships still carry it, so the
+/// absence is a fact about a document rather than a defect in one. Nothing in
+/// this project applies `headtilt` (see `oag_render::camera::internal`), so
+/// what an `Option` buys here is only that a typo cannot become a silent zero.
+#[test]
+fn an_absent_headtilt_is_none_and_a_broken_one_is_still_an_error() {
+    let doc = all_four();
+    assert!(
+        doc.contains(r#"headtilt="2""#),
+        "the fixture has to author one for either half of this to mean anything"
+    );
+
+    let dropped = doc.replace(r#" headtilt="2""#, "");
+    let stats = parse(&dropped).expect("a file with no headtilt is HD-shaped, not broken");
+    assert_eq!(stats.internal_camera.headtilt, None);
+    assert_eq!(
+        stats.backward_camera.headtilt,
+        Some(7.0),
+        "and the other camera's own value is untouched"
+    );
+
+    let broken = doc.replace(r#"headtilt="2""#, r#"headtilt="tilt""#);
+    assert!(
+        matches!(parse(&broken), Err(Error::NotANumber { .. })),
+        "an unparseable value must not collapse into the absent case"
+    );
 }
 
 /// Dropping `<pitch>` gives `None`; breaking one still fails.

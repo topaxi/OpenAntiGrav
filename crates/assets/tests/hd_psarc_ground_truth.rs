@@ -34,7 +34,7 @@
 use std::path::{Path, PathBuf};
 
 use oag_assets::psarc::Archive;
-use oag_formats::{ByteOrder, collision, pads, pvs, track, vex};
+use oag_formats::{ByteOrder, collision, handling, pads, pvs, track, vex};
 
 /// The decrypted PS3 image.
 const PS3_IMAGE: &str = "hdfury-ps3-eu-dec.iso";
@@ -412,3 +412,214 @@ fn the_hd_visibility_mask_is_one_64_bit_field_and_the_swap_is_measurably_wrong()
         "the word-swapped reading should be mostly dangling, was {bad_swapped} of {total_swapped}"
     );
 }
+
+/// Every archive on the image, opened once.
+///
+/// The seven do not split by kind - `data/ships` appears in four of them - so
+/// finding a file means asking all of them rather than predicting which.
+fn all_archives(path: &std::path::Path) -> Vec<Archive> {
+    let mut disc = oag_disc::DiscImage::open(path).expect("open image");
+    let specs: Vec<String> = disc
+        .entries()
+        .expect("iso walk")
+        .iter()
+        .filter(|e| !e.is_directory && e.path.to_ascii_lowercase().ends_with(".psarc"))
+        .map(|e| format!("{}:{}", path.display(), e.path))
+        .collect();
+    specs
+        .iter()
+        .map(|spec| Archive::open(spec).expect("the archive opens"))
+        .collect()
+}
+
+/// HD's handling stats parse with the Pulse parser unmodified, and HD ships
+/// **two** shapes of the file.
+///
+/// `docs/formats/hd-status.md` read the schema off the disc and said so
+/// explicitly: "Whether the parser accepts them unmodified has not been tried -
+/// that is a code change, and this page is a reading." This is the trying.
+///
+/// Two things make the team files work rather than luck. HD writes **plain**
+/// XML beginning `<?xml`, so `handling::from_blob`'s existing dispatch sends it
+/// down the PS2 branch instead of trying to expand a `<code>` dictionary that is
+/// not there; and its element names are the *unshortened* ones the dictionary
+/// would have produced. The extra blocks HD adds - `<FE>`, `<Tilt>` - are
+/// ignored the way any unknown element is.
+///
+/// The second shape is the finding. See
+/// [`the_hd_mode_ships_author_no_speed_class_at_all`].
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn every_hd_teams_handling_stats_parse_with_the_pulse_parser() {
+    let Some(path) = image(PS3_IMAGE) else { return };
+
+    let mut teams: Vec<String> = Vec::new();
+    for (ship, stats) in hd_handling_stats(&path) {
+        if stats.classes.is_empty() {
+            continue; // the mode ships, checked by the test below
+        }
+        teams.push(stats.team.clone());
+
+        assert!(
+            stats.has_pulse_class_ladder(),
+            "{ship}: {} class blocks, not Pulse's four",
+            stats.classes.len()
+        );
+        for class in handling::SpeedClass::ALL {
+            assert!(stats.class(class).is_some(), "{ship} has no {class:?} rung");
+        }
+        // `<Misc>` is what the physics needs first: the hull box and the shield
+        // pool. Zero would parse and then be nonsense.
+        assert!(stats.misc.width > 0.0 && stats.misc.length > 0.0, "{ship}");
+        assert!(stats.misc.shield > 0.0, "{ship}");
+    }
+
+    teams.sort();
+    teams.dedup();
+    assert_eq!(
+        teams,
+        [
+            "AG Systems",
+            "Assegai",
+            "Auricom",
+            "EGX",
+            "Feisar",
+            "Goteki",
+            "Harimau",
+            "Icaras",
+            "Mantis",
+            "Piranha",
+            "Qirex",
+            "Test",
+            "Triakis",
+        ],
+        "twelve racing teams, and a development ship the retail disc still carries"
+    );
+}
+
+/// HD's **mode** ships author no `<Class>` block at all.
+///
+/// This is a schema shape neither Pulse nor Pure has, and it is not a decode
+/// failure: `/data/ships/detonator/handlingstats.xml` is 1,398 bytes against a
+/// team file's ~3,500, names itself `team="ZoneMode"`, and hangs `<Engine>`,
+/// `<Brakes>`, `<Turning>`, `<Airbrake>`, `<Antigrav>` and `<Physical>` directly
+/// off `<Stats>` where a team file nests them inside four rungs. One implicit
+/// speed class, for a mode that has no speed selection.
+///
+/// **The trap this pins down**: `oag_gameplay::handling_for` looks the rung up
+/// and `.expect()`s it, so handing it one of these files panics. Nothing does
+/// today - no HD boot path exists - and the assertion here is what will fail
+/// first if one is written that does.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn the_hd_mode_ships_author_no_speed_class_at_all() {
+    let Some(path) = image(PS3_IMAGE) else { return };
+
+    let classless: Vec<(String, String)> = hd_handling_stats(&path)
+        .into_iter()
+        .filter(|(_, stats)| stats.classes.is_empty())
+        .map(|(ship, stats)| (ship, stats.team))
+        .collect();
+
+    assert!(
+        !classless.is_empty(),
+        "the classless shape should still be on the disc"
+    );
+    for (ship, team) in &classless {
+        assert!(
+            ship.contains("detonator") || ship.contains("zone"),
+            "{ship} ({team}) is classless and is not a mode ship"
+        );
+    }
+}
+
+/// Every `handlingstats.xml` on the image, parsed, with the path it came from.
+fn hd_handling_stats(path: &std::path::Path) -> Vec<(String, handling::Stats)> {
+    let mut out = Vec::new();
+    for mut archive in all_archives(path) {
+        let ships: Vec<String> = archive
+            .paths()
+            .iter()
+            .filter(|p| p.starts_with("/data/ships/") && p.ends_with("/handlingstats.xml"))
+            .cloned()
+            .collect();
+        for ship in ships {
+            let blob = archive.read_path(&ship).expect("the file reads");
+            let stats = handling::from_blob(&blob).unwrap_or_else(|e| panic!("{ship}: {e}"));
+            out.push((ship, stats));
+        }
+    }
+    assert!(
+        out.len() >= 12,
+        "only {} handlingstats.xml found",
+        out.len()
+    );
+    out
+}
+
+/// HD's global `handlingstats.xml` is Pulse's, five `<GlobalClass>` rungs and
+/// all, with `VECTOR` authored first.
+///
+/// `/data/xml/handlingstats.xml` is a different document from a ship's - it has
+/// `<Global>` where a ship has `<Stats>` - so `handling::parse_global` reads it
+/// and `handling::from_blob` correctly refuses it. Sweeping the ships had to
+/// exclude it, and the exclusion is why this test exists rather than being an
+/// omission.
+///
+/// The load-bearing part is the **ordering**. `docs/formats/handling-stats.md`
+/// records that `VECTOR` has no `SpeedClass` variant and that skipping it is
+/// only safe while it is authored first - authored last it would overwrite a
+/// real rung. HD agrees with Pulse on both counts, which is a third disc
+/// corroborating a rule that had two.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn hds_global_handling_file_authors_vector_first_like_pulses() {
+    let Some(path) = image(PS3_IMAGE) else { return };
+
+    let mut blob = None;
+    for mut archive in all_archives(&path) {
+        if archive.contains(GLOBAL_HANDLING) {
+            blob = Some(archive.read_path(GLOBAL_HANDLING).expect("the file reads"));
+        }
+    }
+    let blob = blob.expect("the disc ships a global handling file");
+
+    assert!(
+        handling::from_blob(&blob).is_err(),
+        "the global file is not a ship's, and the ship parser must say so"
+    );
+
+    let global = handling::parse_global(std::str::from_utf8(&blob).expect("plain text"))
+        .expect("the global file parses")
+        .expect("and is a <Global> document");
+
+    // Pulse's own values differ; what is checked is that the schema and the
+    // ordering rule transfer, not the tuning. Five rungs are authored and four
+    // are kept - `VECTOR` is skipped rather than stored, and that is only safe
+    // because it comes first.
+    for class in handling::SpeedClass::ALL {
+        assert!(
+            global.speedup_pads(class).amount > 0.0,
+            "{class:?} has no speedup-pad amount"
+        );
+        assert!(
+            global.weapon_pads(class).refresh_time > 0.0,
+            "{class:?} has no weapon-pad refresh time"
+        );
+        assert!(
+            global.gravity_mul(class).airborne > 0.0,
+            "{class:?} has no airborne gravity multiplier"
+        );
+    }
+
+    // `VECTOR`'s own numbers must not have survived into Venom's slot. HD
+    // authors `VECTOR` at `time="0.18"` and `VENOM` at `0.27`, exactly as
+    // Pulse does, so reading the first block into the first slot is visible.
+    assert!(
+        (global.speedup_pads(handling::SpeedClass::Venom).time - 0.18).abs() > 1e-6,
+        "VECTOR's speedup-pad time landed in Venom's slot"
+    );
+}
+
+/// The global tunables file, which is not a ship's.
+const GLOBAL_HANDLING: &str = "/data/xml/handlingstats.xml";

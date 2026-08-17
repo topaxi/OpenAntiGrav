@@ -152,7 +152,7 @@ fn setup(handling: Handling) -> Setup {
         // sample pins - see `oag_render::camera::internal`.
         internal: InternalParams {
             fov: 65.0,
-            headtilt: 3.0,
+            headtilt: Some(3.0),
             height: 1.0,
             length: 5.0,
             pitch: 0.0,
