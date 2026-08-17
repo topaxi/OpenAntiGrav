@@ -59,18 +59,48 @@ one bit identified out of fourteen. So the machinery *around* the grant is
 recovered in detail and the grant itself is this project's reading of what a
 weapon pad is for.
 
-**Three of the "ours" rows above are probably retirable, and were not retired
-here.** `WeaponPickup_Grant` (`0x08861d20`) *was* found on 2026-08-17 - called
-from `Weapons_DispatchFire` right after a `WEAPONPICKUP` cue - and it does a
-`rand() % total` cumulative walk over a per-column weight table, with a separate
-AI path that interpolates two columns by race position and refuses to repeat the
-last weapon. So "no grant call site exists anywhere in the executable" is **no
-longer true**. What is *not* established is that the table it walks is
-`<Pickupodds>`: that is inference from stride and plausibility at confidence 60.
-The cheap way to settle it is to decompile `WeaponStats_Parse` (`0x0880db7c`) and
-compare its store offsets against `0x178`/`0x1b8`/`0x1f8`/... Until somebody
-does, these rows stay as they are rather than being upgraded on a guess. Details
-on [missile.md](../ghidra/functions/psp-pulse-usa/missile.md#by-catch-the-pickup-grant-and-it-is-pickupodds).
+**Those three rows used to say "ours", and the reason was that no grant existed
+to read.** `WeaponPads_TestCraft` (`0x0888727c`) stamps the pad's refresh timer
+and that is the whole of what it does, so three separate passes concluded there
+was no grant anywhere in the executable. There is: `Weapons_DispatchFire` calls
+`WeaponPickup_Grant` (`0x08861d20`) on the pad-crossing flag at `craft+0x1c4`,
+right after a `WEAPONPICKUP` cue, and it does a `rand() % total` cumulative walk
+over `<Pickupodds>`. **Measured rather than inferred**, two independent ways: the
+sub-parser `WeaponStats_ParsePickupOdds` (`0x0880e93c`) writes its weights to
+exactly the offsets the grant walks, and `WeaponStats_Parse`'s tail sums those
+same offsets into the total the grant divides by. Full layout on
+[missile.md](../ghidra/functions/psp-pulse-usa/missile.md#by-catch-the-pickup-grant-and-it-is-pickupodds).
+
+**Ported 2026-08-17.** `oag_gameplay::pickup::draw` now does what the original
+does: the `ai` column flat for an opponent, and for the player a **blend** of
+`human` with `front`/`back` by race position -
+
+```text
+weight = human + back * t + front * (1 - t),   t = (place - 1) / ship_count
+```
+
+`t` is `0` for the leader, so the leader gets `front` added and the tail gets
+`back`. With the shipped Venom table - Shield `front="2" back="0"`, Turbo
+`back="2" front="0"` - **a player in front draws more Shields and a player at the
+back more Turbos. The pickup draw rubber-bands, and it rubber-bands the player
+rather than the field.** The divisor is the whole field rather than `field - 1`,
+which is the original's own arithmetic and means last place never quite reaches
+the `back` column.
+
+The **no-repeat rule** is ported with it: the grant compares each draw against
+the craft's previous one and re-rolls rather than handing it over, which is what
+the second copy of the held weapon id (`craft+0x1c0`) is for. `pickup::Held` grew
+a `last` field, and that field is hashed - what a craft was last given decides
+what it can be given next, so it is simulation state.
+
+**Three things about the port are ours, and each is labelled where it lives.**
+The *sequence* still cannot match the original, for the reason the next paragraph
+gives. The retry behind the no-repeat rule is **bounded** where the original's
+loop is not: `IMPLEMENTED` holds four weapons, so a table weighting only one of
+them would spin for ever, and after `pickup::REDRAW_ATTEMPTS` a repeat is
+accepted - about one grant in twenty thousand on the shipped odds. And an
+*unplaced* craft spends the `human` column alone, because the original always has
+a place to blend against.
 
 **The PRNG bounds what can ever be checked.** The original's generator is an
 open question on the [roadmap](../overview/roadmap.md), so the *sequence* of

@@ -325,8 +325,12 @@ fn a_pad_can_hand_out_a_missile_and_firing_one_spends_it() {
 
     let mut rng = oag_core::Rng::new(1);
     let drawn = (0..256).any(|_| {
-        oag_gameplay::pickup::draw(&mut rng, table, oag_gameplay::pickup::Driver::Human)
-            == Some(Weapon::Missile)
+        oag_gameplay::pickup::draw(
+            &mut rng,
+            table,
+            oag_gameplay::pickup::Driver::HUMAN_UNPLACED,
+            None,
+        ) == Some(Weapon::Missile)
     });
     assert!(
         drawn,

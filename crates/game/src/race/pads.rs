@@ -239,17 +239,24 @@ impl Race {
         else {
             return;
         };
-        // **The `human` column for slot 0 and the `ai` column for the rest**,
-        // which is a distinction the shipped `<Pickupodds>` table draws itself -
-        // see `docs/gameplay/pickups.md`. `front`/`back` are still unreachable:
-        // they need race *positions*, and `oag_race::RaceState` is single-ship,
-        // so nobody is placed.
+        // **The `human` column for slot 0 and the `ai` column for the rest**, and
+        // the player's is blended with `front`/`back` by their place - which is
+        // the original's own arrangement, recovered from `WeaponPickup_Grant`
+        // (`0x08861d20`). The AI's column is spent flat, so an opponent's odds do
+        // not depend on where it is; the rubber-banding is aimed at the player.
+        // See `docs/gameplay/pickups.md`.
         let who = if slot == 0 {
-            oag_gameplay::pickup::Driver::Human
+            oag_gameplay::pickup::Driver::Human {
+                place: self.player_place(),
+                field: self.world.ship_count,
+            }
         } else {
             oag_gameplay::pickup::Driver::Ai
         };
-        let drawn = oag_gameplay::pickup::draw(&mut self.world.rng, table, who);
-        self.world.ships[slot].pickup.weapon = drawn;
+        let last = self.world.ships[slot].pickup.last;
+        let drawn = oag_gameplay::pickup::draw(&mut self.world.rng, table, who, last);
+        if let Some(weapon) = drawn {
+            self.world.ships[slot].pickup.grant(weapon);
+        }
     }
 }

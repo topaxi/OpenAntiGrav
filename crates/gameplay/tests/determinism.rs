@@ -143,6 +143,17 @@ fn run(ticks: u32) -> (u64, u64) {
 ///
 /// # History
 ///
+/// - **Moved 2026-08-17 (second time that day)**, when `pickup::Held` grew
+///   `last`. The pickup draw refuses to hand out the same weapon twice running -
+///   recovered from `WeaponPickup_Grant` (`0x08861d20`) - so what a craft was
+///   last given decides what it can be given next, which makes it simulation
+///   state. **Isolated the documented way**: with only `write_held`'s second
+///   `write_weapon` removed and nothing else changed, the previous constants -
+///   `0x2d22_d564_7848_a77a` / `0x81c4_2326_bf0f_8ddc` at 60 ticks and
+///   `0x9dee_92a4_2631_48a3` / `0x95b8_b6ad_9886_1d41` at 600 - reproduce bit
+///   for bit. This scenario sets `pickup.weapon` directly rather than through
+///   `Held::grant`, so `last` is `None` throughout and what moved is one more
+///   byte per ship per tick entering the stream.
 /// - **Moved 2026-08-17**, when `Projectile` grew the three fields a guided
 ///   weapon needs: `target`, `bounces` and `launch_speed_kmh`. All three steer a
 ///   missile - the lock it is chasing, how many walls it has left to glance off,
@@ -294,8 +305,8 @@ fn run(ticks: u32) -> (u64, u64) {
 /// beneath this comment and isolate the cause first, by removing the new field's
 /// own write and checking that the previous constants reproduce bit for bit.
 const REFERENCE: &[(u32, u64, u64)] = &[
-    (60, 0x2d22_d564_7848_a77a, 0x81c4_2326_bf0f_8ddc),
-    (600, 0x9dee_92a4_2631_48a3, 0x95b8_b6ad_9886_1d41),
+    (60, 0xa88c_cfc7_3a30_f316, 0x4e6e_0a8f_accb_a74c),
+    (600, 0xb5fc_13ea_252e_8e43, 0x92e8_8d29_f718_d061),
 ];
 
 #[test]

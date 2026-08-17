@@ -16,22 +16,29 @@
 //! *is* the pickup design, and this module spends it rather than inventing a
 //! distribution.
 //!
+//! **Also recovered as of 2026-08-17**, and these three rows used to say "ours"
+//! on the grounds that no grant existed to read. `WeaponPickup_Grant`
+//! (`0x08861d20`) does exist - `Weapons_DispatchFire` calls it on the
+//! pad-crossing flag, right after a `WEAPONPICKUP` cue:
+//!
+//! - **That a crossing grants anything at all**, confidence 85.
+//! - **The draw**: `rand() % total` then a cumulative walk over `<Pickupodds>`,
+//!   with the `ai` column spent flat and the `human` column blended with
+//!   `front`/`back` by race position, and a refusal to hand out the same weapon
+//!   twice running. Confidence 92; see [`draw`] and [`Driver`].
+//! - **The inventory being one slot**, confidence 88 - `craft+0x1bc` holds a
+//!   weapon id and `-1` means empty, which is exactly [`Held`].
+//!
 //! **Ours, and there is no way for it not to be.**
 //!
-//! - **The draw.** How the original turns four weights into one weapon is
-//!   unread, and its PRNG is an open question on the roadmap
-//!   (`docs/overview/roadmap.md`), so the *sequence* this produces cannot match
-//!   the original's even in principle. Only the *distribution* can be checked,
-//!   which is what [`tests`] does. A weighted walk over the authored weights is
-//!   the obvious reading of a table of weights; it is not a recovered algorithm.
-//! - **The grant.** `WeaponPads_TestCraft` (`0x0888727c`) stamps the pad's
-//!   refresh timer on a hit and **no pickup-grant call site has been found** -
-//!   see `docs/ghidra/functions/psp-pulse-usa/pads.md`. So that a crossing
-//!   grants anything at all is this project's reading of what a weapon pad is
-//!   for, not a ported branch.
-//! - **The inventory.** The original keeps it in a flag word at
-//!   `*(entity+0x4c) + 0x1b8` whose bits are unread bar one. [`Held`] is a
-//!   single slot instead.
+//! - **The sequence of draws.** The original's PRNG is an open question on the
+//!   roadmap (`docs/overview/roadmap.md`), so which weapon comes out *when*
+//!   cannot match even with a byte-exact algorithm. Only the *distribution* can
+//!   be checked, which is what [`tests`] does.
+//! - **The bounded retry** behind the no-repeat rule; the original's loop is
+//!   unbounded. See [`REDRAW_ATTEMPTS`].
+//! - **What an unplaced craft draws.** The original always has a place; this
+//!   spends the `human` column alone. See [`Driver::descent`].
 //!
 //! # Only what has an effect is handed out
 //!
@@ -86,36 +93,82 @@ pub const IMPLEMENTED: &[Weapon] = &[
     Weapon::Missile,
 ];
 
-/// Which column of `<Pickupodds>` a craft draws from.
+/// Which column of `<Pickupodds>` a craft draws from, and how its place bends it.
 ///
-/// The shipped table carries four - `ai`, `human`, `front` and `back` - and this
-/// enum offers two. **The missing two are grid position**, which needs race
-/// positions, which needs opponents that move: see
-/// `oag_race::Mode::has_opponents`. Once an AI exists the front/back weights
-/// become reachable and this type is what grows a third case.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+/// **All four authored columns are reachable now**, which they were not before
+/// 2026-08-17: `ai` is spent flat, and `human` is blended with `front` and `back`
+/// by where the craft is in the race. That is the original's own arrangement -
+/// `WeaponPickup_Grant` (`0x08861d20`) has exactly these two paths - and it reads
+/// the opposite way round from the obvious guess, so it is worth stating twice:
+/// **the column pair that rubber-bands is the *player's*, not the AI's.**
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Driver {
-    /// The player.
-    #[default]
-    Human,
-    /// An AI-driven craft. Live since 2026-08-11: `oag_game::race` draws from
-    /// this column for every slot but the player's. See `docs/gameplay/ai.md`.
+    /// The player, whose odds bend with their place in the race.
+    Human {
+        /// One-based place, or `0` for a craft not yet placed.
+        place: u8,
+        /// How many craft are racing.
+        field: u8,
+    },
+    /// An AI-driven craft, which draws the `ai` column flat.
     Ai,
 }
 
+impl Default for Driver {
+    /// The player, unplaced. Matches what this enum defaulted to before it
+    /// carried a place, so a caller that never set one keeps the `human` column
+    /// alone rather than silently acquiring a blend against place zero.
+    fn default() -> Self {
+        Self::HUMAN_UNPLACED
+    }
+}
+
 impl Driver {
+    /// The player, unplaced - the `human` column with no blend.
+    pub const HUMAN_UNPLACED: Self = Self::Human { place: 0, field: 0 };
+
+    /// How far down the field this driver is, `0.0` at the front.
+    ///
+    /// `None` when there is no meaningful place to blend against, in which case
+    /// [`Self::weight`] spends the `human` column alone. **That case is ours** -
+    /// the original always has a placed craft - and it is the conservative
+    /// reading rather than picking an end of the blend arbitrarily.
+    ///
+    /// The divisor is the **whole field**, not `field - 1`, which is the
+    /// original's own arithmetic and has a visible consequence: the craft in last
+    /// place gets `(field - 1) / field` of the way to `back`, never all of it.
+    #[must_use]
+    fn descent(place: u8, field: u8) -> Option<f32> {
+        if place == 0 || field == 0 {
+            return None;
+        }
+        Some(f32::from(place - 1) / f32::from(field))
+    }
+
     /// This driver's weight for one weapon, from one class's table.
     ///
     /// Zero for a weapon the class authors no odds for, which is not an error:
     /// a table need not weight every weapon.
+    ///
+    /// # The blend, and what it does with the shipped numbers
+    ///
+    /// `human + back * t + front * (1 - t)`, recovered whole. `t` is `0` for the
+    /// leader, so **the leader gets `front` added and the tail gets `back`** -
+    /// and the shipped Venom table gives Shield `front="2" back="0"` and Turbo
+    /// `back="2" front="0"`, so a player in front draws more Shields and a player
+    /// at the back more Turbos. The design is catch-up, and it is aimed at the
+    /// player rather than at the field.
     #[must_use]
     fn weight(self, table: &PickupTable, weapon: Weapon) -> f32 {
         let Some(odds) = table.get(weapon) else {
             return 0.0;
         };
         match self {
-            Self::Human => odds.human,
             Self::Ai => odds.ai,
+            Self::Human { place, field } => match Self::descent(place, field) {
+                Some(t) => odds.human + odds.back * t + odds.front * (1.0 - t),
+                None => odds.human,
+            },
         }
     }
 }
@@ -130,13 +183,26 @@ impl Driver {
 pub struct Held {
     /// The weapon in the slot, or `None`.
     pub weapon: Option<Weapon>,
+    /// The last weapon this craft was handed, whether or not it still has it.
+    ///
+    /// **Recovered as a concept.** The original keeps two copies of the held
+    /// weapon id: `craft+0x1bc`, which every fire handler clears to `-1`, and
+    /// `craft+0x1c0`, which it does not. The grant reads the second to refuse
+    /// handing out the same weapon twice running - see [`draw`].
+    ///
+    /// Set by [`Self::grant`] and never cleared, so a craft that fires and
+    /// crosses another pad still remembers. It is world state and is hashed.
+    pub last: Option<Weapon>,
 }
 
 impl Held {
-    /// Nothing held.
+    /// Nothing held, and nothing remembered.
     #[must_use]
     pub const fn empty() -> Self {
-        Self { weapon: None }
+        Self {
+            weapon: None,
+            last: None,
+        }
     }
 
     /// Whether the slot can take a pickup.
@@ -145,7 +211,20 @@ impl Held {
         self.weapon.is_none()
     }
 
+    /// Fills the slot and remembers what went in it.
+    ///
+    /// The pairing is the point: [`draw`] needs the previous grant and would
+    /// silently stop refusing repeats if a caller set `weapon` directly. Tests
+    /// that only want a craft to be carrying something still assign the field.
+    pub const fn grant(&mut self, weapon: Weapon) {
+        self.weapon = Some(weapon);
+        self.last = Some(weapon);
+    }
+
     /// Takes what is held, leaving the slot empty.
+    ///
+    /// [`Self::last`] survives, which is what makes the no-repeat rule outlast
+    /// firing.
     pub const fn take(&mut self) -> Option<Weapon> {
         self.weapon.take()
     }
@@ -160,8 +239,56 @@ impl Held {
 /// The walk is over [`IMPLEMENTED`]'s order rather than the table's document
 /// order, so the sequence depends only on this crate and the seed - a table that
 /// reordered its `<Weapon>` elements would otherwise change every draw.
+///
+/// # It will not hand out `last` twice running
+///
+/// **Recovered.** `WeaponPickup_Grant` (`0x08861d20`) compares every draw against
+/// the craft's previous grant and, on a match, rolls again rather than handing it
+/// over. Pass [`Held::last`].
+///
+/// **The retry is bounded here and is not in the original**, which loops until it
+/// draws something different. Unbounded is fine when thirteen weapons are
+/// weighted and is not fine here: [`IMPLEMENTED`] is four, so a table weighting
+/// only one of them would spin for ever, and a simulation that can hang on a
+/// table is worse than one that occasionally repeats a pickup. After
+/// [`REDRAW_ATTEMPTS`] the repeat is accepted.
+///
+/// So the rule is **best-effort, and how good the effort is depends on the
+/// odds**: a weapon holding a share `p` of the live weight repeats with
+/// probability `p^REDRAW_ATTEMPTS`. On the shipped Venom weights the worst case
+/// is Turbo at 14 of 48, or about one repeat in twenty thousand grants. A table
+/// that gave one weapon nearly all the weight would repeat often, and
+/// `an_overwhelming_weight_terminates_and_may_repeat` pins that rather than
+/// pretending otherwise.
 #[must_use]
-pub fn draw(rng: &mut Rng, table: &PickupTable, driver: Driver) -> Option<Weapon> {
+pub fn draw(
+    rng: &mut Rng,
+    table: &PickupTable,
+    driver: Driver,
+    last: Option<Weapon>,
+) -> Option<Weapon> {
+    for _ in 0..REDRAW_ATTEMPTS {
+        let drawn = draw_once(rng, table, driver)?;
+        if Some(drawn) != last {
+            return Some(drawn);
+        }
+    }
+    // Every attempt came back the same weapon. Hand it over rather than hand over
+    // nothing: a pad that silently grants nothing reads as a broken pad.
+    draw_once(rng, table, driver)
+}
+
+/// How many times [`draw`] re-rolls to avoid repeating the last pickup.
+///
+/// **Ours.** See [`draw`] on why the original's unbounded loop is not reproduced,
+/// and on what the bound costs. Eight is enough that the shipped odds repeat
+/// about once in twenty thousand grants, and small enough that the worst case
+/// spends nine generator draws rather than hanging.
+pub const REDRAW_ATTEMPTS: usize = 8;
+
+/// One weighted draw, with no regard for what came before it.
+#[must_use]
+fn draw_once(rng: &mut Rng, table: &PickupTable, driver: Driver) -> Option<Weapon> {
     let total: f32 = IMPLEMENTED
         .iter()
         .map(|&weapon| driver.weight(table, weapon).max(0.0))
@@ -221,124 +348,4 @@ pub fn table_for(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use oag_formats::weapons::PickupOdds;
-
-    fn table(odds: &[(Weapon, f32, f32)]) -> PickupTable {
-        PickupTable {
-            class: "VENOM".to_string(),
-            odds: odds
-                .iter()
-                .map(|&(weapon, human, ai)| {
-                    (
-                        weapon,
-                        PickupOdds {
-                            human,
-                            ai,
-                            front: 0.0,
-                            back: 0.0,
-                        },
-                    )
-                })
-                .collect(),
-        }
-    }
-
-    /// The stand-in for "weighted, and not implemented". **It has to be a weapon
-    /// that stays out of [`IMPLEMENTED`]**, or the tests below invert silently
-    /// the day it lands - which is exactly what happened to the `Rocket` these
-    /// two used before. Quake needs track deformation and is a long way off.
-    const UNIMPLEMENTED: Weapon = Weapon::Quake;
-
-    #[test]
-    fn a_class_that_weights_nothing_implemented_hands_out_nothing() {
-        // A quake is weighted and a quake cannot be handed out, so this is the
-        // real shape of the restriction rather than an empty table.
-        let quakes_only = table(&[(UNIMPLEMENTED, 1.0, 1.0)]);
-        let mut rng = Rng::new(1);
-        assert_eq!(draw(&mut rng, &quakes_only, Driver::Human), None);
-    }
-
-    #[test]
-    fn a_zero_weight_is_never_drawn() {
-        let no_turbo = table(&[(Weapon::Turbo, 0.0, 1.0)]);
-        let mut rng = Rng::new(1);
-        for _ in 0..100 {
-            assert_eq!(draw(&mut rng, &no_turbo, Driver::Human), None);
-        }
-    }
-
-    /// The draw reads the *driver's own* column. With Turbo weighted for an AI
-    /// and not for a human, the two answers have to differ - a reader that took
-    /// whichever column came first would pass every other test here.
-    #[test]
-    fn the_two_drivers_read_their_own_columns() {
-        let ai_only = table(&[(Weapon::Turbo, 0.0, 1.0)]);
-        let mut rng = Rng::new(7);
-        assert_eq!(draw(&mut rng, &ai_only, Driver::Ai), Some(Weapon::Turbo));
-        assert_eq!(draw(&mut rng, &ai_only, Driver::Human), None);
-    }
-
-    /// **The only thing about the draw that can be checked against the
-    /// original's data**, and it is a distribution rather than a sequence - see
-    /// the module docs.
-    ///
-    /// Two implemented weapons weighted 3:1 against each other, plus an
-    /// unimplemented one weighted far above both. The second half is the part
-    /// that catches a real mistake: a walk that summed the *table's* total
-    /// rather than the implemented subset's would spend most of its rolls past
-    /// the end of the live weights and fall through to the trailing `find`,
-    /// which returns the last implemented weapon every time. That reads as
-    /// "mostly Shield" rather than as an error.
-    #[test]
-    fn the_walk_visits_a_weight_in_proportion_to_it() {
-        let weighted = table(&[
-            (Weapon::Turbo, 3.0, 3.0),
-            (Weapon::Shield, 1.0, 1.0),
-            (UNIMPLEMENTED, 96.0, 96.0),
-        ]);
-        let mut rng = Rng::new(99);
-        let (mut turbos, mut shields) = (0, 0);
-        for _ in 0..10_000 {
-            match draw(&mut rng, &weighted, Driver::Human) {
-                Some(Weapon::Turbo) => turbos += 1,
-                Some(Weapon::Shield) => shields += 1,
-                other => panic!("drew {other:?}, which is not implemented"),
-            }
-        }
-        assert_eq!(turbos + shields, 10_000, "every draw must land somewhere");
-        // 3:1 over 10,000 draws puts Turbo at 7,500 with a standard deviation of
-        // about 43. A 500-wide window is roughly 11 sigma - wide enough that no
-        // seed makes this flaky, narrow enough to reject an even split.
-        assert!(
-            (7_000..=8_000).contains(&turbos),
-            "3:1 odds drew {turbos} turbos and {shields} shields"
-        );
-    }
-
-    /// The property the determinism gate needs from this: same seed, same
-    /// sequence. It is the one guarantee that survives the original's PRNG being
-    /// unrecovered.
-    #[test]
-    fn the_same_seed_draws_the_same_sequence() {
-        let weighted = table(&[(Weapon::Turbo, 1.0, 1.0)]);
-        let sequence = |seed| {
-            let mut rng = Rng::new(seed);
-            (0..50)
-                .map(|_| draw(&mut rng, &weighted, Driver::Human))
-                .collect::<Vec<_>>()
-        };
-        assert_eq!(sequence(4), sequence(4));
-    }
-
-    #[test]
-    fn a_held_slot_gives_up_what_it_holds_exactly_once() {
-        let mut held = Held::empty();
-        assert!(held.is_empty());
-        held.weapon = Some(Weapon::Turbo);
-        assert!(!held.is_empty());
-        assert_eq!(held.take(), Some(Weapon::Turbo));
-        assert_eq!(held.take(), None);
-    }
-}
+mod tests;

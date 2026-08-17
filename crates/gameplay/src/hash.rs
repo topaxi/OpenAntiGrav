@@ -189,8 +189,13 @@ fn write_standing(hasher: &mut StateHasher, standing: &oag_race::Standing) {
 }
 
 fn write_held(hasher: &mut StateHasher, held: &Held) {
-    let Held { weapon } = held;
+    let Held { weapon, last } = held;
     write_weapon(hasher, *weapon);
+    // **The previous grant is state, not a convenience.** The draw refuses to
+    // hand out the same weapon twice running, so two runs whose craft carry the
+    // same thing but remember different last grants are about to be handed
+    // different pickups. See `crate::pickup::draw`.
+    write_weapon(hasher, *last);
 }
 
 /// A weapon slot as a discriminant byte, with `0` reserved for "nothing".
