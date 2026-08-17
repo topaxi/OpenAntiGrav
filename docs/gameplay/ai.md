@@ -34,7 +34,7 @@ times larger" - because the finding is the coupling, not the number.
 | What the numbers *mean* - units, and what `AIThrust` multiplies | **unknown** - the consumer is not identified | - |
 | The sign convention on Pure's `Position` attribute | hypothesis | 55 |
 | Which of Pure's two per-class blocks the engine reads | **unknown** | - |
-| Weapon selection and firing | **not looked at** - `WeaponAIstats.xml` is the hook | - |
+| Weapon selection and firing | `WeaponAIstats.xml`'s **loader and schema are read** (2026-08-17); it turns out not to be the fire-or-absorb decision, and its consumer is unfound | 90 for the schema |
 | **Everything under [what we build instead](#what-we-build-instead)** | **ours** | - |
 
 Nothing here has been run under a debugger. Every score above rests on
@@ -263,8 +263,13 @@ doing.
    parser has no branch for the element at all, which is consistent with it
    being Pure-only.
 5. **Weapon AI.** `Data\XML\WeaponAIstats.xml` is a sixth AI file that
-   `AiStats_LoadAll` does *not* load, so it has its own loader. It pairs with
-   the `WEAPON AI %d` string. Not looked at at all.
+   `AiStats_LoadAll` does *not* load. **Its loader is found** (2026-08-17):
+   `WeaponAiStats_Load` (`0x08851d88`), called from `AiStats_LoadAll`'s own caller
+   on the very next line. The schema is three floats a weapon -
+   `useAgainstPlayer`, `useAgainstAI`, `absorb` - and the shipped values are
+   nearly uniform, so **it is not the fire-or-absorb decision this list assumed
+   it was**. What is still open is its *consumer*. See
+   [ai-stats.md](../ghidra/functions/psp-pulse-usa/ai-stats.md#the-sixth-ai-file-weaponaistatsxml).
 
 **Where the next session starts:** the consumer, not the parser. The parser is
 done - nine functions, named, with the full struct layout on
@@ -1630,9 +1635,12 @@ than the `human` one - a distinction the disc's own data makes. `front` and
 `back` remain unreachable: they need race *positions*.
 
 **What an opponent does with what it draws is a policy, and nothing about it is
-recovered.** The original decides this in `Data\XML\WeaponAIstats.xml`, a sixth
-AI file that `AiStats_LoadAll` does not even load - so it has its own loader,
-which has not been looked for. Until that is read, this is invention, and it is
+recovered.** `Data\XML\WeaponAIstats.xml` was the assumed source and **it is not
+one**: its loader was found on 2026-08-17 and the file holds three multipliers a
+weapon - `useAgainstPlayer`, `useAgainstAI`, `absorb` - all within 20 % of one,
+with nothing marked fire-only or absorb-only. Its consumer is unfound, so what
+the multipliers even scale is unread. The decision itself lives elsewhere and has
+not been located. So this is still invention, and it is
 kept small enough to be obviously provisional: **Turbo is fired at once but only
 where the driver is not braking, the line stays clear for as far as the boost
 carries, and there is nobody close enough ahead to arrive in the back of**; a

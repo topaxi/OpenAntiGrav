@@ -511,3 +511,5 @@
 0x08861d20	function	WeaponPickup_Grant	80	missile.md
 0x0886e0f8	function	WeaponPickup_ArmRocket	80	missile.md
 0x0880e93c	function	WeaponStats_ParsePickupOdds	92	missile.md
+0x08851d88	function	WeaponAiStats_Load	90	ai-stats.md
+0x08852178	function	WeaponAiStats_ParseWeapon	90	ai-stats.md

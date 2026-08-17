@@ -192,8 +192,121 @@ launch change. Neither has been done.
   invisible to `get_function_callers`. The remaining route is a byte search for
   the record base or a live read under PPSSPP.
 - **`Data\XML\WeaponAIstats.xml`** (`0x08a7be38`, tag `WeaponAIStats` at
-  `0x08a7bda4`) is a sixth AI file that `AiStats_LoadAll` does **not** load, so
-  it has a separate loader that has not been looked for. It pairs with the
-  `WEAPON AI %d` string and is the weapon-side AI.
+  `0x08a7bda4`) is a sixth AI file that `AiStats_LoadAll` does **not** load.
+  ~~It has a separate loader that has not been looked for.~~ **Found 2026-08-17 -
+  see [the section below](#the-sixth-ai-file-weaponaistatsxml).** It pairs with
+  the `WEAPON AI %d` string and is the weapon-side AI.
 - **`SkillScaleValue`** (`0x08a8134c`) appears in the string table and in none of
   the nine functions here. Reads like a computed runtime quantity; unchased.
+
+
+## The sixth AI file: `WeaponAIstats.xml`
+
+**Found 2026-08-17**, and the reason nobody had found it is worth recording:
+nothing was hiding it. `AiStats_LoadAll` (`0x08835830`) genuinely does not load
+it, which this page recorded correctly - but its *caller* does, on the very next
+call.
+
+| Address | Name | Confidence |
+| --- | --- | --- |
+| `0x08851d88` | `WeaponAiStats_Load` | 90 |
+| `0x08852178` | `WeaponAiStats_ParseWeapon` | 90 |
+
+`FUN_08829124` is the race-setup function, and it calls the two back to back:
+
+```text
+088293fc: jal 0x08835830     ; AiStats_LoadAll  - the five files this page covers
+08829404: jal 0x08851d88     ; WeaponAiStats_Load - the sixth
+```
+
+So "it has its own loader" was right, and the loader is a sibling eight bytes
+later. **The lesson is the cheap one**: when a page says a file has no loader,
+read the caller of the loader it *does* have before concluding the loader is
+hidden.
+
+### The schema is three floats a weapon
+
+`WeaponAiStats_Load` opens `Data\XML\WeaponAIstats.xml` (`0x08a7be38`), matches
+the root `WeaponAIStats` (`0x08a7be28`), and dispatches each child element to
+`WeaponAiStats_ParseWeapon(record, element, weapon_id)`. That function is short
+enough to state whole:
+
+```c
+record += weapon_id * 0xc;
+while (Xml_NextAttribute(element, attr)) {
+    if      (name == "useAgainstPlayer") record[0x08] = as_float(attr);
+    else if (name == "useAgainstAI")     record[0x0c] = as_float(attr);
+    else if (name == "absorb")           record[0x10] = as_float(attr);
+}
+```
+
+Three attributes, three floats, `0xc` bytes a weapon, **indexed by weapon id**.
+Confidence 90 - the stores are unambiguous and the strings are contiguous.
+
+There is also a `Template` element (`0x08a7bed0`) which the loader matches and
+then **discards** - no parse call. The shipped file authors no such element, so it
+is an authoring convention rather than data.
+
+### It confirms the weapon-id space, from a second direction
+
+The element-to-id mapping falls straight out of the dispatch chain, and it is an
+**independent confirmation** of the ids
+[missile.md](missile.md#weapon_requestfire-and-the-weapon-id-to-bit-map) anchored
+from sound cues and lock distances - plus the five it left as bare numbers:
+
+| id | element | | id | element | | id | element |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 0 | `Rockets` | | 5 | `Cannon` | | 10 | `Leachbeam` |
+| 1 | `Missiles` | | 6 | `Autopilot` | | 11 | `Repulser` |
+| 2 | `Quake` | | 7 | `Plasma` | | 12 | `Shuriken` |
+| 3 | `Turbo` | | 8 | `Bomb` | | | |
+| 4 | `Shield` | | 9 | `Mines` | | | |
+
+`Bomb` at id 8 is read out of the image directly (`0x08a7be64` is
+`42 6f 6d 62 00`), because Ghidra had not typed it as a string.
+
+**This disagrees with `oag_formats::weapons::Weapon::ALL` at three positions**,
+and the enum is the one that is wrong about ids: it has `Cannon, Turbo, Shield`
+at 3/4/5 where the id space has `Turbo, Shield, Cannon`. The enum's order is the
+*string-pool layout* order at `0x08a78c00`, which is a different thing and is
+what its own doc comment says it is - and that comment already warned the mapping
+to ids was unconfirmed. It now is confirmed, and it differs. Nothing in this
+project reads `Weapon::ALL`'s index as a weapon id, so this is a documentation
+correction rather than a bug; `oag_gameplay::hash::write_weapon` uses the index
+only as a hash discriminant, where any stable order does.
+
+### One thing this does *not* settle, and a conflict it opens
+
+Combining the id map above with `Weapon_RequestFire`'s id-to-bit switch puts
+**fire-request bit `0x2` on the Bomb**. That bit's handler is
+`Weapon_UpdateBurstFire_q` (`0x088675cc`), which
+[weapon-fire.md](weapon-fire.md#the-other-multi-shot-weapon-a-staggered-burst)
+reads as the **Cannon** at confidence 72 on the grounds that `rounds` and `rate`
+are the Cannon's `<Stats>` and nobody else's. A Bomb that fires thirty rounds at
+a tenth of a second apart makes no sense.
+
+**Both readings are left standing and the conflict is recorded rather than
+resolved.** Three loose ends say the id-to-bit switch is not as simple as it
+looks: bit `0x2000` (case 3) is dispatched by *nothing* in
+`Weapons_DispatchFire`; three of the cases make no call to `FUN_08871ddc` where
+the rest do; and that call's argument is a **second** id space which remaps 3 to
+5, 8 to 9 and 9 to 8. Until `FUN_08871ddc` is read, "id 8 is the Bomb *and* bit
+`0x2` is the Cannon" may both be true with a remap in between.
+
+### The shipped values are nearly uniform, and that is the finding
+
+Read off `pulse-psp-usa.chd`. Every weapon authors `absorb="1.0"`; every weapon
+except `Plasma` and `Quake` authors `useAgainstAI="1.2" useAgainstPlayer="1.1"`,
+and those two author `1.0`/`1.0`.
+
+**So this file is not the fire-or-absorb decision.** `docs/gameplay/ai.md` and
+`crates/game/src/race/field.rs` have both recorded it as where the original
+decides what an opponent does with a pickup, and it is not: it is three
+multipliers, all within 20 % of one, with no weapon marked as absorb-only or
+fire-only. Even wired exactly, it would barely move an opponent's behaviour.
+
+**The consumer is not found**, so what the three numbers multiply is still
+unread - and until it is, the numbers cannot be spent. The decision logic this
+project has been calling invention lives somewhere else, and finding it is a
+separate hunt: the useful next step is an xref sweep on the record base
+`FUN_08851d88` is handed, which `FUN_08829124` supplies.

@@ -554,12 +554,16 @@ impl Race {
     ///
     /// # This is a policy, and it is the crudest one that is not "nothing"
     ///
-    /// **Nothing about it is recovered.** The original decides this in
-    /// `WeaponAIstats.xml` and whatever reads it - a sixth AI file that
-    /// `AiStats_LoadAll` does not even load, so it has its own loader that has
-    /// not been looked for. See
-    /// `docs/ghidra/functions/psp-pulse-usa/ai-stats.md`. Until that is read,
-    /// anything here is invention, so it is kept small enough to be obviously
+    /// **Nothing about it is recovered**, and the file this comment used to point
+    /// at turns out not to be the answer. `WeaponAIstats.xml`'s loader was found
+    /// on 2026-08-17 (`WeaponAiStats_Load`, `0x08851d88`, called one line after
+    /// `AiStats_LoadAll` in the same race-setup function) and its schema is three
+    /// floats a weapon: `useAgainstPlayer`, `useAgainstAI`, `absorb`. The shipped
+    /// values are nearly uniform - `1.0` absorb throughout, `1.2`/`1.1` for
+    /// everything but Plasma and Quake - so **there is no weapon the file marks
+    /// as absorb-only or fire-only**, and its consumer is unfound anyway. See
+    /// `docs/ghidra/functions/psp-pulse-usa/ai-stats.md`. The decision below is
+    /// therefore still invention, and still kept small enough to be obviously
     /// provisional:
     ///
     /// - **Turbo is fired at once**, but only on a stretch the driver is not

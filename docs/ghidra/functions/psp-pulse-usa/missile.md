@@ -117,11 +117,22 @@ Id 10 is named from its lock distances. The rest are left as numbers.
 **Only ids 1 and 10 take a target**, stored to `craft+0x160`/`+0x164` and
 `craft+0x168`/`+0x16c` respectively.
 
-**This does not settle the Cannon.** [weapon-fire.md](weapon-fire.md) puts the
-burst-fire handler (bit `0x2`, id 8) at the Cannon on confidence 72, while
-`oag_formats::weapons::Weapon::ALL`'s order would make id 3 the Cannon. The four
-ids anchored here happen to agree with that enum's order, which is suggestive and
-is **not** a proof for the ones that are not anchored. Left open.
+**The whole id space is settled as of 2026-08-17, from a second direction**:
+`WeaponAiStats_Load` (`0x08851d88`) dispatches thirteen named XML elements to the
+same ids, giving `3 Turbo`, `4 Shield`, `5 Cannon`, `8 Bomb`, `9 Mines` for the
+five left as numbers above. See
+[ai-stats.md](ai-stats.md#it-confirms-the-weapon-id-space-from-a-second-direction),
+which also records that this **disagrees** with
+`oag_formats::weapons::Weapon::ALL`'s order at three positions - that enum follows
+the string-pool layout, not the ids.
+
+**And it opens a conflict rather than closing one.** Id 8 being the Bomb puts bit
+`0x2` on the Bomb, and [weapon-fire.md](weapon-fire.md) reads that bit's handler
+as the **Cannon** at confidence 72 because `rounds`/`rate` are the Cannon's
+`<Stats>` alone. Both readings are left standing; three loose ends in the switch
+(bit `0x2000` dispatched by nothing, three cases making no `FUN_08871ddc` call,
+and that call's argument being a second id space that remaps 3/8/9) say the
+id-to-bit relation is not the identity it looks like.
 
 ## The lock
 
