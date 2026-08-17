@@ -11,21 +11,28 @@
 //!
 //! # What it draws, and what it does not
 //!
-//! **Untextured triangles, flat-shaded by the viewer's own rig.** That is what
-//! [`oag_formats::rcsmodel`] recovers: positions and indices. Normals, texture
-//! coordinates and the `.gtf` textures they would address are all undecoded,
-//! and none of them is substituted - a made-up normal lights a model wrongly
-//! rather than visibly failing, which is the failure mode `CLAUDE.md` names.
+//! **Textured, lit, and blended where the material says so**, all of it out of
+//! the disc: positions, triangle indices and vertex normals from the
+//! `.rcsmodel`, the texture coordinate from the last four bytes of each vertex,
+//! and the `.gtf` each material names through [`oag_formats::gtf`]. Nothing is
+//! substituted - a made-up normal or an invented alpha would light a model
+//! wrongly rather than visibly failing, which is the failure mode `CLAUDE.md`
+//! names.
 //!
-//! A mesh whose geometry cannot be found or whose vertex stride cannot be
-//! recovered contributes **nothing**, and [`Report`] counts it so the caller can
-//! say so out loud.
+//! What is **not** drawn, and is counted rather than hidden: a mesh whose chunk
+//! cannot be found or whose vertex stride cannot be recovered, and the second
+//! texture a material may name at `+0x78`. That second slot is a *mask* on
+//! Talon's Junction's cloud plate (`cloud mask.gtf` beside `clouds_new.gtf`), a
+//! lightmap on its road, an emissive map on its tunnels and a normal map on a
+//! craft - one field with at least four uses, selected by a shader nothing here
+//! reads. So a surface whose coverage lives in that second texture still paints
+//! solid; see [`surface`].
 
 use anyhow::{Context, Result, bail};
 use oag_core::math::{Mat4, Vec3};
-use oag_formats::{rcsmodel, vex};
+use oag_formats::{gtf, rcsmodel, vex};
 
-use super::{Bounds, DrawCall, GpuVertex, Model};
+use super::{Bounds, DrawCall, GpuVertex, Model, ModelTexture};
 
 /// How far a dequantised point may miss the authored box face by, in world
 /// units, before a stride is rejected.
@@ -52,9 +59,8 @@ pub struct Report {
     ///
     /// Counted rather than derived from `addressed - drawn`, which that
     /// difference used to be: it silently absorbed every other reason a mesh
-    /// contributes nothing - a chunk whose submeshes are all strays, and now a
-    /// [`see_through`] one - and so read as a stride failure whatever went
-    /// wrong.
+    /// contributes nothing - a chunk whose submeshes are all strays among them -
+    /// and so read as a stride failure whatever went wrong.
     pub no_stride: usize,
     /// Triangles emitted.
     pub triangles: usize,
@@ -68,9 +74,18 @@ pub struct Report {
     /// is silent: see [`face_normals`].
     pub authored_normals: usize,
     /// Chunks whose material says the surface is not drawn solid, and which are
-    /// therefore not drawn at all until `.gtf` supplies an alpha. See
-    /// [`see_through`].
+    /// therefore drawn blended rather than in the opaque pass. See [`surface`].
     pub see_through: usize,
+    /// Materials whose `.gtf` this build could not paint with - no path in the
+    /// record, no such entry in the archive, or a container
+    /// `oag_formats::gtf::Texture::to_rgba` refuses.
+    ///
+    /// **The one to watch**, because its failure mode is the one this module
+    /// has spent the most effort removing: a draw call with no texture binds
+    /// `mesh_render::build`'s white 1x1 and paints a white sheet, which is
+    /// exactly what a *working* surface looks like at a glance. See
+    /// [`decode_texture`].
+    pub untextured: usize,
 }
 
 impl Report {
@@ -93,9 +108,10 @@ impl Report {
             n => format!(", plus {n} chunk(s) no node references, drawn in world space"),
         } + &match self.see_through {
             0 => String::new(),
-            n => {
-                format!(", {n} chunk(s) left out as see-through, which needs an alpha out of .gtf")
-            }
+            n => format!(", {n} chunk(s) drawn see-through"),
+        } + &match self.untextured {
+            0 => String::new(),
+            n => format!(", {n} material(s) whose .gtf did not paint"),
         } + &match self.authored_normals {
             0 => ", lit off face normals computed from the triangles".to_string(),
             n => format!(", {n} authored vertex normal(s)"),
@@ -164,7 +180,86 @@ pub fn scene_from(spec: &str, name: &str, data: &[u8]) -> Result<Option<(Model, 
     let Some(geometry) = sibling_geometry(spec, name, data) else {
         return Ok(None);
     };
-    build_scene(name, data, &geometry).map(Some)
+    build_scene(name, data, &geometry, &mut |path| {
+        super::read_blob(spec, path).ok()
+    })
+    .map(Some)
+}
+
+/// How a build fetches a material's `.gtf` out of whatever archive the caller
+/// holds.
+///
+/// A closure rather than an archive spec because the two callers hold different
+/// things: the viewer has a `<image>:<path>` string and the game has an
+/// `oag_assets::Archives` spanning seven of them. `None` for a texture the
+/// archive does not have, which [`Report::untextured`] counts.
+pub type Textures<'a> = &'a mut dyn FnMut(&str) -> Option<Vec<u8>>;
+
+/// A loader that finds nothing, for a caller with no archive in hand.
+///
+/// **Not a convenience** - it is the honest way to build geometry when the
+/// textures cannot be reached, and it produces the untextured model this module
+/// produced before `.gtf` was read, with every slot counted as missing rather
+/// than silently white.
+pub fn no_textures(_: &str) -> Option<Vec<u8>> {
+    None
+}
+
+/// Decodes one material's texture, or says which way it could not be.
+///
+/// **A `.gtf` that will not decode draws nothing rather than something.**
+/// `Texture::to_rgba` refuses the RSX's Morton-swizzled layouts and cubemaps -
+/// 53 of the disc's 7,333 files - and a refusal here leaves the slot `None`,
+/// which `mesh_render::build` binds its white 1x1 for. That is the same white
+/// sheet this module has been removing, so it is counted in
+/// [`Report::untextured`] rather than left to be discovered in a screenshot.
+fn decode_texture(label: &str, blob: &[u8]) -> Option<ModelTexture> {
+    let parsed = gtf::Gtf::parse(blob).ok()?;
+    let texture = parsed.only()?;
+    let rgba = texture.to_rgba(blob).ok()?;
+    let (width, height) = texture.level_size(0);
+    Some(ModelTexture {
+        label: label.to_string(),
+        width,
+        height,
+        rgba: rgba.into_iter().flatten().collect(),
+    })
+}
+
+/// One texture slot per material, in material-table order.
+///
+/// Positional and never compacted, because a chunk names its material by
+/// ordinal - dropping the ones that fail to decode would re-skin the model.
+fn skin(
+    model: &rcsmodel::Model,
+    textures: Textures<'_>,
+    report: &mut Report,
+) -> Vec<Option<ModelTexture>> {
+    let mut cache: std::collections::HashMap<String, Option<ModelTexture>> = Default::default();
+    model
+        .materials
+        .iter()
+        .map(|material| {
+            if material.texture.is_empty() {
+                report.untextured += 1;
+                return None;
+            }
+            // A circuit's 442 materials name far fewer distinct textures, and
+            // decoding a 2048x2048 DXT5 twice is the cost this avoids.
+            let decoded = cache
+                .entry(material.texture.clone())
+                .or_insert_with(|| {
+                    textures(&material.texture)
+                        .as_deref()
+                        .and_then(|blob| decode_texture(&material.texture, blob))
+                })
+                .clone();
+            if decoded.is_none() {
+                report.untextured += 1;
+            }
+            decoded
+        })
+        .collect()
 }
 
 /// The bounding box and chunk hash a PS3 `Mesh` node's payload carries.
@@ -227,8 +322,13 @@ fn referenced(data: &[u8], nodes: &[vex::Node], model: &rcsmodel::Model) -> Vec<
 /// # Errors
 ///
 /// As [`build`].
-pub fn build_scene(label: &str, data: &[u8], model_blob: &[u8]) -> Result<(Model, Report)> {
-    let (mut out, mut report) = build(label, data, model_blob, |c| c.mesh)?;
+pub fn build_scene(
+    label: &str,
+    data: &[u8],
+    model_blob: &[u8],
+    textures: Textures<'_>,
+) -> Result<(Model, Report)> {
+    let (mut out, mut report) = build(label, data, model_blob, textures, |c| c.mesh)?;
 
     let model = rcsmodel::Model::parse(model_blob)
         .map_err(|e| anyhow::anyhow!("{label}: the .rcsmodel beside it: {e}"))?;
@@ -239,16 +339,14 @@ pub fn build_scene(label: &str, data: &[u8], model_blob: &[u8]) -> Result<(Model
         if placed.contains(&mesh.hash) {
             continue;
         }
-        if see_through(&model, mesh) {
-            report.see_through += 1;
-            continue;
-        }
         // No authored box to check against, so the stride comes from where the
         // file puts its buffers, and failing that from the geometry's own
         // compactness - see `rcsmodel::Mesh::solve_stride_without_a_box`.
         let Some(stride) = mesh.solve_stride_without_a_box(model_blob) else {
             continue;
         };
+        let surface = surface(&model, mesh, &out.textures);
+        report.see_through += usize::from(surface.blend.is_some());
         let mut emitted = false;
         for submesh in &mesh.submeshes {
             if submesh.vertex_count == 0 || submesh.index_count == 0 {
@@ -261,14 +359,19 @@ pub fn build_scene(label: &str, data: &[u8], model_blob: &[u8]) -> Result<(Model
                 continue;
             };
             let normals = mesh.normals(model_blob, submesh, stride).ok();
+            let texcoords = mesh.texcoords(model_blob, submesh, stride).ok();
             report.authored_normals += normals.as_deref().map_or(0, authored);
             emit(
                 &mut out,
-                &points,
-                normals.as_deref(),
-                &indices,
+                Geometry {
+                    points: &points,
+                    normals: normals.as_deref(),
+                    texcoords: texcoords.as_deref(),
+                    indices: &indices,
+                },
                 Mat4::IDENTITY,
                 None,
+                surface,
             );
             report.triangles += indices.len() / 3;
             emitted = true;
@@ -286,41 +389,79 @@ pub fn build_scene(label: &str, data: &[u8], model_blob: &[u8]) -> Result<(Model
     Ok((out, report))
 }
 
-/// Whether a chunk's material says its surface is not drawn solid.
+/// How one chunk is drawn: which texture slot, and blended or not.
 ///
-/// # Why this skips the chunk instead of blending it
+/// # `.gtf` is what turned the see-through chunks back on
 ///
-/// **There is no alpha to blend with.** A see-through HD surface gets its
-/// coverage from the `.gtf` texture beside its `.rcsmaterial`, and `.gtf` is
-/// unread - 7,333 files and 2.4 GiB, the largest single thing in the archives.
-/// Nothing else in the file carries one: positions, indices and normals are
-/// decoded, and the four bytes at `+0x0a` were measured against the
-/// vertex-colour hypothesis and are not one.
+/// **The alpha a blend needs is in the texture and nowhere else**, and until
+/// `oag_formats::gtf` was read this module had none - so a see-through chunk was
+/// *left out* rather than blended, because alpha-over at `alpha = 1.0` paints
+/// exactly the opaque pixels while dropping depth write and additive blows a
+/// glass panel to white. That stopgap is gone: `Texture::to_rgba` returns RGBA,
+/// the shader's `fs_main_blend` multiplies the texel's alpha into its output,
+/// and these surfaces are drawn with the equation the material asks for.
 ///
-/// So the three options were to draw these solid, to blend them at `alpha =
-/// 1.0`, or to leave them out, and the middle one is not a middle: alpha-over at
-/// alpha 1 paints exactly the same pixels as opaque while additionally dropping
-/// depth write, and additive would blow every glass panel to white.
+/// The stakes are the same as they were: on Talon's Junction the largest surface
+/// in the whole file is a 63-triangle `clouds` plate spanning 2,011 x 2,195
+/// world units, and drawn opaque it covers the circuit - seen from above the
+/// track was one white blob. 4.3 % to 35.9 % of chunks are see-through across
+/// all 16 circuits (`crates/formats/tests/rcsmodel_material_ground_truth.rs`).
 ///
-/// Between the other two, the disc decides it. On Talon's Junction the largest
-/// surface in the file is a 63-triangle `clouds` plate spanning 2,011 x 2,195
-/// world units - a see-through sheet drawn solid *covers the entire circuit*,
-/// and seen from above the track was one white blob. Skipping it is what makes
-/// the road, the pit lane and the markings visible at all. The fraction skipped
-/// is 4.3 % to 35.9 % of chunks across all 16 circuits
-/// (`crates/formats/tests/rcsmodel_material_ground_truth.rs`), so no circuit is
-/// mostly this.
+/// # A texture that will not paint is *not* a reason to blend
 ///
-/// **This is not transparency and is not meant to stand.** It is an honest
-/// absence in place of a wrong picture, in the sense `CLAUDE.md` means, and
-/// [`Report::see_through`] counts it so a load says so out loud. The condition
-/// to reverse it is exactly one thing: when `.gtf` supplies an alpha, these
-/// chunks are drawn again, blended with the class
-/// [`rcsmodel::Material::blend`] already recovers for each of them.
-fn see_through(model: &rcsmodel::Model, mesh: &rcsmodel::Mesh) -> bool {
-    model
-        .material_of(mesh)
-        .is_some_and(rcsmodel::Material::is_see_through)
+/// A material whose `.gtf` is missing or refused has no alpha either, so
+/// blending it would put the white 1x1 through the transparent pass and paint
+/// the same sheet with depth write off - strictly worse than before. Such a
+/// chunk stays in the opaque pass and is counted in [`Report::untextured`].
+fn surface(
+    model: &rcsmodel::Model,
+    mesh: &rcsmodel::Mesh,
+    skin: &[Option<ModelTexture>],
+) -> Surface {
+    let slot = mesh.material as usize;
+    let texture = skin.get(slot).and_then(Option::as_ref).map(|_| slot);
+    let blend = match model.material_of(mesh).map(rcsmodel::Material::blend) {
+        // Only a painted surface can be blended - see above.
+        Some(rcsmodel::Blend::Class(class)) if texture.is_some() => Some(class),
+        _ => None,
+    };
+    Surface { texture, blend }
+}
+
+/// One submesh's decoded arrays, as [`emit`] takes them.
+///
+/// A struct rather than four parameters because they are one thing - the same
+/// submesh read four ways, all of them the same length - and because the two
+/// call sites would otherwise differ only in an argument's position.
+#[derive(Debug, Clone, Copy)]
+struct Geometry<'a> {
+    points: &'a [[f32; 3]],
+    /// `None` leaves every vertex normal zero, which is [`face_normals`]'
+    /// signal to derive one.
+    normals: Option<&'a [[f32; 3]]>,
+    /// `None` leaves every coordinate at the origin of the texture.
+    texcoords: Option<&'a [[f32; 2]]>,
+    indices: &'a [u16],
+}
+
+/// What [`surface`] decided, carried into [`emit`].
+#[derive(Debug, Clone, Copy, Default)]
+struct Surface {
+    /// Index into `Model::textures`, or `None` for a material with no painted
+    /// texture.
+    texture: Option<usize>,
+    /// The blend equation, or `None` for the opaque pass.
+    blend: Option<vex::BlendClass>,
+}
+
+/// Zero for a coordinate that is not a finite number.
+///
+/// 1.68 % of a circuit's stride-18 vertices decode to an infinity or a NaN at
+/// this offset, which is the residue [`rcsmodel::Mesh::texcoords`] measures and
+/// does not explain. A NaN in a vertex buffer is not a visible failure, it is a
+/// hole in the rasteriser's output, so it is pinned to zero here.
+fn finite(v: f32) -> f32 {
+    if v.is_finite() { v } else { 0.0 }
 }
 
 /// How many of a submesh's decoded normals the file actually authored.
@@ -341,14 +482,13 @@ fn authored(normals: &[[f32; 3]]) -> usize {
 ///
 /// `normals` are the file's own, already decoded; `None` leaves the vertex
 /// normal zero, which is [`face_normals`]'s signal to derive one.
-fn emit(
-    out: &mut Model,
-    points: &[[f32; 3]],
-    normals: Option<&[[f32; 3]]>,
-    indices: &[u16],
-    to_world: Mat4,
-    node: Option<u32>,
-) {
+fn emit(out: &mut Model, mesh: Geometry<'_>, to_world: Mat4, node: Option<u32>, surface: Surface) {
+    let Geometry {
+        points,
+        normals,
+        texcoords,
+        indices,
+    } = mesh;
     let first_vertex = u32::try_from(out.vertices.len()).unwrap_or(u32::MAX);
     let first_index = u32::try_from(out.indices.len()).unwrap_or(u32::MAX);
     let mut centre = Vec3::ZERO;
@@ -372,7 +512,13 @@ fn emit(
             // Zero means the file gave none, and `face_normals` derives it.
             normal,
             colour: [1.0, 1.0, 1.0, 1.0],
-            texcoord: [0.0, 0.0],
+            // A non-finite half is a vertex whose coordinate this reading does
+            // not explain - 1.68 % of a circuit's stride-18 ones. Zero rather
+            // than a NaN travelling into the vertex buffer.
+            texcoord: texcoords
+                .and_then(|t| t.get(k))
+                .map(|&[u, v]| [finite(u), finite(v)])
+                .unwrap_or([0.0, 0.0]),
             lit: 1.0,
             anim: 0,
         });
@@ -385,15 +531,19 @@ fn emit(
 
     out.indices
         .extend(indices.iter().map(|&i| first_vertex + u32::from(i)));
-    out.draws.push(DrawCall {
+    let list = match surface.blend {
+        Some(_) => &mut out.transparent_draws,
+        None => &mut out.draws,
+    };
+    list.push(DrawCall {
         range: first_index..u32::try_from(out.indices.len()).unwrap_or(u32::MAX),
-        texture: None,
+        texture: surface.texture,
         bounds: Bounds {
             centre: centre.to_array(),
             radius,
         },
         culled: false,
-        blend: None,
+        blend: surface.blend,
         node,
     });
 }
@@ -412,6 +562,7 @@ pub fn build(
     label: &str,
     data: &[u8],
     model_blob: &[u8],
+    textures: Textures<'_>,
     pick: fn(vex::classes::Classes) -> Option<u32>,
 ) -> Result<(Model, Report)> {
     if !vex::has_magic(data) {
@@ -437,6 +588,7 @@ pub fn build(
 
     let mut out = Model::none(label);
     let mut report = Report::default();
+    out.textures = skin(&model, textures, &mut report);
 
     for (index, node) in nodes
         .iter()
@@ -451,10 +603,6 @@ pub fn build(
             continue;
         };
         report.addressed += 1;
-        if see_through(&model, mesh) {
-            report.see_through += 1;
-            continue;
-        }
         let tolerance = mesh.scale.iter().fold(0.0f32, |a, &b| a.max(b)) * TOLERANCE_STEPS;
         // The box first, because it is the tightest oracle there is. Where it
         // settles nothing, the buffer layout can - and that is safe to fall back
@@ -470,6 +618,8 @@ pub fn build(
         };
 
         let to_world = Mat4::from_cols_array(&world[index]);
+        let surface = surface(&model, mesh, &out.textures);
+        report.see_through += usize::from(surface.blend.is_some());
         let mut emitted = false;
         for submesh in &mesh.submeshes {
             if submesh.vertex_count == 0 || submesh.index_count == 0 {
@@ -491,14 +641,19 @@ pub fn build(
             };
 
             let normals = mesh.normals(model_blob, submesh, stride).ok();
+            let texcoords = mesh.texcoords(model_blob, submesh, stride).ok();
             report.authored_normals += normals.as_deref().map_or(0, authored);
             emit(
                 &mut out,
-                &points,
-                normals.as_deref(),
-                &indices,
+                Geometry {
+                    points: &points,
+                    normals: normals.as_deref(),
+                    texcoords: texcoords.as_deref(),
+                    indices: &indices,
+                },
                 to_world,
                 u32::try_from(index).ok(),
+                surface,
             );
             report.triangles += indices.len() / 3;
             emitted = true;
@@ -627,14 +782,17 @@ mod tests {
             strays: 2,
             unreferenced: 639,
             see_through: 257,
+            untextured: 3,
             authored_normals: 531_904,
         };
         let line = report.describe();
         assert!(line.contains("59 of 126"), "{line}");
         assert!(line.contains("56 addressed no chunk"), "{line}");
+        assert!(line.contains("257 chunk(s) drawn see-through"), "{line}");
         assert!(
-            line.contains("257 chunk(s) left out as see-through"),
-            "the picture's largest remaining absence has to be in the line: {line}"
+            line.contains("3 material(s) whose .gtf did not paint"),
+            "a draw with no texture binds the white 1x1 and paints a sheet, which \
+             is what a working surface looks like at a glance: {line}"
         );
         assert!(
             line.contains("11 had no recoverable vertex stride"),

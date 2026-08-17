@@ -9,23 +9,18 @@
 //!
 //! # What is decoded here, and what is not
 //!
-//! **Positions, triangle indices, vertex normals and the material table.** The
-//! normals are a packed 11:11:10 signed triple at `+6` of every vertex, on all
-//! three strides - see [`unpack_normal`] and [`Mesh::normals`]. The material
-//! table is what says which surfaces are see-through - see [`material`], and
-//! [`Blend`] for why nothing *blends* through it yet.
+//! **Positions, triangle indices, vertex normals, texture coordinates and the
+//! material table.** The normals are a packed 11:11:10 signed triple at `+6` of
+//! every vertex, on all three strides - see [`unpack_normal`] and
+//! [`Mesh::normals`]. The texture coordinate is the **last four** bytes of a
+//! vertex, two big-endian halves, on every stride - [`Mesh::texcoords`]. The
+//! material table names the `.gtf` each surface paints with and says which
+//! surfaces are see-through - [`material`] and [`Blend`].
 //!
-//! The rest of a vertex is 4 to 12 further bytes and is **not** decoded. What is
-//! known about them:
-//!
-//! - The **last four** read as two `f16` in a texture-coordinate range on every
-//!   stride. That is where a UV would be, and there is no way to check it until
-//!   the `.gtf` textures are read - so nothing consumes it and the code does not
-//!   call it one.
-//! - The four at **`+0x0a`** are a *tangent* on stride 22 and something else on
-//!   stride 18. That split follows the **stride**, not the `83 XX` descriptor
-//!   byte, which was the obvious hypothesis and is measured false; see
-//!   [`SubMesh::format`].
+//! What remains undecoded in a vertex is the four bytes at **`+0x0a`**, which
+//! are a *tangent* on stride 22 and something else on stride 18. That split
+//! follows the **stride**, not the `83 XX` descriptor byte, which was the
+//! obvious hypothesis and is measured false; see [`SubMesh::format`].
 //!
 //! # The `.vex` is not optional
 //!
@@ -119,6 +114,13 @@ const MATERIAL_LEN: usize = 0x18;
 
 /// Bytes of position in a vertex: three big-endian `i16`s.
 const POSITION_LEN: usize = 6;
+
+/// Bytes of texture coordinate at the **end** of a vertex: two big-endian
+/// halves.
+///
+/// Measured from the end rather than the start because that is what holds
+/// across all three strides - see [`Mesh::texcoords`].
+const TEXCOORD_LEN: usize = 4;
 
 /// A chunk whose submeshes are a table of `0x80`-byte descriptors at `+0x60`.
 ///
@@ -214,6 +216,39 @@ pub fn unpack_normal(word: u32) -> [f32; 3] {
         signed(word >> 11, 11),
         signed(word >> 22, 10),
     ]
+}
+
+/// Turns a big-endian IEEE half into an `f32`.
+///
+/// Written out rather than pulled in: Rust's own `f16` is unstable, and the two
+/// places this project needs one (here and a `.gtf` descriptor) do not justify a
+/// dependency. Subnormals and zero are handled by the `exp == 0` arm, and
+/// infinities and NaN come out as themselves so a caller can *see* a field that
+/// is not a half rather than have it silently clamped - which is what
+/// [`Mesh::texcoords`]' non-finite count is measuring.
+#[must_use]
+pub fn unpack_half(bits: u16) -> f32 {
+    let sign = if bits & 0x8000 == 0 { 1.0 } else { -1.0 };
+    let exponent = i32::from((bits >> 10) & 0x1f);
+    let fraction = f32::from(bits & 0x03ff) / 1024.0;
+    sign * match exponent {
+        0 => fraction * SUBNORMAL_SCALE,
+        31 if fraction == 0.0 => f32::INFINITY,
+        31 => f32::NAN,
+        _ => (1.0 + fraction) * exp2(exponent - 15),
+    }
+}
+
+/// `2^-14`, the smallest normal half, written as a literal because
+/// `f32::powi` is a platform transcendental this crate's rules keep out.
+const SUBNORMAL_SCALE: f32 = 6.103_515_6e-5;
+
+/// `2^n` for the exponent range a half can hold, by bit pattern.
+///
+/// Exact, and no `powf` - the exponent of an `f32` is bits 23..31 biased by 127,
+/// and a half's `1..30` maps inside that range with room to spare.
+fn exp2(n: i32) -> f32 {
+    f32::from_bits(((n + 127) as u32) << 23)
 }
 
 /// Everything that can go wrong reading one.
@@ -599,6 +634,53 @@ impl Mesh {
             .map(|k| {
                 let at = submesh.vertex_offset + k * stride + NORMAL_OFFSET;
                 unpack_normal(ByteOrder::Big.u32(data, at))
+            })
+            .collect())
+    }
+
+    /// The texture coordinates, one pair per vertex.
+    ///
+    /// # The last four bytes of a vertex, on every stride
+    ///
+    /// Two big-endian IEEE halves - see [`unpack_half`]. Located by elimination
+    /// rather than decoded from anything that names them: the position, the
+    /// normal and (at stride 22) the tangent account for every other field, and
+    /// what is left reads as a pair in a texture-coordinate range.
+    ///
+    /// **How strong that is, measured**: on Assegai 99.9 % of 24,848 stride-22
+    /// vertices and 96.9 % of its stride-18 ones fall in the unit square, with
+    /// 0.02 % non-finite. A circuit is looser, as tiling makes it - 79.6 % of
+    /// Talon's Junction's 525,944 stride-18 vertices in the unit square, 83.2 %
+    /// within +/-8, and 1.68 % non-finite, which is a real residue and not
+    /// rounding.
+    ///
+    /// **What confirms it is a picture, and that is now possible.** Until
+    /// `oag_formats::gtf` was read there was nothing to check a UV against, so
+    /// this went unread and the code refused to call it one. There is an oracle
+    /// now: a texture sampled through these coordinates either lands on the
+    /// surface it belongs to or streaks visibly.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::OutOfBounds`], as [`Self::positions`].
+    pub fn texcoords(
+        &self,
+        data: &[u8],
+        submesh: &SubMesh,
+        stride: usize,
+    ) -> Result<Vec<[f32; 2]>> {
+        let end = submesh.vertex_offset + stride * submesh.vertex_count.saturating_sub(1) + stride;
+        if submesh.vertex_count > 0 && end > data.len() {
+            return Err(Error::OutOfBounds {
+                what: "a vertex buffer's texture coordinates",
+                end,
+                len: data.len(),
+            });
+        }
+        Ok((0..submesh.vertex_count)
+            .map(|k| {
+                let at = submesh.vertex_offset + k * stride + stride - TEXCOORD_LEN;
+                std::array::from_fn(|i| unpack_half(ByteOrder::Big.u16(data, at + i * 2)))
             })
             .collect())
     }

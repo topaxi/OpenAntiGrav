@@ -11,9 +11,11 @@
 //! # What is *not* decoded
 //!
 //! The `.rcsmaterial` file the [`Material::name`] path leads to is compiled RSX
-//! shader code and is not read. Neither is the `.gtf` texture beside it, which is
-//! where a surface's **alpha** lives - see the note on [`Blend`] for why that
-//! matters more than it sounds like it should.
+//! shader code and is not read - so *which* of a material's two textures the
+//! shader samples for what is unknown, and only the first is painted. The
+//! textures themselves are read: [`Material::texture`] names a `.gtf` and
+//! `oag_formats::gtf` decodes it, which is where a surface's **alpha** comes
+//! from and why [`Blend`] can be drawn at all.
 //!
 //! # Layout
 //!
@@ -41,6 +43,12 @@ use crate::{ByteOrder, vex};
 
 /// How many low bits of the state word select the transparency mode.
 const TRANSPARENCY_BITS: u32 = 0x3;
+
+/// What a texture path ends in, lowercased.
+///
+/// Used as a *check* on the two pointer fields rather than as a search key -
+/// see [`Material::parse`].
+const TEXTURE_SUFFIX: &str = ".gtf";
 
 /// The blend factor this module reads as "one", `GL_ONE`.
 ///
@@ -75,6 +83,36 @@ pub struct Material {
     pub src_factor: u16,
     /// The destination blend factor at `+0x16`.
     pub dst_factor: u16,
+    /// The `.gtf` path at `+0x58`: the texture this material paints with.
+    ///
+    /// **In the clear, and on every material of both models measured** - 4 of 4
+    /// on Assegai, 200 of the first 200 on Talon's Junction. `WindscreenShape`'s
+    /// material names `data/ships/assegai/livery1/assegai_glass.gtf`, which is
+    /// what a windscreen should be painted with, and the circuit's name
+    /// `talons_support_struts.gtf` and `tunnel_fx_diffuse.gtf`.
+    ///
+    /// Empty when the pointer leaves the file, which nothing measured does.
+    pub texture: String,
+    /// A second `.gtf` path at `+0x78`, on the materials that carry one.
+    ///
+    /// **Present on 337 of Talon's Junction's 442 and 2 of Assegai's 4, and it
+    /// is not one thing.** The first look at it suggested a normal map, since
+    /// Assegai's two are `assegai_n.gtf` and `assegai_glass_n.gtf`. Widening the
+    /// sample by four materials refuted that outright - one slot, at least four
+    /// uses:
+    ///
+    /// | material | first texture | second |
+    /// | --- | --- | --- |
+    /// | `diffuse_with_specular_from_alpha_n_vcol` | `assegai_tp_1024.gtf` | `assegai_n.gtf` |
+    /// | `tunnel_fx_noalpha` | `tunnel_fx_diffuse.gtf` | `tunnel_fx_emissive.gtf` |
+    /// | `clouds` | `clouds_new.gtf` | `cloud mask.gtf` |
+    /// | `diffusewithalphachannel` | `holebaralpha.gtf` | an `lmaps/...-lmap.gtf` |
+    ///
+    /// A normal map, an emissive map, a coverage mask and a lightmap. Which it
+    /// is per material is in the `.rcsmaterial`'s shader, which is not read, so
+    /// **nothing samples this** and a surface whose coverage lives here paints
+    /// solid - the cloud plate above being the one that shows.
+    pub second_texture: Option<String>,
 }
 
 /// Which of three modes the low two bits of [`Material::state`] select.
@@ -110,26 +148,26 @@ pub enum Transparency {
 /// What a material's factor pair asks for, once [`Transparency`] says the pair
 /// is consumed at all.
 ///
-/// # Nothing blends through this yet, and why
+/// # What draws through it, and what still does not
 ///
-/// **A see-through surface needs an alpha, and this project has none for HD.**
-/// The alpha is in the `.gtf` texture (7,333 files, 2.4 GiB, unread) and in
-/// nothing else: `oag_formats::rcsmodel` decodes positions, indices and normals,
-/// and the four bytes at `+0x0a` were measured against the vertex-colour
-/// hypothesis and are not one - no lane is `0xff`-dominant the way an alpha
-/// would be, and on stride 22 the last is the bimodal `0`/`255` of a packed
-/// tangent's handedness.
+/// **A blend needs an alpha, and the alpha is in the texture.** That is why
+/// this table sat unwired when it was first read: `oag_formats::rcsmodel`
+/// decodes positions, indices and normals, and the four bytes at `+0x0a` were
+/// measured against the vertex-colour hypothesis and are not one - no lane is
+/// `0xff`-dominant the way an alpha would be, and on stride 22 the last is the
+/// bimodal `0`/`255` of a packed tangent's handedness. With `alpha = 1.0`,
+/// [`vex::BlendClass::AlphaOver`] paints exactly the opaque pixels while losing
+/// depth ordering and [`vex::BlendClass::Additive`] blows a glass panel white.
 ///
-/// So blending an HD surface today would use `alpha = 1.0`, and
-/// [`vex::BlendClass::AlphaOver`] at alpha 1 is pixel-identical to drawing it
-/// opaque while additionally losing depth ordering, and
-/// [`vex::BlendClass::Additive`] would blow every glass panel to white.
+/// `oag_formats::gtf` closed that: [`Material::texture`] names a `.gtf`, its
+/// `to_rgba` carries the alpha, and `oag_render::mesh::rcs` draws these surfaces
+/// blended with the class below.
 ///
-/// What the renderer does with this instead is **skip the chunk** and count it,
-/// which is a wrong picture replaced by an honest absence rather than by a
-/// better picture - `oag_render::mesh::rcs::see_through` carries the evidence
-/// for that choice and the condition to reverse it. The class this reads is
-/// what a blend will use once `.gtf` supplies the alpha.
+/// **One case still paints solid, and it is a property of the data rather than
+/// of this module.** Where a material's coverage lives in the *second* texture
+/// at [`Material::second_texture`] - Talon's Junction's cloud plate names
+/// `cloud mask.gtf` beside `clouds_new.gtf` - nothing here samples it, because
+/// what that slot is for varies per shader and no shader has been read.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Blend {
     /// [`Transparency::Opaque`]: the factor pair is not consumed.
@@ -159,12 +197,27 @@ impl Material {
         if at + 0x18 > data.len() {
             return None;
         }
-        let name_at = ByteOrder::Big.u32(data, at + 0x04) as usize;
+        // **Checked to be a texture path rather than assumed to be one.** These
+        // two words sit past the shortest record this reader tolerates, and
+        // `+0x78` is absent on 296 of Talon's Junction's 442 materials - where
+        // it is absent the word is not a pointer at all, so following it blindly
+        // would put arbitrary bytes in a `String`. A field that does not lead to
+        // a printable `.gtf` path is reported as no texture.
+        let path = |off: usize| {
+            let s = (at + off + 4 <= data.len())
+                .then(|| cstr(data, ByteOrder::Big.u32(data, at + off) as usize))?;
+            let looks_like_one = s.len() < 256
+                && s.bytes().all(|b| (0x20..0x7f).contains(&b))
+                && s.to_ascii_lowercase().ends_with(TEXTURE_SUFFIX);
+            looks_like_one.then_some(s)
+        };
         Some(Self {
-            name: cstr(data, name_at),
+            name: cstr(data, ByteOrder::Big.u32(data, at + 0x04) as usize),
             state: ByteOrder::Big.u32(data, at + 0x10),
             src_factor: ByteOrder::Big.u16(data, at + 0x14),
             dst_factor: ByteOrder::Big.u16(data, at + 0x16),
+            texture: path(0x58).unwrap_or_default(),
+            second_texture: path(0x78),
         })
     }
 

@@ -568,20 +568,18 @@ rather than explained away.
   [rcsmodel](rcsmodel.md); the vertex
   stride is in no field of the file, and of the rest of a vertex a tangent
   (stride 22 only) and a texture coordinate are located but not decoded. A
-  chunk's `+0x20` indexes the material table, and the low two bits of a
-  material's state word say whether the surface is see-through - which is what
-  keeps a circuit's glass, cloud plates, fences and crowd billboards from being
-  drawn as solid white sheets.
+  chunk's `+0x20` indexes the material table; the low two bits of a material's
+  state word say whether the surface is see-through, and `+0x58` names the
+  `.gtf` it paints with. Together those are a textured, blended HD circuit.
 - **`.rcsmaterial`** - 1,632 files, wall-to-wall 32-bit hashes. A track authors
   around fifty by name (`track_surface`, `track_wall`, `glass_reflect`,
   `emissive_bloom`), and a second identical set under `materials_reversed/`.
 - **`.gtf`** - 7,333 files, the PS3's own texture container and publicly
   documented. One sample header reads version `0x0105`, one texture, payload at
-  `+0x80` behind an RSX texture descriptor. Not surveyed. **This is now the
-  single thing between a read circuit and a drawn one**: it holds the alpha
-  every see-through surface's coverage comes from, and nothing else on the disc
-  does, so until it is read those surfaces are left out rather than painted
-  solid.
+  `+0x80` behind an RSX texture descriptor. **Read**, and it is what put pixels
+  on an HD craft and an HD circuit: a material names its `.gtf` at `+0x58`, and
+  the alpha in that texture is where every see-through surface's coverage comes
+  from.
 - **`.pvs`, `.pvspatch`, `.probes`** - one of each per circuit direction, 28
   apiece. `talons_junction/track.pvs` is 114 KiB against 19 `section` nodes, so
   it is a finer structure than the mask in the `.vex`, not the same table moved.
