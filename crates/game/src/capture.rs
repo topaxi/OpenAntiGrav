@@ -635,6 +635,9 @@ pub fn run(
         &view,
         &list,
         crate::display::viewport((width, height), options.settings.display.aspect),
+        // A capture is one static frame with no `MenuStage` clock behind it,
+        // so there is nothing here for a value marquee to be mid-scroll of.
+        None,
     );
     let pixels = read_back(&device, &queue, encoder, &target, width, height)?;
     write_png(&options.path, width, height, &pixels)
@@ -835,6 +838,7 @@ pub fn loading(
         &view,
         &screen.draw_list(options.phase, &options.progress, &atlas),
         viewport,
+        None,
     );
     draw_wave(&mut encoder, &view, &wave, viewport);
 

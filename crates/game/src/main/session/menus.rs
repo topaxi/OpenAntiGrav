@@ -3,7 +3,7 @@
 use anyhow::{Context, Result};
 
 use oag_game::render::{Renderer, VideoFormat};
-use oag_game::{audio, catalogue, display, menu, movie, settings};
+use oag_game::{audio, catalogue, display, marquee, menu, movie, settings};
 use oag_physics::SpeedClass;
 
 use crate::hints::{ESC_TO_MENU, RACE_KEYS, SHELL_KEYS, SHELL_TITLE};
@@ -163,6 +163,11 @@ impl Session {
         let shape = self.backdrop_shape.filter(|_| self.backdrop.is_some());
         let format = self.backdrop.as_ref().map(VideoFormat::of_feed);
         let frames = self.backdrop.as_ref().map_or(0, movie::Feed::len);
+        // Cloned before the move below: the renderer takes the atlas to build
+        // its own GPU-side texture from, but the stage also wants it plain,
+        // to measure a value column's text against. See
+        // `MenuStage::text_atlas`.
+        let text_atlas = rows_face.clone();
         let renderer = Renderer::new(
             &self.gpu.device,
             &self.gpu.queue,
@@ -211,6 +216,8 @@ impl Session {
             renderer,
             menu: model,
             skin,
+            text_atlas,
+            marquee: marquee::Timer::default(),
             // Opening the menus is not a page change: the front end's own
             // hand-off already had its moment, and starting a transition here
             // would zoom the first page in from nothing on every boot.

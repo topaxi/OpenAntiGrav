@@ -96,6 +96,60 @@ impl Tween {
     }
 }
 
+/// How long a value marquee sits still at each end before it moves again.
+///
+/// **Ours**, picked rather than measured: the front end's value column is
+/// this build's own invention (see `menu::VALUE_RIGHT`), so there is no
+/// original marquee to time this against. A second is long enough to start
+/// and finish reading a short overflow before it moves, and short enough that
+/// a long device name does not feel stuck.
+pub const MARQUEE_HOLD: f32 = 1.0;
+
+/// How fast a value marquee's text moves once it is moving, in pixels a
+/// second of the 480x272 space the rows are laid out in.
+///
+/// **Ours**, for the same reason [`MARQUEE_HOLD`] is. Picked to cross a
+/// typical adapter label's overflow - a few hundred pixels - in a couple of
+/// seconds, which read faster than a hold and slower than a blur in manual
+/// testing.
+pub const MARQUEE_SPEED: f32 = 60.0;
+
+/// How far left an overflowing value's text should sit right now, given how
+/// long it has held focus.
+///
+/// A pure function of elapsed time instead of a stateful player: *when* to
+/// reset that elapsed time back to zero - a row losing focus, or its value
+/// changing under an unmoved cursor - is a decision about which row is
+/// focused, not about the clock, so it belongs to the caller
+/// (`MenuStage::tick`) and not here.
+///
+/// `overflow` is how many pixels too wide the text is for its column
+/// (`text_width - column_width`, zero or less meaning it already fits).
+/// Holds at each end for [`MARQUEE_HOLD`] seconds, slides between them at
+/// [`MARQUEE_SPEED`] pixels a second, and bounces back rather than cutting -
+/// a jump-reset mid-word is exactly the kind of motion that reads as broken.
+/// Returns `0.0`, unconditionally, for text that already fits: there is
+/// nothing to scroll, and a caller that skipped the `overflow <= 0.0` check
+/// itself still gets the resting position rather than a division by zero.
+#[must_use]
+pub fn marquee_offset(elapsed: f32, overflow: f32) -> f32 {
+    if overflow <= 0.0 {
+        return 0.0;
+    }
+    let scroll = overflow / MARQUEE_SPEED;
+    let cycle = 2.0 * MARQUEE_HOLD + 2.0 * scroll;
+    let t = elapsed.max(0.0) % cycle;
+    if t < MARQUEE_HOLD {
+        0.0
+    } else if t < MARQUEE_HOLD + scroll {
+        (t - MARQUEE_HOLD) * MARQUEE_SPEED
+    } else if t < 2.0 * MARQUEE_HOLD + scroll {
+        overflow
+    } else {
+        overflow - (t - 2.0 * MARQUEE_HOLD - scroll) * MARQUEE_SPEED
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -155,6 +209,65 @@ mod tests {
         assert!(tween.done());
         assert!((tween.progress() - 1.0).abs() < f32::EPSILON);
         assert!((tween.between(0.0, 5.0) - 5.0).abs() < f32::EPSILON);
+    }
+
+    /// Text that already fits never moves, at any elapsed time.
+    #[test]
+    fn a_value_that_fits_does_not_scroll() {
+        assert_eq!(marquee_offset(0.0, 0.0), 0.0);
+        assert_eq!(marquee_offset(100.0, 0.0), 0.0);
+        assert_eq!(marquee_offset(100.0, -20.0), 0.0);
+    }
+
+    /// The first second is a hold at the start, so a reader gets a beat before
+    /// anything moves.
+    #[test]
+    fn an_overflowing_value_holds_at_the_start() {
+        assert_eq!(marquee_offset(0.0, 120.0), 0.0);
+        assert_eq!(marquee_offset(MARQUEE_HOLD - 0.01, 120.0), 0.0);
+    }
+
+    /// Past the starting hold it slides at exactly [`MARQUEE_SPEED`].
+    #[test]
+    fn it_slides_at_the_stated_speed() {
+        let offset = marquee_offset(MARQUEE_HOLD + 0.5, 120.0);
+        assert!(
+            (offset - 0.5 * MARQUEE_SPEED).abs() < f32::EPSILON,
+            "{offset}"
+        );
+    }
+
+    /// It reaches the full overflow and holds there, rather than overshooting
+    /// or bouncing early.
+    #[test]
+    fn it_holds_at_the_end_once_it_arrives() {
+        let overflow = 120.0;
+        let scroll = overflow / MARQUEE_SPEED;
+        let at_arrival = marquee_offset(MARQUEE_HOLD + scroll, overflow);
+        assert!((at_arrival - overflow).abs() < f32::EPSILON, "{at_arrival}");
+        let mid_hold = marquee_offset(MARQUEE_HOLD + scroll + MARQUEE_HOLD - 0.01, overflow);
+        assert!((mid_hold - overflow).abs() < f32::EPSILON, "{mid_hold}");
+    }
+
+    /// A full cycle bounces back to zero rather than jump-cutting: the offset
+    /// just past the end hold is less than the offset just before it, and the
+    /// whole cycle repeats identically.
+    #[test]
+    fn it_bounces_back_rather_than_cutting() {
+        let overflow = 120.0;
+        let scroll = overflow / MARQUEE_SPEED;
+        let cycle = 2.0 * MARQUEE_HOLD + 2.0 * scroll;
+        let just_after_end_hold = marquee_offset(2.0 * MARQUEE_HOLD + scroll + 0.5, overflow);
+        assert!(
+            just_after_end_hold < overflow,
+            "{just_after_end_hold} should have started easing back"
+        );
+        let one_cycle_later = marquee_offset(0.3 + cycle, overflow);
+        let first_time = marquee_offset(0.3, overflow);
+        assert!(
+            (one_cycle_later - first_time).abs() < 0.01,
+            "the cycle should repeat: {first_time} then {one_cycle_later}"
+        );
     }
 
     /// The curve accelerates, which is the one property the capture actually

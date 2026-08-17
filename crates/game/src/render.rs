@@ -429,7 +429,9 @@ impl Renderer {
     /// Draws `list` into `view`, clearing it first.
     ///
     /// What a stage does: it owns the frame, so it starts from black and the
-    /// bars outside `viewport` are what it leaves uncovered.
+    /// bars outside `viewport` are what it leaves uncovered. `clip` is
+    /// `(y, left, right)` for a marquee row - see `crate::marquee`.
+    #[expect(clippy::too_many_arguments, reason = "clip is one more fact")]
     pub fn render(
         &mut self,
         device: &wgpu::Device,
@@ -438,6 +440,7 @@ impl Renderer {
         view: &wgpu::TextureView,
         list: &[Draw],
         viewport: (f32, f32, f32, f32),
+        clip: Option<(f32, f32, f32)>,
     ) {
         self.render_with(
             wgpu::LoadOp::Clear(wgpu::Color::BLACK),
@@ -447,6 +450,7 @@ impl Renderer {
             view,
             list,
             viewport,
+            clip,
         );
     }
 
@@ -475,13 +479,11 @@ impl Renderer {
             view,
             list,
             viewport,
+            None, // the overlay never marquees; only a menu row does
         );
     }
 
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "the two public wrappers differ only in the load op"
-    )]
+    #[expect(clippy::too_many_arguments, reason = "one wrapper's worth of load op")]
     fn render_with(
         &mut self,
         load: wgpu::LoadOp<wgpu::Color>,
@@ -491,6 +493,7 @@ impl Renderer {
         view: &wgpu::TextureView,
         list: &[Draw],
         viewport: (f32, f32, f32, f32),
+        clip: Option<(f32, f32, f32)>,
     ) {
         self.quads.clear();
         // Where the movie sits in the quad order. The list is painted back to
@@ -527,34 +530,17 @@ impl Renderer {
                     border,
                     align,
                     text,
-                } => self.push_text(
-                    *x,
-                    *y,
-                    *scale,
-                    *color,
-                    // No border colour means a **transparent** outline, so only the
-                    // glyph body draws.
-                    //
-                    // For the three menu fonts and the built-in glyphs this is
-                    // provably a no-op: their mask is a constant 255, so
-                    // `mix(border, color, 1)` is `color` whatever `border` is.
-                    //
-                    // For the two HUD fonts it is a real decision, and it is the
-                    // conservative one. 57 of the 84 HUD-font widgets in the
-                    // shipped layouts carry no `BorderColor` - every time readout
-                    // among them - so something has to fill the baked outline.
-                    // Using the body colour fills it with more glyph and a digit
-                    // becomes a box; using an invented opaque black would put a
-                    // colour nobody recovered into the picture. Transparent draws
-                    // exactly the glyph and invents nothing.
-                    //
-                    // **Whether the original defaults to an opaque outline instead
-                    // is unverified**, and one PPSSPP reference frame settles it.
-                    // See `docs/ui/hud.md`.
-                    border.unwrap_or(TRANSPARENT),
-                    *align,
-                    text,
-                ),
+                } => {
+                    // Transparent is a no-op for the menu/built-in fonts' constant
+                    // mask, and the picked default for the HUD fonts. See
+                    // `docs/ui/hud.md` for the fuller reasoning and open question.
+                    let border = border.unwrap_or(TRANSPARENT);
+                    // Only the row `marquee::apply` names by its `y` clips.
+                    let bounds = clip
+                        .filter(|(row, ..)| (*row - *y).abs() < f32::EPSILON)
+                        .map(|(_, left, right)| (left, right));
+                    self.push_text(*x, *y, *scale, *color, border, *align, text, bounds);
+                }
             }
         }
 
@@ -670,6 +656,7 @@ impl Renderer {
         border: [f32; 4],
         align: Align,
         text: &str,
+        clip: Option<(f32, f32)>, // a value marquee's window; see `crate::marquee`
     ) {
         let width = font::measure(&self.atlas, text) * scale;
         let mut pen = match align {
@@ -685,19 +672,32 @@ impl Renderer {
             // Size and advance come from the cell rather than a constant: the
             // disc's fonts are proportional, and the built-in set fills the
             // same fields in with its fixed 5x7 box.
+            let (w, h) = (cell.width as f32 * scale, cell.height as f32 * scale);
+            let mut rect = [pen, y, w, h];
+            let mut uv = [
+                cell.x as f32,
+                cell.y as f32,
+                cell.width as f32,
+                cell.height as f32,
+            ];
+            if let Some((left, right)) = clip {
+                let (glyph_left, glyph_right) = (rect[0], rect[0] + rect[2]);
+                if glyph_right <= left || glyph_left >= right {
+                    pen += cell.advance * scale;
+                    continue;
+                }
+                // `rect` and `uv` trimmed together, so a half-visible glyph
+                // samples half its own ink rather than stretching the rest.
+                let (cl, cr) = (glyph_left.max(left), glyph_right.min(right));
+                let (from, to) = ((cl - glyph_left) / rect[2], (cr - glyph_left) / rect[2]);
+                uv[0] += from * uv[2];
+                uv[2] *= to - from;
+                rect[0] = cl;
+                rect[2] = cr - cl;
+            }
             self.quads.push(Quad {
-                rect: [
-                    pen,
-                    y,
-                    cell.width as f32 * scale,
-                    cell.height as f32 * scale,
-                ],
-                uv: [
-                    cell.x as f32,
-                    cell.y as f32,
-                    cell.width as f32,
-                    cell.height as f32,
-                ],
+                rect,
+                uv,
                 color,
                 border,
                 mode: MODE_ATLAS,

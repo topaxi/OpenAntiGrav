@@ -63,8 +63,15 @@ impl LoadingStage {
             &vertices,
         );
         let list = self.screen.draw_list(phase, progress, &self.atlas);
-        self.renderer
-            .render(&gpu.device, &gpu.queue, encoder, view, &list, viewport);
+        self.renderer.render(
+            &gpu.device,
+            &gpu.queue,
+            encoder,
+            view,
+            &list,
+            viewport,
+            None,
+        );
         capture::draw_wave(encoder, view, &self.wave, viewport);
     }
 }

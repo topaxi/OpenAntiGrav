@@ -4,7 +4,7 @@ use anyhow::{Result, bail};
 
 use oag_game::keys;
 use oag_game::render::Renderer;
-use oag_game::{menu, movie};
+use oag_game::{font, marquee, menu, movie};
 
 use crate::gpu::Gpu;
 
@@ -23,6 +23,13 @@ pub(crate) struct MenuStage {
     /// open, from the title's own table and the line height of the face that
     /// will draw the rows - the two halves `menu::Skin` exists to join.
     pub(crate) skin: menu::Skin,
+    /// The same face `renderer` draws rows in, kept a second time so a value
+    /// column's width can be measured without reaching into the renderer's
+    /// own, private atlas. Cheap to hold twice: [`font::Atlas`] is a small
+    /// glyph table, not a GPU resource. See [`marquee::apply`].
+    pub(crate) text_atlas: font::Atlas,
+    /// The value marquee's clock: which row it is timing, and for how long.
+    pub(crate) marquee: marquee::Timer,
     /// The page change in flight, if one is.
     ///
     /// **The page the player left is kept as a finished draw list, not as a
@@ -154,6 +161,11 @@ impl MenuStage {
                 self.change = None;
             }
         }
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a tick is milliseconds; f32 holds it exactly"
+        )]
+        self.marquee.tick(dt as f32, marquee::focus(&self.menu));
     }
 
     /// Starts a page change, snapshotting the page being left.
@@ -240,7 +252,7 @@ impl MenuStage {
             _ => None,
         };
         let arriving = menu::draw_list(&self.menu, &self.skin, &keys::bound_keys, shown);
-        let list = match &self.change {
+        let (list, clip) = match &self.change {
             // The page being left grows and fades out; the one arriving grows
             // into place from smaller and fades in. Both run off one tween, so
             // they cannot drift apart. The backdrop is drawn once, by the page
@@ -260,12 +272,30 @@ impl MenuStage {
                 list.extend(going.body);
                 list.extend(coming.chrome);
                 list.extend(coming.body);
-                list
+                (list, None)
             }
-            None => arriving.flatten(),
+            // No transition in flight, so this is the picture staying on
+            // screen rather than one mid-fade - the only time a marquee runs.
+            // A fading, scaling row is not where a player is reading, so
+            // `change.is_some()` skips this rather than scrolling a row
+            // nobody can make out anyway.
+            None => marquee::apply(
+                arriving.flatten(),
+                &self.menu,
+                &self.skin,
+                &|text| font::measure(&self.text_atlas, text),
+                self.marquee.elapsed(),
+            ),
         };
-        self.renderer
-            .render(&gpu.device, &gpu.queue, encoder, view, &list, viewport);
+        self.renderer.render(
+            &gpu.device,
+            &gpu.queue,
+            encoder,
+            view,
+            &list,
+            viewport,
+            clip,
+        );
         Ok(())
     }
 }

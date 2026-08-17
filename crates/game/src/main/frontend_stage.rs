@@ -107,8 +107,16 @@ impl FrontendStage {
     ) -> Result<()> {
         let mut list = self.frontend.draw_list();
         self.sync_video(&gpu.queue, &mut list, backdrop)?;
-        self.renderer
-            .render(&gpu.device, &gpu.queue, encoder, view, &list, viewport);
+        // The disc's own screens, not our menus: nothing here ever marquees.
+        self.renderer.render(
+            &gpu.device,
+            &gpu.queue,
+            encoder,
+            view,
+            &list,
+            viewport,
+            None,
+        );
         Ok(())
     }
 

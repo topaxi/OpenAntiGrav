@@ -48,6 +48,7 @@ pub use oag_input::keys;
 pub mod language;
 pub mod livery;
 pub mod loading;
+pub mod marquee;
 pub mod menu;
 pub mod movie;
 pub mod perf;
