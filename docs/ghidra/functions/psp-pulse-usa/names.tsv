@@ -514,3 +514,7 @@
 0x08851d88	function	WeaponAiStats_Load	90	ai-stats.md
 0x08852178	function	WeaponAiStats_ParseWeapon	90	ai-stats.md
 0x08851d3c	function	WeaponAiStats_Reset	90	ai-stats.md
+0x08851550	function	WeaponAi_Update	85	weapon-ai.md
+0x088518b4	function	WeaponAi_DecideFireOrAbsorb	85	weapon-ai.md
+0x08ab0eac	data	g_weapon_ai_rate	80	weapon-ai.md
+0x08ab0ec0	data	g_weapon_ai_rate_eliminator	80	weapon-ai.md

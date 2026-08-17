@@ -314,9 +314,11 @@ confidence 92. That was wrong, and it was committed and pushed before it was
 checked properly.** Corrected 2026-08-17 by a runtime measurement in Eliminator
 and in Single Race.
 
-The reader is `FUN_088518b4`, whose only caller is `FUN_08851550`. **Neither is
-named here or anywhere in `docs/`**, which is why three static sweeps and a
-watchpoint run all missed it. Read out of memory at a halted watchpoint and
+The reader is `WeaponAi_DecideFireOrAbsorb` (`0x088518b4`), called by
+`WeaponAi_Update` (`0x08851550`) - both unnamed and undocumented until this pass,
+which is why three static sweeps and a watchpoint run all missed it. **The whole
+decision is on [weapon-ai.md](weapon-ai.md)**; what follows is only the part that
+concerns this record. Read out of memory at a halted watchpoint and
 confirmed against Ghidra:
 
 ```text
@@ -397,17 +399,20 @@ counter, at full emulation speed, with no halting. That is strictly more than th
 
 ### What is open now
 
-- **Both functions need naming and an evidence page**, and neither is nameable
-  above about 70, so anything landed for them takes a `_q` suffix. Deliberately
-  **not** named or added to `names.tsv` in this change: the rules require the row
-  and its evidence to land together, and the evidence is one runtime capture plus
-  one disassembly read.
-- **`FUN_08851550`'s identity**, and what object carries the record pointer at
-  `+0x18` with a weapon id at `+0x20`.
-- **A doc conflict the consumer opens.** It selects `+0x08` versus `+0x0c` on a
-  *signed range test*, not visibly on whether the target is the player or an AI.
-  So the parser's attribute names - `useAgainstPlayer`, `useAgainstAI` - and the
-  consumer's actual behaviour disagree, and one of the two readings is wrong.
+**All three of the questions this section used to list are answered on
+[weapon-ai.md](weapon-ai.md)**: both functions are named and landed in
+`names.tsv`, the object carrying the record at `+0x18` and the weapon id at
+`+0x20` is the per-craft weapon-AI context, and the `useAgainstPlayer` conflict
+resolves in the attribute names' favour at confidence 75 - the range test is
+against one particular craft's along-track gap, and reading it as the player's
+makes the names correct.
+
+What is left that touches *this* record:
+
+- **What writes the gap at `self+0x60`.** It is the one step of the naming
+  argument that is inference rather than reading, and if it turns out to be the
+  nearest craft of any kind rather than the player, the shipped attribute names
+  are misleading.
 - **Weapons-off modes are untested** and should read nothing; Tournament and the
   three other race types were skipped on the grounds that two weapons-on modes
   both read, so a third cannot change the verdict.

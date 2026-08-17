@@ -34,7 +34,7 @@ times larger" - because the finding is the coupling, not the number.
 | What the numbers *mean* - units, and what `AIThrust` multiplies | **unknown** - the consumer is not identified | - |
 | The sign convention on Pure's `Position` attribute | hypothesis | 55 |
 | Which of Pure's two per-class blocks the engine reads | **unknown** | - |
-| Weapon selection and firing | **located** (2026-08-17). `WeaponAIstats.xml` is the hook after all: `FUN_088518b4` reads the record every frame and writes the fire request. Loader, schema and reader all read; neither the reader nor its caller is named yet | 97 that it is read; ~70 on any name |
+| Weapon selection and firing | **recovered** (2026-08-17), and unported. `WeaponAi_Update` (`0x08851550`) reconsiders four times a second and `WeaponAi_DecideFireOrAbsorb` (`0x088518b4`) rolls the authored odds against two five-entry difficulty tables. See [weapon-ai.md](../ghidra/functions/psp-pulse-usa/weapon-ai.md) | 85 |
 | **Everything under [what we build instead](#what-we-build-instead)** | **ours** | - |
 
 Nothing here has been run under a debugger. Every score above rests on

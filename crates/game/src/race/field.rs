@@ -565,9 +565,15 @@ impl Race {
     /// absorb-only or fire-only. **That is because they are probabilities, not
     /// flags**: `FUN_088518b4` reads the record every frame and compares each
     /// value against a normalised random draw, gated on an along-track range
-    /// test. So the original's policy is a **weighted random choice**, and what
-    /// stands between this comment and a port is naming that function and reading
-    /// the decision's other inputs. See
+    /// test. **The whole decision is recovered as of 2026-08-17** -
+    /// `WeaponAi_Update` (`0x08851550`) reconsiders four times a second and
+    /// `WeaponAi_DecideFireOrAbsorb` (`0x088518b4`) rolls the authored odds
+    /// against a five-entry difficulty table (`0`, `0.0005`, `0.002`, `0.008`,
+    /// `0.05`, and a second table for Eliminator), with a `2.0` multiplier in
+    /// one mode and `5.0` in Eliminator. **It is not ported**, and porting it
+    /// needs the two skill indices and the `0..1` scalar the branches gate on,
+    /// none of which is read yet. See
+    /// `docs/ghidra/functions/psp-pulse-usa/weapon-ai.md`, and
     /// `docs/ghidra/functions/psp-pulse-usa/ai-stats.md`. The decision below is
     /// therefore still invention, and still kept small enough to be obviously
     /// provisional:
