@@ -563,8 +563,8 @@ rather than explained away.
 
 - **`.rcsmodel`** - 643 files, 686.5 MiB, all render geometry. **Positions,
   triangles and vertex normals read**, see [rcsmodel](rcsmodel.md); the vertex
-  stride is in no field of the file, and of the rest of a vertex only the
-  texture coordinate is even located.
+  stride is in no field of the file, and of the rest of a vertex a tangent
+  (stride 22 only) and a texture coordinate are located but not decoded.
 - **`.rcsmaterial`** - 1,632 files, wall-to-wall 32-bit hashes. A track authors
   around fifty by name (`track_surface`, `track_wall`, `glass_reflect`,
   `emissive_bloom`), and a second identical set under `materials_reversed/`.

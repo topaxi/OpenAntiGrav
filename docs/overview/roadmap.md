@@ -1257,8 +1257,8 @@ Four things worth knowing before touching it:
     three - and a packed **11:11:10 signed** normal at `+6`, unit on 99.5 % of
     every model's vertices and within 18 degrees of the area-weighted face
     average on 82-93 %. The models are still untextured: of the rest of a vertex
-    only the texture coordinate is even located, and it has no oracle until
-    `.gtf` is read.
+    a tangent (stride 22 only) and a texture coordinate are located and neither
+    is decoded, and the coordinate has no oracle until `.gtf` is read.
 12. **The vertex stride is in no field of the file**, and it is not in the
     `.rcsmaterial` either - that was the leading guess at confidence 40, one was
     read, and it is a compiled RSX shader container. Three rules recover the
