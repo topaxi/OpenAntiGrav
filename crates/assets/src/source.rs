@@ -21,7 +21,7 @@ use oag_title::Title;
 /// field should not have to depend on `oag-disc` to name what it read.
 pub use oag_disc::Platform;
 
-use crate::{Archive, Error, Result};
+use crate::{Container, Error, Result};
 
 /// `Err(Error::WrongTitle)` when `serial` is positively known to belong to some
 /// title other than the one being opened.
@@ -78,6 +78,12 @@ pub struct Layout {
     pub data: String,
     /// The companion archive, when the source has one.
     pub fe: Option<String>,
+    /// Every other archive this release ships, all of them, in candidate order.
+    ///
+    /// Empty for both PSP titles. See
+    /// [`ArchiveCandidates::extra`](oag_title::ArchiveCandidates::extra) for why
+    /// a third role exists and why it is a set rather than alternatives.
+    pub extra: Vec<String>,
 }
 
 impl Layout {
@@ -100,6 +106,7 @@ impl Layout {
             looked_for: title.archive_names(),
         })?;
         let fe = pick(source, &files, title.archives.fe);
+        let extra = pick_all(source, &files, title.archives.extra);
 
         // An extracted directory that holds only `USRDIR` has no `UMD_DATA.BIN`
         // and no `SYSTEM.CNF` to identify it, so the archive that matched is the
@@ -113,18 +120,23 @@ impl Layout {
             platform,
             data: data.0,
             fe: fe.map(|(spec, _)| spec),
+            extra,
         })
     }
 
     /// One line for a load report: what was found and what it was found on.
     #[must_use]
     pub fn describe(&self) -> String {
-        match &self.fe {
+        let head = match &self.fe {
             Some(fe) => format!("{} source: {} and {}", self.platform, self.data, fe),
             None => format!(
                 "{} source: {}, with no companion archive",
                 self.platform, self.data
             ),
+        };
+        match self.extra.len() {
+            0 => head,
+            n => format!("{head}, and {n} more"),
         }
     }
 }
@@ -137,15 +149,25 @@ impl Layout {
 pub struct Archives {
     /// Which archives these are and where they came from.
     pub layout: Layout,
-    /// The bulk archive: `Data.wad` on the PSP, `WADS2.WAD` on the PS2.
-    pub data: Archive,
+    /// The bulk archive: `Data.wad` on the PSP, `WADS2.WAD` on the PS2,
+    /// `DATA00.PSARC` on the PS3.
+    pub data: Container,
     /// The companion archive: `FE.wad` on the PSP, `WADSP.WAD` on the PS2.
-    pub fe: Option<Archive>,
+    pub fe: Option<Container>,
+    /// Every other archive the release ships, all mounted, searched after
+    /// [`Self::data`] and [`Self::fe`] and before [`Self::packs`].
+    ///
+    /// Empty for both PSP titles. Five archives on Wipeout HD, which is what
+    /// this exists for; see
+    /// [`ArchiveCandidates::extra`](oag_title::ArchiveCandidates::extra).
+    pub extra: Vec<Container>,
     /// Mounted [downloadable content](crate::dlc), searched after the source's
     /// own archives so the disc always wins a collision.
     ///
     /// Empty unless the caller passed packs to [`Archives::open_with_packs`].
-    pub packs: Vec<Archive>,
+    /// Every shipped pack is a WAD; the type is a [`Container`] so that the
+    /// search below is one rule rather than one rule and an exception.
+    pub packs: Vec<Container>,
     /// What those packs declare: the `PI_Team` and `PI_Track` fragments out of
     /// [`crate::dlc::Pack::manifests`], concatenated in mount order.
     ///
@@ -202,52 +224,92 @@ impl Archives {
         packs: Vec<crate::dlc::Pack>,
     ) -> Result<Self> {
         let layout = Layout::resolve(source, title)?;
-        let data = Archive::open(&layout.data)?;
-        let fe = layout.fe.as_deref().map(Archive::open).transpose()?;
+        let data = Container::open(&layout.data)?;
+        let fe = layout.fe.as_deref().map(Container::open).transpose()?;
+        let extra = layout
+            .extra
+            .iter()
+            .map(|spec| Container::open(spec))
+            .collect::<Result<Vec<_>>>()?;
 
         let mut manifests = Vec::new();
         let mut mounted = Vec::new();
         for pack in packs {
             manifests.extend(pack.manifests);
-            mounted.extend(pack.archives);
+            mounted.extend(
+                pack.archives
+                    .into_iter()
+                    .map(|archive| Container::Wad(Box::new(archive))),
+            );
         }
 
         Ok(Self {
             layout,
             data,
             fe,
+            extra,
             packs: mounted,
             manifests,
         })
     }
 
-    /// Which mounted archive holds this hash, if any.
+    /// Which mounted archive holds this name, if any.
     ///
     /// The one place the search order lives. Returning a position rather than a
     /// reference keeps it usable from `&self` and from `&mut self` alike, which
     /// is what lets [`Self::locate`] stay immutable while the readers below
     /// share the same rule.
-    fn holder_of(&self, hash: u32) -> Option<Held> {
-        if self.data.index_of_hash(hash).is_some() {
+    ///
+    /// **The question is put to each archive rather than answered here**, so a
+    /// WAD hashes the name and a PSARC normalises it to the path spelling it
+    /// stored - see [`Container::contains`]. This used to take a `u32` hash,
+    /// which built the WAD's addressing into the search itself.
+    fn holder_of(&self, name: &str) -> Option<Held> {
+        if self.data.contains(name) {
             return Some(Held::Data);
         }
-        if self
-            .fe
-            .as_ref()
-            .is_some_and(|fe| fe.index_of_hash(hash).is_some())
-        {
+        if self.fe.as_ref().is_some_and(|fe| fe.contains(name)) {
             return Some(Held::Fe);
+        }
+        if let Some(index) = self.extra.iter().position(|extra| extra.contains(name)) {
+            return Some(Held::Extra(index));
         }
         self.packs
             .iter()
-            .position(|pack| pack.index_of_hash(hash).is_some())
+            .position(|pack| pack.contains(name))
             .map(Held::Pack)
     }
 
-    fn held(&mut self, at: Held) -> &mut Archive {
+    /// Which mounted archive holds this name *hash*, if any.
+    ///
+    /// The same search order as [`Self::holder_of`], for the entries whose names
+    /// are not recovered. **PSARC archives are skipped rather than consulted**:
+    /// a PSARC stores paths and no hashes, and its own per-entry digest is an
+    /// MD5 of the path rather than anything a WAD hash could be compared to. A
+    /// source made of them therefore answers `None` here, which is honest - the
+    /// entries this addresses are Pulse's unmined ones.
+    fn holder_of_hash(&self, hash: u32) -> Option<Held> {
+        let has = |container: &Container| match container {
+            Container::Wad(wad) => wad.index_of_hash(hash).is_some(),
+            Container::Psarc(_) => false,
+        };
+        if has(&self.data) {
+            return Some(Held::Data);
+        }
+        if self.fe.as_ref().is_some_and(has) {
+            return Some(Held::Fe);
+        }
+        if let Some(index) = self.extra.iter().position(has) {
+            return Some(Held::Extra(index));
+        }
+        self.packs.iter().position(has).map(Held::Pack)
+    }
+
+    fn held(&mut self, at: Held) -> &mut Container {
         match at {
             Held::Data => &mut self.data,
             Held::Fe => self.fe.as_mut().expect("holder_of found it here"),
+            Held::Extra(index) => &mut self.extra[index],
             Held::Pack(index) => &mut self.packs[index],
         }
     }
@@ -262,10 +324,10 @@ impl Archives {
     /// Mounted packs come last; see [`Self::open_with_packs`].
     #[must_use]
     pub fn locate(&self, name: &str) -> Option<&str> {
-        let hash = oag_formats::wad::hash_name(name);
-        Some(match self.holder_of(hash)? {
+        Some(match self.holder_of(name)? {
             Held::Data => self.data.label(),
             Held::Fe => self.fe.as_ref().expect("holder_of found it here").label(),
+            Held::Extra(index) => self.extra[index].label(),
             Held::Pack(index) => self.packs[index].label(),
         })
     }
@@ -277,10 +339,9 @@ impl Archives {
     /// [`Error::NoSuchEntry`] against the bulk archive when nothing has it, so
     /// the message names the archive a reader would look in first.
     pub fn read_name(&mut self, name: &str) -> Result<Vec<u8>> {
-        let hash = oag_formats::wad::hash_name(name);
-        match self.holder_of(hash) {
-            Some(at) => self.held(at).read_name(name),
-            None => self.data.read_name(name),
+        match self.holder_of(name) {
+            Some(at) => self.held(at).read_entry(name),
+            None => self.data.read_entry(name),
         }
     }
 
@@ -293,10 +354,8 @@ impl Archives {
     ///
     /// [`Error::NoSuchEntry`] against the bulk archive when nothing has it.
     pub fn read_hash(&mut self, hash: u32) -> Result<Vec<u8>> {
-        match self.holder_of(hash) {
-            Some(at) => self.held(at).read_hash(hash),
-            None => self.data.read_hash(hash),
-        }
+        let at = self.holder_of_hash(hash).unwrap_or(Held::Data);
+        self.held(at).as_wad_mut("a name hash")?.read_hash(hash)
     }
 
     /// Reads a `.fnt` and returns it with its glyph atlas attached, wherever
@@ -395,10 +454,11 @@ impl Archives {
     /// last entry of the previous archive and decode it as a texture set.
     fn read_neighbour(&mut self, name: &str, which: Neighbour) -> Result<Vec<u8>> {
         let hash = oag_formats::wad::hash_name(name);
-        let archive = match self.holder_of(hash) {
-            Some(at) => self.held(at),
-            None => &mut self.data,
-        };
+        let at = self.holder_of(name).unwrap_or(Held::Data);
+        // A PSARC's entry order is its manifest's and carries no meaning, so it
+        // is refused here rather than answered with the entry that happens to
+        // sit next to this one. See `Error::NotAWad`.
+        let archive = self.held(at).as_wad_mut("the neighbouring entry")?;
         let index = archive
             .index_of_hash(hash)
             .ok_or_else(|| Error::NoSuchEntry {
@@ -430,6 +490,7 @@ impl Archives {
 enum Held {
     Data,
     Fe,
+    Extra(usize),
     Pack(usize),
 }
 
@@ -570,6 +631,25 @@ fn pick(
             .find(|file| names(file, candidate))
             .map(|file| (archive_spec(source, file), *platform))
     })
+}
+
+/// Every candidate present in `files`, in candidate order.
+///
+/// The set-shaped counterpart of [`pick`], for
+/// [`ArchiveCandidates::extra`](oag_title::ArchiveCandidates::extra). A
+/// candidate that is absent is skipped rather than reported: the field says
+/// what a release *might* carry, and Fury's archives are on a disc that a
+/// base-game pressing is not obliged to match.
+fn pick_all(source: &str, files: &[String], candidates: &[(&str, Platform)]) -> Vec<String> {
+    candidates
+        .iter()
+        .filter_map(|(candidate, _)| {
+            files
+                .iter()
+                .find(|file| names(file, candidate))
+                .map(|file| archive_spec(source, file))
+        })
+        .collect()
 }
 
 /// Whether `path` names `candidate`: the same trailing path components,

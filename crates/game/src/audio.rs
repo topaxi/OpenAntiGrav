@@ -1564,8 +1564,8 @@ fn psp_soundtrack(source: &str) -> Result<Option<Vec<Track>>> {
         return Ok(None);
     }
 
-    let candidates: Vec<(usize, u32)> = archives
-        .data
+    let data = archives.data.as_wad_mut("the entry directory")?; // WAD-shaped
+    let candidates: Vec<(usize, u32)> = data
         .directory()
         .entries
         .iter()
@@ -1576,7 +1576,7 @@ fn psp_soundtrack(source: &str) -> Result<Option<Vec<Track>>> {
 
     let mut tracks = Vec::new();
     for (index, name_hash) in candidates {
-        let Ok(header) = archives.data.peek(index, RIFF_HEADER_PEEK) else {
+        let Ok(header) = data.peek(index, RIFF_HEADER_PEEK) else {
             continue;
         };
         let Ok(stream) = crate::at3::describe(&header) else {
@@ -1620,8 +1620,8 @@ fn load_track(source: &str, platform: Platform, track: Track, cache_dir: &Path) 
 /// and that is what the cache in [`crate::at3`] exists to avoid paying twice.
 fn load_psp_entry(source: &str, name_hash: u32, cache_dir: &Path) -> Result<Sound> {
     let mut archives = oag_pulse::open(source).with_context(|| format!("opening {source}"))?;
-    let at3 = archives
-        .data
+    let data = archives.data.as_wad_mut("a name hash")?;
+    let at3 = data
         .read_hash(name_hash)
         .with_context(|| format!("reading Data.wad entry {name_hash:08x}"))?;
     let pcm = crate::at3::decode(&at3, cache_dir)

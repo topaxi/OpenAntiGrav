@@ -147,6 +147,22 @@ pub struct ArchiveCandidates {
     pub data: &'static [(&'static str, Platform)],
     /// The companion archive, for the releases that have one.
     pub fe: &'static [(&'static str, Platform)],
+    /// Every other archive the release ships, **all** of which are mounted.
+    ///
+    /// The one field here that is not a candidate list: [`Self::data`] and
+    /// [`Self::fe`] are alternatives, tried in order until one is found, and
+    /// this is a set, every member of which is opened if present.
+    ///
+    /// Two archives were enough while the corpus was Pulse and Pure, which ship
+    /// two apiece that anything reads. **Wipeout HD ships seven**, and they do
+    /// not split by kind: `data/environments` and `data/ships` each appear in
+    /// four of them, so a circuit's archive is not predictable from its path and
+    /// four of the twelve teams' `handlingstats.xml` are in the archive that
+    /// holds neither the circuits nor the other eight. Picking two would have
+    /// silently lost a third of the roster.
+    ///
+    /// Empty for both PSP titles, so nothing about their load changes.
+    pub extra: &'static [(&'static str, Platform)],
 }
 
 /// A serial positively identified as belonging to some other title.
@@ -188,6 +204,7 @@ impl Title {
             .data
             .iter()
             .chain(self.archives.fe)
+            .chain(self.archives.extra)
             .map(|(name, _)| (*name).to_string())
             .collect()
     }

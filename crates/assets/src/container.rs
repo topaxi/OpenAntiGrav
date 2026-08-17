@@ -67,6 +67,49 @@ impl Container {
         }
     }
 
+    /// How many entries this archive holds, for a load report.
+    #[must_use]
+    pub fn entry_count(&self) -> usize {
+        match self {
+            Self::Wad(a) => a.directory().entries.len(),
+            Self::Psarc(a) => a.paths().len(),
+        }
+    }
+
+    /// Whether this archive holds `name`, by whatever it calls a name.
+    ///
+    /// The question [`crate::Archives`] asks to decide which of its mounted
+    /// archives serves a read, and the reason it is a method here: a WAD
+    /// answers by hashing the name, a PSARC by normalising it to the path
+    /// spelling it stored. Neither answer is available to the other.
+    #[must_use]
+    pub fn contains(&self, name: &str) -> bool {
+        match self {
+            Self::Wad(a) => a.contains(name),
+            Self::Psarc(a) => a.contains(name),
+        }
+    }
+
+    /// This container as a WAD, or [`Error::NotAWad`](crate::Error::NotAWad).
+    ///
+    /// For the reads that are WAD-shaped rather than archive-shaped - by hash,
+    /// by directory position, into the middle of an entry. See that error for
+    /// the three of them and why none is approximated on a PSARC.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::NotAWad`](crate::Error::NotAWad) when this is a PSARC, naming
+    /// `wanted` so the message says which of the three was asked for.
+    pub fn as_wad_mut(&mut self, wanted: &'static str) -> Result<&mut Archive> {
+        match self {
+            Self::Wad(a) => Ok(a),
+            Self::Psarc(a) => Err(crate::Error::NotAWad {
+                archive: a.label().to_string(),
+                wanted,
+            }),
+        }
+    }
+
     /// Reads one entry, by whatever this container calls a name.
     ///
     /// A WAD takes the game's own spelling with backslashes,

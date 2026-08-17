@@ -187,6 +187,32 @@ pub enum Error {
         path: String,
     },
 
+    /// A caller asked a PSARC for something only a WAD can answer.
+    ///
+    /// Three things about a [WAD](crate::Archive) are not properties of an
+    /// archive in general, and each is load-bearing somewhere:
+    ///
+    /// - **The name hash.** A WAD stores hashes and no names, so a caller with
+    ///   an unmined entry addresses it as `hash:3d2c85f8`. A PSARC stores the
+    ///   real paths, so it has nothing to compare a hash against - and, since a
+    ///   PSARC's own per-entry MD5 is over the *path*, no hash to derive one
+    ///   from either.
+    /// - **Directory position.** The PS2 addresses a model's texture set as
+    ///   "the entry before" and a font's atlas as "the entry after"; a PSARC's
+    ///   order is the manifest's and means nothing.
+    /// - **Ranged and raw reads** into an entry's stored bytes, which a WAD
+    ///   serves from a flat blob and a PSARC only through its block table.
+    ///
+    /// Raised rather than approximated, because every one of those has a
+    /// plausible-looking wrong answer available.
+    #[error("{archive} is a PSARC, and {wanted} is a WAD-only way to address an entry")]
+    NotAWad {
+        /// Which archive.
+        archive: String,
+        /// What was asked for, as a person would name it.
+        wanted: &'static str,
+    },
+
     /// A blob is stored with a compression this build cannot undo.
     ///
     /// Zlib appears in the game but in no shipped archive, so there is nothing

@@ -435,14 +435,10 @@ pub fn load_shell(options: &Options) -> Result<(Shell, oag_assets::Archives)> {
     report.push(format!(
         "{}: {} entries",
         archives.data.label(),
-        archives.data.directory().entries.len()
+        archives.data.entry_count()
     ));
     if let Some(fe) = &archives.fe {
-        report.push(format!(
-            "{}: {} entries",
-            fe.label(),
-            fe.directory().entries.len()
-        ));
+        report.push(format!("{}: {} entries", fe.label(), fe.entry_count()));
     }
 
     steps.lap("open");
@@ -1345,7 +1341,7 @@ fn read_front_end_first(
     name: &str,
 ) -> oag_assets::Result<Vec<u8>> {
     if let Some(fe) = archives.fe.as_mut()
-        && let Ok(blob) = fe.read_name(name)
+        && let Ok(blob) = fe.read_entry(name)
     {
         return Ok(blob);
     }

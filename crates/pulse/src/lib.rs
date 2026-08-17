@@ -34,6 +34,9 @@ pub const TITLE: &Title = &Title {
     archives: ArchiveCandidates {
         data: DATA_CANDIDATES,
         fe: FE_CANDIDATES,
+        // Both PSP titles ship exactly two archives anything reads. See
+        // `ArchiveCandidates::extra` for the release that does not.
+        extra: &[],
     },
     foreign_serials: FOREIGN_SERIALS,
     front_end: Some(FRONT_END),

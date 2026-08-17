@@ -651,6 +651,7 @@ fn existing(cache_dir: &Path) -> Vec<String> {
 fn archive_specs(layout: &oag_assets::Layout) -> Vec<String> {
     let mut specs = vec![layout.data.clone()];
     specs.extend(layout.fe.clone());
+    specs.extend(layout.extra.iter().cloned());
 
     if layout.platform == oag_assets::Platform::Psp
         && let Some(stem) = layout.data.strip_suffix("Data.wad")
@@ -741,6 +742,7 @@ mod tests {
             platform: oag_assets::Platform::Psp,
             data: "image.chd:PSP_GAME/USRDIR/Data.wad".to_string(),
             fe: Some("image.chd:PSP_GAME/USRDIR/FE.wad".to_string()),
+            extra: Vec::new(),
         };
         assert_eq!(
             archive_specs(&layout),
@@ -775,6 +777,7 @@ mod tests {
             platform: oag_assets::Platform::Ps2,
             data: "image.chd:54748/WADS2.WAD".to_string(),
             fe: Some("image.chd:54748/WADSP.WAD".to_string()),
+            extra: Vec::new(),
         };
         assert_eq!(
             archive_specs(&layout),

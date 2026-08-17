@@ -427,9 +427,20 @@ fn sweep_source(path: &Path) -> Sweep {
     let mut archives = oag_pulse::open(source).expect("open as Pulse");
     let mut sweep = Sweep::default();
 
-    sweep_archive(&mut archives.data, &mut sweep);
+    // Both Pulse sources are WADs, so unwrapping the container here is a
+    // statement of that rather than an assumption about archives in general.
+    sweep_archive(
+        archives
+            .data
+            .as_wad_mut("the entry directory")
+            .expect("a WAD"),
+        &mut sweep,
+    );
     if let Some(fe) = archives.fe.as_mut() {
-        sweep_archive(fe, &mut sweep);
+        sweep_archive(
+            fe.as_wad_mut("the entry directory").expect("a WAD"),
+            &mut sweep,
+        );
     }
     for extra in PSP_EXTRA_ARCHIVES {
         if let Ok(mut archive) = Archive::open(&format!("{source}:{extra}")) {

@@ -88,7 +88,10 @@ pub(super) fn load_movie(
 ) -> Result<Option<Movie>> {
     let entry = EntryRef::parse(movie_name);
     let hash = entry.hash();
-    let data = &mut archives.data;
+    // Every path below is WAD-shaped - by hash, by index, peeking a header -
+    // and every source that reaches here is a PSP or PS2 one. See
+    // `oag_assets::Error::NotAWad`.
+    let data = archives.data.as_wad_mut("a movie by name hash")?;
     let index = match data.index_of_hash(hash) {
         Some(index) => index,
         // Only the default boot movie has a loose-file fallback worth trying:

@@ -26,6 +26,10 @@ const TITLE: &Title = &Title {
             ("PSP_GAME/USRDIR/FE.wad", Platform::Psp),
             ("WADSP.WAD", Platform::Ps2),
         ],
+        // The rules under test here are about *finding* archives, and a
+        // candidate that is always present adds nothing to them. The set-shaped
+        // role has its own test below.
+        extra: &[],
     },
     foreign_serials: &[ForeignSerial {
         serial: "UCUS-98612",
@@ -64,16 +68,22 @@ fn mounted(
     let mut mounted = Vec::new();
     for pack in packs {
         manifests.extend(pack.manifests);
-        mounted.extend(pack.archives);
+        mounted.extend(
+            pack.archives
+                .into_iter()
+                .map(|archive| Container::Wad(Box::new(archive))),
+        );
     }
     Archives {
         layout: Layout {
             platform: Platform::Psp,
             data: spec.clone(),
             fe: None,
+            extra: Vec::new(),
         },
-        data: Archive::open(&spec).expect("the test archive"),
+        data: Container::open(&spec).expect("the test archive"),
         fe: None,
+        extra: Vec::new(),
         packs: mounted,
         manifests,
     }
@@ -227,6 +237,64 @@ fn a_psp_extract_resolves_to_the_psp_archives() {
     assert_eq!(
         layout.fe.as_deref(),
         Some(format!("{source}/PSP_GAME/USRDIR/FE.wad").as_str())
+    );
+
+    std::fs::remove_dir_all(&root).ok();
+}
+
+/// The set-shaped third role: every candidate present is resolved, and one
+/// that is absent is skipped rather than reported.
+///
+/// A title with seven archives is what forced this - see
+/// `ArchiveCandidates::extra`. Asserted against a fixture title rather than
+/// Wipeout HD's own, because this crate names no archive.
+#[test]
+fn every_extra_archive_present_resolves_and_a_missing_one_is_skipped() {
+    const SEVEN: &Title = &Title {
+        archives: ArchiveCandidates {
+            data: &[("USRDIR/DATA00.PSARC", Platform::Ps3)],
+            fe: &[("USRDIR/DATA02.PSARC", Platform::Ps3)],
+            extra: &[
+                ("USRDIR/DATA01.PSARC", Platform::Ps3),
+                ("USRDIR/DATA03.PSARC", Platform::Ps3),
+                // Not in the extract below, and therefore not in the layout.
+                ("USRDIR/DATA99.PSARC", Platform::Ps3),
+            ],
+        },
+        ..*TITLE
+    };
+
+    let root = extract(
+        "extra",
+        &[
+            "USRDIR/DATA00.PSARC",
+            "USRDIR/DATA01.PSARC",
+            "USRDIR/DATA02.PSARC",
+            "USRDIR/DATA03.PSARC",
+        ],
+    );
+    let source = root.to_str().unwrap();
+
+    let layout = Layout::resolve(source, SEVEN).unwrap();
+    assert_eq!(layout.data, format!("{source}/USRDIR/DATA00.PSARC"));
+    assert_eq!(
+        layout.fe.as_deref(),
+        Some(format!("{source}/USRDIR/DATA02.PSARC").as_str())
+    );
+    assert_eq!(
+        layout.extra,
+        [
+            format!("{source}/USRDIR/DATA01.PSARC"),
+            format!("{source}/USRDIR/DATA03.PSARC"),
+        ],
+        "in candidate order, with the absent one left out entirely"
+    );
+    // And the report says how many, so a source that mounted fewer than
+    // expected is visible without reading the field.
+    assert!(
+        layout.describe().ends_with("and 2 more"),
+        "{}",
+        layout.describe()
     );
 
     std::fs::remove_dir_all(&root).ok();
