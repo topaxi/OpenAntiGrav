@@ -87,6 +87,105 @@ PS2 does not need the image-base fix PSP does: `SCES_547.48`'s `LOAD` segment
 already declares `VirtAddr 0x00100000`, the PS2 user-module convention, so the
 ELF loader places it correctly with no manual rebase step.
 
+### PS3
+
+**Unlike PSP and PS2, no processor module is needed.** Stock Ghidra decodes the
+Cell PPU: the language is `PowerPC:BE:64:A2ALT-32addr` (shown as variant
+`PowerISA-Altivec-64-32addr`). What PS3 needs instead is a decryption step
+first, a compiler-spec fix, and a script pack.
+
+**1. Decrypt the executable.** A disc `EBOOT.BIN` is a SELF - an encrypted
+container - so there is nothing to import until it is decrypted. RPCS3 does it
+with keys it carries itself:
+
+```sh
+rpcs3 --decrypt data/extracted/ps3/hdfury-eu/PS3_GAME/USRDIR/EBOOT.BIN
+# writes EBOOT.elf beside it, in about two seconds
+```
+
+**No firmware install is needed**, which is worth stating because the opposite
+is the natural assumption: RPCS3 prints `Missing Firmware` and decrypts anyway.
+A disc SELF uses compiled-in keys, and the `PS3UPDAT.PUP` on the disc plays no
+part. The decrypted ELF is derived data - gitignored, and regenerable in
+seconds, so it is never committed.
+
+Sanity-check the result rather than trusting the magic: `readelf -h` should
+report `ELF64`, big endian, `OS/ABI <unknown: 66>` (Cell LV2) and machine
+`PowerPC64`. On Wipeout HD / Fury the entry point `0x870530` sits in the *data*
+segment, which is correct and not a decryption failure - PPC64 ELF entry points
+are OPD descriptors, and this one resolves to `{func=0x00010230,
+toc=0x008ad4d8}`, one address in the executable segment and one in the data
+segment.
+
+**2. Fix the compiler spec.** On the PPU, `r2` holds the TOC pointer and a call
+does not clobber it; Ghidra's `ppc_64_32.cspec` does not say so, so the
+decompiler invents TOC reloads. The output looks fine and is wrong, which is the
+dangerous kind of failure:
+
+```sh
+just patch-ppc-cspec           # needs sudo; idempotent
+just patch-ppc-cspec --check   # exit 0 patched, 1 not
+```
+
+**This edits the Ghidra installation, so a Ghidra upgrade silently reverts it.**
+Run `--check` after every upgrade. `--revert` restores the backup it takes.
+
+**3. Install the script pack.** [Ps3GhidraScripts](https://github.com/clienthax/Ps3GhidraScripts)
+defines the imports, exports and TOC, and names what it can from a bundled NID
+database. Build from source against the installed Ghidra, same reasoning as
+Allegrex and the Emotion Engine above:
+
+```sh
+git clone https://github.com/clienthax/Ps3GhidraScripts.git \
+    data/tools/ps3-ghidra-scripts
+chmod +x data/tools/ps3-ghidra-scripts/gradlew
+env -u JAVA_TOOL_OPTIONS \
+    JAVA_HOME=/usr/lib/jvm/java-21-openjdk \
+    GHIDRA_INSTALL_DIR=/opt/ghidra \
+    data/tools/ps3-ghidra-scripts/gradlew \
+        --project-dir data/tools/ps3-ghidra-scripts \
+        --no-daemon buildExtension
+```
+
+Then `File > Install Extensions > +` and restart.
+
+**4. Import, in this order.** The script pack must run *before* auto-analysis,
+not after:
+
+1. Import `EBOOT.elf`, language `PowerPC:BE:64:A2ALT-32addr`, big endian, with
+   auto-analysis **off**. There is no `.opinion` file, so the language has to be
+   chosen by hand - untick "recommended" in the import dialog to see it.
+2. Run `AnalyzePs3Binary.java` from the Script Manager.
+3. Run auto-analysis.
+4. Run `DefinePS3Syscalls.java`.
+
+#### PS3 traps
+
+**`import_file` over GhidraMCP silently loads a raw binary if you pass a
+language.** The tool's own documentation says a language is for "raw firmware
+binaries", and passing one selects the Raw Binary loader: the result is a single
+flat block at address `0` with no sections and no entry point, which looks like
+a successful import. The tell is `Memory Blocks: 1` in `get_metadata` where the
+ELF has eight program headers. Import without a language and correct it after,
+or import in the GUI, or drive `analyzeHeadless`, which takes a loader and a
+processor together.
+
+**GhidraMCP cannot run the two scripts.** `run_ghidra_script` is gated behind
+`GHIDRA_MCP_ALLOW_SCRIPTS=1` in the environment of the *Ghidra process*, so
+enabling it means restarting Ghidra. Without it the pre/post-analysis flow above
+has to be driven from the Script Manager by hand.
+
+**`DFEngine.sprx` is not importable.** Its ELF type is `0xffa4`
+(`ET_SCE_PPURELEXEC`, a relocatable PRX) and Ps3GhidraScripts states outright
+that relocations are unsupported. `EBOOT.elf` is the only usable PS3 target.
+
+**Some Cell vector instructions are missing from Ghidra's sleigh.** `lvlx`,
+`lvrx`, `stvlx`, `stvrx` and their `l` variants are PPC970/Cell extensions that
+`altivec.sinc` does not implement, and they break decompilation where they
+appear. Measured on Wipeout HD / Fury: **851 `lvlx`** in 1,911,344 instructions
+across the four executable sections, and none of the other seven forms. Narrow,
+but concentrated in vector code.
+
 The Ghidra project (`OpenAntiGrav.gpr` / `OpenAntiGrav.rep/`) lives at the
 repository root, not under `data/`, and is gitignored by name rather than by
 directory - see the comment above `*.gpr` in `.gitignore`: a project opened at
