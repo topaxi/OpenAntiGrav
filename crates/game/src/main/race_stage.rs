@@ -10,6 +10,12 @@ pub(crate) struct RaceStage {
     pub(crate) race: race::Race,
     /// The HUD, or `None` when the disc's layout could not be read.
     pub(crate) hud: Option<oag_game::hud::Overlay>,
+    /// The results table, drawn once the race has one.
+    ///
+    /// Not an `Option`, unlike the HUD: that one needs a layout off the disc and
+    /// there may be none, where this needs only a font and
+    /// `oag_game::font::Atlas::build` always answers with the built-in 5x7 set.
+    pub(crate) scoreboard: oag_game::scoreboard::Overlay,
 }
 
 impl RaceStage {
@@ -48,9 +54,22 @@ impl RaceStage {
 
         // Over the scene and inside the same target, so the HUD is drawn at the
         // render scale the game is and lands in a `--screenshot` too.
-        if let Some(hud) = &mut self.hud {
-            let readout = self.race.readout();
-            hud.draw(&gpu.device, &gpu.queue, encoder, view, &readout, viewport);
+        //
+        // **The HUD goes when the race does.** Once the flag is out the speed
+        // bar, the lap counter and the clock are all reporting a simulation
+        // nobody is stepping any more, and the original hides the HUD at its own
+        // race end too - see the `_BLOWUP` note in `race::tick`.
+        match self.race.results() {
+            Some(board) => {
+                self.scoreboard
+                    .draw(&gpu.device, &gpu.queue, encoder, view, board, viewport)
+            }
+            None => {
+                if let Some(hud) = &mut self.hud {
+                    let readout = self.race.readout();
+                    hud.draw(&gpu.device, &gpu.queue, encoder, view, &readout, viewport);
+                }
+            }
         }
         stats
     }

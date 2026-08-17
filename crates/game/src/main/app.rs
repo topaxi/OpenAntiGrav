@@ -42,6 +42,9 @@ pub(crate) struct App {
     pub(crate) pick_language: bool,
     /// `--give`, resolved to a weapon at startup. See the CLI field.
     pub(crate) give: Option<oag_formats::weapons::Weapon>,
+    /// `--autopilot`: whether the player's craft is flown for them. A
+    /// verification aid - see `race::Race::set_autopilot`.
+    pub(crate) autopilot: bool,
     /// A race loaded before the window opened, which is what `--race` does.
     pub(crate) race: Option<race::Loaded>,
     /// What a race started from `Launch Game` is flown on.
@@ -163,6 +166,7 @@ impl App {
                 self.anisotropy,
                 &self.settings,
                 self.scheme,
+                self.autopilot,
             )?
         } else if let Some(shell) = self.boot_shell.take() {
             // **Always the loading screen**, where this used to be `--prefetch`
@@ -218,6 +222,7 @@ impl App {
             race_options: self.race_options.clone(),
             log_every: self.log_every,
             give: self.give,
+            autopilot: self.autopilot,
             scheme: self.scheme,
             anisotropy: self.anisotropy,
             launched: false,

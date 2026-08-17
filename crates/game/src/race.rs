@@ -75,8 +75,9 @@
 //! (the read itself), `assets`, `hud`, `spawn`.
 //!
 //! Running one: `start`, `tick`, `field` (the racing line, the standings and
-//! what one craft knows of another), `pads`, `weapons`, `respawn`, `effects`,
-//! `hash`, `telemetry`, `access`, `spline`, `camera`.
+//! what one craft knows of another), `pads`, `weapons`, `respawn`, `results`
+//! (the finish condition and the table it leaves), `effects`, `hash`,
+//! `telemetry`, `access`, `spline`, `camera`.
 //!
 //! Drawing one: `scene` and its `frame` child, `drawable`, `visibility`,
 //! `models`, `capture` (the headless path), `held_buttons` (the input a capture
@@ -128,6 +129,7 @@ mod models;
 mod options;
 mod pads;
 mod respawn;
+mod results;
 mod scene;
 mod spawn;
 mod spline;
@@ -759,6 +761,22 @@ pub struct Race {
     /// hull - rotation included - the way the original's scene-graph node
     /// does.
     sparks_anchor: Option<Vec3>,
+    /// Whether slot 0 is being driven by its own [`oag_ai::Driver`] instead of
+    /// by the input snapshot. See [`Self::set_autopilot`].
+    autopilot: bool,
+    /// The results table, taken on the tick the race reached its finish
+    /// condition, and `None` before that.
+    ///
+    /// **A snapshot rather than a live query**, and that is the whole point: "the
+    /// race is over" has to mean one fixed table. The field is still moving when
+    /// the player crosses - `oag_race::places` ranks whoever has not finished by
+    /// distance covered, which is the honest answer at that instant - and a board
+    /// recomputed a second later would show a different one.
+    ///
+    /// On `Race` rather than in `World`: it is derived from state the world
+    /// already holds, so hashing it would hash the same facts twice, and a
+    /// replay reproduces it by reaching the same tick. See [`Self::results`].
+    results: Option<crate::scoreboard::Board>,
 }
 
 /// How fast the kick opens, per second, as an exponential approach.

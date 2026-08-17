@@ -392,6 +392,7 @@ fn main() -> Result<()> {
         boot_overlay: cli.overlay,
         pick_language: cli.pick_language,
         give: give_weapon(cli.give.as_deref())?,
+        autopilot: cli.autopilot,
         race: None,
         race_options,
         trace: cli.trace,

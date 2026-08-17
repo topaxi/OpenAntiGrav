@@ -238,7 +238,7 @@ fn enveloping_pad() -> Vec<oag_formats::pads::PadVolume> {
 /// A full grid on the synthetic straight, which needs an authored slot: the
 /// whole grid layout is offsets from one, and `Race::start` refuses to guess
 /// at it. Faces along `+x`, which is the direction `straight_track` runs.
-fn race_with_a_grid() -> Race {
+pub(super) fn race_with_a_grid() -> Race {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
     setup.start_position = Some(oag_formats::track::StartPosition {

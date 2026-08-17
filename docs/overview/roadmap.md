@@ -451,6 +451,20 @@ seen from the authoring side.
       for all three on the real Custom Race screen, confirmed live for every
       race type. See [race-modes.md](../gameplay/race-modes.md). The AI item
       below is what a fourth, opponent-bearing mode is waiting on.
+      **A race now ends and shows a result** (2026-08-17): the finish condition
+      had no reader outside the rules layer, so a race that ran past its last
+      lap simply carried on. `Race::capture_results` takes a snapshot board on
+      the tick the player crosses for the last time - places, laps, finish
+      ticks, best lap - the composition root stops stepping the simulation, and
+      the table is drawn in place of the HUD until X or escape leaves.
+      **The table is ours**: the disc's own `Race End Photo`/`Save`/`Records`/
+      `Proceed`/`Alone` chain and `EndRace_Results` are names in `.rodata` and
+      nothing about their screens or transitions has been read, so a plain list
+      of positions stands in and says so. `--autopilot` is what reaches the end
+      without a human driving, and
+      `crates/game/tests/race_finish_ground_truth.rs` races a real circuit to
+      the flag. See
+      [race-modes.md](../gameplay/race-modes.md#what-happens-when-a-race-ends).
 - [~] HUD. **The disc's own layout is parsed and drawn.** All five
       `Data\XML\*_HUD.xml` layouts decode - exact rectangles, atlas UVs, colour
       constants, font roles - and a race draws the speed and shield bars, the lap

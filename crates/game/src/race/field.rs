@@ -24,6 +24,94 @@ impl Race {
         self.ai_tuning = tuning;
     }
 
+    /// Hands the player's craft to an opponent's driver, or takes it back.
+    ///
+    /// **A verification aid, and the same kind of thing `Options::opponents`
+    /// is** - a switch that exists so something can be *checked* without a human
+    /// at the keyboard, not a mode the original has. A race ends when the player
+    /// crosses the line for the last time, and until this existed the only way
+    /// to reach that state at all was to drive three laps by hand: no test could
+    /// assert on a finished race, and no `--screenshot` could show one.
+    ///
+    /// It replaces the mapped input snapshot outright rather than blending with
+    /// it, so a run under autopilot is a run nobody is steering. What it does
+    /// **not** get is the off-circuit rescue the opponents have
+    /// (`Self::lost_off_the_circuit` is opponent-only) - so an autopiloted
+    /// player that leaves the geometry stays lost, exactly as a human one does.
+    ///
+    /// **Not the Autopilot pickup**, and the distinction is worth keeping.
+    /// `Ai_Construct` names the local player's input source the literal
+    /// `"autopilot input"`, which says the original hands the player's craft to
+    /// a driver the same way this does - but *what* the pickup then does, how
+    /// long it lasts and how it ends are all unread, and nothing here claims
+    /// them. This is a switch a test and a `--screenshot` can flip, not a
+    /// weapon. See `HANDOVER.md`.
+    ///
+    /// # Turning it on seeds slot 0's driver, and has to
+    ///
+    /// `start.rs` seeds a `Driver` inside the *opponent* loop, so slot 0's is
+    /// left at [`oag_ai::Driver::default`] with its line index at zero - and
+    /// `Driver::drive` searches a 48-sample window around the last index, on
+    /// purpose, so a driver that begins at sample zero when the grid is at
+    /// sample 2,500 never finds itself and steers at the piece of circuit it
+    /// thinks it is on. That is the same trap `start.rs` records paying for on
+    /// eight of the disc's twelve circuits, and it is why this is a locate
+    /// rather than a flag assignment.
+    ///
+    /// **Here rather than in `start.rs`**, deliberately: `driver.index` is
+    /// inside the world snapshot and is hashed, so seeding slot 0 at spawn would
+    /// move every ordinary race's determinism hash for the sake of a field
+    /// nothing reads unless this flag is on. Written where the flag is, it moves
+    /// nothing that is not already under it.
+    ///
+    /// The personality is left neutral - `Driver::default`'s seed is zero and
+    /// `Personality::from_seed(0)` is explicitly the shared tuning - so the
+    /// player's craft is flown by the baseline driver rather than by a character
+    /// drawn for a slot the roster never dealt.
+    pub fn set_autopilot(&mut self, on: bool) {
+        self.autopilot = on;
+        if !on || self.racing_line.is_empty() {
+            return;
+        }
+        let position = self.world.ships[0].physics.body.position;
+        let index = self
+            .racing_line
+            .nearest(position, 0, self.racing_line.len());
+        self.world.ships[0].driver.index = u32::try_from(index).unwrap_or(0);
+    }
+
+    /// Whether the player's craft is being driven for them.
+    #[must_use]
+    pub fn autopilot(&self) -> bool {
+        self.autopilot
+    }
+
+    /// What the player's own driver wants this tick.
+    ///
+    /// The opponents' path exactly - the same line, the same tuning, the same
+    /// pilot slot and the same view of the field - through slot 0's own
+    /// [`oag_ai::Driver`], which is on the ship like everyone else's and so
+    /// inside the world snapshot. A wrecked craft is released rather than
+    /// driven, for the reason [`Self::step_opponents`] gives.
+    pub(super) fn autopilot_controls(&mut self) -> oag_physics::ShipControls {
+        let places = self.places();
+        let field = self.field_for(0, &places);
+        let pilot = self.ai_pilots[0];
+        let ship = &mut self.world.ships[0];
+        if ship.physics.craft_state != oag_physics::CraftState::Racing {
+            return oag_physics::ShipControls::default();
+        }
+        ship.driver.drive(
+            &ship.physics,
+            &oag_ai::Context {
+                line: &self.racing_line,
+                tuning: &self.ai_tuning,
+                pilot: &pilot,
+                field: &field,
+            },
+        )
+    }
+
     /// The line the opponents' drivers follow, index-parallel to
     /// [`Self::ai_order`] rather than to [`Self::spline`].
     ///

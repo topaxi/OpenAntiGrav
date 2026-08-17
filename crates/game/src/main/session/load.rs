@@ -229,6 +229,7 @@ impl Session {
             self.anisotropy,
             &self.settings,
             self.scheme,
+            self.autopilot,
         )?;
         // After the stage swap succeeds, not before: both loads above can fail
         // with `?`, and a failed launch must leave the menu music playing

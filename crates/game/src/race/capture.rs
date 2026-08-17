@@ -21,6 +21,14 @@ pub struct CaptureOptions {
     /// comparison. Ticks past the script's end coast with everything
     /// released.
     pub input_script: Option<oag_trace::script::Script>,
+    /// Fly the player's craft with an opponent's driver. `--autopilot`.
+    ///
+    /// **The only way a capture can reach a finished race**, and therefore the
+    /// only way `--screenshot` can show the results table: the flag falls when
+    /// the player crosses the line for the last time, and `--hold cross` drives
+    /// into the first wall. See [`Race::set_autopilot`], which is a verification
+    /// aid rather than a mode the original has.
+    pub autopilot: bool,
     /// Which control scheme maps the buttons. `[controls] scheme`.
     ///
     /// Here rather than left at the default because the novice sideshift is a
@@ -211,6 +219,7 @@ pub fn capture(
     race.set_boost_fov_kick(options.boost_fov_kick);
     race.set_camera_view(options.camera_view);
     race.set_control_scheme(options.scheme);
+    race.set_autopilot(options.autopilot);
 
     let mut held = HeldButtons::new(options.held);
     for tick in 0..options.ticks {
@@ -235,6 +244,19 @@ pub fn capture(
         audio.tick();
         if options.log_every > 0 && race.world.tick.is_multiple_of(u64::from(options.log_every)) {
             println!("{}", describe(&race.telemetry()));
+        }
+        // The race ended inside the requested tick count, so the rest of it is
+        // not driven - exactly as the window stops stepping a finished race, and
+        // for the same reason: a board taken at the last crossing drawn over a
+        // world that went on moving for another two thousand ticks would be a
+        // picture of two different moments. Said out loud, because a capture
+        // that quietly ran short would otherwise look like a lost tick.
+        if race.finished() {
+            println!(
+                "the race finished on tick {} of the {} asked for; the rest are not driven",
+                race.world.tick, options.ticks
+            );
+            break;
         }
     }
     if let Some(age) = options.pose_boost {
@@ -398,17 +420,32 @@ pub fn capture(
     // were sRGB, which is exactly the disagreement the ADR removed (measured at
     // up to `73/255` on the plume). Text and fills go through the R8 coverage
     // atlas and were unaffected either way. See `docs/ui/hud.md`.
-    match crate::hud::Overlay::new(&device, &queue, format, &hud) {
-        Ok(Some(mut overlay)) => overlay.draw(
-            &device,
-            &queue,
-            &mut encoder,
-            &view,
-            &race.readout(),
-            viewport,
-        ),
-        Ok(None) => println!("no HUD layout: capturing without one"),
-        Err(why) => println!("the HUD overlay did not build ({why}); capturing without one"),
+    //
+    // **Or the results table, once the race has one.** A capture whose
+    // `--ticks` reach past the last crossing is a picture of a finished race,
+    // and the same rule the window follows applies here: the HUD is reporting a
+    // simulation that has stopped, so the board replaces it rather than sitting
+    // under it. That is what makes `--screenshot` able to show a scoreboard at
+    // all - see `crate::scoreboard`.
+    match race.results() {
+        Some(board) => match crate::scoreboard::Overlay::new(&device, &queue, format, &hud) {
+            Ok(mut overlay) => {
+                overlay.draw(&device, &queue, &mut encoder, &view, board, viewport);
+            }
+            Err(why) => println!("the scoreboard did not build ({why}); capturing without one"),
+        },
+        None => match crate::hud::Overlay::new(&device, &queue, format, &hud) {
+            Ok(Some(mut overlay)) => overlay.draw(
+                &device,
+                &queue,
+                &mut encoder,
+                &view,
+                &race.readout(),
+                viewport,
+            ),
+            Ok(None) => println!("no HUD layout: capturing without one"),
+            Err(why) => println!("the HUD overlay did not build ({why}); capturing without one"),
+        },
     }
     // The upscaler, the grade and the blit, through exactly the call the
     // window's frame loop makes.

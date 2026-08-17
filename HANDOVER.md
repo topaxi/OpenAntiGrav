@@ -51,7 +51,7 @@ appending a dated pass to it.
   committed `verification/scenarios/*.inputs` are what reproduce it.
 - **Check `git status` before assuming the tree is clean.** A whole milestone's
   work once sat uncommitted for a day.
-- **Gate status:** last measured green at **1,903 tests (2026-08-17)**, with
+- **Gate status:** last measured green at **1,924 tests (2026-08-17)**, with
   `fmt`, `clippy`, `check-docs` and `check-deps` all clean. Re-measure rather
   than trusting the number here - `git stash && just test` is how the drift was
   caught last time. **The four `oag-trace` failures this bullet used to warn
@@ -99,6 +99,7 @@ they were done, because each unblocked the next:
 | **The race-level determinism hash** (2026-08-11) | `hash_world` + `Race::state_hash` close the hole the pickups opened - inventory, projectiles, pad timers and the RNG position |
 | **The weapon-fire dispatch** (2026-08-11) | **`entity+0x1b8` is read**: one bit per weapon, sixteen handlers. A Rocket fires **three at once**, fanned by `spread` |
 | **`Mode::SingleRace`** (2026-08-11) | the fourth mode, and the only one with weapons on - pickups had nowhere else to happen |
+| **A race ends, and shows a scoreboard** (2026-08-17) | The finish condition (`RaceState::finished`) had no reader outside the rules layer: a race that ran past its last lap simply carried on. Now `Race::capture_results` takes a **snapshot** board on that tick - places, laps, finish ticks, the player's best lap - `Session::frame` stops calling `tick`, and `oag_game::scoreboard` draws the table over the frozen scene in place of the HUD; X or escape returns to the menus. **`Race::tick` is unchanged**, deliberately, so nothing that drives a fixed tick count sees a different world. **The table is ours and says so** - the disc's own `Race End Photo`/`Save`/`Records`/`Proceed`/`Alone` chain and `EndRace_Results` are named in `.rodata` and nothing about their screens, layouts or transitions has been read. Rows name a grid slot rather than a team, because the team is a livery id the race cannot see. Reached without a human by `--autopilot`; measured on `pulse-psp-usa.chd`, default circuit, Venom, elite: the race ends around tick 7,500 (a little over two minutes) with the player mid-pack. `crates/game/tests/race_finish_ground_truth.rs`, [race-modes.md](docs/gameplay/race-modes.md#what-happens-when-a-race-ends) |
 | **Rocket visuals** (2026-08-11) | **a rocket is `Data\Weapons\Rocket.vex`, not a billboard**, and its two explosions are separately authored. [rocket-visuals.md](docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md), verified in PPSSPP with `scripts/psp-fire-weapon.py`. **Our own renderer's rocket has never appeared in a captured frame** - `--race` cannot steer to a weapon pad, so nothing grants a pickup; the model, its axis and its matrices are tested, the pixels are not |
 
 **The AI no longer blocks M5, and this paragraph said it did for four days
@@ -121,11 +122,20 @@ different distance back, so the other rule would give each craft its own error.
 What M5 still wants: **positional audio**, **Zone's explosion**, and the
 **Autopilot pickup** - the one weapon still waiting on driver work rather than on
 a mechanic. `Ai_Construct` names the local player's input source the literal
-`"autopilot input"`, so it is the driver taking the player's craft over, and
-nothing wires that yet. **One trap for whoever does**: slot 0's `Driver` is never
-seeded - `start.rs`'s three initialising writes all sit inside the opponent loop
-- so an autopilot taking the player's craft over steers at the wrong stretch of
-circuit until `driver.index` is set the way `Race::respawn` already sets it.
+`"autopilot input"`, so it is the driver taking the player's craft over. **The
+mechanism now exists** as `Race::set_autopilot` / `--autopilot` (2026-08-17),
+which hands slot 0 to its own `oag_ai::Driver` and is what races to the flag for
+`race_finish_ground_truth`; what is still unwired is the *pickup* - what it does,
+how long it lasts and how it ends are all unread, and the flag is labelled a
+verification aid rather than a weapon. **The seeding trap this row warned about
+is handled at the flag, not at spawn**: slot 0's `Driver` is still never seeded
+in `start.rs` - its three initialising writes all sit inside the opponent loop -
+so `set_autopilot(true)` locates slot 0 on the racing line itself before the
+first tick. It is done there because `driver.index` is hashed, and seeding it at
+spawn would move every ordinary race's determinism hash for a field nothing reads
+unless the flag is on. **Anything else that hands slot 0 to its driver - the
+pickup, when it is built - has to do the same locate**, or it steers at the
+stretch of circuit sample zero happens to be on.
 
 **`entity+0x1b8` is no longer unread.** `Weapons_DispatchFire` (`0x08861814`)
 reads it once a frame and dispatches sixteen bits to sixteen handlers, each

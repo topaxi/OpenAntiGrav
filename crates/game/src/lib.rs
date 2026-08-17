@@ -55,6 +55,7 @@ pub mod pilots;
 pub mod prefetch;
 pub mod race;
 pub mod render;
+pub mod scoreboard;
 pub mod screen;
 pub mod settings;
 pub mod source;
