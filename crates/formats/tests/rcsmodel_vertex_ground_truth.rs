@@ -170,7 +170,8 @@ fn the_stride_the_buffer_layout_gives_is_the_one_the_box_and_the_span_give() {
     );
 }
 
-/// Claim 5: nothing the box-less rules decide lands outside the circuit.
+/// Claim 5: what the box-less rules decide has unit normals, and stays inside
+/// the circuit.
 ///
 /// **The guard the unreferenced path does not otherwise have.** A referenced
 /// mesh is filtered submesh by submesh through
@@ -179,25 +180,30 @@ fn the_stride_the_buffer_layout_gives_is_the_one_the_box_and_the_span_give() {
 /// out as positions - trap 2 in `docs/formats/rcsmodel.md`, the one that framed
 /// Assegai as a speck. A chunk no node references has no box to filter against.
 ///
-/// So this measures the shape of what those rules produce. A misread submesh
-/// reads bytes normalised over the whole `i16` range as positions, which at the
-/// `1/128` scale puts points up to 256 units from the chunk's own bias in
-/// *every* axis - and a circuit is flat: Talon's Junction's floor collision
-/// spans 194 units vertically over 1,476 by 1,088.
+/// Two checks stand in for it, and the first is the stronger:
 ///
-/// **Measured: not one of the 868 submeshes drawn this way leaves +/-400.** The
-/// widest world-space `y` span is 306 units on a chunk only the layout rule
-/// decides, 237 where both rules agree and 189 where only compactness does.
-/// The layout-only chunks being the largest is expected rather than alarming -
-/// the compactness rule needs the true reading to be *decisively* smaller than
-/// the wrong one, and that margin is narrowest on a big chunk, so it declines
-/// on exactly those.
+/// 1. **Every chunk drawn this way has unit normals at the stride it chose**,
+///    whichever of the three rules chose it. Measured on Talon's Junction:
+///    worst 1.00 over the 91 the buffer layout decides, 0.81 over the 593 the
+///    normals decide, and **0.80 over the 133 the compactness rule decides** -
+///    which is the one that matters, because those two rules share no input.
+/// 2. **Nothing lands outside the circuit.** A misread reads bytes normalised
+///    over the whole `i16` range as positions, which at the `1/128` scale puts
+///    points up to 256 units from the chunk's own bias in *every* axis.
+///
+/// The envelope is `+/-600` in world `y` and the reason it is not tighter is
+/// itself a measurement: one chunk reaches `-159..413`, and it is a tower -
+/// 148 by 573 by 208, 104 vertices, whose normals are unit on 0.98 at stride 18
+/// against 0.35 and 0.29 at the other two. That is decisive, so the bound moved
+/// rather than the chunk being excluded.
 #[test]
 #[ignore = "needs a decrypted PS3 disc image in data/images"]
 fn nothing_the_box_less_rules_decide_lands_outside_the_circuit() {
-    /// Generous against the 306 measured, tight against the 256-per-axis
-    /// scatter a misread would produce on a chunk anywhere but the middle.
-    const ENVELOPE: f32 = 400.0;
+    /// Wide enough for the tallest thing the circuit authors, tight against the
+    /// 256-per-axis scatter a misread would produce.
+    const ENVELOPE: f32 = 600.0;
+    /// How much of a chunk must decode to a unit normal at the chosen stride.
+    const UNIT_BAR: f32 = 0.75;
 
     let Some((blob, model_blob)) = pair(
         "DATA00.PSARC",
@@ -213,6 +219,7 @@ fn nothing_the_box_less_rules_decide_lands_outside_the_circuit() {
         .collect();
 
     let (mut checked, mut widest) = (0usize, 0.0f32);
+    let mut worst_unit = 1.0f32;
     for mesh in &model.meshes {
         if placed.contains(&mesh.hash) {
             continue;
@@ -220,16 +227,28 @@ fn nothing_the_box_less_rules_decide_lands_outside_the_circuit() {
         let Some(stride) = mesh.solve_stride_without_a_box(&model_blob) else {
             continue;
         };
+        let (mut unit, mut vertices) = (0usize, 0usize);
         for submesh in &mesh.submeshes {
-            let Ok(points) = mesh.positions(&model_blob, submesh, stride) else {
+            let (Ok(points), Ok(normals)) = (
+                mesh.positions(&model_blob, submesh, stride),
+                mesh.normals(&model_blob, submesh, stride),
+            ) else {
                 continue;
             };
-            let (lo, hi) = points.iter().fold((f32::MAX, f32::MIN), |(lo, hi), p| {
-                (lo.min(p[1]), hi.max(p[1]))
-            });
             if points.is_empty() {
                 continue;
             }
+            for n in &normals {
+                let length = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
+                if length == 0.0 {
+                    continue;
+                }
+                vertices += 1;
+                unit += usize::from((0.93..=1.07).contains(&length));
+            }
+            let (lo, hi) = points.iter().fold((f32::MAX, f32::MIN), |(lo, hi), p| {
+                (lo.min(p[1]), hi.max(p[1]))
+            });
             checked += 1;
             widest = widest.max(hi - lo);
             assert!(
@@ -238,8 +257,20 @@ fn nothing_the_box_less_rules_decide_lands_outside_the_circuit() {
                  not a piece of a circuit"
             );
         }
+        if vertices > 0 {
+            let fraction = unit as f32 / vertices as f32;
+            worst_unit = worst_unit.min(fraction);
+            assert!(
+                fraction >= UNIT_BAR,
+                "a chunk decoded at stride {stride} has unit normals on only \
+                 {fraction:.2} of its {vertices} vertices, so the stride is wrong"
+            );
+        }
     }
-    println!("{checked} box-less submeshes, widest world y span {widest}");
+    println!(
+        "{checked} box-less submeshes, widest world y span {widest:.1}, \
+         worst unit-normal fraction {worst_unit:.2}"
+    );
     assert!(checked >= 800, "only {checked} submeshes reach this path");
 }
 
@@ -494,8 +525,13 @@ fn the_field_after_the_normal_follows_the_stride_and_not_the_descriptor_byte() {
         );
         checked += 1;
         if stride == 22 {
+            // **85, not 90, and the number moved because the sample did.** The
+            // bar was set when 731 of the circuit's chunks decoded; with 968
+            // decoding, group `83 08` reads 87.1 % unit at a median `|dot|` of
+            // 0.008 - unambiguously a tangent by the statistic that identifies
+            // one. The `|dot|` bar is the discriminator; this is a sanity floor.
             assert!(
-                unit_pct >= 90.0 && median < 0.1,
+                unit_pct >= 85.0 && median < 0.1,
                 "stride 22 group 83 {xx:02x} does not look like a tangent \
                  ({unit_pct} % unit, median |dot| {median})"
             );

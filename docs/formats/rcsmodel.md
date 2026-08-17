@@ -30,7 +30,7 @@ just view data/images/hdfury-ps3-eu-dec.iso:PS3_GAME/USRDIR/DATA00.PSARC \
 | Position format | `i16` triple through a per-mesh `bias + q * scale` | 92 |
 | Scale | `1/128` on all but 24 of `talons_junction`'s 983 chunks | 90 |
 | Index format | Big-endian `u16` triangle list | 95 |
-| Vertex stride | **In no field of the file.** 14, 18 or 22, recovered three ways | 88 |
+| Vertex stride | **In no field of the file.** 14, 18 or 22, recovered four ways | 88 |
 | Where the stride is declared | Unknown, and **not** in the `.rcsmaterial` - see below | - |
 | Vertex normal | **`+6`, packed 11:11:10 signed, big-endian** | 88 |
 | The rest of a vertex | A tangent at stride 22 and a texture coordinate, both located; not decoded | - |
@@ -314,8 +314,8 @@ not a detail of it.
 
 ### How it is recovered instead
 
-Three rules. The first two are validated against an oracle the format supplies;
-the third validates *them*.
+Four rules. The first is the tightest oracle, the second is what filled in the
+road, and the last two corroborate.
 
 **Where a `.vex` node references the chunk** - every craft mesh, and the props
 on a circuit - the node's authored bounding box settles it. `min <= max` holds
@@ -354,7 +354,41 @@ median 0.02. The one disagreement is a mesh where the box admitted 36 and this
 picks 18 - half of it, so the box was matching every second vertex and the
 compactness rule is the better answer rather than a worse one.
 
-**Third, and structural rather than statistical: the file's own buffer layout.**
+**Third, and the one that filled in the road: do the normals decode?** A
+vertex's `+6` word is a packed unit vector, and that is a property nothing else
+in the record has - read the same four bytes at the wrong stride and they are a
+position, a texture coordinate or the tail of a previous vertex, and they come
+out unit about a third of the time by chance. So the stride is the one whose
+normals are unit.
+
+**This is the only rule that is per-vertex evidence at every chunk size**, and
+that is why it mattered: the box needs a `.vex` node, the buffer layout needs
+two submeshes, and the compactness rule needs the true reading to be decisively
+smaller than the wrong one - a margin that narrows on exactly the large chunks a
+circuit's road is made of. Talon's Junction had **252 of its 983 chunks** drawn
+as nothing, which is what the holes in the floor were.
+
+| | before | after |
+| --- | ---: | ---: |
+| Chunks that decide a stride | 731 | **968** of 983 |
+| Chunks drawn on the box-less path | 655 | **808** |
+| Triangles | 411,617 | 445,630 |
+| Collision-floor triangles with art within 4 units | 58.8 % | **71.6 %** |
+
+It **disagrees with the other three on none** of the 729 chunks where more than
+one answers. Two bars: the winner must be unit on at least 0.8 of the chunk's
+vertices and beat the runner-up by 0.3, and both sit below the cluster the real
+answers form and well above the ~0.3 a wrong stride scores. Dropping them to 0.7
+and 0.2 decides three more chunks, so this is a knee rather than a tuned
+threshold.
+
+**And a fraction of eight is not evidence**: a chunk must carry at least 32
+vertices to be judged this way. Without that floor the rule accepted eight-vertex
+cards where 7 of 8 unit reads clear the bar by luck, and they decoded to
+2,000-unit planes that stretched the circuit's bounding sphere from 1,909 to
+8,761.
+
+**Fourth, and structural rather than statistical: the file's own buffer layout.**
 A mesh's vertex buffers are packed back to back, so the step from one submesh's
 buffer to the next one's, over the first one's vertex count, *is* the stride -
 arithmetic on two numbers the file states outright, with no oracle and nothing
@@ -375,8 +409,11 @@ compactness rule than the compactness rule can make for itself. It also decides
 and lifts the three referenced meshes whose box settled nothing.
 
 It says nothing about a chunk with one submesh, which is most of a circuit's -
-so it is `solve_stride_by_layout` first and `solve_stride_by_extent` after, and
-the two are complements rather than alternatives.
+so `solve_stride_without_a_box` asks the layout first, the normals next and
+compactness last, and the three are complements rather than alternatives. Every
+chunk any of them decides has unit normals at the stride it chose: worst 1.00
+over the layout's 91, 0.81 over the normals' 593, and **0.80 over compactness's
+133**, which is the cross-check that matters because those two share no input.
 
 **One thing about it is unexplained.** The step is exactly `count * stride` on 38
 of 46 measured pairs and otherwise 16, 32 or 96 bytes *short* - always negative,

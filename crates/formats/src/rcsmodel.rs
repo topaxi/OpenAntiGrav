@@ -150,6 +150,24 @@ const LAYOUT_INLINE: u8 = 0x01;
 /// the honest answer, and it is what the callers do.
 pub const STRIDES: &[usize] = &[14, 18, 22];
 
+/// How much of a chunk must decode to a unit normal for a stride to win.
+///
+/// See [`Mesh::solve_stride_by_normals`]. A wrong stride scores about 0.3 by
+/// chance, and the right one 0.9 or better on most chunks; this sits below the
+/// cluster the right answers form and well above the noise.
+const NORMAL_UNIT_BAR: f32 = 0.8;
+
+/// How far the winning stride must beat the runner-up on that fraction.
+const NORMAL_MARGIN_BAR: f32 = 0.3;
+
+/// Fewest vertices the normal rule will judge a chunk on.
+///
+/// **The bars above are fractions, and a fraction of eight is not evidence.**
+/// Talon's Junction's furthest-flung chunks are eight-vertex cards where 7 of 8
+/// unit reads clear a 0.8 bar by luck; requiring a real sample is what keeps
+/// them out. See [`Mesh::solve_stride_by_normals`].
+const NORMAL_MIN_VERTICES: usize = 32;
+
 /// Byte offset of the packed vertex normal, immediately after the position.
 ///
 /// **The same on all three strides**, which is what says the widths are one
@@ -747,6 +765,77 @@ impl Mesh {
         (!tied).then(|| STRIDES[slot])
     }
 
+    /// Recovers the vertex stride from whether the **normals decode**.
+    ///
+    /// A vertex's `+6` word is a packed unit vector - see [`unpack_normal`] -
+    /// and that is a property nothing else in the record has: read the same
+    /// four bytes at the wrong stride and they are a position, a texture
+    /// coordinate or the tail of a previous vertex, and they come out unit
+    /// about a third of the time by chance. So the stride is the one whose
+    /// normals are unit, and the wrong ones lose by a wide margin.
+    ///
+    /// # Why this is the rule that filled in the road
+    ///
+    /// It is the only rule here that is **per-vertex evidence at every chunk
+    /// size**. The authored box needs a `.vex` node, the buffer layout needs
+    /// two submeshes, and the compactness rule needs the true reading to be
+    /// decisively smaller than the wrong one - a margin that narrows on exactly
+    /// the large chunks a circuit's road is made of. Talon's Junction had
+    /// **252 of its 983 chunks** left undrawn by the other three, which is what
+    /// the holes in the floor were.
+    ///
+    /// Measured on that circuit: this decides **968 of 983** where the other
+    /// rules together decide 731, rescues **239** of the 252, and **disagrees
+    /// with them on none** of the 729 chunks where both answer.
+    ///
+    /// # The two bars, and why they are where they are
+    ///
+    /// The winner must be unit on at least [`NORMAL_UNIT_BAR`] of the chunk's
+    /// vertices and beat the runner-up by [`NORMAL_MARGIN_BAR`]. Both sit below
+    /// the cluster the real answers form and above the ~0.3 a wrong stride
+    /// scores by chance; dropping them to 0.7 and 0.2 decides only 3 more
+    /// chunks, so this is a knee rather than a tuned threshold. A chunk that
+    /// clears neither is reported as undecided and drawn as nothing.
+    #[must_use]
+    pub fn solve_stride_by_normals(&self, data: &[u8]) -> Option<usize> {
+        let mut scores: Vec<(usize, f32)> = STRIDES
+            .iter()
+            .filter_map(|&stride| Some((stride, self.unit_normal_fraction(data, stride)?)))
+            .collect();
+        scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        let &[(stride, best), ..] = &scores[..] else {
+            return None;
+        };
+        let runner_up = scores.get(1).map_or(0.0, |&(_, f)| f);
+        (best >= NORMAL_UNIT_BAR && best - runner_up >= NORMAL_MARGIN_BAR).then_some(stride)
+    }
+
+    /// How much of a chunk decodes to a unit normal at `stride`, or `None` if
+    /// nothing could be read.
+    ///
+    /// An all-zero word is an unused vertex rather than a misdecode - see
+    /// [`Self::normals`] - so it counts towards neither side.
+    fn unit_normal_fraction(&self, data: &[u8], stride: usize) -> Option<f32> {
+        let (mut unit, mut total) = (0usize, 0usize);
+        #[allow(clippy::items_after_statements)]
+        for submesh in &self.submeshes {
+            let Ok(normals) = self.normals(data, submesh, stride) else {
+                continue;
+            };
+            for n in &normals {
+                let length = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
+                if length == 0.0 {
+                    continue;
+                }
+                total += 1;
+                if (0.93..=1.07).contains(&length) {
+                    unit += 1;
+                }
+            }
+        }
+        (total >= NORMAL_MIN_VERTICES).then(|| unit as f32 / total as f32)
+    }
+
     /// The stride of a chunk **no `.vex` node references**, which is most of a
     /// circuit.
     ///
@@ -758,6 +847,7 @@ impl Mesh {
     #[must_use]
     pub fn solve_stride_without_a_box(&self, data: &[u8]) -> Option<usize> {
         self.solve_stride_by_layout()
+            .or_else(|| self.solve_stride_by_normals(data))
             .or_else(|| self.solve_stride_by_extent(data))
     }
 

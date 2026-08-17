@@ -401,6 +401,7 @@ pub fn build(
         let Some(stride) = mesh
             .solve_stride(model_blob, (min, max), tolerance)
             .or_else(|| mesh.solve_stride_by_layout())
+            .or_else(|| mesh.solve_stride_by_normals(model_blob))
         else {
             continue;
         };
