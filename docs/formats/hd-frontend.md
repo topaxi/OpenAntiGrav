@@ -55,8 +55,16 @@ Two things that surfaced only once something walked this data: HD ships **no
 Latin `.fnt` this build can read**, so its whole front end draws in the built-in
 5x7 glyphs (its language plugins name `helv.fnt`, which is present and fails
 `oag_formats::fnt`'s magic check - unread, and probably the byte-order story
-again); and its `<Image>` widgets are `.gtf`, which is undecoded, so they draw
-nothing and say so.
+again); and its `<Image>` widgets are `.gtf`, so they draw nothing and say so -
+`0 of 3 front-end image(s) decoded into a 1x1 sheet`.
+
+**That second one is now a wiring gap rather than a format gap**, and the
+distinction arrived with the merge: [`gtf.md`](gtf.md) reads the PS3's texture
+container, and HD's HUD samples ten `.gtf` textures through it. What still does
+not is `boot::load_sprites`, which offers a front-end image to the PSP `.mip`
+path alone and gets `zero-sized texture 1281x0` for its trouble. Routing it
+through `oag_formats::gtf` is a small change nobody has made, and it is what
+would put `saveIcons`, `line` and `Title_Arrow_HD` on screen.
 
 ### The sixteen language plugins, and the three that lie about themselves
 
