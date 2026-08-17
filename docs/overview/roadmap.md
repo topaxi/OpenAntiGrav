@@ -1173,13 +1173,29 @@ there, each with a ground-truth test against the disc:
 4. `oag_render::mesh::read_blob` goes through that dispatch, so every existing
    viewer mode is pointed at a PS3 archive by changing the spec alone.
 
+Then the three format layers a *driveable* circuit needs, each measured against
+the disc the same day:
+
+5. **Collision** - `collision::from_vex` takes the order from the containing
+   `.vex`, a collision payload's own header word being the palindrome
+   `0xffffffff`. Talon's Junction's 246 floor, 122 wall, 14 mag-floor and 18
+   reset objects reproduce `scripts/hd-survey.py`'s counts exactly, from an
+   independent implementation. `just view --collision --with-spline` draws it.
+6. **Pads** - both classes, 18 speedup and 9 weapon on Talon's Junction, each
+   within a half-width of the spline. A pad's trigger volume is the `Mesh`
+   bounding-box pair, which is precisely the part of a `Mesh` payload that
+   *stayed* when the geometry left.
+7. **The PVS mask** - now one `ByteOrder::u64` rather than a `lo`/`hi` pair.
+   Identical on little-endian by construction, and the fix for the only silent
+   failure in the whole byte-order pass.
+
 **`--mesh` still draws nothing on an HD file, and that is not a bug in any of
 the above**: HD's render geometry left the `.vex` for `.rcsmodel`, which is
 unread. A `Mesh` node on HD is a bounding-box pair and a 32-bit reference.
 
-What is still ahead: about a week to a *driveable* circuit - collision, pads and
-the grid all read byte-swapped already, so the work is the title crate and the
-boot path rather than any format; **months** to something that looks like HD,
+What is still ahead: an `oag-hd` title crate and the boot path, for a
+*driveable* circuit - every format under one is now read, so that work is
+composition rather than recovery; **months** to something that looks like HD,
 nearly all of it `.rcsmodel`; and HD's own simulation is not estimable, being
 gated by [ADR-0009](../architecture/adr/0009-multi-game-fanout.md) item 2 *and*
 by the absence of any RPCS3 equivalent of the M3 harness.

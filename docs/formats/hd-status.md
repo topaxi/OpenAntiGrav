@@ -46,9 +46,9 @@ render geometry lifted out of `.vex` into a PS3 container of its own.
 | `.vex` file header, node tree | Reads **byte-swapped**; version 6 and Pulse's own class IDs |
 | `.vex` mesh batches | **Gone from the file.** A `Mesh` node is now a bounds pair and a reference |
 | `WO Track` payload | Reads byte-swapped; version `0x106`, the same `0x70` control point |
-| Collision soup | Reads byte-swapped, exactly |
-| `section` PVS mask | Reads byte-swapped, with **one trap that a naive port walks into** |
-| `Speedup Pad` / `Weapon Pad` volumes | Read byte-swapped |
+| Collision soup | Reads byte-swapped, exactly - and `collision::from_vex` does |
+| `section` PVS mask | Reads byte-swapped, with **one trap that a naive port walks into** - and `pvs` now avoids it |
+| `Speedup Pad` / `Weapon Pad` volumes | Read byte-swapped, and `pads::volumes` does |
 | Handling stats | Same schema, plain-text XML |
 | `.pob` particle container | Reads byte-swapped; **one declared length no longer agrees** |
 | Textures | **New.** `.gtf`, the PS3's own container |
@@ -261,6 +261,14 @@ an object count, then three chunks per object in the order 1, 3, 2 with strides
 collision nodes across the 28 circuits consume their payload down to its 16-byte
 alignment padding, which is the invariant that settled the layout on the PSP.
 
+**`oag_formats::collision::from_vex` reads it byte-swapped as of 2026-08-17**,
+taking the order from the containing `.vex`'s magic - a collision payload cannot
+declare its own, its header word being the palindrome `0xffffffff`. The counts
+in the table below are reproduced exactly by that reader in
+`crates/assets/tests/hd_psarc_ground_truth.rs`, which matters because they were
+first measured by `scripts/hd-survey.py`: two independent implementations
+agreeing on 246/7,588, 122/4,269, 14/357 and 18/627.
+
 The geometry itself is **not** shared with the PSP even where the circuit is.
 Talon's Junction against Pulse's `16_Track`:
 
@@ -310,6 +318,16 @@ Pulse's `01_Track` hits exactly.
 So: **HD authors real PVS data and `[graphics] pvs_culling` has something to
 read**, provided the mask is read as one 64-bit quantity rather than as a pair.
 
+**`oag_formats::pvs` reads it that way as of 2026-08-17.** The `pvs_mask_lo` /
+`pvs_mask_hi` pair is gone, replaced by one `ByteOrder::u64` at `+0x08` -
+identical on a little-endian file by construction, so the Pulse and Pure ground
+truth is unmoved and the "one bit in fifty" figure above still holds. Talon's
+Junction is one of the 15 clean circuits: **zero** dangling bits under the
+correct reading, and over half dangling under the word-swapped one on the same
+bytes, asserted against each other in
+`crates/assets/tests/hd_psarc_ground_truth.rs` so the check needs no reference
+answer.
+
 ## Pads and the grid read unchanged
 
 `Speedup Pad` `0x3bd` and `Weapon Pad` `0x3be` carry [the same payload](pads.md)
@@ -317,6 +335,15 @@ they do on the PSP: the trigger volume is the mesh's own bounding-box pair at
 `+0x10` and `+0x20`. Across the 28 circuits, **416 speedup pads and 208 weapon
 pads**, with `min <= max` componentwise on all 624. Talon's Junction's pads
 measure `(-4.66, 1.33, -4.66)` to `(4.66, 1.33, 4.66)`.
+
+**Which is why the pads survive the change that stops `--mesh` drawing
+anything.** A pad's payload *is* a `Mesh` payload, and the box pair is precisely
+the part of a `Mesh` payload that stayed behind when the geometry left for
+`.rcsmodel`. `oag_formats::pads::volumes` reads Talon's Junction's **18 speedup
+and 9 weapon pads** off the PS3 disc today, every one within a half-width of the
+spline horizontally - which is a check on the *transform chain* rather than on
+the payload, since a pad's own box is in local space and only the parent chain
+puts it on a circuit.
 
 `Start Position` `0x3bc` is one 64-byte matrix per circuit, 28 of 28, with the
 translation in row 3 and `w = 1.0` - the row-major layout every `.vex` uses.
