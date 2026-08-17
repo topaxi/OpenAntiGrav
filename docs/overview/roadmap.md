@@ -1079,7 +1079,9 @@ paths.
 - [ ] Networking
 - [x] **Wipeout Pure: intro to menu into a Time Trial** (2026-08-12)
 - [ ] Wipeout Pure: its own physics, HUD, boost plume, Zone mode, reset volumes
-- [ ] Wipeout HD / Fury
+- [~] Wipeout HD / Fury - **surveyed, not started.** Its disc opens, its archives
+      read, and the answer to "how much of this is new" is: less than expected.
+      See [hd-status](../formats/hd-status.md) and the section below
 - [ ] Wipeout 2048
 - [ ] Omega Collection, if feasible
 
@@ -1120,6 +1122,37 @@ table - the gap that was actually stopping them from drawing was
 `Speedup Pad` glow texture whole (its brightest texel is alpha 58/255). Fixed
 2026-08-17, see
 [`vex.md`](../formats/vex.md#a-batchs-own-attributes-decide-its-pipeline-not-which-list-it-came-from).
+
+### What is known about HD / Fury (2026-08-17)
+
+A survey, not a start: [hd-status](../formats/hd-status.md) is the page and
+`just hd-survey` re-derives every number on it. The headline is that **HD is the
+PSP asset pipeline byte-swapped**, with one large exception.
+
+Reads with the layouts this project already has, corpus-wide: `.vex` **version
+6 with Pulse's own class IDs** (40 of 40 files, three arithmetic invariants
+each), the `WO Track` spline at version `0x106` (28 of 28, 0 of 71,622 frame
+vectors off unit length), the collision soup (94 of 94 walks closing on the
+pad), both pad classes' trigger volumes (624 of 624), the `section` visibility
+mask, and the `.pob` particle container (88 of 88). Handling stats, track stats,
+the campaign grid and the weapon table are all plain-text XML in the schemas
+already parsed.
+
+Genuinely new: **`.psarc`** ([now read](../formats/psarc.md)), and **`.rcsmodel`**
+- 643 files, 686 MiB, *all* the render geometry, which no longer lives in the
+`.vex` - plus `.rcsmaterial` and `.gtf` textures.
+
+And **ten of HD's sixteen environments are a Pulse or Pure circuit's spline in
+the same world coordinates**, Talon's Junction - this project's own reference
+circuit - among them. That is the finding that changes what a future HD effort
+costs: a Pulse capture and an HD run are comparable on identical geometry.
+
+Cost, if the milestone ever opens: about **a fortnight** to a driveable circuit
+in the `--ribbon` view on Pulse's physics under a named stand-in, the way Pure
+races today; **months** to something that looks like HD, nearly all of it
+`.rcsmodel`; and HD's own simulation is not estimable, being gated by
+[ADR-0009](../architecture/adr/0009-multi-game-fanout.md) item 2 *and* by the
+absence of any RPCS3 equivalent of the M3 harness.
 
 ---
 

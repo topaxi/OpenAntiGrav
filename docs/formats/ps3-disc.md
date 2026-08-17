@@ -159,9 +159,15 @@ Decryption of the whole 2.1 GiB image takes about five seconds.
 
 ## What is still closed
 
-**`.psarc` is.** No reader exists, so **no asset has come off this disc** - not a
-texture, not a model, not a table. Everything below is about the executable,
-which is a separate half of the layer-2 problem and is open.
+**`.psarc` no longer is**, and the sentence that used to stand here - "no asset
+has come off this disc" - was true until 2026-08-17 and is not now. The
+container is read, all seven archives list, and any entry comes out by path: see
+[psarc](psarc.md) for the format and [hd-status](hd-status.md) for what turned
+out to be inside, which is largely the PSP's own asset pipeline byte-swapped.
+
+What is still closed on the asset side is the PS3-specific half: `.rcsmodel`
+(all the render geometry), `.rcsmaterial`, and `.gtf` textures. Everything below
+is about the executable, which is a separate half of the layer-2 problem.
 
 **Layer 2 on `EBOOT.BIN` turned out to be free.** `rpcs3 --decrypt` writes a real
 PPC64 ELF using keys RPCS3 carries, with no firmware install - it prints
@@ -180,6 +186,8 @@ works on the encrypted image exactly as it does on the decrypted one.
 
 ## See also
 
+- [PSARC](psarc.md) - the container this layer gets you to
+- [HD status](hd-status.md) - what is in it, and how much already parses
 - [Format index](README.md) - the `.psarc` and SELF rows
 - [Source images](../reverse-engineering/source-images.md) - this disc's entry
 - [Legal](../overview/legal.md) - why no key and no content is committed

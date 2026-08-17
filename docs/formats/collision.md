@@ -288,6 +288,30 @@ through that surface on Pure's own default circuit and it respawns on the spline
 So a Pure race has respawn-on-fall, and `vex::classes::V4` carries
 `reset_collision: Some(0x37f)` at confidence **94**.
 
+## And in Wipeout HD, byte for byte
+
+**Confidence 92.** Read big-endian, the layout above needs nothing changed on the
+PS3: `0xffffffff`, an object count, three chunks per object in the order 1, 3, 2
+with strides `0x0c`, `0x04` and `0x06`. **94 of 94** collision nodes across HD's
+28 circuits consume their payload down to the 16-byte alignment padding -
+invariant 1 above, on a fourth corpus. Class IDs are Pulse's rather than
+renumbered, unlike Pure's, so the detector is not needed: `0x3b9`, `0x3ba`,
+`0x3cd` and `0x3e6` are authored 28, 28, 28 and 10 times respectively.
+See [hd-status](hd-status.md).
+
+**The geometry itself is not shared, even where the circuit is.** HD's Talon's
+Junction is Pulse's `16_Track` [down to the spline](hd-status.md#the-circuits-are-the-psps),
+and its collision soup is close to twice as dense:
+
+| | floor | wall | mag floor | reset |
+| --- | --- | --- | --- | --- |
+| Pulse `16_Track` | 123 objects, 3,835 v | 66, 2,224 v | 7, 177 v | none |
+| HD `talons_junction` | 246 objects, 7,588 v | 122, 4,269 v | 14, 357 v | 18, 627 v |
+
+HD also authors reset volumes where Pulse's `16_Track` authors none - worth
+knowing beside the finding that three of Pulse's circuits ship zero `Reset`
+colliders and so have no net at all.
+
 ## The per-vertex scalar is authored and unused
 
 The `f32` per vertex reaches the raycast hit result, averaged over a triangle's

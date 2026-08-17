@@ -215,6 +215,16 @@ mine-names image:
 ps3iso *ARGS:
     python3 scripts/ps3iso.py {{ARGS}}
 
+# Read a PS3 .psarc archive in place inside a decrypted disc image:
+# info|list|cat|extract. See docs/formats/psarc.md.
+psarc *ARGS:
+    python3 scripts/psarc.py {{ARGS}}
+
+# Re-derive every number on docs/formats/hd-status.md from the discs themselves.
+# The second argument is optional and only feeds the Pulse control column.
+hd-survey hd="data/images/hdfury-ps3-eu-dec.iso" pulse="":
+    python3 scripts/hd-survey.py {{hd}} {{pulse}}
+
 # Extract a raw ISO from a CHD, which is what the emulators want
 extract-iso image="data/images/pulse-psp-usa.chd" out="data/cache/pulse-psp-usa.iso":
     chdman extractdvd -i {{image}} -o {{out}} -f

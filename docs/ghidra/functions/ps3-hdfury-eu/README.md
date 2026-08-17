@@ -27,6 +27,18 @@ recognisably the same shapes is worth knowing cheaply before anyone plans work
 on it. Names here are opportunistic, and any claim about *Pulse* still has to
 be proved against Pulse's own binaries.
 
+**The asset half of that question is answered, and this directory is no longer
+where it is answered.** As of 2026-08-17 the disc's archives read and the survey
+is [hd-status](../../../formats/hd-status.md): HD ships Pulse's `.vex` at
+version 6 with Pulse's own class IDs, byte-swapped, and ten of its sixteen
+environments are a Pulse or Pure circuit's spline. Where the executable is
+still the only source is everything *behavioural* - what HD does with any of
+it - and the two useful things learned here so far are that gameplay lives in
+`EBOOT.elf` (`Collision.cpp`, `RaceManager.cpp` and `ModeManager.cpp` are all
+named from it) rather than in the closed `DFEngine.sprx`, and that the C++ base
+class stores its own `__FILE__` at object offset `0x30`, which attributes whole
+classes cheaply.
+
 Two structural facts to expect, both different from every other binary here:
 
 - **PPC64 with an OPD.** A function pointer is a descriptor pair

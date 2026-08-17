@@ -1354,6 +1354,46 @@ Applied, from
     shared-atlas pieces is the part still open, see
     [PS2 texture](ps2-texture.md#how-a-model-finds-its-texture-set-directory-position-not-a-name).
 
+## Wipeout HD ships version 6 too, byte-swapped
+
+**Confidence 92**, on three independent arithmetic invariants across 40 files.
+The full survey is [hd-status](hd-status.md); what belongs here is the shape.
+
+A PS3 `.vex` is this format, big-endian. The header word at `+0x0c` reads
+`XXEV` - `VEXX` with its bytes reversed - and every field above, the `u16` child
+count included, reads at the same offset with the opposite byte order. On all 28
+of HD's circuits and 12 of its front-end models the header arithmetic closes, the
+node walk lands exactly on the tree end, and immediate child counts sum to node
+count minus one.
+
+**The class IDs are Pulse's**, not a renumbering like [Pure's](pure-status.md#the-class-id-space-is-renumbered):
+`Transform 0x06e`, `Mesh 0x125`, `WO Track 0x3bb`, `section 0x3c9`, both pad
+classes, all five collision classes and the whole environment group resolve
+against `classes::V6` unchanged. One class does not: **`0x3ed`**, authored once
+per circuit under the node name `collision_trackwall`. Note what that does and
+does not say - the table above was **read only as far as `0x08ab26a0` and its
+terminator was never reached**, so `0x3ed` is past the last entry anyone has
+read rather than past the table, and Pulse may name it too. Its payload has not
+been read either, and it is deliberately **not** added to any table here: the
+name is a hypothesis, and
+[the rubric](../reverse-engineering/confidence-rubric.md) is explicit about what
+naming one costs. Reading further in this binary's own table is the cheap way to
+settle it.
+
+**What is not there is the geometry.** Everything under
+["Geometry is pre-batched GE display lists"](#geometry-is-pre-batched-ge-display-lists)
+is PSP-specific in a way this page did not have to say before: on the PS3 a
+`Mesh` node's payload is 224 to 22,176 bytes of *description* - a bounding-box
+pair at `+0x10`/`+0x20`, `min <= max` componentwise on 1,638 of 1,638 nodes, and
+a per-node 32-bit word that is the obvious candidate for a reference - and the
+vertices live in a `.rcsmodel` file beside the `.vex`. Talon's Junction carries
+90 KB of `Mesh` payload where Pulse's `16_Track` carries 3.49 MB, with a 24.7 MB
+`track.rcsmodel` next to it.
+
+So the node tree, the scene hierarchy, the track payloads and the class space are
+all one format across three consoles and three titles; the vertex encoding is the
+part that has been rewritten every time.
+
 ## Other extensions found
 
 `.dat`, `.svml` (a markup format under `Data\SVML\`), `.tga` (under

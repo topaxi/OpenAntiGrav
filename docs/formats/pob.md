@@ -622,6 +622,35 @@ the first."** This is a second, independent binary agreeing on every
 structural claim without a single adjustment to the parser - real
 corroboration, not just a bigger PSP sample.
 
+## Wipeout HD carries the same container, and one field stops agreeing
+
+**Confidence 85**, over all **88** `.pob` under `data/psys/` on the PS3 disc;
+the survey is [hd-status](hd-status.md). Read big-endian the container is this
+one - the magic reads `PSYS` where the PSP and PS2 write `SYSP`:
+
+- **88 of 88** carry the magic.
+- **88 of 88** carry the two constant words, `1` at `+0x0a` and `1` at `+0x0c`.
+- **88 of 88** carry a NUL-terminated ASCII name **immediately after the slot
+  table**, at `0x10 + slots * 4` - the boundary this page had to work to pin
+  down, holding on a third platform at a third set of slot counts - and on
+  **86 of 88** that name predicts the file's own name, case aside
+  (`WO_DAMAGE_ELECTRIC` for `wo_damage_electric.pob`). The two that do not are
+  authoring rather than parsing: `stesparkstest.pob` holds
+  `WO_SHIP_COLL_SPARK_DAMAGE` and `wo_ship_explosion_lightshafts.pob` holds
+  `WO_SHIP_EXPLOSION`.
+
+**The length check fails on all 88, and that is the finding.** `+0x04` equals
+`HEADER_LEN + payload.len()` exactly on all 35 PSP files and all 41 PS2 ones;
+on HD it falls **short of the file length by 48 to 208 bytes**, always a multiple
+of 16, and the excess is readable developer strings (`Z:\WipeoutHD\Dat`,
+`a\Source\Common\`). Since the same field agrees exactly on two other platforms,
+the likeliest reading is that HD appends a string block `+0x04` does not count -
+which would sit naturally beside the finding above that 43-80 % of slot-resolved
+targets are developer strings. That is a hypothesis. What is recorded is that the
+field disagrees, and by how much.
+
+The emitter tree has not been walked on any HD file.
+
 ## Evidence summary
 
 Every structural claim below holds on **35 of 35** PSP files and, per the

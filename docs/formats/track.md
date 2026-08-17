@@ -605,6 +605,51 @@ distance to this pad, decremented by how far that racer moved - an optimisation
 so the containment test only runs once a craft could have reached the pad. See
 [`pads.md`](../ghidra/functions/psp-pulse-usa/pads.md) for `Pad_SweptTest`.
 
+## Wipeout HD authors version `0x106`, and the control point is unchanged
+
+**Confidence 90**, corpus-wide across all 28 of HD's circuits; the survey is
+[hd-status](hd-status.md). Read big-endian, the whole payload above decodes with
+nothing moved: magic `WOtd`, the `0x20` header, the `0x20` reserved block, paths
+at `0x20` bytes, junctions at `0x10` with `0x7fffffff` for null, control points
+at `0x70`. On every file the bytes after the arrays divide by `0x70` exactly and
+equal the summed path lengths, and **0 of 71,622 frame vectors** are off unit
+length - three per point, which is what says the field *offsets* are right rather
+than only the stride.
+
+Two things follow that are worth having on this page rather than only on that one.
+
+**The unread fields are unread in both games.** `+0x5c` and the bytes from
+`+0x62` are in the "Not determined" list below; HD authors them too, and
+**per track rather than per title** - `+0x5c` is filled on all 776 points of
+HD's `02_track` and on none of `talons_junction`, exactly as Pulse fills it on
+all 862 of `16_Track` and on 30 of 713 of `06_Track`. So a reader comparing the
+two discs will find a difference there and it is authoring, not format.
+
+**`racing_line` is zero on both.** A first pass on the HD disc concluded that HD
+authors no racing line; it is zero on all 862 points of Pulse's own `16_Track`
+too, and on `01`, `05`, `06`, `13` and `14`. The field is simply unauthored on
+the circuits anyone has looked at, in either game.
+
+### The 64-bit `section` mask has to be read as one quantity
+
+[`oag_formats::pvs`](#section-visibility-not-geometry) reads the visibility mask
+as `pvs_mask_lo` at `+0x08` and `pvs_mask_hi` at `+0x0c`. On a little-endian
+file that is the same thing as reading the eight bytes as one `u64`. **On a
+big-endian file it is not**, and a byte-order pass that swaps each word where it
+stands leaves the halves the wrong way round.
+
+Measured over 3,536 set bits in 526 `section` nodes on 24 HD circuits, counting
+bits that name a section the file does not declare: **22.2 %** reading one
+big-endian `u64`, **55.6 %** reading the two words swapped in place, and 100 %
+dangling on 15 of the 24 files under the second. The same script's control run
+over Pulse's own 24 circuits - where the two readings are by construction
+identical - gives **2.10 %**, reproducing the "one bit in fifty" figure the
+ground-truth test already records. The remaining 22 % is three circuits whose
+section IDs run to the 64-bit cap, not a spread.
+
+This is the only place found so far where a mechanically correct per-field byte
+swap produces plausible garbage instead of an error.
+
 ## Open questions
 
 ### Where is lap counting?
