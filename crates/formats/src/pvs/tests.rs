@@ -83,8 +83,34 @@ fn vex_header() -> Vec<u8> {
     header
 }
 
+/// The same header written the way the PS3 exporter writes it.
+fn vex_header_be() -> Vec<u8> {
+    let mut header = vec![0u8; vex::FILE_HEADER_LEN];
+    header[0..4].copy_from_slice(&6u32.to_be_bytes());
+    header[0x0c..0x10].copy_from_slice(vex::MAGIC_BE);
+    header
+}
+
+/// One `section` payload with the whole mask as a single big-endian `u64`.
+fn payload_be(index: u8, mask: u64) -> Vec<u8> {
+    let mut out = vec![index, 0, 0, 0, 0, 0, 0, 0];
+    out.extend(mask.to_be_bytes());
+    out
+}
+
 fn pvs_from(payloads: &[Vec<u8>]) -> Result<TrackPvs> {
     let mut data = vex_header();
+    let mut nodes = Vec::new();
+    for p in payloads {
+        nodes.push(node(data.len(), p.len()));
+        data.extend_from_slice(p);
+    }
+    TrackPvs::from_nodes(&data, &nodes)
+}
+
+/// [`pvs_from`] against a file whose magic says big-endian.
+fn pvs_from_be(payloads: &[Vec<u8>]) -> Result<TrackPvs> {
+    let mut data = vex_header_be();
     let mut nodes = Vec::new();
     for p in payloads {
         nodes.push(node(data.len(), p.len()));
@@ -142,11 +168,38 @@ fn a_section_governs_its_parents_subtree() {
     );
 }
 
-/// The two mask words are one 64-bit value, low word first.
+/// The mask is one 64-bit field, and on a little-endian file that is exactly
+/// the two words joined low word first.
 #[test]
-fn the_two_mask_words_join_low_word_first() {
+fn the_mask_is_one_64_bit_field_low_word_first_on_a_little_endian_file() {
     let pvs = pvs_from(&[payload(0, 0x0000_0002, 0x0000_0001, None)]).expect("parse");
     assert_eq!(pvs.visible_from(0), 0x0000_0001_0000_0002 | 1);
+}
+
+/// The same mask, on a big-endian file, and **not** the two words swapped in
+/// place.
+///
+/// This is the module's one silent-garbage trap. A mechanical
+/// `from_le_bytes` -> `from_be_bytes` sweep over a `lo`/`hi` pair leaves the
+/// halves the wrong way round and raises nothing; measured over Wipeout HD's
+/// 24 circuits, that reading names a section the file does not declare on
+/// 55.6 % of set bits against 22.2 % for the correct one, and turns 15
+/// circuits from clean into 100 % dangling. See
+/// `docs/formats/hd-status.md#the-pvs-mask-and-the-byte-order-trap`.
+#[test]
+fn a_big_endian_mask_is_one_field_and_not_two_words_swapped_in_place() {
+    let mask = 0x0000_0001_0000_0002u64;
+    let pvs = pvs_from_be(&[payload_be(0, mask)]).expect("parse");
+    assert_eq!(pvs.visible_from(0), mask | 1);
+
+    // What the wrong reading would have produced, spelled out so the two are
+    // visibly different rather than merely asserted to be.
+    let swapped_in_place = mask.rotate_left(32);
+    assert_ne!(
+        pvs.visible_from(0),
+        swapped_in_place | 1,
+        "the halves must not come out the other way round"
+    );
 }
 
 /// The original ORs a section's own bit in at load, so a mask is never zero

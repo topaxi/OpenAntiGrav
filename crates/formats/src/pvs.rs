@@ -12,8 +12,7 @@
 //!   +0x00  u8    index          array index, also the PVS bit position
 //!   +0x01  u8    has_bounds     selects the optional bbox block
 //!   +0x02  u8[6] pad            never read
-//!   +0x08  u32   pvs_mask_lo    sections 0..31 visible from here
-//!   +0x0c  u32   pvs_mask_hi    sections 32..63
+//!   +0x08  u64   pvs_mask       one bit per section visible from here
 //!         then, only when has_bounds:
 //!   +0x10  f32[4] bbox_min      the fourth component is not a coordinate
 //!   +0x20  f32[4] bbox_max
@@ -62,6 +61,7 @@
 //! that proves membership is not spatial. Turning that into per-draw-call
 //! masks is `oag_render::pvs`'s business.
 
+use crate::ByteOrder;
 use crate::vex::{self, Node};
 use std::fmt;
 
@@ -236,11 +236,12 @@ impl TrackPvs {
     pub fn from_nodes(data: &[u8], nodes: &[Node]) -> Result<Self> {
         let mut pvs = Self::empty();
         let section_class = vex::classes_of(data).ok().and_then(|c| c.section);
+        let order = vex::byte_order(data);
         for (at, node) in nodes.iter().enumerate() {
             if Some(node.class_id) != section_class {
                 continue;
             }
-            let section = parse_section(data, node, at)?;
+            let section = parse_section(data, node, at, order)?;
             let id = usize::from(section.index);
             if pvs.declared & (1u64 << id) == 0 {
                 pvs.declared |= 1u64 << id;
@@ -390,11 +391,12 @@ pub fn governing_sections(data: &[u8], nodes: &[Node]) -> Result<Vec<Option<u8>>
     // parent node index -> the id of its section child.
     let mut section_of_parent: Vec<Option<u8>> = vec![None; nodes.len()];
     let section_class = vex::classes_of(data).ok().and_then(|c| c.section);
+    let order = vex::byte_order(data);
     for (at, node) in nodes.iter().enumerate() {
         if Some(node.class_id) != section_class {
             continue;
         }
-        let section = parse_section(data, node, at)?;
+        let section = parse_section(data, node, at, order)?;
         if let Some(parent) = node.parent
             && section_of_parent[parent].is_none()
         {
@@ -523,7 +525,7 @@ pub fn set_bits(mask: u64) -> impl Iterator<Item = u8> {
     (0..MAX_SECTIONS as u8).filter(move |id| mask & (1u64 << id) != 0)
 }
 
-fn parse_section(data: &[u8], node: &Node, at: usize) -> Result<Section> {
+fn parse_section(data: &[u8], node: &Node, at: usize, order: ByteOrder) -> Result<Section> {
     let payload = node.payload();
     let got = payload.len();
     if got < FIXED_LEN || payload.end > data.len() {
@@ -539,12 +541,20 @@ fn parse_section(data: &[u8], node: &Node, at: usize) -> Result<Section> {
         return Err(Error::IndexOutOfRange { node: at, index });
     }
     let has_bounds = data[base + 1] != 0;
-    let lo = u64::from(u32_at(data, base + 0x08));
-    let hi = u64::from(u32_at(data, base + 0x0c));
+    // **One 64-bit read, not two 32-bit ones**, and the difference is silent.
+    // On a little-endian file the two spellings are identical, which is why the
+    // field sat here as a `lo`/`hi` pair for a year without anything noticing.
+    // On a big-endian file they are not: swapping each word in place leaves the
+    // halves the wrong way round, and `docs/formats/hd-status.md` measures what
+    // that costs - 55.6 % of set bits naming a section the file does not
+    // declare, against 22.2 % for the correct reading, with no error raised
+    // either way. 15 of Wipeout HD's 24 circuits go from clean to 100 %
+    // dangling.
+    let mask = order.u64(data, base + 0x08);
     // The own bit is OR'd in at load in the original, so a section always sees
     // itself. Doing it here rather than at lookup keeps the hot path a plain
     // array read.
-    let visible = (hi << 32) | lo | (1u64 << index);
+    let visible = mask | (1u64 << index);
 
     let bounds = if has_bounds {
         if got < FIXED_LEN + BOUNDS_LEN {
@@ -556,14 +566,14 @@ fn parse_section(data: &[u8], node: &Node, at: usize) -> Result<Section> {
         }
         Some(Aabb {
             min: [
-                f32_at(data, base + 0x10),
-                f32_at(data, base + 0x14),
-                f32_at(data, base + 0x18),
+                order.f32(data, base + 0x10),
+                order.f32(data, base + 0x14),
+                order.f32(data, base + 0x18),
             ],
             max: [
-                f32_at(data, base + 0x20),
-                f32_at(data, base + 0x24),
-                f32_at(data, base + 0x28),
+                order.f32(data, base + 0x20),
+                order.f32(data, base + 0x24),
+                order.f32(data, base + 0x28),
             ],
         })
     } else {
@@ -575,14 +585,6 @@ fn parse_section(data: &[u8], node: &Node, at: usize) -> Result<Section> {
         visible,
         bounds,
     })
-}
-
-fn u32_at(data: &[u8], at: usize) -> u32 {
-    u32::from_le_bytes([data[at], data[at + 1], data[at + 2], data[at + 3]])
-}
-
-fn f32_at(data: &[u8], at: usize) -> f32 {
-    f32::from_bits(u32_at(data, at))
 }
 
 #[cfg(test)]

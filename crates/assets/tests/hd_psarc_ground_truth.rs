@@ -34,7 +34,7 @@
 use std::path::{Path, PathBuf};
 
 use oag_assets::psarc::Archive;
-use oag_formats::{ByteOrder, collision, pads, track, vex};
+use oag_formats::{ByteOrder, collision, pads, pvs, track, vex};
 
 /// The decrypted PS3 image.
 const PS3_IMAGE: &str = "hdfury-ps3-eu-dec.iso";
@@ -356,5 +356,59 @@ fn both_hd_pad_classes_read_and_sit_on_the_circuit() {
     assert!(
         worst < 20.0,
         "furthest pad is {worst} units from the nearest control point, horizontally"
+    );
+}
+
+/// The visibility mask reads as one 64-bit quantity, and the word-swapped
+/// reading is measurably worse on the same file.
+///
+/// This is the trap `docs/formats/hd-status.md` gives its own section to, and
+/// the only one in the byte-order pass whose failure is **silent**: a
+/// mechanical `from_le_bytes` -> `from_be_bytes` sweep over `pvs_mask_lo` and
+/// `pvs_mask_hi` leaves the two halves the wrong way round, raises nothing, and
+/// hides or shows the wrong half of a circuit.
+///
+/// The measure is the survey's own: how many set bits name a section the file
+/// does not declare. It needs no reference answer, because the two readings are
+/// compared against each other on the same bytes.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn the_hd_visibility_mask_is_one_64_bit_field_and_the_swap_is_measurably_wrong() {
+    let Some(data) = hd_track_vex() else { return };
+    let set = pvs::TrackPvs::parse(&data).expect("the section nodes decode");
+
+    assert!(
+        set.len() >= 16,
+        "a circuit partitions itself, {} sections",
+        set.len()
+    );
+
+    let dangling = |mask_of: &dyn Fn(u8) -> u64| -> (usize, usize) {
+        let (mut total, mut bad) = (0, 0);
+        for id in set.ids() {
+            for bit in pvs::set_bits(mask_of(id)) {
+                total += 1;
+                bad += usize::from(!set.declares(bit));
+            }
+        }
+        (bad, total)
+    };
+
+    let (bad, total) = dangling(&|id| set.visible_from(id));
+    // Swapping each 32-bit word in place is what the wrong reading produces.
+    let (bad_swapped, total_swapped) = dangling(&|id| set.visible_from(id).rotate_left(32));
+
+    assert!(total > 50, "{total} set bits to judge on");
+    assert_eq!(
+        total, total_swapped,
+        "the swap moves bits, it does not add any"
+    );
+    assert_eq!(
+        bad, 0,
+        "{bad} of {total} set bits name a section this circuit does not declare"
+    );
+    assert!(
+        bad_swapped > total / 2,
+        "the word-swapped reading should be mostly dangling, was {bad_swapped} of {total_swapped}"
     );
 }
