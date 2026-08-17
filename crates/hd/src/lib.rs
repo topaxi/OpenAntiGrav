@@ -25,10 +25,18 @@
 //! `WOtd`), never from the console it came off, which is why this crate needs no
 //! `ByteOrder` constant and why `oag_formats::track::parse` takes no argument.
 //!
-//! Nothing here names a `.rcsmodel`, a `.gtf` or a `.bik` beyond the two logo
-//! reels the front-end XML names itself. All three formats are undecoded, and a
-//! table of paths into formats nothing reads would be a list of names rather
-//! than a measurement.
+//! Nothing here names a `.rcsmodel` or a `.bik` beyond the two logo reels the
+//! front-end XML names itself. Both formats are undecoded, and a table of paths
+//! into a format nothing reads would be a list of names rather than a
+//! measurement.
+//!
+//! **`.gtf` is the one exception, and it earns it.** [`hud::TEXTURES`] names the
+//! twelve textures the HUD layouts sample - ten of them `.gtf` - and those are
+//! not a list this crate composed: they are read off the eighteen layouts, and
+//! all twelve resolve to a shipped entry under the extension rule
+//! [`hud::texture_entry`] states. That is a measurement about the disc, which is
+//! what this crate is for. The `.gtf` **format** is still undecoded, and no
+//! texture path outside the HUD's own set is named.
 //!
 //! [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
 //! [`hd-status.md`]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/formats/hd-status.md
@@ -39,6 +47,7 @@ use oag_assets::{Archives, Result};
 use oag_title::{ArchiveCandidates, ForeignSerial, Platform, Title};
 
 pub mod frontend;
+pub mod hud;
 pub mod race;
 
 /// Wipeout HD / Fury, as the asset layer needs to know it.
@@ -96,6 +105,14 @@ pub mod archives {
     pub const DATA05: &str = "PS3_GAME/USRDIR/DATA05.PSARC";
     /// The Fury and campaign team variants.
     pub const DATA06: &str = "PS3_GAME/USRDIR/DATA06.PSARC";
+
+    /// All seven, in disc order.
+    ///
+    /// For a survey that has to look everywhere rather than through
+    /// `oag_assets::Archives`' precedence - which archive an entry comes out of
+    /// is a question of its own here, since the same path ships in more than one
+    /// of these. See `docs/formats/hd-hud.md`.
+    pub const ALL: &[&str] = &[DATA00, DATA01, DATA02, DATA03, DATA04, DATA05, DATA06];
 }
 
 /// Paths inside the archives.

@@ -189,6 +189,25 @@ arcade layout nests them in `<Item OffsetX="-40">`, so they resolve to **negativ
 coordinates** - correct for an offset, nonsense for a position. Any "is it on
 screen" check has to skip them, which is what `hud::is_screen_positioned` is for.
 
+## The reader is shared with HD/Fury, and HD is what corrected it
+
+`oag_game::hud`'s `Layout` reads Wipeout HD / Fury's eighteen layouts as well as
+Pulse's five - see [hd-hud](../formats/hd-hud.md), which is where the numbers
+are. Two rules on this page were right about Pulse and wrong about the dialect,
+and HD is what showed it:
+
+- **`<Item>` offsets compose.** The `collect` walker read an offset as absolute,
+  on the grounds that no shipped file nested one. Pulse nests none; HD nests
+  them three deep and puts them on widgets as well as on `<Item>`. Composing is
+  a strict no-op here - all nine assertions in
+  `crates/game/tests/hud_layout_ground_truth.rs` pass unchanged.
+- **A nameless widget is drawn.** Both widget readers required a `name` and
+  recorded the loss in `Layout::skipped` otherwise. Pulse names all of its;
+  HD leaves 106 anonymous, mostly background panels behind a named readout.
+
+Neither could have been caught from Pulse's own data, which is the argument for
+pointing a parser at a second title even when no milestone is open on it.
+
 ## The HUD fonts are pre-outlined, and that cost a renderer change
 
 The single biggest surprise in implementing this. `PulseHud.fnt` and `small.fnt`

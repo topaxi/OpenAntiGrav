@@ -51,6 +51,7 @@ render geometry lifted out of `.vex` into a PS3 container of its own.
 | `section` PVS mask | Reads byte-swapped, with **one trap that a naive port walks into** - and `pvs` now avoids it |
 | `Speedup Pad` / `Weapon Pad` volumes | Read byte-swapped, and `pads::volumes` does |
 | Handling stats | Same schema, plain-text XML - **parses**, after making `headtilt` optional |
+| HUD layouts | Same dialect and the same widget model - **all 18 compose**, once includes are followed and offsets composed. [hd-hud](hd-hud.md) |
 | `.pob` particle container | Reads byte-swapped; **one declared length no longer agrees** |
 | Textures | **New.** `.gtf`, the PS3's own container |
 | Sound bank | `.bnk` present, unexamined |

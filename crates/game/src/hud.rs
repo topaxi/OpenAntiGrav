@@ -39,6 +39,12 @@ use std::collections::HashMap;
 
 use oag_formats::fexml::{self, Node};
 
+mod compose;
+mod overlay;
+
+pub use compose::{Composed, compose};
+pub use overlay::Overlay;
+
 use crate::frontend::{Align, Draw, SCREEN};
 use crate::screen::{argb_to_rgba, parse_argb};
 
@@ -265,42 +271,88 @@ impl Layout {
     /// *silently* - see [`Self::skipped`].
     #[must_use]
     pub fn from_xml(xml: &str) -> Self {
-        let root = fexml::parse(xml);
+        Self::from_tree(&fexml::parse(xml))
+    }
+
+    /// Reads an already-parsed tree.
+    ///
+    /// The entry point for a layout that is **more than one file**: HD/Fury
+    /// composes each mode's HUD out of a shell plus a dozen `<LoadXML>`
+    /// fragments, and [`compose`] splices those into one tree before this runs.
+    /// Doing it on the tree rather than on text is what lets a fragment's
+    /// `<Variable>` constants reach a widget in a different file, since the
+    /// constant sweep below sees the whole composed document at once.
+    #[must_use]
+    pub fn from_tree(root: &Node) -> Self {
         let mut out = Self::default();
 
         // Constants first: a widget's colour can reference one declared anywhere
         // in the file, including after the widget itself.
-        collect_constants(&root, &mut out.constants);
-        out.collect(&root, 0.0, 0.0);
+        collect_constants(root, &mut out.constants);
+        out.collect(root, 0.0, 0.0);
         out
     }
 
-    /// Walks the tree, carrying the enclosing `<Item>`'s offset down.
+    /// Walks the tree, carrying the enclosing translation down.
+    ///
+    /// # `OffsetX`/`OffsetY` translate; `x`/`y` place
+    ///
+    /// Two coordinate attributes with two different meanings, and telling them
+    /// apart is the whole rule. `OffsetX`/`OffsetY` move the element **and
+    /// everything under it**; `x`/`y` place the element itself inside whatever
+    /// translation it inherited. So the offsets **compose** down the tree and the
+    /// positions do not.
+    ///
+    /// This paragraph said the opposite until 2026-08-17 - an `<Item>`'s offset
+    /// was read as absolute, "because nothing in the shipped data nests them, so
+    /// composing would be untested code". True of Pulse and false of the
+    /// lineage: measured across Pulse's five layouts and HD/Fury's 73 HUD files,
+    ///
+    /// | | Pulse | HD/Fury |
+    /// | --- | ---: | ---: |
+    /// | elements carrying an offset | 26, **all `<Item>`** | 218 |
+    /// | of those, widgets rather than `<Item>` | 0 | 116 |
+    /// | widgets holding a widget | **0** | 242 |
+    /// | offsets carried inside `<Values>` rather than on the element | 0 | 0 |
+    ///
+    /// so composing is a **strict no-op on Pulse** - nothing there ever inherits
+    /// a non-zero offset - and is required to read HD at all. `Data\XML\
+    /// HUD_Elim_info_text.xml` is the case that settles the second half:
+    /// `<Text name="Info1" OffsetX="600" OffsetY="330">` carries `x="0" y="20"`
+    /// of its own and holds three `<Image>` frame pieces at `x="-160"`, `0` and
+    /// `160`, all `centred`. The text lands in the middle of its own frame only
+    /// if the element's `x`/`y` and its children's are read in the *same*
+    /// translated space - which is to say an element's own offset applies to
+    /// itself too, not only to what it contains.
     fn collect(&mut self, node: &Node, offset_x: f32, offset_y: f32) {
         for child in &node.children {
             let name = child.name.as_str();
 
+            // Read off the element rather than through `Node::value`: no shipped
+            // layout on either disc puts an offset in a `<Values>` carrier, and
+            // reaching into one would let a child's carrier answer for its
+            // parent.
+            let x = offset_x + number(&self.constants, child.attr("OffsetX")).unwrap_or(0.0);
+            let y = offset_y + number(&self.constants, child.attr("OffsetY")).unwrap_or(0.0);
+
             if name.eq_ignore_ascii_case("Item") {
-                // An `<Item>` is a translation group, and its offset is absolute
-                // rather than relative to an enclosing one: nothing in the
-                // shipped data nests them, so composing would be untested code.
-                let x = number(&self.constants, child.attr("OffsetX")).unwrap_or(0.0);
-                let y = number(&self.constants, child.attr("OffsetY")).unwrap_or(0.0);
                 self.collect(child, x, y);
                 continue;
             }
 
             if name.eq_ignore_ascii_case("Image") {
-                if let Some(sprite) = self.sprite_from(child, offset_x, offset_y) {
+                if let Some(sprite) = self.sprite_from(child, x, y) {
                     self.sprites.push(sprite);
                 }
+                self.collect(child, x, y);
                 continue;
             }
 
             if name.eq_ignore_ascii_case("Text") {
-                if let Some(label) = self.label_from(child, offset_x, offset_y) {
+                if let Some(label) = self.label_from(child, x, y) {
                     self.labels.push(label);
                 }
+                self.collect(child, x, y);
                 continue;
             }
 
@@ -314,15 +366,12 @@ impl Layout {
             // `Screen`, `Mode3D`, `Variable` and `Values` are containers or
             // already-handled carriers; everything else is walked into so a
             // widget nested somewhere unexpected is still found.
-            self.collect(child, offset_x, offset_y);
+            self.collect(child, x, y);
         }
     }
 
     fn sprite_from(&mut self, node: &Node, offset_x: f32, offset_y: f32) -> Option<Sprite> {
-        let Some(name) = node.attr("name").map(str::to_string) else {
-            self.skipped.push("an <Image> with no name".to_string());
-            return None;
-        };
+        let name = anonymous_or(node);
         // No `Src` means a solid rectangle, not a broken widget - see [`Fill`].
         let Some(src) = node.value("Src").map(str::to_string) else {
             let width = number(&self.constants, node.value("width")).unwrap_or(0.0);
@@ -368,13 +417,8 @@ impl Layout {
     }
 
     fn label_from(&mut self, node: &Node, offset_x: f32, offset_y: f32) -> Option<Label> {
-        let Some(name) = node.attr("name").map(str::to_string) else {
-            self.skipped.push("a <Text> with no name".to_string());
-            return None;
-        };
-
         Some(Label {
-            name,
+            name: anonymous_or(node),
             x: offset_x + number(&self.constants, node.value("x")).unwrap_or(0.0),
             y: offset_y + number(&self.constants, node.value("y")).unwrap_or(0.0),
             font: node.value("font").map(Font::parse).unwrap_or_default(),
@@ -470,6 +514,24 @@ pub fn is_screen_positioned(name: &str) -> bool {
     !RUNTIME_ANCHORED
         .iter()
         .any(|prefix| name.starts_with(prefix))
+}
+
+/// A widget's `name`, or the empty string when it has none.
+///
+/// **A nameless widget is drawn, not broken**, and this used to drop it: both
+/// widget readers required a `name` and pushed "an `<Image>` with no name" onto
+/// [`Layout::skipped`] otherwise. Pulse authors none - all five layouts name
+/// every widget, which is why the rule survived - and HD/Fury authors **106**
+/// against 2,214 named across its eighteen composed HUDs, most of them the
+/// `BackgroundLayer="1"` panels sitting behind a named readout. Dropping those
+/// leaves the numbers with nothing behind them.
+///
+/// The empty name is not a placeholder to be matched on: nothing in
+/// [`draw_list`]'s tables is named `""`, so an anonymous widget carries geometry
+/// and is never selected by name - which is exactly what an unaddressable widget
+/// should do.
+fn anonymous_or(node: &Node) -> String {
+    node.attr("name").unwrap_or_default().to_string()
 }
 
 fn collect_constants(node: &Node, out: &mut HashMap<String, String>) {
@@ -1168,136 +1230,6 @@ impl Layout {
             .iter()
             .map(|sprite| sprite.src.as_str())
             .find(|src| !src.is_empty())
-    }
-}
-
-/// The HUD's two renderers and the data they draw.
-///
-/// # Why two renderers
-///
-/// [`crate::render::Renderer`] binds exactly one font atlas into an immutable
-/// bind group and picks its sampler filter once from `Atlas::is_real`. The HUD
-/// uses two fonts - `HUD` for values and `HUDSmall` for captions - so it needs two
-/// of them and two passes. The alternative, a second atlas binding plus a third
-/// `mode` value in `ui.wgsl`, touches the bind group every existing screen depends
-/// on; two renderers touch nothing. See `docs/ui/hud.md`.
-///
-/// Both are built with `video: None`. A video pipeline that is built and never
-/// filled draws a **green** rectangle rather than nothing, the planes being zeroed
-/// rather than absent - see `crate::render`.
-pub struct Overlay {
-    layout: Layout,
-    strings: crate::language::StringTable,
-    atlas_origin: (f32, f32),
-    hud_line_height: f32,
-    small_line_height: f32,
-    /// Draws the values, in `PulseHud.fnt`.
-    values: crate::render::Renderer,
-    /// Draws the captions, in `small.fnt`.
-    captions: crate::render::Renderer,
-}
-
-impl std::fmt::Debug for Overlay {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Overlay")
-            .field("widgets", &self.layout.widget_count())
-            .field("strings", &self.strings.len())
-            .field("atlas_origin", &self.atlas_origin)
-            .finish()
-    }
-}
-
-impl Overlay {
-    /// Builds the two renderers, or `None` when there is no layout to draw.
-    ///
-    /// # Errors
-    ///
-    /// Propagates pipeline creation.
-    pub fn new(
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        format: wgpu::TextureFormat,
-        assets: &Assets,
-    ) -> anyhow::Result<Option<Self>> {
-        let Some(layout) = assets.layout.clone() else {
-            return Ok(None);
-        };
-
-        let values = crate::render::Renderer::new(
-            device,
-            queue,
-            format,
-            None,
-            assets.font.clone(),
-            &assets.sheet,
-        )?;
-        // The captions renderer never draws a sprite, but it binds the sheet
-        // anyway: `Renderer::new` takes one unconditionally, and a second copy of
-        // a 256x256 atlas is cheaper than making the parameter optional.
-        let captions = crate::render::Renderer::new(
-            device,
-            queue,
-            format,
-            None,
-            assets.small_font.clone(),
-            &assets.sheet,
-        )?;
-
-        Ok(Some(Self {
-            hud_line_height: assets.font.line_height,
-            small_line_height: assets.small_font.line_height,
-            atlas_origin: assets.atlas_origin(),
-            strings: assets.strings.clone(),
-            layout,
-            values,
-            captions,
-        }))
-    }
-
-    /// The context [`draw_list`] takes.
-    #[must_use]
-    pub fn context(&self) -> Context<'_> {
-        Context {
-            layout: &self.layout,
-            strings: &self.strings,
-            atlas_origin: self.atlas_origin,
-            hud_line_height: self.hud_line_height,
-            small_line_height: self.small_line_height,
-            default_border: self.layout.default_border(),
-        }
-    }
-
-    /// Draws the HUD **over** whatever is already in `view`.
-    ///
-    /// Two passes, both `LoadOp::Load`: sprites and values through the `HUD`
-    /// renderer, then captions through the `HUDSmall` one. The sprites go with the
-    /// values because they share a renderer and the sprite sheet is bound in both.
-    pub fn draw(
-        &mut self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        encoder: &mut wgpu::CommandEncoder,
-        view: &wgpu::TextureView,
-        readout: &Readout,
-        viewport: (f32, f32, f32, f32),
-    ) {
-        let frame = draw_list(&self.context(), readout);
-        if frame.is_empty() {
-            return;
-        }
-
-        // Sprites first so text sits over the bars, and both in one pass because
-        // one renderer holds both the sheet and the value font.
-        let mut first = frame.sprites;
-        first.extend(frame.hud_text);
-        if !first.is_empty() {
-            self.values
-                .overlay(device, queue, encoder, view, &first, viewport);
-        }
-        if !frame.small_text.is_empty() {
-            self.captions
-                .overlay(device, queue, encoder, view, &frame.small_text, viewport);
-        }
     }
 }
 
