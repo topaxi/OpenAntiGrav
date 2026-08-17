@@ -49,7 +49,7 @@ render geometry lifted out of `.vex` into a PS3 container of its own.
 | Collision soup | Reads byte-swapped, exactly - and `collision::from_vex` does |
 | `section` PVS mask | Reads byte-swapped, with **one trap that a naive port walks into** - and `pvs` now avoids it |
 | `Speedup Pad` / `Weapon Pad` volumes | Read byte-swapped, and `pads::volumes` does |
-| Handling stats | Same schema, plain-text XML |
+| Handling stats | Same schema, plain-text XML - **parses**, after making `headtilt` optional |
 | `.pob` particle container | Reads byte-swapped; **one declared length no longer agrees** |
 | Textures | **New.** `.gtf`, the PS3's own container |
 | Sound bank | `.bnk` present, unexamined |
@@ -415,8 +415,51 @@ the parser already reads:
 `<ExternalCameraFar>` with the identical seven attributes, `<AirbrakeGraphics>`,
 and per-class `<Engine accelcap amount falloff gain turbo>`, `<Brakes>`,
 `<Turning>`, `<Airbrake>`, `<Antigrav>`, `<Physical>` blocks for
-VENOM/FLASH/RAPIER/PHANTOM. Whether the parser accepts them unmodified has not
-been tried - that is a code change, and this page is a reading.
+VENOM/FLASH/RAPIER/PHANTOM.
+
+**Tried, 2026-08-17: the parser accepts them after one change**, and the change
+is one attribute. `handling::from_blob`'s existing dispatch already sends HD
+down the right branch - the file begins `<?xml`, so it is read as plain text
+rather than expanded against a [`<code>` dictionary](fexml.md) that is not
+there, and its element names are the unshortened ones that expansion would have
+produced. The extra blocks HD adds, `<FE>` and `<Tilt>`, are ignored like any
+unknown element.
+
+What did not parse: **`<InternalCamera>` has no `headtilt`** on HD's team files.
+It is now `Option<f32>`, the same treatment `easyshield`, `sideshift`,
+`weight_distribution` and `<pitch>` already had, and it costs nothing because
+nothing in this project applies `headtilt` - `oag_render::camera::internal`
+carries the value and documents why it does not roll the view by it. The
+absence is a fact about a generation of the schema, not a defect: **HD's own
+mode ships still carry the attribute.**
+
+Sweeping every ship on the image: **twelve racing teams** - AG Systems,
+Assegai, Auricom, EGX, Feisar, Goteki, Harimau, Icaras, Mantis, Piranha, Qirex,
+Triakis - each with Pulse's four rungs, plus a **`Test`** ship the retail disc
+still carries.
+
+### The mode ships author no speed class at all
+
+A schema shape neither Pulse nor Pure has, and the reason the sweep above says
+"team files". `/data/ships/detonator/handlingstats.xml` is 1,398 bytes against a
+team file's ~3,500, names itself `team="ZoneMode"`, and hangs `<Engine>`,
+`<Brakes>`, `<Turning>`, `<Airbrake>`, `<Antigrav>` and `<Physical>` **directly
+off `<Stats>`** where a team file nests them inside four `<Class>` rungs. One
+implicit speed class, for modes that have no speed selection.
+`/data/ships/zone/` and `/data/ships/zone battle/` are the same shape.
+
+It parses, and `Stats::classes` comes back empty, which is honest. **The trap:**
+`oag_gameplay::handling_for` looks a rung up and `.expect()`s it, so handing it
+one of these files panics. Nothing does today, and
+`the_hd_mode_ships_author_no_speed_class_at_all` is what will fail first if an
+HD boot path is written that does.
+
+**`xml/handlingstats.xml`** is the global tunables file, a `<Global>` document
+rather than a `<Stats>` one, so `handling::parse_global` reads it and
+`from_blob` correctly refuses it. It authors **five `<GlobalClass>` rungs with
+`VECTOR` first**, exactly as both Pulse pressings do - which matters because
+[handling-stats](handling-stats.md) records that skipping `VECTOR` is only safe
+while it is authored first. A third disc now corroborates a rule that had two.
 
 **`environments/<track>/stats.xml`** carries target race and lap times per speed
 class, Zone and Elimination targets, a circuit length and location string, and a
