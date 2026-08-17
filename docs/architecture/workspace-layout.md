@@ -47,6 +47,7 @@ Older pages, and [`goals.md`](../overview/goals.md)'s scope table, use
 | `oag-title` | `crates/title` | The engine-side *types* a title package fills in. Tables, no data. |
 | `oag-pulse` | `crates/pulse` | Wipeout Pulse's tables: what that title ships. |
 | `oag-pure` | `crates/pure` | Wipeout Pure's tables, in the same shape. |
+| `oag-hd` | `crates/hd` | Wipeout HD / Fury's, in the same shape - and the release that forced `ArchiveCandidates::extra`, a *set* of archives all of which mount, because HD ships seven and they do not split by kind. |
 | `oag-game` | `crates/game` | The composition root. Boots the front end; see [front-end boot](frontend-boot.md). A thin binary over a library, so the boot sequence can be tested without a GPU. |
 
 ## Crates that do not exist yet
@@ -129,8 +130,9 @@ calling it title-specific would assert one of the two answers still open.
         |     \           oag-race             oag-input
     oag-assets  oag-title      |                    |
         |         /   \        |                    |
-        |   oag-pulse oag-pure |                    |
-        |         \   /        |                    |
+        | oag-pulse oag-pure  |                    |
+        |       oag-hd        |                    |
+        |         \   /       |                    |
         +----------> oag-gameplay <---------------+
                             |
                         oag-game

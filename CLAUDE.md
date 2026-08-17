@@ -109,6 +109,7 @@ Existing crates:
 | `oag-title` | `crates/title` | The `Title` type and its three axes: archive candidates, entry names, foreign-serial deny-list. Types only, no title's data. |
 | `oag-pulse` | `crates/pulse` | What Wipeout Pulse ships: archive and entry names, hashes, and its presentation tables (HUD, front end, loading wave, animated textures, race defaults). |
 | `oag-pure` | `crates/pure` | The same for Wipeout Pure, deliberately thinner - it holds only what `docs/formats/pure-status.md` measured. |
+| `oag-hd` | `crates/hd` | The same for Wipeout HD / Fury, and the one that is shaped differently: seven PSARC archives on a PS3 disc rather than two WADs. Its front end is recovered as data (`frontend::MENU_SKIN`) and deliberately not wired - see `docs/formats/hd-frontend.md`. |
 | `oag-tools` | `crates/tools` | CLI: `oag-unpack`, `oag-wad`. |
 | `oag-physics` | `crates/physics` | Ship dynamics and collision queries. Depends on `oag-core` and nothing else, deliberately. |
 | `oag-race` | `crates/race` | Race rules: modes, lap timing, track progress. |

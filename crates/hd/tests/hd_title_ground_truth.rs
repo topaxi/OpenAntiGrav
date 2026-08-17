@@ -182,6 +182,67 @@ fn the_team_roster_matches_the_disc_and_the_variants_are_left_out() {
     );
 }
 
+/// **The seven archives overlap, and the search order therefore decides which
+/// copy is served.** Measured rather than assumed, because nothing else records
+/// it.
+///
+/// `holder_of` walks data -> fe -> extra and takes the first hit, so a path in
+/// more than one archive is answered by whichever comes first in
+/// `ArchiveCandidates`. On the PSP that ordering was chosen for a case that was
+/// not real - `Archives::open_with_packs`'s own docs say the shipped packs never
+/// collide with the disc on differing content. **On HD it is real**:
+/// `/data/plugins/frontend/gui/skin.xml` is in six of the seven archives and all
+/// six differ by MD5, and which one the runtime loads is unresolved (see
+/// `docs/formats/hd-frontend.md` - the seven-pointer array at `0x00860c80` names
+/// them in order, but its consumer is unread and a first-wins and a last-wins
+/// array are byte-identical).
+///
+/// Nothing on the race path is affected - `talons_junction/track.vex` is in
+/// `DATA00` alone and `assegai/handlingstats.xml` in `DATA02` alone, which this
+/// asserts - so the ordering is a documented choice rather than a bug. It stops
+/// being either if the front end is ever wired up.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn the_archives_overlap_and_the_race_path_sits_outside_the_overlap() {
+    let Some(archives) = opened() else { return };
+
+    let mut seen: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
+    for path in every_path(&archives) {
+        *seen.entry(path).or_default() += 1;
+    }
+
+    let shared: Vec<(&String, &usize)> = seen.iter().filter(|(_, n)| **n > 1).collect();
+    assert!(
+        !shared.is_empty(),
+        "if the archives stopped overlapping, the ordering note on \
+         ArchiveCandidates::extra can go"
+    );
+    println!(
+        "{} of {} distinct paths are in more than one archive",
+        shared.len(),
+        seen.len()
+    );
+
+    assert_eq!(
+        seen.get("/data/plugins/frontend/gui/skin.xml"),
+        Some(&6),
+        "the front end's own skin is the worst case, and the one that matters"
+    );
+
+    // The race path, which is what makes the ordering harmless today.
+    for only_once in [
+        race::DEFAULT_TRACK,
+        "/data/ships/assegai/handlingstats.xml",
+        "/data/xml/handlingstats.xml",
+    ] {
+        assert_eq!(
+            seen.get(only_once),
+            Some(&1),
+            "{only_once} should be unique"
+        );
+    }
+}
+
 /// `DATA03` carries four teams and no circuit, which is the row that forced the
 /// `extra` role.
 ///

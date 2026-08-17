@@ -161,6 +161,19 @@ pub struct ArchiveCandidates {
     /// holds neither the circuits nor the other eight. Picking two would have
     /// silently lost a third of the roster.
     ///
+    /// **They overlap, and this list's order therefore decides which copy is
+    /// served.** 360 of HD's 11,139 distinct paths are in more than one of the
+    /// seven, worst of all `/data/plugins/frontend/gui/skin.xml`, which is in
+    /// six and differs by MD5 in every one - and which of those six the original
+    /// loads is unresolved. `oag_assets::Archives::holder_of` takes the first
+    /// hit walking `data` then `fe` then this, so first-listed wins, and that is
+    /// a documented choice rather than a measurement of what the original does.
+    ///
+    /// It is harmless today because nothing this project reads is in the
+    /// overlap: a circuit and a team's handling each sit in exactly one archive.
+    /// `crates/hd/tests/hd_title_ground_truth.rs` asserts both halves, so it
+    /// stops being harmless loudly rather than quietly.
+    ///
     /// Empty for both PSP titles, so nothing about their load changes.
     pub extra: &'static [(&'static str, Platform)],
 }
