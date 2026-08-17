@@ -513,3 +513,4 @@
 0x0880e93c	function	WeaponStats_ParsePickupOdds	92	missile.md
 0x08851d88	function	WeaponAiStats_Load	90	ai-stats.md
 0x08852178	function	WeaponAiStats_ParseWeapon	90	ai-stats.md
+0x08851d3c	function	WeaponAiStats_Reset	90	ai-stats.md

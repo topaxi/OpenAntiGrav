@@ -211,6 +211,7 @@ call.
 | --- | --- | --- |
 | `0x08851d88` | `WeaponAiStats_Load` | 90 |
 | `0x08852178` | `WeaponAiStats_ParseWeapon` | 90 |
+| `0x08851d3c` | `WeaponAiStats_Reset` | 90 |
 
 `FUN_08829124` is the race-setup function, and it calls the two back to back:
 
@@ -305,8 +306,54 @@ decides what an opponent does with a pickup, and it is not: it is three
 multipliers, all within 20 % of one, with no weapon marked as absorb-only or
 fire-only. Even wired exactly, it would barely move an opponent's behaviour.
 
-**The consumer is not found**, so what the three numbers multiply is still
-unread - and until it is, the numbers cannot be spent. The decision logic this
-project has been calling invention lives somewhere else, and finding it is a
-separate hunt: the useful next step is an xref sweep on the record base
-`FUN_08851d88` is handed, which `FUN_08829124` supplies.
+### And nothing reads it
+
+**The record is parsed and never read.** Confidence **85**, from three sweeps that
+each close a different escape route:
+
+1. **Nothing else forms its address.** The record is an *inline member* at
+   `object + 0x708` - `FUN_08829124` does `addiu s6, s1, 0x708` at `0x08829184`
+   and hands `s6` to the loader. Program-wide there are exactly **two**
+   `addiu <reg>, <reg>, 0x708` instructions: that one, and
+   `FUN_08826cac`'s `FUN_08851ce4(object + 0x708, 2)`, which is the destructor.
+   Nothing stores the base anywhere, so no consumer can have received it.
+2. **Nothing reads a field by weapon index.** Reading weapon `N` means a
+   displacement of `0x710`, `0x714` or `0x718` off a computed base. Searched with
+   *no* mnemonic filter, so `lw`, `lwc1` and the VFPU loads alike: `0x714` gives
+   ten hits and `0x718` eight, **every one of them `sp`-relative** in an unrelated
+   stack frame, and `0x710` the same. `addiu` against those displacements is
+   likewise `sp` only.
+3. **The class has no accessor.** Its whole block is a constructor
+   (`0x08851c94`), a destructor (`0x08851ce4`), the reset (`0x08851d3c`), a thunk
+   to the reset (`0x08851d6c`), the loader and the per-weapon parser.
+   `FUN_0885227c` next door is a generic vector lerp, not a getter.
+
+The **reset** is worth quoting because it makes the dead data visible from a
+second angle - `WeaponAiStats_Reset` (`0x08851d3c`) fills all thirteen records
+with `1.0` in every field:
+
+```c
+do {
+    record[0x08] = 1.0f;  record[0x0c] = 1.0f;  record[0x10] = 1.0f;
+    record += 0xc;
+} while (++i < 0xd);
+```
+
+So the defaults are `1.0`/`1.0`/`1.0` and the shipped file authors
+`1.0`/`1.2`/`1.1`. **The file barely departs from the values it would have had if
+it did not exist**, which is exactly what one expects of a table nothing consumes.
+
+This is the same shape as [`BaseStartThrust`](#basestartthrust-is-authored-and-never-read)
+on this page: authored in the shipped data, parsed correctly, read by nothing.
+
+**Residual gap, stated so nobody treats 85 as 100**: the sweep is by base
+formation and by displacement. A consumer that reached the fields through a
+pointer written to memory somewhere else would escape both - though sweep 1 finds
+nothing that could write such a pointer.
+
+**What this closes.** `ai.md` and `crates/game/src/race/field.rs` both recorded
+this file as where the original decides what an opponent does with a pickup. It
+is not, twice over: it holds no fire-or-absorb flag, and in the shipped PSP build
+it is not consulted at all. **The weapon-AI decision is somewhere else entirely
+and has not been located** - and the `WEAPON AI %d` string this file was paired
+with is now the better lead of the two.

@@ -561,7 +561,9 @@ impl Race {
     /// floats a weapon: `useAgainstPlayer`, `useAgainstAI`, `absorb`. The shipped
     /// values are nearly uniform - `1.0` absorb throughout, `1.2`/`1.1` for
     /// everything but Plasma and Quake - so **there is no weapon the file marks
-    /// as absorb-only or fire-only**, and its consumer is unfound anyway. See
+    /// as absorb-only or fire-only**. Worse for anyone hoping to port it:
+    /// **nothing reads the record**, so the shipped build does not consult the
+    /// file at all. See
     /// `docs/ghidra/functions/psp-pulse-usa/ai-stats.md`. The decision below is
     /// therefore still invention, and still kept small enough to be obviously
     /// provisional:
