@@ -42,6 +42,51 @@ impl Race {
             && self.lost_ticks[slot] >= RESCUE_TICKS
     }
 
+    /// Whether this opponent has been stopped, while asking to move, for long
+    /// enough to count as beached.
+    ///
+    /// The other half of [`Self::lost_off_the_circuit`], and deliberately a
+    /// separate dwell: that one asks whether a craft is *far from* its line, which
+    /// a craft wedged against the scenery is not. See [`STALL_SPEED`] for the
+    /// measurement the two constants come from.
+    ///
+    /// Advances the dwell counter as a side effect, on the same terms and for the
+    /// same reason [`Self::lost_off_the_circuit`] does.
+    ///
+    /// **Three conditions, and each excludes a craft that is stopped legitimately.**
+    /// `thrust` above zero excludes one held on the grid before the lights.
+    /// `!standing.finished()` excludes one coasting to a halt after it has taken
+    /// the flag - measured at 2,242 consecutive ticks on `05_Track` at ace, which
+    /// is the longest apparent stall on the whole disc and is not a stall at all.
+    /// And the speed itself excludes one merely cornering slowly.
+    pub(super) fn stalled(&mut self, slot: usize) -> bool {
+        let ship = &self.world.ships[slot];
+        // `ShipState::thrust` is the commanded throttle on the original's `0..=100`
+        // scale, written by `oag_physics::controls::update` from the controls the
+        // driver returned this tick - so this reads what the craft asked for, not
+        // what it got. `> 0.0` and not `>= 100.0`: `Driver`'s caution axis
+        // multiplies the throttle by an arbitrary fraction, and an exact
+        // comparison against a scaled throttle is the mistake that silently
+        // stopped opponents boosting once.
+        let stopped = ship.physics.thrust > 0.0
+            && !ship.standing.finished()
+            && ship.physics.body.linear_velocity.length() < STALL_SPEED;
+        self.stalled_ticks[slot] = if stopped {
+            self.stalled_ticks[slot].saturating_add(1)
+        } else {
+            0
+        };
+        // The same two guards the other two triggers apply, applied *after* the
+        // counter so the dwell is still measured while they hold. No emptiness
+        // check on the racing line here: unlike `lost_off_the_circuit` this
+        // measures nothing that comes off it - but the respawn it leads to does,
+        // so the guard stays where it is needed.
+        !self.racing_line.is_empty()
+            && !self.respawn_disabled[slot]
+            && self.respawn_cooldown[slot] == 0
+            && self.stalled_ticks[slot] >= STALL_TICKS
+    }
+
     /// Whether this tick ended in contact with `Reset` geometry.
     ///
     /// Suppressed while the cooldown runs and once respawning has given up, so
@@ -114,8 +159,12 @@ impl Race {
         self.respawn_cooldown[slot] = RESPAWN_COOLDOWN_TICKS;
         // The craft is back on its line by definition, so the dwell starts
         // again rather than carrying over and rescuing it a second time on the
-        // tick the cooldown expires.
+        // tick the cooldown expires. Both dwells, for the same reason: a craft
+        // put back is also moving again shortly, and a stall counter that
+        // survived the teleport would fire once more the moment the cooldown ran
+        // out.
         self.lost_ticks[slot] = 0;
+        self.stalled_ticks[slot] = 0;
 
         // Otherwise the ribbon spans the teleport: ten samples of history from
         // wherever the craft fell off, stretched across the track to where it was
@@ -125,10 +174,19 @@ impl Race {
 
         if self.respawns_in_a_row[slot] >= RESPAWN_GIVE_UP {
             self.respawn_disabled[slot] = true;
+            // **Two causes, and naming only one sent people to the wrong place.**
+            // This message used to say the pose was probably inside a `Reset`
+            // volume, which is the right guess when the reset trigger is what
+            // fired. Since the stall rescue landed there is a second, measured
+            // one: the recovery pose is on the racing line, and some circuits
+            // author a line that runs *above* their own collision surface -
+            // `05_Track` for 134 samples - so a craft put back there comes off
+            // again in the same place, however many times it is rescued.
             eprintln!(
                 "reset: craft {slot} respawned {} times in a row without getting \
-                 clear, giving up on it. The recovery pose is probably inside a \
-                 Reset volume; see Race::respawn.",
+                 clear, giving up on it. Either the recovery pose is inside a \
+                 Reset volume, or the racing line there runs above the collision \
+                 surface; see Race::respawn and docs/gameplay/ai.md.",
                 self.respawns_in_a_row[slot]
             );
         }

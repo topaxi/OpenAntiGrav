@@ -545,6 +545,14 @@ pub struct Race {
     /// reset volumes and by their own hands, and teleporting a craft somebody is
     /// flying is a much bigger decision than teleporting one nobody can see.
     lost_ticks: [u32; oag_gameplay::MAX_SHIPS],
+    /// How many consecutive ticks each opponent has spent stopped while asking to
+    /// move. See [`STALL_TICKS`].
+    ///
+    /// A **second** dwell rather than a widening of [`Self::lost_ticks`], because
+    /// the two measure different failures and share only their response: one
+    /// craft has left the circuit, the other is still on it and going nowhere.
+    /// Slot 0's entry is never written, for the reason [`Self::lost_ticks`] gives.
+    stalled_ticks: [u32; oag_gameplay::MAX_SHIPS],
     /// [`RESCUE_HALF_WIDTHS`] in track units, resolved once against this
     /// circuit's widest half-width rather than folded over the sample table
     /// every tick.
@@ -810,6 +818,51 @@ pub const RESCUE_HALF_WIDTHS: f32 = 8.0;
 /// airborne over a gap is briefly indistinguishable from gone, and the two are
 /// told apart by whether the craft comes back.
 pub const RESCUE_TICKS: u32 = 90;
+
+/// How slowly a craft has to be moving to count as stopped, in units per second.
+///
+/// # Invented, like [`RESCUE_HALF_WIDTHS`], and measured before it was chosen
+///
+/// [`RESCUE_HALF_WIDTHS`] catches a craft that has *left* the circuit. It cannot
+/// catch one that is still on it and going nowhere: a craft beached against the
+/// scenery is a few units from the line its driver is steering along, which is
+/// exactly where a craft that is driving well also is.
+///
+/// **One unit per second separates the two cleanly, and the separation is not a
+/// margin - it is total.** Measured over the disc's twelve circuits at all four
+/// difficulties, a lone opponent driving with the throttle down, counting the
+/// longest unbroken run below each of several speeds:
+///
+/// | cell | longest run under 1 | longest run under 5 |
+/// | --- | --- | --- |
+/// | novice `05_Track` | **1,215** | 3,634 |
+/// | novice `07_Track` | **266** | 698 |
+/// | skilled `07_Track` | **0** | 267 |
+/// | every other cell | **0** | 3-11 |
+///
+/// The two beachings are the only cells that spend *any* consecutive time below
+/// one unit per second. The five-unit column is what makes the choice: it would
+/// also catch skilled `07_Track`, which is a craft crawling through a slow
+/// section and recovering by itself in four and a half seconds, and rescuing that
+/// one would cost a clean lap on a circuit that currently manages one. The
+/// three-to-eleven-tick runs in the last row are the standing start.
+///
+/// The other half of the gate is that the craft is **asking** to move -
+/// `ShipState::thrust` above zero - which is what tells a beached craft from one
+/// held on the grid before the lights or coasting after it has finished. Measured
+/// on the same runs: the throttle reads a full 100 on every tick of both real
+/// beachings, so the gate holds continuously through the thing it has to catch.
+pub const STALL_SPEED: f32 = 1.0;
+
+/// How long a craft has to stay stopped before it is put back.
+///
+/// Two seconds at 60 Hz, and the room either side of it is wide: no healthy craft
+/// in the measurement above spends a *single* consecutive tick below
+/// [`STALL_SPEED`], and the shorter of the two real beachings lasts 266. So this
+/// is not a fitted threshold - it is two seconds because two seconds is long
+/// enough that a player watching would already call the craft stuck, and there is
+/// no evidence pulling it either way.
+pub const STALL_TICKS: u32 = 120;
 
 #[cfg(test)]
 mod tests;

@@ -40,8 +40,8 @@ pub enum Mode {
     /// **What this build does without, and the original does not.** The disc's
     /// own description is *"Single Race: take on a full grid of opponents,
     /// weapons optional"* (`MSC_EVENT_SR`), so the original races this with AI.
-    /// Nothing drives an opponent here yet, which is why [`Self::has_opponents`]
-    /// answers `false` for it - see that method.
+    /// This build races it with AI too: [`Self::has_opponents`] answers `true`,
+    /// and a full grid of seven driven opponents takes the start.
     SingleRace,
 }
 

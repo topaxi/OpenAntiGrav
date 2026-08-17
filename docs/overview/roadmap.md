@@ -563,10 +563,11 @@ seen from the authoring side.
       Autopilot is the AI's own controller taking over and belongs with the AI.
       **A rocket now has something to hit**: the AI landed the same day and
       `Mode::SingleRace::has_opponents()` returns `true`, so a single race
-      fields seven driven craft. What is missing on that axis is **aiming** -
-      nothing picks a target, so an opponent never fires at anybody and the
-      player connects by pointing the craft rather than by locking on. That is
-      also what the Missile is waiting for.
+      fields seven driven craft. **Aiming landed with the AI's fifth stage** -
+      `oag_ai::Driver::wants_to_fire` picks a target behind five gates and
+      measured 159 rockets from six of seven opponents in two minutes on a real
+      circuit. What the Missile is still waiting for is a *lock*, which is a
+      mechanic rather than a target.
 - [~] **Shield and energy.** The pool, its maximum and the one thing that spends
       it are recovered and implemented: `*(craft+0x1c4) + 0x88` is the pool,
       `<Misc>`'s three difficulty slots at stats-base `0x84 + skill * 4` are its
@@ -605,14 +606,21 @@ seen from the authoring side.
       field can be *placed*, an opponent draws and spends a pickup, and **every
       craft has its own exhaust** - flare, ribbon and boost plume, off its own
       thrust and its own pose.
-      **What is left**, in the order it is worth doing: the skill vector and
-      mistake injection that make an opponent beatable at a chosen level, a lap
-      *time* per craft (only the player has a clock), a target for anything an
-      opponent fires, a respawn when one falls off, and per-craft liveries -
-      which is also why there is one nozzle for the whole field rather than
-      eight. Also still unread: the unit semantics of the original's thrust
-      numbers, which needs a live read under PPSSPP rather than more
-      decompilation.
+      **That list is now five items shorter, and this paragraph was four days
+      stale once already** - check the code before trusting it. Landed since:
+      the skill vector and **mistake injection** (`oag_ai::Driver::blunder`, with
+      a recovery countdown) behind a four-level **difficulty** that tempers each
+      pilot; **a target** for anything an opponent fires
+      (`Driver::wants_to_fire`); **per-craft liveries**, and with them a nozzle
+      per slot; **a respawn when one falls off**, and a second one for a craft
+      that stops on the circuit rather than leaving it; and **a lap time per
+      craft** - `oag_race::Standing` carries its own clock and best lap, so the
+      player is no longer the only craft that is timed.
+
+      **What is left**: reaction latency, and adaptation between races - which
+      was blocked on per-opponent lap times and is not any more. Also still
+      unread: the unit semantics of the original's thrust numbers, which needs a
+      live read under PPSSPP rather than more decompilation.
 - [ ] Audio, including the **positional** classes a track authors:
       `sound` `0x3e1`, `soundcone` `0x3e9` and `speaker` `0x3cc`. The banks and
       waveforms decode already (M1); what is missing is placing them in the world.
@@ -700,9 +708,9 @@ and a Zone run all spawn the player alone, the way the original does;
 layout under a mode that races solo.
 
 **The seven opponents drive, and each one burns.** A driver, its own
-`Environment`, both pad classes, a standing, a pickup it can spend and an
-exhaust of its own - flare, ribbon and boost plume. What they still share is the
-player's hull, which is the livery item, not the grid one. See
+`Environment`, both pad classes, a standing that counts and times its laps, a
+pickup it can spend, an exhaust of its own - flare, ribbon and boost plume - and
+its own team's hull, since the liveries landed on 2026-08-15. See
 [ai.md](../gameplay/ai.md).
 
 ---

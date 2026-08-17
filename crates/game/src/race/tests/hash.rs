@@ -47,6 +47,38 @@ fn the_pad_distance_cache_moves_the_race_hash() {
     assert_ne!(before, race.state_hash());
 }
 
+/// **Both recovery dwells are simulation state**, for the reason the pad
+/// timers are: a counter one tick out moves the tick a craft is put back on,
+/// and a respawn moves everything after it.
+///
+/// Neither had a case here until 2026-08-17, and that is the gap worth
+/// naming: `two_identical_races_agree_on_the_race_hash_every_tick` passes
+/// whether or not these reach the hasher, because two identical runs agree
+/// about state that is not hashed at all. Determinism is not coverage.
+#[test]
+fn both_recovery_dwells_move_the_race_hash() {
+    let mut race = race_with_weapon_pads(Mode::SingleRace, enveloping_pad(), 1.0);
+    race.tick(&InputSnapshot::default());
+
+    // Slot 1 rather than 0: the player's entry in either counter is never
+    // written, so a test on slot 0 would assert the hash sees a field the
+    // simulation never moves.
+    let before = race.state_hash();
+    race.lost_ticks[1] += 1;
+    let after_lost = race.state_hash();
+    assert_ne!(
+        before, after_lost,
+        "the away-from-the-line dwell was invisible to the gate"
+    );
+
+    race.stalled_ticks[1] += 1;
+    assert_ne!(
+        after_lost,
+        race.state_hash(),
+        "the stopped-on-the-circuit dwell was invisible to the gate"
+    );
+}
+
 /// Two races from one seed driven with identical input agree on the whole
 /// hash, tick for tick - not only at the end. A run that diverged and
 /// converged again would pass a final-state comparison.

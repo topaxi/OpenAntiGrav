@@ -1,0 +1,145 @@
+//! The difficulty scale produces an ordered *race*, not just ordered multipliers.
+//!
+//! **`#[ignore]`d and never run in CI.** It needs game content, which this project
+//! does not ship. See `docs/architecture/adr/0006-no-copyrighted-content.md`.
+//!
+//! ```sh
+//! cargo nextest run -p oag-game --run-ignored all -E 'binary(difficulty_ground_truth)'
+//! ```
+//!
+//! **The only place the scale can be checked.** `oag-ai`'s own tests assert the
+//! multipliers are ordered, which is arithmetic; whether an ordered multiplier
+//! produces an ordered race is a question about a real circuit, a real hull and a
+//! real corridor. A level that looked harder on paper and lapped no faster would
+//! be a setting that does nothing.
+//!
+//! Moved here from `race_ground_truth.rs` on 2026-08-17, when the measurement was
+//! rewritten - see [`every_difficulty_is_quicker_than_the_one_below_it`] for why
+//! one seed could not carry it.
+
+use std::path::{Path, PathBuf};
+
+use oag_game::race;
+use oag_physics::SpeedClass;
+
+/// The disc, or `None` on a checkout without one.
+fn image() -> Option<PathBuf> {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("data/images/pulse-psp-usa.chd");
+
+    if path.exists() {
+        return Some(path);
+    }
+    assert!(
+        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
+        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
+        path.display()
+    );
+    None
+}
+
+/// Race seeds to average a difficulty over.
+///
+/// **Five, and the count is the point of this test's rewrite.** See the test.
+const SEEDS: [u64; 5] = [0x00C0_FFEE, 1, 7, 12_345, 99];
+
+/// How far the leading opponent got in one minute, and whether anybody wrecked.
+fn leader_distance(level: oag_ai::Difficulty, seed: u64) -> Option<(f32, usize)> {
+    let image = image()?;
+    let loaded = race::load(&race::Options {
+        source: image.display().to_string(),
+        class: SpeedClass::Venom,
+        mode: oag_race::Mode::SingleRace,
+        difficulty: level,
+        seed: Some(seed),
+        ..race::Options::default()
+    })
+    .expect("loading the race");
+    let mut race = race::Race::start(loaded.setup);
+
+    for _ in 0..3_600 {
+        race.tick(&oag_gameplay::InputSnapshot::default());
+    }
+
+    let course = race.course().expect("a closed ring");
+    let distance = (1..8)
+        .map(|slot| race.world.ships[slot].standing.distance(course))
+        .fold(f32::NEG_INFINITY, f32::max);
+    let wrecked = (1..8)
+        .filter(|slot| {
+            race.world.ships[*slot].physics.craft_state != oag_physics::CraftState::Racing
+        })
+        .count();
+    Some((distance, wrecked))
+}
+
+/// Each difficulty is measurably harder than the one below it, on real geometry.
+///
+/// # Measured on the leader, not on the field's average
+///
+/// The difference matters. Aggression rises with the level, and aggression is
+/// largely spent on *each other*: a novice field never blocks or shoots, so all
+/// seven flow, while a skilled field trades places and loses time doing it.
+/// Averaged, that made novice look quicker than skilled and the test fail on a
+/// scale that was working. What a player races is the craft in front, so the
+/// honest question is how far the leading opponent got.
+///
+/// # And averaged over seeds, because one race cannot resolve the top two
+///
+/// **This test used to run one race per difficulty and it was passing by a
+/// hair.** Measured on 2026-08-17, one race each: novice 6,704, skilled 7,199,
+/// elite 7,766, ace 7,810. The first two gaps are 495 and 567; the last is
+/// **44**, which is half a percent, and a race is not repeatable to half a
+/// percent - seven drivers trading places is a chaotic system, and any change to
+/// the field's dynamics reshuffles who gets clear.
+///
+/// It duly broke on a change that made every difficulty *faster*: a stall rescue
+/// that frees a wedged craft moved elite to 8,078 and ace to 8,075, and the test
+/// failed on three units in eight thousand while reporting an improvement.
+///
+/// Five seeds resolve it. Means over [`SEEDS`], same day: novice **6,477**,
+/// skilled **7,095**, elite **7,637**, ace **7,751** - ordered throughout, with
+/// the top gap at 1.5 %. Per seed, elite beats ace on two of the five, which is
+/// exactly the variance a single run cannot see past. **If this fails again,
+/// print the spread before touching the scale**: an ordering that holds on the
+/// mean and not on one seed is the measurement being noisy, not the setting
+/// being broken.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn every_difficulty_is_quicker_than_the_one_below_it() {
+    let mut measured: Vec<(&str, f32)> = Vec::new();
+    for (name, level) in oag_ai::Difficulty::ALL {
+        let mut runs = Vec::new();
+        for seed in SEEDS {
+            let Some((distance, wrecked)) = leader_distance(level, seed) else {
+                return;
+            };
+            assert_eq!(
+                wrecked, 0,
+                "{name} put craft out of the race on seed {seed}"
+            );
+            runs.push(distance);
+        }
+        let mean = runs.iter().sum::<f32>() / runs.len() as f32;
+        println!(
+            "{name}: leader per seed {:?}, mean {mean:.0}",
+            runs.iter().map(|d| d.round() as i32).collect::<Vec<_>>()
+        );
+        measured.push((name, mean));
+    }
+
+    for pair in measured.windows(2) {
+        let (easier, harder) = (&pair[0], &pair[1]);
+        assert!(
+            harder.1 > easier.1,
+            "{}'s leader covered no more ground than {}'s, averaged over {} seeds: \
+             {:.0} against {:.0}",
+            harder.0,
+            easier.0,
+            SEEDS.len(),
+            harder.1,
+            easier.1
+        );
+    }
+}

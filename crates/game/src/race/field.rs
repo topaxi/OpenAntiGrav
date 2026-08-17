@@ -80,12 +80,16 @@ impl Race {
     /// their surface from it, so sharing one would fly seven craft against the
     /// player's piece of track.
     ///
-    /// **What an opponent does not get yet**, each deliberate and each a
-    /// separate piece of work: a lap *time* of its own ([`oag_race::RaceState`]
-    /// is the player's clock and only [`oag_race::Standing`] is per craft), a
-    /// respawn when it falls off, a target for anything it fires, and a livery of
-    /// its own. It does get pads of both classes, a standing, an `Exhaust` and a
-    /// pickup it can spend - see [`Self::spend_opponent_pickup`].
+    /// **What an opponent gets**, since this list was four items shorter than the
+    /// truth for long enough to mislead: pads of both classes, a standing that
+    /// counts *and times* its laps, an `Exhaust`, a livery, a pickup it can spend
+    /// ([`Self::spend_opponent_pickup`]), a target for what it fires
+    /// (`oag_ai::Driver::wants_to_fire`), and two ways of being put back - the
+    /// authored reset volumes and, below, the two dwell counters for a craft that
+    /// has left the circuit or stopped on it.
+    ///
+    /// **What it still does not get**: reaction latency, and adaptation between
+    /// races - which was blocked on per-craft lap times and is not any more.
     pub(super) fn step_opponents(&mut self) {
         let damage_rules = oag_gameplay::damage_rules(self.world.race.mode);
         // Once for the whole grid: every craft's view needs the same ordering.
@@ -182,11 +186,14 @@ impl Race {
             // space, because [`Self::respawn`] speaks the sample table's.
             let last_good = self.sample_index_of(index);
             self.respawn_cooldown[slot] = self.respawn_cooldown[slot].saturating_sub(1);
-            // Unconditionally, and before the `||` could skip it: the dwell
-            // counter has to see every tick or a craft banks time it never
-            // spent away.
+            // Unconditionally, and before the `||` could skip it: **both** dwell
+            // counters have to see every tick or a craft banks time it never
+            // spent away. Two `let`s rather than two terms of the `if`, because
+            // `||` short-circuits and the second counter would then only advance
+            // on ticks the first one happened not to fire.
             let lost = self.lost_off_the_circuit(slot);
-            if lost || self.reset_zone_touched(slot, &env, position) {
+            let stalled = self.stalled(slot);
+            if lost || stalled || self.reset_zone_touched(slot, &env, position) {
                 self.respawn(slot, last_good);
             } else if self.respawn_cooldown[slot] == 0 {
                 self.respawns_in_a_row[slot] = 0;

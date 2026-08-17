@@ -240,11 +240,21 @@ fn a_craft_on_the_grid_can_see_somebody() {
 /// the AI landed. That the field then goes somewhere is
 /// `race_ground_truth::the_ai_drives_the_field_along_the_track`, on real
 /// geometry, where it can be true.
+///
+/// # This fixture has a horizon, and it is [`STALL_TICKS`] long
+///
+/// `race_with_a_grid` builds its craft on `Handling::ZERO` with an empty
+/// collision world, so **no force law runs** and the craft hold full throttle
+/// without ever moving. That is the exact condition the stall rescue exists to
+/// catch, so running this fixture past [`STALL_TICKS`] recovers all seven
+/// opponents and zeroes the throttle on the tick it does - a real failure of the
+/// fixture, not of either mechanism. Any synthetic race test that wants to run
+/// longer than this has to give its craft handling that moves them.
 #[test]
 fn the_opponents_are_driven_rather_than_parked() {
     let mut race = race_with_a_grid();
     assert_eq!(race.ship_count(), 8);
-    for _ in 0..120 {
+    for _ in 0..STALL_TICKS / 2 {
         race.tick(&InputSnapshot::default());
     }
 

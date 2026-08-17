@@ -12,10 +12,15 @@ use oag_core::math::Vec3;
 
 /// Everything the race layer knows, for one ship.
 ///
-/// Sized for the single-ship modes. Positions, grid order and per-opponent
-/// timing are M5 work and are deliberately not modelled here yet: a `place`
-/// field that always reads 1 is worse than no field, because it looks like an
-/// answer.
+/// Sized for the single-ship modes, and it stays that way on purpose. Everything
+/// that is *per craft* lives on [`crate::Standing`] instead - the lap count, the
+/// place on the circuit, the finish, and since 2026-08-17 the lap clock and best
+/// lap as well. This struct keeps what belongs to the player's race rather than
+/// to a craft: the mode, the Zone counters and the finish condition.
+///
+/// The two therefore hold the same clock for slot 0, and
+/// `standing::tests::the_standings_clock_agrees_with_the_players` is what keeps
+/// them from drifting apart.
 /// Whether a one-tick change in distance-along is a **forward** wrap of the ring.
 ///
 /// A lap is a wrap, not a plane crossing. Anything that moves more than half the

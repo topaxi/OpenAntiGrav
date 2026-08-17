@@ -250,6 +250,23 @@ fn run(ticks: u32) -> (u64, u64) {
 ///   is 112 more empty slots entering the stream, not anything the simulation
 ///   does: this scenario fires one rocket and never fills a second slot.
 ///
+/// - **Moved a ninth time 2026-08-16**, when [`oag_race::Standing`] gained a lap
+///   clock - `lap_start_tick` and `best_lap_ticks`, the two fields `RaceState`
+///   already carried for the player alone. Every craft on the grid times its own
+///   laps now, which is what "adaptation between races" was blocked on.
+///   **Isolated in the order the compiler forces**, which is the cleanest form of
+///   this proof: `write_standing` destructures exhaustively, so the fields had to
+///   be *named* there before the crate would build. With them named and neither
+///   one written to the hasher, the constants this commit replaces -
+///   `0x86c3_7eae_232b_caba` / `0x4e1f_368e_1f13_b9ec` at 60 ticks and
+///   `0xbd24_86ff_da6a_56b3` / `0x7dc5_c309_e8f9_8311` at 600 - reproduce bit for
+///   bit. So the movement is those two writes entering the stream and nothing
+///   the simulation does differently. **The scenario here has no course in it**,
+///   the same fact the 2026-08-11 entry above turns on, so both fields stay
+///   `None` on every tick: what moved is one discriminant byte apiece per craft
+///   per tick, in the same way the projectile-pool widening moved empty slots
+///   rather than behaviour.
+///
 /// **Never edit these to make the test pass**, the same rule
 /// `crates/physics/tests/determinism.rs` states at length: a movement here is a
 /// change to what a race *does*, and the change is the thing to find. When a
@@ -257,8 +274,8 @@ fn run(ticks: u32) -> (u64, u64) {
 /// beneath this comment and isolate the cause first, by removing the new field's
 /// own write and checking that the previous constants reproduce bit for bit.
 const REFERENCE: &[(u32, u64, u64)] = &[
-    (60, 0x86c3_7eae_232b_caba, 0x4e1f_368e_1f13_b9ec),
-    (600, 0xbd24_86ff_da6a_56b3, 0x7dc5_c309_e8f9_8311),
+    (60, 0xf4f1_bc0c_30a7_27fa, 0x780b_1ec5_4754_1bdc),
+    (600, 0xf63d_86b8_9120_e523, 0x6688_3fef_ea90_5441),
 ];
 
 #[test]

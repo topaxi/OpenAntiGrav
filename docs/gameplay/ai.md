@@ -964,6 +964,51 @@ progress has no recovery at all** - the rescue asks "is it far from its line",
 which a beached craft is not. That is a missing mechanism rather than a tuning
 question, and it is the next one.
 
+##### Built 2026-08-17: a second dwell, on speed rather than distance
+
+`Race::stalled` counts consecutive ticks on which a craft is **stopped, asking to
+move, and has not finished**, and puts it back after `STALL_TICKS`. All three
+terms are load-bearing and each excludes a craft that is stationary for a good
+reason.
+
+**The threshold was measured before it was chosen, and the separation is total
+rather than a margin.** A lone opponent on each of the twelve circuits at each of
+the four difficulties, counting the longest unbroken run below several speeds
+with the full gate applied:
+
+| cell | longest run under 1 unit/s | longest run under 5 units/s |
+| --- | --- | --- |
+| novice `05_Track` | **1,215** | 3,634 |
+| novice `07_Track` | **266** | 698 |
+| skilled `07_Track` | **0** | 267 |
+| every other cell | **0** | 3-11 |
+
+The two beachings are the only cells that spend *any* consecutive time below one
+unit per second, so `STALL_SPEED` is 1.0 and `STALL_TICKS` is 120 with room on
+both sides. The five-unit column is what rules out the obvious wider threshold:
+it would also catch skilled `07_Track`, a craft crawling through a slow section
+and recovering by itself in four and a half seconds, and rescuing that one would
+cost a clean lap on a circuit that manages one today. The three-to-eleven-tick
+runs in the last row are the standing start.
+
+The **thrust** term was measured too rather than assumed: the throttle reads a
+full 100 on every tick of both real beachings, so the gate holds continuously
+through the thing it has to catch. And the **finished** term is not theoretical -
+a craft that has taken the flag coasts to a halt and stays there, measured at
+2,242 consecutive ticks on `05_Track` at ace, which is the longest apparent stall
+on the whole disc and is not a stall at all.
+
+**What it is worth, and what it is not.** novice `05_Track` goes from 1 lap to 2
+and its longest motionless spell from 1,215 ticks to the 119 the threshold
+allows; novice `07_Track` gains a recovery it needed. **The Ace benchmark is
+byte-identical** - same lap times, same two respawns, same loss indices - because
+no healthy craft ever meets the condition. But it does not fix `05_Track`: every
+place the rescue fires is inside or immediately before a documented run of line
+samples with nothing under them (05 at driver indices 116, 634 and 159 against
+the measured run at 161-211; 07 at 2373 against 2364-2376), so the craft is put
+back and comes off again in the same place. **The line running above the surface
+is the cause and it is still open**; this bounds the symptom.
+
 One limitation this buys, stated rather than discovered later: an opponent that
 ends up physically on the split's other branch now has no line beneath it at
 all. That is strictly better than stalling at the seam, and the rescue net
@@ -1696,30 +1741,58 @@ and the same run now places that player 8th of 8.
 
 ### What an opponent still does not get
 
-Each is separate work, and each is listed so nobody assumes otherwise: a lap
-*time* of its own (the standing counts laps; only the player has a clock),
-anything at all happening when it is eliminated, and a livery that is not the
-player's. The exhaust left this list on 2026-08-11 - see
-[The field burns](#the-field-burns); the respawn and a weapon aimed at somebody
-left it since.
+**This section has been wrong more often than any other on this page**, because
+each stage that landed left it saying otherwise. Everything below was checked
+against the code on 2026-08-17; check it again before trusting it.
 
-**And it does not get recovered when it stops.** The rescue asks whether a craft
-is far from its line, which catches one flying into open space and misses one
-beached against the scenery at zero speed - `05_Track` spends seventy of its
-three hundred seconds exactly there. See
-[Where a craft comes off](#where-a-craft-comes-off-two-wrong-answers-and-the-measurement-that-settled-it).
+What is still missing, and it is now a short list: **reaction latency**;
+**adaptation between races**, which was blocked on per-opponent lap times and is
+not any more; and **anything at all happening when a craft is eliminated**. The
+player's *own* position is on screen; an opponent's is not - `PosTag0`-`PosTag7`,
+the floating name tags, are runtime-anchored to a rival's projected screen
+position and nothing computes that.
 
-**And it does not know the other craft are there.** A personality spreads the
-field across the corridor, which is what stopped the single file, but nothing
-avoids, overtakes or defends: a craft closing on a slower one holds its own line
-straight through it and the two bounce. That is the next piece of this work, and
-it is the one the corridor was widened for. **Nor any of the skill work
-above** - no mistake injection with a recovery behaviour, no reaction latency,
-no difficulty selection, no adaptation, no `[ai]` config block. The personality
-covers three of that vector's six axes.
-The player's *own* position is on screen now; an opponent's is not -
-`PosTag0`-`PosTag7`, the floating name tags, are runtime-anchored to a rival's
-projected screen position and nothing computes that.
+**What left this list, with what to look at instead of re-deriving it:**
+
+| Left | When | Where it lives |
+| --- | --- | --- |
+| An exhaust of its own | 2026-08-11 | [The field burns](#the-field-burns) |
+| A respawn when it falls off | 2026-08-12 | `Race::lost_off_the_circuit` |
+| A weapon aimed at somebody | 2026-08-12 | `Driver::wants_to_fire` |
+| Knowing the other craft are there | 2026-08-12 | `oag_ai::Field`, and the `courtesy`/`defence`/`caution` axes |
+| Mistake injection, with a recovery behaviour | 2026-08-12 | `Driver::blunder`, `Driver::mistake`; the rate comes from `Difficulty::tune`, **not** from a config key |
+| Difficulty selection | 2026-08-12 | `oag_ai::Difficulty`, and one `[ai] difficulty` key in `settings.rs` |
+| A livery that is not the player's | 2026-08-15 | `crates/game/src/livery.rs` |
+| **A lap time of its own** | **2026-08-17** | `oag_race::Standing::best_lap_ticks` |
+| **Being recovered when it stops** | **2026-08-17** | `Race::stalled`, `race::STALL_SPEED` |
+
+**Two of those rows are narrower than they look.** The `[ai]` section holds
+`difficulty` and nothing else - `rubberbanding`, `adaptive` and `mistakes` are
+specified on this page and deliberately absent from `settings.rs` rather than
+present and ignored, so the *block* is not built, one key is. And "difficulty
+selection" means the scale is built and measured end to end on real geometry
+(`difficulty_ground_truth.rs`, four levels ordered across five seeds); the
+**pre-race menu row** for it is still in the believed-done-never-verified state
+`HANDOVER.md` records.
+
+**The lap clock is the one that unblocks something else.** A `Standing` now times
+its own laps and keeps its own best, starting the clock at the craft's first
+crossing of the line rather than at the standing start - which matters because
+the grid is laid out behind the line and every slot is a different distance back,
+so lap 1 timed from the start would be a different error for each craft. Slot 0
+therefore carries two clocks, its `Standing`'s and `RaceState`'s, and
+`the_standings_clock_agrees_with_the_players` is what stops them drifting apart.
+
+**Being recovered when it stops** closed the hole the rescue left: it asks
+whether a craft is *far from* its line, which catches one flying into open space
+and misses one beached against the scenery at zero speed. A second dwell counter
+watches for a craft that is stopped while asking to move and has not finished,
+and puts it back after two seconds. See
+[Where a craft comes off](#where-a-craft-comes-off-two-wrong-answers-and-the-measurement-that-settled-it)
+for the measurement the two constants come from, and note what it does **not**
+fix: `05_Track`'s racing line runs above its own collision surface for 134
+samples, which is why a craft beaches there in the first place, and that is still
+open.
 
 **Craft-to-craft collision landed 2026-08-11**, and it was never an AI gap - the
 engine had no two-body path for anybody. `Body_ResolveContactPair`

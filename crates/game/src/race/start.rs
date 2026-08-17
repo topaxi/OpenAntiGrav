@@ -226,6 +226,7 @@ impl Race {
             respawn_disabled: [false; oag_gameplay::MAX_SHIPS],
             respawns: [0; oag_gameplay::MAX_SHIPS],
             lost_ticks: [0; oag_gameplay::MAX_SHIPS],
+            stalled_ticks: [0; oag_gameplay::MAX_SHIPS],
             rescue_distance,
             // Cold, then snapped on the first tick. A race starts from a standing
             // start with no thrust, so there is nothing to snap *to* here.

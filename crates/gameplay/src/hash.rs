@@ -147,6 +147,8 @@ fn write_standing(hasher: &mut StateHasher, standing: &oag_race::Standing) {
         progress,
         course_index,
         finish_tick,
+        lap_start_tick,
+        best_lap_ticks,
     } = standing;
 
     hasher.write_u32(*lap);
@@ -172,6 +174,18 @@ fn write_standing(hasher: &mut StateHasher, standing: &oag_race::Standing) {
             hasher.write_u64(*tick);
         }
     }
+    // The lap clock. A discriminant byte apiece for the same reason `progress`
+    // and `finish_tick` carry one: "the clock has not started" must not hash the
+    // same as "the clock started on tick zero", which is the whole reason
+    // `lap_start_tick` is an `Option` where `RaceState`'s is a bare `u64`.
+    match lap_start_tick {
+        None => hasher.write_u8(0),
+        Some(tick) => {
+            hasher.write_u8(1);
+            hasher.write_u64(*tick);
+        }
+    }
+    write_option_u32(hasher, *best_lap_ticks);
 }
 
 fn write_held(hasher: &mut StateHasher, held: &Held) {

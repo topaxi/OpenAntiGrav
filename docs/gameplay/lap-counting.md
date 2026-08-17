@@ -124,6 +124,16 @@ ship spawns on the slot while the original's starts on the line. Timing from the
 standing start would make lap 1 longer than every other lap by the offset, and
 longer than the original's by the same amount.
 
+**This is every craft's rule, not the player's, as of 2026-08-17.**
+`oag_race::Standing` carries a clock and a best lap of its own, so the whole grid
+is timed. On a grid the argument above is stronger than it is for one ship: each
+slot is a *different* distance behind the line, so timing from the standing start
+would give every craft its own error and the field's first laps would not be
+comparable even with each other. Slot 0 therefore holds two clocks - its
+`Standing`'s and `RaceState`'s - and
+`standing::tests::the_standings_clock_agrees_with_the_players` is what stops them
+drifting apart.
+
 **Do not compare tick counts against the original's own clock.** Two laps of
 3,069 and 3,087 ticks were timed by the game at `0.50.25` and `1.11.08`: whatever
 it counts, it is not frames. The lap *counter* is unaffected and is what to

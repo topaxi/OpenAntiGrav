@@ -45,6 +45,31 @@ pub struct Standing {
     /// craft that both finished are placed by who got there first, not by where
     /// they stopped.
     pub finish_tick: Option<u64>,
+    /// The tick the lap being driven started on, once one has.
+    ///
+    /// `None` until this craft first crosses the line, which is **not** the tick
+    /// the race started: the grid is laid out from the authored `Start Position`
+    /// node, `Course::START_LINE_OFFSET` behind the line, so a craft on the grid
+    /// has not begun a lap however long it has been driving. See
+    /// [`Self::update`]'s spawn-to-line arm.
+    ///
+    /// [`RaceState`] holds the same quantity as a bare `u64` defaulting to `0`,
+    /// which works there only because `best_lap_ticks.is_none()` doubles as the
+    /// "clock not started" flag. Keeping the two coupled is what the `Option`
+    /// avoids; a craft that had genuinely started a lap on tick `0` would be
+    /// indistinguishable from one that had not.
+    ///
+    /// [`RaceState`]: crate::RaceState
+    pub lap_start_tick: Option<u64>,
+    /// The quickest lap this craft has driven, in ticks.
+    ///
+    /// Ticks and not seconds, exactly as [`RaceState::best_lap_ticks`] is, so the
+    /// two are directly comparable - which is the invariant
+    /// `crates/game/tests/lap_times_ground_truth.rs` asserts of slot 0, where both
+    /// clocks time the same craft.
+    ///
+    /// [`RaceState::best_lap_ticks`]: crate::RaceState::best_lap_ticks
+    pub best_lap_ticks: Option<u32>,
 }
 
 impl Default for Standing {
@@ -57,6 +82,8 @@ impl Default for Standing {
             progress: None,
             course_index: None,
             finish_tick: None,
+            lap_start_tick: None,
+            best_lap_ticks: None,
         }
     }
 }
@@ -68,10 +95,44 @@ impl Standing {
         self.finish_tick.is_some()
     }
 
+    /// Ticks the lap being driven has been running, as of `tick`.
+    ///
+    /// `None` before this craft's clock started, which is a different answer from
+    /// `Some(0)` and the reason [`Self::lap_start_tick`] is an `Option`.
+    /// Saturating for the same reason [`RaceState::lap_ticks`] is: a caller that
+    /// passes a tick from before the lap started gets zero, not a lap that has run
+    /// for half an eternity.
+    ///
+    /// [`RaceState::lap_ticks`]: crate::RaceState::lap_ticks
+    #[must_use]
+    pub fn lap_ticks(&self, tick: u64) -> Option<u64> {
+        self.lap_start_tick
+            .map(|started| tick.saturating_sub(started))
+    }
+
     /// Advances the standing from where the craft now is.
     ///
     /// Returns `true` on the tick a lap is completed. `laps_target` of `None` is
     /// a mode that never ends on its own, and such a craft never finishes.
+    ///
+    /// # The clock, and why lap 1 needs a rule of its own
+    ///
+    /// A craft crosses the start line **twice** on its way to completing lap 1:
+    /// once on the way off the grid, and once to finish the lap. The grid is laid
+    /// out from the authored `Start Position` node, which sits
+    /// `Course::START_LINE_OFFSET` behind the line, so timing lap 1 from the
+    /// standing start would make it longer than every other lap by however far the
+    /// craft's own slot is back - a different amount per slot, so the field's lap
+    /// times would not even be comparable with each other.
+    ///
+    /// The first crossing is therefore where the clock starts, and it is
+    /// identified the same way [`RaceState::update`] identifies it: a forward wrap
+    /// that the gate refuses, on lap 1, with no best lap yet. This is
+    /// [`RaceState`]'s rule ported rather than a second invention; the lap
+    /// *counting* around it is untouched.
+    ///
+    /// [`RaceState`]: crate::RaceState
+    /// [`RaceState::update`]: crate::RaceState::update
     pub fn update(
         &mut self,
         course: &Course,
@@ -102,11 +163,38 @@ impl Standing {
         let delta = located.progress - previous;
         if wrapped_backward(delta, half) {
             self.lap = self.lap.saturating_sub(1).max(1);
+            // **The clock is deliberately not restored**, exactly as
+            // `RaceState::uncomplete_lap` does not restore it: what it read when
+            // the line was last crossed forwards is not kept, and inventing a
+            // value would put a wrong time on a results table. Driving backwards
+            // over the line is already a wrong-way situation.
             return false;
         }
-        if !wrapped_forward(delta, half) || self.gate != LapGate::Ready {
+        if !wrapped_forward(delta, half) {
             return false;
         }
+        if self.gate != LapGate::Ready {
+            // **The spawn-to-line crossing**, and the only place the clock ever
+            // starts. See this function's doc comment for why lap 1 cannot be
+            // timed from the standing start.
+            if self.lap == 1 && self.best_lap_ticks.is_none() {
+                self.lap_start_tick = Some(tick);
+            }
+            return false;
+        }
+
+        // A lap, so it has a time - unless the clock never started, which happens
+        // only when the craft's first located fix was already past the line and
+        // its first wrap is this one. `None` rather than a time measured from a
+        // start that was never observed.
+        if let Some(ticks) = self.lap_ticks(tick) {
+            let ticks = u32::try_from(ticks).unwrap_or(u32::MAX);
+            self.best_lap_ticks = Some(match self.best_lap_ticks {
+                Some(best) => best.min(ticks),
+                None => ticks,
+            });
+        }
+        self.lap_start_tick = Some(tick);
 
         self.lap = self.lap.saturating_add(1);
         self.gate = LapGate::NeedsNearHalf;
@@ -196,126 +284,4 @@ pub fn places<const N: usize>(standings: &[Standing; N], course: &Course) -> [u8
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::testing;
-
-    fn course() -> Course {
-        testing::ring_course()
-    }
-
-    /// A craft that started at the line and has driven to `progress` on `lap`.
-    ///
-    /// **The gate is part of that claim, not a detail.** A craft that drove here
-    /// from the line was seen in the near half on the way, so its gate has left
-    /// [`LapGate::NeedsNearHalf`] - and a standing that says otherwise describes a
-    /// craft that is three quarters round a lap it has never started, which
-    /// [`Standing::distance`] now reads as a craft still sitting on the grid. Use
-    /// [`on_the_grid`] for that craft.
-    fn at(lap: u32, progress: f32) -> Standing {
-        let half = course().length() * 0.5;
-        Standing {
-            lap,
-            progress: Some(progress),
-            gate: if progress >= half {
-                LapGate::Ready
-            } else {
-                LapGate::NeedsFarHalf
-            },
-            ..Standing::default()
-        }
-    }
-
-    /// A craft on the grid at `progress`, before its first crossing of the line.
-    ///
-    /// Which is where a real grid is: the slots straddle the line, so most of the
-    /// field spawns in the *last* few percent of the circuit. The default gate is
-    /// what says "has not crossed yet".
-    fn on_the_grid(progress: f32) -> Standing {
-        Standing {
-            progress: Some(progress),
-            ..Standing::default()
-        }
-    }
-
-    #[test]
-    fn a_fresh_standing_is_on_lap_one_and_has_not_finished() {
-        let standing = Standing::default();
-        assert_eq!(standing.lap, 1);
-        assert!(!standing.finished());
-        assert_eq!(standing.progress, None);
-    }
-
-    #[test]
-    fn further_round_is_a_better_place() {
-        let course = course();
-        let standings = [at(1, 10.0), at(1, 90.0), at(2, 5.0)];
-        assert_eq!(places(&standings, &course), [3, 2, 1]);
-    }
-
-    #[test]
-    fn a_finisher_beats_anyone_still_racing() {
-        let course = course();
-        let mut done = at(4, 0.0);
-        done.finish_tick = Some(500);
-        // Further round the circuit, and still racing, so still second.
-        let standings = [at(9, 0.0), done];
-        assert_eq!(places(&standings, &course), [2, 1]);
-    }
-
-    #[test]
-    fn finishers_are_placed_by_when_they_finished() {
-        let course = course();
-        let early = Standing {
-            finish_tick: Some(100),
-            ..Standing::default()
-        };
-        let late = Standing {
-            finish_tick: Some(200),
-            ..Standing::default()
-        };
-        assert_eq!(places(&[late, early], &course), [2, 1]);
-    }
-
-    /// **The first lap of every race**: the grid straddles the start line, so some
-    /// craft are a few units *before* it and some a few units after, and the ones
-    /// before must not be placed a whole lap ahead.
-    ///
-    /// Three craft a unit apart across the line - one just short of it, two just
-    /// over - in the order a grid puts them, back to front. The right answer is that
-    /// the one short of the line is last; the arithmetic this replaced made it first
-    /// by nearly a whole circuit.
-    #[test]
-    fn a_craft_that_has_not_reached_the_line_is_behind_one_just_past_it() {
-        let course = course();
-        let behind = on_the_grid(course.length() - 1.0);
-        let over = on_the_grid(0.5);
-        let further = on_the_grid(1.0);
-        assert_eq!(places(&[behind, over, further], &course), [3, 2, 1]);
-        assert_eq!(behind.distance(&course), -1.0);
-    }
-
-    /// The gate is what separates the two, not the distance: a craft that *has*
-    /// crossed and come round to the far half of lap 1 is ahead of the field, not
-    /// behind it.
-    #[test]
-    fn a_craft_already_round_to_the_far_half_of_lap_one_is_not_read_as_on_the_grid() {
-        let course = course();
-        let far = course.length() * 0.75;
-        let round = at(1, far);
-        let grid = on_the_grid(far);
-        assert_eq!(round.distance(&course), far);
-        assert_eq!(grid.distance(&course), far - course.length());
-        assert_eq!(places(&[grid, round], &course), [2, 1]);
-    }
-
-    /// Eight craft on the grid have no fix at all and are all at distance zero.
-    /// The order has to be *something*, and it has to be the same something every
-    /// run.
-    #[test]
-    fn craft_that_are_exactly_level_are_placed_by_slot() {
-        let course = course();
-        let standings = [Standing::default(); 8];
-        assert_eq!(places(&standings, &course), [1, 2, 3, 4, 5, 6, 7, 8]);
-    }
-}
+mod tests;

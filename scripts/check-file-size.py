@@ -115,7 +115,7 @@ TEST_LIMIT = 200
 # Both splits were move-only and left nothing over 800 lines. The largest thing
 # left is `crates/game/tests/race_ground_truth.rs`.
 BASELINE = {
-    "crates/game/tests/race_ground_truth.rs": 2464,
+    "crates/game/tests/race_ground_truth.rs": 2387,
     "crates/formats/src/vex.rs": 2408,
     "crates/game/src/boot.rs": 2254,
     "crates/game/src/movie.rs": 2200,

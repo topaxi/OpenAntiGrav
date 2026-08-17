@@ -79,6 +79,12 @@ impl Race {
         for dwell in self.lost_ticks {
             hasher.write_u32(dwell);
         }
+        // The second dwell, on the same terms: a stall counter one tick out moves
+        // which tick a craft is put back on, and a respawn moves everything after
+        // it.
+        for dwell in self.stalled_ticks {
+            hasher.write_u32(dwell);
+        }
 
         hasher.finish()
     }
