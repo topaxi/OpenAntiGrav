@@ -49,6 +49,19 @@ pub struct Opened {
 ///
 /// Propagates [`oag_pulse::open_with_packs`] and [`oag_pure::open`].
 pub fn open_source(source: &str, packs: Vec<Pack>) -> Result<Opened> {
+    // **Tried before Pulse, and by a different test.** Pure is reached by
+    // Pulse's deny-list naming it, because the two ship archives under identical
+    // names; HD shares no archive name with either, so there is nothing for a
+    // deny-list to catch and the question is simply whether this source carries
+    // a `.PSARC`. Asking that first costs a Pulse open on an HD disc and keeps
+    // the Pulse/Pure pair exactly as it was.
+    if let Ok(archives) = oag_hd::open(source) {
+        return Ok(Opened {
+            archives,
+            title: oag_hd::TITLE,
+        });
+    }
+
     match oag_pulse::open_with_packs(source, packs) {
         Err(Error::WrongTitle { title, .. }) if title == "Wipeout Pure" => oag_pure::open(source)
             .map(|archives| Opened {

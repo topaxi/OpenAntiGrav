@@ -136,6 +136,13 @@ soup, the pad volumes and the `section` visibility mask all read, corpus-wide;
 and **ten of HD's sixteen environments are a Pulse or Pure circuit's spline in
 the same world coordinates**, Talon's Junction among them.
 
+**[HD front end](hd-frontend.md)** is the same reading applied to
+`/data/plugins/frontend/gui/skin.xml` - HD ships six copies of it and they agree
+on every layout global - plus a read-only sweep of the PS3 executable for the
+boot entry point. It is what `oag_hd::frontend` was filled in from, and it is
+also where the two things that are *not* recovered are named: which of the six
+skins the runtime loads, and therefore which logo reel plays.
+
 Note what that does **not** do to the `Titles` column above: none of it went
 through `oag-formats`, which has no big-endian path, so no row gained an
 `HD Fury`. The measurement is a deliberately separate reading of the same

@@ -7,12 +7,16 @@ the HD counterpart of [menus-original](../ui/menus-original.md) and
 [pure-boot](../architecture/pure-boot.md), and it sits beside
 [hd-status](hd-status.md), which is the format-layer probe this continues.
 
-**Nothing here has been verified under an emulator, and no PS3 executable has
-been read for any of it.** Every claim below rests on static reading of the
-disc's own XML. Per the [rubric](../reverse-engineering/confidence-rubric.md)
+**Nothing here has been verified under an emulator.** Every claim below rests on
+static reading: the disc's own XML, and - for the section
+[what the executable says](#what-the-executable-says) alone - a read-only sweep
+of `EBOOT.elf`. Per the [rubric](../reverse-engineering/confidence-rubric.md)
 that caps an authored-value claim at 94 and puts any *runtime* claim - what the
 boot actually walks, what colour a selected row is, how long a page change takes
-on screen - at zero, because none was made.
+on screen - at zero, because none was made. The executable sweep renamed
+nothing; it cites addresses, and anyone promoting one to a name owes a
+`docs/ghidra/functions/ps3-hdfury-eu/` page and a `names.tsv` row in the same
+change.
 
 The disc is `hdfury-ps3-eu-dec.iso`, serial `BCES-00664`, layer-1 decrypted per
 [ps3-disc](ps3-disc.md); everything is read through the
@@ -24,7 +28,7 @@ The disc is `hdfury-ps3-eu-dec.iso`, serial `BCES-00664`, layer-1 decrypted per
 | --- | --- | --- |
 | Where is the skin? | `/data/plugins/frontend/gui/skin.xml`, in **six** of the seven archives | 94 |
 | Do the six copies agree on layout? | **Yes, on every layout global, exactly** | 92 |
-| Which copy does the runtime load? | **Unknown.** Needs the EBOOT | - |
+| Which copy does the runtime load? | **Still unknown.** An ordered array of all seven is at `0x00860c80`; what consumes it is unread | 88 / - |
 | Coordinate space | **1920x1080**, not Pulse's 480x272 | 90 |
 | Is the main menu a row list? | **No.** It is a `<HorizMenu>` - horizontal | 90 |
 | Is there a `menu` font role? | **No.** HD's language plugins declare no such slot | 90 |
@@ -32,6 +36,7 @@ The disc is `hdfury-ps3-eu-dec.iso`, serial `BCES-00664`, layer-1 decrypted per
 | Are any `FEGlobals` referenced but undeclared? | **None, in any of the six** | 90 |
 | Declared boot chain | Nine screens, quoted below | 80 |
 | Runtime boot order | **Unverified.** Needs an emulator | - |
+| Does the executable agree on the first screen? | **Yes.** `0x000186f0` returns `"Language Selection"` by default | 70 |
 
 ## Reading it yourself
 
@@ -279,6 +284,50 @@ exists only in `DATA02` (15,139,496 bytes). `DATA00` is also the archive holding
 the Fury-only circuits. **That makes `DATA00` look like the newest layer, and
 looking like it is not evidence.** Nothing here establishes load order.
 
+## The declared menu tree
+
+The top level is `mainmenu_definition.xml`'s `<Redirect>`, read verbatim:
+
+```xml
+<Redirect>
+    <Values backward="none"></Values>
+    <Entry item="Mode" equals="FE_RC" goto="Grid Selection"></Entry>
+    <Entry item="Mode" equals="FE_RACEBOX" goto="Single Player"></Entry><? SA - Formerly went to Racebox ?>
+    <Entry item="Mode" equals="FE_ONLINE" goto="NetLoginPage"></Entry>
+    <Entry item="Mode" equals="FE_RECORDS" goto="ScoreSync"></Entry>
+    <Entry item="Mode" equals="FE_OPT_PLUS" goto="Additional"></Entry>
+    <Default goto="To Be Done"></Default>
+</Redirect>
+```
+
+Five entries in the `<HorizMenu>` order given earlier, and the disc records its
+own edit: **`FE_RACEBOX` goes to `Single Player`, not to `Racebox`.**
+`racebox_definition.xml` declares `Single Player` as its first screen and
+`Racebox` is not a screen name anywhere, so the comment describes a change that
+was actually made. A reimplementation reading the file name rather than the
+redirect would wire the wrong target.
+
+Screen counts by definition file, `DATA06`, for scale rather than as a list to
+implement (`docs/architecture/menus.md` owns the menu *tree*, which stays ours):
+
+| file | screens | file | screens |
+| --- | ---: | --- | ---: |
+| `ingame_definition.xml` | 58 | `manual_definition_*.xml` | 6 each |
+| `network_definition.xml` | 50 | `team_selection_definition.xml` | 5 |
+| `skin.xml` | 38 | `cellmode_definition.xml` | 4 |
+| `online_definition.xml` | 36 | `track_selection_definition.xml` | 3 |
+| `additional_definition.xml` | 23 | `showunlocks_definition.xml` | 3 |
+| `stats_definition.xml` | 9 | `recordgrid_definition.xml` | 2 |
+| `demo_definition.xml` | 8 | `controls_definition_ps3.xml` | 2 |
+| `racebox_definition.xml` | 7 | `credits_definition.xml` | 1 |
+| `endrace_definition.xml` | 7 | `gallery_definition.xml` | 1 |
+| `mainmenu_definition.xml` | 6 | `debug_screens.xml` | 1 |
+
+`skin.xml`'s 38 includes duplicates: `Main Menu`, `SoundTest`, the five
+`Manual Part` screens, `Controls` and `Race Records` each appear twice, inside
+two sibling `<Screen name="default">` blocks. Which of the two wins is another
+question for the executable.
+
 ## Filling in `MenuSkin`
 
 ```rust
@@ -400,10 +449,11 @@ the only two archives carrying them - declares the same font slots:
 <Font><Values name="HUDSmall" Language="English" Src="Data\FE\Fonts\small.fnt" borderExtendPixels="3"></Values></Font>
 ```
 
-`DATA03`'s copies add `wo3HUD` and `2097HUD` (the retro HUD skins). Sampling
-five languages across both archives gives slot-name counts of `Default` 10,
-`Title` 10, `Buttons` 10, `HUD` 10, `HUDSmall` 10, `wo3HUD` 5, `2097HUD` 5 -
-and **no `Menu` slot, in either spelling, anywhere**.
+`DATA03`'s copies add `wo3HUD` and `2097HUD` (the retro HUD skins). **All 32
+`definition.xml` files were read**, not sampled, giving slot-name counts of
+`Default` 32, `Title` 32, `Buttons` 32, `HUD` 32, `HUDSmall` 32, `wo3HUD` 16,
+`2097HUD` 16 - and **no slot whose name matches `menu` case-insensitively, in
+any of the 32**.
 
 Four `<Menu>` widgets in `online_definition.xml` nevertheless say `font="menu"`,
 and two `ingame_definition.xml` widgets say `font="InGame"`. Both name slots
@@ -502,9 +552,14 @@ pub const BOOT_PROFILE: &oag_title::BootProfile = &oag_title::BootProfile {
         oag_title::BootStep::screen(states::UPDATE_ANNOUNCEMENT),
     ],
     // `Studio Logo` is the one screen on the declared chain that plays a movie,
-    // and the movie is the Studio Liverpool logo - HD's counterpart to Pure's
-    // `Developer Publisher Screen`. Same shape as Pure's: on the boot path, so
-    // `--reel` shows the screen the disc shows rather than being refused.
+    // and the movie is named for the Studio Liverpool logo. On the boot path,
+    // so `--reel` shows a screen the disc shows rather than being refused.
+    // **Confidence 60, and this is the one field filled by analogy.** The
+    // screen and the movie path are read straight off the XML; the claim that
+    // this is HD's counterpart to Pure's dev/pub reel is *not* read. Pure's was
+    // established by decoding the movie and matching its cards against captured
+    // frames. No Bink decoder was run here, so nothing on this page knows what
+    // is inside `StudioLiverpool.bik` beyond its name.
     reel: Some(oag_title::BootStep::playing(
         states::STUDIO_LOGO,
         names::STUDIO_LOGO_MOVIE,
@@ -646,28 +701,225 @@ what `BootProfile::next_after`'s `usable` predicate is for.
 difference aside. Which is the same headline
 [hd-status](hd-status.md) reached for the asset layer: not a new engine.
 
+## What the executable says
+
+Read out of `/ps3-hdfury-eu/EBOOT.elf` in the project's Ghidra database on
+2026-08-17, **by reading only**. Nothing was renamed, so there is no
+`names.tsv` row and no `docs/ghidra/functions/` page for any of this; addresses
+are cited instead. Anyone promoting one of these to a name owes the page and the
+row in the same change, per [ADR-0005](../architecture/adr/0005-ghidra-conventions.md).
+
+**The database's `r2` fix is applied**, checked before anything below was
+trusted: `0x00392478` decompiles with its TOC pointers resolving to the
+allocator globals and its callees coming out as the functions
+[`memory.md`](../ghidra/functions/ps3-hdfury-eu/memory.md) records, and `_opd_`
+thunks are present throughout. That check matters because the trap is live in
+this very sweep - see the warning at the end of this section.
+
+### The boot entry point is chosen by a function, and its default is the picker
+
+At `0x000186f0`, in its entirety:
+
+```c
+undefined * FUN_000186f0(void)
+{
+  if (*(char *)(DAT_008a57a0 + 1) != '\0') {
+    return PTR_s_Launch_Game_008a57a4;      // "Launch Game"
+  }
+  return PTR_s_Language_Selection_008a57a8; // "Language Selection"
+}
+```
+
+Both are real HD screen names: `Language Selection` is `skin.xml`'s picker and
+`Launch Game` is `ingame_definition.xml`'s first screen. They sit adjacent in
+the application string pool at `0x007792f0` and `0x00779300`, immediately before
+`QuitGameMutex` and `ShutdownMutex` - and `DAT_008a57a0` is the object that owns
+both of those mutexes (`0x00018728` installs them at `+8` and `+0x20`). So the
+global is the game-root object and this is one of its accessors; the function is
+reached only through a vtable slot at `0x008709d0`, alongside five siblings at
+`0x000186d8`-`0x00018870` that read the same object.
+
+**Confidence 88 that the function returns one of those two screen names on that
+flag** - it is four instructions, unambiguous, and below `0x32d5e0` where the
+TOC needs no correction. **Confidence 70 that this is *the* boot entry point.**
+The call site is virtual and was not resolved, so "a game-root accessor that
+yields a start-screen name" is read and "the boot begins here" is inference.
+
+What it does support, at 70: **HD's runtime default agrees with its XML.** The
+declared chain opens on `Language Selection` and the only alternative the
+executable offers is `Launch Game`, which is the straight-into-a-race path a
+demo or trial boot would take, not a different front-end order. That is Pure's
+situation rather than Pulse's - but it is *not* the cold-boot confirmation Pure
+has, and this page still does not assert a runtime order.
+
+The trial reading of that branch is corroborated all over the binary and the
+data: `UpgradeToFullVersionCheckout_Screen.cpp` is one of the 47 classes;
+`mainmenu_definition.xml` declares `PurchaseGame`, `ProductInfoConnectingScreen`
+and `ProductInfoErrorScreen` and carries an `<Item name="TrialItems">` block;
+`demo_definition.xml` declares `Demo Launch Real` and `Demo InGame`. A flag that
+skips the whole front end and lands in a race is exactly what a timed demo
+needs.
+
+### An ordered array of the seven archives, purpose unread
+
+The seven archive names are string literals at `0x00777f88`-`0x00777fe8`, 16
+bytes apart, and the **only** place they are referenced is a NULL-terminated
+array of seven pointers at `0x00860c80`:
+
+```
+0x00860c80: 00777f88 00777f98 00777fa8 00777fb8   -> data00 data01 data02 data03
+0x00860c90: 00777fc8 00777fd8 00777fe8 00000000   -> data04 data05 data06 NULL
+```
+
+**Confidence 88, and it is scored for exactly one claim**: an ordered,
+NULL-terminated array of pointers to all seven names, in `DATA00`..`DATA06`
+order, is the sole reference site for those strings. That is data rather than
+code, so the TOC trap cannot touch it.
+
+**What the array is *for* is unread, and is deliberately not scored.** Calling
+it a mount list would be the invention this project has already been bitten by
+twice. A validation list, a prefetch manifest and an existence check all have
+this shape, and `"Prefetched %d files\n"` sits a few hundred bytes away as a
+live alternative reading. The consuming loop was not identified: the only xref
+Ghidra offers into `0x00860c80` is a read at `0x0032e5d8`, inside a function that
+decompiles as a GameData-installer debug dump, and the TOC-relative loads that
+would reach the array leave no instruction operand to search for.
+
+**So the archive-layering question stays exactly where it was** before the
+executable was opened - and until the consumer is found, the *order* in the
+array carries no priority meaning either. A first-wins array and a last-wins
+array are byte-identical.
+
+One weaker corroboration did fall out. A second site names **only
+`data00.psarc` and `data06.psarc`** - `0x007a4bf8` and `0x007a4c20` - among a
+run of file-system literals:
+
+```
+data00.psarc / "PSARC file Loading %s\n" / data06.psarc /
+"/dev_bdvd/PS3_GAME/USRDIR" / "Prefetched %d files\n" /
+"Creating file systems" / "/dev_hdd0"
+```
+
+Those two, and no other five, singled out among file-system strings is the same
+pairing the `skin.xml` families showed - `DATA00` and `DATA06` being the two
+copies that drop `LogoFMV` and carry the `HD_Colours` block. **Confidence 55**:
+two independent sources agreeing that *some* distinction separates those two
+archives from the other five is real, but the code around these literals was not
+read either, string adjacency is not a data structure, and nothing here says
+what the distinction is.
+
+### The skin path is built, not hardcoded
+
+`0x0078f698` holds `"%s\Skin.xml"` and `0x00786a40` holds
+`"Data\Plugins\frontend"`, which is exactly what `definition.xml` authors:
+
+```xml
+<PI_Skin name="UI">
+    <Values location="Data\Plugins\frontend\GUI" activate="true"></Values>
+</PI_Skin>
+```
+
+So the engine composes the skin path from the plugin's own `location`, and the
+composed path is **identical for all six archives**. The executable therefore
+cannot disambiguate them either; only the mount polarity can. Worth noting that
+the format string is `Skin.xml` with a capital S and backslashes while the
+archives store `/data/plugins/frontend/gui/skin.xml` in lower case with forward
+slashes, so the lookup normalises case and separators somewhere.
+
+`FrontendRoot.cpp` (`0x00786950`) and `FrontendGlobals.cpp` (`0x00785b58`) are
+the module names, if someone picks this up.
+
+### 47 screen classes, and the `type=` correspondence
+
+The binary is stripped of symbols but keeps 462 `.cpp` filename strings (see
+[`memory.md`](../ghidra/functions/ps3-hdfury-eu/memory.md)), of which **47 are
+`*_Screen.cpp`**. Each sits beside its own type-name string - `EpilepsyWarning`
+at `0x00794e60` beside `EpilepsyWarning_Screen.cpp` at `0x00794e18`, `FEMain` at
+`0x00794f00` beside `FEMain_Screen.cpp` at `0x00794ec0`, `HDDBoot` at
+`0x00795d60` and `Language Selection` at `0x00795db0` beside
+`LanguageSelection_Screen.cpp` at `0x00795d68`.
+
+HD's `skin.xml` uses **eight** distinct `type=` values, and **seven of the eight
+have a class**: `Language Selection`, `EpilepsyWarning`, `FirstPlay`, `HDDBoot`,
+`FMV`, `FEMain`, `Main Menu`.
+
+**The eighth is a counterexample and the rule does not survive it.**
+`<Screen type="RunTeaser" name="Game Share">` names a type with no
+`RunTeaser_Screen.cpp` and no `Teaser_Screen.cpp` among the 47. So
+**confidence 80 that `type=` selects a compiled screen class for the boot
+screens, and it is not a universal rule** - `RunTeaser` is either handled
+generically, handled by a class whose file is named something else, or dead the
+way `LogoFMV` is. Not read either way.
+
+A second oddity on the same screen, worth one line: `Game Share`'s only
+`Redirect` is `Default goto="extras"`, lower case, while the screen it must mean
+is `additional_definition.xml`'s `Extras`. Together with `%s\Skin.xml` resolving
+to a lower-case `skin.xml` in the archive, that is a second hint that the
+resolver folds case - **confidence 50**, two coincidences and no code read.
+
+**Do not read the converse.** `PreFMVConnect`, `EULA` and `Update Announcement`
+declare no `type=` and have no class, and that is *expected* under the same
+rule, not evidence they are dead - `Default_Screen.cpp` and `FEDefault_Screen.cpp`
+are exactly the generic drivers a typeless screen would use. The `LogoFMV`
+finding above rests on different evidence entirely: a missing asset, an
+undefined target and no inbound `goto`.
+
+Two of the 47 are worth naming: **`DeveloperPublisher_Screen.cpp`
+(`0x00793c00`) and `MemoryStickWarning_Screen.cpp` (`0x00796110`) are compiled
+into a PS3 binary.** Pure's boot screens, still linked in on a machine with no
+Memory Stick. The PSP legacy is in the code as well as in the data.
+
+### Executable corroboration for the dead screen
+
+`LogoFMV`, `Show Logo`, `StudioLiverpool` and `Backdrop` are **not strings in
+the executable at all**. The first two being absent is a third independent
+reason to treat `LogoFMV` as dead, on top of the four in
+[the dead PSP screen](#the-dead-psp-screen). The second two being absent says
+something different and useful: the logo movie is named only by the XML, so
+**which `.bik` plays is decided by which `skin.xml` is live**, not by the code -
+which folds that question back into the unresolved mount polarity.
+
+### The TOC trap, caught in the act
+
+`memory.md`'s first trap showed itself during this sweep and is worth the
+warning. `0x003383b0` - **above** `0x32d5e0` - decompiles as a screen-name
+lookup that returns `"Language Selection"` for two input values and otherwise
+calls a formatter whose format string Ghidra resolves to
+`"<Bronze Target %d> <Bronze>"`. A medals string inside a screen-name function
+is not a surprising find, it is a wrong one: that is the wrong-TOC symptom
+exactly as documented, in a function twenty minutes' reading away from a real
+result. Nothing above `0x32d5e0` was used on this page without the check
+described at the top of this section.
+
 ## What could not be determined
 
 Named explicitly, with what each would take.
 
-**Needs the PS3 executable (`scripts/import-ps3-eboot.sh`, ghidra-mcp):**
+**Still needs the PS3 executable, after the sweep above:**
 
-1. **Which `skin.xml` the runtime loads.** Six copies, no manifest, no declared
-   priority. This does not affect `MenuSkin` (all six agree) but it decides
-   which of the two boot-chain families is live and which logo `.bik` plays.
-2. **How `.psarc` archives layer.** Whether a later archive shadows an earlier
-   one, and in what order they mount.
+1. **What consumes the seven-archive array at `0x00860c80`, and with what
+   polarity.** Until the consumer is found it is not even established that the
+   array is a mount list, and a first-wins and a last-wins list look identical.
+   This is the *single* blocker on "which `skin.xml` is live", and therefore on
+   which boot-chain family and which logo `.bik` are HD's. It does not affect
+   `MenuSkin`; all six copies agree there.
+2. **The call site of `0x000186f0`**, to lift the boot entry point from
+   inference (70) to a reading.
 3. **Whether an unresolved `font=` falls back to `Default` or to a compiled-in
    table.** `font="menu"` and `font="InGame"` name slots no plugin declares.
+   Cannot change `menu_font`, which is `None` either way.
 4. **The easing curve on a page change**, the same gap Pulse has.
 
 **Needs an emulator (RPCS3 or equivalent) - none was available here:**
 
 5. **The runtime boot order.** Everything in the chain table is *declared*.
-   Pulse's declared and actual first screens differ, so this is a real risk and
-   not a formality.
+   `0x000186f0` now gives a 70-confidence reason to think the runtime's default
+   first screen is the picker, which is a partial answer to the *first* step
+   only; the remaining eight are unmeasured, and Pulse's declared and actual
+   orders differ, so this is a real risk and not a formality.
 6. **Whether `Language Selection` is ever shown** on a machine that takes its
-   language from the XMB.
+   language from the XMB. `0x000186f0` returns its name by default, which is
+   evidence the engine *intends* to open there, not evidence a player sees it.
 7. **Step 4's real path** - `EpilepsyWarning` -> `FirstPlay` -> `Save Warning`
    as the dialog declares, or `EpilepsyWarning` -> `Save Warning` as the
    redirect declares.

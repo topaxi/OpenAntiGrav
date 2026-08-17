@@ -461,7 +461,25 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // model's own embedded textures, and reused rather than re-read from the
     // archive and re-decoded per model.
     let mut ps2_track_textures: Option<Vec<Option<mesh::ModelTexture>>> = None;
-    let track_model = if options.ribbon {
+
+    // **On a PS3 circuit the ribbon is not a choice, it is the only surface
+    // there is.** Wipeout HD left the spline, the collision soup, the pads and
+    // the whole node tree in the `.vex` and moved the render meshes into a
+    // `.rcsmodel` beside it, which nothing here decodes - so `mesh::build` would
+    // refuse the file by name and take the race with it. Falling back draws the
+    // circuit this project can derive rather than nothing at all, and it is
+    // reported so nobody mistakes an invented surface for the disc's art. See
+    // `oag_render::mesh::geometry_is_external`.
+    let external_geometry = mesh::geometry_is_external(&track_blob);
+    if external_geometry && !options.ribbon {
+        report.push(format!(
+            "{track}: a PS3 .vex, so its meshes are in the .rcsmodel beside it - \
+             drawing the derived ribbon instead, as --ribbon does"
+        ));
+    }
+    let ribbon = options.ribbon || external_geometry;
+
+    let track_model = if ribbon {
         track_render::build_model(&label, &ai)
     } else {
         let mut track_model = mesh::build_with_textures(&track, &track_blob, None, options.lod)?;
@@ -485,7 +503,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // The track's authored fog volumes. Empty for a ribbon build, and empty for
     // the four circuits that author no `fogCube` at all - both ordinary, and
     // both meaning the race renders unfogged.
-    let fog_volumes = if options.ribbon {
+    let fog_volumes = if ribbon {
         Vec::new()
     } else {
         let nodes = oag_formats::vex::nodes(&track_blob).unwrap_or_default();
@@ -506,7 +524,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // The ribbon build draws an invented surface rather than the disc's art, so
     // it gets no sky either: the two belong to the same "show what shipped"
     // mode.
-    let sky_model = if options.ribbon {
+    let sky_model = if ribbon {
         None
     } else {
         let sky = mesh::build_sky(&track, &track_blob, ps2_track_textures.clone())?;
@@ -530,7 +548,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
 
     // Same reasoning as the sky: a ribbon build shows an invented surface, so it
     // shows none of the disc's art meshes, pads included.
-    let pad_model = if options.ribbon {
+    let pad_model = if ribbon {
         None
     } else {
         let pads = mesh::build_pads(&track, &track_blob, ps2_track_textures.clone())?;
@@ -563,7 +581,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // the trigger volumes on every mode's own default `Options`, and it mirrors
     // the original's own order of operations: `World_CollectNodeLists` always
     // walks the tree before anything asks whether weapons are on.
-    let weapon_pad_model = if options.ribbon {
+    let weapon_pad_model = if ribbon {
         None
     } else {
         let pads = mesh::build_weapon_pads(&track, &track_blob, ps2_track_textures.clone())?;
@@ -591,7 +609,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     };
     report.push(format!(
         "drawing the track's {}: {} triangle(s), radius {:.0}",
-        if options.ribbon {
+        if ribbon {
             "driveable ribbon"
         } else {
             "art meshes"
@@ -618,7 +636,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // The authored PVS. Skipped for a ribbon build, whose geometry is generated
     // from the spline rather than authored, so the section boxes have nothing
     // to say about it.
-    let visibility = if options.ribbon {
+    let visibility = if ribbon {
         None
     } else {
         TrackVisibility::build(&track_model, &track_blob, &ai)
@@ -633,7 +651,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             visibility.placement.placed_fraction() * 100.0,
             visibility.swap_pairs(),
         )),
-        None if options.ribbon => {}
+        None if ribbon => {}
         None => report.push(
             "no authored visibility sections: PVS culling is unavailable on this track".to_string(),
         ),

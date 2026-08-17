@@ -116,7 +116,7 @@ TEST_LIMIT = 200
 # left is `crates/game/tests/race_ground_truth.rs`.
 BASELINE = {
     "crates/game/tests/race_ground_truth.rs": 2387,
-    "crates/formats/src/vex.rs": 2069,
+    "crates/formats/src/vex.rs": 1822,
     "crates/game/src/boot.rs": 2025,
     "crates/game/src/movie.rs": 2200,
     "crates/game/src/menu.rs": 2168,
@@ -131,7 +131,6 @@ BASELINE = {
     "crates/physics/tests/ship_dynamics.rs": 1366,
     "crates/trace/src/trace.rs": 1300,
     "crates/game/src/display.rs": 1295,
-    "crates/render/src/mesh.rs": 1130,
     "crates/formats/tests/audio_ground_truth.rs": 1226,
     "crates/view/src/main.rs": 1170,
     "crates/ai/tests/closed_loop.rs": 1146,

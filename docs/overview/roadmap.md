@@ -1193,12 +1193,49 @@ the disc the same day:
 the above**: HD's render geometry left the `.vex` for `.rcsmodel`, which is
 unread. A `Mesh` node on HD is a bounding-box pair and a 32-bit reference.
 
-What is still ahead: an `oag-hd` title crate and the boot path, for a
-*driveable* circuit - every format under one is now read, so that work is
-composition rather than recovery; **months** to something that looks like HD,
-nearly all of it `.rcsmodel`; and HD's own simulation is not estimable, being
-gated by [ADR-0009](../architecture/adr/0009-multi-game-fanout.md) item 2 *and*
-by the absence of any RPCS3 equivalent of the M3 harness.
+#### The circuit drives, later the same day
+
+```sh
+cargo run -p oag-game --bin oag-game -- --race --hold cross --ticks 600 \
+    --screenshot /tmp/hd.png data/images/hdfury-ps3-eu-dec.iso
+```
+
+Talon's Junction, off the PS3 disc, hovering at ~3.9 units on HD's own collision
+soup and 730 world units further on after ten seconds of throttle. Three pieces,
+and the estimate that this would be "composition rather than recovery" held:
+
+8. **[`oag-hd`](../../crates/hd)**, the third title package. Its own row is
+   [`ArchiveCandidates::extra`](../../crates/title/src/lib.rs) - a **set** of
+   archives all of which mount, beside the two candidate *lists*, because HD
+   ships seven and they do not split by kind. Four of the twelve teams are in
+   `DATA03`, which carries no circuit at all, so the two-archive model would
+   have lost a third of the roster silently.
+9. **`oag_assets::Archives` holds a `Container`**, so `holder_of` asks each
+   mounted archive whether it has the name instead of hashing it. The
+   WAD-shaped reads - by hash, by directory position, into the middle of an
+   entry - go through `Container::as_wad_mut` and raise `Error::NotAWad` rather
+   than being approximated.
+10. **Two honest absences instead of two refusals.** A PS3 `.vex` has no render
+    geometry in it, so the hull draws nothing and says so, and the circuit falls
+    back to the derived ribbon `--ribbon` already built. Both are reported in
+    the load report; neither substitutes anything. The embedded texture block
+    is answered "absent" on a big-endian file for the same reason - HD's texels
+    are in `.gtf`.
+
+What still does not happen on an HD source is the **front end**:
+`oag_hd::TITLE.front_end` is `None`, so `load_shell` refuses by name and points
+at `--race`. The layout *is* recovered - six copies of `skin.xml` agreeing to
+the digit, in [`oag_hd::frontend`](../formats/hd-frontend.md) - and the boot
+chain is not: what is there is the order the XML **declares**, and
+`BootProfile::chain`'s contract is a measurement. The PS3 executable's boot
+entry point (`FUN_000186f0`) returns `Language Selection`, which agrees with the
+XML at confidence 70; the eight-step order behind it, and which of the six
+`skin.xml` copies is live, both need an emulator.
+
+What is still ahead: **months** to something that looks like HD, nearly all of
+it `.rcsmodel`; and HD's own simulation is not estimable, being gated by
+[ADR-0009](../architecture/adr/0009-multi-game-fanout.md) item 2 *and* by the
+absence of any RPCS3 equivalent of the M3 harness.
 
 ---
 

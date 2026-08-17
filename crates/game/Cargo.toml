@@ -20,6 +20,7 @@ oag-pulse.workspace = true
 # Only for the boot sequence's title fallback (crate::boot::open_source) - a
 # Pure disc opens through here so its intro and menu are reachable, not
 # because Pure is a played title yet. See roadmap M8.
+oag-hd.workspace = true
 oag-pure.workspace = true
 oag-ai.workspace = true
 oag-assets.workspace = true

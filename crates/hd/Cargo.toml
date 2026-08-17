@@ -1,0 +1,25 @@
+[package]
+name = "oag-hd"
+description = "What Wipeout HD / Fury ships: its seven PSARC archives and the paths inside them"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+# A title package is tables. This one is thinner than `oag-pulse` for the same
+# reason `oag-pure` is: it holds what `docs/formats/hd-status.md` and
+# `docs/formats/hd-frontend.md` measured, and nothing else. In particular it
+# restates no `.vex` class ids - HD's track files declare version 6, the same
+# word Pulse's do, and `oag-formats` keys the table off that word rather than
+# off the disc.
+[dependencies]
+oag-assets.workspace = true
+oag-title.workspace = true
+
+[dev-dependencies]
+oag-pulse.workspace = true
+oag-pure.workspace = true
+
+[lints]
+workspace = true

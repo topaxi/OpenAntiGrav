@@ -1773,6 +1773,7 @@ dependencies = [
  "oag-disc",
  "oag-formats",
  "oag-gameplay",
+ "oag-hd",
  "oag-input",
  "oag-physics",
  "oag-pulse",
@@ -1800,6 +1801,16 @@ dependencies = [
  "oag-formats",
  "oag-physics",
  "oag-race",
+]
+
+[[package]]
+name = "oag-hd"
+version = "0.1.0"
+dependencies = [
+ "oag-assets",
+ "oag-pulse",
+ "oag-pure",
+ "oag-title",
 ]
 
 [[package]]
