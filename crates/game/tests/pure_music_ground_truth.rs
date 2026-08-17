@@ -213,9 +213,23 @@ fn the_front_ends_own_music_is_a_short_loop_and_not_a_soundtrack_track() {
             "{label}: the menu loop is {seconds} s"
         );
 
-        let hash = oag_formats::wad::hash_name(name);
+        // Over the declared **names** rather than over the listing's tokens:
+        // `Entry::at` is an index into the declaration now, so comparing it to
+        // a name hash would compare two unrelated numbers and pass for that
+        // reason rather than for the right one.
+        let tracks = oag_pure::MUSIC
+            .tracks
+            .expect("Pure declares its soundtrack");
+        let definition = String::from_utf8(
+            archives
+                .read_name(tracks.declared_in)
+                .expect("reading the plugin definition"),
+        )
+        .expect("the definition is UTF-8");
         assert!(
-            listing(&image).iter().all(|entry| entry.name_hash != hash),
+            catalogue::music(&definition)
+                .iter()
+                .all(|track| track.entry_name(tracks.file) != name),
             "{label}: the menu loop must not be one of the nineteen"
         );
     }

@@ -52,12 +52,42 @@ pub const TITLE: &Title = &Title {
     foreign_serials: FOREIGN_SERIALS,
     front_end: None,
     race: race::DEFAULTS,
-    // `DATA01.PSARC` is sound and music and nothing else, so this is a hole
-    // rather than an absence - but not one number out of it has been read, and
-    // a path borrowed from a PSP title would be a guess attributed to a disc
-    // nobody measured. See `oag_title::FrontEnd` for the same reasoning applied
-    // to the front end.
-    music: None,
+    music: Some(MUSIC),
+};
+
+/// Where Wipeout HD keeps its music.
+///
+/// **Both halves are read off the disc**, and neither is a PSP title's shape.
+/// The paths are literals and templates in the decrypted `EBOOT.elf`, sitting
+/// together a few bytes before `MusicManager.cpp`:
+///
+/// ```text
+/// 793858  %s\%s_stereo%s
+/// 793868  music
+/// 793870  .mp3
+/// 793878  %s\%s_surround%s
+/// 793890  Data\Music\FEMusic\frontend%d_stereo_fury.mp3
+/// 7938c0  Data\Music\FEMusic\frontend%d_surr_fury.mp3
+/// 7938f0  Data\Music\FEMusic\frontend%d_stereo.mp3
+/// 793920  Data\Music\FEMusic\frontend%d_surround.mp3
+/// ```
+///
+/// A soundtrack track is therefore the `PI_Music` location joined with `music`,
+/// `_stereo` and `.mp3` - and all **fifteen** the front-end plugin declares
+/// resolve to real entries. The front end has four candidates rather than one;
+/// see [`names::FRONT_END_MUSIC_VARIANTS`] for which axis is unread.
+///
+/// Confidence **88**: the templates and the declarations are each read off the
+/// disc and every expansion hits, but nothing has been watched running under an
+/// emulator - and HD's front end is not wired at all
+/// ([`oag_title::Title::front_end`] is `None` here), so which of the four the
+/// original picks has not been observed.
+pub const MUSIC: &oag_title::Music = &oag_title::Music {
+    front_end: names::FRONT_END_MUSIC,
+    tracks: Some(oag_title::DeclaredTracks {
+        declared_in: names::FRONT_END_PLUGIN_DEFINITION,
+        file: names::MUSIC_TRACK_FILE,
+    }),
 };
 
 /// The seven archives a Wipeout HD / Fury disc ships, under `PS3_GAME/USRDIR/`.
@@ -112,6 +142,68 @@ pub mod archives {
 /// resolves here unchanged. That is why the race path needed no HD-specific
 /// spelling of a handling file, and it is worth knowing before adding one.
 pub mod names {
+    /// The front-end plugin's own definition, which declares the soundtrack.
+    ///
+    /// HD's counterpart of the PSP titles' `Data\Plugins\PI001\Definition.xml`,
+    /// under a name rather than a number, and carrying the same schema: one
+    /// `PI_Music` node per track beside the `PI_Track` ones. See [`crate::MUSIC`].
+    pub const FRONT_END_PLUGIN_DEFINITION: &str = r"Data\Plugins\frontend\definition.xml";
+
+    /// The file a `PI_Music` location holds, joined onto that location to
+    /// address one soundtrack track.
+    ///
+    /// The executable's `%s\%s_stereo%s` with its last two `%s` filled in from
+    /// the `music` and `.mp3` strings beside it. **Stereo rather than
+    /// surround**: the mixer is stereo, and `_surround` is the same recording
+    /// in more channels rather than a different one - unlike the front end's
+    /// four, which are not all the same music. See [`crate::MUSIC`].
+    pub const MUSIC_TRACK_FILE: &str = "music_stereo.mp3";
+
+    /// The music the front end loops under its menus.
+    ///
+    /// **One of four, and picking it unconditionally is a known limitation**
+    /// rather than a measurement - the same shape as
+    /// `oag_pure::names::INTRO_MOVIE_CUTS`. See
+    /// [`FRONT_END_MUSIC_VARIANTS`].
+    pub const FRONT_END_MUSIC: &str = r"Data\Music\FEMusic\frontend1_stereo.mp3";
+
+    /// Every front-end music the disc carries, by the axis that selects it.
+    ///
+    /// **Two axes, and only one of them is understood.** Stereo against
+    /// surround is a channel count, and the mixer settles it. Base against Fury
+    /// is *not* a re-encode: `frontend1_stereo.mp3` is 4,097,664 bytes and
+    /// `frontend1_stereo_fury.mp3` is 1,057,536, so they are **different pieces
+    /// of music** and choosing between them is choosing what the player hears.
+    /// What the original selects on has not been read.
+    ///
+    /// `%d` is 1 in all four: the executable's template takes a number and only
+    /// `frontend1` exists on the disc, so the numbering starts at one and stops
+    /// there - unlike Pulse, which ships eight.
+    pub const FRONT_END_MUSIC_VARIANTS: &[(&str, &str)] = &[
+        ("base stereo", r"Data\Music\FEMusic\frontend1_stereo.mp3"),
+        (
+            "base surround",
+            r"Data\Music\FEMusic\frontend1_surround.mp3",
+        ),
+        (
+            "fury stereo",
+            r"Data\Music\FEMusic\frontend1_stereo_fury.mp3",
+        ),
+        (
+            "fury surround",
+            r"Data\Music\FEMusic\frontend1_surr_fury.mp3",
+        ),
+    ];
+
+    /// The second front-end track, which nothing here plays.
+    ///
+    /// A literal in the executable rather than a template, and named for the
+    /// ship-selection screen it presumably belongs to - but
+    /// [`oag_title::Music`] carries **one** front-end track and HD's front end
+    /// is not wired at all, so this is recorded and left alone. Its trigger is
+    /// unread, which is the part that would have to be recovered first.
+    pub const SHIP_SELECT_MUSIC: &str = r"Data\Music\FEMusic\FEship.mp3";
+
     /// One circuit's `.vex`, by its environment directory.
     ///
     /// The directory names are the disc's own and are **not** Pulse's: HD ships

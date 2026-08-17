@@ -234,7 +234,13 @@ pub struct MusicDiscs {
     psp: Option<String>,
     /// The booted title's PS2 source, if one was found.
     ps2: Option<String>,
-    /// Which release the game booted from, when it is one of the two.
+    /// The booted title's PS3 source, if one was found.
+    ///
+    /// **Never paired against anything**, unlike the two above: Wipeout HD has
+    /// one release, so this is only ever the disc the game booted from and
+    /// [`MusicDiscs::both`] is false whenever it is set.
+    ps3: Option<String>,
+    /// Which release the game booted from, when it is one of the three.
     booted: Option<Platform>,
 }
 
@@ -264,7 +270,15 @@ impl MusicDiscs {
         match layout.platform {
             Platform::Psp => discs.psp = Some(booted.to_string()),
             Platform::Ps2 => discs.ps2 = Some(booted.to_string()),
-            Platform::Ps3 | Platform::Unknown => return discs,
+            // **Recorded and then done with.** A PS3 disc has music and no
+            // counterpart to pair it against - there is no second release of
+            // Wipeout HD - so the search below is skipped rather than run and
+            // found empty, and MUSIC SOURCE is never offered.
+            Platform::Ps3 => {
+                discs.ps3 = Some(booted.to_string());
+                return discs;
+            }
+            Platform::Unknown => return discs,
         }
 
         // The booted disc's own soundtrack is what a candidate has to match,
@@ -304,11 +318,12 @@ impl MusicDiscs {
     /// One line for a load report: what was found, and where.
     #[must_use]
     pub fn describe(&self) -> String {
-        match (&self.psp, &self.ps2) {
-            (Some(psp), Some(ps2)) => format!("PSP {psp} and PS2 {ps2}"),
-            (Some(psp), None) => format!("PSP {psp} only"),
-            (None, Some(ps2)) => format!("PS2 {ps2} only"),
-            (None, None) => "neither release".to_string(),
+        match (&self.psp, &self.ps2, &self.ps3) {
+            (Some(psp), Some(ps2), _) => format!("PSP {psp} and PS2 {ps2}"),
+            (Some(psp), None, _) => format!("PSP {psp} only"),
+            (None, Some(ps2), _) => format!("PS2 {ps2} only"),
+            (None, None, Some(ps3)) => format!("PS3 {ps3} only"),
+            (None, None, None) => "neither release".to_string(),
         }
     }
 
@@ -326,7 +341,8 @@ impl MusicDiscs {
         chosen.or_else(|| match self.booted? {
             Platform::Psp => self.psp.as_deref().map(|at| (at, Platform::Psp)),
             Platform::Ps2 => self.ps2.as_deref().map(|at| (at, Platform::Ps2)),
-            Platform::Ps3 | Platform::Unknown => None,
+            Platform::Ps3 => self.ps3.as_deref().map(|at| (at, Platform::Ps3)),
+            Platform::Unknown => None,
         })
     }
 }
@@ -1449,8 +1465,8 @@ impl Soundtrack {
     fn read(source: &str, platform: Platform) -> Result<Option<Self>> {
         let tracks = match platform {
             Platform::Ps2 => ps2_soundtrack(source)?,
-            Platform::Psp => psp_soundtrack(source)?,
-            Platform::Ps3 | Platform::Unknown => None,
+            Platform::Psp | Platform::Ps3 => archived_soundtrack(source)?,
+            Platform::Unknown => None,
         };
         Ok(tracks.map(|tracks| Self { tracks }))
     }
@@ -1538,17 +1554,18 @@ fn ps2_soundtrack(source: &str) -> Result<Option<Vec<Track>>> {
     ))
 }
 
-/// The soundtrack entries of a PSP `Data.wad`, addressed by name hash.
+/// The soundtrack entries of a source whose music is inside an archive - every
+/// release but the PS2 one, which keeps its own loose in the filesystem.
 ///
 /// Which entries those are is the one question here whose answer depends on
 /// **which title booted**, so it is asked in [`crate::music`] rather than in
-/// this module.
-fn psp_soundtrack(source: &str) -> Result<Option<Vec<Track>>> {
+/// this module. [`Track::at`] comes back opaque; see [`crate::music::Entry::at`].
+fn archived_soundtrack(source: &str) -> Result<Option<Vec<Track>>> {
     Ok(crate::music::listing(source)?.map(|entries| {
         entries
             .into_iter()
             .map(|entry| Track {
-                at: entry.name_hash,
+                at: entry.at,
                 seconds: entry.seconds,
             })
             .collect()

@@ -83,7 +83,8 @@ Pure does not ship that thing - no firmware update payload, no
 | PBP | `.BIN` | PSP | Pulse | identified | `GSHARE/SHARE.BIN` |
 | SFO | `.SFO` | all three | Pulse, Pure, HD Fury | identified | Magic `\0PSF`. Key/value metadata. Unchanged on the PS3, where `PS3_GAME/PARAM.SFO` is what names the disc: `BCES-00664`, `WipEout(R) HD Fury`. It sits in a plain region, so it reads without the disc key. |
 | PSAR | `.BIN` | PSP | Pulse | identified | Firmware update archive. Not relevant. **Not** the PS3's `.psarc` below, despite both starting `PSAR` - different container, same four bytes. |
-| ATRAC3 | `.AT3` | PSP | Pulse | identified | RIFF wrapped. `ffmpeg` decodes it. |
+| ATRAC3 | `.AT3` | PSP | Pulse, Pure | identified | RIFF wrapped. `ffmpeg` decodes it - the codec has no Rust decoder, which is what [ADR-0019](../architecture/adr/0019-atrac3plus-out-of-process.md) is about. |
+| MPEG-1 Layer III | `.mp3` | PS3 | HD Fury | **understood** | HD's music, in no console container at all: 36 files under `/data/music/`, 48 kHz stereo, plain MP3. Read and decoded **in process** by `symphonia`, so this path needs no `ffmpeg`. Named by the executable's own templates and declared as `PI_Music` - see [hd-status.md](hd-status.md#music-plain-mp3-declared-the-way-the-psp-titles-declare-theirs). |
 | MPEG-2 PS | `.PSS` | PS2 | Pulse | identified | `ffmpeg` decodes it. |
 | IOP module archive | `.IMG` | PS2 | Pulse | unknown | `IOPRP310.IMG`, magic `RESET`. Not relevant to gameplay. |
 | PNG | `.PNG` | PSP | Pulse | **understood** | Standard |

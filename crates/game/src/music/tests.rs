@@ -1,5 +1,10 @@
 //! The one part of this module that needs no disc: the gate both routes run
-//! every candidate through.
+//! every candidate through, and the dispatch between the two containers.
+//!
+//! The MPEG half of that dispatch is asserted against **real** streams in
+//! `crates/game/tests/hd_music_ground_truth.rs`, because a synthetic MPEG frame
+//! is not something a decoder will open and a fixture that only proves "this is
+//! not MPEG" would prove nothing about the case that matters.
 
 use super::*;
 
@@ -29,7 +34,7 @@ fn header(channels: u16, sample_rate: u32, samples: u32) -> Vec<u8> {
 /// The length comes from the `fact` count over the rate, and nothing else.
 #[test]
 fn a_stereo_stream_at_the_soundtracks_rate_is_measured_by_its_fact_chunk() {
-    let seconds = describe(&header(2, 44_100, 44_100 * 180)).expect("a length");
+    let seconds = riff_seconds(&header(2, 44_100, 44_100 * 180)).expect("a length");
     assert!((seconds - 180.0).abs() < 1e-9, "{seconds}");
 }
 
@@ -39,11 +44,11 @@ fn a_stereo_stream_at_the_soundtracks_rate_is_measured_by_its_fact_chunk() {
 #[test]
 fn a_stream_that_is_not_stereo_at_44_100_is_not_a_soundtrack_track() {
     assert_eq!(
-        describe(&header(1, 44_100, 44_100 * 180)),
+        riff_seconds(&header(1, 44_100, 44_100 * 180)),
         None,
         "the disc's 32 mono ATRAC3+ streams share the bitrate and the rate"
     );
-    assert_eq!(describe(&header(2, 48_000, 48_000 * 180)), None);
+    assert_eq!(riff_seconds(&header(2, 48_000, 48_000 * 180)), None);
 }
 
 /// A `fact` chunk is what a length needs, so an entry without one is skipped
@@ -57,13 +62,22 @@ fn a_stream_with_no_fact_chunk_has_no_length() {
         .position(|window| window == b"fact")
         .expect("the fixture writes one");
     without.splice(at..at + 4, *b"junk");
-    assert_eq!(describe(&without), None);
+    assert_eq!(riff_seconds(&without), None);
 }
 
 /// Anything that is not a RIFF/WAVE at all - a movie, a texture, a `.vex` -
 /// falls out here rather than raising, because a bulk archive is full of them.
 #[test]
 fn a_blob_that_is_not_riff_is_skipped_rather_than_reported() {
-    assert_eq!(describe(b"not a riff file at all"), None);
-    assert_eq!(describe(&[]), None);
+    assert_eq!(riff_seconds(b"not a riff file at all"), None);
+    assert_eq!(riff_seconds(&[]), None);
+}
+
+/// A blob that is neither container measures as nothing, rather than as one of
+/// them with a wrong answer. The dispatch's failure case, and the one an
+/// archive full of textures and models exercises constantly.
+#[test]
+fn a_blob_that_is_neither_container_measures_as_nothing() {
+    assert_eq!(seconds_of(b"not a riff and not an mpeg frame"), None);
+    assert_eq!(seconds_of(&[]), None);
 }

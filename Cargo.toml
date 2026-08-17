@@ -67,6 +67,27 @@ clap = { version = "4", features = ["derive"] }
 chd = "0.3"
 bytemuck = "1"
 
+# The MPEG decoder, for the container Wipeout HD keeps its music in. Reads how
+# long a track is, its channel count and its rate, and decodes it to PCM.
+#
+# **In the build so that `ffmpeg` is not, for this codec.** `ffmpeg` is reserved
+# for what we neither implement nor can take a light dependency on - ATRAC3+,
+# which has no Rust decoder at all and which ADR-0019 puts out of process, and
+# the video path. MP3 is neither, so it is decoded in process and Wipeout HD's
+# music plays on a machine with no `ffmpeg` installed.
+#
+# **A library rather than our own.** `oag-formats` hand-rolls every *Wipeout*
+# format because nothing else will; MPEG is a published standard whose failure
+# mode is plausible-sounding noise, which is the same argument `miniz_oxide` and
+# `re_rav1d` are here on.
+#
+# Pure Rust with no C toolchain, the bar those two are held to. **MPL-2.0**,
+# unlike everything else here: a file-level copyleft that covers changes to its
+# own sources and leaves this workspace's `MIT OR Apache-2.0` untouched by
+# depending on it. `default-features = false` takes only the MP3 codec and
+# demuxer, leaving the other twenty-odd formats and the SIMD paths out.
+symphonia = { version = "0.6", default-features = false, features = ["mp3"] }
+
 # Inflate, for the PS3 `.psarc` container. Pure Rust with no C toolchain, the
 # same bar `re_rav1d` is held to. `oag-formats` hand-rolls every *Wipeout*
 # format and the two checksums PNG needs, but deflate is a published standard

@@ -149,6 +149,35 @@ fn a_stored_block_is_a_full_block_of_raw_bytes() {
     assert_eq!(entries[1], body, "and the trailing pad is truncated away");
 }
 
+/// A stored block whose first byte happens to be `0x78` is **still raw**.
+///
+/// The bug this pins, in full, because it is invisible by inspection: a short
+/// block may be either a deflate stream or a payload that did not shrink, and
+/// `0x78` is what tells them apart. A **full-size** block is raw by definition -
+/// a stored length of zero is the table saying so - and asking the same
+/// question of it is asking a question with no meaning, because `0x78` is an
+/// ordinary byte in the middle of arbitrary content.
+///
+/// It bit on real content and not on a fixture:
+/// `Data\Music\Exceeder\music_stereo.mp3` is `DATA01.PSARC` entry 16 on
+/// `hdfury-ps3-eu-dec.iso`, its block 574 is a raw MP3 block beginning `78`,
+/// and the entry was unreadable - one track of fifteen, silently missing from
+/// the soundtrack listing rather than reported. `scripts/psarc.py` never had
+/// the bug: it emits a full block and moves on without testing anything.
+#[test]
+fn a_full_stored_block_beginning_with_the_zlib_marker_is_not_inflated() {
+    // Every byte of the body is `0x78`, so *every* block of it opens on the
+    // marker - the fixture is the pathological case rather than a lucky one.
+    let body = vec![super::ZLIB_CMF; 96];
+    let archive = build(32, 2, &[planned("/raw.bin", body.clone(), true)]);
+
+    let (_, entries) = read_all(&archive);
+    assert_eq!(
+        entries[1], body,
+        "a full block is raw whatever it happens to start with"
+    );
+}
+
 #[test]
 fn every_entry_carries_md5_of_its_uppercased_path() {
     let archive = build(
