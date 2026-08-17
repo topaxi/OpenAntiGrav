@@ -47,6 +47,8 @@ Two structural facts to expect, both different from every other binary here:
   any data or string reference in this program.
 - [collision.md](collision.md) - `Collision.cpp`: the arena, the class, and the
   MeshAABB narrowphase.
+- [race-hud.md](race-hud.md) - the per-mode HUD definitions, their three retro
+  skins, and what `SPZone` adds on top of the base race manager.
 - [mode-manager.md](mode-manager.md) - `ModeManager.cpp`: the sibling mode
   hierarchy, and the one place a C++ constructor pair could be told apart.
 - [race-manager.md](race-manager.md) - `RaceManager.cpp`: the singleton holder

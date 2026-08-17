@@ -44,3 +44,4 @@
 0x00045178	function	MPRaceManager_Construct	78	race-manager.md
 0x0003c580	function	ModeManager_Construct	84	mode-manager.md
 0x0003c480	function	ModeManager_ConstructComplete	82	mode-manager.md
+0x00097be8	function	Hud_LoadDefinition	80	race-hud.md
