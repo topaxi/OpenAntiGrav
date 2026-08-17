@@ -42,6 +42,14 @@ Two structural facts to expect, both different from every other binary here:
 
 ## Pages
 
-None yet. Add a row to [`names.tsv`](names.tsv) and the page it cites in the
-same change: `scripts/apply-ghidra-names.py` refuses a row whose address and
-name do not both still appear on the page named in its last column.
+- [memory.md](memory.md) - the allocator, its heap, the mutex around both, and
+  **the per-function TOC defect this database has**. Read it before trusting
+  any data or string reference in this program.
+- [collision.md](collision.md) - `Collision.cpp`: the arena, the class, and the
+  MeshAABB narrowphase.
+- [race-manager.md](race-manager.md) - `RaceManager.cpp`: the singleton holder
+  and the base of the race-mode hierarchy.
+
+Add a row to [`names.tsv`](names.tsv) and the page it cites in the same change:
+`scripts/apply-ghidra-names.py` refuses a row whose address and name do not
+both still appear on the page named in its last column.

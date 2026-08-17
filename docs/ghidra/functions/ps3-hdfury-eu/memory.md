@@ -168,10 +168,38 @@ is `"*******PS3 Heap Initial Sizes*********************"`, and the float at
 conversion its `%3.2f` needs. Under Ghidra's TOC that slot reads `1.0f` and the
 format strings read as race telemetry.
 
-**So: do not trust a Ghidra string cross-reference in this program.** It yields
-both false positives and false negatives, and the failure mode is a plausible
-wrong string rather than a visible error. To check one by hand, three reads and
-no guessing:
+### There are exactly two TOCs, and they overlap in address space
+
+Walking the whole OPD settles the scale of it. The section runs
+`0x00870520`-`0x008a54d8`, **27,127 entries**, and holds exactly **two** distinct
+TOC values:
+
+| TOC | Functions | Code range it covers |
+| --- | --- | --- |
+| `0x008ad4d8` | 11,037 | `0x010200`-`0x758110` |
+| `0x008bd3c4` | 16,090 | `0x32d5e0`-`0x7579c0` |
+
+Two statically linked modules, then. Ghidra uses the first for everything, so
+**59% of this program's functions have every TOC-relative load resolved against
+the wrong base.**
+
+The ranges **overlap** between `0x32d5e0` and `0x758110`, which is the part that
+matters in practice: a function's address does not tell you its TOC. Only the
+two tails are safe to assume -
+
+- below `0x32d5e0`: always `0x008ad4d8`, so Ghidra is right and its string
+  references can be read directly. Everything in `Collision.cpp` and
+  `RaceManager.cpp` falls here.
+- above `0x758110`: always `0x008bd3c4`, so Ghidra is always wrong.
+- between the two: read the OPD entry. There is no shortcut.
+
+The memory layer documented on this page sits at `0x0039xxxx`, inside the
+overlap, which is why it was the place the problem surfaced.
+
+**So: do not trust a Ghidra string cross-reference in this program** unless the
+function is below `0x32d5e0`. Elsewhere it yields both false positives and false
+negatives, and the failure mode is a plausible wrong string rather than a visible
+error. To check one by hand, three reads and no guessing:
 
 1. `disassemble_function` the caller and find the real `lwz rX, disp(r2)`.
 2. `search_byte_patterns` for the function's own entry address; the single hit

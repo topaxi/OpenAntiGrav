@@ -26,3 +26,17 @@
 0x003a1e78	function	FwMemHeap_AddChunk	88	memory.md
 0x003931e0	function	FwMutex_Lock	90	memory.md
 0x003931b8	function	FwMutex_Unlock	90	memory.md
+0x00033dd0	function	Collision_AllocateArenaBlock	84	collision.md
+0x00034168	function	Collision_FreeBuffers	82	collision.md
+0x00034350	function	Collision_AllocateBuffers	84	collision.md
+0x00034aa0	function	Collision_Construct	80	collision.md
+0x00034c48	function	Collision_DestructAndFree	80	collision.md
+0x00034dc8	function	Collision_Destruct	80	collision.md
+0x00034f40	function	Collision_TestMeshAabb	84	collision.md
+0x00038428	function	Collision_ProcessPairs	80	collision.md
+0x00054628	function	RaceManager_GetInstance	82	race-manager.md
+0x00054778	function	RaceManager_SetInstance	78	race-manager.md
+0x0005d138	function	RaceManager_Construct	80	race-manager.md
+0x000568e0	function	RaceManager_DestructBase	78	race-manager.md
+0x00057580	function	RaceManager_Destruct	80	race-manager.md
+0x00057468	function	RaceManager_DestructAndFree	80	race-manager.md
