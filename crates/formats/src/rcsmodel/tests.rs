@@ -178,6 +178,8 @@ fn the_destination_factor_is_what_picks_the_blend_class() {
         state: 1,
         src_factor: src,
         dst_factor: dst,
+        texture: String::new(),
+        second_texture: None,
     };
     for src in [0x0001, 0x0300, 0x0302] {
         assert_eq!(
@@ -205,6 +207,8 @@ fn the_unused_transparency_encoding_is_not_guessed_at() {
         state: 0x0003,
         src_factor: 0x0302,
         dst_factor: 0x0303,
+        texture: String::new(),
+        second_texture: None,
     };
     assert_eq!(odd.transparency(), None);
     assert!(

@@ -494,7 +494,9 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let vex_geometry = !ribbon && ps3_geometry.is_none();
 
     let track_model = if let Some(geometry) = &ps3_geometry {
-        let (model, built) = mesh::rcs::build_scene(&track, &track_blob, geometry)?;
+        let (model, built) = mesh::rcs::build_scene(&track, &track_blob, geometry, &mut |path| {
+            archives.read_name(path).ok()
+        })?;
         report.push(format!("{track}: {}", built.describe()));
         model
     } else if ribbon {

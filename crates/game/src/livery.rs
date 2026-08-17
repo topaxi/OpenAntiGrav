@@ -214,7 +214,13 @@ fn one(
                 boost_uv: None,
             });
         };
-        let (hull, built) = mesh::rcs::build(&hull_name, &blob, &geometry, |c| c.mesh)?;
+        let (hull, built) = mesh::rcs::build(
+            &hull_name,
+            &blob,
+            &geometry,
+            &mut |path| archives.read_name(path).ok(),
+            |c| c.mesh,
+        )?;
         report.push(format!("{hull_name}: {}", built.describe()));
         return Ok(Livery {
             team: team.to_string(),

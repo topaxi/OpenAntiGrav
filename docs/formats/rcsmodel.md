@@ -33,7 +33,9 @@ just view data/images/hdfury-ps3-eu-dec.iso:PS3_GAME/USRDIR/DATA00.PSARC \
 | Vertex stride | **In no field of the file.** 14, 18 or 22, recovered four ways | 88 |
 | Where the stride is declared | Unknown, and **not** in the `.rcsmaterial` - see below | - |
 | Vertex normal | **`+6`, packed 11:11:10 signed, big-endian** | 88 |
-| The rest of a vertex | A tangent at stride 22 and a texture coordinate, both located; not decoded | - |
+| Texture coordinate | **The last four bytes, two big-endian halves** | 90 |
+| Texture | **The `.gtf` a material names at `+0x58`** | 92 |
+| The rest of a vertex | A tangent at stride 22, located; not decoded | - |
 | Chunk layouts | **Two**, selected by byte `+0x06`. All 643 files read | 88 |
 | Material index | **A chunk's `+0x20`**, resolved by name on a craft | 90 |
 | Which surfaces are see-through | **The low two bits of a material's `+0x10`** | 88 |
@@ -49,11 +51,20 @@ ending `531904 authored vertex normal(s)` is the file's own data, and one ending
 `lit off face normals computed from the triangles` is a derivation, which is the
 distinction [`CLAUDE.md`](../../CLAUDE.md) exists to keep.
 
-**The texture coordinate is located and not confirmed.** The last four bytes of
-every vertex read as two `f16` in a plausible range, and there is nothing to
-check that against until [`.gtf`](hd-status.md#what-is-genuinely-new) is read -
-so nothing consumes it, and it is not called a UV anywhere in the code. The
-bytes between the normal and it are partly identified; see below.
+**The texture coordinate is confirmed, and what confirmed it is a picture.**
+The last four bytes of every vertex are two big-endian halves. That reading had
+been *located* since the normals landed and deliberately not called a UV, because
+there was no oracle for one. [`.gtf`](hd-status.md#what-is-genuinely-new) being
+read supplied it: sampling Assegai's own textures through these coordinates
+renders the words "ASSEGAI DEVELOPMENTS" legibly along the hull, and no wrong
+offset or packing produces readable lettering. Confidence 90. The statistic
+behind it, over every vertex of both models: **99.8 %** of Assegai's 25,144 land
+in the unit square and 100 % are finite numbers; a circuit is looser as tiling
+makes it, at 80.0 % of Talon's Junction's 600,280 in the unit square and 98.5 %
+finite. The 1.5 % that decode to an infinity or a NaN are a real residue and are
+pinned to zero rather than let into a vertex buffer.
+
+The four bytes between the normal and it are partly identified; see below.
 
 ## A chunk comes in two layouts, and byte `+0x06` says which
 
@@ -552,27 +563,61 @@ because that is what separates the two families the disc actually uses:
   Pulse's three classes are a recovered fact about *Pulse*, and there is no
   evidence HD's equations are a subset of them.
 
-### What the renderer does with it, and what it does not
+### The texture a material paints with
 
-**A see-through chunk is not drawn at all**, and that is a stopgap with a
-written-down reversal condition rather than a decode.
+**Confidence 92**, and it is in the clear:
 
-The alpha a blend needs is in the [`.gtf`](hd-status.md#what-is-genuinely-new)
-texture, which is unread - 7,333 files and 2.4 GiB. Nothing else carries one:
-the four bytes at `+0x0a` were measured against the vertex-colour hypothesis and
-are not one, since no lane is `0xff`-dominant the way an alpha would be and on
-stride 22 the last is the bimodal `0`/`255` of a packed tangent's handedness.
+```text
+material +0x58  u32   file offset of a `.gtf` path - the texture
+material +0x78  u32   a second `.gtf` path, on the materials that carry one
+```
 
-So the three options were to draw these solid, to blend them at `alpha = 1.0`,
-or to leave them out - and the middle one is not a middle. Alpha-over at alpha 1
-paints exactly the same pixels as opaque while additionally dropping depth
-write, and additive would blow every glass panel to white.
+Every material of both models names a first texture - 4 of 4 on Assegai, 442 of
+442 on Talon's Junction - and they are the right ones by inspection:
+`WindscreenShape`'s material names `assegai_glass.gtf`, the circuit's name
+`talons_support_struts.gtf` and `tunnel_fx_diffuse.gtf`. Drawn through
+[`oag_formats::gtf`](hd-status.md#what-is-genuinely-new), all 442 of the
+circuit's decode.
 
-Between the other two the disc decides it, and the fraction left out is
-**4.3 % (`zone_4`) to 35.9 % (`talons_junction`)** of chunks across all 16
-circuits, so no circuit is mostly this. The load report says how many, and the
-condition to reverse it is exactly one thing: when `.gtf` supplies an alpha,
-these chunks are drawn again, blended with the class each already resolves to.
+**The second slot is not one thing, and the first sample said it was.** Assegai
+carries exactly two and both end `_n`, which reads as a normal map. Four
+materials off the circuit refute it outright:
+
+| material | first texture | second |
+| --- | --- | --- |
+| `diffuse_with_specular_from_alpha_n_vcol` | `assegai_tp_1024.gtf` | `assegai_n.gtf` |
+| `tunnel_fx_noalpha` | `tunnel_fx_diffuse.gtf` | `tunnel_fx_emissive.gtf` |
+| `clouds` | `clouds_new.gtf` | `cloud mask.gtf` |
+| `diffusewithalphachannel` | `holebaralpha.gtf` | an `lmaps/...-lmap.gtf` |
+
+A normal map, an emissive map, a coverage mask and a lightmap - one field, four
+uses, selected by the `.rcsmaterial`'s shader, which is compiled RSX microcode
+and is not read. **So nothing samples it**, and a surface whose coverage lives
+there paints solid: Talon's Junction's cloud plate is the one that shows.
+
+### What the renderer does with it
+
+**A see-through chunk is drawn blended, with the equation its material names.**
+`oag_render::mesh::rcs` puts it in `Model::transparent_draws` and sets
+`DrawCall::blend`, and the alpha comes from the `.gtf`'s own RGBA.
+
+That was not possible when this table was first read. With no texture there was
+no alpha, so `alpha = 1.0` made alpha-over paint exactly the opaque pixels while
+dropping depth write and additive blow every glass panel to white - and the
+stopgap was to *leave the chunk out*, an honest absence in place of a wrong
+picture. `.gtf` closed it; the stopgap is gone.
+
+**Two things still paint solid, both named rather than worked around:**
+
+1. **A material whose coverage is in the second texture**, the cloud plate above.
+   It is classified see-through and blended correctly, and its first texture has
+   no alpha to blend with.
+2. **A material whose `.gtf` does not decode.** `Texture::to_rgba` refuses the
+   RSX's Morton-swizzled layouts and cubemaps - 53 of the disc's 7,333 files -
+   and such a draw binds the renderer's white 1x1. It is deliberately **not**
+   blended, since blending a white 1x1 with depth write off is worse than
+   leaving it opaque, and `Report::untextured` counts it so a partly-textured
+   circuit cannot read as a working one.
 
 ## What is still open
 
@@ -583,10 +628,10 @@ Named explicitly, with what each would take.
    code. Three rules recover the number without it, so this is now a question
    about the format rather than a blocker. The remaining routes are
    disassembling a shader's microcode, or HD's own executable.
-2. **The texture coordinate**, which is located and unconfirmed: the last four
-   bytes read as two `f16` in a plausible range and there is no way to check
-   that until [`.gtf`](hd-status.md#what-is-genuinely-new) is read. Nothing
-   consumes it, and the code does not call it a UV.
+2. **What the second texture at a material's `+0x78` is for**, per material.
+   One slot with at least four uses - normal map, emissive map, coverage mask,
+   lightmap - and the selector is in the `.rcsmaterial`'s compiled shader.
+   Nothing samples it, so a surface whose coverage lives there paints solid.
 3. **What `+0x0a` holds on stride 18**, and what `83 XX` selects at all. The
    second used to be the lead on the first and is now ruled out: the field
    follows the width, not the byte. `XX` runs `07` to `11` and is the only part
@@ -620,10 +665,10 @@ Named explicitly, with what each would take.
    bits of the state word select - 17 distinct combinations disc-wide, none of
    them decoded. Reading a `.rcsmaterial`'s microcode or HD's own executable are
    the routes; nothing in this project has disassembled a PS3 binary.
-10. **The `.gtf` textures**, which is now the single thing standing between a
-    read circuit and a *drawn* one: it carries the alpha every see-through
-    surface's coverage comes from, and until it is read those surfaces are left
-    out rather than painted solid.
+10. **The 1.5 % of a circuit's texture coordinates that decode to an infinity
+    or a NaN.** Pinned to zero rather than let into a vertex buffer, and not
+    explained - it may be a handful of chunks at a wrong stride rather than
+    anything about the field.
 
 ## See also
 

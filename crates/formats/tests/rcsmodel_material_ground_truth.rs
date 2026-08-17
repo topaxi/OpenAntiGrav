@@ -216,6 +216,8 @@ fn the_unmapped_factor_pairs_are_few_and_named() {
             },
             src_factor: src,
             dst_factor: dst,
+            texture: String::new(),
+            second_texture: None,
         };
         match material.blend() {
             Blend::Opaque | Blend::Class(_) => mapped += 1,
@@ -443,4 +445,137 @@ fn a_third_of_a_circuits_chunks_are_see_through() {
         see_through * 4 > opaque,
         "this is not a rounding error on the picture"
     );
+}
+
+/// Every material names a `.gtf`, and the second slot is **not** one thing.
+///
+/// The first sample said "normal map" - Assegai's only two second textures are
+/// `assegai_n.gtf` and `assegai_glass_n.gtf`. Four more materials refute it, and
+/// this test pins the refutation so the name reading cannot come back.
+#[test]
+#[ignore]
+fn every_material_names_a_texture_and_the_second_slot_is_not_one_thing() {
+    let (_, ship) = match pair(PAIRS[0].0, PAIRS[0].1, PAIRS[0].2) {
+        Some(p) => p,
+        None => return,
+    };
+    let (_, track) = pair(PAIRS[2].0, PAIRS[2].1, PAIRS[2].2).expect("checked above");
+
+    for (label, blob, count) in [("assegai", &ship, 4usize), ("talons_junction", &track, 442)] {
+        let model = rcsmodel::Model::parse(blob).expect("the .rcsmodel parses");
+        assert_eq!(model.materials.len(), count);
+        let named = model
+            .materials
+            .iter()
+            .filter(|m| m.texture.ends_with(".gtf"))
+            .count();
+        let second = model
+            .materials
+            .iter()
+            .filter(|m| m.second_texture.is_some())
+            .count();
+        println!("  {label}: {named} of {count} name a texture, {second} name a second");
+        assert_eq!(named, count, "{label}: every material paints with a .gtf");
+    }
+
+    // The refutation itself, by name on the circuit: one slot, four uses.
+    let model = rcsmodel::Model::parse(&track).expect("parses");
+    let of = |leaf: &str| {
+        model
+            .materials
+            .iter()
+            .find(|m| {
+                m.name
+                    .rsplit('/')
+                    .next()
+                    .unwrap_or_default()
+                    .trim_end_matches(".rcsmaterial")
+                    == leaf
+            })
+            .map(|m| {
+                (
+                    m.texture.clone(),
+                    m.second_texture.clone().unwrap_or_default(),
+                )
+            })
+    };
+    for (material, first, second) in [
+        ("clouds", "clouds_new.gtf", "cloud mask.gtf"),
+        (
+            "tunnel_fx_noalpha",
+            "tunnel_fx_diffuse.gtf",
+            "tunnel_fx_emissive.gtf",
+        ),
+    ] {
+        let (a, b) = of(material).unwrap_or_else(|| panic!("{material} is on this circuit"));
+        assert!(a.ends_with(first), "{material}: {a}");
+        assert!(b.ends_with(second), "{material}: {b}");
+    }
+    let (_, lightmap) = of("diffusewithalphachannel").expect("the circuit has one");
+    assert!(
+        lightmap.contains("lmap"),
+        "a fourth use of the same slot, a lightmap: {lightmap}"
+    );
+}
+
+/// The last four bytes of a vertex are a texture coordinate.
+///
+/// **What confirms it is a picture, and the picture is now possible.** Sampling
+/// Assegai's own `.gtf` through these coordinates renders the words "ASSEGAI
+/// DEVELOPMENTS" legibly along the hull - lettering a wrong reading cannot
+/// produce, since any other offset or packing smears the atlas. What is asserted
+/// here is the statistic behind that: the pair lands in the unit square on
+/// essentially all of a craft's vertices, and mostly on a circuit's, where
+/// tiling legitimately runs outside it.
+#[test]
+#[ignore]
+fn the_last_four_bytes_of_a_vertex_are_a_texture_coordinate() {
+    let Some((_, ship)) = pair(PAIRS[0].0, PAIRS[0].1, PAIRS[0].2) else {
+        return;
+    };
+    let (_, track) = pair(PAIRS[2].0, PAIRS[2].1, PAIRS[2].2).expect("checked above");
+
+    for (label, blob, unit_bar, finite_bar) in [
+        ("assegai", &ship, 0.95, 0.999),
+        ("talons_junction", &track, 0.75, 0.97),
+    ] {
+        let model = rcsmodel::Model::parse(blob).expect("the .rcsmodel parses");
+        let (mut total, mut unit, mut finite) = (0usize, 0usize, 0usize);
+        for mesh in &model.meshes {
+            let Some(stride) = mesh.solve_stride_without_a_box(blob) else {
+                continue;
+            };
+            for sub in &mesh.submeshes {
+                let Ok(uvs) = mesh.texcoords(blob, sub, stride) else {
+                    continue;
+                };
+                for [u, v] in uvs {
+                    total += 1;
+                    if !u.is_finite() || !v.is_finite() {
+                        continue;
+                    }
+                    finite += 1;
+                    if (0.0..=1.0).contains(&u) && (0.0..=1.0).contains(&v) {
+                        unit += 1;
+                    }
+                }
+            }
+        }
+        let share = |k: usize| k as f32 / total as f32;
+        println!(
+            "  {label}: {total} vertices, {:.1} % finite, {:.1} % in the unit square",
+            100.0 * share(finite),
+            100.0 * share(unit)
+        );
+        assert!(
+            share(finite) >= finite_bar,
+            "{label}: {:.3} of coordinates are finite numbers",
+            share(finite)
+        );
+        assert!(
+            share(unit) >= unit_bar,
+            "{label}: {:.3} in the unit square",
+            share(unit)
+        );
+    }
 }
