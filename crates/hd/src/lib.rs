@@ -26,9 +26,16 @@
 //! `ByteOrder` constant and why `oag_formats::track::parse` takes no argument.
 //!
 //! Nothing here names a `.rcsmodel`, a `.gtf` or a `.bik` beyond the two logo
-//! reels the front-end XML names itself. All three formats are undecoded, and a
-//! table of paths into formats nothing reads would be a list of names rather
-//! than a measurement.
+//! reels the front-end XML names itself. A table of paths into formats nothing
+//! reads would be a list of names rather than a measurement - and that is still
+//! the reason for `.gtf`, still partly the reason for `.rcsmodel` (see
+//! [`rcsmodel.md`]), and **no longer the reason for `.bik`**: that container is
+//! read now ([`bik.md`]), and what keeps its paths out of this crate is instead
+//! that nothing plays an HD movie yet. See [`frontend`] for what that is
+//! waiting on.
+//!
+//! [`bik.md`]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/formats/bik.md
+//! [`rcsmodel.md`]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/formats/rcsmodel.md
 //!
 //! [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
 //! [`hd-status.md`]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/formats/hd-status.md

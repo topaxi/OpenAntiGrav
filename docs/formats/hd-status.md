@@ -55,6 +55,7 @@ render geometry lifted out of `.vex` into a PS3 container of its own.
 | Textures | **New.** `.gtf`, the PS3's own container |
 | Sound bank | `.bnk` present, unexamined |
 | [Music](#music-plain-mp3-declared-the-way-the-psp-titles-declare-theirs) | **New container, same declaration.** Plain MP3, named by the executable and declared as `PI_Music`; recovered and played |
+| [Video](bik.md) | **New, and the one payload that is not byte-swapped.** `.bik` replaces `.PMF`; header read on all 37 files, pictures through the same cache |
 
 **And most of HD's circuits are the PSP's circuits**, in the same world
 coordinates - see [the circuits are the PSP's](#the-circuits-are-the-psps).
@@ -575,9 +576,14 @@ rather than explained away.
 - **`.pvs`, `.pvspatch`, `.probes`** - one of each per circuit direction, 28
   apiece. `talons_junction/track.pvs` is 114 KiB against 19 `section` nodes, so
   it is a finer structure than the mask in the `.vex`, not the same table moved.
-- **`.bik`, `.stencilvolume`, `.svml`, `.xfx`, `.points2`, `.effectsettings`,
+- **`.stencilvolume`, `.svml`, `.xfx`, `.points2`, `.effectsettings`,
   `.envsettings`** - the last of these is plain text, a key/value list starting
   `"Lighting.Constant ambient color"=0.403922 0.392157 0.509804`.
+- **`.bik`** - the video, and no longer new to this build either: RAD's Bink 1
+  container, read on all 37 files and transcoded through the same cache the PSP
+  and PS2 movies use. See [bik](bik.md), and note the one thing on it that
+  contradicts this page's headline - a `.bik` is **little-endian**, because the
+  container is the PC authoring tool's rather than the console's.
 - **`.mp3`** - the music, and the one item on this list that is no longer new to
   this build. See below.
 

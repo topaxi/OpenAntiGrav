@@ -118,7 +118,7 @@ BASELINE = {
     "crates/game/tests/race_ground_truth.rs": 2387,
     "crates/formats/src/vex.rs": 1809,
     "crates/game/src/boot.rs": 2025,
-    "crates/game/src/movie.rs": 2200,
+    "crates/game/src/movie.rs": 1981,
     "crates/game/src/menu.rs": 2168,
     "crates/game/src/frontend.rs": 1995,
     "crates/render/src/psys.rs": 1956,

@@ -29,6 +29,7 @@
 
 #[cfg(feature = "av1")]
 pub mod av1;
+pub mod bik;
 pub mod byte_order;
 pub mod collision;
 pub mod entropy;

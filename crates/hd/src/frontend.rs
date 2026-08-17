@@ -158,10 +158,18 @@ pub mod names {
     /// alone here for the same reason a normaliser would be wrong - that is what
     /// the data says.
     ///
-    /// Bink, which nothing in this project decodes, so what is inside it is
-    /// unknown. Pure's dev/pub reel was identified by decoding it and matching
-    /// captured frames; nothing of that kind has been done here, and the name is
-    /// the whole of the evidence.
+    /// **Decoded on 2026-08-17, and the name and the content agree**: 531
+    /// frames of 1920x1080 at 59.94 Hz, 8.86 s, resolving out of black to a
+    /// card reading `STUDIO Liverpool`. This doc comment used to record that
+    /// the file was Bink, that nothing here decoded it, and that the name was
+    /// therefore the whole of the evidence; [`oag_formats::bik`] and
+    /// `crates/game/tests/hd_movie_ground_truth.rs` are what replaced that. See
+    /// [`bik.md`].
+    ///
+    /// What is **not** settled by decoding it is which reel plays - that is
+    /// still the question of which `skin.xml` the runtime loads, above.
+    ///
+    /// [`bik.md`]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/formats/bik.md
     pub const STUDIO_LOGO_MOVIE: &str = "Data/FE/Images/StudioLiverpool.bik";
 
     /// The other family's spelling, and the only one of the two that is in
