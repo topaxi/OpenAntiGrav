@@ -119,7 +119,36 @@ imprecise_flops = "allow"
 [profile.release]
 debug = 1
 
-# Behavioural verification runs the simulation for many thousands of ticks.
-# An unoptimised sim makes the verification loop unusable.
+# Behavioural verification runs the simulation for many thousands of ticks, and
+# the ground-truth tests push whole discs through our own decoders. An
+# unoptimised build makes both unusable.
+#
+# `package."*"` reaches dependencies *only* - never a workspace member - so the
+# crates carrying those loops have to be named one by one. Leaving them out is
+# not a small cost: naming them took `just test-data` from 11:27 to 6:35 and
+# halved its CPU time, and `.config/nextest.toml`'s ordering took it to 3:17
+# from there. See docs/architecture/workspace-layout.md for the measurement and
+# for which crates are deliberately *not* here.
 [profile.dev.package."*"]
+opt-level = 2
+
+# The simulation, driven for thousands of ticks per behavioural test.
+[profile.dev.package.oag-core]
+opt-level = 2
+[profile.dev.package.oag-physics]
+opt-level = 2
+[profile.dev.package.oag-ai]
+opt-level = 2
+[profile.dev.package.oag-race]
+opt-level = 2
+[profile.dev.package.oag-gameplay]
+opt-level = 2
+
+# The asset decode path: LZSS, the GS and GE texture swizzles, the `.vex` node
+# walk, and the sector-at-a-time read under all of them.
+[profile.dev.package.oag-disc]
+opt-level = 2
+[profile.dev.package.oag-formats]
+opt-level = 2
+[profile.dev.package.oag-assets]
 opt-level = 2

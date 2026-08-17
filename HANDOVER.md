@@ -51,10 +51,20 @@ appending a dated pass to it.
   committed `verification/scenarios/*.inputs` are what reproduce it.
 - **Check `git status` before assuming the tree is clean.** A whole milestone's
   work once sat uncommitted for a day.
-- **Gate status:** last measured green at **1,956 tests (2026-08-17)**, with
-  `fmt`, `clippy`, `check-docs` and `check-deps` all clean. Re-measure rather
-  than trusting the number here - `git stash && just test` is how the drift was
-  caught last time. **The four `oag-trace` failures this bullet used to warn
+- **Gate status:** last measured green at **2,043 tests (2026-08-17)** in 2.6s,
+  with `fmt`, `clippy`, `check-docs`, `check-deps`, `check-determinism` and
+  `check-size` all clean. Re-measure rather than trusting the number here -
+  `git stash && just test` is how the drift was caught last time.
+- **`just test-data` takes about 3:17, not 11:27.** If it takes eleven minutes
+  you are on a tree from before the build-profile fix: `[profile.dev.package."*"]`
+  never matched a workspace member, so our own decoders and the sim compiled at
+  `opt-level = 0`, and the suite additionally ran its multi-minute tests last.
+  Both are fixed in `Cargo.toml` and `.config/nextest.toml`; the measurement and
+  the reasoning are in
+  [workspace-layout.md](docs/architecture/workspace-layout.md#build-profiles).
+  **Do not "simplify" either file back:** the per-crate `opt-level` lines look
+  redundant next to the `"*"` glob and are not, and the nextest priorities look
+  cosmetic and are worth half the win. **The four `oag-trace` failures this bullet used to warn
   about are gone**: the disc-backed `oag-game` suite is **656 of 656, 0 skipped**
   under `--run-ignored all` (re-measured 2026-08-17, twice - after the
   lap-clock/stall-rescue work and again after the HD byte-order pass; it was 652
@@ -76,7 +86,19 @@ appending a dated pass to it.
   alone and a pass in a second full sweep of the identical tree. Neither has
   been diagnosed. **Suspect the transcode's environment, and re-run before
   believing either**; a single red in that file is not a signal about the code
-  under test. Separately, and still true, **one failure is the
+  under test. **2026-08-17 adds the shape of it, still not the cause: the
+  failure tracks machine *load*, not a cold cache.** The same test failed again
+  in a full sweep - panicking at `ps2_source_ground_truth.rs:657` on
+  `movie.frames` being `None`, i.e. `.expect("a picture")` - and then passed
+  **cache-cold and alone in 117s** after `/tmp/oag-ps2-progress-ground-truth`
+  was deleted outright, so an absent cache is not the trigger. The transcode
+  self-parallelises (242s user over 117s wall), which is why it is the test that
+  suffers when 16 cores are already full: it took 489s contended and 135s
+  scheduled first. Reproducing it means reproducing the contention, not the
+  cache state. Note also that `refresh: true` is load-bearing there - the
+  assertion is about what a *transcode* reports, so it re-encodes 950 frames
+  every run whatever is cached, and the "(once; cached after this)" line it
+  prints is misleading about itself. Separately, and still true, **one failure is the
   machine rather than the code**:
   `oag-disc::ground_truth listing_matches_chdman_and_the_reference_iso` shells
   out to `chdman extractdvd` into `/tmp/oag-ground-truth.iso`, `/tmp` here is a
