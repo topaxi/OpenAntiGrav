@@ -4,7 +4,39 @@
 //! the display the window is going onto, which the settings menu asks again
 //! every time it is changed - see `Session::apply_window`.
 
-use oag_game::{display, perf};
+use oag_game::{display, icon, perf};
+
+/// The window's Wayland `app_id` and X11 `WM_CLASS` - the same field on both
+/// backends' shared `PlatformSpecificWindowAttributes`, so one call to
+/// `with_name` sets it for either. Matches `packaging/appimage/oag-game.desktop`'s
+/// own filename (its desktop file ID) and `Icon=` key, and what
+/// `just install-desktop-file` writes for a source checkout: winit's own docs
+/// for `with_name` say the general name "should match the `.desktop` file
+/// distributed with your program", because a Wayland compositor's taskbar has
+/// no window icon to read at all (see [`window_icon`]'s doc) - it looks the
+/// app up by this id and shows whatever icon that `.desktop` entry names.
+pub(crate) const APP_ID: &str = "oag-game";
+
+/// The window/taskbar icon, rasterised fresh every launch from
+/// `assets/icons/64x64.svg` via [`oag_game::icon`].
+///
+/// **Only reaches the picture on X11 and Windows.** Wayland has no protocol
+/// for a window to hand the compositor an icon - `winit`'s own Wayland
+/// backend implements `set_window_icon` as an empty function - so on Wayland
+/// (this includes niri) a taskbar's icon comes from the installed `.desktop`
+/// entry keyed by [`APP_ID`] instead; see `just install-desktop-file`. Set
+/// here anyway because it is free, it is what alt-tab and the titlebar read
+/// everywhere it does apply, and a `cfg`-gated version that skipped Wayland
+/// would be a second thing to keep in sync with winit's own platform support.
+pub(crate) fn window_icon() -> winit::window::Icon {
+    let icon::Rgba {
+        width,
+        height,
+        pixels,
+    } = icon::rasterize(64);
+    winit::window::Icon::from_rgba(pixels, width, height)
+        .expect("assets/icons/64x64.svg rasterizes to a 64x64 buffer, which from_rgba accepts")
+}
 
 /// What winit is asked for, for a mode and a chosen screen.
 ///

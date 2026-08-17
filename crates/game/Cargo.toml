@@ -54,6 +54,10 @@ clap.workspace = true
 bytemuck = { workspace = true, features = ["derive"] }
 wgpu = "30"
 winit = "0.30"
+# Rasterises the SVGs under `assets/icons/` into the window/taskbar icon - see
+# `oag_game::icon`. No `<text>` node in either source SVG, so the `text`
+# feature (and the fontdb/rustybuzz/ttf-parser it drags in) is off.
+resvg = { version = "0.48", default-features = false }
 pollster = "0.4"
 toml = "1"
 dirs = "6"

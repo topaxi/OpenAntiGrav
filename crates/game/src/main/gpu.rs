@@ -10,7 +10,7 @@ use winit::event_loop::ActiveEventLoop;
 use winit::window::Window;
 
 use crate::hints::TITLE;
-use crate::window::{centred_on, choose_monitor, fullscreen, present_modes};
+use crate::window::{APP_ID, centred_on, choose_monitor, fullscreen, present_modes, window_icon};
 
 /// The window and the GPU objects, which both stages draw through.
 ///
@@ -150,7 +150,19 @@ impl Gpu {
             .with_title(TITLE)
             .with_inner_size(winit::dpi::LogicalSize::new(size.width, size.height))
             .with_resizable(borderless)
+            .with_window_icon(Some(window_icon()))
             .with_fullscreen(fullscreen(settings.window_mode, monitor.clone()));
+        // The Wayland/X11 app id - see `window::APP_ID`'s doc for why this is
+        // the half of the icon that actually reaches a Wayland taskbar.
+        // `WindowAttributesExtWayland` rather than the X11 twin because both
+        // write the same underlying field, so importing either sets it on
+        // both backends; cfg-gated because the trait only exists at all when
+        // winit is built with a Linux backend.
+        #[cfg(target_os = "linux")]
+        {
+            use winit::platform::wayland::WindowAttributesExtWayland;
+            attributes = attributes.with_name(APP_ID, APP_ID);
+        }
         // Borderless carries the choice in the fullscreen request; windowed has
         // nothing to carry it, so the window is placed on the screen instead.
         // Asked for at creation rather than moved afterwards, which would open

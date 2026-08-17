@@ -89,6 +89,23 @@ use crate::session::Shell;
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
+    // Ahead of settings and the disc search, deliberately: rasterising the
+    // icon needs neither, and `just install-desktop-file` /
+    // `scripts/build-appimage.sh` both call this on machines that may have no
+    // disc image configured at all. See `oag_game::icon` and
+    // `crate::window::window_icon`, the winit-facing use of the same function.
+    if let Some(path) = &cli.write_icon {
+        let oag_game::icon::Rgba {
+            width,
+            height,
+            pixels,
+        } = oag_game::icon::rasterize(cli.icon_size);
+        let png = oag_formats::png::encode_rgba(width, height, &pixels);
+        std::fs::write(path, png).with_context(|| format!("writing {}", path.display()))?;
+        println!("wrote {}x{} {}", width, height, path.display());
+        return Ok(());
+    }
+
     // Loaded (and, on first run or a missing key, written back complete) before
     // anything else: a bad value in the file should fail immediately, not eight
     // seconds of intro later.

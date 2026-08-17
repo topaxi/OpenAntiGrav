@@ -134,3 +134,15 @@ fn a_missing_tick_is_an_error_that_names_the_range() {
     let error = pose_from_trace(&path, 99, false, None).expect_err("tick 99 is not there");
     assert!(error.to_string().contains("no tick 99"), "{error}");
 }
+
+/// `--icon-size` is `requires = "write_icon"` with its own `default_value_t`,
+/// which is the exact clap footgun where a defaulted arg counts as "present"
+/// for requirement validation and every ordinary run - none of which pass
+/// `--write-icon` - refuses to start. Clap 4 scopes `requires` to arguments
+/// actually seen on the command line, so this passes today; it exists to
+/// catch a clap upgrade (or a copy-pasted `requires` on some future flag)
+/// that changes that.
+#[test]
+fn the_icon_flags_do_not_make_themselves_required() {
+    Cli::try_parse_from(["oag-game"]).expect("no flags at all must still parse");
+}

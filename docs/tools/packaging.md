@@ -31,8 +31,11 @@ The work happens in [`scripts/build-appimage.sh`](../../scripts/build-appimage.s
 which assembles an AppDir from [`packaging/appimage/`](../../packaging/appimage/)
 and hands it to `appimagetool`. `appimagetool` is downloaded into `data/tools/`
 on first use, next to the Ghidra extensions - gitignored, like everything else
-under `data/`. Nothing binary is committed: even the icon is generated, by
-[`scripts/appimage-icon.py`](../../scripts/appimage-icon.py).
+under `data/`. Nothing binary is committed: even the icon is generated, by the
+freshly built binary's own `--write-icon`, which rasterises
+[`assets/icons/64x64.svg`](../../assets/icons/64x64.svg) through `oag_game::icon`
+- the same code path `main/window.rs` uses for the live window/taskbar icon, so
+the two can never draw two different pictures.
 
 ## Why AppImage, and not Flatpak
 
@@ -71,6 +74,7 @@ almost entirely static Rust:
 $ ldd target/release/oag-game
     linux-vdso.so.1
     libudev.so.1 => /usr/lib/libudev.so.1
+    libasound.so.2 => /usr/lib/libasound.so.2
     libgcc_s.so.1 => /usr/lib/libgcc_s.so.1
     libm.so.6 => /usr/lib/libm.so.6
     libc.so.6 => /usr/lib/libc.so.6
@@ -83,6 +87,14 @@ $ ldd target/release/oag-game
   `gilrs` reads gamepads through. It talks to the running `systemd-udevd` and
   must be the host's copy; SteamOS has it, as does every distribution that boots
   with systemd. It is on the AppImage excludelist for exactly this reason.
+- **`libasound.so.2`** is what `cpal` (`oag-audio`'s output device) plays sound
+  through. Host-owned for the same reason as `libudev`: it is where
+  PulseAudio/PipeWire's own ALSA plugin lives, so a bundled copy would bypass
+  whatever the host's audio server actually routes through, and it is on the
+  AppImage excludelist alongside it. Needs `libasound2-dev` at *build* time
+  only, for its headers and `alsa.pc` - `packaging/appimage/Containerfile`
+  installs it for the `--container` build the same way it installs
+  `libudev-dev`.
 - **Vulkan and the windowing libraries are not linked at all.** `wgpu` loads
   `libvulkan.so.1` and `winit` loads `libwayland-client`/`libX11` with `dlopen`
   at runtime, so they come from the host - which is required, not merely
@@ -202,6 +214,43 @@ floor clears any SteamOS 3.x that has seen an update, but the number gets
 *confirmed* by step 4 of
 [running it on a Steam Deck](#running-it-on-a-steam-deck): run it from a
 terminal, and either it starts or it names the version it wanted.
+
+## The window/taskbar icon
+
+[`assets/icons/64x64.svg`](../../assets/icons/64x64.svg) is the one source for
+every place this project's icon appears; `oag_game::icon` rasterises it and
+nothing hand-redraws it a second time. Two consumers, one function:
+
+- `main/window.rs`'s `window_icon` hands winit an `Icon` at window creation
+  (`main/gpu.rs`), which reaches the titlebar, alt-tab and, **on X11 only**,
+  the taskbar.
+- `oag-game --write-icon FILE --icon-size N` rasterises the same SVG to a
+  PNG and exits, touching no disc and no window. `scripts/build-appimage.sh`
+  and `scripts/install-desktop-file.sh` both call it.
+
+**Wayland has no window-icon protocol**, so `winit`'s Wayland backend
+implements `set_window_icon` as a no-op (checked directly against its
+source) - a taskbar under niri, or any other Wayland compositor, never sees
+the call above at all. What it reads instead is the window's app_id
+(`main/gpu.rs` sets it to `oag-game` via `with_name`, the same field X11's
+`WM_CLASS` uses) looked up against an **installed** `.desktop` entry, whose
+`Icon=` key is then resolved through the user's icon theme. A packaged
+AppImage installs that entry as part of assembling the AppDir (see
+[what is bundled](#what-is-bundled)); `cargo run`/`just play` out of a
+checkout installs nothing, so a Wayland taskbar has nothing to resolve the
+running game's app_id against until you run:
+
+```sh
+just install-desktop-file
+```
+
+which builds a release binary if one is not already there, writes
+`oag-game.png` at 64px and 256px into
+`~/.local/share/icons/hicolor/*/apps/`, and writes
+`~/.local/share/applications/oag-game.desktop` with `Exec=` pointing at the
+absolute path of the binary it just built (there is no `oag-game` on `PATH`
+outside an AppImage's own mount). Safe to re-run after every rebuild; safe to
+remove by deleting the files it prints at the end.
 
 ## Where the disc image comes from
 

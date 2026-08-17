@@ -191,6 +191,12 @@ appimage *ARGS:
 appimage-portable *ARGS:
     ./scripts/build-appimage.sh --container {{ARGS}}
 
+# Install a .desktop entry and icon for this checkout into ~/.local/share, so a
+# Wayland taskbar has something to resolve the window's app_id against - see
+# docs/tools/packaging.md and scripts/install-desktop-file.sh
+install-desktop-file *ARGS:
+    ./scripts/install-desktop-file.sh {{ARGS}}
+
 # View assets straight from a disc image
 view *ARGS:
     cargo run -q -p oag-view -- {{ARGS}}

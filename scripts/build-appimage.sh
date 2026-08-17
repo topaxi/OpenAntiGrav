@@ -21,7 +21,10 @@
 #                so the AppImage also loads on a distribution older than this
 #                one - which is the whole point on a Steam Deck. Needs podman or
 #                docker; see docs/tools/packaging.md#glibc.
-#   --binary     Package a binary built elsewhere. Implies --skip-build.
+#   --binary     Package a binary built elsewhere. Implies --skip-build. Must
+#                run on this host: the icon step below now invokes it
+#                directly (--write-icon), so a binary for another OS/arch
+#                needs its icon supplied some other way.
 #
 # Environment:
 #   APPIMAGETOOL      appimagetool to use. Default: downloaded into data/tools/.
@@ -150,7 +153,11 @@ install -m 644 "$project_root/packaging/appimage/oag-game.desktop" \
 install -m 644 "$app_dir/oag-game.desktop" \
     "$app_dir/usr/share/applications/oag-game.desktop"
 
-python3 "$project_root/scripts/appimage-icon.py" "$app_dir/oag-game.png" --size 256
+# The same rasterizer `main/window.rs` uses for the live window icon, so the
+# taskbar icon a packaged build installs and the one the window shows at
+# startup can never drift apart the way the old hand-drawn chevron did. See
+# `oag_game::icon` and docs/tools/packaging.md.
+"$binary" --write-icon "$app_dir/oag-game.png" --icon-size 256
 install -m 644 "$app_dir/oag-game.png" \
     "$app_dir/usr/share/icons/hicolor/256x256/apps/oag-game.png"
 # appimagetool takes .DirIcon as the thumbnail; a copy rather than a symlink so
@@ -175,13 +182,14 @@ echo "OK: the AppDir is the engine and nothing else"
 
 step "Runtime libraries"
 
-# Nothing is bundled on purpose. What the binary links is libc, libm, libgcc_s
-# and libudev, every one of which is either part of the base system or, in
-# libudev's case, the host's own device manager - the AppImage excludelist names
-# all of them for the same reason. Vulkan and the windowing libraries are
-# dlopen'd by wgpu and winit at runtime and must come from the host, because a
-# bundled loader cannot talk to the host's graphics driver. See
-# docs/tools/packaging.md.
+# Nothing is bundled on purpose. What the binary links is libc, libm, libgcc_s,
+# libudev and libasound, every one of which is either part of the base system
+# or, in libudev's and libasound's case, host-owned - the device manager and
+# the ALSA stack (mixer settings, PulseAudio/PipeWire's own ALSA plugin) -
+# and the AppImage excludelist names all of them for the same reason. Vulkan
+# and the windowing libraries are dlopen'd by wgpu and winit at runtime and
+# must come from the host, because a bundled loader cannot talk to the host's
+# graphics driver. See docs/tools/packaging.md.
 ldd "$app_dir/usr/bin/oag-game" | sed 's/^/  /'
 
 floor="$(objdump -T "$app_dir/usr/bin/oag-game" \
