@@ -230,3 +230,64 @@ makes replays and golden tests straightforward.
 verification runs the simulation for many thousands of ticks; a fully
 unoptimised build makes that loop too slow to iterate on, while keeping our own
 crates unoptimised preserves debuggability.
+
+### `package."*"` does not reach a workspace member
+
+The glob matches **dependencies only**. From 62b4c44 (2026-07-26), where the
+override was introduced, until this change, that made the paragraph above false
+of the crates it was written for: `oag-physics` and `oag-core` carry
+the sim loop, `oag-formats` and `oag-disc` carry the decoders, and all four
+compiled at `opt-level = 0` in every `cargo build`, `cargo run` and `cargo test`.
+Only the third-party crates around them were optimised.
+
+Verified rather than assumed, in a two-member scratch workspace: with
+`[profile.dev.package."*"] opt-level = 2` and nothing else, `cargo build -v`
+passes **no** `-C opt-level` flag to either member. Adding
+`[profile.dev.package.<member>]` does apply it, to the lib and to the `--test`
+harness alike.
+
+So the crates carrying the heavy loops are named one by one in `Cargo.toml`. The
+split is by what the loop is, not by crate ownership:
+
+| optimised | left at `opt-level = 0` |
+| --- | --- |
+| `oag-core`, `oag-physics`, `oag-ai`, `oag-race`, `oag-gameplay` - the sim, driven for thousands of ticks per behavioural test | `oag-render`, `oag-game`, `oag-view`, `oag-input`, `oag-audio` |
+| `oag-disc`, `oag-formats`, `oag-assets` - LZSS, the GS and GE texture swizzles, the `.vex` node walk, and the sector-at-a-time read under them | `oag-title`, `oag-pulse`, `oag-pure`, `oag-hd`, `oag-trace`, `oag-tools` |
+
+The right-hand column is where a debugger actually gets pointed, so it keeps the
+debuggability the paragraph above is about.
+
+Measured on `just test-data`, 16 cores, 2,323 tests, all images present, warm
+page cache, three full runs of the identical tree:
+
+| | wall | test phase | CPU | cores busy | `difficulty_ground_truth` |
+| --- | --- | --- | --- | --- | --- |
+| before | 11:27 | 686s | 3,253s | 4.1 of 16 | 600s |
+| `opt-level` only | 6:35 | 393s | 1,586s | 4.1 of 16 | 149s |
+| + `nextest.toml` ordering | **3:17** | **196s** | 1,508s | 7.9 of 16 | 69s |
+
+The `opt-level` half is the CPU saving - it halves the work. The ordering half
+spends what is left on more cores at once, and buys almost as much wall clock
+again without making anything faster. Both are needed; neither is most of it.
+
+The four `matches_the_committed_reference` determinism tests - `oag-core`,
+`oag-ai`, `oag-gameplay`, `oag-physics` - pass unchanged at `opt-level = 2`,
+which is the check that matters before touching this: see
+[determinism](determinism.md).
+
+### The suite is tail-bound, so ordering is worth as much as speed
+
+1,508s of work over 16 cores would finish in about 95s. The gap is shape, not
+throughput: a dozen ground-truth tests take minutes and the other ~2,300 take
+milliseconds, so in the default order the run *ends* with a few multi-minute
+tests alone on an idle machine. `.config/nextest.toml` gives the ground-truth
+binaries a scheduling priority, so they start first and the cheap tests fill in
+around them.
+
+The floor under that is one test: `oag-game::ps2_source_ground_truth`'s
+`an_uncapped_transcode_still_reports_a_total_to_divide_by` transcodes 950 frames
+of the PS2 intro, and its `refresh: true` is load-bearing - the assertion is
+about the progress a *transcode* reports, so a cache hit would report nothing.
+It takes 117s alone and 135s scheduled first. Nothing above gets `just test-data`
+much below that, which is why it carries the highest priority in that file: it
+has to start at t=0 or it *is* the tail.
