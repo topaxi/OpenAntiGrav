@@ -19,7 +19,7 @@
 //! against, and the one that made `docs/formats/psarc.md`'s per-entry digest
 //! check worth writing.
 //!
-//! Seven claims, in order of how much they would cost to get wrong:
+//! Nine claims, in order of how much they would cost to get wrong:
 //!
 //! 1. **Every `Mesh` node's hash resolves to a chunk.** The link is the whole
 //!    reason the two files can be read together at all.
@@ -40,8 +40,14 @@
 //!    99.5 % of every model's vertices, and agreeing with an oracle the file
 //!    does not state - the area-weighted average of the faces at each vertex.
 //! 7. **What a vertex carries follows the stride**, not the `83 XX` descriptor
-//!    byte. A negative result, and the only one here: the byte was the obvious
-//!    candidate for naming the field set and it names nothing.
+//!    byte. A negative result: the byte was the obvious candidate for naming
+//!    the field set and it names nothing.
+//! 8. **There is no shared props model**, so the 56 nodes that address no chunk
+//!    are not waiting in one. Another negative result, and it closes a
+//!    hypothesis this format page carried from the day it was written.
+//! 9. **How much of the disc this reader reads** - 419 files of 643, with the
+//!    224 failures all one shape. A ratchet, because every other number here
+//!    comes from three files.
 
 use std::path::{Path, PathBuf};
 
@@ -127,6 +133,11 @@ fn mesh_nodes(blob: &[u8]) -> Vec<(String, u32, [f32; 3], [f32; 3])> {
         })
         .collect()
 }
+
+/// A `Mesh` node that found no chunk: its name, its hash, and the box it
+/// authors - which is the only thing that can say whether a chunk found
+/// elsewhere is the same mesh.
+type Orphan = (String, u32, ([f32; 3], [f32; 3]));
 
 /// The widest axis of a point set.
 fn span(points: &[[f32; 3]]) -> f32 {
@@ -621,6 +632,238 @@ fn the_field_after_the_normal_follows_the_stride_and_not_the_descriptor_byte() {
     assert!(
         checked >= 8,
         "only {checked} groups were big enough to measure"
+    );
+}
+
+/// Claim 8: the 56 `Mesh` nodes that address no chunk in their own circuit are
+/// **not** waiting in a shared props file, and 38 of them are nowhere on the
+/// disc at all.
+///
+/// **A negative result, and it closes a hypothesis this page had carried since
+/// the format was read.** `rcsmodel.md` recorded "a shared props archive
+/// elsewhere on the disc is the obvious guess and has not been looked for". It
+/// has now been looked for and it does not exist: every `.rcsmodel` under
+/// `/data/environments/` is a circuit's own `track`, its `track_reversed`, or a
+/// 128-byte `padreplacement` with no meshes in it.
+///
+/// What the sweep did find is stranger and is why this is a test rather than a
+/// note. **18 of the 56 hashes are carried by *other circuits'* model files** -
+/// the sky traffic (`Skycar_1Shape`, `tanker1aShape`, `shipintersteller1Shape`)
+/// by `amphiseum` and `tech_de_ra`, and eight `pCube*` nodes by three circuits
+/// that share nothing else with Talon's Junction. Fetching them across files
+/// would be wrong as often as right: **13 of the 18 donor chunks fill the box
+/// the node itself authors and 5 do not**, and without that box there is no way
+/// to tell. So nothing is wired, the nodes stay undrawn, and the load report
+/// keeps saying so.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn the_nodes_that_address_no_chunk_are_not_in_a_shared_props_file() {
+    let Some((blob, model_blob)) = pair(
+        "DATA00.PSARC",
+        "/data/environments/talons_junction/track.vex",
+        "/data/environments/talons_junction/track.rcsmodel",
+    ) else {
+        return;
+    };
+    let model = rcsmodel::Model::parse(&model_blob).expect("the .rcsmodel parses");
+
+    // The circuit's own unresolved nodes, with the box each one authors.
+    let unresolved: Vec<Orphan> = mesh_nodes(&blob)
+        .into_iter()
+        .filter(|(_, hash, ..)| model.mesh(*hash).is_none())
+        .map(|(name, hash, min, max)| (name, hash, (min, max)))
+        .collect();
+    assert_eq!(
+        unresolved.len(),
+        56,
+        "the shortfall this test is about changed"
+    );
+
+    // Every `.rcsmodel` on the disc, and where each wanted hash turns up.
+    let image = image().expect("checked by `pair`");
+    let mut donors: std::collections::BTreeMap<u32, Vec<String>> = Default::default();
+    let (mut files, mut chunks, mut unparsed) = (0usize, 0usize, 0usize);
+    let mut environment_models: std::collections::BTreeSet<String> = Default::default();
+    for archive in [
+        "DATA00", "DATA01", "DATA02", "DATA03", "DATA04", "DATA05", "DATA06",
+    ] {
+        let spec = format!("{}:PS3_GAME/USRDIR/{archive}.PSARC", image.display());
+        let mut open = oag_assets::psarc::Archive::open(&spec).expect("the archive opens");
+        let paths: Vec<String> = open
+            .paths()
+            .iter()
+            .filter(|p| p.ends_with(".rcsmodel"))
+            .cloned()
+            .collect();
+        for path in paths {
+            if let Some(rest) = path.strip_prefix("/data/environments/") {
+                // The directory, not the file name: a shared props model would
+                // be the one that does not sit under a circuit's own folder.
+                environment_models.insert(rest.split('/').next().unwrap_or("").to_string());
+            }
+            let Ok(bytes) = open.read_path(&path) else {
+                continue;
+            };
+            let Ok(m) = rcsmodel::Model::parse(&bytes) else {
+                unparsed += 1;
+                continue;
+            };
+            files += 1;
+            chunks += m.meshes.len();
+            for mesh in &m.meshes {
+                if unresolved.iter().any(|(_, h, _)| h == &mesh.hash) {
+                    donors
+                        .entry(mesh.hash)
+                        .or_default()
+                        .push(format!("{archive}:{path}"));
+                }
+            }
+        }
+    }
+    println!(
+        "indexed {files} .rcsmodel file(s) and {chunks} chunk(s), {unparsed} did not parse; \
+         /data/environments/ holds {} directory(ies): {environment_models:?}",
+        environment_models.len()
+    );
+
+    // 1. **There is no shared props model**, because every `.rcsmodel` under
+    //    `/data/environments/` sits in a circuit's own directory. 16 circuits,
+    //    16 directories, and no seventeenth for anything they have in common.
+    assert_eq!(
+        environment_models.len(),
+        16,
+        "/data/environments/ has a directory that is not one of the 16 \
+         circuits, which is where a shared props model would be"
+    );
+
+    // 2. Some of the wanted hashes are in other circuits' models.
+    let elsewhere = unresolved
+        .iter()
+        .filter(|(_, hash, _)| donors.contains_key(hash))
+        .count();
+    println!(
+        "{elsewhere} of {} unresolved nodes resolve in another circuit's model",
+        unresolved.len()
+    );
+    assert!(
+        (10..=30).contains(&elsewhere),
+        "{elsewhere} is outside the range this finding was measured at"
+    );
+
+    // 3. And fetching them would be wrong as often as right.
+    let (mut fits, mut checked) = (0usize, 0usize);
+    for (name, hash, bounds) in &unresolved {
+        let Some(where_) = donors.get(hash) else {
+            continue;
+        };
+        let spec = &where_[0];
+        let (archive, path) = spec.split_once(':').expect("archive:path");
+        let spec = format!("{}:PS3_GAME/USRDIR/{archive}.PSARC", image.display());
+        let mut open = oag_assets::psarc::Archive::open(&spec).expect("the archive opens");
+        let bytes = open.read_path(path).expect("the donor reads");
+        let m = rcsmodel::Model::parse(&bytes).expect("the donor parses");
+        let donor = m.mesh(*hash).expect("the hash that put it in this list");
+        checked += 1;
+        if donor.solve_stride(&bytes, *bounds, TOLERANCE).is_some() {
+            fits += 1;
+        } else {
+            println!("  {name} ({hash:#010x}) does not fill its node's box in {path}");
+        }
+    }
+    println!("{fits} of {checked} donor chunks fill the box the node authors");
+    assert!(
+        fits < checked,
+        "every donor chunk fits, which would make cross-file resolution safe \
+         and this test's conclusion wrong"
+    );
+    assert!(
+        fits > 0,
+        "no donor chunk fits, so none of them is the same mesh"
+    );
+}
+
+/// Claim 9: how much of the disc this reader actually reads.
+///
+/// **419 of 643, and the 224 that fail all fail the same way.** Recorded as a
+/// ratchet rather than left implicit, because every other test in this file
+/// reads three files and this page's claims are phrased about 643.
+///
+/// What is *not* wrong on the failures, which is what makes them a bounded
+/// next job rather than a mystery:
+///
+/// - The version word is `0x000a0000` on **643 of 643**, so the claim on
+///   `docs/formats/rcsmodel.md` holds across the whole disc.
+/// - The header arithmetic - `+0x04 == +0x20 + count * 4`, the invariant the
+///   directory layout rests on - holds on **643 of 643** too, failures
+///   included. So the directory is read correctly everywhere.
+/// - Every failure is `OutOfBounds` on *the submesh descriptors*: the count at
+///   a chunk's `+0x50` reads as hundreds or thousands, putting the descriptors
+///   far past the end of a file that is often only a few kilobytes.
+///
+/// So the chunk header is what differs, on small models - billboards, the
+/// aurora, the weapons - and not on the circuits and craft this project
+/// currently draws. `aurora.rcsmodel` is the smallest worked case: 1,236 bytes,
+/// one mesh, a chunk offset of `0x3a0` whose `+0x50` reads 544.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn two_thirds_of_the_discs_models_parse_and_the_rest_fail_one_way() {
+    let Some(image) = image() else {
+        return;
+    };
+    let (mut total, mut parsed, mut versioned, mut header_ok) = (0usize, 0usize, 0usize, 0usize);
+    let mut errors: std::collections::BTreeMap<&'static str, usize> = Default::default();
+    for archive in [
+        "DATA00", "DATA01", "DATA02", "DATA03", "DATA04", "DATA05", "DATA06",
+    ] {
+        let spec = format!("{}:PS3_GAME/USRDIR/{archive}.PSARC", image.display());
+        let mut open = oag_assets::psarc::Archive::open(&spec).expect("the archive opens");
+        let paths: Vec<String> = open
+            .paths()
+            .iter()
+            .filter(|p| p.ends_with(".rcsmodel"))
+            .cloned()
+            .collect();
+        for path in paths {
+            let bytes = open.read_path(&path).expect("the entry reads");
+            total += 1;
+            if bytes.len() >= 0x40 {
+                let big = oag_formats::ByteOrder::Big;
+                versioned += usize::from(big.u32(&bytes, 0) == rcsmodel::VERSION);
+                let count = big.u32(&bytes, 0x1c) as usize;
+                header_ok += usize::from(
+                    big.u32(&bytes, 0x04) as usize == big.u32(&bytes, 0x20) as usize + count * 4,
+                );
+            }
+            match rcsmodel::Model::parse(&bytes) {
+                Ok(_) => parsed += 1,
+                Err(rcsmodel::Error::OutOfBounds { what, .. }) => {
+                    *errors.entry(what).or_default() += 1;
+                }
+                Err(_) => *errors.entry("something else").or_default() += 1,
+            }
+        }
+    }
+    println!(
+        "{parsed} of {total} .rcsmodel files parse; {versioned} carry the version word, \
+         {header_ok} satisfy the header arithmetic; failures: {errors:?}"
+    );
+    assert_eq!(
+        versioned, total,
+        "the version claim is disc-wide, or it is not"
+    );
+    assert_eq!(
+        header_ok, total,
+        "the directory layout is disc-wide, or the failures are not only in the chunk header"
+    );
+    assert_eq!(
+        errors.keys().collect::<Vec<_>>(),
+        vec![&"the submesh descriptors"],
+        "the failures stopped being one shape, which changes what fixing them costs"
+    );
+    // A ratchet: this may rise and must not fall.
+    assert!(
+        parsed >= 419,
+        "{parsed} of {total} parse, down from the 419 measured on 2026-08-17"
     );
 }
 

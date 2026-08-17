@@ -31,6 +31,7 @@ just view data/images/hdfury-ps3-eu-dec.iso:PS3_GAME/USRDIR/DATA00.PSARC \
 | Where the stride is declared | Unknown, and **not** in the `.rcsmaterial` - see below | - |
 | Vertex normal | **`+6`, packed 11:11:10 signed, big-endian** | 88 |
 | The rest of a vertex | A tangent at stride 22 and a texture coordinate, both located; not decoded | - |
+| How much of the disc reads | **419 of 643 files.** The other 224 all fail the same way | - |
 
 ## What is decoded, and what is not
 
@@ -47,6 +48,31 @@ every vertex read as two `f16` in a plausible range, and there is nothing to
 check that against until [`.gtf`](hd-status.md#what-is-genuinely-new) is read -
 so nothing consumes it, and it is not called a UV anywhere in the code. The
 bytes between the normal and it are partly identified; see below.
+
+## 224 of 643 files do not parse, and they all fail the same way
+
+**Stated here because every other number on this page comes from three files.**
+Measured across all seven archives by
+`two_thirds_of_the_discs_models_parse_and_the_rest_fail_one_way`:
+
+| | of 643 |
+| --- | ---: |
+| Version word is `0x000a0000` | **643** |
+| Header arithmetic `+0x04 == +0x20 + count * 4` holds | **643** |
+| Parses to the end | 419 |
+| Fails, all on *the submesh descriptors* | 224 |
+
+So the container header and the mesh directory are read correctly on the whole
+disc, and what differs is the **chunk header**: the submesh count at a chunk's
+`+0x50` reads as hundreds or thousands and puts the descriptors far past the end
+of a file that is often a few kilobytes. The failures are the small models -
+billboards, the aurora, the weapons - not the circuits and craft this project
+draws, which is why nothing visible is missing and the shortfall was invisible
+until it was counted.
+
+`aurora.rcsmodel` is the smallest worked case: 1,236 bytes, one mesh, a chunk
+offset of `0x3a0` whose `+0x50` reads 544. Whether those files use a shorter
+chunk header or a second layout is unread.
 
 ## The `.vex` is not optional
 
@@ -389,16 +415,26 @@ Named explicitly, with what each would take.
 4. **Why a vertex buffer sometimes ends 16, 32 or 96 bytes short** of
    `vertex_count * stride`. 8 of 46 measured pairs, always negative, always a
    multiple of 16. Harmless to the layout rule, unexplained all the same.
-5. **56 of Talon's Junction's 126 `Mesh` nodes address no chunk.** All are
-   scenery (`Skycar_1Shape`, `tanker1aShape`, `shipintersteller1Shape`,
-   `HyperContintentCraft1Shape`). No word anywhere in their payloads is a chunk
-   hash in this file, and the circuit's directory holds no second model file. A
-   shared props archive elsewhere on the disc is the obvious guess and has not
-   been looked for.
-6. **Which chunk a `Skycube` or a pad belongs to.** Their `.vex` classes carry
+5. **What differs in the chunk header of the 224 files that do not parse.** The
+   biggest single gap in this page, newly measured; see above.
+6. **56 of Talon's Junction's 126 `Mesh` nodes address no chunk**, and the
+   shared-props-archive guess this page used to carry is **refuted**. Every
+   `.rcsmodel` under `/data/environments/` sits in one of exactly 16 circuit
+   directories; there is no seventeenth for anything they share. What the sweep
+   found instead, over all 643 files and 39,414 chunks: **18 of the 56 hashes
+   are carried by other circuits' models** - the sky traffic by `amphiseum` and
+   `tech_de_ra`, and eight `pCube*` nodes by three circuits sharing nothing else
+   with Talon's Junction. Fetching them across files would be wrong as often as
+   right: only **10 of the 18** donor chunks fill the box the node itself
+   authors, the three `pCube*` among the failures, so nothing is wired and the
+   nodes stay undrawn. The remaining 38 are nowhere on the disc under this
+   addressing. The hash is **not** a hash of the node's name under
+   `wad::hash_name`, FNV-1a, DJB2, SDBM or CRC32 in any of three casings, so why
+   a name shared between circuits shares a hash is itself unexplained.
+7. **Which chunk a `Skycube` or a pad belongs to.** Their `.vex` classes carry
    the same payload shape as a `Mesh` on the PSP, and on the PS3 the tie to a
    chunk has not been made - so a PS3 race draws neither.
-7. **The `.pvs` mapping**, which is what would let a renderer draw a section at
+8. **The `.pvs` mapping**, which is what would let a renderer draw a section at
    a time rather than all 904 chunks at once.
 
 ## See also
