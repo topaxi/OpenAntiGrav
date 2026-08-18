@@ -263,6 +263,7 @@ pub fn build_model(
         alpha_tested_draws: Vec::new(),
         transparent_draws: Vec::new(),
         textures: Vec::new(),
+        lightmaps: Vec::new(),
         centre,
         radius,
         mesh_count,
@@ -349,6 +350,7 @@ fn vertex(position: [f32; 3], normal: [f32; 3], colour: [f32; 4], lit: f32) -> G
         normal,
         colour,
         texcoord: [0.0, 0.0],
+        lightmap_texcoord: [0.0, 0.0],
         lit,
         anim: 0,
     }

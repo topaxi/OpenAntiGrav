@@ -93,6 +93,27 @@ Multiplying it into the diffuse is the conventional reading and this project
 applies it; nothing here reads the microcode that would confirm the operation,
 and the load report says so per race.
 
+### How much of the disc it covers
+
+**3,584 chunks over 12 circuits, and 217 distinct atlases.** Not evenly, which
+is why one circuit is not a measurement:
+
+| Circuit | Lightmapped chunks | | Circuit | Lightmapped chunks |
+| --- | ---: | --- | --- | ---: |
+| `12_sol_2` | 638 | | `10_sebenco_climb` | 294 |
+| `05_ubermall` | 501 | | `15_anulpha_pass` | 290 |
+| `01_vineta_k` | 462 | | `04_chenghou_project` | 227 |
+| `02_track` | 348 | | `03_track` | 208 |
+| `tech_de_ra` | 311 | | `amphiseum` | 128 |
+| `modesto_heights` | 101 | | **`talons_junction`** | **76** |
+
+The four Zone circuits author **none**, and Talon's Junction - the circuit
+`oag_hd::race::DEFAULTS` boots - has the fewest of any that do. On it the
+change is 1,028 pixels of 1,175,040 at the starting grid; on `12_sol_2` it is
+**35,693**, and the difference is visible as shading on the overhead structures
+rather than flat grey. Measuring on the default circuit alone would have read
+as "the feature does nothing".
+
 **The other three uses stay unwired.** An emissive map, a normal map and a
 coverage mask all need the variant selection above, and
 `mageffect08_floor` is the case that shows why guessing would be wrong: its

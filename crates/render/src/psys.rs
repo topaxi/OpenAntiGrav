@@ -1498,7 +1498,7 @@ fn quad(
         // the attribute carries the cap fraction the fragment profile
         // needs - see `sparks.wgsl`.
         lit: cap,
-        anim: 0,
+        ..bytemuck::Zeroable::zeroed()
     };
     let bl = corner(-1.0, -1.0, 0.0, 1.0);
     let br = corner(1.0, -1.0, 1.0, 1.0);

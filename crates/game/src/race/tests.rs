@@ -47,6 +47,7 @@ fn model(slots: usize, decoded: usize) -> Model {
                 })
             })
             .collect(),
+        lightmaps: Vec::new(),
         centre: [0.0; 3],
         radius: 1.0,
         anim_tracks: Vec::new(),

@@ -80,6 +80,10 @@ struct Scene {
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
 @group(1) @binding(0) var albedo: texture_2d<f32>;
 @group(1) @binding(1) var albedo_sampler: sampler;
+// The circuit's baked lighting atlas, on the surfaces whose material names one.
+// Every other draw binds a white 1x1, so the multiply below is the identity and
+// no branch is needed - the same arrangement `albedo` already uses.
+@group(1) @binding(2) var lightmap: texture_2d<f32>;
 @group(2) @binding(0) var<uniform> scene: Scene;
 @group(3) @binding(0) var<uniform> anims: TexAnims;
 
@@ -90,6 +94,7 @@ struct VertexInput {
     @location(3) texcoord: vec2<f32>,
     @location(4) lit: f32,
     @location(5) anim: u32,
+    @location(6) lightmap_texcoord: vec2<f32>,
 };
 
 struct VertexOutput {
@@ -99,6 +104,7 @@ struct VertexOutput {
     @location(2) texcoord: vec2<f32>,
     @location(3) lit: f32,
     @location(4) world: vec3<f32>,
+    @location(5) lightmap_texcoord: vec2<f32>,
 };
 
 @vertex
@@ -110,6 +116,10 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     // without needing an inverse transpose.
     out.normal = (uniforms.model * vec4<f32>(in.normal, 0.0)).xyz;
     out.colour = in.colour;
+    // Not run through the texture-animation transform below: an animated
+    // surface scrolls its diffuse across itself, while its patch in the
+    // circuit's lightmap atlas stays where the bake put it.
+    out.lightmap_texcoord = in.lightmap_texcoord;
     // `uv * scale + offset`, the GE's own `TEXSCALE`/`TEXOFFSET` arithmetic -
     // the four words `TexAnim_CompileTransformList` (`0x08927358`) writes into
     // each animated material's display list. The direction is the authored
@@ -164,12 +174,21 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     let light = mix(vec3<f32>(1.0), rig, in.lit);
 
     let texel = textureSample(albedo, albedo_sampler, in.texcoord);
+    // **The circuit's own baked lighting, multiplied in.** A material naming an
+    // `lmaps/*-lmap.gtf` in its second texture slot is drawn through it, sampled
+    // at the `lightmapUV` the chunk's vertex declaration names - see
+    // `docs/formats/rcsmaterial.md`. That the texture *is* a lightmap is read
+    // off four agreeing signals; that the operation is a **multiply** is this
+    // project's assumption, the conventional one, and the load report says so.
+    // Every draw without one binds a white 1x1, so this costs a fetch and
+    // changes nothing.
+    let baked = textureSample(lightmap, albedo_sampler, in.lightmap_texcoord).rgb;
     // Vertex colour modulates the texture on all four channels, as the GE's
     // texture-env does - RGB and alpha alike, not RGB alone. Dropping the
     // vertex colour's own alpha here is what made the boost plume's baked
     // falloff vanish; see `every_psp_teams_boost_plume_vertex_alpha_is_bimodal`
     // in `crates/game/tests/boost_plume_ground_truth.rs`.
-    return vec4<f32>(texel.rgb * in.colour.rgb * light, texel.a * in.colour.a);
+    return vec4<f32>(texel.rgb * in.colour.rgb * light * baked, texel.a * in.colour.a);
 }
 
 @fragment

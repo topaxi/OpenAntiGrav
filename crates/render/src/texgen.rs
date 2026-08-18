@@ -182,6 +182,7 @@ mod tests {
             normal,
             colour: [1.0; 4],
             texcoord: [0.5, 0.5],
+            lightmap_texcoord: [0.0, 0.0],
             lit: 0.0,
             anim: 0,
         }

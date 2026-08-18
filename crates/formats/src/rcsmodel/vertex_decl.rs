@@ -238,6 +238,24 @@ impl VertexDecl {
             .find(named)
             .or_else(|| self.attributes.iter().find(|a| a.is_texcoord()))
     }
+
+    /// The attribute a lightmap is sampled through.
+    ///
+    /// **Named rather than ruled**, unlike [`Self::diffuse_texcoord`]: the
+    /// declaration calls this one `lightmapUV` outright, and the name is a
+    /// `~crc32` preimage checked three ways - see [`Attribute::name`]. What
+    /// makes it more than a plausible name is the correspondence with the
+    /// material beside it: **every chunk whose material's second texture is one
+    /// of the circuit's `lmaps/*-lmap.gtf` declares this attribute, with no
+    /// exceptions on any circuit on the disc**, and no chunk declares one
+    /// without the other. Two files decoded independently agreeing exactly is
+    /// what a wrong reading of either would break.
+    #[must_use]
+    pub fn lightmap_texcoord(&self) -> Option<&Attribute> {
+        self.attributes
+            .iter()
+            .find(|a| a.is_texcoord() && a.name() == Some("lightmapUV"))
+    }
 }
 
 #[cfg(test)]
