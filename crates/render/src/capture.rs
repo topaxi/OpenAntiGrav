@@ -271,10 +271,22 @@ pub fn capture_pixels_from(
             pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
 
             // One draw per material run. Slot 0 is the white fallback, so a texture
-            // index of n binds slot n + 1.
-            for draw in &model.draws {
+            // index of n binds slot n + 1 - and an index past the end **falls back
+            // to slot 0** rather than to the last bind.
+            //
+            // Clamping to `len - 1` is what this did until finding R2 of the
+            // 2026-08-18 review, and it painted an inconsistent model with
+            // whichever texture happened to be last instead of with the
+            // documented, visible white. An arbitrary texture reads as a
+            // deliberate one; white reads as "this slot is missing", which is
+            // the honest answer and the one every other path here gives.
+            let bind = |draw: &crate::mesh::DrawCall| {
                 let slot = draw.texture.map_or(0, |t| t + 1);
-                pass.set_bind_group(1, &texture_binds[slot.min(texture_binds.len() - 1)], &[]);
+                &texture_binds[if slot < texture_binds.len() { slot } else { 0 }]
+            };
+
+            for draw in &model.draws {
+                pass.set_bind_group(1, bind(draw), &[]);
                 pass.draw_indexed(draw.range.clone(), 0, 0..1);
             }
 
@@ -282,8 +294,7 @@ pub fn capture_pixels_from(
             // cutout, not a hardcoded alpha of 1.0 - see `fs_main_alpha_test`.
             pass.set_pipeline(&alpha_test_pipeline);
             for draw in &model.alpha_tested_draws {
-                let slot = draw.texture.map_or(0, |t| t + 1);
-                pass.set_bind_group(1, &texture_binds[slot.min(texture_binds.len() - 1)], &[]);
+                pass.set_bind_group(1, bind(draw), &[]);
                 pass.draw_indexed(draw.range.clone(), 0, 0..1);
             }
 
@@ -310,8 +321,7 @@ pub fn capture_pixels_from(
                     pass.set_pipeline(pipeline);
                     current = Some(pipeline);
                 }
-                let slot = draw.texture.map_or(0, |t| t + 1);
-                pass.set_bind_group(1, &texture_binds[slot.min(texture_binds.len() - 1)], &[]);
+                pass.set_bind_group(1, bind(draw), &[]);
                 pass.draw_indexed(draw.range.clone(), 0, 0..1);
             }
         }

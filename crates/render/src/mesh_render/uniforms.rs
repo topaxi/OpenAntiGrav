@@ -369,4 +369,10 @@ impl Scene {
 }
 
 /// Size, in bytes, of bind group 2's uniform buffer.
-pub const FOG_SIZE: u64 = std::mem::size_of::<Scene>() as u64;
+///
+/// **[`Scene`]'s size, which is [`Fog`] *and* [`Light`]** - 96 bytes, not the
+/// 32 the name `FOG_SIZE` promised until finding R3 of the 2026-08-18 review.
+/// The layout itself was right the whole time and matches `mesh.wgsl` field for
+/// field; what was wrong was that anyone adding to `Scene` read a constant
+/// claiming to measure one of its two halves.
+pub const SCENE_SIZE: u64 = std::mem::size_of::<Scene>() as u64;

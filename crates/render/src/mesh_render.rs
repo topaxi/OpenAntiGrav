@@ -13,7 +13,7 @@ mod uniforms;
 
 pub use blend::{ADDITIVE_BLEND, TRANSPARENT_BLEND, TransparentPipelines};
 use uniforms::Uniforms;
-pub use uniforms::{DEPTH_FORMAT, FOG_SIZE, Fog, Light, Scene, UNIFORMS_SIZE, write_uniforms};
+pub use uniforms::{DEPTH_FORMAT, Fog, Light, SCENE_SIZE, Scene, UNIFORMS_SIZE, write_uniforms};
 
 /// The texture-transform table `mesh.wgsl` reads from bind group 3: one
 /// `(scale, offset)` pair per entry of [`Model::anim_tracks`], already sampled
@@ -260,8 +260,8 @@ pub struct Built {
     pub vertex_buffer: wgpu::Buffer,
     pub index_buffer: wgpu::Buffer,
     pub texture_binds: Vec<wgpu::BindGroup>,
-    /// Bind group 2, holding [`Fog`]. Bound by every draw; write
-    /// [`Built::fog_buffer`] to change it.
+    /// Bind group 2, holding [`Scene`] - [`Fog`] **and** [`Light`]. Bound by
+    /// every draw; write [`Built::fog_buffer`] to change it.
     pub fog_bind: wgpu::BindGroup,
     /// The buffer behind [`Built::fog_bind`], initialised to [`Scene::off`].
     pub fog_buffer: wgpu::Buffer,
@@ -430,7 +430,9 @@ pub fn build(
     });
 
     let fog_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        label: Some("fog"),
+        // Labelled for what the buffer holds, which is `Scene` - fog *and* the
+        // light rig. The three "fog" labels here predated `Light` joining it.
+        label: Some("scene"),
         entries: &[wgpu::BindGroupLayoutEntry {
             binding: 0,
             visibility: wgpu::ShaderStages::FRAGMENT,
@@ -448,14 +450,14 @@ pub fn build(
     // which is what keeps the asset viewer and the offscreen capture path
     // unchanged without either of them knowing fog is there.
     let fog_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("fog"),
-        size: FOG_SIZE,
+        label: Some("scene"),
+        size: SCENE_SIZE,
         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
     queue.write_buffer(&fog_buffer, 0, bytemuck::bytes_of(&Scene::off()));
     let fog_bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("fog"),
+        label: Some("scene"),
         layout: &fog_layout,
         entries: &[wgpu::BindGroupEntry {
             binding: 0,
