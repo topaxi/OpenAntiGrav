@@ -363,6 +363,20 @@ pub fn build(
                 ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                 count: None,
             },
+            // The lightmap shares the albedo's sampler: it is the same
+            // filtering on the same kind of texture, and a second sampler would
+            // be a second thing to keep in step for no difference in the
+            // picture.
+            wgpu::BindGroupLayoutEntry {
+                binding: 2,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            },
         ],
     });
 
@@ -455,7 +469,7 @@ pub fn build(
                 step_mode: wgpu::VertexStepMode::Vertex,
                 attributes: &wgpu::vertex_attr_array![
                     0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x2,
-                    4 => Float32, 5 => Uint32
+                    4 => Float32, 5 => Uint32, 6 => Float32x2
                 ],
             })],
             compilation_options: Default::default(),
@@ -509,7 +523,7 @@ pub fn build(
                 step_mode: wgpu::VertexStepMode::Vertex,
                 attributes: &wgpu::vertex_attr_array![
                     0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x2,
-                    4 => Float32, 5 => Uint32
+                    4 => Float32, 5 => Uint32, 6 => Float32x2
                 ],
             })],
             compilation_options: Default::default(),
@@ -582,7 +596,7 @@ pub fn build(
                     step_mode: wgpu::VertexStepMode::Vertex,
                     attributes: &wgpu::vertex_attr_array![
                         0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x2,
-                        4 => Float32, 5 => Uint32
+                        4 => Float32, 5 => Uint32, 6 => Float32x2
                     ],
                 })],
                 compilation_options: Default::default(),
@@ -736,18 +750,28 @@ pub fn build(
                 },
             );
         }
-        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        texture.create_view(&wgpu::TextureViewDescriptor::default())
+    };
+
+    // One bind group per material slot: its albedo and its lightmap, which the
+    // shader multiplies. Split from `make` because the two are separate
+    // textures paired per slot rather than one texture per group.
+    let bind = |albedo: &wgpu::TextureView, lightmap: &wgpu::TextureView, label: &str| {
         device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some(label),
             layout: &texture_layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&view),
+                    resource: wgpu::BindingResource::TextureView(albedo),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
                     resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(lightmap),
                 },
             ],
         })
@@ -755,14 +779,22 @@ pub fn build(
 
     // A white 1x1 stands in for untextured draws, so the shader needs no branch.
     // It also fills the slot of a `Texture` node we could not decode, keeping
-    // every later texture at the index its materials expect.
+    // every later texture at the index its materials expect - and it is what
+    // every draw with no lightmap binds, which makes the shader's multiply the
+    // identity for every title but Wipeout HD.
     let white = make(1, 1, &[255, 255, 255, 255], "white");
-    let mut texture_binds = vec![white];
-    for slot in &model.textures {
-        texture_binds.push(match slot {
+    let mut texture_binds = vec![bind(&white, &white, "white")];
+    for (index, slot) in model.textures.iter().enumerate() {
+        let albedo = match slot {
             Some(t) => make(t.width, t.height, &t.rgba, &t.label),
             None => make(1, 1, &[255, 255, 255, 255], "undecoded"),
-        });
+        };
+        let lightmap = match model.lightmaps.get(index).and_then(Option::as_ref) {
+            Some(t) => make(t.width, t.height, &t.rgba, &t.label),
+            None => make(1, 1, &[255, 255, 255, 255], "no lightmap"),
+        };
+        let label = slot.as_ref().map_or("undecoded", |t| t.label.as_str());
+        texture_binds.push(bind(&albedo, &lightmap, label));
     }
 
     let placeholder = device.create_buffer(&wgpu::BufferDescriptor {

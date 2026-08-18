@@ -92,6 +92,7 @@ fn model_of(draws: Vec<DrawCall>) -> Model {
         alpha_tested_draws: Vec::new(),
         transparent_draws: Vec::new(),
         textures: Vec::new(),
+        lightmaps: Vec::new(),
         centre: [0.0; 3],
         radius: 1.0,
         anim_tracks: Vec::new(),
@@ -256,6 +257,7 @@ fn swap_fixture() -> (TrackPvs, SwapConflicts) {
         normal: [0.0, 1.0, 0.0],
         colour: [1.0; 4],
         texcoord: [0.0; 2],
+        lightmap_texcoord: [0.0, 0.0],
         lit: 1.0,
         anim: 0,
     };

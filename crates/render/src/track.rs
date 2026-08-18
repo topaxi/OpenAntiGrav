@@ -160,6 +160,7 @@ pub fn build_model(label: &str, ai: &AiTrack) -> Model {
         alpha_tested_draws: Vec::new(),
         transparent_draws: Vec::new(),
         textures: Vec::new(),
+        lightmaps: Vec::new(),
         centre,
         radius,
         anim_tracks: Vec::new(),
@@ -214,6 +215,7 @@ fn strip(
             normal,
             colour,
             texcoord: [0.0, 0.0],
+            lightmap_texcoord: [0.0, 0.0],
             lit: 1.0,
             anim: 0,
         });
@@ -222,6 +224,7 @@ fn strip(
             normal,
             colour,
             texcoord: [1.0, 0.0],
+            lightmap_texcoord: [0.0, 0.0],
             lit: 1.0,
             anim: 0,
         });

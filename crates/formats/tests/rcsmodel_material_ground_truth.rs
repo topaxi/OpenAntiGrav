@@ -404,6 +404,96 @@ fn no_circuit_is_mostly_see_through() {
     );
 }
 
+/// **A lightmap and a `lightmapUV` come together, on every circuit, with no
+/// exceptions either way.**
+///
+/// The discriminator behind `Material::lightmap`, and the reason that method is
+/// a reading rather than a preference for the second texture slot. The material
+/// table and the vertex declaration are decoded independently out of two
+/// different parts of the file, and they agree exactly: a chunk whose material
+/// names one of the circuit's own `lmaps/*-lmap.gtf` **always** declares a
+/// `lightmapUV` attribute, and a chunk whose material names anything else there
+/// never does *because of* the material.
+///
+/// The second half is the one that would fail loudly if the reading were wrong.
+/// A chunk with an `lmaps/` second texture and no coordinates to sample it
+/// through would mean either that the path does not identify a lightmap or that
+/// the attribute name does not - and this project would be multiplying a
+/// circuit by an atlas it cannot address.
+///
+/// The converse is *not* asserted and is not true: plenty of chunks declare a
+/// `lightmapUV` whose material's second slot is an emissive map, a normal map
+/// or a mask. Those are the three uses of the slot that stay unsampled - see
+/// `docs/formats/rcsmaterial.md`.
+#[test]
+#[ignore]
+fn a_lightmap_and_a_lightmap_coordinate_come_together() {
+    let Some(image) = image() else {
+        return;
+    };
+    let mut archives: Vec<oag_assets::psarc::Archive> = ARCHIVES
+        .iter()
+        .map(|a| {
+            let spec = format!("{}:PS3_GAME/USRDIR/{a}.PSARC", image.display());
+            oag_assets::psarc::Archive::open(&spec).expect("the archive opens")
+        })
+        .collect();
+
+    let (mut lightmapped, mut orphans, mut measured, mut chunks) = (0usize, 0usize, 0usize, 0usize);
+    let mut named: BTreeSet<String> = BTreeSet::new();
+    for circuit in CIRCUITS {
+        let path = format!("/data/environments/{circuit}/track.rcsmodel");
+        let Some(bytes) = archives.iter_mut().find_map(|a| a.read_path(&path).ok()) else {
+            continue;
+        };
+        let model = rcsmodel::Model::parse(&bytes).expect("the .rcsmodel parses");
+        let (mut here, mut missing) = (0usize, 0usize);
+        for mesh in &model.meshes {
+            chunks += 1;
+            let Some(lightmap) = model
+                .material_of(mesh)
+                .and_then(rcsmodel::Material::lightmap)
+            else {
+                continue;
+            };
+            named.insert(lightmap.to_string());
+            here += 1;
+            if mesh
+                .decl
+                .as_ref()
+                .and_then(rcsmodel::VertexDecl::lightmap_texcoord)
+                .is_none()
+            {
+                missing += 1;
+                println!(
+                    "  {circuit}: chunk {:#010x} has {lightmap} and no lightmapUV",
+                    mesh.hash
+                );
+            }
+        }
+        println!("  {circuit:<20} {here:4} lightmapped chunk(s), {missing} without coordinates");
+        lightmapped += here;
+        orphans += missing;
+        measured += 1;
+    }
+    println!(
+        "{measured} circuit(s), {chunks} chunks, {lightmapped} lightmapped, \
+         {} distinct atlas(es)",
+        named.len()
+    );
+    assert_eq!(measured, CIRCUITS.len(), "every circuit was measured");
+    assert_eq!(
+        orphans, 0,
+        "a chunk carrying a lightmap with no coordinates to sample it through, \
+         which would mean the path or the attribute name does not identify one"
+    );
+    assert!(
+        lightmapped > 500,
+        "only {lightmapped} lightmapped chunks disc-wide, so either the reading \
+         narrowed or the corpus did"
+    );
+}
+
 /// How much of a circuit's own geometry the table calls see-through.
 ///
 /// The number that says why this matters: a third of Talon's Junction's

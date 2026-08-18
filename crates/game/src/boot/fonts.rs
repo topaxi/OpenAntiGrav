@@ -6,14 +6,29 @@
 //! `<Font>` slots name every face, and a role that resolves to nothing is a
 //! finding rather than a cue to reach for a constant.**
 //!
-//! Wipeout HD is what makes that more than a principle. It ships **four `.fnt`
-//! files and all four are Asian** - `chinese`, `chinesemx`, `korean`,
-//! `koreanbold` - so there is no Latin face on the disc for either role to
-//! resolve to, and its whole front end draws in the built-in 5x7 glyphs. Pure
-//! is in the same state for a different reason (its `pulse_text.fnt` is simply
-//! absent from `Data.wad`), and both are reported rather than papered over: a
-//! silent fallback would make a rendering bug indistinguishable from a loading
-//! one.
+//! Pure is the case that makes it more than a principle: its `pulse_text.fnt`
+//! is simply absent from `Data.wad`, so the `Default` role resolves to a name
+//! nothing on the disc answers to and its front end draws in the built-in 5x7
+//! glyphs. That is reported rather than papered over - a silent fallback would
+//! make a rendering bug indistinguishable from a loading one.
+//!
+//! # HD was in that state too, and it was this module's own reading that was wrong
+//!
+//! This comment used to say HD "ships **four `.fnt` files and all four are
+//! Asian**" and had no Latin face for either role. It ships 33, and `DATA02`
+//! alone holds 17 of them - `helv`, `helvb`, `pulsehud`, `small`,
+//! `ps_buttons`, `arialbd`, `ariblk`, `russianhud` and the Asian ones together.
+//! The four-file count was `DATA04`, `DATA05` and `DATA06`, which really do
+//! carry exactly `chinese`, `chinesemx`, `korean` and `koreanbold` and nothing
+//! else: a survey that was right about the archives it looked at and wrong
+//! about the disc, which is the same shape as the `.gitignore` trap
+//! [`CLAUDE.md`](../../../../CLAUDE.md) already warns about - a scoped result
+//! that reads exactly like a whole-disc one.
+//!
+//! What actually kept HD in 5x7 was that
+//! [`oag_formats::fnt`] read the header little-endian, so all 33 failed the
+//! magic check with `not a .fnt`. The report said so accurately the whole time;
+//! nothing here had to change for the fonts to appear, only the parser.
 
 use super::*;
 

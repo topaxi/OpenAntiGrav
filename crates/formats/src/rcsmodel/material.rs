@@ -158,6 +158,12 @@ pub struct Material {
     pub second_texture: Option<String>,
 }
 
+/// Where a circuit keeps its baked lighting atlases.
+const LIGHTMAP_DIR: &str = "/lmaps/";
+
+/// What every one of them is called.
+const LIGHTMAP_SUFFIX: &str = "-lmap.gtf";
+
 /// Which of three modes the low two bits of [`Material::state`] select.
 ///
 /// **The field is measured; the meaning of value 2 is not.** Across all 15,762
@@ -299,6 +305,37 @@ impl Material {
             self.transparency(),
             Some(Transparency::Blended | Transparency::Mode2)
         )
+    }
+
+    /// The second texture, when it is the circuit's baked lighting atlas.
+    ///
+    /// **The one use of [`Self::second_texture`] this project identifies**, and
+    /// it is identified rather than guessed. Four signals agree and the fourth
+    /// has no exceptions:
+    ///
+    /// 1. The path sits under the circuit's own `lmaps/` directory.
+    /// 2. The file name ends `-lmap.gtf`.
+    /// 3. The material's own `.rcsmaterial` names a sampler `lightmap`
+    ///    (`~crc32` `0x37b5db58`) - see `docs/formats/rcsmaterial.md`.
+    /// 4. **Every chunk that names such a material declares a `lightmapUV`
+    ///    vertex attribute**, and no chunk declares one without the other -
+    ///    76 of 76 on Talon's Junction, 128 of 128 on `amphiseum`, swept over
+    ///    every circuit by `rcsmodel_material_ground_truth.rs`.
+    ///
+    /// The fourth is the discriminator: it is a correspondence between the
+    /// material table and the vertex declaration, decoded independently, and a
+    /// wrong reading of either would break it.
+    ///
+    /// **This says what the texture *is*, not what to do with it.** Multiplying
+    /// it into the diffuse is the conventional reading and a caller's decision;
+    /// nothing here reads the microcode that would confirm the operation. The
+    /// other three uses of the slot - an emissive map, a normal map and a
+    /// coverage mask - need the shader variant a draw selects, which is unread,
+    /// so this answers `None` for them rather than guessing.
+    #[must_use]
+    pub fn lightmap(&self) -> Option<&str> {
+        let path = self.second_texture.as_deref()?;
+        (path.contains(LIGHTMAP_DIR) && path.ends_with(LIGHTMAP_SUFFIX)).then_some(path)
     }
 
     /// The blend equation this material asks for, **both factors**.

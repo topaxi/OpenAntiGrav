@@ -716,7 +716,15 @@ which was answering "no" for submeshes the file draws perfectly well.
 `a_submesh_is_judged_on_the_vertices_a_triangle_names`. On the picture it is
 Talon's Junction going from 445,994 triangles to **466,497** with no other
 change - a blimp's envelope, a tanker's hull and a lifter ship's flank that had
-been silently absent.
+been silently absent. At the starting grid **32 of 1,175,040 pixels differ**,
+which is the honest figure: what came back is above and behind that camera.
+
+**A retraction.** The commit that landed this said the starting-grid frame was
+*pixel-identical*. It was measured on two screenshots that were **fully
+transparent** - `just play --race --screenshot` wrote alpha 0 over the whole
+image, because a frame's alpha channel is the bloom mask and not coverage. That
+was fixed separately and the comparison re-run; the conclusion is unchanged and
+the evidence for it was worthless.
 
 **324 are still outside and this page does not explain them.** They are not
 spread evenly: the three circuits above have none at all, and the residue
@@ -919,9 +927,22 @@ materials off the circuit refute it outright:
 | `diffusewithalphachannel` | `holebaralpha.gtf` | an `lmaps/...-lmap.gtf` |
 
 A normal map, an emissive map, a coverage mask and a lightmap - one field, four
-uses, selected by the `.rcsmaterial`'s shader, which is compiled RSX microcode
-and is not read. **So nothing samples it**, and a surface whose coverage lives
-there paints solid: Talon's Junction's cloud plate is the one that shows.
+uses, selected by the `.rcsmaterial`'s shader.
+
+**One of the four is identified and is drawn** (2026-08-18): a path under the
+circuit's own `lmaps/` ending `-lmap.gtf` is its baked lighting atlas, and
+`Material::lightmap` answers it. Four signals agree, the sharpest being that
+**every chunk naming such a material declares a `lightmapUV` attribute and none
+declares one without it** - 3,584 chunks over 12 circuits, checked by
+`a_lightmap_and_a_lightmap_coordinate_come_together`. `oag_render` samples it
+through that attribute and multiplies; the *multiply* is this project's
+assumption and the load report says so.
+
+**The other three are not**, and [rcsmaterial.md](rcsmaterial.md) is why: a
+`.rcsmaterial` is a container of shader *variants*, twenty fragment programs of
+one material disagree about which unit a sampler sits at, and what selects a
+variant is unread. So a surface whose coverage lives in that slot still paints
+solid: Talon's Junction's cloud plate is the one that shows.
 
 **The obvious shortcut was tried and does not work** (2026-08-18). The
 `.rcsmaterial`'s `SHO` blocks carry a parameter table -
@@ -986,10 +1007,12 @@ Named explicitly, with what each would take.
    code. Three rules recover the number without it, so this is now a question
    about the format rather than a blocker. The remaining routes are
    disassembling a shader's microcode, or HD's own executable.
-2. **What the second texture at a material's `+0x78` is for**, per material.
-   One slot with at least four uses - normal map, emissive map, coverage mask,
-   lightmap - and the selector is in the `.rcsmaterial`'s compiled shader.
-   Nothing samples it, so a surface whose coverage lives there paints solid.
+2. **What the second texture at a material's `+0x78` is for**, per material,
+   for the three uses that are not the lightmap. The lightmap is identified and
+   drawn; a normal map, an emissive map and a coverage mask are not, because
+   the selector is a shader *variant* and what picks one is unread - see
+   [rcsmaterial.md](rcsmaterial.md). A surface whose coverage lives there still
+   paints solid.
 3. **What `+0x0a` holds on stride 18**, and what `83 XX` selects at all. The
    second used to be the lead on the first and is now ruled out: the field
    follows the width, not the byte. `XX` runs `07` to `11` and is the only part

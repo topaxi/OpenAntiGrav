@@ -38,6 +38,23 @@ pub struct GpuVertex {
     /// values rather than sliding at all. One `u32` carries all of that for
     /// the same four bytes per vertex the rate cost.
     pub anim: u32,
+    /// Where a **lightmap** is sampled, for the surfaces that carry one.
+    ///
+    /// A second, separate coordinate set, because a lightmap is an atlas: its
+    /// coordinates place a surface's own patch inside one texture for the whole
+    /// circuit, and they have nothing to do with where the diffuse tiles. On
+    /// Wipeout HD it is the `lightmapUV` attribute the chunk's vertex
+    /// declaration names outright; every other title leaves it at zero and
+    /// binds a white lightmap, so the multiply in `mesh.wgsl` is the identity.
+    ///
+    /// **Last in the struct because it is last in the attribute array.**
+    /// `wgpu::vertex_attr_array!` lays offsets out in the order the locations
+    /// are written, not in field order, so a field inserted in the middle of
+    /// this struct silently shifts every later attribute's offset - which is
+    /// exactly what putting it after `texcoord` did: the diffuse coordinates
+    /// stayed right and `lit` and `anim` came out of the wrong bytes, painting
+    /// the circuit in flat white.
+    pub lightmap_texcoord: [f32; 2],
 }
 
 /// How many distinct texture-transform tracks one model may carry, matching
@@ -297,6 +314,14 @@ pub struct Model {
     /// are positional because materials name a texture by its ordinal, so
     /// compacting them would re-skin the model.
     pub textures: Vec<Option<ModelTexture>>,
+    /// The baked lighting atlas each material carries, positionally beside
+    /// [`Self::textures`].
+    ///
+    /// **Parallel and never compacted**, for the same reason `textures` is: a
+    /// draw names its material by ordinal, so a missing entry has to stay a
+    /// hole. Empty on every title but Wipeout HD, and `None` on the majority of
+    /// its materials - see `oag_formats::rcsmodel::Material::lightmap`.
+    pub lightmaps: Vec<Option<ModelTexture>>,
     /// Centre of the bounding box, so the camera can frame the model.
     pub centre: [f32; 3],
     /// Radius of the bounding sphere.
@@ -343,6 +368,7 @@ impl Model {
             alpha_tested_draws: Vec::new(),
             transparent_draws: Vec::new(),
             textures: Vec::new(),
+            lightmaps: Vec::new(),
             centre: [0.0; 3],
             radius: 0.0,
             mesh_count: 0,
@@ -579,10 +605,15 @@ fn build_class(
                 continue;
             }
             let payload = &data[node.payload()];
-            let Some(child_count) = payload.get(0x50..0x54) else {
+            if payload.len() < 0x54 {
                 continue;
-            };
-            if u32::from_le_bytes(child_count.try_into().expect("checked len 4")) == 2
+            }
+            // In the file's own order, not the host's: HD writes this `u32`
+            // big-endian, where a little-endian read turns 2 into 0x0200_0000
+            // and the skip silently never fires. That direction is `Lod::Both`,
+            // so it draws both levels rather than deleting geometry - which is
+            // why it went unnoticed and why it is still wrong.
+            if vex::byte_order(data).u32(payload, 0x50) == 2
                 && let Some(&second) = children[i].get(1)
             {
                 mark(&children, second, &mut skip);
@@ -747,6 +778,9 @@ fn build_class(
                             ]
                         }),
                         texcoord: v.texcoord.unwrap_or([0.0, 0.0]),
+                        // No PSP or PS2 model authors a lightmap; the white 1x1
+                        // bound for them makes the shader's multiply identity.
+                        lightmap_texcoord: [0.0, 0.0],
                         lit: if v.colour.is_some() { 0.0 } else { 1.0 },
                         anim,
                     });
@@ -865,6 +899,7 @@ fn build_class(
         alpha_tested_draws,
         transparent_draws,
         textures,
+        lightmaps: Vec::new(),
         centre,
         radius,
         mesh_count,

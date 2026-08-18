@@ -86,6 +86,17 @@ pub struct Report {
     /// exactly what a *working* surface looks like at a glance. See
     /// [`decode_texture`].
     pub untextured: usize,
+    /// Materials that carry the circuit's baked lighting atlas in their second
+    /// texture slot, and are therefore drawn multiplied by it.
+    ///
+    /// Counted because it is the one use of that slot this project identifies
+    /// and the other three are left unsampled: a circuit reporting zero here is
+    /// drawing its surfaces unlit by the artists' bake, which is a visible
+    /// absence and should be a stated one. See
+    /// `oag_formats::rcsmodel::Material::lightmap`.
+    pub lightmapped: usize,
+    /// Materials naming a lightmap whose `.gtf` did not load or decode.
+    pub lightmap_undecoded: usize,
     /// Chunks whose vertex declaration names no texture coordinate at all.
     ///
     /// 984 of the disc's chunks. They draw at the origin of their texture,
@@ -119,6 +130,12 @@ impl Report {
         } + &match self.untextured {
             0 => String::new(),
             n => format!(", {n} material(s) whose .gtf did not paint"),
+        } + &match self.lightmapped {
+            0 => String::new(),
+            n => format!(", {n} material(s) multiplied by the circuit's lightmap"),
+        } + &match self.lightmap_undecoded {
+            0 => String::new(),
+            n => format!(", {n} lightmap(s) named but not loaded"),
         } + &match self.no_texcoord {
             0 => String::new(),
             n => format!(", {n} chunk(s) declaring no texture coordinate"),
@@ -244,32 +261,51 @@ fn skin(
     model: &rcsmodel::Model,
     textures: Textures<'_>,
     report: &mut Report,
-) -> Vec<Option<ModelTexture>> {
+) -> (Vec<Option<ModelTexture>>, Vec<Option<ModelTexture>>) {
     let mut cache: std::collections::HashMap<String, Option<ModelTexture>> = Default::default();
-    model
-        .materials
-        .iter()
-        .map(|material| {
-            if material.texture.is_empty() {
-                report.untextured += 1;
-                return None;
-            }
-            // A circuit's 442 materials name far fewer distinct textures, and
-            // decoding a 2048x2048 DXT5 twice is the cost this avoids.
-            let decoded = cache
-                .entry(material.texture.clone())
-                .or_insert_with(|| {
-                    textures(&material.texture)
-                        .as_deref()
-                        .and_then(|blob| decode_texture(&material.texture, blob))
-                })
-                .clone();
+    let mut load = |path: &str, textures: Textures<'_>| {
+        // A circuit's 442 materials name far fewer distinct textures, and
+        // decoding a 2048x2048 DXT5 twice is the cost this avoids. The two
+        // slots share the cache because a lightmap atlas is named by dozens of
+        // materials at once.
+        cache
+            .entry(path.to_string())
+            .or_insert_with(|| {
+                textures(path)
+                    .as_deref()
+                    .and_then(|blob| decode_texture(path, blob))
+            })
+            .clone()
+    };
+    let mut skins = Vec::with_capacity(model.materials.len());
+    let mut lightmaps = Vec::with_capacity(model.materials.len());
+    for material in &model.materials {
+        if material.texture.is_empty() {
+            report.untextured += 1;
+            skins.push(None);
+        } else {
+            let decoded = load(&material.texture, textures);
             if decoded.is_none() {
                 report.untextured += 1;
             }
-            decoded
-        })
-        .collect()
+            skins.push(decoded);
+        }
+        // **Only the slot the material identifies as a lightmap**, which is a
+        // reading rather than a preference for the second texture - see
+        // `oag_formats::rcsmodel::Material::lightmap`. A second texture that is
+        // an emissive map, a normal map or a coverage mask stays unsampled.
+        let lit = material.lightmap().map(|path| load(path, textures));
+        match &lit {
+            Some(Some(_)) => report.lightmapped += 1,
+            // Named and did not decode: counted apart, because a lightmap that
+            // silently fails to load leaves the surface at full brightness,
+            // which is what an unlit surface looks like anyway.
+            Some(None) => report.lightmap_undecoded += 1,
+            None => {}
+        }
+        lightmaps.push(lit.flatten());
+    }
+    (skins, lightmaps)
 }
 
 /// The bounding box and chunk hash a PS3 `Mesh` node's payload carries.
@@ -376,6 +412,7 @@ pub fn build_scene(
             };
             let normals = mesh.normals(model_blob, submesh, stride).ok();
             let texcoords = mesh.texcoords(model_blob, submesh, stride).ok();
+            let lightmap_texcoords = mesh.lightmap_texcoords(model_blob, submesh, stride).ok();
             report.authored_normals += normals.as_deref().map_or(0, authored);
             emit(
                 &mut out,
@@ -383,6 +420,7 @@ pub fn build_scene(
                     points: &points,
                     normals: normals.as_deref(),
                     texcoords: texcoords.as_deref(),
+                    lightmap_texcoords: lightmap_texcoords.as_deref(),
                     indices: &indices,
                 },
                 Mat4::IDENTITY,
@@ -503,6 +541,10 @@ struct Geometry<'a> {
     normals: Option<&'a [[f32; 3]]>,
     /// `None` leaves every coordinate at the origin of the texture.
     texcoords: Option<&'a [[f32; 2]]>,
+    /// Where the circuit's lightmap atlas is sampled, for a chunk that declares
+    /// a `lightmapUV`. `None` leaves it at the origin, which a white lightmap
+    /// makes harmless.
+    lightmap_texcoords: Option<&'a [[f32; 2]]>,
     indices: &'a [u16],
 }
 
@@ -558,6 +600,7 @@ fn emit(out: &mut Model, mesh: Geometry<'_>, to_world: Mat4, node: Option<u32>, 
         points,
         normals,
         texcoords,
+        lightmap_texcoords,
         indices,
     } = mesh;
     let first_vertex = u32::try_from(out.vertices.len()).unwrap_or(u32::MAX);
@@ -586,6 +629,10 @@ fn emit(out: &mut Model, mesh: Geometry<'_>, to_world: Mat4, node: Option<u32>, 
             // A non-finite half is a vertex whose coordinate this reading does
             // not explain - 1.68 % of a circuit's stride-18 ones. Zero rather
             // than a NaN travelling into the vertex buffer.
+            lightmap_texcoord: lightmap_texcoords
+                .and_then(|t| t.get(k))
+                .map(|&[u, v]| [finite(u), finite(v)])
+                .unwrap_or([0.0, 0.0]),
             texcoord: texcoords
                 .and_then(|t| t.get(k))
                 .map(|&[u, v]| [finite(u), finite(v)])
@@ -671,7 +718,9 @@ pub fn build(
 
     let mut out = Model::none(label);
     let mut report = Report::default();
-    out.textures = skin(&model, textures, &mut report);
+    let (skins, lightmaps) = skin(&model, textures, &mut report);
+    out.textures = skins;
+    out.lightmaps = lightmaps;
 
     for (index, node) in nodes
         .iter()
@@ -727,6 +776,7 @@ pub fn build(
 
             let normals = mesh.normals(model_blob, submesh, stride).ok();
             let texcoords = mesh.texcoords(model_blob, submesh, stride).ok();
+            let lightmap_texcoords = mesh.lightmap_texcoords(model_blob, submesh, stride).ok();
             report.authored_normals += normals.as_deref().map_or(0, authored);
             emit(
                 &mut out,
@@ -734,6 +784,7 @@ pub fn build(
                     points: &points,
                     normals: normals.as_deref(),
                     texcoords: texcoords.as_deref(),
+                    lightmap_texcoords: lightmap_texcoords.as_deref(),
                     indices: &indices,
                 },
                 to_world,
@@ -868,6 +919,8 @@ mod tests {
             unreferenced: 639,
             see_through: 257,
             untextured: 3,
+            lightmapped: 4,
+            lightmap_undecoded: 0,
             no_texcoord: 9,
             authored_normals: 531_904,
         };

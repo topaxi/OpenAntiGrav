@@ -798,6 +798,44 @@ impl Mesh {
             }
             None => (stride.saturating_sub(TEXCOORD_LEN), TexcoordFormat::Half),
         };
+        self.coords_at(data, submesh, stride, offset, format)
+    }
+
+    /// The coordinates a **lightmap** is sampled through, one pair per vertex.
+    ///
+    /// The declaration names this attribute `lightmapUV` outright - see
+    /// [`VertexDecl::lightmap_texcoord`] - so unlike [`Self::texcoords`] there
+    /// is no rule here, only a lookup. A chunk that declares none answers
+    /// [`Error::NoTexcoord`], which is every chunk whose material carries no
+    /// lightmap and is the majority of the disc.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::NoTexcoord`] and [`Error::OutOfBounds`], as [`Self::texcoords`].
+    pub fn lightmap_texcoords(
+        &self,
+        data: &[u8],
+        submesh: &SubMesh,
+        stride: usize,
+    ) -> Result<Vec<[f32; 2]>> {
+        let decl = self.decl.as_ref().ok_or(Error::NoTexcoord)?;
+        let attribute = decl.lightmap_texcoord().ok_or(Error::NoTexcoord)?;
+        let format = TexcoordFormat::of(attribute).ok_or(Error::NoTexcoord)?;
+        self.coords_at(data, submesh, stride, usize::from(attribute.offset), format)
+    }
+
+    /// One submesh's coordinate pairs at a byte offset within the vertex.
+    ///
+    /// Shared by [`Self::texcoords`] and [`Self::lightmap_texcoords`], which
+    /// differ only in which attribute they pick.
+    fn coords_at(
+        &self,
+        data: &[u8],
+        submesh: &SubMesh,
+        stride: usize,
+        offset: usize,
+        format: TexcoordFormat,
+    ) -> Result<Vec<[f32; 2]>> {
         let end = submesh.vertex_offset
             + stride * submesh.vertex_count.saturating_sub(1)
             + offset

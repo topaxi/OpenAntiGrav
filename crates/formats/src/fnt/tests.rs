@@ -1,3 +1,11 @@
+//! What the `.fnt` reader in [`super`] is asserted to do, on fixtures built by
+//! hand.
+//!
+//! Its own file rather than a `#[cfg(test)] mod` at the end of `fnt.rs`, under
+//! the 200-line rule in `scripts/check-file-size.py`. Everything here is
+//! synthetic; the disc-backed half is `crates/formats/tests/fnt_ground_truth.rs`
+//! and `fnt_hd_ground_truth.rs`.
+
 use super::*;
 use crate::ByteOrder;
 
