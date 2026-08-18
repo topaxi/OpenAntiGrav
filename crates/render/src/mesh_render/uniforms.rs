@@ -318,14 +318,15 @@ impl Fog {
 ///
 /// The lightmap's alpha gating the direct sun - a baked shadow mask - and the
 /// prelit power curve are the two halves this project used to replace with a
-/// plain multiply. **The magnitudes are the disc's too, and what is not is
-/// the tonemap**: HD computes this in linear light and tonemaps, this
-/// pipeline is gamma-authoritative per
-/// [ADR-0020](../../../docs/architecture/adr/0020-gamma-authoritative-colour-space.md)
-/// and its render target saturates instead. That clamp is this project's
-/// stand-in for the missing stage and is judged against an rpcs3 reference
-/// frame; the per-vertex additive term the original's vertex programs
-/// interpolate on top (dynamic lights among them) is not reproduced.
+/// plain multiply. **The magnitudes are the disc's too, and the arithmetic is
+/// done in linear light** as the RSX does - samples sRGB-decoded, lit, the
+/// result saturated and encoded back into the gamma target - per
+/// [ADR-0026](../../../docs/architecture/adr/0026-hd-authored-lighting-is-linear.md),
+/// which narrows ADR-0020 to the titles its GE argument is about. The
+/// saturate is this project's stand-in for HD's unread exposure stage and is
+/// judged against an rpcs3 reference frame; the per-vertex additive term the
+/// original's vertex programs interpolate on top (dynamic lights among them)
+/// is not reproduced.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Light {

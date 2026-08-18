@@ -235,12 +235,9 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // the direct sun. The magnitudes are authored for a tonemapped linear
     // target; here the render target's saturation stands in for that stage.
     let ndl = clamp(dot(n, scene.light.direction), 0.0, 1.0);
-    let prelit = scene.light.prelit_scale * pow(baked.rgb, scene.light.prelit_power);
+    let baked_linear = pow(baked.rgb, vec3<f32>(2.2));
+    let prelit = scene.light.prelit_scale * pow(baked_linear, scene.light.prelit_power);
     let authored = scene.light.ambient + prelit + scene.light.sun * (ndl * baked.a);
-
-    let rig = mix(stand_in, authored, scene.light.enabled);
-    // Prelit geometry already carries its lighting in the vertex colour.
-    let light = mix(vec3<f32>(1.0), rig, in.lit);
 
     let texel = textureSample(albedo, albedo_sampler, in.texcoord);
 
@@ -261,13 +258,33 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         * (pow(ndh, 32.0) * ndl * baked.a * texel.a * scene.light.specular_scale
             * scene.light.enabled * in.lit);
 
+    // The authored path shades in linear light, as the RSX does: the samples
+    // are sRGB-decoded, lit by the authored magnitudes, saturated (the
+    // stand-in for HD's exposure stage) and encoded back for this gamma
+    // target.
+    let texel_linear = pow(texel.rgb, vec3<f32>(2.2));
+    let lit_linear = clamp(
+        texel_linear * in.colour.rgb * authored + specular,
+        vec3<f32>(0.0),
+        vec3<f32>(1.0),
+    );
+    let authored_rgb = pow(lit_linear, vec3<f32>(1.0 / 2.2));
+
+    // The stand-in path, byte-for-byte what every other title always drew.
+    // Prelit geometry (`lit` 0.0) takes it even under the authored rig: its
+    // lighting is baked into its vertex colours, in the gamma space every
+    // Pulse-shaped asset authors, so the linear round-trip above would
+    // re-shade what is already shaded.
+    let light = mix(vec3<f32>(1.0), stand_in, in.lit);
+    let plain_rgb = texel.rgb * in.colour.rgb * light;
+
     // Vertex colour modulates the texture on all four channels, as the GE's
     // texture-env does - RGB and alpha alike, not RGB alone. Dropping the
     // vertex colour's own alpha here is what made the boost plume's baked
     // falloff vanish; see `every_psp_teams_boost_plume_vertex_alpha_is_bimodal`
     // in `crates/game/tests/boost_plume_ground_truth.rs`.
     return vec4<f32>(
-        texel.rgb * in.colour.rgb * light + specular,
+        mix(plain_rgb, authored_rgb, scene.light.enabled * in.lit),
         texel.a * in.colour.a,
     );
 }

@@ -36,6 +36,7 @@ out to be wrong.
 | [0023](0023-boot-sequence-as-title-data.md) | The boot sequence is a measured table per title | Accepted; supersedes [ADR-0022](0022-title-packages.md) item 4 in part |
 | [0024](0024-in-process-codecs-and-ffmpeg-as-a-last-resort.md) | Decode in process where a light library exists; `ffmpeg` is the last resort | Accepted; narrows [ADR-0019](0019-atrac3plus-out-of-process.md) to ATRAC3+ |
 | [0025](0025-a-boot-chain-carries-its-provenance.md) | A boot chain carries its provenance: measured, or only declared | Accepted; narrows [ADR-0023](0023-boot-sequence-as-title-data.md) |
+| [0026](0026-hd-authored-lighting-is-linear.md) | Wipeout HD's authored lighting is computed in linear light | Accepted; narrows [ADR-0020](0020-gamma-authoritative-colour-space.md) |
 
 ## Format
 
