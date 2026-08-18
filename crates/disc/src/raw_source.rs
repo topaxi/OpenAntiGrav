@@ -46,7 +46,15 @@ impl SectorSource for RawSource {
     }
 
     fn read_sector(&mut self, lba: u32, buf: &mut [u8]) -> Result<()> {
-        debug_assert_eq!(buf.len(), SECTOR_SIZE);
+        // `assert`, not `debug_assert`: this was the quiet half of a contract
+        // the CHD source already panicked on, so in release a short or long
+        // buffer read across a sector boundary and returned wrong data with
+        // `Ok`. See `SectorSource::read_sector`.
+        assert_eq!(
+            buf.len(),
+            SECTOR_SIZE,
+            "read_sector needs a buffer of exactly one sector"
+        );
         if lba >= self.sector_count {
             return Err(Error::SectorOutOfRange {
                 sector: lba,

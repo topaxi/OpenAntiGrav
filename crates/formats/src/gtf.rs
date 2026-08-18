@@ -477,9 +477,17 @@ impl Texture {
             got: blob.len(),
         })?;
         let (width, height) = self.level_size(0);
+        // **Not `Swizzled`.** The swizzled and `B8` cases are both refused
+        // above, so a `None` here is the decoder running out of texels - a
+        // truncated blob - and reporting that as "swizzled, not implemented"
+        // sent the reader looking for a Morton order that is not the problem.
+        // Finding F7 of the 2026-08-18 review, in a codebase that prizes
+        // honest errors.
         decode::level(self.format, texels, width, height, self.pitch as usize).ok_or(
-            Error::Swizzled {
-                format: self.format_byte,
+            Error::DataOutOfBounds {
+                offset: range.start as u32,
+                length: (range.end - range.start) as u32,
+                got: blob.len(),
             },
         )
     }
@@ -494,7 +502,8 @@ impl Texture {
     /// [`Error::Swizzled`] for a texture in the RSX's Morton order,
     /// [`Error::Cubemap`] for a cubemap, and [`Error::DataOutOfBounds`] if the
     /// level does not fit - which `parse` has already ruled out, so it means the
-    /// wrong blob was passed.
+    /// wrong blob was passed, or a blob whose texels stop short of what the
+    /// descriptor declares.
     pub fn to_rgba(&self, blob: &[u8]) -> Result<Vec<[u8; 4]>> {
         if self.cubemap {
             return Err(Error::Cubemap);
@@ -520,9 +529,17 @@ impl Texture {
             got: blob.len(),
         })?;
         let (width, height) = self.level_size(0);
+        // **Not `Swizzled`.** The swizzled and `B8` cases are both refused
+        // above, so a `None` here is the decoder running out of texels - a
+        // truncated blob - and reporting that as "swizzled, not implemented"
+        // sent the reader looking for a Morton order that is not the problem.
+        // Finding F7 of the 2026-08-18 review, in a codebase that prizes
+        // honest errors.
         decode::level(self.format, texels, width, height, self.pitch as usize).ok_or(
-            Error::Swizzled {
-                format: self.format_byte,
+            Error::DataOutOfBounds {
+                offset: range.start as u32,
+                length: (range.end - range.start) as u32,
+                got: blob.len(),
             },
         )
     }

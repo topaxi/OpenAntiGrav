@@ -29,6 +29,15 @@ pub trait SectorSource: std::fmt::Debug + Send {
     fn sector_count(&self) -> u32;
 
     /// Reads one sector into `buf`, which must be exactly [`SECTOR_SIZE`] long.
+    ///
+    /// # Panics
+    ///
+    /// **Both implementations panic on a `buf` of any other length**, and that
+    /// is the contract rather than an accident. This trait is public, so the
+    /// length is a caller error one implementation used to `debug_assert` (and
+    /// so, in release, read across a sector boundary and hand back silently
+    /// wrong data) while the other panicked - two behaviours for one misuse,
+    /// and the quiet one is the worse. Finding F6 of the 2026-08-18 review.
     fn read_sector(&mut self, lba: u32, buf: &mut [u8]) -> Result<()>;
 
     /// Reads `count` consecutive sectors, returning them concatenated.
@@ -69,7 +78,19 @@ pub trait SectorSource: std::fmt::Debug + Send {
         if len == 0 {
             return Ok(Vec::new());
         }
-        let sectors = len.div_ceil(SECTOR_SIZE as u64) as u32;
+        // **Checked, not cast.** `len` reaches here from an ISO 9660 directory
+        // record, and multi-extent joins sum: a hostile image can name 8 TiB,
+        // whose sector count passes 2^32, and `as u32` truncated it to `0` - so
+        // `read_sectors(lba, 0)` returned an empty `Vec` with `Ok`, which is
+        // silently wrong data rather than an error. Finding F3 of the
+        // 2026-08-18 review, and the same root cause as
+        // `Image::read_entry_range`'s start LBA.
+        let sectors = u32::try_from(len.div_ceil(SECTOR_SIZE as u64)).map_err(|_| {
+            Error::SectorOutOfRange {
+                sector: u32::MAX,
+                total: self.sector_count(),
+            }
+        })?;
         let mut data = self.read_sectors(lba, sectors)?;
         data.truncate(len as usize);
         Ok(data)

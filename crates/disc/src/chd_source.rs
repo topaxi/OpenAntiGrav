@@ -184,7 +184,15 @@ impl UnitLayout {
 #[derive(Debug, Clone)]
 struct TrackInfo {
     mode: String,
-    frames: u32,
+    /// Sectors in this track, or `None` when the line does not say.
+    ///
+    /// **`Option`, not a zero**, since finding F5 of the 2026-08-18 review: a
+    /// track line missing or mangling `FRAMES:` used to default to `0`, which
+    /// became a `sector_count` of `0` and turned every read into
+    /// `SectorOutOfRange { total: 0 }` - an image bricked with a confusing
+    /// error rather than falling back to the header's own unit count, which is
+    /// exactly what the no-metadata path already does.
+    frames: Option<u32>,
     pregap: u32,
 }
 
@@ -263,9 +271,12 @@ impl ChdSource {
                 unit_bytes: layout.unit_bytes,
             });
         };
+        // `and_then`, so a track that declares no frame count takes the same
+        // fallback as an image with no track metadata at all - see
+        // [`TrackInfo::frames`].
         let sector_count = tracks
             .first()
-            .map(|t| t.frames)
+            .and_then(|t| t.frames)
             .unwrap_or_else(|| u32::try_from(header.unit_count()).unwrap_or(u32::MAX));
 
         let hunk_buf = chd.get_hunksized_buffer();
@@ -310,7 +321,15 @@ impl SectorSource for ChdSource {
     }
 
     fn read_sector(&mut self, lba: u32, buf: &mut [u8]) -> Result<()> {
-        debug_assert_eq!(buf.len(), SECTOR_SIZE);
+        // `assert`, so misuse names itself here rather than surfacing as a
+        // `copy_from_slice` length panic further down - and so both
+        // implementations answer the same way in release. See
+        // `SectorSource::read_sector`.
+        assert_eq!(
+            buf.len(),
+            SECTOR_SIZE,
+            "read_sector needs a buffer of exactly one sector"
+        );
         if lba >= self.sector_count {
             return Err(Error::SectorOutOfRange {
                 sector: lba,
@@ -355,7 +374,7 @@ fn parse_track(text: &str) -> Option<TrackInfo> {
 
     let mode = field("TYPE:")?;
     Some(TrackInfo {
-        frames: field("FRAMES:").and_then(|v| v.parse().ok()).unwrap_or(0),
+        frames: field("FRAMES:").and_then(|v| v.parse().ok()),
         pregap: field("PREGAP:").and_then(|v| v.parse().ok()).unwrap_or(0),
         mode,
     })
@@ -373,7 +392,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(t.mode, "MODE1");
-        assert_eq!(t.frames, 1_900_848);
+        assert_eq!(t.frames, Some(1_900_848));
         assert_eq!(t.pregap, 0);
     }
 
@@ -422,7 +441,7 @@ mod tests {
     fn track(mode: &str) -> TrackInfo {
         TrackInfo {
             mode: mode.into(),
-            frames: 100,
+            frames: Some(100),
             pregap: 0,
         }
     }
@@ -465,6 +484,20 @@ mod tests {
                 "{mode} should be refused until its layout is verified"
             );
         }
+    }
+
+    /// Finding F5's own guard: a line whose `FRAMES:` is missing or unparseable
+    /// says "unknown", not "zero". A zero here became `sector_count == 0`, so
+    /// every read of an otherwise-fine image failed
+    /// `SectorOutOfRange { total: 0 }`.
+    #[test]
+    fn a_track_line_with_no_frame_count_says_so_rather_than_zero() {
+        let missing = parse_track("TRACK:1 TYPE:MODE1 SUBTYPE:NONE PREGAP:0").unwrap();
+        assert_eq!(missing.frames, None);
+        assert_eq!(missing.mode, "MODE1", "the rest of the line still reads");
+
+        let mangled = parse_track("TRACK:1 TYPE:MODE1 FRAMES:lots PREGAP:0").unwrap();
+        assert_eq!(mangled.frames, None);
     }
 
     #[test]

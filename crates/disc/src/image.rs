@@ -151,7 +151,19 @@ impl DiscImage {
         // and trim the bytes before it.
         let sector_size = SECTOR_SIZE as u64;
         let skip = offset % sector_size;
-        let start_lba = entry.lba + u32::try_from(offset / sector_size).unwrap_or(u32::MAX);
+        // **A checked add, and the `unwrap_or` under it is now unreachable
+        // rather than load-bearing.** `entry.lba + offset/2048` overflowed u32
+        // for the same hostile multi-extent entries `SectorSource::read_range`
+        // names - a debug panic, or in release a wrap to a wrong sector that
+        // reads whatever is there. Finding F4 of the 2026-08-18 review; one
+        // checked add covers both halves of the pair.
+        let start_lba = u32::try_from(offset / sector_size)
+            .ok()
+            .and_then(|sectors| entry.lba.checked_add(sectors))
+            .ok_or(Error::SectorOutOfRange {
+                sector: u32::MAX,
+                total: self.source.sector_count(),
+            })?;
 
         let mut data = self.source.read_range(start_lba, skip + len)?;
         data.drain(..(skip as usize).min(data.len()));

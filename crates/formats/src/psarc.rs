@@ -456,9 +456,22 @@ impl Directory {
         let block_size = self.header.block_size as usize;
         let size = usize::try_from(entry.size).unwrap_or(usize::MAX);
 
+        // **Validated before allocated**, the rule this crate applies in about
+        // thirty parsers and slipped on here: `entry.size` is a u40 read
+        // straight out of the file, so a crafted entry can declare a terabyte
+        // and `Vec::with_capacity` would commit to it before anything checked
+        // whether the entry's blocks are even in the archive. `entry_blocks`
+        // is that check, and running it first bounds the declared size by the
+        // file's own block table - `size.div_ceil(block_size)` blocks have to
+        // exist. In practice the assets layer calls `entry_range` first, which
+        // validates the same span, but `read_entry`'s own contract does not
+        // require that and a public parser owes its guard to itself. Finding
+        // F2 of the 2026-08-18 review.
+        let blocks = self.entry_blocks(index)?;
+
         let mut out = Vec::with_capacity(size);
         let mut at = 0usize;
-        for (n, stored_len) in self.entry_blocks(index)?.into_iter().enumerate() {
+        for (n, stored_len) in blocks.into_iter().enumerate() {
             let block = entry.first_block + u32::try_from(n).unwrap_or(u32::MAX);
             let take = if stored_len == 0 {
                 block_size
