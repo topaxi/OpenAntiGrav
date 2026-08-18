@@ -318,7 +318,23 @@ impl Race {
         // The trigger rule runs whether or not the disc's own effect
         // loaded - see `Setup::effects`. Only the pool needs it.
         let effect = self.effects.get(sparks::DAMAGE_EFFECT).cloned();
-        let can_fire = evaluated.wall.impact && self.sparks_cooldown <= 0.0;
+        // Two trigger modes, chosen by the effect's own flag and never by the
+        // platform. A `LOOPING` emitter has no countdown, so an owner must let
+        // go of it; a burst ends itself and the cooldown is only there to
+        // space the next one. Pulse authors this effect as a burst and HD
+        // authors it looping - see `Race::sparks_attached`.
+        let attached_effect = effect
+            .as_deref()
+            .is_some_and(|effect| effect.roots().iter().any(|&r| effect.emitters[r].looping));
+        let can_fire = if attached_effect {
+            // Ignite once per contact, not once per cooldown: re-arming would
+            // leave a chattering scrape with no sparks for up to
+            // `COLLISION_COOLDOWN` at a time, which a burst never suffers
+            // because it has already finished by then.
+            evaluated.wall.impact && !self.sparks_attached
+        } else {
+            evaluated.wall.impact && self.sparks_cooldown <= 0.0
+        };
         let model_matrix = self.ship_model_matrix();
         if can_fire && let Some(contact) = evaluated.wall.resolved {
             // `contact.point` is deliberately the *penetrating* hull sample
@@ -357,6 +373,22 @@ impl Race {
             }
             self.sparks_ignitions += 1;
             self.sparks_cooldown = sparks::COLLISION_COOLDOWN;
+            self.sparks_attached = attached_effect;
+        }
+        // Releasing on "no contact at all" rather than on `impact` going false
+        // keeps the fountain alive through a gentle slide after the hit -
+        // `impact` is the *inbound* test and a scrape stops being inbound long
+        // before it stops being a scrape. `stop` takes the emission and leaves
+        // the live particles to finish their own lives, so the trail outlasts
+        // the contact the way it does when a rocket detonates.
+        //
+        // Limit worth knowing: `stop` is all-or-nothing across a tree, so this
+        // rule does not generalise to the four HD effects that mix `LOOPING`
+        // with clear siblings - it would truncate the siblings. None of the
+        // four is wired to this trigger.
+        if self.sparks_attached && evaluated.wall.resolved.is_none() {
+            self.sparks.stop();
+            self.sparks_attached = false;
         }
         // Unconditional, like the exhaust: the emitters keep trickling and
         // already-live particles keep ageing even on a tick with no fresh

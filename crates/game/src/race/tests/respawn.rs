@@ -327,3 +327,140 @@ fn a_respawn_is_not_repeated_on_the_very_next_tick() {
         assert_eq!(race.respawns(), 1, "respawned again inside the cooldown");
     }
 }
+
+/// A `.pob` with one root emitter, whose flags word the caller chooses.
+///
+/// Hand-laid bytes, no game content: the container's header, an empty slot
+/// table, and a single record at the resource base carrying the smallest set
+/// of fields `oag_render::psys::Effect::parse` needs to accept it. Field
+/// offsets are the ones `oag_formats::pob::Emitter` documents.
+fn one_emitter_pob(name: &str, flags: u32) -> Vec<u8> {
+    use oag_formats::pob::{EMITTER_LEN, HEADER_LEN, MAGIC, NAME_LEN};
+
+    let mut record = vec![0u8; EMITTER_LEN];
+    let take = name.len().min(NAME_LEN - 1);
+    record[..take].copy_from_slice(&name.as_bytes()[..take]);
+    let mut put = |at: usize, bits: u32| record[at..at + 4].copy_from_slice(&bits.to_le_bytes());
+    put(0x20, flags);
+    put(0x24, 4.0f32.to_bits()); // duration, in ticks
+    put(0x5c, 10); // lifetime centre
+    put(0x64, 1); // interval min
+    put(0x68, 1); // interval max
+    put(0x6c, 1); // per emission, min and max
+    put(0x70, 1);
+    put(0xa0, 64); // live cap
+    put(0xb8, 2); // render mode -> draw class 3, a billboard
+    put(0xc0, 2); // blend class -> additive
+    put(0x4d8 + 0x10, 1.0f32.to_bits()); // size channel, upper bound
+    put(0x5b8 + 0x04, 2); // alpha channel, constant
+    put(0x5b8 + 0x10, 100.0f32.to_bits());
+    put(0x9ac, 1); // one atlas frame
+    record[0x9a0..0x9a4].copy_from_slice(&[1, 0, 1, 0]); // a 1x1 atlas grid
+
+    let mut blob = Vec::new();
+    blob.extend_from_slice(MAGIC);
+    blob.extend_from_slice(&((HEADER_LEN + EMITTER_LEN - NAME_LEN) as u32).to_le_bytes());
+    blob.extend_from_slice(&0u16.to_le_bytes()); // no slots
+    blob.extend_from_slice(&1u16.to_le_bytes());
+    blob.extend_from_slice(&1u32.to_le_bytes());
+    blob.extend_from_slice(&record);
+    blob
+}
+
+/// A race whose collision-spark effect is the one supplied, against a wall.
+fn race_with_spark_effect(blob: &[u8]) -> Race {
+    let mut setup = setup_with(
+        hulled_handling(),
+        vec![plane(1, -40.0, oag_physics::Surface::Wall, 0)],
+    );
+    let effect = oag_render::psys::Effect::parse(blob, oag_render::psys::ColourScale::Full)
+        .expect("the hand-laid effect parses");
+    setup
+        .effects
+        .insert(oag_render::sparks::DAMAGE_EFFECT, effect);
+    Race::start(setup)
+}
+
+fn push_toward_wall(race: &mut Race) {
+    let body = &mut race.world.ships[0].physics.body;
+    body.position = Vec3::new(20.0, -39.7, 0.0);
+    body.linear_velocity = Vec3::new(0.0, -50.0, 0.0);
+}
+
+/// **Wipeout HD's shape of this effect, and the bug it caused.** HD authors
+/// all four emitters of `WO_SHIP_COLL_SPARK_DAMAGE` with
+/// `pob::flags::LOOPING` set, where Pulse authors none of them looping. A
+/// looping emitter has no countdown - `EmitterSpec::run_ticks` is infinite -
+/// so a trigger that only ignites leaves it emitting for the rest of the
+/// race, which is exactly what was seen: sparks that kept pouring off a craft
+/// that had long since left the wall.
+///
+/// The rule is keyed on the effect's own flag, so this is one race differing
+/// from the next by one bit of authored data and nothing else.
+#[test]
+fn a_looping_spark_effect_stops_when_the_contact_does() {
+    use oag_formats::pob::flags;
+
+    let mut race = race_with_spark_effect(&one_emitter_pob("WO_TEST_SPARK", flags::LOOPING));
+
+    push_toward_wall(&mut race);
+    let evaluated = race.tick(&InputSnapshot::default());
+    assert!(
+        evaluated.wall.impact,
+        "the fixture never reaches the wall - not what this test means to check"
+    );
+    assert_eq!(race.spark_ignitions(), 1);
+    assert!(race.sparks().is_running());
+
+    // Held against the wall: one attachment, not one per tick and not one
+    // per cooldown - a chattering scrape must not go dark waiting to re-arm.
+    let ticks = (oag_render::sparks::COLLISION_COOLDOWN / race.dt()).ceil() as usize + 2;
+    for _ in 0..ticks {
+        push_toward_wall(&mut race);
+        race.tick(&InputSnapshot::default());
+    }
+    assert_eq!(
+        race.spark_ignitions(),
+        1,
+        "an attached effect re-ignited instead of staying attached"
+    );
+    assert!(
+        race.sparks().is_running(),
+        "the scrape went dark mid-contact"
+    );
+
+    // Let go. Emission stops at once; the particles already alive finish
+    // their own lives, so the system drains rather than blinking out.
+    for _ in 0..90 {
+        race.world.ships[0].physics.body.position = Vec3::new(20.0, 0.0, 0.0);
+        race.world.ships[0].physics.body.linear_velocity = Vec3::ZERO;
+        race.tick(&InputSnapshot::default());
+    }
+    assert!(
+        !race.sparks().is_running(),
+        "the sparks kept emitting after the contact ended"
+    );
+}
+
+/// The other half of the same rule: a **non**-looping effect is Pulse's
+/// burst, and releasing the wall must not cut it short. Its own duration ends
+/// it, as `ShipCollisionFx_Trigger` has it.
+#[test]
+fn a_burst_spark_effect_is_not_cut_short_by_letting_go() {
+    let mut race = race_with_spark_effect(&one_emitter_pob("WO_TEST_SPARK", 0));
+
+    push_toward_wall(&mut race);
+    race.tick(&InputSnapshot::default());
+    assert_eq!(race.spark_ignitions(), 1);
+    assert!(race.sparks().is_running());
+
+    // One tick clear of the wall: the burst is still going, because nothing
+    // owns it and its 4-tick schedule has not run out.
+    race.world.ships[0].physics.body.position = Vec3::new(20.0, 0.0, 0.0);
+    race.world.ships[0].physics.body.linear_velocity = Vec3::ZERO;
+    race.tick(&InputSnapshot::default());
+    assert!(
+        race.sparks().is_running(),
+        "letting go truncated a burst that owns its own schedule"
+    );
+}

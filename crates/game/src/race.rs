@@ -785,6 +785,24 @@ pub struct Race {
     /// hull - rotation included - the way the original's scene-graph node
     /// does.
     sparks_anchor: Option<Vec3>,
+    /// Whether the sparks are currently *attached* to a wall contact, for the
+    /// effects that author [`oag_formats::pob::flags::LOOPING`].
+    ///
+    /// A looping emitter has no countdown -
+    /// `oag_render::psys::EmitterSpec::run_ticks` is infinite and
+    /// `psys::System::stop` is the only thing that ends it. Pulse authors
+    /// `WO_SHIP_COLL_SPARK_DAMAGE` as a 32-tick burst and needs no owner, so
+    /// this stays `false` there and the cooldown rule below is the whole
+    /// trigger. Wipeout HD authors the same four emitters **looping** with a
+    /// 4-tick duration, so something has to own them, and this latch is what
+    /// holds the attachment across the ticks of one contact.
+    ///
+    /// **Confidence 55, and the low half is which owner.** That a looping
+    /// effect needs one is the flag's own contract. That the owner is *wall
+    /// contact* is inference from what the effect is: no HD trigger has been
+    /// read, and `ShipCollisionFx_Trigger` is Pulse's. What would settle it is
+    /// HD's own dispatch, which nothing has looked at.
+    sparks_attached: bool,
     /// Whether slot 0 is being driven by its own [`oag_ai::Driver`] instead of
     /// by the input snapshot. See [`Self::set_autopilot`].
     autopilot: bool,

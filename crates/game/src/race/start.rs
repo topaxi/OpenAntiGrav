@@ -261,6 +261,7 @@ impl Race {
             // if any - is always read as a fresh impact.
             sparks_cooldown: 0.0,
             sparks_anchor: None,
+            sparks_attached: false,
             autopilot: false,
             results: None,
             // Every pad starts due for a real test. `Pad_Bind` zeroes the same
