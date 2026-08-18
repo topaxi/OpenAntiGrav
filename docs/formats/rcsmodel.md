@@ -721,8 +721,12 @@ been silently absent.
 **324 are still outside and this page does not explain them.** They are not
 spread evenly: the three circuits above have none at all, and the residue
 clusters in `zone_2`, `zone_3`, `01_vineta_k` and `15_anulpha_pass`
-(`wohdtrack_*`, `polySurface*`, `J_ALL_Ads_Frames_pCube*`). A drop from 1,377 to
-324 is a reading that got better, not one that is finished.
+(`wohdtrack_*`, `polySurface*`, `J_ALL_Ads_Frames_pCube*`). **They are not a
+fifth vertex format**: every one of them declares a layout, and the widths they
+declare are 22 on 161, 14 on 94, 18 on 68 and 38 on one - so it is an ordinary
+declaration disagreeing with an authored box rather than a width nothing can
+read. A drop from 1,377 to 324 is a reading that got better, not one that is
+finished.
 
 [`Mesh::solve_stride`]: ../../crates/formats/src/rcsmodel/stride.rs
 
