@@ -136,7 +136,8 @@ around `0x006bxxxx`:
 | `0x008c0854` | `g_GcmContext` (data) | 85 |
 | `0x005cd728` | `ShaderRegistry_Find` | 86 |
 | `0x005cd6d8` | `ShaderRegistry_Register` | 84 |
-| `0x005cd700` | `ShaderRegistry_RegisterComplete` | 78 |
+| `0x005cd990` | `ShaderRegistry_LoadAll` | 86 |
+| `0x005cd8c0` | `ShaderRegistry_UnloadAll` | 84 |
 | `0x008bf1ac` | `g_ShaderRegistryHead` (data) | 84 |
 
 ### `RenderManager_CreateInstance`, and the size of a `RenderManager`
@@ -431,24 +432,62 @@ node[3] = head; head = node;
 ```
 
 **`node[1]` is the microcode.** Reading `r4` and `r5` at every
-`bl ShaderRegistry_Register` across its 14 call sites recovers **62 registration
-sites, 62 distinct names, and 62 payload pointers - and all 62 payloads begin
-`53 48 4f 08`, `"SHO\x08"`.** That is the same `SHO` block
+`bl ShaderRegistry_Register` in the whole image - not just in the call sites
+Ghidra lists - recovers **62 registration sites, 62 distinct names, 62 distinct
+payload pointers, and all 62 payloads begin `53 48 4f 08`, `"SHO\x08"`.** That is
+the same `SHO` block
 [rcsmodel.md](../../../formats/rcsmodel.md#the-rcsmaterial-was-the-leading-hypothesis-and-it-is-not-the-answer)
 found inside a `.rcsmaterial`. So HD has **one shader container, used in two
 places**: per-surface material shaders ship in `.rcsmaterial` files, and
 engine-owned effect shaders are the same records linked into the executable.
 
-The image holds **126 `SHO` blocks**, 124 of them in one contiguous run
-`0x00927800`-`0x00936d80` at `0x80`-granular spacing, against 121 `_vp`/`_fp`
-names plus `accuview`, `quincunx` and `quincunxalt` - the anti-aliasing modes,
-which register the same way and are the only registered names not carrying a
-stage suffix. The 62 unpaired names (all of `RadioHead*`, `psys_*`,
-`FEBackgroundAnim*`, `HUD*`, plus `LensFlare`, `MagStripArc`, `engineflare`,
-`cloudshader`, `lineshader`, `FatLine`) are **not evidence of a second
-mechanism**: their registrars call the other constructor of the pair,
-`0x005cd700`, for which Ghidra lists no callers at all, and the blob count
-already accounts for them.
+**`ShaderRegistry_LoadAll` (`0x005cd990`) confirms the pairing a second way**,
+independently of any call site. It walks the list and, for each node, builds an
+object *from* `node[1]` and stores it in `node[2]`:
+
+```c
+for (node = *g_ShaderRegistryHead; node; node = node[3]) {
+    build(&tmp, node[1], 0,0,0,0);      // from the SHO block
+    ... refcount swap ...
+    node[2] = tmp;                       // what Find hands out
+}
+```
+
+`ShaderRegistry_UnloadAll` (`0x005cd8c0`) is its inverse: same walk, release
+`node[2]`, set it to zero. So the blob is the *source* and `node[2]` the built
+program, which is why `Register` leaves `node[2]` null - the registry is
+declared at static-init time and compiled in one pass later.
+
+### The accounting closes exactly, and one part of it does not
+
+The image holds **126 `SHO` blocks**. Every one has `0x08` as its fourth byte;
+there is no `SHO\x0?` variant anywhere at four-byte alignment. **124 of them lie
+in one contiguous run**, `0x00927800`-`0x00936d80`, spaced on `0x80` boundaries.
+
+That 124 is exact:
+
+| | Count |
+| --- | ---: |
+| `_vp`/`_fp` program names | 121 |
+| `accuview`, `quincunx`, `quincunxalt` - the anti-aliasing modes, the only registered names with no stage suffix | 3 |
+| **Names total** | **124** |
+| **`SHO` blocks in the shader run** | **124** |
+
+The two blocks outside that run, at `0x00765f40` and `0x00766090`, are in
+`.rodata` among the strings, are outside the cluster and outside the count, and
+are **not** shader blobs.
+
+**What does not close is which name goes with which blob.** 62 pairings are
+measured; the other 62 names and the other 62 blobs are matched only by that
+count. The obvious explanation is wrong and was checked: `0x005cd700` is the
+second constructor of the pair and **nothing in the image branches to it** - a
+whole-image `bl` scan finds zero sites, agreeing with Ghidra. So the remaining
+62 register by some route a direct-branch scan does not see, and **what that
+route is, is open**. The unpaired set is coherent rather than random - all of
+`RadioHead*` and `SPU_RadioHead*`, all `psys_*`, all `FEBackgroundAnim*`, both
+`HUD*`, plus `LensFlare`, `MagStripArc`, `engineflare`, `cloudshader`,
+`lineshader` and `FatLine` - which is a hint that they share a mechanism, not
+evidence of one.
 
 `FunkLayerBloom_vp`'s block at `0x0092ec80`, and why the reading is not just
 magic-matching:
@@ -484,6 +523,13 @@ Use `scripts/ps3-toc.py resolve` on every constant in that range.
 - **The draw path.** No mesh submission, no state setting, no shader binding.
   It is inline command-buffer writing and finding it needs a search for RSX
   method constants, not a call graph.
+- **`0x005cd700`**, the registry's second constructor. It is byte-similar to
+  `ShaderRegistry_Register` and has **no branch to it anywhere in the image**,
+  so the base-versus-complete split that
+  [mode-manager.md](mode-manager.md) resolves by call site cannot be resolved
+  here - these are self-registering nodes built by static initialisers, not a
+  class hierarchy, so that rule says nothing about which is C1 and which is C2.
+  Below 50; the hypothesis is recorded and the function is left unnamed.
 - **`SortRoot.cpp`'s four functions** (`0x002dbe08`, `0x002dbe50`,
   `0x002dbe98`, `0x002dbf40`). All four are constructors writing the same two
   vtables and the `__FILE__` at `+0x30`; two of them additionally tail-call

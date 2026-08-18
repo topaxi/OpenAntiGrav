@@ -55,5 +55,6 @@
 0x008c0854	data	g_GcmContext	85	renderer.md
 0x005cd728	function	ShaderRegistry_Find	86	renderer.md
 0x005cd6d8	function	ShaderRegistry_Register	84	renderer.md
-0x005cd700	function	ShaderRegistry_RegisterComplete	78	renderer.md
+0x005cd990	function	ShaderRegistry_LoadAll	86	renderer.md
+0x005cd8c0	function	ShaderRegistry_UnloadAll	84	renderer.md
 0x008bf1ac	data	g_ShaderRegistryHead	84	renderer.md
