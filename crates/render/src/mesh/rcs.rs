@@ -592,6 +592,9 @@ fn emit(out: &mut Model, mesh: Geometry<'_>, to_world: Mat4, node: Option<u32>, 
         // Which list a draw is in, above, is what says it is transparent.
         blend: None,
         blend_state: surface.blend,
+        // A PS3 chunk has no `.vex` mesh payload and so no derived layer; the
+        // uniform value leaves `Model::sort_by_layer` holding chunk order.
+        layer: vex::LAYER_DEFAULT,
         node,
     });
 }

@@ -1043,68 +1043,16 @@ pub fn nodes(data: &[u8]) -> Result<Vec<Node>> {
     Ok(out)
 }
 
+mod mesh_header;
+pub use mesh_header::{
+    LAYER_DEFAULT, LAYER_EARLY, LAYER_EXHAUST, LAYER_REFLECTION_FIRST, LAYER_SCENE, Material,
+    mesh_layer, mesh_materials,
+};
+
 mod textures;
 pub use textures::{
     EmbeddedTexture, texture_asset_path, texture_row_bytes, texture_row_stride, textures,
 };
-
-/// One material of a mesh, from the stride-`0x14` array at `+0x30`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Material {
-    /// The `u16` at `+0x00`: render state, not an animation switch.
-    ///
-    /// Surveyed across every material of all 12 PSP circuits. It is richly
-    /// varied (19 distinct values on `07_Track` alone) and correlates with the
-    /// artists' own naming, but it does **not** separate animated surfaces from
-    /// static ones - `flicker1nonalpha_GLOW` and the plainly static
-    /// `hub_banner_GLOW` both carry `0x91`. Two bits are legible:
-    ///
-    /// - `0x0080` accompanies the `_GLOW`/additive naming convention.
-    /// - `0x2000` lands on exactly the `*_shinemap` textures, which is
-    ///   independent corroboration of the "extra pass" reading of the same bit
-    ///   in a batch's `pass_mask`, and of [`Material::second_texture`].
-    ///
-    /// Nothing consumes it yet. Recorded so the census is reproducible from the
-    /// parser rather than from a one-off script. See `docs/formats/vex.md`.
-    pub flags: u16,
-    /// The `u32` at `+0x04`: an index into the model's texture array, from
-    /// [`textures`].
-    pub texture: u32,
-    /// The `u32` at `+0x08`: the second texture of the `0x2000` extra pass.
-    ///
-    /// Zero on every material of `07_Track`, so the pass it belongs to is not
-    /// exercised there and this stays unread by the renderer.
-    pub second_texture: u32,
-}
-
-/// Materials of one mesh payload.
-///
-/// Stride 0x14, starting at `+0x30`.
-///
-/// Positional for the same reason as [`textures`]: a batch selects a material by
-/// index, so a material that runs past the payload has to come back as `None`
-/// rather than shorten the list and renumber the ones after it.
-///
-/// The remaining `+0x0c..0x14` is **proven zero** on every material of every
-/// PSP circuit, which is what rules out an authored per-surface UV scroll rate
-/// and forces texture-keyed animation instead.
-#[must_use]
-pub fn mesh_materials(payload: &[u8]) -> Vec<Option<Material>> {
-    if payload.len() < 0x30 {
-        return Vec::new();
-    }
-    let count = usize::from(u16_at(payload, 2));
-    (0..count)
-        .map(|i| {
-            let at = 0x30 + i * 0x14;
-            (at + 0x0c <= payload.len()).then(|| Material {
-                flags: u16_at(payload, at),
-                texture: u32_at(payload, at + 4),
-                second_texture: u32_at(payload, at + 8),
-            })
-        })
-        .collect()
-}
 
 /// One keyframe track of a mesh's texture-transform block: key times paired
 /// with `(u, v)` values.

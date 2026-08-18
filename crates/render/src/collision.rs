@@ -242,6 +242,8 @@ pub fn build_model(
         // Synthetic: no batch, so no recovered blend class.
         blend: None,
         blend_state: None,
+        // Synthetic: no mesh, so no derived layer.
+        layer: oag_formats::vex::LAYER_DEFAULT,
         culled: false,
         range: 0..indices_len(&indices),
         texture: None,

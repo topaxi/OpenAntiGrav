@@ -279,8 +279,7 @@
 0x08810e6c	function	Gu_SetMatrix	88	exhaust.md
 0x08b65700	data	g_trail_state_list	85	exhaust.md
 0x08928460	function	Gfx_BindTexture	75	exhaust.md
-0x0891e35c	function	Gfx_Enqueue	65	exhaust.md
-0x0890486c	function	Gfx_ViewDepth	60	exhaust.md
+0x0891e35c	function	Gfx_Enqueue	92	mesh-draw.md
 0x0883d850	function	Ship_ThrustInput	55	exhaust.md
 0x089246b4	function	ShipCollisionFx_Trigger	85	contact-response.md
 0x0883de90	function	Ship_DispatchCollisionFx	80	contact-response.md
@@ -519,3 +518,5 @@
 0x088518b4	function	WeaponAi_DecideFireOrAbsorb	85	weapon-ai.md
 0x08ab0eac	data	g_weapon_ai_rate	80	weapon-ai.md
 0x08ab0ec0	data	g_weapon_ai_rate_eliminator	80	weapon-ai.md
+0x0891ddec	function	Gfx_CompareQueueKeys	95	mesh-draw.md
+0x0890486c	function	Gfx_ViewDepth	82	mesh-draw.md

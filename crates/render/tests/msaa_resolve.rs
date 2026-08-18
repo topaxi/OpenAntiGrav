@@ -66,6 +66,7 @@ fn triangle_model() -> Model {
         draws: vec![DrawCall {
             blend: None,
             blend_state: None,
+            layer: oag_formats::vex::LAYER_DEFAULT,
             culled: false,
             range: 0..3,
             texture: None,

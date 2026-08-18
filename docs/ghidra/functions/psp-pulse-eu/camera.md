@@ -28,7 +28,7 @@ finding rests on:
   `m00 = m11 / 1.7647059`, takes its near plane as
   `cam+0x80 + (65.0 / fov - 1.0) * 0.5`, its far from `display+0x1698`,
   installs the result at `display+0x1190`, and ends with the same
-  `* 480.0` LOD term and `Gfx_Enqueue_q(display, cam, 0x30000000)`.
+  `* 480.0` LOD term and `Gfx_Enqueue(display, cam, 0x30000000)`.
 - `Camera_PublishTripod` copies the tripod's 4x4 into the global camera and
   publishes `fov = *(tripod+0x50)`, `tan(fov/2)`, and **`tan(fov/2) * 480.0 /
   272.0`** - the two literals (`lui 0x43f0`, `lui 0x4388`) that pin the fov

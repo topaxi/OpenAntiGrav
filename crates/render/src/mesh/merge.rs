@@ -79,6 +79,7 @@ pub fn merge(label: &str, models: Vec<Model>) -> Model {
             node: d.node,
             blend: d.blend,
             blend_state: d.blend_state,
+            layer: d.layer,
             culled: d.culled,
         };
         out.draws.extend(model.draws.into_iter().map(rebase));
@@ -109,6 +110,10 @@ pub fn merge(label: &str, models: Vec<Model>) -> Model {
             .fold(0.0f32, f32::max)
             .max(0.001);
     }
+    // The original queues every model's batch sets into **one** queue and sorts
+    // that, so a merge is exactly the case where sorting across sources is the
+    // faithful thing rather than an over-reach - see `Model::sort_by_layer`.
+    out.sort_by_layer();
     out
 }
 
@@ -135,6 +140,7 @@ mod merge_tests {
             draws: vec![DrawCall {
                 blend: None,
                 blend_state: None,
+                layer: oag_formats::vex::LAYER_DEFAULT,
                 culled: false,
                 range: 0..vertices as u32,
                 texture: (textures > 0).then_some(0),

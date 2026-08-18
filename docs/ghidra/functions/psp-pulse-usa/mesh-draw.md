@@ -1876,3 +1876,125 @@ against a live capture.
 - None of this was verified live; it is all static decompilation, though the
   `pass_mask` and `header_byte3` values it is evaluated at are disc
   measurements.
+
+## The render queue, its key, and its sort (2026-08-18)
+
+Recovered while answering a question this page had already half-answered: it
+records that `Mesh_CompileBatchSet` runs "four comparator sorts" and that
+`Gfx_FlushRenderManager` is "sort plus deferred draw callbacks", and neither
+said what is sorted or by what. The whole ordering model is on
+[`docs/rendering/draw-order.md`](../../../rendering/draw-order.md); what follows
+is the four functions and their evidence.
+
+**A note on addresses.** The decompiler renders call targets in this region
+unrelocated - `func_0x0011a35c` and the like. The image base is `0x08804000`, so
+`0x0011a35c` is `0x0891e35c`; every address below is the relocated one, and the
+mapping is confirmed by `Gfx_FlushRenderManager` itself decompiling at
+`0x0891e3c0 = 0x08804000 + 0x11a3c0`.
+
+### `Gfx_Enqueue`
+
+| | |
+| --- | --- |
+| **Address** | `0x0891e35c` |
+| **Confidence** | 92 |
+
+Appends one 8-byte entry - item pointer at `+0x00`, sort key at `+0x04` - to the
+array at `display+0x16a0`, bumping the count at `display+0x5520`. The array is
+bounded at 2,000 entries by where the count sits. When `display+0x1180` is not
+`0xffffffff` it replaces the key's low twenty bits and keeps the top twelve:
+
+```c
+key = (d->0x1180 & 0xfffff) | (key & 0xfff00000);
+```
+
+92 rather than higher because what writes `+0x1180` was not traced. 63 call
+sites, of which the ones this page cares about are `0x0892ece0` (a batch set)
+and `ExhaustFlare_Submit`.
+
+### `Gfx_CompareQueueKeys`
+
+| | |
+| --- | --- |
+| **Address** | `0x0891ddec` |
+| **Confidence** | 95 |
+
+The `qsort` comparator `Gfx_FlushRenderManager` passes. Four instructions, and
+there is nothing in it to interpret:
+
+```asm
+0891ddec  lw    v0, 0x4(a0)
+0891ddf0  lw    a0, 0x4(a1)
+0891ddf4  jr    ra
+0891ddf8  _subu v0, v0, a0
+```
+
+`a->key - b->key`, so **ascending on the whole signed 32-bit word**. It reads
+`+0x04` of each element, which is what fixes the queue entry's layout as
+`{ item, key }` rather than the other way round.
+
+Not 100 only because the rubric caps a static reading; there is no reading of
+these four instructions that differs.
+
+### `Gfx_ViewDepth`
+
+| | |
+| --- | --- |
+| **Address** | `0x0890486c` |
+| **Confidence** | 88 |
+
+Transforms a point by the view matrix at `_DAT_00059568` with `vtfm4_q` and
+returns the **z** component (`auVar1._8_4`). Returns `10000.0` unchanged when any
+of the point's three components is the `0x7f800001` sentinel. Named by
+`exhaust.md` since before this pass; the row is new because the address had never
+been written down beside it.
+
+### `0x0892ece0`, a batch set's submit method
+
+**Deliberately unnamed.** Its shape is unambiguous - it enqueues `self` with
+`*(self+0xbc)`, which `Mesh_CompileBatchSet` stores its layer-key argument into
+at `0x0892f40c` (`sw s0, 0xbc(s1)`) - but it is reached through a vtable and no
+call site names it, so a `Subsystem_VerbNoun` here would be a guess about which
+subsystem owns it. Below 70; the hypothesis is written down instead.
+
+```c
+if (*(int *)(set + 0xbc) != 0x40000000 ||
+    _DAT_0005ab8c <= -*(float *)(_DAT_002ad0b0 + 0x74))
+    Gfx_Enqueue(g_display, set, *(int *)(set + 0xbc));
+```
+
+**Two things this settles.** A mesh batch set is queued with its **bare layer
+key** and no depth term, so mesh geometry is not depth-sorted by the original at
+all. And the `0x40000000` set is *skipped* unless a distance test passes - a
+cull living inside the submit, not an ordering rule.
+
+### The sort, `0x08972860`
+
+**Left unnamed on purpose**: it is a textbook `qsort` - Bentley-McIlroy
+three-way partition, median-of-three under 0x28 elements and a ninther above,
+insertion sort under 7, tail recursion on the larger half - and forcing this
+project's `Subsystem_VerbNoun` convention onto a libc routine would say something
+false about where it came from. **It is not stable**, which is the property a
+reimplementation has to know it is free to choose within.
+
+### The layer derivation, and what it is worth
+
+`Mesh_InitFromPayload`'s re-derivation is written up above under "The layer key
+at `mesh+0x4c`". Restated as a rule, and it fires only when the model's own key
+is `0x45000000`:
+
+```text
+payload[+0x0c] & 0x8                    -> 0x31000000
+else flags & 0x0080                     -> 0x4a000000
+else flags & 0x2000 && flags & 0x0040   -> 0x4a000000
+else flags & 0x1000                     -> 0x45000000
+else                                    -> 0x4a000000
+```
+
+`oag_formats::vex::mesh_layer` is this, and
+`crates/formats/tests/vex_layer_ground_truth.rs` censuses it over `Data.wad`:
+**21,055 mesh nodes, 66.4 % on `0x45` and 33.6 % on `0x4a`**, with the `0x31`
+branch never firing on this disc. Of 5,610 transparent batches, 63.7 % / 36.3 %.
+So the rule separates a real two-thirds/one-third split rather than naming a
+field nothing distinguishes by - which is the check that was run before any of
+it reached the renderer.

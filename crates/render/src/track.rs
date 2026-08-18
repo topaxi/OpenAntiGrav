@@ -135,6 +135,8 @@ pub fn build_model(label: &str, ai: &AiTrack) -> Model {
         // Synthetic: no batch, so no recovered blend class.
         blend: None,
         blend_state: None,
+        // Synthetic: no mesh, so no derived layer.
+        layer: vex::LAYER_DEFAULT,
         culled: false,
         range: 0..indices.len() as u32,
         texture: None,

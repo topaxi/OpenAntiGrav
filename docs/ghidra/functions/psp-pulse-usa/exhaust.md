@@ -103,12 +103,12 @@ three offsets is what makes the role assignment evidence rather than a guess.
 | **Confidence** | 85 |
 
 Returns early when `self+0x84 != 0`. Otherwise takes the node's world
-translation (`*(self+0x30)` at `+0x30`), asks `Gfx_ViewDepth_q` for a depth, and
+translation (`*(self+0x30)` at `+0x30`), asks `Gfx_ViewDepth` for a depth, and
 when that is negative builds a 20-bit back-to-front sort key:
 
 ```c
 key = 0xfffff - (min((int)(-depth * 349.525), 0xfffff) & 0xfffff);
-Gfx_Enqueue_q(g_display, self, key | 0x4d000000);
+Gfx_Enqueue(g_display, self, key | 0x4d000000);
 ```
 
 `0xfffff / 349.525 = 3000.0`, so the key spans **3,000 world units** of depth at
@@ -749,9 +749,18 @@ the PSP GE's own, so the mapping is read, not inferred from call sites. The
 argument pattern rather than by their bodies" is retired: both bodies are now
 read (they maintain a shadow enable-bit word at `DAT_08adc3a8` and emit through
 `0x08811b58`), and the state indices are `sceGu`'s own enum.
-| `0x0891e35c` | function | `Gfx_Enqueue` | 65 |
-| `0x0890486c` | function | `Gfx_ViewDepth` | 60 |
+| `0x0891e35c` | function | `Gfx_Enqueue` | 65, **superseded: 92** |
+| `0x0890486c` | function | `Gfx_ViewDepth` | 60, **superseded: 82** |
 | `0x0883d850` | function | `Ship_ThrustInput` | 55 |
+
+The first two were raised on 2026-08-18 by reading their bodies rather than
+their call sites - the queue entry's layout, the enqueue's depth override, and
+`Gfx_ViewDepth`'s `vtfm4_q` returning the transformed `z`. Both were below 70
+here and so carried the `_q` suffix in prose; **both are above it now and the
+suffix is gone**, which is the convention doing what it is for. `names.tsv`
+carries the new figures and cites
+[mesh-draw.md](mesh-draw.md#the-render-queue-its-key-and-its-sort-2026-08-18),
+where the evidence is.
 
 `Vex_FindClassDescriptor` (`0x08908b68`) and `Vex_LoadModel` (`0x08912b80`) were
 already named by earlier passes; `Gu_DrawArray` (`0x08810e98`) and `Gu_CallList`
@@ -1899,7 +1908,7 @@ Recorded rather than fixed, so the next pass starts from the measurement:
   unchanged by a full-frame command-stream scan plus the driver's live shadow
   state. See the GE-state section.
 - Two callees identified from use rather than from their bodies, hence `_q`:
-  `Ship_ThrustInput_q` (`0x0883d850`, read as thrust) and `Gfx_ViewDepth_q`
+  `Ship_ThrustInput_q` (`0x0883d850`, read as thrust) and `Gfx_ViewDepth`
   (`0x0890486c`, read as a view depth).
 - The class table's `id == -1` terminator, and therefore its extent.
 - ~~What widens the fov during a boost~~ - **not an open question, and never
