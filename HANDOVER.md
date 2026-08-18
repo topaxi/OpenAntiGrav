@@ -60,8 +60,10 @@ appending a dated pass to it.
   --no-fail-fast`. **Five of the six that fail are the `data/traces/` absence
   below**; the sixth is
   `ps2_source_ground_truth::an_uncapped_transcode_still_reports_a_total_to_divide_by`,
-  which transcodes a PS2 `.PSS` and comes back with no frames - unrelated to
-  anything in `oag-formats`, and it takes 342s to reach that answer. Use
+  and it is a **flake under load, not a failure**: it transcodes a PS2 `.PSS`
+  through ffmpeg, takes 342s and returns no frames when the whole sweep is
+  competing for the machine, and passes in 124s run on its own. Re-run it alone
+  before chasing it. Use
   `--no-fail-fast`, because two of the trace ones sort early enough to stop the
   run at 335 of 2,494 and that reads like a much worse tree than it is.
 - **`just test-data` takes about 3:17, not 11:27.** If it takes eleven minutes
