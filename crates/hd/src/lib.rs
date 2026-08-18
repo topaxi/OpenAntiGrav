@@ -71,6 +71,7 @@ pub const TITLE: &Title = &Title {
     // and ADR-0025; this field held `None` until the type could carry that
     // difference.
     front_end: Some(frontend::FRONT_END),
+    hud: hud::LAYOUTS,
     race: race::DEFAULTS,
     // **The same file the soundtrack is declared in**, because on this title the
     // front-end plugin *is* the game plugin - it carries the `PI_Team` and

@@ -90,3 +90,48 @@ fn an_unnamed_team_is_the_titles_own_and_every_title_has_one() {
     assert_eq!(oag_hd::TITLE.race.team, "assegai");
     assert_eq!(oag_pulse::TITLE.race.team, "Assegai");
 }
+
+/// Finding S2's guard: every title answers the HUD question for itself, and
+/// speed lap is the row where the answers differ.
+///
+/// The composed read needs a disc; what is checkable without one is the routing
+/// that was wrong - `hud_layout` returning Pulse's names whatever was open.
+#[test]
+fn each_title_serves_its_own_hud_layouts() {
+    for title in [oag_pulse::TITLE, oag_pure::TITLE, oag_hd::TITLE] {
+        for mode in Mode::ALL {
+            let entry = hud_layout(title, mode);
+            assert!(!entry.is_empty(), "{} authors no {mode:?} HUD", title.name);
+        }
+    }
+
+    // Both PSP discs ship no `SpeedLap_HUD.xml` - the name hashes to
+    // `1af0a646` and neither carries it - so speed lap draws the time trial's.
+    for psp in [oag_pulse::TITLE, oag_pure::TITLE] {
+        assert_eq!(
+            hud_layout(psp, Mode::SpeedLap),
+            hud_layout(psp, Mode::TimeTrial),
+            "{} ships no separate speed lap layout",
+            psp.name
+        );
+    }
+
+    // HD does ship one, which is the divergence that made this an axis. Before
+    // it existed, an HD speed lap was served Pulse's time trial name.
+    assert_ne!(
+        hud_layout(oag_hd::TITLE, Mode::SpeedLap),
+        hud_layout(oag_hd::TITLE, Mode::TimeTrial),
+        "HD ships speedlap_hud.xml separately"
+    );
+    assert_eq!(
+        hud_layout(oag_hd::TITLE, Mode::SpeedLap),
+        "/data/xml/speedlap_hud.xml"
+    );
+
+    // And nothing is quietly serving Pulse's tables to HD any more.
+    assert_ne!(
+        hud_layout(oag_hd::TITLE, Mode::SingleRace),
+        hud_layout(oag_pulse::TITLE, Mode::SingleRace),
+        "HD's layouts are spelled as its own manifest stores them"
+    );
+}

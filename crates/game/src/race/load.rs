@@ -807,7 +807,13 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let language_plugins = title
         .front_end
         .map_or::<&[&str], _>(&[], |front_end| front_end.language_plugins);
-    let hud = load_hud(&mut archives, options.mode, language_plugins, &mut report);
+    let hud = load_hud(
+        &mut archives,
+        title,
+        options.mode,
+        language_plugins,
+        &mut report,
+    );
 
     // The ring the lap counter runs on. Reported either way: "this track has no
     // lap counting" is exactly the kind of thing that otherwise gets discovered

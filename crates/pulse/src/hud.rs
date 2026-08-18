@@ -19,6 +19,24 @@
 /// arithmetic that agrees with itself and not with the disc.
 pub const ATLAS: &str = r"Data\HUD\Textures\PulseHUD.mip";
 
+/// The layout each mode this engine runs reads its HUD from, as
+/// [`oag_title::Title::hud`] carries it.
+///
+/// The constants below are the same values, kept as named items because that is
+/// where their evidence is written down; this is the table the engine reads.
+///
+/// **`speed_lap` is the time trial's, and that is measured rather than assumed**:
+/// this disc ships no `SpeedLap_HUD.xml` - the name hashes to `1af0a646` and no
+/// entry carries it - which is why `docs/ui/hud.md` counts five layouts for six
+/// modes. HD ships a separate one, which is the divergence that made
+/// `oag_title::HudLayouts` a type.
+pub const LAYOUTS: &oag_title::HudLayouts = &oag_title::HudLayouts {
+    arcade: layouts::ARCADE,
+    time_trial: layouts::TIME_TRIAL,
+    speed_lap: layouts::TIME_TRIAL,
+    zone: layouts::ZONE,
+};
+
 /// The five shipped layouts, by race mode.
 ///
 /// Widget counts are `<Image>` plus `<Text>`, measured off the USA PSP disc and

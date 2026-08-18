@@ -42,6 +42,26 @@ pub mod skins {
     pub const RETRO_2097: &str = "2097_hud/";
 }
 
+/// The layout each mode this engine runs reads its HUD from, as
+/// [`oag_title::Title::hud`] carries it.
+///
+/// The constants below are the same values, kept as named items because that is
+/// where their evidence is written down; this is the table the engine reads.
+///
+/// **The default skin, because how a skin is chosen is not read** - see
+/// [`skins`]. The `wo3` and `2097` roots stay in [`ROOTS`] until something can
+/// say which one a race is in.
+///
+/// `speed_lap` is this title's own file. Both PSP discs ship none and draw the
+/// time trial's instead, which is the divergence
+/// [`oag_title::hud`](oag_title::hud) exists for.
+pub const LAYOUTS: &oag_title::HudLayouts = &oag_title::HudLayouts {
+    arcade: layouts::ARCADE,
+    time_trial: layouts::TIME_TRIAL,
+    speed_lap: layouts::SPEED_LAP,
+    zone: layouts::ZONE,
+};
+
 /// The eighteen root layouts, by mode and skin.
 ///
 /// **Read off the manifests rather than off the executable**, and the two do not

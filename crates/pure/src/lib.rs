@@ -45,6 +45,7 @@ pub const TITLE: &Title = &Title {
     },
     foreign_serials: FOREIGN_SERIALS,
     front_end: Some(FRONT_END),
+    hud: hud::LAYOUTS,
     race: race::DEFAULTS,
     plugin_definition: names::GAME_PLUGIN_DEFINITION,
     music: Some(MUSIC),
@@ -94,6 +95,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
 };
 
 pub mod frontend;
+pub mod hud;
 pub mod race;
 
 /// The archives a PSP Pure disc ships, relative to the image root.

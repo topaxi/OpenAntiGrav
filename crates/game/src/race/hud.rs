@@ -6,27 +6,36 @@
 
 use super::*;
 
-/// Which layout a mode draws its HUD from.
+/// Which layout a mode draws its HUD from, on the title that is open.
 ///
-/// Time trial and speed lap share one: `TimeTrial_HUD.xml` carries both, which
-/// is why `docs/ui/hud.md` counts five layouts for six modes and why the disc has
-/// no `SpeedLap_HUD.xml`. Zone has its own.
+/// **The names are the title's** ([`oag_title::HudLayouts`]) and the mapping is
+/// this function's, for the reason `oag_pulse::race` states about the Zone
+/// hull: `Mode` is the engine's type and a title package must not grow one.
 ///
-/// `Arcade_HUD.xml` is the single race's, and it is the only shipped layout that
-/// carries pickup widgets at all: `PickupBackground`, `SubWeapon` and one
-/// `<Type>Icon` per weapon. `TimeTrial_HUD.xml` and `Zone_HUD.xml` carry none,
-/// which is the disc agreeing from the presentation side with what
-/// [`Mode::weapons_enabled`] reads out of the code. See
-/// `docs/gameplay/pickups.md`.
+/// Until 2026-08-18 this returned `oag_pulse`'s names for every title, and HD
+/// worked only because PSARC path normalisation folds
+/// `Data\XML\Arcade_HUD.xml` onto the `/data/xml/arcade_hud.xml` its manifest
+/// stores - so HD's own tables had no reader at all. Finding S2 of that day's
+/// review. The row where the luck ran out is **speed lap**: neither PSP disc
+/// ships a `SpeedLap_HUD.xml`, so both draw the time trial's, while HD ships a
+/// separate one that nothing here could ask for.
 ///
-/// The one layout this does not reach - `Elimination_HUD.xml` - is in
-/// [`crate::hud::layouts`] waiting for the mode that uses it.
+/// The single race's layout is the only shipped one that carries pickup widgets
+/// at all: `PickupBackground`, `SubWeapon` and one `<Type>Icon` per weapon. The
+/// time trial's and Zone's carry none, which is the disc agreeing from the
+/// presentation side with what [`Mode::weapons_enabled`] reads out of the code.
+/// See `docs/gameplay/pickups.md`.
+///
+/// Layouts no mode here reaches - Eliminator's on every title, and HD's
+/// Detonator, Duel and MPTag - stay in their own title crate waiting for the
+/// mode that uses them.
 #[must_use]
-pub const fn hud_layout(mode: Mode) -> &'static str {
+pub const fn hud_layout(title: &'static oag_title::Title, mode: Mode) -> &'static str {
     match mode {
-        Mode::TimeTrial | Mode::SpeedLap => crate::hud::layouts::TIME_TRIAL,
-        Mode::Zone => crate::hud::layouts::ZONE,
-        Mode::SingleRace => crate::hud::layouts::ARCADE,
+        Mode::TimeTrial => title.hud.time_trial,
+        Mode::SpeedLap => title.hud.speed_lap,
+        Mode::Zone => title.hud.zone,
+        Mode::SingleRace => title.hud.arcade,
     }
 }
 
@@ -37,35 +46,50 @@ pub const fn hud_layout(mode: Mode) -> &'static str {
 /// a silent fallback would send someone looking in the shader.
 pub(super) fn load_hud(
     archives: &mut oag_assets::Archives,
+    title: &'static oag_title::Title,
     mode: Mode,
     language_plugins: &[&str],
     report: &mut Vec<String>,
 ) -> crate::hud::Assets {
-    let entry = hud_layout(mode);
-    let layout = match archives
-        .read_name(entry)
-        .map_err(|e| e.to_string())
-        // `text`, not `expand`: the PS2 ships these five layouts as plain
-        // `<?xml` where the PSP shortens them, and reaching for `expand`
-        // refused the PS2's outright and took the whole HUD with it.
-        .and_then(|blob| oag_formats::fexml::text(&blob).map_err(|e| e.to_string()))
-    {
-        Ok(xml) => {
-            let layout = crate::hud::Layout::from_xml(&xml);
+    let entry = hud_layout(title, mode);
+    // **Through `compose`, on every title.** A Pulse or Pure layout includes
+    // nothing and composes to itself, so this is the same read it always was
+    // for them; HD's roots are *shells* that pull in up to sixteen fragments by
+    // `<LoadXML SrcRel=>`, and reading only the root got what an HD race
+    // actually drew before finding S2 was fixed - one fill, no sprites, no
+    // labels. `oag_hd::hud`'s own docs called that out ("reading only the root
+    // gets two empty rectangles") while nothing here composed.
+    //
+    // `fexml::text` inside `compose` decides shortened-versus-plain from each
+    // blob's own first bytes, which is what lets one call serve both dialects:
+    // the PSP shortens its layouts, the PS2 and HD ship plain `<?xml`, and
+    // reaching for `expand` refused the PS2's outright and took the whole HUD
+    // with it.
+    let composed = crate::hud::compose(entry, |path| archives.read_name(path).ok());
+    let layout = match composed {
+        Some(composed) => {
+            let layout = composed.layout;
             report.push(format!(
-                "HUD {entry}: {} sprite(s), {} fill(s), {} label(s), {} model(s)",
+                "HUD {entry}: {} sprite(s), {} fill(s), {} label(s), {} model(s){}",
                 layout.sprites.len(),
                 layout.fills.len(),
                 layout.labels.len(),
-                layout.models.len()
+                layout.models.len(),
+                match composed.files.len() {
+                    1 => String::new(),
+                    n => format!(" composed from {n} file(s)"),
+                }
             ));
+            for missing in &composed.missing {
+                report.push(format!("HUD: include {missing} is not in this source"));
+            }
             for note in &layout.skipped {
                 report.push(format!("HUD: skipped {note}"));
             }
             Some(layout)
         }
-        Err(why) => {
-            report.push(format!("HUD {entry} unavailable ({why}); no HUD"));
+        None => {
+            report.push(format!("HUD {entry} unavailable; no HUD"));
             None
         }
     };

@@ -272,6 +272,34 @@ Worth knowing before spending time on it: the executable's own
 choice is not made by composing a name at runtime. See
 [race-hud.md](../ghidra/functions/ps3-hdfury-eu/race-hud.md).
 
+## What a race reads today
+
+**Since 2026-08-18 an HD race reads HD's own root**, not Pulse's:
+`oag_title::HudLayouts` is the axis (`arcade`, `time_trial`, `speed_lap`,
+`zone`), each title package fills it in, and `oag_game::race::hud_layout` maps
+the mode. Before that every title was served `oag_pulse::hud::layouts` and HD
+worked only because PSARC normalisation folds `Data\XML\Arcade_HUD.xml` onto
+`/data/xml/arcade_hud.xml` - finding S2 of that day's review.
+
+Two things changed measurably on the disc, both visible in the race's own load
+report:
+
+- **`load_hud` composes.** It read only the root before, which for HD meant
+  *one fill, no sprites, no labels* - the empty rectangles this page's own
+  introduction predicted. `just play hd --race` now reports
+  `/data/xml/timetrial_hud.xml: 51 sprite(s), 1 fill(s), 43 label(s), composed
+  from 14 file(s)` and decodes `HUD_Components.gtf` as its atlas. A Pulse or
+  Pure layout includes nothing and composes to itself, so their reports are
+  unchanged to the widget.
+- **Speed lap is HD's own file.** Neither PSP disc ships a `SpeedLap_HUD.xml`
+  (the name hashes to `1af0a646` and no entry carries it), so both draw the time
+  trial's; HD ships one, and it was unreachable. `just play hd --race --mode
+  speed_lap` now reports `/data/xml/speedlap_hud.xml: 50 sprite(s), 1 fill(s),
+  40 label(s), composed from 15 file(s)`.
+
+The default skin only, because which skin a race picks is still unread - see
+below.
+
 ## What is not done
 
 - **The pixels exist and nothing draws them.** [`.gtf` is read](gtf.md) as of

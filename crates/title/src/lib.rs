@@ -36,10 +36,12 @@
 //! [ADR-0023]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0023-boot-sequence-as-title-data.md
 
 pub mod boot;
+pub mod hud;
 pub mod menu;
 pub mod race;
 
 pub use boot::{BootProfile, BootStep, Provenance};
+pub use hud::HudLayouts;
 pub use menu::MenuSkin;
 pub use oag_disc::Platform;
 pub use race::RaceDefaults;
@@ -71,6 +73,9 @@ pub struct Title {
     /// rather than two, and why `None` is a measurement rather than a hole
     /// waiting to be filled.
     pub front_end: Option<&'static FrontEnd>,
+    /// Which layout this title's in-race HUD is read from, per mode. See
+    /// [`hud::HudLayouts`].
+    pub hud: &'static hud::HudLayouts,
     /// What a race falls back to when the caller names no circuit or team. See
     /// [`race::RaceDefaults`].
     ///

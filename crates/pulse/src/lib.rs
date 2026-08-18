@@ -40,6 +40,7 @@ pub const TITLE: &Title = &Title {
     },
     foreign_serials: FOREIGN_SERIALS,
     front_end: Some(FRONT_END),
+    hud: hud::LAYOUTS,
     race: race::DEFAULTS,
     plugin_definition: names::GAME_PLUGIN_DEFINITION,
     music: Some(MUSIC),
