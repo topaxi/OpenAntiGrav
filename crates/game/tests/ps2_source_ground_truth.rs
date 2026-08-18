@@ -387,7 +387,7 @@ fn every_ps2_ship_s_texture_set_is_found_by_directory_position() {
     for team in TEAMS {
         let loaded = race::load(&race::Options {
             source: image.display().to_string(),
-            team: team.to_string(),
+            team: Some(team.to_string()),
             class: SpeedClass::Venom,
             ..race::Options::default()
         })

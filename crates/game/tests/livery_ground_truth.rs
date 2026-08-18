@@ -179,7 +179,7 @@ fn slot_zero_is_the_team_the_options_asked_for() {
         source: image.display().to_string(),
         class: SpeedClass::Venom,
         mode: oag_race::Mode::SingleRace,
-        team: chosen.clone(),
+        team: Some(chosen.clone()),
         ..race::Options::default()
     })
     .expect("loading the race");

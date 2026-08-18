@@ -32,8 +32,22 @@ pub struct Options {
     /// be resolved earlier: which title a source is comes from the serial in its
     /// own filesystem, which is read by opening it.
     pub track: Option<String>,
-    /// Team name, which selects both the handling stats and the model.
-    pub team: String,
+    /// Team id, which selects both the handling stats and the model, or `None`
+    /// for the source's own.
+    ///
+    /// **`None` rather than a constant, for the reason [`Self::track`] gives
+    /// and one more of its own.** `--team`'s help has promised since it landed
+    /// that leaving it out takes the value "from the source's own title, the
+    /// same way `--track` does" - and until 2026-08-18 the track half of that
+    /// refactor had landed and the team half had not, so every title was served
+    /// `oag_pulse::race::DEFAULT_TEAM`. It worked on HD only because a PSARC
+    /// folds case: `Data\Ships\Assegai\handlingstats.xml` normalises onto the
+    /// `assegai` the manifest actually stores. Finding S3 of that day's review,
+    /// and the reason `oag_title::RaceDefaults::team` existed with no reader.
+    ///
+    /// Resolved by [`load`] once the source is open and its title known, from
+    /// [`oag_title::RaceDefaults::team`], and the choice is reported.
+    pub team: Option<String>,
     /// The team ids the *opponents* may fly, in the caller's own order.
     ///
     /// The caller supplies them because they come off the player's own disc -
@@ -169,7 +183,7 @@ impl Default for Options {
             // fills this in from `source::resolve_dlc`.
             dlc: Vec::new(),
             track: None,
-            team: DEFAULT_TEAM.to_string(),
+            team: None,
             // Empty for the same reason `dlc` is: the ids come off the
             // player's own disc, and `load` may not invent one. The
             // composition root fills it from the catalogue.

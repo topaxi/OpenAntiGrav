@@ -174,7 +174,21 @@ pub fn load(options: &Options) -> Result<Loaded> {
         format!("{} weapon pad trigger volume(s)", weapon_pads.len())
     });
 
-    let stats_name = handling::entry_name(&options.team);
+    // **The team this source spells that way**, resolved here for the same
+    // reason the circuit above is: this is the first point the title is known.
+    // See [`Options::team`].
+    let team = match &options.team {
+        Some(asked) => asked.clone(),
+        None => {
+            report.push(format!(
+                "no team named: {}'s own default, {}",
+                title.name, title.race.team
+            ));
+            title.race.team.to_string()
+        }
+    };
+
+    let stats_name = handling::entry_name(&team);
     let stats_blob = read(&mut archives, &stats_name)?;
     let stats =
         handling::from_blob(&stats_blob).map_err(|e| anyhow::anyhow!("{stats_name}: {e}"))?;
@@ -441,7 +455,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     } else {
         options.opponent_teams.clone()
     };
-    let slot_teams = livery::teams_for_slots(&options.team, &available, oag_gameplay::MAX_SHIPS);
+    let slot_teams = livery::teams_for_slots(&team, &available, oag_gameplay::MAX_SHIPS);
     let liveries = livery::load(
         &mut archives,
         &slot_teams,

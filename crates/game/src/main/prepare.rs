@@ -108,11 +108,11 @@ impl Pending {
             // unnamed circuit from the title it opened, which is the only place
             // the title is known. See `race::Options::track`.
             track: self.cli.track.clone(),
-            team: self
-                .cli
-                .team
-                .clone()
-                .unwrap_or_else(|| oag_pulse::race::DEFAULT_TEAM.to_string()),
+            // Passed straight through like `track` above, `None` included:
+            // `race::load` resolves an unnamed team from the title it opened,
+            // which is the only place the title is known. See
+            // `race::Options::team`.
+            team: self.cli.team.clone(),
             class: self.class,
             mode: self.mode,
             opponent_teams,

@@ -267,7 +267,7 @@ fn every_pack_team_loads_a_ship_and_a_full_set_of_handling_stats() {
         let loaded = race::load(&race::Options {
             source: image.clone(),
             dlc: vec![root.clone()],
-            team: team.to_string(),
+            team: Some(team.to_string()),
             class: oag_physics::SpeedClass::Venom,
             ..race::Options::default()
         })
@@ -284,7 +284,7 @@ fn every_pack_team_loads_a_ship_and_a_full_set_of_handling_stats() {
             race::load(&race::Options {
                 source: image.clone(),
                 dlc: vec![root.clone()],
-                team: team.to_string(),
+                team: Some(team.to_string()),
                 class,
                 ..race::Options::default()
             })

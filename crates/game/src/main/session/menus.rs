@@ -322,10 +322,14 @@ impl Session {
                     .as_ref()
                     .and_then(|shell| shell.team(&self.settings.race.team))
                 {
-                    Some(team) => race_options.team = team.to_string(),
+                    Some(team) => race_options.team = Some(team.to_string()),
                     None => eprintln!(
                         "this source does not offer team {:?}, racing as {} instead",
-                        self.settings.race.team, race_options.team
+                        self.settings.race.team,
+                        race_options
+                            .team
+                            .as_deref()
+                            .unwrap_or("this source's own default"),
                     ),
                 }
                 if let Some(class) = SpeedClass::from_name(&self.settings.race.class) {

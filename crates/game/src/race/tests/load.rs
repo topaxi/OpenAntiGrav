@@ -64,3 +64,29 @@ fn a_partly_textured_model_is_reported_too() {
 fn a_model_that_declares_no_slots_wanted_none_and_is_not_reported() {
     assert_eq!(untextured_note(&model(0, 0)), None);
 }
+
+/// Finding S3's guard: an unnamed team resolves per title, not to Pulse's.
+///
+/// The resolution itself needs a disc, so what is checkable without one is the
+/// thing that was actually wrong - `Options` carrying a Pulse constant instead
+/// of "ask the title" - plus the fact that every title package answers when
+/// asked. HD's answer is the one that matters: it is `assegai` where Pulse says
+/// `Assegai`, and the old code only worked because a PSARC folds case.
+#[test]
+fn an_unnamed_team_is_the_titles_own_and_every_title_has_one() {
+    assert_eq!(
+        Options::default().team,
+        None,
+        "a default that names a team is a default that names *one title's* team"
+    );
+    for title in [oag_pulse::TITLE, oag_pure::TITLE, oag_hd::TITLE] {
+        assert!(
+            !title.race.team.is_empty(),
+            "{} authors no default team, so an unnamed --team has nothing to \
+             resolve to",
+            title.name
+        );
+    }
+    assert_eq!(oag_hd::TITLE.race.team, "assegai");
+    assert_eq!(oag_pulse::TITLE.race.team, "Assegai");
+}
