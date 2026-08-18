@@ -44,9 +44,14 @@ fn blob(width: u16, height: u16, bits_per_pixel: u8, rrw: u32, rrh: u32) -> Vec<
     out.extend_from_slice(&[0u8; 8]);
 
     out.extend((0..palette_bytes).map(|i| (i % 253) as u8));
+    // Both transfers' padding lands at the end of the file rather than after
+    // its own block - the layout `super::header` documents. Every shape the
+    // disc ships has a texel block at or above the 256-byte minimum, so this
+    // second term is zero for all of them; it is here so a *small* blob can be
+    // built at all, which is what finding F1's 8x8 repro needs.
     out.extend(std::iter::repeat_n(
         0u8,
-        padded(palette_bytes) - palette_bytes,
+        (padded(palette_bytes) - palette_bytes) + (padded(texel_bytes) - texel_bytes),
     ));
     out
 }
@@ -123,6 +128,33 @@ fn a_four_bit_blob_decodes() {
     assert_eq!(texture.indices.len(), 256 * 512);
     // 4bpp, so every index is a nibble.
     assert!(texture.indices.iter().all(|&i| i < 16));
+}
+
+/// Finding F1's repro, from the 2026-08-18 review: an 8x8 `PSMT8` blob whose
+/// `GIFtag`s and `TRXREG` all agree with each other, so nothing before the
+/// unswizzle can reject it. `psmt8_offset(4, 6, 8)` is 77 and the texel buffer
+/// is 64 bytes, so this panicked the parser - reachable from
+/// `Archives::read_font` and from browsing any hostile archive.
+#[test]
+fn an_eight_bit_blob_too_small_for_its_permutation_is_refused() {
+    let data = blob(8, 8, 8, 4, 4);
+    assert_eq!(
+        header(&data).expect("header").layout,
+        Layout::Psmt8,
+        "the shape is recognised"
+    );
+    assert_eq!(parse(&data), Err(Error::UnsupportedLayout(Layout::Psmt8)));
+    // 8 wide is the panicking half; 4 tall is the other, and a 16x2 blob is
+    // the one a guard on width alone would still let through.
+    let short = blob(16, 2, 8, 8, 1);
+    assert_eq!(
+        parse(&short),
+        Err(Error::UnsupportedLayout(Layout::Psmt8)),
+        "a two-row blob is under the permutation's floor too"
+    );
+    // And the first shape either side of the bound still parses, so the guard
+    // refuses the broken ones rather than the small ones.
+    assert!(parse(&blob(16, 4, 8, 8, 2)).is_ok(), "16x4 is valid PSMT8");
 }
 
 #[test]

@@ -371,8 +371,10 @@ pub fn looks_like_ps2_texture(data: &[u8]) -> bool {
 /// # Errors
 ///
 /// Every way [`header`] can fail, plus [`Error::UnsupportedLayout`] for a
-/// [`Layout::Psmt4`] blob smaller than one 128x128 GS page - a shape nothing on
-/// either disc has. See [`psmt4_offset`].
+/// swizzled blob too small for its own permutation: [`Layout::Psmt4`] below one
+/// 128x128 GS page, and [`Layout::Psmt8`] narrower than 16 or shorter than 4.
+/// Neither shape exists on either disc. See [`psmt4_offset`] and
+/// [`psmt8_offset`].
 pub fn parse(data: &[u8]) -> Result<Ps2Texture> {
     let head = header(data)?;
     // A PSMT4 page is 128x128 texels and [`psmt4_offset`]'s transposition
@@ -381,6 +383,18 @@ pub fn parse(data: &[u8]) -> Result<Ps2Texture> {
     // five are 256x128, 512x256 and 512x512. Refusing beats indexing past the
     // end of the blob.
     if head.layout == Layout::Psmt4 && (head.width < 128 || head.height < 128) {
+        return Err(Error::UnsupportedLayout(head.layout));
+    }
+    // The same guard for PSMT8, which went without one until finding F1 of the
+    // 2026-08-18 review. [`psmt8_offset`] is a permutation of `0..width *
+    // height` only for widths of 16 or more and heights of 4 or more - the
+    // header already forces both to powers of two - and below that it indexes
+    // past the texels: a self-consistent 8x8 blob reaches byte 77 of a 64-byte
+    // buffer and panics the parser. `Archives::read_font` and any archive
+    // browse hand it whatever the file claims, so the shape has to be refused
+    // rather than trusted. The disc stores its narrow textures
+    // [`Layout::Linear`] for exactly this reason.
+    if head.layout == Layout::Psmt8 && (head.width < 16 || head.height < 4) {
         return Err(Error::UnsupportedLayout(head.layout));
     }
 
@@ -432,8 +446,11 @@ pub fn parse(data: &[u8]) -> Result<Ps2Texture> {
 /// The GS lays 8-bit textures out in 16x16 blocks of 16x4 columns with a
 /// two-of-four row swap, which is what the `swap` and `byte_select` terms are.
 /// This is a permutation of `0..width * height` for every power-of-two width of
-/// 16 or more, which the tests assert; the narrower textures on the disc are
-/// stored [`Layout::Linear`] precisely because it is not one below that.
+/// 16 or more **and height of 4 or more**, which the tests assert; the narrower
+/// textures on the disc are stored [`Layout::Linear`] precisely because it is
+/// not one below that. Outside those bounds it indexes past the texels rather
+/// than merely scrambling them, so [`parse`] refuses the shape - a guard PSMT4
+/// had from the start and this did not until 2026-08-18.
 #[must_use]
 pub fn psmt8_offset(x: usize, y: usize, width: usize) -> usize {
     let block = (y & !0xf) * width + (x & !0xf) * 2;
