@@ -146,10 +146,16 @@ has.
 | `Lighting.Constant ambient color` | **Drawn**, clamped to `0..=1` |
 | `Lighting.Sun color` | **Hue drawn, magnitude dropped** - see above |
 | `Lighting.Sky colour`, `Sky rotation` | Read, unused. The sky itself does not draw - see below |
-| `Fog.*` | Read, unused. `Fog Density` is an **exponential** coefficient and this project's fog uniform is a linear `near`/`far` ramp, so wiring it needs a second fog mode rather than a value copy |
+| `Fog.*` | Read, unused, and **an HD race has no fog at all**. HD's circuits author no `fogCube` node, so `fog_volumes` is empty on a PS3 source and `Fog::off` is what binds - the circuit states a fog colour and a density and gets nothing. Wiring it needs a second fog *mode*, not a value copy: `Fog Density` is an **exponential** coefficient and this project's uniform is a linear `near`/`far` ramp |
 | `HDR and Bloom.*` | Read, unused. The bloom here is not HD's, and the tone parameters need a tonemap stage that does not exist |
 | `Water.*` | Read, unused. No water surface is drawn |
 | `Lighting.Prelit *`, `Spotlight *`, `Ambient false direction` | Read, unused, and undecoded - what "prelit ambient false specular" means is not established |
+
+**The asset viewer is deliberately not lit by this**, the same way it is
+deliberately unfogged: `just view --mesh` and `--track` bind `Scene::off` and
+draw through the stand-in rig, because the viewer's job is to show what is on
+the disc clearly rather than as the circuit stages it. The authored rig reaches
+a race and nothing else.
 
 ## The one file that is not a circuit's
 

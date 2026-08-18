@@ -117,6 +117,21 @@ appending a dated pass to it.
   every authored light class (`AmbientLight`/`DirectionalLight`/etc.) are still
   unchecked M6 roadmap items - the flat, dark look that produces is a known,
   documented gap, not something to guess-fix from a screenshot.
+- **And a second one was, in the other direction: the disc authors the light
+  rig and nothing read it.** `mesh.wgsl`'s two invented light directions were a
+  stand-in and its own header said so; Wipeout HD states a sun direction, a sun
+  colour and a constant ambient in a plain-text `track.envsettings` beside every
+  circuit. Read and drawn on 2026-08-18 -
+  [`envsettings.md`](docs/formats/envsettings.md). **The trap in the file**:
+  `"Lighting.Sky colour"=128 128 128 0` is a byte quadruple where every other
+  colour is normalised, and the only thing that says so is the missing decimal
+  point; and `Sun direction` is **not** a unit vector on most circuits, with
+  four degenerate. **The hold**: its magnitudes are authored for a linear HDR
+  pipeline with a tonemapper and this one has neither, so the hue is drawn and
+  the scale is not. That the file authors magnitudes above 1.0 at all is
+  evidence that ADR-0020's gamma-authoritative model is wrong *for HD
+  specifically* - recorded on the page, not acted on, because superseding an ADR
+  needs a reference frame from the running original.
 - **But one of them was, and the shape of it is worth carrying.** On 2026-08-18
   a screenshot of HD's Talon's Junction showed a quarter of the circuit smeared
   into horizontal streaks. Two of `.rcsmodel`'s readings were *solving* for

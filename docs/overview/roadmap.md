@@ -497,7 +497,8 @@ seen from the authoring side.
       [ps2-texture](../formats/ps2-texture.md).
       A **graphics-menu row** for it is still open; today it is a flag only.
       What still makes a race look unlike the original is authored lighting, sky
-      and fog, and those are [M6](#m6---rendering-fidelity).
+      and fog, and those are [M6](#m6---rendering-fidelity) - except on Wipeout
+      HD, whose authored lighting landed on 2026-08-18; see that section.
 - [x] **Speed pads**, decoded, placed, drawn and boosting. `Speedup Pad` `0x3bd`
       is a `Mesh` subclass, so its geometry ships inside the track file (see
       [pads](../formats/pads.md)); the trigger is `oag_game::race`'s reimplementation
@@ -832,6 +833,21 @@ change how this list should be read:
 
 ### Lighting and shadow
 
+- [x] **A Wipeout HD circuit is lit by the rig it authors** (2026-08-18), which
+      is this section's first item to land and lands it for one title only.
+      `mesh.wgsl`'s two-light rig was a stand-in and said so; HD states a sun
+      direction, a sun colour and a constant ambient in the `.envsettings`
+      beside its `track.vex`, and a race now draws through those. **Direction
+      and hue only** - the file authors magnitudes for a linear pipeline with a
+      tonemapper (sun colour to 4.0, ambient to 3.0, `Tone maximum brightness`
+      4.0) and this one is
+      [gamma-authoritative](../architecture/adr/0020-gamma-authoritative-colour-space.md)
+      with neither, so the scale is dropped and the load report says so. Pulse,
+      Pure and PS2 are byte-identical, verified frame against frame.
+      [`envsettings`](../formats/envsettings.md). **The sky and the fog are
+      still not drawn**, and on HD that is total rather than partial: its
+      circuits author no `Skycube` node, so an HD race has no sky and no fog at
+      all, and the sky's own `sky.gtf` is a cubemap `oag_formats::gtf` refuses.
 - [~] `AmbientLight` `0x12c`, `DirectionalLight` `0x131`, `PointLight` `0x132` -
       **decoded and investigated; not built as a render feature.** All three
       payloads are parsed (`crates/formats/src/lighting.rs`,
