@@ -25,11 +25,15 @@ default_scenario := "verification/scenarios/talons-junction-time-trial-lap.input
 native_video_flags := if os() == "linux" { "--features native-video" } else { "" }
 
 # fmt + lint + test + docs + architecture rules, the gate every commit must pass
-check: fmt-check lint test check-docs check-deps check-determinism check-size
+check: fmt-check lint test check-docs check-deps check-determinism check-size check-handover
 
 # Documentation is a deliverable, so its links are checked like any other build output
 check-docs:
     python3 scripts/check-doc-links.py
+
+# HANDOVER.md must stay under 256 KiB - the Read tool's own ceiling, not a style preference
+check-handover:
+    python3 scripts/check-handover-size.py
 
 fmt:
     cargo fmt --all
