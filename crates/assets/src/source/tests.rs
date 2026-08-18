@@ -47,8 +47,10 @@ const TITLE: &Title = &Title {
         track: r"Data\Environments\00_Nowhere\track.vex",
         team: "Nobody",
     },
-    // Unread here for the third time and the same reason: an archive is found
-    // by name, and what is inside one is nothing this crate looks at.
+    // Unread here for the third and fourth time, and the same reason both
+    // times: an archive is found by name, and what is inside one is nothing
+    // this crate looks at.
+    plugin_definition: r"Data\Plugins\PI000\Definition.xml",
     music: None,
 };
 

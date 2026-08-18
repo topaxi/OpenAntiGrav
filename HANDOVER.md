@@ -982,6 +982,41 @@ writers in it at the same time:
 
 ## Traps that are live
 
+**A grid of eight identical craft is what an *empty* roster looks like, not what
+a broken one looks like - so nothing failed and nothing said so.** 2026-08-18.
+Wipeout HD raced eight Assegais because two independent faults each produced an
+empty team list, and `livery::teams_for_slots` does the honest thing with one:
+every slot gets the player's team. Both are fixed; the shape is the part worth
+keeping.
+
+1. **`race::load` and `boot::definitions` read Pulse's plugin path whatever
+   title they had opened.** HD names its game plugin
+   (`Data\Plugins\Frontend\Definition.xml`) where the PSP titles number it
+   (`Data\Plugins\PI001\Definition.xml`). That is now
+   `oag_title::Title::plugin_definition`, the fourth axis to move into the title
+   package for exactly this reason, after the front-end root, the language
+   plugins and the boot chain.
+2. **With the path fixed it still read nothing, because `fexml::expand` refuses
+   a file with no `<code>` dictionary** and HD's definition is plain `<?xml`.
+   `fexml::text` decides from the blob, and its own docs already record this
+   trap for the PS2 in-race HUD - which is to say the trap was written down and
+   still caught the next caller. **Any new `read_name` of an XML entry should be
+   `fexml::text`, not `fexml::expand`, unless the file is known to be
+   shortened.**
+
+Three things to take from it. **One:** a fallback that produces a legible
+picture is the hardest kind to notice - the front end's own version of this bug
+ended in `load_teams`'s eight-team stand-in off `oag_formats::handling::TEAMS`,
+which is a PSP roster on a PS3 disc and looked like a working menu. Both sites
+now report the *reason* rather than a count of zero. **Two:** the second fault
+was hidden behind the first, so fixing the path and re-running still showed
+eight Assegais; the report line said `0 team(s)` both times, which is why it now
+says why. **Three:** HD ships that definition **five times** across its seven
+archives and the copies disagree - `DATA00`'s declares twelve teams and 28
+circuits, `DATA02`'s eight and eight. The archive precedence serves `DATA00`,
+which is a fact about the ordering rather than a measurement of what a PS3
+loads. See [hd-status.md](docs/formats/hd-status.md#the-roster-is-declared-and-under-hds-own-plugin-name---2026-08-18).
+
 **A name-variant sweep is only as good as its extension list, and one whole
 class of PS2 names was missing because `.pct` was not in it.** 2026-08-18.
 `Data\Tex\engineFlare\Engine_noise.mip` is on the PS2 disc; the lookup was

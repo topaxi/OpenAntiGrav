@@ -1347,6 +1347,35 @@ simulation, which is not estimable, being gated by
 [ADR-0009](../architecture/adr/0009-multi-game-fanout.md) item 2 *and* by the
 absence of any RPCS3 equivalent of the M3 harness.
 
+#### The grid fields eight teams, 2026-08-18
+
+Every HD race put eight Assegais on the grid, and that is what an **empty
+roster** looks like rather than what a broken one does: with no team declared,
+`livery::teams_for_slots` gives every slot the player's. Two faults each
+produced that empty list, and the second was hidden behind the first.
+
+`Title::plugin_definition` is the fix for the first and the fourth axis to move
+into the title package - after the front-end root, the language plugins and the
+boot chain, and for the same reason each of those did. HD **names** its game
+plugin where the PSP titles number it, so `Data\Plugins\PI001\Definition.xml`
+found nothing on a PS3 source. The second was `fexml::expand` on a file with no
+`<code>` dictionary; `fexml::text` decides from the blob.
+
+The grid now reads the disc's twelve declared teams and fields eight of them, at
+3,937 to 27,883 triangles - eight different `.rcsmodel` hulls, each with its own
+`Locators.vex` nozzle. The front end offers all twelve rather than the eight-team
+stand-in it was falling back to. Which team flies which slot is still this
+project's, exactly as on the PSP grid. Pinned by
+`crates/game/tests/hd_livery_ground_truth.rs` and
+`hd_boot_ground_truth.rs::the_menus_offer_the_twelve_teams_this_disc_declares`;
+see [hd-status.md](../formats/hd-status.md#the-roster-is-declared-and-under-hds-own-plugin-name---2026-08-18).
+
+What this does **not** touch is the per-team paint: each `PI_Team` declares six
+`PI_TeamModel` variants (`normal`, `SKIN1`, `SKIN2`, `chrome`, `zone`,
+`detonator`) naming a `texturelocation`, and nothing collects or draws them -
+the same gap the Pulse roadmap item above records. Nor is `Unlock` read on any
+title, so everything declared is offered.
+
 ---
 
 ## Open questions blocking later milestones

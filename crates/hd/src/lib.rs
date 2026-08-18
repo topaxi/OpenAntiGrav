@@ -72,6 +72,11 @@ pub const TITLE: &Title = &Title {
     // difference.
     front_end: Some(frontend::FRONT_END),
     race: race::DEFAULTS,
+    // **The same file the soundtrack is declared in**, because on this title the
+    // front-end plugin *is* the game plugin - it carries the `PI_Team` and
+    // `PI_Track` nodes beside the `PI_Music` ones. See
+    // [`names::FRONT_END_PLUGIN_DEFINITION`].
+    plugin_definition: names::FRONT_END_PLUGIN_DEFINITION,
     music: Some(MUSIC),
 };
 
@@ -172,11 +177,38 @@ pub mod archives {
 /// resolves here unchanged. That is why the race path needed no HD-specific
 /// spelling of a handling file, and it is worth knowing before adding one.
 pub mod names {
-    /// The front-end plugin's own definition, which declares the soundtrack.
+    /// The front-end plugin's own definition, which declares the roster, the
+    /// circuits and the soundtrack.
     ///
     /// HD's counterpart of the PSP titles' `Data\Plugins\PI001\Definition.xml`,
     /// under a name rather than a number, and carrying the same schema: one
-    /// `PI_Music` node per track beside the `PI_Track` ones. See [`crate::MUSIC`].
+    /// `PI_Team` node per team, one `PI_Track` per circuit and one `PI_Music`
+    /// per soundtrack track, under the same attribute names. See
+    /// [`crate::MUSIC`] and [`oag_title::Title::plugin_definition`].
+    ///
+    /// **This file ships five times and the copies disagree**, which is the
+    /// [`oag_title::ArchiveCandidates::extra`] overlap biting something that is
+    /// actually read. Measured on `hdfury-ps3-eu-dec.iso`:
+    ///
+    /// | Archive | Bytes | `PI_Team` | `PI_Track` | `PI_Music` |
+    /// | --- | ---: | ---: | ---: | ---: |
+    /// | `DATA00` | 36,996 | 12 | 28 | 15 |
+    /// | `DATA02` | 11,133 | 8 | 8 | 9 |
+    /// | `DATA03` | 17,667 | 12 | 16 | 9 |
+    /// | `DATA05` | 19,355 | 12 | 16 | 9 |
+    /// | `DATA06` | 32,764 | 12 | 16 | 9 |
+    ///
+    /// `oag_assets::Archives` serves `DATA00`'s, which is the fullest of the
+    /// five - twelve teams, and the fifteen `PI_Music` nodes [`crate::MUSIC`]
+    /// already reports every expansion of as resolving. That the precedence
+    /// lands on the fullest copy is a **fact about this ordering**, not a
+    /// measurement of which one a PS3 loads; `DATA02`'s eight-team copy is
+    /// presumably the base game's, from before Fury added four. Which one the
+    /// original reads is unresolved, on the same terms as `skin.xml`'s six.
+    ///
+    /// Confidence **85**: every copy is read off the disc and every team it
+    /// declares resolves to a `ship.vex`, a `ship.rcsmodel`, a `locators.vex`
+    /// and a `handlingstats.xml`, but nothing has been watched running.
     pub const FRONT_END_PLUGIN_DEFINITION: &str = r"Data\Plugins\frontend\definition.xml";
 
     /// The file a `PI_Music` location holds, joined onto that location to

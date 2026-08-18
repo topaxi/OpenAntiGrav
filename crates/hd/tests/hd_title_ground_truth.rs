@@ -199,8 +199,14 @@ fn the_team_roster_matches_the_disc_and_the_variants_are_left_out() {
 ///
 /// Nothing on the race path is affected - `talons_junction/track.vex` is in
 /// `DATA00` alone and `assegai/handlingstats.xml` in `DATA02` alone, which this
-/// asserts - so the ordering is a documented choice rather than a bug. It stops
-/// being either if the front end is ever wired up.
+/// asserts.
+///
+/// **One file this project reads is inside the overlap, as of 2026-08-18**: the
+/// plugin definition the roster comes off, in five of the seven, and the copies
+/// declare 8 or 12 teams and 8, 16 or 28 circuits. So the ordering decides part
+/// of what a player is offered. Which copy wins is asserted below rather than
+/// reasoned about, because it is the ordering that decides it and an ordering is
+/// a line in `EXTRA_CANDIDATES` that anyone could rewrite.
 #[test]
 #[ignore = "needs a decrypted PS3 disc image in data/images"]
 fn the_archives_overlap_and_the_race_path_sits_outside_the_overlap() {
@@ -229,7 +235,7 @@ fn the_archives_overlap_and_the_race_path_sits_outside_the_overlap() {
         "the front end's own skin is the worst case, and the one that matters"
     );
 
-    // The race path, which is what makes the ordering harmless today.
+    // The race path, which is still outside the overlap.
     for only_once in [
         race::DEFAULT_TRACK,
         "/data/ships/assegai/handlingstats.xml",
@@ -241,6 +247,23 @@ fn the_archives_overlap_and_the_race_path_sits_outside_the_overlap() {
             "{only_once} should be unique"
         );
     }
+
+    // The one thing this build reads that *is* in the overlap, and which copy
+    // of it the ordering serves. `DATA00`'s is the fullest - the roster and the
+    // circuit list both come off whichever this names, so a reordering of
+    // `EXTRA_CANDIDATES` changes what a player is offered and fails here first.
+    assert_eq!(
+        seen.get("/data/plugins/frontend/definition.xml"),
+        Some(&5),
+        "the plugin definition is in five of the seven archives"
+    );
+    let served = archives
+        .locate(oag_hd::TITLE.plugin_definition)
+        .expect("something holds the plugin definition");
+    assert!(
+        served.contains("DATA00"),
+        "the roster and the circuit list come off {served}, not DATA00 - see          `oag_hd::names::FRONT_END_PLUGIN_DEFINITION` for what the five copies          differ by"
+    );
 }
 
 /// `DATA03` carries four teams and no circuit, which is the row that forced the

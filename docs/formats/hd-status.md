@@ -602,6 +602,105 @@ a missing asset and a missing anchor are the same picture. Ten is also the
 number `Ship_DispatchCollisionFx` picks the nearest of, so HD authors the full
 set the recovered Pulse trigger expects.
 
+## The roster is declared, and under HD's own plugin name - 2026-08-18
+
+**Confidence 90**, read off the disc and asserted in
+`crates/game/tests/hd_livery_ground_truth.rs` and
+`crates/game/tests/hd_boot_ground_truth.rs::the_menus_offer_the_twelve_teams_this_disc_declares`.
+
+HD declares its teams, circuits and soundtrack in one plugin definition, exactly
+the way the PSP titles do and with the same schema - one `PI_Team` node per team,
+one `PI_Track` per circuit, one `PI_Music` per track, under the same attribute
+names. What differs is only where it is: HD **names** the plugin where Pulse and
+Pure **number** it.
+
+| | Pulse / Pure | HD / Fury |
+| --- | --- | --- |
+| definition | `Data\Plugins\PI001\Definition.xml` | `Data\Plugins\Frontend\Definition.xml` |
+| form | shortened, `<code>` dictionary | plain `<?xml` |
+| teams | 8 | **12** |
+
+That is now [`oag_title::Title::plugin_definition`], on the same footing as the
+front-end root and the language plugins: a constant in `oag-pulse` that every
+title reached for and that is wrong for one of three.
+
+### It ships five times, and the copies disagree
+
+The `ArchiveCandidates::extra` overlap, biting a file something actually reads:
+
+| Archive | Bytes | `PI_Team` | `PI_Track` | `PI_Music` |
+| --- | ---: | ---: | ---: | ---: |
+| `DATA00` | 36,996 | 12 | 28 | 15 |
+| `DATA02` | 11,133 | 8 | 8 | 9 |
+| `DATA03` | 17,667 | 12 | 16 | 9 |
+| `DATA05` | 19,355 | 12 | 16 | 9 |
+| `DATA06` | 32,764 | 12 | 16 | 9 |
+
+`oag_assets::Archives` serves `DATA00`'s, which is the fullest - and the one
+whose fifteen `PI_Music` nodes the [music section](#music-plain-mp3-declared-the-way-the-psp-titles-declare-theirs)
+already reports every expansion of as resolving. **That the precedence lands on
+the fullest copy is a fact about that ordering, not a measurement of what a PS3
+loads**; `DATA02`'s eight-team copy is presumably the base game's, from before
+Fury added four. Same unresolved question as `skin.xml`'s six copies.
+
+### What it cost: two bugs stacked, and one picture
+
+A race on this disc fielded eight identical craft in the player's livery. Both
+causes produce that picture and neither raised an error:
+
+1. **`race::load` and `boot::definitions` asked for Pulse's path.** The read
+   missed, the roster came back empty, and `livery::teams_for_slots` gave every
+   slot the player's team - which is exactly what a working grid looks like on a
+   source that genuinely declares one team.
+2. **With the path fixed, `race::load` still called `fexml::expand`.** That
+   refuses a file carrying no `<code>` dictionary, and HD's definition is plain
+   XML, so the roster came back empty *again*, now as a swallowed `NoDictionary`.
+   `fexml::text` decides from the blob - the trap that function's own docs
+   already record for the PS2 in-race HUD.
+
+The front end had the same first cause with a different ending: `load_teams`
+falls back to `oag_formats::handling::TEAMS` when nothing is declared, so HD's
+menus offered **eight** teams off a list this project holds rather than twelve
+off the disc.
+
+Both report the reason now rather than an empty count.
+
+### The grid, off the disc
+
+Eight slots, eight teams, eight different `.rcsmodel` hulls:
+
+| slot | team | triangles |
+| ---: | --- | ---: |
+| 0 | Assegai | 19,914 |
+| 1 | Feisar | 14,729 |
+| 2 | Qirex | 27,883 |
+| 3 | Piranha | 3,937 |
+| 4 | AG_Systems | 22,666 |
+| 5 | Triakis | 16,393 |
+| 6 | Goteki | 20,204 |
+| 7 | EGX | 22,163 |
+
+Which team flies which slot is **this project's** and not the original's - the
+same statement `oag_game::livery` carries for the PSP grid. All twelve declared
+ids resolve to a `ship.vex`, a `ship.rcsmodel`, a `locators.vex` and a
+`handlingstats.xml`; the ids are capitalised in the XML and lowercase in the
+manifest, and the PSARC lookup's case folding is what joins them.
+
+Every one of the eight resolves every mesh node and every stray, and none
+reports an undecidable vertex stride - so a hull's count is the hull, not what
+survived the decode. Piranha's 3,937 against a field of 14,000 to 27,000 is
+therefore an authored difference and not a decode miss; it is a question for
+[rcsmodel](rcsmodel.md) or for the artist rather than for the roster.
+
+### `Unlock` is not read, on any title
+
+Most of HD's `PI_Team` nodes carry `<Unlock purchase="1">` and most of its
+`PI_Track` nodes carry `<Unlock grid="gridN">`; 69 `Unlock` elements in all.
+`oag_game::catalogue` reads none of them, on HD or on the PSP titles, so
+everything declared is offered. That is a defensible answer for a build with no
+progression and it is **not a measurement** of what the original gates - what
+`purchase`, `grid`, `loyalty` and `MedalCount` select has not been read.
+
 ## What is genuinely new
 
 - **`.rcsmodel`** - 643 files, 686.5 MiB, all render geometry. **Positions,

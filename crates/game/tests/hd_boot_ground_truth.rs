@@ -112,6 +112,49 @@ fn the_boot_report_says_the_order_is_only_declared() {
     );
 }
 
+/// The menus offer the roster and the circuits the **disc** declares.
+///
+/// The fourth axis on the list in this file's own docs, and the one that hid
+/// longest: `boot::definitions` asked for `Data\Plugins\PI001\Definition.xml`
+/// whatever title it had opened, so on this disc it found nothing, the roster
+/// came back empty, and `load_teams` fell through to its eight-team stand-in -
+/// a list this crate holds rather than one the disc declares. Eight teams in a
+/// menu is what a working front end looks like, which is why nothing failed.
+///
+/// Twelve is the count `DATA00`'s copy of the definition carries: the eight
+/// base teams and Fury's four. See `oag_hd::names::FRONT_END_PLUGIN_DEFINITION`
+/// for the five copies and why this one is served.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_menus_offer_the_twelve_teams_this_disc_declares() {
+    let Some(image) = image() else { return };
+    let (shell, _) = shell(&image);
+
+    let teams: Vec<&str> = shell.teams.iter().map(|team| team.id.as_str()).collect();
+    assert_eq!(
+        teams.len(),
+        12,
+        "the roster should be the disc's twelve, not the eight-team stand-in: {teams:?}"
+    );
+    // The stand-in is `oag_formats::handling::TEAMS`, which is the PSP roster
+    // and has no Fury team in it. Naming one directly is what tells the two
+    // cases apart when the count is right for the wrong reason.
+    assert!(
+        teams.contains(&"Icaras"),
+        "a Fury team is missing, so this is a PSP-shaped roster: {teams:?}"
+    );
+    // The circuits come off the same file, and their count is what tells the
+    // five copies apart where the team count cannot: `DATA00` declares 28,
+    // `DATA03`/`DATA05`/`DATA06` declare 16 and `DATA02` declares 8, while four
+    // of the five agree on twelve teams. All 28 resolve to geometry on this
+    // source, so `load_tracks` drops none of them.
+    assert_eq!(
+        shell.tracks.len(),
+        28,
+        "28 raceable circuits is `DATA00`'s copy of the definition; 16 or 8          would mean the archive ordering now serves a different one"
+    );
+}
+
 /// HD's front-end root is a **named** plugin, and it resolves.
 ///
 /// `Data\Plugins\PI001\GUI\Skin.xml` - the constant both PSP titles use, and

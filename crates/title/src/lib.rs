@@ -84,6 +84,30 @@ pub struct Title {
     /// promoted temporaries whose addresses need not be equal. Carrying the
     /// answer removes the question.
     pub race: &'static race::RaceDefaults,
+    /// The plugin definition declaring what this release carries to race with:
+    /// one `PI_Team` node per team, one `PI_Track` per circuit, one `PI_Music`
+    /// per soundtrack track.
+    ///
+    /// **An axis because a third title disagreed**, on exactly the terms
+    /// [`FrontEnd::root`] became one: both PSP titles number the game plugin
+    /// (`Data\Plugins\PI001\Definition.xml`) and Wipeout HD names it
+    /// (`Data\Plugins\Frontend\Definition.xml`), so the `oag-pulse` constant
+    /// every caller reached for is a constant that is wrong for one of three.
+    /// Reaching for it anyway is what made an HD grid eight copies of the
+    /// player's craft: the read missed, the roster came back empty, and
+    /// `livery::teams_for_slots` did the only honest thing it could with no
+    /// teams.
+    ///
+    /// The schema is shared, which is what makes one field enough - HD's file
+    /// carries the same three node kinds under the same attribute names, and
+    /// `oag_game::catalogue` reads all three off it unchanged.
+    ///
+    /// **Overlaps [`DeclaredTracks::declared_in`] and is deliberately not
+    /// merged with it.** The two agree on the two titles that carry both, and
+    /// that agreement is unmeasured rather than structural: `Music` is `None`
+    /// on a title whose music is unlocated and `tracks` is `None` on Pulse,
+    /// so routing this through it could not answer for Pulse at all.
+    pub plugin_definition: &'static str,
     /// Where this title keeps its music, or `None` when none of it has been
     /// located. See [`Music`].
     pub music: Option<&'static Music>,
@@ -245,10 +269,18 @@ pub struct ArchiveCandidates {
     /// hit walking `data` then `fe` then this, so first-listed wins, and that is
     /// a documented choice rather than a measurement of what the original does.
     ///
-    /// It is harmless today because nothing this project reads is in the
-    /// overlap: a circuit and a team's handling each sit in exactly one archive.
-    /// `crates/hd/tests/hd_title_ground_truth.rs` asserts both halves, so it
-    /// stops being harmless loudly rather than quietly.
+    /// **It stopped being harmless on 2026-08-18.** A circuit and a team's
+    /// handling do each sit in exactly one archive, and that was the whole of
+    /// what this project read - until [`Self::plugin_definition`] wired the
+    /// roster up. That file is in **five** of the seven and the copies disagree
+    /// about how many teams exist: `DATA00`'s declares twelve and `DATA02`'s
+    /// eight. So the ordering now decides part of what a player sees, and
+    /// first-listed happens to serve the fullest copy rather than being chosen
+    /// to. See `oag_hd::names::FRONT_END_PLUGIN_DEFINITION` for the table.
+    ///
+    /// `crates/hd/tests/hd_title_ground_truth.rs` asserts the overlap, which of
+    /// the five is served, and that the race path is still outside it - so a
+    /// reordering fails there rather than quietly changing a roster.
     ///
     /// Empty for both PSP titles, so nothing about their load changes.
     pub extra: &'static [(&'static str, Platform)],
