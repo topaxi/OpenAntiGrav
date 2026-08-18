@@ -22,6 +22,13 @@
 //! and a hash that silently covers less than it claims is worse than none,
 //! because it still passes.
 //!
+//! **`oag_ai::Driver` was the exception until 2026-08-18**, read by name inside
+//! [`write_ship`] rather than destructured in its own function - so this
+//! paragraph was a promise the file did not keep, on the one struct that was
+//! growing fastest. Finding D3 of that day's review. A struct that arrives here
+//! gets a `write_*` of its own; reading `foo.bar` off one is the shape to
+//! notice.
+//!
 //! [`Weapon`]: oag_formats::weapons::Weapon
 //! [`Mode`]: oag_race::Mode
 
@@ -102,19 +109,44 @@ fn write_ship(hasher: &mut StateHasher, ship: &Ship) {
     let _ = handling;
     hasher.write_u32(u32::from(*segment));
     write_held(hasher, pickup);
+    write_driver(hasher, driver);
+    write_standing(hasher, standing);
+    hasher.write_u8(u8::from(*active));
+}
+
+/// The opponent driver's own state, which seeds next tick's decisions.
+///
+/// **Its own function, destructured exhaustively**, like every other struct in
+/// this module. It was seven fields read by name inside [`write_ship`] until
+/// finding D3 of the 2026-08-18 review: `Driver` grew faster than anything else
+/// in the world that week, and a field added to it would have compiled clean
+/// and silently dropped out of the hash - the exact drift this module's own
+/// docs promise is a compile error. Nothing about what is written changed, so
+/// no committed constant moves.
+fn write_driver(hasher: &mut StateHasher, driver: &oag_ai::Driver) {
+    let oag_ai::Driver {
+        index,
+        seed,
+        phase,
+        place,
+        provocation,
+        pilot,
+        mistake,
+    } = driver;
+
     // **Hashed, unlike `handling`.** A driver's place on the racing line is the
     // seed for next tick's windowed search, so two runs whose craft agree but
     // whose drivers are looking at different stretches of line have already
     // diverged - the next steering command will differ and nothing before it
     // will show why. It is `0` for slot 0, which the player flies.
-    hasher.write_u32(driver.index);
+    hasher.write_u32(*index);
     // **The seed and the tick count with it.** The seed decides this craft's
     // whole character - which part of the corridor it holds, how hard it
     // commits to a corner - and the count is the argument its drift is a
     // function of, so two runs that agree on every position but disagree on
     // either are about to steer differently. See `oag_ai::Personality`.
-    hasher.write_u32(driver.seed);
-    hasher.write_u32(driver.phase);
+    hasher.write_u32(*seed);
+    hasher.write_u32(*phase);
     // **And the grudge.** `place` is what an overtake is detected against and
     // `provocation` is how long the last one still stings for; a driver that
     // has just been passed covers its line harder, so two runs agreeing on
@@ -122,20 +154,18 @@ fn write_ship(hasher: &mut StateHasher, ship: &Ship) {
     // `write_u32` rather than a `u16` write because `StateHasher` has no
     // sixteen-bit one, and inventing a narrower write to save two bytes in a
     // hash is not worth a second way to feed it.
-    hasher.write_u32(u32::from(driver.place));
-    hasher.write_u32(u32::from(driver.provocation));
+    hasher.write_u32(u32::from(*place));
+    hasher.write_u32(u32::from(*provocation));
     // **And which pilot it is flying.** Unlike `handling` above, this can come
     // out of the player's own config directory and so differs between machines
     // by design; left out, two machines running "the same race" with different
     // pilot files would agree on the hash and disagree on the race. See
     // `oag_ai::Driver::pilot`.
-    hasher.write_u32(driver.pilot);
+    hasher.write_u32(*pilot);
     // **And whether it is in the middle of getting one wrong.** A driver
     // sailing through a braking point it should have taken is about to be
     // somewhere a driver that braked is not. See `oag_ai::Driver::mistake`.
-    hasher.write_u32(u32::from(driver.mistake));
-    write_standing(hasher, standing);
-    hasher.write_u8(u8::from(*active));
+    hasher.write_u32(u32::from(*mistake));
 }
 
 /// A craft's place in the race, which decides the finishing order and is
