@@ -15,12 +15,20 @@
 //! # Why this exists
 //!
 //! `mesh::build_with_textures` read a `LodGroup`'s `child_count` with
-//! `u32::from_le_bytes` until 2026-08-18. On a PS3 `.vex` that turns 2 into
-//! `0x0200_0000`, the `== 2` test never matched, and **`Lod::Single` would have
-//! been silently a no-op on every HD model.** The failure direction was the safe
-//! one - a user who chose `graphics.lod = "single"` would have got `Both`'s
-//! picture rather than a hole in the track - which is exactly why nothing caught
-//! it.
+//! `u32::from_le_bytes` until 2026-08-18. On a PS3 `.vex` that turns every count
+//! into itself shifted 24 bits left, the `== 2` test never matched, and
+//! **`Lod::Single` would have been silently a no-op on every HD model.** The
+//! failure direction was the safe one - a user who chose
+//! `graphics.lod = "single"` would have got `Both`'s picture rather than a hole
+//! in the track - which is exactly why nothing caught it.
+//!
+//! **How much the fix buys is smaller than "64 groups" suggests, and this file
+//! is where that was found.** The skip only ever fires on a *two*-child group,
+//! and HD's 64 split **48 declaring one child and 16 declaring two**. So even
+//! read the right way round, three quarters of them would not have skipped
+//! anything. The distribution is asserted below rather than described, because
+//! the first draft of this work claimed all 64 read `2` and that was an
+//! assumption dressed as a measurement.
 //!
 //! **The fix changes no rendered picture today, and that is asserted here rather
 //! than assumed.** HD keeps its render geometry in `.rcsmodel`, not in the
@@ -44,6 +52,12 @@ const ARCHIVES: usize = 7;
 
 /// `LodGroup` nodes HD authors, across every `.vex` on the disc.
 const EXPECTED_LOD_GROUPS: usize = 64;
+
+/// How those 64 split by declared child count: 48 name one child, 16 name two.
+///
+/// Only the 16 are reachable by [`Lod::Single`] at all, so this is the size of
+/// what the byte-order fix makes possible rather than a curiosity.
+const EXPECTED_CHILD_COUNTS: &[(u32, usize)] = &[(1, 48), (2, 16)];
 
 /// Files carrying at least one.
 const EXPECTED_FILES: usize = 6;
@@ -111,6 +125,7 @@ fn every_hd_lod_group_declares_a_small_child_count_read_the_files_own_way() {
         return;
     };
     let mut seen = 0;
+    let mut counts: std::collections::BTreeMap<u32, usize> = std::collections::BTreeMap::new();
     for (path, blob) in lod_group_files(&image) {
         let nodes = vex::nodes(&blob).expect("the tree walks");
         let lod_group = vex::classes_of(&blob)
@@ -125,6 +140,7 @@ fn every_hd_lod_group_declares_a_small_child_count_read_the_files_own_way() {
             }
             seen += 1;
             let read = order.u32(payload, CHILD_COUNT_AT);
+            *counts.entry(read).or_default() += 1;
             let wrong = u32::from_le_bytes(
                 payload[CHILD_COUNT_AT..CHILD_COUNT_AT + 4]
                     .try_into()
@@ -150,7 +166,19 @@ fn every_hd_lod_group_declares_a_small_child_count_read_the_files_own_way() {
             );
         }
     }
+    for (count, nodes) in &counts {
+        println!("child count {count}: {nodes} node(s)");
+    }
     assert_eq!(seen, EXPECTED_LOD_GROUPS, "LodGroup payloads long enough");
+    // The distribution, not just the range. `Lod::Single` fires only on a
+    // two-child group, so this is what says how much of the disc the fix can
+    // reach - and pinning it stops "HD's LodGroups declare 2" being restated as
+    // a fact about all 64 when it is a fact about 16.
+    let measured: Vec<(u32, usize)> = counts.into_iter().collect();
+    assert_eq!(
+        measured, EXPECTED_CHILD_COUNTS,
+        "HD's LodGroup child counts are not the measured split"
+    );
 }
 
 #[test]
