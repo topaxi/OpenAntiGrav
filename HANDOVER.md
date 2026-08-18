@@ -177,12 +177,49 @@ landed**, one commit each, full `just` green after both.
 | **S3** | `Options::team` is `Option<String>` and `race::load` resolves it from `Title::race.team`, which had no reader at all | `just play hd --race` reports HD's own `assegai`; Pulse's `Assegai`; `--team Feisar` unchanged |
 | **S2** | `oag_title::HudLayouts` is the fourth ADR-0022 axis, each title package fills it in, **and `load_hud` composes on every title** - HD's roots are shells pulling in up to sixteen fragments | HD went from 0 sprites / 0 labels to **51 / 43 composed from 14 files** with its own atlas decoding; speed lap reaches `speedlap_hud.xml` for the first time; Pulse PSP and PS2 unchanged to the widget |
 
+The **P2/P3 sweep** went the same way, batched by area, one commit each:
+**F2-F7** (validate-before-allocate in `psarc::read_entry`; two checked sector
+conversions that were silently returning empty or wrapping; a CHD `FRAMES:`
+that said "unknown" instead of `0`; `read_sector`'s buffer contract asserted
+the same way on both implementations; a truncation no longer reported as
+"swizzled"), **R1-R3** (a `(0, 0)` emission interval that hung the frame, an
+out-of-range texture slot that painted an arbitrary texture instead of the
+white fallback, `FOG_SIZE` renamed `SCENE_SIZE` because it measures `Fog` *and*
+`Light`), **U2, U5-U9** (the viewer's focus loss, a lost key tap, a zero-pitch
+voice that held its slot for ever, `render_tick`'s frame drift, a hidden cursor
+the user drags with, a documented dead field) and **G1-G5** (a stage swap
+inside the tick loop, `--icon-size 0`, an unvalidated first boot step, silent
+language-plugin misses, three doc-rot items).
+
+Two inline test modules moved out on the way - `psys/tests.rs` and
+`boot/tests.rs` - because both files are baselined and a test module inside one
+is a ceiling nobody can spend. `cargo nextest list` reports the same counts
+either side of both moves.
+
 **What was deliberately not done**, and why: **S4** (per-asset `(Archives, &Title)`
 split in `race::load`) and **S5** (an explicit title probe table) are the
 racebox groundwork the review puts last and grades L and M; **S6** (a naming
 axis on `Title`) waits for the 2048 corpus that would give it its shape, which
 is ADR-0022's own rule; **I8** (splitting this file) is M-sized and orthogonal
-to a findings pass.
+to a findings pass. Two more were left standing with reasons in their own
+commit: **U3** (bindings map logical `Key::Character`, so AZERTY scatters WASD)
+is graded S and is not - physical scancodes have to go through `set_key`,
+`map_key`, `candidates`, `bound_keys`, the Controls page's labels and
+`held_buttons`' inverse map, and a hybrid that maps some keys physically and
+some logically would be worse than either; **U4** (a Vec resized and an
+`Arc<Sound>` dropped on the audio thread) needs a return channel to fix
+honestly.
+
+**One thing to know before trusting `just test-data` here.** All 2,545 ground
+truth tests ran on 2026-08-18 and **5 failed, none of them a regression**: the
+three `wall_contact_ground_truth` and two `yaw_authority_ground_truth` tests
+need `data/traces/*.csv` captures, and `data/traces/` does not exist on this
+machine at all. That is the "derived evidence under `data/` is not durable"
+trap this file opens with, arriving as five red lines that look like a physics
+failure. Note also that nextest stops at the first failure by default, so a
+bare `just test-data` reports ~368 of 2,545 tests and tells you nothing about
+the rest - use `cargo nextest run --workspace --run-ignored all --no-fail-fast`
+when the question is whether anything else broke.
 
 **M4, with a run of M5 items landed alongside it on 2026-08-10.** In the order
 they were done, because each unblocked the next:
