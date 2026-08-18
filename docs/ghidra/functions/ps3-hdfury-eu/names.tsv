@@ -53,3 +53,7 @@
 0x005c9194	function	Gcm_InitDevice	82	renderer.md
 0x005bd2f8	function	GcmContext_Callback	76	renderer.md
 0x008c0854	data	g_GcmContext	85	renderer.md
+0x005cd728	function	ShaderRegistry_Find	86	renderer.md
+0x005cd6d8	function	ShaderRegistry_Register	84	renderer.md
+0x005cd700	function	ShaderRegistry_RegisterComplete	78	renderer.md
+0x008bf1ac	data	g_ShaderRegistryHead	84	renderer.md

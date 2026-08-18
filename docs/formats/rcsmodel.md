@@ -323,7 +323,13 @@ than left standing at 40.
 agrees: the disc has no shader file type at all, so every piece of compiled RSX
 microcode is either in a `.rcsmaterial` or in `EBOOT.elf`, and the executable
 carries 121 engine-owned `_vp`/`_fp` program names of its own - the bloom and
-depth-of-field chains among them. It also names exactly eleven `.rcsmaterial`
+depth-of-field chains among them. **Those are `SHO` blocks too**: 126 of them
+are linked into the executable, 62 paired name-to-blob by reading the arguments
+at every shader-registration call site, and one of them decodes with this page's
+own binding record - `(name hash, u16 type, u16 count, u16 register, 0xffff)` at
+a 12-byte stride, found where the header's `+0x0c` count and `+0x12` offset say
+it will be. So `SHO` is not a `.rcsmaterial` container; it is **HD's shader
+container**, and the `.rcsmaterial` is one of two places it ships. It also names exactly eleven `.rcsmaterial`
 files, all `fe/materials/cf_fetracks.rcsmaterial`, as field 6 of a 7-pointer
 per-circuit front-end record that pairs a `.rcsmodel` with its material **by
 path**. That is the only place the model-to-material binding is visible from

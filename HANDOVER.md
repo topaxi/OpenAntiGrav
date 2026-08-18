@@ -972,9 +972,11 @@ are open: the **draw path** (inline command-buffer writes on PS3, so no import
 census or call graph finds it - it needs a search for RSX method constants);
 **`SortRoot.cpp`'s four constructors** (`0x002dbe08`, `0x002dbe50`, `0x002dbe98`,
 `0x002dbf40`, none with a caller, so base cannot be told from complete and none
-is named); and **where the 121 engine-owned shader programs' microcode lives**
-(argued to be in `EBOOT.elf` by elimination at confidence 75 - no blob has been
-located, and pairing one name with one blob is the check that settles it).
+is named); and - **now closed** - where the 121 engine-owned shader
+programs' microcode lives: it is 126 `SHO` blocks linked into `EBOOT.elf`,
+62 of them paired name-to-blob at the registration sites, same container as a
+`.rcsmaterial`. What stays open there is that **no microcode has been
+disassembled**, so nothing says what any program does.
 
 **A model reports the right triangle count and still renders nothing - check
 the alpha test, not the class table.** 2026-08-17. Wipeout Pure's `Speedup

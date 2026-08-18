@@ -134,6 +134,10 @@ around `0x006bxxxx`:
 | `0x005c9194` | `Gcm_InitDevice` | 82 |
 | `0x005bd2f8` | `GcmContext_Callback` | 76 |
 | `0x008c0854` | `g_GcmContext` (data) | 85 |
+| `0x005cd728` | `ShaderRegistry_Find` | 86 |
+| `0x005cd6d8` | `ShaderRegistry_Register` | 84 |
+| `0x005cd700` | `ShaderRegistry_RegisterComplete` | 78 |
+| `0x008bf1ac` | `g_ShaderRegistryHead` (data) | 84 |
 
 ### `RenderManager_CreateInstance`, and the size of a `RenderManager`
 
@@ -398,14 +402,78 @@ way. And `liveRsxPanXForm_CubemapConvolve_fp` plus
 disc's 28 `.probes` files are produced or consumed by, which is the first thread
 anyone has on that format.
 
-**Where the microcode for these 121 lives is an inference, not a measurement.**
-The argument is elimination: no shader file type exists on the disc, and these
-programs belong to engine effects that have no material file, so the bytes must
-be in `EBOOT.elf`. **75.** No blob has been located and no name has been paired
-with one - which is the check that would settle it, and it is the obvious next
-step for anyone picking this up.
+### Where the microcode is: measured, and it is the `.rcsmaterial`'s own container
 
-**A warning for whoever does.** The binder functions are at `0x003af980` and
+This started as an inference at 75 - no shader file type on the disc, so the
+bytes must be in `EBOOT.elf` - and was then **measured**, by following the
+registry rather than by looking for blobs.
+
+`ShaderRegistry_Find` (`0x005cd728`) is a case-insensitive linked-list walk:
+
+```c
+undefined4 *ShaderRegistry_Find(char *name)
+{
+  for (node = *g_ShaderRegistryHead; node; node = node[3])
+    if (strcasecmp(name, (char *)node[0]) == 0)
+      return node + 2;
+  ...                                   // fall back to a shared empty slot
+}
+```
+
+and `ShaderRegistry_Register` (`0x005cd6d8`) is the node constructor that fills
+it in, one static initialiser per program:
+
+```c
+node[0] = name;      // the "FunkLayerBloom_vp" string
+node[1] = payload;   // <-- the second datum
+node[2] = 0;         // resolved lazily; Find returns &node[2]
+node[3] = head; head = node;
+```
+
+**`node[1]` is the microcode.** Reading `r4` and `r5` at every
+`bl ShaderRegistry_Register` across its 14 call sites recovers **62 registration
+sites, 62 distinct names, and 62 payload pointers - and all 62 payloads begin
+`53 48 4f 08`, `"SHO\x08"`.** That is the same `SHO` block
+[rcsmodel.md](../../../formats/rcsmodel.md#the-rcsmaterial-was-the-leading-hypothesis-and-it-is-not-the-answer)
+found inside a `.rcsmaterial`. So HD has **one shader container, used in two
+places**: per-surface material shaders ship in `.rcsmaterial` files, and
+engine-owned effect shaders are the same records linked into the executable.
+
+The image holds **126 `SHO` blocks**, 124 of them in one contiguous run
+`0x00927800`-`0x00936d80` at `0x80`-granular spacing, against 121 `_vp`/`_fp`
+names plus `accuview`, `quincunx` and `quincunxalt` - the anti-aliasing modes,
+which register the same way and are the only registered names not carrying a
+stage suffix. The 62 unpaired names (all of `RadioHead*`, `psys_*`,
+`FEBackgroundAnim*`, `HUD*`, plus `LensFlare`, `MagStripArc`, `engineflare`,
+`cloudshader`, `lineshader`, `FatLine`) are **not evidence of a second
+mechanism**: their registrars call the other constructor of the pair,
+`0x005cd700`, for which Ghidra lists no callers at all, and the blob count
+already accounts for them.
+
+`FunkLayerBloom_vp`'s block at `0x0092ec80`, and why the reading is not just
+magic-matching:
+
+```text
++0x00  53484f08                    'SHO', 8
++0x0c  u16 0x0002                  parameter count
++0x12  u16 0x0028                  parameter table offset
++0x28  083fdb95 0204 0001 01d3 ffff
++0x34  15f68309 0204 0001 01d2 ffff
+```
+
+Two entries at a 12-byte stride, `(name hash, u16 type, u16 count, u16 register,
+0xffff)` - **exactly the binding record `rcsmodel.md` describes for a
+`.rcsmaterial`**, and exactly what the binder at `0x003af980` walks: it reads the
+count from `+0x0c`, the table offset from `+0x12`, steps 12 bytes, and compares
+the first word against the **complement** of a hash computed from the parameter
+name. Header fields, record layout and consuming code all agree, and the
+declared count of 2 matches the two hash-shaped words present. **90.**
+
+The residual doubt is not about the container. It is that no microcode has been
+disassembled, so nothing here says what any program *does* - only where it is
+and how it is addressed.
+
+**A warning for whoever disassembles one.** The binder functions are at `0x003af980` and
 `0x003b31c8`, both **above `0x0032d5e0`**, and the decompiler output there is
 actively misleading rather than merely wrong: floats loaded from the TOC render
 as string-pointer variables, so arithmetic reads as `(float)PTR_s_Emp__d_008a754c`.
