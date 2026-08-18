@@ -411,6 +411,79 @@ impl Texture {
         start..start + self.level_len(level)
     }
 
+    /// Byte range of one mip level of one **face**.
+    ///
+    /// **All of a face's levels are consecutive, then the next face's.** That is
+    /// what [`Self::chain_len`] computes and what the length invariant holds on
+    /// across all 23 of the disc's cubemaps: `one_face * faces() + slack`. A
+    /// caller that walked level-major instead would read face 1's base level as
+    /// face 0's second.
+    ///
+    /// `face` past [`Self::faces`] answers the last face rather than panicking,
+    /// which keeps this total; [`Self::face_to_rgba`] range-checks properly.
+    #[must_use]
+    pub fn face_range(&self, face: usize, level: u8) -> Range<usize> {
+        let one_face: usize = (0..self.mip_levels).map(|l| self.level_len(l)).sum();
+        let face = face.min(self.faces().saturating_sub(1));
+        let start = self.data.start
+            + face * one_face
+            + (0..level).map(|l| self.level_len(l)).sum::<usize>();
+        start..start + self.level_len(level)
+    }
+
+    /// Decodes the base level of one face to straight RGBA8.
+    ///
+    /// # The face order is the RSX's, which is OpenGL's
+    ///
+    /// `0`..`5` are `+X, -X, +Y, -Y, +Z, -Z`. **That is the published order
+    /// rather than something measured here** - `CELL_GCM_TEXTURE_DIMENSION_CUBE`
+    /// inherits it, and nothing in a `.gtf` names a face. What it is checked
+    /// against is a picture: on a sky the four side faces have to meet at their
+    /// vertical edges, and a wrong order or a wrong rotation shows as a seam.
+    /// See `docs/formats/gtf.md`.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Cubemap`] for a texture that is *not* one, since a face index is
+    /// meaningless there; [`Error::UnknownFormat`] for `B8`, as
+    /// [`Self::to_rgba`]; [`Error::Swizzled`] for a layout this does not read;
+    /// and [`Error::DataOutOfBounds`] for a face past the six.
+    pub fn face_to_rgba(&self, blob: &[u8], face: usize) -> Result<Vec<[u8; 4]>> {
+        if !self.cubemap {
+            return Err(Error::Cubemap);
+        }
+        if face >= self.faces() {
+            let range = self.face_range(face, 0);
+            return Err(Error::DataOutOfBounds {
+                offset: range.start as u32,
+                length: (range.end - range.start) as u32,
+                got: blob.len(),
+            });
+        }
+        if !self.format.is_block_compressed() && !self.is_linear() {
+            return Err(Error::Swizzled {
+                format: self.format_byte,
+            });
+        }
+        if self.format == Format::B8 {
+            return Err(Error::UnknownFormat {
+                format: self.format_byte,
+            });
+        }
+        let range = self.face_range(face, 0);
+        let texels = blob.get(range.clone()).ok_or(Error::DataOutOfBounds {
+            offset: range.start as u32,
+            length: (range.end - range.start) as u32,
+            got: blob.len(),
+        })?;
+        let (width, height) = self.level_size(0);
+        decode::level(self.format, texels, width, height, self.pitch as usize).ok_or(
+            Error::Swizzled {
+                format: self.format_byte,
+            },
+        )
+    }
+
     /// Decodes the base mip level to straight RGBA8.
     ///
     /// `blob` must be the bytes [`Gtf::parse`] was given, since [`Self::data`]

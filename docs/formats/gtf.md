@@ -155,22 +155,56 @@ This is worth knowing before measuring anything about a `.gtf` on its RGB alone,
 which is why the endianness test above skips them rather than counting them as
 ties.
 
-## 23 cubemaps, parsed and not decoded
+## 23 cubemaps, and they decode
 
-`cubemap` is set on 23 files, every one a `sky` or an environment probe. Six
-faces follow one another and the length invariant holds on all 23 - **with an
-unexplained 360 bytes** on the 20 that carry a mip chain.
+`cubemap` is set on 23 files, every one a `sky` or an environment probe. All 23
+decode, six faces each, through `Texture::face_to_rgba`.
 
-The same 360, whether the faces are 128x128 `DXT1` (`envlight.gtf`: 65,976
-against six faces of 10,936, and 65,976 - 65,616 = 360) or 2048x2048
-(`12_sol_2/sky.gtf`: 16,777,656 against 16,777,296). Sixty bytes a face, and
-sixty is not a multiple of any block size here. The three single-level cubemaps
-carry no slack at all.
+### Face-major, and the other reading has the same length
 
-Nothing reads a cubemap yet, so the slack is recorded in `Texture::chain_len`
-and `to_rgba` returns `Error::Cubemap` rather than a face. **Do not assume the
-first face starts at offset zero** without checking; that is the natural
-reading and it has not been verified against anything.
+**All of one face's levels, then the next face's.** That is what
+`Texture::chain_len` already had to assume for the length invariant to close -
+`one_face * 6 + slack` - and it is now asserted rather than left implicit,
+because the alternative reading is not caught by any arithmetic: **level-major
+storage has exactly the same total length** and produces a scrambled sky.
+
+What separates them is content. Talon's Junction's `sky.gtf` is 1024x1024 `DXT1`,
+one level, and read face-major its six faces are:
+
+| Face | RSX direction | Mean RGB | What it is |
+| --- | --- | --- | --- |
+| 0 | `+X` | `(204, 221, 229)` | horizon, with a city skyline |
+| 1 | `-X` | `(203, 223, 233)` | horizon |
+| 2 | `+Y` | `(78, 123, 165)` | **the zenith** - deep blue with cloud |
+| 3 | `-Y` | `(255, 255, 255)` | **the nadir** - blank white |
+| 4 | `+Z` | `(217, 229, 232)` | horizon |
+| 5 | `-Z` | `(190, 214, 230)` | horizon |
+
+A blue sky above, a blank floor below, and four sides whose horizon line sits at
+the same height on each. Read level-major, a single-level cubemap's six "faces"
+would each be a slice of one image and none of that would hold. The order
+`+X, -X, +Y, -Y, +Z, -Z` is **published rather than measured** - the RSX
+inherits OpenGL's - and what checks it is that picture.
+
+### The content claim is asserted on one sky and reported for the other 15
+
+Two circuits are why it is not a threshold over the corpus. `amphiseum`'s sky is
+a **night** sky - every face near black, zenith luma 100 against a nadir of 0 -
+so a brightest-against-darkest bar measures exposure rather than structure. And
+`zone_1`'s is a featureless grey void whose zenith (117) and nadir (150)
+genuinely are alike. Both are data. A bar that called either a failure would be
+a bar picked to pass, so `gtf_ground_truth.rs` asserts the exact face means on
+the one sky whose picture was looked at and prints a census of the rest.
+
+### The 360 unexplained bytes are unchanged
+
+Six faces follow one another and the length invariant holds on all 23 - **with
+an unexplained 360 bytes** on the 20 that carry a mip chain. The same 360,
+whether the faces are 128x128 `DXT1` (`envlight.gtf`: 65,976 against six faces of
+10,936, and 65,976 - 65,616 = 360) or 2048x2048 (`12_sol_2/sky.gtf`: 16,777,656
+against 16,777,296). Sixty bytes a face, and sixty is not a multiple of any block
+size here. The three single-level cubemaps carry no slack at all - Talon's
+Junction's sky is one of them, which is why it is the one that was decoded first.
 
 ## What this was read for
 
@@ -189,7 +223,10 @@ diverges. It is pinned in the test rather than tolerated.
 ## Not done
 
 - **The 53 swizzled textures.** RSX Morton order, unimplemented.
-- **The 23 cubemaps' face layout**, and the 360 bytes.
+- **A cubemap's mip levels.** `face_range` addresses one and nothing decodes one,
+  the same gap the flat textures have.
+- **The 360 bytes** on the 20 multi-level cubemaps. Their face layout is read;
+  this tail is not.
 - **`remap`, and it is the identity almost everywhere.** Three values on the
   disc. `0xaae4` on **7,317 of 7,333** unpacks, under libgcm's
   `CELL_GCM_REMAP_MODE` packing, to all four output channels taking "remap"

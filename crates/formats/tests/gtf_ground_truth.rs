@@ -394,3 +394,113 @@ fn the_huds_own_textures_decode() {
         );
     }
 }
+
+/// **All 23 cubemaps decode, six faces each, and the faces are stored
+/// face-major.**
+///
+/// Face-major - all of one face's levels, then the next face's - is what
+/// `Texture::chain_len` already assumed to make the length invariant close, and
+/// it is asserted here rather than left implicit, because the other reading
+/// (level-major) produces exactly the same total length and a scrambled sky.
+///
+/// The check that separates them without a picture: a **cube's six faces are
+/// six different images, and the four sides of a sky are more like one another
+/// than any of them is like the zenith or the nadir.** On Talon's Junction the
+/// zenith is deep blue (mean `(78, 123, 165)`), the nadir is blank white
+/// (`(255, 255, 255)`) and the four sides are pale horizon (`204..217` red).
+/// Read level-major, six "faces" of a single-level cubemap would each be a
+/// slice of one image and would not separate that way.
+#[test]
+#[ignore]
+fn every_cubemap_decodes_six_distinct_faces() {
+    let Some(image) = image() else {
+        return;
+    };
+    let (mut cubemaps, mut decoded, mut refused) = (0usize, 0usize, 0usize);
+    let mut skies = 0usize;
+    for_every_gtf(&image, |path, blob| {
+        let Ok(parsed) = gtf::Gtf::parse(blob) else {
+            return;
+        };
+        let Some(texture) = parsed.only() else { return };
+        if !texture.cubemap {
+            // A face index is meaningless on a flat texture and is refused as
+            // such, rather than answering the whole image.
+            assert!(
+                texture.face_to_rgba(blob, 0).is_err(),
+                "{path}: a flat texture accepted a face index"
+            );
+            return;
+        }
+        cubemaps += 1;
+        assert_eq!(texture.faces(), 6, "{path}");
+        let faces: Vec<_> = (0..6).map(|f| texture.face_to_rgba(blob, f)).collect();
+        assert!(
+            texture.face_to_rgba(blob, 6).is_err(),
+            "{path}: a seventh face was accepted"
+        );
+        if faces.iter().any(Result::is_err) {
+            refused += 1;
+            return;
+        }
+        decoded += 1;
+        let (width, height) = texture.level_size(0);
+        let means: Vec<[u64; 3]> = faces
+            .iter()
+            .map(|f| {
+                let rgba = f.as_ref().expect("checked");
+                assert_eq!(rgba.len(), width as usize * height as usize, "{path}");
+                let n = rgba.len() as u64;
+                std::array::from_fn(|c| {
+                    rgba.iter().map(|p| u64::from(p[c])).sum::<u64>() / n.max(1)
+                })
+            })
+            .collect();
+        // **The content claim is asserted on the one sky whose picture was
+        // looked at, and reported for the rest.** Two circuits are why it is
+        // not a bar over the corpus: `amphiseum`'s sky is a night sky, every
+        // face near black, so a brightest-against-darkest bar measures
+        // exposure; and `zone_1`'s is a featureless grey void whose zenith and
+        // nadir genuinely are alike. Both are data, not decode errors, and a
+        // threshold that called either one a failure would be a threshold this
+        // file picked to pass.
+        let luma = |m: &[u64; 3]| m[0] + m[1] + m[2];
+        if path.ends_with("/sky.gtf") {
+            skies += 1;
+            println!(
+                "  zenith {:4} nadir {:4} sides {:4} {:4} {:4} {:4}  {path}",
+                luma(&means[2]),
+                luma(&means[3]),
+                luma(&means[0]),
+                luma(&means[1]),
+                luma(&means[4]),
+                luma(&means[5])
+            );
+            if path.contains("talons_junction") {
+                // Read off the decoded faces and checked against the picture:
+                // blue zenith, blank white nadir, four pale horizon sides with
+                // a city skyline on them. See `docs/formats/gtf.md`.
+                assert_eq!(
+                    means[2],
+                    [78, 123, 165],
+                    "{path}: the +Y face is the zenith"
+                );
+                assert_eq!(
+                    means[3],
+                    [255, 255, 255],
+                    "{path}: the -Y face is the nadir"
+                );
+                for side in [0, 1, 4, 5] {
+                    assert!(
+                        (190..=220).contains(&means[side][0]),
+                        "{path}: face {side} should be a horizon, not {:?}",
+                        means[side]
+                    );
+                }
+            }
+        }
+    });
+    println!("{cubemaps} cubemaps, {decoded} decoded, {refused} refused, {skies} skies");
+    assert_eq!(cubemaps, 23, "the disc's own count");
+    assert!(skies >= 8, "only {skies} circuit skies found");
+}
