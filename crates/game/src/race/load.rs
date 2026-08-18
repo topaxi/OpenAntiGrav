@@ -598,7 +598,13 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // The ribbon build draws an invented surface rather than the disc's art, so
     // it gets no sky either: the two belong to the same "show what shipped"
     // mode.
-    let sky_model = if !vex_geometry {
+    let sky_model = if ps3_geometry.is_some() {
+        // Wipeout HD authors no `Skycube` node at all - its sky is the
+        // `sky.gtf` cubemap beside the track, drawn through the same
+        // camera-centred sky path. See `mesh::sky_cube` for what of that is
+        // the disc's and what is this project's.
+        hd_sky_model(&mut archives, &track, &mut report)
+    } else if !vex_geometry {
         None
     } else {
         let sky = mesh::build_sky(&track, &track_blob, ps2_track_textures.clone())?;
@@ -899,6 +905,62 @@ pub fn load(options: &Options) -> Result<Loaded> {
         noise,
         report,
     })
+}
+
+/// The `sky.gtf` beside a circuit's `.vex` - Wipeout HD's sky.
+///
+/// One per circuit *directory*, not per `.vex`: `track.vex` and
+/// `track_reversed.vex` both resolve to the same file, which is how the disc
+/// ships it (16 environments, 16 `sky.gtf`).
+fn sky_gtf_name(vex_name: &str) -> Option<String> {
+    let at = vex_name.rfind(['/', '\\'])?;
+    Some(format!("{}{}sky.gtf", &vex_name[..at], &vex_name[at..=at]))
+}
+
+/// Wipeout HD's sky, or `None` with the reason in the report.
+///
+/// The rotation applied is the circuit's own `Lighting.Sky rotation`, read as
+/// degrees - `mesh::sky_cube::build` records why that unit is the corpus's
+/// rather than a guess, and why the sign is still this project's choice. A
+/// missing or unreadable `.envsettings` leaves the sky unrotated rather than
+/// undrawn: the picture is data, the turn is presentation.
+fn hd_sky_model(
+    archives: &mut oag_assets::Archives,
+    track: &str,
+    report: &mut Vec<String>,
+) -> Option<mesh::Model> {
+    let name = sky_gtf_name(track)?;
+    let Ok(blob) = archives.read_name(&name) else {
+        report.push(format!(
+            "{name}: not in the archive set - the sky stays black"
+        ));
+        return None;
+    };
+    let rotation = envsettings_name(track)
+        .and_then(|name| archives.read_name(&name).ok())
+        .and_then(|blob| String::from_utf8(blob).ok())
+        .and_then(|text| oag_formats::envsettings::EnvSettings::parse(&text).ok())
+        .and_then(|env| env.scalar(oag_formats::envsettings::SKY_ROTATION))
+        .unwrap_or(0.0);
+    match mesh::sky_cube::build(&name, &blob, rotation) {
+        Ok(sky) => {
+            let (width, height) = sky
+                .textures
+                .first()
+                .and_then(Option::as_ref)
+                .map_or((0, 0), |t| (t.width, t.height));
+            report.push(format!(
+                "{name}: the circuit's sky, six {width}x{height} cubemap face(s) on a \
+                 camera-centred cube, turned {rotation:.0} degree(s) by the authored Sky \
+                 rotation (unit read off the corpus; sign and axis this project's)"
+            ));
+            Some(sky)
+        }
+        Err(error) => {
+            report.push(format!("{name}: {error:#} - the sky stays black"));
+            None
+        }
+    }
 }
 
 /// The name of the `.envsettings` beside a track `.vex`, or `None`.
