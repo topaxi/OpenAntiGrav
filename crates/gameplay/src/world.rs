@@ -108,15 +108,29 @@ impl Default for Ship {
 /// agreeing is what puts this at confidence **85** rather than the 84 a
 /// decompile alone caps at.
 ///
-/// Zone is game mode 6 and is in neither set, so it races with both on - which
-/// is what makes its shield deplete, and what its unimplemented "destroyed"
-/// ending depends on. See `docs/ghidra/functions/psp-pulse-usa/shield.md`.
+/// Zone is game mode 6 and is in neither set, so its *damage* default stands
+/// and its shield depletes - which is what its unimplemented "destroyed" ending
+/// depends on. See `docs/ghidra/functions/psp-pulse-usa/shield.md`. Its
+/// **weapons** default does not stand: mode 6 defaults `g_weapons_enabled` to
+/// `1` and the front end then always supplies an explicit
+/// `<Weapons>Off</Weapons>` for it, which is why selecting ZONE greys the
+/// `WEAPONS` row to `OFF` on the running original (confirmed live 2026-08-10,
+/// PPSSPP v1.20.4). That is the measurement [`Mode::weapons_enabled`] carries.
 ///
 /// A single race is in neither set either, and unlike Zone the front end does
 /// not override it: `MSC_EVENT_SR` calls weapons "optional" and the Custom Race
 /// screen leaves both rows selectable, so both defaults stand. That makes it the
-/// first mode here whose contact damage is *not* halved - see
+/// only mode here whose contact damage is *not* halved - see
 /// [`oag_physics::damage::NO_WEAPONS_DAMAGE_SCALE`], which a time trial does get.
+///
+/// **The weapons flag is read from [`Mode::weapons_enabled`] rather than
+/// restated here.** Restating it is how the two disagreed about Zone until the
+/// 2026-08-18 review (finding D2): this function said weapons on, `mode.rs`
+/// said off with the stronger evidence, and because the flag halves *all*
+/// damage rather than only weapon damage, Zone was taking roughly twice the
+/// original's contact damage. Survival time is the whole of Zone's score, so
+/// that is a scoreboard divergence and not a detail. One source of truth
+/// cannot drift from itself.
 ///
 /// **Here rather than on [`oag_race::Mode`]**, because `oag-race` deliberately
 /// does not depend on `oag-physics` (see that crate's `Cargo.toml`) and this
@@ -124,15 +138,11 @@ impl Default for Ship {
 /// what it is for.
 #[must_use]
 pub fn damage_rules(mode: Mode) -> DamageRules {
-    match mode {
-        Mode::TimeTrial | Mode::SpeedLap => DamageRules {
-            weapons: false,
-            damage: false,
-        },
-        Mode::Zone | Mode::SingleRace => DamageRules {
-            weapons: true,
-            damage: true,
-        },
+    DamageRules {
+        weapons: mode.weapons_enabled(),
+        // `g_damage_enabled` is cleared for modes `{5, 7, 10}`: time trial and
+        // speed lap, of the four this engine runs.
+        damage: !matches!(mode, Mode::TimeTrial | Mode::SpeedLap),
     }
 }
 
@@ -198,6 +208,38 @@ impl World {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The recovered table, pinned per mode rather than per rule, because the
+    /// two flags come from two different sets in `Race_ReadSetupOptions` and a
+    /// test that only checked "weapons implies damage" would pass on a table
+    /// that had them the wrong way round.
+    #[test]
+    fn each_mode_races_with_the_flags_the_original_gives_it() {
+        for (mode, weapons, damage) in [
+            (Mode::TimeTrial, false, false),
+            (Mode::SpeedLap, false, false),
+            (Mode::Zone, false, true),
+            (Mode::SingleRace, true, true),
+        ] {
+            let rules = damage_rules(mode);
+            assert_eq!(rules.weapons, weapons, "{mode:?} weapons");
+            assert_eq!(rules.damage, damage, "{mode:?} damage");
+        }
+    }
+
+    /// Finding D2's own guard: the weapons flag here is the one `oag-race`
+    /// measured, not a second opinion about it. They contradicted each other
+    /// about Zone for as long as both were written out by hand.
+    #[test]
+    fn the_weapons_flag_is_the_one_oag_race_measured() {
+        for mode in Mode::ALL {
+            assert_eq!(
+                damage_rules(mode).weapons,
+                mode.weapons_enabled(),
+                "{mode:?} disagrees with Mode::weapons_enabled"
+            );
+        }
+    }
 
     #[test]
     fn a_new_world_has_no_ships() {
