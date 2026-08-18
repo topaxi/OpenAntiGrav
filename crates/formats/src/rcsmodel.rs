@@ -22,6 +22,15 @@
 //! follows the **stride**, not the `83 XX` descriptor byte, which was the
 //! obvious hypothesis and is measured false; see [`SubMesh::format`].
 //!
+//! **And the last four bytes are not a coordinate on every submesh.** 290 of a
+//! circuit's 1,112 draw calls span over 100 tiles of their texture because that
+//! field decodes to powers of two there rather than to a UV. The stride, the
+//! descriptor and the material have each been checked and none of them selects;
+//! the one thing that separates the two groups is byte 17 of the vertex being
+//! zero, on 79 % of the affected vertices against 1.9 % of the rest. The whole
+//! elimination is on `docs/formats/rcsmodel.md`; nothing here acts on it, and
+//! [`Mesh::texcoords`] still reads the last four bytes.
+//!
 //! # The `.vex` is not optional
 //!
 //! This format cannot be decoded on its own, and that is a property of the
@@ -88,7 +97,7 @@ use crate::ByteOrder;
 pub mod material;
 mod stride;
 
-pub use material::{Blend, Material, Transparency};
+pub use material::{Blend, Factor, Material, Transparency};
 
 /// The version word every `.rcsmodel` on the HD disc opens with.
 ///

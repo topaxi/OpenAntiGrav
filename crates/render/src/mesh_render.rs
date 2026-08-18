@@ -8,8 +8,10 @@ use anyhow::Result;
 
 use crate::mesh::{GpuVertex, Model};
 
+mod blend;
 mod uniforms;
 
+pub use blend::{ADDITIVE_BLEND, TRANSPARENT_BLEND, TransparentPipelines};
 use uniforms::Uniforms;
 pub use uniforms::{DEPTH_FORMAT, UNIFORMS_SIZE, write_uniforms};
 
@@ -238,61 +240,6 @@ fn mip_chain(width: u32, height: u32, rgba: &[u8]) -> Vec<(u32, u32, Vec<u8>)> {
     levels
 }
 
-/// The blend for a transparent batch of class
-/// [`vex::BlendClass::AlphaOver`] - `pass_mask & 0x100`.
-///
-/// **Recovered.** `Gfx_BuildBatchStateList`'s `0x100` branch programs
-/// `Gu_Enable(GU_BLEND)` with `Gu_BlendFunc(GU_ADD, GU_SRC_ALPHA,
-/// GU_ONE_MINUS_SRC_ALPHA, 0, 0)` and disables the colour test. The colour
-/// factors here are that call. This constant's doc used to say the opposite -
-/// "not recovered ... a plausible reading" - and it happened to be right; what
-/// was wrong was applying it to **every** transparent batch. See
-/// [`ADDITIVE_BLEND`] and [`vex::BlendClass`].
-///
-/// **The alpha factors are still ours**, and deliberately unchanged: PSP
-/// blending is RGB-only, so the original's call says nothing about the alpha
-/// channel and there is nothing to copy.
-pub const TRANSPARENT_BLEND: wgpu::BlendState = wgpu::BlendState {
-    color: wgpu::BlendComponent {
-        src_factor: wgpu::BlendFactor::SrcAlpha,
-        dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
-        operation: wgpu::BlendOperation::Add,
-    },
-    alpha: wgpu::BlendComponent {
-        src_factor: wgpu::BlendFactor::One,
-        dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
-        operation: wgpu::BlendOperation::Add,
-    },
-};
-
-/// The blend for a transparent batch of class [`vex::BlendClass::Additive`] -
-/// `pass_mask & 0x200`.
-///
-/// **Recovered, and identical to [`crate::exhaust::BLEND`].**
-/// `Gfx_BuildBatchStateList`'s `0x200` branch programs
-/// `Gu_BlendFunc(GU_ADD, GU_SRC_ALPHA, GU_FIX, 0x000000, 0xffffff)` - a fixed
-/// destination factor of white, i.e. `src * srcAlpha + dst`. That is the same
-/// equation `ExhaustFlare_BuildDisplayList` programs for the engine flare, so
-/// **the flare, the boost plume and every other `0x200` batch in the game
-/// share one blend**, which was not known until the `0x0700` class was split.
-///
-/// Alpha matches the colour factors here rather than following
-/// [`TRANSPARENT_BLEND`]'s split, for the same reason `exhaust::BLEND` does:
-/// a target later read as premultiplied should not disagree with its own
-/// colour channels.
-pub const ADDITIVE_BLEND: wgpu::BlendState = wgpu::BlendState {
-    color: wgpu::BlendComponent {
-        src_factor: wgpu::BlendFactor::SrcAlpha,
-        dst_factor: wgpu::BlendFactor::One,
-        operation: wgpu::BlendOperation::Add,
-    },
-    alpha: wgpu::BlendComponent {
-        src_factor: wgpu::BlendFactor::SrcAlpha,
-        dst_factor: wgpu::BlendFactor::One,
-        operation: wgpu::BlendOperation::Add,
-    },
-};
-
 /// Everything [`build`] hands back: geometry, texture bindings, and the three
 /// pipelines a `Model` draws through.
 #[derive(Debug)]
@@ -324,6 +271,15 @@ pub struct Built {
     /// (`pass_mask & 0x400`): sorted with the transparent list, drawn with
     /// blending **off**, depth write still off.
     pub unblended_pipeline: [wgpu::RenderPipeline; 2],
+    /// One pipeline pair per distinct equation the *model's own file* authors,
+    /// for the draws that carry a [`crate::mesh::DrawCall::blend_state`].
+    ///
+    /// **Built from the model rather than from a fixed list**, because the set
+    /// is a property of the data: Wipeout HD's materials author a source and a
+    /// destination factor each drawn from four values, and Talon's Junction
+    /// alone uses five of the pairs that makes. A Pulse model authors none and
+    /// this is empty, so nothing is created for a title that does not use it.
+    pub authored_pipelines: Vec<(wgpu::BlendState, [wgpu::RenderPipeline; 2])>,
     pub bind_group: wgpu::BindGroup,
     pub vertex_buffer: wgpu::Buffer,
     pub index_buffer: wgpu::Buffer,
@@ -748,6 +704,29 @@ pub fn build(
         make_pipeline("mesh blend (none, two-sided)", None, false),
         make_pipeline("mesh blend (none, culled)", None, true),
     ];
+    // One pair per *distinct* state the model's transparent draws name, in
+    // first-seen order. A linear scan over a handful of entries rather than a
+    // map: `wgpu::BlendState` is not `Hash`, the count is five on the widest
+    // circuit measured, and first-seen order keeps a rebuild of the same file
+    // byte-identical - the same reason `Model::anim_tracks` is ordered that way.
+    let mut authored_pipelines: Vec<(wgpu::BlendState, [wgpu::RenderPipeline; 2])> = Vec::new();
+    for state in model
+        .transparent_draws
+        .iter()
+        .filter_map(|draw| draw.blend_state)
+    {
+        if authored_pipelines.iter().any(|(seen, _)| *seen == state) {
+            continue;
+        }
+        let label = format!("mesh blend (authored {state:?})");
+        authored_pipelines.push((
+            state,
+            [
+                make_pipeline(&label, Some(state), false),
+                make_pipeline(&label, Some(state), true),
+            ],
+        ));
+    }
 
     let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("vertices"),
@@ -881,6 +860,7 @@ pub fn build(
         blend_pipeline,
         additive_pipeline,
         unblended_pipeline,
+        authored_pipelines,
         bind_group,
         vertex_buffer,
         index_buffer,

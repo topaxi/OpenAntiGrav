@@ -178,6 +178,9 @@ struct Session {
     blend_pipeline: [wgpu::RenderPipeline; 2],
     additive_pipeline: [wgpu::RenderPipeline; 2],
     unblended_pipeline: [wgpu::RenderPipeline; 2],
+    /// One pair per equation this model's own file authors - see
+    /// `mesh_render::Built::authored_pipelines`.
+    authored_pipelines: Vec<(wgpu::BlendState, [wgpu::RenderPipeline; 2])>,
     uniform_buffer: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
     vertex_buffer: wgpu::Buffer,
@@ -259,6 +262,7 @@ impl Session {
             blend_pipeline,
             additive_pipeline,
             unblended_pipeline,
+            authored_pipelines,
             bind_group: placeholder_bind_group,
             vertex_buffer,
             index_buffer,
@@ -311,6 +315,7 @@ impl Session {
             blend_pipeline,
             additive_pipeline,
             unblended_pipeline,
+            authored_pipelines,
             uniform_buffer,
             bind_group,
             vertex_buffer,
@@ -542,19 +547,18 @@ impl Session {
                 // for - see `oag_formats::vex::Batch::blend_class`. The viewer
                 // selects per draw call exactly as the game does, because it
                 // is only useful as a reference if it renders the same way.
-                let mut current: Option<(Option<oag_formats::vex::BlendClass>, bool)> = None;
+                let pipelines = mesh_render::TransparentPipelines {
+                    alpha_over: &self.blend_pipeline,
+                    additive: &self.additive_pipeline,
+                    unblended: &self.unblended_pipeline,
+                    authored: &self.authored_pipelines,
+                };
+                let mut current: Option<&wgpu::RenderPipeline> = None;
                 for draw in &self.model.transparent_draws {
-                    let key = (draw.blend, draw.culled);
-                    if current != Some(key) {
-                        let set = match draw.blend {
-                            Some(oag_formats::vex::BlendClass::Additive) => &self.additive_pipeline,
-                            Some(oag_formats::vex::BlendClass::None) => &self.unblended_pipeline,
-                            Some(oag_formats::vex::BlendClass::AlphaOver) | None => {
-                                &self.blend_pipeline
-                            }
-                        };
-                        pass.set_pipeline(&set[usize::from(draw.culled)]);
-                        current = Some(key);
+                    let pipeline = pipelines.select(draw);
+                    if !current.is_some_and(|set| std::ptr::eq(set, pipeline)) {
+                        pass.set_pipeline(pipeline);
+                        current = Some(pipeline);
                     }
                     let slot = draw.texture.map_or(0, |t| t + 1);
                     pass.set_bind_group(

@@ -24,6 +24,7 @@ use crate::mesh::Bounds;
 fn draw_at(centre: [f32; 3], radius: f32) -> DrawCall {
     DrawCall {
         blend: None,
+        blend_state: None,
         culled: false,
         range: 0..3,
         texture: None,
@@ -66,6 +67,7 @@ fn pvs(boxes: &[(u8, [f32; 3], [f32; 3])]) -> TrackPvs {
 fn draw_of_node(node: Option<u32>) -> DrawCall {
     DrawCall {
         blend: None,
+        blend_state: None,
         culled: false,
         range: 0..3,
         texture: None,

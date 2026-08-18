@@ -65,6 +65,7 @@ fn triangle_model() -> Model {
         indices: vec![0, 1, 2],
         draws: vec![DrawCall {
             blend: None,
+            blend_state: None,
             culled: false,
             range: 0..3,
             texture: None,

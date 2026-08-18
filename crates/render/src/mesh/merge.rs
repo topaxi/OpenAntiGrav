@@ -78,6 +78,7 @@ pub fn merge(label: &str, models: Vec<Model>) -> Model {
             bounds: d.bounds,
             node: d.node,
             blend: d.blend,
+            blend_state: d.blend_state,
             culled: d.culled,
         };
         out.draws.extend(model.draws.into_iter().map(rebase));
@@ -133,6 +134,7 @@ mod merge_tests {
             indices: (0..vertices as u32).collect(),
             draws: vec![DrawCall {
                 blend: None,
+                blend_state: None,
                 culled: false,
                 range: 0..vertices as u32,
                 texture: (textures > 0).then_some(0),

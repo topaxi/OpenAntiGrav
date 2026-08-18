@@ -84,6 +84,20 @@ pub struct DrawCall {
     /// per draw call rather than per model because a single mesh mixes them.
     /// See [`oag_formats::vex::Batch::blend_class`].
     pub blend: Option<vex::BlendClass>,
+    /// The blend equation this batch's **own file** authors, when the file
+    /// authors one rather than naming a class.
+    ///
+    /// Pulse's batches carry a three-way class in `pass_mask & 0x0700` and that
+    /// is all they carry, so [`Self::blend`] is the whole story there and this
+    /// is `None`. A Wipeout HD material carries a source and a destination
+    /// factor instead - see `oag_formats::rcsmodel::Blend::Factors` - and the
+    /// two families do not nest: `0001`/`0001` is unweighted additive and
+    /// `0001`/`0303` is premultiplied alpha, and neither is any member of
+    /// `vex::BlendClass`. Folding them onto the nearest member is what this
+    /// field exists to stop, so when it is `Some` it **overrides**
+    /// [`Self::blend`] as the equation, while `blend` still says the draw is
+    /// transparent at all.
+    pub blend_state: Option<wgpu::BlendState>,
     /// Index of the scene-tree node this draw call came from, into the
     /// `vex::nodes` of the file the model was built from, or `None` for
     /// synthetic geometry (ribbons, collision overlays, fixtures).
@@ -826,6 +840,8 @@ fn build_class(
                         bounds: Bounds { centre, radius },
                         culled: batch.is_culled(),
                         blend: batch.blend_class(),
+                        // A PSP batch names a class and no factor pair.
+                        blend_state: None,
                         node: Some(index as u32),
                     });
                 }

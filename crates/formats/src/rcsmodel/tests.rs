@@ -165,14 +165,21 @@ fn the_state_word_and_not_the_factor_pair_is_what_says_see_through() {
     assert!(glass.is_see_through());
     assert_eq!(
         glass.blend(),
-        Blend::Class(crate::vex::BlendClass::AlphaOver)
+        Blend::Factors {
+            src: material::Factor::SrcAlpha,
+            dst: material::Factor::OneMinusSrcAlpha,
+        }
     );
 }
 
-/// A destination of `GL_ONE` is the additive family, and a pair outside both is
-/// reported rather than folded into the nearer one.
+/// **Both** factors come through, and a value outside the four the disc uses is
+/// reported rather than folded onto the nearest one.
+///
+/// The source used to be dropped here - three different sources against a
+/// destination of `GL_ONE` all read as one class - which is what made a renderer
+/// draw `0001`/`0001` as `SrcAlpha`/`One`.
 #[test]
-fn the_destination_factor_is_what_picks_the_blend_class() {
+fn both_factors_come_through_and_an_unknown_one_is_not_guessed_at() {
     let blended = |src, dst| Material {
         name: String::new(),
         state: 1,
@@ -181,20 +188,35 @@ fn the_destination_factor_is_what_picks_the_blend_class() {
         texture: String::new(),
         second_texture: None,
     };
-    for src in [0x0001, 0x0300, 0x0302] {
+    for (src, named) in [
+        (material::FACTOR_ONE, material::Factor::One),
+        (material::FACTOR_SRC_COLOUR, material::Factor::SrcColour),
+        (material::FACTOR_SRC_ALPHA, material::Factor::SrcAlpha),
+    ] {
         assert_eq!(
             blended(src, material::FACTOR_ONE).blend(),
-            Blend::Class(crate::vex::BlendClass::Additive),
-            "src {src:#06x}"
+            Blend::Factors {
+                src: named,
+                dst: material::Factor::One,
+            },
+            "src {src:#06x} against a destination of GL_ONE is its own equation"
         );
     }
     assert_eq!(
-        blended(0x0300, 0x0302).blend(),
-        Blend::Unmapped {
-            src: 0x0300,
-            dst: 0x0302
+        blended(material::FACTOR_SRC_COLOUR, 0x0302).blend(),
+        Blend::Factors {
+            src: material::Factor::SrcColour,
+            dst: material::Factor::SrcAlpha,
         },
-        "`hologram`'s pair has no member of Pulse's BlendClass and is not given one"
+        "`hologram`'s pair is carried rather than left unmapped"
+    );
+    assert_eq!(
+        blended(material::FACTOR_ONE, 0x0999).blend(),
+        Blend::Unmapped {
+            src: 0x0001,
+            dst: 0x0999
+        },
+        "a fifth value is a fact about the data this reading has not seen"
     );
 }
 

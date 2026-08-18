@@ -195,11 +195,19 @@ fn the_named_glass_is_see_through_and_the_named_road_is_not() {
     }
 }
 
-/// Every factor pair the disc uses maps onto a blend class, bar a handful that
-/// this module deliberately leaves unmapped.
+/// Every factor the disc uses is one of the four `Factor` names, so **no**
+/// material anywhere on the disc comes back unmapped.
+///
+/// This used to allow a handful of unmapped pairs, because the mapping was onto
+/// `vex::BlendClass` - Pulse's three recovered classes - and `hologram`,
+/// `dg_zonelights1` and `zone_death_electricity` are equations Pulse has no
+/// member for. `Material::blend` carries the authored pair itself now, so the
+/// only way to be unmapped is a *factor value* outside `0x0001`, `0x0300`,
+/// `0x0302` and `0x0303`, and there is none. The assertion is the stronger one
+/// accordingly: zero, not five.
 #[test]
 #[ignore]
-fn the_unmapped_factor_pairs_are_few_and_named() {
+fn every_factor_the_disc_uses_is_one_of_the_four_named_ones() {
     if image().is_none() {
         return;
     }
@@ -220,7 +228,7 @@ fn the_unmapped_factor_pairs_are_few_and_named() {
             second_texture: None,
         };
         match material.blend() {
-            Blend::Opaque | Blend::Class(_) => mapped += 1,
+            Blend::Opaque | Blend::Factors { .. } => mapped += 1,
             Blend::Unmapped { src, dst } => {
                 unmapped.entry((src, dst)).or_default().insert(name);
             }
@@ -228,10 +236,9 @@ fn the_unmapped_factor_pairs_are_few_and_named() {
     }
     println!("unmapped: {unmapped:?}");
     let count: usize = unmapped.values().map(BTreeSet::len).sum();
-    assert!(
-        count <= 5,
-        "at most a handful of distinct materials use an equation this module does \
-         not map: {unmapped:?}"
+    assert_eq!(
+        count, 0,
+        "every factor on the disc is one of the four named values: {unmapped:?}"
     );
     assert!(mapped >= 15_700, "{mapped} of 15,762 materials map");
 }
@@ -576,6 +583,62 @@ fn the_last_four_bytes_of_a_vertex_are_a_texture_coordinate() {
             share(unit) >= unit_bar,
             "{label}: {:.3} in the unit square",
             share(unit)
+        );
+    }
+}
+
+/// **The source factor is not constant, which is why dropping it was a bug.**
+///
+/// `Material::blend` used to key on the destination alone, so every see-through
+/// surface reached a renderer as one of Pulse's three classes and was drawn with
+/// a source factor of `GL_SRC_ALPHA` whatever the file said. This is the
+/// measurement that says how much that costs: over every see-through material on
+/// the disc, how many author a source that is *not* `GL_SRC_ALPHA`.
+///
+/// Two families are wrong under the old reading and both are here.
+/// `0001`/`0001` is unweighted additive, drawn as `SrcAlpha`/`One` - every texel
+/// scaled by its own alpha before being added. `0001`/`0303` is premultiplied
+/// alpha, drawn as straight alpha - the colour multiplied by alpha a second
+/// time, which darkens exactly the semi-transparent edge of a glass panel.
+#[test]
+#[ignore]
+fn a_see_through_material_does_not_always_author_a_source_of_src_alpha() {
+    if image().is_none() {
+        return;
+    }
+    let mut pairs: BTreeMap<(u16, u16), usize> = BTreeMap::new();
+    for (mode, src, dst, _) in every_material() {
+        if matches!(mode, Some(Transparency::Opaque) | None) {
+            continue;
+        }
+        *pairs.entry((src, dst)).or_default() += 1;
+    }
+    println!("see-through factor pairs disc-wide: {pairs:?}");
+    let total: usize = pairs.values().sum();
+    let other_source: usize = pairs
+        .iter()
+        .filter(|((src, _), _)| *src != rcsmodel::material::FACTOR_SRC_ALPHA)
+        .map(|(_, count)| count)
+        .sum();
+    assert!(
+        other_source >= 300,
+        "{other_source} of {total} see-through materials author a source other than \
+         GL_SRC_ALPHA; folding them onto Pulse's classes redraws every one of them"
+    );
+    // The two the old reading got wrong, named so a regression says which.
+    for pair in [
+        (
+            rcsmodel::material::FACTOR_ONE,
+            rcsmodel::material::FACTOR_ONE,
+        ),
+        (
+            rcsmodel::material::FACTOR_ONE,
+            rcsmodel::material::FACTOR_ONE_MINUS_SRC_ALPHA,
+        ),
+    ] {
+        assert!(
+            pairs.contains_key(&pair),
+            "{pair:?} is on the disc and is neither of Pulse's equations"
         );
     }
 }

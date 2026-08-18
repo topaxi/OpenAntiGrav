@@ -15,7 +15,6 @@ use crate::mesh_render::{
     Anisotropy, Built, DEPTH_FORMAT, Depth, GlowMask, TRANSPARENT_BLEND, TexAnims, UNIFORMS_SIZE,
     build, write_uniforms,
 };
-use oag_formats::vex;
 
 /// Renders one frame of `model` to a PNG from a given orbit angle.
 ///
@@ -115,6 +114,7 @@ pub fn capture_pixels_from(
         blend_pipeline,
         additive_pipeline,
         unblended_pipeline,
+        authored_pipelines,
         bind_group,
         vertex_buffer,
         index_buffer,
@@ -264,17 +264,18 @@ pub fn capture_pixels_from(
             // splits three ways and a single model mixes them. Grouping the
             // draws by class first would reorder them, and transparent draws
             // are order-dependent by definition.
-            let mut current: Option<(Option<vex::BlendClass>, bool)> = None;
+            let pipelines = crate::mesh_render::TransparentPipelines {
+                alpha_over: &blend_pipeline,
+                additive: &additive_pipeline,
+                unblended: &unblended_pipeline,
+                authored: &authored_pipelines,
+            };
+            let mut current: Option<&wgpu::RenderPipeline> = None;
             for draw in &model.transparent_draws {
-                let key = (draw.blend, draw.culled);
-                if current != Some(key) {
-                    let set = match draw.blend {
-                        Some(vex::BlendClass::Additive) => &additive_pipeline,
-                        Some(vex::BlendClass::None) => &unblended_pipeline,
-                        Some(vex::BlendClass::AlphaOver) | None => &blend_pipeline,
-                    };
-                    pass.set_pipeline(&set[usize::from(draw.culled)]);
-                    current = Some(key);
+                let pipeline = pipelines.select(draw);
+                if !current.is_some_and(|set| std::ptr::eq(set, pipeline)) {
+                    pass.set_pipeline(pipeline);
+                    current = Some(pipeline);
                 }
                 let slot = draw.texture.map_or(0, |t| t + 1);
                 pass.set_bind_group(1, &texture_binds[slot.min(texture_binds.len() - 1)], &[]);

@@ -134,6 +134,7 @@ pub fn build_model(label: &str, ai: &AiTrack) -> Model {
     let draws = vec![DrawCall {
         // Synthetic: no batch, so no recovered blend class.
         blend: None,
+        blend_state: None,
         culled: false,
         range: 0..indices.len() as u32,
         texture: None,

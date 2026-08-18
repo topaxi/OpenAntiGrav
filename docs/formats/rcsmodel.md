@@ -550,18 +550,48 @@ RSX inherits from OpenGL. Four distinct values landing on four meaningful
 members of a published enum is strong, but nothing here has read the code that
 consumes them, so it is short of what an executed branch would carry.
 
-`oag_formats::rcsmodel::Material::blend` keys on the **destination** alone,
-because that is what separates the two families the disc actually uses:
+`oag_formats::rcsmodel::Material::blend` returns **both** factors, each as a
+`Factor` member naming one of those four values. A value outside the four would
+come back `Blend::Unmapped`; **none is**, on all 15,762 materials
+(`every_factor_the_disc_uses_is_one_of_the_four_named_ones`).
 
-- `dst == 0x0001` -> additive. `0302`/`0001`, `0001`/`0001` and `0300`/`0001`
-  all appear, and `vex::BlendClass` has no member for the source distinction, so
-  folding it in would be inventing precision.
-- `dst == 0x0303` -> alpha-over. `0302`/`0303` and `0001`/`0303`.
-- anything else -> **unmapped and reported**. Three materials disc-wide:
-  `hologram` at `0300`/`0302`, `dg_zonelights1` at `0302`/`0300`,
-  `zone_death_electricity` at `0001`/`0302`. None is on any circuit's road.
-  Pulse's three classes are a recovered fact about *Pulse*, and there is no
-  evidence HD's equations are a subset of them.
+**This used to key on the destination alone and drop the source** - `dst ==
+0x0001` read as additive, `dst == 0x0303` as alpha-over, everything else
+unmapped - so that every see-through surface arrived at a renderer as one of
+Pulse's three `vex::BlendClass` members. Saying `BlendClass` has no member for
+the source distinction was correct; *dropping* the source because of it was not.
+`oag_render::mesh_render`'s two transparent pipelines both hardcode a source
+factor of `SrcAlpha`, so every material that authors something else was drawn
+with an equation the file does not ask for.
+
+**How much that is, measured over every see-through material on the disc**
+(`a_see_through_material_does_not_always_author_a_source_of_src_alpha`):
+
+| src / dst | Materials | Under the old reading |
+| --- | ---: | --- |
+| `0302`/`0303` | 1,859 | alpha-over - correct |
+| `0302`/`0001` | 348 | additive - correct |
+| `0001`/`0001` | 144 | additive, so every texel scaled by its own alpha before being added. **Unweighted additive in the file** |
+| `0001`/`0303` | 142 | alpha-over, so the colour multiplied by alpha a second time. **Premultiplied alpha in the file** |
+| `0300`/`0001` | 57 | unmapped, so **drawn opaque** |
+| `0300`/`0302` | 22 | unmapped, so **drawn opaque** |
+| `0001`/`0302` | 1 | unmapped, so **drawn opaque** |
+| `0302`/`0300` | 1 | unmapped, so **drawn opaque** |
+
+**367 of 2,574**, 14 %. On Talon's Junction it is 96 of that circuit's 353
+see-through chunks authoring `0001`/`0001` alone - its trackside advert boards
+(`scanlinebillboard`, `loopmaterial`), which were being dimmed by their own
+alpha. The equation is the file's, so they are brighter now and that is the
+correction rather than a tuning choice.
+
+`oag_render::mesh::rcs::blend_state` translates a pair into a
+`wgpu::BlendState` - the identity mapping on the four names, `Add` for the
+operation because the RSX's blend-equation register is a separate field nothing
+here has read and `GL_FUNC_ADD` is what it holds at reset. `mesh_render::build`
+then creates one pipeline pair per **distinct state the model's own draws name**,
+and `TransparentPipelines::select` prefers `DrawCall::blend_state` over
+`DrawCall::blend`. A Pulse model authors no factor pair, leaves `blend_state`
+`None` and takes the recovered-class path exactly as before.
 
 ### The texture a material paints with
 
@@ -666,9 +696,88 @@ Named explicitly, with what each would take.
    them decoded. Reading a `.rcsmaterial`'s microcode or HD's own executable are
    the routes; nothing in this project has disassembled a PS3 binary.
 10. **The 1.5 % of a circuit's texture coordinates that decode to an infinity
-    or a NaN.** Pinned to zero rather than let into a vertex buffer, and not
-    explained - it may be a handful of chunks at a wrong stride rather than
-    anything about the field.
+    or a NaN**, and the wider residue behind it - see the section below, which
+    is what a 2026-08-18 pass measured and did *not* close.
+11. **A second texture coordinate set at stride 22**, `+0x0e`, which is
+    identified and unused. See below.
+
+## The texture-coordinate residue, and three readings that do not explain it
+
+**Measured 2026-08-18 on `talons_junction.rcsmodel`, and every hypothesis in it
+came back negative.** Recorded because the symptom is large and visible and the
+next reader should not re-derive the eliminations.
+
+### The symptom
+
+On a full build of Talon's Junction, **290 of 1,112 draw calls span more than
+100 tiles of their texture** in U or V - `oag-view --draws` prints the span per
+draw. Those are not tiling: a span of 65,504 is the largest finite IEEE half, and
+the values cluster on exact powers of two (8, 32, 64, 320, 1,024, 20,480), which
+is what a half whose low mantissa byte is zero decodes to. This is the largest
+single contributor to a Wipeout HD circuit's textures reading as wrong.
+
+### What it is not
+
+1. **Not the stride.** The measurement was restricted to chunks whose stride the
+   *buffer-layout* rule settles - consecutive vertex buffers packed back to back,
+   the strongest of the three rules and the one that needs no oracle - and whose
+   `+6` normals decode unit on 90 %+ of vertices. 62 submeshes still read a
+   garbage last-four there, and **all 62 have no alternative stride** among 14,
+   18 and 22 that gives unit normals *and* a sane texture coordinate.
+2. **Not the `83 XX` descriptor byte.** Split by `XX`, the clean and the garbage
+   submeshes use the same values - `83 0a` appears 37 times among the clean and
+   19 among the garbage, `83 0b` 124 and 12. **The other five descriptor bytes
+   are literally `10 10 10 10 10` on every submesh of both groups**, so nothing
+   in the eight-byte descriptor separates them.
+3. **Not the material.** `diffuse_with_specular_from_alpha` splits 21 submeshes
+   garbage to 20 clean, and `defuse_occulsion_vert_col_tint` - the one whose name
+   says vertex colour - has **zero** garbage submeshes of 67. So the vertex
+   colour reading of those four bytes is refuted too, notwithstanding that they
+   hexdump as plausible dark blues (`40 3b 48 00`, `5c 40 65 00`) against Talon's
+   Junction's palette.
+4. **Not a second reading of `+0x0a`.** At stride 18 that field reads inside
+   +/-8 on 71 % of vertices against the last-four's 85 %; neither is clean, and
+   on the garbage submeshes `+0x0a` reads as a plausible road UV (u running 20.5
+   to 21.5 along the length, v alternating 0 and -1 across the width) - which is
+   suggestive and is *not* enough, because three readings of the same four bytes
+   now each fit part of the corpus.
+
+### The one discriminator that does separate them
+
+**Byte 17 of the vertex - the low byte of the last `u16` - is zero on 78.9 % of
+the garbage submeshes' vertices and on 1.9 % of the clean ones.** It is a
+per-vertex test that needs no stride solving and no oracle, and it is the handle
+the next pass should start from: whatever selects the field set is correlated
+with it, and it is not the descriptor, the material or the stride.
+
+**Nothing is implemented off any of this.** A field with three competing
+readings is exactly the case the [methodology](../reverse-engineering/methodology.md)
+says to write down rather than implement, and the current reader keeps taking the
+last four bytes and pinning a non-finite one to zero.
+
+## Stride 22 carries two texture coordinate sets
+
+**Measured the same day, confidence 80, and unused.** The four bytes at `+0x0e`
+of a stride-22 vertex read as two big-endian halves that are **100 % finite and
+100 % inside the unit square** on Talon's Junction's stride-22 chunks - the same
+numbers the confirmed coordinate at `+0x12` gives, and against `+0x0a`'s 34 %
+non-finite, which is what a packed tangent looks like read as halves.
+
+That closes the width exactly:
+
+```text
+stride 14   pos 6 + normal 4 + texcoord 4
+stride 18   pos 6 + normal 4 + ?       4 + texcoord 4
+stride 22   pos 6 + normal 4 + tangent 4 + texcoord 4 + texcoord 4
+```
+
+**It unlocks nothing today**, which is why it is recorded rather than wired: a
+second coordinate set is for the second texture at a material's `+0x78`, and
+which of that slot's four uses applies to a given material is in the
+`.rcsmaterial`'s compiled shader. It is also the wrong stride for the symptom
+above - Talon's Junction is 110 stride-18 chunks to 1 stride-22, and its road is
+stride 18. Only 85 of the circuit's 442 materials name an `lmaps/*-lmap.gtf`
+second texture at all.
 
 ## See also
 

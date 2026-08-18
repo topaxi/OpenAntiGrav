@@ -422,10 +422,45 @@ fn surface(
     let texture = skin.get(slot).and_then(Option::as_ref).map(|_| slot);
     let blend = match model.material_of(mesh).map(rcsmodel::Material::blend) {
         // Only a painted surface can be blended - see above.
-        Some(rcsmodel::Blend::Class(class)) if texture.is_some() => Some(class),
+        Some(rcsmodel::Blend::Factors { src, dst }) if texture.is_some() => {
+            Some(blend_state(src, dst))
+        }
         _ => None,
     };
     Surface { texture, blend }
+}
+
+/// One authored factor pair as the state a pipeline is built with.
+///
+/// **A translation, not a decision.** `oag_formats::rcsmodel::Factor` is the
+/// disc's own four values under names, and each has exactly one counterpart in
+/// `wgpu`; the operation is `Add` because the RSX's blend equation register is a
+/// separate field this reading has not touched and `GL_FUNC_ADD` is what it
+/// holds at reset.
+///
+/// **Alpha follows colour rather than splitting**, for the reason
+/// [`crate::mesh_render::ADDITIVE_BLEND`] gives: a target later read as
+/// premultiplied should not disagree with its own colour channels. The disc says
+/// nothing about the alpha channel either way - a `CellGcmBlendFunc` pair is
+/// programmed for both and only the colour half is what these materials vary.
+fn blend_state(src: rcsmodel::Factor, dst: rcsmodel::Factor) -> wgpu::BlendState {
+    fn factor(f: rcsmodel::Factor) -> wgpu::BlendFactor {
+        match f {
+            rcsmodel::Factor::One => wgpu::BlendFactor::One,
+            rcsmodel::Factor::SrcColour => wgpu::BlendFactor::Src,
+            rcsmodel::Factor::SrcAlpha => wgpu::BlendFactor::SrcAlpha,
+            rcsmodel::Factor::OneMinusSrcAlpha => wgpu::BlendFactor::OneMinusSrcAlpha,
+        }
+    }
+    let component = wgpu::BlendComponent {
+        src_factor: factor(src),
+        dst_factor: factor(dst),
+        operation: wgpu::BlendOperation::Add,
+    };
+    wgpu::BlendState {
+        color: component,
+        alpha: component,
+    }
 }
 
 /// One submesh's decoded arrays, as [`emit`] takes them.
@@ -450,8 +485,12 @@ struct Surface {
     /// Index into `Model::textures`, or `None` for a material with no painted
     /// texture.
     texture: Option<usize>,
-    /// The blend equation, or `None` for the opaque pass.
-    blend: Option<vex::BlendClass>,
+    /// The blend equation the material authors, or `None` for the opaque pass.
+    ///
+    /// The state itself rather than a `vex::BlendClass`, because a PS3 material
+    /// authors a factor *pair* and Pulse's three classes have no member for
+    /// most of them - see `mesh::DrawCall::blend_state`.
+    blend: Option<wgpu::BlendState>,
 }
 
 /// Zero for a coordinate that is not a finite number.
@@ -543,7 +582,12 @@ fn emit(out: &mut Model, mesh: Geometry<'_>, to_world: Mat4, node: Option<u32>, 
             radius,
         },
         culled: false,
-        blend: surface.blend,
+        // `blend` says the draw is transparent at all and `blend_state` says
+        // with what: a PS3 material names neither of Pulse's classes, so the
+        // class here is the one a reader of `blend` alone should assume least
+        // about, and the equation that is actually programmed is beside it.
+        blend: surface.blend.map(|_| vex::BlendClass::AlphaOver),
+        blend_state: surface.blend,
         node,
     });
 }

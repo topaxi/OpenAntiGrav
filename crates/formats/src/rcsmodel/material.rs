@@ -39,7 +39,7 @@
 //! across the disc, most often 128. Everything above sits inside the smallest of
 //! them.
 
-use crate::{ByteOrder, vex};
+use crate::ByteOrder;
 
 /// How many low bits of the state word select the transparency mode.
 const TRANSPARENCY_BITS: u32 = 0x3;
@@ -61,8 +61,51 @@ const TEXTURE_SUFFIX: &str = ".gtf";
 /// them, so it is short of the 90 an executed branch would carry.
 pub const FACTOR_ONE: u16 = 0x0001;
 
+/// `GL_SRC_COLOR`. See [`FACTOR_ONE`] for how the enum was read.
+pub const FACTOR_SRC_COLOUR: u16 = 0x0300;
+
+/// `GL_SRC_ALPHA`. See [`FACTOR_ONE`] for how the enum was read.
+pub const FACTOR_SRC_ALPHA: u16 = 0x0302;
+
 /// `GL_ONE_MINUS_SRC_ALPHA`. See [`FACTOR_ONE`] for how the enum was read.
 pub const FACTOR_ONE_MINUS_SRC_ALPHA: u16 = 0x0303;
+
+/// One side of a blend equation, as the four values the disc uses spell it.
+///
+/// **A rename of a measured number, and nothing more.** Every member is one of
+/// the constants above, the mapping is the identity, and a value outside the
+/// four is not given a member - see [`Self::from_rsx`]. What this buys over
+/// passing the `u16` around is that a renderer can translate it without
+/// re-deriving which OpenGL constant each number is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Factor {
+    /// [`FACTOR_ONE`].
+    One,
+    /// [`FACTOR_SRC_COLOUR`].
+    SrcColour,
+    /// [`FACTOR_SRC_ALPHA`].
+    SrcAlpha,
+    /// [`FACTOR_ONE_MINUS_SRC_ALPHA`].
+    OneMinusSrcAlpha,
+}
+
+impl Factor {
+    /// The member for one of the four values the disc uses, or `None`.
+    ///
+    /// `None` rather than a nearest match: a fifth value would be a fact about
+    /// the data this reading has not seen, and rounding it onto a neighbour is
+    /// how a wrong equation survives review.
+    #[must_use]
+    pub fn from_rsx(value: u16) -> Option<Self> {
+        match value {
+            FACTOR_ONE => Some(Self::One),
+            FACTOR_SRC_COLOUR => Some(Self::SrcColour),
+            FACTOR_SRC_ALPHA => Some(Self::SrcAlpha),
+            FACTOR_ONE_MINUS_SRC_ALPHA => Some(Self::OneMinusSrcAlpha),
+            _ => None,
+        }
+    }
+}
 
 /// One entry of the material table: what the file says about how a surface is
 /// drawn, short of the shader itself.
@@ -156,12 +199,12 @@ pub enum Transparency {
 /// measured against the vertex-colour hypothesis and are not one - no lane is
 /// `0xff`-dominant the way an alpha would be, and on stride 22 the last is the
 /// bimodal `0`/`255` of a packed tangent's handedness. With `alpha = 1.0`,
-/// [`vex::BlendClass::AlphaOver`] paints exactly the opaque pixels while losing
-/// depth ordering and [`vex::BlendClass::Additive`] blows a glass panel white.
+/// an alpha-over blend paints exactly the opaque pixels while losing depth
+/// ordering and an additive one blows a glass panel white.
 ///
 /// `oag_formats::gtf` closed that: [`Material::texture`] names a `.gtf`, its
 /// `to_rgba` carries the alpha, and `oag_render::mesh::rcs` draws these surfaces
-/// blended with the class below.
+/// blended with the equation below.
 ///
 /// **One case still paints solid, and it is a property of the data rather than
 /// of this module.** Where a material's coverage lives in the *second* texture
@@ -172,17 +215,27 @@ pub enum Transparency {
 pub enum Blend {
     /// [`Transparency::Opaque`]: the factor pair is not consumed.
     Opaque,
-    /// See-through, with an equation this module maps onto the class
-    /// `oag_formats::vex` already recovered from Pulse.
-    Class(vex::BlendClass),
-    /// See-through, with a factor pair that is **not** mapped.
+    /// See-through, with **the pair the file authors**, both sides carried.
     ///
-    /// Three materials disc-wide - `hologram` at `0300`/`0302`,
-    /// `dg_zonelights1` at `0302`/`0300`, `zone_death_electricity` at
-    /// `0001`/`0302` - and none of them on any circuit's road, which is what
-    /// makes leaving them unmapped cheap. Reported rather than folded into the
-    /// nearest class, because `Pulse`'s three classes are a recovered fact about
-    /// *Pulse* and there is no evidence HD's equations are a subset of them.
+    /// This used to be a `Class(vex::BlendClass)` keyed on the destination
+    /// factor alone, and the source was dropped - which meant a renderer
+    /// pairing it with Pulse's own pipelines drew every see-through surface
+    /// with a source factor of `GL_SRC_ALPHA` whatever the file said. On
+    /// Talon's Junction that is **96 of 353 see-through chunks**, all of them
+    /// authoring `0001`/`0001` - unweighted additive - plus 3 at
+    /// `0001`/`0303`, which is premultiplied alpha drawn as straight alpha.
+    /// See `docs/formats/rcsmodel.md`.
+    Factors {
+        /// [`Material::src_factor`], named.
+        src: Factor,
+        /// [`Material::dst_factor`], named.
+        dst: Factor,
+    },
+    /// See-through, with a factor value outside the four the disc uses.
+    ///
+    /// Nothing measured reaches this - all 15,762 materials use the four - and
+    /// it exists so a fifth value is reported rather than rounded onto a
+    /// neighbour. See [`Factor::from_rsx`].
     Unmapped {
         /// [`Material::src_factor`].
         src: u16,
@@ -248,29 +301,30 @@ impl Material {
         )
     }
 
-    /// The blend equation this material asks for.
+    /// The blend equation this material asks for, **both factors**.
     ///
-    /// **Keyed on the destination factor alone**, which is what separates the
-    /// two families the disc actually uses: a destination of [`FACTOR_ONE`]
-    /// leaves what is already there and adds to it whatever the source factor
-    /// weights, and a destination of [`FACTOR_ONE_MINUS_SRC_ALPHA`] replaces it
-    /// in proportion to coverage. The source factor varies within each family -
-    /// `0302`, `0001` and `0300` all appear against a destination of `0001` -
-    /// and `oag_formats::vex::BlendClass` has no member for that distinction, so
-    /// folding it in would be inventing precision.
+    /// This used to key on the destination alone and drop the source, on the
+    /// reasoning that `oag_formats::vex::BlendClass` - Pulse's three recovered
+    /// classes - has no member for the distinction. That was the right thing to
+    /// say about `BlendClass` and the wrong thing to do with the data: the
+    /// source factor is measured, it is not constant, and dropping it silently
+    /// redrew every surface that does not author `GL_SRC_ALPHA`. Carrying the
+    /// pair costs the caller one translation and invents nothing.
     ///
-    /// Nothing draws through this; see [`Blend`].
+    /// `oag_render::mesh::rcs` draws through this; see [`Blend`].
     #[must_use]
     pub fn blend(&self) -> Blend {
         if !self.is_see_through() {
             return Blend::Opaque;
         }
-        match self.dst_factor {
-            FACTOR_ONE => Blend::Class(vex::BlendClass::Additive),
-            FACTOR_ONE_MINUS_SRC_ALPHA => Blend::Class(vex::BlendClass::AlphaOver),
-            dst => Blend::Unmapped {
+        match (
+            Factor::from_rsx(self.src_factor),
+            Factor::from_rsx(self.dst_factor),
+        ) {
+            (Some(src), Some(dst)) => Blend::Factors { src, dst },
+            _ => Blend::Unmapped {
                 src: self.src_factor,
-                dst,
+                dst: self.dst_factor,
             },
         }
     }
