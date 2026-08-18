@@ -579,10 +579,15 @@ fn build_class(
                 continue;
             }
             let payload = &data[node.payload()];
-            let Some(child_count) = payload.get(0x50..0x54) else {
+            if payload.len() < 0x54 {
                 continue;
-            };
-            if u32::from_le_bytes(child_count.try_into().expect("checked len 4")) == 2
+            }
+            // In the file's own order, not the host's: HD writes this `u32`
+            // big-endian, where a little-endian read turns 2 into 0x0200_0000
+            // and the skip silently never fires. That direction is `Lod::Both`,
+            // so it draws both levels rather than deleting geometry - which is
+            // why it went unnoticed and why it is still wrong.
+            if vex::byte_order(data).u32(payload, 0x50) == 2
                 && let Some(&second) = children[i].get(1)
             {
                 mark(&children, second, &mut skip);

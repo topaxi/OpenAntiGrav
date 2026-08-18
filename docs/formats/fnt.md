@@ -92,10 +92,113 @@ have picked instead. Pinned by
 positional rather than declared: nothing in the file *says* "my atlas is next",
 and no code path in the executable has been read to confirm it.
 
+### Wipeout HD keeps the layout and writes it big-endian
+
+**33 `.fnt` files across the PS3 disc's seven PSARCs**, and until 2026-08-18 not
+one of them loaded: `Metrics::parse` refused all 33 with `not a .fnt (bad
+version or magic)` and HD's entire front end and HUD drew in the built-in 5x7
+glyphs. The cause is one `u32`.
+
+The first four bytes are the version and magic written as a single constant in
+the file's own order - `01 46 4e 54` (`\x01FNT`) on the PSP and PS2, `54 4e 46
+01` (`TNF\x01`) on the PS3. Every other field follows the same order, with
+nothing moved and nothing resized:
+[`fnt::byte_order`](../../crates/formats/src/fnt.rs) sniffs the magic and the
+rest of the parser is unchanged, the same rule
+[`vex::byte_order`](vex.md) already follows.
+
+**It is not a word swap, and that is checkable.** HD's codepoint table reads
+`00 20 00 21 00 22 00 23` - ascending as big-endian `u16`s, where a
+word-swapped little-endian file would give `00 21 00 20 00 23 00 22`. Every
+declared offset in `pulsehud.fnt` closes on the big-endian reading and on no
+other:
+
+| field | value | closes because |
+| --- | ---: | --- |
+| codepoint count | 166 | - |
+| codepoint table | `0x30` | equals `HEADER_LEN` |
+| offset table | `0x17c` | `0x30 + 166 * 2` |
+| line height | 92 | 720p against Pulse's 25 at 480x272 |
+| atlas | `0xfc0` | `0x17c + 166 * 4 + 166 * 18` |
+| file length | 1,052,736 | `0xfc0 + 64 + 64 + 2048 * 1024 / 2` |
+
+Where the 17 fonts in `DATA02` live and what they are:
+
+| Entry | Line height | Atlas | Glyphs | Used as |
+| --- | ---: | --- | ---: | --- |
+| `/data/fe/fonts/helv.fnt` | 33 | 1024x512 | 243 | `Default` |
+| `/data/fe/fonts/helvb.fnt` | 44 | 1024x512 | 243 | `Title` |
+| `/data/fe/fonts/ps_buttons.fnt` | 54 | 1024x512 | 87 | `Buttons` |
+| `/data/fe/fonts/pulsehud.fnt` | 92 | 2048x1024 | 165 | `HUD` |
+| `/data/fe/fonts/small.fnt` | 34 | 512x512 | 165 | `HUDSmall` |
+| `arialbd`, `ariblk` | 33, 45 | 1024x512 | 203 | not resolved by a slot |
+| `russianhud`, `russianhudsmall` | 85, 29 | 1024x1024, 512x512 | 203 | Russian `HUD` pair |
+| `chinese`, `chinesemx`, `korean`, `koreanbold`, `koreanhudsmall` | 30-43 | up to 2048x1024 | 694-960 | Asian faces |
+| `jap`, `japbold`, `japhudsmall` | 30-44 | up to 2048x1024 | 831-901 | Japanese faces |
+
+The role names come from HD's own language plugins - see
+[hd-frontend.md](hd-frontend.md) - and `pulsehud.fnt` and `small.fnt` really are
+the names Pulse uses, at a 720p size.
+
+**`DATA04`, `DATA05` and `DATA06` carry exactly four fonts each** - `chinese`,
+`chinesemx`, `korean`, `koreanbold` - and this project's own comment in
+`crates/game/src/boot/fonts.rs` once read that as "HD ships four `.fnt` files
+and all four are Asian", concluding there was no Latin face on the disc at all.
+The count was right for those three archives and wrong for the disc. Recorded
+here because the failure shape recurs: a scoped survey reads exactly like a
+whole-disc one.
+
+#### Two things that are not byte order
+
+Each of these would be a plausible-looking wrong picture rather than an error,
+so both are asserted rather than left to a comment:
+
+- **`flags` is 0 on all 33**, where the PSP sets bit 0 on all five of its own.
+  HD's texels are linear and the GE block walk must not run. The decoder already
+  keys on the bit rather than on a console, so it skips itself.
+- **The palette alpha is full-range 0-255** - `0xd9`, `0xf6` and `0xfe` all
+  appear, above what the PS2's 0-128 convention can produce - so the doubling
+  `oag_assets::Archives::read_font` applies to a PS2 font must not reach an HD
+  one. It cannot: that lives on the no-embedded-atlas branch, and HD's atlas is
+  embedded.
+
+#### The nibble order was measured, not carried over
+
+A nibble is not a byte, so a big-endian file has no obligation to reverse them.
+The test is each glyph's own declared box: the column left of `u0` and the
+column at `u1` should hold no ink.
+
+Over **all 33 fonts**, read low-nibble-first: **zero** spilt rows, on every
+one. Read the other way round, every font spills - between 944 rows
+(`ps_buttons.fnt`, the smallest corpus at 86 boxes) and 10,829 (`japbold.fnt`).
+Three of the 33 for scale:
+
+| font | boxes | low nibble first | high nibble first |
+| --- | ---: | ---: | ---: |
+| `helv.fnt` | 242 | **0** spilt rows | 2,808 |
+| `pulsehud.fnt` | 164 | **0** spilt rows | 5,490 |
+| `small.fnt` | 164 | **0** spilt rows | 1,776 |
+
+Low nibble first, the same as the PSP. Eyeballing the decoded sheet does *not*
+settle this on its own - a one-pixel horizontal pair swap still reads as a font
+at a glance - which is why the boxes are the test and the rendered atlas is only
+the sanity check. The measurement is
+`the_nibble_order_is_low_first_and_the_glyph_boxes_are_what_say_so`, not a
+number transcribed here: run the test to regenerate the whole table.
+
+**Confidence 95** for "an HD `.fnt` is the same format big-endian". All 33 across
+all seven archives parse, and for each one the declared tables and the atlas
+tile the file to the byte, the atlas block closes exactly on
+`64 + clut + width * height / 2`, the palette is a 16-entry ramp peaking above
+128, and `flags` is 0. 19,936 glyphs decode, worst per-font edge-ink rate 0.953.
+Not higher because no code in HD's own executable has been read to confirm the
+header is loaded this way; the evidence is entirely the shipped data. Pinned by
+[`crates/formats/tests/fnt_hd_ground_truth.rs`](../../crates/formats/tests/fnt_hd_ground_truth.rs).
+
 ## Layout
 
 ```text
-+0x00  u8       version, 1
++0x00  u8       version, 1        ("TNF\x01" as one big-endian u32 on the PS3)
 +0x01  u8[3]    "FNT"
 +0x04  u32      codepoint count
 +0x08  u32      offset of the codepoint table

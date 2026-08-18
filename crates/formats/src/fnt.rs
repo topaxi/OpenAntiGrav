@@ -17,6 +17,31 @@
 //!
 //! See `docs/formats/fnt.md` for the evidence.
 //!
+//! # Wipeout HD writes the same layout big-endian
+//!
+//! Every field above, the glyph records and the atlas header included, with
+//! nothing moved and nothing resized. The first four bytes are one `u32`
+//! constant written in the file's own order - `\x01FNT` on the PSP and PS2,
+//! `TNF\x01` on the PS3 - so [`byte_order`] sniffs it and no caller passes a
+//! platform in, exactly as [`vex::byte_order`](crate::vex::byte_order) does.
+//!
+//! This is not a word swap, and the distinction is checkable: HD's codepoint
+//! table reads `00 20 00 21 00 22` - ascending as big-endian `u16`s, where a
+//! swapped little-endian file would give `00 21 00 20`. Every offset in
+//! `pulsehud.fnt` closes on that reading and on no other: the offset table at
+//! `0x30 + 166*2 = 0x17c`, the atlas at `0x17c + 166*4 + 166*18 = 0xfc0`, and
+//! the file's last byte at `0xfc0 + 64 + 64 + 2048*1024/2`.
+//!
+//! Two things about HD's atlases that are *not* byte order, and would each be a
+//! silently wrong picture:
+//!
+//! - **`flags` is 0**, so the texels are linear. The unswizzle below already
+//!   keys on the bit rather than on a console, so it skips itself.
+//! - **The palette's alpha is full-range 0-255** - `0xd9`, `0xf6`, `0xfe` all
+//!   appear - so the PS2's 0-128 doubling in `oag_assets::Archives::read_font`
+//!   must not reach it. It cannot: that is the no-embedded-atlas branch and
+//!   HD's atlas is embedded.
+//!
 //! # The atlas header is 64 bytes, and that was the whole problem
 //!
 //! It is not a [`crate::texture`] `.mip` header. It is the same **`Texture`
@@ -61,6 +86,21 @@
 //! The same order as [`crate::texture`], confirmed the same way: the one 4bpp
 //! `.mip` on the disc is a smooth hexagon read low-nibble-first and a combed one
 //! read the other way.
+//!
+//! **Byte order does not change it, and that was measured rather than assumed** -
+//! a nibble is not a byte, and a big-endian file has no obligation to reverse
+//! them. The test is each glyph's own box: the column left of `u0` and the
+//! column at `u1` should hold no ink. Over HD's three Latin faces:
+//!
+//! | font | low nibble first | high nibble first |
+//! | --- | ---: | ---: |
+//! | `helv.fnt` (242 boxes) | **0** spilt rows | 2,808 |
+//! | `pulsehud.fnt` (164 boxes) | **0** spilt rows | 5,490 |
+//! | `small.fnt` (164 boxes) | **0** spilt rows | 1,776 |
+//!
+//! Eyeballing the sheet does not settle this on its own: a one-pixel horizontal
+//! pair swap still reads as a font at a glance, which is why the boxes are the
+//! test and the picture is only the sanity check.
 
 /// Bytes of file header before the codepoint table.
 pub const HEADER_LEN: usize = 0x30;
@@ -78,6 +118,8 @@ pub const GLYPH_LEN: usize = 18;
 pub const ATLAS_HEADER_LEN: usize = 0x40;
 
 pub use crate::texture::{FLAG_SWIZZLED, SWIZZLE_BLOCK_BYTES, SWIZZLE_BLOCK_ROWS};
+
+use crate::ByteOrder;
 
 /// Something wrong with a font.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -202,18 +244,28 @@ pub struct Font {
     pub glyphs: Vec<Glyph>,
 }
 
-fn word(data: &[u8], at: usize) -> u32 {
-    u32::from_le_bytes([data[at], data[at + 1], data[at + 2], data[at + 3]])
+/// Which way round this `.fnt` is written, or `None` if it is not one.
+///
+/// The first four bytes are one `u32` constant written in the file's own order:
+/// `\x01FNT` little-endian, `TNF\x01` big-endian. Nothing else is consulted -
+/// the same rule [`vex::byte_order`](crate::vex::byte_order) follows, and the
+/// reason no caller passes a platform in.
+#[must_use]
+pub fn byte_order(data: &[u8]) -> Option<ByteOrder> {
+    let head = data.get(..4)?;
+    if head[0] == VERSION && &head[1..] == MAGIC {
+        return Some(ByteOrder::Little);
+    }
+    if head[3] == VERSION && head[..3].iter().rev().eq(MAGIC) {
+        return Some(ByteOrder::Big);
+    }
+    None
 }
 
-fn half(data: &[u8], at: usize) -> u16 {
-    u16::from_le_bytes([data[at], data[at + 1]])
-}
-
-/// Whether `data` starts with the `.fnt` version and magic.
+/// Whether `data` starts with the `.fnt` version and magic, either way round.
 #[must_use]
 pub fn looks_like_font(data: &[u8]) -> bool {
-    data.len() >= 4 && data[0] == VERSION && &data[1..4] == MAGIC
+    byte_order(data).is_some()
 }
 
 /// The metrics half of a `.fnt`: everything but the pixels.
@@ -222,6 +274,11 @@ pub fn looks_like_font(data: &[u8]) -> bool {
 /// somewhere else - see [`Font::with_atlas`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Metrics {
+    /// Which way round the file is written, from its own magic.
+    ///
+    /// Carried rather than re-sniffed because the atlas header shares it and
+    /// has no magic of its own to ask.
+    pub order: ByteOrder,
     /// Distance between baselines, in pixels.
     pub line_height: u32,
     /// The word at `+0x14`, 0 or 4. Not decoded.
@@ -245,16 +302,16 @@ impl Metrics {
         if data.len() < HEADER_LEN {
             return Err(Error::TooShort { got: data.len() });
         }
-        if !looks_like_font(data) {
+        let Some(order) = byte_order(data) else {
             return Err(Error::NotAFont);
-        }
+        };
 
-        let count = word(data, 0x04) as usize;
-        let codepoints_at = word(data, 0x08) as usize;
-        let offsets_at = word(data, 0x0c) as usize;
-        let line_height = word(data, 0x10);
-        let unknown = word(data, 0x14);
-        let atlas_at = word(data, 0x18) as usize;
+        let count = order.u32(data, 0x04) as usize;
+        let codepoints_at = order.u32(data, 0x08) as usize;
+        let offsets_at = order.u32(data, 0x0c) as usize;
+        let line_height = order.u32(data, 0x10);
+        let unknown = order.u32(data, 0x14);
+        let atlas_at = order.u32(data, 0x18) as usize;
 
         let range = |what: &'static str, at: usize, len: usize| -> Result<&[u8]> {
             data.get(at..at + len)
@@ -268,19 +325,19 @@ impl Metrics {
             // A terminating 0x0000 is present in three of the five fonts and
             // has no record behind it, so it ends the list rather than being
             // an error.
-            if half(codepoints, index * 2) == 0 {
+            if order.u16(codepoints, index * 2) == 0 {
                 break;
             }
-            let at = word(offsets, index * 4) as usize;
+            let at = order.u32(offsets, index * 4) as usize;
             let record = range("glyph record", at, GLYPH_LEN)?;
             let glyph = Glyph {
-                codepoint: half(record, 0),
+                codepoint: order.u16(record, 0),
                 width: record[2],
                 height: record[3],
-                u0: half(record, 4),
-                u1: half(record, 6),
-                v0: half(record, 8),
-                v1: half(record, 10),
+                u0: order.u16(record, 4),
+                u1: order.u16(record, 6),
+                v0: order.u16(record, 8),
+                v1: order.u16(record, 10),
                 advance: record[12],
             };
             // The box and the size are stored separately, so they agree or this
@@ -296,6 +353,7 @@ impl Metrics {
         }
 
         Ok(Self {
+            order,
             line_height,
             unknown,
             atlas_at,
@@ -324,6 +382,7 @@ impl Font {
     pub fn parse(data: &[u8]) -> Result<Self> {
         let metrics = Metrics::parse(data)?;
         let Metrics {
+            order,
             line_height,
             unknown,
             atlas_at,
@@ -337,12 +396,15 @@ impl Font {
         if atlas.len() < ATLAS_HEADER_LEN {
             return Err(Error::TooShort { got: atlas.len() });
         }
-        let width = half(atlas, 0);
-        let height = half(atlas, 2);
+        // The atlas header has no magic of its own, so it inherits the order
+        // the file's did. Its three size fields close on each other below,
+        // which is what proves the inheritance right rather than assumed.
+        let width = order.u16(atlas, 0);
+        let height = order.u16(atlas, 2);
         let bits_per_pixel = atlas[4];
         let flags = atlas[6];
-        let clut_size = word(atlas, 8) as usize;
-        let texel_size = word(atlas, 0x0c) as usize;
+        let clut_size = order.u32(atlas, 8) as usize;
+        let texel_size = order.u32(atlas, 0x0c) as usize;
 
         if bits_per_pixel != 4 {
             return Err(Error::UnsupportedDepth { bits_per_pixel });
