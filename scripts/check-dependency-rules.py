@@ -29,13 +29,18 @@ ROOT = Path(__file__).resolve().parent.parent
 # oag-title and oag-pulse are here for the reason ADR-0022 gives: a title
 # package is tables, readable from both sides of the simulation boundary, so
 # rule 1 has to cover them or a Pulse constant becomes the back door a texture
-# handle walks through. oag-pure joins them in the same change that creates it;
-# this script validates that every name here is a real workspace member, so it
-# cannot be listed ahead of time the way oag-audio once was.
+# handle walks through. **Every** title package joins in the same change that
+# creates it; this script validates that every name here is a real workspace
+# member, so it cannot be listed ahead of time the way oag-audio once was.
+# oag-pure did join that way and oag-hd did not, which is how rule 1 stopped
+# covering a third of the title packages for as long as it took the 2026-08-18
+# review (finding S1) to notice. The list is the invariant, so a new title
+# crate with no line here is a hole with no symptom.
 GAMEPLAY_CRATES = {
     "oag-ai",
     "oag-core",
     "oag-gameplay",
+    "oag-hd",
     "oag-physics",
     "oag-pulse",
     "oag-pure",
@@ -43,6 +48,20 @@ GAMEPLAY_CRATES = {
     "oag-title",
 }
 FORBIDDEN_FOR_GAMEPLAY = {"oag-render", "oag-audio", "oag-input", "winit", "wgpu"}
+
+# The crates that link `oag-title` without being title packages: the reader of
+# any title's archives, and the composition root that picks one. Every *other*
+# workspace member that links `oag-title` is a title package by construction -
+# a package exists to fill that vocabulary in - so it belongs in
+# GAMEPLAY_CRATES above.
+#
+# This is what stops S1 recurring. Listing `oag-hd` fixes the instance; the
+# reason it went missing for as long as it did is that a title package with no
+# line in GAMEPLAY_CRATES has no symptom - the gate passes, quieter than
+# before. So a new crate reaching for `oag-title` now has to be classified
+# here or there, and cannot be neither.
+TITLE_VOCABULARY = "oag-title"
+NOT_TITLE_PACKAGES = {"oag-assets", "oag-game"}
 
 # Rule 2: no crate may depend on the composition root.
 COMPOSITION_ROOT = "oag-game"
@@ -105,6 +124,26 @@ def main() -> int:
                 f"{crate} transitively depends on {sorted(hit)}, "
                 "which rule 1 (no gameplay crate depends on a renderer/audio/"
                 "input/window backend) forbids"
+            )
+
+    vocabulary_id = id_by_name.get(TITLE_VOCABULARY)
+    if vocabulary_id is None:
+        problems.append(f"workspace member {TITLE_VOCABULARY!r} not found in cargo metadata")
+    else:
+        unclassified = sorted(
+            names[member_id]
+            for member_id in meta["workspace_members"]
+            if vocabulary_id in graph.get(member_id, [])
+            and names[member_id] not in GAMEPLAY_CRATES
+            and names[member_id] not in NOT_TITLE_PACKAGES
+        )
+        if unclassified:
+            problems.append(
+                f"{unclassified} depend on {TITLE_VOCABULARY} but are in neither "
+                "GAMEPLAY_CRATES nor NOT_TITLE_PACKAGES in this script. A crate "
+                "that fills the title vocabulary is a title package and rule 1 "
+                "has to cover it (add it to GAMEPLAY_CRATES); if it reads titles "
+                "rather than being one, say so in NOT_TITLE_PACKAGES."
             )
 
     root_id = id_by_name.get(COMPOSITION_ROOT)
