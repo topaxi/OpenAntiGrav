@@ -653,6 +653,29 @@ uses, selected by the `.rcsmaterial`'s shader, which is compiled RSX microcode
 and is not read. **So nothing samples it**, and a surface whose coverage lives
 there paints solid: Talon's Junction's cloud plate is the one that shows.
 
+**The obvious shortcut was tried and does not work** (2026-08-18). The
+`.rcsmaterial`'s `SHO` blocks carry a parameter table -
+`(name hash, u16 type, u16 count, u16 register, 0xffff)` at a 12-byte stride,
+identified and cross-checked against the executable's own copies in
+[renderer.md](../ghidra/functions/ps3-hdfury-eu/renderer.md#what-was-deliberately-not-read) -
+so the hope was that a material's parameters would name its samplers and settle
+which slot is what without disassembling anything. They do not:
+
+- **The table does not discriminate.** `diffusewithalphachannel`, whose second
+  texture is an `lmaps/*-lmap.gtf`, has a **byte-identical hash set** to
+  `diffuse_with_specular_from_alpha`, which has no second texture at all; the
+  same holds for `clouds` (a mask) against `billboarddiffuse` (nothing).
+- **Nothing in it is sampler-shaped.** Across three materials' 582 well-formed
+  records there are three type codes (`0x201`, `0x203`, `0x204`) and the
+  registers are `0x0100`, `0x0104`, `0x01cc`-`0x01d3` and `0xffff` - constant
+  registers, not the small texture-unit indices a sampler binds to.
+
+So this is a **constant** table, and the second slot's role is still in the
+microcode. **What is not ruled out**: `renderer.md` names *two* binder functions,
+`0x003af980` and `0x003b31c8`, and only the first is described. Whether the
+second binds samplers through a different table is the check that would reopen
+this cheaply, and it has not been run.
+
 ### What the renderer does with it
 
 **A see-through chunk is drawn blended, with the equation its material names.**
