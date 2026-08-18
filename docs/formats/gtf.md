@@ -196,8 +196,13 @@ diverges. It is pinned in the test rather than tolerated.
   matter the day `B8` is decoded.
 - **Mip levels past the base.** They are measured, because the length check
   needs them, and `Texture::level_range` will address one; nothing decodes one.
-- **Nothing is drawn.** `oag_render` does not upload a `.gtf` yet, so no HD
-  texture has reached a shader.
+- **The front end's `<Image>` widgets.** `oag_render` uploads a `.gtf` now -
+  HD's HUD samples ten of them, and an HD craft and circuit are painted from
+  their materials' own textures through
+  [`oag_render::mesh::rcs`](rcsmodel.md#the-texture-a-material-paints-with) -
+  but `boot::load_sprites` still offers a front-end image to the PSP `.mip`
+  path alone and gets `zero-sized texture 1281x0`. A wiring gap, not a format
+  one.
 - **No emulator check**, which is the ceiling on the score.
 
 ## See also
