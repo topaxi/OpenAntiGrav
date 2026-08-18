@@ -574,6 +574,34 @@ which is both why the gap was always a multiple of 16 and why the same check
 would have failed on all 76 Pulse files. The script is fixed and now reports
 88 of 88; the identity is asserted per file on all three discs.
 
+## A hull's locators are in a file of their own - 2026-08-18
+
+**Confidence 90**, measured with `oag_formats::vex::class_world_transforms` on
+the disc and asserted in
+`crates/game/tests/livery_ground_truth.rs::an_hd_hull_takes_its_locators_from_the_file_beside_it`.
+
+Pulse and the PS2 port put every locator node in the hull's own `.vex`. HD
+splits a craft across a directory - `ship.vex`, `ship_lod.vex`,
+`ship_deathshell.vex`, `engineflare.vex`, `locators.vex` and more - and the
+locator nodes live in `locators.vex`. On `data/ships/detonator`:
+
+| file | nodes | `Engine Flare` | `Ship Collision Fx` |
+| --- | --- | --- | --- |
+| `ship.vex` | 88 | 0 | 0 |
+| `locators.vex` | 25 | **1** | **10** |
+| `engineflare.vex` | 18 | 0 | 0 |
+
+The class table is unchanged - all three files report version 6 and the same
+class ids (`959` and `976`) that [`.vex`](#vex-is-version-6-with-pulses-class-table-byte-swapped)
+already records. Only where the nodes are has moved.
+
+**What this cost.** `WO_SHIP_ENGINEFLARE` parses, both its emitters are
+`LOOPING`, and the game attaches one instance per craft - but only where the
+hull yields a nozzle, and HD's yielded none, so the flare never drew. On screen
+a missing asset and a missing anchor are the same picture. Ten is also the
+number `Ship_DispatchCollisionFx` picks the nearest of, so HD authors the full
+set the recovered Pulse trigger expects.
+
 ## What is genuinely new
 
 - **`.rcsmodel`** - 643 files, 686.5 MiB, all render geometry. **Positions,
