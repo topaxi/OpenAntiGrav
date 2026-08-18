@@ -550,32 +550,36 @@ fn the_field_after_the_normal_follows_the_stride_and_not_the_descriptor_byte() {
     );
 }
 
-/// Claim 6: the last four bytes of a vertex are a texture coordinate in **one
-/// of two types**, and which one is recovered from the content.
+/// Claim 6: **where a diffuse texture coordinate is, measured against where it
+/// was assumed to be.**
 ///
 /// # What this replaces
 ///
-/// This test used to pin a negative - that the last four bytes were *not* a
-/// coordinate on every submesh, that 290 of Talon's Junction's 1,112 draw calls
-/// spanned over 100 tiles of their texture, and that no field of the file
-/// separated the two groups. The eliminations still hold and are on
-/// `docs/formats/rcsmodel.md`: not the stride, not the `83 XX` descriptor byte,
-/// not the material, and not any byte of the chunk header or of the `0x80`-byte
-/// submesh descriptor.
+/// This test twice pinned a reading that has since been retired. First a
+/// negative - that the last four bytes of a vertex were *not* a coordinate on
+/// every submesh, 290 of Talon's Junction's 1,112 draw calls spanning over 100
+/// tiles of their texture. Then a positive that explained the split as two
+/// coordinate *types* told apart by what the bytes decoded to.
 ///
-/// What changed is that the *positive* answer no longer needs one. There are two
-/// types - [`rcsmodel::TexcoordFormat`] - and the type is legible from what the
-/// bytes decode to, so [`rcsmodel::Mesh::texcoord_format`] reads it.
+/// Both were reasoning around a missing field, and the field exists: the
+/// chunk's [`rcsmodel::VertexDecl`] gives each attribute's offset and type. The
+/// submeshes the sniff called a second type are ones whose last four bytes are
+/// a different **attribute** - a `tangent` or a colour set - on a vertex whose
+/// coordinate is elsewhere.
+///
+/// The eliminations from the first reading still hold and are on
+/// `docs/formats/rcsmodel.md`: no byte of the chunk header and no byte of the
+/// `0x80`-byte submesh descriptor separates the groups. Neither does, because
+/// the answer is not in either - it is in the block the header points at.
 ///
 /// # What is asserted
 ///
-/// That both types are present in real numbers, that they are confined to
-/// stride 18, and that reading each submesh in its own type leaves the whole
-/// model's coordinates plausible - which is the check the old span figure
-/// failed.
+/// That the declared coordinate is often somewhere other than the last four
+/// bytes, and that reading it where the file says leaves the model's
+/// coordinates far more plausible than reading the last four bytes did.
 #[test]
 #[ignore = "needs a decrypted PS3 disc image in data/images"]
-fn a_texture_coordinate_is_one_of_two_types_and_the_content_says_which() {
+fn the_declaration_says_where_a_texture_coordinate_is_and_it_is_rarely_last() {
     let (archive, vex_path, model_path) = PAIRS[2];
     let Some((_, model_blob)) = pair(archive, vex_path, model_path) else {
         return;
@@ -585,38 +589,45 @@ fn a_texture_coordinate_is_one_of_two_types_and_the_content_says_which() {
     /// Widest tiling treated as authored rather than as noise.
     const PLAUSIBLE: f32 = 8.0;
 
-    let mut by_format: std::collections::BTreeMap<(usize, &str), usize> = Default::default();
+    let mut where_it_is: std::collections::BTreeMap<(usize, &'static str), usize> =
+        Default::default();
     let mut vertices = 0usize;
     let mut implausible = 0usize;
     let mut was_implausible = 0usize;
     for mesh in &model.meshes {
-        let Some(stride) = mesh.solve_stride_by_layout() else {
+        let Some(stride) = mesh.declared_stride() else {
             continue;
         };
+        let uv = mesh
+            .decl
+            .as_ref()
+            .and_then(rcsmodel::VertexDecl::diffuse_texcoord);
+        let Some(uv) = uv else { continue };
+        let placed = if usize::from(uv.offset) + 4 == stride {
+            "last"
+        } else {
+            "elsewhere"
+        };
+        *where_it_is.entry((stride, placed)).or_default() += 1;
         for submesh in &mesh.submeshes {
             if submesh.vertex_count < 16 {
                 continue;
             }
-            let format = mesh.texcoord_format(&model_blob, submesh, stride);
-            let name = match format {
-                rcsmodel::TexcoordFormat::Half => "half",
-                rcsmodel::TexcoordFormat::Unorm16 => "unorm16",
-            };
-            *by_format.entry((stride, name)).or_default() += 1;
             let Ok(uvs) = mesh.texcoords(&model_blob, submesh, stride) else {
                 continue;
             };
             let bad = |uv: &[f32; 2]| !uv.iter().all(|c| c.is_finite() && c.abs() <= PLAUSIBLE);
             vertices += uvs.len();
             implausible += uvs.iter().filter(|uv| bad(uv)).count();
-            // The identical submeshes under the reading this replaces - every
-            // coordinate a half - so the improvement is measured against the old
-            // behaviour on the same corpus rather than against a chosen bar.
+            // The identical submeshes under the reading this replaces - the
+            // last four bytes of every vertex, as halves - so the improvement
+            // is measured against the old behaviour on the same corpus rather
+            // than against a bar this file picked.
             was_implausible += (0..submesh.vertex_count)
                 .filter(|k| {
                     let at = submesh.vertex_offset + k * stride + stride - 4;
                     let uv: [f32; 2] = std::array::from_fn(|i| {
-                        rcsmodel::TexcoordFormat::Half.decode(u16::from_be_bytes([
+                        rcsmodel::unpack_half(u16::from_be_bytes([
                             model_blob[at + i * 2],
                             model_blob[at + i * 2 + 1],
                         ]))
@@ -626,42 +637,30 @@ fn a_texture_coordinate_is_one_of_two_types_and_the_content_says_which() {
                 .count();
         }
     }
-    println!("submeshes by (stride, type): {by_format:?}");
+    println!("chunks by (stride, where the declared coordinate is): {where_it_is:?}");
     println!(
-        "implausible coordinates: {was_implausible} of {vertices} ({:.2}%) reading every one as a \
-         half, {implausible} ({:.2}%) reading each submesh in its own type",
+        "implausible coordinates: {was_implausible} of {vertices} ({:.2}%) reading the last four \
+         bytes, {implausible} ({:.2}%) reading where the declaration says",
         100.0 * was_implausible as f64 / vertices as f64,
         100.0 * implausible as f64 / vertices as f64
     );
 
-    let unorm: usize = by_format
+    let elsewhere: usize = where_it_is
         .iter()
-        .filter(|((_, name), _)| *name == "unorm16")
-        .map(|(_, n)| n)
-        .sum();
-    let halves: usize = by_format
-        .iter()
-        .filter(|((_, name), _)| *name == "half")
+        .filter(|((_, placed), _)| *placed == "elsewhere")
         .map(|(_, n)| n)
         .sum();
     assert!(
-        unorm >= 20 && halves >= 200,
-        "both types must be present in real numbers, not as a rounding error: {by_format:?}"
-    );
-    assert!(
-        by_format
-            .keys()
-            .all(|(stride, name)| *name != "unorm16" || *stride == 18),
-        "the second type is confined to stride 18 on this disc: {by_format:?}"
+        elsewhere >= 100,
+        "the finding is that the coordinate is often not last: {where_it_is:?}"
     );
     // **Measured against the old behaviour, not against a bar this file picked.**
-    // If the two types were not the explanation, reading each submesh in its own
-    // would not move this. It goes 10.37 % to 2.38 % on Talon's Junction; a
-    // factor of three sits well inside that and well outside noise.
+    // If the declaration were not the explanation, reading through it would not
+    // move this.
     assert!(
         implausible * 3 <= was_implausible,
-        "per-submesh typing leaves {implausible} of {vertices} implausible against \
-         {was_implausible} for the all-half reading - under a threefold improvement, so the \
-         split is not carrying its weight"
+        "the declared offset leaves {implausible} of {vertices} implausible against \
+         {was_implausible} for the last-four-bytes reading - under a threefold improvement, so \
+         the declaration is not carrying its weight"
     );
 }

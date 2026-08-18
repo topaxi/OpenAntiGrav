@@ -86,6 +86,13 @@ pub struct Report {
     /// exactly what a *working* surface looks like at a glance. See
     /// [`decode_texture`].
     pub untextured: usize,
+    /// Chunks whose vertex declaration names no texture coordinate at all.
+    ///
+    /// 984 of the disc's chunks. They draw at the origin of their texture,
+    /// which is the honest answer: `rcsmodel::Mesh::texcoords` refuses rather
+    /// than picking an attribute that is not one, and this counts the refusals
+    /// so a flat-coloured surface is a reported absence and not a mystery.
+    pub no_texcoord: usize,
 }
 
 impl Report {
@@ -112,6 +119,9 @@ impl Report {
         } + &match self.untextured {
             0 => String::new(),
             n => format!(", {n} material(s) whose .gtf did not paint"),
+        } + &match self.no_texcoord {
+            0 => String::new(),
+            n => format!(", {n} chunk(s) declaring no texture coordinate"),
         } + &match self.authored_normals {
             0 => ", lit off face normals computed from the triangles".to_string(),
             n => format!(", {n} authored vertex normal(s)"),
@@ -339,14 +349,20 @@ pub fn build_scene(
         if placed.contains(&mesh.hash) {
             continue;
         }
-        // No authored box to check against, so the stride comes from where the
-        // file puts its buffers, and failing that from the geometry's own
-        // compactness - see `rcsmodel::Mesh::solve_stride_without_a_box`.
-        let Some(stride) = mesh.solve_stride_without_a_box(model_blob) else {
+        // **What the chunk declares, first**, which is what turned these on:
+        // 3,382 of the disc's chunks declare a stride the search below cannot
+        // fit, and every one of them used to be skipped silently here. See
+        // `rcsmodel::vertex_decl`.
+        let Some(stride) = mesh
+            .declared_stride()
+            .or_else(|| mesh.solve_stride_without_a_box(model_blob))
+        else {
+            report.no_stride += 1;
             continue;
         };
         let surface = surface(&model, mesh, &out.textures);
         report.see_through += usize::from(surface.blend.is_some());
+        report.no_texcoord += usize::from(declares_no_texcoord(mesh));
         let mut emitted = false;
         for submesh in &mesh.submeshes {
             if submesh.vertex_count == 0 || submesh.index_count == 0 {
@@ -387,6 +403,17 @@ pub fn build_scene(
     out.centre = centre;
     out.radius = radius;
     Ok((out, report))
+}
+
+/// Whether a chunk's declaration names no texture coordinate.
+///
+/// `false` for a chunk with no declaration at all - an inline one, where
+/// `rcsmodel::Mesh::texcoords` still reads the last four bytes and the count
+/// would be about this module rather than about the data.
+fn declares_no_texcoord(mesh: &rcsmodel::Mesh) -> bool {
+    mesh.decl
+        .as_ref()
+        .is_some_and(|decl| decl.diffuse_texcoord().is_none())
 }
 
 /// How one chunk is drawn: which texture slot, and blended or not.
@@ -495,9 +522,14 @@ struct Surface {
 
 /// Zero for a coordinate that is not a finite number.
 ///
-/// 1.68 % of a circuit's stride-18 vertices decode to an infinity or a NaN at
-/// this offset, which is the residue [`rcsmodel::Mesh::texcoords`] measures and
-/// does not explain. A NaN in a vertex buffer is not a visible failure, it is a
+/// **Almost nothing reaches this any more, and it stays.** 1.68 % of a
+/// circuit's vertices used to decode to an infinity or a NaN here, and every
+/// one of them was a `tangent` or a colour set read as a coordinate because the
+/// reader took the last four bytes of a vertex; reading where
+/// `rcsmodel::VertexDecl` says leaves Talon's Junction with **9** of 600,280
+/// and Assegai with 6 of 25,144, which are a different and still-unexplained
+/// thing. An inline chunk has no declaration at all, so the guard is also what
+/// those go through. A NaN in a vertex buffer is not a visible failure, it is a
 /// hole in the rasteriser's output, so it is pinned to zero here.
 fn finite(v: f32) -> f32 {
     if v.is_finite() { v } else { 0.0 }
@@ -655,12 +687,13 @@ pub fn build(
         };
         report.addressed += 1;
         let tolerance = mesh.scale.iter().fold(0.0f32, |a, &b| a.max(b)) * TOLERANCE_STEPS;
-        // The box first, because it is the tightest oracle there is. Where it
-        // settles nothing, the buffer layout can - and that is safe to fall back
-        // to here rather than merely plausible, because every submesh still has
-        // to fit the authored box below before a triangle of it is drawn.
+        // **What the chunk declares, first.** The searches below fit a stride
+        // to the authored box and to buffer layout, and they exist because this
+        // field had not been read; see `rcsmodel::vertex_decl`. They stay for
+        // an inline chunk, which declares nothing.
         let Some(stride) = mesh
-            .solve_stride(model_blob, (min, max), tolerance)
+            .declared_stride()
+            .or_else(|| mesh.solve_stride(model_blob, (min, max), tolerance))
             .or_else(|| mesh.solve_stride_by_layout())
             .or_else(|| mesh.solve_stride_by_normals(model_blob))
         else {
@@ -671,6 +704,7 @@ pub fn build(
         let to_world = Mat4::from_cols_array(&world[index]);
         let surface = surface(&model, mesh, &out.textures);
         report.see_through += usize::from(surface.blend.is_some());
+        report.no_texcoord += usize::from(declares_no_texcoord(mesh));
         let mut emitted = false;
         for submesh in &mesh.submeshes {
             if submesh.vertex_count == 0 || submesh.index_count == 0 {
@@ -834,6 +868,7 @@ mod tests {
             unreferenced: 639,
             see_through: 257,
             untextured: 3,
+            no_texcoord: 9,
             authored_normals: 531_904,
         };
         let line = report.describe();
@@ -844,6 +879,11 @@ mod tests {
             line.contains("3 material(s) whose .gtf did not paint"),
             "a draw with no texture binds the white 1x1 and paints a sheet, which \
              is what a working surface looks like at a glance: {line}"
+        );
+        assert!(
+            line.contains("9 chunk(s) declaring no texture coordinate"),
+            "a chunk with no coordinate paints at the origin of its texture, \
+             which is an absence worth naming: {line}"
         );
         assert!(
             line.contains("11 had no recoverable vertex stride"),

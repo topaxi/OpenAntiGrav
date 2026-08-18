@@ -23,8 +23,8 @@
 //! obvious hypothesis and is measured false; see [`SubMesh::format`].
 //!
 //! **The last four bytes are a coordinate in one of two types**, and which one
-//! is in no field of the file - see [`TexcoordFormat`] and
-//! [`Mesh::texcoord_format`]. Reading every one as a half left 290 of a
+//! is in the file, in the chunk's own [`VertexDecl`] - see [`TexcoordFormat`]
+//! and [`Mesh::texcoords`]. Reading every one as a half left 290 of a
 //! circuit's 1,112 draw calls spanning over 100 tiles of their texture; reading
 //! each submesh in its own type leaves 84.
 //!
@@ -259,50 +259,59 @@ fn exp2(n: i32) -> f32 {
     f32::from_bits(((n + 127) as u32) << 23)
 }
 
-/// How many vertices [`Mesh::texcoord_format`] looks at before deciding.
-///
-/// The two groups are not marginal - the half reading is usable on 95 %+ of one
-/// and under 50 % of the other - so a small sample settles it, and a submesh
-/// under this many vertices is read whole.
-const TEXCOORD_FORMAT_SAMPLE: usize = 64;
-
-/// How many whole tiles of its texture a coordinate may span before the half
-/// reading is judged not to be one.
-///
-/// A circuit tiles a road texture tens of times and never thousands; the values
-/// this rejects are `65504` and exact powers of two up to it, which is what a
-/// half decodes to when its bits are really a `u16`.
-const TEXCOORD_PLAUSIBLE_TILES: f32 = 8.0;
-
 /// The two types a `.rcsmodel` writes a texture coordinate in.
 ///
-/// **Both are measured, and the split is real rather than one type misread.**
-/// The discriminator is texel density: the spread of `log(uv area / world
-/// area)` within a chunk, which is consistent for a correct mapping because
-/// artists map at a consistent density and is not for a wrong one. Over
-/// Talon's Junction's stride-18 chunks, `Half` scores **0.610** against
-/// `Unorm16`'s 1.164 on the group where halves read plausibly, and `Unorm16`
-/// scores **1.839** against `Half`'s 8.170 on the group where they do not. Each
-/// group is best explained by a different type, on a metric that cannot be
-/// gamed by scale - which is what says there are two.
+/// **The file says which**, in the type byte of the chunk's own
+/// [`VertexDecl`] - `0x23` for a pair of halves on 54,120 attributes disc-wide
+/// and `0x22` for a pair of `f32` on 230. See
+/// [`vertex_decl`] and `docs/formats/rcsmodel.md`.
 ///
-/// Selected per submesh by [`Mesh::texcoord_format`]. 285 of Talon's Junction's
-/// 337 stride-18 submeshes are `Half` and 52 are `Unorm16`.
+/// This used to be selected per submesh by sniffing what the bytes decoded to,
+/// with `Unorm16` as its second member. That reading is retired: what the sniff
+/// was separating is not a second coordinate type but a **different
+/// attribute** - a four-byte `tangent` or `colorSet1` in the last four bytes of
+/// a vertex whose coordinate is elsewhere, read as a coordinate because the
+/// reader assumed the coordinate came last.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TexcoordFormat {
-    /// Two big-endian IEEE halves - see [`unpack_half`].
+    /// Two big-endian IEEE halves - see [`unpack_half`]. Declared `0x23`.
     Half,
-    /// Two big-endian `u16`s over `0..=1`, RSX's `CELL_GCM_VERTEX_U16N` shape.
-    Unorm16,
+    /// Two big-endian `f32`. Declared `0x22`.
+    Float,
 }
 
 impl TexcoordFormat {
-    /// One 16-bit field as a coordinate.
+    /// The type a declared attribute is written in, or `None` for one that is
+    /// not a two-component coordinate.
     #[must_use]
-    pub fn decode(self, bits: u16) -> f32 {
+    pub fn of(attribute: &Attribute) -> Option<Self> {
+        if attribute.components != 2 {
+            return None;
+        }
+        match attribute.rsx_type {
+            vertex_decl::RSX_HALF => Some(Self::Half),
+            vertex_decl::RSX_FLOAT => Some(Self::Float),
+            _ => None,
+        }
+    }
+
+    /// Bytes one coordinate pair occupies.
+    #[must_use]
+    pub fn width(self) -> usize {
         match self {
-            Self::Half => unpack_half(bits),
-            Self::Unorm16 => f32::from(bits) / f32::from(u16::MAX),
+            Self::Half => 4,
+            Self::Float => 8,
+        }
+    }
+
+    /// One pair, at `at`.
+    #[must_use]
+    pub fn decode(self, data: &[u8], at: usize) -> [f32; 2] {
+        match self {
+            Self::Half => {
+                std::array::from_fn(|i| unpack_half(ByteOrder::Big.u16(data, at + i * 2)))
+            }
+            Self::Float => std::array::from_fn(|i| ByteOrder::Big.f32(data, at + i * 4)),
         }
     }
 }
@@ -340,6 +349,13 @@ pub enum Error {
         /// Where the chunk starts.
         at: usize,
     },
+    /// The chunk declares no texture coordinate at all.
+    ///
+    /// 984 of the disc's chunks. Answered rather than substituted for: a
+    /// caller that draws these untextured is showing an absence, and one that
+    /// invents a coordinate is showing a wrong picture. See
+    /// [`VertexDecl::diffuse_texcoord`].
+    NoTexcoord,
     /// An index buffer names a vertex the submesh does not have.
     ///
     /// A real corruption check rather than a formality: it is the invariant
@@ -362,6 +378,9 @@ impl std::fmt::Display for Error {
             }
             Self::OutOfBounds { what, end, len } => {
                 write!(f, "{what} ends at {end} but the file is {len} bytes")
+            }
+            Self::NoTexcoord => {
+                write!(f, "the chunk declares no texture coordinate")
             }
             Self::IndexOutOfRange { index, vertices } => {
                 write!(f, "an index names vertex {index} of {vertices}")
@@ -730,38 +749,59 @@ impl Mesh {
             .collect())
     }
 
-    /// The texture coordinates, one pair per vertex.
+    /// Bytes per vertex, as the chunk's own declaration states it.
     ///
-    /// # The last four bytes of a vertex, on every stride
+    /// **Prefer this over [`Self::solve_stride`] and its siblings**, which fit
+    /// the stride to the authored bounding box because this block had not been
+    /// read: the declaration agrees with the search on 35,983 of the 35,990
+    /// chunks the search settles, and settles 3,382 more that it does not. The
+    /// searches remain for [`Layout::Inline`] chunks, which declare nothing.
+    #[must_use]
+    pub fn declared_stride(&self) -> Option<usize> {
+        self.decl.as_ref().map(|decl| decl.stride)
+    }
+
+    /// The texture coordinates a diffuse texture is sampled through, one pair
+    /// per vertex.
     ///
-    /// Two big-endian IEEE halves - see [`unpack_half`]. Located by elimination
-    /// rather than decoded from anything that names them: the position, the
-    /// normal and (at stride 22) the tangent account for every other field, and
-    /// what is left reads as a pair in a texture-coordinate range.
+    /// # Where they are is declared, not assumed
     ///
-    /// **How strong that is, measured**: on Assegai 99.9 % of 24,848 stride-22
-    /// vertices and 96.9 % of its stride-18 ones fall in the unit square, with
-    /// 0.02 % non-finite. A circuit is looser, as tiling makes it - 79.6 % of
-    /// Talon's Junction's 525,944 stride-18 vertices in the unit square, 83.2 %
-    /// within +/-8, and 1.68 % non-finite, which is a real residue and not
-    /// rounding.
+    /// The chunk's [`VertexDecl`] gives the attribute's byte offset and its
+    /// type, and [`VertexDecl::diffuse_texcoord`] picks which of the several a
+    /// vertex may declare. That matters because **the last four bytes of a
+    /// vertex are usually not it**: on the commonest stride-18 layout they are
+    /// `lightmapUV`, whose coordinates are atlas-packed, and painting a diffuse
+    /// texture through them smears it into streaks.
     ///
-    /// **What confirms it is a picture, and that is now possible.** Until
-    /// `oag_formats::gtf` was read there was nothing to check a UV against, so
-    /// this went unread and the code refused to call it one. There is an oracle
-    /// now: a texture sampled through these coordinates either lands on the
-    /// surface it belongs to or streaks visibly.
+    /// A [`Layout::Inline`] chunk declares nothing, so there the last four
+    /// bytes are read as two halves - the reading this method used everywhere
+    /// before the declaration was found, kept for the 2,489 chunks that still
+    /// have no better answer.
     ///
     /// # Errors
     ///
-    /// [`Error::OutOfBounds`], as [`Self::positions`].
+    /// [`Error::NoTexcoord`] for a chunk that declares no texture coordinate at
+    /// all, which 984 of the disc's do - answered rather than substituted for,
+    /// so a caller draws an untextured surface instead of a wrongly-mapped one.
+    /// [`Error::OutOfBounds`] as [`Self::positions`].
     pub fn texcoords(
         &self,
         data: &[u8],
         submesh: &SubMesh,
         stride: usize,
     ) -> Result<Vec<[f32; 2]>> {
-        let end = submesh.vertex_offset + stride * submesh.vertex_count.saturating_sub(1) + stride;
+        let (offset, format) = match &self.decl {
+            Some(decl) => {
+                let attribute = decl.diffuse_texcoord().ok_or(Error::NoTexcoord)?;
+                let format = TexcoordFormat::of(attribute).ok_or(Error::NoTexcoord)?;
+                (usize::from(attribute.offset), format)
+            }
+            None => (stride.saturating_sub(TEXCOORD_LEN), TexcoordFormat::Half),
+        };
+        let end = submesh.vertex_offset
+            + stride * submesh.vertex_count.saturating_sub(1)
+            + offset
+            + format.width();
         if submesh.vertex_count > 0 && end > data.len() {
             return Err(Error::OutOfBounds {
                 what: "a vertex buffer's texture coordinates",
@@ -769,63 +809,9 @@ impl Mesh {
                 len: data.len(),
             });
         }
-        let format = self.texcoord_format(data, submesh, stride);
         Ok((0..submesh.vertex_count)
-            .map(|k| {
-                let at = submesh.vertex_offset + k * stride + stride - TEXCOORD_LEN;
-                std::array::from_fn(|i| format.decode(ByteOrder::Big.u16(data, at + i * 2)))
-            })
+            .map(|k| format.decode(data, submesh.vertex_offset + k * stride + offset))
             .collect())
-    }
-
-    /// Which of the two types this submesh's texture coordinate is written in.
-    ///
-    /// **Recovered from the content, because it is in no field of the file.**
-    /// Every byte of the chunk header (`+0x00`..`+0x60`) and every byte of the
-    /// `0x80`-byte submesh descriptor was swept against the two groups on
-    /// Talon's Junction and **none separates them**; neither does the material,
-    /// the stride, or the `83 XX` descriptor byte. What does separate them is
-    /// what the bytes decode to, which is what this reads.
-    ///
-    /// A [`TexcoordFormat::Half`] submesh read as halves gives finite
-    /// coordinates in a texture-coordinate range; a [`TexcoordFormat::Unorm16`]
-    /// one read the same way gives infinities and values up to `65504`, the
-    /// largest finite half - **290 of Talon's Junction's 1,112 draw calls** span
-    /// over 100 tiles of their texture for exactly this reason. So the test is
-    /// whether the half reading is mostly usable.
-    ///
-    /// See `docs/formats/rcsmodel.md` for the evidence that these are two
-    /// *types* rather than one type misread.
-    #[must_use]
-    pub fn texcoord_format(&self, data: &[u8], submesh: &SubMesh, stride: usize) -> TexcoordFormat {
-        let mut usable = 0usize;
-        let mut seen = 0usize;
-        for k in (0..submesh.vertex_count).take(TEXCOORD_FORMAT_SAMPLE) {
-            let at = submesh.vertex_offset + k * stride + stride - TEXCOORD_LEN;
-            if at + TEXCOORD_LEN > data.len() {
-                break;
-            }
-            seen += 1;
-            let pair: [f32; 2] =
-                std::array::from_fn(|i| unpack_half(ByteOrder::Big.u16(data, at + i * 2)));
-            if pair
-                .iter()
-                .all(|c| c.is_finite() && c.abs() <= TEXCOORD_PLAUSIBLE_TILES)
-            {
-                usable += 1;
-            }
-        }
-        // An empty or unreadable submesh keeps the type the disc uses on five
-        // sixths of its geometry, which is also the one every earlier reading
-        // assumed.
-        if seen == 0 {
-            return TexcoordFormat::Half;
-        }
-        if usable * 2 >= seen {
-            TexcoordFormat::Half
-        } else {
-            TexcoordFormat::Unorm16
-        }
     }
 
     /// Reads one submesh's triangle indices.

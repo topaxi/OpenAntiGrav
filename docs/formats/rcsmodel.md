@@ -58,11 +58,21 @@ there was no oracle for one. [`.gtf`](hd-status.md#what-is-genuinely-new) being
 read supplied it: sampling Assegai's own textures through these coordinates
 renders the words "ASSEGAI DEVELOPMENTS" legibly along the hull, and no wrong
 offset or packing produces readable lettering. Confidence 90. The statistic
-behind it, over every vertex of both models: **99.8 %** of Assegai's 25,144 land
-in the unit square and 100 % are finite numbers; a circuit is looser as tiling
-makes it, at 80.0 % of Talon's Junction's 600,280 in the unit square and 98.5 %
-finite. The 1.5 % that decode to an infinity or a NaN are a real residue and are
-pinned to zero rather than let into a vertex buffer.
+behind it, over every vertex of both models, reading where
+[the declaration](#the-chunk-declares-its-vertex-layout-at-the-word-0x58-points-at)
+says: **99.8 %** of Assegai's 25,144 land in the unit square, with **6**
+non-finite; a circuit is looser as tiling makes it, at 76.0 % of Talon's
+Junction's 600,280 in the unit square, with **9** non-finite.
+
+**The circuit's used to be 1.5 % - some 9,000 vertices - and it was not a
+residue.** This page called it "a real residue and not rounding" and the
+renderer pinned those to zero. Almost every one was a `tangent` or a colour set
+read as a coordinate, because the reader took the last four bytes of a vertex;
+reading where the file says leaves 9. What survives on both models is three
+orders of magnitude smaller and still unexplained, and both counts are now
+pinned exactly rather than covered by a percentage bar. The zeroing pin stays,
+for those and for [inline](#a-chunk-comes-in-two-layouts-and-byte-0x06-says-which)
+chunks, which declare nothing.
 
 The four bytes between the normal and it are partly identified; see below.
 
@@ -184,17 +194,26 @@ was found.
 
 ## The vertex layout
 
+**Every vertex layout on the disc is declared** - see
+[the chunk declares its vertex layout](#the-chunk-declares-its-vertex-layout-at-the-word-0x58-points-at),
+which is the authority. What follows is how the fields were read before that
+block was found, kept because it is the evidence each decode rests on and
+because an [inline](#a-chunk-comes-in-two-layouts-and-byte-0x06-says-which)
+chunk declares nothing:
+
 ```text
 +0x00  i16[3]  position, through the chunk's own bias and scale
 +0x06  u32     normal, packed 11:11:10 signed - see below
-+0x0a  ...     tangent at stride 22; something else at stride 18. Not decoded
++0x0a  ...     tangent at stride 22; something else at stride 18
 +0x0e  ...     stride 22 only; four bytes that look like an RGBA vertex colour
-last 4 bytes   two f16, in a texture-coordinate range. Located, not confirmed
+last 4 bytes   two f16, in a texture-coordinate range
 ```
 
-The three widths are one layout with optional fields rather than three formats,
-which is what the constant normal offset says: stride 14 is position, normal and
-the last field; 18 adds the `+0x0a` field; 22 adds the colour as well.
+The declaration names three of those: `+0x0a` at stride 22 is `tangent`, the
+four bytes at `+0x0e` are a colour set, and **the last four bytes are usually
+not the diffuse coordinate at all**. What sits at `+0x0a` on stride 18 - the one
+field this reading called unrecovered - is `Uv1`, the diffuse coordinate, on the
+layouts whose last four bytes are `lightmapUV`.
 
 ### The normal, at `+6`
 
@@ -287,7 +306,7 @@ wrong, and both are visible in a frame:
   atlas-packed coordinates smears it into streaks, which is what a quarter of
   Talon's Junction looked like.
 - **There are more strides than three.** The disc declares 10, 14, 18, 22, 26,
-  34 and 38. [The search](#the-vertex-stride-is-not-in-the-file) knows three, so
+  34 and 38. [The search](#the-vertex-stride-is-not-in-the-submesh-descriptor) knows three, so
   it gives up on 3,382 of the disc's 39,372 described chunks and they draw
   nothing at all.
 
@@ -411,15 +430,16 @@ is what every layout carrying a lightmap also carries - and it stays a rule
 until a shader is read. **984 of the disc's chunks declare no texture
 coordinate at all**; those are counted rather than given a substitute.
 
-## The vertex stride is not in the file
+## The vertex stride is not in the submesh descriptor
 
-**Superseded on 2026-08-18 - the stride is in the file, in a block the submesh
-descriptor does not hold.** See
-[the chunk declares its vertex layout](#the-chunk-declares-its-vertex-layout-at-the-word-0x58-points-at).
-Everything below stands as measured and is kept because it is what the search
-`oag_formats::rcsmodel::stride` still implements rests on, and because the
-negative result is exact: the descriptor really does not carry the stride, and
-looking there was not the mistake. Looking *only* there was.
+**And the section title used to end "is not in the file", which was wrong: it is
+in the file, in a block the submesh descriptor points to rather than holds.** See
+[the chunk declares its vertex layout](#the-chunk-declares-its-vertex-layout-at-the-word-0x58-points-at). Everything below stands as measured and is kept because it is what the search
+`oag_formats::rcsmodel::stride` still rests on - the searches are how an
+[inline](#a-chunk-comes-in-two-layouts-and-byte-0x06-says-which) chunk's stride
+is found, since those declare nothing - and because the negative result is
+exact: the descriptor really does not carry the stride. Looking there was not
+the mistake; looking *only* there was.
 
 This is the one genuinely open part of the format, and it is worth stating
 plainly rather than burying: **no field anywhere in the 0x80-byte submesh
@@ -905,123 +925,80 @@ Named explicitly, with what each would take.
    bits of the state word select - 17 distinct combinations disc-wide, none of
    them decoded. Reading a `.rcsmaterial`'s microcode or HD's own executable are
    the routes; nothing in this project has disassembled a PS3 binary.
-10. **The 1.5 % of a circuit's texture coordinates that decode to an infinity
-    or a NaN**, and the wider residue behind it - see the section below, which
-    is what a 2026-08-18 pass measured and did *not* close.
-11. **A second texture coordinate set at stride 22**, `+0x0e`, which is
-    identified and unused. See below.
+10. **Which of a vertex's several texture coordinates a shader actually
+    samples.** The declaration names them - `Uv1`, `Uv2`, `lightmapUV`, `map1`,
+    `map2`, `Uvset1` - and nothing here reads the `.rcsmaterial` microcode that
+    chooses; `VertexDecl::diffuse_texcoord` applies a rule and says so. The
+    lightmap is the one that matters: it is named, it is present on 13,293
+    attributes, its `.gtf` is decoded, and **it is not sampled**.
+11. **37 of the 49 attribute name hashes.** The one worth attacking is
+    `0x1aaf7631` - 13,485 uses, always four normalised bytes.
+12. **The four bytes at `+0x0a` on a stride-18 chunk that declares no lightmap.**
+    Named by the declaration on most layouts and unnamed on those.
 
-## A texture coordinate is one of two types, and the file does not say which
+## A texture coordinate is one of two types, and the declaration says which
 
-**Superseded on 2026-08-18. The file does say which**, in the type byte of
-[the vertex declaration](#the-chunk-declares-its-vertex-layout-at-the-word-0x58-points-at),
-and the two types are not the two below: they are `0x23` (two halves, 54,120
-attributes) and `0x22` (two `f32`, 230). What the content sniff below was
-separating is not a second coordinate type at all - it is a **different
-attribute**, a four-byte `tangent` or `colorSet1` in the last four bytes of a
-vertex whose coordinate is somewhere else, read as a coordinate because the
-reader assumed the coordinate was last. Kept until the sniff is removed.
+**Retired and replaced on 2026-08-18.** This section used to describe a content
+sniff: two coordinate types, `Half` and `Unorm16`, told apart per submesh by
+whether the halves decoded plausibly. It is gone, and what it was actually
+separating is worth recording, because the shape of the mistake is a general
+one.
 
-**Measured 2026-08-18, confidence 85.** The last four bytes of a vertex are a
-texture coordinate on every submesh - but in **two different types**, and this
-page previously recorded the second as an unexplained residue.
+The sniff was reasoning around a missing field, and the field was not missing -
+[the vertex declaration](#the-chunk-declares-its-vertex-layout-at-the-word-0x58-points-at)
+carries the type in a byte. The two types it names are `0x23`, a pair of halves
+on 54,120 attributes, and `0x22`, a pair of `f32` on 230. **Neither is a
+`Unorm16`**, and the disc has none.
 
-### The symptom it explains
+**What the sniff was separating was not two types of one attribute. It was two
+different attributes.** The reader took the last four bytes of every vertex as
+the coordinate; on a layout whose coordinate is elsewhere those four bytes are a
+`tangent` or a `colorSet1` - four normalised bytes - and reading four bytes of
+colour as a pair of halves gives infinities and values up to `65504`, which is
+exactly what the sniff was measuring. Reading them as a pair of `u16` over
+`0..=1` gave a *smoother* result, because colour varies smoothly, and the
+texel-density metric the old section cited scored that better. It was a real
+measurement of a real difference, attached to the wrong cause.
 
-`oag-view --draws` reported **290 of Talon's Junction's 1,112 draw calls**
-spanning over 100 tiles of their texture. Those spans were not tiling: they
-cluster on exact powers of two up to **65,504**, the largest finite IEEE half,
-which is what a half decodes to when its mantissa byte is zero. Reading each
-submesh in its own type takes that figure to **84**.
+**The lesson, which is the general one:** a discriminator that separates two
+groups tells you the groups differ. It does not tell you what they are, and a
+metric that improves under a second hypothesis is evidence for that hypothesis
+only against the hypotheses you thought of. The sweep that "found no field of
+the file separating the two groups" was run against labels the sniff itself
+produced, so it could not have found the field even though the field is one word
+away from the bytes it swept.
 
-### The two types
+## Stride 22 carries two texture coordinate sets, and so do others
 
-| | Reading | Submeshes (stride-18 chunks the layout rule settles) |
-| --- | --- | ---: |
-| `Half` | two big-endian IEEE halves | 302 |
-| `Unorm16` | two big-endian `u16` over `0..=1` | 45 |
+**Recorded on 2026-08-17 from content, and named on 2026-08-18 by the
+declaration.** The four bytes at `+0x0e` of a stride-22 vertex read as two
+halves that are 100 % finite and 100 % inside the unit square on Talon's
+Junction's stride-22 chunks - against `+0x0a`'s 34 % non-finite, which is what a
+packed tangent looks like read as halves.
 
-`Unorm16` is RSX's `CELL_GCM_VERTEX_U16N` shape, and a per-attribute type is
-exactly what an RSX vertex format declares. **Only stride 18 carries it**; all 15
-stride-22 submeshes are `Half`.
-
-### What says they are two types rather than one misread
-
-**Texel density.** For a correct mapping the ratio of UV-space triangle area to
-world-space triangle area is roughly constant within a chunk, because art is
-mapped at a consistent density; for a wrong reading it is not. The spread of
-`log(uv area / world area)` within a chunk, which no change of scale can game:
-
-| | `Half` | `Unorm16` |
-| --- | ---: | ---: |
-| the 88 chunks where halves read plausibly | **0.610** | 1.164 |
-| the 18 chunks where they do not | 8.170 | **1.839** |
-
-**Each group is best explained by a different type.** Two cheaper metrics were
-tried first and both are biased - "fraction inside the unit square" is
-tautological for an unsigned normalised reading, and raw edge-to-edge smoothness
-rewards whichever reading has the smaller scale.
-
-The end-to-end figure, over the 378,128 coordinates of the chunks the layout
-rule settles: reading every one as a half leaves **10.37 %** implausible
-(non-finite, or over eight tiles); reading each submesh in its own type leaves
-**2.38 %**. `a_texture_coordinate_is_one_of_two_types_and_the_content_says_which`
-asserts the improvement against the old reading on the identical corpus rather
-than against a chosen threshold.
-
-### The selector is in no field of the file, and that is a measurement
-
-`Mesh::texcoord_format` recovers the type from the content - whether the half
-reading is mostly finite and inside eight tiles - because **every** field was
-swept against the two groups and none separates them:
-
-- **not the stride** - within stride 18, and no other candidate width rescues a
-  submesh;
-- **not the `83 XX` descriptor byte** - `83 0a` appears 37 times among one group
-  and 19 among the other, and the remaining five descriptor bytes are literally
-  `10 10 10 10 10` on both;
-- **not the material** - `diffuse_with_specular_from_alpha` splits 21 to 20, and
-  `defuse_occulsion_vert_col_tint` is 0 of 67;
-- **not any byte of the chunk header** (`+0x00`..`+0x60`) **or of the
-  `0x80`-byte submesh descriptor** - both swept exhaustively, byte by byte,
-  against the two groups.
-
-So the type is either a bit combination nothing here has found, or it lives in
-the `.rcsmaterial`'s shader, which declares a program's vertex inputs and is
-compiled RSX microcode this project has not disassembled.
-
-**What this cannot distinguish, and it is worth knowing.** A submesh whose
-*stride* is wrong also fails the half reading, and is then read as `Unorm16` -
-producing a smooth coordinate in `0..=1` that is no more correct than before,
-only less obviously wrong. On the chunks the buffer-layout rule settles that
-cannot happen, and those are the 45 the table above counts; across the whole
-model roughly 206 submeshes take the `Unorm16` path, so about 160 of them rest
-on a stride from the weaker rules and are **not** corroborated by the density
-measurement.
-
-## Stride 22 carries two texture coordinate sets
-
-**Measured the same day, confidence 80, and unused.** The four bytes at `+0x0e`
-of a stride-22 vertex read as two big-endian halves that are **100 % finite and
-100 % inside the unit square** on Talon's Junction's stride-22 chunks - the same
-numbers the confirmed coordinate at `+0x12` gives, and against `+0x0a`'s 34 %
-non-finite, which is what a packed tangent looks like read as halves.
-
-That closes the width exactly:
+The [declaration](#the-chunk-declares-its-vertex-layout-at-the-word-0x58-points-at)
+says the same thing and says whose is whose. One stride-22 layout, in the file's
+own words:
 
 ```text
-stride 14   pos 6 + normal 4 + texcoord 4
-stride 18   pos 6 + normal 4 + ?       4 + texcoord 4
-stride 22   pos 6 + normal 4 + tangent 4 + texcoord 4 + texcoord 4
+position    3 x i16    at +0x00
+normal      1 x packed at +0x06
+tangent     4 x ubyte  at +0x0a
+Uv1         2 x half   at +0x0e
+lightmapUV  2 x half   at +0x12
 ```
 
-**It unlocks nothing today**, which is why it is recorded rather than wired: a
-second coordinate set is for the second texture at a material's `+0x78`, and
-which of that slot's four uses applies to a given material is in the
-`.rcsmaterial`'s compiled shader. It is also the wrong stride for the symptom
-above - Talon's Junction is 110 stride-18 chunks to 1 stride-22, and its road is
-stride 18. Only 85 of the circuit's 442 materials name an `lmaps/*-lmap.gtf`
-second texture at all.
+and the widths close on every stride the disc uses, not only this one. **It is
+not a stride-22 property**: the commonest stride-18 layout carries `Uv1` at
+`+0x0a` and `lightmapUV` at `+0x0e`, which is exactly the pair that used to be
+read as one coordinate in the wrong place.
+
+**The lightmap still unlocks nothing today**, which is why it is recorded rather
+than sampled: which of the second texture slot's four uses applies to a given
+material is in the `.rcsmaterial`'s compiled shader, and nothing here reads one.
+Only 85 of the circuit's 442 materials name an `lmaps/*-lmap.gtf` second texture
+at all. What has changed is that the coordinate for it is now named rather than
+mistaken for the diffuse one.
 
 ## See also
 

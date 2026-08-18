@@ -525,26 +525,41 @@ fn every_material_names_a_texture_and_the_second_slot_is_not_one_thing() {
     );
 }
 
-/// The last four bytes of a vertex are a texture coordinate.
+/// The declared coordinate is a texture coordinate.
 ///
-/// **What confirms it is a picture, and the picture is now possible.** Sampling
-/// Assegai's own `.gtf` through these coordinates renders the words "ASSEGAI
-/// DEVELOPMENTS" legibly along the hull - lettering a wrong reading cannot
-/// produce, since any other offset or packing smears the atlas. What is asserted
-/// here is the statistic behind that: the pair lands in the unit square on
-/// essentially all of a craft's vertices, and mostly on a circuit's, where
-/// tiling legitimately runs outside it.
+/// **What confirms it is a picture.** Sampling Assegai's own `.gtf` through
+/// these coordinates renders the words "ASSEGAI DEVELOPMENTS" legibly along the
+/// hull - lettering a wrong reading cannot produce, since any other offset or
+/// packing smears the atlas. What is asserted here is the statistic behind
+/// that: the pair lands in the unit square on essentially all of a craft's
+/// vertices, and mostly on a circuit's, where tiling legitimately runs outside
+/// it.
+///
+/// **The bars were raised on 2026-08-18 and the reason is the finding.** This
+/// used to read the last four bytes of every vertex and pass at 75 % of a
+/// circuit's coordinates in the unit square and 97 % finite - which was the
+/// honest bar for a reading that was, on a quarter of the chunks, sampling a
+/// lightmap's atlas coordinates or a colour set. Reading where
+/// `rcsmodel::VertexDecl` says clears far more, and a bar that a wrong reading
+/// also clears is not measuring anything.
 #[test]
 #[ignore]
-fn the_last_four_bytes_of_a_vertex_are_a_texture_coordinate() {
+fn the_declared_coordinate_is_a_texture_coordinate() {
     let Some((_, ship)) = pair(PAIRS[0].0, PAIRS[0].1, PAIRS[0].2) else {
         return;
     };
     let (_, track) = pair(PAIRS[2].0, PAIRS[2].1, PAIRS[2].2).expect("checked above");
 
-    for (label, blob, unit_bar, finite_bar) in [
-        ("assegai", &ship, 0.95, 0.999),
-        ("talons_junction", &track, 0.75, 0.97),
+    // **An exact count of non-finite coordinates, not a percentage bar.** The
+    // circuit's used to be 1.5 % - around 9,000 vertices - and is 9: almost
+    // every one of them was a `tangent` or a colour set read as a coordinate,
+    // because the reader took the last four bytes of a vertex. What survives on
+    // both models is a different and still-unexplained thing, three orders of
+    // magnitude smaller, and it is pinned exactly rather than covered by a bar
+    // so that whatever it is cannot grow unnoticed.
+    for (label, blob, unit_bar, non_finite) in [
+        ("assegai", &ship, 0.95, 6),
+        ("talons_junction", &track, 0.75, 9),
     ] {
         let model = rcsmodel::Model::parse(blob).expect("the .rcsmodel parses");
         let (mut total, mut unit, mut finite) = (0usize, 0usize, 0usize);
@@ -574,10 +589,10 @@ fn the_last_four_bytes_of_a_vertex_are_a_texture_coordinate() {
             100.0 * share(finite),
             100.0 * share(unit)
         );
-        assert!(
-            share(finite) >= finite_bar,
-            "{label}: {:.3} of coordinates are finite numbers",
-            share(finite)
+        assert_eq!(
+            total - finite,
+            non_finite,
+            "{label}: non-finite coordinates moved"
         );
         assert!(
             share(unit) >= unit_bar,
