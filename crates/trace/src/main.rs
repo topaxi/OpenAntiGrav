@@ -37,7 +37,7 @@ use oag_trace::{Script, Trace, compare, plan, replay};
 
 /// The track a recording is assumed to have been taken on unless another is
 /// named. The same default `oag-game` races on, and the directory the reference
-/// scenario's Talon's Junction actually lives in - see `oag_game::race::DEFAULT_TRACK`
+/// scenario's Talon's Junction actually lives in - see `oag_pulse::race::DEFAULT_TRACK`
 /// for the measurement that settled it against the previously assumed `01_Track`.
 const DEFAULT_TRACK: &str = r"Data\Environments\16_Track\track.vex";
 

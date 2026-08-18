@@ -21,9 +21,10 @@ ROOT = Path(__file__).resolve().parent.parent
 
 # Rule 1: no gameplay crate may reach a rendering/audio/input/windowing
 # dependency. The simulation consumes an input *snapshot type* owned by
-# oag-gameplay, never the input system itself. oag-audio does not exist yet
-# (see workspace-layout.md) but is listed anyway so the rule holds the moment
-# it is added. oag-core is included too: oag-render also depends on it, so it
+# oag-gameplay, never the input system itself. oag-audio was listed here before
+# it existed, so that the rule would hold the moment it did; it exists now
+# (`crates/audio`, a mixer and a cpal device) and the entry means what it says.
+# oag-core is included too: oag-render also depends on it, so it
 # is not exclusive to the gameplay branch, but a forbidden dependency landing
 # there would reach oag-gameplay just as surely as one added directly.
 # oag-title and oag-pulse are here for the reason ADR-0022 gives: a title
