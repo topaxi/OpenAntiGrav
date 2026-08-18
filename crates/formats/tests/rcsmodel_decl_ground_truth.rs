@@ -304,3 +304,129 @@ fn the_diffuse_coordinate_is_rarely_the_last_four_bytes() {
         "chunks with no texture coordinate at all should be counted, not assumed away"
     );
 }
+
+/// **Which of the four-byte attributes are vectors and which are colours**, on
+/// a test neither can pass by being the other.
+///
+/// Every `0x44` attribute is four normalised bytes and they are not one thing:
+/// `tangent` is a packed direction, `colorSet1` is painted vertex colour, and
+/// `0x1aaf7631` - the commonest of them disc-wide, 13,485 uses, still unnamed -
+/// is neither a direction nor an opaque colour.
+///
+/// The discriminator is the one
+/// [`the_four_bytes_after_a_position_are_the_vertex_normal`] uses for the
+/// normal, and it is an oracle the file does not state: read the first three
+/// lanes as `byte / 127.5 - 1`, and ask whether the result is a unit vector and
+/// whether it is perpendicular to the vertex's own normal. A packed tangent
+/// must be both. A colour has no reason to be either, and a null result scores
+/// `1/sqrt(3)` = 0.577, which is what a random direction gives against any
+/// normal.
+///
+/// **Why this is a test rather than a note:** it is what says the vertex colour
+/// must not be wired into a renderer yet. `colorSet1` runs the full `0..=255`
+/// on all three lanes with a mean of 128 and an alpha pinned at 255, on a
+/// material the disc itself calls `defuse_occulsion_vert_col_tint` - baked
+/// occlusion, not a light tint. `mesh::GpuVertex::lit` records what happens
+/// when baked lighting is multiplied by a light rig as well, and which of the
+/// two a draw wants is per-draw state nothing here has recovered.
+#[test]
+#[ignore]
+fn a_packed_tangent_is_a_unit_vector_and_a_vertex_colour_is_not() {
+    if image().is_none() {
+        return;
+    }
+    /// `~crc32("tangent")`, the control: it must pass.
+    const TANGENT: u32 = 0xdbe5_f417;
+    /// `~crc32("colorSet1")`.
+    const COLOUR_SET: u32 = 0xce5c_d9d9;
+    /// The commonest four-byte attribute on the disc, still unnamed.
+    const UNNAMED: u32 = 0x1aaf_7631;
+
+    let mut seen: BTreeMap<u32, (usize, usize, f64, usize)> = BTreeMap::new();
+    let mut alpha: BTreeMap<u32, BTreeMap<u8, usize>> = BTreeMap::new();
+    for (_, bytes, model) in every_model() {
+        for mesh in &model.meshes {
+            let Some(decl) = &mesh.decl else { continue };
+            for want in [TANGENT, COLOUR_SET, UNNAMED] {
+                let Some(a) = decl.attributes.iter().find(|a| a.name_hash == want) else {
+                    continue;
+                };
+                for sub in &mesh.submeshes {
+                    let normals = mesh.normals(&bytes, sub, decl.stride).ok();
+                    for k in 0..sub.vertex_count {
+                        let at = sub.vertex_offset + k * decl.stride + usize::from(a.offset);
+                        let Some(four) = bytes.get(at..at + 4) else {
+                            break;
+                        };
+                        // A vertex the file left blank is neither, and there are
+                        // enough of them to move a mean.
+                        if four == [0, 0, 0, 0] {
+                            continue;
+                        }
+                        let entry = seen.entry(want).or_insert((0, 0, 0.0, 0));
+                        entry.0 += 1;
+                        *alpha.entry(want).or_default().entry(four[3]).or_default() += 1;
+                        let v: [f64; 3] = std::array::from_fn(|i| f64::from(four[i]) / 127.5 - 1.0);
+                        let len = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+                        if (0.9..=1.1).contains(&len) {
+                            entry.1 += 1;
+                        }
+                        if len > 0.5
+                            && let Some(n) = normals.as_ref().and_then(|n| n.get(k))
+                        {
+                            let dot = v[0] * f64::from(n[0])
+                                + v[1] * f64::from(n[1])
+                                + v[2] * f64::from(n[2]);
+                            entry.2 += (dot / len).abs();
+                            entry.3 += 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    let report = |want: u32| -> (f64, f64) {
+        let (total, unit, dot, dots) = seen[&want];
+        let opaque = alpha[&want].get(&255).copied().unwrap_or(0);
+        let (unit, dot) = (unit as f64 / total as f64, dot / dots.max(1) as f64);
+        println!(
+            "  {want:#010x}: {total} vertices, {:.1} % unit, mean |dot| {dot:.3}, \
+             {:.0} % with a fourth byte of 255",
+            100.0 * unit,
+            100.0 * opaque as f64 / total as f64
+        );
+        (unit, dot)
+    };
+    let (tangent_unit, tangent_dot) = report(TANGENT);
+    let (colour_unit, colour_dot) = report(COLOUR_SET);
+    let (unnamed_unit, unnamed_dot) = report(UNNAMED);
+
+    assert!(
+        tangent_unit > 0.95 && tangent_dot < 0.05,
+        "tangent is the control and must read as a packed direction"
+    );
+    for (label, unit, dot) in [
+        ("colorSet1", colour_unit, colour_dot),
+        ("0x1aaf7631", unnamed_unit, unnamed_dot),
+    ] {
+        assert!(
+            unit < 0.2 && dot > 0.4,
+            "{label} reads as a direction ({:.1} % unit, |dot| {dot:.3}), which would mean \
+             this discriminator does not separate the two",
+            100.0 * unit
+        );
+    }
+    // The alpha lane is what says `colorSet1` is a colour and the unnamed one is
+    // something else: an opaque colour pins it, and a mask is bimodal.
+    let opaque_share =
+        |want: u32| alpha[&want].get(&255).copied().unwrap_or(0) as f64 / seen[&want].0 as f64;
+    assert!(
+        opaque_share(COLOUR_SET) > 0.99,
+        "colorSet1's fourth byte is 255 on every vertex measured"
+    );
+    assert!(
+        opaque_share(UNNAMED) < 0.5,
+        "the unnamed attribute's fourth byte is not an opaque alpha, which is part of \
+         why it is not named"
+    );
+}

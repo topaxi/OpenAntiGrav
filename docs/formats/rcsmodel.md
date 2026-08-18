@@ -416,6 +416,49 @@ Junction's node names is
 13,485 uses, always four normalised bytes, and it is what sits in the last four
 bytes of the stride-18 layout that has no lightmap.
 
+### The four-byte attributes are three different things, and one is vertex colour
+
+**Confidence 88**, measured 2026-08-18 over every model on the disc; the test is
+`a_packed_tangent_is_a_unit_vector_and_a_vertex_colour_is_not`.
+
+Type `0x44` is four normalised bytes, and 22,117 attributes carry it. They are
+not one thing. The discriminator is the one that located the
+[normal](#the-normal-at-6) - read the first three lanes as `byte / 127.5 - 1`
+and ask whether the result is a unit vector perpendicular to the vertex's own
+normal - and it separates them cleanly:
+
+| Attribute | Vertices | Unit vectors | Mean \|dot\| with the normal | Fourth byte |
+| --- | ---: | ---: | ---: | --- |
+| `tangent` | 3,518,023 | **96.1 %** | **0.029** | 0/255, a handedness sign |
+| `colorSet1` | 682,796 | 9.2 % | 0.524 | **255 on every one** |
+| `0x1aaf7631` | 4,257,172 | 13.4 % | 0.517 | 23 % at 255, 66 % at 0 |
+
+0.577 is `1/sqrt(3)`, what a random direction scores against any normal, so the
+lower two rows are the null result and `tangent` is the only direction among
+them. `tangent` is the control: it was measured as a packed direction before the
+declaration named it.
+
+**`colorSet1` is painted vertex colour.** Its alpha lane is 255 on all 682,796
+vertices, and on Talon's Junction all 91,312 of them belong to one material the
+disc itself calls **`defuse_occulsion_vert_col_tint`** - 101 submeshes. The
+three colour lanes run the full `0..=255` with a mean of 128 and peaks at both
+ends, which is painted occlusion rather than a light tint.
+
+**Nothing draws it, and that is a hold rather than a gap.** `oag_render`'s
+`GpuVertex` has had a colour slot and a shader that consumes it since the PSP
+work, and the `lit` field beside it records what happens if baked lighting is
+multiplied by a light rig as well: the surface comes out nearly black. HD's
+chunks carry authored normals *and* this colour, so a draw wants one or the
+other, and which is per-draw state nothing here has recovered on either console.
+Wiring it on a guess is the failure `CLAUDE.md` names - so it is read, measured
+and left unwired, the same hold [the lightmap](#stride-22-carries-two-texture-coordinate-sets-and-so-do-others)
+takes.
+
+**`0x1aaf7631` is neither**, which is why the wordlist has not named it. Not a
+direction by the test above, and not an opaque colour either - its fourth lane
+is 66 % zero and 23 % 255, a mask's shape rather than an alpha's. 13,485
+attributes, the commonest four-byte one on the disc.
+
 ### Which coordinate a diffuse texture is sampled through is a rule, not a reading
 
 A vertex may declare several `0x23` attributes and **nothing here reads the
@@ -931,9 +974,11 @@ Named explicitly, with what each would take.
     chooses; `VertexDecl::diffuse_texcoord` applies a rule and says so. The
     lightmap is the one that matters: it is named, it is present on 13,293
     attributes, its `.gtf` is decoded, and **it is not sampled**.
-11. **37 of the 49 attribute name hashes.** The one worth attacking is
-    `0x1aaf7631` - 13,485 uses, always four normalised bytes.
-12. **The four bytes at `+0x0a` on a stride-18 chunk that declares no lightmap.**
+11. **37 of the 49 attribute name hashes**, and `0x1aaf7631` above all - 13,485
+    uses, and measured to be neither a direction nor an opaque colour.
+12. **Whether a chunk wants its `colorSet1` or the light rig.** The colour is
+    read and measured and deliberately not drawn; see above.
+13. **The four bytes at `+0x0a` on a stride-18 chunk that declares no lightmap.**
     Named by the declaration on most layouts and unnamed on those.
 
 ## A texture coordinate is one of two types, and the declaration says which

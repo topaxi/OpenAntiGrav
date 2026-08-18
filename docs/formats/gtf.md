@@ -190,12 +190,24 @@ diverges. It is pinned in the test rather than tolerated.
 
 - **The 53 swizzled textures.** RSX Morton order, unimplemented.
 - **The 23 cubemaps' face layout**, and the 360 bytes.
-- **`remap`.** Three values on the disc - `0xaae4` on 7,317, `0xa9ff` on 9,
-  `0xa9e4` on 7 - and what they select is unread. The 16 that differ are all
-  formats `to_rgba` refuses anyway, so the gap costs nothing today and would
-  matter the day `B8` is decoded.
+- **`remap`, and it is the identity almost everywhere.** Three values on the
+  disc. `0xaae4` on **7,317 of 7,333** unpacks, under libgcm's
+  `CELL_GCM_REMAP_MODE` packing, to all four output channels taking "remap"
+  rather than a forced 0 or 1, with sources `A<-A, R<-R, G<-G, B<-B` - the
+  identity permutation. So not acting on the field changes nothing on those.
+  The 16 that differ are `0xa9ff` on 9 files, every one of them `B8`, whose
+  low byte broadcasts one channel to all four - which is what a single-channel
+  texture wants and is moot while `to_rgba` refuses `B8`; and `0xa9e4` on 7
+  files of format `0x9e`, which forces blue to one. **Confidence 75** on the
+  bit packing, which is a published-header reading rather than something
+  measured against behaviour; the *distribution* is measured and is what says
+  the gap costs nothing.
 - **Mip levels past the base.** They are measured, because the length check
   needs them, and `Texture::level_range` will address one; nothing decodes one.
+  **This is a picture gap and not only a completeness one**: the corpus runs to
+  twelve levels, and `oag_render::mesh_render::mip_chain` throws the file's own
+  chain away and box-filters its own from the base level. The disc's are the
+  ones the original minifies with.
 - **The front end's `<Image>` widgets.** `oag_render` uploads a `.gtf` now -
   HD's HUD samples ten of them, and an HD craft and circuit are painted from
   their materials' own textures through
