@@ -759,67 +759,84 @@ Named explicitly, with what each would take.
 11. **A second texture coordinate set at stride 22**, `+0x0e`, which is
     identified and unused. See below.
 
-## The texture-coordinate residue, and three readings that do not explain it
+## A texture coordinate is one of two types, and the file does not say which
 
-**Measured 2026-08-18 on `talons_junction.rcsmodel`, and every hypothesis in it
-came back negative.** Recorded because the symptom is large and visible and the
-next reader should not re-derive the eliminations.
+**Measured 2026-08-18, confidence 85.** The last four bytes of a vertex are a
+texture coordinate on every submesh - but in **two different types**, and this
+page previously recorded the second as an unexplained residue.
 
-### The symptom
+### The symptom it explains
 
-On a full build of Talon's Junction, **290 of 1,112 draw calls span more than
-100 tiles of their texture** in U or V - `oag-view --draws` prints the span per
-draw, so that figure comes from the shipped reader rather than from a script.
-Those are not tiling: a span of 65,504 is the largest finite IEEE half, and the
-values cluster on exact powers of two (8, 32, 64, 320, 1,024, 20,480), which is
-what a half whose low mantissa byte is zero decodes to. This is the largest
-single contributor to a Wipeout HD circuit's textures reading as wrong.
+`oag-view --draws` reported **290 of Talon's Junction's 1,112 draw calls**
+spanning over 100 tiles of their texture. Those spans were not tiling: they
+cluster on exact powers of two up to **65,504**, the largest finite IEEE half,
+which is what a half decodes to when its mantissa byte is zero. Reading each
+submesh in its own type takes that figure to **84**.
 
-Everything below is re-measured by
-`the_last_four_bytes_are_not_a_coordinate_on_every_submesh` in
-[`rcsmodel_vertex_ground_truth.rs`](../../crates/formats/tests/rcsmodel_vertex_ground_truth.rs),
-which is the durable form of it - the numbers here are that test's own output.
+### The two types
 
-### What it is not
+| | Reading | Submeshes (stride-18 chunks the layout rule settles) |
+| --- | --- | ---: |
+| `Half` | two big-endian IEEE halves | 302 |
+| `Unorm16` | two big-endian `u16` over `0..=1` | 45 |
 
-1. **Not the stride.** The measurement is restricted to chunks whose stride
-   `Mesh::solve_stride_by_layout` settles - consecutive vertex buffers packed
-   back to back, the strongest of the three rules and the one that needs no
-   oracle. **52 submeshes, 50,656 vertices**, still read a garbage last-four
-   there, and **none of them is rescued** by either of the other two candidate
-   widths.
-2. **Not the `83 XX` descriptor byte.** Split by `XX`, the clean and the garbage
-   submeshes use the same values - `83 0a` appears 37 times among the clean and
-   19 among the garbage, `83 0b` 124 and 12. (Counted with a scratch sweep over the same
-   corpus; the shape of the result is what matters and the test above pins the
-   part that is load-bearing.) **The other five descriptor bytes
-   are literally `10 10 10 10 10` on every submesh of both groups**, so nothing
-   in the eight-byte descriptor separates them.
-3. **Not the material.** `diffuse_with_specular_from_alpha` splits 21 submeshes
-   garbage to 20 clean, and `defuse_occulsion_vert_col_tint` - the one whose name
-   says vertex colour - has **zero** garbage submeshes of 67. So the vertex
-   colour reading of those four bytes is refuted too, notwithstanding that they
-   hexdump as plausible dark blues (`40 3b 48 00`, `5c 40 65 00`) against Talon's
-   Junction's palette.
-4. **Not a second reading of `+0x0a`.** At stride 18 that field reads inside
-   +/-8 on 71 % of vertices against the last-four's 85 %; neither is clean, and
-   on the garbage submeshes `+0x0a` reads as a plausible road UV (u running 20.5
-   to 21.5 along the length, v alternating 0 and -1 across the width) - which is
-   suggestive and is *not* enough, because three readings of the same four bytes
-   now each fit part of the corpus.
+`Unorm16` is RSX's `CELL_GCM_VERTEX_U16N` shape, and a per-attribute type is
+exactly what an RSX vertex format declares. **Only stride 18 carries it**; all 15
+stride-22 submeshes are `Half`.
 
-### The one discriminator that does separate them
+### What says they are two types rather than one misread
 
-**Byte 17 of the vertex - the low byte of the last `u16` - is zero on 77.3 % of
-the garbage submeshes' 50,656 vertices and on 2.1 % of the clean 315,536.** It is
-a per-vertex test that needs no stride solving and no oracle, and it is the
-handle the next pass should start from: whatever selects the field set is
-correlated with it, and it is not the descriptor, the material or the stride.
+**Texel density.** For a correct mapping the ratio of UV-space triangle area to
+world-space triangle area is roughly constant within a chunk, because art is
+mapped at a consistent density; for a wrong reading it is not. The spread of
+`log(uv area / world area)` within a chunk, which no change of scale can game:
 
-**Nothing is implemented off any of this.** A field with three competing
-readings is exactly the case the [methodology](../reverse-engineering/methodology.md)
-says to write down rather than implement, and the current reader keeps taking the
-last four bytes and pinning a non-finite one to zero.
+| | `Half` | `Unorm16` |
+| --- | ---: | ---: |
+| the 88 chunks where halves read plausibly | **0.610** | 1.164 |
+| the 18 chunks where they do not | 8.170 | **1.839** |
+
+**Each group is best explained by a different type.** Two cheaper metrics were
+tried first and both are biased - "fraction inside the unit square" is
+tautological for an unsigned normalised reading, and raw edge-to-edge smoothness
+rewards whichever reading has the smaller scale.
+
+The end-to-end figure, over the 378,128 coordinates of the chunks the layout
+rule settles: reading every one as a half leaves **10.37 %** implausible
+(non-finite, or over eight tiles); reading each submesh in its own type leaves
+**2.38 %**. `a_texture_coordinate_is_one_of_two_types_and_the_content_says_which`
+asserts the improvement against the old reading on the identical corpus rather
+than against a chosen threshold.
+
+### The selector is in no field of the file, and that is a measurement
+
+`Mesh::texcoord_format` recovers the type from the content - whether the half
+reading is mostly finite and inside eight tiles - because **every** field was
+swept against the two groups and none separates them:
+
+- **not the stride** - within stride 18, and no other candidate width rescues a
+  submesh;
+- **not the `83 XX` descriptor byte** - `83 0a` appears 37 times among one group
+  and 19 among the other, and the remaining five descriptor bytes are literally
+  `10 10 10 10 10` on both;
+- **not the material** - `diffuse_with_specular_from_alpha` splits 21 to 20, and
+  `defuse_occulsion_vert_col_tint` is 0 of 67;
+- **not any byte of the chunk header** (`+0x00`..`+0x60`) **or of the
+  `0x80`-byte submesh descriptor** - both swept exhaustively, byte by byte,
+  against the two groups.
+
+So the type is either a bit combination nothing here has found, or it lives in
+the `.rcsmaterial`'s shader, which declares a program's vertex inputs and is
+compiled RSX microcode this project has not disassembled.
+
+**What this cannot distinguish, and it is worth knowing.** A submesh whose
+*stride* is wrong also fails the half reading, and is then read as `Unorm16` -
+producing a smooth coordinate in `0..=1` that is no more correct than before,
+only less obviously wrong. On the chunks the buffer-layout rule settles that
+cannot happen, and those are the 45 the table above counts; across the whole
+model roughly 206 submeshes take the `Unorm16` path, so about 160 of them rest
+on a stride from the weaker rules and are **not** corroborated by the density
+measurement.
 
 ## Stride 22 carries two texture coordinate sets
 

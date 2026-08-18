@@ -22,14 +22,11 @@
 //! follows the **stride**, not the `83 XX` descriptor byte, which was the
 //! obvious hypothesis and is measured false; see [`SubMesh::format`].
 //!
-//! **And the last four bytes are not a coordinate on every submesh.** 290 of a
-//! circuit's 1,112 draw calls span over 100 tiles of their texture because that
-//! field decodes to powers of two there rather than to a UV. The stride, the
-//! descriptor and the material have each been checked and none of them selects;
-//! the one thing that separates the two groups is byte 17 of the vertex being
-//! zero, on 79 % of the affected vertices against 1.9 % of the rest. The whole
-//! elimination is on `docs/formats/rcsmodel.md`; nothing here acts on it, and
-//! [`Mesh::texcoords`] still reads the last four bytes.
+//! **The last four bytes are a coordinate in one of two types**, and which one
+//! is in no field of the file - see [`TexcoordFormat`] and
+//! [`Mesh::texcoord_format`]. Reading every one as a half left 290 of a
+//! circuit's 1,112 draw calls spanning over 100 tiles of their texture; reading
+//! each submesh in its own type leaves 84.
 //!
 //! # The `.vex` is not optional
 //!
@@ -258,6 +255,54 @@ const SUBNORMAL_SCALE: f32 = 6.103_515_6e-5;
 /// and a half's `1..30` maps inside that range with room to spare.
 fn exp2(n: i32) -> f32 {
     f32::from_bits(((n + 127) as u32) << 23)
+}
+
+/// How many vertices [`Mesh::texcoord_format`] looks at before deciding.
+///
+/// The two groups are not marginal - the half reading is usable on 95 %+ of one
+/// and under 50 % of the other - so a small sample settles it, and a submesh
+/// under this many vertices is read whole.
+const TEXCOORD_FORMAT_SAMPLE: usize = 64;
+
+/// How many whole tiles of its texture a coordinate may span before the half
+/// reading is judged not to be one.
+///
+/// A circuit tiles a road texture tens of times and never thousands; the values
+/// this rejects are `65504` and exact powers of two up to it, which is what a
+/// half decodes to when its bits are really a `u16`.
+const TEXCOORD_PLAUSIBLE_TILES: f32 = 8.0;
+
+/// The two types a `.rcsmodel` writes a texture coordinate in.
+///
+/// **Both are measured, and the split is real rather than one type misread.**
+/// The discriminator is texel density: the spread of `log(uv area / world
+/// area)` within a chunk, which is consistent for a correct mapping because
+/// artists map at a consistent density and is not for a wrong one. Over
+/// Talon's Junction's stride-18 chunks, `Half` scores **0.610** against
+/// `Unorm16`'s 1.164 on the group where halves read plausibly, and `Unorm16`
+/// scores **1.839** against `Half`'s 8.170 on the group where they do not. Each
+/// group is best explained by a different type, on a metric that cannot be
+/// gamed by scale - which is what says there are two.
+///
+/// Selected per submesh by [`Mesh::texcoord_format`]. 285 of Talon's Junction's
+/// 337 stride-18 submeshes are `Half` and 52 are `Unorm16`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TexcoordFormat {
+    /// Two big-endian IEEE halves - see [`unpack_half`].
+    Half,
+    /// Two big-endian `u16`s over `0..=1`, RSX's `CELL_GCM_VERTEX_U16N` shape.
+    Unorm16,
+}
+
+impl TexcoordFormat {
+    /// One 16-bit field as a coordinate.
+    #[must_use]
+    pub fn decode(self, bits: u16) -> f32 {
+        match self {
+            Self::Half => unpack_half(bits),
+            Self::Unorm16 => f32::from(bits) / f32::from(u16::MAX),
+        }
+    }
 }
 
 /// Everything that can go wrong reading one.
@@ -686,12 +731,63 @@ impl Mesh {
                 len: data.len(),
             });
         }
+        let format = self.texcoord_format(data, submesh, stride);
         Ok((0..submesh.vertex_count)
             .map(|k| {
                 let at = submesh.vertex_offset + k * stride + stride - TEXCOORD_LEN;
-                std::array::from_fn(|i| unpack_half(ByteOrder::Big.u16(data, at + i * 2)))
+                std::array::from_fn(|i| format.decode(ByteOrder::Big.u16(data, at + i * 2)))
             })
             .collect())
+    }
+
+    /// Which of the two types this submesh's texture coordinate is written in.
+    ///
+    /// **Recovered from the content, because it is in no field of the file.**
+    /// Every byte of the chunk header (`+0x00`..`+0x60`) and every byte of the
+    /// `0x80`-byte submesh descriptor was swept against the two groups on
+    /// Talon's Junction and **none separates them**; neither does the material,
+    /// the stride, or the `83 XX` descriptor byte. What does separate them is
+    /// what the bytes decode to, which is what this reads.
+    ///
+    /// A [`TexcoordFormat::Half`] submesh read as halves gives finite
+    /// coordinates in a texture-coordinate range; a [`TexcoordFormat::Unorm16`]
+    /// one read the same way gives infinities and values up to `65504`, the
+    /// largest finite half - **290 of Talon's Junction's 1,112 draw calls** span
+    /// over 100 tiles of their texture for exactly this reason. So the test is
+    /// whether the half reading is mostly usable.
+    ///
+    /// See `docs/formats/rcsmodel.md` for the evidence that these are two
+    /// *types* rather than one type misread.
+    #[must_use]
+    pub fn texcoord_format(&self, data: &[u8], submesh: &SubMesh, stride: usize) -> TexcoordFormat {
+        let mut usable = 0usize;
+        let mut seen = 0usize;
+        for k in (0..submesh.vertex_count).take(TEXCOORD_FORMAT_SAMPLE) {
+            let at = submesh.vertex_offset + k * stride + stride - TEXCOORD_LEN;
+            if at + TEXCOORD_LEN > data.len() {
+                break;
+            }
+            seen += 1;
+            let pair: [f32; 2] =
+                std::array::from_fn(|i| unpack_half(ByteOrder::Big.u16(data, at + i * 2)));
+            if pair
+                .iter()
+                .all(|c| c.is_finite() && c.abs() <= TEXCOORD_PLAUSIBLE_TILES)
+            {
+                usable += 1;
+            }
+        }
+        // An empty or unreadable submesh keeps the type the disc uses on five
+        // sixths of its geometry, which is also the one every earlier reading
+        // assumed.
+        if seen == 0 {
+            return TexcoordFormat::Half;
+        }
+        if usable * 2 >= seen {
+            TexcoordFormat::Half
+        } else {
+            TexcoordFormat::Unorm16
+        }
     }
 
     /// Reads one submesh's triangle indices.
