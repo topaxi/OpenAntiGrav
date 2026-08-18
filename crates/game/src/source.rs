@@ -27,6 +27,15 @@
 //! `$APPDIR` is deliberately **not** searched. That is the mounted AppImage
 //! itself, and looking inside it would invite someone to bundle an image into
 //! the package, which is the one thing that must never happen.
+//!
+//! # The first three are a decision; the last three are a guess
+//!
+//! Steps 1 to 3 are a player *stating* which source they want, and [`explicit`]
+//! is those three alone. Steps 4 to 6 are this module guessing, and
+//! [`candidates`] is the whole guess rather than its first hit - which is what
+//! [`crate::launcher`] puts on screen when there is more than one, instead of
+//! opening one and never mentioning the rest. `resolve` is still the two halves
+//! joined, unchanged, for every route that wants one answer and no screen.
 
 use std::path::{Path, PathBuf};
 
@@ -39,12 +48,12 @@ pub const DEFAULT_IMAGE: &str = "data/images/pulse-psp-usa.chd";
 ///
 /// The normalised names from `data/README.md`. Pulse PSP first: it is the
 /// platform the implementation follows, and the PS2 release is corroboration.
-/// Pure and HD/Fury are listed too, purely so a directory holding only one of
-/// them is found by name rather than by alphabetical luck - `oag-game` does
-/// not yet play either; opening one now fails with a clear error naming the
-/// title instead of silently loading it as Pulse. See ADR-0009 and roadmap
-/// M8. Pure's EU image is listed before its USA one so a directory holding
-/// both auto-detects as EU, matching the default region elsewhere.
+/// Pure and HD/Fury are listed too, so a directory holding only one of them is
+/// found by name rather than by alphabetical luck. **Both now boot** - each has
+/// a front end of its own, HD's off a chain its XML declares rather than one
+/// anyone has watched (ADR-0025) - though neither is played past the menus yet;
+/// see roadmap M8. Pure's EU image is listed before its USA one so a directory
+/// holding both auto-detects as EU, matching the default region elsewhere.
 pub const IMAGE_NAMES: [&str; 5] = [
     "pulse-psp-usa.chd",
     "pulse-ps2-eu.chd",
@@ -132,26 +141,8 @@ pub fn resolve_dlc(given: &[String], from_settings: &[String]) -> Vec<PathBuf> {
 /// names every path searched: for a "copy the AppImage and an image into one
 /// folder" workflow, that message is the entire user interface.
 pub fn resolve(given: Option<&str>, from_settings: Option<&str>) -> Result<String> {
-    if let Some(source) = given {
-        return Ok(source.to_string());
-    }
-
-    if let Some(from_env) = std::env::var_os(IMAGE_ENV) {
-        let path = PathBuf::from(from_env);
-        if path.is_file() {
-            return Ok(display(&path));
-        }
-        if let Some(found) = first_image(&path) {
-            return Ok(display(&found));
-        }
-        return Err(anyhow!(
-            "{IMAGE_ENV} is set to {}, which is not a disc image and holds none",
-            path.display()
-        ));
-    }
-
-    if let Some(source) = from_settings {
-        return Ok(source.to_string());
+    if let Some(source) = explicit(given, from_settings)? {
+        return Ok(source);
     }
 
     let searched = search_path();
@@ -161,7 +152,100 @@ pub fn resolve(given: Option<&str>, from_settings: Option<&str>) -> Result<Strin
         }
     }
 
-    Err(anyhow!(
+    Err(nothing_found(&searched))
+}
+
+/// What an explicit channel names, if any of them does.
+///
+/// The three ways a player *states* which source they want - the command line,
+/// `$OAG_IMAGE`, `settings.toml`'s `[source] image` - in that order, with the
+/// directory scan deliberately left out. `Ok(None)` means none of them said
+/// anything, which is the one situation in which [`candidates`] and a chooser
+/// have any business appearing: a stated source is a decision already taken,
+/// and a screen asking it again would be asking a player to repeat themselves.
+///
+/// **`$OAG_IMAGE` naming something unusable is an error, not a `None`.** It is
+/// the strongest statement of intent of the three, and falling through to the
+/// search path would boot a different disc than the one that was asked for
+/// without saying so.
+///
+/// # Errors
+///
+/// `$OAG_IMAGE` set to a path that is neither a disc image nor a directory
+/// holding one.
+pub fn explicit(given: Option<&str>, from_settings: Option<&str>) -> Result<Option<String>> {
+    stated(given, std::env::var_os(IMAGE_ENV), from_settings)
+}
+
+/// [`explicit`] with the environment handed in rather than read.
+///
+/// The split is what makes the `$OAG_IMAGE` branch testable at all. Setting a
+/// process-wide variable would race every other test in this binary - the
+/// reason the DLC tests say they leave `$OAG_DLC` alone - and this workspace
+/// forbids `unsafe`, which `std::env::set_var` now needs. Passing the value in
+/// leaves one impure line above and a decision that can be checked below.
+fn stated(
+    given: Option<&str>,
+    from_env: Option<std::ffi::OsString>,
+    from_settings: Option<&str>,
+) -> Result<Option<String>> {
+    if let Some(source) = given {
+        return Ok(Some(source.to_string()));
+    }
+
+    if let Some(from_env) = from_env {
+        let path = PathBuf::from(from_env);
+        if path.is_file() {
+            return Ok(Some(display(&path)));
+        }
+        if let Some(found) = first_image(&path) {
+            return Ok(Some(display(&found)));
+        }
+        return Err(anyhow!(
+            "{IMAGE_ENV} is set to {}, which is not a disc image and holds none",
+            path.display()
+        ));
+    }
+
+    Ok(from_settings.map(str::to_string))
+}
+
+/// Every disc image on the search path, in the order a chooser should list them.
+///
+/// Each directory contributes its known names first and then everything else
+/// alphabetically - the same order [`first_image`] picks from, so the first row
+/// of a chooser is the image a boot with nothing named would have opened.
+///
+/// Empty is an ordinary answer: it means this machine has no image anywhere the
+/// engine looks, and [`resolve`] is what turns that into the message about it.
+#[must_use]
+pub fn candidates() -> Vec<PathBuf> {
+    let mut found: Vec<PathBuf> = Vec::new();
+    let mut seen: Vec<PathBuf> = Vec::new();
+
+    for directory in search_path() {
+        // Two entries can name one directory - a checkout with the AppImage
+        // sitting in it, say - and the same image listed twice is a chooser
+        // offering the same row twice. `canonicalize` collapses them, and it
+        // fails on a directory that does not exist, which most of the search
+        // path usually is; there the path itself is key enough, nothing being
+        // read out of it anyway.
+        let key = directory
+            .canonicalize()
+            .unwrap_or_else(|_| directory.clone());
+        if seen.contains(&key) {
+            continue;
+        }
+        seen.push(key);
+        found.extend(images_in(&directory));
+    }
+
+    found
+}
+
+/// The not-found message, which for a packaged build is the entire interface.
+fn nothing_found(searched: &[PathBuf]) -> anyhow::Error {
+    anyhow!(
         "no disc image found. OpenAntiGrav ships no game content: supply your own \
          image, from your own copy of the game.\n\nSearched:\n{}\n\nName one \
          directly (`oag-game path/to/pulse-psp-usa.chd`), set {IMAGE_ENV}, or put \
@@ -172,7 +256,7 @@ pub fn resolve(given: Option<&str>, from_settings: Option<&str>) -> Result<Strin
             .collect::<Vec<_>>()
             .join("\n"),
         IMAGE_NAMES[0],
-    ))
+    )
 }
 
 /// Every directory [`resolve`] looks in, in order.
@@ -213,24 +297,44 @@ pub fn search_path() -> Vec<PathBuf> {
 /// The first image in a directory: a known name if there is one, otherwise the
 /// alphabetically first container.
 ///
-/// Alphabetical rather than whatever order the filesystem hands out, so two
-/// runs in a directory holding two images open the same one.
+/// One line over [`images_in`] rather than a scan of its own, so that "which
+/// image does a boot with nothing named open" and "which image does a chooser
+/// list first" cannot drift into answering differently.
 fn first_image(directory: &Path) -> Option<PathBuf> {
+    images_in(directory).into_iter().next()
+}
+
+/// Every image in one directory, known names first and the rest alphabetically.
+///
+/// Alphabetical rather than whatever order the filesystem hands out, so two
+/// runs in a directory holding two images list them the same way - and open the
+/// same one, [`first_image`] being the head of this list.
+fn images_in(directory: &Path) -> Vec<PathBuf> {
+    let mut found: Vec<PathBuf> = Vec::new();
+
     for name in IMAGE_NAMES {
         let candidate = directory.join(name);
         if candidate.is_file() {
-            return Some(candidate);
+            found.push(candidate);
         }
     }
 
     let mut containers: Vec<PathBuf> = std::fs::read_dir(directory)
-        .ok()?
+        .into_iter()
+        .flatten()
         .filter_map(Result::ok)
         .map(|entry| entry.path())
         .filter(|path| path.is_file() && is_container(path))
         .collect();
     containers.sort();
-    containers.into_iter().next()
+
+    for path in containers {
+        if !found.contains(&path) {
+            found.push(path);
+        }
+    }
+
+    found
 }
 
 /// Whether a path looks like a disc image this engine can open.
@@ -257,180 +361,4 @@ fn display(path: &Path) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_named_source_is_used_verbatim() {
-        // Including an archive spec, which is not a path at all.
-        let spec = "data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/FE.wad";
-        assert_eq!(resolve(Some(spec), None).unwrap(), spec);
-        assert_eq!(
-            resolve(Some("nonexistent.chd"), None).unwrap(),
-            "nonexistent.chd"
-        );
-    }
-
-    /// The DLC roots follow the same precedence, with `$OAG_DLC` left out of
-    /// the test on purpose: setting a process-wide variable would race the
-    /// other tests in this binary, and what is worth pinning is the ordering
-    /// this function decides rather than that `var_os` works.
-    #[test]
-    fn dlc_roots_follow_the_command_line_then_the_settings_file() {
-        let cli = ["/from/cli".to_string()];
-        let settings = ["/from/settings".to_string()];
-
-        assert_eq!(
-            resolve_dlc(&cli, &settings),
-            [PathBuf::from("/from/cli")],
-            "the command line wins"
-        );
-        assert_eq!(
-            resolve_dlc(&[], &settings),
-            [PathBuf::from("/from/settings")],
-            "and the settings file is next"
-        );
-    }
-
-    /// No DLC is the ordinary state of a copy of the game, so the empty case
-    /// falls through to the search path rather than failing or returning
-    /// nothing.
-    #[test]
-    fn dlc_roots_fall_back_to_the_search_path_and_never_fail() {
-        // Only when the environment is not already pointing somewhere, which
-        // is a real thing a developer's shell may do.
-        if std::env::var_os(DLC_ENV).is_some() {
-            return;
-        }
-        assert_eq!(resolve_dlc(&[], &[]), dlc_search_path());
-        assert!(
-            dlc_search_path().contains(&PathBuf::from("data/dlc")),
-            "a checkout's own directory is always searched"
-        );
-    }
-
-    /// The images and the packs are looked for in sibling directories, never
-    /// the same one: a disc image is not a pack and scanning one folder for
-    /// both would make every image a candidate archive.
-    #[test]
-    fn the_dlc_search_path_is_a_sibling_of_the_image_search_path() {
-        for path in dlc_search_path() {
-            assert!(
-                !search_path().contains(&path),
-                "{} is searched for both images and packs",
-                path.display()
-            );
-        }
-    }
-
-    #[test]
-    fn a_settings_file_source_is_tried_before_the_search_path() {
-        assert_eq!(
-            resolve(None, Some("from-settings.chd")).unwrap(),
-            "from-settings.chd"
-        );
-    }
-
-    #[test]
-    fn the_command_line_wins_over_the_settings_file() {
-        assert_eq!(
-            resolve(Some("from-cli.chd"), Some("from-settings.chd")).unwrap(),
-            "from-cli.chd"
-        );
-    }
-
-    #[test]
-    fn the_checkouts_own_directory_is_searched_first() {
-        assert_eq!(search_path().first().unwrap(), Path::new("data/images"));
-    }
-
-    /// The mounted AppImage must never be searched: an image found inside the
-    /// package would mean game content had been packaged, which is the one
-    /// thing `docs/overview/legal.md` forbids outright.
-    #[test]
-    fn the_mounted_appimage_is_not_searched() {
-        for path in search_path() {
-            let text = path.to_string_lossy().to_lowercase();
-            assert!(
-                !text.contains("/tmp/.mount_") && !text.contains("appdir"),
-                "the package itself is on the search path: {}",
-                path.display()
-            );
-        }
-    }
-
-    #[test]
-    fn a_known_name_wins_over_an_alphabetically_earlier_image() {
-        let directory = temp_dir("known-name");
-        std::fs::write(directory.join("aaa-other.iso"), b"").unwrap();
-        std::fs::write(directory.join(IMAGE_NAMES[0]), b"").unwrap();
-
-        assert_eq!(
-            first_image(&directory).unwrap().file_name().unwrap(),
-            std::ffi::OsStr::new(IMAGE_NAMES[0])
-        );
-        std::fs::remove_dir_all(&directory).unwrap();
-    }
-
-    /// `IMAGE_NAMES[0]` is interpolated into the not-found hint text, and the
-    /// module doc's "PSP first" rationale depends on this order.
-    #[test]
-    fn image_names_starts_with_pulse_psp_matching_the_hint_text() {
-        assert_eq!(IMAGE_NAMES[0], "pulse-psp-usa.chd");
-        assert_eq!(IMAGE_NAMES[1], "pulse-ps2-eu.chd");
-    }
-
-    /// The maintainer's actual `data/images/` holds all four documented
-    /// names at once - this is the check that extending `IMAGE_NAMES` to
-    /// recognise Pure and HD/Fury by name does not change which file that
-    /// directory resolves to.
-    #[test]
-    fn a_known_pulse_name_still_wins_when_every_documented_name_is_present() {
-        let directory = temp_dir("all-four-names");
-        for name in IMAGE_NAMES {
-            std::fs::write(directory.join(name), b"").unwrap();
-        }
-
-        assert_eq!(
-            first_image(&directory).unwrap().file_name().unwrap(),
-            std::ffi::OsStr::new(IMAGE_NAMES[0])
-        );
-        std::fs::remove_dir_all(&directory).unwrap();
-    }
-
-    #[test]
-    fn any_image_is_found_under_a_name_nobody_normalised() {
-        let directory = temp_dir("any-name");
-        std::fs::write(directory.join("notes.txt"), b"").unwrap();
-        std::fs::write(directory.join("zzz.chd"), b"").unwrap();
-        std::fs::write(directory.join("my-copy.ISO"), b"").unwrap();
-
-        // Alphabetical, so the same image is opened on every run.
-        assert_eq!(
-            first_image(&directory).unwrap().file_name().unwrap(),
-            std::ffi::OsStr::new("my-copy.ISO")
-        );
-        std::fs::remove_dir_all(&directory).unwrap();
-    }
-
-    #[test]
-    fn a_directory_with_nothing_in_it_is_not_a_source() {
-        let directory = temp_dir("empty");
-        assert_eq!(first_image(&directory), None);
-        std::fs::remove_dir_all(&directory).unwrap();
-    }
-
-    #[test]
-    fn a_missing_directory_is_not_an_error() {
-        assert_eq!(first_image(Path::new("/nonexistent/oag/images")), None);
-    }
-
-    /// A directory of this test's own, so the tests do not depend on - or
-    /// disturb - whatever the developer has in `data/images`.
-    fn temp_dir(name: &str) -> PathBuf {
-        let directory = std::env::temp_dir().join(format!("oag-source-{name}"));
-        let _ = std::fs::remove_dir_all(&directory);
-        std::fs::create_dir_all(&directory).unwrap();
-        directory
-    }
-}
+mod tests;

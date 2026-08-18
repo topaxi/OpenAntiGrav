@@ -25,17 +25,30 @@
 //! oag-game --race --screenshot /tmp/race.png --ticks 600 --hold cross
 //! ```
 //!
+//! Named no image at all, it looks for one - and if the search path holds
+//! several, it says so on screen instead of picking one quietly:
+//!
+//! ```sh
+//! oag-game            # one image found: boots it, as it always did
+//! oag-game --launcher # the chooser, whatever is there
+//! ```
+//!
+//! See [`oag_game::launcher`] and `just launch`.
+//!
 //! This file is only `main` itself: read the command line, resolve everything
 //! that can fail before anything is loaded, and hand off to one of the runs in
-//! [`headless`] or to the window in [`app`]. The rest of the binary is the
-//! eighteen modules declared below; everything that can be tested without a GPU
-//! is in [`oag_game`] rather than in any of them.
+//! [`headless`] or to the window in [`app`]. **"Everything that can fail" no
+//! longer includes the source on the windowed route**: which disc image a run
+//! opens may be a screen away, so the load that depends on it lives in
+//! [`prepare`] and runs either here or from `Session::finish_launcher`. The
+//! rest of the binary is the modules declared below; everything that can be
+//! tested without a GPU is in [`oag_game`] rather than in any of them.
 
 use anyhow::{Context, Result, ensure};
 use clap::Parser;
 
 use oag_game::frontend;
-use oag_game::{audio, boot, display, loading, menu, movie, prefetch, race, settings, source};
+use oag_game::{audio, display, launcher, loading, race, settings, source};
 use oag_physics::SpeedClass;
 
 use winit::event_loop::{ControlFlow, EventLoop};
@@ -63,12 +76,16 @@ mod gpu;
 mod headless;
 #[path = "main/hints.rs"]
 mod hints;
+#[path = "main/launcher_stage.rs"]
+mod launcher_stage;
 #[path = "main/loading_stage.rs"]
 mod loading_stage;
 #[path = "main/menu_stage.rs"]
 mod menu_stage;
 #[path = "main/pose.rs"]
 mod pose;
+#[path = "main/prepare.rs"]
+mod prepare;
 #[path = "main/race_stage.rs"]
 mod race_stage;
 #[path = "main/session.rs"]
@@ -79,12 +96,10 @@ mod stage;
 mod window;
 
 use crate::app::App;
-use crate::args::{give_weapon, resolve_difficulty, resolve_scheme};
+use crate::args::give_weapon;
 use crate::cli::Cli;
 use crate::headless::{run_race, run_windowless};
-use crate::hints::MENU_KEYS;
 use crate::pose::{parse_pose, pose_from_trace};
-use crate::session::Shell;
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -162,12 +177,17 @@ fn main() -> Result<()> {
          screen at a stated state. A window shows the real one under --prefetch."
     );
 
-    // Resolved once, before anything opens it: both ways in need a source, and
-    // "no disc image found" is a message about the command line, not something to
-    // discover eight seconds of intro later.
-    let source = source::resolve(cli.source.as_deref(), settings.source.image.as_deref())?;
-    // Resolved beside it, but it cannot fail: no DLC is the ordinary state of a
-    // copy of the game.
+    // Refused rather than ignored: the chooser is a screen, and every one of
+    // these three routes is defined by not opening a window to show it on.
+    ensure!(
+        !cli.launcher || !(cli.race || cli.dry_run || cli.screenshot.is_some()),
+        "--launcher needs a window: it is a screen for choosing a disc image, and \
+         --race, --dry-run and --screenshot all name their own source and open none. \
+         Run it on its own, or name an image directly."
+    );
+
+    // Resolved beside the source below, but it cannot fail: no DLC is the
+    // ordinary state of a copy of the game.
     let dlc = source::resolve_dlc(&cli.dlc, &settings.source.dlc);
 
     // Opened before either way in, because both want sound and neither owns the
@@ -177,17 +197,6 @@ fn main() -> Result<()> {
     // that shows it exists. See the two call sites below and
     // `App::open`.
     let audio = audio::Audio::open(&settings.audio, cli.dump_audio.clone());
-    // Surveyed once, here, because it is what decides whether the AUDIO page
-    // offers MUSIC SOURCE at all - and answering it means opening every disc
-    // image on the search path, which is not something to do while a menu is on
-    // screen. Skipped under `--dry-run` for the same reason the music is.
-    let music_discs = if cli.dry_run {
-        audio::MusicDiscs::default()
-    } else {
-        let discs = audio::MusicDiscs::survey(&source);
-        println!("audio: music discs, {}", discs.describe());
-        discs
-    };
 
     let (pose, camera) = match &cli.pose_from {
         Some(path) => {
@@ -205,42 +214,41 @@ fn main() -> Result<()> {
         ),
     };
 
-    let mut race_options = race::Options {
-        source: source.clone(),
-        dlc: dlc.clone(),
-        // Passed straight through, `None` included: `race::load` resolves an
-        // unnamed circuit from the title it opened, which is the only place the
-        // title is known. See `race::Options::track`.
-        track: cli.track.clone(),
-        team: cli
-            .team
-            .clone()
-            .unwrap_or_else(|| oag_pulse::race::DEFAULT_TEAM.to_string()),
+    let leg = if cli.reel {
+        frontend::Leg::DevPubReel
+    } else {
+        frontend::Leg::LogoFmv
+    };
+
+    // Everything the command line decided that no disc is needed for. The
+    // source is deliberately not in here: on the launcher route it is not known
+    // until a window has been open for a while. See `crate::prepare`.
+    let pending = prepare::Pending {
+        definition: prepare::definition(&cli)?,
+        settings,
+        dlc,
         class,
         mode,
-        // The disc's own team list arrives with the boot shell, below - it is
-        // read from the plugin definition and any mounted DLC pack, so it
-        // cannot be known here. Empty until then, which is the whole grid in
-        // the player's hull.
-        opponent_teams: Vec::new(),
-        ribbon: cli.ribbon,
-        collision: cli.collision,
-        lod: cli.lod.unwrap_or(settings.graphics.lod),
-        // **From the settings here, not only in the menu path.** `--race`
-        // bypasses the menus entirely, and a difficulty wired only into
-        // `LaunchRace` would be silently ignored by the flag most testing uses.
-        // Same shape as the scheme: an unrecognised token is reported and the
-        // default is used rather than failing the boot.
-        difficulty: resolve_difficulty(&settings),
-        opponents: cli.opponents,
-        seed: cli.seed,
+        leg,
         pose,
         camera,
+        cli,
     };
+    // Read back off `pending` from here on: the command line moved into it, and
+    // a second copy of any of these is a second thing to keep in step.
+    let cli = &pending.cli;
+    let settings = &pending.settings;
 
     // Before `boot::load`, deliberately: the front end's load parses the front-end
     // XML, every language plugin and a string table, and may shell out to `ffmpeg`
     // to transcode the intro. Going straight to a race needs none of it.
+    //
+    // Its source is resolved here rather than up with the rest of the command
+    // line, because this is the first route that actually needs one: the
+    // launcher route below has no single answer to resolve. Still before
+    // anything opens it, so "no disc image found" stays a message about the
+    // command line rather than something to discover eight seconds of intro
+    // later.
     if cli.race {
         // `--prefetch` is a front-end thing, and saying so is better than
         // quietly doing nothing. `--race` exists to skip the boot sequence, and
@@ -258,176 +266,160 @@ fn main() -> Result<()> {
         if cli.loading_screen.is_some() {
             println!("--loading-screen has no effect with --race; run it without --race.");
         }
+        let source = source::resolve(cli.source.as_deref(), settings.source.image.as_deref())?;
+        let music_discs = pending.music_discs(&source);
         return run_race(
-            &cli,
-            race_options,
-            &settings,
+            cli,
+            pending.race_options(&source, Vec::new()),
+            settings,
             anisotropy,
             audio,
             music_discs,
         );
     }
-
-    let leg = if cli.reel {
-        frontend::Leg::DevPubReel
-    } else {
-        frontend::Leg::LogoFmv
-    };
-    let options = boot::Options {
-        source: source.clone(),
-        dlc: dlc.clone(),
-        // The string table follows the saved language, so a player who picked
-        // French once reads French from the next boot rather than only having
-        // the picker skipped.
-        language: settings.language.clone(),
-        leg,
-        // `None` when `--movie` was not given: which entry that is depends on
-        // the source's own title, not known here yet, so `boot::load` resolves
-        // it once the source is open. See `boot::Options::movie`.
-        movie: cli.movie.clone(),
-        cache: cli.cache.clone().unwrap_or_else(boot::default_cache_dir),
-        audio_cache: boot::default_audio_cache_dir(),
-        // Every frame by default: the movie the disc plays is 1200 frames long
-        // and its last one is the Wipeout Pulse logo, so a cap would stop the
-        // sequence before the thing it exists to show.
-        extent: cli
-            .movie_frames
-            .map_or(movie::Extent::Whole, movie::Extent::Frames),
-        no_video: cli.no_video,
-        refresh_video: cli.refresh_video,
-        prefer_av1_cache: cli.prefer_av1_cache,
-    };
 
     // Every leg with no window loads the whole boot here and now, blocking, and
     // then leaves. Only a window has anywhere to *show* a wait, so only a
     // window earns the machinery below that defers one.
     if cli.dry_run || cli.screenshot.is_some() {
+        let source = source::resolve(cli.source.as_deref(), settings.source.image.as_deref())?;
+        let music_discs = pending.music_discs(&source);
         return run_windowless(
-            cli,
-            &options,
-            &settings,
-            race_options,
+            &pending.cli,
+            &pending.boot_options(&source),
+            settings,
+            pending.race_options(&source, Vec::new()),
             anisotropy,
             audio,
             music_discs,
         );
     }
 
-    // **The cheap half of the boot, and the only part a window waits on.**
-    // Measured on the EU disc: 0.05 s here against 4.9 s for the movies, which
-    // `MediaWorker` now runs on a thread of its own while winit opens the
-    // window and the loading screen goes up over it. Before this split the
-    // whole 5 seconds ran before winit had been asked for a window at all, so
-    // there was nothing on screen to say the game had started - which is the
-    // bug this shape exists to fix. See `boot::Shell`.
-    let (mut boot_shell, archives) = boot::load_shell(&options)?;
-    // Drained rather than iterated: `boot::assemble` appends its own lines to
-    // this same list, and the hand-off prints what it finds there. Leaving
-    // these in would print the whole first half twice, seconds apart, which
-    // reads as the disc having been opened again.
-    for line in boot_shell.report.drain(..) {
-        println!("{line}");
-    }
-    let media = boot::MediaWorker::spawn(archives, &boot_shell, &options);
-
-    // Parsed here rather than when the menus open, so a broken definition is a
-    // startup error and not something a player meets after the intro.
-    let definition = match cli.menu.as_deref() {
-        Some(path) => {
-            let text = std::fs::read_to_string(path)
-                .with_context(|| format!("reading {}", path.display()))?;
-            menu::Definition::parse(&text).with_context(|| format!("parsing {}", path.display()))?
+    // Which way in this window takes: straight to a boot, or the chooser first.
+    //
+    // The chooser is offered only when nothing was *stated* - see
+    // `source::explicit` - and only when there is a choice to make. One image
+    // is not a choice, and a screen that has to be dismissed before every boot
+    // would be a step added to the common case for nothing.
+    let chosen = source::explicit(cli.source.as_deref(), settings.source.image.as_deref())?;
+    let launcher = match &chosen {
+        Some(_) if !cli.launcher => None,
+        _ => {
+            let paths = source::candidates();
+            // Silent on an empty search path: there is nothing to read, and
+            // `resolve`'s own message a moment later names every directory
+            // that was tried, which is the useful half of the same news.
+            if !paths.is_empty() {
+                println!(
+                    "disc images: {} under the search path, reading each one",
+                    paths.len()
+                );
+            }
+            let rows = launcher::survey(&paths);
+            for row in &rows {
+                println!(
+                    "  {:<14} {:<18} {}",
+                    row.title(),
+                    row.provenance(),
+                    row.name
+                );
+                // The whole reason, here rather than on screen: a terminal has
+                // no right edge to run off. See `launcher::advice`.
+                if let Some(advice) = launcher::advice(row) {
+                    println!("    {advice}");
+                }
+            }
+            // One image is no choice, and **none at all is never a screen, not
+            // even under `--launcher`**: an empty list offers nothing but
+            // escape, where falling through reaches either the stated source or
+            // `resolve`'s message naming every directory it looked in - which
+            // for a packaged build with no image is the entire user interface.
+            if rows.len() > 1 || (cli.launcher && !rows.is_empty()) {
+                Some(launcher::Launcher::new(rows))
+            } else {
+                None
+            }
         }
-        None => menu::Definition::parse(menu::BUILT_IN)
-            .context("parsing the built-in menu definition")?,
-    };
-    // The three lists that come off the disc rather than out of the definition:
-    // what is raceable, who can be raced for, and what languages exist. All
-    // carry a label the player reads and a value the settings file stores, and
-    // on a circuit or a team those are different strings - `16_Track` and
-    // `Mantis` against their localised names, which are shipped content and
-    // only ever live in memory.
-    // Every team the player's own source declares, in the definition's file
-    // order, DLC packs included. `livery::teams_for_slots` decides which slot
-    // flies which; that ordering is this project's, not the original's.
-    race_options.opponent_teams = boot_shell
-        .teams
-        .iter()
-        .map(|team| team.id.clone())
-        .collect();
-
-    let shell = Shell {
-        definition,
-        modes: menu::mode_choices(&boot_shell.strings),
-        teams: boot_shell
-            .teams
-            .iter()
-            .map(|team| menu::Choice::labelled(&team.id, boot_shell.strings.get_or_id(&team.id)))
-            .collect(),
-        tracks: boot_shell
-            .tracks
-            .iter()
-            .map(|track| {
-                (
-                    track.clone(),
-                    boot_shell.strings.get_or_id(&track.id).to_string(),
-                )
-            })
-            .collect(),
-        languages: boot_shell
-            .languages
-            .iter()
-            .map(|language| menu::Choice::labelled(&language.name, &language.native_name))
-            .collect(),
-        font: boot_shell.font.clone(),
-        menu_skin: boot_shell.menu_skin,
-        menu_font: boot_shell.menu_font.clone(),
-        sprites: boot_shell.sprites.clone(),
     };
 
-    println!("\n{MENU_KEYS}");
-
-    // Unconditional now, where it used to be `--prefetch` only. Its two extra
-    // archive reads used to buy nothing on a boot that went straight to the
-    // front end; every windowed boot now shows the loading screen while the
-    // movies decode, so every windowed boot needs the tips and the glow strip.
-    let loading_assets = {
-        let assets = loading::Assets::load(&source, &boot_shell.strings);
-        for note in &assets.notes {
-            println!("{note}");
+    // With no chooser there is exactly one source and it is loaded before the
+    // window, as it always was. With one, everything below waits for the pick -
+    // see `Session::finish_launcher`.
+    let prepared = match &launcher {
+        Some(_) => None,
+        None => {
+            let source = match chosen {
+                Some(source) => source,
+                None => source::resolve(None, None)?,
+            };
+            Some(pending.windowed(&source)?)
         }
-        assets
     };
+
+    // Split apart here rather than carried as one: `App`'s fields are what the
+    // window's first resume reaches for, and half of them are `Option` already
+    // because the `--race` route has none of them either. A run that is still
+    // choosing is in the same position as that one - it has no shell, no boot
+    // and no race yet - so it takes the same shape.
+    let (boot_shell, media, shell, loading_assets, race_options, music_discs, prefetch) =
+        match prepared {
+            Some(prepared) => (
+                Some(prepared.boot_shell),
+                Some(prepared.media),
+                Some(prepared.shell),
+                prepared.loading_assets,
+                Some(prepared.race_options),
+                prepared.music_discs,
+                prepared.prefetch,
+            ),
+            None => (
+                None,
+                None,
+                None,
+                loading::Assets::default(),
+                None,
+                audio::MusicDiscs::default(),
+                None,
+            ),
+        };
+
+    let scheme = pending.scheme();
+    let give = give_weapon(cli.give.as_deref())?;
+    let (boot_overlay, pick_language, autopilot, trace, log_every) = (
+        cli.overlay,
+        cli.pick_language,
+        cli.autopilot,
+        cli.trace,
+        cli.log_every,
+    );
+    let settings = settings.clone();
 
     let event_loop = EventLoop::new()?;
     // Poll rather than Wait: the intro is animated whether or not input arrives.
     event_loop.set_control_flow(ControlFlow::Poll);
 
     let mut app = App {
-        boot_shell: Some(boot_shell),
-        media: Some(media),
-        boot_overlay: cli.overlay,
-        pick_language: cli.pick_language,
-        give: give_weapon(cli.give.as_deref())?,
-        autopilot: cli.autopilot,
+        boot_shell,
+        media,
+        boot_overlay,
+        pick_language,
+        give,
+        autopilot,
         race: None,
         race_options,
-        trace: cli.trace,
-        log_every: cli.log_every,
+        trace,
+        log_every,
         anisotropy,
-        scheme: resolve_scheme(&cli, &settings),
+        scheme,
         settings,
-        shell: Some(shell),
+        shell,
         audio: Some(audio),
         music_discs,
-        // Asked for, not started: see `App::prefetch`.
-        prefetch: cli.prefetch.then(|| prefetch::Options {
-            source: source.clone(),
-            movies: options.cache.clone(),
-            audio: boot::default_audio_cache_dir(),
-            refresh_video: cli.refresh_video,
-        }),
+        prefetch,
         loading_assets,
+        launcher,
+        // Kept whole, because a pick is what turns it into everything above.
+        pending: Some(pending),
         state: None,
     };
     event_loop.run_app(&mut app)?;
@@ -445,6 +437,10 @@ fn main() -> Result<()> {
 /// exactly as they did when all three lived in this file.
 #[cfg(test)]
 use crate::{args::parse_progress, menu_stage::menu_playhead};
+/// Same reasoning, for a library module `main` itself no longer names: the
+/// windowed load moved into [`prepare`] and took `movie` with it.
+#[cfg(test)]
+use oag_game::movie;
 
 #[cfg(test)]
 #[path = "main/tests.rs"]

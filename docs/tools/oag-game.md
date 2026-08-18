@@ -56,6 +56,40 @@ is in [packaging](packaging.md#where-the-disc-image-comes-from), and
 `crates/game/src/source.rs` is the code. **No image ships with the engine** and
 none ever will - see [legal](../overview/legal.md).
 
+**Finding more than one opens the chooser.** `just launch`, or `oag-game` with
+nothing named, reads every image on the search path and puts them on screen with
+what each one turned out to be - the title off its own serial, its platform, and
+its file name. Up and down choose, Enter or X boots the one under the cursor,
+Escape quits.
+
+```
+OPENANTIGRAV
+SELECT A DISC IMAGE
+
+> WIPEOUT PULSE   PSP UCUS-98712   PULSE-PSP-USA.CHD
+  WIPEOUT PURE    PSP UCES-00001   PURE-PSP-EU.CHD
+  WILL NOT OPEN   PS3 BCES-00664   HDFURY-PS3-EU.ISO
+  WIPEOUT HD      PS3 BCES-00664   HDFURY-PS3-EU-DEC.ISO
+```
+
+One image still boots straight in, and nothing named on the command line, in
+`$OAG_IMAGE` or in `settings.toml` ever reaches the screen - those are decisions
+already taken. `--launcher` shows the chooser for a single image too, and it
+**lists the search path and only the search path**: a configured source is not
+one of the rows, so the flag is how to reach something other than it rather than
+a list of everything reachable. An empty search path is still the ordinary "no
+disc image found" error naming every directory tried, never an empty screen.
+It needs a window: `--race`, `--dry-run` and `--screenshot` all name their own
+source and are refused rather than ignored.
+
+An image that will not open is **listed and marked rather than hidden**. The
+case it exists for is a PS3 disc: `hdfury-ps3-eu.iso` and its decrypted twin
+carry the same serial - the `PS3_DISC.SFB` that answers it is outside the
+encrypted region - so nothing short of opening the archives tells them apart,
+and a chooser that filtered on identity would offer the wrong one. The row says
+what to do about it; the terminal says it at more length, with a pointer to
+[the PS3 disc format](../formats/ps3-disc.md). See `oag_game::launcher`.
+
 ```sh
 # No display needed: run the simulation for 45 ticks and write one frame.
 just play --race --screenshot /tmp/race.png --ticks 45 --hold cross
@@ -78,6 +112,7 @@ ticks, and the ship is correspondingly slower than under `--hold cross`.
 
 | Flag | What it does |
 | --- | --- |
+| `--launcher` | Show the disc chooser even when a source would resolve on its own. Without it the chooser appears only when nothing named a source and the search path holds more than one image. Lists the search path only - a configured source is not a row - and an empty search path is still the not-found error. Refused with `--race`, `--dry-run` and `--screenshot`, which name their own source and open no window. |
 | `--movie <entry>` | Which movie to play: a `Data.wad` entry name, or `hash:XXXXXXXX` for one of the reels whose name is not recovered. Defaults to `Data\Movies\Intro.PMF`, which is what the `LogoFMV` screen plays and the only movie the disc's own boot ever opens - see [frontend boot](../architecture/frontend-boot.md#what-the-disc-actually-does-at-boot). |
 | `--reel` | Boot `Intro Screen->IntroMovie1` instead of `LogoFMV`: the code-side state with the frame-counted holds at 144, 231 and 260, playing the 260-frame dev/pub reel those counters describe. **Not the boot order** - the disc never enters that state at boot, and the reels carry no Pulse branding. See [the dev/pub reel](../architecture/frontend-boot.md#the-devpub-reel). Implies `--movie hash:b1ba72c3` unless `--movie` is given. |
 | `--movie-frames <n>` | Convert only the first `n` frames. All of them by default, which for the 1200-frame intro is 33 MiB of cache and about 80 seconds of `ffmpeg`, once. |

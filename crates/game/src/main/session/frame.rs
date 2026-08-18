@@ -14,6 +14,24 @@ use super::Session;
 
 impl Session {
     pub(crate) fn frame(&mut self) -> Result<()> {
+        // Before everything, because it is what makes there be anything: until
+        // a disc has been picked there is no boot to finish and no front end to
+        // hand a window to. Read a frame after the press for the same reason
+        // `Launch Game` is checked here rather than in the tick loop - the row
+        // lighting up is drawn before the load stalls the window.
+        let picked = match &mut self.stage {
+            Stage::Launcher(stage) => stage.picked.take(),
+            _ => None,
+        };
+        if let Some(source) = picked
+            && let Err(e) = self.finish_launcher(&source)
+        {
+            // Reported and stayed on rather than fatal: the chooser is still on
+            // screen and the other rows are still there to try. A disc that
+            // will not boot is exactly the case this screen exists to survive.
+            eprintln!("cannot boot {source}: {e:#}");
+        }
+
         // Before this frame's ticks, so the front end's own first frame is drawn
         // on the frame after the fade ended rather than a frame later still.
         if let Err(e) = self.finish_loading() {
@@ -171,6 +189,11 @@ impl Session {
                 // when both are done - `Screen::advance` holds at full opacity
                 // until then - and `finish_loading` hands the window on when it
                 // has run out.
+                // In the tick loop with everything else, so a held key is read
+                // as one press at the same 60 Hz the menus read theirs at.
+                Stage::Launcher(stage) => {
+                    stage.update(self.controls.buttons_mut());
+                }
                 Stage::Loading(stage) => {
                     stage
                         .screen
@@ -328,6 +351,10 @@ impl Session {
         let inside = (0.0, 0.0, size.0 as f32, size.1 as f32);
         let target = self.framebuffer.view();
         let (scene_stats, video_label) = match &mut self.stage {
+            Stage::Launcher(stage) => {
+                stage.render(&self.gpu, &mut encoder, target, inside);
+                (None, None)
+            }
             Stage::Loading(stage) => {
                 stage.render(&self.gpu, &mut encoder, target, inside, phase, &progress);
                 (None, None)

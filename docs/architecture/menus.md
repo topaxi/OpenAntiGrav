@@ -214,6 +214,20 @@ different strings exactly when the list came off a disc: `16_Track` against
 "Talon's Junction White". That distinction is what lets the menus name a circuit
 without this repository containing its name.
 
+## The one screen that is not a menu
+
+The [disc chooser](../tools/oag-game.md#finding-the-disc-image) has rows, a
+cursor and the same abstract buttons, and it is deliberately **not** a
+`menu::Menu`. It runs before any archive is open, so it has no title - and
+therefore no `oag_title::MenuSkin` to lay it out with and no disc font to draw
+it in. Building it as a menu would mean choosing a skin in order to choose
+which disc the skin should come from. It is its own small module,
+`oag_game::launcher`: one list, one cursor, the engine's own 5x7 glyphs, and a
+`Vec<Draw>` like everything else here.
+
+Nothing else should follow it out of `menu.rs`. The test is whether a screen
+can have a title behind it, and every screen but this one can.
+
 ## What is not built
 
 - **Rebinding.** `oag_input::keys::map_key` is a hardcoded `match`; a `binding`

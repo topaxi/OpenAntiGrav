@@ -13,6 +13,58 @@ use crate::stage::Stage;
 use super::{BackdropShape, Session};
 
 impl Session {
+    /// Turns a picked disc image into the boot the window hands on to.
+    ///
+    /// The other half of `main`'s windowed route, run a few seconds later: the
+    /// same [`crate::prepare::Pending::windowed`] call, and then the same
+    /// [`Stage::loading`] the ordinary boot starts on. A launched boot and a
+    /// named one are the same boot from here, which is the point of the split.
+    ///
+    /// **The `Pending` is dropped on success and kept on failure**, which is
+    /// what lets a player whose first choice will not boot pick another: the
+    /// chooser is still on screen and everything it needs is still here.
+    /// [`Self::finish_loading`] takes its `Shell` up front for the opposite
+    /// reason - there is nothing to go back to there.
+    ///
+    /// # Errors
+    ///
+    /// Propagates the load, which is a disc that will not open. Reporting it to
+    /// the player rather than dying is the caller's business - see
+    /// [`Self::frame`].
+    pub(crate) fn finish_launcher(&mut self, source: &str) -> Result<()> {
+        if self.pending.is_none() {
+            return Ok(());
+        }
+
+        // **Dropped from the frame timer, not measured.** What follows opens
+        // the archives, parses the front end and surveys every image on the
+        // search path for the music - a second or so inside one frame. See the
+        // `stalled` field, and the note in `Session::frame` about why a load is
+        // not a frame time.
+        self.stalled = true;
+        println!("\ndisc image: {source}");
+
+        let prepared = {
+            let Some(pending) = self.pending.as_ref() else {
+                return Ok(());
+            };
+            pending.windowed(source)?
+        };
+        self.pending = None;
+        self.race_options = Some(prepared.race_options);
+        self.music_discs = prepared.music_discs;
+        self.shell = Some(prepared.shell);
+        self.prefetch_pending = prepared.prefetch;
+        self.stage = Stage::loading(
+            &self.gpu,
+            prepared.boot_shell,
+            Some(prepared.media),
+            &prepared.loading_assets,
+            self.trace,
+        )?;
+        Ok(())
+    }
+
     /// Starts `--prefetch`, now that the boot's own movies are out of the cache.
     ///
     /// **Not before.** Both convert through `ffmpeg` into the same directory,
@@ -216,9 +268,17 @@ impl Session {
     ///
     /// The window, the device and the surface are the ones already open, so the
     /// handoff costs a load and not a second window.
+    /// # Errors
+    ///
+    /// The load itself, and - unreachably in practice - a run with no source
+    /// yet: only the menus fire this, and there are no menus before a boot.
     pub(crate) fn launch_race(&mut self) -> Result<()> {
         self.stalled = true;
-        let loaded = race::load(&self.race_options)?;
+        let options = self
+            .race_options
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("no disc image has been chosen yet"))?;
+        let loaded = race::load(options)?;
         for line in &loaded.report {
             println!("{line}");
         }

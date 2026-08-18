@@ -69,7 +69,22 @@ pub(crate) struct Session {
     pub(crate) next_frame: std::time::Instant,
     /// What `Launch Game` starts, kept because the front end is loaded long
     /// before anyone knows whether a race will be asked for.
-    pub(crate) race_options: race::Options,
+    ///
+    /// `None` only while the chooser is on screen: it names a `source`, and
+    /// which source is precisely what has not been decided yet. See
+    /// [`Session::finish_launcher`].
+    pub(crate) race_options: Option<race::Options>,
+    /// What the command line decided, until a pick turns it into a boot.
+    ///
+    /// Taken by [`Session::finish_launcher`], which is what makes that
+    /// once-only: a second pick would find `None` and do nothing.
+    pub(crate) pending: Option<crate::prepare::Pending>,
+    /// `--trace`, kept because the stage that reads it may be built here.
+    ///
+    /// Every other stage is built in `App::open`, which has the flag in hand;
+    /// the loading screen a pick opens is built in [`Session::finish_launcher`]
+    /// long after that.
+    pub(crate) trace: bool,
     pub(crate) log_every: u32,
     /// `--give`, carried into the race loop. See the CLI field.
     pub(crate) give: Option<oag_formats::weapons::Weapon>,
