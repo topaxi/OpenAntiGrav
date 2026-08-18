@@ -132,6 +132,120 @@ fn the_declared_stride_is_the_one_the_search_finds() {
     );
 }
 
+/// **A submesh is judged on the vertices a triangle names, and that recovers
+/// 1,053 of the disc's 1,377 apparent strays.**
+///
+/// A declared vertex count can run past the buffer the file wrote for it:
+/// `talons_junction`'s `tanker4c1Shape` declares 1,288 vertices in 23,152
+/// bytes, which at stride 18 is 32 bytes short, so its last two vertices are
+/// read out of the *next* submesh's buffer and land 100 units from anything.
+/// **The index buffer never references them** - RSX fetches a vertex when an
+/// index asks for it and never sweeps the array - so the original draws the
+/// same picture either way.
+///
+/// Both readings are counted, because the number that matters is the
+/// difference: judging every declared vertex condemns submeshes the file draws
+/// perfectly well, and `oag_render::mesh::rcs` dropped 17 of Talon's Junction's
+/// 117 on that basis.
+///
+/// **324 submeshes are still outside after that, and this test pins the number
+/// rather than hiding it behind a percentage.** They are not spread evenly:
+/// `talons_junction`, `amphiseum` and `tech_de_ra` have none at all, and the
+/// residue clusters in `zone_2`, `zone_3`, `01_vineta_k` and
+/// `15_anulpha_pass`. What is different about those is **unrecovered** - see
+/// `docs/formats/rcsmodel.md`. A drop from 1,377 to 324 is a reading that got
+/// better and not one that is finished.
+#[test]
+#[ignore]
+fn a_submesh_is_judged_on_the_vertices_a_triangle_names() {
+    let Some(image) = image() else { return };
+    let (mut submeshes, mut strays_all, mut strays_drawn, mut files) = (0usize, 0, 0, 0usize);
+    let mut worst: Vec<String> = Vec::new();
+    // Per circuit directory, so the three this reading was measured on can be
+    // asserted at zero rather than absorbed into a disc-wide total.
+    let mut clean: BTreeMap<String, usize> = BTreeMap::new();
+    for archive in ARCHIVES {
+        let spec = format!("{}:PS3_GAME/USRDIR/{archive}.PSARC", image.display());
+        let mut open = oag_assets::psarc::Archive::open(&spec).expect("the archive opens");
+        let paths: Vec<String> = open
+            .paths()
+            .iter()
+            .filter(|p| p.ends_with(".rcsmodel"))
+            .cloned()
+            .collect();
+        for path in paths {
+            let vex = path.replace(".rcsmodel", ".vex");
+            let (Ok(model_blob), Ok(blob)) = (open.read_path(&path), open.read_path(&vex)) else {
+                continue;
+            };
+            let Ok(model) = rcsmodel::Model::parse(&model_blob) else {
+                continue;
+            };
+            files += 1;
+            for (name, hash, min, max) in rcsmodel_common::mesh_nodes(&blob) {
+                let Some(mesh) = model.mesh(hash) else {
+                    continue;
+                };
+                let Some(stride) = mesh.declared_stride() else {
+                    continue;
+                };
+                for submesh in &mesh.submeshes {
+                    if submesh.vertex_count == 0 || submesh.index_count == 0 {
+                        continue;
+                    }
+                    submeshes += 1;
+                    let Ok(points) = mesh.positions(&model_blob, submesh, stride) else {
+                        continue;
+                    };
+                    let slack = 1e-2;
+                    let inside = |p: &[f32; 3]| {
+                        (0..3).all(|i| p[i] >= min[i] - slack && p[i] <= max[i] + slack)
+                    };
+                    if !points.iter().all(inside) {
+                        strays_all += 1;
+                    }
+                    let circuit = path
+                        .strip_prefix("/data/environments/")
+                        .and_then(|rest| rest.split('/').next())
+                        .unwrap_or("")
+                        .to_string();
+                    let entry = clean.entry(circuit).or_default();
+                    if !mesh.submesh_fits(&model_blob, submesh, stride, (min, max)) {
+                        strays_drawn += 1;
+                        *entry += 1;
+                        if worst.len() < 10 {
+                            worst.push(format!("{path} {name} ({hash:#010x})"));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    println!(
+        "{files} model(s) with a sibling .vex, {submeshes} node-addressed submeshes: \
+         {strays_all} leave the box counting every declared vertex, \
+         {strays_drawn} counting only the ones a triangle names"
+    );
+    for line in &worst {
+        println!("  {line}");
+    }
+    assert_eq!(submeshes, 12_624, "the disc's node-addressed submesh count");
+    assert_eq!(
+        (strays_all, strays_drawn),
+        (1_377, 324),
+        "the two readings, pinned exactly: a change either way is a change in \
+         what the reader believes a vertex buffer holds"
+    );
+    for circuit in ["talons_junction", "amphiseum", "tech_de_ra"] {
+        assert_eq!(
+            clean.get(circuit).copied().unwrap_or(usize::MAX),
+            0,
+            "{circuit} is one of the three measured to have no stray at all, \
+             which is the claim the renderer's per-submesh gate rests on"
+        );
+    }
+}
+
 /// **The widths the disc declares, against the three the search knows.**
 ///
 /// `rcsmodel::STRIDES` is `[14, 18, 22]`, measured off authored bounding boxes.

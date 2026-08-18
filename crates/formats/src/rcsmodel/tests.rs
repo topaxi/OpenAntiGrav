@@ -65,7 +65,7 @@ fn model(stride: usize, filler: i16) -> Vec<u8> {
     b.u32(CHUNK + 0x50, 1);
     let sub = CHUNK + SUBMESH_BASE;
     b.u16(sub + 0x08, VERTICES as u16);
-    b.u16(sub + 0x0a, 6);
+    b.u16(sub + 0x0a, VERTICES as u16);
     b.u32(sub + 0x10, ibuf as u32);
     b.u32(sub + 0x18, VBUF as u32);
 
@@ -87,10 +87,15 @@ fn model(stride: usize, filler: i16) -> Vec<u8> {
             b.i16(at + j, filler);
         }
     }
-    for (k, index) in [0u16, 1, 2, 1, 2, 3].into_iter().enumerate() {
-        b.u16(ibuf + k * 2, index);
+    // **Names every vertex.** A stride is judged on the vertices some triangle
+    // references - `Mesh::drawn_extent` - so a fixture whose indices reach only
+    // a few of them describes a box the mesh does not have, and would decide
+    // both the tightness test and the ambiguity one below on the fixture rather
+    // than on the stride.
+    for k in 0..VERTICES {
+        b.u16(ibuf + k * 2, u16::try_from(k).unwrap_or(0));
     }
-    b.bytes.resize(ibuf + 0x100, 0);
+    b.bytes.resize(ibuf + VERTICES * 2 + 0x100, 0);
     b.bytes
 }
 
@@ -339,6 +344,56 @@ fn a_mesh_whose_stride_is_not_determined_reports_nothing_rather_than_guessing() 
         "the fixture is meant to be ambiguous, got {contained:?}"
     );
     assert_eq!(mesh.solve_stride(&data, CUBE_BOUNDS, 2.0 / 128.0), None);
+}
+
+/// A declared vertex count that overruns its own buffer does not condemn the
+/// submesh, because no triangle names the vertices it overruns onto.
+///
+/// **This is a real shape and not a hypothetical.** `talons_junction`'s
+/// `tanker4c1Shape` declares 1,288 vertices in a buffer 32 bytes short of
+/// holding them at the stride the chunk declares, so the last two are read out
+/// of the next submesh's buffer and land 100 units away. RSX fetches a vertex
+/// when an index asks for it and never sweeps the array, so the original draws
+/// the same picture either way - and judging the stride on those two dropped 17
+/// of Talon's Junction's 117 node submeshes on the floor.
+#[test]
+fn vertices_no_triangle_names_do_not_decide_whether_a_submesh_fits() {
+    // The fixture's own geometry: 240 vertices at stride 18 from 0x400, the
+    // eight corners of the unit cube among them, all 240 indexed.
+    const SUB: usize = 0x100 + SUBMESH_BASE;
+    const VBUF: usize = 0x400;
+    let mut data = model(18, 30_000);
+    let honest = Model::parse(&data).unwrap();
+    assert!(honest.meshes[0].submesh_fits(&data, &honest.meshes[0].submeshes[0], 18, CUBE_BOUNDS));
+
+    // One vertex past the end, written far outside the box, and not indexed.
+    // It lands in the padding between the two buffers, which is where a real
+    // overrun lands too - and writing a second would reach into the index
+    // buffer and test something else entirely.
+    data[SUB + 0x08..SUB + 0x0a].copy_from_slice(&241u16.to_be_bytes());
+    for i in 0..3 {
+        let at = VBUF + 240 * 18 + i * 2;
+        data[at..at + 2].copy_from_slice(&30_000i16.to_be_bytes());
+    }
+    let parsed = Model::parse(&data).unwrap();
+    let mesh = &parsed.meshes[0];
+    let submesh = &mesh.submeshes[0];
+    assert_eq!(submesh.vertex_count, 241);
+
+    let points = mesh.positions(&data, submesh, 18).expect("positions");
+    assert!(
+        points[240][0] > 100.0,
+        "the fixture's overrun vertices have to be outside the box to test anything"
+    );
+    assert!(
+        mesh.submesh_fits(&data, submesh, 18, CUBE_BOUNDS),
+        "the stray vertex is not indexed, so nothing draws it"
+    );
+    assert_eq!(
+        mesh.solve_stride(&data, CUBE_BOUNDS, 2.0 / 128.0),
+        Some(18),
+        "and the stride search is not thrown by them either"
+    );
 }
 
 /// The other chunk layout: one submesh, its buffers named in the chunk header

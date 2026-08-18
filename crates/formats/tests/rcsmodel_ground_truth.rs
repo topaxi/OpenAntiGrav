@@ -145,11 +145,20 @@ fn every_index_buffer_is_a_triangle_list_within_its_own_vertex_count() {
 /// note. **18 of the 56 hashes are carried by *other circuits'* model files** -
 /// the sky traffic (`Skycar_1Shape`, `tanker1aShape`, `shipintersteller1Shape`)
 /// by `amphiseum` and `tech_de_ra`, and eight `pCube*` nodes by three circuits
-/// that share nothing else with Talon's Junction. Fetching them across files
-/// would be wrong as often as right: **13 of the 18 donor chunks fill the box
-/// the node itself authors and 5 do not**, and without that box there is no way
-/// to tell. So nothing is wired, the nodes stay undrawn, and the load report
-/// keeps saying so.
+/// that share nothing else with Talon's Junction.
+///
+/// **13 of the 18 have a donor whose geometry is demonstrably the node's, and
+/// 5 have none.** Every donor is judged at the stride its own chunk declares,
+/// over the vertices a triangle names, against the box the Talon's Junction
+/// node authors - and the check is per donor rather than per hash, because a
+/// hash can appear in several circuits' models and be the right mesh in only
+/// one of them: `Skycar_1Shape` fits in `tech_de_ra` and not in `amphiseum`.
+///
+/// So the identity is settled and the *mechanism* is not. **Nothing is wired.**
+/// What says the original resolves a node against another circuit's model file,
+/// or draws these nodes at all, is unrecovered, and a prop drawn because this
+/// project found its geometry somewhere is a picture nobody can check. The
+/// nodes stay undrawn and the load report keeps saying so.
 #[test]
 #[ignore = "needs a decrypted PS3 disc image in data/images"]
 fn the_nodes_that_address_no_chunk_are_not_in_a_shared_props_file() {
@@ -245,35 +254,80 @@ fn the_nodes_that_address_no_chunk_are_not_in_a_shared_props_file() {
         "{elsewhere} is outside the range this finding was measured at"
     );
 
-    // 3. And fetching them would be wrong as often as right.
+    // 3. And which of them is actually the node's mesh.
+    //
+    // **Every donor, not the first one.** A hash turns up in several circuits'
+    // models and is the right mesh in only some of them, so taking whichever
+    // file the archive sweep reached first answers a question about iteration
+    // order. The stride is the donor chunk's own declared one where it has
+    // (which is every chunk on the disc that is `Layout::Described`) and the
+    // search otherwise.
     let (mut fits, mut checked) = (0usize, 0usize);
     for (name, hash, bounds) in &unresolved {
         let Some(where_) = donors.get(hash) else {
             continue;
         };
-        let spec = &where_[0];
-        let (archive, path) = spec.split_once(':').expect("archive:path");
-        let spec = format!("{}:PS3_GAME/USRDIR/{archive}.PSARC", image.display());
-        let mut open = oag_assets::psarc::Archive::open(&spec).expect("the archive opens");
-        let bytes = open.read_path(path).expect("the donor reads");
-        let m = rcsmodel::Model::parse(&bytes).expect("the donor parses");
-        let donor = m.mesh(*hash).expect("the hash that put it in this list");
         checked += 1;
-        if donor.solve_stride(&bytes, *bounds, TOLERANCE).is_some() {
+        let mut any = false;
+        for spec in where_ {
+            let (archive, path) = spec.split_once(':').expect("archive:path");
+            let spec = format!("{}:PS3_GAME/USRDIR/{archive}.PSARC", image.display());
+            let mut open = oag_assets::psarc::Archive::open(&spec).expect("the archive opens");
+            let bytes = open.read_path(path).expect("the donor reads");
+            let m = rcsmodel::Model::parse(&bytes).expect("the donor parses");
+            let donor = m.mesh(*hash).expect("the hash that put it in this list");
+            let stride = donor
+                .declared_stride()
+                .or_else(|| donor.solve_stride(&bytes, *bounds, TOLERANCE));
+            // **Tightness, not containment.** A chunk small enough to sit
+            // inside the box is inside every larger box too, and
+            // `Skycar_1Shape`'s 40-vertex chunk in `amphiseum` passes that way
+            // while its real donor - 848 vertices in `tech_de_ra` - fills the
+            // box exactly. The oracle is computed here rather than borrowed
+            // from `solve_stride`, so it is a second reading of the same claim.
+            let fitted = stride.is_some_and(|stride| {
+                let (mut lo, mut hi) = ([f32::MAX; 3], [f32::MIN; 3]);
+                let mut any = false;
+                for submesh in donor.submeshes.iter().filter(|s| s.vertex_count > 0) {
+                    let (Ok(points), Ok(indices)) = (
+                        donor.positions(&bytes, submesh, stride),
+                        donor.indices(&bytes, submesh),
+                    ) else {
+                        continue;
+                    };
+                    for point in indices.iter().filter_map(|i| points.get(*i as usize)) {
+                        any = true;
+                        for k in 0..3 {
+                            lo[k] = lo[k].min(point[k]);
+                            hi[k] = hi[k].max(point[k]);
+                        }
+                    }
+                }
+                any && (0..3).all(|k| {
+                    (lo[k] - bounds.0[k]).abs() <= TOLERANCE
+                        && (hi[k] - bounds.1[k]).abs() <= TOLERANCE
+                })
+            });
+            if fitted {
+                any = true;
+                println!("  {name} ({hash:#010x}) is the chunk in {path}");
+                break;
+            }
+        }
+        if any {
             fits += 1;
         } else {
-            println!("  {name} ({hash:#010x}) does not fill its node's box in {path}");
+            println!(
+                "  {name} ({hash:#010x}) matches no donor's geometry, in {} file(s)",
+                where_.len()
+            );
         }
     }
-    println!("{fits} of {checked} donor chunks fill the box the node authors");
-    assert!(
-        fits < checked,
-        "every donor chunk fits, which would make cross-file resolution safe \
-         and this test's conclusion wrong"
-    );
-    assert!(
-        fits > 0,
-        "no donor chunk fits, so none of them is the same mesh"
+    println!("{fits} of {checked} unresolved nodes have a donor that is their mesh");
+    assert_eq!(
+        (fits, checked),
+        (13, 18),
+        "the split this finding is: 13 identified, 5 not"
     );
 }
 

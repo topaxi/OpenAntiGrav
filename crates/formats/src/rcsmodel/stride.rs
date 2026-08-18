@@ -344,7 +344,53 @@ impl Mesh {
         any.then(|| (0..3).map(|i| hi[i] - lo[i]).max().unwrap_or(0))
     }
 
-    /// Whether one submesh's positions all land inside `bounds` at `stride`.
+    /// The box **the vertices this submesh actually draws** occupy at `stride`.
+    ///
+    /// # A declared vertex count can overrun its own buffer, and the file is
+    /// not wrong about it
+    ///
+    /// `talons_junction`'s `tanker4c1Shape` declares 1,288 vertices in a buffer
+    /// 23,152 bytes long; at the stride the chunk declares that is 32 bytes
+    /// short, so the last two vertices are read out of the *next* submesh's
+    /// buffer and land 100 units from anything. **The index buffer never
+    /// references them**, so the original draws the same picture either way -
+    /// RSX fetches a vertex when an index asks for it and never sweeps the
+    /// array.
+    ///
+    /// So the only vertices that can testify about a stride are the ones some
+    /// triangle names. **Measured, and it is the whole difference**: over
+    /// `talons_junction`, `amphiseum` and `tech_de_ra`, 68 of 507 submeshes
+    /// leave their node's authored box when every declared vertex is counted,
+    /// and **0 of 507** when only the referenced ones are - three circuits, no
+    /// exceptions, at the stride the chunk itself declares.
+    ///
+    /// A submesh with no readable index buffer falls back to every vertex,
+    /// which is the older reading and the only one available there.
+    fn drawn_extent(&self, data: &[u8], submesh: &SubMesh, stride: usize) -> Option<Bounds> {
+        let points = self.positions(data, submesh, stride).ok()?;
+        let indices = self.indices(data, submesh).unwrap_or_default();
+        let mut lo = [f32::MAX; 3];
+        let mut hi = [f32::MIN; 3];
+        let mut any = false;
+        let mut fold = |point: &[f32; 3]| {
+            any = true;
+            for i in 0..3 {
+                lo[i] = lo[i].min(point[i]);
+                hi[i] = hi[i].max(point[i]);
+            }
+        };
+        if indices.is_empty() {
+            points.iter().for_each(&mut fold);
+        } else {
+            indices
+                .iter()
+                .filter_map(|i| points.get(*i as usize))
+                .for_each(&mut fold);
+        }
+        any.then_some((lo, hi))
+    }
+
+    /// Whether one submesh's drawn positions land inside `bounds` at `stride`.
     ///
     /// **A caller that draws has to ask this too, not just [`solve_stride`].**
     /// The stride search tolerates a submesh that does not fit - see
@@ -353,6 +399,10 @@ impl Mesh {
     /// attribute bytes and scatter across the world. Assegai's hull has exactly
     /// one such submesh and it stretched the ship's own bounding sphere from 7
     /// units to 130, which framed the craft as a speck.
+    ///
+    /// **What counts is what draws** - see [`Mesh::drawn_extent`]. Asking every
+    /// declared vertex instead dropped 17 of Talon's Junction's 117 node
+    /// submeshes over vertices no triangle references.
     ///
     /// [`solve_stride`]: Mesh::solve_stride
     #[must_use]
@@ -365,11 +415,10 @@ impl Mesh {
     ) -> bool {
         let (min, max) = bounds;
         let slack = 1e-2;
-        self.positions(data, submesh, stride).is_ok_and(|points| {
-            points
-                .iter()
-                .all(|p| (0..3).all(|i| p[i] >= min[i] - slack && p[i] <= max[i] + slack))
-        })
+        self.drawn_extent(data, submesh, stride)
+            .is_some_and(|(lo, hi)| {
+                (0..3).all(|i| lo[i] >= min[i] - slack && hi[i] <= max[i] + slack)
+            })
     }
 
     /// The box the submeshes that *fit* inside `bounds` at `stride` occupy, and
@@ -404,24 +453,20 @@ impl Mesh {
             if submesh.vertex_count == 0 {
                 continue;
             }
-            let Ok(points) = self.positions(data, submesh, stride) else {
+            // The vertices some triangle names, and only those - see
+            // [`Mesh::drawn_extent`]. A declared count can overrun its own
+            // buffer by a vertex or two that no index references, and judging a
+            // stride on those rejects the right answer.
+            let Some((slo, shi)) = self.drawn_extent(data, submesh, stride) else {
                 continue;
             };
-            // Bails on the first stray point, which is what keeps the search
-            // over `STRIDES` cheap: a wrong stride usually leaves the box within
-            // a few vertices.
-            if points
-                .iter()
-                .any(|p| (0..3).any(|i| p[i] < min[i] - slack || p[i] > max[i] + slack))
-            {
+            if (0..3).any(|i| slo[i] < min[i] - slack || shi[i] > max[i] + slack) {
                 continue;
             }
             fitted += 1;
-            for point in points {
-                for i in 0..3 {
-                    lo[i] = lo[i].min(point[i]);
-                    hi[i] = hi[i].max(point[i]);
-                }
+            for i in 0..3 {
+                lo[i] = lo[i].min(slo[i]);
+                hi[i] = hi[i].max(shi[i]);
             }
         }
         (fitted > 0).then_some(((lo, hi), fitted))

@@ -114,7 +114,7 @@ Two things still unexplained. Byte `+0x07` takes the values `01` and `02` and
 nothing here distinguishes them. And the byte above the layout selector counts
 chunks but reads `0xff` on many, which no reading accounts for.
 
-## The `.vex` is not optional## The `.vex` is not optional
+## The `.vex` is not optional
 
 This format cannot be read on its own, and that is a property of the format:
 
@@ -685,6 +685,47 @@ choose one of the three, and the other 169 choose a width no measurement
 supports and decode to spikes radiating out of the level. A width outside the
 set is not evidence of a fourth format; it is the search finding nothing.
 
+## A declared vertex count can overrun its own buffer, and the file is right
+
+**Only the vertices a triangle names can testify about a stride.** Read
+2026-08-18, and it recovered 1,053 submeshes the reader had been dropping.
+
+`talons_junction`'s `tanker4c1Shape` declares 1,288 vertices in a buffer 23,152
+bytes long. At the stride the chunk itself declares, 18, that is **32 bytes
+short**: the last two vertices are read out of the *next* submesh's buffer and
+dequantise to about 100 units from anything else in the mesh. The file is not
+wrong about the count and the stride is not wrong either. **The index buffer
+never references those two**, and RSX fetches a vertex when an index asks for it
+rather than sweeping the array, so the original draws the same picture whatever
+sits past the end.
+
+That matters because the box test is a *tightness* test over a union of points,
+and one point 100 units out ruins it. Two things were doing exactly that:
+[`Mesh::solve_stride`], which rejected the true stride for a whole submesh, and
+`Mesh::submesh_fits`, which the renderer asks per submesh before drawing and
+which was answering "no" for submeshes the file draws perfectly well.
+
+| | Judged on every declared vertex | Judged on the ones a triangle names |
+| --- | ---: | ---: |
+| Submeshes outside their node's box, disc-wide | **1,377** | **324** |
+| Of `talons_junction`'s 117 | 17 | **0** |
+| Of `amphiseum`'s 236 | 34 | **0** |
+| Of `tech_de_ra`'s 154 | 17 | **0** |
+
+12,624 node-addressed submeshes on 643 models, in
+`a_submesh_is_judged_on_the_vertices_a_triangle_names`. On the picture it is
+Talon's Junction going from 445,994 triangles to **466,497** with no other
+change - a blimp's envelope, a tanker's hull and a lifter ship's flank that had
+been silently absent.
+
+**324 are still outside and this page does not explain them.** They are not
+spread evenly: the three circuits above have none at all, and the residue
+clusters in `zone_2`, `zone_3`, `01_vineta_k` and `15_anulpha_pass`
+(`wohdtrack_*`, `polySurface*`, `J_ALL_Ads_Frames_pCube*`). A drop from 1,377 to
+324 is a reading that got better, not one that is finished.
+
+[`Mesh::solve_stride`]: ../../crates/formats/src/rcsmodel/stride.rs
+
 ## Wipeout HD's road is not in the `.vex`
 
 The finding that took the longest to see, and the reason a first render of
@@ -962,11 +1003,18 @@ Named explicitly, with what each would take.
    found instead, over all 643 files and 39,414 chunks: **18 of the 56 hashes
    are carried by other circuits' models** - the sky traffic by `amphiseum` and
    `tech_de_ra`, and eight `pCube*` nodes by three circuits sharing nothing else
-   with Talon's Junction. Fetching them across files would be wrong as often as
-   right: only **10 of the 18** donor chunks fill the box the node itself
-   authors, the three `pCube*` among the failures, so nothing is wired and the
-   nodes stay undrawn. The remaining 38 are nowhere on the disc under this
-   addressing. The hash is **not** a hash of the node's name under
+   with Talon's Junction. **13 of those 18 have a donor whose geometry is
+   demonstrably the node's** - judged at the stride the donor chunk declares,
+   over the vertices a triangle names, and required to *fill* the node's box
+   rather than merely sit inside it - and 5 have none, the three `pCube*` among
+   them. The check is per donor and not per hash, because a hash appears in
+   several circuits' models and is the right mesh in only one of them:
+   `Skycar_1Shape` fills its box in `tech_de_ra` and not in `amphiseum`. So the
+   **identity** is settled and the **mechanism** is not, and nothing is wired:
+   what says the original resolves a node against another circuit's model file,
+   or draws these nodes at all, is unrecovered, and a prop drawn because this
+   project found its geometry somewhere is a picture nobody can check. The
+   remaining 38 are nowhere on the disc under this addressing. The hash is **not** a hash of the node's name under
    `wad::hash_name`, FNV-1a, DJB2, SDBM or CRC32 in any of three casings, so why
    a name shared between circuits shares a hash is itself unexplained.
 7. **Which chunk a `Skycube` or a pad belongs to.** Their `.vex` classes carry
