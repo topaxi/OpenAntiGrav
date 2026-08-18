@@ -720,7 +720,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         }
     }
 
-    let noise = match mip_texture(&mut archives, NOISE_TEXTURE) {
+    let noise = match exhaust_texture(&mut archives, NOISE_TEXTURE) {
         Ok((texture, note)) => {
             report.push(note);
             Some(texture)
@@ -731,7 +731,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         }
     };
 
-    let flare = match mip_texture(&mut archives, FLARE_TEXTURE) {
+    let flare = match exhaust_texture(&mut archives, FLARE_TEXTURE) {
         Ok((texture, note)) => {
             report.push(note);
             Some(texture)

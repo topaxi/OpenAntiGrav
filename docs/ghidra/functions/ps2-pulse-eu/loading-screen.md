@@ -104,6 +104,12 @@ name whose extension `Loading_ScreenConstruct` rewrites to `.pct` with
 and the loader rewrites it, which is the mechanism by which one shared XML
 serves both discs.
 
+**That is not a loading-screen quirk.** The same rewrite is in the general
+texture resolver, applied to every name the PS2 build hashes, and reading it
+there is what finally explained why no `.mip` or `.tga` name resolves anywhere
+on this disc. See [texture-names.md](texture-names.md); this page has carried half the
+answer since 2026-08-07 and it read as local to `Loading_ScreenConstruct`.
+
 **Type 6 draws nothing on PS2.** Both `Loading_ScreenConstruct` and
 `Loading_ScreenDraw` are plain compare chains over `{0, 2, 4}`; 6 falls out of
 both without loading a texture or reaching a draw branch. On PSP, type 6 shares

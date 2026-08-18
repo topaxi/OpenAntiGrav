@@ -151,10 +151,11 @@ pub use spline::Spline;
 pub use visibility::{SceneStats, TrackVisibility};
 
 pub(crate) use assets::ps2_texture_set;
-use assets::{
-    FLARE_TEXTURE, NOISE_TEXTURE, mip_texture, particle_effect, unrecovered_or_absent,
-    untextured_note,
-};
+// The two exhaust names are re-exported so a ground-truth test can assert the
+// report line each one produces without spelling the literal a second time -
+// the names are the executable's, and one copy of them is the point.
+pub use assets::{FLARE_TEXTURE, NOISE_TEXTURE};
+use assets::{exhaust_texture, particle_effect, unrecovered_or_absent, untextured_note};
 
 use camera::target_of;
 #[cfg(test)]

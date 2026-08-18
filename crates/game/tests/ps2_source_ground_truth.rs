@@ -252,6 +252,89 @@ fn a_ship_spawns_and_steps_on_the_ps2_disc() {
     );
 }
 
+/// Both exhaust textures decode off **both** discs, under one declared name.
+///
+/// The PS2 keeps them as `.pct` where the PSP keeps them as `.mip`, and the
+/// executables name the same literal on both - so the rewrite in
+/// [`oag_pulse::ps2_texture_name`] is the whole of the difference. Before it,
+/// the PS2 trail and flare both fell back to a procedural glow and the load
+/// report said `not in the archive set`, which is what this asserts is gone.
+///
+/// The dimensions are asserted, not just the fact of a decode: 64x64 and
+/// 128x64 on both discs is a second, independent agreement that the `.pct`
+/// entries really are the same two pictures, and `grabbedEngineFlare128x64x8`
+/// says its own shape in its name.
+///
+/// **What this does not assert** is that the pixels match. The two builds
+/// palette their textures differently (see `oag_formats::ps2_texture` on the
+/// GS's 0-128 alpha), and comparing shipped art across the two releases is the
+/// kind of thing `docs/comparisons/pulse-psp-vs-ps2.md` keeps out of the
+/// repository on purpose.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_exhaust_textures_decode_off_both_discs() {
+    for (name, expected) in [(PS2_IMAGE, ".pct"), (PSP_IMAGE, ".mip")] {
+        let Some(loaded) = load(name) else {
+            continue;
+        };
+        for (declared, width, height) in [
+            (race::NOISE_TEXTURE, 64, 64),
+            (race::FLARE_TEXTURE, 128, 64),
+        ] {
+            let line = loaded
+                .report
+                .iter()
+                .find(|line| line.starts_with(declared))
+                .unwrap_or_else(|| panic!("{name}: the report says nothing about {declared}"));
+            assert!(
+                line.contains(&format!("{width}x{height} {expected}")),
+                "{name}: expected {declared} to decode as a {width}x{height} \
+                 {expected}; the report line was:\n{line}"
+            );
+        }
+    }
+}
+
+/// The loading screen's glow strip is on the PS2 disc too, under the same rule.
+///
+/// Found while fixing the exhaust textures and fixed in the same change: this
+/// entry was read with `read_name`, so on a PS2 source it missed and the wave
+/// sampled `GlowStrip::placeholder` instead. `WADS2.WAD` entry 138 is the real
+/// one, and `oag_render` decodes it now that it knows the PS2 format.
+///
+/// Asserted through [`oag_pulse::read_image`] and the decoder rather than
+/// through `oag_game::loading::Assets`, because that path degrades to the
+/// placeholder by design - a test that went through it would pass either way.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_loading_glow_strip_decodes_off_both_discs() {
+    for source in [PS2_IMAGE, PSP_IMAGE] {
+        let Some(image) = image(source) else {
+            continue;
+        };
+        let mut archives =
+            pulse::open(&image.display().to_string()).expect("the disc opens as Pulse");
+        let blob = oag_pulse::read_image(&mut archives, pulse::loading::GLOW_STRIP_ENTRY)
+            .unwrap_or_else(|e| {
+                panic!(
+                    "{source}: {} is not reachable ({e})",
+                    pulse::loading::GLOW_STRIP_ENTRY
+                )
+            });
+        let strip = oag_render::loading::GlowStrip::decode(&blob).unwrap_or_else(|e| {
+            panic!(
+                "{source}: {} does not decode ({e:#})",
+                pulse::loading::GLOW_STRIP_ENTRY
+            )
+        });
+        println!("{source}: glow strip {}x{}", strip.width, strip.height);
+        assert!(
+            strip.width > 0 && strip.height > 0,
+            "{source}: the glow strip decoded to nothing"
+        );
+    }
+}
+
 /// The PS2 ship declares texture slots that do not fill, and the report says so.
 ///
 /// This asserts the *gap is reported*, not that it is closed. Closing it means

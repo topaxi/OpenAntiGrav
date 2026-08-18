@@ -16,5 +16,13 @@ rust-version.workspace = true
 oag-assets.workspace = true
 oag-title.workspace = true
 
+# Tests only, and deliberately not a normal dependency: `PS2_IMAGES` is checked
+# against the `.pct` rule by hashing the rewritten names, which needs
+# `wad::hash_name` and nothing else from the format layer. The check runs
+# offline, without a disc, which is why it is worth an edge the shipping crate
+# does not have.
+[dev-dependencies]
+oag-formats.workspace = true
+
 [lints]
 workspace = true

@@ -182,3 +182,15 @@
 0x00282838	data	g_loading_wave_rates	85	loading-screen.md
 0x002bc098	data	g_loading_wave_envelope	90	loading-screen.md
 0x002f9c88	data	g_loading_tip	82	loading-screen.md
+
+# How a texture name resolves: the PS2 build rewrites .mip/.tga to .pct before
+# it hashes. See texture-names.md.
+0x0010c1e0	function	Texture_FindOrLoad	88	texture-names.md
+0x0020c588	function	Wad_HashNameString	88	texture-names.md
+0x001efae8	function	Texture_LoadEngineNoise	88	texture-names.md
+0x001d5540	function	Texture_LoadEngineFlare	88	texture-names.md
+0x0020bd20	function	String_ReplaceAll	82	texture-names.md
+0x001ef040	function	Texture_InitFromName	75	texture-names.md
+0x003586d0	data	g_engine_noise_textures	85	texture-names.md
+0x003586c0	data	g_engine_flare_texture	85	texture-names.md
+0x002db9e0	data	g_texture_cache	75	texture-names.md
