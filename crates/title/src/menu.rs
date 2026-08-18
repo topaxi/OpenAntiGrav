@@ -44,6 +44,23 @@ pub type Argb = u32;
 /// [`crate::boot::BootProfile`] is hung off `Title` for.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MenuSkin {
+    /// The grid every coordinate below was **read in**, as `(width, height)`.
+    ///
+    /// Not the grid they are drawn in, which belongs to the *source* rather than
+    /// to the title: Wipeout Pulse ships a PSP pressing and a PS2 one, this
+    /// table was read off the PSP's `Skin.xml`, and the PS2's own file places
+    /// widgets in 640x448. So the two questions have different answers for one
+    /// title and a single field could not hold both. The caller converts - see
+    /// `oag_game::menu::Skin::new`.
+    ///
+    /// **The field exists because a third title disagreed by a factor of four.**
+    /// Both PSP titles author at 480x272 and Wipeout HD authors at 1920x1080,
+    /// so until HD's menus were drawn there was exactly one grid and nothing
+    /// needed to say which it was. Drawing HD's `MenuXOffset` of 800 as if it
+    /// were a PSP coordinate put its whole label column off the side of the
+    /// frame; `oag_hd::frontend::MENU_SKIN` predicted that in its own comment
+    /// and left it for whoever drew these first.
+    pub space: (f32, f32),
     /// Left edge of the menu rows. Authored, `FEGlobals->MenuXOffset`.
     pub menu_x: f32,
     /// Scale applied to menu rows. Authored, `FEGlobals->MenuScale`.
@@ -156,6 +173,7 @@ mod tests {
     /// crate must not know any title's data, so the check that the arithmetic
     /// is right cannot reach for `oag-pulse`.
     const PULSE_SHAPED: MenuSkin = MenuSkin {
+        space: (480.0, 272.0),
         menu_x: 50.0,
         menu_scale: 1.0,
         title_x: 50.0,

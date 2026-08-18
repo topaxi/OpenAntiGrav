@@ -172,3 +172,47 @@ fn the_built_in_menu_opens_on_its_root_and_can_reach_a_race() {
         .any(|entry| matches!(entry, Entry::Run { action, .. } if *action == Action::LaunchRace));
     assert!(reachable, "nothing in the menus starts a race");
 }
+
+/// A skin authored somewhere other than the PSP's grid keeps its own numbers
+/// and scales this build's.
+///
+/// **The untested half of the change that made Wipeout HD's menus legible**, and
+/// the only one reachable without a disc: `oag_hd::frontend::FRONT_END.menu` is a shipped
+/// table, so this needs no image. Both directions are asserted because getting
+/// either backwards is silent - the labels either land off the side of the frame
+/// (the bug this replaced) or bunch into the top-left eighth of it.
+#[test]
+fn a_skin_authored_at_1080p_is_drawn_at_its_own_numbers() {
+    let hd = Skin::new(
+        oag_hd::frontend::FRONT_END.menu,
+        crate::frontend::Space::HD,
+        33.0,
+    );
+
+    // The disc's, used as the disc writes them: `FEGlobals->MenuXOffset` is 800
+    // and 1920/1920 is one. Drawing this at 800-of-480 is what put the whole
+    // label column past the right-hand edge.
+    assert!(
+        (hd.menu_x() - 800.0).abs() < f32::EPSILON,
+        "{}",
+        hd.menu_x()
+    );
+    let (title_x, title_y, _) = hd.title_at();
+    assert!((title_x - 194.0).abs() < f32::EPSILON, "{title_x}");
+    assert!((title_y - 62.0).abs() < f32::EPSILON, "{title_y}");
+
+    // Ours, scaled out of the 480x272 they are written in. 440 of 480 is
+    // eleven-twelfths of the width whatever the grid.
+    assert!(
+        (hd.value_right() - 440.0 * 1920.0 / 480.0).abs() < 0.01,
+        "{}",
+        hd.value_right()
+    );
+
+    // And the rows still fit: HD measures no leading of its own, so the pitch is
+    // a 33-pixel face plus ours scaled up, in a screen four times as tall.
+    assert!(
+        visible_rows(&hd) >= visible_rows(&skin()),
+        "a 1080-line screen must not fit fewer rows than a 272-line one"
+    );
+}

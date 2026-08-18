@@ -156,53 +156,54 @@ impl Language {
 #[derive(Debug, Clone, Default)]
 pub struct StringTable {
     entries: HashMap<String, String>,
-    /// The same entries keyed by a lowercased id, for [`Self::get`]'s fallback.
-    ///
-    /// A second map rather than one folded one, so an exact hit always wins and
-    /// nothing about the existing lookup changes. Two ids differing only in case
-    /// would collide here; the first one read keeps the slot, and the exact map
-    /// still holds both.
-    folded: HashMap<String, String>,
 }
 
 impl StringTable {
     /// Reads an `entries.xml`.
     #[must_use]
     pub fn from_xml(xml: &str) -> Self {
-        let entries: Vec<(String, String)> = string_entries(&parse(xml));
-        let mut folded: HashMap<String, String> = HashMap::new();
-        for (id, value) in &entries {
-            folded
-                .entry(id.to_lowercase())
-                .or_insert_with(|| value.clone());
-        }
         Self {
-            entries: entries.into_iter().collect(),
-            folded,
+            entries: string_entries(&parse(xml)).into_iter().collect(),
         }
     }
 
-    /// Looks up an id, exactly and then case-insensitively.
+    /// Looks up an id, **exactly**.
     ///
-    /// # Why the second try exists
+    /// # Why this is not case-insensitive, having briefly been
     ///
-    /// **The id a caller holds and the id the table is keyed by are written by
-    /// different files, and Wipeout HD's two disagree in case.** Its front-end
-    /// plugin declares `PI_Track name="01_Track"`, and its string table keys the
-    /// circuit's name `01_TRACK` - so every circuit on the RACE page drew as
-    /// `01_Track` instead of `VINETA K`, which reads like a missing translation
-    /// rather than a case fold. Both PSP titles agree with themselves and are
-    /// unaffected: an exact hit is still tried first and still wins.
+    /// Wipeout HD's front-end plugin declares `PI_Track name="01_Track"` and its
+    /// string table keys the circuit `01_TRACK`, so every circuit on the RACE
+    /// page draws as its own id. Folding the case resolves sixteen of the
+    /// twenty-eight and **puts a confidently wrong name on eight of them**, which
+    /// is worse than the id: `17_Track` loads `Data\Environments\Talons_Junction`
+    /// and `17_TRACK` reads `SEBENCO CLIMB REVERSE`.
     ///
-    /// This is the same judgement the front end already makes about `font=`,
-    /// where `Menu` and `menu` both appear in one file - the XML is
-    /// inconsistent about case and a reader that is not will lose entries.
+    /// The case is not the fault. **The two files come from different archives
+    /// and were numbered at different times.** Measured on `hdfury-ps3-eu-dec.iso`:
+    ///
+    /// | Archive | `PI_Track` nodes | `17_TRACK` |
+    /// | --- | ---: | --- |
+    /// | `DATA00` | 28 | *no `entries.xml` at all* |
+    /// | `DATA02` | 8 | `SEBENCO CLIMB REVERSE` |
+    /// | `DATA03`, `DATA05` | 16 | `SEBENCO CLIMB REVERSE` |
+    /// | `DATA06` | 16 | `TALON'S JUNCTION` |
+    ///
+    /// `DATA00` supplies the 28 circuits this build offers and `DATA06` is the
+    /// only table whose numbering agrees with them - and the two are different
+    /// archives, so no copy on the disc pairs the list with its own names. The
+    /// same table also keeps a parallel `NN_TRACK_OLD` set (`09_TRACK_OLD` is
+    /// `TALON'S JUNCTION`), which is the renumbering saying so in the data.
+    ///
+    /// Until which copy the runtime serves is settled - the open question
+    /// `docs/formats/hd-frontend.md` already carries about `skin.xml`'s six
+    /// copies - a miss here shows the id. That is an honest, visible absence;
+    /// a name this build cannot vouch for is not. See
+    /// [ADR-0006](../../../docs/architecture/adr/0006-no-copyrighted-content.md)'s
+    /// neighbour rule in `CLAUDE.md`: never invent what the assets already
+    /// author, and draw nothing rather than a legible stand-in.
     #[must_use]
     pub fn get(&self, id: &str) -> Option<&str> {
-        self.entries
-            .get(id)
-            .or_else(|| self.folded.get(&id.to_lowercase()))
-            .map(String::as_str)
+        self.entries.get(id).map(String::as_str)
     }
 
     /// Looks up an id, falling back to the id itself.

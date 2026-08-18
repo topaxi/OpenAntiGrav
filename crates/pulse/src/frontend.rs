@@ -122,6 +122,17 @@ pub const BOOT_PROFILE: &oag_title::BootProfile = &oag_title::BootProfile {
 /// which is which, and `docs/ui/menus-original.md` carries the captures and the
 /// confidence scores.
 pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
+    // The PSP's screen. **The PS2 pressing is not a second answer here**: this
+    // table was read off `pulse-psp-usa.chd`, so 480x272 is where its numbers
+    // came from whichever pressing is mounted, and the PS2's own 640x448 grid
+    // is the source's rather than the title's. The caller scales one into the
+    // other; see `oag_title::MenuSkin::space`.
+    //
+    // Reading the PS2 `Skin.xml`'s own `FEGlobals` would settle whether that
+    // scaling is what the disc does - `oag_game::frontend::Space` records that
+    // 30 of the 43 coordinates the two files share land within a pixel of the
+    // ratio and 13 do not, so it is an approximation and not a derivation.
+    space: (480.0, 272.0),
     // `FEGlobals->MenuXOffset`, and a capture puts the rows' left edge at
     // exactly 50.0.
     menu_x: 50.0,

@@ -67,6 +67,18 @@
 /// independent copies of an authored file agreeing to the digit. Short of 95
 /// only because nothing has been seen to *read* them.
 pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
+    // **1920x1080, where both PSP titles are 480x272**, and the reason
+    // `oag_title::MenuSkin` carries a grid at all. This paragraph used to be a
+    // warning in the doc comment below - that a caller drawing these at Pulse's
+    // scale would put the list 800 pixels off the side of a PSP-sized frame,
+    // recorded rather than fixed "because fixing it is a change to the type and
+    // the type should change when something draws these". Something draws them,
+    // the type changed, and this field is the fix.
+    //
+    // Confidence 95: `skin.xml` declares a `<Movie>` at `Width="1920"
+    // height="1080"` and places widgets out to `y="994"`, and all six copies
+    // agree. See `oag_game::frontend::Space`.
+    space: (1920.0, 1080.0),
     // `FEGlobals->MenuXOffset`.
     menu_x: 800.0,
     menu_scale: 1.0,

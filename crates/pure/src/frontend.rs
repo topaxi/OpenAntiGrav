@@ -188,6 +188,8 @@ pub const FALLBACK_GLOBALS: &[(&str, &str)] = &[
 /// `TitleYOffset` 20 against 0. Borrowing Pulse's table would have been wrong
 /// on all four.
 pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
+    // The PSP's screen, read off both pressings' own `Skin.xml`.
+    space: (480.0, 272.0),
     menu_x: 21.0,
     menu_scale: 1.15,
     title_x: 21.0,

@@ -14,7 +14,7 @@ use oag_formats::fexml;
 ///
 /// **A whole language went missing over one byte.** Wipeout HD's sixteen
 /// language plugins are plain XML, and fifteen of them are UTF-8; `Portuguese`
-/// writes its own name as `Portugu\xe9s`, which is Latin-1 and not valid UTF-8,
+/// writes its own name as `Portugu\xeas`, which is Latin-1 and not valid UTF-8,
 /// so `from_utf8` failed, `load_languages` skipped the plugin, and the boot
 /// reported fifteen languages with no line saying one had been dropped. Spanish
 /// on the same disc is genuinely UTF-8 (`Español`), so this is a mixed-encoding
@@ -32,4 +32,36 @@ pub(super) fn expand(blob: &[u8]) -> Result<String> {
     }
     Ok(String::from_utf8(blob.to_vec())
         .unwrap_or_else(|e| e.into_bytes().into_iter().map(char::from).collect()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The byte that dropped a language, and the one beside it that did not.
+    ///
+    /// Both spellings of the same letter, so this is the mixed-encoding release
+    /// in two lines: `0xea` alone is Latin-1 and `0xc3 0xaa` is UTF-8, and a
+    /// reader that insists on the second loses every file written the first way.
+    #[test]
+    fn a_latin_1_byte_is_read_rather_than_losing_the_file() {
+        let utf8 = expand("Espa\u{f1}ol".as_bytes()).expect("valid UTF-8 decodes as itself");
+        assert_eq!(utf8, "Español");
+
+        let latin1 = expand(b"Portugu\xeas").expect("Latin-1 no longer fails");
+        assert_eq!(latin1, "Português");
+    }
+
+    /// A file with a `<code>` dictionary still goes through the expander, and a
+    /// broken one is still an error rather than a mojibake string.
+    ///
+    /// The fallback deliberately does not reach this branch: a `.fexml` whose
+    /// dictionary will not read is a *parse* failure, and decoding its bytes as
+    /// Latin-1 would hand the caller a document full of one-letter tag names.
+    #[test]
+    fn a_dictionary_file_is_expanded_and_a_broken_one_still_fails() {
+        let expanded = expand(br#"<code as="alpha"></code><a beta="1"></a>"#).expect("expands");
+        assert!(expanded.contains("alpha"), "{expanded}");
+        assert!(expand(b"<code").is_err(), "an unterminated dictionary");
+    }
 }

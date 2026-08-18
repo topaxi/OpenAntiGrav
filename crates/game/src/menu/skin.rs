@@ -65,6 +65,9 @@ pub struct Skin {
     /// put it in [`Self::space`]. Exactly `(1.0, 1.0)` on a PSP source, which is
     /// why every layout figure pinned by this module's tests is unchanged there.
     from_ours: (f32, f32),
+    /// The same for a number written in the *title's* grid - see
+    /// [`oag_title::MenuSkin::space`], which is not always [`Self::space`].
+    from_theirs: (f32, f32),
     line_height: f32,
 }
 
@@ -102,9 +105,29 @@ impl Skin {
     /// are written in 480x272 and scaled up by [`Self::from_ours`] - and the
     /// disc's numbers are used exactly as the disc writes them.
     ///
-    /// The ratio is exactly `1.0` on a PSP source, so nothing about Pulse's or
-    /// Pure's layout moves by a float ulp; `menu/tests/drawing.rs` pins the
-    /// numbers that would show it if it did.
+    /// # Two ratios, because "ours" and "the title's" are different questions
+    ///
+    /// [`oag_title::MenuSkin::space`] is the grid a table was *read in*, and it
+    /// is not always the grid the source draws in: Pulse's table came off the
+    /// PSP `Skin.xml` and its PS2 pressing places widgets in 640x448. Scaling
+    /// only this build's own figures left that menu internally inconsistent -
+    /// the value column moved by 640/480 while the label column, authored 50,
+    /// stayed where a 480-wide grid put it, and the rows bunched toward the top
+    /// because `first_row_y` of 32 is a tenth of 272 and a fourteenth of 448.
+    ///
+    /// So both sides convert, each from its own grid, and a PS2 menu comes out
+    /// in the same proportions the PSP one always had. **On the PS2 that
+    /// scaling is an approximation and says so**: `crate::frontend::Space`
+    /// records that 30 of the 43 coordinates the two `Skin.xml` files share land
+    /// within a pixel of the ratio and 13 do not, so the disc's own PS2
+    /// `FEGlobals` would settle it and nothing here has read them.
+    ///
+    /// Both ratios are exactly `1.0` on a PSP source, so nothing about Pulse's
+    /// or Pure's layout there moves by a float ulp; `menu/tests/drawing.rs` pins
+    /// the numbers that would show it if it did.
+    ///
+    /// The line height is **not** converted by either: it comes off the face
+    /// actually loaded from this source, so it is already in the drawing grid.
     ///
     /// **The menu tree is still ours** - only where it is drawn follows the
     /// disc. See `docs/architecture/menus.md`.
@@ -114,14 +137,12 @@ impl Skin {
         space: crate::frontend::Space,
         line_height: f32,
     ) -> Self {
-        let from_ours = (
-            space.size.0 / crate::frontend::SCREEN.0,
-            space.size.1 / crate::frontend::SCREEN.1,
-        );
+        let into = |from: (f32, f32)| (space.size.0 / from.0, space.size.1 / from.1);
         Self {
             skin,
             space,
-            from_ours,
+            from_ours: into(crate::frontend::SCREEN),
+            from_theirs: into(skin.space),
             line_height,
         }
     }
@@ -156,7 +177,7 @@ impl Skin {
     /// Left edge of the rows. `FEGlobals->MenuXOffset`.
     #[must_use]
     pub fn menu_x(&self) -> f32 {
-        self.skin.menu_x
+        self.skin.menu_x * self.from_theirs.0
     }
 
     /// Top of the first row's line box.
@@ -164,18 +185,26 @@ impl Skin {
     pub fn first_row_y(&self) -> f32 {
         self.skin
             .first_row_y
-            .unwrap_or_else(|| our_first_row_y(self))
+            .map_or_else(|| our_first_row_y(self), |y| y * self.from_theirs.1)
     }
 
-    /// Distance between two rows. See [`oag_title::MenuSkin::row_pitch`].
+    /// Distance between two rows. [`oag_title::MenuSkin::row_pitch`]'s rule,
+    /// with each term put in the grid being drawn in first.
     ///
-    /// The line height is the face's own and the title's measured leading is in
-    /// the title's own grid, so both are already in [`Self::space`]; only
-    /// [`OUR_LEADING`], which stands in when a title measured none, has to be
-    /// scaled out of the 480x272 it is written in.
+    /// The line height is the face's own and needs nothing. The leading needs a
+    /// different ratio depending on whose it is - a title's measured one is in
+    /// that title's grid and [`OUR_LEADING`] is in ours - which is why this
+    /// resolves the choice here instead of handing both to the same argument.
+    /// Only Pulse measures one, so the distinction is untested by anything but
+    /// its own PS2 pressing; it is written this way because the alternative is a
+    /// silent 6-against-9.9 disagreement on that disc.
     #[must_use]
     pub fn row_pitch(&self) -> f32 {
-        self.skin.row_pitch(self.line_height, self.our_leading())
+        let leading = self
+            .skin
+            .row_extra_leading
+            .map_or_else(|| self.our_leading(), |theirs| theirs * self.from_theirs.1);
+        (self.line_height + leading) * self.skin.menu_scale
     }
 
     /// The scale a row's text is drawn at. `FEGlobals->MenuScale`.
@@ -203,9 +232,16 @@ impl Skin {
     }
 
     /// Where the screen title sits, and how big.
+    ///
+    /// The scale is dimensionless and stays as authored: it multiplies a face
+    /// that already came off this source.
     #[must_use]
     pub(super) fn title_at(&self) -> (f32, f32, f32) {
-        (self.skin.title_x, self.skin.title_y, self.skin.title_scale)
+        (
+            self.skin.title_x * self.from_theirs.0,
+            self.skin.title_y * self.from_theirs.1,
+            self.skin.title_scale,
+        )
     }
 
     /// The screen title's colour.
