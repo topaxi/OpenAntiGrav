@@ -549,3 +549,124 @@ fn the_field_after_the_normal_follows_the_stride_and_not_the_descriptor_byte() {
         "only {checked} groups were big enough to measure"
     );
 }
+
+/// Claim 6, a **negative** one: the last four bytes of a vertex are not a
+/// texture coordinate on every submesh, and nothing in the file has been found
+/// that says which.
+///
+/// [`rcsmodel::Mesh::texcoords`] reads them as two big-endian halves everywhere,
+/// which is right on Assegai and on most of a circuit and is visibly wrong on
+/// the rest: `oag-view --draws` reports **290 of Talon's Junction's 1,112 draw
+/// calls spanning over 100 tiles** of their texture, the spans landing on exact
+/// powers of two up to 65,504 - the largest finite half, which is what a half
+/// with a zero mantissa byte decodes to.
+///
+/// **Restricted to the strongest stride rule.** Only chunks
+/// [`rcsmodel::Mesh::solve_stride_by_layout`] settles are measured - consecutive
+/// vertex buffers packed back to back, arithmetic on two fields of the file
+/// needing no oracle - so a wrong stride cannot be the explanation. The test
+/// asserts that as well: no other candidate width rescues a garbage submesh.
+///
+/// What it pins is the one discriminator found. **Byte 17 of a vertex - the low
+/// byte of the last `u16` - is zero on most of the affected vertices and on
+/// almost none of the rest.** It is not a decode; it is the handle the next pass
+/// should start from, and the full elimination (the `83 XX` descriptor byte, the
+/// other five descriptor bytes, the material) is on `docs/formats/rcsmodel.md`.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn the_last_four_bytes_are_not_a_coordinate_on_every_submesh() {
+    // The circuit, whose road is stride 18; a craft is stride 22 and clean.
+    let (archive, vex_path, model_path) = PAIRS[2];
+    let Some((_, model_blob)) = pair(archive, vex_path, model_path) else {
+        return;
+    };
+    let model = rcsmodel::Model::parse(&model_blob).expect("the .rcsmodel parses");
+
+    /// How much of a submesh must read as a plausible coordinate to be clean.
+    const CLEAN: f64 = 0.95;
+    /// Below this it is counted garbage; between the two is neither.
+    const GARBAGE: f64 = 0.50;
+    /// Widest tiling this treats as authored rather than as noise. A circuit
+    /// tiles a road texture tens of times, never thousands.
+    const PLAUSIBLE: f32 = 8.0;
+
+    // (vertices, byte-17-is-zero) for each bucket, and the rescue count.
+    let (mut clean, mut garbage) = ((0usize, 0usize), (0usize, 0usize));
+    let mut garbage_submeshes = 0usize;
+    let mut rescued = 0usize;
+    for mesh in &model.meshes {
+        let Some(stride) = mesh.solve_stride_by_layout() else {
+            continue;
+        };
+        for submesh in &mesh.submeshes {
+            if submesh.vertex_count < 16 {
+                continue;
+            }
+            let Ok(uvs) = mesh.texcoords(&model_blob, submesh, stride) else {
+                continue;
+            };
+            let plausible = |uvs: &[[f32; 2]]| {
+                uvs.iter()
+                    .filter(|uv| uv.iter().all(|c| c.is_finite() && c.abs() <= PLAUSIBLE))
+                    .count() as f64
+                    / uvs.len() as f64
+            };
+            let share = plausible(&uvs);
+            let zeros = (0..submesh.vertex_count)
+                .filter(|k| model_blob[submesh.vertex_offset + k * stride + 17] == 0)
+                .count();
+            if share >= CLEAN {
+                clean.0 += uvs.len();
+                clean.1 += zeros;
+            } else if share < GARBAGE {
+                garbage.0 += uvs.len();
+                garbage.1 += zeros;
+                garbage_submeshes += 1;
+                // Byte 17 only exists at stride 18 and up, and a rescue would
+                // have to keep the normals unit as well as fix the coordinate -
+                // which is what `solve_stride_by_normals` already asserts for
+                // the stride in hand.
+                if rcsmodel::STRIDES
+                    .iter()
+                    .filter(|&&alt| alt != stride)
+                    .any(|&alt| {
+                        mesh.texcoords(&model_blob, submesh, alt)
+                            .is_ok_and(|alt| plausible(&alt) >= CLEAN)
+                    })
+                {
+                    rescued += 1;
+                }
+            }
+        }
+    }
+
+    println!(
+        "clean: {} vertices, byte 17 zero on {:.1}%; garbage: {} vertices across {} submeshes, \
+         byte 17 zero on {:.1}%; {rescued} rescued by another stride",
+        clean.0,
+        100.0 * clean.1 as f64 / clean.0 as f64,
+        garbage.0,
+        garbage_submeshes,
+        100.0 * garbage.1 as f64 / garbage.0 as f64,
+    );
+
+    assert!(
+        garbage_submeshes >= 20,
+        "{garbage_submeshes} submeshes read a garbage coordinate at a stride the layout rule \
+         settles - if this ever reaches zero the reading has been fixed and this test should go"
+    );
+    assert_eq!(
+        rescued, 0,
+        "no other candidate stride turns a garbage coordinate into a plausible one, which is \
+         what says the stride is not the explanation"
+    );
+    let zero_in_garbage = garbage.1 as f64 / garbage.0 as f64;
+    let zero_in_clean = clean.1 as f64 / clean.0 as f64;
+    assert!(
+        zero_in_garbage >= 0.70 && zero_in_clean <= 0.10,
+        "byte 17 is the only discriminator found: {:.1}% of the garbage vertices against {:.1}% \
+         of the clean ones",
+        100.0 * zero_in_garbage,
+        100.0 * zero_in_clean
+    );
+}

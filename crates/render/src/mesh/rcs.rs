@@ -582,11 +582,15 @@ fn emit(out: &mut Model, mesh: Geometry<'_>, to_world: Mat4, node: Option<u32>, 
             radius,
         },
         culled: false,
-        // `blend` says the draw is transparent at all and `blend_state` says
-        // with what: a PS3 material names neither of Pulse's classes, so the
-        // class here is the one a reader of `blend` alone should assume least
-        // about, and the equation that is actually programmed is beside it.
-        blend: surface.blend.map(|_| vex::BlendClass::AlphaOver),
+        // **`None`, and that is not an omission.** `DrawCall::blend` holds the
+        // class a *Pulse* batch's `pass_mask` names, and a PS3 material names
+        // none - it authors a factor pair, which `blend_state` carries. Putting
+        // the nearest member there instead would be the same fold this module
+        // just stopped doing: 144 of the disc's see-through materials are
+        // `ONE`/`ONE`, and calling them `AlphaOver` in a field defined as a
+        // recovered class is a fabricated value even where nothing reads it.
+        // Which list a draw is in, above, is what says it is transparent.
+        blend: None,
         blend_state: surface.blend,
         node,
     });

@@ -584,6 +584,17 @@ see-through chunks authoring `0001`/`0001` alone - its trackside advert boards
 alpha. The equation is the file's, so they are brighter now and that is the
 correction rather than a tuning choice.
 
+**What changed in a picture is narrower than that table, and measured rather
+than assumed.** The 81 materials in the last four rows used to come back
+`Unmapped` and be drawn *opaque*, so making them see-through could newly lose
+depth write on geometry that had it. It does not, on either circuit that carries
+them: `Report::see_through` is **273 before and after on Talon's Junction and 190
+before and after on `12_sol_2`** - the circuit with the most of them, 5 materials
+over 73 chunks - and `12_sol_2`'s capture moves **one pixel**. Their chunks are
+not in the drawn set at all, so what actually moves is the *equation* on chunks
+that were already blended: Talon's Junction's isolated advert boards move 5,819
+pixels and get brighter.
+
 `oag_render::mesh::rcs::blend_state` translates a pair into a
 `wgpu::BlendState` - the identity mapping on the four names, `Add` for the
 operation because the RSX's blend-equation register is a separate field nothing
@@ -711,22 +722,30 @@ next reader should not re-derive the eliminations.
 
 On a full build of Talon's Junction, **290 of 1,112 draw calls span more than
 100 tiles of their texture** in U or V - `oag-view --draws` prints the span per
-draw. Those are not tiling: a span of 65,504 is the largest finite IEEE half, and
-the values cluster on exact powers of two (8, 32, 64, 320, 1,024, 20,480), which
-is what a half whose low mantissa byte is zero decodes to. This is the largest
+draw, so that figure comes from the shipped reader rather than from a script.
+Those are not tiling: a span of 65,504 is the largest finite IEEE half, and the
+values cluster on exact powers of two (8, 32, 64, 320, 1,024, 20,480), which is
+what a half whose low mantissa byte is zero decodes to. This is the largest
 single contributor to a Wipeout HD circuit's textures reading as wrong.
+
+Everything below is re-measured by
+`the_last_four_bytes_are_not_a_coordinate_on_every_submesh` in
+[`rcsmodel_vertex_ground_truth.rs`](../../crates/formats/tests/rcsmodel_vertex_ground_truth.rs),
+which is the durable form of it - the numbers here are that test's own output.
 
 ### What it is not
 
-1. **Not the stride.** The measurement was restricted to chunks whose stride the
-   *buffer-layout* rule settles - consecutive vertex buffers packed back to back,
-   the strongest of the three rules and the one that needs no oracle - and whose
-   `+6` normals decode unit on 90 %+ of vertices. 62 submeshes still read a
-   garbage last-four there, and **all 62 have no alternative stride** among 14,
-   18 and 22 that gives unit normals *and* a sane texture coordinate.
+1. **Not the stride.** The measurement is restricted to chunks whose stride
+   `Mesh::solve_stride_by_layout` settles - consecutive vertex buffers packed
+   back to back, the strongest of the three rules and the one that needs no
+   oracle. **52 submeshes, 50,656 vertices**, still read a garbage last-four
+   there, and **none of them is rescued** by either of the other two candidate
+   widths.
 2. **Not the `83 XX` descriptor byte.** Split by `XX`, the clean and the garbage
    submeshes use the same values - `83 0a` appears 37 times among the clean and
-   19 among the garbage, `83 0b` 124 and 12. **The other five descriptor bytes
+   19 among the garbage, `83 0b` 124 and 12. (Counted with a scratch sweep over the same
+   corpus; the shape of the result is what matters and the test above pins the
+   part that is load-bearing.) **The other five descriptor bytes
    are literally `10 10 10 10 10` on every submesh of both groups**, so nothing
    in the eight-byte descriptor separates them.
 3. **Not the material.** `diffuse_with_specular_from_alpha` splits 21 submeshes
@@ -744,11 +763,11 @@ single contributor to a Wipeout HD circuit's textures reading as wrong.
 
 ### The one discriminator that does separate them
 
-**Byte 17 of the vertex - the low byte of the last `u16` - is zero on 78.9 % of
-the garbage submeshes' vertices and on 1.9 % of the clean ones.** It is a
-per-vertex test that needs no stride solving and no oracle, and it is the handle
-the next pass should start from: whatever selects the field set is correlated
-with it, and it is not the descriptor, the material or the stride.
+**Byte 17 of the vertex - the low byte of the last `u16` - is zero on 77.3 % of
+the garbage submeshes' 50,656 vertices and on 2.1 % of the clean 315,536.** It is
+a per-vertex test that needs no stride solving and no oracle, and it is the
+handle the next pass should start from: whatever selects the field set is
+correlated with it, and it is not the descriptor, the material or the stride.
 
 **Nothing is implemented off any of this.** A field with three competing
 readings is exactly the case the [methodology](../reverse-engineering/methodology.md)
