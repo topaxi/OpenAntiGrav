@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Reads the `SHO` shader blocks out of Wipeout HD's PS3 `EBOOT.elf`.
+"""Reads the `SHO` shader blocks out of Wipeout HD, in the two places they live.
 
-    ps3-sho.py census            # every block, and the hash censuses
+    ps3-sho.py census            # every block in EBOOT.elf, and the hash censuses
     ps3-sho.py block 0x0092fe80  # one block, fully framed
     ps3-sho.py hash fogFactors   # ~crc32 of a name, the form the tables store
     ps3-sho.py names             # the names recovered so far
+    ps3-sho.py material <image> <path.rcsmaterial>   # one material's variants
+    ps3-sho.py materials <image> [substring]         # the sampler census over many
 
 Every number `docs/ghidra/functions/ps3-hdfury-eu/renderer.md` quotes about the
 shader container comes out of this, so the page can be re-derived rather than
@@ -79,6 +81,47 @@ NAMES = {
     0xF5FAB869: "dstTexture",
     0xA7AC21BC: "sourceImage",
     0xB6D27DA6: "texSampler",
+    # Sampler names recovered from the `.rcsmaterial` side, where the same
+    # container carries a whole material's shader variants. These are the names
+    # that say what a texture slot *is* - see docs/formats/rcsmaterial.md.
+    0x3BDC0403: "Texture1",
+    0xA2D555B9: "Texture2",
+    0xD5D2652F: "Texture3",
+    0x37B5DB58: "lightmap",
+    0x730DF9EE: "shadowMapTex",
+    0x11CB4F74: "DiffuseTexture",
+    0x06A77E50: "DiffuseTexture1",
+    0xDCAF37AC: "diffuseTexture",
+    0x8E6240CE: "diffuseTexture1",
+    0x176B1174: "diffuseTexture2",
+    0x9EE31012: "Diffuse",
+    0x515E298E: "diffuse",
+    0x739A786E: "NormalTexture",
+    0x62AE87A7: "NormalTexture2",
+    0x48F37F5A: "NormalMap",
+    0xD9D6922D: "Normal",
+    0x20C3E476: "SpecularTexture",
+    0x576C4BF3: "SpecMap",
+    0x9FC347FF: "Spec",
+    0xB1F2A176: "EmissiveTexture",
+    0xFA79B1CD: "Emissive",
+    0x030FD39B: "emissive",
+    0xB1600426: "ReflectionMap",
+    0x2D5FC6A6: "EnvMap",
+    0x6E465921: "EnvMap1",
+    0x76FC220B: "Ramp",
+    0x5B44594B: "RampTexture",
+    0xC39746D2: "Noise",
+    0x62D17F19: "Clouds",
+    0xFAD8B460: "smokeTexture",
+    0x1C96B9D6: "smokeTexture1",
+    0xEEDEE991: "Alpha",
+    0x05DFF912: "AlphaMask",
+    0xA8262B61: "AlphaTexture",
+    0x02AB9F07: "Colour",
+    0xCFB83E06: "Colour1",
+    0xC7AAB177: "Dirt",
+    0x25C5C4D3: "BlendTexture",
 }
 
 
@@ -244,11 +287,134 @@ def census(image: Image) -> None:
             )
 
 
+def material_blocks(data: bytes) -> list[tuple[int, Block]]:
+    """Every framed `SHO` block in a `.rcsmaterial`, as `(offset, block)`.
+
+    A `.rcsmaterial` is **not one shader**: it is a container of *variants*, and
+    the count is in its own first word - 70 for
+    `talons_junction/materials/etched_glass_tech.rcsmaterial`, whose 0x40-byte
+    variant records start at the offset its second word gives. Each variant
+    names a vertex program and a fragment one, which is why "the second texture
+    slot's role" could not be read off a single sampler table: twenty fragment
+    programs of one material disagree about which unit a sampler sits at.
+    """
+    out = []
+    at = 0
+    while True:
+        at = data.find(b"SHO\x08", at)
+        if at < 0:
+            break
+        block = RawBlock(data, at)
+        if block.consistent:
+            out.append((at, block))
+        at += 4
+    return out
+
+
+class RawBlock(Block):
+    """A [`Block`] framed against a plain buffer rather than an ELF image."""
+
+    def __init__(self, data: bytes, at: int) -> None:  # noqa: D107
+        class _Buffer:
+            raw = data
+
+            def offset(self, va: int) -> int:
+                return va
+
+            def u32(self, va: int) -> int:
+                return struct.unpack_from(">I", data, va)[0]
+
+        Block.__init__(self, _Buffer(), at)
+
+
+def read_entry(image: str, path: str) -> bytes | None:
+    """One archive entry, out of a decrypted PS3 image."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from psarc import open_archives  # noqa: PLC0415
+
+    for archive in ("DATA00", "DATA01", "DATA02", "DATA03", "DATA04", "DATA05", "DATA06"):
+        spec = f"{image}:PS3_GAME/USRDIR/{archive}.PSARC"
+        try:
+            opened = open_archives(spec)
+        except Exception:  # noqa: BLE001 - a missing archive is not an error here
+            continue
+        for handle in opened:
+            index = handle.find(path)
+            if index is not None:
+                return handle.read(index)
+    return None
+
+
+def show_material(image: str, path: str) -> None:
+    data = read_entry(image, path)
+    if data is None:
+        print(f"{path} is not in any archive on {image}", file=sys.stderr)
+        return
+    count = struct.unpack_from(">I", data, 0)[0]
+    print(f"{path}: {len(data)} bytes, {count} variant(s)")
+    blocks = material_blocks(data)
+    fragment = [b for _, b in blocks if b.fragment]
+    print(f"  {len(blocks)} framed block(s), {len(fragment)} fragment")
+    by_unit: dict[int, dict[int, int]] = {}
+    for block in fragment:
+        for h, unit in block.samplers:
+            by_unit.setdefault(unit, {})
+            by_unit[unit][h] = by_unit[unit].get(h, 0) + 1
+    for unit in sorted(by_unit):
+        rows = sorted(by_unit[unit].items(), key=lambda kv: -kv[1])
+        shown = ", ".join(
+            f"{h:#010x}{'=' + NAMES[h] if h in NAMES else ''} x{n}" for h, n in rows[:4]
+        )
+        print(f"  unit {unit}: {shown}")
+
+
+def show_materials(image: str, substring: str = "") -> None:
+    """The sampler census over every `.rcsmaterial` on an image.
+
+    This is where the sampler names came from: 125 distinct hashes over 693
+    materials, swept against a candidate list, with the shape agreeing - a
+    sampler carries a texture unit and no register at all.
+    """
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from psarc import open_archives  # noqa: PLC0415
+
+    seen: dict[int, tuple[int, set[int]]] = {}
+    materials = 0
+    for archive in ("DATA00", "DATA01", "DATA02", "DATA03", "DATA04", "DATA05", "DATA06"):
+        spec = f"{image}:PS3_GAME/USRDIR/{archive}.PSARC"
+        try:
+            opened = list(open_archives(spec))
+        except SystemExit:
+            continue
+        for handle in opened:
+            wanted = [
+                index
+                for path, _size, index in handle.files()
+                if path.endswith(".rcsmaterial") and substring in path
+            ]
+            for index in wanted:
+                materials += 1
+                for _at, block in material_blocks(handle.read(index)):
+                    for h, unit in block.samplers:
+                        count, units = seen.get(h, (0, set()))
+                        seen[h] = (count + 1, units | {unit})
+    named = sum(1 for h in seen if h in NAMES)
+    print(f"{materials} .rcsmaterial file(s), {len(seen)} distinct samplers, {named} named")
+    for h, (count, units) in sorted(seen.items(), key=lambda kv: -kv[1][0]):
+        print(f"  {h:#010x} {count:6}  units {sorted(units)}  {NAMES.get(h, '')}")
+
+
 def main(argv: list[str]) -> int:
     if len(argv) < 2:
         print(__doc__)
         return 2
     command = argv[1]
+    if command == "material":
+        show_material(argv[2], argv[3])
+        return 0
+    if command == "materials":
+        show_materials(argv[2], argv[3] if len(argv) > 3 else "")
+        return 0
     if command == "hash":
         for text in argv[2:]:
             print(f"{name_hash(text):#010x}  {text}")

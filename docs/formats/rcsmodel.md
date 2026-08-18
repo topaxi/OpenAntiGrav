@@ -716,7 +716,15 @@ which was answering "no" for submeshes the file draws perfectly well.
 `a_submesh_is_judged_on_the_vertices_a_triangle_names`. On the picture it is
 Talon's Junction going from 445,994 triangles to **466,497** with no other
 change - a blimp's envelope, a tanker's hull and a lifter ship's flank that had
-been silently absent.
+been silently absent. At the starting grid **32 of 1,175,040 pixels differ**,
+which is the honest figure: what came back is above and behind that camera.
+
+**A retraction.** The commit that landed this said the starting-grid frame was
+*pixel-identical*. It was measured on two screenshots that were **fully
+transparent** - `just play --race --screenshot` wrote alpha 0 over the whole
+image, because a frame's alpha channel is the bloom mask and not coverage. That
+was fixed separately and the comparison re-run; the conclusion is unchanged and
+the evidence for it was worthless.
 
 **324 are still outside and this page does not explain them.** They are not
 spread evenly: the three circuits above have none at all, and the residue
