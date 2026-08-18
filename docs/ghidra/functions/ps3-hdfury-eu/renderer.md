@@ -85,6 +85,14 @@ update, submit and draw methods do not name their own file and do not appear.
 So the tables below are an inventory of what exists and where it starts, and
 they say nothing about behaviour.
 
+**The scan decodes the single `lwz rD,disp(r2)` form only**, not the
+`addis`/`lwz` pair a displacement past +-32 KiB would need. That limit is
+checked rather than assumed: of the 443 distinct `.cpp` names in the image it
+attributes 434, and **every one of the 9 it misses is an SPU-side or library
+translation unit** - `jobmain.cpp`, the `edgezlib_*` and `edgeanim_*` asserts,
+`mp3dec/*`, `LinkObj.cpp`. No importer and no renderer-family file is among
+them, so the censuses below are complete for the layer they describe.
+
 ## The render layer's address range
 
 436 of the 462 `.cpp` names attribute to at least one function. The rendering
@@ -291,6 +299,118 @@ class ID has been read out of this binary, and Pure already showed that
 between titles. **75** for the table as a whole; the two consequences above
 inherit that and no more.
 
+## Shaders are in exactly two places, and neither is a file type on the disc
+
+The disc has **no shader file type at all** - the
+[extension census](../../../formats/hd-status.md#the-headline) runs `.gtf`,
+`.rcsmaterial`, `.xml`, `.vex`, `.rcsmodel`, `.pob`, `.bnk`, `.bik`, `.mp3`,
+`.fnt`, `.probes`, `.pvs`, `.nnt` and stops. There is no `.vpo`, `.fpo`, `.cgb`
+or shader archive, and `EBOOT.elf` names none. So every piece of compiled RSX
+microcode HD runs is in one of two containers, and this section is what the
+executable says about each.
+
+### 1. Per-surface: the `.rcsmaterial`, which the executable barely names
+
+[rcsmodel.md](../../../formats/rcsmodel.md#the-rcsmaterial-was-the-leading-hypothesis-and-it-is-not-the-answer)
+established from the file side that a `.rcsmaterial` is a compiled RSX shader
+container - `SHO` blocks, a hashed parameter table, microcode - and that a
+`.rcsmodel`'s string pool names one per material. The executable side agrees and
+adds one thing.
+
+**`EBOOT.elf` contains no `.rcsmaterial` extension string**, unlike `.rcsmodel`
+which it has twice and appends by hand. Every material the executable knows
+about it names in full, and there are **exactly 11**, all the same file per
+circuit:
+
+```text
+data/environments/01_vineta_k/fe/materials/cf_fetracks.rcsmaterial
+data/environments/15_anulpha_pass/fe/materials/cf_fetracks.rcsmaterial
+...  11 in total, one per front-end circuit
+```
+
+They are not referenced from code. They are **field 6 of a 7-pointer record**
+in `.data`, stride `0x1c`, the array starting at `0x00924314`:
+
+| Field | Example (`01_Vineta_K`) |
+| --- | --- |
+| `+0x00` | `Data/Environments/01_Vineta_K/fe/TrackSelectEmblem.gtf` |
+| `+0x04` | `Data/Environments/01_Vineta_K/fe/TrackSelectEmblem_fury.gtf` |
+| `+0x08` | `Data/Environments/01_Vineta_K/fe/Preview.bik` |
+| `+0x0c` | `Data/Environments/01_Vineta_K/fe/track01.vex` |
+| `+0x10` | `Data/Environments/01_Vineta_K/fe/track01.rcsmodel` |
+| `+0x14` | `data/environments/01_vineta_k/fe/materials/cf_fetracks.rcsmaterial` |
+| `+0x18` | `data/environments/01_vineta_k/fe/fe_grad.gtf` |
+
+That is the **track-select record**: an emblem, its Fury variant, a preview
+video, and the scene/geometry/material/gradient set for the little rotating
+circuit model. **88** - the stride is confirmed by eleven consecutive records
+and the field roles are the filenames' own.
+
+Its consequence for the format work is the pairing at `+0x10` and `+0x14`: a
+`.rcsmodel` and a `.rcsmaterial` **named side by side, as separate assets**.
+Everywhere else the material comes out of the model's own string pool, so this
+is the one place the binding is visible from outside the file - and it is a
+path pair, not an index. The lowercase/mixed-case split (`Data/...` for the
+model, `data/...` for the material) says the two were added by different hands,
+which fits a material system bolted to an existing model pipeline.
+
+### 2. Engine-owned: 121 shader programs named by the executable
+
+`EBOOT.elf` carries **121 distinct `_vp`/`_fp` program names** in TOC slots -
+`FunkLayerBloomGate_fp` at `0x007b1318` is reached from the pointer array at
+`0x008b73c4`, which runs the whole `FunkLayerBloom` set back to back. So each
+name is a TOC-addressed key that binder code loads with `lwz rX,disp(r2)`.
+
+| Group | Count | Examples |
+| ---: | ---: | --- |
+| `FunkLayer*` | 32 | the post chain - see below |
+| `RadioHead*` | 31 | `RadioHead0`..`RadioHead12`, plus `RadioHead5_point/line/quad/texture` and `SPU_RadioHead` |
+| `downsample*` | 11 | `downsamplescaleaddfeedbackcorrection_fp`, `downsamplescaleanaglyph_fp`, `downsamplescalefiltercolourscale_fp` |
+| `FEBackgroundAnim*` | 9 | including `FEBackgroundAnimFuryWave` and `FEBackgroundAnimFuryBlend` |
+| `psys_*` | 6 | `psys_lit`, `psys_normal`, `psys_simplegeom` |
+| `Live*` | 5 | `LiveStencilShadow`, `LiveGeometryPrimitives{,Constant,Specular}` |
+| `HUD*`, `PrimList*` | 8 | `HUDBoostTextured`, `HUDShockTextured`, `PrimListUTU/UUU` |
+| singles | 19 | `LensFlare`, `engineflare`, `trail`, `Shockwave`, `MagStripArc`, `FatLine`, `cloudshader`, `lineshader`, `liveRsxPanXForm_CubemapConvolve_fp`, `liveRsxPanXForm_CubemapToDualParaboloide_fp` |
+
+**The `FunkLayer*` set is the post-processing chain**, and it is the answer to a
+question the rest of this page had to leave open - there is no `Bloom.cpp`
+because bloom is not a class:
+
+- **Bloom, 8 programs**: `FunkLayerBloom_vp`, `FunkLayerBloomGate_fp`,
+  `FunkLayerBloomDownsample_fp`, `FunkLayerBloomBlurVertical_fp`,
+  `FunkLayerBloomBlurHorizontal_fp`, `FunkLayerBloomRadial_vp/_fp`,
+  `FunkLayerBloomRadialGate_fp`. A gate, a downsample, a separable two-pass
+  blur, and a radial variant with its own gate.
+- **Depth of field, 7 programs**: `FunkLayerDof_fp`, `FunkLayerDofKernel_fp`,
+  `FunkLayerDofCopy_fp`, and `FunkLayerDofBlurAvg/Avg2/Min/Min2_fp`.
+- **The rest**: `FunkLayerZoom`, `FunkLayerCorruption`, `FunkLayerColour2d`,
+  `FunkLayerReplayBar`, `FunkLayerCopy/CopyAlpha/CopyBlend`,
+  `FunkLayerBlendBuffer`, `FunkLayerFx_vp`/`FunkLayerFxUv_vp`,
+  `FunkLayerDebugLightRender`.
+
+Three of these land directly on this project's open work.
+[Bloom](../../../rendering/README.md) is an unchecked M6 roadmap item and this
+names its exact pass structure. `psys_lit`/`psys_normal`/`psys_simplegeom` are a
+three-way split of the particle shading that
+[`oag_render::psys`](../../../../crates/render/src/psys.wgsl) currently does one
+way. And `liveRsxPanXForm_CubemapConvolve_fp` plus
+`liveRsxPanXForm_CubemapToDualParaboloide_fp` are almost certainly what the
+disc's 28 `.probes` files are produced or consumed by, which is the first thread
+anyone has on that format.
+
+**Where the microcode for these 121 lives is an inference, not a measurement.**
+The argument is elimination: no shader file type exists on the disc, and these
+programs belong to engine effects that have no material file, so the bytes must
+be in `EBOOT.elf`. **75.** No blob has been located and no name has been paired
+with one - which is the check that would settle it, and it is the obvious next
+step for anyone picking this up.
+
+**A warning for whoever does.** The binder functions are at `0x003af980` and
+`0x003b31c8`, both **above `0x0032d5e0`**, and the decompiler output there is
+actively misleading rather than merely wrong: floats loaded from the TOC render
+as string-pointer variables, so arithmetic reads as `(float)PTR_s_Emp__d_008a754c`.
+Use `scripts/ps3-toc.py resolve` on every constant in that range.
+
 ## What was deliberately not read
 
 - **The draw path.** No mesh submission, no state setting, no shader binding.
@@ -303,10 +423,9 @@ inherit that and no more.
   complete and the pairs cannot be named - below 50, so per
   [ADR-0005](../../../architecture/adr/0005-ghidra-conventions.md) the
   hypothesis is written here and nothing is renamed.
-- **Post-processing.** There is no `Bloom.cpp`, `PostProcess.cpp` or
-  `Shader.cpp` among the 462 filenames. That is a real absence in the *file
-  list*, not evidence HD has no bloom - it plainly does. Where it lives is
-  unknown.
+- **Post-processing has no `.cpp` of its own**, and that turned out to be the
+  wrong place to look: it is a set of named shader programs, not a class. See
+  [the shader section](#shaders-are-in-exactly-two-places-and-neither-is-a-file-type-on-the-disc).
 - **`RenderManager`'s methods.** This page names its constructors and its
   singleton, and reads no method, no vtable slot and no frame entry point. The
   512-byte table, the two matrix arrays and the 768 KiB buffer are all

@@ -33,11 +33,12 @@ is [hd-status](../../../formats/hd-status.md): HD ships Pulse's `.vex` at
 version 6 with Pulse's own class IDs, byte-swapped, and ten of its sixteen
 environments are a Pulse or Pure circuit's spline. Where the executable is
 still the only source is everything *behavioural* - what HD does with any of
-it - and the two useful things learned here so far are that gameplay lives in
-`EBOOT.elf` (`Collision.cpp`, `RaceManager.cpp` and `ModeManager.cpp` are all
-named from it) rather than in the closed `DFEngine.sprx`, and that the C++ base
-class stores its own `__FILE__` at object offset `0x30`, which attributes whole
-classes cheaply.
+it - and three things learned here so far carry: gameplay lives in `EBOOT.elf`
+(`Collision.cpp`, `RaceManager.cpp` and `ModeManager.cpp` are all named from it)
+rather than in the closed `DFEngine.sprx`; the C++ base class stores its own
+`__FILE__` at object offset `0x30`, which attributes whole classes cheaply; and
+**the renderer is in `EBOOT.elf` too** - it drives libgcm itself and imports one
+single symbol from `DFEngine.sprx`. See [renderer.md](renderer.md).
 
 Two structural facts to expect, both different from every other binary here:
 

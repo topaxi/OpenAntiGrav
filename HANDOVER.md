@@ -948,6 +948,34 @@ writers in it at the same time:
 
 ## Traps that are live
 
+**The Ghidra bridge cannot run scripts, so the PS3 TOC defect has to be worked
+around rather than fixed in place.** 2026-08-18. `GHIDRA_MCP_ALLOW_SCRIPTS` is
+unset on this bridge, so both `run_ghidra_script` and `run_script_inline` refuse
+with "Script execution disabled" - which means **`AssignPs3R2FromOpd.java`
+cannot be applied to the live `ps3-hdfury-eu` database through MCP at all.** The
+next session will reach for it, because
+[memory.md](docs/ghidra/functions/ps3-hdfury-eu/memory.md) correctly names it as
+the fix. The two routes that do work are the full
+`scripts/import-ps3-eboot.sh` re-import (needs Ghidra closed, and is heavy), or
+**`scripts/ps3-toc.py`, which resolves each function's own TOC against the file
+with no Ghidra at all** - added 2026-08-18 for exactly this. Its self-check is
+`scripts/ps3-toc.py resolve 0x003914b0 -0x6634`, which must print
+`Small is  %3.2f MB (%d bytes)` and not `forward`. **Its `map` mode is validated
+against `Collision.cpp`**, whose two attributed addresses are already in
+`names.tsv` from independent work. The failure mode it avoids is not a visible
+error: in module-B functions Ghidra renders TOC-loaded *floats* as string
+pointers, so arithmetic decompiles as `(float)PTR_s_Emp__d_008a754c` and reads
+like a nonsense variable name rather than a wrong base.
+
+**Deferred from the 2026-08-18 renderer sweep**, so nobody re-derives that these
+are open: the **draw path** (inline command-buffer writes on PS3, so no import
+census or call graph finds it - it needs a search for RSX method constants);
+**`SortRoot.cpp`'s four constructors** (`0x002dbe08`, `0x002dbe50`, `0x002dbe98`,
+`0x002dbf40`, none with a caller, so base cannot be told from complete and none
+is named); and **where the 121 engine-owned shader programs' microcode lives**
+(argued to be in `EBOOT.elf` by elimination at confidence 75 - no blob has been
+located, and pairing one name with one blob is the check that settles it).
+
 **A model reports the right triangle count and still renders nothing - check
 the alpha test, not the class table.** 2026-08-17. Wipeout Pure's `Speedup
 Pad`/`Weapon Pad` class ids were recovered 2026-08-13, `mesh::build_pads` is

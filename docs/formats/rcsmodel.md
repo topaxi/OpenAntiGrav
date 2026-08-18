@@ -319,6 +319,17 @@ answers the question the `.rcsmaterial` was being read for. **Nothing in this
 project reads a `.rcsmaterial` today**, and the hypothesis is withdrawn rather
 than left standing at 40.
 
+**HD's executable was read for the other half of this on 2026-08-18** and it
+agrees: the disc has no shader file type at all, so every piece of compiled RSX
+microcode is either in a `.rcsmaterial` or in `EBOOT.elf`, and the executable
+carries 121 engine-owned `_vp`/`_fp` program names of its own - the bloom and
+depth-of-field chains among them. It also names exactly eleven `.rcsmaterial`
+files, all `fe/materials/cf_fetracks.rcsmaterial`, as field 6 of a 7-pointer
+per-circuit front-end record that pairs a `.rcsmodel` with its material **by
+path**. That is the only place the model-to-material binding is visible from
+outside a `.rcsmodel`. See
+[renderer.md](../ghidra/functions/ps3-hdfury-eu/renderer.md#shaders-are-in-exactly-two-places-and-neither-is-a-file-type-on-the-disc).
+
 There is also no *link* from a submesh to a material. The 0x80-byte descriptor
 has no field that partitions the 123 stride-labelled submeshes into few enough
 groups to be a material index: every candidate is either the buffer offsets
