@@ -111,6 +111,16 @@ one extra measurement. The instrument, its validation and the recovered fov term
 are on
 [projection-vs-the-original.md](projection-vs-the-original.md).
 
+## Draw order
+
+**The original has one render queue, one 32-bit key and one sort, and mesh
+geometry carries no depth in that key.** Which means the intuitive fix for a
+renderer drawing in file order - a back-to-front sort over the transparent
+batches - is *less* faithful than doing nothing, for track geometry. The key,
+its layers, the four functions behind it and the four ways this crate still
+diverges are on [draw-order.md](draw-order.md); `Model::sort_by_layer` is the
+implementation, and it is one stable sort on one field.
+
 **The recurring failure is not a wrong measurement - it is a control that was
 available and never run.** Four instances in two days, each caught only after it
 had misled someone: the background alignment that was *asserted* rather than
