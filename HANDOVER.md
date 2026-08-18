@@ -210,6 +210,15 @@ some logically would be worse than either; **U4** (a Vec resized and an
 `Arc<Sound>` dropped on the audio thread) needs a return channel to fix
 honestly.
 
+**One regression this pass made and caught**, worth knowing because the shape
+repeats: G3's "validate the chain's first step" check also fired on `--reel`,
+whose state is *off-path* by construction - the dev/pub reel has no screen in
+the set because the disc's boot never enters it - and silently turned the flag
+into a no-op. `boot_ground_truth::the_reel_leg_still_runs_its_frame_holds` is
+the only thing that keeps that path from rotting, and it is `#[ignore]`d, so
+`just` was green throughout. A validity check applied to a state the *operator*
+named rather than a chain led to is a check against the wrong question.
+
 **One thing to know before trusting `just test-data` here.** All 2,545 ground
 truth tests ran on 2026-08-18 and **5 failed, none of them a regression**: the
 three `wall_contact_ground_truth` and two `yaw_authority_ground_truth` tests
