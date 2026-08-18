@@ -279,7 +279,11 @@ fn the_three_wired_roles_have_the_metrics_the_front_end_expects() {
         return;
     };
     assert_eq!(
-        archive.paths().iter().filter(|p| p.ends_with(".fnt")).count(),
+        archive
+            .paths()
+            .iter()
+            .filter(|p| p.ends_with(".fnt"))
+            .count(),
         EXPECTED_LATIN_FONTS,
         "wrong number of fonts in {LATIN_ARCHIVE}"
     );

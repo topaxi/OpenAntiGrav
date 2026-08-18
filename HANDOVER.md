@@ -51,16 +51,19 @@ appending a dated pass to it.
   committed `verification/scenarios/*.inputs` are what reproduce it.
 - **Check `git status` before assuming the tree is clean.** A whole milestone's
   work once sat uncommitted for a day.
-- **Gate status:** last measured green at **2,075 tests (2026-08-17)** in 3.7s,
+- **Gate status:** last measured green at **2,138 tests (2026-08-18)** in 8.3s,
   with `fmt`, `clippy`, `check-docs`, `check-deps`, `check-determinism` and
   `check-size` all clean. Re-measure rather than trusting the number here -
   `git stash && just test` is how the drift was caught last time.
-- **The whole disc-backed sweep is 2,378 of 2,383 in about 4:30**, measured
-  2026-08-17 with `cargo nextest run --workspace --run-ignored all
-  --no-fail-fast`. **The five that fail are the `data/traces/` absence below and
-  nothing else** - use `--no-fail-fast`, because two of them sort early enough
-  to stop the run at 301 of 2,383 and that reads like a much worse tree than it
-  is.
+- **The whole disc-backed sweep is 2,488 of 2,494 in about 7:40**, measured
+  2026-08-18 with `cargo nextest run --workspace --run-ignored all
+  --no-fail-fast`. **Five of the six that fail are the `data/traces/` absence
+  below**; the sixth is
+  `ps2_source_ground_truth::an_uncapped_transcode_still_reports_a_total_to_divide_by`,
+  which transcodes a PS2 `.PSS` and comes back with no frames - unrelated to
+  anything in `oag-formats`, and it takes 342s to reach that answer. Use
+  `--no-fail-fast`, because two of the trace ones sort early enough to stop the
+  run at 335 of 2,494 and that reads like a much worse tree than it is.
 - **`just test-data` takes about 3:17, not 11:27.** If it takes eleven minutes
   you are on a tree from before the build-profile fix: `[profile.dev.package."*"]`
   never matched a workspace member, so our own decoders and the sim compiled at
