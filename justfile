@@ -102,10 +102,9 @@ hash-images:
 # path stays reachable by keyword, ready for whenever Pure becomes playable
 # (roadmap M8).
 #
-# `hd`/`fury`/`hd-ps3-eu` swaps in Wipeout HD / Fury, and that one needs
-# `--race`:
+# `hd`/`fury`/`hd-ps3-eu` swaps in Wipeout HD / Fury:
 #
-#     just play hd --race
+#     just play hd
 #
 # **Only the decrypted image works**, so the keyword names
 # `hdfury-ps3-eu-dec.iso` and never the `.iso` beside it; a PS3 disc has to be
@@ -113,16 +112,20 @@ hash-images:
 # does it, and docs/formats/ps3-disc.md is why. The recipe says so rather than
 # letting the archive open fail with something obscure.
 #
-# **Without `--race` this refuses by name**, the way the Pure keywords do and
-# for a nearer-miss reason: `oag_hd::TITLE` sets `front_end: None`, so the boot
-# path stops with "Wipeout HD's front end is not wired up (its boot chain is
-# declared, not measured)". The layout half is in fact recovered - see
-# docs/formats/hd-frontend.md, and `oag_hd::frontend::MENU_SKIN`, read off six
-# agreeing copies of `skin.xml` - and it is the *chain* that is still only what
-# the XML declares rather than something anyone watched HD do. That is a
-# deliberate hold, not a gap waiting on this recipe.
+# **`--race` is no longer needed**, and this paragraph used to say the opposite.
+# The front end refused HD by name while `oag_hd::TITLE` set `front_end: None`;
+# ADR-0025 replaced that with a boot chain that carries its provenance, and the
+# boot now walks HD's own declared order, plays its logo reel and opens the
+# menus - in HD's 1920x1080 grid, in its own `helv.fnt`. Every line of the boot
+# report still says the order is **declared** rather than watched, which is the
+# hold that has not moved.
 #
-# **With `--race` it runs**, verified on this disc: Talon's Junction with
+# Six of the eight declared steps are dialogs this build cannot drive, so the
+# chain it walks is the picker and `Studio Logo`; running out of it opens this
+# build's own menu tree, and the report names the screen it ran out on. See
+# docs/formats/hd-frontend.md.
+#
+# **`--race` still skips straight to one**, verified on this disc: Talon's Junction with
 # Assegai, which is `oag_hd::race::DEFAULTS` and the same circuit as Pulse's
 # `16_Track` in the same coordinates, so an HD run is directly comparable with
 # an existing Pulse capture. Expect an honest half-picture rather than a

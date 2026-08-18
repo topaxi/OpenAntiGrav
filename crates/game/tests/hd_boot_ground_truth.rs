@@ -208,21 +208,23 @@ fn every_declared_language_plugin_resolves() {
         );
     }
 
-    // **Fifteen of the sixteen, and the missing one is named.** An inequality
-    // here would pass just as well at twelve, which is the "silent truncation
-    // reads as covered" shape this project keeps writing rules about - so this
-    // is the number that was measured, and a regression fails it.
+    // **All sixteen, and this used to be fifteen.** An inequality here would
+    // pass just as well at twelve, which is the "silent truncation reads as
+    // covered" shape this project keeps writing rules about - so this is the
+    // number that was measured, and a regression fails it.
+    //
+    // The sixteenth is Portuguese, and what was dropping it was one byte:
+    // `Portugu\xeas` is Latin-1, `from_utf8` refused the whole file and the
+    // plugin went with it, silently. `boot::xml::expand` falls back to Latin-1
+    // now; `all_sixteen_languages_load_including_the_latin_1_one` asserts the
+    // name comes out right rather than merely coming out.
     let languages = boot::load_languages(&mut archives, plugins, &mut report);
-    assert_eq!(
-        languages.len(),
-        15,
-        "fifteen of the sixteen parse; Portuguese is the one that does not"
-    );
+    assert_eq!(languages.len(), 16, "every declared plugin parses");
     assert!(
-        !languages
+        languages
             .iter()
             .any(|language| language.name == "Portuguese"),
-        "if Portuguese started parsing, this test and hd-frontend.md are both stale"
+        "the Latin-1 plugin is the one this count used to be missing"
     );
     assert!(languages.iter().any(|language| language.name == "English"));
 
@@ -343,5 +345,189 @@ fn the_front_end_grid_is_1920_by_1080() {
     assert!(
         oag_hd::frontend::MENU_SKIN.menu_x < shell.space.size.0,
         "the menu column lands on screen in this grid"
+    );
+}
+
+/// The skin says which grid it was read in, and it is this disc's own.
+///
+/// The pair the menus are reconciled from: `oag_game::menu::Skin::new` uses the
+/// *source's* grid to draw in and the *title's* to convert from, and on this
+/// title they are the same 1920x1080. A table whose `space` drifted from the
+/// grid it was read in would put the label column somewhere plausible and wrong,
+/// which is the failure mode the field exists to make impossible.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_menu_skins_own_grid_is_the_one_this_disc_authors_in() {
+    let Some(image) = image() else { return };
+    let (shell, _) = shell(&image);
+
+    assert_eq!(oag_hd::frontend::MENU_SKIN.space, (1920.0, 1080.0));
+    assert_eq!(shell.menu_skin.space, shell.space.size);
+}
+
+/// Wipeout HD's fonts read, and they read **big-endian**.
+///
+/// Every one of them fell back to the built-in 5x7 face until `fnt::byte_order`
+/// existed: the magic at `+0x00` is one 32-bit word, so the PS3 exporter writes
+/// it reversed and `\x01FNT` becomes `TNF\x01`. The whole front end drew in
+/// debug glyphs, which is legible enough that nothing failed.
+///
+/// Asserted from both ends. The `.fnt` itself has to sniff big-endian and give
+/// back the figures its header states; and `load_font` has to have put that face
+/// on the atlas rather than the fallback, which is what the line height pins -
+/// the built-in face is 7 pixels tall and `helv.fnt` declares 33.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_front_end_font_is_a_big_endian_fnt_and_it_is_the_one_loaded() {
+    let Some(image) = image() else { return };
+    let mut archives = oag_hd::open(&image.display().to_string()).expect("opening the disc");
+
+    let name = r"Data\FE\Fonts\helv.fnt";
+    let blob = archives.read_name(name).expect("HD's body face reads");
+    assert_eq!(
+        oag_formats::fnt::byte_order(&blob),
+        Some(oag_formats::ByteOrder::Big),
+        "a PS3 .fnt is the PSP layout with its words the other way round"
+    );
+    assert_eq!(&blob[..4], b"TNF\x01", "the magic is a swapped word");
+
+    let font = oag_formats::fnt::Font::parse(&blob).expect("and it parses");
+    assert_eq!((font.width, font.height), (1024, 512));
+    assert_eq!(font.line_height, 33);
+    assert_eq!(font.glyphs.len(), 243);
+    // Read from the flag, not from the console: HD's atlases ship linear where
+    // the PSP's ship swizzled, so a reader that unswizzled on platform would
+    // comb every glyph.
+    assert_eq!(font.indices.len(), 1024 * 512);
+
+    let (shell, _) = shell(&image);
+    assert!(
+        (shell.font.line_height - 33.0).abs() < f32::EPSILON,
+        "the boot put the disc's face on the atlas, not the 5x7 fallback: {}",
+        shell.font.line_height
+    );
+}
+
+/// The front end's three `.gtf` images decode, where all three used to fail.
+///
+/// `sprite::Image::decode` tried the PSP `.mip` parser and then the PS2 one, so
+/// a `.gtf` was reported as `zero-sized texture 1281x0` - a complaint about a
+/// format the file is not - and the sheet came out 1x1. `oag_formats::gtf` had
+/// decoded these since long before the front end asked for one.
+///
+/// The sizes are the disc's and are what tells a decoded sheet from a plausible
+/// one: `line.gtf` is an 8x8 tile stretched to a 1600-pixel rule, so a sheet
+/// that merely has *some* width would pass a weaker assertion.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn every_front_end_image_this_disc_names_decodes() {
+    let Some(image) = image() else { return };
+    let (shell, _) = shell(&image);
+
+    let named: Vec<&str> = shell
+        .screens
+        .screens
+        .iter()
+        .flat_map(|screen| screen.images.iter())
+        .map(|image| image.src.as_str())
+        .collect();
+    assert!(!named.is_empty(), "the root names images at all");
+    for src in &named {
+        assert!(
+            shell.sprites.get(src).is_some(),
+            "{src} is named by a screen and not in the sheet"
+        );
+        assert!(
+            src.to_ascii_lowercase().ends_with(".gtf"),
+            "this disc's front-end images are all .gtf: {src}"
+        );
+    }
+
+    let line = shell
+        .sprites
+        .get(r"Data\FE\Images\line.gtf")
+        .expect("the rule above and below every screen");
+    assert_eq!((line.width, line.height), (8, 8));
+    let arrow = shell
+        .sprites
+        .get(r"Data\FE\Images\Title_Arrow_HD.gtf")
+        .expect("the title arrow");
+    assert_eq!((arrow.width, arrow.height), (32, 32));
+}
+
+/// All sixteen languages reach the picker, not fifteen.
+///
+/// **One Latin-1 byte used to drop one of them silently.** `Portuguese` writes
+/// its own name `Portugu\xeas`, which is not valid UTF-8, so `boot::xml::expand`
+/// failed, `load_languages` skipped the plugin and the boot reported fifteen
+/// with no line saying which had gone. `Spanish` on the same disc is genuinely
+/// UTF-8, so the release is mixed-encoding rather than Latin-1.
+///
+/// The native names are asserted for two of them because the count alone would
+/// not notice a plugin that loaded and lost its name.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn all_sixteen_languages_load_including_the_latin_1_one() {
+    let Some(image) = image() else { return };
+    let (shell, _) = shell(&image);
+
+    assert_eq!(shell.languages.len(), 16);
+    let native = |name: &str| {
+        shell
+            .languages
+            .iter()
+            .find(|language| language.name == name)
+            .map(|language| language.native_name.clone())
+    };
+    assert_eq!(native("Portuguese").as_deref(), Some("Português"));
+    assert_eq!(native("Spanish").as_deref(), Some("Español"));
+
+    // **Not a bug on this side of the disc.** Four of the sixteen declare their
+    // own name as `Svenska` and `Russian` declares `P??????`; those are the
+    // shipped files, checked byte for byte, and a reader that "corrected" them
+    // would be inventing. See `docs/formats/hd-frontend.md`.
+    assert_eq!(native("Japanese").as_deref(), Some("Svenska"));
+}
+
+/// A circuit shows its id, because no string table on this disc can name it.
+///
+/// **The regression this guards is a name, not a blank.** `Data\Plugins\
+/// Frontend\definition.xml` in `DATA00` declares 28 circuits and keys them
+/// `NN_Track`; every `entries.xml` reachable here keys circuit names `NN_TRACK`
+/// *in a different numbering*. Folding the case resolves sixteen and gets eight
+/// wrong - `17_Track` loads `Talons_Junction` and `17_TRACK` reads
+/// `SEBENCO CLIMB REVERSE`. `DATA06` is the only table that agrees with
+/// `DATA00`'s list and it is a different archive, so no copy pairs the two.
+///
+/// Until which copy the runtime serves is settled, an id on screen is an honest
+/// absence and a name is not. See `oag_game::language::StringTable::get`.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_circuit_shows_its_id_rather_than_a_name_from_the_wrong_numbering() {
+    let Some(image) = image() else { return };
+    let (shell, _) = shell(&image);
+
+    let seventeen = shell
+        .tracks
+        .iter()
+        .find(|track| track.id == "17_Track")
+        .expect("this disc declares a seventeenth circuit");
+    assert!(
+        seventeen.location.contains("Talons_Junction"),
+        "the id and the geometry agree: {}",
+        seventeen.location
+    );
+    assert_eq!(
+        shell.strings.get_or_id(&seventeen.id),
+        "17_Track",
+        "the string table's own 17 names a different circuit; showing it would \
+         put a confident wrong name on screen"
+    );
+    // And the table really does hold that wrong answer, so this test fails the
+    // day a matching copy is served rather than passing for having found none.
+    assert_eq!(
+        shell.strings.get("17_TRACK"),
+        Some("SEBENCO CLIMB REVERSE"),
+        "the numbering mismatch is still what it was measured to be"
     );
 }

@@ -186,6 +186,113 @@ but no capture confirms the space is not letterboxed or safe-zone-inset before
 presentation. `obeySafeZone="false"` and `ignoreSafeZoneFullscreen="true"`
 appear as attributes, so a safe-zone transform exists and is per-widget.
 
+### It is drawn in that space now, and what that cost
+
+**2026-08-18.** Until this landed, `oag-game` laid every menu out in the PSP's
+480x272 whatever disc was mounted, and the paragraph above was a warning rather
+than a description. What it warned about is exactly what happened: `menu_x` 800
+in a 480-wide grid put the whole label column 320 pixels past the right-hand
+edge, so the RACE page drew a column of *values* with no labels beside them -
+which reads as a string-table failure, not a coordinate one, and cost a pass to
+recognise.
+
+Two things changed, and the second is the one worth carrying:
+
+- [`oag_title::MenuSkin`](../../crates/title/src/menu.rs) now states the grid its
+  own numbers were **read in**, and `oag_game::menu::Skin` draws in the
+  **source's**. `oag_hd::frontend::MENU_SKIN` says `(1920.0, 1080.0)`.
+- **Those are different questions and one field could not hold both.** Wipeout
+  Pulse ships a PSP pressing and a PS2 one; its table was read off the PSP
+  `Skin.xml` and the PS2's own file places widgets in 640x448. The first attempt
+  scaled only *this build's* figures into the source's grid and left the title's
+  alone, which is right exactly while the two agree - and on the PS2 disc it left
+  the value column at 640/480 of where it belonged while the label column stayed
+  put. Both sides convert now, each from its own grid.
+
+Drawing in the source's grid rather than converting into the PSP's is the choice
+that keeps the picture: HD's faces are rasterised for a 1080-line screen, so
+squeezing them into a 272-line one draws them at quarter scale from an atlas
+built for four times that; and the grid is what the whole front end is
+letterboxed to, so borrowing the PSP's would show a 16:9 menu at 480/272 =
+1.765. Pinned by `crates/game/src/menu/tests/drawing.rs` against the shipped
+table, and by `the_menu_skins_own_grid_is_the_one_this_disc_authors_in` against
+the disc.
+
+**Still unconfirmed, and unchanged by any of it**: whether the space is
+letterboxed or safe-zone-inset before presentation. The `obeySafeZone` attributes
+above are the reason to expect it is.
+
+## The three front-end images are `.gtf`, and all three draw
+
+`Data\FE\Images\saveIcons.gtf` (256x128), `line.gtf` (8x8) and
+`Title_Arrow_HD.gtf` (32x32) are every image the front-end root names. All three
+are ordinary [`.gtf`](gtf.md) and decode with no new work - `oag_formats::gtf`
+had handled them since long before the front end asked for one.
+
+**What was missing was a branch, and the error named the wrong format.**
+`oag_game::sprite::Image::decode` tried the PSP `.mip` parser and then the PS2
+one, so a `.gtf` came back as *"zero-sized texture 1281x0"* - a complaint about a
+format the file is not - all three failed, and the sheet collapsed to a single
+transparent texel. `line.gtf` is the 8x8 tile stretched to the 1600-pixel rules
+above and below every screen, so a sheet with *some* width would not have been
+enough to notice; the sizes are asserted in
+`every_front_end_image_this_disc_names_decodes`.
+
+## A circuit's name cannot be looked up on this disc
+
+**Confidence 92, and it is a finding rather than a gap.** The front-end plugin
+keys circuits `NN_Track` and every string table keys their names `NN_TRACK`, so
+the obvious repair is to fold the case. Doing that resolves sixteen of the
+twenty-eight and puts a **confidently wrong** name on eight, because the two
+files were numbered at different times:
+
+| Archive | `PI_Track` nodes | `17_TRACK` reads |
+| --- | ---: | --- |
+| `DATA00` | 28 | *no `entries.xml` at all* |
+| `DATA02` | 8 | `SEBENCO CLIMB REVERSE` |
+| `DATA03` | 16 | `SEBENCO CLIMB REVERSE` |
+| `DATA05` | 16 | `SEBENCO CLIMB REVERSE` |
+| `DATA06` | 16 | `TALON'S JUNCTION` |
+
+`DATA00` supplies the 28 circuits this build offers, and `17_Track` there loads
+`Data\Environments\Talons_Junction`. `DATA06` is the only table whose numbering
+agrees with that - and it is a different archive, so **no copy on the disc pairs
+the circuit list with its own names.** The same table keeps a parallel `_OLD`
+set (`09_TRACK_OLD` = `TALON'S JUNCTION`, `10_TRACK_OLD` = `TECH DE RA`,
+`11_TRACK_OLD` = `MODESTO HEIGHTS`, `12_TRACK_OLD` = `THE AMPHISEUM`), which is
+the renumbering saying so in the data.
+
+So this is the same open question [the six `skin.xml`
+copies](#six-skins-one-layout) pose - *which copy does the runtime serve?* - and
+it needs the executable rather than another reading. Until it is settled,
+`StringTable::get` matches exactly and a circuit row shows its id. An id is an
+honest, visible absence; a name this build cannot vouch for is not. Pinned by
+`a_circuit_shows_its_id_rather_than_a_name_from_the_wrong_numbering`, which
+asserts the mismatch is still what it was measured to be so the test fails the
+day a matching copy is served rather than passing for having found none.
+
+**Everything else in the menus resolves exactly**, including the twelve team
+names, so the fold buys nothing anywhere but here.
+
+## Sixteen languages, four of which the disc misnames
+
+All sixteen plugins parse. Fifteen did until 2026-08-18, and the sixteenth was
+lost to one byte: `Portuguese` writes its own name `Portugu\xeas`, which is
+Latin-1 and not valid UTF-8, so the file failed to decode and the plugin was
+skipped with no report line naming it. `Spanish` on the same disc is genuinely
+UTF-8 (`Español`), so the release is **mixed-encoding** rather than Latin-1;
+`boot::xml::expand` tries UTF-8 first and falls back to Latin-1, which is total
+and so cannot lose a file again.
+
+**Four of the native names are wrong on the disc itself and are left alone.**
+`japanese/definition.xml` literally contains `<Entry ID="Japanese"
+String="Svenska">`, and Korean, Swedish and TraditionalChinese carry the same
+copy-paste; `Russian` declares `P??????`. A boot report reading
+`Japanese (Svenska)` looks exactly like this build mixing two plugins up, which
+is why it is pinned rather than merely noted - see
+`every_declared_language_plugin_resolves`. Correcting them here would be
+inventing.
+
 ## The dead PSP screen
 
 Four copies (`DATA02`, `DATA03`, `DATA04`, `DATA05`) carry a `LogoFMV` screen:

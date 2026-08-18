@@ -106,8 +106,69 @@ const PURE_XML: &str = r#"
 </Screen>
 "#;
 
+/// Wipeout HD's two driveable screens, as its own `skin.xml` declares them.
+///
+/// The picker and the logo reel and nothing else, which is not this fixture
+/// being small - it is the whole of what `boot::load_shell` walks on that disc.
+/// The other six steps of the declared chain are a connection check, three
+/// dialogs, an EULA and a save warning, none of which [`super::can_drive`]
+/// lists, so the mechanism steps over every one of them and the chain that
+/// reaches the front end is two screens long. See `docs/formats/hd-frontend.md`.
+///
+/// `Studio Logo`'s redirects are the disc's: an `AutoRedirect` for the movie
+/// running out and five buttons that all go where it goes. What they go *to* -
+/// `EpilepsyWarning` - is a screen nothing here drives, which is exactly the
+/// situation the chain end has to cope with.
+const HD_XML: &str = r#"
+<Screen>
+  <Screen type="Language Selection" name="Language Selection">
+<DisplayLanguages><Values clear="true"></Values></DisplayLanguages>
+<Menu name="Language"><Values align="left" font="Default" x="800" scale="1.0" y="46" color="0xFFFFFFFF"></Values></Menu>
+<Redirect name="LanguageAutoRedirect">
+  <Values backward="none"></Values>
+  <Default goto="PreFMVConnect"></Default>
+</Redirect>
+  </Screen>
+  <Screen type="FMV" name="Studio Logo">
+<Movie><Values src="Data/FE/Images/StudioLiverpool.bik" autostart="true" autoredirect="true"></Values></Movie>
+<Redirect name="AutoRedirect"><Values backward="none" forward="none"></Values><Default goto="EpilepsyWarning"></Default></Redirect>
+<Redirect name="StartRedirect"><Values backward="none" forward="start"></Values><Default goto="EpilepsyWarning"></Default></Redirect>
+  </Screen>
+  <Screen type="FEMain" name="Top FE Screen"></Screen>
+</Screen>
+"#;
+
 /// The grid every fixture in here authors in.
 const GRID: (u32, u32) = (SCREEN.0 as u32, SCREEN.1 as u32);
+
+/// Wipeout HD's boot, as `boot::load_shell` resolves it: the picker, the logo
+/// reel, and nothing after them that this build can drive.
+fn hd(frames: usize) -> Frontend {
+    Frontend::booting(
+        Sequence {
+            steps: vec![
+                Step {
+                    state: states::LANGUAGE_SELECTION,
+                    movie: MoviePlan::none(GRID),
+                },
+                Step {
+                    state: hd_states::STUDIO_LOGO,
+                    movie: MoviePlan {
+                        frames,
+                        frame_rate: crate::movie::FRAME_RATE,
+                        aspect: GRID,
+                        has_picture: false,
+                    },
+                },
+            ],
+            backdrop_parent: None,
+        },
+        Screens::from_xml(HD_XML),
+        StringTable::default(),
+        languages(),
+        Vec::new(),
+    )
+}
 
 /// A Pure-shaped boot whose second movie has `fmv_frames` frames of picture.
 ///

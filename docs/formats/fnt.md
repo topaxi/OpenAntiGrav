@@ -10,6 +10,11 @@ capitals the five shipped languages need, and the PSP button glyphs.
 format: metrics-only `.fnt`, glyph atlas in the following archive entry as a
 `PSMT4` [PS2 texture](ps2-texture.md). See [below](#the-ps2-keeps-the-same-five-fonts-and-moves-the-pixels-out).
 
+**So is Wipeout HD's**, and that one is the same arrangement with every scalar
+byte-swapped - see [below](#wipeout-hd-writes-the-same-format-big-endian). Its
+atlases ship *linear* where both PSP titles' ship swizzled, which is read from
+the flag rather than from the console.
+
 **Validated against two discs**: `pulse-psp-usa` and `pure-psp-usa`. Pure ships
 six fonts under the same header - version `1` plus `"FNT"`, codepoint table at
 `0x30`, offset table at `0x30 + 2 * count` - and the atlas arithmetic
@@ -174,6 +179,59 @@ atlas ships with the bit already set, so the game skips the conversion and the
 data on disc is swizzled. A reader has to undo it.
 
 Two nibbles per byte, **low nibble first**, the same order as `.mip`.
+
+## Wipeout HD writes the same format big-endian
+
+**Status: understood, confidence 95.** Every field above holds on the PS3,
+with every multi-byte scalar the other way round and nothing else changed.
+Implemented as [`fnt::byte_order`](../../crates/formats/src/fnt.rs), sniffed off
+the magic and never off the platform, per
+[`byte_order`](../../crates/formats/src/byte_order.rs)'s own rule.
+
+**The magic *is* the sniff, and that is not a coincidence.** The four bytes at
+`+0x00` are one 32-bit word - a version byte and three characters - so the PS3
+exporter reverses them along with everything else:
+
+| | `+0x00` | reads as |
+| --- | --- | --- |
+| PSP, PS2 | `01 46 4e 54` | `\x01FNT` |
+| PS3 | `54 4e 46 01` | `TNF\x01` |
+
+Until this landed, every one of Wipeout HD's fonts was refused with *"not a
+.fnt (bad version or magic)"* and its whole front end drew in the built-in 5x7
+debug face - legible enough that nothing failed and nobody looked.
+
+Measured on `hdfury-ps3-eu-dec.iso`, read big-endian:
+
+| Entry | Count | Line height | Atlas | Closes? |
+| --- | ---: | ---: | --- | --- |
+| `Data\FE\Fonts\helv.fnt` | 244 | 33 | 1024x512 4bpp | `0x40 + 64 + 1024*512/2` = 262,272 ✔ |
+| `Data\FE\Fonts\PulseHud.fnt` | 166 | 92 | 2048x1024 4bpp | 1,048,704 ✔ |
+| `Data\FE\Fonts\small.fnt` | 166 | 34 | 512x512 4bpp | 131,200 ✔ |
+
+The confidence comes from the arithmetic rather than from the picture: none of
+those totals closes, and no codepoint table lands at `0x30` with its offset
+table at `0x30 + 2 * count`, if a single scalar is read at the wrong end.
+
+**Two things this section deliberately does not inherit from the PSP's**, both
+read from the file rather than assumed:
+
+- **The atlases ship linear.** `flags & 1` is **clear** on all three, where it
+  is set on all five of Pulse's and all six of Pure's, so the unswizzle above is
+  correctly skipped. A reader that undid the swizzle because the disc is a PS3
+  disc would comb every glyph.
+- **4bpp is still low-nibble-first.** Checked by eye on `small.fnt`'s `A`, which
+  comes out a clean flat-topped glyph read that way and one pixel out of step at
+  both edges read the other.
+
+The CLUT is 16 `RGBA8888` entries as before, and its alpha ramp is *shuffled*
+rather than ascending - `00 8a 37 de 60 13 b7 fe …`, which sorts to a clean
+16-level ramp. Nothing here reorders it: the indices address it as authored.
+
+`swapping_a_font_changes_nothing_but_the_byte_order` is the check that costs
+nothing to re-run - it swaps a hand-built fixture field by field and asserts the
+two parse to the identical [`Font`](../../crates/formats/src/fnt.rs), palette
+and unswizzled indices included.
 
 ## Evidence
 

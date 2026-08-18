@@ -226,3 +226,93 @@ fn the_picker_moves_and_wraps_both_ways() {
         "up from the first wraps to the last"
     );
 }
+
+/// Running out of boot chain opens the menus instead of stopping dead.
+///
+/// **This is the whole of what let Wipeout HD past its logo.** Six of its eight
+/// declared steps are dialogs nothing here drives, so the walked chain is the
+/// picker and `Studio Logo`; when that movie ended, `advance` found no next step
+/// and returned silently. Four hundred ticks of START and CROSS left the state
+/// on `Studio Logo`, which is indistinguishable from a hang.
+///
+/// The destination is [`states::LAUNCH_GAME`] because that is where this
+/// build's own menu tree opens - the same deliberate divergence
+/// `update_show_logo` and `update_title_screen` make, and documented as such on
+/// `Frontend::advance`.
+#[test]
+fn a_boot_that_runs_out_of_chain_opens_the_menus() {
+    let mut frontend = hd(20);
+    let mut input = Input::new();
+
+    // Pick a language, which is the only step ahead of the reel.
+    input.begin_frame(1 << button::CROSS);
+    frontend.update(FRAME, &mut input, None);
+    assert!(
+        run_until(&mut frontend, &mut input, 200, |f| f
+            .machine()
+            .is(hd_states::STUDIO_LOGO)),
+        "the picker hands on to the logo reel"
+    );
+
+    // And then nothing, on a disc whose next six screens this build skips.
+    assert!(
+        run_until(&mut frontend, &mut input, 600, |f| f
+            .machine()
+            .is(states::LAUNCH_GAME)),
+        "the reel running out has to reach the menus, not stall on the reel"
+    );
+    assert!(frontend.is_finished());
+}
+
+/// And it says so, naming the screen it ran out on.
+///
+/// A silent hand-off would be the same failure in the other direction: the
+/// order Wipeout HD boots in is *declared* rather than measured (ADR-0025), so a
+/// transition this build invents has to be visible in the report next to the
+/// ones the disc states.
+#[test]
+fn the_chain_running_out_is_reported_rather_than_silent() {
+    let mut frontend = hd(20);
+    let mut input = Input::new();
+    input.begin_frame(1 << button::CROSS);
+    frontend.update(FRAME, &mut input, None);
+    run_until(&mut frontend, &mut input, 600, |f| {
+        f.machine().is(states::LAUNCH_GAME)
+    });
+
+    let notes = frontend.take_notes();
+    assert!(
+        notes.iter().any(|note| note.contains("boot chain ends")
+            && note.contains(hd_states::STUDIO_LOGO)
+            && note.contains(states::LAUNCH_GAME)),
+        "the hand-off has to name where it ran out and where it went: {notes:#?}"
+    );
+}
+
+/// A chain with something left ahead of it is untouched.
+///
+/// The guard on the change above: both PSP titles leave their last screen by
+/// their own handler on a START press rather than by advancing past it, so
+/// neither must ever reach the new arm. Pure's boot is five steps and this walks
+/// the first four - if running out fired early, the picker alone would land on
+/// the menus.
+#[test]
+fn a_chain_with_steps_left_advances_through_them_as_before() {
+    let mut frontend = pure(30);
+    let mut input = Input::new();
+    reach_the_second_movie(&mut frontend, &mut input);
+    assert!(frontend.machine().is(pure_states::FMV_INTRO));
+    assert!(
+        !frontend.machine().is(states::LAUNCH_GAME),
+        "four steps in, a five-step chain has not run out"
+    );
+
+    // And the fifth is `Title Screen`, which is left by its own handler.
+    assert!(
+        run_until(&mut frontend, &mut input, 600, |f| f
+            .machine()
+            .is(pure_states::TITLE_SCREEN)),
+        "the movie ending advances to the last step rather than past it"
+    );
+    assert!(!frontend.is_finished(), "PRESS START has not been pressed");
+}

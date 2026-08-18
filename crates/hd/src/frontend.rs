@@ -56,12 +56,20 @@
 
 /// HD's menu layout, out of `skin.xml`'s `FEGlobals` block.
 ///
-/// **These are 1920x1080 coordinates**, where Pulse's and Pure's are 480x272.
-/// Nothing in [`oag_title::MenuSkin`] carries a coordinate space, because until
-/// this table existed there was only one; a caller that draws HD's menus at
-/// Pulse's scale will put the list 800 pixels off the side of a PSP-sized
-/// frame. Recorded here rather than fixed, because fixing it is a change to the
-/// type and the type should change when something draws these.
+/// **These are 1920x1080 coordinates**, where Pulse's and Pure's are 480x272,
+/// and [`oag_title::MenuSkin::space`] is where that is stated. This comment used
+/// to warn that nothing carried a coordinate space and that a caller drawing
+/// these at Pulse's scale would put the list 800 pixels off the side of a
+/// PSP-sized frame - recorded rather than fixed, "because fixing it is a change
+/// to the type and the type should change when something draws these".
+///
+/// Something draws them, the type changed, and the warning was accurate: the
+/// RACE page came up as a column of values with no labels beside them, because
+/// every label was off the right-hand edge. `oag_game::menu::Skin` converts both
+/// sides now - the title's numbers out of [`MENU_SKIN::space`](oag_title::MenuSkin::space)
+/// and this build's own out of the 480x272 they are written in - and the menus
+/// are drawn in the *source's* grid rather than in either. See
+/// `docs/formats/hd-frontend.md`.
 ///
 /// Confidence **92** on the five authored numbers and the two colours: six
 /// independent copies of an authored file agreeing to the digit. Short of 95
