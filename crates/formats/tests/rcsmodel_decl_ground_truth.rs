@@ -161,9 +161,15 @@ fn a_submesh_is_judged_on_the_vertices_a_triangle_names() {
     let Some(image) = image() else { return };
     let (mut submeshes, mut strays_all, mut strays_drawn, mut files) = (0usize, 0, 0, 0usize);
     let mut worst: Vec<String> = Vec::new();
-    // Per circuit directory, so the three this reading was measured on can be
-    // asserted at zero rather than absorbed into a disc-wide total.
-    let mut clean: BTreeMap<String, usize> = BTreeMap::new();
+    // The widths the residue declares, which is what says whether it is a
+    // fifth vertex format or an ordinary one that disagrees with its box.
+    let mut residue_widths: BTreeMap<usize, usize> = BTreeMap::new();
+    // Strays per top directory under `/data/environments/`, so the three
+    // circuits this reading was measured on can be asserted at zero rather than
+    // absorbed into a disc-wide total. **Everything outside that tree - the
+    // craft, the weapons, the HUD models - pools under the empty key**, so
+    // `strays[""]` says nothing about any one of them.
+    let mut strays: BTreeMap<String, usize> = BTreeMap::new();
     for archive in ARCHIVES {
         let spec = format!("{}:PS3_GAME/USRDIR/{archive}.PSARC", image.display());
         let mut open = oag_assets::psarc::Archive::open(&spec).expect("the archive opens");
@@ -209,12 +215,13 @@ fn a_submesh_is_judged_on_the_vertices_a_triangle_names() {
                         .and_then(|rest| rest.split('/').next())
                         .unwrap_or("")
                         .to_string();
-                    let entry = clean.entry(circuit).or_default();
+                    let entry = strays.entry(circuit).or_default();
                     if !mesh.submesh_fits(&model_blob, submesh, stride, (min, max)) {
                         strays_drawn += 1;
                         *entry += 1;
+                        *residue_widths.entry(stride).or_default() += 1;
                         if worst.len() < 10 {
-                            worst.push(format!("{path} {name} ({hash:#010x})"));
+                            worst.push(format!("{path} {name} ({hash:#010x}) stride {stride}"));
                         }
                     }
                 }
@@ -229,6 +236,7 @@ fn a_submesh_is_judged_on_the_vertices_a_triangle_names() {
     for line in &worst {
         println!("  {line}");
     }
+    println!("the residue declares {residue_widths:?}");
     assert_eq!(submeshes, 12_624, "the disc's node-addressed submesh count");
     assert_eq!(
         (strays_all, strays_drawn),
@@ -238,7 +246,7 @@ fn a_submesh_is_judged_on_the_vertices_a_triangle_names() {
     );
     for circuit in ["talons_junction", "amphiseum", "tech_de_ra"] {
         assert_eq!(
-            clean.get(circuit).copied().unwrap_or(usize::MAX),
+            strays.get(circuit).copied().unwrap_or(usize::MAX),
             0,
             "{circuit} is one of the three measured to have no stray at all, \
              which is the claim the renderer's per-submesh gate rests on"
