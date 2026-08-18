@@ -93,41 +93,35 @@ impl Output {
         let config: cpal::StreamConfig = supported.config();
         // `cpal::SampleRate` is a plain `u32` alias as of 0.18, not a newtype.
         let sample_rate = config.sample_rate;
-        let device_channels = usize::from(config.channels).max(1);
 
         let mixer = Arc::new(Mutex::new(Mixer::new(sample_rate)));
-        let callback_mixer = Arc::clone(&mixer);
-        // Rendered stereo, before it is spread over however many channels the
-        // device actually has. Allocated once here rather than in the callback.
-        let mut scratch: Vec<f32> = Vec::new();
 
-        let stream = device
-            .build_output_stream(
-                config,
-                move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
-                    let frames = data.len() / device_channels;
-                    scratch.clear();
-                    scratch.resize(frames * CHANNELS, 0.0);
-
-                    // `try_lock`, not `lock`. This runs on the audio thread,
-                    // where blocking on a tick that is mid-update is a dropout
-                    // for every voice rather than a late update for one. A
-                    // missed frame of silence is the cheaper failure.
-                    match callback_mixer.try_lock() {
-                        Ok(mut mixer) => mixer.render(&mut scratch),
-                        Err(_) => scratch.fill(0.0),
-                    }
-
-                    spread(&scratch, data, device_channels);
-                },
-                move |err| eprintln!("audio: output stream error: {err}"),
-                None,
-            )
-            .with_context(|| format!("building an output stream on {name}"))?;
-
-        stream
-            .play()
-            .with_context(|| format!("starting the output stream on {name}"))?;
+        // **The device's own sample format, not `f32`.** This built an `f32`
+        // stream unconditionally until finding U1 of the 2026-08-18 review, and
+        // a device whose default format is anything else - bare ALSA `hw:` is
+        // routinely `i16` - failed at `build_output_stream` and, through
+        // `open_or_null`, left the whole session silent on a working card. The
+        // mixer still renders `f32` and the conversion happens on the way out;
+        // `spread` is generic over the destination for that reason.
+        let format = supported.sample_format();
+        let stream = match format {
+            cpal::SampleFormat::F32 => build::<f32>(&device, config, &mixer),
+            cpal::SampleFormat::F64 => build::<f64>(&device, config, &mixer),
+            cpal::SampleFormat::I8 => build::<i8>(&device, config, &mixer),
+            cpal::SampleFormat::I16 => build::<i16>(&device, config, &mixer),
+            cpal::SampleFormat::I32 => build::<i32>(&device, config, &mixer),
+            cpal::SampleFormat::I64 => build::<i64>(&device, config, &mixer),
+            cpal::SampleFormat::U8 => build::<u8>(&device, config, &mixer),
+            cpal::SampleFormat::U16 => build::<u16>(&device, config, &mixer),
+            cpal::SampleFormat::U32 => build::<u32>(&device, config, &mixer),
+            cpal::SampleFormat::U64 => build::<u64>(&device, config, &mixer),
+            // `SampleFormat` is `#[non_exhaustive]`, and the packed 24-bit and
+            // DSD formats have no `FromSample<f32>` to convert through. Named
+            // rather than silently silent, which is the failure this arm's
+            // siblings exist to end.
+            other => Err(anyhow::anyhow!("unsupported sample format {other}")),
+        }
+        .with_context(|| format!("building a {format} output stream on {name}"))?;
 
         Ok(Self {
             mixer,
@@ -201,29 +195,78 @@ impl Output {
     }
 }
 
-/// Copies interleaved stereo into a buffer of `channels` channels.
+/// Builds and starts one output stream in the device's own sample format.
+///
+/// Generic over `T` so the fifteen-line callback is written once rather than
+/// once per format; `cpal`'s own `FromSample` does the conversion, which is the
+/// same integer scaling this crate's `Sound` decoding uses in the other
+/// direction.
+fn build<T>(
+    device: &cpal::Device,
+    config: cpal::StreamConfig,
+    mixer: &Arc<Mutex<Mixer>>,
+) -> Result<cpal::Stream>
+where
+    T: cpal::SizedSample + cpal::FromSample<f32> + Send + 'static,
+{
+    let device_channels = usize::from(config.channels).max(1);
+    let callback_mixer = Arc::clone(mixer);
+    // Rendered stereo, before it is spread over however many channels the
+    // device actually has. Allocated once here rather than in the callback.
+    let mut scratch: Vec<f32> = Vec::new();
+
+    let stream = device.build_output_stream(
+        config,
+        move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
+            let frames = data.len() / device_channels;
+            scratch.clear();
+            scratch.resize(frames * CHANNELS, 0.0);
+
+            // `try_lock`, not `lock`. This runs on the audio thread,
+            // where blocking on a tick that is mid-update is a dropout
+            // for every voice rather than a late update for one. A
+            // missed frame of silence is the cheaper failure.
+            match callback_mixer.try_lock() {
+                Ok(mut mixer) => mixer.render(&mut scratch),
+                Err(_) => scratch.fill(0.0),
+            }
+
+            spread(&scratch, data, device_channels);
+        },
+        move |err| eprintln!("audio: output stream error: {err}"),
+        None,
+    )?;
+    stream.play()?;
+    Ok(stream)
+}
+
+/// Copies interleaved stereo into a buffer of `channels` channels, converting
+/// to the device's sample type on the way.
 ///
 /// Fewer than two channels take the left; more than two get silence in the
 /// extras rather than a copy, because duplicating a stereo pair into surrounds
 /// is a mix decision and not one this layer should be making quietly.
-fn spread(stereo: &[f32], out: &mut [f32], channels: usize) {
+fn spread<T: cpal::FromSample<f32> + cpal::Sample>(stereo: &[f32], out: &mut [T], channels: usize) {
+    let silence = T::from_sample_(0.0f32);
     if channels == CHANNELS {
         let n = out.len().min(stereo.len());
-        out[..n].copy_from_slice(&stereo[..n]);
-        out[n..].fill(0.0);
+        for (slot, &sample) in out[..n].iter_mut().zip(&stereo[..n]) {
+            *slot = T::from_sample_(sample);
+        }
+        out[n..].fill(silence);
         return;
     }
-    out.fill(0.0);
+    out.fill(silence);
     for (frame, chunk) in out.chunks_exact_mut(channels).enumerate() {
         let at = frame * CHANNELS;
         if at + 1 >= stereo.len() {
             break;
         }
         if channels == 1 {
-            chunk[0] = (stereo[at] + stereo[at + 1]) * 0.5;
+            chunk[0] = T::from_sample_((stereo[at] + stereo[at + 1]) * 0.5);
         } else {
-            chunk[0] = stereo[at];
-            chunk[1] = stereo[at + 1];
+            chunk[0] = T::from_sample_(stereo[at]);
+            chunk[1] = T::from_sample_(stereo[at + 1]);
         }
     }
 }
@@ -276,6 +319,43 @@ mod tests {
         let mut out = [0.0; 2];
         spread(&stereo, &mut out, 1);
         assert_eq!(out, [0.5, 0.5]);
+    }
+
+    /// Finding U1's own guard, at the layer a machine with no sound card can
+    /// still check: the mixer renders `f32` and the device may want something
+    /// else, so `spread` has to convert rather than only copy. `i16` and `u16`
+    /// because they are the two formats a bare ALSA `hw:` device actually
+    /// offers, and the ones whose absence made a working card silent.
+    ///
+    /// **Not a check of the device path**, which needs hardware this project's
+    /// runs do not have. What it pins is that full scale stays full scale and
+    /// silence stays silence through the conversion, in both signed and
+    /// unsigned conventions - `u16`'s origin is `1 << 15`, not zero, which is
+    /// the half of this that a copy would get wrong without erroring.
+    #[test]
+    fn a_device_that_wants_integers_gets_converted_samples() {
+        let stereo = [1.0, -1.0, 0.0, 0.0];
+
+        let mut signed = [0i16; 4];
+        spread(&stereo, &mut signed, 2);
+        assert_eq!(signed[0], i16::MAX);
+        assert_eq!(signed[1], i16::MIN);
+        assert_eq!(&signed[2..], &[0, 0]);
+
+        let mut unsigned = [0u16; 4];
+        spread(&stereo, &mut unsigned, 2);
+        assert_eq!(unsigned[0], u16::MAX);
+        assert_eq!(unsigned[1], u16::MIN);
+        assert_eq!(&unsigned[2..], &[1 << 15, 1 << 15]);
+
+        // And the padding past the rendered frames is the *format's* silence,
+        // not a zero bit pattern - which for `u16` is the mid-point.
+        let mut short = [7u16; 6];
+        spread(&stereo, &mut short, 2);
+        assert!(
+            short[4..].iter().all(|s| *s == 1 << 15),
+            "unsigned padding must be the format's origin, not zero"
+        );
     }
 
     #[test]
