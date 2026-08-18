@@ -458,6 +458,23 @@ and a rocket flies for up to 600. Reading that as a countdown makes the
 flare stop a sixth of the way through the flight, and the obvious repair -
 re-triggering it - is an invention covering a misread flag.
 
+#### "Property of the effect" is a Pulse regularity, not a rule - 2026-08-18
+
+Wipeout HD walked with the same parser breaks the clean split, and only that
+half of the claim. **Four of its 88 systems mix set and clear emitters inside
+one tree**: `WO_QUAKE_DETONATOR_TRAILS`, `WO_CANNON_MUZZLEFLASH`,
+`WO_MISSILE_HEAD` and `WO_ROCKET_FLARE` - the last two being on the *set* side
+of the Pulse table above, so HD authors the same effects with some emitters
+looping and some not.
+
+The bit's meaning is untouched: nothing about a per-emitter flag contradicts
+the executable's `+0x160` mechanism, which is per-instance and so per-emitter
+already. What is retired is the corpus inference layered on top of it. A
+consumer must read each emitter's own flag and must not take the root's as the
+effect's. Pinned in
+`crates/assets/tests/pob_ground_truth.rs::every_hd_particle_system_walks_the_same_way_byte_swapped`,
+which asserts *which* four mix rather than tolerating any number that do.
+
 ### The colour table is RGB-only, and `+0xbc` says whether it animates - 2026-08-12
 
 `ParticleSystem_UpdateParticles` (`0x088f635c`) resolves a live particle's
@@ -622,14 +639,16 @@ the first."** This is a second, independent binary agreeing on every
 structural claim without a single adjustment to the parser - real
 corroboration, not just a bigger PSP sample.
 
-## Wipeout HD carries the same container, and one field stops agreeing
+## Wipeout HD carries the same container, byte-swapped
 
-**Confidence 85**, over all **88** `.pob` under `data/psys/` on the PS3 disc;
-the survey is [hd-status](hd-status.md). Read big-endian the container is this
-one - the magic reads `PSYS` where the PSP and PS2 write `SYSP`:
+**Confidence 93**, over all **88** `.pob` under `data/psys/` on the PS3 disc;
+the survey is [hd-status](hd-status.md) and the parser runs on them in
+`crates/assets/tests/pob_ground_truth.rs`. Read big-endian the container is
+this one - the magic reads `PSYS` where the PSP and PS2 write `SYSP`:
 
 - **88 of 88** carry the magic.
 - **88 of 88** carry the two constant words, `1` at `+0x0a` and `1` at `+0x0c`.
+- **88 of 88** agree with the `+0x04` length rule below.
 - **88 of 88** carry a NUL-terminated ASCII name **immediately after the slot
   table**, at `0x10 + slots * 4` - the boundary this page had to work to pin
   down, holding on a third platform at a third set of slot counts - and on
@@ -638,18 +657,73 @@ one - the magic reads `PSYS` where the PSP and PS2 write `SYSP`:
   authoring rather than parsing: `stesparkstest.pob` holds
   `WO_SHIP_COLL_SPARK_DAMAGE` and `wo_ship_explosion_lightshafts.pob` holds
   `WO_SHIP_EXPLOSION`.
+- **636 of 636** real slots resolve through the same two-hop pointer fixup to
+  an in-bounds target, **526** of them onto NUL-terminated ASCII - the same
+  developer texture paths, now rooted at `Z:\WipeoutPSP\HD\` and
+  `Z:\WipeoutHD\`, with 17 still on Pulse's own `Z:\WipeoutPSP\X2\`.
+- The emitter tree walks **249 records** across the 88, nine deep at its
+  deepest, with no record reached twice and every link landing on a full
+  `EMITTER_LEN` record.
 
-**The length check fails on all 88, and that is the finding.** `+0x04` equals
-`HEADER_LEN + payload.len()` exactly on all 35 PSP files and all 41 PS2 ones;
-on HD it falls **short of the file length by 48 to 208 bytes**, always a multiple
-of 16, and the excess is readable developer strings (`Z:\WipeoutHD\Dat`,
-`a\Source\Common\`). Since the same field agrees exactly on two other platforms,
-the likeliest reading is that HD appends a string block `+0x04` does not count -
-which would sit naturally beside the finding above that 43-80 % of slot-resolved
-targets are developer strings. That is a hypothesis. What is recorded is that the
-field disagrees, and by how much.
+### The order is settled at float granularity, not by the magic
 
-The emitter tree has not been walked on any HD file.
+A 4CC that reads both ways round is weak evidence on its own. Over those 249
+records, read each way:
+
+| | big-endian | little-endian |
+| --- | --- | --- |
+| named `f32` fields plausible | 3,214 of 3,237 | 1,015 of 3,237 |
+| channel key counts within `MAX_CHANNEL_KEYS` | 996 of 996 | 0 of 996 |
+| keyframe `(time, value)` pairs in `0..=1` | 2,823 of 2,823 | n/a |
+| channel modes | only the three known | n/a |
+
+### The one field that is not a plain re-read
+
+The 256-entry colour table at `+0xc4` is a `u32` per entry, parsed as four
+bytes, so on a big-endian file each entry arrives reversed and has to be
+reversed back. It is legible in the data: a PSP ramp runs `b5 86 57 c8` ->
+`30 2e 2e 00` with alpha last, an HD one `ff ff ff ff` -> `00 ff ff ff` with
+alpha first. Reversed, HD's `WO_CANNON_SPARKS_DETONATOR` is a white-to-blue
+fade, which is what a pulse cannon looks like.
+
+Strings - the name field, emitter names, texture paths - are byte arrays and
+read as-is. That is why the parser takes an `oag_formats::ByteOrder`
+*parameter* and never byte-swaps the whole file: a blanket swap would mangle
+every one of them.
+
+### Retraction: `+0x04` never disagreed - 2026-08-18
+
+**This section previously read "and one field stops agreeing", and reported
+that the `+0x04` length check failed on all 88, short of the file length by 48
+to 208 bytes, always a multiple of 16 - with a hypothesis that HD appends an
+uncounted string block.** All of that was an artifact of the check, which
+compared `+0x04` to the *file* length (`scripts/hd-survey.py`, since fixed).
+
+The rule this page states everywhere else is that `+0x04` equals
+`HEADER_LEN + payload.len()` where the payload begins **after** the 32-byte
+name. That expands to `len(file) - base - 16`, so a file is *always* longer
+than the field says, by exactly the header, the slot table and the name. The
+same wrong check would have reported the same "shortfall" on all 35 PSP and
+all 41 PS2 files. The observed 48-208 range is `base + 16` - which is why it
+was always a multiple of 16, the slot table being four bytes per slot.
+
+`crates/assets/tests/pob_ground_truth.rs` now asserts
+`len(blob) - declared == resource_base() + 16` on **every file of all three
+discs**, so the identity is checked rather than reasoned about.
+
+The line "the emitter tree has not been walked on any HD file" is retracted
+with it; it has now been walked on all 88.
+
+### Two things HD authors that Pulse does not
+
+Both are content, not byte order, and both are pinned as measurements:
+
+- **`blend_class` 4**, on the seven emitters of `WO_NITRO_SHIP_DEATH` and
+  nowhere else. Pulse writes only 1-3. Nothing is traced about what it draws,
+  so it stays unnamed and `oag_render::psys` refuses it by
+  `Error::UnknownBlendClass` rather than falling back to one of the three.
+- **`LOOPING` is per-emitter** - see the retraction under
+  [flag `0x1`](#flag-0x1-is-this-effect-loops---2026-08-12) above.
 
 ## Evidence summary
 
@@ -692,8 +766,15 @@ which retired the previous **0** here; on the collision-spark file only,
 not corpus-wide. **90** for the `+0x94c` sibling-emitter tree (file bytes
 plus two live breakpoint captures).
 
-**Validated against two discs**, `pulse-psp-usa` and `pulse-ps2-eu`. Not
-checked against Pure's UMD, or PS2's `WADSP.WAD`/`PRERACE.WAD`.
+**Validated against three discs**, `pulse-psp-usa`, `pulse-ps2-eu` and
+`hdfury-ps3-eu` - the third big-endian, through the same parser with a byte
+order passed in and no offset changed. That raises the container, the name
+field, the slot fixup and the emitter tree to **93**: the same structural
+claims now hold on three independently authored corpora and 164 files, one of
+them written by a different compiler for a different endianness. What it does
+not raise is anything resting on a *runtime* read - the fixup mechanism is
+still traced live on PSP only. Not checked against Pure's UMD, or PS2's
+`WADSP.WAD`/`PRERACE.WAD`.
 
 ## Reproducing
 

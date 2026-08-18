@@ -82,8 +82,31 @@
 //! directions - its root's *particles* each carry a `SMOKEMUSHROOM` system,
 //! and one of its siblings does the same with `FIREMUSHROOM`.
 
+//! # Wipeout HD/Fury ships the same container the other way round
+//!
+//! The PS3 build is big-endian, so its magic reads `PSYS` - the same 4CC, its
+//! bytes reversed - and the *identical* layout is read big-endian. Nothing
+//! else moves: header words, the slot table's two-hop fixup, the 32-byte name
+//! at the resource base, [`EMITTER_LEN`] and every offset within it are
+//! unchanged, over all 88 `.pob` entries on the disc. `docs/formats/pob.md`
+//! carries the measurement, including the one that settles the order at float
+//! granularity rather than by the magic alone.
+//!
+//! [`Emitter::colours`] is the one field that is not a plain re-read: it is a
+//! `u32` parsed as four bytes, so a big-endian entry arrives reversed and is
+//! reversed back here. Strings are byte arrays and read as-is, which is why
+//! this is a byte-order *parameter* and never a swap of the whole file.
+
+use crate::ByteOrder;
+
 /// The container magic.
 pub const MAGIC: &[u8; 4] = b"SYSP";
+
+/// The container magic on a big-endian build: the same four bytes, reversed.
+///
+/// See the module documentation. `Wipeout HD`/`Fury` writes this; the PSP and
+/// PS2 discs write [`MAGIC`].
+pub const MAGIC_BE: &[u8; 4] = b"PSYS";
 
 /// Bytes before the slot table: magic, the size field, the count, and the two
 /// constant header words.
@@ -106,7 +129,7 @@ pub enum Error {
         /// Bytes supplied.
         got: usize,
     },
-    /// The blob does not start with [`MAGIC`].
+    /// The blob starts with neither [`MAGIC`] nor [`MAGIC_BE`].
     NotSysp,
     /// One of the two header words seen as a constant 1 on every real file
     /// was something else.
@@ -169,7 +192,7 @@ impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::TooShort { got } => write!(f, "need at least {HEADER_LEN} bytes, got {got}"),
-            Self::NotSysp => write!(f, "the blob does not begin with SYSP"),
+            Self::NotSysp => write!(f, "the blob begins with neither SYSP nor PSYS"),
             Self::UnexpectedHeaderWord { field, value } => {
                 write!(f, "header word {field} is {value}, expected 1")
             }
@@ -224,20 +247,36 @@ pub struct ParticleSystem<'a> {
     /// whole blob rather than this slice, because the resource base - what
     /// every offset inside is relative to - is the name field, not this.
     pub payload: &'a [u8],
+    /// Which way round this blob's words are, from its magic - see
+    /// [`byte_order`]. Every later read through [`Self::resolve_slot`] and
+    /// [`Self::emitters`] uses it, so a caller never passes it again.
+    pub order: ByteOrder,
 }
 
-fn word(data: &[u8], at: usize) -> u32 {
-    u32::from_le_bytes([data[at], data[at + 1], data[at + 2], data[at + 3]])
-}
-
-fn half(data: &[u8], at: usize) -> u16 {
-    u16::from_le_bytes([data[at], data[at + 1]])
+/// Which way round a blob's words are, from its own magic.
+///
+/// `SYSP` on the PSP and PS2, `PSYS` on the PS3 - the same four bytes, written
+/// by the same exporter on a big-endian host, so the file says which it is and
+/// nothing here has to ask what console it came from. A blob with neither
+/// spelling reads as [`ByteOrder::Little`];
+/// [`looks_like_particle_system`] is the check for "is this a `.pob`" and this
+/// is not it.
+#[must_use]
+pub fn byte_order(data: &[u8]) -> ByteOrder {
+    match data.get(0..4) {
+        Some(magic) if magic == MAGIC_BE => ByteOrder::Big,
+        _ => ByteOrder::Little,
+    }
 }
 
 /// Whether `data` looks like a particle system, without parsing it.
+///
+/// True for either spelling of the magic: a big-endian `.pob` is still a
+/// `.pob`, and a caller that only accepted [`MAGIC`] would report every one of
+/// HD/Fury's 88 as unparseable rather than reading them.
 #[must_use]
 pub fn looks_like_particle_system(data: &[u8]) -> bool {
-    data.len() >= 4 && &data[0..4] == MAGIC
+    matches!(data.get(0..4), Some(magic) if magic == MAGIC || magic == MAGIC_BE)
 }
 
 impl<'a> ParticleSystem<'a> {
@@ -254,13 +293,14 @@ impl<'a> ParticleSystem<'a> {
         if data.len() < HEADER_LEN {
             return Err(Error::TooShort { got: data.len() });
         }
-        if &data[0..4] != MAGIC {
+        if !looks_like_particle_system(data) {
             return Err(Error::NotSysp);
         }
-        let declared = word(data, 0x04);
-        let count = half(data, 0x08);
-        let header_a = u32::from(half(data, 0x0a));
-        let header_c = word(data, 0x0c);
+        let order = byte_order(data);
+        let declared = order.u32(data, 0x04);
+        let count = order.u16(data, 0x08);
+        let header_a = u32::from(order.u16(data, 0x0a));
+        let header_c = order.u32(data, 0x0c);
         if header_a != 1 {
             return Err(Error::UnexpectedHeaderWord {
                 field: "+0x0a",
@@ -283,7 +323,7 @@ impl<'a> ParticleSystem<'a> {
         let slots = data[HEADER_LEN..table_end]
             .chunks_exact(SLOT_LEN)
             .map(|chunk| {
-                let value = u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
+                let value = order.u32(chunk, 0);
                 (value != EMPTY_SLOT).then_some(value)
             })
             .collect();
@@ -305,6 +345,7 @@ impl<'a> ParticleSystem<'a> {
             name,
             slots,
             payload,
+            order,
         })
     }
 
@@ -336,12 +377,7 @@ impl<'a> ParticleSystem<'a> {
         let Some(fixup_bytes) = data.get(site..site + SLOT_LEN) else {
             return Err(Error::SlotOutOfRange { index });
         };
-        let baked = u32::from_le_bytes([
-            fixup_bytes[0],
-            fixup_bytes[1],
-            fixup_bytes[2],
-            fixup_bytes[3],
-        ]);
+        let baked = self.order.u32(fixup_bytes, 0);
         let target = resource_base + baked as usize;
         let name_end = resource_base + NAME_LEN;
         if target < name_end || data.len() <= target {
@@ -382,7 +418,7 @@ impl<'a> ParticleSystem<'a> {
         let base = self.resource_base();
         let mut out = Vec::new();
         let mut seen = Vec::new();
-        walk_emitters(data, base, 0, &mut out, &mut seen)?;
+        walk_emitters(data, self.order, base, 0, &mut out, &mut seen)?;
         Ok(out)
     }
 }
@@ -406,66 +442,10 @@ pub const CHANNEL_LEN: usize = 0xe0;
 /// the block's own five-word header, in `(time, value)` pairs.
 pub const MAX_CHANNEL_KEYS: usize = (CHANNEL_LEN - 0x14) / 8;
 
-/// Emitter-record flag bits, `+0x20`.
-///
-/// Named from their consumers in the runtime interpreter - see
-/// `docs/ghidra/functions/psp-pulse-usa/particle-system.md`. Bits with no
-/// constant here were not traced to a consumer.
-pub mod flags {
-    /// The emitter never stops on its own: [`super::Emitter::duration_ticks`]
-    /// is not a countdown and the effect runs until whatever owns it says
-    /// otherwise.
-    ///
-    /// **Corpus-derived, confidence 75.** The split is clean on both discs -
-    /// 76 emitters over 35 PSP effects and 41 PS2 ones, with no effect
-    /// mixing set and clear emitters. Every attached or environmental
-    /// effect has it: `WO_ROCKET_FLARE`, `WO_MISSILE_HEAD`,
-    /// `WO_SHURIKEN_HEAD`, `WO_SHURIKEN_TRAIL`, `WO_PLASMA_HEAD`,
-    /// `WO_LEACHBEAM_*`, `WO_REPULSER`, `WO_QUAKE`, `WO_RAIN`, `WO_SNOW`,
-    /// `WO_MODESTO_STEAM_*`, and on the PS2 disc `WO_SHIP_ENGINEFLARE` and
-    /// `WO_UNDERWATER_DEBRIS`. Every impact does not: all five explosions,
-    /// both bounces, every spark burst, `WO_PLASMA_FLASH`,
-    /// `WO_TRACK_ROCK_DEBRIS`. `WO_RAIN`, `WO_SNOW` and `WO_BLUE_WELDER`
-    /// settle it on their own - all three author a **one-tick** duration
-    /// and none of the three can be a one-tick effect.
-    ///
-    /// The executable has the matching mechanism, at
-    /// `ParticleSystem_Update` (`0x088f5b9c`): under instance flag `0x10`
-    /// at `+0x160` the duration counter at `+0x138` counts *up* by one per
-    /// update instead of down by the frame's ticks, the emitter-level
-    /// channel age becomes `counter / 60` rather than `1 - counter /
-    /// duration`, and the branch that sets the finished bit is skipped
-    /// entirely. What is **not** traced is the spec-`0x1`-to-instance-`0x10`
-    /// assignment: the initialiser is behind an unresolved import stub, so
-    /// the two are joined by the corpus rather than by a read.
-    pub const LOOPING: u32 = 0x1;
-    /// Spawn offsets and velocities skip the emitter node's matrix.
-    pub const WORLD_SPACE: u32 = 0x2;
-    /// Each particle takes a random initial billboard roll.
-    pub const RANDOM_ROLL: u32 = 0x4;
-    /// The rotation speed is sign-flipped on half the particles.
-    pub const RANDOM_ROTATION_SIGN: u32 = 0x8;
-    /// A burst's particles are spread along the emitter's motion over the
-    /// frame rather than all placed at its current position.
-    pub const SUBFRAME_SPREAD: u32 = 0x20;
-    /// [`Emitter::gravity_per_tick2`] is applied. **Dormant when clear** -
-    /// the field still holds an authored value on emitters that never use
-    /// it.
-    pub const GRAVITY: u32 = 0x200;
-    /// Particles never expire.
-    pub const IMMORTAL: u32 = 0x800;
-    /// The spawn direction covers the sphere by a Fibonacci spiral instead
-    /// of sampling it randomly.
-    pub const UNIFORM_SPHERE: u32 = 0x20_0000;
-    /// [`Emitter::duration_ticks`] counts bursts, not ticks.
-    pub const REPEAT_COUNT: u32 = 0x80_0000;
-    /// A streak's second point stays at the particle's spawn position
-    /// instead of following it - what makes a burst radiate rather than
-    /// trail.
-    pub const STREAK_FROM_SPAWN: u32 = 0x200_0000;
-    /// Each particle takes a random sprite-atlas frame.
-    pub const RANDOM_ATLAS_FRAME: u32 = 0x400_0000;
-}
+/// Emitter-record flag bits, `+0x20`. Its own file: the evidence behind
+/// [`flags::LOOPING`] alone runs longer than the rest of this module's
+/// constants put together.
+pub mod flags;
 
 /// How a channel block produces its value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -632,6 +612,11 @@ pub struct Emitter {
     /// anything else walks the table over the particle's life.
     pub colour_mode: u32,
     /// `+0xc0`: 1 alpha-test, 2 additive, 3 alpha-over.
+    ///
+    /// Wipeout HD/Fury authors a **4** as well, on the seven emitters of
+    /// `WO_NITRO_SHIP_DEATH` and nowhere else in its 88 systems. Nothing has
+    /// been traced to say what it draws, so it is left unnamed here and a
+    /// consumer should refuse it rather than fall back to one of the three.
     pub blend_class: u32,
     /// `+0xc4`, 256 RGBA entries.
     ///
@@ -723,6 +708,7 @@ pub const MODIFIER_DRAG: u32 = 3;
 /// Depth-first walk of the emitter tree, appending each record.
 fn walk_emitters(
     data: &[u8],
+    order: ByteOrder,
     base: usize,
     offset: usize,
     out: &mut Vec<Emitter>,
@@ -733,22 +719,22 @@ fn walk_emitters(
     }
     seen.push(offset);
 
-    let (mut emitter, death, particle, sibling) = parse_emitter(data, base, offset)?;
+    let (mut emitter, death, particle, sibling) = parse_emitter(data, order, base, offset)?;
     let index = out.len();
     // Reserve this record's slot before recursing, so children land after
     // their parent and the index stays stable.
     out.push(emitter_placeholder());
 
     if let Some(child) = death {
-        emitter.death_child = Some(walk_emitters(data, base, child, out, seen)?);
+        emitter.death_child = Some(walk_emitters(data, order, base, child, out, seen)?);
     }
     if let Some(child) = particle {
-        emitter.particle_child = Some(walk_emitters(data, base, child, out, seen)?);
+        emitter.particle_child = Some(walk_emitters(data, order, base, child, out, seen)?);
     }
     out[index] = emitter;
 
     if let Some(next) = sibling {
-        walk_emitters(data, base, next, out, seen)?;
+        walk_emitters(data, order, base, next, out, seen)?;
     }
     Ok(index)
 }
@@ -807,6 +793,7 @@ fn emitter_placeholder() -> Emitter {
 #[expect(clippy::type_complexity, reason = "one call site, unpacked at once")]
 fn parse_emitter(
     data: &[u8],
+    order: ByteOrder,
     base: usize,
     offset: usize,
 ) -> Result<(Emitter, Option<usize>, Option<usize>, Option<usize>)> {
@@ -822,26 +809,33 @@ fn parse_emitter(
         .ok_or(Error::EmitterNameNotTerminated { offset })?;
     let name = String::from_utf8_lossy(&record[..nul]).into_owned();
 
-    let float = |at: usize| f32::from_bits(word(record, at));
-    let int = |at: usize| word(record, at) as i32;
+    let word = |at: usize| order.u32(record, at);
+    let half = |at: usize| order.u16(record, at);
+    let float = |at: usize| order.f32(record, at);
+    let int = |at: usize| order.u32(record, at) as i32;
 
+    // A palette entry is a `u32` and not four bytes, so on a big-endian file
+    // it arrives reversed - alpha first rather than last. See the module docs.
     let mut colours = Box::new([[0u8; 4]; 256]);
     for (entry, bytes) in colours.iter_mut().zip(record[0xc4..].chunks_exact(4)) {
         entry.copy_from_slice(bytes);
+        if order == ByteOrder::Big {
+            entry.reverse();
+        }
     }
 
-    let modifiers = parse_modifiers(data, base, word(record, 0x9b4) as usize)?;
+    let modifiers = parse_modifiers(data, order, base, word(0x9b4) as usize)?;
 
     let emitter = Emitter {
         name,
         offset,
-        flags: word(record, 0x20),
+        flags: word(0x20),
         duration_ticks: float(0x24),
-        shape: word(record, 0x30),
+        shape: word(0x30),
         extent: float(0x34),
         extent_unread: [float(0x38), float(0x40)],
-        radius_mode: word(record, 0x3c),
-        velocity_mode: word(record, 0x44),
+        radius_mode: word(0x3c),
+        velocity_mode: word(0x44),
         speed_per_tick: (float(0x48), float(0x4c)),
         elevation: float(0x50),
         azimuth: float(0x54),
@@ -851,19 +845,19 @@ fn parse_emitter(
         per_emission: (int(0x6c), int(0x70)),
         gravity_per_tick2: float(0x74),
         live_cap: int(0xa0),
-        render_mode: word(record, 0xb8),
-        colour_mode: word(record, 0xbc),
-        blend_class: word(record, 0xc0),
+        render_mode: word(0xb8),
+        colour_mode: word(0xbc),
+        blend_class: word(0xc0),
         colours,
-        size: parse_channel(record, 0x4d8)?,
-        alpha: parse_channel(record, 0x5b8)?,
-        rotation_speed: parse_channel(record, 0x698)?,
-        emission_scale: parse_channel(record, 0x858)?,
+        size: parse_channel(record, order, 0x4d8)?,
+        alpha: parse_channel(record, order, 0x5b8)?,
+        rotation_speed: parse_channel(record, order, 0x698)?,
+        emission_scale: parse_channel(record, order, 0x858)?,
         playback_rate: float(0x4cc),
         child_velocity_inherit: float(0x4d0),
         child_spawn_probability: float(0x4d4),
         animated_attributes: int(0x93c),
-        atlas_grid: (half(record, 0x9a0), half(record, 0x9a2)),
+        atlas_grid: (half(0x9a0), half(0x9a2)),
         atlas_frames: int(0x9ac),
         modifiers,
         death_child: None,
@@ -872,7 +866,7 @@ fn parse_emitter(
 
     // Zero is "no pointer": it would name the root, which is never a child
     // of anything.
-    let child = |at: usize| match word(record, at) as usize {
+    let child = |at: usize| match word(at) as usize {
         0 => None,
         value => Some(value),
     };
@@ -880,8 +874,8 @@ fn parse_emitter(
 }
 
 /// One channel block at `block`, relative to the record's own base.
-fn parse_channel(record: &[u8], block: usize) -> Result<Channel> {
-    let count = word(record, block + 0x08) as i32;
+fn parse_channel(record: &[u8], order: ByteOrder, block: usize) -> Result<Channel> {
+    let count = order.u32(record, block + 0x08) as i32;
     let keys = usize::try_from(count).map_err(|_| Error::ChannelKeyCount { block, count })?;
     if keys > MAX_CHANNEL_KEYS {
         return Err(Error::ChannelKeyCount { block, count });
@@ -889,23 +883,25 @@ fn parse_channel(record: &[u8], block: usize) -> Result<Channel> {
     let keys = (0..keys)
         .map(|i| {
             let at = block + 0x14 + i * 8;
-            (
-                f32::from_bits(word(record, at)),
-                f32::from_bits(word(record, at + 4)),
-            )
+            (order.f32(record, at), order.f32(record, at + 4))
         })
         .collect();
     Ok(Channel {
-        period: f32::from_bits(word(record, block)),
-        mode: ChannelMode::from_raw(word(record, block + 0x04)),
-        lo: f32::from_bits(word(record, block + 0x0c)),
-        hi: f32::from_bits(word(record, block + 0x10)),
+        period: order.f32(record, block),
+        mode: ChannelMode::from_raw(order.u32(record, block + 0x04)),
+        lo: order.f32(record, block + 0x0c),
+        hi: order.f32(record, block + 0x10),
         keys,
     })
 }
 
 /// The modifier list starting at `offset` from the resource base.
-fn parse_modifiers(data: &[u8], base: usize, offset: usize) -> Result<Vec<Modifier>> {
+fn parse_modifiers(
+    data: &[u8],
+    order: ByteOrder,
+    base: usize,
+    offset: usize,
+) -> Result<Vec<Modifier>> {
     /// Bytes of a node that must be readable: the `next` pointer is last.
     const NODE_LEN: usize = 0x34;
 
@@ -919,13 +915,13 @@ fn parse_modifiers(data: &[u8], base: usize, offset: usize) -> Result<Vec<Modifi
         let node = &data[start..];
         let mut params = [0.0f32; 9];
         for (i, param) in params.iter_mut().enumerate() {
-            *param = f32::from_bits(word(node, i * 4));
+            *param = order.f32(node, i * 4);
         }
         out.push(Modifier {
-            kind: word(node, 0x24),
+            kind: order.u32(node, 0x24),
             params,
         });
-        next = word(node, 0x30) as usize;
+        next = order.u32(node, 0x30) as usize;
         if out.len() > MAX_EMITTERS {
             return Err(Error::EmitterTreeUnbounded);
         }

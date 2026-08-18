@@ -45,6 +45,18 @@ use oag_render::sparks;
 /// `.pob` blobs on the PSP disc, per `docs/formats/pob.md`.
 const SYSTEMS: usize = 35;
 
+/// Wipeout HD/Fury's `.pob` entries, and the four PSARCs that hold them.
+///
+/// Named rather than walked because this crate does not depend on `oag-disc`;
+/// the four are what `python3 scripts/psarc.py list` reports, and the count
+/// below is what makes a fifth one appearing a failure rather than a silent
+/// gap.
+const HD_ARCHIVES: [&str; 4] = ["DATA00", "DATA02", "DATA03", "DATA06"];
+
+/// `.pob` entries across [`HD_ARCHIVES`], duplicates included - four names
+/// appear in two archives each.
+const HD_SYSTEMS: usize = 88;
+
 fn image() -> Option<PathBuf> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
@@ -277,4 +289,87 @@ fn every_effect_on_the_disc_plays_without_panicking() {
 
     assert_eq!(played, SYSTEMS);
     println!("busiest: {} with {} particles", busiest.1, busiest.0);
+}
+
+/// The same translation on Wipeout HD/Fury's effects, which are big-endian.
+///
+/// [`oag_formats::pob`] reading them is asserted on the disc in
+/// `crates/assets/tests/pob_ground_truth.rs`; this is the layer above - that a
+/// record read the other way round still becomes an [`EmitterSpec`] this
+/// renderer can play, with no field landing outside a range the spec builder
+/// accepts.
+///
+/// **One effect is expected to be refused**, and that is the assertion rather
+/// than an exception: `WO_NITRO_SHIP_DEATH` authors `blend_class` 4, which no
+/// Pulse file does and nothing has traced. Refusing it by name is the
+/// do-not-invent rule holding - an effect with an undecoded blend mode draws
+/// nothing and says so, instead of being drawn as one of the three that are
+/// decoded.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn every_hd_effect_translates_or_is_refused_by_name() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("data/images/hdfury-ps3-eu-dec.iso");
+    if !path.exists() {
+        assert!(
+            std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
+            "OAG_REQUIRE_GAME_DATA is set but {} is missing",
+            path.display()
+        );
+        println!("skipping: {} not present", path.display());
+        return;
+    }
+
+    let dt = 1.0 / TICK_HZ;
+    let (mut seen, mut played) = (0usize, 0usize);
+    let mut refused = Vec::new();
+
+    for name in HD_ARCHIVES {
+        let spec = format!("{}:PS3_GAME/USRDIR/{name}.PSARC", path.display());
+        let mut archive = oag_assets::psarc::Archive::open(&spec).expect("the archive opens");
+        let entries: Vec<String> = archive
+            .paths()
+            .iter()
+            .filter(|entry| entry.to_ascii_lowercase().ends_with(".pob"))
+            .cloned()
+            .collect();
+
+        for entry in entries {
+            let blob = archive.read_path(&entry).expect("the entry reads");
+            seen += 1;
+            assert!(
+                pob::looks_like_particle_system(&blob),
+                "{entry}: not a particle system"
+            );
+            // HD's palettes run to 255, as the PSP's do and unlike the PS2's.
+            let effect = match Effect::parse(&blob, ColourScale::Full) {
+                Ok(effect) => effect,
+                Err(error) => {
+                    refused.push(format!("{entry}: {error}"));
+                    continue;
+                }
+            };
+
+            let mut rng = Rng::new(seen as u64);
+            let mut system = System::new();
+            system.ignite(&effect, Vec3::ZERO, 1.0);
+            for tick in 0..240 {
+                let anchor = Vec3::new(tick as f32 * 0.1, 0.0, 0.0);
+                system.advance(&effect, dt, anchor, &mut rng);
+                let (additive, alpha_over) = system.vertices(&effect, Vec3::X, Vec3::Y);
+                assert!((additive.len() + alpha_over.len()) % 6 == 0);
+            }
+            played += 1;
+        }
+    }
+
+    assert_eq!(seen, HD_SYSTEMS, "entries found across {HD_ARCHIVES:?}");
+    assert_eq!(refused.len(), 1, "refusals: {refused:?}");
+    assert!(
+        refused[0].contains("wo_nitro_ship_death") && refused[0].contains("blend class 4"),
+        "the one refusal is not the one this test knows about: {}",
+        refused[0]
+    );
+    assert_eq!(played, HD_SYSTEMS - 1);
 }

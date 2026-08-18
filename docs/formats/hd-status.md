@@ -52,7 +52,7 @@ render geometry lifted out of `.vex` into a PS3 container of its own.
 | `Speedup Pad` / `Weapon Pad` volumes | Read byte-swapped, and `pads::volumes` does |
 | Handling stats | Same schema, plain-text XML - **parses**, after making `headtilt` optional |
 | HUD layouts | Same dialect and the same widget model - **all 18 compose**, once includes are followed and offsets composed. [hd-hud](hd-hud.md) |
-| `.pob` particle container | Reads byte-swapped; **one declared length no longer agrees** |
+| `.pob` particle container | Reads byte-swapped, exactly - and `pob` does, **all 88 parsed and their 249 emitters walked** |
 | Textures | **New.** [`.gtf`](gtf.md), the PS3's own container - **read**, 7,333 of 7,333, 7,280 of them decoding |
 | Sound bank | `.bnk` present, unexamined |
 | [Music](#music-plain-mp3-declared-the-way-the-psp-titles-declare-theirs) | **New container, same declaration.** Plain MP3, named by the executable and declared as `PI_Music`; recovered and played |
@@ -535,10 +535,12 @@ own screen set.
 lowercase name, alongside `_detonator` and `_elimination` variants for modes
 Pulse does not have.
 
-## `.pob` reads, with one field that no longer agrees
+## `.pob` reads byte-swapped, and the parser reads it
 
-**Confidence 85.** The [container](pob.md) is byte-swapped: the magic reads
-`PSYS` where Pulse writes `SYSP`. Over all **88** effects:
+**Confidence 93.** The [container](pob.md) is byte-swapped: the magic reads
+`PSYS` where Pulse writes `SYSP`. `oag_formats::pob` takes a byte order and
+reads all 88 with no offset changed, checked against the disc by
+`crates/assets/tests/pob_ground_truth.rs`. Over all **88** effects:
 
 - magic on 88 of 88;
 - the two constant words - `1` at `+0x0a` and `1` at `+0x0c` - on 88 of 88;
@@ -553,14 +555,24 @@ The two that do not predict their filename are authoring, not parsing:
 and a rename. A third, `wo_dustmotes.pob`, matches only case-insensitively
 (`WO_DustMotes`), which is why the check is spelt that way.
 
-**The length check does not hold on any of them.** On all 35 Pulse files
-`+0x04` equals `HEADER_LEN + payload.len()` exactly; on HD it falls short of the
-file length by 48 to 208 bytes, always a multiple of 16, and the excess is
-readable developer strings (`Z:\WipeoutHD\Dat`, `a\Source\Common\`). The obvious
-reading is that HD appends a string block the length field does not count, which
-would fit Pulse's own finding that 43-80 % of slot-resolved records are developer
-strings - but that is a hypothesis, and the field is recorded as disagreeing
-rather than explained away.
+Beyond the container: **636 of 636** real slots resolve through the same
+two-hop pointer fixup to an in-bounds target, 526 of them onto developer
+strings; and the emitter tree walks **249 records**, nine deep at its deepest,
+with no record revisited. Every predicate the Pulse corpora satisfy - positive
+schedules, in-range channel modes, a draw class the blend table has - holds on
+records read the other way round. Two things HD *authors* differently are on
+[pob](pob.md#two-things-hd-authors-that-pulse-does-not): a fourth
+`blend_class`, and `LOOPING` being per-emitter rather than per-effect.
+
+**Retracted - 2026-08-18: the length check never failed.** This section
+previously read "with one field that no longer agrees" and reported `+0x04`
+falling short of the file length by 48 to 208 bytes on all 88, with a
+hypothesis about an appended string block. That was `scripts/hd-survey.py`
+comparing the field to the *file* length. `+0x04` counts a payload that starts
+after the 32-byte name, so it is short by `base + 16` on **every** platform -
+which is both why the gap was always a multiple of 16 and why the same check
+would have failed on all 76 Pulse files. The script is fixed and now reports
+88 of 88; the identity is asserted per file on all three discs.
 
 ## What is genuinely new
 

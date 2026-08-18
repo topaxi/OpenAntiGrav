@@ -253,13 +253,20 @@ def survey_pob(image):
             # that is what makes the slot table's end a measured boundary.
             stem = path.rsplit("/", 1)[-1][:-4]
             name_ok += name.decode("ascii", "replace").lower() == stem.lower()
-            length_ok += declared == len(data)
-            slack.add(len(data) - declared)
+            # `+0x04` is `HEADER_LEN + payload.len()` where the payload starts
+            # *after* the 32-byte name, so it is short of the file length by the
+            # header, the slot table and that name - on every platform, not only
+            # this one. Comparing it to `len(data)` instead reported a shortfall
+            # of 48 to 208 bytes here and would report one on all 76 Pulse files
+            # too; see docs/formats/pob.md.
+            base = 0x10 + slots * 4
+            length_ok += declared == 0x10 + (len(data) - base - 32)
+            slack.add(len(data) - declared - base - 16)
     print("\n.pob particle containers")
     print(f"  {total} files: magic PSYS on {magic_ok}, the two constant words on "
           f"{words_ok}, a name predicting the file name on {name_ok}")
-    print(f"  the +0x04 length equals the file length on {length_ok}; "
-          f"shortfalls seen: {sorted(slack)}")
+    print(f"  the +0x04 length agrees with the payload on {length_ok}; "
+          f"residuals seen: {sorted(slack)}")
 
 
 def hd_tracks(image):

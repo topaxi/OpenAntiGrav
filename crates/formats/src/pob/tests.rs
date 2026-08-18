@@ -195,6 +195,18 @@ impl Record {
         self.u32(at, value.to_bits())
     }
 
+    /// The same record, written the way a PS3 build writes it.
+    ///
+    /// Every field past the 32-byte name is a word, and the name is bytes, so
+    /// reversing each four-byte group from [`NAME_LEN`] on is exactly what the
+    /// big-endian exporter emits - including the palette, which is `u32`s.
+    fn big_endian(mut self) -> Self {
+        for word in self.0[NAME_LEN..].chunks_exact_mut(4) {
+            word.reverse();
+        }
+        self
+    }
+
     /// A channel block: mode, bounds, and `(time, value)` keys.
     fn channel(mut self, block: usize, mode: u32, lo: f32, hi: f32, keys: &[(f32, f32)]) -> Self {
         self = self
@@ -444,4 +456,177 @@ fn a_target_landing_before_the_payload_is_refused() {
         parsed.resolve_slot(&data, 0),
         Err(Error::SlotOutOfRange { index: 0 })
     );
+}
+
+/// The container header and slot table, rewritten big-endian around a resource
+/// image the caller has already laid out for the same order (see
+/// [`Record::big_endian`]). The image itself is not touched: its name fields
+/// are byte strings and reversing them would be the very bug
+/// [`crate::byte_order`] exists to prevent.
+fn big_endian_container(mut blob: Vec<u8>) -> Vec<u8> {
+    let slots = usize::from(ByteOrder::Little.u16(&blob, 0x08));
+    blob[0x00..0x04].copy_from_slice(MAGIC_BE);
+    blob[0x04..0x08].reverse();
+    blob[0x08..0x0a].reverse();
+    blob[0x0a..0x0c].reverse();
+    blob[0x0c..0x10].reverse();
+    for i in 0..slots {
+        let at = HEADER_LEN + i * SLOT_LEN;
+        blob[at..at + SLOT_LEN].reverse();
+    }
+    blob
+}
+
+/// One `.pob` carrying every kind of field the parser reads - flags, floats,
+/// signed counts, a palette entry, two channels with keys, a modifier node and
+/// a sibling pointer - laid out for `order`.
+fn twin(order: ByteOrder) -> Vec<u8> {
+    const SECOND: usize = 0x1000;
+    const NODE: usize = 0x2000;
+    let dress = |record: Record| match order {
+        ByteOrder::Big => record.big_endian(),
+        ByteOrder::Little => record,
+    };
+    let mut image = resource(&[
+        (
+            0,
+            dress(
+                Record::new("WO_TWIN_ROOT")
+                    .u32(0x20, flags::GRAVITY | flags::LOOPING)
+                    .f32(0x24, 32.0)
+                    .u32(0x30, 7)
+                    .f32(0x34, 0.5)
+                    .f32(0x48, 1.5)
+                    .i32(0x5c, 16)
+                    .i32(0x60, -6)
+                    .f32(0x74, -0.015)
+                    .i32(0xa0, 64)
+                    .u32(0xb8, 5)
+                    .u32(0xc4, u32::from_le_bytes([1, 2, 3, 4]))
+                    .channel(0x4d8, 0, 0.5, 2.5, &[(0.0, 0.0), (1.0, 1.0)])
+                    .channel(0x5b8, 2, 0.0, 200.0, &[])
+                    .i32(0x9ac, 8)
+                    .u32(0x9b4, NODE as u32)
+                    .u32(0x94c, SECOND as u32),
+            ),
+        ),
+        (
+            SECOND,
+            dress(Record::new("bits").f32(0x24, 4.0).u32(0xb8, 2)),
+        ),
+    ]);
+    image.resize(NODE + 0x34, 0);
+    let mut put = |at: usize, bits: u32| {
+        let bytes = match order {
+            ByteOrder::Big => bits.to_be_bytes(),
+            ByteOrder::Little => bits.to_le_bytes(),
+        };
+        image[at..at + 4].copy_from_slice(&bytes);
+    };
+    put(NODE, 0.98f32.to_bits());
+    put(NODE + 4, 0.85f32.to_bits());
+    put(NODE + 8, 0.5f32.to_bits());
+    put(NODE + 0x24, MODIFIER_DRAG);
+    // The atlas grid is two `u16` fields, not one `u32`: on the disc a
+    // big-endian record holds `00 08 00 04` for an 8x4 grid, so a four-byte
+    // reversal would read it back as 4x8. Written here field by field.
+    let mut put16 = |at: usize, value: u16| {
+        let bytes = match order {
+            ByteOrder::Big => value.to_be_bytes(),
+            ByteOrder::Little => value.to_le_bytes(),
+        };
+        image[at..at + 2].copy_from_slice(&bytes);
+    };
+    put16(0x9a0, 4);
+    put16(0x9a2, 2);
+
+    let blob = pob_from_resource(&[None, Some(0x1a4)], &image);
+    match order {
+        ByteOrder::Big => big_endian_container(blob),
+        ByteOrder::Little => blob,
+    }
+}
+
+/// The whole claim about Wipeout HD/Fury in one assertion: the PS3 build is
+/// the same container with the words the other way round, so the same authored
+/// content must parse to the same records either way.
+#[test]
+fn a_big_endian_blob_parses_to_exactly_what_its_little_endian_twin_does() {
+    let little = twin(ByteOrder::Little);
+    let big = twin(ByteOrder::Big);
+    assert_ne!(little, big, "the two blobs must not be identical bytes");
+
+    let (le, be) = (
+        ParticleSystem::parse(&little).expect("little"),
+        ParticleSystem::parse(&big).expect("big"),
+    );
+    assert_eq!(le.order, ByteOrder::Little);
+    assert_eq!(be.order, ByteOrder::Big);
+    assert_eq!(le.name, be.name);
+    assert_eq!(le.slots, be.slots);
+    assert_eq!(
+        le.emitters(&little).expect("little emitters"),
+        be.emitters(&big).expect("big emitters")
+    );
+}
+
+/// Every field the twin sets, read off the big-endian blob alone - so the test
+/// above cannot pass by both sides being wrong in the same way.
+#[test]
+fn the_big_endian_blob_carries_the_authored_values() {
+    let data = twin(ByteOrder::Big);
+    let parsed = ParticleSystem::parse(&data).expect("parse");
+    assert_eq!(parsed.name, "WO_TWIN_ROOT");
+    assert_eq!(parsed.slots, vec![None, Some(0x1a4)]);
+
+    let emitters = parsed.emitters(&data).expect("emitters");
+    assert_eq!(emitters.len(), 2);
+    let root = &emitters[0];
+    assert!(root.gravity_enabled());
+    assert!(root.looping());
+    assert_eq!(root.duration_ticks, 32.0);
+    assert_eq!(root.shape, 7);
+    assert_eq!(root.extent, 0.5);
+    assert_eq!(root.speed_per_tick.0, 1.5);
+    assert_eq!(root.lifetime_ticks, (16, -6));
+    assert_eq!(root.gravity_per_tick2, -0.015);
+    assert_eq!(root.live_cap, 64);
+    assert_eq!(root.draw_class(), Some(6));
+    assert_eq!(root.atlas_grid, (4, 2));
+    assert_eq!(root.atlas_frames, 8);
+    assert_eq!(root.size.mode, ChannelMode::Keyframed);
+    assert_eq!(root.size.scaled_at(1.0), 2.5);
+    assert_eq!(root.alpha.hi, 200.0);
+    assert_eq!(root.drag_per_tick(), Some([0.98, 0.85, 0.5]));
+    assert_eq!(emitters[1].name, "bits");
+}
+
+/// A palette entry is a `u32`, not four bytes: the one field a big-endian read
+/// gets wrong if it is copied straight through.
+#[test]
+fn a_big_endian_palette_entry_comes_back_in_the_authored_order() {
+    let data = twin(ByteOrder::Big);
+    let parsed = ParticleSystem::parse(&data).expect("parse");
+    let emitters = parsed.emitters(&data).expect("emitters");
+    assert_eq!(emitters[0].colours[0], [1, 2, 3, 4]);
+    assert_eq!(
+        &data[HEADER_LEN + 2 * SLOT_LEN + 0xc4..][..4],
+        &[4, 3, 2, 1],
+        "on disc it really is stored the other way round"
+    );
+}
+
+/// A blob's own magic says which order it is; nothing asks what console it
+/// came from.
+#[test]
+fn the_magic_is_the_whole_of_how_a_blob_declares_its_order() {
+    assert_eq!(byte_order(MAGIC), ByteOrder::Little);
+    assert_eq!(byte_order(MAGIC_BE), ByteOrder::Big);
+    assert_eq!(byte_order(b"WOtd"), ByteOrder::Little);
+    assert_eq!(byte_order(&[]), ByteOrder::Little);
+
+    assert!(looks_like_particle_system(MAGIC));
+    assert!(looks_like_particle_system(MAGIC_BE));
+    assert!(!looks_like_particle_system(b"WOtd"));
+    assert!(!looks_like_particle_system(b"PSY"));
 }
