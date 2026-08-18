@@ -132,7 +132,7 @@ impl Report {
             n => format!(", {n} material(s) whose .gtf did not paint"),
         } + &match self.lightmapped {
             0 => String::new(),
-            n => format!(", {n} material(s) multiplied by the circuit's lightmap"),
+            n => format!(", {n} material(s) lit through the circuit's lightmap"),
         } + &match self.lightmap_undecoded {
             0 => String::new(),
             n => format!(", {n} lightmap(s) named but not loaded"),

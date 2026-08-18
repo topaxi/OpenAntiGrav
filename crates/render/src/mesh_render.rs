@@ -854,11 +854,18 @@ pub fn build(
 
     // A white 1x1 stands in for untextured draws, so the shader needs no branch.
     // It also fills the slot of a `Texture` node we could not decode, keeping
-    // every later texture at the index its materials expect - and it is what
-    // every draw with no lightmap binds, which makes the shader's multiply the
-    // identity for every title but Wipeout HD.
+    // every later texture at the index its materials expect.
+    //
+    // A draw with no lightmap binds **black with alpha 1** instead: the
+    // shader's authored-rig branch computes the prelit term from the
+    // lightmap's colour and gates the sun by its alpha, so black-opaque is
+    // exactly the equation the original's own lightmap-less shader variants
+    // state - no baked light, full sun. Nothing multiplies a lightmap
+    // straight into the colour any more, so the old white identity has no
+    // reader left.
     let white = make(1, 1, &[255, 255, 255, 255], "white");
-    let mut texture_binds = vec![bind(&white, &white, "white")];
+    let no_lightmap = make(1, 1, &[0, 0, 0, 255], "no lightmap");
+    let mut texture_binds = vec![bind(&white, &no_lightmap, "white")];
     for (index, slot) in model.textures.iter().enumerate() {
         let albedo = match slot {
             Some(t) => make(t.width, t.height, &t.rgba, &t.label),
@@ -866,7 +873,7 @@ pub fn build(
         };
         let lightmap = match model.lightmaps.get(index).and_then(Option::as_ref) {
             Some(t) => make(t.width, t.height, &t.rgba, &t.label),
-            None => make(1, 1, &[255, 255, 255, 255], "no lightmap"),
+            None => make(1, 1, &[0, 0, 0, 255], "no lightmap"),
         };
         let label = slot.as_ref().map_or("undecoded", |t| t.label.as_str());
         texture_binds.push(bind(&albedo, &lightmap, label));

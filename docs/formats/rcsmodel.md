@@ -1051,14 +1051,22 @@ Named explicitly, with what each would take.
    a time rather than all 904 chunks at once.
 9. **What separates transparency mode 2 from mode 1**, and what the other 15
    bits of the state word select - 17 distinct combinations disc-wide, none of
-   them decoded. Reading a `.rcsmaterial`'s microcode or HD's own executable are
-   the routes; nothing in this project has disassembled a PS3 binary.
+   them decoded. The microcode route is now open -
+   [`scripts/ps3-microcode.py`](../../scripts/ps3-microcode.py) disassembles
+   both RSX program kinds - but nothing has yet tied a state-word bit to a
+   variant choice.
 10. **Which of a vertex's several texture coordinates a shader actually
-    samples.** The declaration names them - `Uv1`, `Uv2`, `lightmapUV`, `map1`,
-    `map2`, `Uvset1` - and nothing here reads the `.rcsmaterial` microcode that
-    chooses; `VertexDecl::diffuse_texcoord` applies a rule and says so. The
-    lightmap is the one that matters: it is named, it is present on 13,293
-    attributes, its `.gtf` is decoded, and **it is not sampled**.
+    samples**, per material. The declaration names them - `Uv1`, `Uv2`,
+    `lightmapUV`, `map1`, `map2`, `Uvset1` - and
+    `VertexDecl::diffuse_texcoord` still applies a rule and says so. What has
+    moved: the **lightmap is sampled and drawn on the equation the microcode
+    itself states** - `prelit_scale * lightmap^prelit_power`, its alpha a
+    shadow mask gating the direct sun; see
+    [renderer.md](../ghidra/functions/ps3-hdfury-eu/renderer.md#the-race-fog-curve-is-read-out-of-the-circuit-materials-own-microcode)
+    and `oag_render`'s `mesh.wgsl` - and the lit variants read so far bind it
+    through the second half of the interpolant the diffuse shares, agreeing
+    with the rule. A per-material read of every variant is what would retire
+    the rule entirely.
 11. **37 of the 49 attribute name hashes**, and `0x1aaf7631` above all - 13,485
     uses, and measured to be neither a direction nor an opaque colour.
 12. **Whether a chunk wants its `colorSet1` or the light rig.** The colour is

@@ -153,7 +153,9 @@ pub(super) fn envsettings_light(
             return mesh_render::Light::stand_in();
         }
     };
-    use oag_formats::envsettings::{AMBIENT_COLOUR, SUN_COLOUR, SUN_DIRECTION};
+    use oag_formats::envsettings::{
+        AMBIENT_COLOUR, PRELIT_POWER, PRELIT_SCALE, SUN_COLOUR, SUN_DIRECTION, SUN_SPECULAR_SCALE,
+    };
     let (Some(direction), Some(colour), Some(ambient)) = (
         env.direction(SUN_DIRECTION),
         env.vec3(SUN_COLOUR),
@@ -165,11 +167,27 @@ pub(super) fn envsettings_light(
         ));
         return mesh_render::Light::stand_in();
     };
-    let light = mesh_render::Light::authored(direction, colour, ambient);
+    // The prelit curve and the specular weight feed terms whose *combination*
+    // is read out of the circuit's own fragment microcode - see
+    // `mesh_render::Light`. A file missing one of them gets the identity for
+    // that term rather than the stand-in rig: the sun and ambient above are
+    // still the circuit's.
+    let prelit_scale = env.vec3(PRELIT_SCALE).unwrap_or([1.0; 3]);
+    let prelit_power = env.vec3(PRELIT_POWER).unwrap_or([1.0; 3]);
+    let specular_scale = env.scalar(SUN_SPECULAR_SCALE).unwrap_or(0.0);
+    let light = mesh_render::Light::authored(
+        direction,
+        colour,
+        ambient,
+        prelit_scale,
+        prelit_power,
+        specular_scale,
+    );
     report.push(format!(
-        "{name}: sun [{:.2}, {:.2}, {:.2}] hue [{:.2}, {:.2}, {:.2}] over ambient \
-         [{:.2}, {:.2}, {:.2}] - the authored magnitude ({:.2}) is dropped, this target \
-         having no headroom for it",
+        "{name}: sun [{:.2}, {:.2}, {:.2}] colour [{:.2}, {:.2}, {:.2}] over ambient \
+         [{:.2}, {:.2}, {:.2}], prelit {:.1}*lightmap^{:.1}, specular x{:.2} - the \
+         combination is the microcode's own; the render target's saturation stands in \
+         for HD's tonemap",
         direction[0],
         direction[1],
         direction[2],
@@ -179,7 +197,9 @@ pub(super) fn envsettings_light(
         light.ambient[0],
         light.ambient[1],
         light.ambient[2],
-        colour.iter().fold(0.0f32, |a, b| a.max(*b)),
+        prelit_scale[0],
+        prelit_power[0],
+        specular_scale,
     ));
     light
 }

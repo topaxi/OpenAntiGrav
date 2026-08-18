@@ -77,6 +77,16 @@ pub const SUN_SPECULAR_SCALE: &str = "Lighting.Sun specular scale";
 /// `"Lighting.Constant ambient color"`. Three numbers, reaching 3.0.
 pub const AMBIENT_COLOUR: &str = "Lighting.Constant ambient color";
 
+/// `"Lighting.Prelit ambient colour scale"`. Three numbers. The scale the
+/// circuit's own fragment microcode multiplies the powed lightmap by -
+/// `prelit = scale * lightmap.rgb ^ power` - see
+/// `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`.
+pub const PRELIT_SCALE: &str = "Lighting.Prelit ambient colour scale";
+
+/// `"Lighting.Prelit ambient colour power"`. Three numbers, the exponent in
+/// the same term [`PRELIT_SCALE`] scales.
+pub const PRELIT_POWER: &str = "Lighting.Prelit ambient colour power";
+
 /// `"Lighting.Sky colour"`. **Four bytes**, not floats - see the module docs.
 pub const SKY_COLOUR: &str = "Lighting.Sky colour";
 
@@ -86,8 +96,10 @@ pub const SKY_ROTATION: &str = "Lighting.Sky rotation";
 /// `"Fog.Fog Color"`. Three numbers, reaching 1.85.
 pub const FOG_COLOUR: &str = "Fog.Fog Color";
 
-/// `"Fog.Fog Density"`. One number, 0.0003 to 0.03 - an **exponential**
-/// coefficient, where this project's fog uniform is a linear near/far ramp.
+/// `"Fog.Fog Density"`. One number, 0.0003 to 0.03. The circuit materials'
+/// own fragment microcode applies its coefficient as
+/// `exp(-(coefficient * view_depth)^2)`; whether this value reaches that
+/// coefficient unscaled is not read.
 pub const FOG_DENSITY: &str = "Fog.Fog Density";
 
 /// One entry's value: the numbers as written, and how they were written.

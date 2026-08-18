@@ -85,7 +85,11 @@ impl Scene {
         // instead - static for the race, since its curve reads view depth
         // rather than anything sampled at the camera. `Fog::off` remains for
         // every title that authors neither.
-        let eye_fog = self.authored_fog.unwrap_or_else(mesh_render::Fog::off);
+        let mut eye_fog = self.authored_fog.unwrap_or_else(mesh_render::Fog::off);
+        // The specular term reads the eye out of the fog block - it is the one
+        // slot in bind group 2 that carries a position - so it is kept current
+        // even when the fog itself is static or off.
+        eye_fog.camera = eye.to_array();
         let fog = oag_formats::fog::sample(&self.fog_volumes, eye.to_array())
             .map_or(eye_fog, |p| mesh_render::Fog::new(&p, eye.to_array()));
         // The circuit's own light rig where it authors one - Wipeout HD does,

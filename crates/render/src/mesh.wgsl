@@ -77,6 +77,13 @@ struct Light {
     _lpad0: f32,
     sun: vec3<f32>,
     _lpad1: f32,
+    // The prelit (baked-lightmap) curve and the specular weight, from the
+    // circuit's `.envsettings`, applied exactly where its own fragment
+    // microcode applies them - see `lit_texel` and `mesh_render::Light`.
+    prelit_scale: vec3<f32>,
+    specular_scale: f32,
+    prelit_power: vec3<f32>,
+    _lpad2: f32,
 };
 
 struct Scene {
@@ -210,32 +217,59 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     let fill = max(dot(n, normalize(vec3<f32>(-0.5, 0.2, -0.7))), 0.0);
     let stand_in = vec3<f32>(0.15 + 0.75 * key + 0.25 * fill);
 
-    // The authored one: a single sun in the direction the circuit states, over
-    // the ambient it states. `scene.light.sun` is the sun's hue with its
-    // magnitude divided out, which is all this target can hold.
-    let sun = max(dot(n, scene.light.direction), 0.0);
-    let authored = scene.light.ambient + scene.light.sun * sun;
+    // **The circuit's own baked lighting.** A material naming an
+    // `lmaps/*-lmap.gtf` in its second texture slot is drawn through it,
+    // sampled at the `lightmapUV` the chunk's vertex declaration names - see
+    // `docs/formats/rcsmaterial.md`. Every draw without one binds a black,
+    // alpha-1 placeholder, which zeroes the prelit term and passes the sun
+    // below - exactly the equation the original's own lightmap-less shader
+    // variants state.
+    let baked = textureSample(lightmap, albedo_sampler, in.lightmap_texcoord);
+
+    // The authored rig, and the combination is no longer this project's: it is
+    // the one every lit variant of an HD circuit `.rcsmaterial` computes,
+    // read out of the fragment microcode
+    // (docs/ghidra/functions/ps3-hdfury-eu/renderer.md). The lightmap enters
+    // through a power curve - `Prelit ambient colour scale/power`, the
+    // .envsettings names - and its **alpha** is a baked shadow mask gating
+    // the direct sun. The magnitudes are authored for a tonemapped linear
+    // target; here the render target's saturation stands in for that stage.
+    let ndl = clamp(dot(n, scene.light.direction), 0.0, 1.0);
+    let prelit = scene.light.prelit_scale * pow(baked.rgb, scene.light.prelit_power);
+    let authored = scene.light.ambient + prelit + scene.light.sun * (ndl * baked.a);
 
     let rig = mix(stand_in, authored, scene.light.enabled);
     // Prelit geometry already carries its lighting in the vertex colour.
     let light = mix(vec3<f32>(1.0), rig, in.lit);
 
     let texel = textureSample(albedo, albedo_sampler, in.texcoord);
-    // **The circuit's own baked lighting, multiplied in.** A material naming an
-    // `lmaps/*-lmap.gtf` in its second texture slot is drawn through it, sampled
-    // at the `lightmapUV` the chunk's vertex declaration names - see
-    // `docs/formats/rcsmaterial.md`. That the texture *is* a lightmap is read
-    // off four agreeing signals; that the operation is a **multiply** is this
-    // project's assumption, the conventional one, and the load report says so.
-    // Every draw without one binds a white 1x1, so this costs a fetch and
-    // changes nothing.
-    let baked = textureSample(lightmap, albedo_sampler, in.lightmap_texcoord).rgb;
+
+    // The read specular term: half-vector against the sun, exponent 32 - an
+    // inline constant of the microcode, the same in every lit variant - and
+    // masked by the sun's own incidence, the lightmap's shadow alpha and the
+    // diffuse texture's alpha (gloss lives there; a DXT1 diffuse has alpha 1
+    // everywhere, which is full gloss, as the original samples it too). Zero
+    // whenever the authored rig is off: the stand-in never had one.
+    let to_eye = normalize(scene.fog.camera - in.world);
+    let half_vector = to_eye + scene.light.direction;
+    let ndh = clamp(
+        dot(half_vector, n) / max(length(half_vector), 1e-6),
+        0.0,
+        1.0,
+    );
+    let specular = scene.light.sun
+        * (pow(ndh, 32.0) * ndl * baked.a * texel.a * scene.light.specular_scale
+            * scene.light.enabled * in.lit);
+
     // Vertex colour modulates the texture on all four channels, as the GE's
     // texture-env does - RGB and alpha alike, not RGB alone. Dropping the
     // vertex colour's own alpha here is what made the boost plume's baked
     // falloff vanish; see `every_psp_teams_boost_plume_vertex_alpha_is_bimodal`
     // in `crates/game/tests/boost_plume_ground_truth.rs`.
-    return vec4<f32>(texel.rgb * in.colour.rgb * light * baked, texel.a * in.colour.a);
+    return vec4<f32>(
+        texel.rgb * in.colour.rgb * light + specular,
+        texel.a * in.colour.a,
+    );
 }
 
 @fragment
