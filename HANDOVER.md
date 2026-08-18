@@ -117,6 +117,24 @@ appending a dated pass to it.
   every authored light class (`AmbientLight`/`DirectionalLight`/etc.) are still
   unchecked M6 roadmap items - the flat, dark look that produces is a known,
   documented gap, not something to guess-fix from a screenshot.
+- **But one of them was, and the shape of it is worth carrying.** On 2026-08-18
+  a screenshot of HD's Talon's Junction showed a quarter of the circuit smeared
+  into horizontal streaks. Two of `.rcsmodel`'s readings were *solving* for
+  something the file states: a chunk's `+0x58` points at a **vertex-attribute
+  declaration** giving the stride, and per attribute a `~crc32` name, an RSX
+  type and a byte offset. The texture coordinate was being read from the last
+  four bytes of a vertex, which on the commonest layout is `lightmapUV`.
+  `docs/formats/rcsmodel.md`. **The trap that cost the first sweep**: `+0x58` is
+  the index count on a `LAYOUT_INLINE` chunk, so a disc-wide sweep that does not
+  gate on the `+0x06` layout byte comes back as convincing noise - 606
+  declarations with a stride of zero, type codes spread over all sixteen values.
+  **The lesson worth more than the fix**: the retired reading had a
+  texel-density discriminator that really did separate two groups, and a sweep
+  of every header byte that really did find no field separating them. Both were
+  correct and both were about the wrong thing - the sweep was run against labels
+  the discriminator produced, so it could not find the field one word away from
+  the bytes it swept. When a heuristic stands in for a missing field, check the
+  field is missing.
 
 ## Where the project stands
 
