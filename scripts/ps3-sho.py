@@ -1,0 +1,276 @@
+#!/usr/bin/env python3
+"""Reads the `SHO` shader blocks out of Wipeout HD's PS3 `EBOOT.elf`.
+
+    ps3-sho.py census            # every block, and the hash censuses
+    ps3-sho.py block 0x0092fe80  # one block, fully framed
+    ps3-sho.py hash fogFactors   # ~crc32 of a name, the form the tables store
+    ps3-sho.py names             # the names recovered so far
+
+Every number `docs/ghidra/functions/ps3-hdfury-eu/renderer.md` quotes about the
+shader container comes out of this, so the page can be re-derived rather than
+trusted. Nothing here is a parser this project ships: the blocks live in the
+executable, which no part of the game reads at runtime.
+
+**The block layout is validated rather than asserted.** Each of the three tables
+starts exactly where the previous one ends - `params == attributes + 8*count`
+and `samplers == params + 12*count` - which holds on all 124 blocks in the
+shader run and is what makes the framing a reading rather than a guess. The
+class table this project misframed by one field
+(`docs/ghidra/functions/ps3-hdfury-eu/vex-classes.md`) is why that check is here.
+
+The ELF must already be extracted; see the ps3-hdfury-eu README.
+"""
+
+from __future__ import annotations
+
+import struct
+import sys
+import zlib
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+DEFAULT_ELF = ROOT / "data/extracted/ps3/hdfury-eu/PS3_GAME/USRDIR/EBOOT.elf"
+
+# The contiguous run of shader blocks. Two further `SHO\x08` words sit in
+# `.rodata` among the strings and are not shader blobs - see renderer.md.
+RUN_LO, RUN_HI = 0x00927800, 0x00936D80
+
+# Names recovered by hashing candidates against the tables. `~crc32` is the
+# hash - `renderer.md`'s "The name hash is CRC-32" - so a name that lands is a
+# preimage and not a resemblance. Every one below also agrees in *shape* with
+# what the table declares for it, which is the second, independent check: a
+# matrix is declared `count 4`, a sampler carries a texture unit, and the three
+# attributes named `inPos`, `inCol` and `inUV` sit at attribute slots 0, 3 and
+# 8 - position, COLOR0 and TEXCOORD0 in NV40's own conventional numbering.
+NAMES = {
+    # Parameters
+    0x2E7D5F33: "viewProj",
+    0x9307F358: "worldView",
+    0xADF3C36F: "proj",
+    0x4C06F24F: "worldViewProj",
+    0xE252323B: "kWorldViewProj",
+    0xD04A156C: "fogFactors",
+    0x906B67BA: "time",
+    0x13B9DA7B: "scale",
+    0x083FDB95: "size",
+    0xA6F5352F: "offset",
+    0x627BE8EA: "offsets",
+    0x2F7FC242: "colourRamp",
+    # Attributes
+    0xB9D31B0A: "position",
+    0xDE7A971B: "normal",
+    0x31D3E4B0: "inPos",
+    0xA2BBF46C: "inCol",
+    0x9F182390: "inUV",
+    0x5508B4BA: "uv",
+    0x05079A31: "colour",
+    0x99A9B716: "color",
+    0x47935368: "fAlpha",
+    0x3DE66379: "fLength",
+    # Samplers
+    0x7D99F28D: "texture",
+    0xB5AD56C3: "texture0",
+    0xC2AA6655: "texture1",
+    0x5BA337EF: "texture2",
+    0x305C5D3F: "diffuseSampler",
+    0x3F1E1460: "blurSampler",
+    0xEAB179D1: "depthSampler",
+    0x518D0E89: "srcTexture",
+    0xF5FAB869: "dstTexture",
+    0xA7AC21BC: "sourceImage",
+    0xB6D27DA6: "texSampler",
+}
+
+
+def name_hash(text: str) -> int:
+    """`~crc32(name)`, which is what the tables store."""
+    return (~zlib.crc32(text.encode())) & 0xFFFFFFFF
+
+
+class Image:
+    """An ELF64 big-endian image addressed by virtual address."""
+
+    def __init__(self, path: Path) -> None:
+        self.raw = path.read_bytes()
+        (e_phoff,) = struct.unpack_from(">Q", self.raw, 0x20)
+        e_phentsize, e_phnum = struct.unpack_from(">HH", self.raw, 0x36)
+        self.segments: list[tuple[int, int, int]] = []
+        for i in range(e_phnum):
+            base = e_phoff + i * e_phentsize
+            p_type, _f, p_offset, p_vaddr, _pa, p_filesz, _m = struct.unpack_from(
+                ">IIQQQQQ", self.raw, base
+            )
+            if p_type == 1 and p_filesz:
+                self.segments.append((p_vaddr, p_offset, p_filesz))
+
+    def offset(self, va: int) -> int | None:
+        for vaddr, off, size in self.segments:
+            if vaddr <= va < vaddr + size:
+                return off + (va - vaddr)
+        return None
+
+    def address(self, off: int) -> int | None:
+        for vaddr, base, size in self.segments:
+            if base <= off < base + size:
+                return vaddr + (off - base)
+        return None
+
+    def u32(self, va: int) -> int:
+        return struct.unpack_from(">I", self.raw, self.offset(va))[0]
+
+
+class Block:
+    """One `SHO` block, framed.
+
+    ```text
+    +0x00  'SHO', 8
+    +0x04  u32   1 for a fragment program, 0 for a vertex one
+    +0x08  u16   2 on all 124
+    +0x0a  u16   attribute count
+    +0x0c  u16   parameter count
+    +0x0e  u16   sampler count
+    +0x10  u16   attribute table offset, 0x18 on all 124
+    +0x12  u16   parameter table offset
+    +0x14  u16   sampler table offset
+    +0x16  u16   where the program data begins
+    ```
+
+    Attribute record, 8 bytes: `(name hash, attribute slot)`.
+    Parameter record, 12 bytes:
+    `(name hash, u16 type, u16 count, u16 vertex register, u16 fragment slot)`
+    with `0xffff` in whichever of the last two does not apply - a vertex
+    program's constants live in the constant file and a fragment program's are
+    patched into its own microcode, which is why exactly one is ever set.
+    Type is `0x0200 | components`, and `count` is rows, so a 4x4 matrix is
+    `(0x0204, 4)`.
+    Sampler record, 8 bytes: `(name hash, texture unit)`.
+    """
+
+    def __init__(self, image: Image, va: int) -> None:
+        off = image.offset(va)
+        self.va = va
+        self.fragment = image.u32(va + 4) == 1
+        fields = struct.unpack_from(">8H", image.raw, off + 8)
+        self.version = fields[0]
+        counts = fields[1], fields[2], fields[3]
+        offsets = fields[4], fields[5], fields[6]
+        self.program_at = fields[7]
+        self.attributes = [
+            struct.unpack_from(">II", image.raw, off + offsets[0] + 8 * i)
+            for i in range(counts[0])
+        ]
+        self.parameters = [
+            struct.unpack_from(">IHHHH", image.raw, off + offsets[1] + 12 * i)
+            for i in range(counts[1])
+        ]
+        self.samplers = [
+            struct.unpack_from(">II", image.raw, off + offsets[2] + 8 * i)
+            for i in range(counts[2])
+        ]
+        # The framing check: each table starts where the previous one ended.
+        self.consistent = (
+            offsets[1] == offsets[0] + 8 * counts[0]
+            and offsets[2] == offsets[1] + 12 * counts[1]
+        )
+
+    def show(self) -> None:
+        kind = "fragment" if self.fragment else "vertex"
+        print(f"{self.va:#010x}  {kind} program, version {self.version}")
+        print(f"  program data at +{self.program_at:#05x}")
+        for h, slot in self.attributes:
+            print(f"  attribute  {h:#010x}  slot {slot:2}  {NAMES.get(h, '')}")
+        for h, ty, count, vreg, fslot in self.parameters:
+            where = f"c{vreg}" if vreg != 0xFFFF else f"patch +{fslot:#06x}"
+            print(
+                f"  parameter  {h:#010x}  float{ty & 0xFF} x{count}  "
+                f"{where:14} {NAMES.get(h, '')}"
+            )
+        for h, unit in self.samplers:
+            print(f"  sampler    {h:#010x}  unit {unit}    {NAMES.get(h, '')}")
+
+
+def blocks(image: Image) -> list[Block]:
+    """Every block in the shader run, in address order."""
+    out = []
+    at = 0
+    while True:
+        at = image.raw.find(b"SHO\x08", at)
+        if at < 0:
+            break
+        va = image.address(at)
+        if va is not None and RUN_LO <= va <= RUN_HI:
+            out.append(Block(image, va))
+        at += 4
+    out.sort(key=lambda b: b.va)
+    return out
+
+
+def census(image: Image) -> None:
+    found = blocks(image)
+    bad = [b.va for b in found if not b.consistent]
+    fragment = sum(1 for b in found if b.fragment)
+    print(f"{len(found)} blocks in {RUN_LO:#010x}..{RUN_HI:#010x}")
+    print(f"  {fragment} fragment, {len(found) - fragment} vertex")
+    print(f"  {len(bad)} with a table that does not follow the previous one")
+    if bad:
+        print("  " + " ".join(f"{va:#010x}" for va in bad))
+    # A program with attributes is a vertex program and one without is a
+    # fragment program, on all 124 - which is what says `+0x04` is the kind and
+    # not something that happens to correlate with it.
+    mixed = [b.va for b in found if b.fragment != (not b.attributes)]
+    print(f"  {len(mixed)} where the kind word disagrees with having attributes")
+    for label, rows in (
+        ("attributes", [(h, f"slot {s}") for b in found for h, s in b.attributes]),
+        (
+            "parameters",
+            [
+                (h, f"float{ty & 0xFF} x{c}")
+                for b in found
+                for h, ty, c, _v, _f in b.parameters
+            ],
+        ),
+        ("samplers", [(h, f"unit {u}") for b in found for h, u in b.samplers]),
+    ):
+        seen: dict[int, tuple[int, set[str]]] = {}
+        for h, shape in rows:
+            count, shapes = seen.get(h, (0, set()))
+            seen[h] = (count + 1, shapes | {shape})
+        named = sum(1 for h in seen if h in NAMES)
+        print(f"\n{len(seen)} distinct {label}, {named} named:")
+        for h, (count, shapes) in sorted(seen.items(), key=lambda kv: -kv[1][0]):
+            print(
+                f"  {h:#010x} {count:4}  {', '.join(sorted(shapes)):24} "
+                f"{NAMES.get(h, '')}"
+            )
+
+
+def main(argv: list[str]) -> int:
+    if len(argv) < 2:
+        print(__doc__)
+        return 2
+    command = argv[1]
+    if command == "hash":
+        for text in argv[2:]:
+            print(f"{name_hash(text):#010x}  {text}")
+        return 0
+    if command == "names":
+        for h, text in sorted(NAMES.items(), key=lambda kv: kv[1]):
+            print(f"{h:#010x}  {text}")
+        return 0
+    path = Path(argv[-1]) if argv[-1].endswith(".elf") else DEFAULT_ELF
+    if not path.exists():
+        print(f"{path} is not present; see data/README.md", file=sys.stderr)
+        return 1
+    image = Image(path)
+    if command == "census":
+        census(image)
+        return 0
+    if command == "block":
+        Block(image, int(argv[2], 0)).show()
+        return 0
+    print(__doc__)
+    return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv))

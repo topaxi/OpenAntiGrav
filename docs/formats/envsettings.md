@@ -146,7 +146,7 @@ has.
 | `Lighting.Constant ambient color` | **Drawn**, clamped to `0..=1` |
 | `Lighting.Sun color` | **Hue drawn, magnitude dropped** - see above |
 | `Lighting.Sky colour`, `Sky rotation` | Read, unused. The sky itself does not draw - see below |
-| `Fog.*` | Read, unused, and **an HD race has no fog at all**. HD's circuits author no `fogCube` node, so `fog_volumes` is empty on a PS3 source and `Fog::off` is what binds - the circuit states a fog colour and a density and gets nothing. Wiring it needs a second fog *mode*, not a value copy: `Fog Density` is an **exponential** coefficient and this project's uniform is a linear `near`/`far` ramp |
+| `Fog.*` | Read, unused, and **an HD race has no fog at all**. HD's circuits author no `fogCube` node, so `fog_volumes` is empty on a PS3 source and `Fog::off` is what binds - the circuit states a fog colour and a density and gets nothing. **The curve is unread and is not guessed** - see below |
 | `HDR and Bloom.*` | Read, unused. The bloom here is not HD's, and the tone parameters need a tonemap stage that does not exist |
 | `Water.*` | Read, unused. No water surface is drawn |
 | `Lighting.Prelit *`, `Spotlight *`, `Ambient false direction` | Read, unused, and undecoded - what "prelit ambient false specular" means is not established |
@@ -194,6 +194,26 @@ Two things the string sweep turned up that this page's key list does not have:
   key namespace** these settings are read through, and it is not the flat one the
   33 files on the disc write. What supplies the prefix is unread.
 
+### The prefixed namespace covers fog too, and one lookalike is not fog at all
+
+Swept 2026-08-18. `"%s.Lighting.Fog colour"`, `"%s.Lighting.Fog density"`,
+`"%s.Lighting.Alt Fog colour"`, `"%s.Lighting.Alt Fog density"`,
+`"%s.Lighting.Track Fog colour"` and `"%s.Lighting.Track Fog density"` sit at
+`0x007b24d8`-`0x007b2568` and are all named by one function, `0x003d0b98`. So the
+prefixed namespace is not a sky-only thing: it covers the same fog values these
+files write flat, and it carries a **`Track Fog` pair no file on the disc
+writes**.
+
+**`"%s.sections[%d].fogStart"`, `"fogLength"` and `"fogExponent"`
+(`0x00788cc8`-`0x00788d08`) are not this file's fog and not the race's.** They
+read exactly like the fog curve anyone would go looking for, which is why they
+are named here: their neighbours in the same key block are `effectMode`, `fovy`,
+`duration`, `dofStart`, `dofStrength`, `dofFactor`, `focusStart` and `focusEnd`,
+and the `.cpp` name immediately after them at `0x00788e58` is
+`BackgroundController_Item.cpp`. They belong to the **front end's background
+camera flythrough**, a per-section rig with depth of field, and have nothing to
+do with a circuit.
+
 ## Open
 
 - **What the original does with any of it.** Every name here is the file's own.
@@ -208,7 +228,19 @@ Two things the string sweep turned up that this page's key list does not have:
   `sky.gtf` beside the track, a 1024x1024 DXT1 **cubemap** that
   [`gtf::Texture::to_rgba`](gtf.md) refuses; the geometry to draw it through
   would be this project's, so it is not drawn at all rather than invented.
-- **Fog**, which needs the exponential mode above.
+- **The fog curve.** `Fog Density` runs `0.0003` to `0.03` across the corpus and
+  **what is done with it is not read**. The shader side is located:
+  [`renderer.md`](../ghidra/functions/ps3-hdfury-eu/renderer.md) shows
+  `fogFactors` is one `float4` appearing in 9 `SHO` blocks, **all of them vertex
+  programs**, so HD's fog is computed per vertex and interpolated. Whether the
+  term is `exp`, `exp2`, linear or squared needs that microcode, which is
+  located and undecoded. Over a density range of two orders of magnitude those
+  candidates differ by more than the picture does, so **a race draws unfogged
+  rather than at a chosen ramp**: a plausible haze at the authored colour would
+  look entirely correct and be unfalsifiable, which is the failure
+  [`CLAUDE.md`](../../CLAUDE.md) records the rocket's invented smoke for.
+- **`Alternate Fog Color` and `Alternate Fog Density`**, on every circuit, with
+  nothing read about what selects them.
 
 ## See also
 

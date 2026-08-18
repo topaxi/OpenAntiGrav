@@ -416,6 +416,16 @@ Junction's node names is
 13,485 uses, always four normalised bytes, and it is what sits in the last four
 bytes of the stride-18 layout that has no lightmap.
 
+**The shaders share this namespace, and looking there does not name it.** HD's
+executable carries 124 `SHO` shader blocks whose attribute tables are keyed by
+the *same* `~crc32` hashes - `position` is `0xb9d31b0a` and `normal` is
+`0xde7a971b` on both sides, which is how a stride authored per chunk binds to a
+program compiled once. Reading all 124 named eleven attribute names, and
+**`0x1aaf7631` appears in none of them**: the commonest four-byte attribute on
+the disc is one no engine-owned program declares an input for. See
+[`renderer.md`](../ghidra/functions/ps3-hdfury-eu/renderer.md) and
+`scripts/ps3-sho.py`.
+
 ### The four-byte attributes are three different things, and one is vertex colour
 
 **Confidence 88**, measured 2026-08-18 over every model on the disc; the test is

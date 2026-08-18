@@ -526,6 +526,120 @@ actively misleading rather than merely wrong: floats loaded from the TOC render
 as string-pointer variables, so arithmetic reads as `(float)PTR_s_Emp__d_008a754c`.
 Use `scripts/ps3-toc.py resolve` on every constant in that range.
 
+### The block, framed whole
+
+**Read 2026-08-18 with [`scripts/ps3-sho.py`](../../../../scripts/ps3-sho.py),
+which is where every number below comes from.** The block is a descriptor with
+three tables and the program's own data behind them:
+
+```text
++0x00  'SHO', 8
++0x04  u32   1 for a fragment program, 0 for a vertex one
++0x08  u16   2 on all 124
++0x0a  u16   attribute count
++0x0c  u16   parameter count
++0x0e  u16   sampler count
++0x10  u16   attribute table offset, 0x18 on all 124
++0x12  u16   parameter table offset
++0x14  u16   sampler table offset
++0x16  u16   where the program data begins
+```
+
+| Table | Stride | Record |
+| --- | ---: | --- |
+| Attributes | 8 | `(name hash, attribute slot)` |
+| Parameters | 12 | `(name hash, u16 type, u16 count, u16 vertex register, u16 fragment slot)` |
+| Samplers | 8 | `(name hash, texture unit)` |
+
+**Confidence 90, and the framing is checked rather than asserted.** Each table
+starts exactly where the previous one ends - `params == attributes + 8*count`
+and `samplers == params + 12*count` - and that holds on **all 124 blocks, with
+zero exceptions**. [`vex-classes.md`](vex-classes.md) is why the check is there:
+a one-field rotation of a record can be self-consistent and wrong, so a layout
+that only *reads plausibly* is not read at all.
+
+`+0x04` is the program kind and not something correlated with it: on all 124,
+the word is 1 exactly when the block declares no attributes. **75 fragment
+programs, 49 vertex.** The parameter record's last two fields are the same
+either/or - one is always `0xffff` - which is RSX's own split: a vertex
+program's constants live in the constant file and a fragment program's are
+patched into its own microcode. Type is `0x0200 | components` and `count` is
+rows, so a 4x4 matrix declares `(0x0204, 4)`.
+
+**The microcode is inline, at `+0x16`**, preceded by a block of embedded float
+constants. `FunkLayerBloom_vp`'s begins at `0x0092ffe0` with `00031c6c
+005c6055 0186c083 60407ffc` - four-word NV40 vertex instructions. This page
+previously said only that no microcode had been disassembled; that is still
+true, and now it says where it is. Nothing here decodes an instruction.
+
+### 29 parameter, attribute and sampler names, by preimage
+
+The hash is `~crc32` ([below](#the-name-hash-is-crc-32)), so a candidate that
+lands is a **preimage** rather than a resemblance. A previous sweep of ~2,000
+names over thirteen `.rcsmaterial` hashes matched none; sweeping the executable's
+own 124 blocks instead - 34 attributes, 111 parameters, 20 samplers - matched
+29 across five sweeps of about 780,000 candidates in total. At that scale the
+expected number of false hits is under 0.01.
+
+| Kind | Names |
+| --- | --- |
+| Parameter | `viewProj` `worldView` `proj` `worldViewProj` `kWorldViewProj` `fogFactors` `time` `scale` `size` `offsets` `colourRamp` |
+| Attribute | `position` `normal` `inPos` `inCol` `inUV` `uv` `colour` `color` `offset` `fAlpha` `fLength` |
+| Sampler | `texture` `texture0` `texture1` `texture2` `diffuseSampler` `blurSampler` `depthSampler` `srcTexture` `dstTexture` `sourceImage` `texSampler` |
+
+**Every one also agrees in shape with what the table declares for it**, which is
+the second and independent check. The four matrices are the four names ending
+`Proj`/`View` and each declares `count 4`; `time`, `scale` and `size` are
+scalars; the eleven sampler names are the ones that carry a texture unit and no
+register at all. The sharpest of the three is the attribute slots: `inPos` sits
+at slot 0, `inCol` and `colour` at slot 3, and `inUV` at slot 8 - **position,
+COLOR0 and TEXCOORD0 in NV40's own conventional attribute numbering**, which
+nothing in the wordlist knew about.
+
+**The attribute names are the same namespace `.rcsmodel` uses.** `position`
+(`0xb9d31b0a`) and `normal` (`0xde7a971b`) are the hashes a chunk's vertex
+declaration writes, byte for byte -
+[`rcsmodel.md`](../../../formats/rcsmodel.md). So a mesh's declared attributes
+and a program's declared inputs are matched by name hash, which is how a stride
+authored per chunk binds to a program compiled once. Five hashes remain unnamed
+above ten uses and are listed by `ps3-sho.py census`; `0x1aaf7631`, the
+13,485-use attribute `rcsmodel.md` cannot name, appears in **no** block's
+attribute table.
+
+### What this says about fog, and what it does not
+
+`fogFactors` is `~crc32` `0xd04a156c`, **one `float4`, in 9 blocks, and all 9
+are vertex programs** - at registers c455 to c463, one per program. So
+**HD's fog is computed per vertex and interpolated**, and its coefficients are a
+single four-component constant.
+
+**The curve is not read, and three things that look like it are not it.**
+
+- **`%s.sections[%d].fogStart`, `fogLength` and `fogExponent`
+  (`0x00788cc8`-`0x00788d08`) are not race fog.** Their neighbours in the same
+  key block are `effectMode`, `fovy`, `duration`, `dofStart`, `dofStrength`,
+  `dofFactor`, `focusStart` and `focusEnd`, and the `.cpp` immediately after
+  them at `0x00788e58` is `BackgroundController_Item.cpp`. They are the front
+  end's background camera flythrough - a per-section rig with depth of field.
+  `0x00187010` names the indexed form and `0x00187400`/`0x001876f8` the flat
+  one.
+- **`%s.Lighting.Fog colour`, `Fog density`, `Alt Fog colour`, `Alt Fog
+  density`, `Track Fog colour` and `Track Fog density`
+  (`0x007b24d8`-`0x007b2568`), all named by `0x003d0b98`**, are a second,
+  prefixed namespace over the same values the 33 `.envsettings` files write
+  flat - the namespace [`envsettings.md`](../../../formats/envsettings.md) had
+  open. A `Track Fog` pair exists that no file on the disc writes.
+- **`Fog.Fog Density` itself** is named twice, at `0x00786260` (by `0x006909a8`)
+  and `0x007b0630` (by `0x003a83d8` and `0x003a9520`, the same two functions
+  that name `Lighting.Sky colour`).
+
+None of that says whether the term is `exp`, `exp2`, linear or squared, and the
+authored densities span `0.0003` to `0.03`, over which those candidates diverge
+by more than the picture. **Reading it needs the vertex microcode**, which is
+located above and undecoded. Until then `oag-render` draws an HD race unfogged
+rather than at a guessed ramp - see
+[`envsettings.md`](../../../formats/envsettings.md).
+
 ## What was deliberately not read
 
 - **The draw path.** No mesh submission, no state setting, no shader binding.
