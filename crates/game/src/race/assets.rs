@@ -1,4 +1,4 @@
-//! The small readers `load` is built out of - a particle effect, a `.mip`
+//! The small readers `load` is built out of - a particle effect, an exhaust
 //! texture - and the two notes it puts in the load report when an asset is
 //! absent or arrives untextured.
 //!
@@ -20,14 +20,13 @@ pub const FLARE_TEXTURE: &str = r"Data\Tex\EngineFlare\grabbedEngineFlare128x64x
 /// `Trail_DrawRibbon` indexes per layer. Note the directory case differs from
 /// [`FLARE_TEXTURE`]'s - `engineFlare` here, `EngineFlare` there - which does not
 /// matter, since the WAD hash is case-insensitive.
+///
+/// The PS2 build loads this same literal, from `0x002be7d0` in `SCES_547.48`,
+/// into the same three slots - and finds it under `.pct` rather than `.mip`.
+/// [`oag_pulse::ps2_texture_name`] is where that rewrite lives; nothing here
+/// needs to know which disc it is reading.
 pub const NOISE_TEXTURE: &str = r"Data\Tex\engineFlare\Engine_noise.mip";
 
-/// Decodes a `.mip` texture out of the archive set.
-///
-/// Returns the pixels and a line for the load report, or the reason it could not -
-/// **as text, not as `None`**. A missing entry and a blob that does not parse are
-/// different problems with different fixes (name mining versus the decoder), and a
-/// silent fallback hides which one happened.
 /// Reads one `Data\Psys\<name>.POB` out of the archive set and parses it
 /// into a playable effect.
 ///
@@ -65,28 +64,71 @@ pub(super) fn particle_effect(
     Ok((effect, note))
 }
 
-pub(super) fn mip_texture(
+/// Decodes an exhaust texture out of the archive set, in whichever of the two
+/// formats this disc stores it.
+///
+/// Returns the pixels and a line for the load report, or the reason it could not -
+/// **as text, not as `None`**. A missing entry and a blob that does not parse are
+/// different problems with different fixes (name mining versus the decoder), and a
+/// silent fallback hides which one happened.
+///
+/// [`oag_pulse::read_image`] rather than `read_name`, for the same reason the
+/// HUD atlas uses it: the PS2 keeps these two under the declared name with its
+/// own extension. The PSP path is unchanged - the declared name answers first
+/// and the rewrite is never reached.
+pub(super) fn exhaust_texture(
     archives: &mut oag_assets::Archives,
     name: &str,
 ) -> std::result::Result<(FlareTexture, String), String> {
-    let blob = archives
-        .read_name(name)
+    let blob = oag_pulse::read_image(archives, name)
         .map_err(|e| format!("{name}: not in the archive set ({e})"))?;
-    let texture = oag_formats::texture::Texture::parse(&blob)
-        .map_err(|e| format!("{name}: {} bytes, does not parse ({e})", blob.len()))?;
-    let note = format!(
-        "{name}: {}x{}, {} mip level(s)",
-        texture.width, texture.height, texture.mip_levels
-    );
-    Ok((
-        FlareTexture {
-            width: u32::from(texture.width),
-            height: u32::from(texture.height),
-            rgba: texture.to_rgba(),
-        },
-        note,
-    ))
+    decode_either(name, &blob)
 }
+
+/// Decodes whichever of the two texture formats the blob is, with the pixels a
+/// [`FlareTexture`] wants.
+///
+/// The PSP's `.mip` is tried first and **its** error is the one reported, the
+/// same rule `crate::sprite::Image::decode` follows: a `.mip` that will not
+/// parse is far and away the commoner failure, and reporting the PS2 parser's
+/// complaint about a PSP blob sends the reader after the wrong decoder.
+///
+/// The note names the format, because "64x64" alone does not distinguish a PSP
+/// disc from a PS2 one in the load report, and the two reach this point by
+/// different names.
+fn decode_either(name: &str, blob: &[u8]) -> std::result::Result<(FlareTexture, String), String> {
+    match oag_formats::texture::Texture::parse(blob) {
+        Ok(texture) => Ok((
+            FlareTexture {
+                width: u32::from(texture.width),
+                height: u32::from(texture.height),
+                rgba: texture.to_rgba(),
+            },
+            format!(
+                "{name}: {}x{} .mip, {} mip level(s)",
+                texture.width, texture.height, texture.mip_levels
+            ),
+        )),
+        Err(psp) => match oag_formats::ps2_texture::parse(blob) {
+            Ok(texture) => Ok((
+                FlareTexture {
+                    width: u32::from(texture.width),
+                    height: u32::from(texture.height),
+                    rgba: texture.to_rgba(),
+                },
+                format!(
+                    "{name}: {}x{} .pct, {} bpp",
+                    texture.width, texture.height, texture.bits_per_pixel
+                ),
+            )),
+            Err(_) => Err(format!(
+                "{name}: {} bytes, does not parse ({psp})",
+                blob.len()
+            )),
+        },
+    }
+}
+
 /// Why a class produced nothing: the file authors none, or nobody has recovered
 /// its id for this format version.
 ///

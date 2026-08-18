@@ -180,8 +180,11 @@ impl Assets {
                     Ok(xml) => tips = self::tips(&xml, strings),
                     Err(e) => notes.push(format!("{TIPS_ENTRY}: {e}")),
                 }
-                match archives
-                    .read_name(GLOW_STRIP_ENTRY)
+                // `read_image`, not `read_name`: the PS2 keeps this strip
+                // under the declared name with the extension rewritten to
+                // `.pct` (`oag_pulse::ps2_texture_name`), which is why the
+                // loading screen had no overlay on that disc.
+                match oag_pulse::read_image(&mut archives, GLOW_STRIP_ENTRY)
                     .map_err(|e| e.to_string())
                     .and_then(|blob| {
                         oag_render::loading::GlowStrip::decode(&blob).map_err(|e| format!("{e:#}"))

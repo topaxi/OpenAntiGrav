@@ -392,15 +392,50 @@ figure says this rule will not fit - that piece is still open and is a
 separate, smaller RE task from "does a circuit's own `track.vex` get its
 textures back," which this section now answers.
 
-## The front-end and HUD images are not under the names their XML uses
+## A standalone texture is under its declared name with the extension rewritten
 
-A third lookup, and unlike the two above it is **not** a rule. The PS2's own
-screens ask for `Data\HUD\Textures\PulseHUD.mip` and
-`Data\FE\Images\pulse_logo.mip`, and neither hashes to an entry on the disc.
-Nor does any variation: 60 candidates across path shape, case and extension
-were hashed against all 7,393 entry hashes in `WADS2.WAD` and `WADSP.WAD` and
-every one missed. Directory position does not help either - the five
-`Data\XML\*_HUD.xml` entries sit in a run of XML with no texture near them.
+The PS2 build shares its XML, its models and its authored asset paths with the
+PSP build. What it does not share is the compiled texture container, so its
+texture resolver **replaces the source art's extension before it hashes**:
+`.TGA` and then `.MIP` become `.PCT`. One declared name therefore serves both
+pressings.
+
+| Declared | PSP entry | PS2 entry |
+| --- | --- | --- |
+| `Data\Tex\engineFlare\Engine_noise.mip` | `008d70a2` | `e9f16c12` (`....pct`) |
+| `Data\HUD\Textures\PulseHUD.mip` | `57d37d8c` | `beaf613c` (`....pct`) |
+
+Of the 50 `.mip` and `.tga` literals in `SCES_547.48`, **0 resolve on the PS2
+disc as spelled and 47 resolve rewritten**; the three that do not are an
+absolute authoring path off a build machine and two extension-only stubs. Every
+other class of asset name - `.pob`, `.vex`, `.bnk`, `.xml` - resolves on both
+discs unrewritten. `Data/Tex/Missing.pct`, the placeholder the resolver falls
+back to when a name reaches no file, is itself entry 6910 of `WADS2.WAD`.
+
+**Confidence 95.** The rewrite is read off `Texture_FindOrLoad` (`0x0010c1e0`)
+directly - the five string constants are consecutive in `.rodata` - and it is
+corroborated by the section below, whose three entries were recovered by an
+unrelated method and are reproduced exactly by the rule. Implemented as
+[`oag_pulse::ps2_texture_name`](../../crates/pulse/src/lib.rs); see
+[`texture-names.md`](../ghidra/functions/ps2-pulse-eu/texture-names.md).
+
+### How this was missed for so long, and the sweep that missed it
+
+Worth recording, because the failure is reusable. The PS2's own screens ask for
+`Data\HUD\Textures\PulseHUD.mip` and `Data\FE\Images\pulse_logo.mip`, and
+neither hashes to an entry on the disc. Nor did any variation tried at the
+time: 60 candidates across path shape, case and extension were hashed against
+all 7,393 entry hashes in `WADS2.WAD` and `WADSP.WAD` and every one missed -
+**`.pct` was not among the extensions tried**. Directory position does not help
+either; the five `Data\XML\*_HUD.xml` entries sit in a run of XML with no
+texture near them. So the entries below were found by their pictures instead,
+and this page recorded the lookup as unknown.
+
+The general lesson: when a *whole class* of names misses and every other class
+hits, the answer is a transformation the loader applies, not more spellings.
+Meanwhile [`loading-screen.md`](../ghidra/functions/ps2-pulse-eu/loading-screen.md)
+had already recorded the `.mip`-to-`.pct` rewrite for the loading screen alone,
+and it read as a quirk of that screen rather than as the general rule it is.
 
 The entries were found **by their pictures**: decode the PSP `.mip`, reduce it
 to a silhouette (one bit per pixel, "is this texel's palette entry
@@ -426,15 +461,18 @@ that image is 93.75 % opaque, so every candidate scores 0.9375 for free.
 Correlating the picture settles it at 0.02 across all 28 same-shaped
 candidates. Do not re-run the weaker test on it.
 
-**How the game itself resolves these names is not known.** A repeated
-3,656-byte blob sitting beside the HUD assets looked like a name table and was
-ruled out: none of its 914 words is an entry hash in either archive.
+A repeated 3,656-byte blob sitting beside the HUD assets looked like a name
+table and was ruled out along the way: none of its 914 words is an entry hash in
+either archive.
 
-**Confidence 90** for the three mappings - exact shape agreement, 0.99+
-silhouette against a runner-up field below 0.71, visual confirmation, and for
-the atlas the independent UV agreement. Short of 94 because the mapping is
-recovered rather than declared and no executable path has been read. Recorded
-in [`oag_pulse::PS2_IMAGES`](../../crates/pulse/src/lib.rs) and
+**All three hashes fall out of the extension rewrite above.**
+`Data\HUD\Textures\PulseHUD.pct` hashes to `beaf613c`, `pulse_logo.pct` to
+`1e6c873e`, `pulse_assets.pct` to `0d31af1b` - the picture-matched entries,
+exactly. Two methods sharing no assumption reaching the same three entries is
+what raises the rewrite to **95** and these three mappings with it. The table
+stays in
+[`oag_pulse::PS2_IMAGES`](../../crates/pulse/src/lib.rs) as that check, run
+offline with no disc; nothing loads through it any more. It is also still
 pinned by `crates/assets/tests/ps2_image_ground_truth.rs`, which re-derives the
 match instead of asserting the constants against themselves.
 

@@ -82,11 +82,11 @@ pub(super) fn load_hud(
             "HUD {entry} names no texture; its sprites are drawn from <Model> \
              geometry rather than an atlas"
         )),
-        // `read_image`, not `read_name`: the PS2 keeps its atlas under an entry
-        // its own XML's name does not hash to (see `oag_pulse::PS2_IMAGES`). That
-        // substitution table is keyed on Pulse-PSP names and is inert on any other
-        // source - a name it does not hold falls through to the original error -
-        // so it stays here rather than becoming a per-title lookup.
+        // `read_image`, not `read_name`: the PS2 keeps its atlas under the
+        // declared name with the extension rewritten to `.pct` (see
+        // `oag_pulse::ps2_texture_name`). The declared name is tried first, so
+        // any other source takes exactly the path it took before, and a name
+        // under neither spelling still fails naming the one that was asked for.
         Some(atlas) => match oag_pulse::read_image(archives, atlas) {
             Ok(blob) => {
                 let mut notes = Vec::new();

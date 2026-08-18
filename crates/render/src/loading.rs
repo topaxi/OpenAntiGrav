@@ -361,7 +361,9 @@ pub const BLEND: wgpu::BlendState = wgpu::BlendState {
 /// The 32x32 glow strip, as RGBA8.
 ///
 /// Normally `data/defaults/loading/LoadingPulseOverlay.mip` - `Data.wad` entry
-/// 68, name hash `d857f34b`, 2,064 bytes. Unlike
+/// 68, name hash `d857f34b`, 2,064 bytes on the PSP, and the same declared name
+/// under `.pct` as `WADS2.WAD` entry 138 (`312beffb`, 2,317 bytes) on the PS2.
+/// See `oag_pulse::ps2_texture_name`. Unlike
 /// [`crate::exhaust::FlareTexture`], which takes pixels the caller decoded, this
 /// carries its own [`GlowStrip::decode`]: `oag-render` already depends on
 /// `oag-formats`, there is exactly one blob this pipeline ever wants, and
@@ -378,22 +380,39 @@ pub struct GlowStrip {
 }
 
 impl GlowStrip {
-    /// Decodes a `.mip` blob.
+    /// Decodes a `.mip` blob, or the `.pct` the PS2 keeps the same strip in.
+    ///
+    /// The PSP format is tried first and **its** error is the one reported, for
+    /// the reason `oag_game::sprite::Image::decode` gives: a `.mip` that will
+    /// not parse is the commoner failure, and the PS2 parser's complaint about
+    /// a PSP blob points at the wrong decoder.
     ///
     /// # Errors
     ///
-    /// Propagates whatever [`oag_formats::texture::Texture::parse`] rejects.
-    /// The size arithmetic there is exact, so a failure means the blob is not a
-    /// texture rather than that it is a damaged one.
+    /// Propagates whatever [`oag_formats::texture::Texture::parse`] rejects,
+    /// when [`oag_formats::ps2_texture::parse`] will not take the blob either.
+    /// The size arithmetic in both is exact, so a failure means the blob is not
+    /// a texture rather than that it is a damaged one.
     pub fn decode(blob: &[u8]) -> Result<Self> {
-        let texture = oag_formats::texture::Texture::parse(blob)
-            .map_err(|e| anyhow::anyhow!("{e}"))
-            .with_context(|| format!("decoding the glow strip, {} bytes", blob.len()))?;
-        Ok(Self {
-            width: u32::from(texture.width),
-            height: u32::from(texture.height),
-            rgba: texture.to_rgba(),
-        })
+        let psp = match oag_formats::texture::Texture::parse(blob) {
+            Ok(texture) => {
+                return Ok(Self {
+                    width: u32::from(texture.width),
+                    height: u32::from(texture.height),
+                    rgba: texture.to_rgba(),
+                });
+            }
+            Err(e) => e,
+        };
+        if let Ok(texture) = oag_formats::ps2_texture::parse(blob) {
+            return Ok(Self {
+                width: u32::from(texture.width),
+                height: u32::from(texture.height),
+                rgba: texture.to_rgba(),
+            });
+        }
+        Err(anyhow::anyhow!("{psp}"))
+            .with_context(|| format!("decoding the glow strip, {} bytes", blob.len()))
     }
 
     /// An authored stand-in, for when the disc's own strip is unavailable.

@@ -134,18 +134,23 @@ pub fn open_with_packs(source: &str, packs: Vec<oag_assets::dlc::Pack>) -> Resul
     Archives::open_with_packs(source, TITLE, packs)
 }
 
-/// Reads a front-end or HUD image the XML named, from wherever this source
-/// keeps it.
+/// Reads a raster image by the name its own data declares, from wherever this
+/// source keeps it.
 ///
 /// The declared name is tried first, so the PSP path is exactly
-/// [`Archives::read_name`] and needs no console test. Only when that misses does
-/// the PS2 substitution in [`PS2_IMAGES`] get a look, and an image that is in
-/// neither still fails with the original name in the message -
-/// `Data\FE\Images\gameshare_backdrop.mip` really is absent from the PS2 disc
-/// and should keep saying so.
+/// [`Archives::read_name`] and needs no console test. Only when that misses is
+/// the name rewritten the way the PS2 build rewrites it - see
+/// [`ps2_texture_name`] - and an image that is under neither name still fails
+/// with the original in the message: `Data\FE\Images\gameshare_backdrop.mip`
+/// really is absent from the PS2 disc and should keep saying so.
 ///
-/// This lives here rather than on [`Archives`] because the substitution table is
-/// a fact about Pulse's PS2 pressing, not about archives in general.
+/// No platform test. The rewritten name is simply a second name to try, and on
+/// a PSP source the first one has already answered; a `.pct` entry does not
+/// exist there for the rewrite to collide with.
+///
+/// This lives here rather than on [`Archives`] because the rewrite is a fact
+/// about how Pulse's PS2 build resolves a texture name, not about archives in
+/// general.
 ///
 /// # Errors
 ///
@@ -154,12 +159,49 @@ pub fn read_image(archives: &mut Archives, name: &str) -> Result<Vec<u8>> {
     match archives.read_name(name) {
         Ok(blob) => Ok(blob),
         Err(original) => {
-            let Some(hash) = ps2_image_hash(name) else {
+            let Some(ps2) = ps2_texture_name(name) else {
                 return Err(original);
             };
-            archives.read_hash(hash).map_err(|_| original)
+            archives.read_name(&ps2).map_err(|_| original)
         }
     }
+}
+
+/// What the PS2 build calls the texture a PSP name asks for, if the name is one
+/// it would rewrite.
+///
+/// The two discs share their XML, their `.vex` models and their authored asset
+/// paths; what they do not share is the compiled texture container. The PS2
+/// build's texture resolver takes the declared name and **replaces the source
+/// art's extension with its own** before it hashes anything, so one name serves
+/// both pressings:
+///
+/// | Declared | PSP entry | PS2 entry |
+/// | --- | --- | --- |
+/// | `Data\Tex\engineFlare\Engine_noise.mip` | `008d70a2` | `e9f16c12` |
+///
+/// `.tga` is rewritten as well as `.mip` - the executable's own table lists
+/// both - because a good many names in it are still the artist's source path.
+/// Anything else is left alone, which is why this returns [`None`] rather than
+/// a name: a `.vex` or a `.pob` is found under its declared name on both discs.
+///
+/// # Where this comes from
+///
+/// `Texture_FindOrLoad` (`0x0010c1e0` in `SCES_547.48`) canonicalises the name
+/// before hashing it: it strips a leading `WIPEOUT PSP\PS2\` build path, then
+/// replaces `.TGA` and then `.MIP` with `.PCT`, hashes the result with the WAD
+/// name hash, and looks it up. A name that resolves to no file is replaced
+/// wholesale with `Data/Tex/Missing.pct` - itself entry 6910 of `WADS2.WAD` -
+/// and retried, which is the game's own visible "texture not found".
+///
+/// See `docs/ghidra/functions/ps2-pulse-eu/texture-names.md`, and
+/// [`PS2_IMAGES`] for the three entries that were found by their picture before
+/// the rule was known and now serve as its check.
+#[must_use]
+pub fn ps2_texture_name(name: &str) -> Option<String> {
+    let (stem, extension) = name.rsplit_once('.')?;
+    (extension.eq_ignore_ascii_case("mip") || extension.eq_ignore_ascii_case("tga"))
+        .then(|| format!("{stem}.pct"))
 }
 
 /// The four archives a PSP Pulse disc ships, relative to the image root.
@@ -358,23 +400,32 @@ pub mod hashes {
     pub const PS2_PULSE_ASSETS: u32 = 0x0d31_af1b;
 }
 
-/// What a PS2 archive calls the front-end and HUD images the XML asks for by
-/// their PSP `.mip` names.
+/// Three PS2 entries that were found by their picture, kept as the check on the
+/// rule that now finds every one of them by name.
 ///
-/// # Why a table and not a rule
+/// # This was a table, and it is now evidence
 ///
 /// The PS2 release keeps its raster images as ordinary PS2 textures (see
-/// `oag_formats::ps2_texture`) in `WADS2.WAD`, but **not under the
-/// names its own XML uses**. `Data\HUD\Textures\PulseHUD.mip` hashes to
-/// `57d37d8c`, which is in neither archive, and no variation on the spelling
-/// helps: 60 candidates across path shape, case and extension were hashed
-/// against all 7,393 entry hashes on the disc and every one missed. The
-/// directory-position rules that solve the PS2's models and fonts do not apply
-/// either - the five `*_HUD.xml` entries sit in a run of XML with no texture
-/// anywhere near them. **How the game itself performs this lookup is not
-/// known**; a repeated 3,656-byte blob next to the HUD assets looked like a
-/// name table and was checked and ruled out (none of its 914 words is an entry
-/// hash).
+/// `oag_formats::ps2_texture`) in `WADS2.WAD`, and for a long time this crate
+/// held no way to reach them: `Data\HUD\Textures\PulseHUD.mip` hashes to
+/// `57d37d8c`, which is in neither archive, and 60 candidates across path shape,
+/// case and extension were hashed against all 7,393 entry hashes and every one
+/// missed. So these three were found by their picture instead, and the note here
+/// said the game's own lookup was not known.
+///
+/// **It is known now**, and the earlier sweep missed it by one extension:
+/// [`ps2_texture_name`] rewrites `.mip` to `.pct`, and all three of these
+/// hashes fall straight out of it - `Data\HUD\Textures\PulseHUD.pct` is
+/// `beaf613c`, `pulse_logo.pct` is `1e6c873e`, `pulse_assets.pct` is
+/// `0d31af1b`. Three hashes recovered by picture correlation, reproduced exactly
+/// by a one-line name rule derived independently from the executable, is as
+/// close to a proof as this project gets, which is why the table stays: it is
+/// checked against the rule offline, with no disc, by
+/// `the_pct_rule_reproduces_every_picture_matched_hash`.
+///
+/// Nothing calls [`ps2_image_hash`] on the loading path any more -
+/// [`read_image`] applies the rule instead, which reaches every PS2 texture on
+/// the disc rather than these three.
 ///
 /// # How the entries were found, and how sure it is
 ///
@@ -461,6 +512,44 @@ mod tests {
         assert_eq!(TITLE.foreign_title("UCUS-98712"), None);
         assert_eq!(TITLE.foreign_title("SCES-54748"), None);
         assert_eq!(TITLE.foreign_title("UCES-00465"), None);
+    }
+
+    /// The three entries in [`PS2_IMAGES`] were recovered by correlating
+    /// pictures, months before the executable's own rewrite was read. Every one
+    /// of them falls out of [`ps2_texture_name`] plus the ordinary WAD name
+    /// hash, which is the whole reason the table is still here.
+    ///
+    /// Offline: no disc, no archive, just the two functions agreeing.
+    #[test]
+    fn the_pct_rule_reproduces_every_picture_matched_hash() {
+        for &(psp, found_by_picture) in PS2_IMAGES {
+            let ps2 = ps2_texture_name(psp).expect("every entry in the table is a .mip name");
+            assert_eq!(
+                oag_formats::wad::hash_name(&ps2),
+                found_by_picture,
+                "{psp} -> {ps2}"
+            );
+        }
+    }
+
+    /// The rewrite is the PS2 texture resolver's, so it fires on the two
+    /// extensions that resolver's own table lists and on nothing else. A `.vex`
+    /// or a `.pob` is found under its declared name on both discs, and rewriting
+    /// one would send a miss looking for a file that cannot exist.
+    #[test]
+    fn only_a_source_art_extension_is_rewritten() {
+        assert_eq!(
+            ps2_texture_name(r"Data\Tex\engineFlare\Engine_noise.mip").as_deref(),
+            Some(r"Data\Tex\engineFlare\Engine_noise.pct")
+        );
+        assert_eq!(
+            ps2_texture_name(r"DATA\SHIPS\COMMON\TEXTURES\ENGINE_GLOW.TGA").as_deref(),
+            Some(r"DATA\SHIPS\COMMON\TEXTURES\ENGINE_GLOW.pct")
+        );
+        assert_eq!(ps2_texture_name(r"Data\Psys\WO_SHIP_ENGINEFLARE.POB"), None);
+        assert_eq!(ps2_texture_name(r"Data\Defaults\Skycube.vex"), None);
+        assert_eq!(ps2_texture_name("Data/Tex/Missing.pct"), None);
+        assert_eq!(ps2_texture_name("nodot"), None);
     }
 
     /// Both consoles' archives are offered, bulk before companion, so a "nothing

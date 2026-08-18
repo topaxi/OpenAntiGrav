@@ -25,10 +25,11 @@ form, and Ghidra's string search will return all three.
 | [Movie source paths](movie-paths.md) | How a `Movie` widget's `src` becomes a filename, and the one global that picks the PAL cut of both the intro and the backdrop |
 | [Recovered C library](libc.md) | `strlen`, `strcmp`, `strcasecmp`, `tolower`, `_ctype_` |
 | [Loading screen](loading-screen.md) | The same procedural heartbeat wave as the PSP, and the four places the port diverges |
+| [Texture names](texture-names.md) | Why no `.mip` or `.tga` name resolves on this disc: the loader rewrites the extension to `.pct` before it hashes |
 
 ## Renames
 
-**Applied.** 151 symbols, collected in [names.tsv](names.tsv). There is no
+**Applied.** 160 symbols, collected in [names.tsv](names.tsv). There is no
 `just` recipe for this set yet; run the script directly against a bridge with
 `SCES_547.48` open:
 
@@ -86,6 +87,14 @@ These are findings, not noise, and none of them has been reconciled.
 outside every class block; its element is not determined". The PS2 binary has a
 `<Misc>` element the PSP page never mentions, and its parser writes `0x90`
 directly. See [handling-xml.md](handling-xml.md).
+
+**Every PS2 texture is addressable by the name its own data declares.**
+`oag_pulse::PS2_IMAGES` was written with the note that "how the game itself
+performs this lookup is not known", after a sweep of 60 spellings that all
+missed. The loader rewrites `.mip` and `.tga` to `.pct` before hashing, which
+finds 47 of the 50 raster names in this executable and reproduces all three
+hashes that sweep had to recover by correlating pictures. See
+[texture-names.md](texture-names.md).
 
 ## Candidates, not yet confident enough to name
 
