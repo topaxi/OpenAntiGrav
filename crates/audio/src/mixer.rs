@@ -222,6 +222,16 @@ pub struct Mixer {
     /// for tests. Silent starvation is the failure mode worth being able to
     /// see.
     starved: u64,
+    /// Sample-rate remainder carried between [`Self::render_tick`] calls.
+    ///
+    /// **Because `sample_rate / tick_hz` is not always a whole number.** 48,000
+    /// and 44,100 both divide by 60 exactly, which is why truncating went
+    /// unnoticed until finding U7 of the 2026-08-18 review; a rate that does
+    /// not divide dropped up to `tick_hz - 1` frames a second, so the
+    /// `--dump-audio` WAV drifted steadily behind the simulation it is supposed
+    /// to be comparable with. Carrying the remainder makes the *average* exact
+    /// while every individual tick stays within one frame of nominal.
+    tick_frame_remainder: u32,
 }
 
 impl Mixer {
@@ -235,6 +245,7 @@ impl Mixer {
             sample_rate: sample_rate.max(1),
             generation: 0,
             starved: 0,
+            tick_frame_remainder: 0,
         }
     }
 
@@ -274,11 +285,22 @@ impl Mixer {
 
     /// Starts a voice, returning a handle to steer it with.
     ///
-    /// Returns `None` when every slot is busy. Refusing rather than stealing is
-    /// deliberate for now: stealing needs a priority the original keeps in the
-    /// bank's undecoded cue table, and inventing one would be a guess dressed
-    /// as behaviour.
+    /// Returns `None` when every slot is busy, or when the play could never
+    /// finish. Refusing rather than stealing is deliberate for now: stealing
+    /// needs a priority the original keeps in the bank's undecoded cue table,
+    /// and inventing one would be a guess dressed as behaviour.
     pub fn play(&mut self, play: Play) -> Option<VoiceId> {
+        // **A pitch of zero is refused, not clamped to zero.** `pitch.max(0.0)`
+        // accepted it, and a voice whose playhead never advances emits a
+        // constant DC offset - inaudible, but a bias on the bus - and holds its
+        // slot until something stops it by handle, which for a fire-and-forget
+        // cue is never. It counts as starvation because that is what it causes:
+        // one fewer slot, visible in the overlay rather than silent. Finding U6
+        // of the 2026-08-18 review. A negative or NaN pitch goes the same way.
+        if play.pitch <= 0.0 || play.pitch.is_nan() {
+            self.starved += 1;
+            return None;
+        }
         let slot = self.voices.iter().position(Voice::is_free).or_else(|| {
             self.starved += 1;
             None
@@ -289,7 +311,7 @@ impl Mixer {
             sound: Some(play.sound),
             bus: Some(play.bus),
             position: 0.0,
-            pitch: play.pitch.max(0.0),
+            pitch: play.pitch,
             gain: play.gain.max(0.0),
             looping: play.looping,
             generation,
@@ -482,7 +504,12 @@ impl Mixer {
     /// the offline dump and a real-time stream produce the same samples for the
     /// same control sequence. Returns how many frames were written.
     pub fn render_tick(&mut self, tick_hz: u32, out: &mut Vec<f32>) -> usize {
-        let frames = (self.sample_rate / tick_hz.max(1)) as usize;
+        let tick_hz = tick_hz.max(1);
+        // Whole frames plus whatever the last ticks left over - see
+        // [`Mixer::tick_frame_remainder`].
+        let total = self.sample_rate + self.tick_frame_remainder;
+        let frames = (total / tick_hz) as usize;
+        self.tick_frame_remainder = total % tick_hz;
         let at = out.len();
         out.resize(at + frames * CHANNELS, 0.0);
         self.render(&mut out[at..]);

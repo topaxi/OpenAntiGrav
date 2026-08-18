@@ -135,6 +135,17 @@ impl ApplicationHandler for App {
 
             WindowEvent::CursorLeft { .. } => session.drag_ended(),
 
+            // A key held while the window loses focus is never seen to come up,
+            // and the camera would orbit for ever while the user is elsewhere.
+            // `oag-game` has fixed this class since `release_all` landed
+            // (`crates/game/src/main/app.rs`); the viewer never got it -
+            // finding U2 of the 2026-08-18 review. The drag goes with it, for
+            // the same reason a `CursorLeft` ends one.
+            WindowEvent::Focused(false) => {
+                session.held = Held::default();
+                session.drag_ended();
+            }
+
             WindowEvent::MouseWheel { delta, .. } => session.wheel(delta),
 
             WindowEvent::KeyboardInput { event, .. } => {
@@ -224,9 +235,13 @@ impl Session {
                 .create_window(attributes)
                 .context("creating the window")?,
         );
-        // Orbiting is keyboard-only (arrows, +/-, PageUp/PageDown); the cursor
-        // has nothing to click on.
-        window.set_cursor_visible(false);
+        // **The cursor stays visible**, because the pointer is an input here:
+        // dragging orbits and the wheel zooms, beside the keyboard's arrows,
+        // `+`/`-` and PageUp/PageDown. This hid the pointer behind a comment
+        // saying orbiting is keyboard-only, which stopped being true when drag
+        // and wheel landed in this same file - finding U8 of the 2026-08-18
+        // review. Hiding the thing the user is dragging with is the one
+        // arrangement that cannot be right.
 
         let instance = wgpu::Instance::default();
         let surface = instance

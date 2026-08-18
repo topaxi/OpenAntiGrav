@@ -29,6 +29,16 @@ pub use pad::Pad;
 #[derive(Debug, Clone, Default)]
 pub struct Keyboard {
     held: u32,
+    /// Bits that went down since the last read, whether or not they are still
+    /// down. See [`Self::take_taps`].
+    tapped: u32,
+    /// **Only read when this `Keyboard` is used on its own**, through
+    /// [`Self::snapshot`]. Inside [`Controls`] it is dead state: that merges
+    /// [`Self::held_mask`] with the pad's bits and computes the edges on its
+    /// own `Input`, and never calls `Keyboard::snapshot` at all. Two
+    /// edge-computing `Input`s in one path is an invitation to read the stale
+    /// one, which is finding U9 of the 2026-08-18 review - recorded here rather
+    /// than removed, because the standalone path is real and tested.
     buttons: Input,
 }
 
@@ -50,6 +60,7 @@ impl Keyboard {
         let bit = 1u32 << (index & 0x1f);
         if pressed {
             self.held |= bit;
+            self.tapped |= bit;
         } else {
             self.held &= !bit;
         }
@@ -62,6 +73,26 @@ impl Keyboard {
     /// player is in another application.
     pub fn release_all(&mut self) {
         self.held = 0;
+        // The latch goes too: a tap that happened before focus was lost is
+        // input the player meant for the other application by the time we
+        // notice, and delivering it a frame later is worse than dropping it.
+        self.tapped = 0;
+    }
+
+    /// Bits that went down since the last call, and clears the latch.
+    ///
+    /// **Why a latch exists at all**: a key pressed *and released* entirely
+    /// between two 60 Hz reads leaves [`Self::held_mask`] at zero both times,
+    /// so the press was silently lost - finding U5 of the 2026-08-18 review. A
+    /// hardware keyboard's repeat rate cannot produce one, but a scripted
+    /// press, a macro key and a frame that ran long all can, and a menu
+    /// confirm that sometimes does nothing is the worst kind of bug to chase.
+    ///
+    /// Or-ing this into one frame's held mask makes such a tap a full
+    /// press-then-release edge across two frames, which is exactly what a
+    /// slower tap would have produced.
+    pub fn take_taps(&mut self) -> u32 {
+        std::mem::take(&mut self.tapped)
     }
 
     /// Ends the tick: computes the button edges, then derives the axes.
@@ -71,7 +102,8 @@ impl Keyboard {
     /// pad produces a continuum, and the simulation cannot tell the difference:
     /// it reads the snapshot, not the device.
     pub fn snapshot(&mut self) -> InputSnapshot {
-        self.buttons.begin_frame(self.held);
+        let held = self.held | self.take_taps();
+        self.buttons.begin_frame(held);
         InputSnapshot {
             buttons: self.buttons,
             stick_x: axis(
@@ -174,8 +206,11 @@ impl Controls {
     /// resting on the stick does not veto the d-pad and vice versa.
     pub fn snapshot(&mut self) -> InputSnapshot {
         let pad = self.pad.poll();
+        // The keyboard's *taps* as well as what it still holds - see
+        // [`Keyboard::take_taps`]. The pad is polled rather than
+        // event-driven, so it has no equivalent to latch.
         self.buttons
-            .begin_frame(self.keyboard.held_mask() | pad.held);
+            .begin_frame(self.keyboard.held_mask() | self.keyboard.take_taps() | pad.held);
 
         let digital_x = axis(
             self.buttons.is_held(button::RIGHT),
@@ -349,5 +384,43 @@ mod tests {
         ] {
             assert!((-1.0..=1.0).contains(&axis), "axis out of range: {axis}");
         }
+    }
+
+    /// Finding U5's guard: a press and release entirely between two reads is
+    /// still a press.
+    ///
+    /// Both halves matter - the tap has to *arrive*, and it has to arrive as an
+    /// edge that goes away again, or a menu confirm would repeat for ever.
+    #[test]
+    fn a_tap_between_two_snapshots_is_not_lost() {
+        let mut keyboard = Keyboard::new();
+        let key = Key::Named(NamedKey::Enter);
+
+        keyboard.set_key(&key, true);
+        keyboard.set_key(&key, false);
+        assert_eq!(keyboard.held_mask(), 0, "nothing is held any more");
+
+        let first = keyboard.snapshot();
+        assert!(
+            first.buttons.is_held(button::CROSS),
+            "the tap was dropped between the two reads"
+        );
+
+        let second = keyboard.snapshot();
+        assert!(
+            !second.buttons.is_held(button::CROSS),
+            "a latched tap must release, or it repeats for ever"
+        );
+    }
+
+    /// Focus loss clears the latch too: a tap the player made on the way out
+    /// belongs to whatever they switched to.
+    #[test]
+    fn release_all_drops_a_latched_tap() {
+        let mut keyboard = Keyboard::new();
+        keyboard.set_key(&Key::Named(NamedKey::Enter), true);
+        keyboard.set_key(&Key::Named(NamedKey::Enter), false);
+        keyboard.release_all();
+        assert!(!keyboard.snapshot().buttons.is_held(button::CROSS));
     }
 }

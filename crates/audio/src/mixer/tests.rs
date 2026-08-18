@@ -272,3 +272,48 @@ fn resampling_a_faster_source_consumes_it_faster() {
     mixer.render(&mut out);
     assert!(!mixer.is_playing(id), "198 frames in, it should be done");
 }
+
+/// Finding U6's guard: a voice that could never advance is refused, and the
+/// refusal is visible rather than silent.
+#[test]
+fn a_zero_pitch_voice_is_refused_rather_than_parked() {
+    let mut mixer = Mixer::new(44_100);
+    let before = mixer.starved();
+
+    for pitch in [0.0, -1.0, f32::NAN] {
+        let mut play = Play::once(tone(2048, 2, 44_100), Bus::Sfx);
+        play.pitch = pitch;
+        assert!(
+            mixer.play(play).is_none(),
+            "pitch {pitch} would never advance the playhead"
+        );
+    }
+    assert_eq!(
+        mixer.starved(),
+        before + 3,
+        "a refusal that does not count is a slot lost silently"
+    );
+
+    // And an ordinary pitch still plays, so the guard refuses the broken case
+    // rather than the quiet one.
+    let mut slow = Play::once(tone(2048, 2, 44_100), Bus::Sfx);
+    slow.pitch = 0.01;
+    assert!(mixer.play(slow).is_some());
+}
+
+/// Finding U7's guard: a sample rate that does not divide the tick rate must
+/// not lose frames, or the `--dump-audio` WAV drifts behind the simulation.
+#[test]
+fn a_non_divisible_sample_rate_averages_out_over_a_second() {
+    let mut mixer = Mixer::new(44_100);
+    let mut out = Vec::new();
+    let mut frames = 0;
+    for _ in 0..64 {
+        frames += mixer.render_tick(64, &mut out);
+    }
+    assert_eq!(
+        frames, 44_100,
+        "a second of ticks must be a second of audio"
+    );
+    assert_eq!(out.len(), 44_100 * CHANNELS);
+}
