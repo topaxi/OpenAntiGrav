@@ -502,20 +502,30 @@ pub fn load_shell(options: &Options) -> Result<(Shell, oag_assets::Archives)> {
     // silently shortened sequence is exactly the kind of thing that reads as
     // finished work, which is how this build once shipped Pure's order wrong.
     //
-    // **The first step goes through the same two checks**, which it did not
-    // until finding G3 of the 2026-08-18 review: `walked` started with
+    // **The chain's first step goes through the same two checks**, which it did
+    // not until finding G3 of the 2026-08-18 review: `walked` started with
     // `profile.start()` unconditionally, so a pressing lacking the boot screen -
     // a demo or trial disc - walked an unbacked state that any *later* step
     // would have been skipped and reported for. The report is the point: a boot
     // that opens on a screen this source does not carry should say so, not
     // present as a blank one.
+    //
+    // **`--reel` is exempt, and that is the whole nature of the flag.** The
+    // dev/pub reel is an *off-path* state: it is real and evidenced (its
+    // `OnEnter` caches `"DevPubRedirect"` at `0x088d7d80`) and the disc's own
+    // boot never enters it, so it has no screen in the set to be found by. It
+    // is reached because the operator named it, not because a chain led there,
+    // and checking a screen set that by construction does not carry it turns
+    // `--reel` into a no-op - which is what this check did on its first pass,
+    // caught by `boot_ground_truth::the_reel_leg_still_runs_its_frame_holds`.
     let mut walked: Vec<&'static oag_title::BootStep> = Vec::new();
-    if screens.by_name(start_step.state).is_none() {
+    let off_path = options.leg == crate::frontend::Leg::DevPubReel;
+    if !off_path && screens.by_name(start_step.state).is_none() {
         report.push(format!(
             "the chain opens on {:?}, which this pressing does not carry",
             start_step.state
         ));
-    } else if crate::frontend::can_drive(start_step.state) {
+    } else if off_path || crate::frontend::can_drive(start_step.state) {
         walked.push(start_step);
     } else {
         report.push(format!(
