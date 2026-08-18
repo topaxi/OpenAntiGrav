@@ -671,10 +671,17 @@ which slot is what without disassembling anything. They do not:
   registers, not the small texture-unit indices a sampler binds to.
 
 So this is a **constant** table, and the second slot's role is still in the
-microcode. **What is not ruled out**: `renderer.md` names *two* binder functions,
-`0x003af980` and `0x003b31c8`, and only the first is described. Whether the
-second binds samplers through a different table is the check that would reopen
-this cheaply, and it has not been run.
+microcode. **The cheap reopening was run and is closed**: `0x003b31c8`, which
+`renderer.md` listed as a second binder, is not one - it is the Detonator scoring
+subsystem's static initialiser, and that page is corrected. There is one binder,
+it walks this table, and this table holds constants.
+
+What the check did turn up is worth more than the answer it was looking for:
+`Crc32_HashString` (`0x005a2090`) is the name hash these records key on, plain
+CRC-32 with the complement stored, confirmed by `~crc32("viewProj")` landing on
+the one parameter every material declares. Naming a parameter is a wordlist
+problem now. It did not name any sampler, because there is no sampler record
+here to name.
 
 ### What the renderer does with it
 

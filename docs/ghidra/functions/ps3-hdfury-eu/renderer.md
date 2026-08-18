@@ -512,8 +512,16 @@ The residual doubt is not about the container. It is that no microcode has been
 disassembled, so nothing here says what any program *does* - only where it is
 and how it is addressed.
 
-**A warning for whoever disassembles one.** The binder functions are at `0x003af980` and
-`0x003b31c8`, both **above `0x0032d5e0`**, and the decompiler output there is
+**`0x003b31c8` is not a binder** (corrected 2026-08-18; see
+[the name hash](#the-name-hash-is-crc-32) below). It is the Detonator scoring
+subsystem's static init/teardown pair - `param_1 == 1` constructs and
+`param_1 == 0` tears down - and it registers `bomb_score`, `multiplier`,
+`bomb_hit_score`, `bomb_increment`, `Data/XML/DetonatorScoring.xml`,
+`DetonatorScoring` and `Bullet`. It reached this list because it sits in the same
+address range and calls the same registry; nothing was read from it before.
+
+**A warning for whoever disassembles one.** The binder function is at `0x003af980`,
+**above `0x0032d5e0`**, and the decompiler output there is
 actively misleading rather than merely wrong: floats loaded from the TOC render
 as string-pointer variables, so arithmetic reads as `(float)PTR_s_Emp__d_008a754c`.
 Use `scripts/ps3-toc.py resolve` on every constant in that range.
@@ -546,3 +554,50 @@ Use `scripts/ps3-toc.py resolve` on every constant in that range.
   unexplained.
 - **Everything about `Model.cpp`, `Billboard.cpp`, `Font.cpp`, `Pen.cpp` and
   the `Fx*` family** beyond where they start.
+
+## The name hash is CRC-32
+
+**Confidence 92**, recovered 2026-08-18 while checking whether `0x003b31c8` was
+the second binder this page named. It is not - it is Detonator scoring's static
+initialiser - but it is where the hash is visible, because it hashes seven names
+in the clear and stores each result.
+
+`Crc32_HashString` (`0x005a2090`) is a textbook table-driven CRC-32:
+
+```c
+u32 Crc32_HashString(const u8 *s) {
+    if (!s || !*s) return 0;
+    u32 crc = 0xffffffff;
+    do { crc = (crc >> 8) ^ table[(crc ^ *s++) & 0xff]; } while (*s);
+    return ~crc;
+}
+```
+
+with the 256-entry table at `0x008aea18 + 0x200` (the index is masked `0x3fc`,
+i.e. `(crc ^ byte) & 0xff` scaled by 4). **Callers store the complement of what
+it returns** - `*(u32 *)(obj + 0xf4) = ~Crc32_HashString(name)` - which is the
+raw CRC register before the final xor, and is exactly the "complement of a hash
+computed from the parameter name" the binder at `0x003af980` compares against.
+
+**Confirmed against real data rather than by shape alone.** The parameter hash
+`0x2e7d5f33` appears in the `SHO` block of every `.rcsmaterial` examined, at
+register `0x0100` with count 4 - a four-row matrix. `~crc32("viewProj")` is
+`0x2e7d5f33`. A guessed name landing on a 32-bit hash is not a coincidence, and
+the declared shape agrees with the name.
+
+**What this unlocks, and what it does not.** Naming any parameter is now a
+wordlist problem rather than a cryptographic one. It is not solved by it: a
+sweep of ~2,000 plausible Cg and engine parameter names over the other thirteen
+shared hashes matched **none**, so the remaining names are not the obvious ones
+and the productive source is likely the microcode's own symbol usage or the
+`_vp`/`_fp` program names.
+
+### It also over-names `ShaderRegistry_Register`
+
+The same call site registers `bomb_score` and `Data/XML/DetonatorScoring.xml`
+through `ShaderRegistry_Register` (`0x005cd6d8`). So the function is a **generic
+named-node registry constructor** and the `ShaderRegistry_` prefix claims a
+subsystem it does not own; the 62 registrations whose payloads begin `SHO\x08`
+are one use of it among others. Left renamed for now rather than churned, and
+recorded here because [ADR-0005](../../../architecture/adr/0005-ghidra-conventions.md)
+makes this page authoritative over the database.
