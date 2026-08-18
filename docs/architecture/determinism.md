@@ -173,11 +173,19 @@ in. One ULP in an angle that sets a speed target is one bit in the world hash.
 **And it is enforced now, not merely stated.**
 [`scripts/check-transcendentals.py`](../../scripts/check-transcendentals.py)
 fails the `just` gate and the `check` CI job on any of the forbidden calls in
-`crates/{core,physics,gameplay,ai,race}/src`, outside `#[cfg(test)]`. Two files
-are allowed by name and each says why: `oag_core::math` holds the wrappers, and
-`oag_core::probe` calls `sin` deliberately so that a platform whose libm
-differs shows up as a failing gate rather than as a mystery desync. Adding a
-third entry is a decision about determinism, not a formality. The script was
+`crates/{core,physics,gameplay,ai,race,formats}/src`, outside `#[cfg(test)]`.
+**`oag-formats` is in that set and is not simulation code**: handling stats,
+splines and track data are parsed there and handed straight to the simulation,
+so a transcendental applied to a parsed value at load time reaches the world
+hash exactly as surely as one applied at tick time. It joined on 2026-08-18
+(finding I2), when the crate set was narrower than the claim it was enforcing.
+Three files are allowed by name and each says why: `oag_core::math` holds the
+wrappers, `oag_core::probe` calls `sin` deliberately so that a platform whose
+libm differs shows up as a failing gate rather than as a mystery desync, and
+`oag_formats::entropy` scores a byte histogram for `oag-unpack sniff` - a
+triage label a human reads, which no parser branches on and which reaches
+nothing. Adding a fourth entry is a decision about determinism, not a
+formality. The script was
 checked against the bug that motivated it - restoring `f32::acos` in
 `Line::curvature` makes it fail, naming the line.
 

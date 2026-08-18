@@ -19,6 +19,14 @@ What it does not do: parse Rust. It strips comments and `#[cfg(test)]` blocks
 and then matches method calls textually, which is enough for a rule about a
 fixed list of method names and cheap enough to run on every `just`.
 
+Two things widened on 2026-08-18, both from the review that day. The crate set
+gained `oag-formats` (finding I2), because a transcendental applied to a
+handling stat or a spline at *load* time reaches the world hash as surely as
+one applied at tick time. And the patterns gained the rotation constructors
+(finding D1): matching method names alone could never see
+`Quat::from_axis_angle`, which is a `sin_cos` wearing a type name and which had
+been feeding the rocket fan's spread into hashed state in plain sight.
+
 One interaction worth knowing about, because it is a way this gate could have
 gone wrong quietly. `scripts/check-file-size.py` requires a `#[cfg(test)]`
 module over 200 lines to move into a file of its own, and what lands there is
@@ -37,10 +45,19 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
-# The crates whose arithmetic reaches a committed state hash. `oag-render`,
-# `oag-game` and the tools are deliberately absent: a renderer may call
-# whatever it likes, because a pixel is not compared across machines.
-SIMULATION_CRATES = ("core", "physics", "gameplay", "ai", "race")
+# The crates whose arithmetic reaches a committed state hash, plus the crate
+# that *parses the numbers it starts from*. `oag-render`, `oag-game` and the
+# tools are deliberately absent: a renderer may call whatever it likes, because
+# a pixel is not compared across machines.
+#
+# `formats` joined 2026-08-18 (finding I2). It is not simulation code and never
+# will be, but handling stats, splines and track data are read there and handed
+# straight to the simulation, so a transcendental applied to a parsed value at
+# load time reaches the world hash exactly as surely as one applied at tick
+# time - and CLAUDE.md's claim ("no platform transcendental reaches simulation
+# code") was already the broader of the two. It carries one live call, which
+# ALLOWED names.
+SCANNED_CRATES = ("core", "physics", "gameplay", "ai", "race", "formats")
 
 # Not required by IEEE-754 to be correctly rounded, so not portable. `sqrt` is
 # absent on purpose - it *is* required, and glam's `length`/`normalize` are
@@ -86,6 +103,16 @@ ALLOWED = {
         "the determinism probe calls `sin` deliberately, so a platform whose "
         "libm differs shows up as a failing gate rather than as a mystery "
         "desync - see determinism.md"
+    ),
+    "crates/formats/src/entropy.rs": (
+        "Shannon entropy over a byte histogram, and the decision it is: this "
+        "is a *sniffing heuristic* - `oag-unpack sniff` is its only caller in "
+        "the workspace - that labels a blob sparse/structured/mixed/compressed "
+        "so a human can triage an archive. No parser branches on it, no value "
+        "derived from it is handed to the simulation, and a last-bit "
+        "disagreement between two platforms' `log2` would at worst move a "
+        "printed number. It is f64 as well, which nothing in the simulation "
+        "may be"
     ),
 }
 
@@ -233,7 +260,7 @@ def main() -> int:
     scanned = 0
     test_files = 0
 
-    for crate in SIMULATION_CRATES:
+    for crate in SCANNED_CRATES:
         root = ROOT / "crates" / crate / "src"
         if not root.is_dir():
             print(f"no such crate directory: {root.relative_to(ROOT)}")
@@ -255,7 +282,7 @@ def main() -> int:
                         findings.append(f"{relative}:{number}: {found.group(1)}")
 
     if findings:
-        print("platform transcendentals in simulation code:\n")
+        print("platform transcendentals in simulation code, or in what feeds it:\n")
         for finding in findings:
             print(f"  {finding}")
         print(
@@ -269,7 +296,7 @@ def main() -> int:
         return 1
 
     print(
-        f"OK: no platform transcendentals in {scanned} simulation source file(s), "
+        f"OK: no platform transcendentals in {scanned} scanned source file(s), "
         f"{len(ALLOWED)} allowed by name, {test_files} dedicated test file(s) skipped"
     )
     return 0
