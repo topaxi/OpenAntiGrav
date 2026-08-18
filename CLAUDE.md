@@ -119,9 +119,10 @@ Existing crates:
 | `oag-input` | `crates/input` | Maps real devices onto the abstract button layer and produces an `InputSnapshot`. |
 | `oag-view` | `crates/view` | Asset viewer: CLI, window and texture browser over `oag-render`. |
 | `oag-trace` | `crates/trace` | Per-tick trace capture and comparison against the original: `oag-trace show\|run\|compare\|script\|drive\|track`. The reading half of the M3 verification harness. |
+| `oag-audio` | `crates/audio` | Mixing and playback: a hardware-free voice pool and sample loop, a `cpal` stream or none at all, and a WAV writer so a headless run is checkable. Cues are a per-tick *output* of the simulation, never `World` state. See [ADR-0018](docs/architecture/adr/0018-audio-mixer-architecture.md). |
 | `oag-game` | `crates/game` | Composition root; boots the front end. A thin `[[bin]]` over `[lib]` so boot logic is testable headlessly. |
 
-Later crates (`oag-weapons`, `oag-audio`,
+Later crates (`oag-weapons`,
 `oag-ui`, `oag-replay`, `oag-net`) are
 added only when their milestone opens - see
 [`docs/architecture/workspace-layout.md`](docs/architecture/workspace-layout.md) for the
