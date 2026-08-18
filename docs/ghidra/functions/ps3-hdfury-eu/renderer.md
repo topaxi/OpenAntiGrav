@@ -696,6 +696,58 @@ and which are that reading - judged against an rpcs3 reference frame of the
 same grid. Confidence 84 on the curve (the static-reading cap; the formula is
 the microcode's own arithmetic), 60 on density-unscaled.
 
+### The registry is resolved: every post program's block is addressable
+
+Read 2026-08-18 with [`scripts/ps3-registry.py`](../../../../scripts/ps3-registry.py).
+`ShaderRegistry_Register`'s signature is `Register(slot, name, block)` - the
+**third** argument points straight at the program's `SHO` block, established
+by reading the call site at `0x003b3938` rather than assumed. Resolving the
+`lwz r4/r5, d(r2)` operands of every `bl` to it, each against its own
+function's OPD TOC, ties 62 of the 121 named programs to their blocks, the
+whole `FunkLayer` post chain among them; every resolved pointer lands on a
+`SHO\x08` magic, which is the self-check.
+
+### The bloom chain, read pass by pass
+
+With names on blocks, `scripts/ps3-microcode.py fp <block>` reads the M6
+bloom exactly. All constants below are the microcode's own; the patched ones
+line up one-for-one with the `.envsettings` `HDR and Bloom` keys:
+
+- **`FunkLayerBloomGate_fp` (`0x92d580`), the bright pass**:
+  `gate = frame.rgb * frame.a * <Bloom from alpha contribution>`
+  ` + frame.rgb * pow(dot(frame.rgb, (0.9, 1.77, 0.33)), <Bloom from frame exponent>) * <Bloom from frame contribution>`
+  plus a patched bias and a subtractive clamp term. The luminance weights are
+  inline - `(0.3, 0.59, 0.11) * 3` - and the `pow` is the usual `LG2`/`EX2`
+  pair. So HD blooms from the **glow-mask alpha and from HDR luminance at
+  once**, where Pulse's recovered gate is alpha-only.
+- **`FunkLayerBloomDownsample_fp` (`0x92d780`)**: a single-tap scaled copy
+  with an alpha scale-and-bias - no filtering in the shader; the sampler does
+  it.
+- **`FunkLayerBloomBlurVertical_fp` (`0x92d880`) /
+  `Horizontal` (`0x92dc80`)**: a nine-tap separable kernel, weights
+  `1, 0.8, 0.5, 0.2, 0.1` mirrored and divided by exactly `4.2` (the final
+  `MUL` by `0.238095` = `1/4.2`), tap spacing a patched parameter -
+  `Bloom horizontal size`/`vertical size` are the authored values that reach
+  it.
+- **`FunkLayerCopy_fp` (`0x92cd80`)** is a plain textured copy and
+  **`FunkLayerColour2d_fp` (`0x92ce00`)** a flat-colour quad: **there is no
+  tone-curve program anywhere in the chain.** The `Tone adaption boost` /
+  `Tone maximum brightness` family therefore feeds a PPU-computed **exposure
+  scale**, most plausibly folded into the per-draw patched lighting
+  constants; the settings block that receives those keys is registered by
+  `0x003a83d8`/`0x003a9520`/`0x006909a8` and the frame-time consumer is not
+  yet read. Nothing implements a guessed curve on the strength of this - the
+  absence of one is the finding.
+
+**What implementing the read bloom needs**, and why it is not in this change:
+the gate's luminance term is `pow(lum, 4) * 0.03` on Talon's Junction, which
+only produces the reference frame's glow when `lum` runs over 1.0 - the gate
+reads the **pre-exposure linear scene**. This renderer's race target is
+`Rgba8Unorm` and saturates, so a faithful bloom needs the HD path rendered to
+a float target first (scene in linear, gate, blur, composite, then the
+exposure stand-in and encode). That is the M6-for-HD work item, now with
+every constant read.
+
 ## What was deliberately not read
 
 - **The draw path.** No mesh submission, no state setting, no shader binding.

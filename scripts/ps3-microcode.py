@@ -339,6 +339,11 @@ def main(argv: list[str]) -> int:
         at = elf.offset(int(argv[2], 16))
         vp_disasm(elf.raw, at)
         return 0
+    if command == "fp":
+        elf = Elf(DEFAULT_ELF if len(argv) < 4 else Path(argv[3]))
+        at = elf.offset(int(argv[2], 16))
+        fp_disasm(elf.raw, at)
+        return 0
     if command in ("vp-file", "fp-file"):
         raw = Path(argv[2]).read_bytes()
         pick = int(argv[3]) if len(argv) > 3 else None
