@@ -222,10 +222,11 @@ fn one(
             |c| c.mesh,
         )?;
         report.push(format!("{hull_name}: {}", built.describe()));
+        let (nozzle, collision_fx) = locators(archives, &hull_name, &blob, report);
         return Ok(Livery {
             team: team.to_string(),
-            nozzle: engine_flare(&blob),
-            collision_fx: collision_fx_locators(&blob),
+            nozzle,
+            collision_fx,
             hull,
             boost: None,
             boost_uv: None,
@@ -248,25 +249,7 @@ fn one(
         hull.radius
     ));
 
-    let nozzle = engine_flare(&blob);
-    match nozzle {
-        Some(at) => report.push(format!(
-            "{hull_name}: engine_flare locator at {at:?} in model space"
-        )),
-        None => report.push(format!(
-            "{hull_name}: no Engine Flare node - this craft's exhaust will not be drawn"
-        )),
-    }
-
-    let collision_fx = collision_fx_locators(&blob);
-    report.push(if collision_fx.is_empty() {
-        format!("{hull_name}: no Ship Collision Fx nodes - sparks anchor at the contact point")
-    } else {
-        format!(
-            "{hull_name}: {} Ship Collision Fx locator(s) for the spark anchor",
-            collision_fx.len()
-        )
-    });
+    let (nozzle, collision_fx) = locators(archives, &hull_name, &blob, report);
 
     let (boost, boost_uv) = plume(archives, team, mode, lod, report);
     Ok(Livery {
@@ -277,6 +260,74 @@ fn one(
         boost,
         boost_uv,
     })
+}
+
+/// The hull's `Engine Flare` and `Ship Collision Fx` locators, from whichever
+/// file of the pair actually carries them.
+///
+/// **Wipeout HD keeps them in a separate `Locators.vex`.** Pulse and the PS2
+/// port put every locator node in the hull's own `.vex`, so the hull blob is
+/// the whole answer there. On the PS3 set `Ship.vex` carries the class ids and
+/// **no nodes of either class**, while `Locators.vex` beside it carries one
+/// `Engine Flare` and ten `Ship Collision Fx` - which is why HD's engine flare
+/// never attached: the effect loaded and there was no nozzle to hang it on.
+///
+/// The sibling is only read when the hull yields nothing, so a Pulse or PS2
+/// source never looks for a file it does not ship, and a set that carries both
+/// keeps the hull's own answer.
+fn locators(
+    archives: &mut oag_assets::Archives,
+    hull_name: &str,
+    blob: &[u8],
+    report: &mut Vec<String>,
+) -> (Option<Vec3>, Vec<Vec3>) {
+    let mut source = hull_name.to_string();
+    let mut nozzle = engine_flare(blob);
+    let mut collision_fx = collision_fx_locators(blob);
+
+    if nozzle.is_none()
+        && collision_fx.is_empty()
+        && let Some(name) = sibling_entry(hull_name, LOCATORS_ENTRY)
+        && let Ok(sibling) = archives.read_name(&name)
+    {
+        nozzle = engine_flare(&sibling);
+        collision_fx = collision_fx_locators(&sibling);
+        if nozzle.is_some() || !collision_fx.is_empty() {
+            source = name;
+        }
+    }
+
+    match nozzle {
+        Some(at) => report.push(format!(
+            "{source}: engine_flare locator at {at:?} in model space"
+        )),
+        None => report.push(format!(
+            "{hull_name}: no Engine Flare node - this craft's exhaust will not be drawn"
+        )),
+    }
+    report.push(if collision_fx.is_empty() {
+        format!("{hull_name}: no Ship Collision Fx nodes - sparks anchor at the contact point")
+    } else {
+        format!(
+            "{source}: {} Ship Collision Fx locator(s) for the spark anchor",
+            collision_fx.len()
+        )
+    });
+
+    (nozzle, collision_fx)
+}
+
+/// The file HD keeps its locator nodes in, beside the hull.
+const LOCATORS_ENTRY: &str = "Locators.vex";
+
+/// `name` with its last path component replaced by `file`.
+///
+/// Both separators, because a WAD entry is spelled with backslashes and a
+/// PSARC path with forward ones, and this runs on whichever the caller was
+/// handed.
+fn sibling_entry(name: &str, file: &str) -> Option<String> {
+    let at = name.rfind(['\\', '/'])?;
+    Some(format!("{}{file}", &name[..=at]))
 }
 
 /// The `Engine Flare` locator's position in a hull's own model space.
@@ -480,5 +531,20 @@ mod tests {
     #[test]
     fn one_slot_is_just_the_player() {
         assert_eq!(teams_for_slots("a", &ids(&["a", "b"]), 1), ids(&["a"]));
+    }
+
+    /// Both separators, because a WAD entry is spelled with backslashes and a
+    /// PSARC path with forward ones and this runs on either.
+    #[test]
+    fn a_sibling_replaces_only_the_last_path_component() {
+        assert_eq!(
+            sibling_entry(r"Data\Ships\Detonator\Ship.vex", LOCATORS_ENTRY).as_deref(),
+            Some(r"Data\Ships\Detonator\Locators.vex")
+        );
+        assert_eq!(
+            sibling_entry("/data/ships/detonator/ship.vex", LOCATORS_ENTRY).as_deref(),
+            Some("/data/ships/detonator/Locators.vex")
+        );
+        assert_eq!(sibling_entry("Ship.vex", LOCATORS_ENTRY), None);
     }
 }

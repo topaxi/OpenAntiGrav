@@ -197,3 +197,64 @@ fn slot_zero_is_the_team_the_options_asked_for() {
             .collect::<Vec<_>>()
     );
 }
+
+/// **Wipeout HD keeps its locator nodes in a file of their own.** Pulse and
+/// the PS2 port put every `Engine Flare` and `Ship Collision Fx` node in the
+/// hull's own `.vex`; HD's `Ship.vex` carries the class ids and no nodes of
+/// either class, and `Locators.vex` beside it carries them.
+///
+/// This is the test that turns that into a run rather than a reading. Before
+/// the sibling was read, HD's `WO_SHIP_ENGINEFLARE` loaded and then had no
+/// nozzle to attach to, so the flare never drew - a missing asset and a
+/// missing anchor look identical on screen, and only one of them was true.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn an_hd_hull_takes_its_locators_from_the_file_beside_it() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("data/images/hdfury-ps3-eu-dec.iso");
+    if !path.exists() {
+        assert!(
+            std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
+            "OAG_REQUIRE_GAME_DATA is set but {} is missing",
+            path.display()
+        );
+        println!("skipping: {} not present", path.display());
+        return;
+    }
+
+    let mut archives = oag_assets::Archives::open(&path.to_string_lossy(), oag_hd::TITLE)
+        .expect("the archives open");
+    let teams = vec!["Detonator".to_string()];
+    let mut report = Vec::new();
+    let liveries = oag_game::livery::load(
+        &mut archives,
+        &teams,
+        oag_race::Mode::SingleRace,
+        oag_render::mesh::Lod::default(),
+        &mut report,
+    )
+    .expect("the livery loads");
+    for line in &report {
+        println!("{line}");
+    }
+
+    let livery = &liveries[0];
+    assert!(
+        livery.nozzle.is_some(),
+        "no Engine Flare locator, so nothing would anchor WO_SHIP_ENGINEFLARE"
+    );
+    // Ten, which is the count `Ship_DispatchCollisionFx` picks the nearest of
+    // and the same number `oag_physics::wall::HULL_PROBES` samples.
+    assert_eq!(
+        livery.collision_fx.len(),
+        10,
+        "the Ship Collision Fx locators did not come through"
+    );
+    assert!(
+        report
+            .iter()
+            .any(|line| line.contains("Locators.vex") && line.contains("engine_flare locator")),
+        "the report does not say the sibling supplied them: {report:?}"
+    );
+}
