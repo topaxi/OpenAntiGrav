@@ -7,7 +7,7 @@ use anyhow::{Context, Result};
 use oag_core::{TickClock, TickRate};
 
 use oag_game::render::Renderer;
-use oag_game::{audio, boot, display, loading, perf, prefetch, race, settings, upscale};
+use oag_game::{audio, boot, display, launcher, loading, perf, prefetch, race, settings, upscale};
 use oag_gameplay::ControlScheme;
 use oag_input::Controls;
 use oag_render::mesh_render::Anisotropy;
@@ -20,6 +20,7 @@ use winit::window::WindowId;
 
 use crate::gpu::Gpu;
 use crate::hints::RACE_TITLE;
+use crate::prepare;
 use crate::session::{Session, Shell};
 use crate::stage::Stage;
 
@@ -48,7 +49,17 @@ pub(crate) struct App {
     /// A race loaded before the window opened, which is what `--race` does.
     pub(crate) race: Option<race::Loaded>,
     /// What a race started from `Launch Game` is flown on.
-    pub(crate) race_options: race::Options,
+    ///
+    /// `None` while the chooser is up: its `source` field is the one thing a
+    /// run that has not picked yet cannot state, and a placeholder there would
+    /// be a path nothing checked. Filled by `Session::finish_launcher`.
+    pub(crate) race_options: Option<race::Options>,
+    /// The disc chooser, when this run opened with no source named and found
+    /// more than one image. See [`oag_game::launcher`].
+    pub(crate) launcher: Option<launcher::Launcher>,
+    /// What the command line decided, kept because a pick is what turns it into
+    /// a boot. `None` on the `--race` route, which never chooses anything.
+    pub(crate) pending: Option<prepare::Pending>,
     pub(crate) trace: bool,
     pub(crate) log_every: u32,
     pub(crate) anisotropy: Anisotropy,
@@ -140,7 +151,13 @@ impl App {
         let Some(mut audio) = self.audio.take() else {
             return Ok(None);
         };
-        let stage = if let Some(loaded) = self.race.take() {
+        let stage = if let Some(launcher) = self.launcher.take() {
+            // Before both of the others, because it is what comes before both:
+            // nothing has been opened yet and the two branches below are about
+            // what was. It draws with the engine's own glyphs - see
+            // `Stage::launcher` - since there is no disc to take a font from.
+            Stage::launcher(&gpu, launcher)?
+        } else if let Some(loaded) = self.race.take() {
             gpu.window.set_title(RACE_TITLE);
             // Straight away on this leg only: `--race` has no boot sequence, so
             // there is no intro for the music to wait behind. The front end's
@@ -220,6 +237,8 @@ impl App {
             stalled: true,
             next_frame: std::time::Instant::now(),
             race_options: self.race_options.clone(),
+            pending: self.pending.take(),
+            trace: self.trace,
             log_every: self.log_every,
             give: self.give,
             autopilot: self.autopilot,

@@ -1,0 +1,125 @@
+//! What the chooser says about the images this machine actually has.
+//!
+//! `launcher::tests` covers the cursor and the draw list with candidates built
+//! by hand. This is the other half: [`oag_game::launcher::survey`] reading real
+//! discs, which is the only way to check that the title, platform and serial on
+//! a row are the disc's own rather than a guess - and the only way to check the
+//! one case the whole "list it anyway" decision exists for, an encrypted PS3
+//! image sitting beside its decrypted twin.
+//!
+//! `#[ignore]`d: needs real images under `data/images/`. `just test-data`.
+
+use std::path::{Path, PathBuf};
+
+use oag_game::launcher::{self, State};
+
+fn image(name: &str) -> Option<PathBuf> {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("data/images")
+        .join(name);
+    if path.exists() {
+        return Some(path);
+    }
+    assert!(
+        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
+        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
+        path.display()
+    );
+    eprintln!("skipping: {} is not present", path.display());
+    None
+}
+
+/// Every row is labelled off the disc, not off its file name.
+#[test]
+#[ignore = "needs a disc image under data/images/"]
+fn each_pressing_identifies_as_its_own_title() {
+    // Every serial here was read off the maintainer's own images with
+    // `oag-unpack info`, not copied from a database.
+    let expected = [
+        ("pulse-psp-usa.chd", "Wipeout Pulse", "PSP", "UCUS-98712"),
+        ("pulse-psp-eu.chd", "Wipeout Pulse", "PSP", "UCES-00465"),
+        ("pulse-ps2-eu.chd", "Wipeout Pulse", "PS2", "SCES-54748"),
+        ("pure-psp-eu.chd", "Wipeout Pure", "PSP", "UCES-00001"),
+        ("pure-psp-usa.chd", "Wipeout Pure", "PSP", "UCUS-98612"),
+        ("hdfury-ps3-eu-dec.iso", "Wipeout HD", "PS3", "BCES-00664"),
+    ];
+
+    for (name, title, platform, serial) in expected {
+        let Some(path) = image(name) else { continue };
+        let rows = launcher::survey(&[path]);
+        let row = rows.first().expect("one path in, one row out");
+
+        assert_eq!(row.name, name);
+        assert_eq!(row.title(), title, "{name}");
+        assert_eq!(row.platform.to_string(), platform, "{name}");
+        assert_eq!(row.serial.as_deref(), Some(serial), "{name}");
+        assert!(row.is_playable(), "{name} should open");
+    }
+}
+
+/// The reason the unavailable row exists at all.
+///
+/// The encrypted image and the decrypted one carry the same serial - the
+/// `PS3_DISC.SFB` that answers it is outside the encrypted region - so nothing
+/// short of trying to open the archives can tell them apart, and a chooser that
+/// filtered on identity alone would offer the wrong one.
+#[test]
+#[ignore = "needs a disc image under data/images/"]
+fn an_encrypted_ps3_image_is_listed_with_the_fix_rather_than_hidden() {
+    let Some(encrypted) = image("hdfury-ps3-eu.iso") else {
+        return;
+    };
+    let rows = launcher::survey(&[encrypted]);
+    let row = rows.first().expect("one path in, one row out");
+
+    assert!(!row.is_playable(), "an encrypted image must not be offered");
+    assert_eq!(row.platform.to_string(), "PS3");
+    assert_eq!(
+        row.serial.as_deref(),
+        Some("BCES-00664"),
+        "the identity block reads through the encryption"
+    );
+    match &row.state {
+        State::Unavailable(why) => assert!(why.contains(".dkey"), "{why}"),
+        State::Playable(_) => unreachable!(),
+    }
+}
+
+/// The chooser only ever appears because the search path holds more than one
+/// image, so this is the state the whole feature is for.
+///
+/// The directory is reached through [`image`] rather than
+/// `oag_game::source::candidates`, whose first search-path entry is
+/// `data/images` **relative to the current directory** - the workspace root
+/// when the game runs, and the crate directory under `cargo nextest`. That is
+/// the composition root's policy working as intended and not something to bend
+/// a test around; what is worth checking here is that a folder of several real
+/// images surveys into several real rows.
+#[test]
+#[ignore = "needs a disc image under data/images/"]
+fn a_folder_of_several_images_surveys_into_several_rows() {
+    let Some(one) = image("pulse-psp-usa.chd") else {
+        return;
+    };
+    let directory = one.parent().expect("images live in a directory");
+
+    let mut paths: Vec<PathBuf> = std::fs::read_dir(directory)
+        .expect("the directory reads")
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| path.is_file() && oag_game::source::is_container(path))
+        .collect();
+    paths.sort();
+    assert!(paths.len() > 1, "one image needs no chooser: {paths:?}");
+
+    let rows = launcher::survey(&paths);
+    assert_eq!(rows.len(), paths.len());
+    assert!(
+        rows.iter().any(oag_game::launcher::Candidate::is_playable),
+        "nothing here opens"
+    );
+    for row in &rows {
+        eprintln!("{:<14} {:<18} {}", row.title(), row.provenance(), row.name);
+    }
+}

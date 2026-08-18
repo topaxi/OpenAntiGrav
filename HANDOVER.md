@@ -896,6 +896,8 @@ answer.
 | **`just play`'s default is not `oag-game`'s default** | `native-video`'s Cargo feature is off by default, so `cargo build`/`cargo test`/CI stay GStreamer-free; `just play` turns it on. |
 | **GStreamer for ATRAC3+** | **Do not retry this.** Extending the `native-video` path to audio was the intended route and it cannot work - see [ADR-0019](docs/architecture/adr/0019-atrac3plus-out-of-process.md). |
 | **Motion blur is designed but not built** | [`docs/rendering/motion-blur.md`](docs/rendering/motion-blur.md) specifies it fully and costs it at about a week and a half; no code exists. An invented modern feature, not a recovered one. Written down because the per-object velocity buffer it needs is also two of the five things FSR 3.1 and TAA are waiting on, so the design is worth more than the effect. **Two open questions could still change it**: whether `Rg16Float` is multisample-renderable at 4x on the adapters here (probe before writing any shader - `sample_count: 2` already failed everywhere, which is why there is no `Msaa2x`), and whether bloom, which the design inherits its placement and colour-space handling from, is actually correct today - it defaults off and has no menu row, so nobody has looked. ADR-0024 is owed by whoever implements it, since ADR-0013 currently forbids the row. |
+| **The disc chooser is not a `menu::Menu`** | 2026-08-18. `oag_game::launcher` has rows, a cursor and the same abstract buttons, and it is its own module anyway: it runs before any archive is open, so it has no title, therefore no `MenuSkin` and no disc font. Making it a menu would mean choosing a skin in order to choose which disc the skin comes from. It draws with `font::Atlas::build` and `sprite::Sheet::default`, the disc-free pair the perf overlay already uses. The test for anything else moving out of `menu.rs` is whether a title can be behind it - and everything else can. [menus.md](docs/architecture/menus.md#the-one-screen-that-is-not-a-menu) |
+| **The chooser has no headless capture route** | `--until` matches front-end state-machine names read off the disc's own `Skin.xml` (`capture.rs`), and this screen has none - it exists before a disc does. `--menu-page` is for our menu tree. So `--launcher` is *refused* with `--screenshot`/`--dry-run`/`--race` rather than half-working, and the screen is covered by unit tests plus `crates/game/tests/launcher_ground_truth.rs` instead. **`every_line_fits_on_screen` in `launcher/tests.rs` is the one that earns its keep**: it measures each drawn string in the 5x7 face against the 480-unit grid, and it exists because the first version's footer ran off the right edge where no test could see it. |
 | Everything else milestone-scoped | Weapons, AI, netcode, the shell: [roadmap](docs/overview/roadmap.md), not this file. |
 
 ## Working rules that were learned expensively
@@ -1099,6 +1101,24 @@ machine and this checkout.
   *uncached* default the cache would need a new one.
 
 ## Verification status: what to lean on
+
+**The disc chooser was driven end to end on this machine** (2026-08-18), which
+is worth writing down because there is no automated way to do it. `just launch`
+listed all seven images under `data/images/` with the title, platform and serial
+read off each disc; `hdfury-ps3-eu.iso` came up red and unselectable beside the
+decrypted twin it shares a serial with; and two Down presses plus Return booted
+`pure-psp-eu.chd` through the ordinary loading screen. Whole survey of seven
+images: 0.85 s.
+
+**How to repeat it, and the two dead ends.** The input has to go in over
+**X11** - `xdotool` cannot reach the window under Wayland at all, so
+`unset WAYLAND_DISPLAY` before the run is what makes a scripted press land, and
+`xdotool key --window <id>` does not work either; focus the window and use plain
+`xdotool key`. **Xvfb is not a way round having a real display here**: the run
+starts and the survey prints, but Mesa reports *"vulkan: No DRI3 support
+detected - required for presentation"* and nothing is ever drawn or ticked, so
+no press is acted on. A headless *capture* is no help either - see the entry in
+"Scope decisions" about the chooser having no `--until`.
 
 **The cross-platform gate now runs four layers, not one** (2026-08-15). CI's
 `determinism` job runs `oag-core`, `oag-physics`, `oag-gameplay` and the new

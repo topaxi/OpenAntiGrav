@@ -266,6 +266,15 @@ impl Session {
                 // circuit id is shared between the titles, so *every* stored
                 // Pulse circuit misses): a settings file naming a pack circuit
                 // the player no longer has takes the same path on Pulse.
+                // Taken out and put back rather than reached through, so the
+                // settings below can be read while it is being written. There
+                // are no menus before a disc has been chosen, so the `None`
+                // here is unreachable in practice and says so rather than
+                // unwrapping.
+                let Some(mut race_options) = self.race_options.take() else {
+                    eprintln!("no disc image has been chosen yet, so there is nothing to race");
+                    return;
+                };
                 let chosen = self.shell.as_ref().and_then(|shell| {
                     shell
                         .track(&self.settings.race.track)
@@ -280,7 +289,7 @@ impl Session {
                         .map(catalogue::Track::entry_name)
                 });
                 match chosen {
-                    Some(entry) => self.race_options.track = Some(entry),
+                    Some(entry) => race_options.track = Some(entry),
                     None => eprintln!(
                         "this source offers no circuit at all; racing whatever was \
                          already selected"
@@ -299,36 +308,38 @@ impl Session {
                     .as_ref()
                     .and_then(|shell| shell.team(&self.settings.race.team))
                 {
-                    Some(team) => self.race_options.team = team.to_string(),
+                    Some(team) => race_options.team = team.to_string(),
                     None => eprintln!(
                         "this source does not offer team {:?}, racing as {} instead",
-                        self.settings.race.team, self.race_options.team
+                        self.settings.race.team, race_options.team
                     ),
                 }
                 if let Some(class) = SpeedClass::from_name(&self.settings.race.class) {
-                    self.race_options.class = class;
+                    race_options.class = class;
                 }
                 // Same shape as the speed class above: an unrecognised token
                 // leaves the previous mode in place rather than substituting
                 // one, so a settings file from a build with a mode this one
                 // does not have still races.
                 if let Some(mode) = oag_race::Mode::from_name(&self.settings.race.mode) {
-                    self.race_options.mode = mode;
+                    race_options.mode = mode;
                 }
                 // Same shape again: an unrecognised level leaves the previous
                 // one in place rather than substituting a default mid-session.
                 if let Some(difficulty) =
                     oag_ai::Difficulty::from_name(&self.settings.ai.difficulty)
                 {
-                    self.race_options.difficulty = difficulty;
+                    race_options.difficulty = difficulty;
                 }
                 println!(
                     "\nloading {}",
-                    self.race_options
+                    race_options
                         .track
                         .as_deref()
                         .unwrap_or("this source's own default circuit")
                 );
+                // Back before the load, which reads it.
+                self.race_options = Some(race_options);
                 match self.launch_race() {
                     Ok(()) => println!("\n{RACE_KEYS}{ESC_TO_MENU}"),
                     // Reported rather than fatal: leaving the menus on screen
@@ -353,8 +364,10 @@ impl Session {
     ///   `Menu::back` raises `Closed`, which already means "there is nothing
     ///   behind the menus", so the last one still quits;
     /// - in a race, it hands the window back to the menus;
-    /// - in the front end, or in a `--race` run that never had menus, there is
-    ///   no level behind and it quits.
+    /// - in the front end, in the disc chooser, or in a `--race` run that never
+    ///   had menus, there is no level behind and it quits. The chooser is the
+    ///   clearest case of the rule rather than an exception to it: it is the
+    ///   first thing a run shows, so behind it is the desktop.
     ///
     /// **Leaving a race discards it.** There is no pause and no resume - the
     /// `World` is dropped and re-entering the race loads a fresh one - and

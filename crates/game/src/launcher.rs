@@ -1,0 +1,399 @@
+//! The chooser shown when a run names no disc image and this machine has more
+//! than one.
+//!
+//! [`crate::source`] has always been able to find *an* image; what it could not
+//! do is admit there were others. On a machine holding several pressings the
+//! first one on the search path won and the rest were invisible, reachable only
+//! by naming a path on the command line. This module is the other half:
+//! `source::candidates` lists every image, [`survey`] says what each one
+//! actually is, and [`Launcher`] is the cursor over the result.
+//!
+//! # Nothing here is authored
+//!
+//! A row's title is [`oag_title::Title::name`], reached through
+//! [`crate::title::identify`] - the disc's own serial, through the deny-list,
+//! which is the same evidence the boot itself uses. Its platform and serial are
+//! [`oag_disc::TitleInfo`], read out of `UMD_DATA.BIN`, `SYSTEM.CNF` or
+//! `PS3_DISC.SFB`. There is deliberately no table in this file mapping a file
+//! name to a game: a name is what a player called their own dump, and reading
+//! the disc is the only honest way to answer what it holds.
+//!
+//! **Region is not shown, because nothing reports one.** It would have to be
+//! guessed from the serial's third letter, and the serial itself is on the row
+//! already for anyone who reads them.
+//!
+//! # An image that will not open is still listed
+//!
+//! The live case is a PS3 disc: `hdfury-ps3-eu.iso` and `hdfury-ps3-eu-dec.iso`
+//! sit side by side, identify as the same serial, and only the decrypted one
+//! opens - the encrypted one's ISO 9660 directory reads fine and everything
+//! inside it is noise. Hiding it would leave a player whose only copy is the
+//! encrypted one staring at a list their disc is not on. So it is listed,
+//! marked, skipped by the cursor, and carries the fix.
+//!
+//! # This is not a [`crate::menu`]
+//!
+//! The menus are a definition of pages and entries, drawn with a title's own
+//! [`oag_title::MenuSkin`] and its own font. This screen runs *before* a title
+//! is known, so it has neither, and pretending otherwise would mean picking a
+//! skin to choose which skin to use. It is its own small thing: one list, one
+//! cursor, the engine's own 5x7 glyphs.
+
+use std::path::{Path, PathBuf};
+
+use oag_disc::{DiscImage, Platform};
+use oag_gameplay::input::{Input, button};
+use oag_title::Title;
+
+use crate::frontend::{Align, Draw, SCREEN};
+
+/// One disc image the chooser offers.
+#[derive(Debug, Clone)]
+pub struct Candidate {
+    /// What to hand [`crate::source::resolve`]'s callers: the path, as a string.
+    pub source: String,
+    /// The file's own name, which is what a player recognises the row by.
+    pub name: String,
+    /// What the disc says it runs on, or [`Platform::Unknown`] if it says
+    /// nothing.
+    pub platform: Platform,
+    /// The disc's serial, normalised. `None` on a source that carries none - an
+    /// `oag-unpack` extract, or an image whose identity block would not read.
+    pub serial: Option<String>,
+    /// Whether it can be played, and if not, why not.
+    pub state: State,
+}
+
+/// Whether a candidate is playable, and what to say when it is not.
+#[derive(Debug, Clone)]
+pub enum State {
+    /// It opened, as this title.
+    Playable(&'static Title),
+    /// It did not open. The string is for the player, and names the fix when
+    /// there is one to name.
+    Unavailable(String),
+}
+
+impl Candidate {
+    /// Whether the cursor may land on this row.
+    #[must_use]
+    pub fn is_playable(&self) -> bool {
+        matches!(self.state, State::Playable(_))
+    }
+
+    /// The title's name, or the reason it has none.
+    #[must_use]
+    pub fn title(&self) -> &str {
+        match &self.state {
+            State::Playable(title) => title.name,
+            State::Unavailable(_) => UNAVAILABLE,
+        }
+    }
+
+    /// The platform and serial, as one column.
+    #[must_use]
+    pub fn provenance(&self) -> String {
+        match &self.serial {
+            Some(serial) => format!("{} {serial}", self.platform),
+            None => self.platform.to_string(),
+        }
+    }
+}
+
+/// What a row that will not open is headed instead of a title.
+const UNAVAILABLE: &str = "WILL NOT OPEN";
+
+/// Opens every candidate far enough to say what it is.
+///
+/// Two reads apiece, both of which already existed: [`DiscImage::identify`] for
+/// the platform and serial, which is a handful of sectors, and
+/// [`crate::title::identify`] for the title, which mounts the archives and
+/// drops them. The second is the expensive one and it is also the only thing
+/// that proves a source will open at all, which is exactly what the chooser has
+/// to know before it offers a row.
+///
+/// Order is the order it was given, which is `source::candidates`' - known
+/// names first, so the first row is the image a boot with nothing named would
+/// have opened.
+#[must_use]
+pub fn survey(paths: &[PathBuf]) -> Vec<Candidate> {
+    paths.iter().map(|path| examine(path)).collect()
+}
+
+/// One candidate, opened.
+fn examine(path: &Path) -> Candidate {
+    let source = path.to_string_lossy().into_owned();
+    let name = path.file_name().map_or_else(
+        || source.clone(),
+        |name| name.to_string_lossy().into_owned(),
+    );
+
+    // Deliberately tolerant: an image whose identity block will not read is
+    // still worth listing under its file name, because the title open below is
+    // what decides whether it plays and it may well succeed anyway.
+    let info = DiscImage::open(path)
+        .and_then(|mut disc| disc.identify())
+        .ok();
+    let platform = info
+        .as_ref()
+        .map_or(Platform::Unknown, |info| info.platform);
+    let serial = info.and_then(|info| info.serial);
+
+    let state = match crate::title::identify(&source) {
+        Some(title) => State::Playable(title),
+        None => State::Unavailable(why_not(platform)),
+    };
+
+    Candidate {
+        source,
+        name,
+        platform,
+        serial,
+        state,
+    }
+}
+
+/// What to tell a player about a source that would not open.
+///
+/// Only the PS3 case is specific, and it is specific because it is the one
+/// where the failure has a known cause and a known fix: a PS3 disc image is
+/// layer-1 encrypted until it is decrypted with the disc's own `.dkey`, and its
+/// ISO 9660 directory reads perfectly either way - so "the archives are not in
+/// here" is what an encrypted image looks like from the inside. The wording
+/// follows `just play hd`, which already prints this.
+///
+/// Everything else gets the honest short answer rather than a guess. A source
+/// can fail to open for reasons this cannot see - a truncated dump, a disc from
+/// a title nothing here knows - and naming one of them would be inventing a
+/// diagnosis.
+///
+/// **Short enough to draw**, which is why the pointer at
+/// `docs/formats/ps3-disc.md` is not in it: the screen is 480 units wide in the
+/// engine's own 5x7 face and a line that runs off the right edge tells a player
+/// less than a shorter one that fits. `fits_on_screen` in this module's tests
+/// is what keeps that true.
+fn why_not(platform: Platform) -> String {
+    match platform {
+        Platform::Ps3 => "still encrypted? decrypt it with its own .dkey".to_string(),
+        _ => "no archives this engine recognises".to_string(),
+    }
+}
+
+/// The long form of [`State::Unavailable`]'s reason, for the boot report.
+///
+/// `None` for a row that opened. Separate from what the screen draws because
+/// stdout has no right edge: this is where the pointer into `docs/` goes, and
+/// where a maintainer reading a terminal gets the whole story rather than the
+/// half that fits in 480 units.
+#[must_use]
+pub fn advice(row: &Candidate) -> Option<String> {
+    let State::Unavailable(why) = &row.state else {
+        return None;
+    };
+    let mut line = format!("{} will not open: {why}", row.name);
+    if row.platform == Platform::Ps3 {
+        line.push_str(" (`just ps3iso decrypt`; see docs/formats/ps3-disc.md)");
+    }
+    Some(line)
+}
+
+/// The chooser: a list of candidates and a cursor over the playable ones.
+#[derive(Debug)]
+pub struct Launcher {
+    rows: Vec<Candidate>,
+    cursor: usize,
+}
+
+impl Launcher {
+    /// Takes a surveyed list, parking the cursor on the first playable row.
+    ///
+    /// A list with nothing playable in it is a real state - a folder of
+    /// encrypted images - and it is left with the cursor at zero and
+    /// [`Self::pick`] refusing. The screen still says what is there and why
+    /// none of it works, which is the entire reason those rows are listed.
+    #[must_use]
+    pub fn new(rows: Vec<Candidate>) -> Self {
+        let cursor = rows.iter().position(Candidate::is_playable).unwrap_or(0);
+        Self { rows, cursor }
+    }
+
+    /// The rows, in the order they are drawn.
+    #[must_use]
+    pub fn rows(&self) -> &[Candidate] {
+        &self.rows
+    }
+
+    /// Which row the cursor is on.
+    #[must_use]
+    pub fn cursor(&self) -> usize {
+        self.cursor
+    }
+
+    /// Whether anything here can be played.
+    #[must_use]
+    pub fn has_playable(&self) -> bool {
+        self.rows.iter().any(Candidate::is_playable)
+    }
+
+    /// Moves and selects, returning the source picked when one is.
+    ///
+    /// Edges are consumed the way [`crate::menu::Menu::update`] consumes them,
+    /// and for the same reason: one press is one press whichever device saw it,
+    /// and a held key must not walk the list.
+    pub fn update(&mut self, input: &mut Input) -> Option<String> {
+        if take(input, button::DOWN) {
+            self.step(1);
+        }
+        if take(input, button::UP) {
+            self.step(-1);
+        }
+
+        let confirmed = take(input, button::CROSS) | take(input, button::START);
+        if confirmed { self.pick() } else { None }
+    }
+
+    /// The source under the cursor, if it is one that can be played.
+    #[must_use]
+    pub fn pick(&self) -> Option<String> {
+        self.rows
+            .get(self.cursor)
+            .filter(|row| row.is_playable())
+            .map(|row| row.source.clone())
+    }
+
+    /// Moves the cursor to the next playable row in `direction`, wrapping.
+    ///
+    /// Rows that will not open are stepped over rather than landed on: a cursor
+    /// that can sit on a row nothing will happen from is a screen that looks
+    /// broken. Nothing playable at all leaves the cursor where it is rather
+    /// than looping forever.
+    fn step(&mut self, direction: isize) {
+        let count = self.rows.len();
+        if count == 0 || !self.has_playable() {
+            return;
+        }
+
+        let mut at = self.cursor;
+        for _ in 0..count {
+            at = at
+                .wrapping_add_signed(direction)
+                .wrapping_add(count)
+                .rem_euclid(count);
+            if self.rows[at].is_playable() {
+                self.cursor = at;
+                return;
+            }
+        }
+    }
+}
+
+/// A button press, read as an edge and consumed.
+///
+/// The same helper `menu.rs` keeps private, spelled again here rather than
+/// made public there: `menu.rs` is at its size ceiling and this is three lines.
+fn take(input: &mut Input, index: u8) -> bool {
+    if input.is_pressed(index) {
+        input.consume_press(index);
+        true
+    } else {
+        false
+    }
+}
+
+/// What the screen looks like: a heading, one line per candidate, and a footer.
+///
+/// Drawn in the 480x272 grid every other screen of ours is authored in - this
+/// one has no source, so it has no source's grid to borrow, and the renderer's
+/// own default is the PSP's.
+#[must_use]
+pub fn draw_list(launcher: &Launcher) -> Vec<Draw> {
+    let mut out = vec![Draw::Fill {
+        rect: [0.0, 0.0, SCREEN.0, SCREEN.1],
+        color: BACKDROP,
+    }];
+
+    out.push(text(MARGIN, 24.0, 1.0, HEADING, "OPENANTIGRAV"));
+    out.push(text(MARGIN, 40.0, 1.0, DIM, "SELECT A DISC IMAGE"));
+
+    for (index, row) in launcher.rows().iter().enumerate() {
+        let y = FIRST_ROW + index as f32 * ROW;
+        let selected = index == launcher.cursor() && row.is_playable();
+        let colour = if !row.is_playable() {
+            UNAVAILABLE_COLOUR
+        } else if selected {
+            SELECTED
+        } else {
+            TEXT
+        };
+
+        if selected {
+            out.push(Draw::Fill {
+                rect: [MARGIN - 4.0, y - 2.0, SCREEN.0 - MARGIN * 2.0 + 8.0, ROW],
+                color: HIGHLIGHT,
+            });
+        }
+
+        out.push(text(MARGIN, y, 1.0, colour, row.title()));
+        out.push(text(TITLE_COLUMN, y, 1.0, colour, &row.provenance()));
+        out.push(text(NAME_COLUMN, y, 1.0, colour, &row.name));
+    }
+
+    // Why each unlistenable row will not open, under the list rather than on
+    // it: they are sentences, the rows are a table, and the rows the cursor
+    // cannot reach are the ones a player most needs a sentence for. One line
+    // each, because two encrypted images have two different names.
+    let mut note = FIRST_ROW + (launcher.rows().len() as f32 + 1.0) * ROW;
+    for row in launcher.rows() {
+        if let State::Unavailable(why) = &row.state {
+            out.push(text(
+                MARGIN,
+                note,
+                1.0,
+                UNAVAILABLE_COLOUR,
+                &format!("{}: {why}", row.name),
+            ));
+            note += ROW;
+        }
+    }
+
+    // Always drawn, and at the bottom rather than after the notes: the keys are
+    // what a player needs on the first frame, and a screen where they vanish as
+    // soon as something is wrong is a screen that helps least when it matters.
+    out.push(text(MARGIN, SCREEN.1 - 20.0, 1.0, DIM, HINT));
+
+    out
+}
+
+/// One line of text, left aligned, with no border.
+fn text(x: f32, y: f32, scale: f32, color: [f32; 4], body: &str) -> Draw {
+    Draw::Text {
+        x,
+        y,
+        scale,
+        color,
+        border: None,
+        align: Align::Left,
+        text: body.to_string(),
+    }
+}
+
+/// Where the list starts, and how far apart its rows are.
+const MARGIN: f32 = 16.0;
+const FIRST_ROW: f32 = 64.0;
+const ROW: f32 = 14.0;
+/// Where the platform-and-serial column starts, and the file name after it.
+const TITLE_COLUMN: f32 = 130.0;
+const NAME_COLUMN: f32 = 250.0;
+
+const BACKDROP: [f32; 4] = [0.02, 0.03, 0.06, 1.0];
+const HIGHLIGHT: [f32; 4] = [0.16, 0.36, 0.62, 1.0];
+const HEADING: [f32; 4] = [0.92, 0.95, 1.0, 1.0];
+const TEXT: [f32; 4] = [0.72, 0.78, 0.86, 1.0];
+const SELECTED: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
+const DIM: [f32; 4] = [0.48, 0.53, 0.60, 1.0];
+const UNAVAILABLE_COLOUR: [f32; 4] = [0.55, 0.36, 0.36, 1.0];
+
+const HINT: &str = "UP/DOWN CHOOSE   ENTER OR X START   ESCAPE QUIT";
+
+#[cfg(test)]
+mod tests;

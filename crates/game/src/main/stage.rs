@@ -17,6 +17,7 @@ use oag_render::mesh_render::Anisotropy;
 
 use crate::frontend_stage::{FrontendStage, PendingMovie};
 use crate::gpu::Gpu;
+use crate::launcher_stage::LauncherStage;
 use crate::loading_stage::LoadingStage;
 use crate::menu_stage::MenuStage;
 use crate::race_stage::RaceStage;
@@ -26,6 +27,8 @@ use crate::race_stage::RaceStage;
 /// Both variants are boxed: a race carries the whole `World`, eight ship slots
 /// wide, and an enum is as large as its largest variant wherever it is stored.
 pub(crate) enum Stage {
+    /// Which disc image to boot, when the run named none and found several.
+    Launcher(Box<LauncherStage>),
     /// The wave and the counts, while `--prefetch` converts the disc.
     Loading(Box<LoadingStage>),
     /// The boot sequence: the intro reel, then the language picker.
@@ -37,6 +40,35 @@ pub(crate) enum Stage {
 }
 
 impl Stage {
+    /// The disc chooser, which is the one stage with no source behind it.
+    ///
+    /// **The engine's own 5x7 glyphs, not a disc font**, for the same reason
+    /// `App::open` builds the performance overlay from them: this runs before
+    /// any archive is open, so there is no disc font to have. It is also the
+    /// reason there is no `set_space` call - a space belongs to a source's own
+    /// front-end XML, and the renderer's default is the PSP's 480x272, which is
+    /// the grid this screen is authored in.
+    ///
+    /// # Errors
+    ///
+    /// Propagates the renderer's own pipeline build.
+    pub(crate) fn launcher(gpu: &Gpu, launcher: oag_game::launcher::Launcher) -> Result<Self> {
+        let renderer = Renderer::new(
+            &gpu.device,
+            &gpu.queue,
+            gpu.config.format,
+            None,
+            oag_game::font::Atlas::build(),
+            &oag_game::sprite::Sheet::default(),
+        )
+        .context("building the disc chooser")?;
+        Ok(Self::Launcher(Box::new(LauncherStage {
+            renderer,
+            launcher,
+            picked: None,
+        })))
+    }
+
     /// The loading screen, holding the half-boot it will hand the window to.
     ///
     /// **The boot sequence is carried as data rather than built and paused.**

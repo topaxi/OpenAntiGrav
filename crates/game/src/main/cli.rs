@@ -27,8 +27,26 @@ pub(crate) struct Cli {
     ///
     /// Left out, it is searched for: `data/images/` in the current directory,
     /// then beside the AppImage, then `<data dir>/oag/images`. `oag_game::source`
-    /// documents the whole order, and `$OAG_IMAGE` short-circuits it.
+    /// documents the whole order, and `$OAG_IMAGE` short-circuits it. Finding
+    /// more than one there opens the chooser - see `--launcher`.
     pub(crate) source: Option<String>,
+
+    /// Show the disc chooser, even when a source would resolve on its own.
+    ///
+    /// Without this the chooser appears only when nothing named a source and
+    /// the search path holds more than one image; one image boots straight in,
+    /// as it always did. With it the screen is shown for a single image too.
+    ///
+    /// **It lists the search path, and only the search path.** A source named
+    /// on the command line, in `$OAG_IMAGE` or in `settings.toml` is not a row:
+    /// this is how to reach something *other* than the one configured, not a
+    /// list of everything reachable. An empty search path is still the ordinary
+    /// "no disc image found" error rather than an empty screen.
+    ///
+    /// Needs a window: `--race`, `--dry-run` and `--screenshot` all name their
+    /// own source and are refused.
+    #[arg(long)]
+    pub(crate) launcher: bool,
 
     /// Which movie to play: an archive entry name, or `hash:XXXXXXXX` for one of
     /// the reels whose name is not recovered.

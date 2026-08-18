@@ -30,7 +30,7 @@ use crate::hints::{ESC_QUITS, RACE_KEYS};
 /// as the game always did. The body below is that former part of `main`,
 /// unchanged.
 pub(crate) fn run_windowless(
-    cli: Cli,
+    cli: &Cli,
     options: &boot::Options,
     settings: &settings::Settings,
     race_options: race::Options,
@@ -84,7 +84,7 @@ pub(crate) fn run_windowless(
         })
     });
 
-    let scheme = resolve_scheme(&cli, settings);
+    let scheme = resolve_scheme(cli, settings);
 
     // A source with no movie at all - which is every PS2 source, whose intro is
     // an MPEG-2 program stream outside the archives - has no video format
@@ -123,7 +123,7 @@ pub(crate) fn run_windowless(
         return Ok(());
     }
 
-    if let Some(path) = cli.screenshot {
+    if let Some(path) = cli.screenshot.clone() {
         // No `start_music` here: this leg runs the boot sequence, so the music
         // waits behind the intro exactly as the window's does, and `capture::run`
         // starts it from its own tick loop. See `Audio::start_music`.
@@ -415,7 +415,7 @@ pub(crate) fn run_race(
         give,
         autopilot: cli.autopilot,
         race: Some(loaded),
-        race_options: options,
+        race_options: Some(options),
         trace: cli.trace,
         log_every: cli.log_every,
         anisotropy,
@@ -435,6 +435,10 @@ pub(crate) fn run_race(
         // Nor anything to draw one with: this route never opens the archives
         // the tips and the glow strip come out of.
         loading_assets: loading::Assets::default(),
+        // `--race` names its own source and is refused alongside `--launcher`,
+        // so there is nothing here to choose and nothing left to prepare.
+        launcher: None,
+        pending: None,
         state: None,
     };
     event_loop.run_app(&mut app)?;

@@ -261,22 +261,31 @@ is the answer, and the first hit wins:
 | Order | Where | For |
 | --- | --- | --- |
 | 1 | the command-line argument, verbatim | `oag-game ~/roms/pulse.chd`, and everything scripted |
-| 2 | `$OAG_IMAGE` (a file or a directory) | a fixed location, set once in a launcher |
-| 3 | `data/images/` under the current directory | the repository checkout, which is what `just play` uses |
-| 4 | the AppImage's own directory, then `images/` in it | **portable mode**: copy the AppImage and the image into one folder |
-| 5 | `~/.local/share/oag/images/` | a stable per-user location |
+| 2 | `$OAG_IMAGE` (a file or a directory) | a fixed location, set once in a launcher script |
+| 3 | `settings.toml`'s `[source] image` | a player who always plays off one disc, saved between runs |
+| 4 | `data/images/` under the current directory | the repository checkout, which is what `just play` uses |
+| 5 | the AppImage's own directory, then `images/` in it | **portable mode**: copy the AppImage and the image into one folder |
+| 6 | `~/.local/share/oag/images/` | a stable per-user location |
 
-Within a directory, the four normalised names from
+The first three are a player *stating* which source they want and the last
+three are the engine guessing, and that line matters: **a guess with more than
+one answer is shown rather than resolved.** Steps 4 to 6 holding several images
+opens the [disc chooser](oag-game.md#finding-the-disc-image) instead of taking
+the first; a stated source never does.
+
+Within a directory, the five normalised names from
 [`data/README.md`](../../data/README.md) are tried first, in this order:
-`pulse-psp-usa.chd`, `pulse-ps2-eu.chd`, `pure-psp-usa.chd`, then
-`hdfury-ps3-eu.iso`. Pulse's own two names come first because that is the
-platform the implementation follows; the other two are recognised so a
-directory holding only one of them is found by name rather than by
-alphabetical luck, not because `oag-game` can play them yet - opening one
-fails with a clear error naming the title instead of silently loading it as
-Pulse. After the known names, any `.chd` or `.iso` in alphabetical order is
-tried - so an image under whatever name the player's own dump has still
-works, and two runs in the same directory always open the same one.
+`pulse-psp-usa.chd`, `pulse-ps2-eu.chd`, `pure-psp-eu.chd`, `pure-psp-usa.chd`,
+then `hdfury-ps3-eu.iso`. Pulse's own two names come first because that is the
+platform the implementation follows; the others are recognised so a directory
+holding only one of them is found by name rather than by alphabetical luck.
+Pure and HD/Fury both boot their own front ends - HD's off a chain its XML
+declares rather than one anyone has watched, which every boot of it says out
+loud ([ADR-0025](../architecture/adr/0025-a-boot-chain-carries-its-provenance.md))
+- though neither is played past the menus yet. After the known names, any
+`.chd` or `.iso` in alphabetical order is tried - so an image under whatever
+name the player's own dump has still works, and two runs in the same directory
+always list them in the same order.
 
 Portable mode reads **`$APPIMAGE`'s directory**, the AppImage file's own
 location. `$APPDIR`, the mounted read-only package, is deliberately never
