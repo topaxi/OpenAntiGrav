@@ -16,6 +16,30 @@ use crate::mesh_render::{
     build, write_uniforms,
 };
 
+/// Makes every pixel opaque, in place, before a frame is encoded as a PNG.
+///
+/// **The alpha channel of a rendered frame is not coverage; it is the bloom
+/// mask.** `mesh_render::GlowMask::Protected` binds `ColorWrites::COLOR`, so
+/// scene geometry does not write alpha at all and the channel keeps whatever
+/// the pass cleared it to - zero - while the handful of models bound
+/// `GlowMask::Written` mark themselves for `post::bloom`, whose `fs_bright`
+/// reads exactly that (`texel.rgb * texel.a`). The window never presents the
+/// channel, so nothing on screen depends on it.
+///
+/// A PNG does present it. Encoding a race frame straight from the readback
+/// buffer therefore writes a **fully transparent image**: correct bytes, and
+/// every viewer shows nothing. This is the one line that turns a frame into a
+/// picture of a frame.
+///
+/// Takes `[r, g, b, a]` rows as `capture_pixels_from` returns them; a length
+/// that is not a multiple of four leaves its tail alone rather than panicking,
+/// because a truncated readback is already a reported error elsewhere.
+pub fn make_opaque(pixels: &mut [u8]) {
+    for pixel in pixels.chunks_exact_mut(4) {
+        pixel[3] = 0xff;
+    }
+}
+
 /// Renders one frame of `model` to a PNG from a given orbit angle.
 ///
 /// `pitch` near zero looks along the ground; near `PI / 2` looks straight down,
