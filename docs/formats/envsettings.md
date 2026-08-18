@@ -165,6 +165,35 @@ shares almost nothing else; the ground truth names it rather than filtering by
 line count, so that a *second* non-circuit file shows up as a failure instead of
 being quietly absorbed.
 
+## Where the executable touches this, located and not read
+
+Recovered 2026-08-18 with Ghidra open on `EBOOT.elf` and
+[`scripts/ps3-toc.py`](../../scripts/ps3-toc.py), which resolves each function's
+own TOC rather than the one Ghidra picks for all of them - see
+[`memory.md`](../ghidra/functions/ps3-hdfury-eu/memory.md), because 59 % of
+TOC-relative loads otherwise land on a real string that is not the one the code
+loads.
+
+| Address | What names it |
+| --- | --- |
+| `0x003a83d8`, `0x003a9520` | `"Lighting.Sky colour"` and `"Lighting.Sky rotation"` |
+| `0x003f3fb0` | `"sky.gtf"`, `"skycube"` and `"Data/Tex/ZoneSky.gtf"`, all three |
+
+**Nothing is renamed on the strength of that**, per
+[`CLAUDE.md`](../../CLAUDE.md)'s rule: naming a function needs more than knowing
+which strings it mentions, and below 50 confidence the hypothesis is written down
+instead of dressed up as a name. `0x003f3fb0` is a large per-race setup function
+that also builds pads and cameras; which part of it loads a sky is unread.
+
+Two things the string sweep turned up that this page's key list does not have:
+
+- **`"Lighting.Debug.Draw sky"`** - a debug toggle, so the sky is drawn through
+  something switchable and separately named.
+- **`"%s.Lighting.Sky reflection colour"`, `"%s.Sky horizon colour"` and
+  `"%s.Sky zenith colour"`** - `%s`-prefixed, so there is a **second, prefixed
+  key namespace** these settings are read through, and it is not the flat one the
+  33 files on the disc write. What supplies the prefix is unread.
+
 ## Open
 
 - **What the original does with any of it.** Every name here is the file's own.
