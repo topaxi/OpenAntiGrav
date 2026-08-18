@@ -93,8 +93,10 @@ use crate::ByteOrder;
 
 pub mod material;
 mod stride;
+pub mod vertex_decl;
 
 pub use material::{Blend, Factor, Material, Transparency};
+pub use vertex_decl::{Attribute, VertexDecl};
 
 /// The version word every `.rcsmodel` on the HD disc opens with.
 ///
@@ -421,8 +423,36 @@ pub struct Mesh {
     /// Out of range on a file whose material table this reader could not walk;
     /// [`Model::material_of`] answers `None` there rather than panicking.
     pub material: u32,
+    /// Which shape this chunk's header takes, out of its `+0x06` byte.
+    pub layout: Layout,
     /// The draw calls this mesh is split into.
     pub submeshes: Vec<SubMesh>,
+    /// What the chunk says its vertices are made of, out of the word at
+    /// `+0x58`.
+    ///
+    /// `Some` on every [`LAYOUT_DESCRIBED`] chunk of every model on the disc,
+    /// and `None` on a [`LAYOUT_INLINE`] one, where that word is the index
+    /// count instead. See [`vertex_decl`] - it is the file stating the stride
+    /// and the offset of each attribute, both of which this module used to
+    /// solve for.
+    pub decl: Option<VertexDecl>,
+}
+
+/// Which of the two shapes a chunk's header takes, out of its `+0x06` byte.
+///
+/// **The field that decides what several later words mean**, and the reason
+/// this is on [`Mesh`] rather than kept private: `+0x58` is a pointer to a
+/// [`vertex_decl::VertexDecl`] on one and an index count on the other, so a
+/// reader that does not know which it is holding reads a declaration out of
+/// noise. See [`LAYOUT_DESCRIBED`] and [`LAYOUT_INLINE`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Layout {
+    /// [`LAYOUT_DESCRIBED`]: a table of `0x80`-byte submesh descriptors at
+    /// `+0x60`. 39,372 of the disc's 41,861 chunks.
+    Described,
+    /// [`LAYOUT_INLINE`]: one buffer pair named in the chunk header itself.
+    /// 2,489 chunks.
+    Inline,
 }
 
 /// One draw call's worth of geometry.
@@ -549,8 +579,13 @@ impl Mesh {
                 ByteOrder::Big.f32(data, at + off + 8),
             ]
         };
-        let submeshes = match data[at + 0x06] {
-            LAYOUT_DESCRIBED => {
+        let layout = match data[at + 0x06] {
+            LAYOUT_DESCRIBED => Layout::Described,
+            LAYOUT_INLINE => Layout::Inline,
+            other => return Err(Error::UnknownChunkLayout { got: other, at }),
+        };
+        let submeshes = match layout {
+            Layout::Described => {
                 let count = ByteOrder::Big.u32(data, at + 0x50) as usize;
                 let last = at + SUBMESH_BASE + count * SUBMESH_LEN;
                 if last > data.len() {
@@ -573,7 +608,7 @@ impl Mesh {
                     })
                     .collect()
             }
-            LAYOUT_INLINE => {
+            Layout::Inline => {
                 if at + 0x6e > data.len() {
                     return Err(Error::OutOfBounds {
                         what: "an inline chunk's buffer fields",
@@ -589,17 +624,20 @@ impl Mesh {
                     index_offset: ByteOrder::Big.u32(data, at + 0x5c) as usize,
                 }]
             }
-            other => {
-                return Err(Error::UnknownChunkLayout { got: other, at });
-            }
         };
+
+        let decl = (layout == Layout::Described)
+            .then(|| VertexDecl::parse(data, ByteOrder::Big.u32(data, at + 0x58) as usize))
+            .flatten();
 
         Ok(Self {
             hash: ByteOrder::Big.u32(data, at),
             bias: f3(0x30),
             scale: f3(0x40),
             material: ByteOrder::Big.u32(data, at + 0x20),
+            layout,
             submeshes,
+            decl,
         })
     }
 

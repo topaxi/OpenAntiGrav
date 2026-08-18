@@ -267,7 +267,159 @@ set and what it does select is still open. And it corrects this page: an earlier
 reading put Assegai's stride-18 meshes at a median `|dot|` of 0.02, on **62**
 vertices of one mesh; across 484,328 they are 0.55.
 
+## The chunk declares its vertex layout, at the word `+0x58` points at
+
+**Confidence 92**, measured 2026-08-18 over every `.rcsmodel` on the disc.
+Read by [`rcsmodel::vertex_decl`](../../crates/formats/src/rcsmodel/vertex_decl.rs)
+and checked by
+[`rcsmodel_decl_ground_truth.rs`](../../crates/formats/tests/rcsmodel_decl_ground_truth.rs).
+
+**Everything two sections of this page describe as unrecoverable is written
+down in the file.** The stride, the byte offset of each attribute, its type and
+its *name* are all in a block a [described](#a-chunk-comes-in-two-layouts-and-byte-0x06-says-which)
+chunk's `+0x58` points at. Two of the inferences that stood in for it were
+wrong, and both are visible in a frame:
+
+- **The last four bytes of a vertex are usually not its diffuse texture
+  coordinate.** On the commonest stride-18 layout they are `lightmapUV`, and
+  the diffuse coordinate `Uv1` sits at `+0x0a`; on others the last four bytes
+  are `tangent` or a colour set. Painting a diffuse texture through a lightmap's
+  atlas-packed coordinates smears it into streaks, which is what a quarter of
+  Talon's Junction looked like.
+- **There are more strides than three.** The disc declares 10, 14, 18, 22, 26,
+  34 and 38. [The search](#the-vertex-stride-is-not-in-the-file) knows three, so
+  it gives up on 3,382 of the disc's 39,372 described chunks and they draw
+  nothing at all.
+
+### Layout
+
+```text
++0x00  u8   attribute count - 2 to 7 on the disc
++0x01  u8   vertex stride
++0x02  u16  zero
+```
+
+then `count` records of eight bytes:
+
+```text
++0x00  u32  attribute name hash, ~crc32(name)
++0x04  u16  the vertex stride again
++0x06  u8   type: component count in the high nibble, RSX vertex type in the low
++0x07  u8   byte offset of the attribute within the vertex
+```
+
+**Only on a described chunk.** On an [inline](#a-chunk-comes-in-two-layouts-and-byte-0x06-says-which)
+one `+0x58` is the index count, and reading it as a pointer there is what made
+the first disc-wide sweep come back as noise - 606 declarations with a stride of
+zero and type codes spread uniformly over all sixteen values. Gating on the
+`+0x06` byte makes the same sweep exact.
+
+### What says this is the layout rather than a field that correlates with it
+
+Four independent checks, all disc-wide:
+
+| Check | Result |
+| --- | --- |
+| The pointer lands inside the file | **39,372 of 39,372** described chunks |
+| The stride repeated at each record's `+0x04` equals the header's | **every one** of 118,000-odd records |
+| The declared stride equals the one the box search fits, where it fits one | **35,983 of 35,990** |
+| The search settles on nothing at all | **3,382 chunks**, every one of which the declaration decodes |
+
+The repeated stride is the strongest of the four, because the bytes did not have
+to pass it: a wrong pointer, a wrong header size or a wrong record size each
+breaks it on the first record. The agreement with the box search is the second,
+because the search is an independent *fitting procedure* against the chunk's own
+authored bounding box and shares no reasoning with this block.
+
+### The type codes, and there are exactly seven
+
+Component count in the high nibble, `CELL_GCM_VERTEX_*` in the low - the RSX's
+own vertex enumeration, the same numbering
+[the blend factors](#the-factor-values-and-which-are-mapped) come from.
+
+| Code | Shape | Uses | What carries it |
+| --- | --- | ---: | --- |
+| `0x35` | 3 x `S32K` (`i16`, not normalised) | 39,372 | `position`, on every chunk |
+| `0x16` | 1 x `CMP` (one packed word) | 39,372 | `normal`, on every chunk |
+| `0x23` | 2 x `SF` (half) | 54,120 | every texture coordinate |
+| `0x43` | 4 x `SF` | 2,537 | an alias covering two `0x23`s at one offset |
+| `0x44` | 4 x `UB` (byte over `0..=1`) | 22,117 | `tangent`, `colorSet1`, `VertexColour1` |
+| `0x22` | 2 x `F` (`f32`) | 230 | a texture coordinate, on the few that want the range |
+| `0x42` | 4 x `F` | 230 | the alias of two of those |
+
+An eighth code would be a fact this reading has not seen; the ground truth
+asserts the set rather than tolerating a new member, for the reason
+[`Factor::from_rsx`](#the-factor-values-and-which-are-mapped) returns `None` on
+a fifth blend factor.
+
+The aliases are why the attribute list is **not** in offset order and **not** a
+partition: a `0x43` at `+0x0a` covers exactly the bytes two `0x23`s at `+0x0a`
+and `+0x0e` do, so a shader can bind either view.
+
+### The names, and they are Maya's
+
+The hash is `~crc32(name)` - the same one
+[`renderer.md`](../ghidra/functions/ps3-hdfury-eu/renderer.md#the-name-hash-is-crc-32)
+recovered from `Crc32_HashString`, complement and all. Naming an attribute is
+therefore a wordlist problem, and twelve of the disc's 49 hashes fell to one:
+
+| Hash | Name | Type | Uses |
+| --- | --- | --- | ---: |
+| `0xb9d31b0a` | `position` | `0x35` at `+0x00` | 39,372 |
+| `0xde7a971b` | `normal` | `0x16` at `+0x06` | 39,372 |
+| `0x427214fc` | `Uv1` | `0x23`, `0x22` | 28,298 |
+| `0x1aaf7631` | *unnamed* | `0x44` | 13,485 |
+| `0x26a7b665` | `lightmapUV` | `0x23` | 13,293 |
+| `0xdbe5f417` | `tangent` | `0x44`, `0x43` | 5,765 |
+| `0x7a3f521c` | `uv1` | `0x23` | 5,258 |
+| `0xdb7b4546` | `Uv2` | `0x23` | 2,653 |
+| `0x7493d450` | `VertexColour1` | `0x44` | 2,595 |
+| `0xce5cd9d9` | `colorSet1` | `0x44` | 484 |
+| `0x49f76806` | `Uvset1` | `0x23`, `0x22` | 424 |
+| `0x2003d7e6` | `map1` | `0x23` | 360 |
+| `0xb90a865c` | `map2` | `0x23` | 91 |
+
+**Three of them are controls, and that is what makes the rest credible.**
+`position`, `normal` and `tangent` were decoded from content long before this
+block was read - three quantised shorts at `+0x00`, one 11:11:10 word at `+0x06`,
+and [four biased bytes at `+0x0a` on stride 22](#0x0a-is-a-tangent-at-stride-22-and-is-not-one-at-stride-18).
+Candidate strings picked with no knowledge of where they would land hash onto
+exactly those three attributes, on every chunk of the disc. A guessed name
+landing on a 32-bit hash is not a coincidence; three of them landing on the
+three attributes whose content was already known is not one either.
+
+`map1`, `map2`, `colorSet1` and `VertexColour1` are **Maya's** vocabulary, which
+agrees with what the `.vex` files already say about the pipeline: one of Talon's
+Junction's node names is
+`Z:/WipeoutHD/Data/Source/Wip/DLC3/Environments/Talons_Junction/resource.ma`.
+
+37 hashes are still unnamed. The one worth attacking next is `0x1aaf7631` -
+13,485 uses, always four normalised bytes, and it is what sits in the last four
+bytes of the stride-18 layout that has no lightmap.
+
+### Which coordinate a diffuse texture is sampled through is a rule, not a reading
+
+A vertex may declare several `0x23` attributes and **nothing here reads the
+shader that chooses between them** - the `.rcsmaterial` is compiled RSX
+microcode, per [the material section](#the-material-table-and-which-surfaces-are-see-through).
+So `VertexDecl::diffuse_texcoord` applies a rule and says so: *the first declared
+two-component coordinate that is not `lightmapUV`*.
+
+That is right on the evidence there is - a lightmap's coordinates are
+atlas-packed, painting a diffuse texture through them streaks visibly, and `Uv1`
+is what every layout carrying a lightmap also carries - and it stays a rule
+until a shader is read. **984 of the disc's chunks declare no texture
+coordinate at all**; those are counted rather than given a substitute.
+
 ## The vertex stride is not in the file
+
+**Superseded on 2026-08-18 - the stride is in the file, in a block the submesh
+descriptor does not hold.** See
+[the chunk declares its vertex layout](#the-chunk-declares-its-vertex-layout-at-the-word-0x58-points-at).
+Everything below stands as measured and is kept because it is what the search
+`oag_formats::rcsmodel::stride` still implements rests on, and because the
+negative result is exact: the descriptor really does not carry the stride, and
+looking there was not the mistake. Looking *only* there was.
 
 This is the one genuinely open part of the format, and it is worth stating
 plainly rather than burying: **no field anywhere in the 0x80-byte submesh
@@ -760,6 +912,15 @@ Named explicitly, with what each would take.
     identified and unused. See below.
 
 ## A texture coordinate is one of two types, and the file does not say which
+
+**Superseded on 2026-08-18. The file does say which**, in the type byte of
+[the vertex declaration](#the-chunk-declares-its-vertex-layout-at-the-word-0x58-points-at),
+and the two types are not the two below: they are `0x23` (two halves, 54,120
+attributes) and `0x22` (two `f32`, 230). What the content sniff below was
+separating is not a second coordinate type at all - it is a **different
+attribute**, a four-byte `tangent` or `colorSet1` in the last four bytes of a
+vertex whose coordinate is somewhere else, read as a coordinate because the
+reader assumed the coordinate was last. Kept until the sniff is removed.
 
 **Measured 2026-08-18, confidence 85.** The last four bytes of a vertex are a
 texture coordinate on every submesh - but in **two different types**, and this

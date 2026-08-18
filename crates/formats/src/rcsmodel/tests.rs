@@ -432,7 +432,9 @@ fn packed(counts: &[usize], stride: usize) -> Mesh {
         bias: [0.0; 3],
         scale: [1.0 / 128.0; 3],
         material: 0,
+        layout: Layout::Described,
         submeshes,
+        decl: None,
     }
 }
 
