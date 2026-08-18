@@ -193,6 +193,7 @@ struct Session {
     /// texture-transform tracks.
     anim_bind: wgpu::BindGroup,
     anim_buffer: wgpu::Buffer,
+    node_anim_buffer: wgpu::Buffer,
     model: Model,
     orbit: Orbit,
     held: Held,
@@ -271,6 +272,7 @@ impl Session {
             fog_buffer: _,
             anim_bind,
             anim_buffer,
+            node_anim_buffer,
         } = mesh_render::build(
             &device,
             &queue,
@@ -324,6 +326,7 @@ impl Session {
             fog_bind,
             anim_bind,
             anim_buffer,
+            node_anim_buffer,
             model,
             orbit,
             held: Held::default(),
@@ -445,6 +448,15 @@ impl Session {
         );
         self.queue
             .write_buffer(&self.anim_buffer, 0, bytemuck::bytes_of(&anims));
+        // The viewer's clock moves a track's `Anim Transform` nodes too, so a
+        // circuit opened in `oag-view` shows the same scenery motion a race
+        // does rather than a frozen first frame.
+        let nodes = mesh_render::NodeAnims::sample(
+            &self.model,
+            now.duration_since(self.opened).as_secs_f32(),
+        );
+        self.queue
+            .write_buffer(&self.node_anim_buffer, 0, bytemuck::bytes_of(&nodes));
 
         let aspect = self.config.width as f32 / self.config.height.max(1) as f32;
         mesh_render::write_uniforms(

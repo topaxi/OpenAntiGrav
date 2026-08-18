@@ -187,7 +187,7 @@ worked example in the tree: an enum in `oag_game::display` with `name()`,
 pair; a field on `Graphics`; a tuple in `menu_seeds`; a `kind = "choice"` row in
 `assets/ui/menu.toml` whose `values` are exactly `ALL`, in order; an arm in
 `Session::apply_setting`; a per-frame argument on `Scene::render` next to
-`animated_textures`; and a field on `race::CaptureOptions` so `--screenshot`
+`anim_seconds`; and a field on `race::CaptureOptions` so `--screenshot`
 reflects it, the way `bloom` and `anti_aliasing` already do.
 
 ## What the velocity buffer does not solve

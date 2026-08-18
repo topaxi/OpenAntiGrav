@@ -12,8 +12,8 @@ use std::path::Path;
 use crate::camera::orbit::Orbit;
 use crate::mesh::Model;
 use crate::mesh_render::{
-    Anisotropy, Built, DEPTH_FORMAT, Depth, GlowMask, TRANSPARENT_BLEND, TexAnims, UNIFORMS_SIZE,
-    build, write_uniforms,
+    Anisotropy, Built, DEPTH_FORMAT, Depth, GlowMask, NodeAnims, TRANSPARENT_BLEND, TexAnims,
+    UNIFORMS_SIZE, build, write_uniforms,
 };
 
 /// Renders one frame of `model` to a PNG from a given orbit angle.
@@ -123,6 +123,7 @@ pub fn capture_pixels_from(
         fog_buffer: _,
         anim_bind,
         anim_buffer,
+        node_anim_buffer,
     } = build(
         &device,
         &queue,
@@ -160,6 +161,14 @@ pub fn capture_pixels_from(
         &anim_buffer,
         0,
         bytemuck::bytes_of(&TexAnims::sample(model, seconds)),
+    );
+    // The same clock moves the scenery. A capture of a track at `seconds` has
+    // to place its `Anim Transform` nodes at `seconds` too, or the still is of
+    // a circuit that never existed.
+    queue.write_buffer(
+        &node_anim_buffer,
+        0,
+        bytemuck::bytes_of(&NodeAnims::sample(model, seconds)),
     );
 
     // The bind group must reference the buffer we just filled.

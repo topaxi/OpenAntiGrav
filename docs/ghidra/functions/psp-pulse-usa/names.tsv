@@ -520,3 +520,16 @@
 0x08ab0ec0	data	g_weapon_ai_rate_eliminator	80	weapon-ai.md
 0x0891ddec	function	Gfx_CompareQueueKeys	95	mesh-draw.md
 0x0890486c	function	Gfx_ViewDepth	82	mesh-draw.md
+0x0890009c	function	AnimTransform_Register	90	anim-transform.md
+0x088fe5a4	function	AnimTransform_Bind	90	anim-transform.md
+0x088fe400	function	AnimTransform_Evaluate	90	anim-transform.md
+0x088fe564	function	AnimTransform_SetAnimTime	88	anim-transform.md
+0x088fed44	function	AnimTransform_EvalTranslation	90	anim-transform.md
+0x088ff1c8	function	AnimTransform_EvalRotation	90	anim-transform.md
+0x088ffc08	function	AnimTransform_EvalScale	90	anim-transform.md
+0x089100a0	function	Mesh_Register	88	anim-transform.md
+0x08a6bb84	function	AnimTransform_ClassTag	88	anim-transform.md
+0x08a6bd48	function	Mesh_ClassTag	88	anim-transform.md
+0x08ad0fb4	data	g_anim_transform_vtable	85	anim-transform.md
+0x088fe0a8	function	AnimTransform_Update	90	anim-transform.md
+0x08ab0818	data	g_ingame	85	anim-transform.md

@@ -29,6 +29,20 @@ pub struct DrawCall {
     /// culling - not the whole model's, which would defeat the point on a
     /// track where one `Model` is the entire circuit.
     pub bounds: Bounds,
+    /// Whether this draw's geometry is moved per frame by an `Anim Transform`,
+    /// which makes [`Self::bounds`] a statement about time zero only.
+    ///
+    /// Set, the draw skips culling entirely - both the PVS mask and the frustum
+    /// test - because neither has a bound it could trust. A moving object's
+    /// world-space extent is its whole authored path, and on the widest node
+    /// measured that is 5,000 units, so a bounding sphere honest enough to be
+    /// safe would swallow most of the circuit and cull nothing anyway.
+    ///
+    /// 474 of a circuit's ~6,800 meshes carry it, so what this costs is about
+    /// 7% of the geometry drawn unculled - against a moving object vanishing
+    /// when the tests disagree with where it actually is. See
+    /// `docs/rendering/scenery-animation.md`.
+    pub moving: bool,
     /// Whether this batch is drawn single-sided, from its own `pass_mask`.
     ///
     /// **The original culls most of its geometry and this crate culled none of

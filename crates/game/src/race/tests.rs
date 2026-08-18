@@ -50,6 +50,7 @@ fn model(slots: usize, decoded: usize) -> Model {
         centre: [0.0; 3],
         radius: 1.0,
         anim_tracks: Vec::new(),
+        anim_nodes: Vec::new(),
         mesh_count: 1,
     }
 }

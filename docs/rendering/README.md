@@ -18,11 +18,21 @@
   reason that is [about verification, not rendering](../overview/roadmap.md#m5---full-race)
 - Ship rendering, including team liveries - **done** for the eight teams whose
   `Ship.vex` resolves by name
-- Scenery **animation**, authored as `Anim Transform` `0x3c0` and
-  `animationTrigger` `0x3dc` - nothing reads either yet. Distinct from
-  **texture** animation, which is **done** for eight trackside textures: a
-  V-axis scroll over a banded texture, the ship blink lights' mechanism
-  generalised. See [`vex.md`](../formats/vex.md), "Tracks animate too"
+- Scenery **animation** - **done**, both mechanisms. `Anim Transform` `0x3c0`
+  moves the geometry: 393 nodes over the twelve circuits with 474 meshes below
+  them, decoded from the class's own binder and evaluators
+  ([`anim-transform.md`](../ghidra/functions/psp-pulse-usa/anim-transform.md))
+  and replayed per frame through a node-matrix table the vertex shader indexes.
+  Reading it also **fixed a placement defect**: the class used to contribute the
+  identity, which dropped its transform along with its animation and left 245 of
+  those meshes at the world origin, 38 while still scrolling their texture
+  correctly. **Texture** animation is the other mechanism and is also done -
+  every one of the 922 materials the engine's `& 0x10` gate marks reaches the
+  shader, replaying the per-material keyframe block rather than a chosen rate.
+  `animationTrigger` `0x3dc` is authored zero times across the 44 `.vex` files
+  checked. Counts and evidence in
+  [`scenery-animation.md`](scenery-animation.md); the texture mechanism is in
+  [`vex.md`](../formats/vex.md), "The texture-transform keyframe block"
 - Lighting and shadow: five authored light classes plus
   `Dynamic Shadow Occluder` and `lensflare` - none implemented. The prelit path
   exists (`GpuVertex.lit`), so this is about which surfaces are which

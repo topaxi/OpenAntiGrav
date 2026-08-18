@@ -184,6 +184,7 @@ mod tests {
             texcoord: [0.5, 0.5],
             lit: 0.0,
             anim: 0,
+            xform: 0,
         }
     }
 

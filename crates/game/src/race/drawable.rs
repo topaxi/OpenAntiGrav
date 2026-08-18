@@ -42,6 +42,15 @@ pub(super) struct Drawable {
     /// The buffer behind it. Rewritten each frame by [`Self::write_anims`], or
     /// left all-identity for a model that authors no track.
     anims: wgpu::Buffer,
+    /// This drawable's `Anim Transform` node matrices, bound as binding 1 of
+    /// the same group 3 as [`Self::anims`] - see
+    /// `mesh_render::Built::node_anim_buffer` for why they share a group.
+    ///
+    /// The buffer behind it. Rewritten each frame by
+    /// [`Self::write_node_anims`], or left all-identity for a model with no
+    /// `Anim Transform` at all - which is every ship, every sky and every
+    /// synthetic overlay.
+    node_anims: wgpu::Buffer,
 }
 
 impl std::fmt::Debug for Drawable {
@@ -81,6 +90,7 @@ impl Drawable {
             fog_buffer,
             anim_bind,
             anim_buffer,
+            node_anim_buffer,
         } = mesh_render::build(
             device,
             queue,
@@ -125,6 +135,7 @@ impl Drawable {
             fog: fog_buffer,
             anim_bind,
             anims: anim_buffer,
+            node_anims: node_anim_buffer,
         })
     }
 
@@ -157,6 +168,22 @@ impl Drawable {
         }
         let anims = mesh_render::TexAnims::sample(&self.model, seconds);
         queue.write_buffer(&self.anims, 0, bytemuck::bytes_of(&anims));
+    }
+
+    /// Samples every `Anim Transform` this model carries at `seconds` and
+    /// uploads the matrix table the vertex shader indexes.
+    ///
+    /// The sibling of [`Self::write_anims`], and the same trade: one buffer
+    /// write per drawable per frame, with each node's chain resolved once
+    /// rather than per vertex. A model with no `Anim Transform` - every ship,
+    /// the sky, both pad models, the collision overlay - writes nothing and
+    /// keeps the identity table `mesh_render::build` initialised it with.
+    pub(super) fn write_node_anims(&self, queue: &wgpu::Queue, seconds: f32) {
+        if self.model.anim_nodes.is_empty() {
+            return;
+        }
+        let anims = mesh_render::NodeAnims::sample(&self.model, seconds);
+        queue.write_buffer(&self.node_anims, 0, bytemuck::bytes_of(&anims));
     }
 
     /// Applies a texture transform to this model's **authored** UVs and

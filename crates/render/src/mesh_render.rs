@@ -74,6 +74,52 @@ impl TexAnims {
 /// Size, in bytes, of the [`TexAnims`] uniform buffer.
 pub const TEX_ANIMS_SIZE: u64 = std::mem::size_of::<TexAnims>() as u64;
 
+/// The node-transform table `mesh.wgsl` reads from bind group 4: one world
+/// matrix per entry of [`Model::anim_nodes`], sampled for this frame.
+///
+/// Slot 0 is the identity, which is what [`GpuVertex::xform`] `== 0` selects,
+/// so the 93% of a circuit's geometry that does not move costs one indexed load
+/// and no branch - deliberately the same shape as [`TexAnims`].
+///
+/// 8 KiB at [`crate::mesh::NODE_ANIM_LIMIT`], which is inside the 64 KiB
+/// uniform binding every wgpu backend guarantees.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct NodeAnims {
+    /// One column-major world matrix per node. The layout
+    /// `oag_formats::vex` already uses - see `mesh.wgsl`'s own note.
+    pub transform: [[f32; 16]; crate::mesh::NODE_ANIM_LIMIT],
+}
+
+impl Default for NodeAnims {
+    fn default() -> Self {
+        Self {
+            transform: [oag_formats::vex::IDENTITY; crate::mesh::NODE_ANIM_LIMIT],
+        }
+    }
+}
+
+impl NodeAnims {
+    /// Samples every `Anim Transform` of `model` at `seconds` and packs the
+    /// table.
+    ///
+    /// `seconds` is the model's animation clock, the same one
+    /// [`TexAnims::sample`] takes and for the same reason: the original passes
+    /// the race clock to every world mesh's updater, and each node wraps on its
+    /// own authored `LoopEnd`.
+    #[must_use]
+    pub fn sample(model: &Model, seconds: f32) -> Self {
+        let mut out = Self::default();
+        for (slot, matrix) in model.sample_anim_nodes(seconds).into_iter().enumerate() {
+            out.transform[slot + 1] = matrix;
+        }
+        out
+    }
+}
+
+/// Size, in bytes, of the [`NodeAnims`] uniform buffer.
+pub const NODE_ANIMS_SIZE: u64 = std::mem::size_of::<NodeAnims>() as u64;
+
 /// Headless capture, split into `crate::capture` so a pixel-returning entry
 /// point could be added there without pushing this file past its frozen
 /// size ceiling - see [`crate::capture`] for both functions' own docs.
@@ -224,6 +270,9 @@ pub struct Built {
     pub anim_bind: wgpu::BindGroup,
     /// The buffer behind [`Built::anim_bind`], initialised to all-identity.
     pub anim_buffer: wgpu::Buffer,
+    /// The [`NodeAnims`] buffer, bound as **binding 1 of the same group 3** as
+    /// [`Built::anim_buffer`]. Write it once a frame to move scenery.
+    pub node_anim_buffer: wgpu::Buffer,
 }
 
 /// Which depth state [`build`] gives a model's pipelines.
@@ -400,18 +449,23 @@ pub fn build(
         }],
     });
 
+    // **Two bindings in one group, not two groups.** wgpu's downlevel limit is
+    // four bind groups and 0 to 3 are already the uniforms, the texture, the
+    // fog and this - so the node matrices ride here as binding 1 rather than
+    // claiming a fifth group, which fails shader creation outright.
+    let anim_entry = |binding| wgpu::BindGroupLayoutEntry {
+        binding,
+        visibility: wgpu::ShaderStages::VERTEX,
+        ty: wgpu::BindingType::Buffer {
+            ty: wgpu::BufferBindingType::Uniform,
+            has_dynamic_offset: false,
+            min_binding_size: None,
+        },
+        count: None,
+    };
     let anim_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        label: Some("texture animation"),
-        entries: &[wgpu::BindGroupLayoutEntry {
-            binding: 0,
-            visibility: wgpu::ShaderStages::VERTEX,
-            ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Uniform,
-                has_dynamic_offset: false,
-                min_binding_size: None,
-            },
-            count: None,
-        }],
+        label: Some("animation"),
+        entries: &[anim_entry(0), anim_entry(1)],
     });
 
     // Initialised to all-identity for the same reason the fog buffer is
@@ -424,13 +478,32 @@ pub fn build(
         mapped_at_creation: false,
     });
     queue.write_buffer(&anim_buffer, 0, bytemuck::bytes_of(&TexAnims::default()));
+    // All-identity for the same reason the texture table is: a caller that never
+    // writes it draws every mesh where the file's static chain puts it.
+    let node_anim_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("node animation"),
+        size: NODE_ANIMS_SIZE,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    queue.write_buffer(
+        &node_anim_buffer,
+        0,
+        bytemuck::bytes_of(&NodeAnims::default()),
+    );
     let anim_bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("texture animation"),
+        label: Some("animation"),
         layout: &anim_layout,
-        entries: &[wgpu::BindGroupEntry {
-            binding: 0,
-            resource: anim_buffer.as_entire_binding(),
-        }],
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: anim_buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: node_anim_buffer.as_entire_binding(),
+            },
+        ],
     });
 
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -455,7 +528,7 @@ pub fn build(
                 step_mode: wgpu::VertexStepMode::Vertex,
                 attributes: &wgpu::vertex_attr_array![
                     0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x2,
-                    4 => Float32, 5 => Uint32
+                    4 => Float32, 5 => Uint32, 6 => Uint32
                 ],
             })],
             compilation_options: Default::default(),
@@ -509,7 +582,7 @@ pub fn build(
                 step_mode: wgpu::VertexStepMode::Vertex,
                 attributes: &wgpu::vertex_attr_array![
                     0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x2,
-                    4 => Float32, 5 => Uint32
+                    4 => Float32, 5 => Uint32, 6 => Uint32
                 ],
             })],
             compilation_options: Default::default(),
@@ -582,7 +655,7 @@ pub fn build(
                     step_mode: wgpu::VertexStepMode::Vertex,
                     attributes: &wgpu::vertex_attr_array![
                         0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x2,
-                        4 => Float32, 5 => Uint32
+                        4 => Float32, 5 => Uint32, 6 => Uint32
                     ],
                 })],
                 compilation_options: Default::default(),
@@ -783,6 +856,7 @@ pub fn build(
     Ok(Built {
         anim_bind,
         anim_buffer,
+        node_anim_buffer,
         fog_bind,
         fog_buffer,
         pipeline,

@@ -72,7 +72,8 @@ pub mod classes;
 mod matrix;
 
 pub use matrix::{
-    IDENTITY, class_world_transforms, multiply, transform, transform_point, world_transforms,
+    Anchored, IDENTITY, anchor_world, anim_anchors, class_world_transforms, multiply, transform,
+    transform_point, world_transforms, world_transforms_at,
 };
 
 /// Class ID of a `Mesh` node.
@@ -116,6 +117,16 @@ pub const CLASS_SECTION: u32 = 0x3c9;
 /// 715 of `01_Track`'s 2,071 nodes. Its payload is a 4x4 matrix, or nothing at
 /// all when the transform is the identity.
 pub const CLASS_TRANSFORM: u32 = 0x6e;
+
+/// Class ID of an `Anim Transform` node: a scene-graph transform whose
+/// translation, rotation and scale are each a keyframe track.
+///
+/// 393 nodes over Pulse's twelve circuits, with 474 meshes below them. Read
+/// through the class's own registration site (`0x0890009c`, the call passing
+/// `0x3c0` to `Vex_RegisterClass`) rather than off the class-name table alone -
+/// see [`anim_transform`](crate::vex::anim_transform) and
+/// `docs/ghidra/functions/psp-pulse-usa/anim-transform.md`.
+pub const CLASS_ANIM_TRANSFORM: u32 = 0x3c0;
 
 /// Class ID of a `LodGroup` node: an authored level of detail.
 ///
@@ -759,12 +770,16 @@ pub struct Node {
     pub data_size: usize,
     /// Number of immediate children.
     pub child_count: usize,
-    /// The `u16` at `+0x0e`, whose meaning is not established.
+    /// Length in bytes of the header's named-attribute list, and `0` where the
+    /// node carries none.
     ///
-    /// Zero on all but a few dozen nodes per file. Where it is set the values
-    /// are small and round (24, 36, 48, 56, 68, 368) and look like byte counts,
-    /// but nothing has been traced to them. Kept because it is the field that
-    /// made `child_count` look 32 bits wide.
+    /// **Settled 2026-08-18**; this field's doc used to say its meaning was not
+    /// established, with the observation that its values "are small and round
+    /// (24, 36, 48, 56, 68, 368) and look like byte counts". They are byte
+    /// counts, of the list [`node_attributes`] walks - `AnimTransform_Bind`
+    /// (`0x088fe5a4`) tests exactly this short before walking it. The name is
+    /// kept as `unk_0x0e` for now because renaming a public field is a change
+    /// for its own commit.
     pub unk_0x0e: u16,
     /// Node name from the header, when it carries one.
     pub name: Option<String>,
@@ -979,6 +994,15 @@ mod mesh_header;
 pub use mesh_header::{
     LAYER_DEFAULT, LAYER_EARLY, LAYER_EXHAUST, LAYER_REFLECTION_FIRST, LAYER_SCENE, Material,
     mesh_layer, mesh_materials,
+};
+
+mod attributes;
+pub use attributes::node_attributes;
+
+mod anim_transform;
+pub use anim_transform::{
+    AnimChannel, AnimTransform, DEFAULT_LOOP_SECONDS, anim_transform, anim_transform_of,
+    anim_transforms,
 };
 
 mod textures;

@@ -101,13 +101,15 @@ pub struct CaptureOptions {
     /// frustum culling passed. Frustum culling stays off in a capture either
     /// way, so the two images differ by this tier alone.
     pub pvs_culling: bool,
-    /// Whether the inferred trackside texture animations run.
+    /// Pins the animation clock, in seconds, instead of deriving it from the
+    /// tick.
     ///
-    /// Honoured for the same reason the two culling tiers are: two captures
-    /// differing only by this setting are how `[graphics] animated_textures`
-    /// gets checked against the running original, and that check is the whole
-    /// reason the setting exists.
-    pub animated_textures: bool,
+    /// `None` in a race, and set by `--anim-seconds`. Two captures at two times
+    /// are how an animated surface is shown to move at all headlessly, and a
+    /// comparison against a still of the original wants our phase matched to
+    /// theirs rather than left where the tick put it. The tick already makes a
+    /// capture reproducible; this makes it *aimable*.
+    pub anim_seconds: Option<f32>,
     /// How strong the boost's field-of-view kick is. Honoured for a sharper
     /// version of the same reason: the effect is **authored**, so a capture meant
     /// to be compared against the running original wants it at
@@ -406,7 +408,7 @@ pub fn capture(
         options.fov,
         options.frustum_culling,
         options.pvs_culling,
-        options.animated_textures,
+        options.anim_seconds,
     );
 
     // The HUD, into the same target. Without this a race screenshot would show

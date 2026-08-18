@@ -318,7 +318,22 @@ runs on. One refinement to the section above, no behavioural change.
 | `0x0890e160` | `Mesh_UpdateTextureTransforms` | 90 | Decompiles whole: fires when `mesh+0x40 != mesh+0x18c`, walks the materials (`mesh+0x5c`, stride `0x14`), and for each `& 0x10` calls `TexAnim_UpdateTransform(time, mesh+0x60 + i*0x40)` then `TexAnim_CompileTransformList(mesh+0x64 + i*0x18, block)`, caching the time at `+0x18c`. Live-corroborated: the updater breakpoint's return address `0x0890e1e4` sits inside it and its time argument was sampled. |
 | `0x08927358` | `TexAnim_CompileTransformList` | 90 | Decompiles whole: builds exactly the five words read live from the plume's list - `float_bits >> 8 \| 0x48/0x49/0x4a/0x4b << 24` from block `+0x18..+0x24`, then `RET`, then `sceKernelDcacheWritebackRange` - direct memory writes, no `Gu_TexScale`/`Gu_TexOffset` call, which is the instruction-level proof of the choke-point correction above. |
 | `0x089114fc` | `Node_SetAnimTimeTree` | 75 | Recursive node-tree walk: for nodes of three classes (Mesh's class-identity `0x08a6bb84` plus two unidentified), dispatches vtable slot `+0x84` with the payload offset short at `+0x80`, then recurses into children. Named from the one dispatch target read (below) and the reveal call site passing `0.0`; the two other classes' methods are unread. Thin wrapper `FUN_08912890` (the reveal's call) tail-calls it, left unnamed. |
-| `0x0890e240` | `Mesh_SetAnimTime` | 78 | The Mesh class's `+0x84` method, found through the vtable at `0x08ad1994` (init slot `+0x7c` = `0x0891ff50`, the `Mesh_InitFromPayload` trampoline, which pins the base). First instruction `swc1 f12, 0x40(a0)` - stores the time argument to `mesh+0x40`, the exact field `Mesh_UpdateTextureTransforms` gates on. A tail also copies a global reference mesh's `+0x40` (from `DAT_08ab0818`, else `DAT_08b317b0`) into `mesh+0x194`; that purpose is unread, which is what holds this below 85. |
+| `0x0890e240` | `Mesh_SetAnimTime` | 78 | The Mesh class's `+0x84` method, found through the vtable at `0x08ad1994` (init slot `+0x7c` = `0x0891ff50`, the `Mesh_InitFromPayload` trampoline, which pins the base). First instruction `swc1 f12, 0x40(a0)` - stores the time argument to `mesh+0x40`, the exact field `Mesh_UpdateTextureTransforms` gates on. A tail also copies a global reference mesh's `+0x40` (from `DAT_08ab0818`, else `DAT_08b317b0`) into `mesh+0x194`; that purpose is unread, which is what holds this below 85. | **See the correction below: the first branch is `Anim Transform`, not Mesh.**
+
+### Correction, 2026-08-18: which three classes the walker dispatches
+
+The row above names `0x08a6bb84` as "Mesh's class-identity". **It is `Anim
+Transform`'s.** Mesh's is `0x08a6bd48`, the walker's *second* branch. Each is
+pinned by its own registration function storing the tag into the class
+descriptor's `+0x04` - `AnimTransform_Register` (`0x0890009c`) and
+`Mesh_Register` (`0x089100a0`), the only `li a1, 0x3c0` and `li a1, 0x125` in
+the image. The third branch, `0x08a6bd18`, is still unidentified.
+
+Nothing on this page's *behaviour* changes: all three branches dispatch the same
+vtable slot `+0x84`, and `Mesh_SetAnimTime` is still the method Mesh's branch
+reaches. What changes is why the walker has three branches at all - it feeds
+this page's texture-transform clock and the scenery-animation clock through one
+tree walk. See [`anim-transform.md`](anim-transform.md).
 
 ## Measured in a live race: only the trail scrolls
 
@@ -369,7 +384,7 @@ rather than an animated coordinate: `Trail_DrawRibbon` already sets a per-draw
 colour through `FUN_0881125c`, and a per-object colour advanced on a clock would
 pulse a light without moving a UV or rewriting a palette. Not investigated.
 
-**Consequence for the renderer**: `[graphics] animated_textures` defaulted
+**Consequence for the renderer** *(the setting named here was removed on 2026-08-18; see [`scenery-animation.md`](../../../rendering/scenery-animation.md))*: `[graphics] animated_textures` defaulted
 **off** while the eight track surfaces were selected on geometry alone - narrow
 authored V bands against full-tile static art - because making them scroll on
 chosen rates was a departure from the original rather than a reproduction of

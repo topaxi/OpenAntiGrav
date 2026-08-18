@@ -34,6 +34,9 @@ pub struct Options {
     /// A run that reaches `Launch Game` with a race to hand off to spends what is
     /// left of them on the race instead.
     pub ticks: u32,
+    /// Pins the animation clock, in seconds, instead of deriving it from the
+    /// tick. `None` derives it. See `Cli::anim_seconds`.
+    pub anim_seconds: Option<f32>,
     /// Buttons held on every tick.
     pub held: u32,
     /// Buttons pressed and released on alternating ticks.
@@ -470,7 +473,7 @@ pub fn run(
                 fov: options.settings.graphics.fov,
                 frustum_culling: options.settings.graphics.frustum_culling,
                 pvs_culling: options.settings.graphics.pvs_culling,
-                animated_textures: options.settings.graphics.animated_textures,
+                anim_seconds: options.anim_seconds,
                 bloom: options.settings.graphics.bloom,
                 boost_fov_kick: options.settings.graphics.boost_fov_kick,
                 camera_view: options.settings.graphics.camera_view,

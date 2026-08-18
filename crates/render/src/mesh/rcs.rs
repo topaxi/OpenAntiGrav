@@ -592,6 +592,7 @@ fn emit(out: &mut Model, mesh: Geometry<'_>, to_world: Mat4, node: Option<u32>, 
                 .unwrap_or([0.0, 0.0]),
             lit: 1.0,
             anim: 0,
+            xform: 0,
         });
     }
     let centre = centre / points.len() as f32;
@@ -607,6 +608,7 @@ fn emit(out: &mut Model, mesh: Geometry<'_>, to_world: Mat4, node: Option<u32>, 
         None => &mut out.draws,
     };
     list.push(DrawCall {
+        moving: false,
         range: first_index..u32::try_from(out.indices.len()).unwrap_or(u32::MAX),
         texture: surface.texture,
         bounds: Bounds {

@@ -37,7 +37,7 @@ impl RaceStage {
         fov: display::Fov,
         cull: bool,
         pvs_cull: bool,
-        animated_textures: bool,
+        anim_seconds: Option<f32>,
     ) -> race::SceneStats {
         let stats = self.scene.render(
             &gpu.device,
@@ -49,7 +49,7 @@ impl RaceStage {
             fov,
             cull,
             pvs_cull,
-            animated_textures,
+            anim_seconds,
         );
 
         // Over the scene and inside the same target, so the HUD is drawn at the

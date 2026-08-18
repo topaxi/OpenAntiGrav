@@ -876,14 +876,14 @@ fn rib_vertex(p: Vec3, rgb: [f32; 3], u: f32, v: f32, glow: f32) -> GpuVertex {
         position: p.to_array(),
         normal: [0.0, 0.0, 1.0],
         // Alpha is the **glow mask**, not an opacity: [`TRAIL_BLEND`]'s colour
-        // factors are both One, so this never reaches the colour result - it is
-        // stamped into the target's alpha for the bloom's bright pass to weigh.
-        // See [`TRAIL_GLOW_GAIN`].
+        // factors are both One, so it never reaches the colour result - it is
+        // stamped into the target's alpha for the bloom. See [`TRAIL_GLOW_GAIN`].
         colour: [rgb[0], rgb[1], rgb[2], glow],
         texcoord: [u, v],
         // Emissive, like the flare: no light rig.
         lit: 0.0,
         anim: 0,
+        xform: 0,
     }
 }
 
@@ -1487,13 +1487,13 @@ pub fn sprite(centre: Vec3, right: Vec3, up: Vec3, half_size: f32, alpha: f32) -
 fn quad(centre: Vec3, right: Vec3, up: Vec3, alpha: f32) -> [GpuVertex; 6] {
     let corner = |sx: f32, sy: f32, u: f32, v: f32| GpuVertex {
         position: (centre + right * sx + up * sy).to_array(),
-        // The flare is emissive: it must not pick up the mesh light rig, which is
-        // what `lit = 0.0` means to the shader this crate already ships.
+        // The flare is emissive: `lit = 0.0` keeps the mesh light rig off it.
         normal: [0.0, 0.0, 1.0],
         colour: [1.0, 1.0, 1.0, alpha],
         texcoord: [u, v],
         lit: 0.0,
         anim: 0,
+        xform: 0,
     };
     let bl = corner(-1.0, -1.0, 0.0, 1.0);
     let br = corner(1.0, -1.0, 1.0, 1.0);
