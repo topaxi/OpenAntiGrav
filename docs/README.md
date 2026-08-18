@@ -59,7 +59,18 @@ tools/                  command line tool reference, and packaging
 
 ## Status
 
-Milestone **M0 (Foundation)**. The disc tooling works and has produced the first
-real findings; nothing about the game's runtime behaviour has been established
-yet. Directories for subsystems that do not exist yet contain a scope statement
+**[`overview/roadmap.md`](overview/roadmap.md) is the authority**; this page
+carries a one-paragraph summary and nothing per-item, because a status kept in
+two places is a status that drifts in one of them. It already had: this section
+still said "milestone M0, nothing about the game's runtime behaviour has been
+established yet" on 2026-08-18, several milestones and one booted HD front end
+later, which made the first page a new contributor reads the most wrong one
+(finding I5 of that day's review).
+
+Where it actually stands: **M0-M1 (foundation, asset archaeology) and M4
+(playable core) are complete**, M2 and M3 are complete in every part the work so
+far has needed, and **M5 (full race), M6 (rendering fidelity) and M7 (shell) are
+in flight**. A race runs, with lap timing, opponents, pickups and three
+single-ship modes; three titles' discs open, and Pure and HD both reach a front
+end. Directories for subsystems that do not exist yet contain a scope statement
 rather than speculation.
