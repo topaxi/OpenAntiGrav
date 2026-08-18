@@ -70,6 +70,14 @@ impl Gpu {
         let (device, queue) =
             pollster::block_on(chosen.adapter.request_device(&wgpu::DeviceDescriptor {
                 label: Some("oag-game"),
+                // **Not the default, which is `MemoryHints::Performance`.**
+                // `gpu-allocator` suballocates from device blocks rather than
+                // allocating per resource, and `Performance` asks for blocks of
+                // 128-256 MiB: on a heap with 200 MiB free that request fails
+                // outright while a 4 MiB texture would have fitted many times
+                // over. `MemoryUsage` asks for 8-64 MiB instead, which costs
+                // some allocator churn and nothing anyone would see.
+                memory_hints: wgpu::MemoryHints::MemoryUsage,
                 ..Default::default()
             }))
             .context("requesting the device")?;
