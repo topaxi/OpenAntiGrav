@@ -214,8 +214,19 @@ pub struct Fog {
     pub far: f32,
     /// `1.0` to fog, `0.0` to pass colour through untouched.
     pub enabled: f32,
-    _pad0: f32,
-    _pad1: f32,
+    /// Wipeout HD's fog coefficient, for [`Fog::curve`] `1.0`; unused at `0.0`.
+    pub density: f32,
+    /// Which curve `mesh.wgsl` applies. `0.0` is the GE's linear ramp between
+    /// [`Fog::near`] and [`Fog::far`], re-sampled from a `fogCube` volume each
+    /// frame - Pulse's fog. `1.0` is Wipeout HD's, **read out of its own
+    /// fragment microcode** rather than guessed: every fogged variant of a
+    /// circuit `.rcsmaterial` computes `exp(-(density * view_depth)^2)` - a
+    /// `MUL` by `log2(e)` into `EX2` with the product squared and negated - and
+    /// lerps the fog colour in by that factor. The coefficient and the colour
+    /// arrive together in one patched `float4` the shader interface itself
+    /// names `fogColour` (a crc32 preimage, not a resemblance). See
+    /// `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`.
+    pub curve: f32,
     _pad2: f32,
 }
 
@@ -233,8 +244,8 @@ impl Fog {
             camera: [0.0; 3],
             far: 1.0,
             enabled: 0.0,
-            _pad0: 0.0,
-            _pad1: 0.0,
+            density: 0.0,
+            curve: 0.0,
             _pad2: 0.0,
         }
     }
@@ -251,8 +262,31 @@ impl Fog {
             // clamps the span, and this keeps the ordering sane regardless.
             far: params.far.max(params.near + f32::EPSILON),
             enabled: 1.0,
-            _pad0: 0.0,
-            _pad1: 0.0,
+            density: 0.0,
+            curve: 0.0,
+            _pad2: 0.0,
+        }
+    }
+
+    /// Wipeout HD's fog, from the two values its `track.envsettings` authors.
+    ///
+    /// The curve is the disc's - see [`Fog::curve`]. What is **not** read is
+    /// how the engine fills the shader's `fogColour.w` from
+    /// `Fog.Fog Density`: this passes the authored density through unscaled,
+    /// which is the plain reading and is judged against an rpcs3 reference
+    /// frame rather than proven from the executable. The colour is authored
+    /// for HD's linear-light pipeline and used as-is in this gamma target,
+    /// the same hold `Light::authored` documents.
+    #[must_use]
+    pub fn authored_exp2(colour: [f32; 3], density: f32) -> Self {
+        Self {
+            colour,
+            near: 0.0,
+            camera: [0.0; 3],
+            far: 1.0,
+            enabled: 1.0,
+            density,
+            curve: 1.0,
             _pad2: 0.0,
         }
     }

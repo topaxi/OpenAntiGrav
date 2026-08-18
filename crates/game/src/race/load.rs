@@ -7,6 +7,9 @@
 
 use super::*;
 
+mod environment;
+use environment::{envsettings_fog, envsettings_light, hd_sky_model};
+
 /// Loads a track, a ship and its handling out of a disc image.
 ///
 /// # Errors
@@ -574,6 +577,17 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // sun direction all fall back to the stand-in and say so. Nothing is
     // substituted for a value the file does not carry.
     let light = envsettings_light(&mut archives, &track, &mut report);
+    // The circuit's authored distance fog, on the same file. **The curve is no
+    // longer a guess**: every fogged fragment variant of an HD circuit
+    // `.rcsmaterial` computes `exp(-(coefficient * view_depth)^2)` and lerps a
+    // patched `fogColour` in by it - read out of the microcode itself, see
+    // `mesh_render::Fog::curve`. Gated to the PS3 path: a Pulse circuit fogs
+    // through its `fogCube` volumes and authors no `.envsettings` at all.
+    let authored_fog = if ps3_geometry.is_some() {
+        envsettings_fog(&mut archives, &track, &mut report)
+    } else {
+        None
+    };
     // The track's authored fog volumes. Empty for a ribbon build, and empty for
     // the four circuits that author no `fogCube` at all - both ordinary, and
     // both meaning the race renders unfogged.
@@ -898,6 +912,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         weapon_pad_model,
         fog_volumes,
         light,
+        authored_fog,
         liveries,
         rocket_model,
         visibility,
@@ -905,137 +920,4 @@ pub fn load(options: &Options) -> Result<Loaded> {
         noise,
         report,
     })
-}
-
-/// The `sky.gtf` beside a circuit's `.vex` - Wipeout HD's sky.
-///
-/// One per circuit *directory*, not per `.vex`: `track.vex` and
-/// `track_reversed.vex` both resolve to the same file, which is how the disc
-/// ships it (16 environments, 16 `sky.gtf`).
-fn sky_gtf_name(vex_name: &str) -> Option<String> {
-    let at = vex_name.rfind(['/', '\\'])?;
-    Some(format!("{}{}sky.gtf", &vex_name[..at], &vex_name[at..=at]))
-}
-
-/// Wipeout HD's sky, or `None` with the reason in the report.
-///
-/// The rotation applied is the circuit's own `Lighting.Sky rotation`, read as
-/// degrees - `mesh::sky_cube::build` records why that unit is the corpus's
-/// rather than a guess, and why the sign is still this project's choice. A
-/// missing or unreadable `.envsettings` leaves the sky unrotated rather than
-/// undrawn: the picture is data, the turn is presentation.
-fn hd_sky_model(
-    archives: &mut oag_assets::Archives,
-    track: &str,
-    report: &mut Vec<String>,
-) -> Option<mesh::Model> {
-    let name = sky_gtf_name(track)?;
-    let Ok(blob) = archives.read_name(&name) else {
-        report.push(format!(
-            "{name}: not in the archive set - the sky stays black"
-        ));
-        return None;
-    };
-    let rotation = envsettings_name(track)
-        .and_then(|name| archives.read_name(&name).ok())
-        .and_then(|blob| String::from_utf8(blob).ok())
-        .and_then(|text| oag_formats::envsettings::EnvSettings::parse(&text).ok())
-        .and_then(|env| env.scalar(oag_formats::envsettings::SKY_ROTATION))
-        .unwrap_or(0.0);
-    match mesh::sky_cube::build(&name, &blob, rotation) {
-        Ok(sky) => {
-            let (width, height) = sky
-                .textures
-                .first()
-                .and_then(Option::as_ref)
-                .map_or((0, 0), |t| (t.width, t.height));
-            report.push(format!(
-                "{name}: the circuit's sky, six {width}x{height} cubemap face(s) on a \
-                 camera-centred cube, turned {rotation:.0} degree(s) by the authored Sky \
-                 rotation (unit read off the corpus; sign and axis this project's)"
-            ));
-            Some(sky)
-        }
-        Err(error) => {
-            report.push(format!("{name}: {error:#} - the sky stays black"));
-            None
-        }
-    }
-}
-
-/// The name of the `.envsettings` beside a track `.vex`, or `None`.
-///
-/// The rewrite the disc's own pairing uses:
-/// `/data/environments/talons_junction/track.vex` sits beside
-/// `track.envsettings`. Case-insensitive on the suffix for the same reason
-/// [`mesh::rcs::sibling_name`] is - the game's own spelling varies between
-/// containers.
-fn envsettings_name(vex_name: &str) -> Option<String> {
-    let at = vex_name.len().checked_sub(4)?;
-    vex_name[at..]
-        .eq_ignore_ascii_case(".vex")
-        .then(|| format!("{}.envsettings", &vex_name[..at]))
-}
-
-/// The light rig a circuit authors, or [`mesh_render::Light::stand_in`].
-///
-/// **Every way this can fail leaves the stand-in and says so in the report.**
-/// A track that authors no settings file - every Pulse, Pure and PS2 circuit -
-/// is silent, because an absence that is true of a whole title is not news; a
-/// file that is there and does not yield a rig is reported, because that is a
-/// gap in this reading rather than in the data.
-fn envsettings_light(
-    archives: &mut oag_assets::Archives,
-    track: &str,
-    report: &mut Vec<String>,
-) -> mesh_render::Light {
-    let Some(name) = envsettings_name(track) else {
-        return mesh_render::Light::stand_in();
-    };
-    let Ok(blob) = archives.read_name(&name) else {
-        return mesh_render::Light::stand_in();
-    };
-    let text = match String::from_utf8(blob) {
-        Ok(text) => text,
-        Err(_) => {
-            report.push(format!("{name}: not text; lighting with the stand-in rig"));
-            return mesh_render::Light::stand_in();
-        }
-    };
-    let env = match oag_formats::envsettings::EnvSettings::parse(&text) {
-        Ok(env) => env,
-        Err(e) => {
-            report.push(format!("{name}: {e}; lighting with the stand-in rig"));
-            return mesh_render::Light::stand_in();
-        }
-    };
-    use oag_formats::envsettings::{AMBIENT_COLOUR, SUN_COLOUR, SUN_DIRECTION};
-    let (Some(direction), Some(colour), Some(ambient)) = (
-        env.direction(SUN_DIRECTION),
-        env.vec3(SUN_COLOUR),
-        env.vec3(AMBIENT_COLOUR),
-    ) else {
-        report.push(format!(
-            "{name}: no usable sun direction, colour and ambient; lighting with the \
-             stand-in rig"
-        ));
-        return mesh_render::Light::stand_in();
-    };
-    let light = mesh_render::Light::authored(direction, colour, ambient);
-    report.push(format!(
-        "{name}: sun [{:.2}, {:.2}, {:.2}] hue [{:.2}, {:.2}, {:.2}] over ambient \
-         [{:.2}, {:.2}, {:.2}] - the authored magnitude ({:.2}) is dropped, this target \
-         having no headroom for it",
-        direction[0],
-        direction[1],
-        direction[2],
-        light.sun[0],
-        light.sun[1],
-        light.sun[2],
-        light.ambient[0],
-        light.ambient[1],
-        light.ambient[2],
-        colour.iter().fold(0.0f32, |a, b| a.max(*b)),
-    ));
-    light
 }

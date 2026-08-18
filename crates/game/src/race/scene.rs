@@ -29,6 +29,12 @@ pub struct Scene {
     /// Empty for a track that authors no `fogCube` - four of the forty - and the
     /// race then renders unfogged, which is what the original does too.
     fog_volumes: Vec<oag_formats::fog::FogVolume>,
+    /// Wipeout HD's authored distance fog, static for the whole race.
+    ///
+    /// What binds when no `fogCube` volume covers the camera - which on HD is
+    /// always, since HD authors no `fogCube` at all. See
+    /// [`crate::race::Loaded::authored_fog`].
+    authored_fog: Option<mesh_render::Fog>,
     /// The track's `Skycube`, drawn camera-centred before anything else.
     ///
     /// `None` when the file authors no sky, which is every Pure track and every
@@ -169,6 +175,7 @@ impl Scene {
         anti_aliasing: crate::display::AntiAliasing,
         fog_volumes: Vec<oag_formats::fog::FogVolume>,
         light: mesh_render::Light,
+        authored_fog: Option<mesh_render::Fog>,
     ) -> Result<Self> {
         // The far plane comes from the track's own bounding sphere: a track is
         // hundreds of units across, and a fixed guess would either clip it away or
@@ -504,6 +511,7 @@ impl Scene {
             weapon_pads,
             fog_volumes,
             light,
+            authored_fog,
             exhaust,
             sparks,
             depth: depth_texture(device, size, sample_count),

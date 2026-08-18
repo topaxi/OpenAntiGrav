@@ -212,6 +212,7 @@ pub fn capture(
         rocket_model,
         fog_volumes,
         light,
+        authored_fog,
         visibility,
         flare,
         noise,
@@ -329,6 +330,7 @@ pub fn capture(
         options.anti_aliasing,
         fog_volumes,
         light,
+        authored_fog,
     )?;
 
     let target = device.create_texture(&wgpu::TextureDescriptor {

@@ -81,10 +81,13 @@ impl Scene {
         // `_nolight` and stands in for infinity, which is behind the fog rather
         // than inside it.
         let eye = race.camera_position();
+        // Outside every volume, Wipeout HD's authored distance fog binds
+        // instead - static for the race, since its curve reads view depth
+        // rather than anything sampled at the camera. `Fog::off` remains for
+        // every title that authors neither.
+        let eye_fog = self.authored_fog.unwrap_or_else(mesh_render::Fog::off);
         let fog = oag_formats::fog::sample(&self.fog_volumes, eye.to_array())
-            .map_or_else(mesh_render::Fog::off, |p| {
-                mesh_render::Fog::new(&p, eye.to_array())
-            });
+            .map_or(eye_fog, |p| mesh_render::Fog::new(&p, eye.to_array()));
         // The circuit's own light rig where it authors one - Wipeout HD does,
         // in `track.envsettings` - and `mesh.wgsl`'s stand-in where it does
         // not, which is every title whose rig has not been recovered.

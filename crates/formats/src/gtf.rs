@@ -85,15 +85,16 @@
 //! refuses them by name instead. Block-compressed formats are never swizzled -
 //! the block layout is the tiling - so the `0x20` bit is not consulted for them.
 //!
-//! # And 23 cubemaps, which are parsed and not decoded
+//! # And 23 cubemaps, which decode face by face
 //!
 //! `cubemap` is set on 23 files, all of them a `sky` or an environment probe.
-//! Six faces follow one another and the length invariant holds on all 23 - with
-//! **an unexplained 360 bytes** on the 20 that carry a mip chain, the same 360
-//! whether the faces are 128x128 `DXT1` or 2048x2048. Six times sixty, and
-//! sixty is not a multiple of any block size here. Nothing reads a cubemap yet,
-//! so the slack is recorded in [`Texture::chain_len`] rather than explained
-//! away.
+//! Six faces follow one another - face-major, decoded by
+//! [`Texture::face_to_rgba`], drawn as a race's sky by
+//! `oag_render::mesh::sky_cube` - and the length invariant holds on all 23,
+//! with **an unexplained 360 bytes** on the 20 that carry a mip chain, the
+//! same 360 whether the faces are 128x128 `DXT1` or 2048x2048. Six times
+//! sixty, and sixty is not a multiple of any block size here; the slack is
+//! recorded in [`Texture::chain_len`] rather than explained away.
 //!
 //! See `docs/formats/gtf.md` for the evidence, and `docs/formats/hd-hud.md` for
 //! what needed this.

@@ -52,8 +52,15 @@ struct Fog {
     camera: vec3<f32>,
     far: f32,
     enabled: f32,
-    _pad0: f32,
-    _pad1: f32,
+    // Wipeout HD's fog coefficient - see `curve`.
+    density: f32,
+    // 0.0: the GE's linear ramp over radial distance (Pulse). 1.0: Wipeout
+    // HD's curve, read out of its own fragment microcode - every fogged
+    // .rcsmaterial variant computes `exp(-(density * view_depth)^2)` (a MUL by
+    // log2(e) into EX2_SAT, the product squared and negated) and lerps the fog
+    // colour in by it. The distance is the clip-space w its vertex programs
+    // write into the interpolant, i.e. view depth, not radial distance.
+    curve: f32,
     _pad2: f32,
 };
 
@@ -122,6 +129,9 @@ struct VertexOutput {
     @location(3) lit: f32,
     @location(4) world: vec3<f32>,
     @location(5) lightmap_texcoord: vec2<f32>,
+    // Clip-space w, which for a perspective projection is view-space depth.
+    // What Wipeout HD's own vertex programs hand their fog - see `Fog::curve`.
+    @location(6) view_depth: f32,
 };
 
 @vertex
@@ -162,6 +172,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     out.texcoord = in.texcoord * anim.xy + anim.zw;
     out.lit = in.lit;
     out.world = world.xyz;
+    out.view_depth = out.clip.w;
     return out;
 }
 
@@ -177,11 +188,16 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 // 15 % at the corners of Pulse's authored field of view. Reproducing view-space
 // z needs the view matrix separately, which this uniform block does not carry;
 // recorded as a known divergence rather than silently accepted.
-fn fogged(colour: vec3<f32>, world: vec3<f32>) -> vec3<f32> {
+fn fogged(colour: vec3<f32>, world: vec3<f32>, view_depth: f32) -> vec3<f32> {
     let distance = length(world - scene.fog.camera);
     let span = max(scene.fog.far - scene.fog.near, 1e-6);
     // 1.0 is clear, 0.0 is fully fogged, matching the GE's own sense.
-    let factor = clamp((scene.fog.far - distance) / span, 0.0, 1.0);
+    let linear = clamp((scene.fog.far - distance) / span, 0.0, 1.0);
+    // Wipeout HD's curve, from its own microcode - see `Fog::curve` above.
+    // Saturated exactly as the original's EX2_SAT is.
+    let scaled = scene.fog.density * view_depth;
+    let authored = clamp(exp(-scaled * scaled), 0.0, 1.0);
+    let factor = mix(linear, authored, scene.fog.curve);
     return mix(scene.fog.colour, colour, mix(1.0, factor, scene.fog.enabled));
 }
 
@@ -230,7 +246,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // bound, so it stays a hardcoded 1.0 here rather than the texture's and
     // vertex colour's combined alpha, matching every prior opaque render
     // exactly. `fs_main_blend` below is the one that actually reads it.
-    return vec4<f32>(fogged(shaded.rgb, in.world), 1.0);
+    return vec4<f32>(fogged(shaded.rgb, in.world, in.view_depth), 1.0);
 }
 
 // Used only by the blended pipeline - see
@@ -241,7 +257,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 @fragment
 fn fs_main_blend(in: VertexOutput) -> @location(0) vec4<f32> {
     let shaded = lit_texel(in);
-    return vec4<f32>(fogged(shaded.rgb, in.world), shaded.a);
+    return vec4<f32>(fogged(shaded.rgb, in.world, in.view_depth), shaded.a);
 }
 
 // The GE's real alpha-test call **is** recovered now:
@@ -297,5 +313,5 @@ fn fs_main_alpha_test(in: VertexOutput) -> @location(0) vec4<f32> {
     if shaded.a < ALPHA_TEST_THRESHOLD {
         discard;
     }
-    return vec4<f32>(fogged(shaded.rgb, in.world), 1.0);
+    return vec4<f32>(fogged(shaded.rgb, in.world, in.view_depth), 1.0);
 }

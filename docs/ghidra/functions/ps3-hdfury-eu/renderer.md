@@ -569,8 +569,17 @@ rows, so a 4x4 matrix declares `(0x0204, 4)`.
 **The microcode is inline, at `+0x16`**, preceded by a block of embedded float
 constants. `FunkLayerBloom_vp`'s begins at `0x0092ffe0` with `00031c6c
 005c6055 0186c083 60407ffc` - four-word NV40 vertex instructions. This page
-previously said only that no microcode had been disassembled; that is still
-true, and now it says where it is. Nothing here decodes an instruction.
+previously said only that no microcode had been disassembled. **It now is**:
+[`scripts/ps3-microcode.py`](../../../../scripts/ps3-microcode.py) decodes both
+program kinds, in the executable and in a `.rcsmaterial` alike, against the
+NV40 instruction encodings in Mesa's nouveau headers. Three container facts
+were established empirically on the way and are recorded in the script's own
+header with the checks that pinned them: vertex instructions are stored as
+four big-endian dwords in the spec's own order (all 24 permutations scored,
+identity wins at 1.00 with one END bit, on the last instruction); fragment
+instructions store each dword's 16-bit halves swapped; and a vertex program's
+`c[N]` is the parameter table's register `N + 256` (the table binds `viewProj`
+to c256 and the code multiplies the position by `c[0]..c[3]`).
 
 ### 29 parameter, attribute and sampler names, by preimage
 
@@ -633,12 +642,59 @@ single four-component constant.
   and `0x007b0630` (by `0x003a83d8` and `0x003a9520`, the same two functions
   that name `Lighting.Sky colour`).
 
-None of that says whether the term is `exp`, `exp2`, linear or squared, and the
+None of that said whether the term is `exp`, `exp2`, linear or squared, and the
 authored densities span `0.0003` to `0.03`, over which those candidates diverge
-by more than the picture. **Reading it needs the vertex microcode**, which is
-located above and undecoded. Until then `oag-render` draws an HD race unfogged
-rather than at a guessed ramp - see
-[`envsettings.md`](../../../formats/envsettings.md).
+by more than the picture.
+
+### The race fog curve is read, out of the circuit materials' own microcode
+
+Read 2026-08-18 with [`scripts/ps3-microcode.py`](../../../../scripts/ps3-microcode.py).
+The circuit's fog is **not** the `fogFactors` vertex path above - that constant
+appears only in the executable's own 124 blocks (`FunkLayerBloom_vp` among
+them, whose chain is a *power* curve for the front end). A circuit draws
+through the `SHO` blocks in its own `.rcsmaterial` files, and those do it
+**per fragment**:
+
+```text
+clouds.rcsmaterial, fragment block #3 (talons_junction):
+@0x13  MUL R3.x, f[TC3].wwww, {..}.wwww      <- view depth * fogColour.w
+@0x23  MUL R3.w, -R3.xxxx, R3.xxxx           <- negate and square
+@0x2c  MUL R1.w, R3.wwww, {1.44269,..}.xxxx  <- * log2(e)
+@0x2f  EX2_SAT R1.w, R1.wwww                 <- f = e^-(k*d)^2, saturated
+@0x31  MAD R2.xyz, -{fog rgb}, R1.wwww, {fog rgb}
+@0x33  MAD H2.xyz, R1.wwww, H2, R2           <- lerp(fog colour, lit, f)
+```
+
+So the curve is `f = exp(-(coefficient * view_depth)^2)` - squared
+exponential - and the distance is **clip-space `w`**: the paired vertex block
+writes `o[TC3]` as world position with `.w` copied from the position it just
+projected, so the interpolant is view depth, not radial distance.
+
+**The coefficient and the colour arrive together, and the parameter is named
+by preimage.** Both inline constants are patched by the *same* material
+parameter - the patch chain is `fslot -> u16 index at block+fslot -> offset
+list -> 16-byte code slots`, and following it lands both on one `float4` whose
+name hash `0x3dc31258` is `~crc32("fogColour")`. Two more preimages fell out
+of the same tables: `positionScale`/`positionBias` (`0x9cc5ab3a`/`0xa4972b78`),
+the dequantisation pair every circuit vertex program applies as `v * scale +
+bias` - the shader interface confirming
+[`rcsmodel.md`](../../../formats/rcsmodel.md)'s bias-and-scale reading from
+the disc's other side - and `diffuse` (`0x515e298e`), sampler unit 0.
+
+**The census, over every material of Talon's Junction**: 54 `.rcsmaterial`,
+857 fragment programs, **657 declare a patched `fogColour` and 657 contain the
+`log2(e)`-into-`EX2` chain** - and on the 20 blocks of
+`diffuse_specular_v01.rcsmaterial` the two properties hold block-for-block,
+an exact iff. The remainder are the depth/shadow-shaped variants that write
+no colour at all.
+
+**What is still not read**: how the engine fills `fogColour.w` from
+`Fog.Fog Density`, and what selects the `Alternate` pair. `oag-render` now
+draws an HD race on this curve with the authored density passed through
+unscaled - `mesh_render::Fog::authored_exp2` says which halves are the disc's
+and which are that reading - judged against an rpcs3 reference frame of the
+same grid. Confidence 84 on the curve (the static-reading cap; the formula is
+the microcode's own arithmetic), 60 on density-unscaled.
 
 ## What was deliberately not read
 
