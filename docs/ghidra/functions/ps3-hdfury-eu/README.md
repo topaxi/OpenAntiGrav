@@ -65,6 +65,11 @@ Two structural facts to expect, both different from every other binary here:
   hierarchy, and the one place a C++ constructor pair could be told apart.
 - [race-manager.md](race-manager.md) - `RaceManager.cpp`: the singleton holder
   and the base of the race-mode hierarchy.
+- [renderer.md](renderer.md) - the rendering layer: that it is in this binary
+  rather than `DFEngine.sprx`, the GCM device bring-up, `RenderManager`, and
+  the finding that HD keeps Pulse's one-translation-unit-per-`.vex`-class
+  importer layout. Also the **out-of-Ghidra** way around the TOC defect,
+  [`scripts/ps3-toc.py`](../../../../scripts/ps3-toc.py).
 
 Add a row to [`names.tsv`](names.tsv) and the page it cites in the same change:
 `scripts/apply-ghidra-names.py` refuses a row whose address and name do not

@@ -45,3 +45,11 @@
 0x0003c580	function	ModeManager_Construct	84	mode-manager.md
 0x0003c480	function	ModeManager_ConstructComplete	82	mode-manager.md
 0x00097be8	function	Hud_LoadDefinition	80	race-hud.md
+0x002d6190	function	RenderManager_CreateInstance	84	renderer.md
+0x002d5ed0	function	RenderManager_ConstructComplete	80	renderer.md
+0x002d5710	function	RenderManager_Construct	76	renderer.md
+0x002bebb0	function	MeshImporter_Construct	78	renderer.md
+0x00650330	function	Gcm_Init	88	renderer.md
+0x005c9194	function	Gcm_InitDevice	82	renderer.md
+0x005bd2f8	function	GcmContext_Callback	76	renderer.md
+0x008c0854	data	g_GcmContext	85	renderer.md
