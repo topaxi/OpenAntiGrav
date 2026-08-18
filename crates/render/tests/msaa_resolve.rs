@@ -41,6 +41,7 @@ fn triangle_model() -> Model {
             lightmap_texcoord: [0.0, 0.0],
             lit: 0.0,
             anim: 0,
+            xform: 0,
         },
         GpuVertex {
             position: [0.0, 1.0, -1.0],
@@ -50,6 +51,7 @@ fn triangle_model() -> Model {
             lightmap_texcoord: [0.0, 0.0],
             lit: 0.0,
             anim: 0,
+            xform: 0,
         },
         GpuVertex {
             position: [0.0, 0.0, 1.0],
@@ -59,6 +61,7 @@ fn triangle_model() -> Model {
             lightmap_texcoord: [0.0, 0.0],
             lit: 0.0,
             anim: 0,
+            xform: 0,
         },
     ];
     Model {
@@ -67,6 +70,7 @@ fn triangle_model() -> Model {
         label: "msaa_resolve test triangle".into(),
         indices: vec![0, 1, 2],
         draws: vec![DrawCall {
+            moving: false,
             blend: None,
             blend_state: None,
             layer: oag_formats::vex::LAYER_DEFAULT,
@@ -86,6 +90,7 @@ fn triangle_model() -> Model {
         centre: [0.0, 0.0, 0.0],
         radius: 2.0,
         anim_tracks: Vec::new(),
+        anim_nodes: Vec::new(),
         mesh_count: 1,
         vertices,
     }

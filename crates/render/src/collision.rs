@@ -239,6 +239,7 @@ pub fn build_model(
         .fold(0.0f32, f32::max)
         .sqrt();
     let draws = vec![DrawCall {
+        moving: false,
         // Synthetic: no batch, so no recovered blend class.
         blend: None,
         blend_state: None,
@@ -268,6 +269,7 @@ pub fn build_model(
         radius,
         mesh_count,
         anim_tracks: Vec::new(),
+        anim_nodes: Vec::new(),
     }
 }
 
@@ -353,6 +355,7 @@ fn vertex(position: [f32; 3], normal: [f32; 3], colour: [f32; 4], lit: f32) -> G
         lightmap_texcoord: [0.0, 0.0],
         lit,
         anim: 0,
+        xform: 0,
     }
 }
 

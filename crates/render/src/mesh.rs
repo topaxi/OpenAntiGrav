@@ -5,58 +5,6 @@ use oag_assets::Container;
 use oag_core::math::Mat4;
 use oag_formats::{ps2_texture, vex, wad};
 
-/// A vertex as the mesh shader expects it.
-#[repr(C)]
-#[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct GpuVertex {
-    pub position: [f32; 3],
-    pub normal: [f32; 3],
-    pub colour: [f32; 4],
-    pub texcoord: [f32; 2],
-    /// 1.0 to apply the viewer's light rig, 0.0 for geometry that is prelit.
-    ///
-    /// Track batches carry vertex colours *and* normals, and their colours are
-    /// baked lighting. Lighting them again multiplies two lighting terms and the
-    /// track comes out nearly black. Ship batches have no vertex colour, so they
-    /// need the rig. This is the viewer's own choice, not the game's: the GE
-    /// decides per draw from state we have not recovered.
-    pub lit: f32,
-    /// Which of [`Model::anim_tracks`] transforms this vertex's texture
-    /// coordinate, plus one; `0` for a surface that does not animate.
-    ///
-    /// The shader looks the entry up and applies `uv * scale + offset`, the
-    /// GE's own `TEXSCALE`/`TEXOFFSET` arithmetic - see
-    /// `docs/ghidra/functions/psp-pulse-usa/texture-animation.md`. The curve
-    /// itself is the material's authored keyframe block, sampled on the CPU
-    /// once per frame per track rather than per vertex.
-    ///
-    /// An index rather than the scalar V rate this used to be, because the
-    /// authored data is not a scalar V rate. `16_Track` alone carries 17
-    /// distinct tracks, and they scroll in U as often as in V - the
-    /// `col_display7` displays this project animated downwards actually run
-    /// sideways - some diagonally, and the flicker panels step between held
-    /// values rather than sliding at all. One `u32` carries all of that for
-    /// the same four bytes per vertex the rate cost.
-    pub anim: u32,
-    /// Where a **lightmap** is sampled, for the surfaces that carry one.
-    ///
-    /// A second, separate coordinate set, because a lightmap is an atlas: its
-    /// coordinates place a surface's own patch inside one texture for the whole
-    /// circuit, and they have nothing to do with where the diffuse tiles. On
-    /// Wipeout HD it is the `lightmapUV` attribute the chunk's vertex
-    /// declaration names outright; every other title leaves it at zero and
-    /// binds a white lightmap, so the multiply in `mesh.wgsl` is the identity.
-    ///
-    /// **Last in the struct because it is last in the attribute array.**
-    /// `wgpu::vertex_attr_array!` lays offsets out in the order the locations
-    /// are written, not in field order, so a field inserted in the middle of
-    /// this struct silently shifts every later attribute's offset - which is
-    /// exactly what putting it after `texcoord` did: the diffuse coordinates
-    /// stayed right and `lit` and `anim` came out of the wrong bytes, painting
-    /// the circuit in flat white.
-    pub lightmap_texcoord: [f32; 2],
-}
-
 /// How many distinct texture-transform tracks one model may carry, matching
 /// `mesh.wgsl`'s `TexAnims` array.
 ///
@@ -348,6 +296,13 @@ pub struct Model {
     /// by. Empty outside [`build_class`] (a ribbon, a collision overlay, a
     /// merge).
     pub node_vertex_ranges: Vec<std::ops::Range<u32>>,
+    /// The `Anim Transform` nodes this model's geometry hangs under, indexed by
+    /// [`GpuVertex::xform`] minus one.
+    ///
+    /// Not deduplicated, unlike [`Self::anim_tracks`]: two nodes authoring the
+    /// same channels still sit at different places in the tree, so they are
+    /// different matrices and cannot share a slot.
+    pub anim_nodes: Vec<AnimNode>,
 }
 
 impl Model {
@@ -375,9 +330,16 @@ impl Model {
             airbrakes: [None, None],
             anim_tracks: Vec::new(),
             node_vertex_ranges: Vec::new(),
+            anim_nodes: Vec::new(),
         }
     }
 }
+
+mod vertex;
+pub use vertex::GpuVertex;
+
+mod anim_node;
+pub use anim_node::{AnimNode, NODE_ANIM_LIMIT};
 
 mod flap;
 pub use flap::Flap;
@@ -659,7 +621,18 @@ fn build_class(
     // nested up to 25 deep on a track, so a model is only assembled once these
     // are composed. A ship has one transform and looks the same either way,
     // which is why this was not missed sooner.
-    let world = vex::world_transforms(data, &nodes);
+    //
+    // **Anchored, not absolute**: geometry under an `Anim Transform` is baked in
+    // that node's own space and moved by the shader, because the node's matrix
+    // changes every frame while the bake happens once. For everything else
+    // `Anchored::local` *is* the world matrix, so the two cases share one array.
+    // See `vex::anim_anchors`.
+    let anchors = vex::anim_anchors(data, &nodes);
+    let (anim_nodes, anim_slot) = anim_node::collect(data, &nodes, &anchors, classes);
+    // Where each anchor sits at time zero, for the draw-call bounds below: the
+    // vertices are in anchor space, and a bounding sphere has to be in the
+    // space the frustum test is done in.
+    let anchor_world = vex::anchor_world(data, &nodes, 0.0);
 
     let mut vertices: Vec<GpuVertex> = Vec::new();
     let mut indices: Vec<u32> = Vec::new();
@@ -677,7 +650,11 @@ fn build_class(
         .filter(|(i, n)| n.class_id == class_id && !skip.contains(i))
     {
         let payload = &data[node.payload()];
-        let to_world = world[index];
+        let anim_node::Placement {
+            to_world,
+            xform,
+            bounds_matrix,
+        } = anim_node::placement(&anchors, &anchor_world, &anim_slot, index);
         let mut contributed = false;
         // Where this node's own vertices start, for the airbrake flaps below.
         // Taken per *node* rather than per batch: a flap is one mesh node and
@@ -783,6 +760,7 @@ fn build_class(
                         lightmap_texcoord: [0.0, 0.0],
                         lit: if v.colour.is_some() { 0.0 } else { 1.0 },
                         anim,
+                        xform,
                     });
                 }
                 for tri in batch.triangles() {
@@ -804,10 +782,17 @@ fn build_class(
                         .map(|k| (hi[k] - centre[k]).powi(2))
                         .sum::<f32>()
                         .sqrt();
+                    // The vertices are in anchor space when this batch moves,
+                    // so the sphere is too. Lifting it by the anchor's own
+                    // time-zero matrix makes it a world-space statement about
+                    // one instant - which is all it can ever be, and why
+                    // `moving` turns the tests off rather than trusting it.
+                    let centre = bounds_matrix.map_or(centre, |m| vex::transform_point(&m, centre));
                     out.push(DrawCall {
                         range: first_index..last_index,
                         texture,
                         bounds: Bounds { centre, radius },
+                        moving: xform != 0,
                         culled: batch.is_culled(),
                         blend: batch.blend_class(),
                         // A PSP batch names a class and no factor pair.
@@ -857,7 +842,10 @@ fn build_class(
             {
                 airbrakes[side] = Some(Flap {
                     vertices: span,
-                    hinge: Mat4::from_cols_array(&world[hinge]),
+                    // `anchors` rather than a separate world pass: a flap is on
+                    // a ship, no ship authors an `Anim Transform`, and with no
+                    // anchor above it `Anchored::local` *is* the world matrix.
+                    hinge: Mat4::from_cols_array(&anchors[hinge].local),
                 });
             }
         }
@@ -892,6 +880,7 @@ fn build_class(
         .max(0.001);
 
     let mut model = Model {
+        anim_nodes,
         label: label.to_string(),
         vertices,
         indices,

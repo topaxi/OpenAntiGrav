@@ -779,9 +779,21 @@ change how this list should be read:
 
 ### Scene, animation and culling
 
-- [ ] `Anim Transform` `0x3c0` - the authored animation channel. This is the one
-      that makes scenery move, and nothing reads it yet
-- [ ] `animationTrigger` `0x3dc` - what starts an animation
+- [x] `Anim Transform` `0x3c0` - the authored animation channel, and the one
+      that makes scenery move. **Read and played 2026-08-18**: 393 nodes over
+      the twelve circuits with 474 meshes below them, decoded from the class's
+      own registration, binder and three channel evaluators
+      ([`anim-transform.md`](../ghidra/functions/psp-pulse-usa/anim-transform.md))
+      and replayed through a per-node matrix table the vertex shader indexes.
+      Reading it also fixed a placement defect: `vex::world_transforms` gave the
+      class the identity, dropping its transform along with its animation, and
+      **245 of those meshes drew at the world origin**. Eight still do, because
+      their own keys put them there. See
+      [`scenery-animation.md`](../rendering/scenery-animation.md)
+- [ ] `animationTrigger` `0x3dc` - what starts an animation. Authored **zero**
+      times across the 44 `.vex` files checked (twelve `track.vex`, twelve
+      `start_grid.vex`, twenty ship files), so whatever starts these is not a
+      sibling node. A bounded negative, not a survey of the disc's ~340 files
 - [x] `LodGroup` `0x2ee` - confirmed (see `docs/formats/vex.md`, "`LodGroup`:
       authored, but never switched at runtime") that the original never
       selects a tier at runtime: both children of a `child_count == 2` group
@@ -923,7 +935,8 @@ change how this list should be read:
       an enumerated list rather than a name rule, because the format holds no
       authored rate (material `+0x0c..0x14` is zero everywhere) and the material
       `flags` word does not separate animated from static. **At confidence 65,
-      behind `[graphics] animated_textures`**: the geometry and texture content
+      behind `[graphics] animated_textures`** *(setting since removed)*: the
+      geometry and texture content
       are measured, but no capture has confirmed the original animates these
       surfaces. See [`vex.md`](../formats/vex.md) and
       [`texture-animation.md`](../ghidra/functions/psp-pulse-usa/texture-animation.md)

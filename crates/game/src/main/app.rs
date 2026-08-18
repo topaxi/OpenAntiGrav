@@ -46,6 +46,9 @@ pub(crate) struct App {
     /// `--autopilot`: whether the player's craft is flown for them. A
     /// verification aid - see `race::Race::set_autopilot`.
     pub(crate) autopilot: bool,
+    /// `--anim-seconds`: pins the trackside animation clock. See
+    /// `Session::anim_seconds`.
+    pub(crate) anim_seconds: Option<f32>,
     /// A race loaded before the window opened, which is what `--race` does.
     pub(crate) race: Option<race::Loaded>,
     /// What a race started from `Launch Game` is flown on.
@@ -242,6 +245,7 @@ impl App {
             log_every: self.log_every,
             give: self.give,
             autopilot: self.autopilot,
+            anim_seconds: self.anim_seconds,
             scheme: self.scheme,
             anisotropy: self.anisotropy,
             launched: false,

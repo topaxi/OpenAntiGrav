@@ -487,7 +487,7 @@ pub struct Audio {
     /// says the original cycles a race playlist - the circuit-to-track mapping
     /// is still unestablished (`docs/formats/ps2-audio.md`). This is a
     /// deliberate choice for this reimplementation, the same way
-    /// `[graphics] boost_fov_kick` and `animated_textures` are: no confidence
+    /// `[graphics] boost_fov_kick` is: no confidence
     /// score, no `names.tsv` row.
     race_voice: Option<VoiceId>,
     /// Which release the race voice came off, mirroring [`Self::music_from`].

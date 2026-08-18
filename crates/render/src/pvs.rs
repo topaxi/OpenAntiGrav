@@ -504,6 +504,12 @@ pub fn visible(
     visible_set: Option<&VisibleSet>,
     frustum: Option<&Frustum>,
 ) -> bool {
+    // A draw the shader moves has bounds that describe where it was at time
+    // zero and nothing about where it is now, so neither test below can be
+    // trusted on it. See [`DrawCall::moving`].
+    if draw.moving {
+        return true;
+    }
     if let Some(set) = visible_set
         && !set.allows(sections)
     {

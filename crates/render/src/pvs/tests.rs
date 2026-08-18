@@ -23,6 +23,7 @@ use crate::mesh::Bounds;
 
 fn draw_at(centre: [f32; 3], radius: f32) -> DrawCall {
     DrawCall {
+        moving: false,
         blend: None,
         blend_state: None,
         layer: oag_formats::vex::LAYER_DEFAULT,
@@ -67,6 +68,7 @@ fn pvs(boxes: &[(u8, [f32; 3], [f32; 3])]) -> TrackPvs {
 
 fn draw_of_node(node: Option<u32>) -> DrawCall {
     DrawCall {
+        moving: false,
         blend: None,
         blend_state: None,
         layer: oag_formats::vex::LAYER_DEFAULT,
@@ -96,6 +98,7 @@ fn model_of(draws: Vec<DrawCall>) -> Model {
         centre: [0.0; 3],
         radius: 1.0,
         anim_tracks: Vec::new(),
+        anim_nodes: Vec::new(),
         mesh_count: 1,
     }
 }
@@ -260,6 +263,7 @@ fn swap_fixture() -> (TrackPvs, SwapConflicts) {
         lightmap_texcoord: [0.0, 0.0],
         lit: 1.0,
         anim: 0,
+        xform: 0,
     };
     model.indices.clear();
     for (draw, base_x) in [(0usize, 100.0f32), (1, 0.0), (2, 0.0), (3, 0.0)] {

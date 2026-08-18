@@ -1006,14 +1006,23 @@ material of every circuit. **There is no authored per-surface UV scroll rate in
 this format.** Confidence 90: an exhaustive scan of real data, which is what the
 [rubric](../reverse-engineering/confidence-rubric.md) caps below 95.
 
-**`flags` does not mark animation.** It is richly varied - 19 distinct values on
-`07_Track`, from `0x0001` on plain art to `0x2001`, `0x0192` and `0x0292` - and
-it does correlate with the artists' naming, but it does not separate animated
-surfaces from static ones: the static `hub_banner_GLOW` and the banded
-`flicker1nonalpha_GLOW` both carry `0x91`. Two bits are legible:
+**`flags` as a whole does not mark animation, but one of its bits does.**
+Corrected 2026-08-18: this paragraph read "`flags` does not mark animation" and
+offered "the static `hub_banner_GLOW` and the banded `flicker1nonalpha_GLOW`
+both carry `0x91`" as the proof. Both of those surfaces are in fact animated -
+see the box at [Trackside advertising](#trackside-advertising-is-static-and-that-is-measured-on-both-axes) -
+so the example proved nothing, and `0x91` carries `0x10`, which is precisely the
+bit `Mesh_UpdateTextureTransforms` (`0x0890e160`) tests before evaluating a
+material's keyframe block. On all twelve circuits every one of the 922 materials
+carrying it authors a non-empty block; the converse was not measured. What the
+word still does not do is separate animated from static by its *value*: it is
+richly varied - 19 distinct values on `07_Track`, from `0x0001` on plain art to
+`0x2001`, `0x0192` and `0x0292` - and correlates with the artists' naming.
+Three bits are legible:
 
 | Bit | Where it lands | Reading |
 | --- | --- | --- |
+| `0x0010` | 922 materials over the twelve circuits, 27 to 125 each | the engine's own texture-transform gate, read at instruction level in [`texture-animation.md`](../ghidra/functions/psp-pulse-usa/texture-animation.md) |
 | `0x0080` | `07_archtrim_Glow_01`, `SL_BlueStrip_GLOW`, `col_display7_GLOW`, `07_Pulse_light_BLEND_GLOW` | accompanies the `_GLOW`/additive naming convention |
 | `0x2000` | **exactly** the `*_shinemap` textures - `SL_stripwindows_shinemap`, `rf_dome2_strip_shinemap`, `StripWindows_shinemap` | the extra pass, corroborating the same bit's meaning in a batch's `pass_mask` and the second texture index at `+0x08` |
 
@@ -1199,6 +1208,20 @@ entry is at or under 1.5 rows and every exclusion is at or above 31.9.**
 
 ### Trackside advertising is static, and that is measured on both axes
 
+> **Withdrawn 2026-08-18. The billboards scroll, and the disc authors it.** The
+> measurement below stands for what it actually tested - a *filmstrip*, stepping
+> through a banded texture's rows or blocks - and its conclusion was then
+> over-generalised to "do not move, on either axis". The per-material keyframe
+> blocks say otherwise for the second axis: `hub_banner_GLOW`, named below as the
+> static counter-example, sweeps `u` by **four whole tiles** with a half-tile `v`
+> step over a 10 s loop on both circuits that draw it, and seven more banner and
+> logo textures carry their own offset tracks. A quad spanning the full width of
+> its texture is evidence against a filmstrip and no evidence at all against a
+> `TEXOFFSET` scroll, which slides the coordinates whatever they span. The counts
+> and the tracks are in
+> [`scenery-animation.md`](../rendering/scenery-animation.md); the renderer
+> already plays them.
+
 The rows above only rule out a filmstrip stepping through *rows*. One asset
 looks like the horizontal case - **`FEISAR2anim.tga`**, 256x32 in 8 distinct
 32x32 blocks, on sponsor art, with `anim` in the artists' own name - and its
@@ -1213,7 +1236,10 @@ spanning essentially its full **width**: `piranha_banner_ADD_GLOW` 254.00 of 256
 zero materials** on all four circuits that embed it (`03`, `04`, `13`, `14`), so
 it is never drawn - the same shape as `flicker1/2nonalpha_GLOW`.
 
-So the billboards' contents render and do not move, on either axis.
+So the billboards' contents render and do not step through frames. The sentence
+that stood here said "render and do not move, on either axis"; the stepping half
+is what these two measurements support, and the moving half is what the box at
+the top of this section withdraws.
 
 **That last measurement does not generalise to non-billboard scenery, and a
 reading built on it was wrong.** The renderer used to carry a scalar V rate per
@@ -1242,7 +1268,7 @@ whose compiled five-word display list writes `TEXOFFSET` directly and never
 calls `Gu_TexOffset` - which is why a breakpoint on that function saw only the
 exhaust ribbon and why the negative it produced did not mean what it looked
 like. The renderer replays the authored tracks, so `[graphics]
-animated_textures` now defaults **on**: it is a reproduction rather than a
+animated_textures` now defaults **on** *(and was removed outright on 2026-08-18 - see [`scenery-animation.md`](../rendering/scenery-animation.md))*: it is a reproduction rather than a
 departure, and what the switch does off is freeze every animated surface at
 the first key of its track, for still-frame comparison. See
 [`texture-animation.md`](../ghidra/functions/psp-pulse-usa/texture-animation.md).
@@ -1252,12 +1278,66 @@ is now: a record of which surfaces the *geometry* singles out, useful as a
 cross-check on the authored blocks, and not what drives the picture. Where the
 two disagree the blocks win - they are the original's own data.
 
-One reading is ruled out rather than untested: the material `flags` word is
-**not** an animation switch, since the static `hub_banner_GLOW` and the banded
-`flicker1nonalpha_GLOW` both carry `0x91`. A second is now explained rather
+One reading is narrowed rather than ruled out: the material `flags` **word** is
+not an animation switch by its value, but its `0x10` **bit** is exactly the
+engine's gate - the counter-example this paragraph used to give, "the static
+`hub_banner_GLOW`", turned out to be animated, and `0x91` carries `0x10`. See
+the corrected paragraph under
+[`+0x0c..0x14` is empty, and `flags` is render state](#0x0c0x14-is-empty-and-flags-is-render-state).
+A second is now explained rather
 than ruled out - material `+0x0c..0x14` is indeed zero on every material of
 every circuit, because the animation is stored in the block after the material
 array, not on the material.
+
+## `Anim Transform` `0x3c0`: the keyframed node matrix
+
+The other animation mechanism, and the one that moves geometry rather than
+sliding a coordinate under it. Every Pulse circuit authors it - **393 nodes over
+the twelve, with 474 meshes below them** - and the class is read whole:
+registration, binder and all three channel evaluators are in
+[`anim-transform.md`](../ghidra/functions/psp-pulse-usa/anim-transform.md), which
+is also where the field map's evidence lives. `oag_formats::vex::anim_transform`
+parses it and `oag_render::mesh::AnimNode` plays it.
+
+The payload is a `0x50`-byte header followed by six key arrays - translation,
+rotation and scale, each a `u16` time array in 60 Hz frames paired with
+`(s16, s16, s16)` values:
+
+- **translation** is `value * quantum + base`, with a per-axis quantum at
+  `+0x20` and the base at `+0x10`;
+- **rotation** is a **compressed unit quaternion** - three components in 1/32767
+  units with `w = sqrt(1 - x^2 - y^2 - z^2)` - slerped between keys;
+- **scale** is **1/256 fixed point**, the same convention the texture-transform
+  block uses, multiplying the basis rows.
+
+Composition is scale, then rotate, then translate. Between keys the evaluators
+clamp and lerp exactly as `TexAnim_EvalKeyframes` does for the texture block, and
+the node's `FixedFrames` attribute snaps to the preceding key instead - the same
+role that block's step flag plays.
+
+**A count of zero still stores one key**, which is what makes the six arrays
+**tile `[0x50, payload_len)` exactly on every one of the 393**. That tiling is
+the field map's evidence: it is falsifiable on every node of every circuit at
+once, and a wrong offset or stride breaks it on the first file.
+
+### The node header carries named attributes
+
+Three of them are read by this class's binder, through a list the header
+declares - and finding it settles a field that had been recorded as unknown.
+The `u16` at header `+0x0e` is the **list's length in bytes**, which is why its
+values were "small and round (24, 36, 48, 56, 68, 368)"; header `+0x06` is the
+offset to the first entry. `oag_formats::vex::node_attributes` walks it.
+
+| Attribute | Effect |
+| --- | --- |
+| `LoopEnd` | the wrap period; `AnimTransform_Update` does `fmodf(t, LoopEnd)` |
+| `AnimEnd` | stored and, so far as anything read shows, never used |
+| `FixedFrames` | snap to the key instead of blending |
+
+Both times default to 6,000 seconds, so a node with no `LoopEnd` does not loop.
+The lookup is a `strcmp` and therefore case sensitive: **three nodes author
+`Loopend`**, which the original does not match, so those three do not loop -
+reproduced rather than corrected.
 
 ## Path templates
 

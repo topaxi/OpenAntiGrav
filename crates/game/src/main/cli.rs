@@ -198,6 +198,26 @@ pub(crate) struct Cli {
     #[arg(long, value_name = "FILE")]
     pub(crate) dump_audio: Option<std::path::PathBuf>,
 
+    /// Pin the animation clock, in seconds, instead of deriving it from the
+    /// tick.
+    ///
+    /// Both trackside animation mechanisms - the per-material texture transform
+    /// and the `Anim Transform` node motion - run off one clock, which a race
+    /// takes from the tick. This overrides it, for a comparison harness that
+    /// needs our phase matched to a still of the original rather than left where
+    /// the tick put it. Two runs at two values are also the headless way to show
+    /// that an animated surface moves at all. Same flag, same meaning as
+    /// `oag-view --anim-seconds`.
+    ///
+    /// **This is deliberately not a settings-file option.** It was one -
+    /// `[graphics] animated_textures`, a boolean - and it was a footgun: it
+    /// dated from when the animation was a guess, it grew to freeze moving
+    /// scenery as well as scrolling surfaces without its name saying so, and a
+    /// `false` persisted from before the default flipped left circuits silently
+    /// static. A harness knob belongs on the command line.
+    #[arg(long, value_name = "SECONDS")]
+    pub(crate) anim_seconds: Option<f32>,
+
     /// With `--screenshot`, the image's size as `WIDTHxHEIGHT`.
     ///
     /// A window is not always given the size it asks for - a tiling compositor

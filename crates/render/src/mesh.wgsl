@@ -87,6 +87,22 @@ struct Scene {
 @group(2) @binding(0) var<uniform> scene: Scene;
 @group(3) @binding(0) var<uniform> anims: TexAnims;
 
+// The world matrix of each `Anim Transform` node the model carries, sampled for
+// this frame on the CPU. Binding 1 of group 3 rather than a group of its own:
+// wgpu guarantees four bind groups and 0 to 3 are already taken.
+//
+// Slot 0 is the identity, which is what
+// `GpuVertex::xform == 0` selects, so static geometry costs one indexed load and
+// no branch - the same shape as `TexAnims` above.
+//
+// Column-major, which is what `oag_formats::vex`'s row-major-row-vector layout
+// already is when read as a `mat4x4<f32>`: `transform_point` computes
+// `p.x*m[0] + p.y*m[4] + p.z*m[8] + m[12]`, which is exactly `M * v`.
+struct NodeAnims {
+    transform: array<mat4x4<f32>, 128>,
+};
+@group(3) @binding(1) var<uniform> node_anims: NodeAnims;
+
 struct VertexInput {
     @location(0) position: vec3<f32>,
     @location(1) normal: vec3<f32>,
@@ -95,6 +111,7 @@ struct VertexInput {
     @location(4) lit: f32,
     @location(5) anim: u32,
     @location(6) lightmap_texcoord: vec2<f32>,
+    @location(7) xform: u32,
 };
 
 struct VertexOutput {
@@ -110,11 +127,25 @@ struct VertexOutput {
 @vertex
 fn vs_main(in: VertexInput) -> VertexOutput {
     var out: VertexOutput;
-    let world = uniforms.model * vec4<f32>(in.position, 1.0);
+    // The `Anim Transform` above this vertex, if any. Slot 0 is the identity,
+    // so static geometry passes through unchanged. Applied *before* the model
+    // matrix because it is part of the file's own scene-graph chain: the
+    // vertex is baked in the anim node's space, and this is the matrix that
+    // takes it back to the model's. See `oag_formats::vex::anim_anchors`.
+    let node = node_anims.transform[in.xform];
+    let placed = node * vec4<f32>(in.position, 1.0);
+    let world = uniforms.model * placed;
     out.clip = uniforms.view_projection * world;
-    // Uniform scale only, so the model matrix rotates normals correctly
-    // without needing an inverse transpose.
-    out.normal = (uniforms.model * vec4<f32>(in.normal, 0.0)).xyz;
+    // Uniform scale only, so the model matrix rotates normals correctly without
+    // needing an inverse transpose. **The node matrix is not uniform**: 129 of
+    // the 920 authored scale keys are per-axis, and skewing a normal by one of
+    // those is wrong. It is harmless on this data and measured rather than
+    // assumed - all 37 meshes under a non-uniformly scaled node are prelit
+    // (`lit = 0.0`), so their normals never reach the light rig at all. A title
+    // that lights one needs the inverse transpose here;
+    // `scenery_animation_ground_truth.rs` fails when that day comes.
+    let turned = node * vec4<f32>(in.normal, 0.0);
+    out.normal = (uniforms.model * turned).xyz;
     out.colour = in.colour;
     // Not run through the texture-animation transform below: an animated
     // surface scrolls its diffuse across itself, while its patch in the

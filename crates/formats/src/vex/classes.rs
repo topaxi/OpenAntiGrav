@@ -95,6 +95,8 @@ pub struct Classes {
     pub track_wall_collision: Option<u32>,
     /// The node whose second child is a mesh's low-detail alternative.
     pub lod_group: Option<u32>,
+    /// The keyframed transform that makes trackside scenery move.
+    pub anim_transform: Option<u32>,
     /// The `Airbrake` node a flap `Mesh` hangs under.
     pub airbrake: Option<u32>,
     /// The engine flare locator on a ship.
@@ -132,6 +134,7 @@ pub const V6: Classes = Classes {
     // discs, so listing it changes nothing Pulse decodes.
     track_wall_collision: Some(CLASS_TRACK_WALL_COLLISION),
     lod_group: Some(super::CLASS_LOD_GROUP),
+    anim_transform: Some(super::CLASS_ANIM_TRANSFORM),
     airbrake: Some(super::CLASS_AIRBRAKE),
     engine_flare: Some(super::CLASS_ENGINE_FLARE),
     ship_collision_fx: Some(super::CLASS_SHIP_COLLISION_FX),
@@ -244,6 +247,12 @@ pub const V4: Classes = Classes {
     // version 6.
     track_wall_collision: None,
     lod_group: None,
+    // `Anim Transform` is index 8 of the same name run that gives the ten ids
+    // above, which puts it at `0x372`. It stays `None` for the reason
+    // `airbrake` does: no version-4 file has been checked for one and nothing
+    // reads it there, so the derivation is recorded without this table
+    // asserting it.
+    anim_transform: None,
     // `Airbrake` *is* in the name run, at index 11, so the same arithmetic
     // gives `0x377`. It stays `None` because nothing has looked for it in
     // Pure's own files and nothing consumes it yet - the derivation is
@@ -281,6 +290,7 @@ pub const V3: Classes = Classes {
     // version 6.
     track_wall_collision: None,
     lod_group: None,
+    anim_transform: None,
     airbrake: None,
     engine_flare: None,
     ship_collision_fx: None,

@@ -40,6 +40,7 @@ pub fn merge(label: &str, models: Vec<Model>) -> Model {
         radius: 1.0,
         mesh_count: 0,
         anim_tracks: Vec::new(),
+        anim_nodes: Vec::new(),
         node_vertex_ranges: Vec::new(),
     };
 
@@ -60,6 +61,18 @@ pub fn merge(label: &str, models: Vec<Model>) -> Model {
         // pointing off the end.
         let limit = u32::try_from(ANIM_TRACK_LIMIT).unwrap_or(u32::MAX);
         out.anim_tracks.truncate(ANIM_TRACK_LIMIT - 1);
+        // The same rebase for the node transforms, whose slots are positional
+        // in exactly the same way and whose 0 means "not moved" the same way.
+        // A parent index is into the *source* model's list, so it moves too.
+        let xform_base = u32::try_from(out.anim_nodes.len()).unwrap_or(0);
+        let node_base = out.anim_nodes.len();
+        out.anim_nodes
+            .extend(model.anim_nodes.into_iter().map(|mut n| {
+                n.parent = n.parent.map(|p| p + node_base);
+                n
+            }));
+        let node_limit = u32::try_from(NODE_ANIM_LIMIT).unwrap_or(u32::MAX);
+        out.anim_nodes.truncate(NODE_ANIM_LIMIT - 1);
 
         out.vertices.extend(model.vertices.into_iter().map(|mut v| {
             if v.anim != 0 {
@@ -68,6 +81,10 @@ pub fn merge(label: &str, models: Vec<Model>) -> Model {
                 // some *other* surface's animation.
                 let rebased = v.anim.saturating_add(anim_base);
                 v.anim = if rebased < limit { rebased } else { 0 };
+            }
+            if v.xform != 0 {
+                let rebased = v.xform.saturating_add(xform_base);
+                v.xform = if rebased < node_limit { rebased } else { 0 };
             }
             v
         }));
@@ -82,6 +99,7 @@ pub fn merge(label: &str, models: Vec<Model>) -> Model {
             blend_state: d.blend_state,
             layer: d.layer,
             culled: d.culled,
+            moving: d.moving,
         };
         out.draws.extend(model.draws.into_iter().map(rebase));
         out.alpha_tested_draws
@@ -136,10 +154,12 @@ mod merge_tests {
                     lightmap_texcoord: [0.0, 0.0],
                     lit: 1.0,
                     anim: 0,
+                    xform: 0,
                 })
                 .collect(),
             indices: (0..vertices as u32).collect(),
             draws: vec![DrawCall {
+                moving: false,
                 blend: None,
                 blend_state: None,
                 layer: oag_formats::vex::LAYER_DEFAULT,
@@ -159,6 +179,7 @@ mod merge_tests {
             centre: [0.0; 3],
             radius: 1.0,
             anim_tracks: Vec::new(),
+            anim_nodes: Vec::new(),
             mesh_count: 1,
         }
     }

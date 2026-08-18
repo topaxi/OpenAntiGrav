@@ -31,7 +31,7 @@ impl Scene {
         fov: crate::display::Fov,
         cull: bool,
         pvs_cull: bool,
-        animated_textures: bool,
+        anim_seconds: Option<f32>,
     ) -> SceneStats {
         let aspect = viewport.2.max(1.0) / viewport.3.max(1.0);
         let view_projection = race.projection(aspect, self.far, fov) * race.view();
@@ -54,13 +54,21 @@ impl Scene {
         // (`docs/ghidra/functions/psp-pulse-usa/texture-animation.md`, "The
         // values gap is closed"), and each authored track wraps on its own
         // period, so there is no global phase to keep in step.
-        let seconds = race.world.tick as f32 / 60.0;
-        // `[graphics] animated_textures` no longer gates a guess, so it no
-        // longer gates the track: what draws now is the material's own
-        // authored keyframe block. The setting stays as a way to freeze every
-        // animated surface at its authored coordinates, which is what a
-        // still-frame comparison against a capture wants.
-        let track_seconds = if animated_textures { seconds } else { 0.0 };
+        //
+        // `anim_seconds` overrides it, and is `None` in a race. It exists for a
+        // comparison harness that needs to pin the animation phase
+        // independently of the tick - `--anim-seconds`, the same flag and the
+        // same meaning `oag-view` already has.
+        //
+        // **This replaced a `[graphics] animated_textures` boolean**, which
+        // dated from when the animation was a guess at which surfaces scroll
+        // and how fast. What draws now is the disc's own keyframe data, for
+        // both mechanisms, so a boolean could only switch the reproduction
+        // *off* - and since the `Anim Transform` port its name had quietly come
+        // to cover trackside objects *moving* as well as surfaces scrolling. A
+        // still-frame comparison wants a chosen time, not a freeze; a stale
+        // `false` in a settings file wants nothing at all.
+        let seconds = anim_seconds.unwrap_or(race.world.tick as f32 / 60.0);
         // Fog, sampled where the eye is. `oag_formats::fog::sample` reimplements
         // `FogCube_Sample`: the camera is transformed into the volume's space,
         // rejected if outside, and all six parameters interpolated across the
@@ -96,7 +104,7 @@ impl Scene {
         {
             queue.write_buffer(&drawable.fog, 0, bytemuck::bytes_of(&scene));
         }
-        // The scenery, on the clock `[graphics] animated_textures` can freeze.
+        // The scenery: both animation mechanisms off the one clock.
         for drawable in [
             Some(&self.track),
             self.sky.as_ref(),
@@ -107,7 +115,11 @@ impl Scene {
         .into_iter()
         .flatten()
         {
-            drawable.write_anims(queue, track_seconds);
+            drawable.write_anims(queue, seconds);
+            // The scenery that *moves* rides the same clock as the scenery
+            // that scrolls, so `--anim-seconds` aims both at once and a race
+            // runs both off the tick.
+            drawable.write_node_anims(queue, seconds);
         }
         // The craft always animate. Their blink lights are the one animation
         // on the disc confirmed against a frame-accurate capture of the
@@ -225,10 +237,10 @@ impl Scene {
         }
         // Ready-to-collect vs cooling down - see `Drawable::tint_weapon_pads`
         // and `oag_render::weapon_pad` for the recovered mechanism this
-        // reproduces. `seconds` rather than `track_seconds`: unlike the
-        // authored texture-transform tracks this is gameplay state, not
-        // scenery, so `[graphics] animated_textures` freezing scenery must
-        // not freeze it too.
+        // reproduces. This is gameplay state rather than scenery, which used
+        // to matter because a setting could freeze the scenery clock without
+        // freezing this one; both now run off `seconds` and there is nothing
+        // left to keep apart.
         if let Some(weapon_pads) = &self.weapon_pads {
             let ready: Vec<bool> = race
                 .weapon_pad_refresh_left()

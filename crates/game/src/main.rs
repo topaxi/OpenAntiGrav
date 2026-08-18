@@ -392,6 +392,7 @@ fn main() -> Result<()> {
         cli.trace,
         cli.log_every,
     );
+    let anim_seconds = cli.anim_seconds;
     let settings = settings.clone();
 
     let event_loop = EventLoop::new()?;
@@ -405,6 +406,7 @@ fn main() -> Result<()> {
         pick_language,
         give,
         autopilot,
+        anim_seconds,
         race: None,
         race_options,
         trace,

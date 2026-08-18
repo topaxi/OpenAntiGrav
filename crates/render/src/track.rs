@@ -132,6 +132,7 @@ pub fn build_model(label: &str, ai: &AiTrack) -> Model {
     // `radius` above, which is only half the longest single axis and would
     // under-cover the corners of a non-cubic box.
     let draws = vec![DrawCall {
+        moving: false,
         // Synthetic: no batch, so no recovered blend class.
         blend: None,
         blend_state: None,
@@ -164,6 +165,7 @@ pub fn build_model(label: &str, ai: &AiTrack) -> Model {
         centre,
         radius,
         anim_tracks: Vec::new(),
+        anim_nodes: Vec::new(),
         mesh_count: ai.paths.len(),
     }
 }
@@ -218,6 +220,7 @@ fn strip(
             lightmap_texcoord: [0.0, 0.0],
             lit: 1.0,
             anim: 0,
+            xform: 0,
         });
         vertices.push(GpuVertex {
             position: edges_of(s, right, lift),
@@ -227,6 +230,7 @@ fn strip(
             lightmap_texcoord: [0.0, 0.0],
             lit: 1.0,
             anim: 0,
+            xform: 0,
         });
     }
     for i in 0..samples.len() as u32 - 1 {

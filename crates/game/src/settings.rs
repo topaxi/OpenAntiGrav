@@ -374,8 +374,8 @@ pub struct Graphics {
     /// scale; whether it is one on this game's hard-edged paletted art is a
     /// screenshot comparison has now been run, and at 50 % on one frame of one
     /// track FSR 1 wins clearly. **The default has not moved on it**, because
-    /// one frame of one track is not the sample `animated_textures` was held
-    /// to - see HANDOVER for what would settle it. See
+    /// one frame of one track is not the sample a default flip is held to
+    /// here; see HANDOVER for what would settle it. See
     /// [`crate::display::Upscaler`].
     ///
     /// **Only has an effect below 100 % `render_scale`.** FSR 1 is a magnifier;
@@ -505,10 +505,18 @@ pub struct Graphics {
     /// of its track, which is what a still-frame comparison against a capture
     /// of the original wants.
     ///
+    /// **It freezes the scenery that *moves*, not only the scenery that
+    /// scrolls, and the name no longer says so.** Since the `Anim Transform`
+    /// class was ported (2026-08-18) this switch gates both mechanisms off one
+    /// clock, because a still-frame comparison wants the whole circuit held
+    /// still and not half of it. The name is kept for now rather than migrated,
+    /// since it is a persisted key in everyone's settings file - but a `false`
+    /// here is now a much bigger hammer than it was when it was written, and a
+    /// file written before 2026-08-11 carries `false` from back when that was
+    /// the default. That is the first thing to check if a circuit looks static.
+    ///
     /// The ships are deliberately not covered by this switch: their blink is
     /// measured in a frame-accurate capture, so it animates either way.
-    #[serde(default = "default_animated_textures")]
-    pub animated_textures: bool,
     /// Whether the recovered bloom post-process runs.
     ///
     /// **Defaults off, and the reason is honesty rather than taste.** The
@@ -587,12 +595,6 @@ fn default_bloom() -> bool {
     false
 }
 
-/// See [`Graphics::animated_textures`]: **on**, now that the renderer replays
-/// the authored keyframe tracks instead of a table of chosen rates.
-fn default_animated_textures() -> bool {
-    true
-}
-
 impl Default for Graphics {
     fn default() -> Self {
         Self {
@@ -607,7 +609,6 @@ impl Default for Graphics {
             frustum_culling: default_frustum_culling(),
             pvs_culling: default_pvs_culling(),
             lod: Lod::default(),
-            animated_textures: default_animated_textures(),
             bloom: default_bloom(),
             boost_fov_kick: default_boost_fov_kick(),
             camera_view: default_camera_view(),

@@ -664,7 +664,7 @@ pub enum Upscaler {
     ///
     /// **The default.** The comparison that would move it has been run once,
     /// at 50 % on one frame of one track, and FSR 1 won it clearly - but one
-    /// frame of one track is not the sample `animated_textures` was held to,
+    /// frame of one track is not the sample a default flip is held to here,
     /// and the doubt that motivated the caution is specifically about content
     /// this frame did not contain: the menus and the HUD are 480x272-era
     /// paletted raster and glyphs off a coverage atlas, and a sharpener rings

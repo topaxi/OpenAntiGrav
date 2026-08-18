@@ -107,6 +107,14 @@ pub(crate) struct Session {
     /// The persisted settings, kept because the menus change them and every
     /// change is written straight back.
     pub(crate) settings: settings::Settings,
+    /// `--anim-seconds`: pins the trackside animation clock instead of deriving
+    /// it from the tick.
+    ///
+    /// **Not in [`Self::settings`], on purpose.** It is a harness knob, and the
+    /// boolean it replaced (`[graphics] animated_textures`) was persisted -
+    /// which is how a value written before the default flipped went on
+    /// freezing circuits long after the animation stopped being a guess.
+    pub(crate) anim_seconds: Option<f32>,
     /// Where every stage draws, before it is stretched onto the surface.
     ///
     /// On the session rather than on a stage because it outlives them: a race

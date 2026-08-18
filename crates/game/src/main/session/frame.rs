@@ -392,7 +392,7 @@ impl Session {
                     self.settings.graphics.fov,
                     self.settings.graphics.frustum_culling,
                     self.settings.graphics.pvs_culling,
-                    self.settings.graphics.animated_textures,
+                    self.anim_seconds,
                 )),
                 None,
             ),

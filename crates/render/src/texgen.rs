@@ -185,6 +185,7 @@ mod tests {
             lightmap_texcoord: [0.0, 0.0],
             lit: 0.0,
             anim: 0,
+            xform: 0,
         }
     }
 

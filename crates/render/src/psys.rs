@@ -1494,9 +1494,8 @@ fn quad(
         colour: [colour[0], colour[1], colour[2], alpha],
         texcoord: [u, v],
         // The `lit` slot is repurposed by this pipeline: particles are
-        // emissive (never lit by the mesh rig, a different pipeline), so
-        // the attribute carries the cap fraction the fragment profile
-        // needs - see `sparks.wgsl`.
+        // emissive (never lit by the mesh rig), so it carries the cap
+        // fraction the fragment profile needs - see `sparks.wgsl`.
         lit: cap,
         ..bytemuck::Zeroable::zeroed()
     };
