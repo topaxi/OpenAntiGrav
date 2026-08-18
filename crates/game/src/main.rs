@@ -110,6 +110,12 @@ fn main() -> Result<()> {
     // disc image configured at all. See `oag_game::icon` and
     // `crate::window::window_icon`, the winit-facing use of the same function.
     if let Some(path) = &cli.write_icon {
+        // **Validated here, because `rasterize`'s `expect` is not a CLI error
+        // message.** That function's own docs say no player input reaches it;
+        // `--icon-size` does, and `--write-icon out.png --icon-size 0` panicked
+        // rather than saying what was wrong. Finding G2 of the 2026-08-18
+        // review.
+        anyhow::ensure!(cli.icon_size > 0, "--icon-size must be at least 1");
         let oag_game::icon::Rgba {
             width,
             height,

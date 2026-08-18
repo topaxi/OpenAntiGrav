@@ -37,9 +37,15 @@ pub struct Rgba {
 /// Renders [`SOURCE`] at `size` pixels square.
 ///
 /// The source is a vector, so any `size` re-renders cleanly - unlike
-/// upscaling a raster, there is no interpolation to soften. Panics if the
-/// committed SVG fails to parse or `size` is zero; both are programmer
-/// errors; there is no path where a player's input reaches this function.
+/// upscaling a raster, there is no interpolation to soften.
+///
+/// # Panics
+///
+/// If the committed SVG fails to parse, or `size` is zero. The first is a
+/// programmer error. The second **is** reachable from the command line, via
+/// `--icon-size`, which is why the caller in `main` validates it and reports
+/// it as a CLI error - this claimed no player input reaches it, and one did
+/// (finding G2 of the 2026-08-18 review).
 #[must_use]
 pub fn rasterize(size: u32) -> Rgba {
     let tree = usvg::Tree::from_data(SOURCE, &usvg::Options::default())

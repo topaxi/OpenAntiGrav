@@ -182,14 +182,6 @@ pub(crate) fn run_windowless(
     unreachable!("every branch above returns")
 }
 
-/// Loads a track and a ship and either captures one frame or opens a window.
-///
-/// **The settings apply here too**, even though this route never opens a menu
-/// to change them with. It used to take only the aspect, which left a window
-/// opened with `--race` ignoring the window size, the render scale and the
-/// performance overlay that the same file was setting for every other route -
-/// and the overlay is most wanted exactly here, where a track is on screen.
-/// Nothing on this path writes the file back.
 /// Our per-tick state, in the capture's own columns, written to `path`.
 ///
 /// # Which of our values stands for which recovered field
@@ -313,6 +305,18 @@ pub(crate) fn write_trace(
     Ok(())
 }
 
+/// Loads a track and a ship and either captures one frame or opens a window.
+///
+/// **The settings apply here too**, even though this route never opens a menu
+/// to change them with. It used to take only the aspect, which left a window
+/// opened with `--race` ignoring the window size, the render scale and the
+/// performance overlay that the same file was setting for every other route -
+/// and the overlay is most wanted exactly here, where a track is on screen.
+/// Nothing on this path writes the file back.
+///
+/// This paragraph sat on `write_trace` until finding G5 of the 2026-08-18
+/// review - fused onto that function's own docs, leaving this one
+/// undocumented and that one describing something it does not do.
 pub(crate) fn run_race(
     cli: &Cli,
     options: race::Options,

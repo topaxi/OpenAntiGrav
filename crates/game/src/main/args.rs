@@ -125,6 +125,13 @@ pub(crate) fn parse_progress(spec: &str) -> Result<prefetch::Progress> {
         failed: 0,
         // A real label, built the way `prefetch` builds one, so the line reads
         // as the thing it will read as in a window rather than as filler.
+        //
+        // **Pulse's name, whatever the source is**, and deliberately: this flag
+        // previews the loading screen's *layout*, and the pipeline behind it is
+        // Pulse-only by construction anyway (`prefetch.rs` hardcodes
+        // `oag_pulse::TITLE` - finding S11). Named here so a reader of an HD
+        // preview knows the text is a stand-in for width rather than a claim
+        // about that disc. Finding G5 of the 2026-08-18 review.
         current: (done < total).then(|| format!("Data.wad {}", oag_pulse::names::INTRO_MOVIE)),
         finished: done == total,
     })
@@ -150,9 +157,6 @@ pub(crate) fn parse_size(text: &str) -> Result<(u32, u32)> {
     Ok((width, height))
 }
 
-/// Printed whenever a race takes the window, by either route - and the two
-/// routes differ in exactly one key, which is why what escape does is spelled
-/// separately rather than assumed.
 /// Resolves `--give`'s spelling to a weapon, case-insensitively.
 ///
 /// Rejects an unknown name rather than ignoring it: a silent no-op here looks

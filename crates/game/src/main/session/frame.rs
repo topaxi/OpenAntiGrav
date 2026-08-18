@@ -267,6 +267,18 @@ impl Session {
                     for event in events {
                         self.handle_menu(&event);
                     }
+                    // **Break if the menu just started a race**, the same way
+                    // the results table above breaks when it hands the window
+                    // back. `handle_menu`'s `LaunchRace` swaps `Stage::Menu`
+                    // for `Stage::Race` in place, and without this the frame's
+                    // remaining catch-up steps tick the fresh race with the
+                    // confirm key still held - reading the `X` that started it
+                    // as thrust. Bounded by the catch-up cap, so usually zero
+                    // or one step, which is exactly why it went unnoticed:
+                    // finding G1 of the 2026-08-18 review.
+                    if matches!(self.stage, Stage::Race(_)) {
+                        break;
+                    }
                 }
                 Stage::Race(stage) if stage.race.finished() => {
                     // **The race is over, so nothing is stepped.** The world is
