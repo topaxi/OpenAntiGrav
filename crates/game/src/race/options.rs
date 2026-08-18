@@ -367,6 +367,11 @@ pub struct Loaded {
     /// The track's authored `fogCube` volumes, for [`Scene`] to sample per
     /// frame at the camera.
     pub fog_volumes: Vec<oag_formats::fog::FogVolume>,
+    /// The circuit's own light rig, out of its `.envsettings`.
+    ///
+    /// [`mesh_render::Light::stand_in`] for every title that authors none,
+    /// which is all of them but Wipeout HD.
+    pub light: mesh_render::Light,
     /// The track's `Skycube`, when it authors one.
     ///
     /// Built from the same blob as [`Self::track_model`] and indexing the same

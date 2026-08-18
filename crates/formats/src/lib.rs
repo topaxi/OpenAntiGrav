@@ -33,6 +33,7 @@ pub mod bik;
 pub mod byte_order;
 pub mod collision;
 pub mod entropy;
+pub mod envsettings;
 pub mod fexml;
 pub mod fnt;
 pub mod fog;

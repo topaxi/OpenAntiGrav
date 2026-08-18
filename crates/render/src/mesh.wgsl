@@ -57,10 +57,30 @@ struct Fog {
     _pad2: f32,
 };
 
+// The light rig a Wipeout HD circuit authors in its own `.envsettings`, or the
+// stand-in below when nothing does. `enabled` is 0.0 or 1.0 rather than a
+// branch, for the reason `Fog::enabled` is: one pipeline, not two.
+//
+// The direction and the sun's hue are the disc's. The magnitude is not - see
+// `mesh_render::Light`.
+struct Light {
+    direction: vec3<f32>,
+    enabled: f32,
+    ambient: vec3<f32>,
+    _lpad0: f32,
+    sun: vec3<f32>,
+    _lpad1: f32,
+};
+
+struct Scene {
+    fog: Fog,
+    light: Light,
+};
+
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
 @group(1) @binding(0) var albedo: texture_2d<f32>;
 @group(1) @binding(1) var albedo_sampler: sampler;
-@group(2) @binding(0) var<uniform> fog: Fog;
+@group(2) @binding(0) var<uniform> scene: Scene;
 @group(3) @binding(0) var<uniform> anims: TexAnims;
 
 struct VertexInput {
@@ -117,21 +137,31 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 // z needs the view matrix separately, which this uniform block does not carry;
 // recorded as a known divergence rather than silently accepted.
 fn fogged(colour: vec3<f32>, world: vec3<f32>) -> vec3<f32> {
-    let distance = length(world - fog.camera);
-    let span = max(fog.far - fog.near, 1e-6);
+    let distance = length(world - scene.fog.camera);
+    let span = max(scene.fog.far - scene.fog.near, 1e-6);
     // 1.0 is clear, 0.0 is fully fogged, matching the GE's own sense.
-    let factor = clamp((fog.far - distance) / span, 0.0, 1.0);
-    return mix(fog.colour, colour, mix(1.0, factor, fog.enabled));
+    let factor = clamp((scene.fog.far - distance) / span, 0.0, 1.0);
+    return mix(scene.fog.colour, colour, mix(1.0, factor, scene.fog.enabled));
 }
 
 fn lit_texel(in: VertexOutput) -> vec4<f32> {
     let n = normalize(in.normal);
 
+    // The stand-in: two invented directions, kept for every title whose own
+    // rig has not been recovered. See this file's header.
     let key = max(dot(n, normalize(vec3<f32>(0.4, 0.8, 0.5))), 0.0);
     let fill = max(dot(n, normalize(vec3<f32>(-0.5, 0.2, -0.7))), 0.0);
-    let rig = 0.15 + 0.75 * key + 0.25 * fill;
+    let stand_in = vec3<f32>(0.15 + 0.75 * key + 0.25 * fill);
+
+    // The authored one: a single sun in the direction the circuit states, over
+    // the ambient it states. `scene.light.sun` is the sun's hue with its
+    // magnitude divided out, which is all this target can hold.
+    let sun = max(dot(n, scene.light.direction), 0.0);
+    let authored = scene.light.ambient + scene.light.sun * sun;
+
+    let rig = mix(stand_in, authored, scene.light.enabled);
     // Prelit geometry already carries its lighting in the vertex colour.
-    let light = mix(1.0, rig, in.lit);
+    let light = mix(vec3<f32>(1.0), rig, in.lit);
 
     let texel = textureSample(albedo, albedo_sampler, in.texcoord);
     // Vertex colour modulates the texture on all four channels, as the GE's

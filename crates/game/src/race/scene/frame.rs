@@ -77,6 +77,13 @@ impl Scene {
             .map_or_else(mesh_render::Fog::off, |p| {
                 mesh_render::Fog::new(&p, eye.to_array())
             });
+        // The circuit's own light rig where it authors one - Wipeout HD does,
+        // in `track.envsettings` - and `mesh.wgsl`'s stand-in where it does
+        // not, which is every title whose rig has not been recovered.
+        let scene = mesh_render::Scene {
+            fog,
+            light: self.light,
+        };
         for drawable in [
             Some(&self.track),
             self.collision.as_ref(),
@@ -87,7 +94,7 @@ impl Scene {
         .flatten()
         .chain(self.ships.iter())
         {
-            queue.write_buffer(&drawable.fog, 0, bytemuck::bytes_of(&fog));
+            queue.write_buffer(&drawable.fog, 0, bytemuck::bytes_of(&scene));
         }
         // The scenery, on the clock `[graphics] animated_textures` can freeze.
         for drawable in [

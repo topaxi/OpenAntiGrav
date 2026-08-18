@@ -241,6 +241,7 @@ impl Stage {
             weapon_pad_model,
             rocket_model,
             fog_volumes,
+            light,
             visibility,
             flare,
             noise,
@@ -266,6 +267,7 @@ impl Stage {
             visibility,
             settings.graphics.anti_aliasing,
             fog_volumes,
+            light,
         )?;
         // Against the **surface** format, like every other renderer here, because
         // the HUD is composited into the offscreen target which shares it.

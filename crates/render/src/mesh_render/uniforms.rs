@@ -1,4 +1,5 @@
-//! The camera and model matrices the mesh pipeline reads from bind group 0.
+//! The uniform blocks the mesh pipeline reads: the camera and model matrices in
+//! bind group 0, and the scene's fog and light in bind group 2.
 //!
 //! Split out of `mesh_render.rs` for size alone. What is here is the whole of
 //! how an [`Orbit`] becomes a view-projection matrix, which is worth having in
@@ -189,3 +190,183 @@ mod tests {
         }
     }
 }
+
+/// The fog block `mesh.wgsl` reads from bind group 2.
+///
+/// Deliberately **not** part of [`Uniforms`]. That struct is mirrored by every
+/// pipeline in this crate and by the asset viewer, so growing it means moving
+/// four `.wgsl` declarations and `oag-view`'s own buffer sizing in lockstep;
+/// only the pipelines that fog need these fields.
+///
+/// The field order is the WGSL declaration's, and the padding is real: a WGSL
+/// `vec3` aligns to 16 bytes, so the `f32` after each one occupies the slot that
+/// alignment would otherwise waste.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct Fog {
+    /// Fog colour, linear.
+    pub colour: [f32; 3],
+    /// Distance at which fog starts.
+    pub near: f32,
+    /// Eye position, so the fragment stage can measure distance.
+    pub camera: [f32; 3],
+    /// Distance at which fog is total.
+    pub far: f32,
+    /// `1.0` to fog, `0.0` to pass colour through untouched.
+    pub enabled: f32,
+    _pad0: f32,
+    _pad1: f32,
+    _pad2: f32,
+}
+
+impl Fog {
+    /// Fog that does nothing.
+    ///
+    /// What the sky, the asset viewer and a track with no `fogCube` bind. It is
+    /// a value rather than an unbound group because WGSL has no optional
+    /// bindings: the alternative is a second pipeline per fog state.
+    #[must_use]
+    pub fn off() -> Self {
+        Self {
+            colour: [0.0; 3],
+            near: 0.0,
+            camera: [0.0; 3],
+            far: 1.0,
+            enabled: 0.0,
+            _pad0: 0.0,
+            _pad1: 0.0,
+            _pad2: 0.0,
+        }
+    }
+
+    /// Fog from one sampled [`oag_formats::fog::FogParams`] and the eye it was
+    /// sampled at.
+    #[must_use]
+    pub fn new(params: &oag_formats::fog::FogParams, camera: [f32; 3]) -> Self {
+        Self {
+            colour: params.colour,
+            near: params.near,
+            camera,
+            // A degenerate range would divide by zero in the shader; the shader
+            // clamps the span, and this keeps the ordering sane regardless.
+            far: params.far.max(params.near + f32::EPSILON),
+            enabled: 1.0,
+            _pad0: 0.0,
+            _pad1: 0.0,
+            _pad2: 0.0,
+        }
+    }
+}
+
+/// The authored light rig a circuit's own settings file states.
+///
+/// # Why this exists
+///
+/// **`mesh.wgsl`'s two-light rig is a stand-in and says so**, with invented
+/// directions chosen so geometry reads clearly. Wipeout HD authors the real
+/// thing in plain text, one file per circuit - see
+/// [`oag_formats::envsettings`] - and `CLAUDE.md`'s rule about not inventing
+/// what the assets already author applies directly.
+///
+/// # What is the disc's and what is this project's
+///
+/// **The direction and the hue are the disc's. The magnitude is not.** A
+/// circuit authors a sun colour reaching 4.0 and an ambient reaching 3.0,
+/// because HD renders in linear light and tonemaps; this pipeline is
+/// gamma-authoritative per
+/// [ADR-0020](../../../docs/architecture/adr/0020-gamma-authoritative-colour-space.md)
+/// and has no tonemap stage, so those magnitudes would clip rather than expose.
+/// [`Light::authored`] therefore keeps the sun's *ratio* between channels -
+/// which is the visible part, and is what makes Talon's Junction's sun warm
+/// against its cool ambient - and drops the scale. That reduction is this
+/// project's and is labelled here rather than hidden in a shader constant.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct Light {
+    /// Unit direction **towards** the light, which is what a normal dots with.
+    pub direction: [f32; 3],
+    /// `1.0` to use this rig, `0.0` for `mesh.wgsl`'s stand-in.
+    pub enabled: f32,
+    /// Constant ambient, as authored and clamped into range.
+    pub ambient: [f32; 3],
+    _pad0: f32,
+    /// The sun's colour with its magnitude divided out: the hue alone.
+    pub sun: [f32; 3],
+    _pad1: f32,
+}
+
+impl Light {
+    /// The stand-in rig: what every title but HD binds.
+    ///
+    /// A value rather than an unbound group, for the reason [`Fog::off`] is
+    /// one: WGSL has no optional bindings.
+    #[must_use]
+    pub fn stand_in() -> Self {
+        Self {
+            direction: [0.0, 1.0, 0.0],
+            enabled: 0.0,
+            ambient: [0.0; 3],
+            _pad0: 0.0,
+            sun: [0.0; 3],
+            _pad1: 0.0,
+        }
+    }
+
+    /// The rig a circuit authors.
+    ///
+    /// `direction` must already be normalised;
+    /// [`oag_formats::envsettings::EnvSettings::direction`] does it and answers
+    /// `None` for the degenerate triples four circuits write, which is why this
+    /// takes a direction rather than a settings file.
+    #[must_use]
+    pub fn authored(direction: [f32; 3], colour: [f32; 3], ambient: [f32; 3]) -> Self {
+        // The hue, without the scale. A sun colour of `(2.0, 1.83, 0.89)`
+        // becomes `(1.0, 0.91, 0.44)` - the same warmth, inside the range this
+        // target can hold.
+        let peak = colour.iter().fold(0.0f32, |a, b| a.max(*b));
+        let sun = if peak > 0.0 {
+            std::array::from_fn(|i| (colour[i] / peak).clamp(0.0, 1.0))
+        } else {
+            [0.0; 3]
+        };
+        Self {
+            direction,
+            enabled: 1.0,
+            // Authored in range on most circuits and reaching 3.0 on some.
+            // Clamped rather than passed on: past 1.0 it is a white sheet in
+            // this target, and a clamp is at least monotone.
+            ambient: std::array::from_fn(|i| ambient[i].clamp(0.0, 1.0)),
+            _pad0: 0.0,
+            sun,
+            _pad1: 0.0,
+        }
+    }
+}
+
+/// Everything bind group 2 carries: the fog volume and the light rig.
+///
+/// One buffer rather than two groups because `wgpu`'s default
+/// `max_bind_groups` is 4 and this pipeline already uses 0 through 3.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct Scene {
+    /// The fog volume the camera is inside.
+    pub fog: Fog,
+    /// The circuit's authored light rig, or [`Light::stand_in`].
+    pub light: Light,
+}
+
+impl Scene {
+    /// No fog and the stand-in rig: what the sky, the asset viewer and every
+    /// title but HD bind.
+    #[must_use]
+    pub fn off() -> Self {
+        Self {
+            fog: Fog::off(),
+            light: Light::stand_in(),
+        }
+    }
+}
+
+/// Size, in bytes, of bind group 2's uniform buffer.
+pub const FOG_SIZE: u64 = std::mem::size_of::<Scene>() as u64;

@@ -15,6 +15,15 @@ use frame::{depth_texture, msaa_color_texture};
 #[derive(Debug)]
 pub struct Scene {
     track: Drawable,
+    /// The circuit's own light rig, where it authors one.
+    ///
+    /// [`mesh_render::Light::stand_in`] for every title whose rig has not been
+    /// recovered, which is all of them but Wipeout HD; HD states a sun
+    /// direction, a sun colour and a constant ambient in the `.envsettings`
+    /// beside its `track.vex`, and `CLAUDE.md`'s rule about not inventing what
+    /// the assets already author is why that is read rather than approximated.
+    /// See [`oag_formats::envsettings`].
+    light: mesh_render::Light,
     /// The track's authored fog volumes, sampled at the camera each frame.
     ///
     /// Empty for a track that authors no `fogCube` - four of the forty - and the
@@ -159,6 +168,7 @@ impl Scene {
         visibility: Option<TrackVisibility>,
         anti_aliasing: crate::display::AntiAliasing,
         fog_volumes: Vec<oag_formats::fog::FogVolume>,
+        light: mesh_render::Light,
     ) -> Result<Self> {
         // The far plane comes from the track's own bounding sphere: a track is
         // hundreds of units across, and a fixed guess would either clip it away or
@@ -493,6 +503,7 @@ impl Scene {
             pads,
             weapon_pads,
             fog_volumes,
+            light,
             exhaust,
             sparks,
             depth: depth_texture(device, size, sample_count),

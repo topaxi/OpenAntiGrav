@@ -520,6 +520,18 @@ pub fn load(options: &Options) -> Result<Loaded> {
         }
         track_model
     };
+    // **The circuit's own light rig, where it authors one.** Wipeout HD does:
+    // `track.envsettings` sits beside `track.vex` and states a sun direction, a
+    // sun colour and a constant ambient. `mesh.wgsl`'s two-light rig is a
+    // stand-in for exactly this and says so, and `CLAUDE.md`'s rule about not
+    // inventing what the assets already author is why it is read here rather
+    // than approximated.
+    //
+    // A sibling-path rewrite, the same shape as `mesh::rcs::sibling_name`, and
+    // the same failure behaviour: no file, an unparsable one, or a degenerate
+    // sun direction all fall back to the stand-in and say so. Nothing is
+    // substituted for a value the file does not carry.
+    let light = envsettings_light(&mut archives, &track, &mut report);
     // The track's authored fog volumes. Empty for a ribbon build, and empty for
     // the four circuits that author no `fogCube` at all - both ordinary, and
     // both meaning the race renders unfogged.
@@ -831,6 +843,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         pad_model,
         weapon_pad_model,
         fog_volumes,
+        light,
         liveries,
         rocket_model,
         visibility,
@@ -838,4 +851,81 @@ pub fn load(options: &Options) -> Result<Loaded> {
         noise,
         report,
     })
+}
+
+/// The name of the `.envsettings` beside a track `.vex`, or `None`.
+///
+/// The rewrite the disc's own pairing uses:
+/// `/data/environments/talons_junction/track.vex` sits beside
+/// `track.envsettings`. Case-insensitive on the suffix for the same reason
+/// [`mesh::rcs::sibling_name`] is - the game's own spelling varies between
+/// containers.
+fn envsettings_name(vex_name: &str) -> Option<String> {
+    let at = vex_name.len().checked_sub(4)?;
+    vex_name[at..]
+        .eq_ignore_ascii_case(".vex")
+        .then(|| format!("{}.envsettings", &vex_name[..at]))
+}
+
+/// The light rig a circuit authors, or [`mesh_render::Light::stand_in`].
+///
+/// **Every way this can fail leaves the stand-in and says so in the report.**
+/// A track that authors no settings file - every Pulse, Pure and PS2 circuit -
+/// is silent, because an absence that is true of a whole title is not news; a
+/// file that is there and does not yield a rig is reported, because that is a
+/// gap in this reading rather than in the data.
+fn envsettings_light(
+    archives: &mut oag_assets::Archives,
+    track: &str,
+    report: &mut Vec<String>,
+) -> mesh_render::Light {
+    let Some(name) = envsettings_name(track) else {
+        return mesh_render::Light::stand_in();
+    };
+    let Ok(blob) = archives.read_name(&name) else {
+        return mesh_render::Light::stand_in();
+    };
+    let text = match String::from_utf8(blob) {
+        Ok(text) => text,
+        Err(_) => {
+            report.push(format!("{name}: not text; lighting with the stand-in rig"));
+            return mesh_render::Light::stand_in();
+        }
+    };
+    let env = match oag_formats::envsettings::EnvSettings::parse(&text) {
+        Ok(env) => env,
+        Err(e) => {
+            report.push(format!("{name}: {e}; lighting with the stand-in rig"));
+            return mesh_render::Light::stand_in();
+        }
+    };
+    use oag_formats::envsettings::{AMBIENT_COLOUR, SUN_COLOUR, SUN_DIRECTION};
+    let (Some(direction), Some(colour), Some(ambient)) = (
+        env.direction(SUN_DIRECTION),
+        env.vec3(SUN_COLOUR),
+        env.vec3(AMBIENT_COLOUR),
+    ) else {
+        report.push(format!(
+            "{name}: no usable sun direction, colour and ambient; lighting with the \
+             stand-in rig"
+        ));
+        return mesh_render::Light::stand_in();
+    };
+    let light = mesh_render::Light::authored(direction, colour, ambient);
+    report.push(format!(
+        "{name}: sun [{:.2}, {:.2}, {:.2}] hue [{:.2}, {:.2}, {:.2}] over ambient \
+         [{:.2}, {:.2}, {:.2}] - the authored magnitude ({:.2}) is dropped, this target \
+         having no headroom for it",
+        direction[0],
+        direction[1],
+        direction[2],
+        light.sun[0],
+        light.sun[1],
+        light.sun[2],
+        light.ambient[0],
+        light.ambient[1],
+        light.ambient[2],
+        colour.iter().fold(0.0f32, |a, b| a.max(*b)),
+    ));
+    light
 }

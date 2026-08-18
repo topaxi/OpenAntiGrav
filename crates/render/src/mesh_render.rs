@@ -13,77 +13,7 @@ mod uniforms;
 
 pub use blend::{ADDITIVE_BLEND, TRANSPARENT_BLEND, TransparentPipelines};
 use uniforms::Uniforms;
-pub use uniforms::{DEPTH_FORMAT, UNIFORMS_SIZE, write_uniforms};
-
-/// The fog block `mesh.wgsl` reads from bind group 2.
-///
-/// Deliberately **not** part of [`Uniforms`]. That struct is mirrored by every
-/// pipeline in this crate and by the asset viewer, so growing it means moving
-/// four `.wgsl` declarations and `oag-view`'s own buffer sizing in lockstep;
-/// only the pipelines that fog need these fields.
-///
-/// The field order is the WGSL declaration's, and the padding is real: a WGSL
-/// `vec3` aligns to 16 bytes, so the `f32` after each one occupies the slot that
-/// alignment would otherwise waste.
-#[repr(C)]
-#[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct Fog {
-    /// Fog colour, linear.
-    pub colour: [f32; 3],
-    /// Distance at which fog starts.
-    pub near: f32,
-    /// Eye position, so the fragment stage can measure distance.
-    pub camera: [f32; 3],
-    /// Distance at which fog is total.
-    pub far: f32,
-    /// `1.0` to fog, `0.0` to pass colour through untouched.
-    pub enabled: f32,
-    _pad0: f32,
-    _pad1: f32,
-    _pad2: f32,
-}
-
-impl Fog {
-    /// Fog that does nothing.
-    ///
-    /// What the sky, the asset viewer and a track with no `fogCube` bind. It is
-    /// a value rather than an unbound group because WGSL has no optional
-    /// bindings: the alternative is a second pipeline per fog state.
-    #[must_use]
-    pub fn off() -> Self {
-        Self {
-            colour: [0.0; 3],
-            near: 0.0,
-            camera: [0.0; 3],
-            far: 1.0,
-            enabled: 0.0,
-            _pad0: 0.0,
-            _pad1: 0.0,
-            _pad2: 0.0,
-        }
-    }
-
-    /// Fog from one sampled [`oag_formats::fog::FogParams`] and the eye it was
-    /// sampled at.
-    #[must_use]
-    pub fn new(params: &oag_formats::fog::FogParams, camera: [f32; 3]) -> Self {
-        Self {
-            colour: params.colour,
-            near: params.near,
-            camera,
-            // A degenerate range would divide by zero in the shader; the shader
-            // clamps the span, and this keeps the ordering sane regardless.
-            far: params.far.max(params.near + f32::EPSILON),
-            enabled: 1.0,
-            _pad0: 0.0,
-            _pad1: 0.0,
-            _pad2: 0.0,
-        }
-    }
-}
-
-/// Size, in bytes, of the fog uniform buffer.
-pub const FOG_SIZE: u64 = std::mem::size_of::<Fog>() as u64;
+pub use uniforms::{DEPTH_FORMAT, FOG_SIZE, Fog, Light, Scene, UNIFORMS_SIZE, write_uniforms};
 
 /// The texture-transform table `mesh.wgsl` reads from bind group 3: one
 /// `(scale, offset)` pair per entry of [`Model::anim_tracks`], already sampled
@@ -287,7 +217,7 @@ pub struct Built {
     /// Bind group 2, holding [`Fog`]. Bound by every draw; write
     /// [`Built::fog_buffer`] to change it.
     pub fog_bind: wgpu::BindGroup,
-    /// The buffer behind [`Built::fog_bind`], initialised to [`Fog::off`].
+    /// The buffer behind [`Built::fog_bind`], initialised to [`Scene::off`].
     pub fog_buffer: wgpu::Buffer,
     /// Bind group 3, holding [`TexAnims`]. Bound by every draw; write
     /// [`Built::anim_buffer`] once a frame to animate.
@@ -460,7 +390,7 @@ pub fn build(
         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
-    queue.write_buffer(&fog_buffer, 0, bytemuck::bytes_of(&Fog::off()));
+    queue.write_buffer(&fog_buffer, 0, bytemuck::bytes_of(&Scene::off()));
     let fog_bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("fog"),
         layout: &fog_layout,
