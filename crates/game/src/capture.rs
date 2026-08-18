@@ -506,12 +506,15 @@ pub fn run(
     //
     // Frame zero and not a moving one: a capture is one picture, and there is
     // nothing here for a playhead to be advanced by.
-    // The grid the chosen list's rects are in. `--menu-page` draws this
-    // project's own menu layout, which is authored at 480x272 whatever the disc
-    // is; the other two draw a source's XML and so take the source's grid. A
-    // capture that got this wrong would disagree with the window, which is the
-    // divergence this module exists to prevent.
-    let space = crate::frontend::Space::PSP;
+    // The grid the chosen list's rects are in - the source's, on all three
+    // paths. `--menu-page` used to pin `Space::PSP` here on the grounds that
+    // this project's menu layout is authored at 480x272; that is still where the
+    // layout is *written*, but `menu::Skin` now scales it into the source's grid
+    // so that the disc's own `FEGlobals` and its own faces are drawn at the
+    // numbers the disc states. A capture that got this wrong would disagree with
+    // the window, which is the divergence this module exists to prevent - so
+    // this reads the same value `Session::open_menus` hands its renderer.
+    let space = frontend.space();
     let (mut movie, video_format, list, space) = match (&options.menu_page, &options.screen) {
         (Some(page), _) => {
             let showing = backdrop.as_ref().filter(|movie| movie.frames.is_some());
@@ -537,7 +540,11 @@ pub fn run(
                 // The face the rows are drawn in, not the front end's
                 // default: the pitch comes off its line height, so reading
                 // the wrong one spaces the rows for a font nothing draws.
-                &crate::menu::Skin::new(menu_skin, menu_font.as_ref().unwrap_or(&font).line_height),
+                &crate::menu::Skin::new(
+                    menu_skin,
+                    space,
+                    menu_font.as_ref().unwrap_or(&font).line_height,
+                ),
                 options.menu_anim_phase,
             )?;
             (backdrop, format, list, space)

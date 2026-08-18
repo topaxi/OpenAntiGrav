@@ -51,15 +51,28 @@ fn a_drawn_page_has_a_title_a_row_each_and_one_highlight() {
 /// The value column is right-aligned against a fixed edge, which is the
 /// whole reason a long label and a long value cannot overlap. Asserted
 /// because it is invisible in a headless test otherwise.
+///
+/// **Against the skin's edge and against the literal 440**, which is one
+/// assertion about the layout and one about the conversion: this skin is
+/// Pulse's, drawn in `Space::PSP`, so the ratio is exactly 1.0 and
+/// `value_right()` has to come back as the constant it is written as. A source
+/// authoring elsewhere is what makes the two differ, and there is no such skin
+/// in this crate to build a fixture from.
 #[test]
 fn values_are_right_aligned_on_one_edge() {
+    let skin = skin();
+    assert!(
+        (skin.value_right() - 440.0).abs() < f32::EPSILON,
+        "a PSP-grid skin scales this build's own figures by exactly one: got {}",
+        skin.value_right()
+    );
     let mut menu = Menu::new(fixture());
     press(&mut menu, &[button::CROSS]);
     for draw in list(&menu, &no_bindings, None) {
         if let Draw::Text { align, x, .. } = draw
             && align == Align::Right
         {
-            assert!((x - VALUE_RIGHT).abs() < f32::EPSILON, "got {x}");
+            assert!((x - skin.value_right()).abs() < f32::EPSILON, "got {x}");
         }
     }
 }

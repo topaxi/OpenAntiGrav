@@ -207,6 +207,13 @@ pub(crate) struct Shell {
     /// How this title lays its menus out and colours them, carried from the
     /// serial that identified the source. See `boot::Shell::menu_skin`.
     pub(crate) menu_skin: &'static oag_title::MenuSkin,
+    /// The grid that skin's numbers are in, and the one the rows are drawn in.
+    ///
+    /// Carried beside the skin for the reason the skin is carried at all: it is
+    /// a property of the source, settled while the archives were still open, and
+    /// re-deriving it when the menus open would mean asking the disc a question
+    /// it has already answered. See `boot::Shell::space`.
+    pub(crate) space: oag_game::frontend::Space,
     /// The face menu rows are drawn in, which is a bigger one than the rest
     /// of the front end uses. `None` draws them in `font`.
     pub(crate) menu_font: Option<oag_game::font::Atlas>,

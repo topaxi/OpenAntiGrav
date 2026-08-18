@@ -202,18 +202,50 @@ pub struct Font {
     pub glyphs: Vec<Glyph>,
 }
 
-fn word(data: &[u8], at: usize) -> u32 {
-    u32::from_le_bytes([data[at], data[at + 1], data[at + 2], data[at + 3]])
+/// Which end of a `.fnt`'s words comes first, read off the magic itself.
+///
+/// `None` for something that is not a font either way round.
+///
+/// # The magic *is* the sniff, and that is not a coincidence
+///
+/// The four bytes at `+0x00` are one 32-bit word - a version byte and three
+/// characters - so the PS3 exporter writes them reversed along with everything
+/// else: `01 46 4e 54` on the PSP and PS2, `54 4e 46 01` on the PS3. Reading the
+/// second as `TNF\x01` is what "not a .fnt (bad version or magic)" was
+/// reporting on every one of Wipeout HD's fonts, and the front end fell back to
+/// its 5x7 debug face for all of them.
+///
+/// The rest of the file needs nothing else. Confidence **95**: the layout is the
+/// PSP's field for field, and every derived quantity closes on HD's own files -
+/// `helv.fnt` declares 244 glyphs with its codepoint table at `0x30` and its
+/// offset table at `0x30 + 244*2`, and its atlas block is exactly
+/// `64 + 64 + 1024*512/2` bytes. Nothing about that arithmetic works if a single
+/// scalar is read the other way round.
+///
+/// **Two things the PSP's own atlas notes warn about do not apply here**, and
+/// both are read from the file rather than assumed: HD's atlases ship with the
+/// swizzle bit **clear**, so the texels are already linear and
+/// [`crate::texture::unswizzle`] is not run on them; and the 4bpp packing is
+/// still low-nibble-first, checked by eye on `small.fnt`'s `A`, which comes out
+/// a clean flat-topped glyph that way and one pixel out of step the other.
+#[must_use]
+pub fn byte_order(data: &[u8]) -> Option<crate::ByteOrder> {
+    if data.len() < 4 {
+        return None;
+    }
+    if data[0] == VERSION && &data[1..4] == MAGIC {
+        return Some(crate::ByteOrder::Little);
+    }
+    if data[3] == VERSION && data[0..3].iter().rev().eq(MAGIC.iter()) {
+        return Some(crate::ByteOrder::Big);
+    }
+    None
 }
 
-fn half(data: &[u8], at: usize) -> u16 {
-    u16::from_le_bytes([data[at], data[at + 1]])
-}
-
-/// Whether `data` starts with the `.fnt` version and magic.
+/// Whether `data` is a `.fnt`, either way round. See [`byte_order`].
 #[must_use]
 pub fn looks_like_font(data: &[u8]) -> bool {
-    data.len() >= 4 && data[0] == VERSION && &data[1..4] == MAGIC
+    byte_order(data).is_some()
 }
 
 /// The metrics half of a `.fnt`: everything but the pixels.
@@ -245,16 +277,17 @@ impl Metrics {
         if data.len() < HEADER_LEN {
             return Err(Error::TooShort { got: data.len() });
         }
-        if !looks_like_font(data) {
+        let Some(order) = byte_order(data) else {
             return Err(Error::NotAFont);
-        }
+        };
+        let word = |at: usize| order.u32(data, at);
 
-        let count = word(data, 0x04) as usize;
-        let codepoints_at = word(data, 0x08) as usize;
-        let offsets_at = word(data, 0x0c) as usize;
-        let line_height = word(data, 0x10);
-        let unknown = word(data, 0x14);
-        let atlas_at = word(data, 0x18) as usize;
+        let count = word(0x04) as usize;
+        let codepoints_at = word(0x08) as usize;
+        let offsets_at = word(0x0c) as usize;
+        let line_height = word(0x10);
+        let unknown = word(0x14);
+        let atlas_at = word(0x18) as usize;
 
         let range = |what: &'static str, at: usize, len: usize| -> Result<&[u8]> {
             data.get(at..at + len)
@@ -268,19 +301,19 @@ impl Metrics {
             // A terminating 0x0000 is present in three of the five fonts and
             // has no record behind it, so it ends the list rather than being
             // an error.
-            if half(codepoints, index * 2) == 0 {
+            if order.u16(codepoints, index * 2) == 0 {
                 break;
             }
-            let at = word(offsets, index * 4) as usize;
+            let at = order.u32(offsets, index * 4) as usize;
             let record = range("glyph record", at, GLYPH_LEN)?;
             let glyph = Glyph {
-                codepoint: half(record, 0),
+                codepoint: order.u16(record, 0),
                 width: record[2],
                 height: record[3],
-                u0: half(record, 4),
-                u1: half(record, 6),
-                v0: half(record, 8),
-                v1: half(record, 10),
+                u0: order.u16(record, 4),
+                u1: order.u16(record, 6),
+                v0: order.u16(record, 8),
+                v1: order.u16(record, 10),
                 advance: record[12],
             };
             // The box and the size are stored separately, so they agree or this
@@ -323,6 +356,11 @@ impl Font {
     /// with [`Error::TooShort`] and needs [`Font::with_atlas`] instead.
     pub fn parse(data: &[u8]) -> Result<Self> {
         let metrics = Metrics::parse(data)?;
+        // Sniffed again rather than carried on `Metrics`: `Metrics::parse` has
+        // already refused anything that is not a font either way round, so this
+        // cannot be `None`, and the alternative was a field on a public struct
+        // that describes the file's encoding rather than the font.
+        let order = byte_order(data).unwrap_or_default();
         let Metrics {
             line_height,
             unknown,
@@ -337,12 +375,12 @@ impl Font {
         if atlas.len() < ATLAS_HEADER_LEN {
             return Err(Error::TooShort { got: atlas.len() });
         }
-        let width = half(atlas, 0);
-        let height = half(atlas, 2);
+        let width = order.u16(atlas, 0);
+        let height = order.u16(atlas, 2);
         let bits_per_pixel = atlas[4];
         let flags = atlas[6];
-        let clut_size = word(atlas, 8) as usize;
-        let texel_size = word(atlas, 0x0c) as usize;
+        let clut_size = order.u32(atlas, 8) as usize;
+        let texel_size = order.u32(atlas, 0x0c) as usize;
 
         if bits_per_pixel != 4 {
             return Err(Error::UnsupportedDepth { bits_per_pixel });

@@ -1536,19 +1536,13 @@ pub const DEVPUB_REEL: &str = pulse::names::DEVPUB_REEL;
 mod fonts;
 mod movies;
 mod roster;
+mod xml;
 
 use fonts::{load_font, load_menu_font};
 pub use movies::EntryRef;
 use movies::load_movie;
 use roster::{definitions, load_teams, load_tracks};
-
-fn expand(blob: &[u8]) -> Result<String> {
-    if fexml::is_fexml(blob) {
-        fexml::expand(blob).map_err(|e| anyhow::anyhow!("{e}"))
-    } else {
-        String::from_utf8(blob.to_vec()).context("not text")
-    }
-}
+use xml::expand;
 
 /// The default movie cache directory: `data/cache/movies` in a repository
 /// checkout, and `<cache dir>/oag/movies` anywhere else - see

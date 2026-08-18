@@ -11,16 +11,17 @@
 //! three images. When a screen needs enough of them for the waste to show, the
 //! lookup below is already in pixels, so only this file has to change.
 
-use oag_formats::ps2_texture;
 use oag_formats::texture::Texture;
+use oag_formats::{gtf, ps2_texture};
 
-/// One decoded image, from either disc's texture format.
+/// One decoded image, from any of the three discs' texture formats.
 ///
-/// The two are different formats, not two versions of one - a PSP `.mip` is a
-/// header, a palette and pixels, a PS2 texture is the GS upload packet that
-/// would put one in video memory - but a sheet only needs a size and RGBA, so
-/// the difference stops here. See `docs/formats/psp-texture.md` and
-/// `docs/formats/ps2-texture.md`.
+/// The three are different formats, not versions of one - a PSP `.mip` is a
+/// header, a palette and pixels; a PS2 texture is the GS upload packet that
+/// would put one in video memory; a PS3 `.gtf` is a big-endian RSX descriptor
+/// over DXT or straight ARGB - but a sheet only needs a size and RGBA, so the
+/// difference stops here. See `docs/formats/psp-texture.md`,
+/// `docs/formats/ps2-texture.md` and `docs/formats/gtf.md`.
 struct Image {
     width: u16,
     height: u16,
@@ -29,11 +30,20 @@ struct Image {
 }
 
 impl Image {
-    /// Decodes whichever of the two formats this blob is.
+    /// Decodes whichever of the three formats this blob is.
     ///
     /// The PSP is tried first and its error is the one reported, because a
-    /// `.mip` that will not parse is the far commoner failure and naming the
-    /// PS2 parser's complaint about it would send a reader the wrong way.
+    /// `.mip` that will not parse is the far commoner failure and naming
+    /// another parser's complaint about it would send a reader the wrong way.
+    ///
+    /// **The PS3 branch is why the report line used to say `1281x0`.** Wipeout
+    /// HD's front end names three `.gtf` textures, and with only the two PSP-era
+    /// parsers here the `.mip` one got there first, read a `.gtf`'s big-endian
+    /// header as a `.mip`'s little-endian one and came back with a zero-sized
+    /// texture - so all three failed, the sheet came out 1x1, and the error
+    /// blamed a format the file is not. [`oag_formats::gtf`] has decoded these
+    /// since well before the front end asked for one; nothing was missing but
+    /// the branch.
     fn decode(blob: &[u8]) -> Result<Self, String> {
         match Texture::parse(blob) {
             Ok(t) => Ok(Self {
@@ -49,9 +59,44 @@ impl Image {
                     bits_per_pixel: t.bits_per_pixel,
                     rgba: t.to_rgba(),
                 }),
-                Err(_) => Err(psp.to_string()),
+                Err(_) => Self::decode_gtf(blob).ok_or_else(|| psp.to_string()),
             },
         }
+    }
+
+    /// The PS3 branch, or `None` for a blob that is not a `.gtf` this build
+    /// draws.
+    ///
+    /// `None` rather than an error because the caller reports the *`.mip`*
+    /// parser's complaint for anything none of the three recognise, and a `.gtf`
+    /// error on a file that was never a `.gtf` is the misdirection this whole
+    /// function exists to avoid. A `.gtf` that parses and then will not
+    /// convert - the sky cubemaps [`oag_formats::gtf::Texture::to_rgba`]
+    /// refuses - takes the same route out, which is the honest one: the sheet
+    /// reports the image as undecoded rather than drawing a substitute for it.
+    fn decode_gtf(blob: &[u8]) -> Option<Self> {
+        let gtf = gtf::Gtf::parse(blob).ok()?;
+        let texture = gtf.only()?;
+        let rgba = texture.to_rgba(blob).ok()?;
+        Some(Self {
+            width: texture.width,
+            height: texture.height,
+            // Bits per *texel*, which for a block format means dividing the
+            // block's bytes over the sixteen texels it covers: DXT1 reads 4 and
+            // DXT45 reads 8, against 32 for straight ARGB. Reporting the block
+            // instead would put "128bpp" on the boot line, which is a true
+            // sentence about a unit nobody asked about. A log field; nothing
+            // reads it.
+            bits_per_pixel: {
+                let texels = if texture.format.is_block_compressed() {
+                    16
+                } else {
+                    1
+                };
+                u8::try_from(texture.format.unit_len() * 8 / texels).unwrap_or(u8::MAX)
+            },
+            rgba: rgba.into_iter().flatten().collect(),
+        })
     }
 
     /// The decoded pixels, consuming the image: the sheet copies them out and

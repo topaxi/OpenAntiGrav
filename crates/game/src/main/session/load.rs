@@ -219,21 +219,20 @@ impl Session {
         // and knows nothing about where they go. `repeat: true`, which is the
         // whole difference between this movie and the intro.
         //
-        // **The menu's grid, which is ours and is the PSP's - not the
-        // source's.** This rect is drawn by `MenuStage`'s own renderer, and
-        // `open_menus` builds that one fresh and never calls `set_space`, so
-        // its `screen` uniform is `Space::PSP` whatever disc is mounted. The
-        // menu layout it sits behind is this project's own, authored at
-        // 480x272, which is why `capture.rs` pins `Space::PSP` on the same
-        // picture.
+        // **The menu's grid, which is the source's.** This rect is drawn by
+        // `MenuStage`'s own renderer, and what matters is only that the rect and
+        // that renderer's `screen` uniform are in the same grid: `pillarbox_in`
+        // always fills one axis of whatever it is given, so a rect built in one
+        // grid and normalised against another overflows the screen on every
+        // aspect.
         //
-        // Handing this the *source's* space instead was a regression: on a PS2
-        // disc it built the rect in a 640x448 grid for a shader normalising
-        // against 480x272, and `pillarbox_in` always fills one axis of the grid
-        // it is given, so the backdrop overflowed the screen on every aspect.
-        // Silent on the PSP, where the two grids are the same numbers, and
-        // invisible to `--menu-page`, which goes through `capture.rs`.
-        let space = frontend::Space::PSP;
+        // This was `Space::PSP` on both sides until the menus started drawing a
+        // 1920x1080 source's skin at its own numbers. `open_menus` now calls
+        // `set_space` with the same value read here, and `capture.rs` does the
+        // same on the `--menu-page` path. Being wrong in the same direction in
+        // all three places is what kept the PS2's 640x448 mismatch invisible for
+        // as long as it was.
+        let space = loaded.frontend.space();
         (self.backdrop, self.backdrop_shape) = match loaded.backdrop.take() {
             Some(movie) => {
                 let shape = BackdropShape {

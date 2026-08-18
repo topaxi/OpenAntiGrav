@@ -117,10 +117,10 @@ TEST_LIMIT = 200
 BASELINE = {
     "crates/game/tests/race_ground_truth.rs": 2387,
     "crates/formats/src/vex.rs": 1758,
-    "crates/game/src/boot.rs": 1792,
+    "crates/game/src/boot.rs": 1784,
     "crates/game/src/movie.rs": 1981,
-    "crates/game/src/menu.rs": 2168,
-    "crates/game/src/frontend.rs": 1873,
+    "crates/game/src/menu.rs": 2005,
+    "crates/game/src/frontend.rs": 1357,
     "crates/render/src/psys.rs": 1956,
     "crates/game/src/audio.rs": 1798,
     "crates/trace/src/main.rs": 1615,

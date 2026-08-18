@@ -156,22 +156,53 @@ impl Language {
 #[derive(Debug, Clone, Default)]
 pub struct StringTable {
     entries: HashMap<String, String>,
+    /// The same entries keyed by a lowercased id, for [`Self::get`]'s fallback.
+    ///
+    /// A second map rather than one folded one, so an exact hit always wins and
+    /// nothing about the existing lookup changes. Two ids differing only in case
+    /// would collide here; the first one read keeps the slot, and the exact map
+    /// still holds both.
+    folded: HashMap<String, String>,
 }
 
 impl StringTable {
     /// Reads an `entries.xml`.
     #[must_use]
     pub fn from_xml(xml: &str) -> Self {
-        let root = parse(xml);
+        let entries: Vec<(String, String)> = string_entries(&parse(xml));
+        let mut folded: HashMap<String, String> = HashMap::new();
+        for (id, value) in &entries {
+            folded
+                .entry(id.to_lowercase())
+                .or_insert_with(|| value.clone());
+        }
         Self {
-            entries: string_entries(&root).into_iter().collect(),
+            entries: entries.into_iter().collect(),
+            folded,
         }
     }
 
-    /// Looks up an id.
+    /// Looks up an id, exactly and then case-insensitively.
+    ///
+    /// # Why the second try exists
+    ///
+    /// **The id a caller holds and the id the table is keyed by are written by
+    /// different files, and Wipeout HD's two disagree in case.** Its front-end
+    /// plugin declares `PI_Track name="01_Track"`, and its string table keys the
+    /// circuit's name `01_TRACK` - so every circuit on the RACE page drew as
+    /// `01_Track` instead of `VINETA K`, which reads like a missing translation
+    /// rather than a case fold. Both PSP titles agree with themselves and are
+    /// unaffected: an exact hit is still tried first and still wins.
+    ///
+    /// This is the same judgement the front end already makes about `font=`,
+    /// where `Menu` and `menu` both appear in one file - the XML is
+    /// inconsistent about case and a reader that is not will lose entries.
     #[must_use]
     pub fn get(&self, id: &str) -> Option<&str> {
-        self.entries.get(id).map(String::as_str)
+        self.entries
+            .get(id)
+            .or_else(|| self.folded.get(&id.to_lowercase()))
+            .map(String::as_str)
     }
 
     /// Looks up an id, falling back to the id itself.

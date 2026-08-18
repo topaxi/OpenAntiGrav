@@ -1636,159 +1636,9 @@ impl Menu {
     }
 }
 
-/// The right-hand edge a row's value is anchored to, in the 480x272 space the
-/// rest of the front end draws in.
-///
-/// **Ours.** The original's menus have no value column at all - a Wipeout row
-/// is a label and nothing else, and every setting that needs one lives on a
-/// screen built for it. So this is picked rather than recovered, far enough
-/// from [`MenuSkin::menu_x`] that a long label and a long value cannot collide.
-const VALUE_RIGHT: f32 = 440.0;
+mod skin;
 
-/// The leading this build uses for a title that never measured its own.
-///
-/// Pulse measured 6; Pure has not been captured. Handing this to
-/// [`oag_title::MenuSkin::row_pitch`] rather than letting the title table
-/// default is what keeps one title's measurement out of another's menu - see
-/// that method's own docs.
-const OUR_LEADING: f32 = 6.0;
-
-/// Where the rows start for a title whose own menu definitions are unread.
-///
-/// **Ours**, and derived rather than a constant: a title can state where its
-/// *title* goes without stating where its rows go - Pure does exactly that,
-/// `TitleYOffset` 20 with no main-menu definition to read a first row out of -
-/// and a fixed 32 would then drop the first row almost onto the title. So the
-/// rows start one title-line plus one leading below the title, which is the
-/// same relationship Pulse's own authored 32 has to its title at 0.
-fn our_first_row_y(skin: &Skin) -> f32 {
-    let (_, title_y, title_scale) = skin.title_at();
-    title_y + skin.line_height * title_scale + OUR_LEADING
-}
-
-/// What this build draws a menu with, once a title's skin and the font in use
-/// have been put together.
-///
-/// The title supplies what its disc states; this fills the gaps with values
-/// marked as ours, so a field a title never measured shows up here as *this
-/// build's* choice rather than as the other title's number. Nothing in
-/// [`draw_list`] reads [`oag_title::MenuSkin`] directly, which is what makes
-/// that guarantee checkable in one place.
-#[derive(Debug, Clone, Copy)]
-pub struct Skin {
-    skin: &'static oag_title::MenuSkin,
-    line_height: f32,
-}
-
-impl Skin {
-    /// Pairs a title's skin with the line height of the face the rows will
-    /// actually be drawn in.
-    ///
-    /// The line height is passed in rather than looked up because the atlas is
-    /// the renderer's, and this module owns layout: the same split
-    /// [`draw_list`]'s `bindings` argument exists for.
-    #[must_use]
-    pub fn new(skin: &'static oag_title::MenuSkin, line_height: f32) -> Self {
-        Self { skin, line_height }
-    }
-
-    /// Left edge of the rows. `FEGlobals->MenuXOffset`.
-    #[must_use]
-    pub fn menu_x(&self) -> f32 {
-        self.skin.menu_x
-    }
-
-    /// Top of the first row's line box.
-    #[must_use]
-    pub fn first_row_y(&self) -> f32 {
-        self.skin
-            .first_row_y
-            .unwrap_or_else(|| our_first_row_y(self))
-    }
-
-    /// Distance between two rows. See [`oag_title::MenuSkin::row_pitch`].
-    #[must_use]
-    pub fn row_pitch(&self) -> f32 {
-        self.skin.row_pitch(self.line_height, OUR_LEADING)
-    }
-
-    /// The scale a row's text is drawn at. `FEGlobals->MenuScale`.
-    #[must_use]
-    pub fn row_scale(&self) -> f32 {
-        self.skin.menu_scale
-    }
-
-    /// An unselected row. `FEGlobals->TextColor`, or ours where undeclared.
-    #[must_use]
-    pub fn normal(&self) -> [f32; 4] {
-        self.skin.text.map_or(OUR_NORMAL, argb)
-    }
-
-    /// The selected row, brightened toward white rather than given a bar.
-    #[must_use]
-    pub fn selected(&self) -> [f32; 4] {
-        self.skin.selected.map_or(OUR_SELECTED, argb)
-    }
-
-    /// How long a page change takes. `transition=`.
-    #[must_use]
-    pub fn transition_secs(&self) -> f32 {
-        self.skin.transition_secs
-    }
-
-    /// Where the screen title sits, and how big.
-    #[must_use]
-    fn title_at(&self) -> (f32, f32, f32) {
-        (self.skin.title_x, self.skin.title_y, self.skin.title_scale)
-    }
-
-    /// The screen title's colour.
-    ///
-    /// **Not the disc's, deliberately.** Pulse authors `TitleColor` black,
-    /// because on hardware the title sits on a light angled top bar
-    /// (`topbarleft`/`topbarcenter`/`topbarright`) that this build does not
-    /// draw yet. Using the authored colour before the bar exists paints black
-    /// text on a dark backdrop - invisible, and wrong in a way that would look
-    /// like a bug rather than like a missing feature. The same substitution the
-    /// language picker already makes for the same reason.
-    #[must_use]
-    fn title_color(&self) -> [f32; 4] {
-        OUR_SELECTED
-    }
-}
-
-/// How many rows are on screen at once, given the pitch in use.
-///
-/// Derived rather than picked: rows start at the skin's first row and are one
-/// pitch apart, and the noted-row message under them needs a line of its own at
-/// `0.8` scale. The last row plus that message must clear the 272-pixel screen.
-///
-/// At Pulse's measured 28-pixel pitch that is seven rows, which is exactly what
-/// the original's own main menu shows.
-#[must_use]
-pub fn visible_rows(skin: &Skin) -> usize {
-    let pitch = skin.row_pitch().max(1.0);
-    let room = SCREEN_HEIGHT - skin.first_row_y() - skin.line_height * 0.8 - MESSAGE_GAP;
-    #[expect(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        reason = "clamped to 1..=32 on the next line"
-    )]
-    let rows = (room / pitch).floor().max(1.0) as usize;
-    rows.clamp(1, 32)
-}
-
-/// The 272-pixel space every front-end coordinate in this build is in.
-const SCREEN_HEIGHT: f32 = 272.0;
-
-/// Room left under the last row for the noted-row message.
-const MESSAGE_GAP: f32 = 6.0;
-
-/// A packed `0xAARRGGBB` as the renderer's straight-alpha RGBA.
-fn argb(value: oag_title::menu::Argb) -> [f32; 4] {
-    let byte = |shift: u32| ((value >> shift) & 0xFF) as f32 / 255.0;
-    [byte(16), byte(8), byte(0), byte(24)]
-}
+pub use skin::{Skin, visible_rows};
 
 /// Where the visible window starts, given where it was pushed to and where the
 /// cursor is.
@@ -1824,19 +1674,6 @@ fn window_start(pushed: usize, selected: usize, rows: usize, visible: usize) -> 
     let ceiling = selected.saturating_sub(1);
     pushed.min(last).min(ceiling).max(floor)
 }
-
-/// An unselected row, for a title that declares no `TextColor`.
-///
-/// **Ours**, and only ever reached by a title whose own disc is silent. Pulse's
-/// `0xFF33A6B9` and Pure's measured `0xFF88D6E8` both come off their discs.
-const OUR_NORMAL: [f32; 4] = [0.72, 0.78, 0.84, 1.0];
-
-/// The selected row, for a title with no capture of one.
-///
-/// **Ours**, but shaped by what the original does: the capture shows selection
-/// as a brightening toward white rather than as a bar behind the row, so this
-/// is white rather than a fourth hue. Pulse supplies its own measured value.
-const OUR_SELECTED: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
 
 /// Rows that show something the player cannot change yet.
 ///
@@ -2131,7 +1968,7 @@ pub fn draw_list(
         };
         if let Some(text) = value {
             out.push(Draw::Text {
-                x: VALUE_RIGHT,
+                x: skin.value_right(),
                 y,
                 scale: row_scale,
                 color: if selected && entry.is_adjustable() && !inert {
@@ -2152,7 +1989,7 @@ pub fn draw_list(
     if let Some(message) = noted {
         out.push(Draw::Text {
             x: margin_x - 18.0,
-            y: first_row_y + shown as f32 * row_height + MESSAGE_GAP,
+            y: first_row_y + shown as f32 * row_height + skin.message_gap(),
             scale: row_scale * 0.8,
             color: WARNING,
             border: None,

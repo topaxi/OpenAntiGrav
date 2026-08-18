@@ -37,7 +37,12 @@ impl Session {
             .menu_font
             .clone()
             .unwrap_or_else(|| shell.font.clone());
-        let skin = menu::Skin::new(shell.menu_skin, rows_face.line_height);
+        // The source's own grid, not the PSP's: HD authors its `FEGlobals` at
+        // 1920x1080 and its faces are rasterised for that screen, so the rows
+        // are laid out and drawn where the disc says rather than shrunk into
+        // another console's coordinates. `Space::PSP` on both PSP titles, where
+        // the ratio is exactly 1.0 and nothing moves. See `menu::Skin::new`.
+        let skin = menu::Skin::new(shell.menu_skin, shell.space, rows_face.line_height);
         model.set_visible_rows(menu::visible_rows(&skin));
         // Supplied before seeding, because a value cannot be seeded onto a list
         // that is not there yet.
@@ -168,7 +173,7 @@ impl Session {
         // to measure a value column's text against. See
         // `MenuStage::text_atlas`.
         let text_atlas = rows_face.clone();
-        let renderer = Renderer::new(
+        let mut renderer = Renderer::new(
             &self.gpu.device,
             &self.gpu.queue,
             self.gpu.config.format,
@@ -176,6 +181,15 @@ impl Session {
             rows_face,
             &shell.sprites,
         )?;
+        // **A fresh `Renderer` is `Space::PSP` until told otherwise**, and the
+        // menus are the one stage that never told it. That was right while their
+        // every coordinate was this build's own 480x272; it stopped being right
+        // when `Skin` started handing back the source's. Both halves move
+        // together or neither does - the `screen` uniform normalising a rect and
+        // the rect itself have to be in the same grid, and being wrong in the
+        // same direction is exactly what made this invisible until a 1920-wide
+        // source arrived.
+        renderer.set_space(skin.space());
         // **The picture moves across as well as the playhead**, and it has to,
         // because the renderer does not. A fresh `Renderer` is fresh planes:
         // zeroed, which is green rather than black, so the first menu frame

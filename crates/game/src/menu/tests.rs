@@ -31,7 +31,11 @@ fn list(
 /// fixture means a change to the recovered numbers shows up here, which is
 /// the point - these tests are where the layout is pinned.
 fn skin() -> Skin {
-    Skin::new(oag_pulse::FRONT_END.menu, PULSE_MENU_LINE_HEIGHT)
+    Skin::new(
+        oag_pulse::FRONT_END.menu,
+        crate::frontend::Space::PSP,
+        PULSE_MENU_LINE_HEIGHT,
+    )
 }
 
 /// `Pulse_20.fnt`'s line height, per `docs/formats/fnt.md` and confirmed by
