@@ -67,6 +67,7 @@ pub const MAGIC: &[u8; 4] = b"VEXX";
 /// [`byte_order`].
 pub const MAGIC_BE: &[u8; 4] = b"XXEV";
 
+pub mod class_names;
 pub mod classes;
 mod matrix;
 
@@ -234,80 +235,11 @@ pub const CLASS_SPEEDUP_PAD: u32 = 0x3bd;
 /// geometry decodes and is asserted against the disc alongside the speedup pads.
 pub const CLASS_WEAPON_PAD: u32 = 0x3be;
 
-/// The `.vex` class-ID to name table, as the shipped executable carries it.
+/// The `.vex` class-ID to name table, read whole out of a shipped executable.
 ///
-/// Read out of `BOOT.BIN` at `0x08ab2370` - stride 12, `{u32 id, char *name,
-/// ptr}`, names at `0x08a84d40`, terminated by `id == -1`. The third field is a
-/// runtime slot that `Vex_RegisterClass` fills at boot, **not** a shared vtable.
-/// `docs/ghidra/functions/psp-pulse-usa/exhaust.md` carries the evidence and the
-/// confidence score (95, because ten of these IDs were already in this file from
-/// unrelated evidence and every one agrees).
-///
-/// These are names, not content: a class name describes the format, which is what
-/// ADR-0006 permits. Nothing here is a tuning value.
-///
-/// **Not exhaustive.** The read stopped at `0x08ab26a0` without reaching the
-/// terminator, so the generic Maya classes with small sequential ids
-/// (`0 Invalid`, `1 Base`, `2 Name`, …) are only partly covered and the table's
-/// extent is unknown. `0x3e3` genuinely has no entry, and the table does contain
-/// out-of-order ids (`0x3d0`, `0x3e9`, `0x3eb`), so a gap proves nothing.
-const CLASS_NAMES: &[(u32, &str)] = &[
-    (0x06e, "Transform"),
-    (0x0f4, "World"),
-    (0x0f7, "Camera"),
-    (0x123, "NurbsSurface"),
-    (0x125, "Mesh"),
-    (0x12c, "AmbientLight"),
-    (0x131, "DirectionalLight"),
-    (0x132, "PointLight"),
-    (0x2ee, "LodGroup"),
-    (0x3b9, "Floor Collision"),
-    (0x3ba, "Wall Collision"),
-    (0x3bb, "WO Track"),
-    (0x3bc, "Start Position"),
-    (0x3bd, "Speedup Pad"),
-    (0x3be, "Weapon Pad"),
-    (0x3bf, "Engine Flare"),
-    (0x3c0, "Anim Transform"),
-    (0x3c1, "Texture"),
-    (0x3c2, "Dynamic Point Light"),
-    (0x3c3, "Dynamic Shadow Occluder"),
-    (0x3c4, "ParticleSystem"),
-    (0x3c5, "Airbrake"),
-    (0x3c6, "Skycube"),
-    (0x3c7, "Quake"),
-    (0x3c8, "Trail"),
-    (0x3c9, "section"),
-    (0x3ca, "gate"),
-    (0x3cb, "shadow"),
-    (0x3cc, "speaker"),
-    (0x3cd, "Reset Collision"),
-    (0x3ce, "wospot"),
-    (0x3cf, "wopoint"),
-    (0x3d0, "Ship Collision Fx"),
-    (0x3d3, "fogCube"),
-    (0x3d4, "MeshNode_Ghost"),
-    (0x3d5, "sea"),
-    (0x3d6, "seaweed"),
-    (0x3d7, "seareflect"),
-    (0x3d8, "cloudCube"),
-    (0x3d9, "cloudGroup"),
-    (0x3da, "weatherPos"),
-    (0x3db, "Unused 1"),
-    (0x3dc, "animationTrigger"),
-    (0x3dd, "gridCamera"),
-    (0x3de, "lensflare"),
-    (0x3df, "textureBlob"),
-    (0x3e0, "blob"),
-    (0x3e1, "sound"),
-    (0x3e2, "Ship Muzzle"),
-    (0x3e4, "exitglow"),
-    (0x3e5, "engine_fire"),
-    (0x3e6, "Mag Floor Collision"),
-    (0x3e7, "Cage Collision"),
-    (0x3e9, "soundcone"),
-    (0x3eb, "cannon_flash"),
-];
+/// 866 records; see [`class_names`] for where it comes from, what its two
+/// blocks are, and why the generic Maya classes are in it.
+use class_names::CLASS_NAMES;
 
 /// The shipped name for a class ID, or `None` if the ID is not in
 /// [`CLASS_NAMES`].
