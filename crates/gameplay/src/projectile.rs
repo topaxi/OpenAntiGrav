@@ -865,7 +865,7 @@ pub fn launch(
     // same ray rather than erroring: that is a file that authors no fan, not a
     // broken weapon.
     [0.0, stats.spread, -stats.spread].map(|angle| {
-        let direction = oag_core::math::Quat::from_axis_angle(up, angle) * forward;
+        let direction = oag_core::math::quat_from_axis_angle(up, angle) * forward;
         (nose, direction * speed)
     })
 }

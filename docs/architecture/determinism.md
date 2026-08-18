@@ -185,6 +185,24 @@ checked against the bug that motivated it - restoring `f32::acos` in
 `to_degrees`: the first is required to be correctly rounded, the other two are
 a multiply by a constant.
 
+**And a textual gate over method names had a hole exactly the shape of its
+patterns.** `glam` in this workspace is `["std", "scalar-math"]` with no `libm`
+feature, so `Quat::from_axis_angle` is `sin_cos(angle * 0.5)` through the
+platform's libm - the same portability hole as `f32::acos`, wearing a type name
+instead of a method name. Both patterns wanted a leading `.` or an `f32::`, so
+neither matched it, and `oag_gameplay::projectile::launch` computed the rocket
+fan's spread directions through it into `Projectile::velocity`, which is hashed
+state. Three gates missed it at once (finding D1, 2026-08-18): this script's
+patterns, the gameplay determinism scenario that spawned rockets with
+hand-written velocities and never called `launch`, and the physics probe, which
+fires no weapon. The fix is all three - a
+[`quat_from_axis_angle`](../../crates/core/src/math.rs) wrapper beside `acos`,
+a third pattern here over the bare constructor names, and a committed volley
+scenario in `crates/gameplay/tests/determinism.rs` that fires a real fan from a
+craft deliberately not axis-aligned. `from_mat3`, `from_rotation_arc` and
+`lerp` stay off the list: they are `sqrt` and arithmetic, and a gate that
+flags clean code is one people learn to skip.
+
 **The fix is the one this page already named**: bring the implementation in
 rather than weaken the rule. [`oag_core::math::acos`](../../crates/core/src/math.rs)
 wraps the `libm` crate - a pure-Rust port of MUSL's libm, so every target runs

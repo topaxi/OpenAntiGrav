@@ -309,6 +309,167 @@ const REFERENCE: &[(u32, u64, u64)] = &[
     (600, 0xb5fc_13ea_252e_8e43, 0x92e8_8d29_f718_d061),
 ];
 
+/// The volley scenario: a craft at an angle fires a real fanned Rocket volley
+/// through [`projectile::launch`], and every shot flies.
+///
+/// **Separate from [`run`] on purpose.** The scenario above spawns one rocket
+/// with a hand-written velocity, which is exactly why finding D1 of the
+/// 2026-08-18 review could live in `launch` untouched by any gate: the spread
+/// goes through a `sin_cos`, lands in `Projectile::velocity`, and nothing
+/// cross-platform ever called the function that computes it. Adding the volley
+/// to `run` would have moved that scenario's constants and mixed one fix's
+/// evidence into another's history, so this carries its own reference.
+///
+/// The craft is deliberately **not** axis-aligned. With a default pose the fan
+/// rotates about `Vec3::Y` and two of the three directions come out of the
+/// half-angle sine with exactly representable components; a tilted craft makes
+/// every component a real product of the rotation, which is what a platform's
+/// libm can disagree about in the last bit.
+fn run_volley(ticks: u32) -> (u64, u64) {
+    use oag_core::math::{Quat, Vec3 as V};
+
+    let world_geometry = corridor();
+    let stats = weapon_stats()
+        .rocket()
+        .expect("the fixture authors a Rocket");
+
+    let mut world = World::new(0xC0FFEE);
+    world.ship_count = 2;
+    for (slot, position) in [V::ZERO, V::Z * 380.0].into_iter().enumerate() {
+        let ship = &mut world.ships[slot];
+        ship.active = true;
+        ship.handling.dimensions = Dimensions {
+            length: 4.0,
+            width: 2.0,
+            height: 1.0,
+            shield: 100.0,
+            ..Dimensions::default()
+        };
+        ship.physics.shield = 100.0;
+        ship.physics.body.mass = 1.0;
+        ship.physics.body.position = position;
+    }
+    // Yaw a little, roll a little: the fan's axis is the craft's own up.
+    world.ships[0].physics.body.orientation =
+        Quat::from_rotation_y(0.11) * Quat::from_rotation_z(0.23);
+
+    // The volley the front end fires, built the way `race::weapons` builds it.
+    let shots = projectile::launch(
+        &world.ships[0].physics,
+        &world.ships[0].handling.dimensions,
+        &stats,
+        oag_formats::handling::SpeedClass::Venom,
+    );
+    for (position, velocity) in shots {
+        assert!(
+            world
+                .projectiles
+                .spawn(Weapon::Rocket, position, velocity, 0),
+            "the pool refused a shot, so this scenario is not flying a full volley"
+        );
+    }
+
+    let mut trajectory = oag_core::hash::StateHasher::new();
+    for _ in 0..ticks {
+        projectile::step(
+            &mut world,
+            TICK,
+            &world_geometry,
+            Some(&weapon_stats()),
+            oag_formats::handling::SpeedClass::Venom,
+            DamageRules::default(),
+        );
+        let _ = world.rng.next_f32();
+        world.tick += 1;
+        oag_gameplay::hash::write_world(&mut trajectory, &world);
+    }
+
+    (hash_world(&world), trajectory.finish())
+}
+
+/// Committed reference hashes for [`run_volley`]: `(ticks, final, trajectory)`.
+///
+/// # History
+///
+/// - **Recorded 2026-08-18**, with the scenario, as finding D1's gate. There is
+///   no earlier value: no committed hash had ever covered
+///   [`projectile::launch`]. Recorded *after* the fix, so what these pin is the
+///   deterministic `oag_core::math::quat_from_axis_angle` and not glam's
+///   platform `sin_cos` - pinning the hole would have made the hole the
+///   reference.
+///
+/// **Never edit these to make the test pass**, for the same reason
+/// [`REFERENCE`] says at length.
+const REFERENCE_VOLLEY: &[(u32, u64, u64)] = &[
+    (60, 0x8c79_4b77_720c_7444, 0xf356_fa51_5a78_b1a0),
+    (600, 0xfa19_77ff_52da_9377, 0x6357_39ef_ff80_8956),
+];
+
+#[test]
+fn the_fanned_volley_matches_the_committed_reference() {
+    let mut failures = Vec::new();
+    for &(ticks, expected_final, expected_trajectory) in REFERENCE_VOLLEY {
+        let (final_hash, trajectory_hash) = run_volley(ticks);
+        if final_hash != expected_final || trajectory_hash != expected_trajectory {
+            failures.push(format!(
+                "ticks={ticks}\n  final:      expected {expected_final:#018x}, got \
+                 {final_hash:#018x}\n  trajectory: expected {expected_trajectory:#018x}, got \
+                 {trajectory_hash:#018x}"
+            ));
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "the fanned volley is not reproducible on this platform ({} / {}):\n\n{}\n\nDo not \
+         update the constants to silence this. See the module docs.",
+        std::env::consts::OS,
+        std::env::consts::ARCH,
+        failures.join("\n\n")
+    );
+}
+
+/// The volley scenario has to fire a *fan*, or its constants pin three rockets
+/// on one ray and the spread never enters the hash at all.
+#[test]
+fn the_volley_actually_fans() {
+    use oag_core::math::{Quat, Vec3 as V};
+
+    let stats = weapon_stats()
+        .rocket()
+        .expect("the fixture authors a Rocket");
+    assert!(stats.spread != 0.0, "the fixture authors no fan");
+
+    let mut world = World::new(0xC0FFEE);
+    let ship = &mut world.ships[0];
+    ship.handling.dimensions = Dimensions {
+        length: 4.0,
+        width: 2.0,
+        height: 1.0,
+        ..Dimensions::default()
+    };
+    ship.physics.body.orientation = Quat::from_rotation_y(0.11) * Quat::from_rotation_z(0.23);
+
+    let shots = projectile::launch(
+        &ship.physics,
+        &ship.handling.dimensions,
+        &stats,
+        oag_formats::handling::SpeedClass::Venom,
+    );
+    let directions: Vec<V> = shots.iter().map(|&(_, velocity)| velocity).collect();
+    assert!(
+        directions[1].distance(directions[0]) > 1.0 && directions[2].distance(directions[0]) > 1.0,
+        "the three shots share a ray, so the spread is not exercised: {directions:?}"
+    );
+    // And the fan is off an axis nothing makes exactly representable, which is
+    // the property that makes a libm difference visible at all.
+    for direction in &directions {
+        assert!(
+            direction.x != 0.0 && direction.y != 0.0 && direction.z != 0.0,
+            "a shot is axis-aligned, so the scenario is weaker than it looks: {direction:?}"
+        );
+    }
+}
+
 #[test]
 fn the_race_state_matches_the_committed_reference() {
     let mut failures = Vec::new();
@@ -410,4 +571,5 @@ fn the_run_visits_the_paths_it_claims_to_cover() {
 #[test]
 fn the_race_state_is_stable_across_repeated_runs() {
     assert_eq!(run(300), run(300));
+    assert_eq!(run_volley(300), run_volley(300));
 }

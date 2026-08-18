@@ -24,7 +24,7 @@
 //! question tracked against M5 in `docs/overview/roadmap.md`. Deriving the rest
 //! of a grid from the one authored slot would be a guess dressed as code.
 
-use oag_core::math::{Mat3, Quat, Vec3};
+use oag_core::math::{Mat3, Quat, Vec3, quat_from_axis_angle};
 use oag_formats::track::{Sample, StartPosition};
 use oag_physics::Handling;
 
@@ -89,7 +89,7 @@ impl Pose {
         let forward = Vec3::from_array(sample.tangent);
         let forward = up
             .try_normalize()
-            .map_or(forward, |axis| Quat::from_axis_angle(axis, yaw) * forward);
+            .map_or(forward, |axis| quat_from_axis_angle(axis, yaw) * forward);
 
         Self {
             position,

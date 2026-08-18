@@ -62,6 +62,46 @@ pub fn acos(x: f32) -> f32 {
     libm::acosf(x)
 }
 
+/// `sin` and `cos` of the same angle, from our own libm rather than the
+/// platform's.
+///
+/// Same reasoning as [`acos`], and the same requirement: simulation code calls
+/// this instead of [`f32::sin_cos`]. It exists chiefly so
+/// [`quat_from_axis_angle`] has one, and is public because the next rotation
+/// helper will want it too.
+#[must_use]
+pub fn sin_cos(x: f32) -> (f32, f32) {
+    libm::sincosf(x)
+}
+
+/// A rotation of `angle` radians about `axis`, deterministically.
+///
+/// **Simulation code must call this instead of [`Quat::from_axis_angle`].**
+/// glam's own version is `sin_cos(angle * 0.5)` through the *platform's* libm -
+/// this workspace builds glam as `["std", "scalar-math"]` with no `libm`
+/// feature - so it is the same portability hole [`acos`] documents, wearing a
+/// type name instead of a method name. That is how it survived three gates
+/// until the 2026-08-18 review (finding D1): `scripts/check-transcendentals.py`
+/// matched `.sin_cos(` and `f32::sin_cos(` and never `Quat::from_axis_angle(`,
+/// the gameplay determinism test spawned rockets with hand-written velocities
+/// instead of calling `projectile::launch`, and the physics probe fires no
+/// weapon. A rocket fan's spread directions land in `Projectile::velocity`,
+/// which is hashed state, so the first rocket fired with a nonzero spread on
+/// two platforms could desync the world hash.
+///
+/// The arithmetic is glam's, operation for operation - half-angle sine on the
+/// axis, cosine in `w` - with only the `sin_cos` swapped, so a caller's bits
+/// change by at most the libm difference this exists to remove. In particular
+/// **it does not normalise `axis`**; glam does not either (it only asserts,
+/// under `glam_assert`), and adding a normalise here would change results for
+/// every caller that already passes a unit axis.
+#[must_use]
+pub fn quat_from_axis_angle(axis: Vec3, angle: f32) -> Quat {
+    let (s, c) = sin_cos(angle * 0.5);
+    let v = axis * s;
+    Quat::from_xyzw(v.x, v.y, v.z, c)
+}
+
 /// Right-handed camera matrices with a 0..1 depth range.
 ///
 /// That range is what wgpu, Metal and DX12 expect; the OpenGL -1..1 convention
@@ -198,6 +238,57 @@ pub fn binary_angle_to_radians(units: u16) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The wrapper has to be glam's rotation, not merely *a* rotation: every
+    /// caller that swaps to it is asserting its own results did not move by
+    /// more than the libm difference. Approximate, deliberately - bit equality
+    /// with the platform's `sin_cos` is exactly the thing that is not portable,
+    /// so requiring it here would make this test fail on whichever machine is
+    /// the odd one out.
+    #[test]
+    fn matches_glams_rotation_for_arbitrary_axes_and_angles() {
+        let axes = [
+            Vec3::X,
+            Vec3::Y,
+            Vec3::Z,
+            Vec3::new(1.0, 2.0, -3.0).normalize(),
+            Vec3::new(-0.3, 0.9, 0.2).normalize(),
+        ];
+        for axis in axes {
+            for angle in [-3.0, -0.7, -0.05, 0.0, 0.05, 0.7, 3.0, 6.2] {
+                let ours = quat_from_axis_angle(axis, angle);
+                let theirs = Quat::from_axis_angle(axis, angle);
+                assert!(
+                    (ours.x - theirs.x).abs() < 1e-6
+                        && (ours.y - theirs.y).abs() < 1e-6
+                        && (ours.z - theirs.z).abs() < 1e-6
+                        && (ours.w - theirs.w).abs() < 1e-6,
+                    "axis = {axis}, angle = {angle}: {ours} vs {theirs}"
+                );
+            }
+        }
+    }
+
+    /// A zero angle is the identity and a zero axis is not renormalised into
+    /// one: `projectile::launch` builds its middle shot with `angle == 0.0`,
+    /// and `spawn` hands in an axis it normalised itself. Both rely on this
+    /// doing no correcting of its own.
+    #[test]
+    fn a_zero_angle_is_the_identity_and_the_axis_is_taken_as_given() {
+        assert_eq!(quat_from_axis_angle(Vec3::Y, 0.0), Quat::IDENTITY);
+        assert_eq!(quat_from_axis_angle(Vec3::ZERO, 1.0).xyz(), Vec3::ZERO);
+    }
+
+    /// `sin_cos` is the pair `f32::sin` and `f32::cos` would give, to the
+    /// tolerance two libms are allowed to differ by.
+    #[test]
+    fn sin_cos_agrees_with_the_platform_to_within_a_libm_difference() {
+        for x in [-2.5f32, -0.4, 0.0, 0.4, 1.6, 2.5] {
+            let (s, c) = sin_cos(x);
+            assert!((s - x.sin()).abs() < 1e-6, "sin({x})");
+            assert!((c - x.cos()).abs() < 1e-6, "cos({x})");
+        }
+    }
 
     #[test]
     fn fixed_16_16_round_trips_exact_values() {

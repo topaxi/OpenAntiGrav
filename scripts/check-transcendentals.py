@@ -89,8 +89,38 @@ ALLOWED = {
     ),
 }
 
+# Constructors that are a transcendental wearing a type name. `glam` in this
+# workspace is `["std", "scalar-math"]` with **no** `libm` feature, so every one
+# of these resolves to the platform's `sin_cos`/`atan2`/`acos` exactly the way
+# `f32::sin_cos` would - and until 2026-08-18 none of them was matched by
+# anything here, because the two patterns above want a leading `.` or an
+# `f32::`. `Quat::from_axis_angle` reached `Projectile::velocity` through
+# `projectile::launch` for weeks in plain sight (finding D1 of that day's
+# review). Matched on the bare name so a `math::Quat::from_axis_angle`, a
+# `Quat::from_axis_angle` and a `use`d `from_axis_angle` all report.
+#
+# Deliberately absent, because they are `sqrt` and arithmetic and nothing else:
+# `from_mat3`/`from_mat4`/`from_rotation_arc`/`from_cols`, `lerp`, `normalize`.
+# A gate that flags clean code is a gate people learn to skip.
+FORBIDDEN_ROTATIONS = (
+    "from_axis_angle",
+    "from_euler",
+    "from_rotation_x",
+    "from_rotation_y",
+    "from_rotation_z",
+    "from_scaled_axis",
+    "to_axis_angle",
+    "to_euler",
+    "to_scaled_axis",
+    "slerp",
+    "angle_between",
+    "angle_to",
+    "rotate_towards",
+)
+
 METHOD_CALL = re.compile(r"\.\s*(" + "|".join(FORBIDDEN) + r")\s*\(")
 PATH_CALL = re.compile(r"\bf(?:32|64)::\s*(" + "|".join(FORBIDDEN) + r")\s*\(")
+ROTATION_CALL = re.compile(r"\b(" + "|".join(FORBIDDEN_ROTATIONS) + r")\s*\(")
 
 
 def blank(text: str, start: int, end: int) -> str:
@@ -219,7 +249,7 @@ def main() -> int:
             scanned += 1
             source = strip_test_modules(strip_comments(path.read_text()))
             for number, line in enumerate(source.splitlines(), start=1):
-                for pattern in (METHOD_CALL, PATH_CALL):
+                for pattern in (METHOD_CALL, PATH_CALL, ROTATION_CALL):
                     found = pattern.search(line)
                     if found:
                         findings.append(f"{relative}:{number}: {found.group(1)}")
