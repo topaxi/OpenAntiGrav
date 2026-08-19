@@ -405,3 +405,79 @@ fn a_ship_thrown_at_hds_barrier_does_not_pass_through_it() {
         "the ship never gained any velocity back along the barrier's normal"
     );
 }
+
+/// The bug this pins: every HD circuit's grid, forward and reversed, landing on
+/// the track rather than over a gap or off the collision mesh.
+///
+/// **Found by exactly this sweep, before `oag_game::race::spawn::grid_poses`
+/// walked the spline instead of extrapolating a straight line from the anchor.**
+/// With the straight-line formula, 9 of these 12 *reversed* grids put one or
+/// more of the eight slots off the collision mesh entirely - up to 145 units
+/// from the driveable line on `tech_de_ra`'s reversed grid - against one
+/// forward grid over its envelope by a single slot. Reversed grids sit on
+/// whatever piece of track their own `Start Position` node landed on, which is
+/// far more often a curve than the authored front straight forward grids sit
+/// on, and a straight line extrapolated from one end runs off a curve over the
+/// grid's 138-unit span. See `grid_poses`'s own doc comment for the fix.
+///
+/// `KNOWN_SHORT` is the one slot this does not close: `modesto_heights`'s
+/// reversed grid still comes up one slot short of collision under it, at 21.42
+/// units from the driveable line - well inside the track's own half-width, so
+/// it is a probe missing the surface at one specific spot rather than a slot
+/// off the track, and it was not chased further here. A regression that adds a
+/// second exception, or moves this one's number outside a generous band, is
+/// worth reading before waving through.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn every_hd_grid_lands_on_the_track() {
+    let Some(image) = image() else { return };
+
+    /// `(circuit, file, allowed slots with no collision under them)`.
+    const KNOWN_SHORT: &[(&str, &str, usize)] = &[("modesto_heights", "track_reversed", 1)];
+
+    for (_, circuit, file) in CIRCUITS {
+        let track = format!("/data/environments/{circuit}/{file}.vex");
+        let loaded = race::load(&race::Options {
+            source: image.display().to_string(),
+            class: SpeedClass::Venom,
+            track: Some(track.clone()),
+            opponents: true,
+            ..race::Options::default()
+        })
+        .unwrap_or_else(|e| panic!("{circuit}/{file}: loading the race: {e:#}"));
+
+        let colliders = loaded.setup.collision.clone();
+        let bound = loaded.setup.spline.max_half_width() * 2.0;
+        let race = race::Race::start(loaded.setup);
+        let ships: Vec<_> = race.world.ships.iter().filter(|s| s.active).collect();
+        assert_eq!(ships.len(), 8, "{circuit}/{file} should field a full grid");
+
+        let allowed_short = KNOWN_SHORT
+            .iter()
+            .find(|(c, f, _)| c == circuit && f == file)
+            .map_or(0, |(_, _, n)| *n);
+        let mut missing_collision = 0;
+        for (index, ship) in ships.iter().enumerate() {
+            let position = ship.physics.body.position;
+            let distance = race
+                .spline()
+                .distance_to(position)
+                .expect("the track has samples");
+            assert!(
+                distance < bound,
+                "{circuit}/{file}: slot {index} is {distance:.2} from the driveable line, \
+                 outside the {bound:.2} envelope"
+            );
+            let origin = position + Vec3::Y * 20.0;
+            let ray = oag_physics::Ray::new(origin, Vec3::NEG_Y, 80.0);
+            if oag_physics::Raycaster::raycast(&colliders, ray, None, false).is_none() {
+                missing_collision += 1;
+            }
+        }
+        assert!(
+            missing_collision <= allowed_short,
+            "{circuit}/{file}: {missing_collision} slot(s) have no collision surface under \
+             them, {allowed_short} allowed"
+        );
+    }
+}

@@ -157,6 +157,80 @@ onto the original's row 0 and then implemented against ours, and the two are
 opposite. **No unit test on an identity node can catch that** - it is a fact
 about which way the axis points on a real track, not about the arithmetic.
 
+## Reversed grids: the straight line ran off the curve
+
+**Fixed 2026-08-19, and this is an engineering correction to the port, not a new
+reading of the original** - nothing below changes what `Race_SpawnGrid` or the
+geometry table above says the original does, and no new live capture backs it.
+
+The two known departures above were measured on one track's *forward* grid and
+called sub-unit. On a *reversed* grid the same straight-line formula is not
+sub-unit wrong, it is off the track: a sweep of every Wipeout HD circuit's grid,
+both directions, with opponents on
+(`crates/game/tests/hd_trackwall_ground_truth.rs::every_hd_grid_lands_on_the_track`)
+found **9 of 12 reversed grids** putting one or more of the eight slots off the
+collision mesh entirely - up to **145 units** from the driveable line on
+`tech_de_ra`'s reversed grid - against one forward grid over its envelope by a
+single slot. Talon's Junction (`16_Track` on Pulse) is not one of the nine,
+which is why the only track this project's grid was ever live-verified against
+gave no sign of the problem: its own reversed grid's start straight happens to
+be close enough to flat that a straight line stays on it.
+
+The reason is the same shape every time. A reversed circuit's grid sits on
+whatever piece of track its own `Start Position` node landed on - a value
+authored independently of the forward grid's, per
+[`track.md`](../../../formats/track.md#start-position) - and that is far more
+often a curve than the authored front straight a forward grid sits on. The
+straight-line formula extrapolates in one fixed direction for the full
+138-unit span, and a curve underneath it means slot 1 ends up somewhere the
+track is not.
+
+**The fix keeps both measured constants** (`GRID_ROW_PITCH`, `GRID_COLUMN_OFFSET`)
+and changes only how they are applied: `oag_game::race::spawn::grid_poses` walks
+the track's own resampled spline from the anchor, `GRID_ROW_PITCH` units per
+step, instead of projecting along the anchor's fixed forward axis, and stagger
+uses each walked sample's own `lateral` axis instead of the anchor's fixed one -
+the same axis [`Pose::from_sample`](../../../../crates/gameplay/src/spawn.rs)
+already uses for the same reason. Heading is untouched: every slot still shares
+the anchor's own orientation, which is the part the live capture actually
+confirmed to four decimal places, and this does not reopen that. Two guards
+keep it from being wrong in a new way: the walk never crosses into a different
+*path* in [`Spline`](../../../../crates/game/src/race/spline.rs)'s own table -
+consecutive indices are only spatially adjacent within one path, and crossing
+one landed grid slots on an unrelated branch on a first attempt - and a walk
+that runs off the end of the path before covering the full distance falls back
+to the old straight line rather than trusting a short answer, which is what
+keeps this project's own short synthetic test tracks (well under 138 units)
+working.
+
+Re-run after the fix, the same sweep finds **one slot on one circuit** still
+short: `modesto_heights`'s reversed grid has one slot with no collision surface
+within the probe's reach, 21.42 units from the driveable line - inside the
+track's own half-width, so a probe missing the surface at one specific spot
+rather than a slot off the track, and not chased further. The regression test
+records it as a named, bounded exception rather than silently passing or
+silently widening its own tolerance.
+
+**Confidence 70** on the mechanism (the curve-following geometry is measured
+against the sweep above, which is this project's own collision mesh, not the
+original), and the forward-grid live comparison
+(`our_grid_is_the_originals_grid`) still passes at the same 3-unit tolerance
+afterward, so the fix cost nothing on the one number that *is* checked against
+the original.
+
+**A separate, pre-existing gap this incidentally found and did not fix.**
+Relocating exactly where an opponent first meets trouble on `05_Track` - a
+circuit `docs/gameplay/ai.md` already measures as having 134 racing-line samples
+with no collision surface under them - moved
+`crates/game/tests/stall_rescue_ground_truth.rs::a_craft_that_stops_on_the_disc_is_put_back`
+onto a spot where the craft gets wedged bouncing rather than sitting still: a
+tick-by-tick trace shows its position frozen for thousands of ticks while its
+speed oscillates between about 0.2 and 10 units/s, never staying below
+`STALL_SPEED` for long enough to trip the rescue's three-term "stalled" test,
+which requires *sustained* low speed. That gap in the rescue predicate predates
+this fix and is not touched here; the test is left failing rather than adjusted
+to hide it, since it is evidence of a real, different, open problem.
+
 ## Names landed
 
 | Address | Name | Confidence |
@@ -188,9 +262,18 @@ not named**: it is only inferred from the call site's position in the
   unrecovered**: `Race_SpawnAiRacer`'s `id` comes from a racer list built
   upstream that nothing has read, so the ordering in use is this project's and
   is labelled as such in the load report.
+- **`modesto_heights`'s reversed grid, one slot short.** See "Reversed grids"
+  above - inside the track's own bounds, not chased further.
+- **The stall rescue does not catch a craft bouncing in place.** Found while
+  fixing the reversed grids, above, and not this page's subsystem - tracked
+  against `crates/game/tests/stall_rescue_ground_truth.rs`, not here.
 
 ## History
 
+- 2026-08-19: reversed grids fixed - `grid_poses` walks the track's own spline
+  instead of extrapolating a straight line from the anchor, closing 8 of 9
+  broken reversed grids a sweep of Wipeout HD's circuits found. See "Reversed
+  grids" above.
 - 2026-08-10: geometry measured against the running original; the authored node
   identified as slot 8. Ordering recovered the same day.
 - 2026-08-10: page created. Ordering recovered; geometry open.

@@ -134,7 +134,7 @@ impl Race {
             && (mode.has_opponents() || opponents)
             && let Some(base) = base
         {
-            let poses = grid_poses(base, &collision, spawn_height(&handling));
+            let poses = grid_poses(base, &spline, &collision, spawn_height(&handling));
             for (index, pose) in poses.iter().enumerate().take(GRID_SLOTS as usize - 1) {
                 let opponent = &mut world.ships[index + 1];
                 opponent.active = true;

@@ -1115,22 +1115,22 @@ fn the_whole_grid_lands_on_the_track() {
         );
     }
 
-    // Two staggered columns, across the player's own **left**. Slot 8 is the
-    // player and sits on the node's line; the odd slots sit off it. A whole unit of
-    // tolerance because each slot was re-dropped onto its own footprint and the
-    // track rolls under the grid.
-    let left = -player.right();
+    // Two staggered columns, against each slot's own nearest sample: the grid
+    // follows the curve now (`grid_poses`, `grid.md#reversed-grids-the-straight-line-ran-off-the-curve`).
+    // Five units: reprojecting one lane bias onto each slot's axis approximates.
+    let local_bias = |p: Vec3| {
+        let (_, s, _) = race.spline().nearest(p).expect("has samples");
+        (p - Vec3::from_array(s.pos)).dot(Vec3::from_array(s.lateral).normalize_or_zero())
+    };
+    let player_bias = local_bias(player.position);
     for (index, ship) in ships.iter().enumerate() {
         let slot = if index == 0 { 8 } else { index as u8 };
-        let lateral = (ship.physics.body.position - player.position).dot(left);
-        let expected = if slot % 2 == 1 {
-            oag_gameplay::GRID_COLUMN_OFFSET
-        } else {
-            0.0
-        };
+        let stagger = [0.0, oag_gameplay::GRID_COLUMN_OFFSET][(slot % 2) as usize];
+        let lateral = local_bias(ship.physics.body.position);
         assert!(
-            (lateral - expected).abs() < 1.0,
-            "slot {slot} sits {lateral:.2} across the grid, expected about {expected:.1}"
+            (lateral - (player_bias - stagger)).abs() < 5.0,
+            "slot {slot} sits {lateral:.2} off its own local centreline, expected {:.1}",
+            player_bias - stagger
         );
     }
 
