@@ -122,8 +122,20 @@ class Bridge:
         writing every rename after the first group into whichever program was
         active when the *previous* group left off, and reports "No function
         found" for addresses that exist perfectly well in the intended one.
+
+        The bridge answers with 200 and a JSON `error` body on failure rather
+        than an HTTP error, so a bare `get()` call would swallow it - this
+        raises instead so the caller can't mistake a failed switch for a
+        successful one and silently write into the wrong program. That is a
+        real failure mode, not a hypothetical: `switch_program` is keyed by
+        the program's bare display name, and four of this project's binaries
+        are all named `BOOT.BIN`, so it can only ever reach whichever one
+        Ghidra happens to expose under that name, no matter which full path
+        is requested.
         """
-        self.get("switch_program", program=self.program)
+        reply = self.get("switch_program", program=self.program)
+        if '"success":true' not in reply and '"success": true' not in reply:
+            raise RuntimeError(f"switch_program to {self.program!r} failed: {reply}")
 
     def has_function(self, address: str) -> bool:
         return "No function found" not in self.get("get_function_by_address", address=address)
@@ -281,6 +293,12 @@ def apply_group(paths: list[Path], program: str, args) -> int:
             bridge.switch_program()
         except (urllib.error.URLError, OSError) as e:
             print(f"cannot reach the bridge at {args.url} for {program}: {e}", file=sys.stderr)
+            return 1
+        except RuntimeError as e:
+            # Refuse to guess which program is active: every rename below would
+            # otherwise land wherever the *previous* group left the bridge,
+            # silently writing this group's names into an unrelated binary.
+            print(f"  {e}", file=sys.stderr)
             return 1
 
     applied = skipped = failed = 0
