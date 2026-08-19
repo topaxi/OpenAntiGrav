@@ -857,14 +857,18 @@ what the three states mean.
 semantics, and the falloff formula are corroborated twice over - the static
 trace and a live watchpoint hit landing on the address the trace predicts -
 which is more than the rubric's single-function static-reading cap normally
-allows. What holds it under 70: no caller is known (`get_xrefs_to` finds
-nothing static, so this is reached through a function-pointer dispatch this
-project has not located - a rocket, a mine or a missile explosion is the
-obvious guess given the address sits among `Rocket_Ctor`/`Rocket_Update`/
-`Missile_Update`, all unconfirmed), the `stats` table's identity and its
-`sourceIndex`/`targetIndex` calling convention are read off this function
-alone with no second site to cross-check, and the `entity+0x368` branch's
-three cases are not understood, only observed.
+allows. What holds it under 70: the caller is found but unread (`FUN_08867b50`,
+`0x08867de4` - `get_xrefs_to` found nothing, which in this database means
+nothing on its own; see the entry on image-base-relative addressing silencing
+every xref tool in `HANDOVER.md`, and `search_instructions` on the
+image-relative operand found this call in one search once that was known - a
+rocket, a mine or a missile explosion is still the obvious guess given the
+address sits among `Rocket_Ctor`/`Rocket_Update`/`Missile_Update`, now
+narrowable by reading `FUN_08867b50` itself rather than by address proximity
+alone), the `stats` table's identity and its `sourceIndex`/`targetIndex`
+calling convention are read off this function alone with no second site to
+cross-check, and the `entity+0x368` branch's three cases are not understood,
+only observed.
 
 #### A second writer at `FUN_08868ea4` (`0x08868ea4`), not renamed
 
@@ -887,19 +891,136 @@ impulse to each entry - still reads like the rival-contact half of "weapon or
 rival-contact code" the way `Weapon_PostBlastImpulse_q` reads like the weapon
 half, but it is a guess about the shape, not a measurement. Confidence on that
 reading: under 50, so no name - `FUN_08868ea4` stays as it is rather than
-guessing `ShipContact_PostRivalImpulse` or similar. Left for whoever picks the
-loop bound and the list identity apart.
+guessing `ShipContact_PostRivalImpulse` or similar. **Two callers found, both
+unread**: `FUN_08868a10` (`0x08868ad4`) and `FUN_088690fc` (`0x08869450`) -
+same image-base-relative search as `Weapon_PostBlastImpulse_q`'s caller
+above. Left for whoever picks the loop bound, the list identity, and these two
+callers apart.
 
-#### What is still not wired
+### `Ship_ApplyCollisionImpulse` (`0x0883f274`), read at instruction level, 2026-08-19
 
-Neither writer has a Rust port. `crates/physics/src/wall.rs`'s
-`STUN_PER_CONTACT` doc already lays out what
-`Ship_ApplyCollisionImpulse`'s own side needs (the forward-axis projection,
-the Shield gate, the zero-on-consume) and says explicitly that constant alone
-is not enough - now there are two producers to reproduce as well as the one
-consumer, and `Weapon_PostBlastImpulse_q`'s own caller and `stats` table are
-still unread. Arming the stun for real is a bigger change than this finding;
-this section is what makes it startable rather than a fresh hunt.
+`engine.md` already carried this function's behaviour as a confidence-85
+summary (the forward-axis projection, the Shield gate, `craft+0x290 += 0.5`).
+Read in full off its disassembly - the decompiler would not complete on it
+either, same as every function on this page checked today - it comes apart
+into six steps, `s0` holding the function's own `a0` (called `entity` below)
+throughout:
+
+1. **The zero test.** `*(entity+0x4c)` gives a pointer; `+0x110` off it is the
+   pending vector. Read component-wise - `x != 0` short-circuits the other two
+   checks, `y` next, `z` last - and if all three are `0.0`, jump straight to
+   the function's cleanup with nothing touched. This is why a live watchpoint
+   only firing on three of eight craft this session is not "five armed
+   watchpoints were dead": most craft simply had nothing pending that tick.
+2. **The Shield gate.** `*(*(entity+0x4c)+0x1b8) & 0x10` - if set, skip both
+   the projection and the timer arm below and go straight to step 6. This is
+   the field `engine.md` already read as `craft->0x1b8`; whether it is really
+   the same struct `weapon-fire.md` calls `entity+0x1b8` (the fire-request
+   word, read one indirection shallower) or a same-shaped field on a distinct
+   struct is not settled here - see "Not determined" below.
+3. **The projection, and it really is what the summary said.** `magnitude =
+   |pending.xyz|`; `forward = *(*(entity+0x794))` (`+0x794` is already read
+   elsewhere as the ship's scene node - [`camera.md`](camera.md),
+   [`exhaust.md`](exhaust.md), [`missile.md`](missile.md) all cite it, and its
+   first quad reads as an orientation row here, consistent with a scene node's
+   transform); `sign = dot(forward, pending.xyz) < 0 ? -1 : +1`; the pending
+   vector's storage is then **overwritten in place** with `forward * (sign *
+   magnitude)`. The original direction is discarded entirely - only its
+   magnitude and which way it pointed relative to the ship's own forward axis
+   survive. "Scales the ship's own forward axis by the impulse magnitude
+   rather than using the impulse direction" is exact, not a summary.
+4. **The impulse is applied through `Body_ApplyImpulseAtPoint` (`0x0884d64c`)**
+   - the same function [the pair path below](#what-it-does-with-the-impulse)
+   uses, called `(body = *(entity+0x794), point = a1, impulse = &pending)`.
+   `a1` is the whole function's own second parameter, passed through
+   unexamined the entire way - what the caller supplies as a point is not
+   read here.
+5. **The timer arm.** `*(entity+0x94)` is already established as the
+   entity-to-craft back-pointer ([`shield.md`](shield.md) reads a live example
+   at the identical `0xfc0` offset this page's own watchpoint session
+   measured between "entity" and "craft" independently). `craft->0x290 +=
+   0.5` there - `STUN_PER_CONTACT` in `crates/physics/src/wall.rs`.
+6. **The consume.** Whether or not the Shield gate fired, `*(entity+0x4c)+0x110`
+   is overwritten with a constant quad read out of `.rodata` (read live as all
+   zero, matching every idle craft this session's watchpoint saw as `(0, 0, 0,
+   1)` before a hit and presumably `(0, 0, 0, 0)` or similar after - not
+   independently confirmed which).
+
+Confidence **85** on the mechanism (matches `engine.md`'s existing figure; the
+instruction trace adds detail, not a different reading), lower on `a1`'s
+identity (unread) and on whether step 2's struct is the same one
+`weapon-fire.md` names (undetermined, see below).
+
+#### Its call target needed the image base added by hand - Ghidra's own bytes are pre-relocation
+
+**The trap that cost the most time today, and the diagnosis took a wrong turn
+before landing right.** Ghidra's stored bytes for the `jal` at `0x0883f3e0`
+(`read_memory`: `93 25 01 0c`) decode, by the ordinary MIPS J-type rule
+(`target = ((addr+4) & 0xF0000000) | ((word & 0x03FFFFFF) << 2)` - the high
+bits are `0` for every PSP text address in this build), to `0x0004964c` - a
+small, sub-`0x08000000` address nowhere in this program's loaded text.
+Reading the same address **live**, in the running emulator
+(`Debugger.read(0x0883f3e0, 4)`), returns *different* bytes - `93 35 21 0e` -
+decoding to `0x0884d64c`: `Body_ApplyImpulseAtPoint`, already named, already
+the function this call site should sensibly reach.
+
+The reconciliation: `0x0004964c + 0x08804000 = 0x0884d64c`, where
+`0x08804000` is this program's own image base
+(`get_current_program_info`'s figure at the top of every session). Checked
+against a control - all **six** `jal`s inside `Body_ResolveContactPair`,
+calls to `Body_Translate`, `Body_ApplyImpulseAtPoint` and `FUN_0884dc60` this
+project has trusted since 2026-08-11 - and the same addition recovers the
+live-verified target from Ghidra's static bytes at every one of them,
+including the exact pair this page's tail-call row already cites
+(`0x499f8 + 0x08804000 = 0x0884d9f8` is `Body_Translate`; `0x49c60 +
+0x08804000 = 0x0884dc60` is `FUN_0884dc60`) - so that earlier finding was
+right, not lucky.
+
+**So this is not database corruption.** Ghidra's stored instruction bytes
+hold the **pre-relocation** `R_MIPS_26` target field - the raw word-address
+bits an `R_MIPS_26` relocation entry is meant to patch - while the bytes
+PPSSPP's loader actually runs are **post-relocation**, patched at load time.
+Ghidra's importer evidently set the image base correctly (every address this
+page cites by name resolves fine) without applying that relocation to the
+`jal` instructions' own encoded bits. **The rule going forward**: a `jal`
+target read from Ghidra's *static* disassembly needs the image base added by
+hand - `target = image_base + ((word & 0x03FFFFFF) << 2)`, no `(addr+4) &
+0xF0000000` term, since the field itself is unrelocated. A `jal` target read
+from *live* memory needs the ordinary hardware rule instead, since the
+relocation is already applied there. Mixing the two - which is what the first
+pass through this investigation did, computing `0x08800000 + 0x0004964c` by
+hand and landing inside `Ship_UpdateCraft` instead of at a real function - is
+the actual trap; the fix is not a health check, it is remembering which of
+the two addition rules the bytes in front of you were produced by. Prior
+static readings that cited a call target by number are mechanically
+recoverable with this constant, not suspect.
+
+**Left open**: whether this is a general PSP-ELF-relocation trait or specific
+to how this project's importer step handled `BOOT.BIN`, and whether it
+explains anything about the decompiler failing on every function this session
+tried to decompile (including `Body_ResolveContactPair` itself, clean in
+2026-08-11) - no evidence ties the two; unapplied `jal` relocations would not
+on their own explain a decompilation failure, so treat the decompiler outage
+as a separate, undiagnosed thing rather than the same bug.
+
+### Not determined, again
+
+- **Whether step 2's Shield flag and `weapon-fire.md`'s `entity+0x1b8`
+  fire-request word are the same struct or two different ones that happen to
+  share an offset.** `weapon-fire.md` reads the flag word one indirection
+  shallower (`craft+0x1b8` direct) than this function does
+  (`*(*(entity+0x4c))+0x1b8`); reconciling the two needs either a struct dump
+  at both addresses or a live comparison, neither done here.
+- **What `a1` (`Ship_ApplyCollisionImpulse`'s own second parameter, the "point"
+  passed to `Body_ApplyImpulseAtPoint`) is supplied by the caller.** The
+  caller is `FUN_0883f540` (`0x0883f5a0`), found the same way as both writers'
+  callers above; unread, so `a1`'s origin stays open.
+- **What is still not wired.** Neither writer nor this consumer has a Rust
+  port. `crates/physics/src/wall.rs`'s `STUN_PER_CONTACT` doc lays out what the
+  consumer side needs; this section is what makes porting it startable rather
+  than a fresh hunt. All three callers are now found - `FUN_08867b50`,
+  `FUN_08868a10`, `FUN_088690fc` and `FUN_0883f540` - and reading them is the
+  remaining gate, not locating them.
 
 ### `0x08815ccc` is a stub, so craft-to-craft contact does not come from the narrowphase
 

@@ -267,15 +267,24 @@ pub const MIN_HULL_EXTENT: f32 = 1e-4;
 /// anything to a rival hit". [`ShipState::shield_pickup_timer`] is the flag.
 ///
 /// The writer is found, 2026-08-19, by a live write breakpoint on the field
-/// during a driven Single Race: two of them, both in the weapon-code region
-/// and both reached through a function-pointer dispatch this project has not
-/// located rather than a static call. `Weapon_PostBlastImpulse_q`
-/// (`0x0886794c`) computes a distance falloff off a per-weapon stats table and
-/// **accumulates** an impulse into the target's pending vector - a rocket,
-/// mine or missile explosion is the unconfirmed guess for its caller. A
-/// second, unnamed writer loops over what reads like a short entity list doing
-/// the same accumulate. Neither has a Rust port yet, and neither does
-/// `Ship_ApplyCollisionImpulse`'s own consumer side above. See
+/// during a driven Single Race: two of them, both in the weapon-code region.
+/// `Weapon_PostBlastImpulse_q` (`0x0886794c`) computes a distance falloff off
+/// a per-weapon stats table and **accumulates** an impulse into the target's
+/// pending vector - a rocket, mine or missile explosion is the unconfirmed
+/// guess for its caller (`FUN_08867b50`, found but unread). A second, unnamed
+/// writer loops over what reads like a short entity list doing the same
+/// accumulate, also with a found-but-unread caller. `Ship_ApplyCollisionImpulse`
+/// itself is now read at instruction level too: the forward-axis projection
+/// overwrites the pending vector's storage in place before applying it
+/// through the same `Body_ApplyImpulseAtPoint` (`0x0884d64c`) this crate's
+/// own [`resolve`] already reproduces the math of - finding that call target
+/// needed a live memory read plus the image base, since Ghidra's *static*
+/// disassembly of a `jal` operand in this database is the unrelocated
+/// `R_MIPS_26` field, not the real address (an already-documented trap that
+/// also silences `get_xrefs_to`; the fix for both is the same
+/// image-relative `search_instructions`). None of the three functions has a
+/// Rust port yet - all four callers are found, none read, which is the
+/// remaining gate. See
 /// `docs/ghidra/functions/psp-pulse-usa/contact-response.md`.
 ///
 /// It also fixes the *scope* of the shield, which is easy to over-read: this is
