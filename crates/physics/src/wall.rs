@@ -266,6 +266,11 @@ pub const MIN_HULL_EXTENT: f32 = 1e-4;
 /// rather than be discovered afterwards as "the shield does not seem to do
 /// anything to a rival hit". [`ShipState::shield_pickup_timer`] is the flag.
 ///
+/// The writer is still unfound, and the search for it is narrower than it was:
+/// both of `Body_ResolveContactPair`'s tail calls are ruled out, so the
+/// two-body path does not post it either. See
+/// `docs/ghidra/functions/psp-pulse-usa/contact-response.md`.
+///
 /// It also fixes the *scope* of the shield, which is easy to over-read: this is
 /// the only impulse it touches. `Body_ResolveContact` applies the track impulse
 /// unconditionally, so a shielded craft bounces off a wall exactly as it
