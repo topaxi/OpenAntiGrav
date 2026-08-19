@@ -637,13 +637,16 @@ unread; a craft against track geometry takes the single-body path.
 
 - **What entity class `+0xb8 == 6` is**, and what the global byte at `0x08ab07e3`
   gates - the branch that gives a collider `0.0` friction instead of `0.02`.
-- **`Ship_ApplyCollisionImpulse`'s pickup-flag `0x10`.** Narrowed from
-  "unread" to a concrete location: the word is at `*(entity+0x4c) + 0x1b8`, and
-  bit `0x10` being set suppresses both the forward-projected impulse *and* the
-  `craft+0x290 += 0.5` stun. What sets it is still unread, so the
+- ~~**`Ship_ApplyCollisionImpulse`'s pickup-flag `0x10`.**~~ **Read
+  2026-08-19: it is the Shield pickup**, armed by `Shield_Fire`
+  (`0x08861568`) off fire bit `0x20` and cleared when its countdown expires.
+  See [shield-pickup.md](shield-pickup.md), which also reads the four `& 0x10`
+  gates in this function's own contact loop and the weapon-damage drain
+  (`0x0883f13c`) that absorbs a hit into the shield's flash instead. The
   confidence-75 wall attribution in
   [force-balance-ground-truth.md](../../../physics/force-balance-ground-truth.md)
-  stays capped where it is.
+  stays capped where it is for its own reasons, but not for this one: the
+  Shield cannot be up during a trace that never picks one up.
 - ~~**`0x0884ef30`**, the two-body contact resolver.~~ **Read 2026-08-11** - see
   [the section below](#body_resolvecontactpair-0x0884ef30-the-two-body-path).
 - **What posts the pending impulse at `entity->0x4c + 0x110`.** The consumer is

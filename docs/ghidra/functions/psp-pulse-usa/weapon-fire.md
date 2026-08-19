@@ -92,7 +92,7 @@ exactly anywhere else.
 
 ```c
 uVar5 = *(uint *)(craft + 0x1b8);
-if ((uVar5 & 0x1000) != 0) { FUN_0885d3bc(world, craft);            uVar5 = *(uint *)(craft + 0x1b8); }
+if ((uVar5 & 0x1000) != 0) { FUN_088613bc(world, craft);            uVar5 = *(uint *)(craft + 0x1b8); }
 if ((uVar5 & 0x4000) != 0) { FUN_088577ac(world->..., craft, i);    uVar5 = *(uint *)(craft + 0x1b8); }
 if ((uVar5 & 0x0100) != 0) { FUN_08863a20(world+0x44, craft, i);    uVar5 = ...; }
 if ((uVar5 & 0x0040) != 0) { FUN_088685cc(world+0x4c, craft, i);    uVar5 = ...; }
@@ -104,11 +104,23 @@ Sixteen bits are dispatched in all. **The word is re-read after every handler**,
 which is what says a handler may clear its own bit - and one of them does.
 
 Three of the handlers take `dt` and a `world`/`craft` pair with no subsystem
-pointer (`0x0885d404`, `0x0885d534`, `0x0885d630`, bits `0x800`, `0x200`,
+pointer (`0x08861404`, `0x08861534`, `0x08861630`, bits `0x800`, `0x200`,
 `0x10`). Those are the shape a *timed* pickup wants rather than a projectile,
 and `docs/gameplay/pickups.md` already records bit `0x200` as the Turbo's half
 of the engine gate - the same bit number, which is corroboration rather than
-proof.
+proof. **All three are now read**: `0x200` and `0x10` are the Turbo's and the
+Shield's countdowns, and their arming halves are bits `0x400` and `0x20`. See
+[shield-pickup.md](shield-pickup.md).
+
+**Correction, 2026-08-19: the five small-handler addresses above were wrong by
+`0x4000` until this change**, and they are worth stating as a trap rather than
+a typo. The decompiler prints an unresolved call as `func_0x000NNNNN`, and the
+real address is that plus the **image base `0x08804000`** - not `0x08800000`,
+which is what the first pass added. The *resolved* names on this page were
+never affected (`func_0x0006a104` really is `Weapon_FireRocket` at
+`0x0886e104`), so the error hid: only the five `FUN_...` addresses moved, and
+each of the wrong ones lands inside `Rocket_Update` (`0x0885d2a8`-`0x0885db37`)
+and decompiles as that whole function rather than failing.
 
 **This is the word `HANDOVER.md` has been recording as "thirteen unread bits out
 of fourteen".** It is the pickup word behind `craft+0x1c0`, and its *consumers*
