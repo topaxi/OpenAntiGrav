@@ -1183,7 +1183,7 @@ impl Pipeline {
                             blend: Some(blend),
                             write_mask,
                         })],
-                        compilation_options: Default::default(),
+                        compilation_options: crate::mesh_render::fragment_options(format),
                     }),
                     primitive: wgpu::PrimitiveState {
                         // A camera-facing quad has no meaningful winding: the basis it

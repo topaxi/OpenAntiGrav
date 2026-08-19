@@ -91,6 +91,15 @@ struct Scene {
     light: Light,
 };
 
+// 1.0 when the render target holds linear light - Wipeout HD's float scene
+// target, where the bloom gate reads pre-exposure luminance and the encode
+// happens in `post::hd_bloom`'s own pass. 0.0 for every gamma target, where
+// this shader encodes (or never decodes) exactly as it always has. Set from
+// the target format at pipeline build - see `mesh_render::is_linear_target` -
+// so no uniform needs a new field and the sky's zeroed scene buffer cannot
+// miss it.
+override linear_out: f32 = 0.0;
+
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
 @group(1) @binding(0) var albedo: texture_2d<f32>;
 @group(1) @binding(1) var albedo_sampler: sampler;
@@ -259,24 +268,28 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
             * scene.light.enabled * in.lit);
 
     // The authored path shades in linear light, as the RSX does: the samples
-    // are sRGB-decoded, lit by the authored magnitudes, saturated (the
-    // stand-in for HD's exposure stage) and encoded back for this gamma
-    // target.
+    // are sRGB-decoded and lit by the authored magnitudes. On a gamma target
+    // the result is saturated (the stand-in for HD's exposure stage) and
+    // encoded back here; on the linear float target it leaves **unclamped**,
+    // because values above 1.0 are exactly what the bloom gate reads, and the
+    // saturate-and-encode happens in `post::hd_bloom`'s own pass instead.
     let texel_linear = pow(texel.rgb, vec3<f32>(2.2));
-    let lit_linear = clamp(
-        texel_linear * in.colour.rgb * authored + specular,
-        vec3<f32>(0.0),
-        vec3<f32>(1.0),
+    let lit_linear = texel_linear * in.colour.rgb * authored + specular;
+    let encoded = pow(
+        clamp(lit_linear, vec3<f32>(0.0), vec3<f32>(1.0)),
+        vec3<f32>(1.0 / 2.2),
     );
-    let authored_rgb = pow(lit_linear, vec3<f32>(1.0 / 2.2));
+    let authored_rgb = mix(encoded, lit_linear, linear_out);
 
     // The stand-in path, byte-for-byte what every other title always drew.
     // Prelit geometry (`lit` 0.0) takes it even under the authored rig: its
     // lighting is baked into its vertex colours, in the gamma space every
     // Pulse-shaped asset authors, so the linear round-trip above would
-    // re-shade what is already shaded.
+    // re-shade what is already shaded. On the linear target its gamma result
+    // is decoded, so `post::hd_bloom`'s encode returns it byte-for-byte.
     let light = mix(vec3<f32>(1.0), stand_in, in.lit);
-    let plain_rgb = texel.rgb * in.colour.rgb * light;
+    let plain = texel.rgb * in.colour.rgb * light;
+    let plain_rgb = mix(plain, pow(plain, vec3<f32>(2.2)), linear_out);
 
     // Vertex colour modulates the texture on all four channels, as the GE's
     // texture-env does - RGB and alpha alike, not RGB alone. Dropping the

@@ -746,7 +746,91 @@ reads the **pre-exposure linear scene**. This renderer's race target is
 `Rgba8Unorm` and saturates, so a faithful bloom needs the HD path rendered to
 a float target first (scene in linear, gate, blur, composite, then the
 exposure stand-in and encode). That is the M6-for-HD work item, now with
-every constant read.
+every constant read. *(Done the next day - the two sections below are what
+finished it.)*
+
+### The chain runner, and every engine-fed parameter (2026-08-19)
+
+`FUN_003b4690` is the PPU function that runs the whole `FunkLayerBloom` set
+and patches its parameters - found by walking who loads the descriptor table
+at `0x8b73c4` (the ten program-name pointers, followed by the parameter
+names `size, uvSize, contribution, additiveColour, offsetScale, offset,
+screenOrigin, screenSize, distanceScalar, uvScale, uvScaleOrigin, texture,
+sourceImage`). Its setup twin `FUN_003af980` allocates the target ladder:
+one half-res, four quarter-res and two eighth-res buffers (`size >> 1/2/3`).
+Confidence 90 throughout this section - static reading, two independent
+routes (microcode operand order and PPU fill) agreeing on every value.
+
+What it settles, each previously an unknown of the gate:
+
+- **`contribution.w` is hard-coded zero** - the microcode's
+  `(1 - contribution.w * frame.a)` damping factor never engages.
+- **`additiveColour` is an event flash**: `{v,v,v,0}` with
+  `v = flash * k + 0.1` while a flash field is live, `{0,0,0,0}` otherwise.
+- **`contribution.y` is the authored `Bloom from frame contribution` faded
+  by luminance adaptation**: `y = (1 - min(adapted * <Bloom adaption boost>
+  * 0.25, 1)) * authored`, `0.25` an inline constant (TOC value `0x8b743c`).
+- **The adaptation is a CPU readback loop**: the quarter-res scene is halved
+  iteratively to a handful of pixels, read back, its mean colour stored at
+  FunkLayer+0x240 and its luminance - weights `(0.3, 0.59, 0.11)`, TOC
+  values `0x8b74fc..0x8b7504` - lerped into the persistent state at +0x254:
+  `adapted += <Bloom adaption rate> * (avgLum - adapted)`.
+- **The blur runs at quarter res with tap step `authored size / buffer
+  size`**: the multipliers are the TOC constants `1/480` and `1/270`
+  (`0x8b7508`/`0x8b750c`) - the quarter buffers of a 1080p frame.
+- **The gate reads the quarter-res scene**, not the full frame: downsample
+  to half, to quarter, gate, blur-vertical, blur-horizontal, ping-ponging
+  the quarter pair.
+
+The settings block the parameters come from is pinned by its registrar
+(`FUN_003a83d8`): each `HDR and Bloom.*` key string maps to a field of the
+singleton `FUN_003a9520` returns - `+0x52c` adaption rate, `+0x530/0x534/
+0x538` frame contribution/exponent/alpha contribution, `+0x53c` adaption
+boost, `+0x540/0x544/0x548` the Tone family, `+0x54c` `Bloom feedback` (a
+key no circuit file authors), `+0x550/0x554` the blur sizes, `+0x558..0x570`
+the radial set. That mapping is what turns every "plausibly this key" in
+the sections above into a read.
+
+### The exposure is read: `scale` on the resolve, not a tone curve (2026-08-19)
+
+The `Tone` family's consumer is `FUN_003e3268` (the every-frame present
+path; `FUN_003df7c0` is a standalone re-run of its tail). It is the sole
+caller of the chain runner, stores the returned adapted luminance at
+`0x008c3520+0x28`, and computes
+
+```text
+scale = <Tone maximum brightness> - min(<Tone adaption boost> * adapted,
+                                        <Tone darkening clamp>)
+```
+
+(`fsel`-min, quoted in full in the analysis notes). On Talon's Junction
+(boost 20, clamp 3, max 4) that is `4 - min(20 * adapted, 3)`: a black frame
+is pushed 4x, anything with adapted luminance over 0.15 rides at exactly
+1.0, and the image is never darkened below 1x - **the "tonemap" is a plain
+scene multiplier with a floor**, which is why no tone-curve program exists.
+
+`scale` is bound to the resolve program `downsamplescaleaddfeedback_fp`
+(block `0x92a500`), whose four parameter names all fall to crc32 preimage:
+`scale` (`0x13b9da7b`), `scaleFeedback` (`0xaa718745`), `scaleAdd`
+(`0xabd84d0a`), `fullscreenTintColour` (`0xde0aade6`). Its microcode reads:
+
+```text
+feedback = lerp(scene, 2 * feedbackBuffer, feedbackBuffer.a * scaleFeedback)
+out      = saturate(feedback * scale + bloom * scaleAdd + tint)
+```
+
+with `scaleAdd` fed the constant 1.0 - **the bloom is added after the
+exposure scale, unscaled** - `scaleFeedback` fed `Bloom feedback + a runtime
+float` (inert at the authored default 0), and the resolve ending on its
+`ADD_SAT` with no gamma arithmetic. The correction variant
+(`downsamplescaleaddfeedbackcorrection_fp`) adds `saturation`/`finalScale`/
+`finalBias` parameters whose fill is a render-context field this reading
+did not chase.
+
+All of the above is implemented verbatim in `oag_render::post::hd_bloom`;
+its module header lists the four things that are deliberately *not* modelled
+(GPU-side adaptation in place of the readback, the event flash, the feedback
+mix and tint, and the final display encode).
 
 ## What was deliberately not read
 

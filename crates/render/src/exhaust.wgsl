@@ -15,6 +15,12 @@ struct Uniforms {
     model: mat4x4<f32>,
 };
 
+// 1.0 when the render target holds linear light (Wipeout HD's float scene
+// target), 0.0 on every gamma target. Set from the target format at pipeline
+// build - `mesh_render::is_linear_target` - so the additive blend below runs
+// in the same colour space as everything else drawn into that target.
+override linear_out: f32 = 0.0;
+
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
 @group(1) @binding(0) var flare: texture_2d<f32>;
 @group(1) @binding(1) var flare_sampler: sampler;
@@ -59,5 +65,10 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // own alpha carries the shape and its rgb the colour. Both are used: a flare
     // whose texel is transparent must not brighten the framebuffer.
     let shape = texel.a;
-    return vec4<f32>(texel.rgb * in.colour.rgb, shape * in.colour.a);
+    let rgb = texel.rgb * in.colour.rgb;
+    // On the linear float target the flare's gamma-authored colour is decoded
+    // so the additive blend and the encode after it round-trip; on a gamma
+    // target this is the identity.
+    let out_rgb = mix(rgb, pow(rgb, vec3<f32>(2.2)), linear_out);
+    return vec4<f32>(out_rgb, shape * in.colour.a);
 }

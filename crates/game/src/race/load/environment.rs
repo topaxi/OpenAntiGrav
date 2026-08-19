@@ -121,6 +121,80 @@ pub(super) fn envsettings_fog(
     Some(mesh_render::Fog::authored_exp2(colour, density))
 }
 
+/// The `HDR and Bloom` values a Wipeout HD circuit authors, or `None` with
+/// the reason reported.
+///
+/// These are the parameters the engine patches into the read
+/// `FunkLayerBloom` gate and blur programs - the formulas live in
+/// `oag_render::post::hd_bloom`, every one of them the microcode's own. A
+/// file without the whole set draws without the chain rather than with a
+/// guessed half of it, and says so.
+pub(super) fn envsettings_bloom(
+    archives: &mut oag_assets::Archives,
+    track: &str,
+    report: &mut Vec<String>,
+) -> Option<oag_render::post::hd_bloom::Params> {
+    use oag_formats::envsettings::{
+        BLOOM_ADAPTION_BOOST, BLOOM_ADAPTION_RATE, BLOOM_ALPHA_CONTRIBUTION,
+        BLOOM_FRAME_CONTRIBUTION, BLOOM_FRAME_EXPONENT, BLOOM_HORIZONTAL_SIZE, BLOOM_VERTICAL_SIZE,
+        EnvSettings, TONE_ADAPTION_BOOST, TONE_DARKENING_CLAMP, TONE_MAXIMUM_BRIGHTNESS,
+    };
+    let name = envsettings_name(track)?;
+    let blob = archives.read_name(&name).ok()?;
+    let text = String::from_utf8(blob).ok()?;
+    let env = EnvSettings::parse(&text).ok()?;
+    let (
+        Some(alpha_contribution),
+        Some(frame_contribution),
+        Some(frame_exponent),
+        Some(horizontal_size),
+        Some(vertical_size),
+        Some(adaption_rate),
+        Some(adaption_boost),
+        Some(tone_adaption_boost),
+        Some(tone_darkening_clamp),
+        Some(tone_maximum_brightness),
+    ) = (
+        env.scalar(BLOOM_ALPHA_CONTRIBUTION),
+        env.scalar(BLOOM_FRAME_CONTRIBUTION),
+        env.scalar(BLOOM_FRAME_EXPONENT),
+        env.scalar(BLOOM_HORIZONTAL_SIZE),
+        env.scalar(BLOOM_VERTICAL_SIZE),
+        env.scalar(BLOOM_ADAPTION_RATE),
+        env.scalar(BLOOM_ADAPTION_BOOST),
+        env.scalar(TONE_ADAPTION_BOOST),
+        env.scalar(TONE_DARKENING_CLAMP),
+        env.scalar(TONE_MAXIMUM_BRIGHTNESS),
+    )
+    else {
+        report.push(format!(
+            "{name}: no complete HDR and Bloom block; the race draws without the read \
+             bloom chain"
+        ));
+        return None;
+    };
+    report.push(format!(
+        "{name}: bloom gate alpha x{alpha_contribution}, lum^{frame_exponent} \
+         x{frame_contribution} faded by adaptation (rate {adaption_rate}, boost \
+         {adaption_boost}), blur steps {horizontal_size}/{vertical_size}, exposure \
+         {tone_maximum_brightness} - min(adapted x{tone_adaption_boost}, \
+         {tone_darkening_clamp}) - formulas read from the executable's own \
+         FunkLayerBloom microcode and its PPU chain runner"
+    ));
+    Some(oag_render::post::hd_bloom::Params {
+        alpha_contribution,
+        frame_contribution,
+        frame_exponent,
+        horizontal_size,
+        vertical_size,
+        adaption_rate,
+        adaption_boost,
+        tone_adaption_boost,
+        tone_darkening_clamp,
+        tone_maximum_brightness,
+    })
+}
+
 /// The light rig a circuit authors, or [`mesh_render::Light::stand_in`].
 ///
 /// **Every way this can fail leaves the stand-in and says so in the report.**

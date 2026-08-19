@@ -588,6 +588,15 @@ pub fn load(options: &Options) -> Result<Loaded> {
     } else {
         None
     };
+    // The circuit's `HDR and Bloom` block, which is what turns the HD race
+    // onto the linear float scene target and the read FunkLayerBloom chain -
+    // see `oag_render::post::hd_bloom` for what of that is the microcode's
+    // and what is this project's. Gated to the PS3 path like the fog above.
+    let hd_bloom = if ps3_geometry.is_some() {
+        environment::envsettings_bloom(&mut archives, &track, &mut report)
+    } else {
+        None
+    };
     // The track's authored fog volumes. Empty for a ribbon build, and empty for
     // the four circuits that author no `fogCube` at all - both ordinary, and
     // both meaning the race renders unfogged.
@@ -913,6 +922,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         fog_volumes,
         light,
         authored_fog,
+        hd_bloom,
         liveries,
         rocket_model,
         visibility,

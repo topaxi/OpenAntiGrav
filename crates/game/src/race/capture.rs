@@ -213,6 +213,7 @@ pub fn capture(
         fog_volumes,
         light,
         authored_fog,
+        hd_bloom,
         visibility,
         flare,
         noise,
@@ -331,6 +332,7 @@ pub fn capture(
         fog_volumes,
         light,
         authored_fog,
+        hd_bloom,
     )?;
 
     let target = device.create_texture(&wgpu::TextureDescriptor {

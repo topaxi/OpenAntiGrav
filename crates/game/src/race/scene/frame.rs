@@ -321,17 +321,21 @@ impl Scene {
         let depth_view = self
             .depth
             .create_view(&wgpu::TextureViewDescriptor::default());
+        // Under the HD chain the whole scene draws into its linear float
+        // target instead of the caller's view; the chain's own encode pass is
+        // what reaches `view`, after the read bloom. See `Self::hd`.
+        let target = self.hd.as_ref().map_or(view, |hd| hd.scene_view());
         // MSAA draws into its own multisampled attachment and resolves into
-        // `view` at the end of this one pass; everything else draws straight
-        // into `view`, exactly as before this setting existed. See
+        // the target at the end of this one pass; everything else draws
+        // straight into it, exactly as before this setting existed. See
         // `Self::msaa_color`.
         let msaa_view = self
             .msaa_color
             .as_ref()
             .map(|texture| texture.create_view(&wgpu::TextureViewDescriptor::default()));
         let (attachment_view, resolve_target) = match &msaa_view {
-            Some(msaa_view) => (msaa_view, Some(view)),
-            None => (view, None),
+            Some(msaa_view) => (msaa_view, Some(target)),
+            None => (target, None),
         };
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("race"),
@@ -452,6 +456,15 @@ impl Scene {
         // so this ends the borrow rather than waiting for the scope to.
         drop(pass);
 
+        // Wipeout HD's read post chain: gate, downsample, the two blurs, the
+        // composite back over the linear scene, and the encode into the
+        // caller's view. It replaces the PSP bloom outright - its gate
+        // consumes the same glow-mask alpha as one of its two terms. See
+        // `oag_render::post::hd_bloom`.
+        if let Some(hd) = &self.hd {
+            hd.run(encoder, view);
+            return stats;
+        }
         // The recovered post-process, reading the alpha channel the ribbon and
         // the flare stamped and adding a blurred copy of the masked colour back
         // over the frame. `view` is the resolved image in both the MSAA and the

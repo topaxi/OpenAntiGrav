@@ -394,6 +394,13 @@ pub struct Loaded {
     /// where a volume sample is per-frame, which is why it is a value here
     /// rather than something [`Scene`] samples.
     pub authored_fog: Option<mesh_render::Fog>,
+    /// The circuit's authored `HDR and Bloom` values, out of the same
+    /// `.envsettings`.
+    ///
+    /// Wipeout HD's, and `None` everywhere else. `Some` is what switches the
+    /// race onto the linear float scene target and the read `FunkLayerBloom`
+    /// chain - see `oag_render::post::hd_bloom`.
+    pub hd_bloom: Option<oag_render::post::hd_bloom::Params>,
     /// The track's `Skycube`, when it authors one.
     ///
     /// Built from the same blob as [`Self::track_model`] and indexing the same

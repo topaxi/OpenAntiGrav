@@ -125,6 +125,9 @@ pub const NODE_ANIMS_SIZE: u64 = std::mem::size_of::<NodeAnims>() as u64;
 /// size ceiling - see [`crate::capture`] for both functions' own docs.
 pub use crate::capture::{capture_from, capture_pixels_from};
 
+mod target;
+pub use target::{fragment_options, is_linear_target, linear_constants};
+
 /// Anisotropic filtering level: the one texture-filtering knob modern
 /// renderers expose to a user. Mip generation itself always runs (see
 /// [`mip_chain`]) and is not a setting - every renderer just does it.
@@ -378,6 +381,16 @@ pub fn build(
         label: Some("mesh"),
         source: wgpu::ShaderSource::Wgsl(include_str!("mesh.wgsl").into()),
     });
+    // The target format is the statement about colour space - see
+    // [`is_linear_target`] - and it reaches the shader as a pipeline
+    // constant, so every pipeline built here answers for the target it was
+    // built against and no uniform needs a field the sky's zeroed scene
+    // buffer would miss.
+    let linear_constants: &[(&str, f64)] = if is_linear_target(format) {
+        &[("linear_out", 1.0)]
+    } else {
+        &[]
+    };
 
     let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("mesh"),
@@ -558,7 +571,10 @@ pub fn build(
                 blend: None,
                 write_mask: glow.writes(),
             })],
-            compilation_options: Default::default(),
+            compilation_options: wgpu::PipelineCompilationOptions {
+                constants: linear_constants,
+                ..Default::default()
+            },
         }),
         primitive: wgpu::PrimitiveState {
             // Culling is off on purpose. Strip winding is reconstructed rather
@@ -612,7 +628,10 @@ pub fn build(
                 blend: None,
                 write_mask: glow.writes(),
             })],
-            compilation_options: Default::default(),
+            compilation_options: wgpu::PipelineCompilationOptions {
+                constants: linear_constants,
+                ..Default::default()
+            },
         }),
         primitive: wgpu::PrimitiveState {
             cull_mode: None,
@@ -686,7 +705,10 @@ pub fn build(
                     // which draw paths are allowed to write it and why.
                     write_mask: glow.writes(),
                 })],
-                compilation_options: Default::default(),
+                compilation_options: wgpu::PipelineCompilationOptions {
+                    constants: linear_constants,
+                    ..Default::default()
+                },
             }),
             primitive: wgpu::PrimitiveState {
                 cull_mode: cull.then_some(wgpu::Face::Back),

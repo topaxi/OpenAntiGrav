@@ -33,4 +33,5 @@
 pub mod bloom;
 pub mod fsr1;
 pub mod fxaa;
+pub mod hd_bloom;
 pub mod smaa;
