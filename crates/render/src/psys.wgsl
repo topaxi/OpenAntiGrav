@@ -20,6 +20,11 @@ struct Uniforms {
     model: mat4x4<f32>,
 };
 
+// 1.0 when the render target holds linear light (Wipeout HD's float scene
+// target), 0.0 on every gamma target - set from the target format at
+// pipeline build, see `mesh_render::is_linear_target`.
+override linear_out: f32 = 0.0;
+
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
 
 struct VertexInput {
@@ -87,5 +92,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // Removing it barely moves the sparks - `bits` is white in its own
     // palette either way.
     let rgb = in.colour.rgb * shape;
-    return vec4<f32>(rgb, pow(shape, 1.2) * in.colour.a);
+    // On the linear float target the palette's gamma-authored colour is
+    // decoded so the blend and the encode after it round-trip; on a gamma
+    // target this is the identity. See `mesh_render::is_linear_target`.
+    let out_rgb = mix(rgb, pow(rgb, vec3<f32>(2.2)), linear_out);
+    return vec4<f32>(out_rgb, pow(shape, 1.2) * in.colour.a);
 }

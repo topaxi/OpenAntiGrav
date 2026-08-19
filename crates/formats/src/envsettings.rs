@@ -77,6 +77,16 @@ pub const SUN_SPECULAR_SCALE: &str = "Lighting.Sun specular scale";
 /// `"Lighting.Constant ambient color"`. Three numbers, reaching 3.0.
 pub const AMBIENT_COLOUR: &str = "Lighting.Constant ambient color";
 
+/// `"Lighting.Prelit ambient colour scale"`. Three numbers. The scale the
+/// circuit's own fragment microcode multiplies the powed lightmap by -
+/// `prelit = scale * lightmap.rgb ^ power` - see
+/// `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`.
+pub const PRELIT_SCALE: &str = "Lighting.Prelit ambient colour scale";
+
+/// `"Lighting.Prelit ambient colour power"`. Three numbers, the exponent in
+/// the same term [`PRELIT_SCALE`] scales.
+pub const PRELIT_POWER: &str = "Lighting.Prelit ambient colour power";
+
 /// `"Lighting.Sky colour"`. **Four bytes**, not floats - see the module docs.
 pub const SKY_COLOUR: &str = "Lighting.Sky colour";
 
@@ -86,9 +96,62 @@ pub const SKY_ROTATION: &str = "Lighting.Sky rotation";
 /// `"Fog.Fog Color"`. Three numbers, reaching 1.85.
 pub const FOG_COLOUR: &str = "Fog.Fog Color";
 
-/// `"Fog.Fog Density"`. One number, 0.0003 to 0.03 - an **exponential**
-/// coefficient, where this project's fog uniform is a linear near/far ramp.
+/// `"Fog.Fog Density"`. One number, 0.0003 to 0.03. The circuit materials'
+/// own fragment microcode applies its coefficient as
+/// `exp(-(coefficient * view_depth)^2)`; whether this value reaches that
+/// coefficient unscaled is not read.
 pub const FOG_DENSITY: &str = "Fog.Fog Density";
+
+/// `"HDR and Bloom.Bloom adaption rate"`. One number: the per-frame lerp
+/// rate of the adapted average luminance -
+/// `adapted += rate * (luma(mean) - adapted)`, read out of `FUN_003b4690`.
+/// The settings-block registrar at `0x003a83d8` ties every key in this block
+/// to its field, which is what makes each mapping here a read rather than a
+/// name-shaped guess. See `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`.
+pub const BLOOM_ADAPTION_RATE: &str = "HDR and Bloom.Bloom adaption rate";
+
+/// `"HDR and Bloom.Bloom adaption boost"`. One number: scales the adapted
+/// luminance in the gate's fade - the luminance bloom term is multiplied by
+/// `1 - min(adapted * boost * 0.25, 1)`, `0.25` an inline constant of the
+/// executable.
+pub const BLOOM_ADAPTION_BOOST: &str = "HDR and Bloom.Bloom adaption boost";
+
+/// `"HDR and Bloom.Tone adaption boost"`. One number: scales the adapted
+/// luminance in the read exposure -
+/// `scale = maximum_brightness - min(adapted * this, darkening_clamp)` -
+/// applied as the resolve pass's `scale` parameter.
+pub const TONE_ADAPTION_BOOST: &str = "HDR and Bloom.Tone adaption boost";
+
+/// `"HDR and Bloom.Tone darkening clamp"`. One number: the cap in the same
+/// formula, i.e. how far below the maximum the exposure can fall.
+pub const TONE_DARKENING_CLAMP: &str = "HDR and Bloom.Tone darkening clamp";
+
+/// `"HDR and Bloom.Tone maximum brightness"`. One number: the exposure on a
+/// black frame.
+pub const TONE_MAXIMUM_BRIGHTNESS: &str = "HDR and Bloom.Tone maximum brightness";
+
+/// `"HDR and Bloom.Bloom from alpha contribution"`. One number: the weight of
+/// the glow-mask term in `FunkLayerBloomGate_fp`'s read bright pass -
+/// `frame.rgb * frame.a * this` - see
+/// `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`.
+pub const BLOOM_ALPHA_CONTRIBUTION: &str = "HDR and Bloom.Bloom from alpha contribution";
+
+/// `"HDR and Bloom.Bloom from frame contribution"`. One number: the weight of
+/// the same gate's luminance term - `frame.rgb * lum^exponent * this`.
+pub const BLOOM_FRAME_CONTRIBUTION: &str = "HDR and Bloom.Bloom from frame contribution";
+
+/// `"HDR and Bloom.Bloom from frame exponent"`. One number: the luminance
+/// term's power.
+pub const BLOOM_FRAME_EXPONENT: &str = "HDR and Bloom.Bloom from frame exponent";
+
+/// `"HDR and Bloom.Bloom horizontal size"`. One number: the horizontal blur's
+/// tap spacing, the patched parameter `FunkLayerBloomBlurHorizontal_fp` steps
+/// its nine taps by.
+pub const BLOOM_HORIZONTAL_SIZE: &str = "HDR and Bloom.Bloom horizontal size";
+
+/// `"HDR and Bloom.Bloom vertical size"`. One number: the vertical blur's tap
+/// spacing.
+pub const BLOOM_VERTICAL_SIZE: &str = "HDR and Bloom.Bloom vertical size";
 
 /// One entry's value: the numbers as written, and how they were written.
 #[derive(Debug, Clone, PartialEq)]

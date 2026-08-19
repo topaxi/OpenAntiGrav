@@ -58,6 +58,14 @@ NAMES = {
     0xA6F5352F: "offset",
     0x627BE8EA: "offsets",
     0x2F7FC242: "colourRamp",
+    # Material-table parameters, recovered while reading the fog microcode -
+    # see docs/ghidra/functions/ps3-hdfury-eu/renderer.md and
+    # scripts/ps3-microcode.py. fogColour is the float4 whose .rgb the fog
+    # lerp targets and whose .w is the curve's coefficient.
+    0x3DC31258: "fogColour",
+    0x9CC5AB3A: "positionScale",
+    0xA4972B78: "positionBias",
+    0x515E298E: "diffuse",
     # Attributes
     0xB9D31B0A: "position",
     0xDE7A971B: "normal",

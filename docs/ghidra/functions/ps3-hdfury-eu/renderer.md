@@ -569,8 +569,17 @@ rows, so a 4x4 matrix declares `(0x0204, 4)`.
 **The microcode is inline, at `+0x16`**, preceded by a block of embedded float
 constants. `FunkLayerBloom_vp`'s begins at `0x0092ffe0` with `00031c6c
 005c6055 0186c083 60407ffc` - four-word NV40 vertex instructions. This page
-previously said only that no microcode had been disassembled; that is still
-true, and now it says where it is. Nothing here decodes an instruction.
+previously said only that no microcode had been disassembled. **It now is**:
+[`scripts/ps3-microcode.py`](../../../../scripts/ps3-microcode.py) decodes both
+program kinds, in the executable and in a `.rcsmaterial` alike, against the
+NV40 instruction encodings in Mesa's nouveau headers. Three container facts
+were established empirically on the way and are recorded in the script's own
+header with the checks that pinned them: vertex instructions are stored as
+four big-endian dwords in the spec's own order (all 24 permutations scored,
+identity wins at 1.00 with one END bit, on the last instruction); fragment
+instructions store each dword's 16-bit halves swapped; and a vertex program's
+`c[N]` is the parameter table's register `N + 256` (the table binds `viewProj`
+to c256 and the code multiplies the position by `c[0]..c[3]`).
 
 ### 29 parameter, attribute and sampler names, by preimage
 
@@ -633,12 +642,195 @@ single four-component constant.
   and `0x007b0630` (by `0x003a83d8` and `0x003a9520`, the same two functions
   that name `Lighting.Sky colour`).
 
-None of that says whether the term is `exp`, `exp2`, linear or squared, and the
+None of that said whether the term is `exp`, `exp2`, linear or squared, and the
 authored densities span `0.0003` to `0.03`, over which those candidates diverge
-by more than the picture. **Reading it needs the vertex microcode**, which is
-located above and undecoded. Until then `oag-render` draws an HD race unfogged
-rather than at a guessed ramp - see
-[`envsettings.md`](../../../formats/envsettings.md).
+by more than the picture.
+
+### The race fog curve is read, out of the circuit materials' own microcode
+
+Read 2026-08-18 with [`scripts/ps3-microcode.py`](../../../../scripts/ps3-microcode.py).
+The circuit's fog is **not** the `fogFactors` vertex path above - that constant
+appears only in the executable's own 124 blocks (`FunkLayerBloom_vp` among
+them, whose chain is a *power* curve for the front end). A circuit draws
+through the `SHO` blocks in its own `.rcsmaterial` files, and those do it
+**per fragment**:
+
+```text
+clouds.rcsmaterial, fragment block #3 (talons_junction):
+@0x13  MUL R3.x, f[TC3].wwww, {..}.wwww      <- view depth * fogColour.w
+@0x23  MUL R3.w, -R3.xxxx, R3.xxxx           <- negate and square
+@0x2c  MUL R1.w, R3.wwww, {1.44269,..}.xxxx  <- * log2(e)
+@0x2f  EX2_SAT R1.w, R1.wwww                 <- f = e^-(k*d)^2, saturated
+@0x31  MAD R2.xyz, -{fog rgb}, R1.wwww, {fog rgb}
+@0x33  MAD H2.xyz, R1.wwww, H2, R2           <- lerp(fog colour, lit, f)
+```
+
+So the curve is `f = exp(-(coefficient * view_depth)^2)` - squared
+exponential - and the distance is **clip-space `w`**: the paired vertex block
+writes `o[TC3]` as world position with `.w` copied from the position it just
+projected, so the interpolant is view depth, not radial distance.
+
+**The coefficient and the colour arrive together, and the parameter is named
+by preimage.** Both inline constants are patched by the *same* material
+parameter - the patch chain is `fslot -> u16 index at block+fslot -> offset
+list -> 16-byte code slots`, and following it lands both on one `float4` whose
+name hash `0x3dc31258` is `~crc32("fogColour")`. Two more preimages fell out
+of the same tables: `positionScale`/`positionBias` (`0x9cc5ab3a`/`0xa4972b78`),
+the dequantisation pair every circuit vertex program applies as `v * scale +
+bias` - the shader interface confirming
+[`rcsmodel.md`](../../../formats/rcsmodel.md)'s bias-and-scale reading from
+the disc's other side - and `diffuse` (`0x515e298e`), sampler unit 0.
+
+**The census, over every material of Talon's Junction**: 54 `.rcsmaterial`,
+857 fragment programs, **657 declare a patched `fogColour` and 657 contain the
+`log2(e)`-into-`EX2` chain** - and on the 20 blocks of
+`diffuse_specular_v01.rcsmaterial` the two properties hold block-for-block,
+an exact iff. The remainder are the depth/shadow-shaped variants that write
+no colour at all.
+
+**What is still not read**: how the engine fills `fogColour.w` from
+`Fog.Fog Density`, and what selects the `Alternate` pair. `oag-render` now
+draws an HD race on this curve with the authored density passed through
+unscaled - `mesh_render::Fog::authored_exp2` says which halves are the disc's
+and which are that reading - judged against an rpcs3 reference frame of the
+same grid. Confidence 84 on the curve (the static-reading cap; the formula is
+the microcode's own arithmetic), 60 on density-unscaled.
+
+### The registry is resolved: every post program's block is addressable
+
+Read 2026-08-18 with [`scripts/ps3-registry.py`](../../../../scripts/ps3-registry.py).
+`ShaderRegistry_Register`'s signature is `Register(slot, name, block)` - the
+**third** argument points straight at the program's `SHO` block, established
+by reading the call site at `0x003b3938` rather than assumed. Resolving the
+`lwz r4/r5, d(r2)` operands of every `bl` to it, each against its own
+function's OPD TOC, ties 62 of the 121 named programs to their blocks, the
+whole `FunkLayer` post chain among them; every resolved pointer lands on a
+`SHO\x08` magic, which is the self-check.
+
+### The bloom chain, read pass by pass
+
+With names on blocks, `scripts/ps3-microcode.py fp <block>` reads the M6
+bloom exactly. All constants below are the microcode's own; the patched ones
+line up one-for-one with the `.envsettings` `HDR and Bloom` keys:
+
+- **`FunkLayerBloomGate_fp` (`0x92d580`), the bright pass**:
+  `gate = frame.rgb * frame.a * <Bloom from alpha contribution>`
+  ` + frame.rgb * pow(dot(frame.rgb, (0.9, 1.77, 0.33)), <Bloom from frame exponent>) * <Bloom from frame contribution>`
+  plus a patched bias and a subtractive clamp term. The luminance weights are
+  inline - `(0.3, 0.59, 0.11) * 3` - and the `pow` is the usual `LG2`/`EX2`
+  pair. So HD blooms from the **glow-mask alpha and from HDR luminance at
+  once**, where Pulse's recovered gate is alpha-only.
+- **`FunkLayerBloomDownsample_fp` (`0x92d780`)**: a single-tap scaled copy
+  with an alpha scale-and-bias - no filtering in the shader; the sampler does
+  it.
+- **`FunkLayerBloomBlurVertical_fp` (`0x92d880`) /
+  `Horizontal` (`0x92dc80`)**: a nine-tap separable kernel, weights
+  `1, 0.8, 0.5, 0.2, 0.1` mirrored and divided by exactly `4.2` (the final
+  `MUL` by `0.238095` = `1/4.2`), tap spacing a patched parameter -
+  `Bloom horizontal size`/`vertical size` are the authored values that reach
+  it.
+- **`FunkLayerCopy_fp` (`0x92cd80`)** is a plain textured copy and
+  **`FunkLayerColour2d_fp` (`0x92ce00`)** a flat-colour quad: **there is no
+  tone-curve program anywhere in the chain.** The `Tone adaption boost` /
+  `Tone maximum brightness` family therefore feeds a PPU-computed **exposure
+  scale**, most plausibly folded into the per-draw patched lighting
+  constants; the settings block that receives those keys is registered by
+  `0x003a83d8`/`0x003a9520`/`0x006909a8` and the frame-time consumer is not
+  yet read. Nothing implements a guessed curve on the strength of this - the
+  absence of one is the finding.
+
+**What implementing the read bloom needs**, and why it is not in this change:
+the gate's luminance term is `pow(lum, 4) * 0.03` on Talon's Junction, which
+only produces the reference frame's glow when `lum` runs over 1.0 - the gate
+reads the **pre-exposure linear scene**. This renderer's race target is
+`Rgba8Unorm` and saturates, so a faithful bloom needs the HD path rendered to
+a float target first (scene in linear, gate, blur, composite, then the
+exposure stand-in and encode). That is the M6-for-HD work item, now with
+every constant read. *(Done the next day - the two sections below are what
+finished it.)*
+
+### The chain runner, and every engine-fed parameter (2026-08-19)
+
+`FUN_003b4690` is the PPU function that runs the whole `FunkLayerBloom` set
+and patches its parameters - found by walking who loads the descriptor table
+at `0x8b73c4` (the ten program-name pointers, followed by the parameter
+names `size, uvSize, contribution, additiveColour, offsetScale, offset,
+screenOrigin, screenSize, distanceScalar, uvScale, uvScaleOrigin, texture,
+sourceImage`). Its setup twin `FUN_003af980` allocates the target ladder:
+one half-res, four quarter-res and two eighth-res buffers (`size >> 1/2/3`).
+Confidence 90 throughout this section - static reading, two independent
+routes (microcode operand order and PPU fill) agreeing on every value.
+
+What it settles, each previously an unknown of the gate:
+
+- **`contribution.w` is hard-coded zero** - the microcode's
+  `(1 - contribution.w * frame.a)` damping factor never engages.
+- **`additiveColour` is an event flash**: `{v,v,v,0}` with
+  `v = flash * k + 0.1` while a flash field is live, `{0,0,0,0}` otherwise.
+- **`contribution.y` is the authored `Bloom from frame contribution` faded
+  by luminance adaptation**: `y = (1 - min(adapted * <Bloom adaption boost>
+  * 0.25, 1)) * authored`, `0.25` an inline constant (TOC value `0x8b743c`).
+- **The adaptation is a CPU readback loop**: the quarter-res scene is halved
+  iteratively to a handful of pixels, read back, its mean colour stored at
+  FunkLayer+0x240 and its luminance - weights `(0.3, 0.59, 0.11)`, TOC
+  values `0x8b74fc..0x8b7504` - lerped into the persistent state at +0x254:
+  `adapted += <Bloom adaption rate> * (avgLum - adapted)`.
+- **The blur runs at quarter res with tap step `authored size / buffer
+  size`**: the multipliers are the TOC constants `1/480` and `1/270`
+  (`0x8b7508`/`0x8b750c`) - the quarter buffers of a 1080p frame.
+- **The gate reads the quarter-res scene**, not the full frame: downsample
+  to half, to quarter, gate, blur-vertical, blur-horizontal, ping-ponging
+  the quarter pair.
+
+The settings block the parameters come from is pinned by its registrar
+(`FUN_003a83d8`): each `HDR and Bloom.*` key string maps to a field of the
+singleton `FUN_003a9520` returns - `+0x52c` adaption rate, `+0x530/0x534/
+0x538` frame contribution/exponent/alpha contribution, `+0x53c` adaption
+boost, `+0x540/0x544/0x548` the Tone family, `+0x54c` `Bloom feedback` (a
+key no circuit file authors), `+0x550/0x554` the blur sizes, `+0x558..0x570`
+the radial set. That mapping is what turns every "plausibly this key" in
+the sections above into a read.
+
+### The exposure is read: `scale` on the resolve, not a tone curve (2026-08-19)
+
+The `Tone` family's consumer is `FUN_003e3268` (the every-frame present
+path; `FUN_003df7c0` is a standalone re-run of its tail). It is the sole
+caller of the chain runner, stores the returned adapted luminance at
+`0x008c3520+0x28`, and computes
+
+```text
+scale = <Tone maximum brightness> - min(<Tone adaption boost> * adapted,
+                                        <Tone darkening clamp>)
+```
+
+(`fsel`-min, quoted in full in the analysis notes). On Talon's Junction
+(boost 20, clamp 3, max 4) that is `4 - min(20 * adapted, 3)`: a black frame
+is pushed 4x, anything with adapted luminance over 0.15 rides at exactly
+1.0, and the image is never darkened below 1x - **the "tonemap" is a plain
+scene multiplier with a floor**, which is why no tone-curve program exists.
+
+`scale` is bound to the resolve program `downsamplescaleaddfeedback_fp`
+(block `0x92a500`), whose four parameter names all fall to crc32 preimage:
+`scale` (`0x13b9da7b`), `scaleFeedback` (`0xaa718745`), `scaleAdd`
+(`0xabd84d0a`), `fullscreenTintColour` (`0xde0aade6`). Its microcode reads:
+
+```text
+feedback = lerp(scene, 2 * feedbackBuffer, feedbackBuffer.a * scaleFeedback)
+out      = saturate(feedback * scale + bloom * scaleAdd + tint)
+```
+
+with `scaleAdd` fed the constant 1.0 - **the bloom is added after the
+exposure scale, unscaled** - `scaleFeedback` fed `Bloom feedback + a runtime
+float` (inert at the authored default 0), and the resolve ending on its
+`ADD_SAT` with no gamma arithmetic. The correction variant
+(`downsamplescaleaddfeedbackcorrection_fp`) adds `saturation`/`finalScale`/
+`finalBias` parameters whose fill is a render-context field this reading
+did not chase.
+
+All of the above is implemented verbatim in `oag_render::post::hd_bloom`;
+its module header lists the four things that are deliberately *not* modelled
+(GPU-side adaptation in place of the readback, the event flash, the feedback
+mix and tint, and the final display encode).
 
 ## What was deliberately not read
 

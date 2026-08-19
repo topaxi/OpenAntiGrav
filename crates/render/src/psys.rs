@@ -1649,7 +1649,7 @@ impl Pipeline {
                         // protecting the glow mask. See `crate::post::bloom`.
                         write_mask: wgpu::ColorWrites::COLOR,
                     })],
-                    compilation_options: Default::default(),
+                    compilation_options: crate::mesh_render::fragment_options(format),
                 }),
                 primitive: wgpu::PrimitiveState {
                     // A camera-facing quad has no meaningful winding: the

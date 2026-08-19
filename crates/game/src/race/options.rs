@@ -386,6 +386,21 @@ pub struct Loaded {
     /// [`mesh_render::Light::stand_in`] for every title that authors none,
     /// which is all of them but Wipeout HD.
     pub light: mesh_render::Light,
+    /// The circuit's authored distance fog, out of its `.envsettings`.
+    ///
+    /// Wipeout HD's, and `None` everywhere else: Pulse fogs through the
+    /// `fogCube` volumes in [`Self::fog_volumes`] instead, and the two never
+    /// coexist - HD authors no `fogCube` node at all. Static for the race
+    /// where a volume sample is per-frame, which is why it is a value here
+    /// rather than something [`Scene`] samples.
+    pub authored_fog: Option<mesh_render::Fog>,
+    /// The circuit's authored `HDR and Bloom` values, out of the same
+    /// `.envsettings`.
+    ///
+    /// Wipeout HD's, and `None` everywhere else. `Some` is what switches the
+    /// race onto the linear float scene target and the read `FunkLayerBloom`
+    /// chain - see `oag_render::post::hd_bloom`.
+    pub hd_bloom: Option<oag_render::post::hd_bloom::Params>,
     /// The track's `Skycube`, when it authors one.
     ///
     /// Built from the same blob as [`Self::track_model`] and indexing the same

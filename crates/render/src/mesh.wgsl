@@ -52,8 +52,15 @@ struct Fog {
     camera: vec3<f32>,
     far: f32,
     enabled: f32,
-    _pad0: f32,
-    _pad1: f32,
+    // Wipeout HD's fog coefficient - see `curve`.
+    density: f32,
+    // 0.0: the GE's linear ramp over radial distance (Pulse). 1.0: Wipeout
+    // HD's curve, read out of its own fragment microcode - every fogged
+    // .rcsmaterial variant computes `exp(-(density * view_depth)^2)` (a MUL by
+    // log2(e) into EX2_SAT, the product squared and negated) and lerps the fog
+    // colour in by it. The distance is the clip-space w its vertex programs
+    // write into the interpolant, i.e. view depth, not radial distance.
+    curve: f32,
     _pad2: f32,
 };
 
@@ -70,12 +77,28 @@ struct Light {
     _lpad0: f32,
     sun: vec3<f32>,
     _lpad1: f32,
+    // The prelit (baked-lightmap) curve and the specular weight, from the
+    // circuit's `.envsettings`, applied exactly where its own fragment
+    // microcode applies them - see `lit_texel` and `mesh_render::Light`.
+    prelit_scale: vec3<f32>,
+    specular_scale: f32,
+    prelit_power: vec3<f32>,
+    _lpad2: f32,
 };
 
 struct Scene {
     fog: Fog,
     light: Light,
 };
+
+// 1.0 when the render target holds linear light - Wipeout HD's float scene
+// target, where the bloom gate reads pre-exposure luminance and the encode
+// happens in `post::hd_bloom`'s own pass. 0.0 for every gamma target, where
+// this shader encodes (or never decodes) exactly as it always has. Set from
+// the target format at pipeline build - see `mesh_render::is_linear_target` -
+// so no uniform needs a new field and the sky's zeroed scene buffer cannot
+// miss it.
+override linear_out: f32 = 0.0;
 
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
 @group(1) @binding(0) var albedo: texture_2d<f32>;
@@ -122,6 +145,9 @@ struct VertexOutput {
     @location(3) lit: f32,
     @location(4) world: vec3<f32>,
     @location(5) lightmap_texcoord: vec2<f32>,
+    // Clip-space w, which for a perspective projection is view-space depth.
+    // What Wipeout HD's own vertex programs hand their fog - see `Fog::curve`.
+    @location(6) view_depth: f32,
 };
 
 @vertex
@@ -162,6 +188,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     out.texcoord = in.texcoord * anim.xy + anim.zw;
     out.lit = in.lit;
     out.world = world.xyz;
+    out.view_depth = out.clip.w;
     return out;
 }
 
@@ -177,11 +204,16 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 // 15 % at the corners of Pulse's authored field of view. Reproducing view-space
 // z needs the view matrix separately, which this uniform block does not carry;
 // recorded as a known divergence rather than silently accepted.
-fn fogged(colour: vec3<f32>, world: vec3<f32>) -> vec3<f32> {
+fn fogged(colour: vec3<f32>, world: vec3<f32>, view_depth: f32) -> vec3<f32> {
     let distance = length(world - scene.fog.camera);
     let span = max(scene.fog.far - scene.fog.near, 1e-6);
     // 1.0 is clear, 0.0 is fully fogged, matching the GE's own sense.
-    let factor = clamp((scene.fog.far - distance) / span, 0.0, 1.0);
+    let linear = clamp((scene.fog.far - distance) / span, 0.0, 1.0);
+    // Wipeout HD's curve, from its own microcode - see `Fog::curve` above.
+    // Saturated exactly as the original's EX2_SAT is.
+    let scaled = scene.fog.density * view_depth;
+    let authored = clamp(exp(-scaled * scaled), 0.0, 1.0);
+    let factor = mix(linear, authored, scene.fog.curve);
     return mix(scene.fog.colour, colour, mix(1.0, factor, scene.fog.enabled));
 }
 
@@ -194,32 +226,80 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     let fill = max(dot(n, normalize(vec3<f32>(-0.5, 0.2, -0.7))), 0.0);
     let stand_in = vec3<f32>(0.15 + 0.75 * key + 0.25 * fill);
 
-    // The authored one: a single sun in the direction the circuit states, over
-    // the ambient it states. `scene.light.sun` is the sun's hue with its
-    // magnitude divided out, which is all this target can hold.
-    let sun = max(dot(n, scene.light.direction), 0.0);
-    let authored = scene.light.ambient + scene.light.sun * sun;
+    // **The circuit's own baked lighting.** A material naming an
+    // `lmaps/*-lmap.gtf` in its second texture slot is drawn through it,
+    // sampled at the `lightmapUV` the chunk's vertex declaration names - see
+    // `docs/formats/rcsmaterial.md`. Every draw without one binds a black,
+    // alpha-1 placeholder, which zeroes the prelit term and passes the sun
+    // below - exactly the equation the original's own lightmap-less shader
+    // variants state.
+    let baked = textureSample(lightmap, albedo_sampler, in.lightmap_texcoord);
 
-    let rig = mix(stand_in, authored, scene.light.enabled);
-    // Prelit geometry already carries its lighting in the vertex colour.
-    let light = mix(vec3<f32>(1.0), rig, in.lit);
+    // The authored rig, and the combination is no longer this project's: it is
+    // the one every lit variant of an HD circuit `.rcsmaterial` computes,
+    // read out of the fragment microcode
+    // (docs/ghidra/functions/ps3-hdfury-eu/renderer.md). The lightmap enters
+    // through a power curve - `Prelit ambient colour scale/power`, the
+    // .envsettings names - and its **alpha** is a baked shadow mask gating
+    // the direct sun. The magnitudes are authored for a tonemapped linear
+    // target; here the render target's saturation stands in for that stage.
+    let ndl = clamp(dot(n, scene.light.direction), 0.0, 1.0);
+    let baked_linear = pow(baked.rgb, vec3<f32>(2.2));
+    let prelit = scene.light.prelit_scale * pow(baked_linear, scene.light.prelit_power);
+    let authored = scene.light.ambient + prelit + scene.light.sun * (ndl * baked.a);
 
     let texel = textureSample(albedo, albedo_sampler, in.texcoord);
-    // **The circuit's own baked lighting, multiplied in.** A material naming an
-    // `lmaps/*-lmap.gtf` in its second texture slot is drawn through it, sampled
-    // at the `lightmapUV` the chunk's vertex declaration names - see
-    // `docs/formats/rcsmaterial.md`. That the texture *is* a lightmap is read
-    // off four agreeing signals; that the operation is a **multiply** is this
-    // project's assumption, the conventional one, and the load report says so.
-    // Every draw without one binds a white 1x1, so this costs a fetch and
-    // changes nothing.
-    let baked = textureSample(lightmap, albedo_sampler, in.lightmap_texcoord).rgb;
+
+    // The read specular term: half-vector against the sun, exponent 32 - an
+    // inline constant of the microcode, the same in every lit variant - and
+    // masked by the sun's own incidence, the lightmap's shadow alpha and the
+    // diffuse texture's alpha (gloss lives there; a DXT1 diffuse has alpha 1
+    // everywhere, which is full gloss, as the original samples it too). Zero
+    // whenever the authored rig is off: the stand-in never had one.
+    let to_eye = normalize(scene.fog.camera - in.world);
+    let half_vector = to_eye + scene.light.direction;
+    let ndh = clamp(
+        dot(half_vector, n) / max(length(half_vector), 1e-6),
+        0.0,
+        1.0,
+    );
+    let specular = scene.light.sun
+        * (pow(ndh, 32.0) * ndl * baked.a * texel.a * scene.light.specular_scale
+            * scene.light.enabled * in.lit);
+
+    // The authored path shades in linear light, as the RSX does: the samples
+    // are sRGB-decoded and lit by the authored magnitudes. On a gamma target
+    // the result is saturated (the stand-in for HD's exposure stage) and
+    // encoded back here; on the linear float target it leaves **unclamped**,
+    // because values above 1.0 are exactly what the bloom gate reads, and the
+    // saturate-and-encode happens in `post::hd_bloom`'s own pass instead.
+    let texel_linear = pow(texel.rgb, vec3<f32>(2.2));
+    let lit_linear = texel_linear * in.colour.rgb * authored + specular;
+    let encoded = pow(
+        clamp(lit_linear, vec3<f32>(0.0), vec3<f32>(1.0)),
+        vec3<f32>(1.0 / 2.2),
+    );
+    let authored_rgb = mix(encoded, lit_linear, linear_out);
+
+    // The stand-in path, byte-for-byte what every other title always drew.
+    // Prelit geometry (`lit` 0.0) takes it even under the authored rig: its
+    // lighting is baked into its vertex colours, in the gamma space every
+    // Pulse-shaped asset authors, so the linear round-trip above would
+    // re-shade what is already shaded. On the linear target its gamma result
+    // is decoded, so `post::hd_bloom`'s encode returns it byte-for-byte.
+    let light = mix(vec3<f32>(1.0), stand_in, in.lit);
+    let plain = texel.rgb * in.colour.rgb * light;
+    let plain_rgb = mix(plain, pow(plain, vec3<f32>(2.2)), linear_out);
+
     // Vertex colour modulates the texture on all four channels, as the GE's
     // texture-env does - RGB and alpha alike, not RGB alone. Dropping the
     // vertex colour's own alpha here is what made the boost plume's baked
     // falloff vanish; see `every_psp_teams_boost_plume_vertex_alpha_is_bimodal`
     // in `crates/game/tests/boost_plume_ground_truth.rs`.
-    return vec4<f32>(texel.rgb * in.colour.rgb * light * baked, texel.a * in.colour.a);
+    return vec4<f32>(
+        mix(plain_rgb, authored_rgb, scene.light.enabled * in.lit),
+        texel.a * in.colour.a,
+    );
 }
 
 @fragment
@@ -230,7 +310,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // bound, so it stays a hardcoded 1.0 here rather than the texture's and
     // vertex colour's combined alpha, matching every prior opaque render
     // exactly. `fs_main_blend` below is the one that actually reads it.
-    return vec4<f32>(fogged(shaded.rgb, in.world), 1.0);
+    return vec4<f32>(fogged(shaded.rgb, in.world, in.view_depth), 1.0);
 }
 
 // Used only by the blended pipeline - see
@@ -241,7 +321,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 @fragment
 fn fs_main_blend(in: VertexOutput) -> @location(0) vec4<f32> {
     let shaded = lit_texel(in);
-    return vec4<f32>(fogged(shaded.rgb, in.world), shaded.a);
+    return vec4<f32>(fogged(shaded.rgb, in.world, in.view_depth), shaded.a);
 }
 
 // The GE's real alpha-test call **is** recovered now:
@@ -297,5 +377,5 @@ fn fs_main_alpha_test(in: VertexOutput) -> @location(0) vec4<f32> {
     if shaded.a < ALPHA_TEST_THRESHOLD {
         discard;
     }
-    return vec4<f32>(fogged(shaded.rgb, in.world), 1.0);
+    return vec4<f32>(fogged(shaded.rgb, in.world, in.view_depth), 1.0);
 }

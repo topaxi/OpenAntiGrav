@@ -1,0 +1,690 @@
+//! Wipeout HD's post chain: a linear float scene target, the read
+//! `FunkLayerBloom` passes over it, and the encode that stands in for the
+//! unread exposure stage.
+//!
+//! Recovered from the EBOOT twice over - the fragment microcode of every
+//! pass (`scripts/ps3-microcode.py`) and the PPU function that runs the
+//! chain and fills the patched parameters (`FUN_003b4690`, read 2026-08-19).
+//! See [renderer.md](../../../../docs/ghidra/functions/ps3-hdfury-eu/renderer.md),
+//! "The bloom chain, read pass by pass". **Every formula here is the
+//! executable's; the parameters are the `.envsettings` `HDR and Bloom`
+//! values, read per circuit and carried in [`Params`].** The chain the
+//! original runs, in its own order:
+//!
+//! 1. downsample the frame to half, then to quarter;
+//! 2. keep halving a copy down to a handful of pixels, read the mean colour
+//!    back and update the **adapted average luminance**:
+//!    `adapted += rate * (luma(mean) - adapted)`, luma weights
+//!    `(0.3, 0.59, 0.11)`;
+//! 3. the **gate** over the quarter-res scene - glow-mask term plus the
+//!    luminance term, the latter *faded by adaptation*:
+//!    `1 - min(adapted * boost * 0.25, 1)`;
+//! 4. the two nine-tap blurs, ping-ponging the quarter buffers, tap spacing
+//!    `authored size / buffer size` (the executable hard-codes `1/480` and
+//!    `1/270` - its quarter buffers of a 1080p frame);
+//! 5. the resolve, `downsamplescaleaddfeedback_fp`, every parameter name
+//!    settled by crc32 preimage: the scene times the **read exposure**
+//!    `scale = <Tone maximum brightness> - min(adapted * <Tone adaption
+//!    boost>, <Tone darkening clamp>)`, plus the blurred bloom times
+//!    `scaleAdd` = 1.0 - the bloom is deliberately *not* exposure-scaled -
+//!    saturated. The exposure arithmetic is `FUN_003e3268`'s own (the
+//!    settings registrar at `0x003a83d8` pins each key to its field).
+//!
+//! What is *not* the disc's, stated rather than hidden:
+//!
+//! - **The adaptation runs on the GPU here** (a 1x1 ping-pong) where the
+//!   original reads the reduced buffer back and lerps on the PPU. Same
+//!   arithmetic, no readback. And on the chain's **first frame** the lerp
+//!   rate is forced to 1 - the state starts at zero and a single-frame
+//!   capture would otherwise render the never-adapted picture no player
+//!   ever sees.
+//! - **The gate's event flash is not modelled.** The engine's
+//!   `additiveColour` is `{0,0,0,0}` outside a whiteout flash driven by
+//!   state this renderer does not carry, and `contribution.w` is hard-coded
+//!   zero by the engine itself, so both drop out of the shader.
+//! - **The resolve's `scaleFeedback` mix and `fullscreenTintColour`** are
+//!   inert at authored defaults (no circuit authors `Bloom feedback`; the
+//!   tint is an event effect) and left out.
+//! - **The final gamma encode.** The original's resolve ends on its
+//!   `ADD_SAT`; the `pow(1/2.2)` after it here remains
+//!   [ADR-0026](../../../../docs/architecture/adr/0026-hd-authored-lighting-is-linear.md)'s
+//!   display-encode stand-in.
+//!
+//! # Why the chain owns the scene target
+//!
+//! The gate's luminance term reads the **pre-exposure linear scene** - on
+//! Talon's Junction it only produces the reference frame's glow when the
+//! weighted luminance runs over 1.0. So the race is drawn into a float
+//! target in linear light first, and that target is this chain's:
+//! [`Chain::scene_view`] is what the race pass attaches, and [`Chain::run`]
+//! is everything between it and the caller's own surface.
+
+use anyhow::Result;
+
+/// The scene target's format: linear, and wide enough for the gate to see
+/// luminance above 1.0. Drawing into it is what tells every pipeline in this
+/// crate to output linear light - see `mesh_render::is_linear_target`.
+pub const SCENE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
+
+/// The luminance weights of the gate's `dot`, inline in
+/// `FunkLayerBloomGate_fp`'s own microcode: `(0.3, 0.59, 0.11) * 3`. The
+/// adaptation's own weights are the plain [`ADAPT_LUMINANCE`].
+pub const GATE_LUMINANCE: [f32; 3] = [0.9, 1.77, 0.33];
+
+/// The luminance weights of the PPU adaptation loop, the executable's own
+/// constants at `0x8b74fc..0x8b7504`.
+pub const ADAPT_LUMINANCE: [f32; 3] = [0.3, 0.59, 0.11];
+
+/// The inline factor the engine applies between the adapted luminance and
+/// the authored `Bloom adaption boost` in the gate fade - the constant at
+/// `0x8b743c`.
+pub const ADAPTION_FADE_SCALE: f32 = 0.25;
+
+/// The blur kernel of `FunkLayerBloomBlurVertical_fp`/`Horizontal_fp`:
+/// nine taps, weights `1, 0.8, 0.5, 0.2, 0.1` mirrored, divided by exactly
+/// 4.2 (the microcode's final `MUL` by `0.238095`).
+pub const BLUR_WEIGHTS: [f32; 9] = [0.1, 0.2, 0.5, 0.8, 1.0, 0.8, 0.5, 0.2, 0.1];
+
+/// The kernel's divisor, the microcode's own constant.
+pub const BLUR_DIVISOR: f32 = 4.2;
+
+/// One circuit's `HDR and Bloom` values - the parameters the engine patches
+/// into the gate and blur programs, read from `track.envsettings`. The
+/// settings-block offsets each name maps to are read out of the registrar
+/// at `0x003a83d8`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Params {
+    /// `Bloom from alpha contribution`: the glow-mask term's weight.
+    pub alpha_contribution: f32,
+    /// `Bloom from frame contribution`: the luminance term's weight.
+    pub frame_contribution: f32,
+    /// `Bloom from frame exponent`: the luminance term's power.
+    pub frame_exponent: f32,
+    /// `Bloom horizontal size`: the horizontal blur's tap spacing, in texels
+    /// of the blur buffer.
+    pub horizontal_size: f32,
+    /// `Bloom vertical size`: the vertical blur's tap spacing.
+    pub vertical_size: f32,
+    /// `Bloom adaption rate`: the adaptation lerp's per-frame rate.
+    pub adaption_rate: f32,
+    /// `Bloom adaption boost`: scales the adapted luminance in the gate
+    /// fade, together with [`ADAPTION_FADE_SCALE`].
+    pub adaption_boost: f32,
+    /// `Tone adaption boost`: scales the adapted luminance in the resolve's
+    /// exposure - `scale = max_brightness - min(adapted * this, clamp)`.
+    pub tone_adaption_boost: f32,
+    /// `Tone darkening clamp`: the cap on that product, i.e. how far below
+    /// `Tone maximum brightness` the exposure can fall.
+    pub tone_darkening_clamp: f32,
+    /// `Tone maximum brightness`: the exposure on a black frame.
+    pub tone_maximum_brightness: f32,
+}
+
+/// A scratch colour buffer: sampled by the next pass, drawn into by this one.
+#[derive(Debug)]
+struct Target {
+    #[expect(dead_code, reason = "held so the view stays valid")]
+    texture: wgpu::Texture,
+    view: wgpu::TextureView,
+}
+
+impl Target {
+    fn new(device: &wgpu::Device, label: &str, (width, height): (u32, u32)) -> Self {
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some(label),
+            size: wgpu::Extent3d {
+                width: width.max(1),
+                height: height.max(1),
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: SCENE_FORMAT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        Self { texture, view }
+    }
+}
+
+/// The uniform block `hd_bloom.wgsl` reads, one per pass.
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+struct Constants {
+    step: [f32; 2],
+    alpha_contribution: f32,
+    frame_contribution: f32,
+    frame_exponent: f32,
+    adaption_rate: f32,
+    adaption_boost: f32,
+    tone_adaption_boost: f32,
+    tone_darkening_clamp: f32,
+    tone_maximum_brightness: f32,
+    _pad: [f32; 2],
+}
+
+/// One ready-to-run pass: pipeline, its input bindings, its output.
+#[derive(Debug)]
+struct Pass {
+    group: wgpu::BindGroup,
+    target: wgpu::TextureView,
+}
+
+/// Everything sized to the viewport, rebuilt whole on resize.
+#[derive(Debug)]
+struct Sized {
+    scene: Target,
+    /// Downsample scene -> half -> quarter, then the luminance reduction
+    /// halvings, all on the copy pipeline, in order.
+    downsamples: Vec<Pass>,
+    /// The two adapt-pass variants, indexed by which ping-pong texture is
+    /// being written this frame.
+    adapt: [Pass; 2],
+    /// The two gate variants, reading the adapted state written this frame.
+    gate: [Pass; 2],
+    blur_vertical: Pass,
+    blur_horizontal: Pass,
+    /// The two resolve variants, reading the adapted state written this
+    /// frame. `Pass::target` is unused here - the caller's view is the
+    /// target.
+    encode: [Pass; 2],
+    #[expect(dead_code, reason = "held so the views stay valid")]
+    scratch: Vec<Target>,
+}
+
+/// The whole HD post chain: the float scene target and every pass between
+/// it and the caller's surface.
+#[derive(Debug)]
+pub struct Chain {
+    params: Params,
+    copy: wgpu::RenderPipeline,
+    adapt: wgpu::RenderPipeline,
+    /// The adapt pipeline with the lerp rate forced to 1, run once: the
+    /// state starts at zero and a single captured frame would otherwise
+    /// show the never-adapted picture. See the module header.
+    adapt_jump: wgpu::RenderPipeline,
+    gate: wgpu::RenderPipeline,
+    blur: wgpu::RenderPipeline,
+    encode: wgpu::RenderPipeline,
+    layout: wgpu::BindGroupLayout,
+    sampler: wgpu::Sampler,
+    sized: Sized,
+    /// Which adaptation ping-pong texture the next frame writes.
+    current: std::cell::Cell<usize>,
+    /// Whether the adaptation state still holds its zero-initialised value.
+    fresh: std::cell::Cell<bool>,
+}
+
+impl Chain {
+    /// Builds the pipelines and the targets for a viewport of `size`.
+    ///
+    /// `surface_format` is the caller's own target, which only the encode
+    /// pass touches; everything before it runs on [`SCENE_FORMAT`].
+    ///
+    /// # Errors
+    ///
+    /// Propagates a shader or pipeline that will not build.
+    pub fn new(
+        device: &wgpu::Device,
+        surface_format: wgpu::TextureFormat,
+        size: (u32, u32),
+        params: Params,
+    ) -> Result<Self> {
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("hd bloom"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("hd_bloom.wgsl").into()),
+        });
+        let texture_entry = |binding| wgpu::BindGroupLayoutEntry {
+            binding,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Texture {
+                sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                view_dimension: wgpu::TextureViewDimension::D2,
+                multisampled: false,
+            },
+            count: None,
+        };
+        let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("hd bloom"),
+            entries: &[
+                texture_entry(0),
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                texture_entry(3),
+                texture_entry(4),
+            ],
+        });
+        // Bilinear and clamped. The downsample microcode is a single tap
+        // whose filtering it leaves to the sampler, which over an exact 2x
+        // halving makes each tap the 2x2 box mean - what the luminance
+        // reduction wants - and clamping keeps the blur from wrapping glow
+        // across the frame edge.
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("hd bloom"),
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            ..Default::default()
+        });
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("hd bloom"),
+            bind_group_layouts: &[Some(&layout)],
+            immediate_size: 0,
+        });
+        let pipeline = |label: &str,
+                        entry: &str,
+                        format: wgpu::TextureFormat,
+                        blend: Option<wgpu::BlendState>,
+                        constants: &[(&str, f64)]| {
+            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some(label),
+                layout: Some(&pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: &shader,
+                    entry_point: Some("vs_main"),
+                    buffers: &[],
+                    compilation_options: Default::default(),
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &shader,
+                    entry_point: Some(entry),
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format,
+                        blend,
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                    compilation_options: wgpu::PipelineCompilationOptions {
+                        constants,
+                        ..Default::default()
+                    },
+                }),
+                primitive: wgpu::PrimitiveState::default(),
+                depth_stencil: None,
+                multisample: wgpu::MultisampleState::default(),
+                multiview_mask: None,
+                cache: None,
+            })
+        };
+        let copy = pipeline("hd bloom copy", "fs_copy", SCENE_FORMAT, None, &[]);
+        let adapt = pipeline("hd bloom adapt", "fs_adapt", SCENE_FORMAT, None, &[]);
+        let adapt_jump = pipeline(
+            "hd bloom adapt jump",
+            "fs_adapt",
+            SCENE_FORMAT,
+            None,
+            &[("rate_override", 1.0)],
+        );
+        let gate = pipeline("hd bloom gate", "fs_gate", SCENE_FORMAT, None, &[]);
+        let blur = pipeline("hd bloom blur", "fs_blur", SCENE_FORMAT, None, &[]);
+        // No separate composite pass: the read resolve
+        // (`downsamplescaleaddfeedback_fp`) adds the bloom itself, after
+        // the exposure scale - see `fs_encode`.
+        let encode = pipeline(
+            "hd encode",
+            "fs_encode",
+            surface_format.remove_srgb_suffix(),
+            None,
+            &[],
+        );
+        let sized = Self::sized(device, &layout, &sampler, size, params);
+        Ok(Self {
+            params,
+            copy,
+            adapt,
+            adapt_jump,
+            gate,
+            blur,
+            encode,
+            layout,
+            sampler,
+            sized,
+            current: std::cell::Cell::new(0),
+            fresh: std::cell::Cell::new(true),
+        })
+    }
+
+    /// The float scene target the race pass draws into.
+    #[must_use]
+    pub fn scene_view(&self) -> &wgpu::TextureView {
+        &self.sized.scene.view
+    }
+
+    /// Rebuilds the targets for a new viewport size. The adaptation state
+    /// restarts from zero, which the next frame's rate-1 jump re-seeds.
+    pub fn resize(&mut self, device: &wgpu::Device, size: (u32, u32)) {
+        self.sized = Self::sized(device, &self.layout, &self.sampler, size, self.params);
+        self.current.set(0);
+        self.fresh.set(true);
+    }
+
+    fn sized(
+        device: &wgpu::Device,
+        layout: &wgpu::BindGroupLayout,
+        sampler: &wgpu::Sampler,
+        (width, height): (u32, u32),
+        params: Params,
+    ) -> Sized {
+        let (width, height) = (width.max(1), height.max(1));
+        let half = ((width / 2).max(1), (height / 2).max(1));
+        let quarter = ((width / 4).max(1), (height / 4).max(1));
+        let scene = Target::new(device, "hd scene", (width, height));
+        let half_target = Target::new(device, "hd bloom half", half);
+        let quarter_a = Target::new(device, "hd bloom quarter a", quarter);
+        let quarter_b = Target::new(device, "hd bloom quarter b", quarter);
+        // The luminance reduction: keep halving from the quarter buffer to a
+        // single pixel, the same iterated halving FUN_003b4690 runs before
+        // its readback.
+        let mut reductions = Vec::new();
+        let (mut w, mut h) = quarter;
+        while w > 1 || h > 1 {
+            w = (w / 2).max(1);
+            h = (h / 2).max(1);
+            reductions.push(Target::new(device, "hd bloom reduce", (w, h)));
+        }
+        let adapted = [
+            Target::new(device, "hd bloom adapted a", (1, 1)),
+            Target::new(device, "hd bloom adapted b", (1, 1)),
+        ];
+
+        let constants = |label: &str, step: [f32; 2]| {
+            let c = Constants {
+                step,
+                alpha_contribution: params.alpha_contribution,
+                frame_contribution: params.frame_contribution,
+                frame_exponent: params.frame_exponent,
+                adaption_rate: params.adaption_rate,
+                adaption_boost: params.adaption_boost,
+                tone_adaption_boost: params.tone_adaption_boost,
+                tone_darkening_clamp: params.tone_darkening_clamp,
+                tone_maximum_brightness: params.tone_maximum_brightness,
+                _pad: [0.0; 2],
+            };
+            let bytes = bytemuck::bytes_of(&c);
+            let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some(label),
+                size: bytes.len() as u64,
+                usage: wgpu::BufferUsages::UNIFORM,
+                mapped_at_creation: true,
+            });
+            buffer
+                .slice(..)
+                .get_mapped_range_mut()
+                .expect("a freshly mapped buffer maps")
+                .copy_from_slice(bytes);
+            buffer.unmap();
+            buffer
+        };
+        let still = constants("hd bloom constants", [0.0, 0.0]);
+        // The authored `Bloom vertical/horizontal size` over the buffer
+        // being blurred - the executable's own arithmetic, whose hard-coded
+        // 1/480 and 1/270 are its quarter buffers of a 1080p frame.
+        let vertical = constants(
+            "hd bloom blur-v constants",
+            [0.0, params.vertical_size / quarter.1 as f32],
+        );
+        let horizontal = constants(
+            "hd bloom blur-h constants",
+            [params.horizontal_size / quarter.0 as f32, 0.0],
+        );
+
+        let group = |label: &str,
+                     source: &wgpu::TextureView,
+                     state: &wgpu::TextureView,
+                     bloom: &wgpu::TextureView,
+                     buffer: &wgpu::Buffer| {
+            device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some(label),
+                layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(source),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(sampler),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: wgpu::BindingResource::TextureView(state),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 4,
+                        resource: wgpu::BindingResource::TextureView(bloom),
+                    },
+                ],
+            })
+        };
+        let pass = |label: &str,
+                    source: &wgpu::TextureView,
+                    state: &wgpu::TextureView,
+                    bloom: &wgpu::TextureView,
+                    buffer: &wgpu::Buffer,
+                    target: &wgpu::TextureView| Pass {
+            group: group(label, source, state, bloom, buffer),
+            target: target.clone(),
+        };
+
+        // The unused input slots of a pass bind whatever view is already
+        // bound elsewhere in the pass and never its own target: a texture
+        // bound for sampling in the pass that renders into it - even
+        // unread - is a usage conflict.
+        let mut downsamples = vec![
+            pass(
+                "hd bloom to-half",
+                &scene.view,
+                &scene.view,
+                &scene.view,
+                &still,
+                &half_target.view,
+            ),
+            pass(
+                "hd bloom to-quarter",
+                &half_target.view,
+                &half_target.view,
+                &half_target.view,
+                &still,
+                &quarter_a.view,
+            ),
+        ];
+        let mut previous = &quarter_a.view;
+        for reduction in &reductions {
+            downsamples.push(pass(
+                "hd bloom reduce",
+                previous,
+                previous,
+                previous,
+                &still,
+                &reduction.view,
+            ));
+            previous = &reduction.view;
+        }
+        let mean = reductions.last().map_or(&quarter_a.view, |r| &r.view);
+        // adapt[i] writes ping-pong texture i, reading the other as state.
+        let adapt = [
+            pass(
+                "hd bloom adapt a",
+                mean,
+                &adapted[1].view,
+                mean,
+                &still,
+                &adapted[0].view,
+            ),
+            pass(
+                "hd bloom adapt b",
+                mean,
+                &adapted[0].view,
+                mean,
+                &still,
+                &adapted[1].view,
+            ),
+        ];
+        // gate[i] runs after adapt[i] and reads the state adapt[i] wrote.
+        let gate = [
+            pass(
+                "hd bloom gate a",
+                &quarter_a.view,
+                &adapted[0].view,
+                &quarter_a.view,
+                &still,
+                &quarter_b.view,
+            ),
+            pass(
+                "hd bloom gate b",
+                &quarter_a.view,
+                &adapted[1].view,
+                &quarter_a.view,
+                &still,
+                &quarter_b.view,
+            ),
+        ];
+        let blur_vertical = pass(
+            "hd bloom blur-v",
+            &quarter_b.view,
+            &quarter_b.view,
+            &quarter_b.view,
+            &vertical,
+            &quarter_a.view,
+        );
+        let blur_horizontal = pass(
+            "hd bloom blur-h",
+            &quarter_a.view,
+            &quarter_a.view,
+            &quarter_a.view,
+            &horizontal,
+            &quarter_b.view,
+        );
+        // The read resolve: scene * exposure + bloom, into the caller's
+        // view. encode[i] reads the adapted state written this frame.
+        let encode = [
+            pass(
+                "hd encode a",
+                &scene.view,
+                &adapted[0].view,
+                &quarter_b.view,
+                &still,
+                &scene.view,
+            ),
+            pass(
+                "hd encode b",
+                &scene.view,
+                &adapted[1].view,
+                &quarter_b.view,
+                &still,
+                &scene.view,
+            ),
+        ];
+        let mut scratch = vec![half_target, quarter_a, quarter_b];
+        scratch.extend(reductions);
+        scratch.extend(adapted);
+        Sized {
+            scene,
+            downsamples,
+            adapt,
+            gate,
+            blur_vertical,
+            blur_horizontal,
+            encode,
+            scratch,
+        }
+    }
+
+    /// Runs the chain: the downsample ladder, the adaptation update, the
+    /// gate, the two blurs, and the read resolve into `view`. The pass
+    /// order is `FUN_003b4690`'s own, the resolve `FUN_003e3268`'s.
+    pub fn run(&self, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) {
+        let mut pass = |label: &str,
+                        pipeline: &wgpu::RenderPipeline,
+                        stage: &Pass,
+                        target: Option<&wgpu::TextureView>,
+                        load: wgpu::LoadOp<wgpu::Color>| {
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some(label),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: target.unwrap_or(&stage.target),
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
+            pass.set_pipeline(pipeline);
+            pass.set_bind_group(0, &stage.group, &[]);
+            pass.draw(0..3, 0..1);
+        };
+        let clear = wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT);
+        for stage in &self.sized.downsamples {
+            pass("hd bloom downsample", &self.copy, stage, None, clear);
+        }
+        let current = self.current.get();
+        let adapt_pipeline = if self.fresh.replace(false) {
+            &self.adapt_jump
+        } else {
+            &self.adapt
+        };
+        pass(
+            "hd bloom adapt",
+            adapt_pipeline,
+            &self.sized.adapt[current],
+            None,
+            clear,
+        );
+        pass(
+            "hd bloom gate",
+            &self.gate,
+            &self.sized.gate[current],
+            None,
+            clear,
+        );
+        pass(
+            "hd bloom blur-v",
+            &self.blur,
+            &self.sized.blur_vertical,
+            None,
+            clear,
+        );
+        pass(
+            "hd bloom blur-h",
+            &self.blur,
+            &self.sized.blur_horizontal,
+            None,
+            clear,
+        );
+        pass(
+            "hd encode",
+            &self.encode,
+            &self.sized.encode[current],
+            Some(view),
+            clear,
+        );
+        self.current.set(1 - current);
+    }
+}

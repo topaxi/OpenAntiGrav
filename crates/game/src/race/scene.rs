@@ -29,6 +29,12 @@ pub struct Scene {
     /// Empty for a track that authors no `fogCube` - four of the forty - and the
     /// race then renders unfogged, which is what the original does too.
     fog_volumes: Vec<oag_formats::fog::FogVolume>,
+    /// Wipeout HD's authored distance fog, static for the whole race.
+    ///
+    /// What binds when no `fogCube` volume covers the camera - which on HD is
+    /// always, since HD authors no `fogCube` at all. See
+    /// [`crate::race::Loaded::authored_fog`].
+    authored_fog: Option<mesh_render::Fog>,
     /// The track's `Skycube`, drawn camera-centred before anything else.
     ///
     /// `None` when the file authors no sky, which is every Pure track and every
@@ -114,6 +120,12 @@ pub struct Scene {
     /// writer: it blooms the glow mask, and any surface that opts into the mask
     /// is handled by the same three passes. See `oag_render::post::bloom`.
     bloom: Option<oag_render::post::bloom::Bloom>,
+    /// Wipeout HD's post chain: the linear float scene target the whole race
+    /// draws into, the read `FunkLayerBloom` passes over it, and the encode
+    /// into the caller's own view. `None` for every other title, where the
+    /// scene draws straight into the caller's target as it always has. See
+    /// `oag_render::post::hd_bloom` and [`Scene::render`].
+    hd: Option<oag_render::post::hd_bloom::Chain>,
     depth: wgpu::Texture,
     /// The colour attachment every pipeline here actually draws into, and its
     /// sample count.
@@ -169,6 +181,8 @@ impl Scene {
         anti_aliasing: crate::display::AntiAliasing,
         fog_volumes: Vec<oag_formats::fog::FogVolume>,
         light: mesh_render::Light,
+        authored_fog: Option<mesh_render::Fog>,
+        hd_bloom: Option<oag_render::post::hd_bloom::Params>,
     ) -> Result<Self> {
         // The far plane comes from the track's own bounding sphere: a track is
         // hundreds of units across, and a fixed guess would either clip it away or
@@ -176,6 +190,31 @@ impl Scene {
         let far = track_model.radius * 4.0;
         let sample_count = anti_aliasing.msaa_samples();
         let scene_depth = mesh_render::Depth::Scene;
+        // Wipeout HD's post chain: a linear float scene target, the read
+        // FunkLayerBloom passes and the encode. Present exactly when the
+        // circuit authors an `HDR and Bloom` block - see
+        // `oag_render::post::hd_bloom` for what of it is the microcode's.
+        // A failure is reported and dropped the way the PSP bloom's is: a
+        // race without it is the pre-HDR picture, not a broken one.
+        let hd = match hd_bloom
+            .map(|params| oag_render::post::hd_bloom::Chain::new(device, format, size, params))
+            .transpose()
+        {
+            Ok(hd) => hd,
+            Err(e) => {
+                eprintln!("hd post chain unavailable ({e}) - the frame draws without it");
+                None
+            }
+        };
+        // **The format is the statement about colour space.** With the chain
+        // in place every pipeline below is built against the linear float
+        // target and switches itself to linear output - see
+        // `mesh_render::is_linear_target`.
+        let format = if hd.is_some() {
+            oag_render::post::hd_bloom::SCENE_FORMAT
+        } else {
+            format
+        };
         let sky = sky_model
             .filter(|model| !model.indices.is_empty())
             .map(|model| {
@@ -478,8 +517,10 @@ impl Scene {
         ));
         let sparks = std::cell::RefCell::new(sparks::Pipeline::new(device, format, sample_count));
         // A failure here is reported and dropped rather than propagated: a race
-        // without a bloom is a dimmer race, not a broken one.
-        let bloom = match bloom_enabled
+        // without a bloom is a dimmer race, not a broken one. The HD chain
+        // replaces this pass outright - its read gate consumes the same glow
+        // mask as one of its two terms - so the two never run together.
+        let bloom = match (bloom_enabled && hd.is_none())
             .then(|| oag_render::post::bloom::Bloom::new(device, format))
             .transpose()
         {
@@ -492,6 +533,7 @@ impl Scene {
 
         Ok(Self {
             bloom,
+            hd,
             track,
             visibility,
             ships,
@@ -504,6 +546,7 @@ impl Scene {
             weapon_pads,
             fog_volumes,
             light,
+            authored_fog,
             exhaust,
             sparks,
             depth: depth_texture(device, size, sample_count),
@@ -520,6 +563,17 @@ impl Scene {
     /// validation error, so this is not optional on resize.
     pub fn resize(&mut self, device: &wgpu::Device, format: wgpu::TextureFormat, size: (u32, u32)) {
         let sample_count = self.anti_aliasing.msaa_samples();
+        // Under the HD chain every scene pipeline was built against the
+        // linear float format, so the MSAA attachment has to match it, and
+        // the chain's own targets track the viewport.
+        let format = if self.hd.is_some() {
+            oag_render::post::hd_bloom::SCENE_FORMAT
+        } else {
+            format
+        };
+        if let Some(hd) = &mut self.hd {
+            hd.resize(device, size);
+        }
         self.depth = depth_texture(device, size, sample_count);
         self.msaa_color = msaa_color_texture(device, format, size, sample_count);
     }

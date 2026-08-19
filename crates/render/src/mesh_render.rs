@@ -125,6 +125,9 @@ pub const NODE_ANIMS_SIZE: u64 = std::mem::size_of::<NodeAnims>() as u64;
 /// size ceiling - see [`crate::capture`] for both functions' own docs.
 pub use crate::capture::{capture_from, capture_pixels_from};
 
+mod target;
+pub use target::{fragment_options, is_linear_target, linear_constants};
+
 /// Anisotropic filtering level: the one texture-filtering knob modern
 /// renderers expose to a user. Mip generation itself always runs (see
 /// [`mip_chain`]) and is not a setting - every renderer just does it.
@@ -378,6 +381,16 @@ pub fn build(
         label: Some("mesh"),
         source: wgpu::ShaderSource::Wgsl(include_str!("mesh.wgsl").into()),
     });
+    // The target format is the statement about colour space - see
+    // [`is_linear_target`] - and it reaches the shader as a pipeline
+    // constant, so every pipeline built here answers for the target it was
+    // built against and no uniform needs a field the sky's zeroed scene
+    // buffer would miss.
+    let linear_constants: &[(&str, f64)] = if is_linear_target(format) {
+        &[("linear_out", 1.0)]
+    } else {
+        &[]
+    };
 
     let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("mesh"),
@@ -558,7 +571,10 @@ pub fn build(
                 blend: None,
                 write_mask: glow.writes(),
             })],
-            compilation_options: Default::default(),
+            compilation_options: wgpu::PipelineCompilationOptions {
+                constants: linear_constants,
+                ..Default::default()
+            },
         }),
         primitive: wgpu::PrimitiveState {
             // Culling is off on purpose. Strip winding is reconstructed rather
@@ -612,7 +628,10 @@ pub fn build(
                 blend: None,
                 write_mask: glow.writes(),
             })],
-            compilation_options: Default::default(),
+            compilation_options: wgpu::PipelineCompilationOptions {
+                constants: linear_constants,
+                ..Default::default()
+            },
         }),
         primitive: wgpu::PrimitiveState {
             cull_mode: None,
@@ -686,7 +705,10 @@ pub fn build(
                     // which draw paths are allowed to write it and why.
                     write_mask: glow.writes(),
                 })],
-                compilation_options: Default::default(),
+                compilation_options: wgpu::PipelineCompilationOptions {
+                    constants: linear_constants,
+                    ..Default::default()
+                },
             }),
             primitive: wgpu::PrimitiveState {
                 cull_mode: cull.then_some(wgpu::Face::Back),
@@ -854,11 +876,18 @@ pub fn build(
 
     // A white 1x1 stands in for untextured draws, so the shader needs no branch.
     // It also fills the slot of a `Texture` node we could not decode, keeping
-    // every later texture at the index its materials expect - and it is what
-    // every draw with no lightmap binds, which makes the shader's multiply the
-    // identity for every title but Wipeout HD.
+    // every later texture at the index its materials expect.
+    //
+    // A draw with no lightmap binds **black with alpha 1** instead: the
+    // shader's authored-rig branch computes the prelit term from the
+    // lightmap's colour and gates the sun by its alpha, so black-opaque is
+    // exactly the equation the original's own lightmap-less shader variants
+    // state - no baked light, full sun. Nothing multiplies a lightmap
+    // straight into the colour any more, so the old white identity has no
+    // reader left.
     let white = make(1, 1, &[255, 255, 255, 255], "white");
-    let mut texture_binds = vec![bind(&white, &white, "white")];
+    let no_lightmap = make(1, 1, &[0, 0, 0, 255], "no lightmap");
+    let mut texture_binds = vec![bind(&white, &no_lightmap, "white")];
     for (index, slot) in model.textures.iter().enumerate() {
         let albedo = match slot {
             Some(t) => make(t.width, t.height, &t.rgba, &t.label),
@@ -866,7 +895,7 @@ pub fn build(
         };
         let lightmap = match model.lightmaps.get(index).and_then(Option::as_ref) {
             Some(t) => make(t.width, t.height, &t.rgba, &t.label),
-            None => make(1, 1, &[255, 255, 255, 255], "no lightmap"),
+            None => make(1, 1, &[0, 0, 0, 255], "no lightmap"),
         };
         let label = slot.as_ref().map_or("undecoded", |t| t.label.as_str());
         texture_binds.push(bind(&albedo, &lightmap, label));

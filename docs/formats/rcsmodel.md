@@ -745,15 +745,38 @@ Talon's Junction showed sky traffic hanging over an empty void.
 
 **All 126 `Mesh` nodes of `talons_junction/track.vex` are props** - blimps,
 girders, tankers, skycars, the largest of them 166 units across. There is no
-road among them. The circuit itself is in the **904 of 983** chunks that no
-`.vex` node references at all, and those chunks carry a **world-space** bias:
-their biases span `-7009..2986` in x and `-7069..6759` in z, which is the
-environment, where a referenced chunk's bias is a few units and needs its node's
-transform.
+road among them. The circuit itself is in the **913 of 983** chunks that no
+`Mesh` node addresses, and those chunks carry a **world-space** bias: their
+biases span `-7009..2986` in x and `-7069..6759` in z, which is the
+environment, where a referenced chunk's bias is a few units and needs its
+node's transform.
 
 So a PS3 model is read in two passes: the meshes its `.vex` places, and the
-geometry nothing in the `.vex` mentions, drawn at identity. On a craft the
-second pass is empty; on a circuit it is nearly everything.
+geometry no `Mesh` node addresses, drawn at identity. On a craft the second
+pass is empty; on a circuit it is nearly everything.
+
+**The pads are second-pass geometry with a first-pass-shaped reference**
+(confidence 90, 2026-08-19). A `Weapon Pad` (`0x3be`) or `Speedup Pad`
+(`0x3bd`) node carries a chunk hash at the mesh payload's own `+0x30`, but
+the chunk it names is baked in world space anyway: on all 9 of Talon's
+Junction's weapon pads and all 27 of Anulpha Pass's speedup pads, the chunk's
+position extent sits beside the node's world translation (within the pad's own
+footprint), never at the origin and never at double the translation - so
+drawing it through the node's transform would land it off the world, and
+drawing it at identity lands it on the track. 423 chunks across the disc's
+circuits are addressed this way and by nothing else (239 `weapon_pads`
+materials, 182 speedup materials and stragglers), and a reader that excludes
+every *mentioned* hash from its second pass - as this project's did - draws
+none of them. The node presumably exists for the gameplay trigger and the
+armed/used visual state, both unread.
+
+**56 of Talon's Junction's prop nodes address chunks the model does not have**,
+and they stay honest absence - open item 6 below has the full sweep (18 of the
+56 hashes live in *other circuits'* models, 38 nowhere, the mechanism that
+would resolve one at runtime unrecovered). What that absence does **not** cost
+the picture: the sky traffic visible on the circuit is the 33 world-space
+`animating_traffic` chunks, which the second pass draws; the 56 nodes were
+never the visible traffic.
 
 **What drives it at runtime is unread.** HD moved visibility out of the `.vex`
 into 28 `.pvs` files, and the obvious hypothesis is that a `.pvs` names the
@@ -1044,21 +1067,31 @@ Named explicitly, with what each would take.
    remaining 38 are nowhere on the disc under this addressing. The hash is **not** a hash of the node's name under
    `wad::hash_name`, FNV-1a, DJB2, SDBM or CRC32 in any of three casings, so why
    a name shared between circuits shares a hash is itself unexplained.
-7. **Which chunk a `Skycube` or a pad belongs to.** Their `.vex` classes carry
-   the same payload shape as a `Mesh` on the PSP, and on the PS3 the tie to a
-   chunk has not been made - so a PS3 race draws neither.
+7. ~~**Which chunk a `Skycube` or a pad belongs to.**~~ Made for the pads on
+   2026-08-19: a `Weapon Pad` or `Speedup Pad` node names its chunk at the mesh
+   payload's own `+0x30`, and the chunk is world-space baked - see "The pads
+   are second-pass geometry" above. The `Skycube` tie is still unmade (HD's sky
+   is drawn from `sky.gtf` instead).
 8. **The `.pvs` mapping**, which is what would let a renderer draw a section at
-   a time rather than all 904 chunks at once.
+   a time rather than all 913 chunks at once.
 9. **What separates transparency mode 2 from mode 1**, and what the other 15
    bits of the state word select - 17 distinct combinations disc-wide, none of
-   them decoded. Reading a `.rcsmaterial`'s microcode or HD's own executable are
-   the routes; nothing in this project has disassembled a PS3 binary.
+   them decoded. The microcode route is now open -
+   [`scripts/ps3-microcode.py`](../../scripts/ps3-microcode.py) disassembles
+   both RSX program kinds - but nothing has yet tied a state-word bit to a
+   variant choice.
 10. **Which of a vertex's several texture coordinates a shader actually
-    samples.** The declaration names them - `Uv1`, `Uv2`, `lightmapUV`, `map1`,
-    `map2`, `Uvset1` - and nothing here reads the `.rcsmaterial` microcode that
-    chooses; `VertexDecl::diffuse_texcoord` applies a rule and says so. The
-    lightmap is the one that matters: it is named, it is present on 13,293
-    attributes, its `.gtf` is decoded, and **it is not sampled**.
+    samples**, per material. The declaration names them - `Uv1`, `Uv2`,
+    `lightmapUV`, `map1`, `map2`, `Uvset1` - and
+    `VertexDecl::diffuse_texcoord` still applies a rule and says so. What has
+    moved: the **lightmap is sampled and drawn on the equation the microcode
+    itself states** - `prelit_scale * lightmap^prelit_power`, its alpha a
+    shadow mask gating the direct sun; see
+    [renderer.md](../ghidra/functions/ps3-hdfury-eu/renderer.md#the-race-fog-curve-is-read-out-of-the-circuit-materials-own-microcode)
+    and `oag_render`'s `mesh.wgsl` - and the lit variants read so far bind it
+    through the second half of the interpolant the diffuse shares, agreeing
+    with the rule. A per-material read of every variant is what would retire
+    the rule entirely.
 11. **37 of the 49 attribute name hashes**, and `0x1aaf7631` above all - 13,485
     uses, and measured to be neither a direction nor an opaque colour.
 12. **Whether a chunk wants its `colorSet1` or the light rig.** The colour is

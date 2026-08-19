@@ -95,9 +95,18 @@ that uses the raw triple as a direction scales its light by an accident.
 which is what keeps a degenerate triple out of a shader as a NaN. **Whether the
 length carries an intensity is not established**; that needs HD's executable.
 
-## It is authored for a linear HDR pipeline, and this project's is not
+## It is authored for a linear HDR pipeline, and this project's now is one
 
-This is the constraint that decides how much of the file can be used today.
+*(Heading updated 2026-08-19; the section below it is kept as the record of
+why the magnitudes were once dropped.)* The HD race now renders into a linear
+`Rgba16Float` scene target, shades at the authored magnitudes
+([ADR-0026](../architecture/adr/0026-hd-authored-lighting-is-linear.md)) and
+resolves through the **read** exposure - `scale = Tone maximum brightness -
+min(Tone adaption boost * adapted luminance, Tone darkening clamp)`, the
+executable's own arithmetic; see
+[renderer.md](../ghidra/functions/ps3-hdfury-eu/renderer.md#the-exposure-is-read-scale-on-the-resolve-not-a-tone-curve-2026-08-19).
+The paragraphs below record the constraint as it stood, and still hold for
+every non-HD title.
 
 | Key | Brightest across the corpus |
 | --- | ---: |
@@ -144,10 +153,12 @@ has.
 | --- | --- |
 | `Lighting.Sun direction` | **Drawn.** Normalised; the stand-in rig is used where it is degenerate |
 | `Lighting.Constant ambient color` | **Drawn**, clamped to `0..=1` |
-| `Lighting.Sun color` | **Hue drawn, magnitude dropped** - see above |
-| `Lighting.Sky colour`, `Sky rotation` | Read, unused. The sky itself does not draw - see below |
-| `Fog.*` | Read, unused, and **an HD race has no fog at all**. HD's circuits author no `fogCube` node, so `fog_volumes` is empty on a PS3 source and `Fog::off` is what binds - the circuit states a fog colour and a density and gets nothing. **The curve is unread and is not guessed** - see below |
-| `HDR and Bloom.*` | Read, unused. The bloom here is not HD's, and the tone parameters need a tonemap stage that does not exist |
+| `Lighting.Sun color` | **Drawn at the authored magnitude** into the linear scene target, per [ADR-0026](../architecture/adr/0026-hd-authored-lighting-is-linear.md); the "hue drawn, magnitude dropped" reduction above is retired |
+| `Lighting.Sky colour` | Read, unused |
+| `Lighting.Sky rotation` | **Drawn**: the sky cubemap is turned by it, about the vertical. Degrees is the corpus's own unit - 180 and -40 survive no radian reading - and the sign and axis are this project's choice, said per race in the load report |
+| `Fog.Fog Color`, `Fog Density` | **Drawn, on the curve read out of the circuit materials' own fragment microcode**: `f = exp(-(density * view_depth)^2)`, the colour lerped in by `f`. See [renderer.md](../ghidra/functions/ps3-hdfury-eu/renderer.md#the-race-fog-curve-is-read-out-of-the-circuit-materials-own-microcode). What is *not* read is how the engine fills the shader's coefficient from `Fog Density`; the authored value is passed through unscaled and judged against an rpcs3 reference frame |
+| `Fog.Alternate *` | Read, unused - what selects the alternate pair over the primary is unread |
+| `HDR and Bloom.*` | **Drawn** (2026-08-19): the whole non-radial chain - gate, adaptation fade, blurs, exposure - runs on the read formulas in `oag_render::post::hd_bloom`, every key's field pinned by the executable's own settings registrar. Still unused: the `Radial bloom *` set (its passes are read but not implemented) and `Bloom feedback` (authored by no circuit) |
 | `Water.*` | Read, unused. No water surface is drawn |
 | `Lighting.Prelit *`, `Spotlight *`, `Ambient false direction` | Read, unused, and undecoded - what "prelit ambient false specular" means is not established |
 
@@ -222,23 +233,26 @@ do with a circuit.
   puts on a static reading.
 - **Whether the sun direction's length is an intensity.** Eight lengths across
   32 circuits; normalising is this project's choice.
-- **The sky.** `Lighting.Sky colour` and `Sky rotation` are read and nothing
-  uses them, because HD's circuits author **no `Skycube` node** - class `0x3c6`
-  is in the class table and zero nodes carry it. The sky is
-  `sky.gtf` beside the track, a 1024x1024 DXT1 **cubemap** that
-  [`gtf::Texture::to_rgba`](gtf.md) refuses; the geometry to draw it through
-  would be this project's, so it is not drawn at all rather than invented.
-- **The fog curve.** `Fog Density` runs `0.0003` to `0.03` across the corpus and
-  **what is done with it is not read**. The shader side is located:
-  [`renderer.md`](../ghidra/functions/ps3-hdfury-eu/renderer.md) shows
-  `fogFactors` is one `float4` appearing in 9 `SHO` blocks, **all of them vertex
-  programs**, so HD's fog is computed per vertex and interpolated. Whether the
-  term is `exp`, `exp2`, linear or squared needs that microcode, which is
-  located and undecoded. Over a density range of two orders of magnitude those
-  candidates differ by more than the picture does, so **a race draws unfogged
-  rather than at a chosen ramp**: a plausible haze at the authored colour would
-  look entirely correct and be unfalsifiable, which is the failure
-  [`CLAUDE.md`](../../CLAUDE.md) records the rocket's invented smoke for.
+- **The sky is drawn now, and `Sky colour` still is not understood.** HD's
+  circuits author **no `Skycube` node** - class `0x3c6` is in the class table
+  and zero nodes carry it - and the sky is `sky.gtf` beside the track, a
+  six-face **cubemap** [`gtf::Texture::face_to_rgba`](gtf.md) decodes.
+  `oag_render::mesh::sky_cube` builds it into a camera-centred cube whose quads
+  sample each face exactly where the RSX's own cubemap addressing would, drawn
+  through the same `Depth::Sky` path as Pulse's authored `Skycube` mesh; the
+  picture is the disc's and the cube is the geometry a cubemap defines for
+  itself. `Sky rotation` turns it (see the table above). What `Sky colour`
+  does - `128 128 128 0` on most circuits - is still unread and unused.
+- **The fog curve is read**, out of the circuit materials' own fragment
+  microcode rather than the executable's `fogFactors` blocks (which turned out
+  to be the front end's): `f = exp(-(coefficient * view_depth)^2)`, the
+  coefficient and the fog colour patched together into one `float4` the shader
+  interface itself names `fogColour` - a `~crc32` preimage. The census and the
+  instruction listing are in
+  [`renderer.md`](../ghidra/functions/ps3-hdfury-eu/renderer.md#the-race-fog-curve-is-read-out-of-the-circuit-materials-own-microcode).
+  **Still open**: whether `fogColour.w` is `Fog.Fog Density` unscaled - the
+  race passes it through unscaled and says so - and what selects the
+  `Alternate` pair.
 - **`Alternate Fog Color` and `Alternate Fog Density`**, on every circuit, with
   nothing read about what selects them.
 

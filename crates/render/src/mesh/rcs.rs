@@ -132,7 +132,7 @@ impl Report {
             n => format!(", {n} material(s) whose .gtf did not paint"),
         } + &match self.lightmapped {
             0 => String::new(),
-            n => format!(", {n} material(s) multiplied by the circuit's lightmap"),
+            n => format!(", {n} material(s) lit through the circuit's lightmap"),
         } + &match self.lightmap_undecoded {
             0 => String::new(),
             n => format!(", {n} lightmap(s) named but not loaded"),
@@ -324,29 +324,27 @@ fn node_geometry(
     Some((order.u32(payload, 0x30), read3(0x10), read3(0x20)))
 }
 
-/// Every chunk hash any node of the `.vex` mentions anywhere in its payload.
+/// The chunk hashes the node pass consumes: `+0x30` of every `Mesh` node.
 ///
-/// **A scan rather than a field read, deliberately.** A `Mesh` node carries its
-/// hash at `+0x30`, but a `Weapon Pad` carries one too and a `Quake` node
-/// carries two at `+0x958` and `+0x9d8` - and those offsets were found by
-/// looking, not read out of anything. What this is *for* is the complement:
-/// deciding which chunks nothing references, so they can be drawn in world
-/// space. Over-collecting is the safe direction there, since a hash wrongly
-/// counted as referenced only means that chunk is drawn through its node.
-fn referenced(data: &[u8], nodes: &[vex::Node], model: &rcsmodel::Model) -> Vec<u32> {
-    let known: std::collections::HashSet<u32> = model.meshes.iter().map(|m| m.hash).collect();
+/// **Only what [`build`] draws, and that reverses an earlier over-collection.**
+/// This used to scan every node's whole payload for anything shaped like a
+/// chunk hash, on the theory that a hash wrongly counted as referenced would
+/// still be drawn through its node. Measured false: a `Weapon Pad` and a
+/// `Speedup Pad` node each carry a chunk hash at the mesh payload's own
+/// `+0x30`, the node pass only draws the `Mesh` class, and so all 423 pad
+/// chunks on the disc were drawn by nobody. Their positions are baked in world
+/// space like every other circuit chunk - each pad chunk's centre sits beside
+/// its node's world translation, never at the origin and never doubled -
+/// so the world-space pass is the right place for them, and the way to hand
+/// them to it is to stop counting them here.
+fn referenced(data: &[u8], nodes: &[vex::Node], mesh_class: u32) -> Vec<u32> {
     let order = vex::byte_order(data);
-    let mut out = Vec::new();
-    for node in nodes {
-        let payload = &data[node.payload()];
-        for at in (0..payload.len().saturating_sub(3)).step_by(4) {
-            let word = order.u32(payload, at);
-            if known.contains(&word) {
-                out.push(word);
-            }
-        }
-    }
-    out
+    nodes
+        .iter()
+        .filter(|node| node.class_id == mesh_class)
+        .filter_map(|node| node_geometry(&data[node.payload()], order))
+        .map(|(hash, _, _)| hash)
+        .collect()
 }
 
 /// The whole of a PS3 model: the meshes its `.vex` places, and the geometry
@@ -358,12 +356,22 @@ fn referenced(data: &[u8], nodes: &[vex::Node], model: &rcsmodel::Model) -> Vec<
 /// of Assegai's 15 `Mesh` nodes addresses a chunk, and its positions are in the
 /// node's own space - the PSP arrangement with the vertices moved out. All 126
 /// of Talon's Junction's `Mesh` nodes are *props*: blimps, girders, sky
-/// traffic. The road, the walls and the scenery are among the 904 of 983 chunks
-/// no node references, each carrying a **world-space** bias, drawn without a
-/// node transform because there is no node.
+/// traffic. The road, the walls, the scenery and both kinds of pad are among
+/// the 913 of 983 chunks no `Mesh` node addresses, each carrying a
+/// **world-space** bias, drawn without a node transform because there is no
+/// node - a `Weapon Pad` or `Speedup Pad` node names its chunk at the mesh
+/// payload's own `+0x30`, but as [`referenced`] records, the chunk's
+/// coordinates ignore the node anyway.
 ///
 /// So a circuit that drew only the first pass drew its skybox traffic and no
 /// track, which is exactly what this looked like before the second existed.
+///
+/// **56 of Talon's Junction's prop nodes stay honestly absent.** Their hashes
+/// are in no `.rcsmodel` on the disc except *other environments'* - the same
+/// `tanker1aShape` hash appears in Amphiseum's and Tech De Ra's own track
+/// models, so the hash is content-derived and those donors were simply never
+/// baked into this circuit's file. The sky traffic that is visible here is
+/// the world-space `animating_traffic` chunks, which the second pass draws.
 ///
 /// # Errors
 ///
@@ -379,7 +387,11 @@ pub fn build_scene(
     let model = rcsmodel::Model::parse(model_blob)
         .map_err(|e| anyhow::anyhow!("{label}: the .rcsmodel beside it: {e}"))?;
     let nodes = vex::nodes(data).context("walking the node tree")?;
-    let placed = referenced(data, &nodes, &model);
+    let mesh_class = vex::classes_of(data)
+        .ok()
+        .and_then(|c| c.mesh)
+        .context("no mesh class id for this .vex version")?;
+    let placed = referenced(data, &nodes, mesh_class);
 
     for mesh in &model.meshes {
         if placed.contains(&mesh.hash) {

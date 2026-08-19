@@ -214,8 +214,19 @@ pub struct Fog {
     pub far: f32,
     /// `1.0` to fog, `0.0` to pass colour through untouched.
     pub enabled: f32,
-    _pad0: f32,
-    _pad1: f32,
+    /// Wipeout HD's fog coefficient, for [`Fog::curve`] `1.0`; unused at `0.0`.
+    pub density: f32,
+    /// Which curve `mesh.wgsl` applies. `0.0` is the GE's linear ramp between
+    /// [`Fog::near`] and [`Fog::far`], re-sampled from a `fogCube` volume each
+    /// frame - Pulse's fog. `1.0` is Wipeout HD's, **read out of its own
+    /// fragment microcode** rather than guessed: every fogged variant of a
+    /// circuit `.rcsmaterial` computes `exp(-(density * view_depth)^2)` - a
+    /// `MUL` by `log2(e)` into `EX2` with the product squared and negated - and
+    /// lerps the fog colour in by that factor. The coefficient and the colour
+    /// arrive together in one patched `float4` the shader interface itself
+    /// names `fogColour` (a crc32 preimage, not a resemblance). See
+    /// `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`.
+    pub curve: f32,
     _pad2: f32,
 }
 
@@ -233,8 +244,8 @@ impl Fog {
             camera: [0.0; 3],
             far: 1.0,
             enabled: 0.0,
-            _pad0: 0.0,
-            _pad1: 0.0,
+            density: 0.0,
+            curve: 0.0,
             _pad2: 0.0,
         }
     }
@@ -251,8 +262,31 @@ impl Fog {
             // clamps the span, and this keeps the ordering sane regardless.
             far: params.far.max(params.near + f32::EPSILON),
             enabled: 1.0,
-            _pad0: 0.0,
-            _pad1: 0.0,
+            density: 0.0,
+            curve: 0.0,
+            _pad2: 0.0,
+        }
+    }
+
+    /// Wipeout HD's fog, from the two values its `track.envsettings` authors.
+    ///
+    /// The curve is the disc's - see [`Fog::curve`]. What is **not** read is
+    /// how the engine fills the shader's `fogColour.w` from
+    /// `Fog.Fog Density`: this passes the authored density through unscaled,
+    /// which is the plain reading and is judged against an rpcs3 reference
+    /// frame rather than proven from the executable. The colour is authored
+    /// for HD's linear-light pipeline and used as-is in this gamma target,
+    /// the same hold `Light::authored` documents.
+    #[must_use]
+    pub fn authored_exp2(colour: [f32; 3], density: f32) -> Self {
+        Self {
+            colour,
+            near: 0.0,
+            camera: [0.0; 3],
+            far: 1.0,
+            enabled: 1.0,
+            density,
+            curve: 1.0,
             _pad2: 0.0,
         }
     }
@@ -270,16 +304,29 @@ impl Fog {
 ///
 /// # What is the disc's and what is this project's
 ///
-/// **The direction and the hue are the disc's. The magnitude is not.** A
-/// circuit authors a sun colour reaching 4.0 and an ambient reaching 3.0,
-/// because HD renders in linear light and tonemaps; this pipeline is
-/// gamma-authoritative per
-/// [ADR-0020](../../../docs/architecture/adr/0020-gamma-authoritative-colour-space.md)
-/// and has no tonemap stage, so those magnitudes would clip rather than expose.
-/// [`Light::authored`] therefore keeps the sun's *ratio* between channels -
-/// which is the visible part, and is what makes Talon's Junction's sun warm
-/// against its cool ambient - and drops the scale. That reduction is this
-/// project's and is labelled here rather than hidden in a shader constant.
+/// **The combination is the disc's**, read out of the circuit materials' own
+/// fragment microcode
+/// (`docs/ghidra/functions/ps3-hdfury-eu/renderer.md`) rather than assumed:
+///
+/// ```text
+/// light  = ambient + prelit_scale * lightmap^prelit_power
+///        + sun * max(dot(N, L), 0) * lightmap.a
+/// colour = diffuse * light
+///        + sun * specular_scale * pow(max(dot(H, N), 0), 32)
+///          * max(dot(N, L), 0) * lightmap.a * diffuse.a
+/// ```
+///
+/// The lightmap's alpha gating the direct sun - a baked shadow mask - and the
+/// prelit power curve are the two halves this project used to replace with a
+/// plain multiply. **The magnitudes are the disc's too, and the arithmetic is
+/// done in linear light** as the RSX does - samples sRGB-decoded, lit, the
+/// result saturated and encoded back into the gamma target - per
+/// [ADR-0026](../../../docs/architecture/adr/0026-hd-authored-lighting-is-linear.md),
+/// which narrows ADR-0020 to the titles its GE argument is about. The
+/// saturate is this project's stand-in for HD's unread exposure stage and is
+/// judged against an rpcs3 reference frame; the per-vertex additive term the
+/// original's vertex programs interpolate on top (dynamic lights among them)
+/// is not reproduced.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Light {
@@ -293,6 +340,20 @@ pub struct Light {
     /// The sun's colour with its magnitude divided out: the hue alone.
     pub sun: [f32; 3],
     _pad1: f32,
+    /// `Lighting.Prelit ambient colour scale`, applied exactly where the
+    /// circuit's own fragment microcode applies it:
+    /// `prelit = scale * lightmap^power`. See [`Light::authored`] for what
+    /// of the equation is read and what is this project's.
+    pub prelit_scale: [f32; 3],
+    /// `Lighting.Sun specular scale`, weighting the read specular term
+    /// `pow(max(dot(H, N), 0), 32) * max(dot(N, L), 0) * lightmap.a`.
+    /// The exponent 32 is an **inline** microcode constant, not a patched
+    /// parameter, so it lives in `mesh.wgsl` rather than here.
+    pub specular_scale: f32,
+    /// `Lighting.Prelit ambient colour power` - the exponent in the same
+    /// prelit term.
+    pub prelit_power: [f32; 3],
+    _pad2: f32,
 }
 
 impl Light {
@@ -309,6 +370,10 @@ impl Light {
             _pad0: 0.0,
             sun: [0.0; 3],
             _pad1: 0.0,
+            prelit_scale: [1.0; 3],
+            specular_scale: 0.0,
+            prelit_power: [1.0; 3],
+            _pad2: 0.0,
         }
     }
 
@@ -318,27 +383,36 @@ impl Light {
     /// [`oag_formats::envsettings::EnvSettings::direction`] does it and answers
     /// `None` for the degenerate triples four circuits write, which is why this
     /// takes a direction rather than a settings file.
+    ///
+    /// Every value is passed through as authored - the equation these feed is
+    /// the one read out of the circuit's own microcode, and reducing a term of
+    /// it would un-read it. Where the sum leaves the range this target holds,
+    /// the target saturates; that clamp is the documented stand-in for HD's
+    /// missing tonemap stage - see the type-level docs.
     #[must_use]
-    pub fn authored(direction: [f32; 3], colour: [f32; 3], ambient: [f32; 3]) -> Self {
-        // The hue, without the scale. A sun colour of `(2.0, 1.83, 0.89)`
-        // becomes `(1.0, 0.91, 0.44)` - the same warmth, inside the range this
-        // target can hold.
-        let peak = colour.iter().fold(0.0f32, |a, b| a.max(*b));
-        let sun = if peak > 0.0 {
-            std::array::from_fn(|i| (colour[i] / peak).clamp(0.0, 1.0))
-        } else {
-            [0.0; 3]
-        };
+    pub fn authored(
+        direction: [f32; 3],
+        colour: [f32; 3],
+        ambient: [f32; 3],
+        prelit_scale: [f32; 3],
+        prelit_power: [f32; 3],
+        specular_scale: f32,
+    ) -> Self {
         Self {
             direction,
             enabled: 1.0,
-            // Authored in range on most circuits and reaching 3.0 on some.
-            // Clamped rather than passed on: past 1.0 it is a white sheet in
-            // this target, and a clamp is at least monotone.
-            ambient: std::array::from_fn(|i| ambient[i].clamp(0.0, 1.0)),
+            ambient,
             _pad0: 0.0,
-            sun,
+            sun: colour,
             _pad1: 0.0,
+            prelit_scale,
+            specular_scale,
+            // A power of zero would turn an unsampled black lightmap texel
+            // into full white; the floor keeps the curve monotone in the
+            // lightmap without changing any authored value (the corpus
+            // authors 1.0 to 2.0).
+            prelit_power: std::array::from_fn(|i| prelit_power[i].max(1e-3)),
+            _pad2: 0.0,
         }
     }
 }
