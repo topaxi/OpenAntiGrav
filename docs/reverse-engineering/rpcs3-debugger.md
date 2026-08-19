@@ -415,6 +415,49 @@ without complaint. Setting `AVCodecID: 27` (H.264) in `recording.yml` makes the
 match land on `mp4` instead; that file is the user's rather than the
 repository's, so it is left alone.
 
+### The HUD reads back as numbers, sparsely and honestly
+
+[`scripts/rpcs3_hud.py`](../../scripts/rpcs3_hud.py) turns a recording into a
+speed trace:
+
+```sh
+just rpcs3-speed ~/.config/rpcs3/recordings/BCES00664/<recording>.mp4 > speed.csv
+```
+
+Measured on a 52-second Talon's Junction run at 15 Hz: **63 samples over 788
+frames - 8 % coverage - spanning 225 to 444 km/h**, with a mean frame-to-frame
+change of 4.3 km/h, which is what a real acceleration curve looks like at that
+rate. Every surviving value is physically coherent; the point of the design is
+that the other 92 % are *gaps*, not guesses.
+
+Three things decide that trade, and only the last is tuning:
+
+1. **The HUD is alpha-blended over the scene.** Over a bright stretch of Talon's
+   Junction the glyph strokes sit barely above the background, and a global
+   threshold reads 13 % of frames. The high-pass here - subtract a box blur
+   wider than a glyph, keep what is *locally* brighter - is what makes the
+   readable frames readable at all.
+2. **The numerals are right-aligned in a fixed field**, and that is what turns a
+   *dropped* digit into a rejected frame rather than a plausible wrong number.
+   Measured: the last digit's run ends at column 53 in 100 frames of 111, and
+   consecutive digits are 13 columns apart. Without the alignment and
+   "is there ink still sitting in the slot to the left?" checks, the reader
+   emitted `35` between `353` and `355`, and `747` - **coverage went from 8 % to
+   28 % and the output stopped being trustworthy**, which is the wrong trade to
+   make silently.
+3. **The template set is what one clip contained** - 0, 2, 3, 4, 5, 7 and 8, and
+   never a 1, 6 or 9. A frame showing one of those reads as unknown and is
+   dropped. `rpcs3_hud.py glyphs` re-clusters any recording and writes the
+   bitmaps out for labelling, which is how the set grows; this is deliberately
+   not a general OCR.
+
+**What would actually fix the coverage is not more tuning.** A darker circuit
+would raise it a great deal - the washout is background brightness, and Talon's
+Junction is the brightest thing on the disc. And the value the engine *holds*
+would replace the reading entirely: that is a memory address, reachable through
+`rpcs3_debugger.py`, and finding it is the honest next step rather than
+squeezing this further.
+
 ### The menu walk has to be keyed on the screen, not counted
 
 HD runs at about 9 fps here, and a `cross` that lands mid-transition does

@@ -100,6 +100,13 @@ RACE_WALK = [
     "InGame",
 ]
 
+# Where the walk is finished. `Launch Game` is *transient* - it can come and go
+# between two polls - so nothing here waits for a named screen: the walk presses
+# until the screen changes at all and stops when it recognises one of these.
+# Waiting for `Launch Game` by name overshoots straight past `InGame` into
+# `HUD`, which is what the first version of this did.
+RACE_ARRIVED = {"InGame", "HUD"}
+
 
 def tty_text():
     try:
@@ -249,31 +256,29 @@ class Session:
         self.pad.press("cross", 0.15)
         time.sleep(3.0)
 
-    def press_until(self, button, target, attempts=4, settle=5.0):
-        """Press until `TTY.log` says the screen is `target`. True if it got there."""
-        for attempt in range(1, attempts + 1):
-            was = current_screen()
-            if was == target:
-                return True
-            self.pad.press(button, 0.15)
-            deadline = time.time() + settle
-            while time.time() < deadline:
-                if current_screen() == target:
-                    return True
-                time.sleep(0.4)
-            print("      (%s did not move %s -> %s, retry %d)"
-                  % (button, was, target, attempt), flush=True)
-        return current_screen() == target
+    def press_once(self, button, settle=5.0):
+        """Press, then wait for the screen to change. Returns (was, now)."""
+        was = current_screen()
+        self.pad.press(button, 0.15)
+        deadline = time.time() + settle
+        while time.time() < deadline and current_screen() == was:
+            time.sleep(0.3)
+        return was, current_screen()
 
-    def walk_to_race(self):
-        for index, target in enumerate(RACE_WALK, 1):
-            was = current_screen()
-            ok = self.press_until("cross", target)
-            print("  %d/%d  cross  %-22s -> %-22s %s"
-                  % (index, len(RACE_WALK), was, current_screen(),
-                     "" if ok else "FAILED"), flush=True)
-            if not ok:
+    def walk_to_race(self, max_presses=12):
+        """Press cross until HD is in a race, or give up and say where it got to.
+
+        Deliberately not a fixed count: HD runs at about 9 fps here and a press
+        landing mid-transition does nothing, so `RACE_WALK` is what the path was
+        *measured* to be and this loop is what survives a dropped press.
+        """
+        for index in range(1, max_presses + 1):
+            if current_screen() in RACE_ARRIVED:
                 break
+            was, now = self.press_once("cross")
+            print("  press %2d  %-22s -> %-22s%s"
+                  % (index, was, now, "" if now != was else "   (dropped)"),
+                  flush=True)
         return current_screen()
 
 
@@ -322,11 +327,11 @@ def cmd_race(args):
             screenshot(session.log_dir / "01-menu.png")
         print("walking the menus:", flush=True)
         screen = session.walk_to_race()
-        if screen != "InGame":
-            print("ended on %r rather than InGame" % screen, file=sys.stderr)
+        if screen not in RACE_ARRIVED:
+            print("ended on %r rather than in a race" % screen, file=sys.stderr)
             return 1
-        print("InGame; waiting %g s for the track to load" % args.load,
-              flush=True)
+        print("%s; waiting %g s for the track to load"
+              % (current_screen(), args.load), flush=True)
         time.sleep(args.load)
         if args.shots:
             screenshot(session.log_dir / "02-grid.png")
@@ -351,11 +356,12 @@ def cmd_record(args):
             return 1
         time.sleep(args.settle)
         print("walking the menus:", flush=True)
-        if session.walk_to_race() != "InGame":
-            print("ended on %r rather than InGame" % current_screen(),
+        if session.walk_to_race() not in RACE_ARRIVED:
+            print("ended on %r rather than in a race" % current_screen(),
                   file=sys.stderr)
             return 1
-        print("InGame; waiting %g s for the track to load" % args.load, flush=True)
+        print("%s; waiting %g s for the track to load"
+              % (current_screen(), args.load), flush=True)
         time.sleep(args.load)
         print("starting the recording", flush=True)
         session.toggle_recording()

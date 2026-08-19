@@ -389,6 +389,14 @@ rpcs3-race image="data/images/hdfury-ps3-eu-dec.iso" *ARGS:
 rpcs3-record image="data/images/hdfury-ps3-eu-dec.iso" *ARGS:
     uv run --with evdev python3 scripts/rpcs3-drive.py --image {{image}} record {{ARGS}}
 
+# Read HD's speed readout out of a recording and print it as CSV. Sparse on
+# purpose: the HUD is alpha-blended, so an unreadable frame is a gap and never
+# a guess. Check the coverage line it prints on stderr before leaning on the
+# numbers - about 8 % on Talon's Junction, which is the brightest circuit there
+# is. See docs/reverse-engineering/rpcs3-debugger.md.
+rpcs3-speed video *ARGS:
+    uv run --with numpy python3 scripts/rpcs3_hud.py read {{video}} {{ARGS}}
+
 # Run a committed scenario through OUR OWN physics and print a run report: where
 # the ship is every N ticks, how fast, whether it is still on the track. Needs a
 # disc image (for the track and the handling stats) and nothing else - no
