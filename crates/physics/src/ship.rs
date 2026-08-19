@@ -280,11 +280,17 @@ pub struct ShipState {
     /// that produces no thrust at all"; confidence 88 on the gate, 85 on reading the
     /// field as a collision stun.
     ///
-    /// Armed by [`crate::wall::resolve`] with [`crate::wall::STUN_PER_CONTACT`], the
-    /// original's `craft+0x290 += 0.5` in `Ship_ApplyCollisionImpulse`. It is
-    /// **added, not assigned**, so successive impacts accumulate rather than
-    /// refreshing to a fixed value - but only once per impact, see
-    /// [`Self::wall_contact_prev`].
+    /// Armed by [`crate::wall::apply_pending_impulse`] with
+    /// [`crate::wall::STUN_PER_CONTACT`], the original's `craft+0x290 += 0.5` in
+    /// `Ship_ApplyCollisionImpulse`. It is **added, not assigned**, so successive
+    /// impacts accumulate rather than refreshing to a fixed value.
+    ///
+    /// **This crate does not yet produce anything for
+    /// [`Self::pending_impulse`] to hold** - a track contact does not, and is not
+    /// supposed to; see [`crate::wall::STUN_PER_CONTACT`]'s own doc for the two
+    /// bugs an earlier, wrong arming site cost before that was found. So this
+    /// timer is armed correctly whenever something posts a pending impulse, and
+    /// nothing does yet.
     ///
     /// Decremented in [`crate::forces::evaluate`] at the lateral-grip step rather
     /// than with the control ramps, because that is where the original decrements it
@@ -293,21 +299,36 @@ pub struct ShipState {
     pub stun_timer: f32,
     /// Whether last frame's [`crate::wall::resolve`] pushed the hull out of a wall.
     ///
-    /// Exists to make the collision stun **edge-triggered**, which is what the
-    /// original is and what a naive port is not.
-    /// `Ship_ApplyCollisionImpulse` (`0x0883f274`) is gated on a *pending impulse
-    /// vector* at `entity->0x4c + 0x110`, and it zeroes that vector on the way out
-    /// on every path - so `craft+0x290 += 0.5` fires once per impact the collision
-    /// system posts, not once per frame the hull happens to be touching something.
-    ///
-    /// The distinction is the difference between a playable game and a dead one.
-    /// The stun accumulates at `0.5 s` a go and decays at `dt`, so at 60 Hz the
-    /// ratio is **30:1**: arming it every frame of a one-second wall scrape buys
-    /// about thirty seconds during which the engine produces nothing at all. That
-    /// was reported from play as "at some point the racer completely stopped
-    /// accelerating", and `crates/physics/tests/yaw_authority.rs` is not where it is
-    /// pinned - see `a_sustained_scrape_arms_the_stun_once` in [`crate::wall`].
+    /// **Vestigial.** This existed to make an earlier, wrong arming site
+    /// edge-triggered - `wall::resolve` used to arm [`Self::stun_timer`] directly
+    /// on the first frame of every inward contact, and this field was how it knew
+    /// "first frame" from "still touching". That arming site is gone (see
+    /// [`crate::wall::STUN_PER_CONTACT`]'s own doc for why), so nothing reads this
+    /// field for anything any more - `wall::resolve` still writes it every tick,
+    /// faithfully, to nowhere. Left in rather than removed because a hull contact
+    /// is still a fact a future consumer (a hit-reaction animation, an audio cue)
+    /// is likely to want the edge of; removing it now would be guessing that
+    /// nothing will.
     pub wall_contact_prev: bool,
+    /// The pending collision-impulse vector at `entity->0x4c + 0x110`.
+    ///
+    /// `Ship_ApplyCollisionImpulse` (`0x0883f274`) reads this every tick,
+    /// projects it onto the ship's own forward axis, applies the result, arms
+    /// [`Self::stun_timer`], and zeroes this **unconditionally** on every path -
+    /// gated only by whether it started nonzero and by
+    /// [`Self::shield_pickup_timer`]. [`crate::wall::apply_pending_impulse`] is
+    /// the port; see its own doc and
+    /// `docs/ghidra/functions/psp-pulse-usa/contact-response.md` for the full
+    /// instruction-level read.
+    ///
+    /// **Nothing in this crate writes to this field yet.** Two producers are
+    /// found in the original - `Weapon_PostBlastImpulse_q` (a weapon blast) and
+    /// an unnamed second writer reached from what reads like a rival-contact
+    /// path - and neither is ported. So `apply_pending_impulse` runs every tick
+    /// against a field that is always zero and is a correct no-op until a
+    /// producer exists to write it, the same shape as [`Self::pad_direction`]
+    /// before a probe script crosses a pad.
+    pub pending_impulse: Vec3,
     /// Seconds left on the timer at `craft+0x2e0`.
     ///
     /// While it runs, the hover target height is reduced by `min(timer, 4.0)` and
@@ -556,6 +577,7 @@ impl Default for ShipState {
             reverse_controls: 0.0,
             stun_timer: 0.0,
             wall_contact_prev: false,
+            pending_impulse: Vec3::ZERO,
             leap_timer: 0.0,
             grounded: 0.0,
             grounded_prev: 0.0,

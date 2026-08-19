@@ -122,6 +122,9 @@ use crate::forces::Environment;
 use crate::params::{Dimensions, Handling};
 use crate::ship::{Body, ShipState};
 
+mod impulse;
+pub use impulse::{STUN_PER_CONTACT, apply_pending_impulse};
+
 /// The ship collider's own friction, for [`combine_friction`].
 ///
 /// `0.02`, written to `collider+0x64` by the ship-entity constructor
@@ -202,97 +205,6 @@ pub const MAX_CONTACT_DEPTH: f32 = 2.0;
 /// possible, and the ship passes through walls exactly as it did before. See
 /// [`WallResponse::hull_degenerate`].
 pub const MIN_HULL_EXTENT: f32 = 1e-4;
-
-/// Seconds of [`ShipState::stun_timer`] a **posted** collision impulse adds.
-///
-/// `craft+0x290 += 0.5` in `Ship_ApplyCollisionImpulse` (`0x0883f274`).
-/// **Added, not assigned**, so a ship that keeps being hit accumulates stun
-/// rather than holding a flat half second. Confidence 85; see
-/// `docs/ghidra/functions/psp-pulse-usa/engine.md`.
-///
-/// # Nothing in this crate arms it, and that is a correction
-///
-/// [`resolve`] used to, on the first frame of every inward contact. It was wrong,
-/// and the evidence is three-legged:
-///
-/// - `Ship_ApplyCollisionImpulse` is gated on a **pending impulse vector** at
-///   `entity->0x4c + 0x110` being non-zero, and it zeroes that vector on the way
-///   out. Nothing on the track-contact path writes it: `Body_ResolveContact`
-///   applies its impulse through `Body_ApplyImpulseAtPoint` and records the
-///   contact into the observation ring, and `FUN_088418e0` - the only consumer of
-///   that ring - computes camera and audio amplitudes from literals `0.05`,
-///   `0.7`, `0.0125` and `1.0` and writes no impulse anywhere.
-/// - `data/traces/talons-junction-time-trial-lap.csv` is 3,146 ticks of a Time
-///   Trial capture (not a complete lap despite the name, it stalls and
-///   reverses somewhere in it; see `docs/tools/oag-trace.md`'s own
-///   correction), `4.8 %` of it in wall contact, and `stun_timer` is
-///   **`0.0` on every tick**.
-/// - `data/traces/talons-junction-standing-start.csv` is 300 more ticks, 230 of
-///   them one continuous wall scrape, and `stun_timer` is **`0.0` on every tick**
-///   there too.
-///
-/// So the timer belongs to being hit by something - a rival, a weapon - and not
-/// to touching the track. The gate it feeds is real and stays
-/// ([`ShipState::stun_timer`] still cuts thrust and lateral grip); the arming
-/// site is simply not in this crate yet, the same way nothing arms
-/// [`ShipState::leap_timer`].
-///
-/// **What that mistake cost, so nobody re-derives it**: with the old
-/// single-deepest-probe contact model it fired rarely enough to look harmless.
-/// The moment the hull grew its ten real sample points it fired on `2,045` of a
-/// `3,146`-tick open-loop run - `65 %` of the race with no engine at all - and
-/// the craft crawled `742` units instead of a lap. Two earlier bugs in the same
-/// place are recorded history: arming *per frame* rather than per impact
-/// (`0.5 s` armed against a `dt` decay is 30:1 at 60 Hz, reported from play as
-/// "at some point the racer completely stopped accelerating"), and this one.
-///
-/// The original's impulse path also projects the posted impulse onto the ship's
-/// forward axis before applying it, and scales the ship's own forward axis by the
-/// impulse magnitude rather than using the impulse direction. Whoever wires up a
-/// ship-to-ship contact wants `Ship_ApplyCollisionImpulse` reproduced whole, not
-/// this constant on its own.
-///
-/// # A fired Shield suppresses both halves, and that is the other half of it
-///
-/// `Ship_ApplyCollisionImpulse` wraps the projection *and* the `+= 0.5` in
-/// `if ((craft->0x1b8 & 0x10) == 0)`, and bit `0x10` is the running Shield
-/// pickup - read 2026-08-19, see
-/// `docs/ghidra/functions/psp-pulse-usa/shield-pickup.md`. The posted vector is
-/// zeroed on the way out either way, so a shielded craft does not bank the
-/// knockback and take it late.
-///
-/// **Nothing here is reachable yet**, and that is the point of recording it now:
-/// the day something posts `craft+0x110`, the shield gate has to arrive with it
-/// rather than be discovered afterwards as "the shield does not seem to do
-/// anything to a rival hit". [`ShipState::shield_pickup_timer`] is the flag.
-///
-/// The writer is found, 2026-08-19, by a live write breakpoint on the field
-/// during a driven Single Race: two of them, both in the weapon-code region.
-/// `Weapon_PostBlastImpulse_q` (`0x0886794c`) computes a distance falloff off
-/// a per-weapon stats table and **accumulates** an impulse into the target's
-/// pending vector - a rocket, mine or missile explosion is the unconfirmed
-/// guess for its caller (`FUN_08867b50`, found but unread). A second, unnamed
-/// writer loops over what reads like a short entity list doing the same
-/// accumulate, also with a found-but-unread caller. `Ship_ApplyCollisionImpulse`
-/// itself is now read at instruction level too: the forward-axis projection
-/// overwrites the pending vector's storage in place before applying it
-/// through the same `Body_ApplyImpulseAtPoint` (`0x0884d64c`) this crate's
-/// own [`resolve`] already reproduces the math of - finding that call target
-/// needed a live memory read plus the image base, since Ghidra's *static*
-/// disassembly of a `jal` operand in this database is the unrelocated
-/// `R_MIPS_26` field, not the real address (an already-documented trap that
-/// also silences `get_xrefs_to`; the fix for both is the same
-/// image-relative `search_instructions`). None of the three functions has a
-/// Rust port yet - all four callers are found, none read, which is the
-/// remaining gate. See
-/// `docs/ghidra/functions/psp-pulse-usa/contact-response.md`.
-///
-/// It also fixes the *scope* of the shield, which is easy to over-read: this is
-/// the only impulse it touches. `Body_ResolveContact` applies the track impulse
-/// unconditionally, so a shielded craft bounces off a wall exactly as it
-/// otherwise would - it just pays no energy for it, per
-/// [`crate::damage::apply_contact`].
-pub const STUN_PER_CONTACT: f32 = 0.5;
 
 /// One resolved contact between the hull and a surface.
 #[derive(Debug, Clone, Copy, PartialEq)]

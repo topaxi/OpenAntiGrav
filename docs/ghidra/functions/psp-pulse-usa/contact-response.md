@@ -1003,6 +1003,41 @@ tried to decompile (including `Body_ResolveContactPair` itself, clean in
 on their own explain a decompilation failure, so treat the decompiler outage
 as a separate, undiagnosed thing rather than the same bug.
 
+### `FUN_0883f540` (`0x0883f540`-`0x0883f7b7`): `a1` is the ship's own position
+
+**Read 2026-08-19.** `Ship_ApplyCollisionImpulse`'s caller, and it settles the
+`a1` question: this function reads `s1 = *(entity+0x794) + 0x30` early
+(`entity+0x794` is the ship's scene node, already established via
+[`camera.md`](camera.md)/[`exhaust.md`](exhaust.md)/[`missile.md`](missile.md)),
+carries `s1` unchanged through three other calls, and passes it as `a1` at the
+`Ship_ApplyCollisionImpulse` call site (`0x0883f5a0`/`0x0883f5a4`). The scene
+node's own layout, read off this same function's copy loop at
+`0x0883f720`-`0x0883f758` (four `lv.q`/`sv.q` pairs at `+0x00`, `+0x10`,
+`+0x20`, `+0x30` into `entity+0xf70..0xfa0`), is three 16-byte orientation
+rows followed by a fourth: **`+0x30` is the scene node's world position.** So
+`a1` is the ship's own current position - not a contact point, not anything
+weapon- or rival-supplied. `Body_ApplyImpulseAtPoint`'s lever arm
+(`point - body.position`) is therefore zero by construction for every call
+this project has found, which is why [`crate::wall::apply_pending_impulse`]
+applies the impulse as a pure linear push with no angular term: not an
+approximation, a structural fact of the one caller that exists.
+
+`FUN_0883f540` itself is a ship's per-tick combat-reaction dispatcher, not
+collision-specific - worth recording so the next reader does not mistake it
+for a second contact-response function. In call order: `FUN_0883efb4`
+(unread), `Ship_ApplyPendingWeaponDamage` (`0x0883f13c`, already named and
+already cited by `crates/physics/src/damage.rs`'s own module doc), a third
+"pending scalar, consumed once" function at `FUN_0883f228` (unread as a
+function, but its own body is small and clean: `if (*(entity+0x4c)+0x128) >
+0.0`, call `Ship_AddShield(entity)`, then zero that field - a *fourth*
+pending-value slot on the same struct, this one arming a shield grant, unread
+beyond that), `Ship_ApplyCollisionImpulse`, then weapon-fire bookkeeping
+(`Ship_AcquireLock`/`Ship_FireHeldWeapon`, gated on `*(entity+0x4c)+0x1bc`
+being `1` or `10`), `FUN_08844ec4` (unread), `FUN_0883f424` (unread), and
+`Ship_State` (`0x0883e64c`, already named) - plus a large branch on the same
+`+0x1bc` state building what reads like HUD hit-notification text, not
+chased.
+
 ### Not determined, again
 
 - **Whether step 2's Shield flag and `weapon-fire.md`'s `entity+0x1b8`
@@ -1011,16 +1046,20 @@ as a separate, undiagnosed thing rather than the same bug.
   shallower (`craft+0x1b8` direct) than this function does
   (`*(*(entity+0x4c))+0x1b8`); reconciling the two needs either a struct dump
   at both addresses or a live comparison, neither done here.
-- **What `a1` (`Ship_ApplyCollisionImpulse`'s own second parameter, the "point"
-  passed to `Body_ApplyImpulseAtPoint`) is supplied by the caller.** The
-  caller is `FUN_0883f540` (`0x0883f5a0`), found the same way as both writers'
-  callers above; unread, so `a1`'s origin stays open.
-- **What is still not wired.** Neither writer nor this consumer has a Rust
-  port. `crates/physics/src/wall.rs`'s `STUN_PER_CONTACT` doc lays out what the
-  consumer side needs; this section is what makes porting it startable rather
-  than a fresh hunt. All three callers are now found - `FUN_08867b50`,
-  `FUN_08868a10`, `FUN_088690fc` and `FUN_0883f540` - and reading them is the
-  remaining gate, not locating them.
+- **What `*(entity+0x4c)+0x1bc`'s states mean**, beyond `1` and `10` gating a
+  weapon-fire-bookkeeping call and the HUD-text branch above - a full case
+  read of `FUN_0883f540` past what this pass needed.
+- **The four unread callers**: `FUN_08867b50` (`Weapon_PostBlastImpulse_q`'s),
+  `FUN_08868a10` and `FUN_088690fc` (the second writer's, two sites),
+  `FUN_0883f540` (`Ship_ApplyCollisionImpulse`'s - now partly read above, but
+  its own five unread callees are not). Reading them is what would identify
+  the two writers' triggers and confirm the consumer's calling context beyond
+  the `a1` answer above.
+- **What is still not wired.** `Ship_ApplyCollisionImpulse` has a Rust port
+  now - [`crate::wall::apply_pending_impulse`], correct and tested against a
+  directly-set [`crate::ShipState::pending_impulse`] - but nothing produces
+  one: neither writer is ported, so the consumer runs every tick against a
+  field that is always zero until one is.
 
 ### `0x08815ccc` is a stub, so craft-to-craft contact does not come from the narrowphase
 

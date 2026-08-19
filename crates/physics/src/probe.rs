@@ -357,6 +357,7 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
         reverse_controls,
         stun_timer,
         wall_contact_prev,
+        pending_impulse,
         leap_timer,
         grounded,
         grounded_prev,
@@ -386,6 +387,10 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
     hasher.write_f32(reverse_controls);
     hasher.write_f32(stun_timer);
     hasher.write_u8(u8::from(wall_contact_prev));
+    // Zero through every probe script - no producer exists yet to write it, see
+    // `ShipState::pending_impulse`'s own doc - the same fixed-run-of-bytes shape
+    // as `pad_direction` below before a probe script crosses a pad.
+    hasher.write_vec3(pending_impulse);
     hasher.write_f32(leap_timer);
     hasher.write_f32(grounded);
     hasher.write_f32(grounded_prev);

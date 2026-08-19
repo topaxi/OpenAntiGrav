@@ -220,24 +220,41 @@ use oag_physics::{CraftState, Environment, ShipState, step};
 ///   the field - the three constants from earlier the same day reproduce bit for
 ///   bit. So the new branch is never taken here and what moved is the length of
 ///   the hash stream.
+/// - **Regenerated 2026-08-19, and behaviour did not change.** `ShipState`
+///   gained `pending_impulse`, the collision-stun vector at the original's
+///   `entity->0x4c + 0x110` - see `crate::wall::apply_pending_impulse`, the new
+///   port of `Ship_ApplyCollisionImpulse`, now called unconditionally every tick
+///   from `crate::step` (right after `wall::resolve`), the same as the
+///   original's `FUN_0883f540` calls it per ship. No probe script writes
+///   `pending_impulse` and nothing in this crate does either yet: the two
+///   producers the original has, `Weapon_PostBlastImpulse_q` and an unnamed
+///   second writer, are read but not ported
+///   (`docs/ghidra/functions/psp-pulse-usa/contact-response.md`). So the field
+///   holds `Vec3::ZERO` on entry to `apply_pending_impulse` every tick of every
+///   run, its own zero-check makes the call a true no-op (the early return, not
+///   its absence), and this is a longer hash stream only. Checked the same way
+///   as every entry above: with `hasher.write_vec3(pending_impulse)` alone
+///   removed - `apply_pending_impulse` still called from `crate::step` - the
+///   three constants from 2026-08-11 (the `shield_pickup_timer` entry)
+///   reproduce bit for bit.
 const REFERENCE: &[(u32, Script, u64, u64)] = &[
     (
         600,
         Script::Corridor,
-        0x8609_c774_c408_8b6c,
-        0x6b5f_549c_b628_a7b2,
+        0x3704_c308_e4c7_377c,
+        0x0e58_8040_c263_f562,
     ),
     (
         3_600,
         Script::Corridor,
-        0x3c37_237f_ee68_9a86,
-        0x6ee2_a9e1_c91e_8934,
+        0xda00_a5a1_2b6a_7136,
+        0xe248_bbd7_0b47_e644,
     ),
     (
         3_600,
         Script::Aerobatic,
-        0xdb7c_6400_f629_bc7d,
-        0xe50e_e16e_fca3_d976,
+        0xe8a8_0115_2a3b_e93d,
+        0xb9c7_aa3c_96d7_add6,
     ),
 ];
 
@@ -330,6 +347,7 @@ fn every_hashed_field_reaches_the_hash() {
         ("reverse_controls", |s| s.reverse_controls = 1.0),
         ("stun_timer", |s| s.stun_timer = 1.0),
         ("wall_contact_prev", |s| s.wall_contact_prev = true),
+        ("pending_impulse", |s| s.pending_impulse.z = 1.0),
         ("leap_timer", |s| s.leap_timer = 1.0),
         ("grounded", |s| s.grounded = 1.0),
         ("grounded_prev", |s| s.grounded_prev = 1.0),
@@ -408,6 +426,15 @@ fn the_run_visits_the_paths_it_claims_to_cover() {
         // pad hit would quietly turn that history note into a lie.
         assert_eq!(state.pad_timer, 0.0, "tick {tick}: the boost armed");
         assert_eq!(state.pad_direction, Vec3::ZERO);
+        // Same claim, same reason, for the 2026-08-19 addition: no producer
+        // exists yet for `pending_impulse`, so it holds its default for the
+        // whole run and the hashes below moved only because the stream got
+        // longer.
+        assert_eq!(
+            state.pending_impulse,
+            Vec3::ZERO,
+            "tick {tick}: an impulse posted"
+        );
         lost_energy |= state.shield < full_pool;
     }
 
