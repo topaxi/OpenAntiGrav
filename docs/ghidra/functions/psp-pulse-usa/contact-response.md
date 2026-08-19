@@ -915,29 +915,42 @@ inertia tensor, body space. That reading is not weak: it is backed by
 `Body_Integrate` actively *consuming* the block every sub-step
 (`vtfm3.t`/`vscl.t` off `body+0x40`, the result cached to `body+0x80..0xb0`
 and read again by `Body_ApplyImpulseAtPoint`), not merely by
-`Body_SetBoxInertia` zeroing it at construction - so this is not "the
-constructor zeroes it and nothing else touches it," the strongest version of
-the case for `body+0x50` being reused. Both readings rest on real instruction
-traces and neither is a misread of a snippet; they simply have not been
-reconciled. Left as an open contradiction for a future pass to settle -
-candidates worth checking: whether `Body_Integrate`'s `vtfm3.t` genuinely
-addresses all four quad-words as one matrix or only three of them (`+0x40`,
-`+0x60`, `+0x70`, leaving `+0x50` as incidental range that happens to sit
-between real tensor rows), and whether `body+0x50` is written every tick by
-something this page has not yet traced (the integrator's own position update
-is the obvious candidate, given what this function reads there). Not resolved
-either way here.
+`Body_SetBoxInertia` zeroing it at construction.
 
-**Separately, and worth keeping**: the same live check also read
-`body+0x30` (`rigid-body.md`'s own `Body_AddForceAtPoint` comment, `a0 =
-body+0x30 ; position`) for all eight craft, and it does **not** read as a
-world position either - every craft's value clustered near `(0, 0.7-0.75, 0)`,
-unit-scale, y-dominant, which looks far more like a normalized up/orientation
-vector than a track-scale position. That comment predates this session and
-was not re-verified here beyond this one observation; a future reader should
-not assume `body+0x30` is position without checking it directly; the raw
-values are worth a second, dedicated look rather than being resolved as a
-side effect of this page.
+**Checked further, same session, and the contradiction stands rather than
+resolves.** `Body_SetBoxInertia`'s diagonal patch-back (`disassemble_bytes`
+over `0x0884e218`-`0x0884e22c`) writes three scalars at `+0x40`, `+0x54`,
+`+0x68` - stride `0x14` apart, exactly what a row-major 4x4 with `0x10`-byte
+rows at `+0x40`/`+0x50`/`+0x60`/`+0x70` predicts for its own diagonal
+(`row_base + column*4`: `0x40+0`, `0x50+4`, `0x60+8`). The constructor's own
+arithmetic requires row 1 to start at `+0x50` for `+0x54` to be its diagonal
+entry - so this does not weaken `rigid-body.md`'s tensor reading, it
+independently confirms the construction-time layout. Which makes the runtime
+observation sharper, not softer: for an axis-aligned box, the off-diagonal
+terms of row 1 (`+0x50`, `+0x58`, the ones this session read as `-668.16` and
+`139.64`) should be `0.0` forever after construction, and they visibly are
+not. Something writes real, non-zero, per-craft data into that row at
+runtime, and `Weapon_PostBlastImpulse_q` reads it as this craft's position.
+Left as a genuinely unreconciled contradiction, not a range-label
+imprecision: the next check is whether `Body_Integrate`'s `vtfm3.t` reads all
+four quad-words as one matrix or only three (a `.t` transform is 3x3; which
+three rows it actually addresses from a `+0x40` base is not yet read), and
+what writes `body+0x50` every tick if it is not the tensor's own math - the
+integrator's own position update is the obvious candidate, given what this
+function reads there.
+
+**Separately, and read with a caveat this time.** The same live check also
+read `body+0x30` (`rigid-body.md`'s own `Body_AddForceAtPoint` comment, `a0 =
+body+0x30 ; position`) for all eight craft - but **at the start line, before
+the countdown**, not at the mid-race moment `T+0x50` was sampled. Every
+craft's value clustered near `(0, 0.7-0.75, 0)`, unit-scale. That is not a
+controlled comparison against the mid-race `T+0x50` reading - a parked grid
+sitting close together in some local frame is also a plausible explanation for
+tight clustering, and `rigid-body.md` already documents `Body_Translate` doing
+`body->position(+0x30) += ...`, i.e. a field that does accumulate like a
+position. So this is not evidence that `body+0x30` is not position, only a
+recorded observation from one uncontrolled sample: worth a same-breakpoint,
+mid-race re-read before anyone treats it as a finding.
 
 **Why 68, and the `_q`, unchanged despite settling `T`.** The write site, its
 accumulate-not-overwrite semantics and the falloff formula are now traced
