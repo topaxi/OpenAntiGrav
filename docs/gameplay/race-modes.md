@@ -158,7 +158,21 @@ supplied once when the menus open and is not re-supplied when MODE changes, so
 picking a non-Zone circuit and then Zone gives a load error naming
 `availableInZone` rather than a row that was never offered. Deliberate: making
 the list mode-reactive is front-end work, and the error is honest in the
-meantime.
+meantime. `catalogue::tracks_of_kind` and `Track::available_in_zone` are the two
+listings such a filter would read; nothing dispatches between them, because
+which one applies is a title fact and `oag_title::ZoneCircuit` is where that
+lives.
+
+**And the Zone HUD draws its labels with no values behind them.** A screenshot of
+a Zone race shows `Lap`, `Score` and `Zone` positioned exactly where
+`Zone_HUD.xml` puts them and reading blank, which looks like this change broke
+something and is instead the pre-existing gap [hud.md](../ui/hud.md) records: a
+mode's code substitutes string keys into widgets the layout positioned, that
+substitution rule is unread, and Zone is one of the layouts explicitly scoped out
+there. [zone-mode.md](../ghidra/functions/psp-pulse-usa/zone-mode.md) has the
+same hole from the RE side - what raises `IG_HUD_PERF_ZONE` and what drives the
+`Zone_Bar_*` widgets is inside the widget system, not the mode. The environment
+swap does not touch any of it.
 
 **Zone's racing line is authored separately from the race one**, which was worth
 checking because `Course::START_LINE_OFFSET` is fitted on `16_Track`'s *race*

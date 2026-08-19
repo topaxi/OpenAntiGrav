@@ -75,8 +75,7 @@ pub struct Track {
     ///
     /// `false` on a title that declares no such attribute anywhere, which is
     /// every title whose Zone circuits are separate - Pure marks its four with
-    /// `type="Zone"` instead, and [`zone_tracks`] is what reads either
-    /// arrangement.
+    /// `type="Zone"` instead, and [`tracks_of_kind`] is what lists those.
     pub available_in_zone: bool,
 }
 
@@ -108,25 +107,50 @@ impl Track {
 /// walk, and it puts `16_Track` first, which is the circuit every capture under
 /// `data/traces/` was taken on.
 ///
-/// Entries whose `type` is not `Race` are skipped rather than guessed at - the
-/// shipped file has none, so what another value would mean is unestablished and
-/// silently racing one would be inventing behaviour.
+/// Entries whose `type` is not `Race` are skipped rather than guessed at - what
+/// another value means is a per-title question, and [`tracks_of_kind`] is how a
+/// caller that knows the answer asks it.
 #[must_use]
 pub fn tracks(definition_xml: &str) -> Vec<Track> {
+    tracks_of_kind(definition_xml, "Race")
+}
+
+/// Every `PI_Track` of one `type`, in file order.
+///
+/// [`tracks`] is this with `"Race"`, which is every circuit both PSP titles let
+/// a player race normally. The other values the shipped definitions use are
+/// **per-title vocabulary**, which is why this takes the kind rather than
+/// offering a variant per name: Pure declares `Zone` (its four Zone-mode
+/// circuits) and `Classic` (the Wipeout 1 and 2097 tracks it re-ships), and
+/// Pulse declares neither - all 24 of its entries are `Race`, and its Zone
+/// circuits are a second file inside those same directories rather than
+/// entries of their own.
+///
+/// So a caller wanting Zone's circuits has to know which title it opened before
+/// it knows which question to ask, and [`oag_title::ZoneCircuit`] is what tells
+/// it. That dispatch is deliberately **not** wrapped up here: it belongs to the
+/// caller that has the title in hand, and a helper doing it would be a title
+/// axis living in the engine.
+///
+/// An entry with no `type` attribute counts as `Race` - no shipped definition
+/// omits it, so this is the reading of an absence rather than a rule anything
+/// relies on.
+#[must_use]
+pub fn tracks_of_kind(definition_xml: &str, kind: &str) -> Vec<Track> {
     let root = parse(definition_xml);
     let mut out = Vec::new();
-    collect(&root, &mut out);
+    collect(&root, kind, &mut out);
     out
 }
 
-fn collect(node: &Node, out: &mut Vec<Track>) {
+fn collect(node: &Node, kind: &str, out: &mut Vec<Track>) {
     for child in &node.children {
         if child.name == "PI_Track" {
-            if let Some(track) = read_track(child) {
+            if let Some(track) = read_track(child, kind) {
                 out.push(track);
             }
         } else {
-            collect(child, out);
+            collect(child, kind, out);
         }
     }
 }
@@ -292,19 +316,7 @@ pub fn all_tracks(documents: &[String]) -> Vec<Track> {
     out
 }
 
-fn read_track(node: &Node) -> Option<Track> {
-    read_track_of_type(node, "Race")
-}
-
-/// One `PI_Track` whose `type` is the one asked for, or `None`.
-///
-/// The `type` is a parameter because two of them are raceable in this engine and
-/// which one a caller wants depends on the mode: `Race` for everything, `Zone`
-/// on a title that declares Zone circuits separately. An entry with no `type`
-/// attribute at all counts as `Race`, which is what the shipped files' own
-/// omissions mean - Pulse spells `type="Race"` on all 24 and Pure on all its
-/// race circuits, so no shipped entry actually relies on this.
-fn read_track_of_type(node: &Node, wanted: &str) -> Option<Track> {
+fn read_track(node: &Node, wanted: &str) -> Option<Track> {
     let id = node.attr("name")?.to_string();
     let values = node.children_named("Values").next()?;
     if values.attr("type").unwrap_or("Race") != wanted {
@@ -321,58 +333,6 @@ fn read_track_of_type(node: &Node, wanted: &str) -> Option<Track> {
         // reason it exists.
         available_in_zone: values.flag("availableInZone").unwrap_or(false),
     })
-}
-
-/// The circuits a Zone race can be run on, in file order.
-///
-/// **Two arrangements, and the title says which one it is**, because the discs
-/// genuinely disagree rather than merely spelling one idea differently:
-///
-/// - [`oag_title::ZoneCircuit::Prefixed`] - Pulse. Zone runs on the *race*
-///   circuits, sixteen of the twenty-four, each declaring
-///   `availableInZone="true"`. The returned entries are race entries and their
-///   [`Track::entry_name`] is the race `.vex`;
-///   [`oag_title::ZoneCircuit::variant_of`] turns one into the Zone file beside
-///   it.
-/// - [`oag_title::ZoneCircuit::Separate`] - Pure, and HD on the evidence of its
-///   four `zone_N` environment directories. Zone runs on circuits of its own,
-///   declared `type="Zone"`, which the race listing in [`tracks`] deliberately
-///   skips. Their [`Track::entry_name`] is already the file to load.
-///
-/// So a caller gets a list it can race in Zone either way without knowing which
-/// disc it opened - which is the same job [`oag_title::HudLayouts`] does for the
-/// HUD and [`oag_title::RaceDefaults`] for the opening circuit.
-///
-/// **Empty is a real answer**, not a failure: HD's plugin definition declares no
-/// `PI_Track` at all this build has read, so its Zone circuits are reached
-/// through [`oag_title::ZoneCircuit::Separate`]'s own default rather than
-/// through a listing. A caller with an empty list still has a circuit to race.
-#[must_use]
-pub fn zone_tracks(definition_xml: &str, zone: oag_title::ZoneCircuit) -> Vec<Track> {
-    match zone {
-        oag_title::ZoneCircuit::Prefixed(_) => tracks(definition_xml)
-            .into_iter()
-            .filter(|track| track.available_in_zone)
-            .collect(),
-        oag_title::ZoneCircuit::Separate(_) => {
-            let root = parse(definition_xml);
-            let mut out = Vec::new();
-            collect_of_type(&root, "Zone", &mut out);
-            out
-        }
-    }
-}
-
-fn collect_of_type(node: &Node, wanted: &str, out: &mut Vec<Track>) {
-    for child in &node.children {
-        if child.name == "PI_Track" {
-            if let Some(track) = read_track_of_type(child, wanted) {
-                out.push(track);
-            }
-        } else {
-            collect_of_type(child, wanted, out);
-        }
-    }
 }
 
 #[cfg(test)]

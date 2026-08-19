@@ -87,6 +87,13 @@ fn race_circuits(archives: &mut oag_assets::Archives, definition: &str) -> Vec<c
 }
 
 /// The same, for the circuits a Zone race can be run on.
+///
+/// **The two arrangements, dispatched here rather than inside the catalogue.**
+/// A title whose Zone circuits are the race ones with a prefixed file marks them
+/// with `availableInZone`; a title whose Zone circuits are its own declares them
+/// `type="Zone"`, which the race listing skips. `oag_game::catalogue` offers the
+/// two listings and deliberately does not choose between them - that choice
+/// needs the title in hand, so it belongs to a caller like this one.
 fn zone_circuits(
     archives: &mut oag_assets::Archives,
     definition: &str,
@@ -96,7 +103,13 @@ fn zone_circuits(
         .read_name(definition)
         .expect("the game plugin definition");
     let xml = oag_formats::fexml::text(&blob).expect("the definition is not shortened");
-    catalogue::zone_tracks(&xml, zone)
+    match zone {
+        ZoneCircuit::Prefixed(_) => catalogue::tracks(&xml)
+            .into_iter()
+            .filter(|track| track.available_in_zone)
+            .collect(),
+        ZoneCircuit::Separate(_) => catalogue::tracks_of_kind(&xml, "Zone"),
+    }
 }
 
 /// **The load-correctness claim, swept over every circuit Pulse declares.**
