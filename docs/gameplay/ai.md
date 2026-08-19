@@ -1773,10 +1773,12 @@ decision rather than a detail:
   ribbons, and `MAX_SPRITES` now carries its own arithmetic: eight flares plus a
   projectile and a blast flash per projectile slot, 40 of 48.
 
-The one gap left is per-team **liveries**: the whole field still wears the
-player's hull, so there is one model-space nozzle rather than eight, and every
-plume is the player's team's. When per-team models land the locator moves with
-the model.
+**Liveries landed 2026-08-15** (`crates/game/src/livery.rs`), and with them
+the per-slot nozzle this section used to want: `Setup::nozzles` is one locator
+per slot, read off that slot's own hull, so each plume samples its own team's
+UV keyframes rather than the player's. `Race::force_boost_state` stays slot
+0's alone, deliberately - a pose comparison is against one captured craft, and
+that is a capture-only synthetic warmup, not a field-wide mechanic.
 
 ### The field is placed
 
