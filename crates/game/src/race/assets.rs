@@ -322,26 +322,31 @@ pub(super) fn zone_circuit_miss(
 /// divergence from the original rather than a simplification, and one that is
 /// invisible from a screenshot, so it is stated on every Zone load.
 ///
-/// The file is `<zone craft>\handlingstats.xml`: `Data\Ships\Zone_01` on both
-/// PSP titles and `/data/ships/zone` on HD, all three opening
-/// `<Stats team="ZoneMode">` and authoring **no `<Class>` block at all** where a
-/// team file authors four or five. `oag_gameplay::handling_for` needs a class
+/// The directory is `Data\Ships\Zone_01` on both PSP titles and
+/// `/data/ships/zone` on HD, all three opening `<Stats team="ZoneMode">` and
+/// authoring **no `<Class>` block at all** where a team file authors four or
+/// five.
+///
+/// **The line deliberately names no path**, because on Pulse that directory is
+/// not one anything here can derive: [`oag_title::ZoneCraft::directory`] answers
+/// with the *player's own team* there, which is correct for the model and wrong
+/// for this - Pulse draws `Assegai\Zone.vex` while its ZoneMode block sits in
+/// `Zone_01`. An earlier draft of this line interpolated that helper and told
+/// every Pulse player that `Assegai\handlingstats.xml` was a ZoneMode file,
+/// which it is not. Naming the directory would need a fifth title field for
+/// something nothing reads; `crates/game/tests/zone_ground_truth.rs` carries
+/// the three spellings as the evidence instead. `oag_gameplay::handling_for` needs a class
 /// and panics without one, which is the whole reason it is unread - see
 /// [`oag_title::ZoneCraft`] for what the shipped file does carry and why the
 /// mode plausibly wants it.
-pub(super) fn zone_handling_note(
-    mode: Mode,
-    team: &str,
-    title: &oag_title::Title,
-) -> Option<String> {
+pub(super) fn zone_handling_note(mode: Mode, team: &str) -> Option<String> {
     if mode != Mode::Zone {
         return None;
     }
-    let craft = title.race.zone_craft.directory(team);
     Some(format!(
-        "zone: flying {team}'s handling. {} ships a ZoneMode handling block of \
-         its own and nothing reads it - it authors no <Class>, which is what \
-         this engine's per-class conversion needs. See oag_title::ZoneCraft",
-        oag_formats::handling::entry_name(craft)
+        "zone: flying {team}'s handling. This title ships a ZoneMode handling \
+         block of its own and nothing reads it - it authors no <Class>, which \
+         is what this engine's per-class conversion needs. See \
+         oag_title::ZoneCraft and docs/gameplay/race-modes.md"
     ))
 }
