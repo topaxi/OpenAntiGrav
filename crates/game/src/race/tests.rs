@@ -19,6 +19,7 @@ mod field;
 mod hash;
 mod held_buttons;
 mod load;
+mod models;
 mod pads;
 mod respawn;
 mod scene;

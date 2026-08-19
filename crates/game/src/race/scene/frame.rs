@@ -159,12 +159,18 @@ impl Scene {
         // here down: the scene always holds a full grid's worth of drawables and a
         // time trial fields one craft.
         let drawn = usize::from(race.ship_count());
-        // Every craft in play, the player first. `zip` rather than an index so a
-        // race with fewer craft than the scene has drawables writes only the
-        // ones it has - the rest keep last frame's uniforms and are not drawn.
-        let matrices = race.ship_model_matrices();
-        for (drawable, matrix) in self.ships.iter().zip(&matrices) {
-            drawable.write(queue, view_projection, *matrix);
+        // Slot-indexed rather than `zip`ped over `race.ship_model_matrices()`,
+        // whose filter-then-collect drops out of slot order the moment a
+        // craft below `drawn` goes inactive - see `Race::ship_active`. A
+        // tail slot past `drawn` is simply never in this range, so it keeps
+        // last frame's uniforms and is not drawn, the same as before.
+        for slot in 0..drawn {
+            if !race.ship_active(slot) {
+                continue;
+            }
+            if let Some(drawable) = self.ships.get(slot) {
+                drawable.write(queue, view_projection, race.ship_model_matrix_of(slot));
+            }
         }
         // The flaps move in *model* space, before the ship's own matrix, so
         // this is a vertex write and not a second uniform - see
@@ -219,6 +225,11 @@ impl Scene {
             let Some(boost) = boost else {
                 continue;
             };
+            // An inactive slot has nothing current to sample - its craft is
+            // out of the race, not merely hidden. See `Race::ship_active`.
+            if !race.ship_active(slot) {
+                continue;
+            }
             if !race.exhaust_of(slot).plume_visible() {
                 continue;
             }
@@ -279,6 +290,13 @@ impl Scene {
         let mut vertices = Vec::new();
         let mut trail = Vec::new();
         for slot in 0..drawn {
+            // Per craft, unlike the nozzle check below - an inactive slot is
+            // out of the race regardless of what its model authors. `continue`
+            // rather than `break`: the slots after it can still be racing.
+            // See `Race::ship_active`.
+            if !race.ship_active(slot) {
+                continue;
+            }
             // No locator, nothing drawn - rather than a flare at the origin.
             // `break` rather than `continue` because the whole field shares one
             // model, so a missing `Engine Flare` node is missing for every craft.
@@ -437,6 +455,9 @@ impl Scene {
             let Some(boost) = boost else {
                 continue;
             };
+            if !race.ship_active(slot) {
+                continue;
+            }
             if !race.exhaust_of(slot).plume_visible() {
                 continue;
             }

@@ -92,6 +92,29 @@ impl Race {
         self.world.ship_count
     }
 
+    /// Whether the craft in this slot is still racing.
+    ///
+    /// The slot-indexed counterpart to [`Self::ship_model_matrix_of`], for the
+    /// same reason: a caller walking `0..ship_count()` needs to skip an
+    /// inactive slot without losing slot alignment, which
+    /// [`Self::ship_model_matrices`]' filter-then-collect cannot give it. Every
+    /// per-craft loop in `Scene::render` that writes or draws by slot should
+    /// test this before it does either - see the four sites this joins.
+    ///
+    /// Currently a no-op everywhere it is called: nothing deactivates a slot
+    /// below [`Self::ship_count`] mid-race today, elimination being the
+    /// obvious future candidate. Written ahead of that landing so the loops
+    /// already agree with `oag_gameplay::World`'s own `active` flag instead of
+    /// assuming every slot in range is racing.
+    ///
+    /// # Panics
+    ///
+    /// If `slot` is not a ship slot.
+    #[must_use]
+    pub fn ship_active(&self, slot: usize) -> bool {
+        self.world.ships[slot].active
+    }
+
     /// One model matrix per craft in play, the player's first.
     ///
     /// The player is index 0 and the seven opponents follow, which is the array
