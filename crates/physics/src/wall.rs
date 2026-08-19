@@ -266,9 +266,16 @@ pub const MIN_HULL_EXTENT: f32 = 1e-4;
 /// rather than be discovered afterwards as "the shield does not seem to do
 /// anything to a rival hit". [`ShipState::shield_pickup_timer`] is the flag.
 ///
-/// The writer is still unfound, and the search for it is narrower than it was:
-/// both of `Body_ResolveContactPair`'s tail calls are ruled out, so the
-/// two-body path does not post it either. See
+/// The writer is found, 2026-08-19, by a live write breakpoint on the field
+/// during a driven Single Race: two of them, both in the weapon-code region
+/// and both reached through a function-pointer dispatch this project has not
+/// located rather than a static call. `Weapon_PostBlastImpulse_q`
+/// (`0x0886794c`) computes a distance falloff off a per-weapon stats table and
+/// **accumulates** an impulse into the target's pending vector - a rocket,
+/// mine or missile explosion is the unconfirmed guess for its caller. A
+/// second, unnamed writer loops over what reads like a short entity list doing
+/// the same accumulate. Neither has a Rust port yet, and neither does
+/// `Ship_ApplyCollisionImpulse`'s own consumer side above. See
 /// `docs/ghidra/functions/psp-pulse-usa/contact-response.md`.
 ///
 /// It also fixes the *scope* of the shield, which is easy to over-read: this is

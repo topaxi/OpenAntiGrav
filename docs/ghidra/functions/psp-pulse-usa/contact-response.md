@@ -651,10 +651,9 @@ unread; a craft against track geometry takes the single-body path.
   Shield cannot be up during a trace that never picks one up.
 - ~~**`0x0884ef30`**, the two-body contact resolver.~~ **Read 2026-08-11** - see
   [the section below](#body_resolvecontactpair-0x0884ef30-the-two-body-path).
-- **What posts the pending impulse at `entity->0x4c + 0x110`.** The consumer is
-  read and the contact path is excluded (above), so the writer is somewhere in
-  the weapon or rival-contact code and is the next step for anyone wiring the
-  stun back up.
+- ~~**What posts the pending impulse at `entity->0x4c + 0x110`.**~~ **Read
+  2026-08-19** - a write breakpoint at the live address caught two writers.
+  See [the section below](#two-writers-found-at-a-live-write-breakpoint-2026-08-19).
 - **`0x08815ccc`** (box against box) and **`0x0881702c`** (mesh against mesh,
   gated on `world+0x5464`), the two narrowphase pairs `Collision_DispatchPair`
   can reach that a craft against track geometry does not.
@@ -770,10 +769,138 @@ instructions later. That is a clear-to-zero on the body pointer directly,
 not a post to `*(entity+0x4c)+0x110` - a different object and a different
 operation. Confidence 90 this is unrelated to the stun mechanism.
 
-So the pending-impulse writer stays unfound, but the exclusion now covers
-both of `Body_ResolveContactPair`'s tail calls, not just an unresolved
-"lands somewhere odd" note. It is somewhere else in the weapon or
-rival-contact code, as the note below already said.
+So the pending-impulse writer stays unfound by static reading alone, but the
+exclusion now covers both of `Body_ResolveContactPair`'s tail calls, not just
+an unresolved "lands somewhere odd" note. It is somewhere else in the weapon
+or rival-contact code, which the next section confirms directly.
+
+### Two writers, found at a live write breakpoint, 2026-08-19
+
+The static sweep above exhausted the cheap candidates without finding a
+literal `+0x110` store on an entity-derived pointer anywhere in
+`Body_ResolveContact`'s or `Body_ResolveContactPair`'s call trees. The
+question "does anything write here" is what a live watchpoint answers better
+than more decompilation, so this was checked directly: a Single Race
+(opponents on the grid, `psp-drive.py menu --single-race`), a write breakpoint
+(`memory.breakpoint.add`, `size=16, write=true, log=true`) armed on all eight
+craft's `*(entity+0x4c)+0x110` at once - the addresses read live off a
+`Ship_ApplyCollisionImpulse` breakpoint hit rather than guessed - and the
+player driven into the pack. `docs/reverse-engineering/ppsspp-debugger.md`'s
+watchpoint section is the mechanism; a control watchpoint on a craft's own
+rigid-body position (thousands of hits) ran alongside the whole time to prove
+the instrument was live throughout, per that page's rule that a quiet
+watchpoint and a working one that saw nothing look identical.
+
+Three of the eight armed craft took a hit during one drive. Every hit logged
+one of two program counters, immediately followed by a **write** from
+`Ship_ApplyCollisionImpulse` itself (`0x0883f3d0`/`0x0883f398`/`0x0883f410`) -
+the zero-on-consume this page already reads - landing on the same watched
+address a beat later. That is the consumer this page already reads,
+corroborating the target address rather than a coincidence.
+
+#### `Weapon_PostBlastImpulse_q` (`0x0886794c`), confidence 68
+
+The more frequent of the two (5 of 6 logged hits). A short, straight-line
+function - no loop, disassembled and read instruction-by-instruction because
+the decompiler would not complete on it (nor on `Body_ResolveContactPair` or
+`FUN_08868ea4` below, checked directly against a function this page decompiled
+cleanly on 2026-08-11, so this is the decompiler failing on this database
+session rather than these three functions being unusual).
+
+Signature as called: `(craftArray, sourceIndex, targetIndex)`, all three plain
+values, not pointers to a manifold. `craftArray + sourceIndex*4 + 0x64` gives
+a source entity, whose `+0x40` field indexes a global table this function
+reads three floats out of at `+0xe8`, `+0xec`, `+0xf0` - shaped exactly like a
+per-weapon stats block (compare `WeaponAIstats` in
+`docs/reverse-engineering/ppsspp-debugger.md`'s watchpoint section, a
+different table with the same "index through a global, read named floats"
+shape). `craftArray + targetIndex*4 + 0x44` gives what this function reads as
+the target entity, and it is this entity's `+0x110` that gets written - **what
+is measured, and no more**: the write instruction's operand computes
+`*(craftArray + targetIndex*4 + 0x44) + 0x110`, and the live watchpoint (armed
+at `*(entity+0x4c)+0x110`, `Ship_ApplyCollisionImpulse`'s own addressing) fired
+at exactly that address. The two chains landing on the same live address means
+`craftArray + targetIndex*4 + 0x44 == entity + 0x4c` for whatever `entity` and
+`targetIndex` were live at the time - which holds if `craftArray[targetIndex]`
+is `entity - 8`, an offset relationship nothing read here explains. Left
+unexplained rather than asserted as "the same double indirection."
+
+The arithmetic, in order:
+
+1. `d = |target_position - source_position|` (`vsub.q` then `vdot.t`/`vsqrt.s`).
+2. `target->0x120 += stats->0xe8` - an accumulator on the target, read nowhere
+   in this function; a shake or cooldown timer is the obvious guess, unread.
+3. `falloff = 1.0 - d / stats->0xec` - a linear falloff over a radius, not
+   clamped here (a hit outside the radius drives `falloff` negative; nothing
+   in this function stops that, so either the caller gates on distance first
+   or a far hit posts a negative-magnitude impulse - unread).
+4. `direction = normalize(target->(+0x44 deref)+0x50)`, guarded against a
+   zero-length vector the way `FUN_08868ea4` below does too (`vrcp` on a
+   `MaxFloat`-substituted zero denominator rather than a divide-by-zero).
+5. `impulse = direction * (falloff * stats->0xf0)`.
+6. `*(target+0x110) = *(target+0x110) + impulse` - **accumulated**, via
+   `vadd.q`, not overwritten. Two blasts in the same tick stack. The write
+   itself is `sv.q C400, 0x0(a2)` at **`0x08867b0c`**, the address every
+   watchpoint hit logged.
+
+Before any of that, the function reads `source->0x368` (through the same
+`craftArray[sourceIndex]->0x64` entity) and branches three ways on whether it
+is `0`, `1`, or `2`, setting a byte flag at `target->(+0x44 deref)+0x124` when
+it is not `0`. **This is the same unread field
+[HANDOVER.md](../../../../HANDOVER.md) already flags as "the shield path's
+last unmeasured field: `entity + 0x368`"** - a second, independent function
+reading it as a tri-state, which narrows that thread without closing it: this
+adds "gates whether a blast sets `target+0x124`" to what is known, still not
+what the three states mean.
+
+**Why 68, and the `_q`.** The write site, its accumulate-not-overwrite
+semantics, and the falloff formula are corroborated twice over - the static
+trace and a live watchpoint hit landing on the address the trace predicts -
+which is more than the rubric's single-function static-reading cap normally
+allows. What holds it under 70: no caller is known (`get_xrefs_to` finds
+nothing static, so this is reached through a function-pointer dispatch this
+project has not located - a rocket, a mine or a missile explosion is the
+obvious guess given the address sits among `Rocket_Ctor`/`Rocket_Update`/
+`Missile_Update`, all unconfirmed), the `stats` table's identity and its
+`sourceIndex`/`targetIndex` calling convention are read off this function
+alone with no second site to cross-check, and the `entity+0x368` branch's
+three cases are not understood, only observed.
+
+#### A second writer at `FUN_08868ea4` (`0x08868ea4`), not renamed
+
+The other logged PC, once. Also decompiler-resistant, and only partially read
+by hand: it loops (`t7` against a bound read through a `lui`/`lw` pair shaped like a
+`$gp`-relative access - the same pattern [HANDOVER.md](../../../../HANDOVER.md)
+already flags as unreliable to address literally from its displayed
+immediate, so the loop's actual bound is unread), and inside the loop
+computes `*(cursor+0x48)+0x110` as its target address, where `cursor` starts
+at the function's own `a0` and advances by one word (`4` bytes) per loop
+iteration - the same `+0x48` offset `Weapon_PostBlastImpulse_q` reaches
+through `+0x44`, one word apart, which is consistent with either of two
+readings this project has not distinguished: a cursor walking successive
+*entities*' pending-impulse pointers (each entity's own `+0x48` slot, one per
+iteration), or a cursor walking consecutive *fields* inside one entity
+(`+0x48`, `+0x4c`, `+0x50`, ...) that happen to alias the pending-impulse
+offset on one particular iteration. Nothing read here settles which, nor what
+the loop is walking a list *of*. That shape - iterate something, post an
+impulse to each entry - still reads like the rival-contact half of "weapon or
+rival-contact code" the way `Weapon_PostBlastImpulse_q` reads like the weapon
+half, but it is a guess about the shape, not a measurement. Confidence on that
+reading: under 50, so no name - `FUN_08868ea4` stays as it is rather than
+guessing `ShipContact_PostRivalImpulse` or similar. Left for whoever picks the
+loop bound and the list identity apart.
+
+#### What is still not wired
+
+Neither writer has a Rust port. `crates/physics/src/wall.rs`'s
+`STUN_PER_CONTACT` doc already lays out what
+`Ship_ApplyCollisionImpulse`'s own side needs (the forward-axis projection,
+the Shield gate, the zero-on-consume) and says explicitly that constant alone
+is not enough - now there are two producers to reproduce as well as the one
+consumer, and `Weapon_PostBlastImpulse_q`'s own caller and `stats` table are
+still unread. Arming the stun for real is a bigger change than this finding;
+this section is what makes it startable rather than a fresh hunt.
+
 ### `0x08815ccc` is a stub, so craft-to-craft contact does not come from the narrowphase
 
 **Read 2026-08-11, and it changes the picture.** `Collision_DispatchPair`

@@ -1257,3 +1257,17 @@ satisfies it. Same watch address, same control craft, opposite answer.
 **So a positive control proves the instrument, and nothing about the scenario.**
 Before reporting a zero, ask what would have to happen in the game for the code
 under test to run at all, and then make it happen.
+
+### A worked example: finding a pending-impulse writer no static sweep found
+
+`scripts/psp-watch-pending-impulse.py` is this whole recipe as a reusable
+script, not just a description of one - read all live entity addresses off a
+breakpoint hit, arm a write watchpoint on each one's derived field plus one
+control, resume, and let a driven race do the rest. It is what found
+`Weapon_PostBlastImpulse_q` (`0x0886794c`) and a second, still-unnamed writer
+into `Ship_ApplyCollisionImpulse`'s pending vector after a static sweep across
+every plausible displacement and call tree came up empty - see
+`docs/ghidra/functions/psp-pulse-usa/contact-response.md#two-writers-found-at-a-live-write-breakpoint-2026-08-19`.
+The shape generalises to any "who writes this heap field" question: derive the
+address live rather than guessing it, arm write-only/log-true, always run a
+control alongside, and read the writer's PC out of the emulator's own stdout.
