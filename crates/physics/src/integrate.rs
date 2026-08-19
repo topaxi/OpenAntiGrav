@@ -272,6 +272,14 @@ pub fn step<R: Raycaster + ?Sized>(
     }
 
     evaluated.wall = wall::resolve(state, handling, env, raycaster, before_integration);
+    // `Ship_ApplyCollisionImpulse`'s port: consumes `state.pending_impulse` every
+    // tick, same as the original consumes `entity->0x4c + 0x110`. Currently a
+    // guaranteed no-op - nothing in this crate writes `pending_impulse` yet, both
+    // producers (`Weapon_PostBlastImpulse_q` and its unnamed sibling) are still
+    // unported - but it has to run every tick regardless, the way the original's
+    // `FUN_0883f540` calls it unconditionally per ship. See
+    // `crate::wall::apply_pending_impulse`.
+    wall::apply_pending_impulse(state);
     evaluated.shield = crate::damage::apply_contact(
         state,
         &handling.dimensions,

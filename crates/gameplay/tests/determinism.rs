@@ -299,6 +299,19 @@ fn run(ticks: u32) -> (u64, u64) {
 ///   per tick, in the same way the projectile-pool widening moved empty slots
 ///   rather than behaviour.
 ///
+/// - **Moved 2026-08-19**, when `oag_physics::ShipState` gained
+///   `pending_impulse` - see `crates/physics/tests/determinism.rs`'s own
+///   history for that field, which this file inherits through
+///   `hash_world`'s call into `oag_physics::probe::hash_state` (`crates/gameplay/src/hash.rs`)
+///   rather than a change made here. No isolation check repeated in this file:
+///   it would exercise the identical function that entry already isolated, and
+///   nothing in `oag_gameplay` writes the new field either - both scenarios
+///   here spawn craft through `oag_physics::ShipState` defaults and never touch
+///   it. The constants this commit replaces - `0xa88c_cfc7_3a30_f316` /
+///   `0x4e6e_0a8f_accb_a74c` at 60 ticks and `0xb5fc_13ea_252e_8e43` /
+///   `0x92e8_8d29_f718_d061` at 600 - are exactly what `probe::hash_state`'s
+///   own isolation check reproduced bit for bit with the new write removed.
+///
 /// **Never edit these to make the test pass**, the same rule
 /// `crates/physics/tests/determinism.rs` states at length: a movement here is a
 /// change to what a race *does*, and the change is the thing to find. When a
@@ -306,8 +319,8 @@ fn run(ticks: u32) -> (u64, u64) {
 /// beneath this comment and isolate the cause first, by removing the new field's
 /// own write and checking that the previous constants reproduce bit for bit.
 const REFERENCE: &[(u32, u64, u64)] = &[
-    (60, 0xa88c_cfc7_3a30_f316, 0x4e6e_0a8f_accb_a74c),
-    (600, 0xb5fc_13ea_252e_8e43, 0x92e8_8d29_f718_d061),
+    (60, 0x603b_7db8_2f52_2c56, 0xe133_7ae6_7445_d5ec),
+    (600, 0x38cb_c8b3_20d6_50c3, 0xf14f_a426_00c6_3801),
 ];
 
 /// The volley scenario: a craft at an angle fires a real fanned Rocket volley
@@ -399,12 +412,17 @@ fn run_volley(ticks: u32) -> (u64, u64) {
 ///   deterministic `oag_core::math::quat_from_axis_angle` and not glam's
 ///   platform `sin_cos` - pinning the hole would have made the hole the
 ///   reference.
+/// - **Moved 2026-08-19**, the same `pending_impulse` addition [`REFERENCE`]'s
+///   own history records, inherited through the same `hash_world` call and
+///   not re-isolated here for the same reason. Replaces
+///   `0x8c79_4b77_720c_7444` / `0xf356_fa51_5a78_b1a0` at 60 ticks and
+///   `0xfa19_77ff_52da_9377` / `0x6357_39ef_ff80_8956` at 600.
 ///
 /// **Never edit these to make the test pass**, for the same reason
 /// [`REFERENCE`] says at length.
 const REFERENCE_VOLLEY: &[(u32, u64, u64)] = &[
-    (60, 0x8c79_4b77_720c_7444, 0xf356_fa51_5a78_b1a0),
-    (600, 0xfa19_77ff_52da_9377, 0x6357_39ef_ff80_8956),
+    (60, 0x3518_c7a7_def5_c624, 0xc9d2_d53c_8f24_9cc0),
+    (600, 0xc8e9_756b_9c7f_7337, 0x9ae4_9df4_2937_0236),
 ];
 
 #[test]
