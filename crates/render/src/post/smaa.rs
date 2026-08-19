@@ -28,6 +28,8 @@
 
 use anyhow::Result;
 
+use super::{sampler_entry, texture_entry};
+
 const AREA_WIDTH: u32 = 160;
 const AREA_HEIGHT: u32 = 560;
 const SEARCH_WIDTH: u32 = 64;
@@ -406,28 +408,6 @@ fn upload(
     );
     let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
     (texture, view)
-}
-
-fn texture_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
-    wgpu::BindGroupLayoutEntry {
-        binding,
-        visibility: wgpu::ShaderStages::FRAGMENT,
-        ty: wgpu::BindingType::Texture {
-            sample_type: wgpu::TextureSampleType::Float { filterable: true },
-            view_dimension: wgpu::TextureViewDimension::D2,
-            multisampled: false,
-        },
-        count: None,
-    }
-}
-
-fn sampler_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
-    wgpu::BindGroupLayoutEntry {
-        binding,
-        visibility: wgpu::ShaderStages::FRAGMENT,
-        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-        count: None,
-    }
 }
 
 fn pass_pipeline(

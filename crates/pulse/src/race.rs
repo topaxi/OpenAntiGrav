@@ -16,7 +16,45 @@
 pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     track: DEFAULT_TRACK,
     team: DEFAULT_TEAM,
+    zone: oag_title::ZoneCircuit::Prefixed(ZONE_TRACK_PREFIX),
+    // The one variant with a recovered selector behind it rather than a name
+    // probe: `Ship_LoadModel`'s `case 6`. See `ships::ZONE_HULL`.
+    zone_craft: oag_title::ZoneCraft::ModelsInTeam {
+        hull: ships::ZONE_HULL,
+        boost: ships::ZONE_BOOST,
+    },
 };
+
+/// What Pulse puts on the front of a circuit's file name to reach the Zone
+/// variant of the same circuit.
+///
+/// `Data\Environments\16_Track\track.vex` beside
+/// `Data\Environments\16_Track\zone_track.vex`, and `track_reversed.vex` beside
+/// `zone_track_reversed.vex` - the four names per circuit that
+/// [`docs/formats/track.md`] derives from the binary's own `%s\%strack%s.vex`
+/// template. This constant is that template's **first** `%s`.
+///
+/// **A Zone circuit is a different file, not a filter on the race one.** It
+/// ships its own meshes, lights, `fogCube` and `Skycube`, and the sky is where
+/// the difference is plainest: of the 40 skies on the PSP disc, the twelve with
+/// a single material are exactly the Zone variants, against five or six for
+/// every race circuit. So Zone's look is loaded rather than computed, which is
+/// what `CLAUDE.md`'s rule about not inventing what the assets author asks for.
+///
+/// **Sixteen of the disc's twenty-four `PI_Track` entries have one**, and which
+/// sixteen is declared rather than guessed - see
+/// `oag_game::catalogue::Track::available_in_zone`.
+///
+/// Confidence **94**: every one of the 24 entries was probed by name against
+/// `pulse-psp-usa.chd` and the presence of the file matches the declaration
+/// 24 times out of 24. `pulse-ps2-eu.chd` carries the same arrangement, so this
+/// is a Pulse fact rather than a PSP one. The **selector inside the executable
+/// is unread** - the branch that chooses the prefix, the analogue of
+/// `Ship_LoadModel`'s `case 6` for the hull, has not been found - which is what
+/// caps this below the confidence the hull swap carries.
+///
+/// [`docs/formats/track.md`]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/formats/track.md
+pub const ZONE_TRACK_PREFIX: &str = "zone_";
 
 /// The circuit a race loads when the caller names none.
 ///

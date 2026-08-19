@@ -153,6 +153,12 @@ The two extra globals in `DATA00` and `DATA06` are `HD_BG` and `HD_transBG`,
 declared in a nested `<Screen name="HD_Colours">` block that the other four
 copies do not carry.
 
+**"They do not differ on a single layout number" is exactly as narrow as it
+sounds: they differ on the *colours*.** That `HD_Colours` block is the FE style,
+and `DATA00`'s and `DATA06`'s copies of it disagree on five of their six values -
+see [the palette section](#the-hd_-palette-is-the-fe-style-and-the-archives-disagree),
+which is why nothing in this project transcribes an `HD_*` colour.
+
 ## The coordinate space is 1920x1080
 
 This matters more than any single number. Pasting `menu_x: 800.0` into a
@@ -545,6 +551,14 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     // Authored on HD's own `<LeftLayer transition="0.5">`, the dominant value
     // across its GUI files. Read off HD, not borrowed - but see the warning.
     transition_secs: 0.5,
+    // Authored, `MainMenu_Definition.xml`'s own `<HorizMenu name="Mode">`, and
+    // identical in the five archives carrying that file. See "the main menu is
+    // horizontal, and it is drawn that way now" below.
+    strip: Some(oag_title::MenuStrip {
+        x: 160.0,
+        y: 125.0,
+        color: 0xFF70_5070,
+    }),
 };
 ```
 
@@ -560,10 +574,11 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
 | `first_row_y` | **no** | `None` | 85 | No `<Menu>` on the main menu; no dominant y. |
 | `row_extra_leading` | measured field | `None` | - | No capture. Needs an emulator. |
 | `menu_font` | **no** | `None` | 90 | No `Menu` slot in any language plugin. |
-| `text` | yes | `0xFFFFFFFF` | 92 | `TextColor`, all six. |
+| `text` | yes | `0xFFFFFFFF` | 92 | `TextColor`, all six - one of the globals the FE style does *not* move. |
 | `title` | yes | `0xFF646464` | 90 | `TitleColor`, all six - but see the caveat. |
-| `selected` | measured field | `None` | - | No capture. Needs an emulator. |
+| `selected` | measured field | `None` | - | No capture - and the authored `highlightColor` is `HD_Blue`, whose value is the style. |
 | `transition_secs` | yes | `0.5` | 70 | Dominant `<LeftLayer transition=>`; see the warning. |
+| `strip` | yes | `(160, 125, 0xff705070)` | 92 | The main menu's own `<HorizMenu>`, identical in all five copies of `MainMenu_Definition.xml`. |
 
 ### `first_row_y` is absent, and why
 
@@ -614,6 +629,203 @@ draw uses it. Recording it here as an authored fact and leaving the field `None`
 keeps the two separable. If a later pass wants it, the number is `300.0` and the
 change is one line; inventing it now would make an interpretation look like a
 reading.
+
+### The main menu is horizontal, and it is drawn that way now
+
+**Added 2026-08-19.** The paragraph above has said "HD's main menu is a
+`<HorizMenu>`" since this page was written, and until now that was a reason a
+field was empty rather than something anything drew: `oag-game` laid every menu
+out as a column, so HD's root page came out as a stack of rows at
+`MenuXOffset` 800 - a layout its own disc does not author anywhere.
+
+The widget, out of `DATA06` and identical in the other four copies:
+
+```xml
+<HorizMenu name="Mode" focus="true" transition="0.4" delay="0.2">
+  <Values align="left" x="160" y="125" color="0xff705070"></Values>
+  <Entry IDString="FE_RC"></Entry>
+  <Entry IDString="FE_RACEBOX"></Entry>
+  <Entry IDString="FE_ONLINE"></Entry>
+  <Entry IDString="FE_OPT_PLUS"></Entry>
+  <Entry IDString="FE_RECORDS"></Entry>
+</HorizMenu>
+```
+
+**Confidence 92**, the same band and for the same reason as the `FEGlobals`
+above: five archives carry `MainMenu_Definition.xml` - `DATA00`, `DATA02`,
+`DATA03`, `DATA05`, `DATA06`, the other two carrying none - and all five write
+those three numbers identically. `crates/game/tests/hd_menu_ground_truth.rs`
+asserts that against every copy rather than against one, so the day the archives
+diverge is a failure rather than a coin toss.
+
+#### It is an axis, and here is the measurement that licensed it
+
+[ADR-0022] wants a second corpus before a constant becomes a field, and the two
+PSP titles supply it by authoring **no such widget at all**. Measured rather than
+assumed - every blob of the named archives was extracted and searched, and the
+`Menu` column is the control:
+
+| disc | archives read | files | holding `Menu` | holding `HorizMenu` |
+| --- | --- | ---: | ---: | ---: |
+| `pulse-psp-usa.chd` | `Data.wad`, `FE.wad`, `FEData.wad` | 1,411 | 30 | **0** |
+| `pulse-psp-eu.chd` | `Data.wad` | 1,138 | 27 | **0** |
+| `pulse-ps2-eu.chd` | `WADSP.WAD` | 193 | 43 | **0** |
+| `pure-psp-eu.chd` | `Data.wad`, `FE.wad`, `FEData.wad` | 1,241 | 46 | **0** |
+| `hdfury-ps3-eu-dec.iso` | `DATA06`'s front-end tree | 29 | 18 | **8** |
+
+A string search finds a shortened element because the PSP dialect writes the
+full name into each file's own `<code>` dictionary - see `oag_formats::fexml`.
+The PS2 pressing's other three archives (`WADS2.WAD`, `PRERACE.WAD`,
+`PS2MUSIC.WAD`) were **not** swept; `WADSP.WAD` is where that disc's front end
+is.
+
+Within HD it is an idiom rather than one screen's exception: eight files carry
+ten `<HorizMenu>` widgets against seventeen vertical `<Menu>`, all ten at
+`x="160"` and `align="left"`, six at `y="125"` and four - the manual pages - at
+`y="140"`. Eight of the ten use `0xff705070`; the two in
+`network_definition.xml`/`online_definition.xml` use `0xffffffff`.
+
+#### Which pages this build draws as a strip, and why that is ours
+
+The menu **tree** is still this project's own - see
+[menus](../architecture/menus.md), which this changes nothing about. What follows
+the disc is where the entries go.
+
+`oag_game::menu::strip::suits` draws a page as a strip when every entry is
+navigation - a submenu, an action, or the way back - because a strip has nowhere
+to put the value column a row list anchors on the right. **That rule is ours.**
+It is *shaped* by HD, whose `<HorizMenu>` screens (`Main Menu`, `Additional`,
+`Extras`, `Controls Menu`) are all pages that only choose where to go next while
+`Settings` and its neighbours are `<Item>` lists with values - a consistent split
+and not a declaration.
+
+**On the shipped `assets/ui/menu.toml` it fires on the root page alone**, and
+that is worth stating plainly rather than implying the rule tracks HD's idiom
+generally: `options` is this build's counterpart to `Additional` and would be a
+strip on HD's own reading, but a `choice` hangs off it here, so it keeps its
+column. Of the seven pages, `main` is the only one with no `choice`, `toggle` or
+`binding`.
+
+Two more things are ours and marked where they are made: the **gap** between two
+entries (`STRIP_GAP` in `crates/game/src/menu/skin.rs` - the widget states no
+`gap` and there is no second anchor to derive one from), and the **selected**
+colour, `MenuSkin::selected` being a measured field with no HD capture behind it.
+Left and right step a strip, because that is the axis it is drawn on; up and down
+keep working, which is an affordance rather than a reading.
+
+**Every entry is drawn, and there is no carousel.** Nothing in the widget says
+the selection is centred or that entries off the end are hidden, so all of them
+run from the anchor. That is the only reading the data supports; a capture would
+settle whether the original scrolls.
+
+### The frame the menus sit in, and it is read rather than transcribed
+
+**Added 2026-08-19, with the strip.** A horizontal menu on a black field is
+still not what this disc draws. HD authors a *frame* - the rules above and below
+the page, the mark in the top left, and what the whole thing is cleared to - and
+authors all of it on **one screen**, `FE Screen`, the parent every menu screen
+is nested inside. Read out of `DATA00`'s `skin.xml`:
+
+```xml
+<Screen name="FE Screen">
+    <ScreenClear><Values Colour="FEGlobals->HD_BG"></Values></ScreenClear>
+    ...
+    <Image transition="0.3" delay="0.1">
+        <Values transitiontype="hscale" x="160" y="110" width="1600" height="8"
+                color="FEGlobals->HD_Grey" src="Data\FE\Images\line.gtf"></Values>
+    </Image>
+    <Image transition="0">
+        <Values x="160" y="73" width="32" height="32"
+                color="FEGlobals->HD_Grey" src="Data\FE\Images\Title_Arrow_HD.gtf"></Values>
+    </Image>
+    <Image transition="0.3" delay="0.3">
+        <Values transitiontype="hscale" x="160" y="975" width="1600" height="8"
+                color="FEGlobals->HD_Grey" src="Data\FE\Images\line.gtf"></Values>
+    </Image>
+```
+
+`line.gtf` is an 8x8 tile stretched to 1600 wide, which is why the widget's own
+size has to win over the texture's: drawn at its own size it is eight pixels of
+what should be most of the screen.
+
+**The title package names the screen and nothing else** -
+`oag_title::FrontEnd::menu_frame` is `Some("FE Screen")` - and
+`oag_game::menu::frame` reads the widgets off it at boot. That is deliberate and
+it is `CLAUDE.md`'s rule: a table of `(160, 110, 1600, 8)` in a Rust file would
+be correct to the digit and still wrong, because it would not survive the disc
+being re-read and would say nothing about the other twenty-odd frames on this
+disc. Reported at boot as `menu frame FE Screen: clears to #000000, 3 mark(s),
+ink #969696`, so what a menu is sitting in is visible without a screenshot.
+
+**Its `<Text>` widgets are deliberately not drawn.** They are the trial build's
+(`FE_TRIAL_MODE`, `FE_PURCHASE_NOW`) or belong to a `<NavigationController>`,
+which decides per screen which button prompts to show and which this build does
+not have; the three images and the clear carry no such owner. Drawing everything
+on the screen would put "purchase now" across a retail menu.
+
+### The `HD_*` palette is the FE style, and the archives disagree
+
+**This is the finding of the pass, and it arrived by contradiction.** Reading
+`DATA06` says HD's front end is white: `HD_BG` `0xffffffff`, `HD_Grey`
+`0xff646464`, `HD_Blue` `0xff8ac0ca`. A menu drawn on that would need grey rows,
+because `FEGlobals->TextColor` is white and white on white is nothing. So the
+first attempt at this change put `MenuSkin::text` at grey - and then the disc-
+backed test failed, because the archive the boot actually serves is `DATA00`,
+which declares **the same six globals with different values**:
+
+| global | `DATA00` | `DATA06` |
+| --- | --- | --- |
+| `HD_BG` | `0xff000000` (black) | `0xffffffff` (white) |
+| `HD_transBG` | `0xe0000000` | `0xe0ffffff` |
+| `HD_Grey` | `0xff969696` | `0xff646464` |
+| `HD_LightGrey` | `0x7f646464` | `0xffdedede` |
+| `HD_Blue` | `0xffac0717` (red) | `0xff8ac0ca` (teal) |
+| `HD_White` | `0xffffffff` | `0xffffffff` |
+
+Black with red against white with teal: **those are Wipeout Fury and Wipeout HD**,
+and `additional_definition.xml` names the switch between them -
+
+```xml
+<List name="FE Style" focus="true" global="FE Style" save="true" default="HD" delay="0.5">
+  <Values idstring="OPT_FE_STYLE" ...></Values>
+  <Entry string="HD"></Entry>
+  <Entry string="FURY"></Entry>
+</List>
+```
+
+`DATA00` is the archive holding the Fury circuits and the `_fury` logo reel, so
+the two palettes travel with the two layers of content. **Confidence 88** that
+the `HD_*` block is the FE style: two archives, six globals, every one differing
+in the direction the two games' art directions differ, and a named option with
+exactly those two entries. What is *not* read is the code that chooses, so
+whether the option rebinds the globals or the engine loads a different archive's
+`skin.xml` is open - and it is the same "which copy does the runtime serve?"
+question this page has carried since it was written.
+
+Three consequences, all of them live:
+
+1. **`FEGlobals->TextColor` and `TitleColor` are not part of it.** Both archives
+   declare them identically (`0xFFFFFFFF`, `0xFF646464`), which is why
+   `MenuSkin::text` can hold a value at all and why the "six copies agree" table
+   above is still true of everything it lists.
+2. **`MenuSkin::selected` stays `None` although the disc states a highlight.**
+   Twenty-five `highlightColor` attributes, every one `FEGlobals->HD_Blue`,
+   always beside a `color` of `HD_Grey` - so the disc does answer the question
+   this measured field asks. It answers it with a *global whose value is the
+   style*, and a constant in `oag-hd` would hard-code one game's look into a
+   table that cannot say which.
+3. **This build shows the Fury palette**, because `DATA00` serves the front-end
+   root: a black field, `0xff969696` rules, and the menu title in the same grey.
+   That is coherent - it is one archive's own answer, not a mixture - and it is
+   a *choice of archive* rather than a reading. Serving `DATA06`'s root instead
+   would give the white style, and would change the boot chain and the logo reel
+   with it.
+
+The menu title is drawn in the frame's own ink rather than in `TitleColor` for
+the same reason: HD's `Main Menu` authors its title `color="FEGlobals->HD_Grey"`
+and the frame's three widgets carry that same global, so "the title is the
+colour of the rules" is read off the disc, and taking it from the marks makes it
+resolve to whichever archive was served instead of being pinned to one.
 
 ### `menu_font` is `None`, and that is a measurement
 
@@ -1134,10 +1346,24 @@ none has been taken yet:**
 
 ## Implemented where
 
-Nowhere yet. This page is the input to an `oag-hd` title package, not a record
-of one. When that crate lands, [ADR-0022] governs its shape and [ADR-0023] its
-boot table, and this page becomes the citation its doc comments point at - the
-way [pure-boot](../architecture/pure-boot.md) backs `oag_pure::frontend`.
+`crates/hd/src/frontend.rs`, which this page is the citation for - the way
+[pure-boot](../architecture/pure-boot.md) backs `oag_pure::frontend`.
+[ADR-0022] governs the crate's shape and [ADR-0023] its boot table, whose
+provenance is [ADR-0025]'s.
+
+**This paragraph used to read "nowhere yet"**, and it was written before the
+crate existed. What consumes the page today:
+
+| This page's section | Where it landed |
+| --- | --- |
+| `MenuSkin`, every field | `oag_hd::frontend::MENU_SKIN`, pinned by `crates/game/tests/menu_skin.rs` |
+| the `<HorizMenu>` | `oag_title::MenuStrip` and `oag_game::menu::strip`, pinned by `crates/game/tests/hd_menu_ground_truth.rs` |
+| `FE Screen`'s frame | `oag_title::FrontEnd::menu_frame` names the screen; `oag_game::menu::frame` reads it, same test |
+| `BootProfile`, declared | `oag_hd::frontend::BOOT`, pinned by `crates/game/tests/hd_boot_ground_truth.rs` |
+| the 1920x1080 grid | `oag_game::frontend::Space::HD` |
+| the sixteen language plugins | `oag_hd::frontend::LANGUAGE_PLUGINS` |
+
+[ADR-0025]: ../architecture/adr/0025-a-boot-chain-carries-its-provenance.md
 
 [ADR-0022]: ../architecture/adr/0022-title-packages.md
 [ADR-0023]: ../architecture/adr/0023-boot-sequence-as-title-data.md

@@ -479,9 +479,34 @@ fn build_optional_class(
     external: Option<Vec<Option<ModelTexture>>>,
     pick: fn(vex::classes::Classes) -> Option<u32>,
 ) -> Result<Model> {
-    if vex::classes_of(data).is_ok_and(|classes| pick(classes).is_none()) {
+    let Ok(classes) = vex::classes_of(data) else {
+        // Let `build_class` produce the real complaint about the file rather
+        // than swallowing it as "authors none".
+        return build_class(label, data, external, Lod::Both, pick);
+    };
+    let Some(id) = pick(classes) else {
+        return Ok(Model::none(label));
+    };
+
+    // **A file that authors no node of the class has none of this geometry, and
+    // that is the empty answer rather than an error.** Every doc comment above
+    // says so and every caller already reads an empty model that way; until a
+    // Zone circuit was loaded, nothing exercised it, because `build_class`
+    // bails on empty indices and each of the three classes had been met only on
+    // files that author it. `Data\Environments\16_Track\zone_track.vex` is the
+    // counter-example: it authors a `Skycube` and 17 `Speedup Pad`s and **no
+    // `Weapon Pad` at all**, which is the disc agreeing with
+    // `oag_race::Mode::weapons_enabled` being false for Zone - and it made a
+    // whole Zone race fail to load with `decoded to no triangles`.
+    //
+    // Checked by walking the tree rather than by catching that error, so the
+    // two stay distinguishable: a class nothing authors returns empty here, and
+    // a class that *is* authored but decodes to nothing still fails loudly in
+    // `build_class`, which is a decoder problem and should not be quiet.
+    if vex::nodes(data).is_ok_and(|nodes| !nodes.iter().any(|node| node.class_id == id)) {
         return Ok(Model::none(label));
     }
+
     build_class(label, data, external, Lod::Both, pick)
 }
 

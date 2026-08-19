@@ -58,16 +58,38 @@ pub struct Track {
     pub location: String,
     /// Whether this entry is the circuit run the other way round.
     pub reversed: bool,
+    /// Whether a Zone race can be run on this circuit.
+    ///
+    /// **Read off the entry's own `availableInZone="true"`, and it is a
+    /// load-correctness fact rather than a menu one.** On a title whose Zone
+    /// circuits are the race ones with a prefixed file
+    /// ([`oag_title::ZoneCircuit::Prefixed`]), a circuit without this attribute
+    /// carries no `zone_track.vex` at all, so a Zone race on it asks the archive
+    /// for a name that hashes to nothing.
+    ///
+    /// That correlation is measured rather than assumed: all 24 of Pulse's
+    /// `PI_Track` entries were probed by name against `pulse-psp-usa.chd` and
+    /// the attribute predicts the file **24 times out of 24** - the sixteen that
+    /// declare it have their variant, the eight that do not have none.
+    /// `crates/game/tests/zone_ground_truth.rs` is that sweep.
+    ///
+    /// `false` on a title that declares no such attribute anywhere, which is
+    /// every title whose Zone circuits are separate - Pure marks its four with
+    /// `type="Zone"` instead, and [`tracks_of_kind`] is what lists those.
+    pub available_in_zone: bool,
 }
 
 impl Track {
-    /// The archive entry name of the `.vex` this race loads.
+    /// The archive entry name of the `.vex` a *race* loads on this circuit.
     ///
     /// The four-file rule from `docs/formats/track.md`: a circuit ships
     /// `track.vex`, `track_reversed.vex` and the two zone variants, and a
-    /// `PI_Track` picks between the first two with `Reversed`. Zone entries are
-    /// a separate mode this build has no way into yet, so nothing here selects
-    /// them.
+    /// `PI_Track` picks between the first two with `Reversed`.
+    ///
+    /// **The Zone pair is reached by rewriting this**, not by a second method
+    /// here: which rewrite applies is a property of the title rather than of the
+    /// circuit, so it lives in [`oag_title::ZoneCircuit::variant_of`] and this
+    /// stays the one name a `PI_Track` names by itself.
     #[must_use]
     pub fn entry_name(&self) -> String {
         let file = if self.reversed {
@@ -85,25 +107,50 @@ impl Track {
 /// walk, and it puts `16_Track` first, which is the circuit every capture under
 /// `data/traces/` was taken on.
 ///
-/// Entries whose `type` is not `Race` are skipped rather than guessed at - the
-/// shipped file has none, so what another value would mean is unestablished and
-/// silently racing one would be inventing behaviour.
+/// Entries whose `type` is not `Race` are skipped rather than guessed at - what
+/// another value means is a per-title question, and [`tracks_of_kind`] is how a
+/// caller that knows the answer asks it.
 #[must_use]
 pub fn tracks(definition_xml: &str) -> Vec<Track> {
+    tracks_of_kind(definition_xml, "Race")
+}
+
+/// Every `PI_Track` of one `type`, in file order.
+///
+/// [`tracks`] is this with `"Race"`, which is every circuit both PSP titles let
+/// a player race normally. The other values the shipped definitions use are
+/// **per-title vocabulary**, which is why this takes the kind rather than
+/// offering a variant per name: Pure declares `Zone` (its four Zone-mode
+/// circuits) and `Classic` (the Wipeout 1 and 2097 tracks it re-ships), and
+/// Pulse declares neither - all 24 of its entries are `Race`, and its Zone
+/// circuits are a second file inside those same directories rather than
+/// entries of their own.
+///
+/// So a caller wanting Zone's circuits has to know which title it opened before
+/// it knows which question to ask, and [`oag_title::ZoneCircuit`] is what tells
+/// it. That dispatch is deliberately **not** wrapped up here: it belongs to the
+/// caller that has the title in hand, and a helper doing it would be a title
+/// axis living in the engine.
+///
+/// An entry with no `type` attribute counts as `Race` - no shipped definition
+/// omits it, so this is the reading of an absence rather than a rule anything
+/// relies on.
+#[must_use]
+pub fn tracks_of_kind(definition_xml: &str, kind: &str) -> Vec<Track> {
     let root = parse(definition_xml);
     let mut out = Vec::new();
-    collect(&root, &mut out);
+    collect(&root, kind, &mut out);
     out
 }
 
-fn collect(node: &Node, out: &mut Vec<Track>) {
+fn collect(node: &Node, kind: &str, out: &mut Vec<Track>) {
     for child in &node.children {
         if child.name == "PI_Track" {
-            if let Some(track) = read_track(child) {
+            if let Some(track) = read_track(child, kind) {
                 out.push(track);
             }
         } else {
-            collect(child, out);
+            collect(child, kind, out);
         }
     }
 }
@@ -269,10 +316,10 @@ pub fn all_tracks(documents: &[String]) -> Vec<Track> {
     out
 }
 
-fn read_track(node: &Node) -> Option<Track> {
+fn read_track(node: &Node, wanted: &str) -> Option<Track> {
     let id = node.attr("name")?.to_string();
     let values = node.children_named("Values").next()?;
-    if values.attr("type").is_some_and(|kind| kind != "Race") {
+    if values.attr("type").unwrap_or("Race") != wanted {
         return None;
     }
     Some(Track {
@@ -281,6 +328,10 @@ fn read_track(node: &Node) -> Option<Track> {
         // The shipped file spells it `Reversed="True"`, capitalised, which is
         // why this goes through `flag` rather than comparing to "true".
         reversed: values.flag("Reversed").unwrap_or(false),
+        // Lowercase `true` here, where `Reversed` is capitalised - the disc is
+        // inconsistent about it and `flag` accepts either, which is the whole
+        // reason it exists.
+        available_in_zone: values.flag("availableInZone").unwrap_or(false),
     })
 }
 

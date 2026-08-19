@@ -52,6 +52,7 @@ so the flag is the only way in on that path.
 | Weapons | off | off | off | **on** |
 | Free turbo a lap | **yes** | **yes** | no | no |
 | HUD layout | `TimeTrial_HUD.xml` | `TimeTrial_HUD.xml` | `Zone_HUD.xml` | `Arcade_HUD.xml` |
+| Environment | the circuit's | the circuit's | **its own**, see below | the circuit's |
 
 Time trial and speed lap sharing a layout is the disc's arrangement, not a
 shortcut: there is no `SpeedLap_HUD.xml`, which is why
@@ -119,6 +120,106 @@ same selector, and every team's `Zone.vex` decodes to the same hull - see
 Confidence 84. `oag_game::race::ship_entry_name` picks the model this way, and
 the menu greys the TEAM row while MODE is Zone so a player is not offered a
 choice that no longer changes the shape drawn - only the colour it is drawn in.
+
+**That is Pulse's arrangement, and the other two titles do not share it.**
+`oag_title::ZoneCraft` is the axis, and it splits the corpus exactly the way
+`ZoneCircuit` does - which is the interesting part, because it means each title
+made *one* decision that shows up twice:
+
+| | Zone's circuit | Zone's hull |
+| --- | --- | --- |
+| Pulse | the race circuit's directory, `zone_`-prefixed | the player's team, `Zone.vex` |
+| Pure | `Data\Zone\NN_Zone\track.vex` | `Data\Ships\Zone_01\Ship.vex` |
+| HD / Fury | `/data/environments/zone_N/track.vex` | `/data/ships/zone/ship.vex` |
+
+Pulse hangs Zone off the entities a race already has; Pure and HD give Zone
+entities of its own, and there the player's team stops reaching the hull at all.
+Pulse's is the only one with a recovered *selector* behind it (`case 6`,
+confidence 84); the other two are name resolution at 94, and neither title's
+executable has been read. HD's was already half-recovered before anything wanted
+it - `zone` is one of the four `oag_hd::names::MODE_SHIPS` read off the manifest.
+
+### Every title ships one Zone handling block, and this engine does not read it
+
+**The shipped answer to "what handling does a Zone craft have" is one block
+shared by every team**, not the player's own. All three titles carry a Zone-mode
+craft directory - `Data\Ships\Zone_01` on both PSP titles, `/data/ships/zone` on
+HD - whose `handlingstats.xml` opens `<Stats team="ZoneMode">` and authors **no
+`<Class>` block at all**, where a team file authors four or five.
+
+That fits the mode: a `<Class>` carries engine, brakes and turning, and Zone
+replaces the engine with the auto-speed law, disables the brakes and flies a
+four-corner hover variant - all three selected by the Zone expression rather
+than read from a team.
+
+**It is unread here**, so a Zone race flies the player's own team's numbers and
+`race::load` says so on every Zone load. Closing it is a physics question -
+which blocks the mode is actually meant to supply, and where turning comes from
+when no class authors one - rather than a naming one, and no title's Zone
+handling path has been read in any executable. Watch the near-miss on Pulse:
+`Data\Ships\Zone` is `<Stats team="Zone">` **with** classes and is the
+unlockable Zone *livery*, a raceable team; `Zone_01` is the mode.
+
+### Zone flies its own environment, and the disc authors every bit of it
+
+**The look is loaded, not computed.** A Zone circuit is a whole separate `.vex`
+with its own meshes, its own light rig, its own `fogCube` and its own
+`Skycube` - nothing here tints, desaturates or otherwise invents it, which is
+[`CLAUDE.md`](../../CLAUDE.md)'s rule about not authoring a stand-in for what the
+data already carries. The sky is the clearest single marker: of the 40 skies on
+the PSP disc, the twelve with one material are exactly the Zone variants against
+five or six for every race circuit ([skycube](../formats/skycube.md)).
+
+**Where that environment lives is a title fact**, and it is one of the few axes
+measured on all three titles rather than two:
+
+| | Zone's environment |
+| --- | --- |
+| Pulse (PSP and PS2) | the race circuit's own directory, one extra `zone_`-prefixed file |
+| Pure | `Data\Zone\NN_Zone\track.vex` - four circuits of its own, `type="Zone"` |
+| HD / Fury | `/data/environments/zone_N/track.vex` - four circuits of its own |
+
+Two shapes across three titles, which is what makes `oag_title::ZoneCircuit` a
+type with two variants and no third "unknown" state. Pulse derives the Zone name
+from the race one; Pure and HD cannot, because their discs author no mapping
+between the two sets - asking what Vineta K's Zone variant is has no answer in
+the data. Evidence and per-claim confidence: [track](../formats/track.md), and
+the sweep is `crates/game/tests/zone_ground_truth.rs`.
+
+**Sixteen of Pulse's twenty-four circuits can be raced in Zone**, declared by
+`availableInZone="true"` and confirmed by probing all 24 by name - the attribute
+predicts the file 24 times out of 24. A circuit without it carries no Zone
+environment, so this is load-correctness rather than menu data, and `race::load`
+says so by name when a Zone race asks for one that has none.
+
+**What is not wired: the menu still offers all 24 in Zone.** The track list is
+supplied once when the menus open and is not re-supplied when MODE changes, so
+picking a non-Zone circuit and then Zone gives a load error naming
+`availableInZone` rather than a row that was never offered. Deliberate: making
+the list mode-reactive is front-end work, and the error is honest in the
+meantime. `catalogue::tracks_of_kind` and `Track::available_in_zone` are the two
+listings such a filter would read; nothing dispatches between them, because
+which one applies is a title fact and `oag_title::ZoneCircuit` is where that
+lives.
+
+**And the Zone HUD draws its labels with no values behind them.** A screenshot of
+a Zone race shows `Lap`, `Score` and `Zone` positioned exactly where
+`Zone_HUD.xml` puts them and reading blank, which looks like this change broke
+something and is instead the pre-existing gap [hud.md](../ui/hud.md) records: a
+mode's code substitutes string keys into widgets the layout positioned, that
+substitution rule is unread, and Zone is one of the layouts explicitly scoped out
+there. [zone-mode.md](../ghidra/functions/psp-pulse-usa/zone-mode.md) has the
+same hole from the RE side - what raises `IG_HUD_PERF_ZONE` and what drives the
+`Zone_Bar_*` widgets is inside the widget system, not the mode. The environment
+swap does not touch any of it.
+
+**Zone's racing line is authored separately from the race one**, which was worth
+checking because `Course::START_LINE_OFFSET` is fitted on `16_Track`'s *race*
+file. Across the sixteen: fourteen have identical control-point counts and one
+environment does not - `10_Track` at 844 race / 848 zone, and its reversed twin
+`26_Track` at 847 / 852. So the fit carries on fourteen and is inherited rather
+than re-measured on the other two. Nothing about Zone lap timing is verified
+against the original either way.
 
 ### Zone's numbers are not in this repository
 

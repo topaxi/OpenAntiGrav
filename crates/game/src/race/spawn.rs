@@ -90,16 +90,117 @@ pub(super) fn spawn_pose(
 /// units long and no track is flat over that, so sharing one `y` would leave the
 /// front of the field buried or floating.
 ///
-/// A slot with no surface under it keeps the offset height it was given, which is
+/// **Walked along `spline` rather than extrapolated in a straight line from
+/// `base`'s own frame, and this is a fix rather than a new measurement.**
+/// [`oag_gameplay::grid_pose`]'s straight-line offset is what grid.md's own
+/// residual table already flagged - "the original's grid follows the track's
+/// curve; ours does not" - and on the one circuit that residual was ever
+/// measured against (`16_Track`/Talon's Junction), the grid's own start straight
+/// happens to be close enough to flat that a straight line stays on the track. It
+/// is not close enough on most others: a sweep of every Wipeout HD circuit's
+/// grid (`crates/game/tests/hd_trackwall_ground_truth.rs`, both directions,
+/// opponents on) found 9 of 12 *reversed* grids putting one or more slots off
+/// the collision mesh entirely - up to 145 units from the driveable line on
+/// `tech_de_ra`'s reversed grid - against only one flagged forward grid (`zone_3`,
+/// one slot, barely over the envelope). Reversed grids sit on whatever piece of
+/// track the exporter put their own `Start Position` node on, which is far more
+/// often a curve than the authored front straight forward grids sit on, and the
+/// straight-line formula extrapolates *off* that curve over the grid's 138-unit
+/// span.
+///
+/// So each slot's raw position now comes from walking `spline` itself, in
+/// `base`'s own forward direction, [`oag_gameplay::GRID_ROW_PITCH`] units per
+/// step back from `base`'s nearest sample - the same measured constant, applied
+/// along the track instead of along a straight line - and the column stagger
+/// uses that sample's own `lateral` axis rather than `base`'s fixed one, for the
+/// same reason [`Pose::from_sample`] does: a curve turns the two axes apart
+/// exactly where a straight-line stagger would start missing the road.
+/// **Heading is untouched** - every slot still shares `base`'s own orientation,
+/// which is the part grid.md's live capture actually confirmed, to four decimal
+/// places, and nothing here re-opens that.
+///
+/// Falls back to [`oag_gameplay::grid_pose`]'s straight line, per slot, when
+/// `spline` has no sample near `base`, when `base`'s own tangent gives no
+/// direction to walk, or when the walk to that slot runs off the end of the
+/// path before covering the full distance - a spline too short for a whole
+/// grid's worth of walking is the same situation [`oag_gameplay::grid_pose`]
+/// was written for, and it is what this project's own short synthetic test
+/// tracks are.
+///
+/// A slot with no collision surface under it keeps the walked height, which is
 /// the same fallback [`spawn_pose`] already takes when a track authors no slot.
 pub(super) fn grid_poses(
     base: Pose,
+    spline: &Spline,
     collision: &CollisionWorld,
     height: f32,
 ) -> [Pose; GRID_SLOTS as usize] {
+    let forward = base.orientation * Vec3::NEG_Z;
+    let anchor = spline.nearest(base.position).map(|(index, _, _)| index);
+    let walk = anchor.and_then(|index| walk_direction(spline, index, forward));
+    // `base` itself sits off the spline's own centreline - every authored
+    // `Start Position` does, by 3.2 to 20.5 units (`docs/formats/track.md`) -
+    // and that offset is carried through the walk rather than discarded, or
+    // every slot but 8 would snap onto the bare centreline instead of staying
+    // in `base`'s own lane. Measured once, along the anchor sample's own
+    // `lateral` axis, and re-applied along each walked sample's own axis below -
+    // an approximation that degrades gracefully on a tight curve rather than
+    // being exact there, but is exact on anything close to straight, which is
+    // what every measured grid so far has been.
+    let bias = anchor.and_then(|index| spline.sample(index)).map(|sample| {
+        let lateral = Vec3::from_array(sample.lateral).normalize_or_zero();
+        (base.position - Vec3::from_array(sample.pos)).dot(lateral)
+    });
+
     core::array::from_fn(|index| {
         let slot = u8::try_from(index + 1).unwrap_or(GRID_SLOTS);
-        let mut pose = oag_gameplay::grid_pose(base, slot);
+        let back = GRID_SLOTS - slot;
+        let mut pose = match (anchor, walk, bias) {
+            // `back == 0` is slot 8, `base` itself - walking zero distance and
+            // re-deriving it from a resampled centreline point would only add
+            // floating-point noise to a value that is already exact.
+            (Some(anchor), Some(direction), Some(bias)) if back > 0 => {
+                let target = f32::from(back) * oag_gameplay::GRID_ROW_PITCH;
+                let (_, sample_pos, sample_lateral, ran_off_the_end) =
+                    walk_along(spline, anchor, direction, target);
+                if ran_off_the_end {
+                    // The walk hit the end of the path (or a path boundary)
+                    // before covering the full distance - a track shorter than
+                    // one grid's worth of spline, which no shipped circuit is
+                    // but a synthetic test fixture can be. The straight-line
+                    // formula does not care how long the spline is, so it is
+                    // the honest fallback here rather than a slot left standing
+                    // wherever the walk ran out.
+                    //
+                    // **Not a distance check against `target`.** A walk that
+                    // covers the full distance still stops short of it by up to
+                    // one sample's own spacing, because it never interpolates
+                    // past the last sample it can still afford - see
+                    // `walk_along`. Samples run wider than a couple of units
+                    // apart on some circuits, so a fixed distance tolerance
+                    // here read that quantisation as "ran off the end" and
+                    // fell back to the straight line on slots that had plenty
+                    // of path left, undoing the fix on exactly the reversed
+                    // grids it exists for.
+                    oag_gameplay::grid_pose(base, slot)
+                } else {
+                    let stagger = if slot % 2 == 1 {
+                        oag_gameplay::GRID_COLUMN_OFFSET
+                    } else {
+                        0.0
+                    };
+                    // `sample_lateral` points to the driver's right (see
+                    // `Pose::from_sample`); `bias` restores `base`'s own lane and
+                    // the column stagger goes further left again, so it
+                    // subtracts where `bias` adds.
+                    Pose {
+                        position: sample_pos + sample_lateral * (bias - stagger),
+                        orientation: base.orientation,
+                    }
+                }
+            }
+            _ => oag_gameplay::grid_pose(base, slot),
+        };
         let up = pose.orientation * Vec3::Y;
         // `base` already carries `height` along its own up axis, so the drop has
         // to take it off before re-applying it under this slot - otherwise every
@@ -112,6 +213,114 @@ pub(super) fn grid_poses(
         }
         pose
     })
+}
+
+/// Which way `spline`'s own sample index walks toward `forward`, from `anchor`.
+///
+/// `Some(1)` when stepping to a higher index moves toward `forward`, `Some(-1)`
+/// when a lower index does, `None` only when `anchor` is out of range or its
+/// sample's `tangent` is exactly zero - a degenerate sample [`walk_along`]
+/// could not usefully walk from anyway.
+///
+/// Reads `anchor`'s own authored `tangent` rather than probing a neighbouring
+/// sample's position: a `Start Position` node sitting one sample from a path
+/// boundary has a neighbour on one side only, and a first version of this that
+/// probed neighbours gave up on exactly the circuits where that happened - most
+/// of the reversed grids this exists to fix, since a reverse route more often
+/// starts near where its path joins the forward one. `tangent` needs no
+/// neighbour: it is already the direction of increasing index at this sample,
+/// by construction of how [`Spline::from_track`] samples a path with increasing
+/// `t`, so its sign against `forward` alone says which way to step.
+#[must_use]
+fn walk_direction(spline: &Spline, anchor: usize, forward: Vec3) -> Option<i32> {
+    let tangent = Vec3::from_array(spline.sample(anchor)?.tangent);
+    let dot = tangent.dot(forward);
+    if dot > 0.0 {
+        Some(1)
+    } else if dot < 0.0 {
+        Some(-1)
+    } else {
+        None
+    }
+}
+
+/// Walks `distance` units along `spline` from `anchor`, stepping `direction`
+/// (`1` or `-1`) one sample at a time and accumulating the real distance between
+/// consecutive sample positions.
+///
+/// **Never crosses a path boundary.** [`Spline`]'s own table concatenates every
+/// path in *file* order, and consecutive indices are only spatially adjacent
+/// within one path - `ai_order`'s doc comment already records a track (`05_Track`
+/// on Pulse) where the next path in file order is "a kilometre away, pointing
+/// the wrong way". A first version of this walk did not check that and jumped
+/// grid slots onto an unrelated branch on some HD circuits, making a handful of
+/// forward grids worse rather than fixing the reversed ones. So a step whose
+/// target sample is not [`Spline::path_of`] the same as `anchor`'s is treated
+/// exactly like running off the end of the table: the walk stops one sample
+/// short, on the last sample that is still part of the same path.
+///
+/// Also stops, short of `distance`, if the walk runs off either end of the
+/// table: a grid at the very start or end of a track's samples is clamped to
+/// what the track actually has, the same way [`oag_gameplay::grid_pose`]'s slot
+/// argument clamps rather than panics.
+///
+/// Stops at the last sample reached without *exceeding* `distance`, rather than
+/// interpolating past it - sub-sample precision is a fraction of a control-point
+/// interval (`docs/formats/track.md`), far finer than the grid measurement this
+/// is walking.
+///
+/// Returns the sample's own index, position, (unit) `lateral` axis, and
+/// whether the walk ran off the end of the path or the table before covering
+/// `distance` - the caller's signal to fall back rather than trust a short
+/// walk.
+///
+/// **A flag, not a distance check against `distance`.** A walk that covers the
+/// full distance still stops short of it by up to one sample's own spacing,
+/// because it never interpolates past the last sample it can still afford -
+/// see above. Samples run wider than a couple of units apart on some circuits,
+/// so a caller comparing the returned distance against `distance` with a fixed
+/// tolerance would read that ordinary quantisation as "ran off the end" - measured
+/// on `tech_de_ra`'s reversed grid, which is exactly what a first version of this
+/// function's caller did, and it undid the curve-following fix on slots that had
+/// plenty of path left.
+#[must_use]
+fn walk_along(
+    spline: &Spline,
+    anchor: usize,
+    direction: i32,
+    distance: f32,
+) -> (usize, Vec3, Vec3, bool) {
+    let path = spline.path_of(anchor);
+    let mut index = anchor;
+    let mut pos = Vec3::from_array(spline.sample(index).map_or([0.0; 3], |s| s.pos));
+    let mut travelled = 0.0f32;
+    let mut ran_off_the_end = false;
+    loop {
+        let Some(next_index) = index
+            .checked_add_signed(direction as isize)
+            .filter(|&i| spline.path_of(i) == path)
+        else {
+            ran_off_the_end = travelled < distance;
+            break;
+        };
+        let Some(next_sample) = spline.sample(next_index) else {
+            ran_off_the_end = travelled < distance;
+            break;
+        };
+        let next_pos = Vec3::from_array(next_sample.pos);
+        let step = (next_pos - pos).length();
+        if travelled + step > distance {
+            break;
+        }
+        travelled += step;
+        pos = next_pos;
+        index = next_index;
+    }
+    let lateral = spline
+        .sample(index)
+        .map(|s| Vec3::from_array(s.lateral).normalize_or_zero())
+        .unwrap_or(Vec3::X);
+    (index, pos, lateral, ran_off_the_end)
 }
 
 /// How far up the track's own drop for a spawn probe starts, and how far it

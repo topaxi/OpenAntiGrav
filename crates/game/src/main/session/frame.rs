@@ -4,7 +4,7 @@ use anyhow::Result;
 
 use oag_game::frontend::{self};
 use oag_game::keys;
-use oag_game::{boot, display, menu, movie, perf, race, report, settings, upscale};
+use oag_game::{boot, display, font, menu, movie, perf, race, report, settings, upscale};
 use oag_gameplay::input::button;
 
 use crate::hints::SHELL_KEYS;
@@ -258,8 +258,14 @@ impl Session {
                     // `back` and `open` both change the page, and a jump
                     // between two pages at the same depth is still a change.
                     let before = stage.menu.page().id.clone();
-                    let leaving =
-                        menu::draw_list(&stage.menu, &stage.skin, &keys::bound_keys, None);
+                    let leaving = menu::draw_list(
+                        &stage.menu,
+                        &stage.skin,
+                        &keys::bound_keys,
+                        &|text| font::measure(&stage.text_atlas, text),
+                        None,
+                        &stage.frame,
+                    );
                     let events = stage.menu.update(self.controls.buttons_mut());
                     if stage.menu.page().id != before {
                         stage.begin_change(leaving);

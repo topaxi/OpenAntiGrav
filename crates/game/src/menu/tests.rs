@@ -11,8 +11,10 @@
 mod definition;
 mod disabled_and_restart;
 mod drawing;
+mod frame;
 mod navigation;
 mod rows;
+mod strip;
 
 use super::*;
 
@@ -23,7 +25,26 @@ fn list(
     bindings: &dyn Fn(u8) -> Vec<&'static str>,
     backdrop: Option<Backdrop>,
 ) -> Vec<Draw> {
-    draw_list(menu, &skin(), bindings, backdrop).flatten()
+    draw_list(
+        menu,
+        &skin(),
+        bindings,
+        &measure,
+        backdrop,
+        &Frame::default(),
+    )
+    .flatten()
+}
+
+/// A stand-in for a real face's widths: every glyph six pixels wide.
+///
+/// The tests that need this are the strip's, and none of them assert a number
+/// that came off a font - they assert that entry *n+1* starts a measured width
+/// and one gap past entry *n*, which a flat advance states as clearly as a real
+/// atlas would and without pinning this build's layout to a glyph table. The
+/// same stand-in `marquee`'s own tests use, for the same reason.
+fn measure(text: &str) -> f32 {
+    text.chars().count() as f32 * 6.0
 }
 
 /// The skin every test below draws with: Pulse's own table against the

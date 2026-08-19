@@ -737,6 +737,19 @@ and a Zone run all spawn the player alone, the way the original does;
 `race::Options::opponents` is the verification override for looking at the
 layout under a mode that races solo.
 
+**Reversed grids follow the track's curve now (2026-08-19), not just the
+forward one.** The straight-line formula above was only ever live-verified on
+one forward grid; a sweep of every Wipeout HD circuit's grid found 9 of 12
+*reversed* grids putting one or more slots off the collision mesh entirely -
+up to 145 units from the driveable line - because a reversed grid sits on
+whatever piece of track its own `Start Position` node landed on, which is far
+more often a curve than the authored front straight a forward grid sits on.
+`grid_poses` now walks the track's own spline instead of extrapolating a
+straight line, closing all but one slot on one circuit. See "Reversed grids: the
+straight line ran off the curve" in [grid.md](../ghidra/functions/psp-pulse-usa/grid.md)
+for the numbers, and the same page for a separate, pre-existing gap in the
+stall rescue this incidentally found.
+
 **The seven opponents drive, and each one burns.** A driver, its own
 `Environment`, both pad classes, a standing that counts and times its laps, a
 pickup it can spend, an exhaust of its own - flare, ribbon and boost plume - and

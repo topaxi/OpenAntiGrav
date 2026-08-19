@@ -150,7 +150,7 @@
 0x0883a970	function	Xml_ReadGlobalSettings	85	engine.md
 0x0883fdec	function	Ship_UpdateStartBoost	85	engine.md
 0x088390b4	function	Xml_ReadBoostSettings	88	engine.md
-0x088271b4	function	Race_ResetCraftBoosts_q	60	engine.md
+0x088271b4	function	Race_ResetCraftBoosts	60	engine.md
 0x0884c5c8	function	Ship_UpdateEngine	84	engine.md
 0x08848788	function	Ship_UpdateSteering	84	engine.md
 0x0884c9a4	function	Ship_UpdateAirbrakes	88	engine.md
@@ -545,4 +545,4 @@
 0x0883f13c	function	Ship_ApplyPendingWeaponDamage	82	shield-pickup.md
 0x0885e1c0	function	ShipShield_Deactivate	84	shield-pickup.md
 0x0885eb54	function	ShipShield_InitColours	82	shield-pickup.md
-0x0886794c	function	Weapon_PostBlastImpulse_q	68	contact-response.md
+0x0886794c	function	Weapon_PostBlastImpulse	68	contact-response.md

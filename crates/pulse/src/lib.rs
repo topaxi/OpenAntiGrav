@@ -73,6 +73,13 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     language_plugins: LANGUAGE_PLUGINS,
     menu: frontend::MENU_SKIN,
     boot: frontend::BOOT_PROFILE,
+    // **A gap, not a measurement.** Pulse authors a frame - its own
+    // `Top FE Screen->FE Screen` carries the light angled top bar the menu
+    // title sits on - and nothing here has read it. Naming the screen would put
+    // that bar on screen and change a picture this build already draws, so it
+    // wants its own before-and-after rather than arriving as a side effect of
+    // Wipeout HD's.
+    menu_frame: None,
 };
 
 /// The bulk archive's candidates, in the order they are tried.

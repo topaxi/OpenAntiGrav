@@ -9,16 +9,24 @@
 //! | --- | --- | --- |
 //! | default circuit | `Data\Environments\16_Track\track.vex` | `Data\Environments\01_Vineta_K\track.vex` |
 //! | default team | `Assegai` | `Assegai` |
+//! | Zone's circuit | the race one's directory, `zone_`-prefixed | `Data\Zone\01_Zone\track.vex`, a circuit of its own |
+//! | Zone's hull | the player's team, `Zone.vex` | `Data\Ships\Zone_01`, a ship of its own |
 //!
-//! **One field of the two actually diverges**, and that one is the whole reason
-//! this type exists: `16_Track` resolves on no Pure pressing, so `oag-game`'s
-//! `--track` carrying it as a compile-time default made `--race` on a Pure disc
-//! fail inside the archive with a message about a name that hashes to nothing.
-//! The team is here beside it because a caller that must name a circuit before
-//! opening anything must name a team too, not because the two discs disagree -
-//! they do not.
+//! **Three fields of the four actually diverge**, and the first of them is the
+//! reason this type exists at all: `16_Track` resolves on no Pure pressing, so
+//! `oag-game`'s `--track` carrying it as a compile-time default made `--race` on
+//! a Pure disc fail inside the archive with a message about a name that hashes
+//! to nothing. The team is here beside it because a caller that must name a
+//! circuit before opening anything must name a team too, not because the two
+//! discs disagree - they do not.
 //!
-//! # Deliberately two fields
+//! [`ZoneCircuit`] and [`ZoneCraft`] are the other two, and they are the ones
+//! measured across all three titles rather than two; their own docs carry the
+//! probes. They split the corpus identically, which is the interesting part:
+//! Pulse hangs Zone off the entities a race already has, Pure and HD give Zone
+//! entities of its own.
+//!
+//! # Deliberately four fields
 //!
 //! Not a home for everything a race loads. Three kinds of thing are kept out,
 //! for three different reasons:
@@ -26,10 +34,17 @@
 //! - **Shared vocabulary.** `Data\Ships\<Team>\Ship.vex` resolves on both
 //!   discs, so the hull's file name is not a title fact and a field for it would
 //!   be a table with one value in it.
-//! - **Unrecovered, not different.** The boost plume and the Zone hull are on
-//!   Pure somewhere; what that disc calls them is unread. A field would be a
-//!   `None` designed from one example, which is the failure [ADR-0009] named and
-//!   [ADR-0022] does not license.
+//! - **Unrecovered, not different.** The boost plume is on Pure somewhere; what
+//!   that disc calls it is unread. A field would be a `None` designed from one
+//!   example, which is the failure [ADR-0009] named and [ADR-0022] does not
+//!   license. **The Zone hull was on this list until 2026-08-19 and has come
+//!   off it**, which is worth reading as a worked example rather than a
+//!   correction: it was excluded while Pulse and Pure were measured and HD was
+//!   not, because two measurements and a hole is the shape being refused. HD's
+//!   was then measured - `/data/ships/zone/ship.vex`, off the manifest the
+//!   `oag_hd::names::MODE_SHIPS` roster already listed - and with three titles
+//!   and no hole it became [`ZoneCraft`]. The bar moved because the evidence
+//!   did, not because the design changed its mind.
 //! - **Absent by construction.** Pure ships no loading-screen wave and no `.mip`
 //!   HUD atlas at all. An axis that is `Some` for one title and `None` for the
 //!   other is the same one-example design in a different disguise.
@@ -58,4 +73,281 @@ pub struct RaceDefaults {
     /// An **id** - the folder under `Data\Ships\` - and not the name a player
     /// reads, which comes from the string table. See `oag_game::catalogue`.
     pub team: &'static str,
+    /// How this title names the circuit a Zone race runs on. See
+    /// [`ZoneCircuit`].
+    pub zone: ZoneCircuit,
+    /// Where this title keeps the craft a Zone race flies. See [`ZoneCraft`].
+    pub zone_craft: ZoneCraft,
+}
+
+/// Where a title keeps the hull a Zone race flies.
+///
+/// The companion of [`ZoneCircuit`], and it splits the corpus the same way -
+/// which is the thing worth noticing about it. Pulse hangs Zone off the entities
+/// a race already has: the player's own team directory gains a second model, the
+/// race circuit's directory gains a second `.vex`. Pure and HD give Zone
+/// entities of its own: its own ship directory, its own circuits. One decision
+/// per title, showing up twice.
+///
+/// | Title | Zone's hull | Measured on |
+/// | --- | --- | --- |
+/// | Pulse | `Data\Ships\<Team>\Zone.vex` - the player's team, a different file | `pulse-psp-usa.chd` |
+/// | Pure | `Data\Ships\Zone_01\Ship.vex` - a ship directory of its own | `pure-psp-eu.chd` |
+/// | HD / Fury | `/data/ships/zone/ship.vex` - a ship directory of its own | `hdfury-ps3-eu-dec.iso` |
+///
+/// Pulse's is the one with a recovered *selector* behind it rather than a name
+/// probe: `Ship_LoadModel` (`0x08843258`) `case 6` builds `%s\Zone.vex` under
+/// the established Zone expression, confidence 84 - see
+/// `docs/ghidra/functions/psp-pulse-usa/zone-mode.md`. The other two are name
+/// resolution against shipped archives at 94, and neither title's executable has
+/// been read.
+///
+/// # Every title ships a `ZoneMode` handling file, and nothing reads it
+///
+/// The finding that does **not** fit this enum, recorded here because this is
+/// where the next reader will look for it. All three titles carry a dedicated
+/// Zone-mode craft *directory* - `Data\Ships\Zone_01` on both PSP titles,
+/// `/data/ships/zone` on HD - whose `handlingstats.xml` opens
+/// `<Stats team="ZoneMode">` and authors **no `<Class>` block at all**, where
+/// every team file authors four or five.
+///
+/// So the shipped answer to "what handling does a Zone craft have" is *one
+/// block, shared by every team* rather than the player's own - which is
+/// consistent with the mode overriding exactly the parts a `<Class>` would
+/// carry: [`zone-mode.md`] has the engine replaced by the auto-speed law, the
+/// brakes disabled and a four-corner hover variant, all three selected by the
+/// Zone expression rather than read from a team.
+///
+/// **This engine does not read it.** `oag_gameplay::handling_for` needs a
+/// `<Class>` and panics without one, so a Zone race still takes its per-class
+/// handling from the player's own team, and `oag_game::race::load` says so in
+/// the report. Closing that is a physics question - which of those blocks the
+/// mode is actually meant to supply - not a naming one, and no title's Zone
+/// handling path has been read in any executable.
+///
+/// Note the near-miss beside it on Pulse: `Data\Ships\Zone` is `<Stats
+/// team="Zone">` **with** class blocks, and is the unlockable Zone *livery*, a
+/// raceable team. `Zone_01` is the mode. The two differ by a suffix and are not
+/// the same thing.
+///
+/// [`zone-mode.md`]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/ghidra/functions/psp-pulse-usa/zone-mode.md
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ZoneCraft {
+    /// The player keeps their team and the *model files* change, to these
+    /// stems. Pulse.
+    ///
+    /// The hull is shared geometry with a per-team paint: all eight teams'
+    /// `Zone.vex` decode to the same 1213 vertices / 1149 triangles, so the team
+    /// still chooses the livery and no longer chooses the shape.
+    ModelsInTeam {
+        /// Model stem for the hull, in place of the usual one.
+        hull: &'static str,
+        /// Model stem for the boost plume, in place of the usual one.
+        boost: &'static str,
+    },
+    /// Zone has a ship directory of its own and the player's team choice does
+    /// not reach the hull at all. Pure and HD.
+    ///
+    /// The model stems inside it are the ordinary ones, so only the directory
+    /// changes - which is why this carries one string where
+    /// [`Self::ModelsInTeam`] carries two.
+    OwnShip(&'static str),
+}
+
+impl ZoneCraft {
+    /// Which ship directory a Zone race's models come out of.
+    ///
+    /// `player` is the team the caller would otherwise have used, and is the
+    /// answer for [`Self::ModelsInTeam`]: on Pulse the Zone hull lives inside
+    /// whichever team the player picked, which is what keeps the livery theirs.
+    #[must_use]
+    pub fn directory(self, player: &str) -> &str {
+        match self {
+            Self::ModelsInTeam { .. } => player,
+            Self::OwnShip(ship) => ship,
+        }
+    }
+
+    /// The hull's model stem, or `None` for "whatever a race would have used".
+    ///
+    /// `None` on [`Self::OwnShip`] rather than a spelling of `Ship`, so that the
+    /// one place that knows how a hull is named stays the title package that
+    /// knows it - this crate deliberately holds no game constant. See the module
+    /// docs.
+    #[must_use]
+    pub fn hull(self) -> Option<&'static str> {
+        match self {
+            Self::ModelsInTeam { hull, .. } => Some(hull),
+            Self::OwnShip(_) => None,
+        }
+    }
+
+    /// The boost plume's model stem, on the same terms as [`Self::hull`].
+    #[must_use]
+    pub fn boost(self) -> Option<&'static str> {
+        match self {
+            Self::ModelsInTeam { boost, .. } => Some(boost),
+            Self::OwnShip(_) => None,
+        }
+    }
+}
+
+/// Where a title keeps the environment a Zone race flies through.
+///
+/// **Zone's whole look is authored, not computed.** A Zone circuit ships its own
+/// meshes, its own textures, its own lights, its own `fogCube` and its own
+/// `Skycube` - and the sky is the giveaway, because the twelve one-material
+/// skies `docs/formats/skycube.md` counts across the PSP disc are exactly the
+/// Zone variants against five or six materials for every race circuit. So there
+/// is nothing to tint, desaturate or otherwise invent: loading the file the disc
+/// authors *is* the aesthetic, per `CLAUDE.md`'s rule about not authoring a
+/// stand-in for what the data already carries.
+///
+/// **Where that file lives is the part that diverges**, and unlike the two
+/// fields beside it this one was measured on all three titles rather than two:
+///
+/// | Title | Zone's environment | Measured on |
+/// | --- | --- | --- |
+/// | Pulse | `Data\Environments\16_Track\zone_track.vex` - the race circuit's own directory, one extra file | `pulse-psp-usa.chd`, `pulse-ps2-eu.chd` |
+/// | Pure | `Data\Zone\01_Zone\track.vex` - four circuits of its own, declared `type="Zone"` | `pure-psp-eu.chd` |
+/// | HD / Fury | `/data/environments/zone_1/track.vex` - four circuits of its own | `hdfury-ps3-eu-dec.iso` |
+///
+/// Two shapes across three titles, so neither variant is designed from one
+/// example and there is no third state for a title nobody has looked at. That
+/// is what [ADR-0022] licenses and what the `Option` fields this module's docs
+/// refuse do not have.
+///
+/// **The selector in the executable is unread.** `docs/formats/track.md` records
+/// the binary's own `%s\%strack%s.vex` template, whose two `%s`s are exactly the
+/// prefix and the `_reversed` suffix [`Self::Prefixed`] composes - but the
+/// branch that puts `zone_` in the first one has not been found, the way
+/// `Ship_LoadModel`'s `case 6` was found for the hull. Everything here is name
+/// resolution against shipped archives, which is why the confidence is the 94 of
+/// a direct probe and not higher.
+///
+/// [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ZoneCircuit {
+    /// A Zone race runs the *same* circuit, out of a second file in its
+    /// directory whose name is the race one with this prefix on the front.
+    ///
+    /// Pulse, on both its platforms: `track.vex` beside `zone_track.vex`, and
+    /// `track_reversed.vex` beside `zone_track_reversed.vex`. The prefix is
+    /// carried rather than hardcoded because it is the first `%s` of the
+    /// binary's own path template, and a title that spelled it differently would
+    /// change this string and nothing else.
+    ///
+    /// **Not every circuit has one**, which is a load-correctness fact and not a
+    /// menu one - see `oag_game::catalogue::Track::available_in_zone`.
+    Prefixed(&'static str),
+    /// A Zone race runs a circuit of its own, sharing nothing with the race
+    /// ones, and this is the one it opens when the caller names none.
+    ///
+    /// Pure and HD. There is deliberately **no mapping** from a race circuit to
+    /// a Zone one here, because the discs author none: Pure ships eight race
+    /// circuits and four Zone circuits, HD sixteen environments of which four
+    /// are Zone. Asking "what is Vineta K's Zone variant" is a question with no
+    /// answer in the data, so this variant answers the only question that does
+    /// have one.
+    Separate(&'static str),
+}
+
+impl ZoneCircuit {
+    /// The circuit a Zone race opens when the caller named one.
+    ///
+    /// [`Self::Prefixed`] rewrites it, because on such a title the name the
+    /// caller gave is a race circuit and its Zone twin is derivable.
+    /// [`Self::Separate`] hands it back untouched, because there is nothing to
+    /// derive - a caller naming a circuit on Pure or HD has named the one it
+    /// wants, and rewriting it would invent a path the disc does not carry.
+    ///
+    /// **Idempotent under `Prefixed`**: a name already carrying the prefix comes
+    /// back unchanged, so `--track ...\zone_track.vex --mode zone` asks for
+    /// `zone_track.vex` rather than `zone_zone_track.vex`.
+    #[must_use]
+    pub fn variant_of(self, track: &str) -> String {
+        match self {
+            Self::Prefixed(prefix) => {
+                let split = track.rfind(['\\', '/']).map_or(0, |i| i + 1);
+                let (directory, file) = track.split_at(split);
+                if file.starts_with(prefix) {
+                    return track.to_string();
+                }
+                format!("{directory}{prefix}{file}")
+            }
+            Self::Separate(_) => track.to_string(),
+        }
+    }
+
+    /// The circuit a Zone race opens when the caller named none.
+    ///
+    /// `race_default` is [`RaceDefaults::track`], which is what a race would
+    /// have opened. [`Self::Prefixed`] derives its Zone twin from it, so the
+    /// title's opening circuit stays the opening circuit in both modes;
+    /// [`Self::Separate`] ignores it and answers with its own, because a race
+    /// circuit is not a Zone one on those titles and opening it would be a
+    /// normal race wearing the Zone rules.
+    #[must_use]
+    pub fn default_track(self, race_default: &str) -> String {
+        match self {
+            Self::Prefixed(_) => self.variant_of(race_default),
+            Self::Separate(track) => track.to_string(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ZoneCircuit;
+
+    const PULSE: ZoneCircuit = ZoneCircuit::Prefixed("zone_");
+    const PURE: ZoneCircuit = ZoneCircuit::Separate(r"Data\Zone\01_Zone\track.vex");
+
+    /// The prefix goes on the *file*, not the front of the whole entry name,
+    /// and both separators the corpus uses are directory separators.
+    #[test]
+    fn the_prefix_lands_on_the_file_name() {
+        assert_eq!(
+            PULSE.variant_of(r"Data\Environments\16_Track\track.vex"),
+            r"Data\Environments\16_Track\zone_track.vex"
+        );
+        assert_eq!(
+            PULSE.variant_of("/data/environments/talons_junction/track.vex"),
+            "/data/environments/talons_junction/zone_track.vex"
+        );
+    }
+
+    /// The `_reversed` suffix is part of the file name, so prefixing composes
+    /// with it and produces the fourth of the four names a circuit ships.
+    #[test]
+    fn the_prefix_composes_with_the_reversed_suffix() {
+        assert_eq!(
+            PULSE.variant_of(r"Data\Environments\16_Track\track_reversed.vex"),
+            r"Data\Environments\16_Track\zone_track_reversed.vex"
+        );
+    }
+
+    /// `--track` naming a Zone circuit outright must not be prefixed twice.
+    #[test]
+    fn prefixing_an_already_prefixed_name_changes_nothing() {
+        let zone = r"Data\Environments\16_Track\zone_track.vex";
+        assert_eq!(PULSE.variant_of(zone), zone);
+    }
+
+    /// A title whose Zone circuits are their own has nothing to derive: the
+    /// caller's name stands, and the default is the title's own Zone circuit
+    /// rather than a rewrite of its race one.
+    #[test]
+    fn separate_circuits_are_never_rewritten() {
+        let named = r"Data\Zone\03_Zone\track.vex";
+        assert_eq!(PURE.variant_of(named), named);
+        assert_eq!(
+            PURE.default_track(r"Data\Environments\01_Vineta_K\track.vex"),
+            r"Data\Zone\01_Zone\track.vex"
+        );
+        assert_eq!(
+            PULSE.default_track(r"Data\Environments\16_Track\track.vex"),
+            r"Data\Environments\16_Track\zone_track.vex"
+        );
+    }
 }

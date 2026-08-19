@@ -42,9 +42,9 @@ pub mod race;
 
 pub use boot::{BootProfile, BootStep, Provenance};
 pub use hud::HudLayouts;
-pub use menu::MenuSkin;
+pub use menu::{MenuSkin, MenuStrip};
 pub use oag_disc::Platform;
-pub use race::RaceDefaults;
+pub use race::{RaceDefaults, ZoneCircuit, ZoneCraft};
 
 /// One title's release-level facts.
 ///
@@ -231,6 +231,26 @@ pub struct FrontEnd {
     /// asset layer holds a field of screen names it has no business in. Inert
     /// data, and cheaper than two things to keep in step.
     pub boot: &'static boot::BootProfile,
+    /// The screen whose own widgets frame every menu: the rules, the corner
+    /// marks and the colour the frame is cleared to.
+    ///
+    /// **A screen name, and deliberately not a table of coordinates.** Wipeout
+    /// HD authors its whole front-end frame on one screen - `FE Screen`, the
+    /// parent every menu screen is nested inside - as a `<ScreenClear>` and
+    /// three `<Image>` widgets. Naming the screen lets the caller *play the
+    /// data*, which is what `CLAUDE.md` asks for; transcribing the four numbers
+    /// per image into this crate is the hand-transcribed-table failure that rule
+    /// exists to prevent, and it would not survive the disc being re-read.
+    ///
+    /// `None` for a title whose frame has not been read, which is both PSP
+    /// titles today. **That is a gap and not a measurement**, and the difference
+    /// matters here: Pulse's own `FE Screen` carries the light angled top bar
+    /// (`topbarleft`/`topbarcenter`/`topbarright`) that
+    /// `oag_game::menu::Skin::title_color` substitutes a colour for precisely
+    /// because nothing draws it yet. Filling this in for Pulse is a change with
+    /// a visible consequence for a screen this build already draws, so it wants
+    /// its own before-and-after rather than being carried along by HD's.
+    pub menu_frame: Option<&'static str>,
 }
 
 /// The archive names a title's releases carry, in the order they are tried.

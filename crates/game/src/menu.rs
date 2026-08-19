@@ -16,6 +16,13 @@
 //! bolting extra branches onto it would leave a structure that is neither
 //! faithful nor ours, and every added entry would look like a recovered one.
 //!
+//! **The shape is ours; where it is drawn is not.** That split is
+//! `docs/architecture/menus.md`'s one-liner - the tree is ours, the presentation
+//! is the disc's - and it reaches further than a set of coordinates: Wipeout HD
+//! lays its main menu out *horizontally*, so the same page is drawn as a column
+//! on a PSP title and as a strip on that one. See [`rows`] and [`strip`], which
+//! [`draw_list`] picks between.
+//!
 //! So the shape is ours and it is written down in [`assets/ui/menu.toml`],
 //! which ships with the source rather than coming off a disc. What the disc's
 //! XML says the original's menus were is a separate, still-open question, and
@@ -1200,6 +1207,9 @@ pub struct Menu {
     scroll: Vec<usize>,
     /// How many rows fit on screen. See [`Self::set_visible_rows`].
     visible: usize,
+    /// Whether this title draws navigation pages as a strip. See
+    /// [`Self::set_strip_layout`].
+    strip_layout: bool,
 }
 
 /// How many rows a page shows before the caller says otherwise.
@@ -1224,6 +1234,9 @@ impl Menu {
             cursor,
             scroll,
             visible: DEFAULT_VISIBLE_ROWS,
+            // A column until a title says otherwise, which is what both PSP
+            // discs measurably say.
+            strip_layout: false,
         }
     }
 
@@ -1420,6 +1433,29 @@ impl Menu {
         self.visible
     }
 
+    /// Whether this title's navigation pages are drawn as a horizontal strip.
+    ///
+    /// Set by whoever is drawing, from the live [`Skin`], for the same reason
+    /// [`Self::set_visible_rows`] is: whether a strip exists at all is the
+    /// *title's* answer - [`oag_title::MenuStrip`] - and this type holds no
+    /// skin. Which pages it then applies to is this type's own page list, so the
+    /// flag says only "this disc draws strips" and [`strip::suits`] decides the
+    /// rest.
+    ///
+    /// It reaches [`Self::update`] and nothing else. What is drawn is decided
+    /// from the skin directly in [`draw_list`], so a caller that forgets this
+    /// gets a strip that reads left-to-right and steps with up and down - wrong,
+    /// but not a menu drawn one way and navigated another.
+    ///
+    /// **`crate::capture` deliberately does not set it**, which is not an
+    /// oversight to fix: `--menu-page` draws one frame and never calls
+    /// [`Self::update`], so the only field that would read this is never
+    /// consulted. Its picture is the strip either way, because that comes off
+    /// the skin.
+    pub fn set_strip_layout(&mut self, strip: bool) {
+        self.strip_layout = strip;
+    }
+
     /// Index of the page being drawn.
     fn current(&self) -> usize {
         *self.stack.last().expect("the stack is never empty")
@@ -1462,7 +1498,26 @@ impl Menu {
 
         let right = take(input, button::RIGHT);
         let left = take(input, button::LEFT);
-        if (right || left)
+        // On a page drawn as a strip, left and right are what *step* it: the
+        // entries run that way on screen, so a cursor that only answered up and
+        // down would be moving across an axis the page does not have. There is
+        // nothing for them to adjust on such a page in any case - [`strip::suits`]
+        // admits only navigation entries, and none of those carries a value - so
+        // this is a choice between "step" and "do nothing", not between two
+        // meanings.
+        //
+        // **Up and down keep working there, and that part is ours.** The
+        // entries are one list however they are laid out, and a player whose
+        // thumb goes down on a menu has not asked for nothing to happen. The
+        // original is presumably left/right only; nothing here claims otherwise.
+        if self.strip_layout && strip::suits(self.page()) && rows > 0 {
+            if right {
+                self.cursor[page] = (self.cursor[page] + 1) % rows;
+            }
+            if left {
+                self.cursor[page] = (self.cursor[page] + rows - 1) % rows;
+            }
+        } else if (right || left)
             && let Some(event) = self.adjust(if right { 1 } else { -1 })
         {
             out.push(event);
@@ -1636,9 +1691,13 @@ impl Menu {
     }
 }
 
+mod frame;
+mod rows;
 mod skin;
+mod strip;
 
-pub use skin::{Skin, visible_rows};
+pub use frame::{Frame, read as read_frame};
+pub use skin::{Skin, Strip, visible_rows};
 
 /// Where the visible window starts, given where it was pushed to and where the
 /// cursor is.
@@ -1840,163 +1899,77 @@ impl Default for Transition {
 /// owns the mapping, this crate owns the layout, and neither has to know how
 /// the other works. `main.rs` hands over [`oag_input::keys::bound_keys`].
 ///
+/// `measure` is the width of a string in the face the entries will be drawn in,
+/// on the same seam and for the same reason: the atlas is the renderer's and the
+/// layout is this crate's. Only a [`strip`] reads it - a column starts every row
+/// at one x - which is why it arrived with the second idiom rather than with the
+/// first.
+///
 /// `backdrop` is the same arrangement one step further out: a frame and a
 /// rectangle, already decided, rather than a movie this module would then have
 /// to know how to play. `None` draws the rows on whatever the pass cleared to,
 /// which is black - see [`Backdrop`].
+///
+/// # Two idioms, and the disc picks
+///
+/// A page is drawn as a column of rows ([`rows`]) unless the title authors a
+/// horizontal strip and the page has nothing to put in a value column, in which
+/// case it is drawn as one ([`strip`]). Wipeout HD is the title that does; both
+/// PSP titles measurably do not. See [`oag_title::MenuStrip`].
 #[must_use]
 pub fn draw_list(
     menu: &Menu,
     skin: &Skin,
     bindings: &dyn Fn(u8) -> Vec<&'static str>,
+    measure: &dyn Fn(&str) -> f32,
     backdrop: Option<Backdrop>,
+    frame: &Frame,
 ) -> Layers {
     let page = menu.page();
-    let margin_x = skin.menu_x();
-    let row_height = skin.row_pitch();
-    let row_scale = skin.row_scale();
-    let first_row_y = skin.first_row_y();
-    let visible = visible_rows(skin);
     let (title_x, title_y, title_scale) = skin.title_at();
 
+    // The frame's clear, then the movie, then the frame's marks. Both halves of
+    // the frame are the disc's own widgets off one screen - see [`frame`] - and
+    // the movie goes between them because a clear is what a screen starts from
+    // and a rule is drawn on top of what the screen holds. No title carries both
+    // a frame and a movie, so the interleaving is arranged and not observed.
+    let mut backdrops: Vec<Draw> = frame.clear.clone().into_iter().collect();
+    backdrops.extend(backdrop.map(|backdrop| Draw::Video {
+        rect: backdrop.rect,
+        frame: backdrop.frame,
+        position: backdrop.position,
+        // The same movie `Show Logo` sits on, still looping and still on
+        // the same playhead: the menus are where the disc's own
+        // `FE Screen` was going anyway.
+        source: crate::frontend::Video::Backdrop,
+    }));
+    backdrops.extend(frame.marks.iter().cloned());
+
     let mut layers = Layers {
-        backdrop: backdrop
-            .map(|backdrop| Draw::Video {
-                rect: backdrop.rect,
-                frame: backdrop.frame,
-                position: backdrop.position,
-                // The same movie `Show Logo` sits on, still looping and still on
-                // the same playhead: the menus are where the disc's own
-                // `FE Screen` was going anyway.
-                source: crate::frontend::Video::Backdrop,
-            })
-            .into_iter()
-            .collect(),
+        backdrop: backdrops,
         ..Layers::default()
     };
-    let out = &mut layers.chrome;
-    out.push(Draw::Text {
+    layers.chrome.push(Draw::Text {
         x: title_x,
         y: title_y,
         scale: title_scale,
-        color: skin.title_color(),
+        // The frame's own ink where there is a frame, this build's substitute
+        // where there is not - see `Skin::title_color`, whose whole argument was
+        // about the missing frame rather than about the colour.
+        color: frame.ink.unwrap_or_else(|| skin.title_color()),
         border: None,
         align: Align::Left,
         text: page.title.clone(),
     });
 
-    // The first noted row's message, shown once under the rows however many
-    // rows are marked: two lines of small text competing for the same corner
-    // would be less readable than one, and the markers already say which rows.
-    // A restart note and a warning share the slot and the first row in page
-    // order wins, because they are the same kind of thing to a player - "this
-    // row is not doing what it says" - and ranking them would mean deciding
-    // which of two true sentences to hide.
-    //
-    // Only the rows on screen are considered, markers and message alike: the
-    // message sits under the rows and the markers say which of them, so a note
-    // belonging to a row that has scrolled away would be a sentence about
-    // nothing the player can see.
-    let mut noted: Option<String> = None;
-    let first = menu.scroll();
-    let mut shown = 0usize;
-    let out = &mut layers.body;
-    for (row, entry) in page.entries.iter().enumerate().skip(first).take(visible) {
-        let y = first_row_y + (row - first) as f32 * row_height;
-        shown += 1;
-        let selected = row == menu.selected();
-
-        // **No fill behind the selected row.** The original marks selection by
-        // brightening the row's own text toward white - a capture of its main
-        // menu shows no bar, and none of the pink `MenuHighLightArrowColor` the
-        // palette declares appears anywhere on that screen. This build used to
-        // draw a translucent bar here; it was invented, and it is gone.
-
-        // A binding cannot be changed yet and a disabled row cannot be changed
-        // now; both read as "this does nothing if you press it", which is what
-        // the dim colour says. A disabled row can still be selected and read
-        // rather than being unreachable.
-        let inert = matches!(entry, Entry::Binding { .. }) || menu.is_disabled(entry);
-        // Marked in the margin rather than by recolouring the row: the colour
-        // already means selected, normal or inert, and a fourth meaning on the
-        // same channel would collide with those three. See `WARNING`.
-        let note = menu
-            .warning(entry)
-            .map(|warning| &warning.message)
-            .or_else(|| menu.restart_note(entry).map(|restart| &restart.message));
-        if let Some(message) = note {
-            noted.get_or_insert(message.clone());
-            out.push(Draw::Text {
-                x: margin_x - 18.0,
-                y,
-                scale: row_scale,
-                color: WARNING,
-                border: None,
-                align: Align::Left,
-                text: "!".to_string(),
-            });
-        }
-        out.push(Draw::Text {
-            x: margin_x,
-            y,
-            scale: row_scale,
-            color: if inert {
-                DIMMED
-            } else if selected {
-                skin.selected()
-            } else {
-                skin.normal()
-            },
-            border: None,
-            align: Align::Left,
-            text: entry.label().to_string(),
-        });
-
-        // The right-hand column: a setting's value, or what a button is bound
-        // to. `Align::Right` anchors at `x - width`, so both kinds land on the
-        // same edge whatever they say.
-        let value = match entry {
-            Entry::Binding { button, .. } => {
-                let keys = bindings(*button);
-                if keys.is_empty() {
-                    Some("UNBOUND".to_string())
-                } else {
-                    Some(keys.join(" / "))
-                }
-            }
-            other => other.value().map(|value| value.to_string()),
-        };
-        if let Some(text) = value {
-            out.push(Draw::Text {
-                x: skin.value_right(),
-                y,
-                scale: row_scale,
-                color: if selected && entry.is_adjustable() && !inert {
-                    skin.selected()
-                } else {
-                    DIMMED
-                },
-                border: None,
-                align: Align::Right,
-                text,
-            });
-        }
-    }
-
-    // Under the last row *drawn* rather than at a fixed height, so it sits with
-    // the page it belongs to instead of floating away from a short one - and so
-    // a scrolled page puts it under the window rather than off the bottom.
-    if let Some(message) = noted {
-        out.push(Draw::Text {
-            x: margin_x - 18.0,
-            y: first_row_y + shown as f32 * row_height + skin.message_gap(),
-            scale: row_scale * 0.8,
-            color: WARNING,
-            border: None,
-            align: Align::Left,
-            text: format!("! {message}"),
-        });
-    }
+    // Which idiom a page is drawn in is the *title's* answer first and this
+    // page's second: a strip needs a disc that authors one, and a page with
+    // nothing to put in a value column. Everything else is a row list, which is
+    // every page on both PSP titles and all but the root on Wipeout HD.
+    layers.body = match skin.strip().filter(|_| strip::suits(page)) {
+        Some(strip) => strip::draw(menu, skin, strip, measure),
+        None => rows::draw(menu, skin, bindings),
+    };
 
     layers
 }

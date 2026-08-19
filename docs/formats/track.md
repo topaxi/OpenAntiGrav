@@ -56,6 +56,47 @@ so the `location` attribute plus the binary's `%s\%strack%s.vex` template gives
 `zone_track_reversed.vex`. Mining those raised name resolution in `Data.wad`
 from 177 to 269 of 1,142 entries.
 
+### Not every circuit has the zone pair, and the entry says which do
+
+`availableInZone="true"` above is **load-correctness, not menu decoration**: a
+circuit that does not declare it carries no `zone_track.vex` at all, so a Zone
+race on one asks the archive for a name that hashes to nothing.
+
+Measured by probing all 24 entries by name against `pulse-psp-usa.chd`: the
+attribute predicts the file **24 times out of 24**, sixteen present and eight
+absent, with no exception in either direction. `pulse-ps2-eu.chd` declares 32
+entries and the same biconditional holds there, 22 present and 10 absent.
+Confidence **94** - direct name resolution over the whole set.
+`crates/game/tests/zone_ground_truth.rs` is that sweep, and
+`oag_game::catalogue::Track::available_in_zone` is where it is read.
+
+**A zone circuit is a different environment, not a filtered view of the race
+one.** `16_Track` decodes to 602 meshes / 163,178 triangles and its
+`zone_track.vex` to 564 / 154,538, with its own lights, its own `fogCube` and its
+own `Skycube` - and the sky is the tell, because the twelve one-material skies
+[`skycube.md`](skycube.md) counts on the disc are exactly the zone variants
+against five or six materials elsewhere.
+
+**The racing line is usually but not always shared.** Comparing the two splines
+across all sixteen zone-available circuits: fourteen have identical control-point
+counts and two do not - `10_Track` (844 race / 848 zone) and its reversed twin
+`26_Track` (847 / 852), which are the same environment. So a zone circuit's
+`WO Track` is authored separately rather than copied, and one environment's
+differs slightly. See [race modes](../gameplay/race-modes.md) for what that costs.
+
+**One circuit authors no `Weapon Pad` node at all** where its race twin does -
+which is the data agreeing with Zone having weapons off, and is the case that
+found a real bug in `oag_render::mesh::build_optional_class`: it returned an
+empty model for an *unrecovered class id* but errored for a class the file simply
+does not author, so a Zone race failed to load with `decoded to no triangles`
+while the file parsed perfectly.
+
+**The selector inside the executable is unread.** The `%s\%strack%s.vex` template
+is recovered and its first `%s` is where `zone_` goes, but the branch that puts
+it there - the analogue of `Ship_LoadModel`'s `case 6` for the Zone hull, see
+[zone-mode.md](../ghidra/functions/psp-pulse-usa/zone-mode.md) - has not been
+found. Everything above is shipped data, which is what caps it at 94.
+
 ## Class IDs
 
 Decoded from the table at `0x08ab2370` (stride 12, `{u32 id, char *name, ptr}`,

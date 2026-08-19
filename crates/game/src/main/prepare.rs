@@ -226,6 +226,9 @@ impl Pending {
             space: boot_shell.space,
             menu_font: boot_shell.menu_font.clone(),
             sprites: boot_shell.sprites.clone(),
+            // The disc's own chrome, read by the boot itself - which is where
+            // the parsed XML, the sheet and the grid were all in hand.
+            frame: boot_shell.frame.clone(),
         };
 
         println!("\n{MENU_KEYS}");

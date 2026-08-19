@@ -61,6 +61,8 @@
 
 use anyhow::Result;
 
+use super::{sampler_entry, texture_entry, uniform_entry};
+
 /// The scene target's format: linear, and wide enough for the gate to see
 /// luminance above 1.0. Drawing into it is what tells every pipeline in this
 /// crate to output linear light - see `mesh_render::is_linear_target`.
@@ -236,36 +238,15 @@ impl Chain {
             label: Some("hd bloom"),
             source: wgpu::ShaderSource::Wgsl(include_str!("hd_bloom.wgsl").into()),
         });
-        let texture_entry = |binding| wgpu::BindGroupLayoutEntry {
-            binding,
-            visibility: wgpu::ShaderStages::FRAGMENT,
-            ty: wgpu::BindingType::Texture {
-                sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                view_dimension: wgpu::TextureViewDimension::D2,
-                multisampled: false,
-            },
-            count: None,
-        };
+        // The fullscreen triple at 0..2, then the two extra source textures
+        // this pass alone reads - so it composes the entries rather than
+        // calling `fullscreen_layout`, which stops at binding 2.
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("hd bloom"),
             entries: &[
                 texture_entry(0),
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 2,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
+                sampler_entry(1),
+                uniform_entry(2),
                 texture_entry(3),
                 texture_entry(4),
             ],

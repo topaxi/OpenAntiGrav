@@ -28,7 +28,58 @@
 pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     track: DEFAULT_TRACK,
     team: DEFAULT_TEAM,
+    zone: oag_title::ZoneCircuit::Separate(DEFAULT_ZONE_TRACK),
+    zone_craft: oag_title::ZoneCraft::OwnShip(ZONE_SHIP),
 };
+
+/// The ship directory a Zone race flies out of.
+///
+/// **Shaped like Pure's and not like Pulse's**, which is what gave
+/// [`oag_title::ZoneCraft`] its third measurement and so its licence to exist:
+/// Zone has a ship directory of its own, and the player's team choice does not
+/// reach the hull.
+///
+/// This name was already on the disc's roster before anything wanted it -
+/// `zone` is one of the four [`crate::names::MODE_SHIPS`], read off the manifest
+/// beside `detonator`, `zone battle` and `test`, and that listing already
+/// recorded the shape of the finding: **the mode ships author no `<Class>` block
+/// at all** where every team file authors four.
+/// `crates/assets/tests/hd_psarc_ground_truth.rs` asserts exactly that and names
+/// `zone` as one of the two classless ones.
+///
+/// `/data/ships/zone/ship.vex` resolves and decodes - 29 meshes, 29,678
+/// triangles through its `.rcsmodel` sibling, probed 2026-08-19. Confidence
+/// **94** for the name; **nothing about which mode selects it has been read in
+/// this executable**, so the identification rests on the directory's name, its
+/// classless handling file and its company in `MODE_SHIPS`, exactly as Pure's
+/// does.
+///
+/// Spelled without a leading slash and capitalised the way Pulse spells a team,
+/// because it goes through `oag_pulse::race::ships::entry_name` like every other
+/// hull and a PSARC folds case and separators - see this module's own docs.
+/// `Data\Ships\zone\Ship.vex` normalises onto `data/ships/zone/ship.vex`, which
+/// is what the manifest stores.
+pub const ZONE_SHIP: &str = "zone";
+
+/// The circuit a Zone race loads when the caller names none.
+///
+/// **HD is shaped like Pure here, not like Pulse**: Zone runs on circuits of its
+/// own rather than on a second `.vex` inside a race circuit's directory. Four of
+/// them, and this build already knew their names without knowing what they were
+/// for - `zone_1` through `zone_4` are four of the sixteen entries in
+/// [`crate::names::ENVIRONMENTS`], which `crates/hd/tests/hd_title_ground_truth.rs`
+/// re-derives from the manifest rather than trusting. Each holds a plain
+/// `track.vex`, the same as every other environment on the disc.
+///
+/// `zone_1` for the reason [`DEFAULT_TRACK`] gives for Talon's Junction inverted:
+/// there is no capture to match here, so the disc's own ordering answers.
+///
+/// **What is *not* claimed** is which of the four a player reaches first, or how
+/// they are unlocked. Pure declares that in its plugin definition and HD's
+/// track-selection XML has not been read - see [`crate::names::ENVIRONMENTS`],
+/// which says the same about the sixteen. This is a name that resolves, nothing
+/// more.
+pub const DEFAULT_ZONE_TRACK: &str = "/data/environments/zone_1/track.vex";
 
 /// The circuit a race loads when the caller names none.
 ///

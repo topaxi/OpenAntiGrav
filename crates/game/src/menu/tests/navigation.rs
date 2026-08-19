@@ -79,7 +79,14 @@ fn a_long_page_scrolls_one_row_before_the_cursor_reaches_the_bottom() {
 #[test]
 fn a_zoom_moves_the_body_and_not_the_chrome() {
     let menu = Menu::new(long_page(3));
-    let settled = draw_list(&menu, &skin(), &no_bindings, None);
+    let settled = draw_list(
+        &menu,
+        &skin(),
+        &no_bindings,
+        &measure,
+        None,
+        &Frame::default(),
+    );
     let chrome_before = first_text_at(&settled.chrome);
     let body_before = first_text_at(&settled.body);
 
@@ -103,7 +110,15 @@ fn a_zoom_moves_the_body_and_not_the_chrome() {
 #[test]
 fn a_zoom_fades_both_layers() {
     let menu = Menu::new(long_page(3));
-    let faded = draw_list(&menu, &skin(), &no_bindings, None).zoomed((0.0, 0.0), 1.0, 0.25);
+    let faded = draw_list(
+        &menu,
+        &skin(),
+        &no_bindings,
+        &measure,
+        None,
+        &Frame::default(),
+    )
+    .zoomed((0.0, 0.0), 1.0, 0.25);
     for draw in faded.chrome.iter().chain(faded.body.iter()) {
         if let Draw::Text { color, .. } = draw {
             assert!(color[3] <= 0.25 + 0.001, "alpha not applied: {color:?}");

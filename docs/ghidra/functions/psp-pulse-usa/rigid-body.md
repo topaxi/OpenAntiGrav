@@ -228,11 +228,27 @@ anything. The four fields are one consistent scheme:
 
 | Offset | Meaning |
 | --- | --- |
-| `+0x40..0x70` | inverse inertia tensor, **body space** |
+| `+0x40..0x70` | inverse inertia tensor, **body space** - **but see the open contradiction below** |
 | `+0x80..0xb0` | inverse inertia tensor, **world space** (derived, cached per sub-step) |
 | `+0xc0..0xf0` | basis transpose (derived, cached per sub-step) |
 | `+0x150` | angular velocity, the quantity that turns the basis |
 | `+0x160` | **angular momentum**, body frame, what torque integrates into |
+
+**Open contradiction, 2026-08-19, not resolved here - and a follow-up check
+sharpened it rather than closing it.** A live check in
+[contact-response.md](contact-response.md#weapon_postblastimpulse_q-0x0886794c-confidence-68),
+under "What `T` actually is", read `body+0x50` off a real craft mid-tick, off a
+body pointer confirmed by direct pointer equality, and it held a track-scale
+value that changed with the craft's actual position - not tensor-shaped data.
+A follow-up static read of `Body_SetBoxInertia`'s diagonal patch-back
+(`+0x40`/`+0x54`/`+0x68`, stride `0x14`) then independently *confirmed* this
+section's own row layout - the constructor's own diagonal arithmetic requires
+row 1 to start at `+0x50` - which makes the runtime observation harder to
+explain away, not easier: row 1's off-diagonal terms should be `0.0` forever
+for an axis-aligned box and were visibly not. Neither reading is weak and
+neither has been withdrawn; see that page for the full account of what is and
+is not settled. Do not treat `body+0x50` specifically as confirmed tensor
+storage until this is reconciled.
 
 **So the trace's fitted per-axis factor is the inertia tensor, and the sign is the
 `w_game = -w_physics` convention.** The recorded `+0x160` column is `I * w`, so

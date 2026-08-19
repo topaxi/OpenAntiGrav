@@ -225,6 +225,19 @@ pub struct Screen {
     pub display_languages: bool,
     /// The screen's `Menu` widget, if it has one.
     pub menu: Option<Menu>,
+    /// What the screen's `<ScreenClear>` fills the frame with, as ARGB.
+    ///
+    /// **Not [`Self::fills`]**, which is the `<Image>`-with-a-colour-and-no-`src`
+    /// spelling. The two say the same kind of thing and are kept apart because
+    /// only one of them is a *clear*: a `ScreenClear` is the frame the screen
+    /// starts from, and every widget on the screen - and on the screens nested
+    /// inside it - is drawn over it.
+    ///
+    /// Wipeout HD's `FE Screen` is what this exists for:
+    /// `<ScreenClear><Values Colour="FEGlobals->HD_BG">`, white, and every menu
+    /// screen on that disc is a descendant of it. Read here rather than in the
+    /// menus so the value comes off the disc rather than out of a constant.
+    pub clear: Option<u32>,
 }
 
 impl Screen {
@@ -382,6 +395,18 @@ impl Screens {
                     }
                 }
             },
+            "screenclear" => {
+                // `Colour`, the British spelling, which is what every
+                // `ScreenClear` on Wipeout HD's disc uses - and `color` beside
+                // it because the same file spells the `Image` attribute the
+                // other way, so which one an element takes is not a thing to
+                // remember.
+                if let Some(value) = child.value("Colour").or_else(|| child.value("color"))
+                    && let Some(argb) = self.resolve(value).and_then(parse_argb)
+                {
+                    screen.clear = Some(argb);
+                }
+            }
             "movie" => screen.movies.push(Movie::from_node(child)),
             "text" => screen.texts.push(self.text_from_node(child)),
             "redirect" => screen.redirects.push(redirect_from_node(child)),

@@ -112,6 +112,60 @@ class Bridge:
         with urllib.request.urlopen(req, timeout=60) as r:
             return r.read().decode("utf-8", "replace")
 
+    def _true_current_executable_path(self) -> str:
+        """The executable path of whatever program the bridge will actually
+        write to right now - a plain `get_metadata` with no `program` query
+        parameter at all, bypassing `get()`'s default so this can't quietly
+        re-resolve to the program this Bridge wants rather than the one the
+        bridge is actually holding as current."""
+        with urllib.request.urlopen(f"{self.url}/get_metadata", timeout=30) as r:
+            reply = r.read().decode("utf-8", "replace")
+        for line in reply.splitlines():
+            if line.startswith("Executable Path:"):
+                return line.removeprefix("Executable Path:").strip()
+        return ""
+
+    def switch_program(self) -> None:
+        """Make this Bridge's program the bridge's active one.
+
+        `rename_function_by_address` and `create_function` both ignore the
+        `program` field on the request and act on whatever program the bridge
+        currently considers active - unlike `get_function_by_address`, which
+        resolves `program` correctly. Without this, a multi-binary run keeps
+        writing every rename after the first group into whichever program was
+        active when the *previous* group left off, and reports "No function
+        found" for addresses that exist perfectly well in the intended one -
+        or worse, silently succeeds by writing this group's names into that
+        other program instead.
+
+        `switch_program`'s own `"success": true` reply is not trustworthy:
+        confirmed live, it reports success while leaving the bridge's true
+        current program completely unchanged, for any of the three binaries
+        that share the display name `BOOT.BIN` with `psp-pulse-usa`. So this
+        does not trust the reply at all - it re-reads the true current
+        program afterward with no `program` parameter, the same lookup a
+        write call implicitly uses, and compares its executable path against
+        what `get_metadata` reports *for the program this Bridge asked for*
+        (which, like every other GET, resolves correctly). Only a match
+        means a write will actually land where it's supposed to.
+        """
+        self.get("switch_program", program=self.program)
+        wanted = self.get("get_metadata").strip()  # program set by get() -> resolves correctly
+        wanted_path = next(
+            (
+                l.removeprefix("Executable Path:").strip()
+                for l in wanted.splitlines()
+                if l.startswith("Executable Path:")
+            ),
+            "",
+        )
+        actual_path = self._true_current_executable_path()
+        if not wanted_path or actual_path != wanted_path:
+            raise RuntimeError(
+                f"switch_program to {self.program!r} did not take: bridge is still "
+                f"writing to {actual_path!r}, not {wanted_path!r}"
+            )
+
     def has_function(self, address: str) -> bool:
         return "No function found" not in self.get("get_function_by_address", address=address)
 
@@ -265,8 +319,15 @@ def apply_group(paths: list[Path], program: str, args) -> int:
     if not args.dry_run:
         try:
             bridge.get("get_metadata")
+            bridge.switch_program()
         except (urllib.error.URLError, OSError) as e:
             print(f"cannot reach the bridge at {args.url} for {program}: {e}", file=sys.stderr)
+            return 1
+        except RuntimeError as e:
+            # Refuse to guess which program is active: every rename below would
+            # otherwise land wherever the *previous* group left the bridge,
+            # silently writing this group's names into an unrelated binary.
+            print(f"  {e}", file=sys.stderr)
             return 1
 
     applied = skipped = failed = 0

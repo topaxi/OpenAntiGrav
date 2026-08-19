@@ -231,6 +231,7 @@ fn an_hd_hull_takes_its_locators_from_the_file_beside_it() {
         &mut archives,
         &teams,
         oag_race::Mode::SingleRace,
+        oag_pulse::race::DEFAULTS.zone_craft,
         oag_render::mesh::Lod::default(),
         &mut report,
     )

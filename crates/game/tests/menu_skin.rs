@@ -83,6 +83,32 @@ fn pulse_states_what_its_disc_and_its_capture_gave() {
     assert!(pulse().selected.is_some(), "measured off a capture");
 }
 
+/// One title draws a strip and two draw columns, and each says so itself.
+///
+/// The third title is here because this axis is the one where HD is not simply
+/// *more* than the PSP titles: it lays its main menu out on the other axis
+/// entirely. Both `None`s are measurements - four pressings across two titles
+/// and two consoles author no `<HorizMenu>` anywhere, see `oag_title::MenuStrip`
+/// - so this fails the day one of them is filled in from HD's numbers.
+#[test]
+fn only_hd_authors_a_horizontal_strip() {
+    assert!(pulse().strip.is_none(), "Pulse's main menu is a column");
+    assert!(pure().strip.is_none(), "Pure's are too");
+
+    let strip = oag_hd::frontend::MENU_SKIN
+        .strip
+        .expect("HD's main menu is a <HorizMenu>");
+    assert!((strip.x - 160.0).abs() < f32::EPSILON);
+    assert!((strip.y - 125.0).abs() < f32::EPSILON);
+    assert_eq!(strip.color, 0xFF70_5070);
+    // A strip title has no first row for `first_row_y` to be the top of, which
+    // is the pair of readings HD's own comments make together.
+    assert!(oag_hd::frontend::MENU_SKIN.first_row_y.is_none());
+    // And the widget's colour is not the global, which is the mistake the
+    // drawing side would make silently.
+    assert_ne!(Some(strip.color), oag_hd::frontend::MENU_SKIN.text);
+}
+
 /// The pitch rule reproduces all four menus it was measured on.
 ///
 /// `menu` is a 22-pixel face and `small` a 17-pixel one, per

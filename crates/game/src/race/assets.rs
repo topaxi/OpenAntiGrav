@@ -177,21 +177,26 @@ pub(super) fn untextured_note(model: &Model) -> Option<String> {
 /// Assembled the way the loader assembles it, with backslashes, which is what the
 /// name hash needs.
 ///
-/// A [`Mode::Zone`] run loads `Zone.vex` instead of `Ship.vex`. That is not a
-/// livery swap of convenience: `Ship_LoadModel` (`0x08843258`) switches on the
-/// same `DAT_08ab07e3 == 0 && DAT_08b31048 == 6` expression already established
-/// as the Zone selector (see `docs/ghidra/functions/psp-pulse-usa/zone-mode.md`),
+/// **A [`Mode::Zone`] run flies a different hull, and where that hull lives is a
+/// title fact** - [`oag_title::ZoneCraft`], measured on all three titles. Pulse
+/// keeps it inside the player's own team directory as `Zone.vex`; Pure and HD
+/// give Zone a ship directory of its own, so the player's team stops reaching
+/// the hull at all.
+///
+/// Pulse's is the branch with a recovered selector rather than a name probe:
+/// `Ship_LoadModel` (`0x08843258`) switches on the same
+/// `DAT_08ab07e3 == 0 && DAT_08b31048 == 6` expression already established as
+/// the Zone selector (see `docs/ghidra/functions/psp-pulse-usa/zone-mode.md`),
 /// and only that case builds the `%s\Zone.vex` path. Every team's `Zone.vex`
 /// decodes to the same 1213 vertices / 1149 triangles / 8 meshes, so the hull
-/// itself is shared - only the livery painted on it still varies by team.
+/// itself is shared there - only the livery painted on it still varies by team.
+/// On the other two there is no per-team Zone hull to share.
 #[must_use]
-pub fn ship_entry_name(team: &str, mode: Mode) -> String {
-    let model = if mode == Mode::Zone {
-        ships::ZONE_HULL
-    } else {
-        ships::HULL
-    };
-    ships::entry_name(team, model)
+pub fn ship_entry_name(team: &str, mode: Mode, zone: oag_title::ZoneCraft) -> String {
+    if mode != Mode::Zone {
+        return ships::entry_name(team, ships::HULL);
+    }
+    ships::entry_name(zone.directory(team), zone.hull().unwrap_or(ships::HULL))
 }
 
 /// The boost plume that goes with [`ship_entry_name`]'s hull.
@@ -209,13 +214,11 @@ pub fn ship_entry_name(team: &str, mode: Mode) -> String {
 /// the caller's missing-entry path already handles a set that does not carry
 /// one.
 #[must_use]
-pub fn boost_entry_name(team: &str, mode: Mode) -> String {
-    let model = if mode == Mode::Zone {
-        ships::ZONE_BOOST
-    } else {
-        ships::BOOST
-    };
-    ships::entry_name(team, model)
+pub fn boost_entry_name(team: &str, mode: Mode, zone: oag_title::ZoneCraft) -> String {
+    if mode != Mode::Zone {
+        return ships::entry_name(team, ships::BOOST);
+    }
+    ships::entry_name(zone.directory(team), zone.boost().unwrap_or(ships::BOOST))
 }
 
 /// The shield shells a craft can draw, best first.
@@ -266,4 +269,84 @@ pub(crate) fn ps2_texture_set(
 ) -> Option<Vec<Option<mesh::ModelTexture>>> {
     let blob = archives.read_preceding(entry_name).ok()?;
     mesh::ps2_texture_set(&blob).ok()
+}
+
+/// The error a circuit that is in none of the source's archives produces.
+///
+/// **A Zone race gets a different sentence, and the reason is that it has a
+/// different commonest cause.** Any other mode reaching this point named a
+/// circuit that is not on the disc, and saying so is the whole story. A Zone
+/// race on a title whose Zone circuits are the race ones with a prefixed file
+/// reaches it for a second reason that looks identical from the archive's side:
+/// the circuit is there, and it simply has no Zone variant beside it. Sixteen of
+/// Pulse's twenty-four `PI_Track` entries carry one and eight do not, exactly as
+/// each declares with `availableInZone` - see
+/// [`crate::catalogue::Track::available_in_zone`].
+///
+/// Collapsing the two sends a reader after a name-mining problem that is not
+/// there, which is the failure [`unrecovered_or_absent`] exists to prevent one
+/// layer down.
+pub(super) fn zone_circuit_miss(
+    track: &str,
+    mode: Mode,
+    title: &oag_title::Title,
+    archives: &oag_assets::Archives,
+) -> anyhow::Error {
+    let layout = archives.layout.describe();
+    if mode != Mode::Zone {
+        return anyhow::anyhow!("{track} is in none of this source's archives ({layout})");
+    }
+    match title.race.zone {
+        oag_title::ZoneCircuit::Prefixed(prefix) => anyhow::anyhow!(
+            "{track} is in none of this source's archives ({layout}). A zone race \
+             flies the circuit's own zone environment, named with the `{prefix}` \
+             prefix, and not every circuit has one - on {} the plugin definition \
+             marks the ones that do with `availableInZone`. Pick one of those, or \
+             race another mode here",
+            title.name
+        ),
+        oag_title::ZoneCircuit::Separate(default) => anyhow::anyhow!(
+            "{track} is in none of this source's archives ({layout}). {} keeps its \
+             zone circuits apart from its race ones, so a race circuit's name will \
+             not do: {default} is the one this title opens by default",
+            title.name
+        ),
+    }
+}
+
+/// The report line a Zone race owes about its handling, or `None` for any other
+/// mode.
+///
+/// **Every title ships a Zone-mode handling file and this engine does not read
+/// it**, so a Zone race flies on the player's own team's numbers. That is a
+/// divergence from the original rather than a simplification, and one that is
+/// invisible from a screenshot, so it is stated on every Zone load.
+///
+/// The directory is `Data\Ships\Zone_01` on both PSP titles and
+/// `/data/ships/zone` on HD, all three opening `<Stats team="ZoneMode">` and
+/// authoring **no `<Class>` block at all** where a team file authors four or
+/// five.
+///
+/// **The line deliberately names no path**, because on Pulse that directory is
+/// not one anything here can derive: [`oag_title::ZoneCraft::directory`] answers
+/// with the *player's own team* there, which is correct for the model and wrong
+/// for this - Pulse draws `Assegai\Zone.vex` while its ZoneMode block sits in
+/// `Zone_01`. An earlier draft of this line interpolated that helper and told
+/// every Pulse player that `Assegai\handlingstats.xml` was a ZoneMode file,
+/// which it is not. Naming the directory would need a fifth title field for
+/// something nothing reads; `crates/game/tests/zone_ground_truth.rs` carries
+/// the three spellings as the evidence instead. `oag_gameplay::handling_for` needs a class
+/// and panics without one, which is the whole reason it is unread - see
+/// [`oag_title::ZoneCraft`] for what the shipped file does carry and why the
+/// mode plausibly wants it.
+pub(super) fn zone_handling_note(mode: Mode, team: &str) -> Option<String> {
+    if mode != Mode::Zone {
+        return None;
+    }
+    Some(format!(
+        "zone: flying {team}'s handling. This title ships a ZoneMode handling \
+         block of its own and nothing reads it - it authors no <Class>, which \
+         is what this engine's per-class conversion needs. See \
+         oag_title::ZoneCraft and docs/gameplay/race-modes.md"
+    ))
 }

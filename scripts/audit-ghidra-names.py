@@ -51,14 +51,20 @@ BINARY_PROGRAMS = {
     "psp-pure-usa": "/psp-pure-usa/BOOT.BIN",
     "psp-pure-eu": "/psp-pure-eu/BOOT.BIN",
     "ps2-pulse-eu": "/ps2-pulse-eu/SCES_547.48",
+    "ps3-hdfury-eu": "/ps3-hdfury-eu/EBOOT.elf",
 }
 
 CONFIDENT_MIN = 70
 
 # Names Ghidra or the toolchain produces on its own. Anything matching these is
 # not a claim about what the function is, so it is not the audit's business.
+# `.opd.FUN_` is `ps3-hdfury-eu`'s share of this: PowerPC ELFs have a separate
+# official procedure descriptor table, and Ghidra auto-labels each entry
+# `.opd.FUN_<addr>` - 23,162 of them on this binary alone, all noise the same
+# way `FUN_<addr>` itself is.
 GENERATED = re.compile(
-    r"^(FUN_|LAB_|SUB_|thunk_|DAT_|_?_?start$|entry$|caseD_|switchD_)", re.IGNORECASE
+    r"^(FUN_|LAB_|SUB_|thunk_|DAT_|_?_?start$|entry$|caseD_|switchD_|\.opd\.FUN_)",
+    re.IGNORECASE,
 )
 
 
@@ -131,6 +137,41 @@ def named_functions(url: str, program: str) -> list[tuple[str, str]]:
     return found
 
 
+def _executable_path(metadata_text: str) -> str:
+    for line in metadata_text.splitlines():
+        if line.startswith("Executable Path:"):
+            return line.removeprefix("Executable Path:").strip()
+    return ""
+
+
+def ensure_active(url: str, program: str) -> bool:
+    """Make `program` the bridge's true active program before any write.
+
+    `rename_function_by_address` ignores its own `program` field and acts on
+    whatever the bridge currently considers active - and `switch_program`'s
+    `"success": true` reply is not trustworthy: confirmed live against this
+    same bridge (see apply-ghidra-names.py's `Bridge.switch_program`), it
+    reports success while leaving the true active program unchanged for any
+    binary that shares a display name with another open program, `BOOT.BIN`
+    among them. Without this check, `--prune` would revert names in whatever
+    program happened to be truly active, not the one `--binary` named -
+    exactly the bug that put 234 stray names into `psp-pulse-usa`.
+
+    So this does not trust `switch_program`'s reply. It re-reads the true
+    active program afterward with no `program` parameter - the same lookup a
+    write implicitly uses - and compares its executable path against what
+    `get_metadata` reports *for the program requested*, which, like every
+    other GET, resolves correctly. Only a path match clears a write to proceed.
+    """
+    params = urllib.parse.urlencode({"program": program})
+    urllib.request.urlopen(f"{url}/switch_program?{params}", timeout=30).read()
+    with urllib.request.urlopen(f"{url}/get_metadata?{params}", timeout=30) as r:
+        wanted = _executable_path(r.read().decode("utf-8", "replace"))
+    with urllib.request.urlopen(f"{url}/get_metadata", timeout=30) as r:
+        actual = _executable_path(r.read().decode("utf-8", "replace"))
+    return bool(wanted) and wanted == actual
+
+
 def revert(url: str, program: str, addr: str) -> bool:
     """Rename a function back to Ghidra's own `FUN_<addr>`.
 
@@ -188,6 +229,15 @@ def audit(url: str, binary: str, prune: bool = False) -> int:
         print("   clean: every live name is sanctioned by names.tsv")
 
     if prune and unsanctioned:
+        if not ensure_active(url, program):
+            print(
+                f"\n   refusing to prune: could not make {program!r} the bridge's true "
+                "active program - a revert here would land in whichever program actually "
+                "is active instead. Open it directly in Ghidra, or the bridge cannot "
+                "currently reach it for writes.",
+                file=sys.stderr,
+            )
+            return 1
         print(f"\n   reverting {len(unsanctioned)} unsanctioned name(s) to FUN_<addr>")
         done = sum(revert(url, program, addr) for _name, addr in unsanctioned)
         print(f"   reverted {done}, failed {len(unsanctioned) - done}")

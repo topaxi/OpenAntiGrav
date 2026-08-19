@@ -42,6 +42,27 @@ want:
 
 > **The tree is ours. The presentation is the disc's.**
 
+**And "presentation" turned out to include the axis.** Wipeout HD's main menu is
+a `<HorizMenu>` - horizontal - where both PSP titles' are a column, so a build
+that drew every title's root page as a stack of rows was drawing one of them a
+way its own disc authors nowhere. `oag_title::MenuStrip` is that axis and
+`crates/game/src/menu/strip.rs` draws it; the tree it arranges is still the one
+below. See [hd-frontend](../formats/hd-frontend.md#the-main-menu-is-horizontal-and-it-is-drawn-that-way-now)
+for the census that licensed the field, for which pages this build applies it to
+and why that rule is ours, and for the two figures inside a strip that are ours
+because the widget states neither.
+
+**And the page is drawn inside the disc's own frame.** What a menu is cleared
+to, the rules above and below it and the mark in the corner are all authored on
+one screen - HD's `FE Screen` - so the title package names *the screen*
+(`oag_title::FrontEnd::menu_frame`) and `crates/game/src/menu/frame.rs` reads the
+widgets off it at boot. Nothing here holds a coordinate or a colour, which is
+what keeps it right when the disc says something unexpected: HD's `HD_*` palette
+turned out to be its **FE style**, black-and-red in one archive and
+white-and-teal in another, and a frame read at runtime resolves to whichever
+archive the boot served rather than to whichever one a person happened to open.
+Both PSP titles' frames are unread, so their menus draw exactly as they did.
+
 ## What still comes off the disc
 
 Not the *structure*, but the *contents*, wherever the contents are a property of

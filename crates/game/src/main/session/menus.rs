@@ -79,6 +79,11 @@ impl Session {
         // the ratio is exactly 1.0 and nothing moves. See `menu::Skin::new`.
         let skin = menu::Skin::new(shell.menu_skin, shell.space, rows_face.line_height);
         model.set_visible_rows(menu::visible_rows(&skin));
+        // And which way a page steps, for the disc that draws one of them as a
+        // strip: left and right along the entries rather than up and down a
+        // column. Set from the same skin the drawing side reads, so what is on
+        // screen and what the buttons do cannot disagree.
+        model.set_strip_layout(skin.strip().is_some());
         // Supplied before seeding, because a value cannot be seeded onto a list
         // that is not there yet.
         let tracks: Vec<menu::Choice> = shell
@@ -264,6 +269,7 @@ impl Session {
             menu: model,
             skin,
             text_atlas,
+            frame: shell.frame.clone(),
             marquee: marquee::Timer::default(),
             // Opening the menus is not a page change: the front end's own
             // hand-off already had its moment, and starting a transition here
