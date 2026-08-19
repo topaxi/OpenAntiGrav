@@ -201,7 +201,7 @@ impl Race {
 
         let camera = Chase::snapped(target_of(&world.ships[0]), &chase);
 
-        Self {
+        let mut race = Self {
             racing_line: line,
             ai_order: order,
             // **Degraded from the measured tuning**, never boosted toward it -
@@ -287,6 +287,12 @@ impl Race {
             flaps: [0.0, 0.0],
             flap_graphics: setup.airbrake_graphics,
             scheme: ControlScheme::default(),
-        }
+        };
+        // Lap 1 is a lap too. See `Race::grant_free_turbo` for the mode,
+        // full-slot and missing-table gates this shares with every later
+        // grant - the same call, just made once more, here, before the first
+        // lap-completion edge exists to make it.
+        race.grant_free_turbo();
+        race
     }
 }

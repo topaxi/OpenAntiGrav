@@ -198,7 +198,9 @@ recovers automatically because the original's does, not because this project
 decided it should.
 
 Both also grant *"a free turbo pickup once per lap"*, and **it is implemented as
-of 2026-08-11** - on the lap edge, into an empty slot only. The manual string is
+of 2026-08-11** - on the lap edge, into an empty slot only, including lap 1's
+own edge at the start of the race (fixed 2026-08-19; the field started every
+race one turbo short until then). The manual string is
 no longer the only record of it: `TimeTrial_HUD.xml` authors a
 `PickupBackground` and exactly one weapon icon, `TurboIcon`, where `Zone_HUD.xml`
 authors none and `Arcade_HUD.xml` authors all thirteen. Two shipped files

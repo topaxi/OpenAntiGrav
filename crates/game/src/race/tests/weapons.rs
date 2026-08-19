@@ -55,10 +55,16 @@ fn crossing_a_weapon_pad_grants_the_pickup_its_class_weights() {
 /// wholly recovered: a weapons-off race in the original does not ignore a
 /// crossing, it empties the trigger list at track load. So the three
 /// single-ship modes must grant nothing while standing on a pad forever.
+///
+/// **About the pad only.** A time trial and a speed lap start holding a free
+/// Turbo of their own - see [`Race::grant_free_turbo`] - which this clears
+/// first so 120 ticks sitting on a pad is a clean test of the pad alone, not
+/// of whether the start-of-race grant happened to leave the slot full.
 #[test]
 fn a_weapons_off_mode_never_grants_anything() {
     for mode in [Mode::TimeTrial, Mode::SpeedLap, Mode::Zone] {
         let mut race = race_with_weapon_pads(mode, enveloping_pad(), 1.0);
+        race.world.ships[0].pickup.weapon = None;
         for _ in 0..120 {
             race.tick(&InputSnapshot::default());
         }
@@ -402,7 +408,10 @@ fn a_fired_rocket_puts_three_projectiles_in_the_air() {
 /// Driven directly rather than by racing a lap: the *edge* it hangs off is
 /// `oag_race::Outcome::lap_completed`, which `oag-race`'s own tests cover,
 /// and what is worth pinning here is which modes it applies to and what it
-/// does to a slot that is already full.
+/// does to a slot that is already full. `race_with_weapon_pads` already ran
+/// `Race::start`'s own call for lap 1, so the explicit call below the first
+/// two modes exercises exactly the "already full, keep it" gate rather than
+/// a first grant - both assert the same `Some(Turbo)` either way.
 #[test]
 fn only_the_two_solo_modes_are_given_a_free_turbo_and_never_two_at_once() {
     use oag_formats::weapons::Weapon;
@@ -440,6 +449,39 @@ fn only_the_two_solo_modes_are_given_a_free_turbo_and_never_two_at_once() {
     let mut race = Race::start(setup);
     race.grant_free_turbo();
     assert_eq!(race.ship_pickup(), None);
+}
+
+/// Lap 1 is a lap too: reported 2026-08-19 as the one the field's own start
+/// grant had been dropping, because it only ever fired on
+/// `oag_race::Outcome::lap_completed`, which lap 1 never crosses on its way
+/// in. `Race::start` now grants it directly, so a fresh time trial or speed
+/// lap begins already holding a Turbo rather than earning its first one on
+/// finishing lap 1 - see [`Race::grant_free_turbo`]'s own doc for the
+/// "still not recovered" half of this.
+#[test]
+fn a_fresh_time_trial_or_speed_lap_already_holds_lap_ones_turbo() {
+    use oag_formats::weapons::Weapon;
+
+    for mode in [Mode::TimeTrial, Mode::SpeedLap] {
+        let race = race_with_weapon_pads(mode, Vec::new(), 1.0);
+        assert_eq!(
+            race.ship_pickup(),
+            Some(Weapon::Turbo),
+            "{mode:?} must not wait for lap 1 to end before granting its turbo"
+        );
+    }
+
+    // Neither excluded mode gets one at the start either - the same gate
+    // `only_the_two_solo_modes_are_given_a_free_turbo_and_never_two_at_once`
+    // pins for the later, `lap_completed`-driven grants.
+    for mode in [Mode::Zone, Mode::SingleRace] {
+        let race = race_with_weapon_pads(mode, Vec::new(), 1.0);
+        assert_eq!(
+            race.ship_pickup(),
+            None,
+            "{mode:?} was given a turbo at the start"
+        );
+    }
 }
 
 /// Absorbing pays the weapon's own `absorb` into the energy pool, and the

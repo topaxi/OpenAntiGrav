@@ -158,11 +158,17 @@ per-file dictionary, so `name` is `b=` in `Arcade_HUD.xml` and `c=` in
 `TimeTrial_HUD.xml`, and grepping the first file's key against the second
 returns nothing with exit code 0. Expand before grepping, or use the parser.
 
-**What is not recovered is where in the lap it arrives.** It is granted on the
-lap edge here, so the first one comes with the start of lap 2 rather than at the
-start line. The original may hand it over at the start of a lap instead, which
-is the same edge one lap earlier; nothing read says which. The choice made is
-the one that cannot give a free boost before the clock starts.
+**Lap 1 gets one too, granted at race start rather than on completing the
+lap.** `Race::grant_free_turbo` is called from `oag_race::Outcome::lap_completed`
+for every later lap and, once more, from `Race::start` directly - the edge
+that grant hangs off does not exist yet for lap 1, so it was silently missing
+its own turbo until this was reported 2026-08-19 and fixed. Both calls share
+every gate (mode, an empty slot, a loaded weapon table), so lap 1 gets
+exactly what lap 2 does, just at its own start instead of its own end - the
+same instant, one lap earlier. **What is still not recovered is the moment
+within a lap for laps 2..N**: "once per lap" constrains the count, not
+whether the original grants it crossing the finish line or at the start line
+a tick later (the same edge, either description) - nothing read pins which.
 
 ## The icon is found by name, not by an id
 

@@ -21,12 +21,18 @@ impl Race {
     /// second record was found by `every_weapon_has_an_icon_widget_named_after_it`
     /// failing against the assumption that these layouts carried none.
     ///
-    /// **What is not recovered is *when* within the lap.** "Once per lap" is
-    /// awarded here on the lap edge, which means the ship gets its first one on
-    /// crossing the line to start lap 2 rather than at the start line - and the
-    /// original may well hand it over at the start of a lap instead, which is
-    /// the same edge one lap earlier. Nothing read says which. The conservative
-    /// choice is the one that cannot give a free boost before the clock starts.
+    /// **Called from two places for one rule.** `oag_race::Outcome::lap_completed`
+    /// fires this on every later lap's edge, and [`Race::start`] calls it once
+    /// more, directly, before that edge exists for lap 1 - "once per lap"
+    /// otherwise held for laps 2..N and silently dropped the first, which is
+    /// the edge a player crosses at the start line before ever seeing a lap
+    /// end. Reported 2026-08-19 as missing on lap 1; both calls share every
+    /// gate below, so lap 1 gets exactly the same grant lap 2 does, just at
+    /// its own start rather than its own end - the same instant, one lap
+    /// earlier. **Still not recovered**: whether the original also grants it
+    /// at the start line rather than crossing into lap 2, or somewhere else
+    /// within the lap - "once per lap" constrains the count, not the moment,
+    /// and nothing read pins the moment for laps 2..N either.
     ///
     /// Zone is excluded: it authors no pickup widgets at all, and its event text
     /// promises nothing.

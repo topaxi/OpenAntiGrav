@@ -1415,15 +1415,15 @@ fn a_weapon_pad_on_the_disc_hands_out_a_pickup_in_a_single_race() {
     );
 
     // And the three weapons-off modes hand out nothing from the same spot, for
-    // any number of ticks. Zone is the one with no free turbo either, so it is
-    // the clean negative; a time trial and a speed lap are checked for the
-    // *pad* specifically by standing still, which never completes a lap.
+    // any number of ticks. A time trial and a speed lap start already holding
+    // lap 1's own free turbo (`Race::start`), cleared here to isolate the pad.
     for mode in [
         oag_race::Mode::TimeTrial,
         oag_race::Mode::SpeedLap,
         oag_race::Mode::Zone,
     ] {
         let mut race = race_at_pad(mode);
+        race.world.ships[0].pickup.weapon = None;
         for _ in 0..120 {
             race.tick(&Default::default());
         }
