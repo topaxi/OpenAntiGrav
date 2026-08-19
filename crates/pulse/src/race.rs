@@ -39,6 +39,32 @@ pub const DEFAULT_TRACK: &str = r"Data\Environments\16_Track\track.vex";
 /// directly comparable without passing `--team`/`--class` every time.
 pub const DEFAULT_TEAM: &str = "Assegai";
 
+/// The shell a fired Shield pickup draws around the craft, when no team's own
+/// is on the source.
+///
+/// `Data\Weapons\shield.vex`, and **it is on both Pulse's disc and Pure's**,
+/// byte-identical in tree and texture to Pulse's per-team
+/// [`ships::SHIELD`]. Pure carries no per-team shell at all - no
+/// `Data\Ships\<Team>\shipshield.vex` and no `shipboost.vex` either - so on that
+/// title this is the only shield model there is, and on Pulse it is a leftover.
+///
+/// Pulse's own loader never assembles this name: `ShipShield_Construct`
+/// (`0x0885db38`) builds `%s\%sshield.vex` from a directory *and* a prefix, so
+/// the bare form cannot come out of it. It is here as the fallback a source
+/// without the per-team model gets, which is what makes the shield visible on
+/// Pure without reading Pure's own executable. See
+/// `docs/ghidra/functions/psp-pulse-usa/shield-pickup.md`.
+pub const SHARED_SHIELD: &str = r"Data\Weapons\shield.vex";
+
+/// The cockpit variant of the shield shell, `Data\Weapons\vr_shield_cockpit.vex`.
+///
+/// A noise-textured sphere the original draws **instead of** the hull-shaped
+/// shell when the camera is inside the craft, at `1.8` times the shell's scale.
+/// Also on both discs. Named here rather than left out because it is recovered
+/// and because naming it is what stops the next reader concluding the shield has
+/// one model; nothing loads it until this engine has an internal camera.
+pub const COCKPIT_SHIELD: &str = r"Data\Weapons\vr_shield_cockpit.vex";
+
 /// The four per-team `.vex` models a race can ask for, and how the path is built.
 pub mod ships {
     /// The hull every mode but Zone draws.
@@ -64,6 +90,22 @@ pub mod ships {
     /// data; loading [`BOOST`] in a Zone race was a real mismatch rather than a
     /// simplification.
     pub const ZONE_BOOST: &str = "Zoneboost";
+
+    /// The shell a fired Shield pickup draws around the craft.
+    ///
+    /// **Not a name this project chose.** `ShipShield_Construct` (`0x0885db38`)
+    /// builds `%s\%sshield.vex` from the team's own directory and a prefix it
+    /// reads from the `FE_TeamModel` config key, whose literal default in the
+    /// binary is `"ship"` - so the assembled name is exactly this. All eight
+    /// playable teams carry one, confirmed by hashing the assembled name against
+    /// `Data.wad`'s directory. See
+    /// `docs/ghidra/functions/psp-pulse-usa/shield-pickup.md`.
+    ///
+    /// **No Zone variant exists**, unlike [`BOOST`]/[`ZONE_BOOST`]: neither
+    /// `Zoneshield` nor `Zoneshipshield` hashes to anything on the disc. So a
+    /// Zone craft draws this same shell, which is what the format string does
+    /// too - the prefix comes from a config key, not from the game mode.
+    pub const SHIELD: &str = "shipshield";
 
     /// The archive entry name of one of a team's models.
     ///

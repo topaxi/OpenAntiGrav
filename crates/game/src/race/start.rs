@@ -247,6 +247,7 @@ impl Race {
             // the track from the origin to its grid slot on the opening ticks.
             exhaust: [Exhaust::new(); MAX_SHIPS],
             exhaust_rng: std::array::from_fn(|slot| Rng::new(exhaust_seed(slot))),
+            shield: [ShipShield::new(); MAX_SHIPS],
             nozzles,
             collision_fx,
             sparks: psys::System::new(),

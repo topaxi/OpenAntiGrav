@@ -79,6 +79,21 @@ pub struct Scene {
     /// rather than `Option<Vec<_>>` so the no-plume source and the iteration read
     /// the same way `ships` does.
     boost: Vec<Option<Drawable>>,
+    /// One shield shell per craft, on the same additive pipeline as
+    /// [`Self::boost`] and for the same reason: both textures carry the artists'
+    /// `_ADD` suffix.
+    ///
+    /// `None` for a slot whose source carries neither the per-team
+    /// `shipshield.vex` nor the shared `Data\Weapons\shield.vex` - see
+    /// `crate::livery::Livery::shield`, which reports which of the two answered.
+    /// Drawn only while that craft's `oag_render::shield::ShipShield` is
+    /// visible, with the craft's own model matrix scaled by the shell's swell.
+    ///
+    /// Eight copies for the reason [`Self::ships`] holds eight, plus one this
+    /// one has on its own: the shell's colour is uploaded into its *vertex*
+    /// buffer every frame (`Drawable::tint`), so two craft with shields up at
+    /// different points of their fade need two buffers.
+    shield: Vec<Option<Drawable>>,
     /// One drawable per projectile slot, for rockets drawn as their own model.
     ///
     /// **Empty** when `Data\Weapons\Rocket.vex` did not load, and the sprite
@@ -482,6 +497,41 @@ impl Scene {
                 )?));
             }
         }
+        // The shield shell, on the plume's own additive pipeline. Both models'
+        // textures carry the artists' `_ADD` suffix - `pulse_shield_test_ADD`
+        // here, `pulse_boost2_ADD` there - which is what says they share a
+        // blend, and the shell's whole look is a bright surface over the hull
+        // rather than a surface that occludes it.
+        //
+        // **Glow-mask written, like the plume and unlike the hull.** A raised
+        // shield is one of the brightest things in the frame and the effect a
+        // player is meant to notice; leaving it out of the mask would keep it
+        // out of the bloom, which is where most of its presence comes from.
+        // Unlike the plume, that is a reading rather than a recovered draw
+        // path - the shell's own GE state has not been read.
+        let mut shield = Vec::new();
+        for slot in 0..GRID_SLOTS as usize {
+            let livery = &liveries[slot.min(liveries.len().saturating_sub(1))];
+            let Some(model) = livery
+                .shield
+                .as_ref()
+                .filter(|model| !model.indices.is_empty())
+            else {
+                shield.push(None);
+                continue;
+            };
+            shield.push(Some(Drawable::new(
+                device,
+                queue,
+                model.clone(),
+                format,
+                anisotropy,
+                sample_count,
+                scene_depth,
+                exhaust::BLEND,
+                mesh_render::GlowMask::Written,
+            )?));
+        }
         // One per projectile slot, cloned the way the hulls and plumes above are.
         // A rocket's hull is opaque - it is a painted dart, not a glow - so this
         // takes the ordinary transparent blend and the protected glow mask the
@@ -538,6 +588,7 @@ impl Scene {
             visibility,
             ships,
             boost,
+            shield,
             rockets,
             boost_uv_transforms,
             collision,

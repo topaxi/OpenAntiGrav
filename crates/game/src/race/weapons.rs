@@ -119,13 +119,21 @@ impl Race {
                         // pickup is kept rather than spent on nothing.
                         return;
                     };
-                    self.world.ships[0].physics.shield_pickup_timer = simple.time;
-                    // No visual. The disc authors a per-team
-                    // `Data\Ships\<Team>\<Team>shield.vex` for the shield hit
-                    // response (`docs/overview/roadmap.md`) and none of it is
-                    // built, so reusing the exhaust plume the way the Turbo does
-                    // would be inventing a look rather than reusing one. The
-                    // HUD icon leaving the slot is the only feedback today.
+                    // **A running shield cannot be refreshed**, and that is
+                    // recovered: `Shield_Fire` (`0x08861568`) does its whole
+                    // body inside `if ((craft->0x1b8 & 0x10) == 0)` and its
+                    // `else` arm only drops the fire request. The pickup is
+                    // still gone either way - the original clears `craft+0x1bc`
+                    // in the grant, not in the handler - so firing a Shield into
+                    // a running one wastes it, which is what happens here.
+                    //
+                    // Deliberately *not* the "keep the pickup" shape the arms
+                    // around it use for a missing table: that shape is for
+                    // nothing having happened, and here something did.
+                    if self.world.ships[0].physics.shield_pickup_timer <= 0.0 {
+                        self.world.ships[0].physics.shield_pickup_timer = simple.time;
+                        self.shield[0].activate();
+                    }
                 }
                 oag_formats::weapons::Weapon::Rocket => {
                     let Some(stats) = weapons.rocket() else {

@@ -72,6 +72,15 @@ pub struct Livery {
     pub nozzle: Option<Vec3>,
     /// The additive plume a speed pad reveals, `shipboost.vex` beside the hull.
     pub boost: Option<Model>,
+    /// The additive shell a fired Shield pickup raises,
+    /// `shipshield.vex` beside the hull - or `Data\Weapons\shield.vex` on a
+    /// source that carries no per-team one, which is every Pure source.
+    ///
+    /// Per team for the reason [`Self::boost`] is, and more so: the shell is
+    /// modelled to the hull it wraps, so one team's around another's would sit
+    /// inside the fuselage in places and outside it in others. See
+    /// [`crate::race::shield_entry_names`].
+    pub shield: Option<Model>,
     /// The `Ship Collision Fx` locators in this hull's own model space, the
     /// spark anchors the original picks the nearest of.
     ///
@@ -147,6 +156,7 @@ pub fn load(
                 collision_fx: source.collision_fx.clone(),
                 boost: source.boost.clone(),
                 boost_uv: source.boost_uv.clone(),
+                shield: source.shield.clone(),
             };
             report.push(format!(
                 "slot {slot}: {team}, the same livery as slot {first} - the source declares \
@@ -173,6 +183,7 @@ pub fn load(
                     collision_fx: player.collision_fx.clone(),
                     boost: player.boost.clone(),
                     boost_uv: player.boost_uv.clone(),
+                    shield: player.shield.clone(),
                 });
             }
         }
@@ -212,6 +223,7 @@ fn one(
                 collision_fx: Vec::new(),
                 boost: None,
                 boost_uv: None,
+                shield: None,
             });
         };
         let (hull, built) = mesh::rcs::build(
@@ -230,6 +242,14 @@ fn one(
             hull,
             boost: None,
             boost_uv: None,
+            // **Not "no shield on PS3", but "not looked for yet".** Neither of
+            // `shield_entry_names`' two names is a PSARC path, and HD's own
+            // shield asset has not been located - see
+            // `docs/formats/hd-frontend.md` for how that title's names are
+            // reached. `None` here draws nothing and the loader report says so,
+            // which is the honest state; a PSP name spelled at a PS3 archive
+            // would report a miss for the wrong reason.
+            shield: None,
         });
     }
     let mut hull = mesh::build_with_textures(&hull_name, &blob, None, lod)?;
@@ -252,6 +272,7 @@ fn one(
     let (nozzle, collision_fx) = locators(archives, &hull_name, &blob, report);
 
     let (boost, boost_uv) = plume(archives, team, mode, lod, report);
+    let shield = shell(archives, team, lod, report);
     Ok(Livery {
         team: team.to_string(),
         hull,
@@ -259,6 +280,7 @@ fn one(
         collision_fx,
         boost,
         boost_uv,
+        shield,
     })
 }
 
@@ -428,6 +450,58 @@ fn collision_fx_locators(ship_blob: &[u8]) -> Vec<Vec3> {
 /// `One`/`One` on linearised texels crushes the halo's mid-tones by ~30% of
 /// encoded brightness - which is why the fix moved to the upload rather than
 /// being dropped.
+/// The shell a fired Shield pickup raises, from the first of
+/// [`crate::race::shield_entry_names`] the source actually carries.
+///
+/// **Absence is reported rather than fatal**, exactly as [`plume`]'s is: a
+/// source without either model is a source without a shield visual, which is a
+/// missing feature and not a broken load. The report names which of the two
+/// names answered, because they mean different things - the per-team one is what
+/// `ShipShield_Construct` (`0x0885db38`) assembles, the shared one is this
+/// project's reading of what a Pure source must mean by the same effect.
+///
+/// **No texture-transform track and no vertex rework**, unlike the plume: the
+/// model is one mesh with one `_ADD` texture, and the animation is entirely in
+/// the transform and the vertex colour that
+/// [`oag_render::shield::ShipShield`] computes. Anything done to the mesh here
+/// would be a second, invisible place for the look to come from.
+fn shell(
+    archives: &mut oag_assets::Archives,
+    team: &str,
+    lod: mesh::Lod,
+    report: &mut Vec<String>,
+) -> Option<Model> {
+    let names = crate::race::shield_entry_names(team);
+    for (index, name) in names.iter().enumerate() {
+        let Ok(blob) = archives.read_name(name) else {
+            continue;
+        };
+        match mesh::build_with_textures(name, &blob, None, lod) {
+            Ok(model) => {
+                let provenance = if index == 0 {
+                    "the team's own"
+                } else {
+                    "shared - this source carries no per-team shell"
+                };
+                report.push(format!(
+                    "{name}: {} triangle(s) - the shield shell, {provenance}",
+                    model.indices.len() / 3
+                ));
+                return Some(model);
+            }
+            Err(error) => report.push(format!(
+                "{name}: {} bytes, does not parse ({error})",
+                blob.len()
+            )),
+        }
+    }
+    report.push(format!(
+        "{}: not in the archive set - no shield shell for this team",
+        names.join(" nor ")
+    ));
+    None
+}
+
 fn plume(
     archives: &mut oag_assets::Archives,
     team: &str,

@@ -268,6 +268,42 @@ impl Drawable {
         }
     }
 
+    /// Multiplies every vertex colour by `rgba`, from the model's own authored
+    /// values.
+    ///
+    /// What the shield shell needs and the only thing it needs: the original
+    /// hands its model a packed colour once a frame (`set_model_colour` in
+    /// `ShipShield_Update`) and this engine's mesh pipeline has no per-draw
+    /// colour uniform to put one in. Rewriting the vertex colours is the same
+    /// trade [`Self::deflect_airbrakes`] makes for the flaps - one
+    /// `write_buffer` of a small mesh against a shader change and a fourth bind
+    /// group - and it is exactly a multiply, so the authored colour still
+    /// decides the look and this only scales it.
+    ///
+    /// **From `self.model.vertices` every time, never from the last frame's**,
+    /// for the reason the flaps give: compounding a per-frame multiply would
+    /// darken the shell toward black over a few seconds and make the picture
+    /// depend on how long the shield had been up.
+    ///
+    /// One write for the whole buffer rather than one per node: the shell is a
+    /// single mesh, and a per-range loop would be machinery for a case that does
+    /// not exist.
+    pub(super) fn tint(&self, queue: &wgpu::Queue, rgba: [f32; 4]) {
+        let tinted: Vec<mesh::GpuVertex> = self
+            .model
+            .vertices
+            .iter()
+            .map(|v| {
+                let mut out = *v;
+                for (channel, scale) in rgba.iter().enumerate() {
+                    out.colour[channel] = v.colour[channel] * scale;
+                }
+                out
+            })
+            .collect();
+        queue.write_buffer(&self.vertices, 0, bytemuck::cast_slice(&tinted));
+    }
+
     /// Recolours each weapon pad's own geometry by whether it currently hands
     /// out a pickup - see [`oag_render::weapon_pad`] for the recovered
     /// mechanism this reproduces. `ready[i]` pairs with this drawable's

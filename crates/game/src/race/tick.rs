@@ -122,6 +122,13 @@ impl Race {
             &self.collision,
             self.dt,
         );
+        // The contact half of the same edge as the blast one below, and the one
+        // a player meets first: scraping a wall behind a shield costs nothing
+        // and bulges the shell. The original's contact loop takes exactly this
+        // branch instead of its hull-damage call.
+        if evaluated.shield.absorbed {
+            self.shield[0].hit();
+        }
 
         // **After the craft moved and before the race rules.** A rocket fired
         // this tick was spawned from the pose the tick *started* at, in
@@ -133,6 +140,12 @@ impl Race {
         // The whole table rather than the Rocket's block: a blast is looked up by
         // the weapon that made it now that more than one weapon can make one.
         let damage_rules = oag_gameplay::damage_rules(self.world.race.mode);
+        // One flag per slot for a craft whose shield swallowed a blast. The
+        // *only* thing that makes a shell visibly react is an absorbed hit -
+        // see `oag_render::shield::ShipShield::hit` - so a blast that a shield
+        // ate has to come back out of the step rather than being invisible on
+        // both sides.
+        let mut absorbed = [false; MAX_SHIPS];
         let impacts = oag_gameplay::projectile::step(
             &mut self.world,
             self.dt,
@@ -140,7 +153,13 @@ impl Race {
             self.weapons.as_ref(),
             super::to_format_class(self.class),
             damage_rules,
+            &mut absorbed,
         );
+        for (slot, hit) in absorbed.iter().enumerate() {
+            if *hit {
+                self.shield[slot].hit();
+            }
+        }
         // After `projectile::step`, so a flare rides where its rocket
         // actually ended the tick rather than a tick behind it.
         self.advance_projectile_flares();
@@ -246,6 +265,9 @@ impl Race {
         // produce the same flare at the same tick count as the window does, and
         // it is the same reason the chase camera is advanced from here.
         self.advance_exhausts();
+        // Same argument, and after `step`/`step_opponents` so a shell that lost
+        // its last tick of protection this frame starts fading this frame.
+        self.advance_shields();
 
         // Open while the boost's own timer runs, close once it has expired, both
         // as an exponential approach so neither edge is a step. Driven from

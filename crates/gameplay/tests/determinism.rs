@@ -120,6 +120,7 @@ fn run(ticks: u32) -> (u64, u64) {
             Some(&stats),
             oag_formats::handling::SpeedClass::Venom,
             DamageRules::default(),
+            &mut [],
         );
         // A draw a tick, so the generator's position is not a function of
         // anything else in the run.
@@ -378,6 +379,7 @@ fn run_volley(ticks: u32) -> (u64, u64) {
             Some(&weapon_stats()),
             oag_formats::handling::SpeedClass::Venom,
             DamageRules::default(),
+            &mut [],
         );
         let _ = world.rng.next_f32();
         world.tick += 1;
@@ -531,6 +533,7 @@ fn the_run_visits_the_paths_it_claims_to_cover() {
             Some(&stats),
             oag_formats::handling::SpeedClass::Venom,
             DamageRules::default(),
+            &mut [],
         );
         impacts += reported.iter().flatten().count();
         if world.projectiles.live() > 0 && world.projectiles.slots[0].position.z > 0.0 {

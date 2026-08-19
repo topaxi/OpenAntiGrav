@@ -112,7 +112,7 @@ use oag_render::pvs::{
     DrawSections, PlacementStats, SectionPadding, SwapConflicts, UNPLACED, VisibleSet,
 };
 use oag_render::sparks;
-use oag_render::{mesh, mesh_render, track as track_render};
+use oag_render::{mesh, mesh_render, shield::ShipShield, track as track_render};
 
 mod access;
 mod assets;
@@ -139,7 +139,7 @@ mod tick;
 mod visibility;
 mod weapons;
 
-pub use assets::{boost_entry_name, ship_entry_name};
+pub use assets::{boost_entry_name, shield_entry_names, ship_entry_name};
 pub use camera::chase_params;
 pub use capture::{CaptureOptions, Presented, capture, describe};
 pub use held_buttons::HeldButtons;
@@ -611,6 +611,14 @@ pub struct Race {
     /// capture taken against a single-craft race, and it couples eight flares
     /// that should be independent. See [`exhaust_seed`].
     exhaust_rng: [Rng; MAX_SHIPS],
+    /// Each craft's shield shell animation, when one is up.
+    ///
+    /// Render-only for the reason [`Self::exhaust`] is: the *simulation* half of
+    /// a fired Shield is `oag_physics::ShipState::shield_pickup_timer`, which is
+    /// hashed, and this is only the swell and flicker riding on it. Per craft
+    /// because the original's shield object hangs off the ship entity. See
+    /// [`oag_render::shield`].
+    shield: [ShipShield; MAX_SHIPS],
     /// The `engine_flare` locator in model space, when the ship model has one.
     ///
     /// One value for the whole field, because every craft wears the player's hull

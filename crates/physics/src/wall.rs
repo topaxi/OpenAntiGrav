@@ -249,6 +249,26 @@ pub const MIN_HULL_EXTENT: f32 = 1e-4;
 /// impulse magnitude rather than using the impulse direction. Whoever wires up a
 /// ship-to-ship contact wants `Ship_ApplyCollisionImpulse` reproduced whole, not
 /// this constant on its own.
+///
+/// # A fired Shield suppresses both halves, and that is the other half of it
+///
+/// `Ship_ApplyCollisionImpulse` wraps the projection *and* the `+= 0.5` in
+/// `if ((craft->0x1b8 & 0x10) == 0)`, and bit `0x10` is the running Shield
+/// pickup - read 2026-08-19, see
+/// `docs/ghidra/functions/psp-pulse-usa/shield-pickup.md`. The posted vector is
+/// zeroed on the way out either way, so a shielded craft does not bank the
+/// knockback and take it late.
+///
+/// **Nothing here is reachable yet**, and that is the point of recording it now:
+/// the day something posts `craft+0x110`, the shield gate has to arrive with it
+/// rather than be discovered afterwards as "the shield does not seem to do
+/// anything to a rival hit". [`ShipState::shield_pickup_timer`] is the flag.
+///
+/// It also fixes the *scope* of the shield, which is easy to over-read: this is
+/// the only impulse it touches. `Body_ResolveContact` applies the track impulse
+/// unconditionally, so a shielded craft bounces off a wall exactly as it
+/// otherwise would - it just pays no energy for it, per
+/// [`crate::damage::apply_contact`].
 pub const STUN_PER_CONTACT: f32 = 0.5;
 
 /// One resolved contact between the hull and a surface.

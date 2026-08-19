@@ -182,6 +182,39 @@ impl Scene {
         if let Some(player) = self.ships.first() {
             player.deflect_airbrakes(queue, left, right);
         }
+        // The shield shell: the craft's own matrix with a uniform swell on top,
+        // and its colour written into the vertex buffer.
+        //
+        // **The scale is applied on the right**, after the craft's rotation and
+        // translation, so it grows the shell about the hull's own origin rather
+        // than sliding it along the world axes. The original composes the same
+        // way - its update builds a scale matrix from the identity basis and
+        // installs it under the craft's node.
+        //
+        // Skipped while invisible rather than written and left undrawn, the same
+        // as the plume: there is nothing for stale buffer contents to affect,
+        // and a shell that is not up is the common case for every craft in every
+        // race.
+        for (slot, shell) in self.shield.iter().enumerate().take(drawn) {
+            // `None` is a slot whose source ships no shell under either name -
+            // a reported absence, not a hidden one. See `livery::shell`.
+            let Some(shell) = shell else {
+                continue;
+            };
+            if !race.ship_active(slot) {
+                continue;
+            }
+            let state = race.shield_of(slot);
+            if !state.visible() {
+                continue;
+            }
+            shell.write(
+                queue,
+                view_projection,
+                race.ship_model_matrix_of(slot) * Mat4::from_scale(Vec3::splat(state.scale())),
+            );
+            shell.tint(queue, state.colour());
+        }
         // One matrix per rocket in the air. `zip` bounds it the way the ships'
         // loop is bounded: nothing in the air writes nothing, and the drawables
         // past the live count keep last frame's uniforms and are not drawn.
@@ -462,6 +495,23 @@ impl Scene {
                 continue;
             }
             stats.add(boost.draw(&mut pass, None, None, None));
+        }
+        // With the plumes, and after the hulls for the same reason: the shell
+        // wraps a craft whose depth has to already be in the buffer, or the far
+        // side of the shell draws over the near side of the ship inside it.
+        //
+        // Gated on exactly what the write above was gated on, for the reason the
+        // plume's loop gives - a shell drawn from a uniform buffer that was not
+        // written this frame would sit at last frame's pose *and* at last
+        // frame's swell.
+        for (slot, shell) in self.shield.iter().enumerate().take(drawn) {
+            let Some(shell) = shell else {
+                continue;
+            };
+            if !race.ship_active(slot) || !race.shield_of(slot).visible() {
+                continue;
+            }
+            stats.add(shell.draw(&mut pass, None, None, None));
         }
         if let Some(collision) = &self.collision {
             stats.add(collision.draw(&mut pass, None, None, None));

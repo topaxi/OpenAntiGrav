@@ -218,6 +218,35 @@ pub fn boost_entry_name(team: &str, mode: Mode) -> String {
     ships::entry_name(team, model)
 }
 
+/// The shield shells a craft can draw, best first.
+///
+/// **Two names rather than one, because the two discs disagree and neither is a
+/// guess.** Pulse authors a per-team `Data\Ships\<Team>\shipshield.vex` and its
+/// `ShipShield_Construct` (`0x0885db38`) assembles exactly that; Pure ships no
+/// per-team shell at all and carries only `Data\Weapons\shield.vex`, which is
+/// byte-identical in tree and texture. Both were checked by hashing the names
+/// against each disc's own `Data.wad` directory. So the first entry is the
+/// recovered Pulse path and the second is what a source without it falls back
+/// to.
+///
+/// **The fallback is a title gap, not a rendering choice**, and the caller says
+/// so in its report: Pure's own loader has not been read, so using the shared
+/// model there is this project's reading of which model Pure must mean, not a
+/// recovered one. Recording it that way is what keeps the pressure on to read
+/// Pure's executable rather than letting a working picture close the question.
+///
+/// **No mode switch**, unlike [`boost_entry_name`]: no `Zoneshield.vex` exists
+/// on either disc, and the original's own format string takes its prefix from a
+/// config key rather than from the game mode. See
+/// `docs/ghidra/functions/psp-pulse-usa/shield-pickup.md`.
+#[must_use]
+pub fn shield_entry_names(team: &str) -> [String; 2] {
+    [
+        ships::entry_name(team, ships::SHIELD),
+        oag_pulse::race::SHARED_SHIELD.to_string(),
+    ]
+}
+
 /// Reads and decodes a model's external PS2 texture set, from the archive
 /// entry directly before it.
 ///

@@ -210,9 +210,9 @@ fn reset_puts_a_wrecked_craft_back_in_the_race() {
     assert_eq!(s.shield, 300.0);
 }
 
-/// The whole of what a fired Shield does: refuse the hit outright, and
-/// refuse it on the edge that also suppresses the two signals - a shielded
-/// craft neither dies nor cries critical.
+/// The whole of what a fired Shield does: refuse the hit outright, refuse it
+/// on the edge that also suppresses the two signals - a shielded craft neither
+/// dies nor cries critical - and report the absorb so the shell can flash.
 #[test]
 fn a_running_shield_refuses_the_hit_and_both_its_signals() {
     let d = dimensions(100.0);
@@ -222,9 +222,29 @@ fn a_running_shield_refuses_the_hit_and_both_its_signals() {
     s.shield_pickup_timer = 0.5;
 
     let report = apply_contact(&mut s, &d, &wall(1000.0), DamageRules::default());
-    assert_eq!(report, Shield::default(), "a shielded craft took a hit");
+    assert_eq!(
+        report,
+        Shield {
+            absorbed: true,
+            ..Shield::default()
+        },
+        "a shielded craft took a hit"
+    );
     assert_eq!(s.shield, 1.0, "the pool moved");
     assert_eq!(s.craft_state, CraftState::Racing, "a shielded craft died");
+}
+
+/// A shield with nothing to swallow does not flash. The original's flash arm
+/// is on the branch a *hit* takes, so a tick with no contact at all must not
+/// reach it - otherwise a raised shield strobes for its whole duration.
+#[test]
+fn a_shield_with_no_contact_reports_no_absorb() {
+    let d = dimensions(100.0);
+    let mut s = state(100.0);
+    s.shield_pickup_timer = 0.5;
+
+    let report = apply_contact(&mut s, &d, &wall(0.0), DamageRules::default());
+    assert_eq!(report, Shield::default(), "an untouched shield flashed");
 }
 
 /// The timer runs one tick longer than the arithmetic, for the reason
@@ -309,7 +329,10 @@ fn a_running_shield_refuses_a_weapon_hit_too() {
     s.shield_pickup_timer = 0.5;
     assert_eq!(
         apply_weapon(&mut s, &d, 100.0, DamageRules::default()),
-        Shield::default()
+        Shield {
+            absorbed: true,
+            ..Shield::default()
+        }
     );
     assert_eq!(s.shield, 100.0);
 

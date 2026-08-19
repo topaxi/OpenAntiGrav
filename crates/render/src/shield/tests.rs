@@ -1,0 +1,176 @@
+use super::*;
+
+/// 60 Hz, the rate everything in this engine runs at and the rate the
+/// original's own substep loop is expressed in.
+const DT: f32 = 1.0 / 60.0;
+
+/// Nothing is drawn until the pickup fires. The regression this guards is a
+/// shell that renders around every craft from the grid.
+#[test]
+fn a_fresh_shield_draws_nothing() {
+    let shield = ShipShield::new();
+    assert!(!shield.visible());
+}
+
+/// `ShipShield_Activate` sets the object's active flag and nothing else has to
+/// happen for the shell to appear - no first frame of ramp, no reveal delay.
+#[test]
+fn activating_shows_the_shell_on_the_same_frame() {
+    let mut shield = ShipShield::new();
+    shield.activate();
+    assert!(shield.visible());
+}
+
+/// `ShipShield_Hit` stores `1.1` into the swell, and the drawn scale is
+/// `swell + 0.012 + flicker * 0.012`. So the frame a hit lands is measurably
+/// larger than the frame before it, whatever the flicker is doing: the flicker's
+/// whole range is `0.012`, and the bulge is `0.1`.
+#[test]
+fn an_absorbed_hit_bulges_the_shell_past_the_flickers_reach() {
+    let mut shield = ShipShield::new();
+    shield.activate();
+    let resting = shield.scale();
+    shield.hit();
+    let bulged = shield.scale();
+    assert!(
+        bulged - resting > SCALE_FLICKER,
+        "a hit moved the scale by {} - inside the flicker's own {SCALE_FLICKER}",
+        bulged - resting
+    );
+    assert!((bulged - resting - (SWELL_ON_HIT - SWELL_REST)).abs() < 1e-6);
+}
+
+/// The swell settles back at `0.2` per substep, which is about a fifth of a
+/// second. Pinned as a duration rather than as a rate so that changing the
+/// substep loop to a closed form has to keep the same feel.
+#[test]
+fn a_bulge_settles_in_about_a_fifth_of_a_second() {
+    let mut shield = ShipShield::new();
+    shield.activate();
+    shield.hit();
+    for _ in 0..12 {
+        shield.advance(DT);
+    }
+    // `0.8^12` of the original tenth is under a hundredth of the shell.
+    let left = shield.scale() - (SWELL_REST + SCALE_BASE + flicker(shield.time) * SCALE_FLICKER);
+    assert!(left.abs() < 0.01, "{left} of the bulge left after 12 ticks");
+}
+
+/// A hit on a shell that is not up does nothing. Both of the original's callers
+/// test the active flag first, so this is its guard rather than a convenience.
+#[test]
+fn a_hit_with_no_shield_up_is_a_no_op() {
+    let mut shield = ShipShield::new();
+    shield.hit();
+    assert!(!shield.visible());
+    assert!(
+        (shield.scale() - (SWELL_REST + SCALE_BASE + flicker(0.0) * SCALE_FLICKER)).abs() < 1e-6
+    );
+}
+
+/// The alpha flicker never dims the shell below three quarters, and never
+/// brightens it past its colour. Both bounds are the recovered `0.25`/`0.75`
+/// split, and they are what say the flicker is a shimmer rather than a blink.
+#[test]
+fn the_alpha_flicker_stays_inside_its_recovered_quarter() {
+    let mut shield = ShipShield::new();
+    shield.activate();
+    for tick in 0..600 {
+        shield.advance(DT);
+        let alpha = shield.colour()[3];
+        assert!(
+            (ALPHA_FLOOR..=1.0).contains(&alpha),
+            "tick {tick}: alpha {alpha} left [{ALPHA_FLOOR}, 1]"
+        );
+    }
+}
+
+/// The flicker is a pure function of the shell's own clock, so a capture at a
+/// given time is reproducible and two shields raised together shimmer together.
+/// The regression this guards is reaching for a generator here.
+#[test]
+fn the_flicker_is_a_pure_function_of_the_clock() {
+    for step in 0..200 {
+        let t = step as f32 * 0.03;
+        assert_eq!(flicker(t), flicker(t));
+        assert!(
+            (0.0..=1.0).contains(&flicker(t)),
+            "flicker({t}) = {} left [0, 1]",
+            flicker(t)
+        );
+    }
+}
+
+/// Two shells activated on the same frame stay in step. Same argument as above,
+/// stated against the type rather than the function.
+#[test]
+fn two_shells_raised_together_flicker_together() {
+    let mut a = ShipShield::new();
+    let mut b = ShipShield::new();
+    a.activate();
+    b.activate();
+    for _ in 0..90 {
+        a.advance(DT);
+        b.advance(DT);
+    }
+    assert_eq!(a.colour(), b.colour());
+    assert_eq!(a.scale(), b.scale());
+}
+
+/// `advance` on a shell that is not up must not move its clock: a shield raised
+/// later would otherwise start mid-waveform, which is the same class of bug the
+/// boost plume's free-running clock was.
+#[test]
+fn an_inactive_shell_does_not_age() {
+    let mut shield = ShipShield::new();
+    for _ in 0..120 {
+        shield.advance(DT);
+    }
+    shield.activate();
+    let mut fresh = ShipShield::new();
+    fresh.activate();
+    assert_eq!(shield.colour(), fresh.colour());
+}
+
+/// A `dt` shorter than the original's own `1/60` substep advances neither lerp.
+/// That is the original's `(int)(dt / 0.016666668)` and it is kept rather than
+/// smoothed, so a caller running faster than 60 Hz gets the original's
+/// behaviour rather than a different settle time.
+#[test]
+fn a_substep_shorter_than_the_originals_moves_no_lerp() {
+    let mut shield = ShipShield::new();
+    shield.activate();
+    shield.hit();
+    let bulged = shield.swell;
+    shield.advance(SUBSTEP * 0.5);
+    assert_eq!(shield.swell, bulged);
+}
+
+/// Deactivating leaves the shell up. It disappears when its alpha crosses
+/// `0.1`, which is what makes an expiring shield dissolve. The colour target it
+/// fades toward is the one part of this the tint would change.
+#[test]
+fn deactivating_fades_rather_than_hiding() {
+    let mut shield = ShipShield::new();
+    shield.activate();
+    shield.deactivate();
+    assert!(
+        shield.visible(),
+        "the shell vanished on the deactivate frame"
+    );
+    for _ in 0..120 {
+        shield.advance(DT);
+    }
+    assert!(!shield.visible(), "the shell never finished fading");
+}
+
+/// Deactivating a shell that is not up does nothing, so a caller that drives
+/// this off a timer crossing zero can call it unconditionally.
+#[test]
+fn deactivating_nothing_is_a_no_op() {
+    let mut shield = ShipShield::new();
+    shield.deactivate();
+    assert!(!shield.visible());
+    shield.advance(DT);
+    assert!(!shield.visible());
+}

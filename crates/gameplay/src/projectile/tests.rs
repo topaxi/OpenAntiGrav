@@ -349,6 +349,7 @@ fn a_blast_reaches_inside_the_radius_and_stops_at_it() {
         30.0,
         100.0,
         oag_physics::DamageRules::default(),
+        &mut [],
     );
     assert_eq!(reached, 2, "the blast reached {reached} craft");
 
@@ -398,6 +399,7 @@ fn a_shielded_craft_keeps_its_energy_and_still_gets_shoved() {
         30.0,
         10.0,
         oag_physics::DamageRules::default(),
+        &mut [],
     );
     assert_eq!(grid[0].physics.shield, 100.0, "the shield let damage in");
     assert!(
@@ -452,6 +454,7 @@ fn a_rocket_fired_at_a_parked_craft_takes_its_energy() {
             Some(&stats),
             oag_formats::handling::SpeedClass::Venom,
             oag_physics::DamageRules::default(),
+            &mut [],
         );
         if impacts.iter().flatten().count() > 0 {
             hit = true;
@@ -492,6 +495,7 @@ fn without_rocket_stats_an_impact_only_frees_its_slot() {
             None,
             oag_formats::handling::SpeedClass::Venom,
             oag_physics::DamageRules::default(),
+            &mut [],
         );
     }
     assert_eq!(world.projectiles.live(), 0);

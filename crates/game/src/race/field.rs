@@ -251,7 +251,7 @@ impl Race {
                 damage_rules,
                 ..Environment::default()
             };
-            oag_physics::step(
+            let evaluated = oag_physics::step(
                 &mut self.world.ships[slot].physics,
                 &controls,
                 &handling,
@@ -259,6 +259,13 @@ impl Race {
                 &self.collision,
                 self.dt,
             );
+            // The same shell bulge slot 0 gets in `tick`. Nothing hands an
+            // opponent a Shield yet - the AI has no fire decision for one - so
+            // this is unreachable today and is here because the alternative is a
+            // rival shield that silently has no visual the day it arrives.
+            if evaluated.shield.absorbed {
+                self.shield[slot].hit();
+            }
 
             // **The same recovery the player gets**, and it is not a nicety.
             // Without it an opponent that leaves the geometry keeps going: the

@@ -106,7 +106,7 @@ void Shield_Update(float dt, World *w, Craft *craft)
     craft->shield_timer -= dt;                      // stored unconditionally
     if (craft->shield_timer <= 0.0) {
         craft->fire_flags &= ~0x10;
-        Shield_Deactivate_q(craft->entity);         // 0x0883e5c0
+        Shield_Deactivate(craft->entity)   ;         // 0x0883e5c0
         if (g_game_mode >= 0xe) net_broadcast(...);
     }
 }
@@ -293,6 +293,22 @@ if (obj->fading && obj->rgba.a <= 0.1) {                // obj + 0x75
 }
 ```
 
+`ShipShield_Deactivate` (`0x0885e1c0`), which `Shield_Deactivate` calls, is the
+other end:
+
+```c
+obj->rgba_target = (0, 0, 0, 0);        // obj + 0x50, all four channels
+obj->swell_target = DAT_08ab0f1c;       // obj + 0x68, an unresolved constant
+obj->fading = 1;                        // obj + 0x75
+hide shell; hide cockpit;               // clear bit 2 of each model's +0x2c
+```
+
+**The two hides are per-frame bookkeeping, not a stop**, and reading them as a
+stop would delete the fade: the update sets the drawn model's flag again on the
+very next frame, every frame, so the shell keeps drawing until the
+`alpha <= 0.1` test at the bottom of the update takes it down. What ends a
+shield is the fade, not the deactivate.
+
 `ShipShield_Hit` (`0x0885eb04`) is five stores: a hit colour into `obj+0x40`
 and **`1.1` into `obj+0x64`**. So an absorbed hit re-flashes the colour and
 pops the swell to `1.1`, which the `0.2`-per-step approach pulls back to `1.0`
@@ -324,15 +340,15 @@ All in `names.tsv` in this change.
 | `0x08861630` | `Shield_Update` | 88 |
 | `0x088614c4` | `Turbo_Fire` | 88 |
 | `0x0883e544` | `Shield_Activate` | 84 |
-| `0x0883e5c0` | `Shield_Deactivate_q` | 68 |
+| `0x0883e5c0` | `Shield_Deactivate` | 80 |
 | `0x0885db38` | `ShipShield_Construct` | 85 |
 | `0x0885de4c` | `ShipShield_Activate` | 84 |
+| `0x0885e1c0` | `ShipShield_Deactivate` | 84 |
 | `0x0885e254` | `ShipShield_Update` | 84 |
 | `0x0885eb04` | `ShipShield_Hit` | 80 |
 | `0x0883f13c` | `Ship_ApplyPendingWeaponDamage` | 82 |
 
-`Shield_Deactivate_q` keeps its `_q`: it is named from its one call site - the
-countdown's expiry arm - and its body is not read. `0x08861534`, the Turbo's
+`0x08861534`, the Turbo's
 countdown, is disassembled and understood but has no function defined in the
 database and no page section of its own, so it gets no row.
 

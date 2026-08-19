@@ -504,23 +504,33 @@ pub struct ShipState {
     /// [`crate::damage::apply_contact`] returns early the same way it does for a
     /// craft that is already blowing up.
     ///
-    /// # This one is ours all the way down, unlike [`Self::turbo_timer`]
+    /// # Recovered as of 2026-08-19, and this comment used to say the opposite
     ///
-    /// The Turbo's *magnitude* is the disc's `<Engine turbo>` and its gate is an
-    /// inference from a flag pair that was actually read. **Nothing comparable
-    /// exists here.** `WeaponStats_ParseShield` (`0x0880ca2c`) reads an `absorb`
-    /// and a `time` into `craft`-relative offsets `+0x8c`/`+0x90`, and
-    /// `docs/formats/weapon-stats.md` records that the `time` **joins to no
-    /// recovered code path** - no reader of those offsets has been found, and
-    /// neither has any branch in `Ship_Damage` (`0x088439ac`) that a shield would
-    /// have to take. So the *duration* is the disc's own number and **what it
-    /// does is this project's reading of what a shield is for**, in the same
-    /// sense that a weapon pad granting anything at all is. See
-    /// `docs/gameplay/pickups.md`, whose recovered-versus-ours table carries it.
+    /// It said "ours all the way down", on the grounds that `<Weapon
+    /// type="Shield"><Stats time>` joined to no recovered code path. It joins to
+    /// three. `Shield_Fire` (`0x08861568`), the handler for fire bit `0x20`,
+    /// loads the weapon-stats block's `+0x8c` - which is exactly where
+    /// `WeaponStats_ParseShield` (`0x0880ca2c`) writes `time` - into
+    /// `craft+0x188` and raises running bit `0x10`; `Shield_Update`
+    /// (`0x08861630`) counts it down and lowers the bit. That bit is then read
+    /// by the weapon-damage drain, by the contact loop's damage reaction and by
+    /// `Ship_ApplyCollisionImpulse`. See
+    /// `docs/ghidra/functions/psp-pulse-usa/shield-pickup.md`.
     ///
-    /// **Damage refused rather than reduced** is part of that reading: the
-    /// original may well scale it, and nothing says so either way. Refusing is
-    /// the choice that is unambiguous to test and that cannot half-work.
+    /// **The reason it read as unfindable is worth keeping**: Ghidra resolves no
+    /// cross-reference to any string or constant in this image, so "no reader
+    /// found" was a property of the search, not of the binary.
+    ///
+    /// **Damage refused rather than reduced turns out to be right**, and for a
+    /// better reason than the one originally given ("unambiguous to test"). Both
+    /// of the original's damage drains *discard* the amount on the shielded
+    /// branch rather than scaling or deferring it, and both then arm the
+    /// shield's own hit flash - which is what
+    /// [`crate::damage::Shield::absorbed`] carries out of the tick.
+    ///
+    /// **What is still ours**: nothing yet decrements `Self::shield` by the
+    /// `absorb` half of `<Stats>`, and the original's own absorb path is a
+    /// separate button rather than part of the shield.
     ///
     /// **A consequence worth stating.** [`crate::damage::Shield::depleted`] is
     /// the edge Zone's unbuilt end condition is waiting for, and it cannot fire

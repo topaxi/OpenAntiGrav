@@ -183,6 +183,19 @@ pub struct Shield {
     /// [`Zone`](../../../docs/ghidra/functions/psp-pulse-usa/zone-mode.md)'s
     /// unimplemented end condition has been waiting for.
     pub depleted: bool,
+    /// Whether a fired Shield pickup swallowed this tick's damage.
+    ///
+    /// **The original's own edge, not a convenience.** Both of its damage drains
+    /// take the shield branch *instead of* subtracting, and both then call
+    /// `ShipShield_Hit` (`0x0885eb04`) - so absorbing a hit is what makes the
+    /// shell flash and bulge. Without this the shield is invisible on the one
+    /// tick a player is looking at it.
+    ///
+    /// Set only when there was something to swallow: a zero-energy graze against
+    /// a shield is not a hit, and firing the flash on it would strobe the shell
+    /// for every tick of a scrape. See
+    /// `docs/ghidra/functions/psp-pulse-usa/shield-pickup.md`.
+    pub absorbed: bool,
 }
 
 /// Advance the destroyed sequence, `0x088404c8`.
@@ -325,15 +338,36 @@ fn subtract(state: &mut ShipState, dimensions: &Dimensions, lost: f32) -> Shield
     // `Ship_Damage` refuses outright outside the racing states - a craft already
     // blowing up takes no further damage. The original's gate lists states 4, 5,
     // 6 and 2; the three this crate models collapse to "not racing".
-    //
-    // A fired Shield pickup refuses on the same edge, and that placement is the
-    // point: refusing *here* means it also suppresses `depleted` and
-    // `crossed_critical`, so a shielded craft cannot be destroyed and cannot
-    // fire the energy-critical cue. Refusing after the subtraction would give a
-    // shield that hides the number while the craft still dies. **The refusal is
-    // ours** - see [`crate::ShipState::shield_pickup_timer`].
-    if state.craft_state != CraftState::Racing || state.shield_pickup_timer > 0.0 {
+    if state.craft_state != CraftState::Racing {
         return Shield::default();
+    }
+
+    // A fired Shield pickup refuses on the same edge, and **that is recovered as
+    // of 2026-08-19** - this comment used to say the refusal was ours.
+    //
+    // The original has two damage drains and the Shield gates both. Weapon
+    // damage is posted to `craft+0x120` and drained by
+    // `Ship_ApplyPendingWeaponDamage` (`0x0883f13c`), which calls `Ship_Damage`
+    // only when `craft+0x1b8 & 0x10` is clear; contact damage is the contact
+    // loop's reaction #2, which the same bit replaces with reaction #3. In both,
+    // the amount is *discarded* rather than deferred, and both then arm
+    // `ShipShield_Hit`. See
+    // `docs/ghidra/functions/psp-pulse-usa/shield-pickup.md`.
+    //
+    // Refusing *here* rather than after the subtraction is what the original
+    // does too, and it is load-bearing: it suppresses `depleted` and
+    // `crossed_critical` with it, so a shielded craft cannot be destroyed and
+    // cannot fire the energy-critical cue.
+    //
+    // What the shield does **not** do is change the wall's own impulse. It
+    // suppresses the *posted* one - see [`crate::wall::STUN_PER_CONTACT`] - and
+    // nothing on the track path posts that. A shielded craft still bounces off a
+    // wall exactly as an unshielded one does; it simply pays nothing for it.
+    if state.shield_pickup_timer > 0.0 {
+        return Shield {
+            absorbed: lost > 0.0,
+            ..Shield::default()
+        };
     }
 
     let max = dimensions.shield;
@@ -356,6 +390,7 @@ fn subtract(state: &mut ShipState, dimensions: &Dimensions, lost: f32) -> Shield
         lost,
         crossed_critical,
         depleted,
+        absorbed: false,
     }
 }
 

@@ -542,6 +542,10 @@ fn nearest_hit<R: Raycaster + ?Sized>(
 /// owns neither. Returns the impacts so a caller can put a spark where each one
 /// landed, which is the only thing left for it to do.
 ///
+/// `absorbed` is [`blast`]'s out-parameter, passed straight through: one flag
+/// per ship slot for a craft whose fired Shield swallowed a blast this call.
+/// See [`blast`] for why it is a parameter and not a second return value.
+///
 /// `weapons` is `None` for a race whose weapon table did not load, in which case
 /// an impact does nothing but free its slot. That is the same "gated on the
 /// table" rule the pickup grant follows, and for the same reason: a blast with
@@ -570,6 +574,7 @@ pub fn step<R: Raycaster + ?Sized>(
     weapons: Option<&oag_formats::weapons::WeaponStats>,
     class: oag_formats::handling::SpeedClass,
     rules: oag_physics::DamageRules,
+    absorbed: &mut [bool],
 ) -> [Option<Impact>; MAX_PROJECTILES] {
     let count = world.ship_count as usize;
     let missile_stats = weapons.and_then(oag_formats::weapons::WeaponStats::missile);
@@ -592,6 +597,7 @@ pub fn step<R: Raycaster + ?Sized>(
             damage,
             force,
             rules,
+            absorbed,
         );
     }
 
@@ -631,6 +637,21 @@ fn blast_stats(
 /// Returns how many craft it reached, which is what a caller asserting "the
 /// blast did something" wants and what a test asserting "and nothing outside the
 /// radius" needs the other half of.
+///
+/// # `absorbed`
+///
+/// One flag per ship slot, **set and never cleared**, marking a craft whose
+/// fired Shield swallowed this blast. The original's weapon-damage drain
+/// (`Ship_ApplyPendingWeaponDamage`, `0x0883f13c`) takes a shield branch that
+/// discards the amount and calls `ShipShield_Hit` instead, so a swallowed hit is
+/// the *only* thing that makes the shell visibly react - see
+/// `docs/ghidra/functions/psp-pulse-usa/shield-pickup.md`.
+///
+/// An out-parameter rather than a second return value, because the caller that
+/// wants it is two layers up and the intermediate ([`step`]) already returns the
+/// thing every other caller asks for. A caller with nothing to draw passes a
+/// scratch array; a short slice is written as far as it goes rather than
+/// panicking, so `&mut []` is a legal "do not tell me".
 pub fn blast(
     ships: &mut [crate::world::Ship],
     point: Vec3,
@@ -638,9 +659,13 @@ pub fn blast(
     damage: f32,
     force: f32,
     rules: oag_physics::DamageRules,
+    absorbed: &mut [bool],
 ) -> usize {
     let mut reached = 0;
-    for ship in ships.iter_mut().filter(|s| s.active) {
+    for (slot, ship) in ships.iter_mut().enumerate() {
+        if !ship.active {
+            continue;
+        }
         let offset = ship.physics.body.position - point;
         if offset.length() > radius {
             continue;
@@ -648,7 +673,13 @@ pub fn blast(
         reached += 1;
 
         let dimensions = ship.handling.dimensions;
-        oag_physics::damage::apply_weapon(&mut ship.physics, &dimensions, damage, rules);
+        let report =
+            oag_physics::damage::apply_weapon(&mut ship.physics, &dimensions, damage, rules);
+        // `|=` rather than `=`: two blasts in one tick against one shielded
+        // craft are two absorbs, and the second must not clear the first.
+        if let Some(flag) = absorbed.get_mut(slot) {
+            *flag |= report.absorbed;
+        }
 
         // A craft exactly on the blast centre has no direction to be pushed in.
         // World up rather than a zero push or a normalised NaN: something has to

@@ -537,9 +537,10 @@
 0x08861630	function	Shield_Update	88	shield-pickup.md
 0x088614c4	function	Turbo_Fire	88	shield-pickup.md
 0x0883e544	function	Shield_Activate	84	shield-pickup.md
-0x0883e5c0	function	Shield_Deactivate	68	shield-pickup.md
+0x0883e5c0	function	Shield_Deactivate	80	shield-pickup.md
 0x0885db38	function	ShipShield_Construct	85	shield-pickup.md
 0x0885de4c	function	ShipShield_Activate	84	shield-pickup.md
 0x0885e254	function	ShipShield_Update	84	shield-pickup.md
 0x0885eb04	function	ShipShield_Hit	80	shield-pickup.md
 0x0883f13c	function	Ship_ApplyPendingWeaponDamage	82	shield-pickup.md
+0x0885e1c0	function	ShipShield_Deactivate	84	shield-pickup.md

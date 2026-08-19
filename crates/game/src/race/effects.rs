@@ -41,6 +41,38 @@ impl Race {
         }
     }
 
+    /// Advances every craft's shield shell, and starts the fade on the tick its
+    /// timer runs out.
+    ///
+    /// **Driven off `shield_pickup_timer` rather than off a second flag**, so
+    /// the picture cannot disagree with the simulation about whether a craft is
+    /// protected. The original has the same single source: `Shield_Update`
+    /// (`0x08861630`) is what both lowers the fire flag and calls the visual's
+    /// deactivate, in that order, on the tick the countdown reaches zero.
+    ///
+    /// The shell is **not** hidden here - `ShipShield::deactivate` starts a fade
+    /// the shell finishes on its own, which is the original's arrangement and
+    /// the reason a shield dissolves rather than blinking out. So a shell
+    /// outlives its craft's protection by a few frames, on purpose.
+    ///
+    /// Runs over every slot rather than the active ones: an inactive craft's
+    /// shell has nothing to draw it, and skipping the advance would freeze a
+    /// mid-fade shell for a craft that comes back.
+    pub(super) fn advance_shields(&mut self) {
+        for slot in 0..MAX_SHIPS {
+            if self.world.ships[slot].physics.shield_pickup_timer <= 0.0 {
+                self.shield[slot].deactivate();
+            }
+            self.shield[slot].advance(self.dt);
+        }
+    }
+
+    /// One craft's shield shell, by slot.
+    #[must_use]
+    pub fn shield_of(&self, slot: usize) -> &ShipShield {
+        &self.shield[slot]
+    }
+
     /// The **player's** exhaust animation state.
     ///
     /// Slot 0, which is what every capture and every pinned exhaust number is
