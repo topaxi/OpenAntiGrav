@@ -881,44 +881,80 @@ first pass:
     unread). None of these three feed `Ship_ApplyCollisionImpulse` or
     anything else this page has read, so they stay measured-and-unported.
 
-**What `T` actually is, corrected from "unexplained" to "actively doubted".**
-The first pass's live-watchpoint correlation established that, for the one
-craft caught mid-hit, `T` and `*(entity+0x4c)` (`Ship_ApplyCollisionImpulse`'s
-own body pointer) landed on the same live address, and read that as evidence
-`T` might simply *be* that body pointer (`craftArray[targetIndex] == entity -
-8`). This full read weakens that reading rather than confirming it: `T+0x50`
-is used here exactly the way a world position is used (subtracted against
-another position, normalized into a direction), but `rigid-body.md`'s own
-offset table puts `body+0x40..0x70` as the **inverse inertia tensor, body
-space** - so if `T` really were the body pointer, `T+0x50` would be the
-tensor's second row, not a position, and the arithmetic above would not do
-what it visibly does. The two readings do not both hold. Since `T+0x110`
-matching `Ship_ApplyCollisionImpulse`'s address is independently confirmed at
-runtime (the watchpoint hit, corroborating fact rather than the disputed one),
-the more consistent picture is that `T` is a **different** struct from the
-body - plausibly the plain entity struct (`S` is read as one, and `S->0x90` is
-a position on it with no extra indirection) - whose own `+0x110` happens to
-alias the body's `+0x110` for a reason this page has not found, rather than
-`T` being the body pointer itself. Left as an open contradiction, not resolved
-either way; a future reader should not treat either hypothesis as settled.
+**What `T` actually is - settled, 2026-08-19, at a live breakpoint.** The
+static read above left this as an open contradiction: `T+0x50` is used exactly
+the way a world position is used, but `rigid-body.md`'s own offset table puts
+`body+0x40..0x70` as the inverse inertia tensor, body space - so if `T` were
+the body pointer, `T+0x50` should be tensor storage, not a position, and the
+two readings could not both hold.
 
-**Why 68, and the `_q`, unchanged despite the fuller read.** The write site,
-its accumulate-not-overwrite semantics and the falloff formula are now traced
-across the whole function body rather than partially, and the source-position
-helper is resolved - genuine gains. What holds it under 70 is not weaker than
-before: the caller is found but unread (`FUN_08867b50`, `0x08867de4` -
-`get_xrefs_to` found nothing, which in this database means nothing on its own;
-see the entry on image-base-relative addressing silencing every xref tool in
-`HANDOVER.md`, and `search_instructions` on the image-relative operand found
-this call in one search once that was known - a rocket, a mine or a missile
-explosion is still the obvious guess given the address sits among
-`Rocket_Ctor`/`Rocket_Update`/`Missile_Update`, now narrowable by reading
-`FUN_08867b50` itself rather than by address proximity alone), the `stats`
-table's identity and its `sourceIndex`/`targetIndex` calling convention are
-read off this function alone with no second site to cross-check, the
-`stats->0x368` branch's three cases are not understood, only observed, and `T`
-itself - the single most load-bearing unknown, per the paragraph above - is now
-actively disputed rather than merely unexplained.
+A live check settles it in favour of `T` being the body pointer. Method: a
+`Ship_ApplyCollisionImpulse` breakpoint enumerated all eight live craft
+entities and each one's body pointer (`*(entity+0x4c)`), same as the original
+two-writers hunt; a second, execution breakpoint at `0x08867aa8` (right after
+`Weapon_PostBlastImpulse_q`'s `lw a2, 0x44(s0)` loads `T`, before the `+0x110`
+`addiu`) caught a real AI-on-AI blast during a driven Single Race. At the hit:
+
+```
+T (a2)  = 0x09ba1a80  -- exactly the body pointer already enumerated for one
+                         of the eight craft (entity 0x09b41790)
+T+0x50  = (-668.16, 7.92, 139.64, 1.0)  -- track-scale, matches the craft
+                                            positions read moments earlier
+                                            (e.g. -132.30, -49.58, -175.27)
+T+0x110 = (0.0, 0.0, 0.0, 1.0)          -- resting, consistent with a tick
+                                            with no pending impulse yet
+```
+
+`T` is the body pointer, confirmed by direct pointer equality against the
+enumerated list, not inference. `T+0x50` holds a value that is unambiguously
+position-shaped and position-scaled for the craft it belongs to. So
+`Weapon_PostBlastImpulse_q` really does read `body+0x50` as this craft's world
+position - which sits in genuine, unresolved tension with `rigid-body.md`'s
+own confidence-**88** reading of `body+0x40..0x70` as a single 4x4 inverse
+inertia tensor, body space. That reading is not weak: it is backed by
+`Body_Integrate` actively *consuming* the block every sub-step
+(`vtfm3.t`/`vscl.t` off `body+0x40`, the result cached to `body+0x80..0xb0`
+and read again by `Body_ApplyImpulseAtPoint`), not merely by
+`Body_SetBoxInertia` zeroing it at construction - so this is not "the
+constructor zeroes it and nothing else touches it," the strongest version of
+the case for `body+0x50` being reused. Both readings rest on real instruction
+traces and neither is a misread of a snippet; they simply have not been
+reconciled. Left as an open contradiction for a future pass to settle -
+candidates worth checking: whether `Body_Integrate`'s `vtfm3.t` genuinely
+addresses all four quad-words as one matrix or only three of them (`+0x40`,
+`+0x60`, `+0x70`, leaving `+0x50` as incidental range that happens to sit
+between real tensor rows), and whether `body+0x50` is written every tick by
+something this page has not yet traced (the integrator's own position update
+is the obvious candidate, given what this function reads there). Not resolved
+either way here.
+
+**Separately, and worth keeping**: the same live check also read
+`body+0x30` (`rigid-body.md`'s own `Body_AddForceAtPoint` comment, `a0 =
+body+0x30 ; position`) for all eight craft, and it does **not** read as a
+world position either - every craft's value clustered near `(0, 0.7-0.75, 0)`,
+unit-scale, y-dominant, which looks far more like a normalized up/orientation
+vector than a track-scale position. That comment predates this session and
+was not re-verified here beyond this one observation; a future reader should
+not assume `body+0x30` is position without checking it directly; the raw
+values are worth a second, dedicated look rather than being resolved as a
+side effect of this page.
+
+**Why 68, and the `_q`, unchanged despite settling `T`.** The write site, its
+accumulate-not-overwrite semantics and the falloff formula are now traced
+across the whole function body, the source-position helper is resolved, and
+`T`'s identity is now measured rather than disputed - genuine gains. What
+still holds it under 70: the caller is found but unread (`FUN_08867b50`,
+`0x08867de4` - `get_xrefs_to` found nothing, which in this database means
+nothing on its own; see the entry on image-base-relative addressing silencing
+every xref tool in `HANDOVER.md`, and `search_instructions` on the
+image-relative operand found this call in one search once that was known - a
+rocket, a mine or a missile explosion is still the obvious guess given the
+address sits among `Rocket_Ctor`/`Rocket_Update`/`Missile_Update`, now
+narrowable by reading `FUN_08867b50` itself rather than by address proximity
+alone), the `stats` table's identity and its `sourceIndex`/`targetIndex`
+calling convention are read off this function alone with no second site to
+cross-check, and the `stats->0x368` branch's three cases are not understood,
+only observed.
 
 #### A second writer at `FUN_08868ea4` (`0x08868ea4`), not renamed
 

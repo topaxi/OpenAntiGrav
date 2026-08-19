@@ -88,10 +88,12 @@ use crate::ship::ShipState;
 /// the real address (an already-documented trap that also silences
 /// `get_xrefs_to`; the fix for both is the same image-relative
 /// `search_instructions`). `Ship_ApplyCollisionImpulse` itself has a Rust
-/// port now, [`apply_pending_impulse`]; the two writers do not. All four
-/// callers - the writers' and the consumer's - are found, none read, which is
-/// the remaining gate before a real producer exists to test the consumer
-/// against something other than a directly-set field. See
+/// port now, [`apply_pending_impulse`], and so does one of the two writers -
+/// `Weapon_PostBlastImpulse_q` is [`post_blast_impulse`]. The second, unnamed
+/// writer does not. All four callers - both writers' and the consumer's - are
+/// found, none read, which is why even the ported writer has nothing calling
+/// it yet: this crate has no weapon trigger, no `radius`/`power` table, and no
+/// settled `source`/`target` selection to wire it to. See
 /// `docs/ghidra/functions/psp-pulse-usa/contact-response.md`.
 ///
 /// It also fixes the *scope* of the shield, which is easy to over-read: this is
@@ -163,6 +165,71 @@ pub fn apply_pending_impulse(state: &mut ShipState) {
     }
 
     state.pending_impulse = Vec3::ZERO;
+}
+
+/// A weapon blast's distance-falloff impulse, posted onto a target's
+/// [`ShipState::pending_impulse`] for [`apply_pending_impulse`] to consume.
+///
+/// `Weapon_PostBlastImpulse_q` (`0x0886794c`), read at instruction level
+/// 2026-08-19; full derivation and the parts left unported are in
+/// `docs/ghidra/functions/psp-pulse-usa/contact-response.md`. The original
+/// reads `target_position` from `target+0x50` on a struct that a live check
+/// at a breakpoint confirmed *is* the target's `RigidBody` - the same one
+/// [`ShipState::body`] ports - by direct pointer equality against craft
+/// enumerated off `Ship_ApplyCollisionImpulse`; `target+0x50` itself held a
+/// live, track-scale, per-craft value at the hit, matching what this crate
+/// calls [`crate::ship::Body::position`]. (That live check also turned up an
+/// unresolved tension with `rigid-body.md`'s own reading of `body+0x40..0x70`
+/// as inertia-tensor storage - see that page's "Open contradiction" note; it
+/// does not affect this substitution, which only needed `target+0x50`'s
+/// identity settled, not `+0x40..0x70`'s.) The arithmetic this function
+/// ports, in the original's order:
+///
+/// 1. `d = |target_position - source_position|`.
+/// 2. `falloff = 1.0 - d / radius` - **not clamped**, faithfully: a target
+///    beyond `radius` gets a negative `falloff`, which flips the impulse to
+///    pull the target *toward* the source rather than push it away. The
+///    original does not guard this and neither does this port; whether the
+///    original's caller always gates by distance first is unread.
+/// 3. `direction = normalize(target_position - source_position)` - the same
+///    difference vector step 1 already computed, zero-guarded
+///    ([`Vec3::normalize_or_zero`]) the way the original substitutes
+///    `MaxFloat` before its reciprocal: a target exactly at the source gets no
+///    push, not a `NaN` one.
+/// 4. `pending_impulse += direction * (falloff * power)` - **accumulated**,
+///    not assigned, so two blasts landing on the same ship in the same tick
+///    stack rather than the later one overwriting the earlier.
+///
+/// # What this function deliberately does not port
+///
+/// The original also: adds `stats->0xe8` to an unrelated accumulator at
+/// `target+0x120`; adds `stats->0xfc` to a second unrelated one at
+/// `target+0x130`; writes a literal `4` to `target+0x138`; records the
+/// source's weapon-stat index onto `target+0x13c`; and conditionally sets a
+/// byte flag at `target+0x124` off a three-state field on the weapon's own
+/// stats block. None of these feed [`apply_pending_impulse`] or anything else
+/// this crate reads yet - each is measured in the original, none is
+/// understood well enough to give a Rust field a meaning, so none is ported.
+/// Porting any of them without a settled reading would be inventing what they
+/// do, which this project does not do - see `CLAUDE.md`, "Never invent what
+/// the assets already author."
+///
+/// # Nothing calls this yet
+///
+/// The original's caller, `FUN_08867b50`, is found but unread - which weapon
+/// types trigger a blast, at what `radius`/`power`, and how `source`/`target`
+/// are chosen are all still open. This crate has no `radius`/`power` table to
+/// read them from either. So this is a correct, tested, pure function with no
+/// wiring into any weapon or explosion yet, the same shape
+/// [`apply_pending_impulse`] was before this: provable on directly-supplied
+/// inputs, independent of whichever caller lands first.
+pub fn post_blast_impulse(target: &mut ShipState, source_position: Vec3, radius: f32, power: f32) {
+    let diff = target.body.position - source_position;
+    let distance = diff.length();
+    let falloff = 1.0 - distance / radius;
+    let direction = diff.normalize_or_zero();
+
+    target.pending_impulse += direction * (falloff * power);
 }
 
 #[cfg(test)]
@@ -275,5 +342,78 @@ mod tests {
         // guarded.
         assert_eq!(state.stun_timer, STUN_PER_CONTACT);
         assert_eq!(state.pending_impulse, Vec3::ZERO);
+    }
+
+    /// Well inside the radius, the impulse points away from the source,
+    /// scaled by both the linear falloff and the weapon's own power.
+    #[test]
+    fn well_inside_the_radius_the_impulse_pushes_away_from_the_source() {
+        let mut target = ship();
+        target.body.position = Vec3::new(4.0, 0.0, 0.0);
+
+        post_blast_impulse(&mut target, Vec3::ZERO, 10.0, 20.0);
+
+        // distance 4, radius 10 -> falloff 0.6; power 20 -> magnitude 12,
+        // directed along +x, away from the source at the origin.
+        assert_eq!(target.pending_impulse, Vec3::new(12.0, 0.0, 0.0));
+    }
+
+    /// At the source's exact position the direction is undefined, and the
+    /// original substitutes `MaxFloat` before its reciprocal rather than
+    /// dividing by zero - `normalize_or_zero` is the same guard. Falloff is
+    /// `1.0` here, but a zero direction still posts a zero impulse.
+    #[test]
+    fn at_the_source_s_own_position_the_impulse_is_zero_not_nan() {
+        let mut target = ship();
+        target.body.position = Vec3::ZERO;
+
+        post_blast_impulse(&mut target, Vec3::ZERO, 10.0, 20.0);
+
+        assert_eq!(target.pending_impulse, Vec3::ZERO);
+    }
+
+    /// Exactly at the radius, `falloff` is zero and the impulse is zero
+    /// regardless of direction or power.
+    #[test]
+    fn at_the_edge_of_the_radius_the_falloff_is_zero() {
+        let mut target = ship();
+        target.body.position = Vec3::new(10.0, 0.0, 0.0);
+
+        post_blast_impulse(&mut target, Vec3::ZERO, 10.0, 20.0);
+
+        assert_eq!(target.pending_impulse, Vec3::ZERO);
+    }
+
+    /// Beyond the radius `falloff` goes negative - not clamped, the same as
+    /// the original - which flips the impulse to pull the target toward the
+    /// source rather than push it away. Faithful, not fixed: see this
+    /// function's own doc for why the original leaves it this way.
+    #[test]
+    fn beyond_the_radius_the_falloff_goes_negative_and_pulls_inward() {
+        let mut target = ship();
+        target.body.position = Vec3::new(20.0, 0.0, 0.0);
+
+        post_blast_impulse(&mut target, Vec3::ZERO, 10.0, 20.0);
+
+        // distance 20, radius 10 -> falloff -1.0; power 20 -> magnitude -20
+        // along +x, i.e. 20 units toward the source at the origin.
+        assert_eq!(target.pending_impulse, Vec3::new(-20.0, 0.0, 0.0));
+    }
+
+    /// Two blasts in the same tick accumulate rather than the second
+    /// overwriting the first - `vadd.q`, not a plain store, in the original.
+    #[test]
+    fn two_blasts_in_the_same_tick_accumulate() {
+        let mut target = ship();
+        target.body.position = Vec3::new(4.0, 0.0, 0.0);
+
+        post_blast_impulse(&mut target, Vec3::ZERO, 10.0, 20.0);
+        post_blast_impulse(&mut target, Vec3::new(4.0, 0.0, 4.0), 10.0, 20.0);
+
+        // The first posts (12, 0, 0) as above. The second: source at
+        // (4, 0, 4), target still at (4, 0, 0) -> diff (0, 0, -4), distance
+        // 4, falloff 0.6, magnitude 12, direction -z -> (0, 0, -12).
+        // Accumulated, not overwritten: (12, 0, -12).
+        assert_eq!(target.pending_impulse, Vec3::new(12.0, 0.0, -12.0));
     }
 }

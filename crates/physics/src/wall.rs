@@ -123,7 +123,7 @@ use crate::params::{Dimensions, Handling};
 use crate::ship::{Body, ShipState};
 
 mod impulse;
-pub use impulse::{STUN_PER_CONTACT, apply_pending_impulse};
+pub use impulse::{STUN_PER_CONTACT, apply_pending_impulse, post_blast_impulse};
 
 /// The ship collider's own friction, for [`combine_friction`].
 ///

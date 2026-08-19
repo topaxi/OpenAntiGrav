@@ -321,13 +321,19 @@ pub struct ShipState {
     /// `docs/ghidra/functions/psp-pulse-usa/contact-response.md` for the full
     /// instruction-level read.
     ///
-    /// **Nothing in this crate writes to this field yet.** Two producers are
-    /// found in the original - `Weapon_PostBlastImpulse_q` (a weapon blast) and
-    /// an unnamed second writer reached from what reads like a rival-contact
-    /// path - and neither is ported. So `apply_pending_impulse` runs every tick
-    /// against a field that is always zero and is a correct no-op until a
-    /// producer exists to write it, the same shape as [`Self::pad_direction`]
-    /// before a probe script crosses a pad.
+    /// **Nothing in this crate calls a producer yet, so this field is still
+    /// always zero in practice.** Two producers are found in the original -
+    /// `Weapon_PostBlastImpulse_q` (a weapon blast) and an unnamed second
+    /// writer reached from what reads like a rival-contact path.
+    /// `Weapon_PostBlastImpulse_q` has a Rust port,
+    /// [`crate::wall::post_blast_impulse`] - correct and tested against
+    /// directly-supplied source position, radius and power - but nothing in
+    /// this crate calls it: the original's own caller is found but unread, and
+    /// this crate has no weapon trigger or stats table to drive it from. The
+    /// second writer has no port at all. So `apply_pending_impulse` still runs
+    /// every tick against a field nothing in this crate ever sets, a correct
+    /// no-op until a producer is wired to something, the same shape as
+    /// [`Self::pad_direction`] before a probe script crosses a pad.
     pub pending_impulse: Vec3,
     /// Seconds left on the timer at `craft+0x2e0`.
     ///
