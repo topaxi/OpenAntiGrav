@@ -112,6 +112,19 @@ class Bridge:
         with urllib.request.urlopen(req, timeout=60) as r:
             return r.read().decode("utf-8", "replace")
 
+    def switch_program(self) -> None:
+        """Make this Bridge's program the bridge's active one.
+
+        `rename_function_by_address` and `create_function` both ignore the
+        `program` field on the request and act on whatever program the bridge
+        currently considers active - unlike `get_function_by_address`, which
+        resolves `program` correctly. Without this, a multi-binary run keeps
+        writing every rename after the first group into whichever program was
+        active when the *previous* group left off, and reports "No function
+        found" for addresses that exist perfectly well in the intended one.
+        """
+        self.get("switch_program", program=self.program)
+
     def has_function(self, address: str) -> bool:
         return "No function found" not in self.get("get_function_by_address", address=address)
 
@@ -265,6 +278,7 @@ def apply_group(paths: list[Path], program: str, args) -> int:
     if not args.dry_run:
         try:
             bridge.get("get_metadata")
+            bridge.switch_program()
         except (urllib.error.URLError, OSError) as e:
             print(f"cannot reach the bridge at {args.url} for {program}: {e}", file=sys.stderr)
             return 1
