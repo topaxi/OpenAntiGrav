@@ -392,6 +392,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         "{stats_name}: team {:?}, {:?} class, mass {}, ride_height {}",
         stats.team, options.class, handling.physical.mass, handling.antigrav.ride_height
     ));
+    report.extend(assets::zone_handling_note(options.mode, &team, title));
     // The eye offsets are reported **after** `craft_scale`, because that is
     // where the eye actually ends up, and the two differ now that the scale is a
     // rig parameter rather than a factor folded into the four offsets. Reporting
@@ -481,6 +482,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         &mut archives,
         &slot_teams,
         options.mode,
+        title.race.zone_craft,
         options.lod,
         &mut report,
     )?;

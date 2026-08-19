@@ -140,6 +140,7 @@ pub fn load(
     archives: &mut oag_assets::Archives,
     teams: &[String],
     mode: Mode,
+    zone: oag_title::ZoneCraft,
     lod: mesh::Lod,
     report: &mut Vec<String>,
 ) -> Result<Vec<Livery>> {
@@ -166,7 +167,7 @@ pub fn load(
             continue;
         }
 
-        match one(archives, team, mode, lod, report) {
+        match one(archives, team, mode, zone, lod, report) {
             Ok(livery) => out.push(livery),
             Err(error) if slot == 0 => return Err(error),
             Err(error) => {
@@ -196,10 +197,11 @@ fn one(
     archives: &mut oag_assets::Archives,
     team: &str,
     mode: Mode,
+    zone: oag_title::ZoneCraft,
     lod: mesh::Lod,
     report: &mut Vec<String>,
 ) -> Result<Livery> {
-    let hull_name = ship_entry_name(team, mode);
+    let hull_name = ship_entry_name(team, mode, zone);
     let blob = archives
         .read_name(&hull_name)
         .with_context(|| format!("reading {hull_name}"))?;
@@ -269,7 +271,7 @@ fn one(
 
     let (nozzle, collision_fx) = locators(archives, &hull_name, &blob, report);
 
-    let (boost, boost_uv) = plume(archives, team, mode, lod, report);
+    let (boost, boost_uv) = plume(archives, team, mode, zone, lod, report);
     let shield = shell(archives, team, lod, report);
     Ok(Livery {
         team: team.to_string(),
@@ -592,10 +594,11 @@ fn plume(
     archives: &mut oag_assets::Archives,
     team: &str,
     mode: Mode,
+    zone: oag_title::ZoneCraft,
     lod: mesh::Lod,
     report: &mut Vec<String>,
 ) -> (Option<Model>, Option<vex::TexTransform>) {
-    let boost_name = boost_entry_name(team, mode);
+    let boost_name = boost_entry_name(team, mode, zone);
     let Ok(blob) = archives.read_name(&boost_name) else {
         report.push(format!(
             "{boost_name}: not in the archive set - no boost plume for this team"

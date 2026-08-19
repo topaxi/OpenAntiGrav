@@ -505,3 +505,127 @@ fn hd_keeps_four_zone_environments_of_its_own() {
         );
     }
 }
+
+/// **The craft axis, on all three titles at once.**
+///
+/// The companion of the circuit sweeps above, and it splits the corpus the same
+/// way: Pulse keeps the Zone hull inside the player's own team, Pure and HD give
+/// Zone a ship directory of its own. Two shapes, three titles, no hole - which
+/// is what licenses [`oag_title::ZoneCraft`] to be a type rather than a
+/// constant, on the same terms as [`ZoneCircuit`].
+///
+/// Each title is asserted on both halves of its own shape, because either alone
+/// would pass on a build that had quietly fallen back to the other:
+///
+/// - the name a Zone race resolves is **not** the one a race would have resolved;
+/// - that name is on the disc and decodes to geometry.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn every_titles_zone_craft_resolves_and_is_not_the_race_hull() {
+    let cases: [(&str, &str, oag_title::ZoneCraft); 3] = [
+        (
+            "data/images/pulse-psp-usa.chd",
+            oag_pulse::race::DEFAULT_TEAM,
+            oag_pulse::race::DEFAULTS.zone_craft,
+        ),
+        (
+            "data/images/pure-psp-eu.chd",
+            oag_pure::race::DEFAULT_TEAM,
+            oag_pure::race::DEFAULTS.zone_craft,
+        ),
+        (
+            "data/images/hdfury-ps3-eu-dec.iso",
+            oag_hd::race::DEFAULT_TEAM,
+            oag_hd::race::DEFAULTS.zone_craft,
+        ),
+    ];
+
+    for (name, team, craft) in cases {
+        let Some(path) = image(name) else { continue };
+        let source = path.display().to_string();
+        let archives =
+            oag_game::title::open_source(&source, Vec::new()).expect("opening the source");
+
+        let racing = race::ship_entry_name(team, oag_race::Mode::TimeTrial, craft);
+        let zoning = race::ship_entry_name(team, oag_race::Mode::Zone, craft);
+        assert_ne!(
+            racing, zoning,
+            "{name}: a zone race should not fly the same hull a race does"
+        );
+        assert!(
+            archives.archives.locate(&zoning).is_some(),
+            "{name}: {zoning} should be on the disc"
+        );
+
+        // Which half of the enum this title is, asserted against the *name* so a
+        // title silently changing shape fails here rather than somewhere subtle.
+        match craft {
+            oag_title::ZoneCraft::ModelsInTeam { .. } => assert!(
+                zoning.contains(team),
+                "{name}: this title keeps the zone hull in the player's own team, \
+                 so {zoning} should still name {team}"
+            ),
+            oag_title::ZoneCraft::OwnShip(ship) => {
+                assert!(
+                    !zoning.contains(team),
+                    "{name}: this title has a zone ship of its own, so the player's \
+                     team {team} should not appear in {zoning}"
+                );
+                assert!(zoning.contains(ship), "{name}: {zoning} should name {ship}");
+            }
+        }
+        println!("{name}: race {racing} / zone {zoning}");
+    }
+}
+
+/// **The shipped Zone handling block, and the fact that nothing reads it.**
+///
+/// The finding the craft enum deliberately does *not* model: all three titles
+/// carry a Zone-mode craft directory whose `handlingstats.xml` opens
+/// `<Stats team="ZoneMode">` and authors **no `<Class>` block**, where a team
+/// file authors four or five. So the shipped answer to "what handling does a
+/// Zone craft have" is one block shared by every team - which is what a player
+/// would expect of a mode that replaces the throttle - and this engine flies the
+/// player's own team instead, because the per-class conversion needs a class.
+///
+/// Asserted rather than left as a comment so that the day someone teaches the
+/// handling layer to read it, this test is what tells them the file's shape.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn every_titles_zone_handling_is_one_classless_block() {
+    // Pulse's zone *craft* is per-team, so its ZoneMode directory is not the one
+    // `ZoneCraft::directory` returns - it is named here directly, which is the
+    // point: the block exists on all three titles whatever shape the hull takes.
+    let cases = [
+        ("data/images/pulse-psp-usa.chd", "Zone_01"),
+        ("data/images/pure-psp-eu.chd", "Zone_01"),
+        ("data/images/hdfury-ps3-eu-dec.iso", "zone"),
+    ];
+
+    for (name, directory) in cases {
+        let Some(path) = image(name) else { continue };
+        let source = path.display().to_string();
+        let mut opened =
+            oag_game::title::open_source(&source, Vec::new()).expect("opening the source");
+        let entry = oag_formats::handling::entry_name(directory);
+        let blob = opened
+            .archives
+            .read_name(&entry)
+            .unwrap_or_else(|e| panic!("{name}: reading {entry}: {e}"));
+        let stats = oag_formats::handling::from_blob(&blob)
+            .unwrap_or_else(|e| panic!("{name}: parsing {entry}: {e}"));
+
+        assert_eq!(
+            stats.team, "ZoneMode",
+            "{name}: {entry} should name the mode it is for in the disc's own words"
+        );
+        assert!(
+            stats.classes.is_empty(),
+            "{name}: {entry} authors {} <Class> block(s). If this ever stops being \
+             zero the file can drive oag_gameplay::handling_for directly, and the \
+             divergence oag_title::ZoneCraft documents can be closed",
+            stats.classes.len()
+        );
+        println!("{name}: {entry} is team=ZoneMode with no <Class>");
+    }
+}

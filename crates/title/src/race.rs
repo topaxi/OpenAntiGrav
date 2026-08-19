@@ -10,8 +10,9 @@
 //! | default circuit | `Data\Environments\16_Track\track.vex` | `Data\Environments\01_Vineta_K\track.vex` |
 //! | default team | `Assegai` | `Assegai` |
 //! | Zone's circuit | the race one's directory, `zone_`-prefixed | `Data\Zone\01_Zone\track.vex`, a circuit of its own |
+//! | Zone's hull | the player's team, `Zone.vex` | `Data\Ships\Zone_01`, a ship of its own |
 //!
-//! **Two fields of the three actually diverge**, and the first of them is the
+//! **Three fields of the four actually diverge**, and the first of them is the
 //! reason this type exists at all: `16_Track` resolves on no Pure pressing, so
 //! `oag-game`'s `--track` carrying it as a compile-time default made `--race` on
 //! a Pure disc fail inside the archive with a message about a name that hashes
@@ -19,10 +20,13 @@
 //! circuit before opening anything must name a team too, not because the two
 //! discs disagree - they do not.
 //!
-//! [`ZoneCircuit`] is the third, and it is the one measured across all three
-//! titles rather than two; its own docs carry the probe.
+//! [`ZoneCircuit`] and [`ZoneCraft`] are the other two, and they are the ones
+//! measured across all three titles rather than two; their own docs carry the
+//! probes. They split the corpus identically, which is the interesting part:
+//! Pulse hangs Zone off the entities a race already has, Pure and HD give Zone
+//! entities of its own.
 //!
-//! # Deliberately three fields
+//! # Deliberately four fields
 //!
 //! Not a home for everything a race loads. Three kinds of thing are kept out,
 //! for three different reasons:
@@ -33,11 +37,14 @@
 //! - **Unrecovered, not different.** The boost plume is on Pure somewhere; what
 //!   that disc calls it is unread. A field would be a `None` designed from one
 //!   example, which is the failure [ADR-0009] named and [ADR-0022] does not
-//!   license. **The Zone *hull* used to be on this list and is not any more** -
-//!   see `oag_pure::race::ZONE_TEAM` - but it is still not a field here, for the
-//!   same reason: HD's is unread, so the axis has two measurements and a hole,
-//!   which is exactly the shape being refused. The circuit axis below has three
-//!   measurements and no hole, which is what makes it a type instead.
+//!   license. **The Zone hull was on this list until 2026-08-19 and has come
+//!   off it**, which is worth reading as a worked example rather than a
+//!   correction: it was excluded while Pulse and Pure were measured and HD was
+//!   not, because two measurements and a hole is the shape being refused. HD's
+//!   was then measured - `/data/ships/zone/ship.vex`, off the manifest the
+//!   `oag_hd::names::MODE_SHIPS` roster already listed - and with three titles
+//!   and no hole it became [`ZoneCraft`]. The bar moved because the evidence
+//!   did, not because the design changed its mind.
 //! - **Absent by construction.** Pure ships no loading-screen wave and no `.mip`
 //!   HUD atlas at all. An axis that is `Some` for one title and `None` for the
 //!   other is the same one-example design in a different disguise.
@@ -69,6 +76,120 @@ pub struct RaceDefaults {
     /// How this title names the circuit a Zone race runs on. See
     /// [`ZoneCircuit`].
     pub zone: ZoneCircuit,
+    /// Where this title keeps the craft a Zone race flies. See [`ZoneCraft`].
+    pub zone_craft: ZoneCraft,
+}
+
+/// Where a title keeps the hull a Zone race flies.
+///
+/// The companion of [`ZoneCircuit`], and it splits the corpus the same way -
+/// which is the thing worth noticing about it. Pulse hangs Zone off the entities
+/// a race already has: the player's own team directory gains a second model, the
+/// race circuit's directory gains a second `.vex`. Pure and HD give Zone
+/// entities of its own: its own ship directory, its own circuits. One decision
+/// per title, showing up twice.
+///
+/// | Title | Zone's hull | Measured on |
+/// | --- | --- | --- |
+/// | Pulse | `Data\Ships\<Team>\Zone.vex` - the player's team, a different file | `pulse-psp-usa.chd` |
+/// | Pure | `Data\Ships\Zone_01\Ship.vex` - a ship directory of its own | `pure-psp-eu.chd` |
+/// | HD / Fury | `/data/ships/zone/ship.vex` - a ship directory of its own | `hdfury-ps3-eu-dec.iso` |
+///
+/// Pulse's is the one with a recovered *selector* behind it rather than a name
+/// probe: `Ship_LoadModel` (`0x08843258`) `case 6` builds `%s\Zone.vex` under
+/// the established Zone expression, confidence 84 - see
+/// `docs/ghidra/functions/psp-pulse-usa/zone-mode.md`. The other two are name
+/// resolution against shipped archives at 94, and neither title's executable has
+/// been read.
+///
+/// # Every title ships a `ZoneMode` handling file, and nothing reads it
+///
+/// The finding that does **not** fit this enum, recorded here because this is
+/// where the next reader will look for it. All three titles carry a dedicated
+/// Zone-mode craft *directory* - `Data\Ships\Zone_01` on both PSP titles,
+/// `/data/ships/zone` on HD - whose `handlingstats.xml` opens
+/// `<Stats team="ZoneMode">` and authors **no `<Class>` block at all**, where
+/// every team file authors four or five.
+///
+/// So the shipped answer to "what handling does a Zone craft have" is *one
+/// block, shared by every team* rather than the player's own - which is
+/// consistent with the mode overriding exactly the parts a `<Class>` would
+/// carry: [`zone-mode.md`] has the engine replaced by the auto-speed law, the
+/// brakes disabled and a four-corner hover variant, all three selected by the
+/// Zone expression rather than read from a team.
+///
+/// **This engine does not read it.** `oag_gameplay::handling_for` needs a
+/// `<Class>` and panics without one, so a Zone race still takes its per-class
+/// handling from the player's own team, and `oag_game::race::load` says so in
+/// the report. Closing that is a physics question - which of those blocks the
+/// mode is actually meant to supply - not a naming one, and no title's Zone
+/// handling path has been read in any executable.
+///
+/// Note the near-miss beside it on Pulse: `Data\Ships\Zone` is `<Stats
+/// team="Zone">` **with** class blocks, and is the unlockable Zone *livery*, a
+/// raceable team. `Zone_01` is the mode. The two differ by a suffix and are not
+/// the same thing.
+///
+/// [`zone-mode.md`]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/ghidra/functions/psp-pulse-usa/zone-mode.md
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ZoneCraft {
+    /// The player keeps their team and the *model files* change, to these
+    /// stems. Pulse.
+    ///
+    /// The hull is shared geometry with a per-team paint: all eight teams'
+    /// `Zone.vex` decode to the same 1213 vertices / 1149 triangles, so the team
+    /// still chooses the livery and no longer chooses the shape.
+    ModelsInTeam {
+        /// Model stem for the hull, in place of the usual one.
+        hull: &'static str,
+        /// Model stem for the boost plume, in place of the usual one.
+        boost: &'static str,
+    },
+    /// Zone has a ship directory of its own and the player's team choice does
+    /// not reach the hull at all. Pure and HD.
+    ///
+    /// The model stems inside it are the ordinary ones, so only the directory
+    /// changes - which is why this carries one string where
+    /// [`Self::ModelsInTeam`] carries two.
+    OwnShip(&'static str),
+}
+
+impl ZoneCraft {
+    /// Which ship directory a Zone race's models come out of.
+    ///
+    /// `player` is the team the caller would otherwise have used, and is the
+    /// answer for [`Self::ModelsInTeam`]: on Pulse the Zone hull lives inside
+    /// whichever team the player picked, which is what keeps the livery theirs.
+    #[must_use]
+    pub fn directory(self, player: &str) -> &str {
+        match self {
+            Self::ModelsInTeam { .. } => player,
+            Self::OwnShip(ship) => ship,
+        }
+    }
+
+    /// The hull's model stem, or `None` for "whatever a race would have used".
+    ///
+    /// `None` on [`Self::OwnShip`] rather than a spelling of `Ship`, so that the
+    /// one place that knows how a hull is named stays the title package that
+    /// knows it - this crate deliberately holds no game constant. See the module
+    /// docs.
+    #[must_use]
+    pub fn hull(self) -> Option<&'static str> {
+        match self {
+            Self::ModelsInTeam { hull, .. } => Some(hull),
+            Self::OwnShip(_) => None,
+        }
+    }
+
+    /// The boost plume's model stem, on the same terms as [`Self::hull`].
+    #[must_use]
+    pub fn boost(self) -> Option<&'static str> {
+        match self {
+            Self::ModelsInTeam { boost, .. } => Some(boost),
+            Self::OwnShip(_) => None,
+        }
+    }
 }
 
 /// Where a title keeps the environment a Zone race flies through.

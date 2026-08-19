@@ -17,6 +17,12 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     track: DEFAULT_TRACK,
     team: DEFAULT_TEAM,
     zone: oag_title::ZoneCircuit::Prefixed(ZONE_TRACK_PREFIX),
+    // The one variant with a recovered selector behind it rather than a name
+    // probe: `Ship_LoadModel`'s `case 6`. See `ships::ZONE_HULL`.
+    zone_craft: oag_title::ZoneCraft::ModelsInTeam {
+        hull: ships::ZONE_HULL,
+        boost: ships::ZONE_BOOST,
+    },
 };
 
 /// What Pulse puts on the front of a circuit's file name to reach the Zone

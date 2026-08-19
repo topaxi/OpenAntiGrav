@@ -177,21 +177,26 @@ pub(super) fn untextured_note(model: &Model) -> Option<String> {
 /// Assembled the way the loader assembles it, with backslashes, which is what the
 /// name hash needs.
 ///
-/// A [`Mode::Zone`] run loads `Zone.vex` instead of `Ship.vex`. That is not a
-/// livery swap of convenience: `Ship_LoadModel` (`0x08843258`) switches on the
-/// same `DAT_08ab07e3 == 0 && DAT_08b31048 == 6` expression already established
-/// as the Zone selector (see `docs/ghidra/functions/psp-pulse-usa/zone-mode.md`),
+/// **A [`Mode::Zone`] run flies a different hull, and where that hull lives is a
+/// title fact** - [`oag_title::ZoneCraft`], measured on all three titles. Pulse
+/// keeps it inside the player's own team directory as `Zone.vex`; Pure and HD
+/// give Zone a ship directory of its own, so the player's team stops reaching
+/// the hull at all.
+///
+/// Pulse's is the branch with a recovered selector rather than a name probe:
+/// `Ship_LoadModel` (`0x08843258`) switches on the same
+/// `DAT_08ab07e3 == 0 && DAT_08b31048 == 6` expression already established as
+/// the Zone selector (see `docs/ghidra/functions/psp-pulse-usa/zone-mode.md`),
 /// and only that case builds the `%s\Zone.vex` path. Every team's `Zone.vex`
 /// decodes to the same 1213 vertices / 1149 triangles / 8 meshes, so the hull
-/// itself is shared - only the livery painted on it still varies by team.
+/// itself is shared there - only the livery painted on it still varies by team.
+/// On the other two there is no per-team Zone hull to share.
 #[must_use]
-pub fn ship_entry_name(team: &str, mode: Mode) -> String {
-    let model = if mode == Mode::Zone {
-        ships::ZONE_HULL
-    } else {
-        ships::HULL
-    };
-    ships::entry_name(team, model)
+pub fn ship_entry_name(team: &str, mode: Mode, zone: oag_title::ZoneCraft) -> String {
+    if mode != Mode::Zone {
+        return ships::entry_name(team, ships::HULL);
+    }
+    ships::entry_name(zone.directory(team), zone.hull().unwrap_or(ships::HULL))
 }
 
 /// The boost plume that goes with [`ship_entry_name`]'s hull.
@@ -209,13 +214,11 @@ pub fn ship_entry_name(team: &str, mode: Mode) -> String {
 /// the caller's missing-entry path already handles a set that does not carry
 /// one.
 #[must_use]
-pub fn boost_entry_name(team: &str, mode: Mode) -> String {
-    let model = if mode == Mode::Zone {
-        ships::ZONE_BOOST
-    } else {
-        ships::BOOST
-    };
-    ships::entry_name(team, model)
+pub fn boost_entry_name(team: &str, mode: Mode, zone: oag_title::ZoneCraft) -> String {
+    if mode != Mode::Zone {
+        return ships::entry_name(team, ships::BOOST);
+    }
+    ships::entry_name(zone.directory(team), zone.boost().unwrap_or(ships::BOOST))
 }
 
 /// The shield shells a craft can draw, best first.
@@ -309,4 +312,36 @@ pub(super) fn zone_circuit_miss(
             title.name
         ),
     }
+}
+
+/// The report line a Zone race owes about its handling, or `None` for any other
+/// mode.
+///
+/// **Every title ships a Zone-mode handling file and this engine does not read
+/// it**, so a Zone race flies on the player's own team's numbers. That is a
+/// divergence from the original rather than a simplification, and one that is
+/// invisible from a screenshot, so it is stated on every Zone load.
+///
+/// The file is `<zone craft>\handlingstats.xml`: `Data\Ships\Zone_01` on both
+/// PSP titles and `/data/ships/zone` on HD, all three opening
+/// `<Stats team="ZoneMode">` and authoring **no `<Class>` block at all** where a
+/// team file authors four or five. `oag_gameplay::handling_for` needs a class
+/// and panics without one, which is the whole reason it is unread - see
+/// [`oag_title::ZoneCraft`] for what the shipped file does carry and why the
+/// mode plausibly wants it.
+pub(super) fn zone_handling_note(
+    mode: Mode,
+    team: &str,
+    title: &oag_title::Title,
+) -> Option<String> {
+    if mode != Mode::Zone {
+        return None;
+    }
+    let craft = title.race.zone_craft.directory(team);
+    Some(format!(
+        "zone: flying {team}'s handling. {} ships a ZoneMode handling block of \
+         its own and nothing reads it - it authors no <Class>, which is what \
+         this engine's per-class conversion needs. See oag_title::ZoneCraft",
+        oag_formats::handling::entry_name(craft)
+    ))
 }

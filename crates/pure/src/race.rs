@@ -61,6 +61,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     track: DEFAULT_TRACK,
     team: DEFAULT_TEAM,
     zone: oag_title::ZoneCircuit::Separate(DEFAULT_ZONE_TRACK),
+    zone_craft: oag_title::ZoneCraft::OwnShip(ZONE_TEAM),
 };
 
 /// The circuit a Zone race loads when the caller names none.
@@ -117,13 +118,13 @@ pub const DEFAULT_ZONE_TRACK: &str = r"Data\Zone\01_Zone\track.vex";
 /// inferring it. Confidence **94** for the identification; the two together are
 /// about as direct as a name probe gets.
 ///
-/// **Nothing reads this yet**, deliberately, and the reason is the one
-/// `oag_title::race`'s module docs give: the craft axis has Pulse measured and
-/// Pure measured and HD unread, which is the two-of-three shape an
-/// [ADR-0022] type is not licensed for. It is recorded here, where its evidence
-/// is, exactly as [`oag_title::RaceDefaults::team`] sat with no reader before it
-/// had one. Wiring it needs `oag_game::race` to ask a title how it names the
-/// Zone craft, and that question is worth asking once HD's answer is known.
+/// **Read by [`DEFAULTS`] since 2026-08-19**, through
+/// [`oag_title::ZoneCraft::OwnShip`]. It sat here with no reader for exactly as
+/// long as HD's answer was unknown - the craft axis then had Pulse and Pure
+/// measured and a hole, which is the two-of-three shape [ADR-0022] does not
+/// license. HD's turned out to be `/data/ships/zone`, the same shape as this
+/// one, so the axis reached three measurements and became a type. The constant
+/// did not change; what changed is that there was something to fill in.
 ///
 /// Not to be confused with the `PI_Team name="Zone"` beside it, which is
 /// `type="Race"` and is the unlockable *livery* a player earns by taking gold on

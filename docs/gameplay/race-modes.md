@@ -121,6 +121,45 @@ Confidence 84. `oag_game::race::ship_entry_name` picks the model this way, and
 the menu greys the TEAM row while MODE is Zone so a player is not offered a
 choice that no longer changes the shape drawn - only the colour it is drawn in.
 
+**That is Pulse's arrangement, and the other two titles do not share it.**
+`oag_title::ZoneCraft` is the axis, and it splits the corpus exactly the way
+`ZoneCircuit` does - which is the interesting part, because it means each title
+made *one* decision that shows up twice:
+
+| | Zone's circuit | Zone's hull |
+| --- | --- | --- |
+| Pulse | the race circuit's directory, `zone_`-prefixed | the player's team, `Zone.vex` |
+| Pure | `Data\Zone\NN_Zone\track.vex` | `Data\Ships\Zone_01\Ship.vex` |
+| HD / Fury | `/data/environments/zone_N/track.vex` | `/data/ships/zone/ship.vex` |
+
+Pulse hangs Zone off the entities a race already has; Pure and HD give Zone
+entities of its own, and there the player's team stops reaching the hull at all.
+Pulse's is the only one with a recovered *selector* behind it (`case 6`,
+confidence 84); the other two are name resolution at 94, and neither title's
+executable has been read. HD's was already half-recovered before anything wanted
+it - `zone` is one of the four `oag_hd::names::MODE_SHIPS` read off the manifest.
+
+### Every title ships one Zone handling block, and this engine does not read it
+
+**The shipped answer to "what handling does a Zone craft have" is one block
+shared by every team**, not the player's own. All three titles carry a Zone-mode
+craft directory - `Data\Ships\Zone_01` on both PSP titles, `/data/ships/zone` on
+HD - whose `handlingstats.xml` opens `<Stats team="ZoneMode">` and authors **no
+`<Class>` block at all**, where a team file authors four or five.
+
+That fits the mode: a `<Class>` carries engine, brakes and turning, and Zone
+replaces the engine with the auto-speed law, disables the brakes and flies a
+four-corner hover variant - all three selected by the Zone expression rather
+than read from a team.
+
+**It is unread here**, so a Zone race flies the player's own team's numbers and
+`race::load` says so on every Zone load. Closing it is a physics question -
+which blocks the mode is actually meant to supply, and where turning comes from
+when no class authors one - rather than a naming one, and no title's Zone
+handling path has been read in any executable. Watch the near-miss on Pulse:
+`Data\Ships\Zone` is `<Stats team="Zone">` **with** classes and is the
+unlockable Zone *livery*, a raceable team; `Zone_01` is the mode.
+
 ### Zone flies its own environment, and the disc authors every bit of it
 
 **The look is loaded, not computed.** A Zone circuit is a whole separate `.vex`

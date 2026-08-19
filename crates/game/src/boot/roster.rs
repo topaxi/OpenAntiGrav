@@ -153,7 +153,15 @@ pub(super) fn load_teams(
 /// Whether both files a race reads for a team are on this source.
 fn raceable(archives: &oag_assets::Archives, id: &str) -> bool {
     archives
-        .locate(&crate::race::ship_entry_name(id, oag_race::Mode::default()))
+        // The ordinary hull, spelled directly rather than through
+        // `race::ship_entry_name`: this asks whether a team is *raceable*, which
+        // is a question about the normal hull and never about the Zone one, and
+        // routing it through the mode-aware helper meant passing a `ZoneCraft`
+        // that could not affect the answer.
+        .locate(&oag_pulse::race::ships::entry_name(
+            id,
+            oag_pulse::race::ships::HULL,
+        ))
         .is_some()
         && archives
             .locate(&oag_formats::handling::entry_name(id))
