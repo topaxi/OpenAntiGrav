@@ -464,3 +464,62 @@ fn a_burst_spark_effect_is_not_cut_short_by_letting_go() {
         "letting go truncated a burst that owns its own schedule"
     );
 }
+
+/// A raised shield turns a wall contact into a **shell bulge and no sparks**,
+/// which is the whole chain the shield exists to produce.
+///
+/// Both halves are recovered from the same contact loop, and both are gated on
+/// the same `craft+0x1b8 & 0x10`: its third gate (`0x0884255c`) branches past
+/// `Ship_DispatchCollisionFx`, and its fourth (`0x08842684`) replaces the
+/// hull-damage call with `ShipShield_Hit`. See
+/// `docs/ghidra/functions/psp-pulse-usa/shield-pickup.md`.
+///
+/// **This is the only test that runs the whole path end to end** -
+/// `damage::subtract` setting `absorbed`, `tick` turning that into
+/// `ShipShield::hit`, and `hit` moving the drawn scale. The three links are
+/// each covered on their own; nothing else asserts they are joined.
+///
+/// The fixture is [`a_sustained_scrape_spawns_sparks_once_not_every_tick`]'s,
+/// for the reason that test gives: a fresh wall is easy to wind backwards and
+/// fails silently.
+#[test]
+fn a_shielded_scrape_bulges_the_shell_and_throws_no_sparks() {
+    let handling = hulled_handling();
+    let setup = setup_with(
+        handling,
+        vec![plane(1, -40.0, oag_physics::Surface::Wall, 0)],
+    );
+    let mut race = Race::start(setup);
+
+    race.world.ships[0].physics.shield_pickup_timer = 1.0;
+    race.shield[0].activate();
+    let resting = race.shield_of(0).scale();
+
+    let body = &mut race.world.ships[0].physics.body;
+    body.position = Vec3::new(20.0, -39.7, 0.0);
+    body.linear_velocity = Vec3::new(0.0, -50.0, 0.0);
+    let evaluated = race.tick(&InputSnapshot::default());
+
+    assert!(
+        evaluated.wall.impact,
+        "the fixture never reaches the wall - not what this test means to check"
+    );
+    assert!(
+        evaluated.shield.absorbed,
+        "the shield did not report swallowing the contact"
+    );
+    assert_eq!(
+        race.spark_ignitions(),
+        0,
+        "a shielded craft threw hull sparks"
+    );
+    // One tick of the `0.2`-per-substep settle has already run, so this is a
+    // little under the full tenth rather than exactly it. Well clear of the
+    // `SCALE_FLICKER` the breathing moves, which is what makes the assertion
+    // about the bulge and not about the phase.
+    let bulge = race.shield_of(0).scale() - resting;
+    assert!(
+        bulge > oag_render::shield::SCALE_FLICKER * 2.0,
+        "the shell did not bulge on the absorbed hit: moved {bulge}"
+    );
+}

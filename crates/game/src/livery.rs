@@ -242,14 +242,12 @@ fn one(
             hull,
             boost: None,
             boost_uv: None,
-            // **Not "no shield on PS3", but "not looked for yet".** Neither of
-            // `shield_entry_names`' two names is a PSARC path, and HD's own
-            // shield asset has not been located - see
-            // `docs/formats/hd-frontend.md` for how that title's names are
-            // reached. `None` here draws nothing and the loader report says so,
-            // which is the honest state; a PSP name spelled at a PS3 archive
-            // would report a miss for the wrong reason.
-            shield: None,
+            // **The shell is loaded on PS3 too**, unlike the plume: HD carries a
+            // per-team `shipshield.vex` with its geometry in the `.rcsmodel`
+            // beside it, under the same stem Pulse uses, for all eight teams and
+            // Zone. `shell` takes the same external-geometry branch this hull
+            // just took. See `crate::race::shield_entry_names`.
+            shield: shell(archives, team, lod, report),
         });
     }
     let mut hull = mesh::build_with_textures(&hull_name, &blob, None, lod)?;
@@ -476,13 +474,63 @@ fn shell(
         let Ok(blob) = archives.read_name(name) else {
             continue;
         };
+        let provenance = if index == 0 {
+            "the team's own"
+        } else {
+            "shared - this source carries no per-team shell"
+        };
+        // **A PS3 shell's geometry is in the `.rcsmodel` beside it**, exactly as
+        // the hull's is - see the same branch in [`one`]. HD ships a per-team
+        // `shipshield.vex`/`.rcsmodel` pair under the same stem Pulse uses, for
+        // every team plus Zone, so the whole difference between the two titles
+        // here is which of these two arms reads the geometry.
+        if mesh::geometry_is_external(&blob) {
+            let sibling = mesh::rcs::sibling_name(name);
+            let Some(geometry) = sibling.as_deref().and_then(|s| archives.read_name(s).ok()) else {
+                report.push(format!(
+                    "{name}: a PS3 .vex with no .rcsmodel beside it - no shield shell for this team"
+                ));
+                continue;
+            };
+            match mesh::rcs::build(
+                name,
+                &blob,
+                &geometry,
+                &mut |path| archives.read_name(path).ok(),
+                |c| c.mesh,
+            ) {
+                Ok((model, built)) => {
+                    report.push(format!(
+                        "{name}: {} - the shield shell, {provenance}",
+                        built.describe()
+                    ));
+                    // **Said out loud because the picture does not say it.** The
+                    // shell draws additively, and `mesh::rcs` resolves no
+                    // material - HD authors one per team
+                    // (`/data/materials/ships/<team>_shield.rcsmaterial`) and
+                    // nothing here reads it. So the geometry is the disc's and
+                    // the *brightness* is not: an untextured additive surface at
+                    // full white washes the hull out, where the PSP shell's own
+                    // vertices carry a blue-violet at half alpha. Drawing it is
+                    // still right - it is real decoded geometry, and the
+                    // substitute is for the missing material alone - but a
+                    // reviewer looking at an HD capture has to be told which
+                    // half is recovered.
+                    report.push(format!(
+                        "{name}: drawn with no material - HD's own \
+                         <team>_shield.rcsmaterial is not read, so the shell is \
+                         brighter and flatter than the disc's"
+                    ));
+                    return Some(model);
+                }
+                Err(error) => {
+                    report.push(format!("{name}: its .rcsmodel does not build ({error})"));
+                    continue;
+                }
+            }
+        }
         match mesh::build_with_textures(name, &blob, None, lod) {
             Ok(model) => {
-                let provenance = if index == 0 {
-                    "the team's own"
-                } else {
-                    "shared - this source carries no per-team shell"
-                };
                 report.push(format!(
                     "{name}: {} triangle(s) - the shield shell, {provenance}",
                     model.indices.len() / 3

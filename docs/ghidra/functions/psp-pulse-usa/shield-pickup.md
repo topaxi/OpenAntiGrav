@@ -203,19 +203,25 @@ reads `0.0` on all 3,146 ticks of a lap. So a shielded craft still bounces off
 a wall exactly as an unshielded one does. Only the rival/weapon knockback and
 its half-second stun go away.
 
-### 3. The contact loop's hull damage becomes the same flash
+### 3. The contact loop, all four gates read
 
-`FUN_088418e0` tests the bit at `0x08841fcc`, `0x088420e8`, `0x08842560` and
-`0x08842684`. [contact-response.md](contact-response.md) already documents the
-outcome from the other side, as its reaction #3: the shield branch is taken
-*instead of* the hull-damage call, and it is `FUN_0885eb04(shieldEntity)` - the
-same `ShipShield_Hit` as above.
+`FUN_088418e0` tests the bit at `0x08841fcc`, `0x088420e8`, `0x0884255c` and
+`0x08842684`, and **all four are read** - which matters, because the claim that
+rests on them is the one this whole page is load-bearing for: *a shielded craft
+still bounces off a wall exactly as an unshielded one does.* Not one of the four
+touches a velocity, an impulse or a position.
 
-The block behind the first of the four gates is larger than a damage call: it
-also adds a stats value to `craft+0x130`, writes `craft+0x138 = 5`, latches
-`entity->0x860 |= 0x40` so it fires once, and plays a cue. What that whole
-block is has **not** been read; it is recorded here as skipped-when-shielded
-and left open.
+| Gate | Skipped when shielded |
+| --- | --- |
+| `0x08841fcc` | A once-latched block (`entity->0x860 & 0x40`): adds a stats value to `craft+0x130`, writes `craft+0x138 = 5`, calls `Ship_Damage(stats[0x60], entity, 2, kind, 0)` and plays a cue. **Not read further** and left open. |
+| `0x088420e8` | Four instructions reading `craft+0x130`, the accumulator the block above writes. |
+| `0x0884255c` | **The collision sparks.** The proximity test on `DAT_08ab10b0 + 0x70` and the call to `Ship_DispatchCollisionFx` (`0x0883de90`) - reaction #1 on [contact-response.md](contact-response.md). A shielded craft throws no hull sparks at all. |
+| `0x08842684` | **The damage/flash switch**, reaction #2 against #3: `Ship_Damage(|p| * 0.035, ...)` plus `entity->0x860 |= 0x20 \| 0x400000` on one side, `if (shield->active) ShipShield_Hit(shield)` on the other. |
+
+The third is a finding in its own right and is not on
+[contact-response.md](contact-response.md): **sparks are the hull being hurt,
+and a shielded hull is not being hurt**, so the shell's own bulge is the whole of
+what a shielded contact shows. Confidence **84**.
 
 ### And there is no fourth
 
@@ -256,9 +262,33 @@ which `oag_render::mesh_render::blend::ADDITIVE_BLEND` already has a pipeline
 for.
 
 `Data\Weapons\shield.vex` is on the disc too, the same mesh and the same
-texture as the per-team shell. **No code path assembles that name** - the
-format string always supplies a directory *and* a prefix - so it reads as a
-stray copy and is not the thing to draw.
+texture as the per-team shell. **No code path assembles that name** on this
+binary - the format string always supplies a directory *and* a prefix - so on
+Pulse it reads as a stray copy and is not the thing to draw.
+
+### The same asset across the three titles, checked on all three
+
+Each name hashed or listed against that disc's own archive directory:
+
+| Title | Per-team shell | Shared `Data\Weapons\shield.vex` |
+| --- | --- | --- |
+| **Pulse** (PSP) | `Data\Ships\<Team>\shipshield.vex`, all eight teams | present, unreferenced |
+| **Pure** (PSP) | **absent** - and no `shipboost.vex` either | present |
+| **HD/Fury** (PS3) | `/data/ships/<team>/shipshield.vex` + `.rcsmodel`, all eight teams plus Zone and Detonator | absent |
+
+So the effect is the same one across the lineage and only the *packaging*
+moves: Pure has the shared model and no per-team one, HD has the per-team one
+with its geometry in the sibling `.rcsmodel` the PS3 build splits every model
+into, and Pulse has both. **HD also authors a material per team**
+(`/data/materials/ships/<team>_shield.rcsmaterial`), which nothing in this
+project reads yet - so an HD shell draws its real geometry with no material at
+all, which is brighter and flatter than the disc's. The loader report says so
+on every HD boot rather than leaving it to a screenshot.
+
+That table is why the entry name is a per-title axis
+(`oag_pulse::race::ships::SHIELD` and `oag_pulse::race::SHARED_SHIELD`) rather
+than a constant: it is not one name with a fallback, it is three packagings of
+one effect.
 
 `crates/game/src/race/weapons.rs` said `Data\Ships\<Team>\<Team>shield.vex`.
 That name hashes to nothing in the archive, and it is the reason the feature
@@ -276,7 +306,7 @@ for (i = 0; i < steps; i++)                             // colour, obj+0x40, rgb
 for (i = 0; i < steps; i++)                             // swell, obj+0x64
     obj->swell += (1.0 - obj->swell) * 0.2;             // target obj+0x68, rate obj+0x6c
 
-n     = noise(obj->time);                               // obj + 0x78
+n     = sinf(obj->time);                                // obj + 0x78, seconds
 alpha = obj->rgba.a * (n * 0.25 + 0.75);
 scale = obj->swell + 0.012 + n * 0.012;
 
@@ -320,6 +350,17 @@ an activation colour, writes `obj->0x60 = 0.15`, `obj->0x68 = 1.0`,
 The literals `0.15`, `0.2`, `1.0`, `1.1`, `0.012`, `0.25`, `0.75` and `1.8` are
 instruction immediates, read directly. Confidence **84**.
 
+**The flicker is `sinf`, and this nearly went down as unreadable.** The update
+calls one function with the object's accumulated time and spends the result on
+both the alpha and the scale, and the decompiler prints it as an unresolved
+`func_0x0017a300` - which is `0x0897e300`, and decompiles as the C library's
+`sinf`. So the argument is radians against a clock in seconds and the shell
+breathes on a **`2*pi`-second** cycle, between half and all of its colour's
+alpha. The first implementation pass here filled that slot with an invented
+~2.7 Hz shimmer, which is a visibly different effect; recorded because the trap
+is general - an unresolved `func_0x...` in this image is not evidence that
+anything is unreadable, only that the call was not relocated.
+
 **The three colour vec4s are not resolved.** They are `lui 0x6`/`addiu`
 constant-pool loads - `0x627a8` (target), `0x627b8` (hit) and `0x627c8`
 (activation), unrelocated - and the relocation model that works for text and
@@ -358,7 +399,10 @@ database and no page section of its own, so it gets no row.
   claim is a static read, which is why nothing exceeds 88.
 - **The three colour constants**, above.
 - **The block behind the contact loop's first shield gate**
-  (`0x08841fe0`-`0x08842088`), which does more than post damage.
+  (`0x08841fe0`-`0x08842088`), which does more than post damage. The other
+  three gates are read; see the table above.
+- **HD's `<team>_shield.rcsmaterial`**, which is what an HD shell should be
+  drawn with.
 - **The id-to-bit conflict** with [missile.md](missile.md) and
   [ai-stats.md](ai-stats.md).
 - **`FUN_0883efb4`**, the third member of `FUN_0883f13c`'s family, which also
@@ -366,6 +410,11 @@ database and no page section of its own, so it gets no row.
 
 ## History
 
+- 2026-08-19, same day, second pass: all four contact-loop gates read - the
+  third suppresses the collision sparks, which is a finding of its own - and the
+  flicker settled as `sinf` rather than left as an unread function. The asset
+  checked across Pure and HD/Fury, which is what turned the entry name into a
+  per-title axis.
 - 2026-08-19: page created. The Shield's fire bit settled at `0x20` against the
   three parsers' stat offsets, the consumers of flag `0x10` read, the two
   authored models located and confirmed present on the disc, and the visual

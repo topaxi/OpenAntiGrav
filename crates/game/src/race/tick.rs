@@ -348,15 +348,24 @@ impl Race {
         let attached_effect = effect
             .as_deref()
             .is_some_and(|effect| effect.roots().iter().any(|&r| effect.emitters[r].looping));
-        let can_fire = if attached_effect {
-            // Ignite once per contact, not once per cooldown: re-arming would
-            // leave a chattering scrape with no sparks for up to
-            // `COLLISION_COOLDOWN` at a time, which a burst never suffers
-            // because it has already finished by then.
-            evaluated.wall.impact && !self.sparks_attached
-        } else {
-            evaluated.wall.impact && self.sparks_cooldown <= 0.0
-        };
+        // **A raised shield throws no hull sparks**, and that is recovered:
+        // the contact loop's third `craft+0x1b8 & 0x10` gate (`0x0884255c`)
+        // branches past `Ship_DispatchCollisionFx` (`0x0883de90`) entirely -
+        // reaction #1 on `docs/.../contact-response.md`, the spark spawn. The
+        // shell's own bulge is what a shielded contact shows instead, which is
+        // the whole design: sparks are the hull being hurt and the hull is not
+        // being hurt. See `docs/.../shield-pickup.md`.
+        let shielded = self.world.ships[0].physics.shield_pickup_timer > 0.0;
+        let can_fire = !shielded
+            && if attached_effect {
+                // Ignite once per contact, not once per cooldown: re-arming
+                // would leave a chattering scrape with no sparks for up to
+                // `COLLISION_COOLDOWN` at a time, which a burst never suffers
+                // because it has already finished by then.
+                evaluated.wall.impact && !self.sparks_attached
+            } else {
+                evaluated.wall.impact && self.sparks_cooldown <= 0.0
+            };
         let model_matrix = self.ship_model_matrix();
         if can_fire && let Some(contact) = evaluated.wall.resolved {
             // `contact.point` is deliberately the *penetrating* hull sample

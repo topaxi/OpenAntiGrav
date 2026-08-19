@@ -296,6 +296,49 @@ fn a_fired_shield_arms_the_timer_for_its_authored_duration() {
     );
 }
 
+/// A second Shield fired into a running one is **wasted**: the timer keeps the
+/// remainder it had rather than being refreshed, and the pickup is spent
+/// anyway.
+///
+/// Recovered, and the one shape of this that reads as a bug rather than a rule.
+/// `Shield_Fire` (`0x08861568`) does its whole body inside
+/// `if ((craft->0x1b8 & 0x10) == 0)` and its `else` arm clears only the fire
+/// request; the grant is what clears the held slot, so the pickup is gone either
+/// way. See `docs/ghidra/functions/psp-pulse-usa/shield-pickup.md`.
+#[test]
+fn a_shield_fired_into_a_running_one_is_wasted_rather_than_stacked() {
+    let mut race =
+        race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_shield_table());
+    let mut buttons = Buttons::new();
+
+    race.tick(&buttons.tick(CROSS));
+    race.tick(&buttons.tick(CROSS | SQUARE));
+    let after_first = race.ship().physics.shield_pickup_timer;
+    assert!(after_first > 0.0, "the first Shield never armed");
+
+    // The slot is written directly rather than waiting for a second grant: the
+    // grant refuses to hand out the same weapon twice running (`pickup::draw`),
+    // so a pad-driven second Shield would take an unbounded number of ticks and
+    // the timer would be most of the way down by then.
+    race.tick(&buttons.tick(CROSS));
+    race.world.ships[0].pickup.weapon = Some(oag_formats::weapons::Weapon::Shield);
+    race.tick(&buttons.tick(CROSS | SQUARE));
+
+    assert_eq!(
+        race.ship_pickup(),
+        None,
+        "the second Shield must be spent even though it did nothing"
+    );
+    // Two ticks have passed since the first arm, so the timer must have fallen
+    // by exactly those two - not been reset to the authored duration.
+    let expected = after_first - 2.0 * race.dt();
+    assert!(
+        (race.ship().physics.shield_pickup_timer - expected).abs() < 1e-5,
+        "the second Shield refreshed the timer: expected {expected}, got {}",
+        race.ship().physics.shield_pickup_timer
+    );
+}
+
 /// Absorbing a Shield pays its own `absorb` rather than the Turbo's, which
 /// is the one thing that could quietly cross over now that two weapons are
 /// authored with two different pairs.

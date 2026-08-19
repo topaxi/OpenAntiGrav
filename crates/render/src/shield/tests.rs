@@ -68,9 +68,10 @@ fn a_hit_with_no_shield_up_is_a_no_op() {
     );
 }
 
-/// The alpha flicker never dims the shell below three quarters, and never
-/// brightens it past its colour. Both bounds are the recovered `0.25`/`0.75`
-/// split, and they are what say the flicker is a shimmer rather than a blink.
+/// The alpha flicker never dims the shell below half its colour and never
+/// brightens it past it. Both bounds fall out of `sin`'s own `-1..=1` against
+/// the recovered `0.25`/`0.75` split, and they are what say the shell breathes
+/// rather than blinks.
 #[test]
 fn the_alpha_flicker_stays_inside_its_recovered_quarter() {
     let mut shield = ShipShield::new();
@@ -85,20 +86,35 @@ fn the_alpha_flicker_stays_inside_its_recovered_quarter() {
     }
 }
 
-/// The flicker is a pure function of the shell's own clock, so a capture at a
-/// given time is reproducible and two shields raised together shimmer together.
-/// The regression this guards is reaching for a generator here.
+/// The flicker is `sin` of the shell's clock in seconds, so it is a pure
+/// function - a capture at a given time is reproducible - and it completes one
+/// cycle in `2*pi` seconds rather than several a second.
+///
+/// **The period is the assertion that matters.** The first version of this
+/// module invented a ~2.7 Hz shimmer for the same slot, which is a visibly
+/// different effect; pinning the period is what makes that regression fail a
+/// test rather than pass review.
 #[test]
-fn the_flicker_is_a_pure_function_of_the_clock() {
+fn the_flicker_is_sin_of_the_clock_in_seconds() {
     for step in 0..200 {
         let t = step as f32 * 0.03;
         assert_eq!(flicker(t), flicker(t));
         assert!(
-            (0.0..=1.0).contains(&flicker(t)),
-            "flicker({t}) = {} left [0, 1]",
+            (-1.0..=1.0).contains(&flicker(t)),
+            "flicker({t}) = {} left [-1, 1]",
             flicker(t)
         );
     }
+    let period = std::f32::consts::TAU;
+    assert!(flicker(period / 4.0) > 0.99, "the peak is not a quarter in");
+    assert!(
+        flicker(period * 3.0 / 4.0) < -0.99,
+        "the trough is not three quarters in"
+    );
+    assert!(
+        (flicker(period) - flicker(0.0)).abs() < 1e-5,
+        "the cycle is not 2*pi seconds long"
+    );
 }
 
 /// Two shells activated on the same frame stay in step. Same argument as above,

@@ -13,7 +13,7 @@
 //! of the hull, and `Data\Weapons\vr_shield_cockpit.vex`, a noise-textured
 //! sphere. `ShipShield_Update` (`0x0885e254`) draws exactly one of them - the
 //! shell from an external camera, the sphere from the cockpit - at a scale that
-//! swells on impact and settles, with an alpha that flickers. `ShipShield_Hit`
+//! swells on impact and settles, with an alpha that breathes. `ShipShield_Hit`
 //! (`0x0885eb04`) is what an absorbed hit calls, and it is the only thing that
 //! makes the shell visibly react.
 //!
@@ -28,22 +28,23 @@
 //! # What is recovered and what is ours
 //!
 //! **Recovered**, all from instruction immediates: the two lerp rates
-//! ([`COLOUR_RATE`], [`SWELL_RATE`]), the swell's rest value and its hit value
+//! ([`COLOUR_RATE`], [`SWELL_REST_RATE`]), the swell's rest value and its hit value
 //! ([`SWELL_REST`], [`SWELL_ON_HIT`]), the `0.012` base and flicker of the scale
 //! ([`SCALE_BASE`], [`SCALE_FLICKER`]), the alpha flicker's `0.25`/`0.75` split
-//! ([`ALPHA_FLICKER`]), the cockpit sphere's [`COCKPIT_SCALE`], the fixed
+//! ([`ALPHA_FLICKER`], [`ALPHA_MID`]), the cockpit sphere's [`COCKPIT_SCALE`], the fixed
 //! 60 Hz substep, and the `0.1` alpha at which a fading shell stops being drawn
 //! ([`FADE_OUT_ALPHA`]).
 //!
+//! **Also recovered, and this one nearly was not.** The flicker's curve is
+//! `sinf` of the shell's own clock in **seconds** - see [`flicker`]. The call
+//! reads as an unresolved `func_0x0017a300` in the decompiled update, and the
+//! first pass here shipped an invented shimmer in its place; decompiling the
+//! target settles it as the C library's `sinf`, so the shell breathes on a
+//! `2*pi`-second cycle rather than flickering. The two are not subtly different
+//! and the invented one was wrong.
+//!
 //! **Ours, and there is no way for it not to be yet.**
 //!
-//! - **The flicker's own curve.** The original samples one unread function of
-//!   the effect's accumulated time and uses its result for both the alpha and
-//!   the scale wobble. Its *range* is pinned - the two consumers only make sense
-//!   for `0..=1` - and its role is recovered; the function is not. See
-//!   [`flicker`], which is a stand-in for a missing *function* rather than for
-//!   missing data, and which nothing else in this module depends on the shape
-//!   of.
 //! - **The tint.** `ShipShield_Activate` and `ShipShield_Hit` load their colours
 //!   from a constant pool this project cannot yet address - see the docs page's
 //!   "the three colour vec4s are not resolved". So [`ShipShield::rgba`] starts
@@ -87,14 +88,21 @@ pub const SCALE_BASE: f32 = 0.012;
 /// as [`SCALE_BASE`], so the shell breathes by about a percent.
 pub const SCALE_FLICKER: f32 = 0.012;
 
-/// The flicker's share of the alpha: `alpha * (n * 0.25 + 0.75)`.
+/// The flicker's share of the alpha: `alpha * (sin(t) * 0.25 + 0.75)`.
 ///
-/// So the shell never dims below three quarters of its colour's alpha, and the
-/// flicker is a quarter of it.
+/// `sin` runs `-1..=1`, so the shell breathes between **half** and **all** of
+/// its colour's alpha - not between three quarters and all, which is what this
+/// constant reads like on its own and what the first pass here assumed while it
+/// had the flicker's range wrong.
 pub const ALPHA_FLICKER: f32 = 0.25;
 
-/// The floor of the alpha flicker, `1.0 - ALPHA_FLICKER`.
-pub const ALPHA_FLOOR: f32 = 1.0 - ALPHA_FLICKER;
+/// The midpoint the alpha flicker swings about, `1.0 - ALPHA_FLICKER`.
+pub const ALPHA_MID: f32 = 1.0 - ALPHA_FLICKER;
+
+/// The dimmest the alpha flicker goes, as a fraction of the colour's own alpha.
+///
+/// `ALPHA_MID - ALPHA_FLICKER`, i.e. a half, at `sin(t) == -1`.
+pub const ALPHA_FLOOR: f32 = ALPHA_MID - ALPHA_FLICKER;
 
 /// What the cockpit sphere's scale is multiplied by. `1.8`.
 ///
@@ -155,8 +163,11 @@ impl ShipShield {
     ///
     /// **A placeholder for one unread constant, and deliberately the identity.**
     /// The original loads a tint here; multiplying the authored vertex colours by
-    /// white is the one choice that cannot misrepresent them. See the module
-    /// docs.
+    /// white is the one choice that cannot misrepresent them - and on this model
+    /// they are not white to begin with: `oag-view --draws` reads the shell's own
+    /// vertices as `(0.55, 0.50, 0.91, 0.50)` on its main batch, a blue-violet at
+    /// half alpha. So the shell already looks the way the artists painted it, and
+    /// the unread constant can only shift it. See the module docs.
     pub const UNTINTED: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
 
     /// A shield that is not up.
@@ -280,32 +291,36 @@ impl ShipShield {
     /// byte alone and passes the other three straight through.
     #[must_use]
     pub fn colour(&self) -> [f32; 4] {
-        let alpha = self.rgba[3] * (flicker(self.time) * ALPHA_FLICKER + ALPHA_FLOOR);
+        let alpha = self.rgba[3] * (flicker(self.time) * ALPHA_FLICKER + ALPHA_MID);
         [self.rgba[0], self.rgba[1], self.rgba[2], alpha]
     }
 }
 
-/// The shell's flicker, `0..=1`, as a function of its own clock.
+/// The shell's flicker, `-1..=1`: **`sin` of its own clock, in seconds**.
 ///
-/// **Ours.** The original calls one unread function with the object's
-/// accumulated time and spends the result on both the alpha and the scale. What
-/// is recovered is that there is a single such value, that both consumers need
-/// it in `0..=1`, and that its argument is a clock that resets on activation -
-/// not the curve.
+/// Recovered. `ShipShield_Update` calls one function with the object's
+/// accumulated time and spends the result on both the alpha and the scale, and
+/// that function - printed as an unresolved `func_0x0017a300` because this
+/// image relocates no call targets - decompiles as the C library's `sinf`
+/// (`0x0897e300`).
 ///
-/// This is a sum of two incommensurable sines, which gives a non-repeating
-/// shimmer without a table and without a generator: a pure function of `t`, so a
-/// screenshot at a given time is reproducible and two craft whose shields went
-/// up together flicker together, the way one clock feeding one function must.
+/// So the argument is in **radians and the clock is in seconds**, giving a
+/// `2*pi`-second period: the shell breathes about once every six and a third
+/// seconds, over a whole shield's typical life. That matters because it is not
+/// what "flicker" suggests, and the first version of this function was an
+/// invented ~2.7 Hz shimmer that read as a completely different effect. Named
+/// `flicker` still, because that is what the two consumers use it for.
+///
+/// A pure function of `t`, so a screenshot at a given time is reproducible and
+/// two craft whose shields went up together breathe together - which they must,
+/// one clock feeding one function.
 ///
 /// Not in the simulation and so not bound by
-/// `docs/architecture/determinism.md` - `sin` is a platform transcendental and
+/// `docs/architecture/determinism.md`; `sin` is a platform transcendental and
 /// would be a violation on the other side of the line.
 #[must_use]
 pub fn flicker(t: f32) -> f32 {
-    let a = (t * 17.0).sin();
-    let b = (t * 6.3).sin();
-    (a + b).mul_add(0.25, 0.5)
+    t.sin()
 }
 
 #[cfg(test)]
