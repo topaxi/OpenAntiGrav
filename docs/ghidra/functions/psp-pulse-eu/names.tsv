@@ -327,7 +327,7 @@
 0x0892d960	function	AmbientLight_RegisterClass	90	lighting.md
 0x08934fc8	function	DirectionalLight_RegisterClass	90	lighting.md
 0x0890cea8	function	Mesh_ApplyMaterialLighting	78	lighting.md
-0x0890d8d4	function	Mesh_ApplyShinemapReflection_q	55	lighting.md
+0x0890d8d4	function	Mesh_ApplyShinemapReflection	55	lighting.md
 0x08909c00	function	Loading_Ramp255	82	corroboration.md
 0x08909c44	function	Loading_LerpByte	80	corroboration.md
 0x08909c7c	function	Loading_LerpColour	82	corroboration.md
