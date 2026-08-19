@@ -505,22 +505,29 @@ moves it out into `Session::held_menu_backdrop` before the outgoing
 outgoing stage supplies, through a small pure function
 (`session::menus::backdrop_seed`) kept separate from the `Renderer`-touching
 code around it precisely so the seeding *decision* is unit-testable without a
-GPU - see `crates/game/src/main/tests.rs`. **Not independently verified on a
-live capture**: driving the windowed build under Xvfb to watch the transition
-the way the boot-path fix was diagnosed turned out to be blocked two ways in
-the sandbox this was written in, neither the missing key-injection tooling
-the ESC-rewiring row used to cite - `xdotool` and `Xvfb` are both present now.
-First, `import -window <id>` came back solid black throughout a run that was
-verifiably rendering (a logged `renderer: vulkan: NVIDIA...` line, movies
-decoding, ticks advancing), so screenshotting this build's window is not
-reliable on that machine regardless of input. Second, and only partly
-separable from the first, no synthetic key (`xdotool key`/`keydown`,
-including a plain `x` throttle test on a confirmed-focused window) was ever
-observed to change anything - which could mean the key never arrived or that
-it arrived and produced no *visible* effect, and the black-screenshot finding
-means that ambiguity cannot be resolved on this machine. See HANDOVER's
-ESC-rewiring row for the fuller account. A machine with working screen
-capture would settle the input question in one run.
+GPU - see `crates/game/src/main/tests.rs`.
+
+**Independently verified on a live capture, 2026-08-19.** The earlier black
+screenshots and unresponsive keys both traced to one cause, not two: this
+sandbox has a live Wayland session (`WAYLAND_DISPLAY` set) alongside Xvfb, and
+winit prefers Wayland when both are set - so the app was rendering into that
+invisible session while every capture and key-injection tool pointed at Xvfb.
+Launching with `WAYLAND_DISPLAY` unset routes the window through X11 as
+intended, and screenshots stopped being black immediately. Real `xdotool`
+keypresses still needed one more thing: with no window manager running on
+Xvfb, X input focus never lands on the app's window on its own, so an
+explicit `XSetInputFocus` (raw Xlib, no WM required) was needed before
+`xdotool key` had anywhere to deliver to. With both in place: navigated the
+real menus into a race exactly as a player would (`RACE` -> `START`), let it
+run, pressed a real `Escape`, and captured six frames in rapid succession
+immediately after - none black, the backdrop's animation visibly continuing
+frame to frame. Held `Escape` down for 1.2s from one menu level deep landed
+exactly one level back and left the process running, confirming the
+`!event.repeat` guard holds against real OS-level key repeat, not just the
+synthetic events the unit tests drive. The window title updated to
+`OpenAntiGrav - menu` with no stale `- race` suffix. See HANDOVER's former
+ESC-rewiring row (deleted 2026-08-19 once this closed it) for the fuller
+account of the two-symptom-one-cause diagnosis.
 
 ## DISPLAY against GRAPHICS
 
