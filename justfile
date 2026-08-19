@@ -382,6 +382,13 @@ rpcs3-boot image="data/images/hdfury-ps3-eu-dec.iso" *ARGS:
 rpcs3-race image="data/images/hdfury-ps3-eu-dec.iso" *ARGS:
     uv run --with evdev python3 scripts/rpcs3-drive.py --image {{image}} race --shots {{ARGS}}
 
+# The same, capturing the driven part as video through RPCS3's own recorder.
+# HD's HUD is in the frame - lap, position, lap time, shield and km/h - so a
+# recording reads as a 30 Hz trace and not just a picture. The file lands in
+# ~/.config/rpcs3/recordings/<TITLE_ID>/, a subdirectory per title.
+rpcs3-record image="data/images/hdfury-ps3-eu-dec.iso" *ARGS:
+    uv run --with evdev python3 scripts/rpcs3-drive.py --image {{image}} record {{ARGS}}
+
 # Run a committed scenario through OUR OWN physics and print a run report: where
 # the ship is every N ticks, how fast, whether it is still on the track. Needs a
 # disc image (for the track and the handling stats) and nothing else - no

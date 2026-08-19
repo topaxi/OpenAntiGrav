@@ -39,12 +39,21 @@ Subcommands:
     preflight the pad, the input profile and the display, with each fix.
     boot      launch and wait for the Main Menu, then hold it there.
     race      boot, walk the menus into a race, optionally drive and screenshot.
+    record    the same, capturing the driven part as video.
+
+**Video is the observable a race actually has.** `TTY.log` goes quiet the moment
+the front end hands over, and the GDB stub answers nothing while the target
+runs, so a driven lap has no per-tick channel at all - but RPCS3's own overlay
+records one, and HD's HUD puts speed, position, lap number and lap time in the
+frame. `record` drives that: start, drive, stop, and the file lands in
+`~/.config/rpcs3/recordings/<TITLE_ID>/`.
 
 Needs `evdev` for anything that presses a button; run those through
 `uv run --with evdev`. See docs/reverse-engineering/rpcs3-debugger.md.
 """
 
 import argparse
+import glob
 import os
 import re
 import subprocess
@@ -58,6 +67,11 @@ import rpcs3_pad
 TTY = os.path.expanduser("~/.cache/rpcs3/TTY.log")
 DISPLAY_NUMBER = 77
 DISPLAY = "127.0.0.1:%d" % DISPLAY_NUMBER
+# Taller than 720p on purpose: RPCS3's own home-menu overlay is nine rows and
+# does not scroll, so at 1280x720 the last three - `SaveState` among them - are
+# simply not on screen, and the highlight walking off the bottom reads exactly
+# like a dead d-pad.
+DISPLAY_GEOMETRY = "1600x1200x24"
 SCREEN_LINE = re.compile(r'Switching Screen "(.*?)" to "(.*?)"')
 
 # RPCS3's *own* home menu, opened by the PS button - not the game's. Measured
@@ -71,11 +85,20 @@ HOME_MENU = [
     "Restart Game", "Exit Game",
 ]
 
-# Measured: Main Menu -> Campaign Selection -> Grid Selection Fury ->
-# Cell Selection -> Team Selection -> Launch Game -> InGame. Every step is the
-# default highlighted row, so the walk needs no d-pad at all - which is the
-# reason it is this short and this reproducible.
-MENU_WALK = ["cross"] * 6
+# Measured: every step is the default highlighted row, so the walk into a race
+# needs no d-pad at all. It is written as the *screens* rather than as six
+# presses because a press is genuinely dropped now and then - HD runs at about
+# 9 fps here, and a `cross` that lands mid-transition does nothing. Keying on
+# `TTY.log` and re-pressing is the difference between a walk that works and one
+# that ends on `Team Selection` about a third of the time.
+RACE_WALK = [
+    "Campaign Selection",
+    "Grid Selection Fury",
+    "Cell Selection",
+    "Team Selection",
+    "Launch Game",
+    "InGame",
+]
 
 
 def tty_text():
@@ -107,7 +130,7 @@ def start_display():
     if display_running():
         return False
     subprocess.Popen(
-        ["Xvfb", ":%d" % DISPLAY_NUMBER, "-screen", "0", "1280x720x24",
+        ["Xvfb", ":%d" % DISPLAY_NUMBER, "-screen", "0", DISPLAY_GEOMETRY,
          "-listen", "tcp", "-nolisten", "unix"],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         start_new_session=True)
@@ -116,6 +139,18 @@ def start_display():
         if display_running():
             return True
     raise RuntimeError("Xvfb :%d did not come up" % DISPLAY_NUMBER)
+
+
+def recordings(title_id="BCES00664"):
+    """Every recording RPCS3 has written for a title, oldest first.
+
+    The path is `recordings/<TITLE_ID>/*.mp4` - a *subdirectory* per title,
+    which is worth stating because globbing `recordings/*` finds nothing and
+    reads as "recording silently did not work".
+    """
+    root = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+    pattern = os.path.join(root, "rpcs3", "recordings", title_id, "*.mp4")
+    return sorted(glob.glob(pattern), key=os.path.getmtime)
 
 
 def emulator_env():
@@ -208,11 +243,37 @@ class Session:
             self.pad.press("up", 0.12)
             time.sleep(settle)
 
-    def walk_to_race(self, settle=4.0):
-        for index, button in enumerate(MENU_WALK, 1):
-            was, now = self.tap(button, settle)
-            print("  %d/%d  %-7s  %-22s -> %s"
-                  % (index, len(MENU_WALK), button, was, now), flush=True)
+    def toggle_recording(self):
+        """Start or stop RPCS3's own capture. The overlay item is a toggle."""
+        self.home_menu_select("Start/Stop Recording")
+        self.pad.press("cross", 0.15)
+        time.sleep(3.0)
+
+    def press_until(self, button, target, attempts=4, settle=5.0):
+        """Press until `TTY.log` says the screen is `target`. True if it got there."""
+        for attempt in range(1, attempts + 1):
+            was = current_screen()
+            if was == target:
+                return True
+            self.pad.press(button, 0.15)
+            deadline = time.time() + settle
+            while time.time() < deadline:
+                if current_screen() == target:
+                    return True
+                time.sleep(0.4)
+            print("      (%s did not move %s -> %s, retry %d)"
+                  % (button, was, target, attempt), flush=True)
+        return current_screen() == target
+
+    def walk_to_race(self):
+        for index, target in enumerate(RACE_WALK, 1):
+            was = current_screen()
+            ok = self.press_until("cross", target)
+            print("  %d/%d  cross  %-22s -> %-22s %s"
+                  % (index, len(RACE_WALK), was, current_screen(),
+                     "" if ok else "FAILED"), flush=True)
+            if not ok:
+                break
         return current_screen()
 
 
@@ -280,6 +341,41 @@ def cmd_race(args):
     return 0
 
 
+def cmd_record(args):
+    before = set(recordings())
+    with Session(args.image, args.log_dir) as session:
+        print("rpcs3 pid %d" % session.proc.pid, flush=True)
+        if not session.wait_for_screen("Main Menu", args.timeout):
+            print("never reached the Main Menu (last screen: %s)"
+                  % current_screen(), file=sys.stderr)
+            return 1
+        time.sleep(args.settle)
+        print("walking the menus:", flush=True)
+        if session.walk_to_race() != "InGame":
+            print("ended on %r rather than InGame" % current_screen(),
+                  file=sys.stderr)
+            return 1
+        print("InGame; waiting %g s for the track to load" % args.load, flush=True)
+        time.sleep(args.load)
+        print("starting the recording", flush=True)
+        session.toggle_recording()
+        print("driving %g s" % args.drive, flush=True)
+        session.pad.set("cross", True)
+        time.sleep(args.drive)
+        session.pad.set("cross", False)
+        print("stopping the recording", flush=True)
+        session.toggle_recording()
+        time.sleep(8.0)
+    fresh = [path for path in recordings() if path not in before]
+    if not fresh:
+        print("no new recording appeared - check RPCS3.log for `video_encoder`",
+              file=sys.stderr)
+        return 1
+    for path in fresh:
+        print("%s  %.1f MiB" % (path, os.path.getsize(path) / 1048576.0))
+    return 0
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--image",
@@ -308,6 +404,14 @@ def main(argv=None):
     race.add_argument("--shots", action="store_true",
                       help="capture the menu, the grid and the driven frame")
     race.set_defaults(run=cmd_race)
+
+    rec = sub.add_parser("record")
+    rec.add_argument("--timeout", type=float, default=180.0)
+    rec.add_argument("--settle", type=float, default=12.0)
+    rec.add_argument("--load", type=float, default=50.0)
+    rec.add_argument("--drive", type=float, default=30.0,
+                     help="seconds of held thrust to capture")
+    rec.set_defaults(run=cmd_record)
 
     args = parser.parse_args(argv)
     return args.run(args)

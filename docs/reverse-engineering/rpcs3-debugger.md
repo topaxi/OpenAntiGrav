@@ -381,9 +381,47 @@ Event 01/08 screen**, not to the grid the state was taken on. So the trade is a
 context is lost to `Compatible Savestate Mode` or to HD's own resume path was
 not established, and is not worth establishing unless the payoff changes.
 
-`Start/Stop Recording` in the same overlay is unexplored and is the more
-interesting item: it would give a driven lap as video, which is the one
-observable a race has that `TTY.log` does not.
+`Start/Stop Recording` in the same overlay turned out to be the item worth
+having; see below.
+
+## Video is the observable a race actually has
+
+`TTY.log` goes quiet the moment the front end hands over, and the GDB stub
+answers nothing while the target runs - so a driven lap has no per-tick channel
+at all. RPCS3's own overlay records one, and it is two rows from `SaveState`:
+
+```sh
+just rpcs3-record --drive 45
+# -> ~/.config/rpcs3/recordings/BCES00664/BCES00664_recording_<stamp>.mp4
+```
+
+`Start/Stop Recording` is a *toggle*: select it, drive, select it again. The
+file lands under `recordings/<TITLE_ID>/` - a **subdirectory per title**, which
+is worth saying because globbing `recordings/*` finds nothing and reads exactly
+like recording having silently failed.
+
+What comes out, verified: 1280x720 at 30 fps, MPEG-4 video and AAC audio, about
+0.5 MiB a second. **And HD's HUD is in the frame** - lap number, position, lap
+time, shield percentage and speed in km/h - so a recording is not just a picture
+of a race, it is a readable trace of one at 30 Hz. That is the closest thing to
+M3's per-tick capture this platform offers, and it is worth saying plainly that
+it is a *reading off the screen*, not the engine's own numbers.
+
+One cosmetic wart, recorded rather than fixed: `recording.yml` ships
+`Video Codec: ""` and `AVCodecID: 12` (MPEG-4), and RPCS3 picks the first output
+format that matches the codec - which is `rtp_mpegts`. The file is therefore an
+**MPEG-TS stream with a `.mp4` extension**. `ffmpeg` and `ffprobe` read it
+without complaint. Setting `AVCodecID: 27` (H.264) in `recording.yml` makes the
+match land on `mp4` instead; that file is the user's rather than the
+repository's, so it is left alone.
+
+### The menu walk has to be keyed on the screen, not counted
+
+HD runs at about 9 fps here, and a `cross` that lands mid-transition does
+nothing at all. A fixed six presses ends on `Team Selection` about a third of
+the time. `Session.press_until` presses, watches `TTY.log` for the expected
+screen, and re-presses up to four times - which is the whole reason the walk is
+written as the list of screens rather than as a count of buttons.
 
 ## What is worth doing next, in order
 
