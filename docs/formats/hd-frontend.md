@@ -1305,7 +1305,12 @@ Named explicitly, with what each would take.
    Cannot change `menu_font`, which is `None` either way.
 4. **The easing curve on a page change**, the same gap Pulse has.
 
-**Needs an emulator (RPCS3 or equivalent) - none was available here:**
+**Needs the title *running*, which it now can be: `just rpcs3-race` walks HD's
+front end from a cold boot into a race with no window on anyone's desktop, and
+HD names every screen it enters on `TTY.log`
+([rpcs3-debugger.md](../reverse-engineering/rpcs3-debugger.md)). Every item
+below is therefore a reading waiting to be taken rather than a blocked one -
+none has been taken yet:**
 
 5. **The runtime boot order.** Everything in the chain table is *declared*.
    `0x000186f0` now gives a 70-confidence reason to think the runtime's default

@@ -297,6 +297,20 @@ sudo pacman -S pcsx2
 
 Provides an EE and IOP debugger, memory search, and save states.
 
+### RPCS3 (PS3)
+
+Two separate jobs: it is what decrypts a disc `EBOOT.BIN` (above), and it is the
+only way to watch a PS3 title behave. It boots WipEout HD / Fury from the
+**decrypted** disc image with no window and no human -
+`just launch-hdfury-ps3-headless` - and a stock `config.yml` already exposes a
+GDB stub on `127.0.0.1:2345` that reads and writes guest memory at the same
+addresses the Ghidra corpus uses.
+
+What it has no equivalent of is PPSSPP's input API, which is what stops a
+scripted run reaching a race. See
+[Driving RPCS3 from its GDB stub](rpcs3-debugger.md) for what the stub answers,
+the four traps in it, and the one permission that unblocks synthetic input.
+
 ## Disc tooling
 
 `oag-unpack` handles CHD and raw ISO natively, so `chdman` is not needed for

@@ -72,6 +72,40 @@ slot `0x008a684c`. That string is at `0x0077cad0` and its bytes are
 `"Racemanager Changed %p, %p\n"`. It is read as raw bytes, not as a Ghidra
 label, and it corroborates the structural reading rather than carrying it.
 
+## Live confirmation, and what the object turns out not to hold
+
+2026-08-19, the first runtime reading on this binary - `just rpcs3-race` puts HD
+in a race and [`scripts/rpcs3_debugger.py`](../../../../scripts/rpcs3_debugger.py)
+reads guest memory at these same addresses (see
+[rpcs3-debugger.md](../../../reverse-engineering/rpcs3-debugger.md)).
+
+**The holder reads back exactly as this page describes.** Mid-race, with the
+craft under power on Talon's Junction:
+
+```
+holder 0x008a6814 -> race manager 0x0095ae78
+```
+
+A non-null, plausibly-heap pointer at the slot the constructor is read to
+install into. That lifts `RaceManager_GetInstance`'s reading from "what the
+decompilation says it reads" to "what it reads at run time", and it is the first
+claim on this binary with a runtime leg rather than a decompilation-only one.
+
+**And the base object holds no per-frame state.** Its first `0xc000` bytes were
+dumped twice, 25 seconds of real racing apart - the two frames differ by 0.364
+RMSE, so the game unambiguously advanced - and the two dumps are **byte
+identical**: 0 of 12288 words changed. No float in the object moved into or
+within a speed-like band in that time.
+
+So whatever holds craft dynamics - position, velocity, the speed the HUD prints
+- is *not* in the RaceManager base object. That is a useful negative: it rules
+out the one runtime structure this binary had a named entry point into, and says
+the next search has to start somewhere else. Confidence 80: the measurement is
+unambiguous, but `0xc000` is this page's own estimate of where the base object's
+fields stop, and a derived race mode's fields begin above it - `0x00045178`
+writes at index `0xb8e`, past the `0xb75` the base is read to end at - so a
+per-frame field living in the *derived* part would sit outside what was dumped.
+
 ### `RaceManager_GetInstance`
 
 `0x00054628` is one instruction of work: `return *(void **)(0x008a6814)`. It

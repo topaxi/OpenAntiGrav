@@ -1371,7 +1371,14 @@ What is still ahead: the attribute layout and `.gtf`, for a *textured* HD;
 `.pvs`, for drawing a section at a time rather than all 904 chunks; and HD's own
 simulation, which is not estimable, being gated by
 [ADR-0009](../architecture/adr/0009-multi-game-fanout.md) item 2 *and* by the
-absence of any RPCS3 equivalent of the M3 harness.
+absence of any RPCS3 equivalent of the M3 harness. What now exists is the
+*driving* half: `just rpcs3-race` boots HD on a virtual display, walks its front
+end into a race and holds thrust, with no window on anyone's desktop, and
+screenshots come off it as real frames. What does not exist is the *capture*
+half, and the transport is why - RPCS3's GDB stub answers nothing at all while
+the target runs and costs 41 ms a packet while it is stopped, so there is no
+per-tick channel to record a trace on. See
+[rpcs3-debugger.md](../reverse-engineering/rpcs3-debugger.md).
 
 #### The grid fields eight teams, 2026-08-18
 

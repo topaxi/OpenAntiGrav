@@ -323,10 +323,79 @@ launch-pulse-ps2 image="data/images/pulse-ps2-eu.chd" *ARGS:
 launch-pure-psp image="data/images/pure-psp-eu.chd" *ARGS:
     {{ppsspp_bin}} {{image}} {{ARGS}}
 
-# WipEout HD / Fury (PS3) in RPCS3. PS3 titles usually need installing rather than
-# booting a raw image directly; see RPCS3's own docs if this doesn't boot as-is.
-launch-hdfury-ps3 image="data/images/hdfury-ps3-eu.iso" *ARGS:
+# WipEout HD / Fury (PS3) in RPCS3. It has to be the layer-1 DECRYPTED image -
+# the encrypted twin beside it reads as noise and RPCS3 will not boot it; see
+# `just ps3iso decrypt` and docs/formats/ps3-disc.md.
+launch-hdfury-ps3 image="data/images/hdfury-ps3-eu-dec.iso" *ARGS:
     {{rpcs3_bin}} {{image}} {{ARGS}}
+
+# The same, with no window at all: `--headless` runs the null renderer, so the
+# game ticks and nothing is drawn. This is the form a script drives, together
+# with the GDB stub on 127.0.0.1:2345 that a stock config.yml already enables -
+# see docs/reverse-engineering/rpcs3-debugger.md, whose trap list is the
+# difference between a session that works and one that invents its results.
+# `--input-config oag` is what makes a virtual pad reachable; without it RPCS3
+# binds a keyboard that headless has no window to feed. `just rpcs3-preflight`
+# says whether either half is missing. RPCS3 is single-instance: kill a previous
+# run before starting this one.
+launch-hdfury-ps3-headless image="data/images/hdfury-ps3-eu-dec.iso" *ARGS:
+    {{rpcs3_bin}} --headless --no-gui --input-config oag {{image}} {{ARGS}}
+
+# Can a script press a button on this machine? RPCS3 has no input API, so the
+# only route is a uinput virtual pad, and two things have to be true for one to
+# reach the game: `/dev/uinput` has to be openable (root-only until a udev rule
+# says otherwise) and RPCS3 has to have an input profile naming the evdev
+# handler (without one it binds a keyboard and swallows every press in silence).
+# This checks both and prints the exact command for whichever is wrong - run it
+# before blaming the emulator for ignoring input.
+rpcs3-preflight:
+    uv run --with evdev scripts/rpcs3_pad.py preflight
+
+# Write the input profile `launch-hdfury-ps3-headless` selects. Three lines
+# naming the evdev handler and the virtual pad; RPCS3 fills the rest from its
+# own defaults.
+rpcs3-input-config:
+    uv run --with evdev scripts/rpcs3_pad.py install-config
+
+# Create that virtual pad and hold it open, so another terminal can watch RPCS3
+# pick it up. The pad must exist BEFORE the emulator starts; RPCS3 binds pads
+# when it enumerates devices, and says so with `Evdev device 0 connected`.
+rpcs3-pad seconds="30":
+    uv run --with evdev scripts/rpcs3_pad.py pad {{seconds}}
+
+# Start the virtual display everything below needs. It listens on TCP and is
+# addressed as 127.0.0.1:77, because a sandboxed session may not be able to
+# write /tmp/.X11-unix and then the unix socket never appears at all.
+rpcs3-display:
+    python3 scripts/rpcs3-drive.py display
+
+# Boot WipEout HD and hold it at the Main Menu, on that display, with no window
+# on anyone's desktop. `--headless` cannot get here - it stalls inside
+# cellGameDataCheck with the null renderer; see
+# docs/reverse-engineering/rpcs3-debugger.md.
+rpcs3-boot image="data/images/hdfury-ps3-eu-dec.iso" *ARGS:
+    uv run --with evdev python3 scripts/rpcs3-drive.py --image {{image}} boot {{ARGS}}
+
+# The whole thing: boot, walk the front end into a race (six taps of cross),
+# hold thrust, and screenshot it. Run from the MAIN checkout - `data/` is
+# gitignored and absent from a worktree.
+rpcs3-race image="data/images/hdfury-ps3-eu-dec.iso" *ARGS:
+    uv run --with evdev python3 scripts/rpcs3-drive.py --image {{image}} race --shots {{ARGS}}
+
+# The same, capturing the driven part as video through RPCS3's own recorder.
+# HD's HUD is in the frame - lap, position, lap time, shield and km/h - so a
+# recording reads as a 30 Hz trace and not just a picture. The file lands in
+# ~/.config/rpcs3/recordings/<TITLE_ID>/, a subdirectory per title.
+rpcs3-record image="data/images/hdfury-ps3-eu-dec.iso" *ARGS:
+    uv run --with evdev python3 scripts/rpcs3-drive.py --image {{image}} record {{ARGS}}
+
+# Read HD's speed readout out of a recording and print it as CSV. Sparse on
+# purpose: the HUD is alpha-blended, so an unreadable frame is a gap and never
+# a guess. Check the coverage line it prints on stderr before leaning on the
+# numbers - about 8 % on Talon's Junction, which is the brightest circuit there
+# is. See docs/reverse-engineering/rpcs3-debugger.md.
+rpcs3-speed video *ARGS:
+    uv run --with numpy python3 scripts/rpcs3_hud.py read {{video}} {{ARGS}}
 
 # Run a committed scenario through OUR OWN physics and print a run report: where
 # the ship is every N ticks, how fast, whether it is still on the track. Needs a
