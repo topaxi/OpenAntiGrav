@@ -60,6 +60,17 @@ DISPLAY_NUMBER = 77
 DISPLAY = "127.0.0.1:%d" % DISPLAY_NUMBER
 SCREEN_LINE = re.compile(r'Switching Screen "(.*?)" to "(.*?)"')
 
+# RPCS3's *own* home menu, opened by the PS button - not the game's. Measured
+# 2026-08-19 at 1600x1200; the list wraps, and at 720p only the first six rows
+# are visible with no scrolling, which reads exactly like a dead d-pad. Reached
+# from the top by `up`, since counting backwards from `Exit Game` is both fewer
+# presses and further from selecting it by accident.
+HOME_MENU = [
+    "Resume Game", "Settings", "Trophies", "Take Screenshot",
+    "Start/Stop Recording", "Toggle Fullscreen", "SaveState",
+    "Restart Game", "Exit Game",
+]
+
 # Measured: Main Menu -> Campaign Selection -> Grid Selection Fury ->
 # Cell Selection -> Team Selection -> Launch Game -> InGame. Every step is the
 # default highlighted row, so the walk needs no d-pad at all - which is the
@@ -181,6 +192,21 @@ class Session:
         self.pad.press(button, 0.15)
         time.sleep(settle)
         return was, current_screen()
+
+    def home_menu_select(self, item, settle=1.0):
+        """Open RPCS3's overlay and highlight `item`, without confirming it.
+
+        Only the `SaveState` path has been walked end to end; the rest is the
+        same arithmetic on a list that was read off a screenshot, so treat a
+        first use of another row as unverified.
+        """
+        if item not in HOME_MENU:
+            raise KeyError("no such home-menu item: %r" % item)
+        self.pad.press("ps", 0.30)
+        time.sleep(4.0)
+        for _ in range(len(HOME_MENU) - HOME_MENU.index(item)):
+            self.pad.press("up", 0.12)
+            time.sleep(settle)
 
     def walk_to_race(self, settle=4.0):
         for index, button in enumerate(MENU_WALK, 1):

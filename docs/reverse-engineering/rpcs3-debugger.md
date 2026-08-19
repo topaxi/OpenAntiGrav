@@ -328,6 +328,63 @@ nothing in the log to say which it took.
   breakpoint on the `cellPadGetData` return, which is the one address proven not
   to fire, and the 41 ms round trip would cap it near 8 fps even if it did.
 
+## Savestates work, drive off the pad, and are not worth adopting
+
+They were expected to be the payoff - `rpcs3 --savestate <path>` boots straight
+into one, which would have collapsed the 130-second cold walk to a flag. Tried
+end to end on 2026-08-19 and **not adopted**, for the same shape of reason the
+PSP `.ppst` was not: it does not do what the boot does, and it does not do it
+faster.
+
+### Creating one is a pad walk through RPCS3's own overlay
+
+There is no savestate hotkey that lands here - `xdotool key` reaches nothing,
+with or without `windowfocus`, and `windowclose` does not close the window
+either, so RPCS3's Qt frame ignores synthetic X input on this display. What does
+work is the **PS button**, which opens RPCS3's own home menu overlay and takes
+d-pad and cross from the virtual pad:
+
+```
+{Pad Thread} Input: opening home menu...
+{Overlay Input Thread} Input: SetIntercepted: pads=1, keyboards=1, mice=1
+{Overlay Input Thread} RSX: User selected 'SaveState' in ''
+```
+
+The menu is nine items - `Resume Game`, `Settings`, `Trophies`, `Take
+Screenshot`, `Start/Stop Recording`, `Toggle Fullscreen`, `SaveState`, `Restart
+Game`, `Exit Game` - and it wraps, so **`up` three times from the top is
+`SaveState`**, which is fewer presses and does not risk landing on `Exit Game`.
+One more `cross` opens a page whose single entry is `Save Emulation State And
+Exit`, and a third `cross` takes it.
+
+**The overlay needs a display taller than 720p to show the whole list.** At
+1280x720 only the first six items are visible and the view does not scroll, so
+`SaveState` is invisible and the highlight walks off the bottom - which reads
+exactly like the d-pad not working. 1600x1200 shows all nine. That the d-pad
+works at all is worth stating, since HD's own menus give no `TTY.log` line for a
+highlight move and so say nothing either way.
+
+### Two settings decide whether the file is written and whether it loads
+
+| Setting | Value | What happens otherwise |
+| --- | --- | --- |
+| `Suspend Emulation Savestate Mode` | `true` | no savestate is written at all |
+| `Compatible Savestate Mode` | `true` | capture dies: `Emu State Capture Thread ... Verification failed (object: 0x0)`, then `Saving savestate failed due to fatal error!`, leaving an **empty `savestates/BCES00664/` directory** that looks exactly like success to anything checking for the directory rather than a file |
+| `Save Disc Game Data` | `false` | the file balloons from 44 MB to **2.0 GB** and then refuses to load: `HDD0 deserialization failed: Invalid directory name` |
+
+### What it restores to, and why that ends it
+
+It loads cleanly in about 60 seconds - and restores HD to its **Campaign /
+Event 01/08 screen**, not to the grid the state was taken on. So the trade is a
+60-second load that lands mid-front-end against a 45-second boot that lands at
+`Main Menu`: **slower, and not appreciably closer to a race.** Whether the race
+context is lost to `Compatible Savestate Mode` or to HD's own resume path was
+not established, and is not worth establishing unless the payoff changes.
+
+`Start/Stop Recording` in the same overlay is unexplored and is the more
+interesting item: it would give a driven lap as video, which is the one
+observable a race has that `TTY.log` does not.
+
 ## What is worth doing next, in order
 
 1. **A committed input script and a lap.** The walk is six taps and thrust is a
@@ -336,10 +393,9 @@ nothing in the log to say which it took.
    pacing problem is different here: there is no cycle counter to key on (the
    GDB stub answers nothing while running), so a drive is wall-clock paced and
    is *not* frame-exact. Say so wherever a measurement leans on it.
-2. **`--savestate` on the grid.** `rpcs3 --savestate <path>` boots straight into
-   one, which would collapse the 130-second cold walk to a CLI flag for every
-   run after the first - something the PPSSPP path never had (`psp-drive.py
-   restart` exists precisely because that debugger has no savestate command).
+2. **`Start/Stop Recording` from the home menu**, for a driven lap as video.
+   The overlay is already pad-drivable and the item is two rows from
+   `SaveState`; nothing else gives a race a continuous observable.
 3. **Re-test breakpoints against an address that provably runs.** A race is full
    of them - `RaceManager_GetInstance` at `0x00054628` for a start - and now
    that a race is reachable, the confidence-35 hold above can be settled either
