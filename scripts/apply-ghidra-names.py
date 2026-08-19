@@ -112,6 +112,19 @@ class Bridge:
         with urllib.request.urlopen(req, timeout=60) as r:
             return r.read().decode("utf-8", "replace")
 
+    def _true_current_executable_path(self) -> str:
+        """The executable path of whatever program the bridge will actually
+        write to right now - a plain `get_metadata` with no `program` query
+        parameter at all, bypassing `get()`'s default so this can't quietly
+        re-resolve to the program this Bridge wants rather than the one the
+        bridge is actually holding as current."""
+        with urllib.request.urlopen(f"{self.url}/get_metadata", timeout=30) as r:
+            reply = r.read().decode("utf-8", "replace")
+        for line in reply.splitlines():
+            if line.startswith("Executable Path:"):
+                return line.removeprefix("Executable Path:").strip()
+        return ""
+
     def switch_program(self) -> None:
         """Make this Bridge's program the bridge's active one.
 
@@ -121,21 +134,37 @@ class Bridge:
         resolves `program` correctly. Without this, a multi-binary run keeps
         writing every rename after the first group into whichever program was
         active when the *previous* group left off, and reports "No function
-        found" for addresses that exist perfectly well in the intended one.
+        found" for addresses that exist perfectly well in the intended one -
+        or worse, silently succeeds by writing this group's names into that
+        other program instead.
 
-        The bridge answers with 200 and a JSON `error` body on failure rather
-        than an HTTP error, so a bare `get()` call would swallow it - this
-        raises instead so the caller can't mistake a failed switch for a
-        successful one and silently write into the wrong program. That is a
-        real failure mode, not a hypothetical: `switch_program` is keyed by
-        the program's bare display name, and four of this project's binaries
-        are all named `BOOT.BIN`, so it can only ever reach whichever one
-        Ghidra happens to expose under that name, no matter which full path
-        is requested.
+        `switch_program`'s own `"success": true` reply is not trustworthy:
+        confirmed live, it reports success while leaving the bridge's true
+        current program completely unchanged, for any of the three binaries
+        that share the display name `BOOT.BIN` with `psp-pulse-usa`. So this
+        does not trust the reply at all - it re-reads the true current
+        program afterward with no `program` parameter, the same lookup a
+        write call implicitly uses, and compares its executable path against
+        what `get_metadata` reports *for the program this Bridge asked for*
+        (which, like every other GET, resolves correctly). Only a match
+        means a write will actually land where it's supposed to.
         """
-        reply = self.get("switch_program", program=self.program)
-        if '"success":true' not in reply and '"success": true' not in reply:
-            raise RuntimeError(f"switch_program to {self.program!r} failed: {reply}")
+        self.get("switch_program", program=self.program)
+        wanted = self.get("get_metadata").strip()  # program set by get() -> resolves correctly
+        wanted_path = next(
+            (
+                l.removeprefix("Executable Path:").strip()
+                for l in wanted.splitlines()
+                if l.startswith("Executable Path:")
+            ),
+            "",
+        )
+        actual_path = self._true_current_executable_path()
+        if not wanted_path or actual_path != wanted_path:
+            raise RuntimeError(
+                f"switch_program to {self.program!r} did not take: bridge is still "
+                f"writing to {actual_path!r}, not {wanted_path!r}"
+            )
 
     def has_function(self, address: str) -> bool:
         return "No function found" not in self.get("get_function_by_address", address=address)
