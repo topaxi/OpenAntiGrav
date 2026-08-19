@@ -1338,15 +1338,68 @@ trampoline,
 the second slot too), whose own caller is not found by a static `jal` search
 - the same indirect-dispatch shape as `FUN_08867370` itself.
 
-**So this is a real, specific write shaped exactly like a fuse arm, on a
-weapon-instance pool that is not obviously the one `FUN_08867370` counts
-down** - genuinely useful, and genuinely unconfirmed as *the* write that
-question was chasing. Settling it needs one of: reading what `+0xbc`'s
-per-type table actually enumerates (which weapon types have entries),
-finding `FUN_0886b458`'s own caller, or a live check correlating this
-write's target address against a `FUN_08867370`-enumerated entity the way
-`T`'s identity was settled earlier on this page. None done here - recorded
-as the next concrete step rather than claimed as the answer.
+**A static re-read the same session found a positive match that cuts the other
+way, though.** `FUN_08867370`'s own decrement instruction - read in full this
+time (`disassemble_bytes` over the whole function, not inferred from the
+earlier partial trace) - resolves its per-slot entity with `lw s4, 0x64(s3)`,
+where `s3` walks `craftArray + i*4` exactly like every pool on this page. That
+is the identical `subsystem + i*4 + 0x64` indexing `FUN_0886a920` uses to
+allocate the very entity `FUN_0885bf84` arms, and the decrement itself -
+`lwc1 f12, 0x48(s4)` / `sub.s` / `swc1 f12, 0x48(s4)` at `0x088673fc`-
+`0x08867410` - lands on the exact field `FUN_0885bf84` writes. Two matches,
+not one: the slot arithmetic and the field offset both line up. What still
+does not line up: `FUN_0886a920`'s own allocation cursor lives at
+`subsystem+0xa4` (`sltiu a0, a2, 0x10` gates it against the cap `16` there),
+while `FUN_08867370`'s loop bound is `craftArray+0x164` - a different offset,
+so this is not proof the two functions read the very same field, only that
+they index the very same *shape* of array off what could plausibly be the
+same subsystem struct (a rotating write-cursor and a separate live-count on
+one struct is an ordinary shape, not a stretch). Confidence moves from
+"unconfirmed, pool shape doesn't match" to **"unconfirmed, but the slot
+arithmetic and the written field now both match exactly"** - a real
+upgrade, not a settled question.
+
+**A live check followed up on this, properly controlled - and it neither
+confirmed nor refuted it, for a new and specific reason.** A first attempt
+used a halting write watchpoint with no control alongside it, which
+`ppsspp-debugger.md`'s own "always arm a positive control" section already
+warns reads as indistinguishable from a false negative - so it is not
+reported on its own here, only folded into the second attempt below. Redone
+per that page's actual recipe - `enabled: False, log: True` at full speed,
+plus a positive control watchpoint over 156 bytes of a live craft body
+(the same shape as that page's own worked example) running alongside:
+caught `FUN_0885bf84` arming a fresh entity, armed the log watch on its
+`+0x48` and the control on the craft body, ran free for 90 seconds. The
+control counted **30,413 hits** - proof the watch mechanism, the log, and
+the emulator were all healthy the whole window, not stalled or wedged. The
+target counted exactly **one** hit, `FUN_0885bf84`'s own arming write,
+logged correctly with its PC. And yet by the end of the same 90 seconds,
+that entity's `+0x3c` tag had changed (`2` to `5`) and its `+0x48` field
+held a new value neither `0.0` nor what the arm write had set - meaning
+something wrote there, controls says the watch works, and the log has no
+line for it. Repeated with a lighter, uncontrolled version of the same
+setup on a separate entity, tag changed `9` to `5` inside three minutes;
+both changes read as the pool slot being freed and recycled to a different
+occupant faster than expected, well inside the two-to-three-minute windows
+tried here, and whatever writes a freed slot's memory during that handoff
+is not going through the path `CHK Write*(CPU)` logs. **New trap for
+`ppsspp-debugger.md`, not just a dead end on this page**: a watchpoint with
+a verified-working control can still miss a real write if the writer takes
+a different path than an ordinary CPU store - a zero count is not proof of
+absence the way the existing "always arm a control" section implies, only
+proof the *ordinary* path stayed silent. See
+[ppsspp-debugger.md](../../../reverse-engineering/ppsspp-debugger.md#a-controlled-watch-can-still-miss-a-write---the-pool-slot-outlives-the-log-does-not)
+for the full account.
+
+So: settling whether `FUN_0885bf84` is really the write `FUN_08867370` needs
+is still open, but for a narrower reason now - not "the pool shape doesn't
+match" (it mostly does), but "this weapon-instance's slot lifetime is
+apparently too short to catch mid-flight with a write watch, and the
+watch's blind spot for however it gets recycled is itself unexplained".
+Reading what `+0xbc`'s per-type table actually enumerates, finding
+`FUN_0886b458`'s own caller, or catching a slot at the *moment* it is
+armed and reading its `+0x48` on every single tick thereafter (rather than
+trusting a watchpoint to report absence) are the concrete next steps.
 
 ### Not determined, again
 
