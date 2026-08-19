@@ -310,7 +310,7 @@ every committed scenario.
 | `standing-start.inputs` | **300 ticks of held thrust from the start line.** Two measurements in one: a clean launch to tick 186, then a sustained scrape at speed. The force-balance regression test - see [below](#the-standing-start-and-what-it-regression-tests) |
 | `sideshift-double-tap.inputs` | **The veteran sideshift**: 180 ticks to reach racing speed, then `L` tapped twice inside the `0.25 s` window. Symmetric about the centre line apart from the two taps, so it is decidable against a control that drops them - measured at **11.7 units of leftward displacement** for **1.2 units** of extra path. Not captured from the original yet; see `docs/ghidra/functions/psp-pulse-usa/input-bindings.md` for the recipe |
 | `sideshift-flick.inputs` | **The novice sideshift**, and it needs `--scheme novice`. Holds the sideshift button with the stick already over (which must fire nothing), centres to arm, then flicks. Its control is *the same file under `--scheme veteran`*, where the held button is one airbrake tap and no shift fires - so the steering is identical by construction. The two agree to the printed precision through tick 200 and are **4.0 units apart at tick 210**, inside the shift's own `0.2 s`. Also uncaptured |
-| `talons-junction-time-trial-lap.inputs` | **3,146 ticks: one completed lap of Talon's Junction White.** Not hand-authored - see below, and note it no longer flies clean open-loop |
+| `talons-junction-time-trial-lap.inputs` | **3,146 ticks of Talon's Junction White - despite the name, not a clean whole lap: it stalls and reverses somewhere in it, see below.** Not hand-authored - see below, and note it no longer flies clean open-loop |
 
 **`--scheme` belongs on `drive`, and on `run` it is a trap worth knowing about.**
 A script says `l`, not "left airbrake" or "sideshift button", so the scheme
@@ -339,6 +339,27 @@ Every scenario above this one is a few hundred ticks somebody wrote by hand.
 `talons-junction-time-trial-lap.inputs` is 3,146 ticks and nobody wrote it: it
 was **recorded off a closed-loop autopilot flying the original**, and the file is
 the log of what that autopilot pressed.
+
+**Despite this section's own title, it is not a clean, whole lap.**
+`crates/trace/tests/lap_capture_ground_truth.rs` measured it, off the
+capture's own `position` and `speed` columns rather than anything computed:
+the ship drives **432 of the circuit's 5,094 units - 8.5 % - in the first ten
+seconds**, sits between 0.0 and 3.4 units/s for about a thousand ticks, then
+**drives back the way it came, past the start line, and carries on away from
+it** for the rest of the recording. Replayed through this project's own
+`RaceState`, it reports zero completed laps. **No exit-criterion argument may
+lean on this file being a complete lap.** That correction was made and never
+propagated here or to `crates/physics/src/wall.rs`, which carried the same
+"complete lap" claim; both were left unswept deliberately when the finding
+was made ("recorded in HANDOVER rather than fixed here, because they are
+load-bearing citations in other arguments and want reading rather than
+sed" - the commit that found this), and this paragraph and that file's
+comment are the belated fix. What the file is still good for: its first
+frame resolves to the same ring point `Course::START_LINE_OFFSET`'s start
+line does, which is the strongest check that constant has - and see the note
+below on what its wall-contact percentage and the game's own lap counter
+reading can still be trusted to mean, which is less than the rest of this
+section originally claimed.
 
 `scripts/psp-autopilot.py` breaks in `Ship_UpdateCraft` once per tick exactly the
 way `psp-trace.py` does, reads the craft, and steers it with a pure-pursuit
@@ -379,11 +400,26 @@ autopilot took the 3-lap Time Trial to its end and the game started a fresh
 attempt behind it (`Lap 1 of 3`, `best` cleared), which is also how a capture
 tool sees a finished race: `Ship_UpdateCraft` simply stops being called.
 
+**This is now in direct tension with the "not a lap" finding above, and
+neither side of that tension has been re-examined.** The HUD reading is a
+live observation of the original during the capture session; the "8.5 %,
+then a reversal, zero completed laps" reading is a later measurement of the
+*committed CSV*, off its own `position` and `speed` columns. Both cannot
+describe the same run driving cleanly to a finish line. Either the committed
+file is not the run the HUD reading was taken from, or something about how
+this section's tick number lines up with the file's rows is wrong, or the
+later reading has its own bug the way an earlier draft of that test did (see
+its own doc comment). Unresolved - read the game's-own-word claim below with
+that in mind, and do not stack a third argument on either half until it is.
+
 **The lap is 95.2 % wall-free** (`speed/|velocity|` reads `1.0000` on 2,996 of
 3,146 ticks) with a longest clean run of **314 consecutive ticks**. That retires
 the standing complaint in [`oag-game.md`](oag-game.md) that no capture has more
 than 60 consecutive wall-free ticks: the force law now has a clean, *cornering*
-straight to be measured on, which no previous capture provided.
+straight to be measured on, which no previous capture provided. **This measures
+wall contact only, independent of forward-vs-reversed travel, so it is not
+itself contradicted by the "not a lap" finding** - only the "lap" in its own
+name is.
 
 ### The second lap, taken for one column
 

@@ -222,8 +222,10 @@ pub const MIN_HULL_EXTENT: f32 = 1e-4;
 ///   contact into the observation ring, and `FUN_088418e0` - the only consumer of
 ///   that ring - computes camera and audio amplitudes from literals `0.05`,
 ///   `0.7`, `0.0125` and `1.0` and writes no impulse anywhere.
-/// - `data/traces/talons-junction-time-trial-lap.csv` is 3,146 ticks of a
-///   complete Time Trial lap, `4.8 %` of it in wall contact, and `stun_timer` is
+/// - `data/traces/talons-junction-time-trial-lap.csv` is 3,146 ticks of a Time
+///   Trial capture (not a complete lap despite the name, it stalls and
+///   reverses somewhere in it; see `docs/tools/oag-trace.md`'s own
+///   correction), `4.8 %` of it in wall contact, and `stun_timer` is
 ///   **`0.0` on every tick**.
 /// - `data/traces/talons-junction-standing-start.csv` is 300 more ticks, 230 of
 ///   them one continuous wall scrape, and `stun_timer` is **`0.0` on every tick**
