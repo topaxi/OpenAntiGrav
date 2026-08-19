@@ -6,12 +6,47 @@ use oag_game::render::{Renderer, VideoFormat};
 use oag_game::{audio, catalogue, display, marquee, menu, movie, settings};
 use oag_physics::SpeedClass;
 
+use crate::frontend_stage::HeldFrame;
 use crate::hints::{ESC_TO_MENU, RACE_KEYS, SHELL_KEYS, SHELL_TITLE};
 use crate::menu_stage::{Backdrop, MenuStage, menu_playhead};
 use crate::stage::Stage;
 use crate::window::monitor_names;
 
 use super::Session;
+
+/// Which picture [`Session::open_menus`] should seed the new renderer's
+/// planes with.
+///
+/// **The front end's own held frame on the boot path** (`frontend_held`,
+/// only ever `Some` when the stage being replaced is [`crate::stage::Stage::Frontend`]).
+/// **The menus' own last picture on the `escape` path** (`held_menu_backdrop`,
+/// only consulted when `is_race`): the `MenuStage` that showed it is gone by
+/// the time a race ends, so `Session::launch_race` moves it out to
+/// [`Session::held_menu_backdrop`] before dropping that stage, and this reads
+/// it back rather than the stage itself. `None` on every other transition,
+/// and also whenever the candidate for the path taken is itself `None` - a
+/// source with no backdrop at all seeds nothing on either path.
+///
+/// **Takes the two candidates and `is_race` rather than `&Stage`
+/// itself**, which is what makes this a plain function over data instead of
+/// a method that needs a live stage - and a live `Stage::Race` carries a
+/// whole GPU scene, which has no business existing just to be matched on in
+/// a test. See `main/tests.rs`.
+pub(crate) fn backdrop_seed(
+    frontend_held: Option<&HeldFrame>,
+    is_race: bool,
+    held_menu_backdrop: Option<&HeldFrame>,
+) -> Option<HeldFrame> {
+    let held = if is_race {
+        held_menu_backdrop
+    } else {
+        frontend_held
+    };
+    held.map(|held| HeldFrame {
+        index: held.index,
+        picture: held.picture.clone(),
+    })
+}
 
 impl Session {
     /// Replaces the front end with the menus, seeded from the settings.
@@ -198,22 +233,20 @@ impl Session {
         // one to three frames of menu-on-black on every boot - the flicker on
         // the START press. Seeding the planes here closes it, and `shown` is
         // seeded to match so the draw list names the frame that is really in
-        // them. `escape` -> menus carries nothing, as it carries no playhead:
-        // that path restarts the loop deliberately, see `menu_playhead`.
-        let seed = match &self.stage {
-            Stage::Frontend(stage) => stage
-                .held_backdrop
-                .as_ref()
-                .map(|held| (held.index, held.picture.clone())),
+        // them. **`escape` -> menus carries this too, off `held_menu_backdrop`
+        // rather than a live stage** - it carries no playhead, which restarts
+        // deliberately (see `menu_playhead`), but the picture that playhead
+        // last showed is not lost with it.
+        let frontend_held = match &self.stage {
+            Stage::Frontend(stage) => stage.held_backdrop.as_ref(),
             _ => None,
         };
-        let seeded = match &seed {
-            Some((index, picture)) => {
-                renderer.upload_frame(&self.gpu.queue, picture)?;
-                Some(*index)
-            }
-            None => None,
-        };
+        let is_race = matches!(self.stage, Stage::Race(_));
+        let seed = backdrop_seed(frontend_held, is_race, self.held_menu_backdrop.as_ref());
+        if let Some(held) = &seed {
+            renderer.upload_frame(&self.gpu.queue, &held.picture)?;
+        }
+        let seeded = seed.as_ref().map(|held| held.index);
         // Past the last fallible step, so a renderer that could not be built
         // leaves the front end holding its own backdrop rather than stripped of
         // one it is still drawing.
@@ -240,6 +273,7 @@ impl Session {
                 player: menu_playhead(carried, frames, shape.frame_rate),
                 rect: shape.rect,
                 shown: seeded,
+                held: seed,
             }),
         }));
         self.gpu.window.set_title(SHELL_TITLE);

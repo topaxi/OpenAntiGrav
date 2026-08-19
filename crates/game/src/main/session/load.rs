@@ -281,6 +281,18 @@ impl Session {
         for line in &loaded.report {
             println!("{line}");
         }
+        // Taken out of the outgoing `MenuStage` before it is dropped below -
+        // not the playhead, which `menu_playhead` restarts deliberately on the
+        // way back, but the picture it was last drawing, so `escape` does not
+        // flash black waiting for the restarted feed's first frame. See
+        // `Session::held_menu_backdrop`.
+        self.held_menu_backdrop = match &mut self.stage {
+            Stage::Menu(stage) => stage
+                .backdrop
+                .as_mut()
+                .and_then(|backdrop| backdrop.held.take()),
+            _ => None,
+        };
         self.stage = Stage::race(
             &self.gpu,
             loaded,

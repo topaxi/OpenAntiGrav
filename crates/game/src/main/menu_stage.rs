@@ -6,6 +6,7 @@ use oag_game::keys;
 use oag_game::render::Renderer;
 use oag_game::{font, marquee, menu, movie};
 
+use crate::frontend_stage::HeldFrame;
 use crate::gpu::Gpu;
 
 /// The front end, and everything only it needs.
@@ -82,12 +83,21 @@ pub(crate) struct Backdrop {
     /// **Coming out of the boot sequence this starts `Some`**, seeded by
     /// `Session::open_menus` from the picture the front end had on screen. It
     /// used to start `None` on every path, and the one to three frames of
-    /// menu-on-black that produced were the flicker on the START press. It still
-    /// starts `None` on the `escape` -> menus path, which carries no playhead and
-    /// no picture and so shows black until the restarted feed produces frame 0 -
-    /// see [`menu_playhead`], which is where that whole path's judgement call is
-    /// argued.
+    /// menu-on-black that produced were the flicker on the START press. **It
+    /// also starts `Some` on the `escape` -> menus path now**: the playhead
+    /// still restarts there deliberately - see [`menu_playhead`], which is
+    /// where that judgement call is argued - but the picture does not have to,
+    /// and carrying it is what [`Backdrop::held`] is for.
     pub(crate) shown: Option<usize>,
+    /// The picture behind [`Self::shown`], kept past the moment it was taken
+    /// from the feed - the same reason `FrontendStage::held_backdrop` exists,
+    /// and for the same handoff, one stage later. `take_upto` pops, so without
+    /// this the frame the menus were last drawing would already be gone from
+    /// the ring by the time a race ends and `Session::open_menus` wants to seed
+    /// the next `MenuStage` with it. Moved onto [`crate::session::Session`] in
+    /// `launch_race`, not read again here - once a race starts nothing in this
+    /// stage runs until it is rebuilt.
+    pub(crate) held: Option<HeldFrame>,
 }
 
 /// The playhead the menus open on: the one already running, when there is one.
@@ -123,6 +133,13 @@ pub(crate) struct Backdrop {
 /// too, the change is to stash the playhead on [`Session`] when a race starts
 /// and pass it back in here - the feed needs no restart for that, because it
 /// parks at most four frames past where the menus stopped taking from it.
+///
+/// **This paragraph is about the playhead only.** The *picture* it restarts
+/// on **is** carried across a race now, through [`Backdrop::held`] and
+/// `Session::held_menu_backdrop` - that closed the one to three black frames
+/// `escape` used to show while this fresh player waited for the restarted
+/// feed's first frame, which is a different bug from the one this section
+/// argues about.
 pub(crate) fn menu_playhead(
     carried: Option<movie::Player>,
     frames: usize,
@@ -238,6 +255,10 @@ impl MenuStage {
                 if let Some(frame) = feed.take_upto(backdrop.player.position()) {
                     self.renderer.upload_frame(&gpu.queue, &frame.picture)?;
                     backdrop.shown = Some(frame.index);
+                    backdrop.held = Some(HeldFrame {
+                        index: frame.index,
+                        picture: frame.picture,
+                    });
                 }
                 // The frame on screen, not the one the playhead names.
                 backdrop.shown.map(|frame| menu::Backdrop {

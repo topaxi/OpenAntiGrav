@@ -1,5 +1,6 @@
 //! What the composition root in [`super`] is asserted to do: trace-row poses,
-//! the backdrop playhead carried into the menus, and the conversion-state flag.
+//! the backdrop playhead and picture carried into the menus, and the
+//! conversion-state flag.
 //!
 //! Its own file rather than a `#[cfg(test)]` block at the end of `main.rs`, and
 //! `main/tests.rs` rather than the `crates/game/tests/` beside it: **an
@@ -99,6 +100,54 @@ fn with_nothing_to_carry_the_menus_start_the_loop_themselves() {
     assert_eq!(fresh.position(), 0);
     assert_eq!(fresh.frames(), 270);
     assert!(!fresh.is_finished(), "270 frames of loop are not an ending");
+}
+
+/// A `HeldFrame` distinguishable from any other by its index alone - the
+/// picture is never inspected by [`backdrop_seed`], only carried.
+fn held(index: usize) -> HeldFrame {
+    HeldFrame {
+        index,
+        picture: movie::VideoFrame::default(),
+    }
+}
+
+/// Task #8: `escape` -> menus used to show one to three black frames while a
+/// freshly restarted feed produced its first picture, because nothing carried
+/// a picture across the race the way the boot path already carried one from
+/// the front end. `backdrop_seed` is the decision at the heart of the fix;
+/// `Session::open_menus` is the GPU-touching caller around it, which is why
+/// the assertions are on this pure core rather than on a live `Session`.
+#[test]
+fn escape_seeds_the_menus_from_the_race_side_backdrop_not_the_frontend_side_one() {
+    let from_frontend = held(11);
+    let from_race = held(22);
+    let seeded = backdrop_seed(Some(&from_frontend), true, Some(&from_race))
+        .expect("a race that carried a picture seeds one");
+    assert_eq!(
+        seeded.index, 22,
+        "escape reads held_menu_backdrop, not the frontend's held_backdrop, \
+         which is stale or absent once a race has run"
+    );
+}
+
+#[test]
+fn booting_into_the_menus_seeds_from_the_frontend_side_backdrop() {
+    let from_frontend = held(11);
+    let seeded = backdrop_seed(Some(&from_frontend), false, None)
+        .expect("the boot path seeds from the front end's held frame");
+    assert_eq!(seeded.index, 11);
+}
+
+#[test]
+fn a_source_with_no_backdrop_seeds_nothing_on_either_path() {
+    assert!(
+        backdrop_seed(None, false, None).is_none(),
+        "no front-end picture, boot path"
+    );
+    assert!(
+        backdrop_seed(None, true, None).is_none(),
+        "no held race picture, escape path"
+    );
 }
 
 /// The two figures, and the three fields that follow from them.

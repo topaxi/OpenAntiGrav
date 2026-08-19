@@ -444,7 +444,10 @@ fn main() -> Result<()> {
 /// the tests still call `menu_playhead` and `parse_progress` unqualified,
 /// exactly as they did when all three lived in this file.
 #[cfg(test)]
-use crate::{args::parse_progress, menu_stage::menu_playhead};
+use crate::{
+    args::parse_progress, frontend_stage::HeldFrame, menu_stage::menu_playhead,
+    session::menus::backdrop_seed,
+};
 /// Same reasoning, for a library module `main` itself no longer names: the
 /// windowed load moved into [`prepare`] and took `movie` with it.
 #[cfg(test)]

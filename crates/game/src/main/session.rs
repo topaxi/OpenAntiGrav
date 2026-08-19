@@ -23,7 +23,7 @@ mod frame;
 #[path = "session/load.rs"]
 mod load;
 #[path = "session/menus.rs"]
-mod menus;
+pub(crate) mod menus;
 
 /// Everything that only exists once there is a window.
 pub(crate) struct Session {
@@ -150,6 +150,19 @@ pub(crate) struct Session {
     /// The backdrop's frame rate and where on screen it goes, kept because the
     /// feed carries pixels and not presentation.
     pub(crate) backdrop_shape: Option<BackdropShape>,
+    /// The menu backdrop's last shown picture, stashed here - beside the
+    /// playhead above - the moment a race starts.
+    ///
+    /// `launch_race` moves it out of the outgoing `MenuStage`'s
+    /// [`crate::menu_stage::Backdrop::held`], because `open_menus` needs it
+    /// later and the stage holding it is dropped in the same call. **Not the
+    /// playhead**, which `menu_playhead` restarts deliberately on this path -
+    /// only the picture, so `escape` back to the menus does not show black for
+    /// the one to three frames the restarted feed takes to produce its own
+    /// first one. `None` before the first race; overwritten, not cleared, by
+    /// every later one, the same way `stage.frontend.held_backdrop` is simply
+    /// left behind rather than reset.
+    pub(crate) held_menu_backdrop: Option<crate::frontend_stage::HeldFrame>,
     /// The `--prefetch` worker, when this run started one.
     ///
     /// **On the session and not on the loading stage.** The stage is replaced

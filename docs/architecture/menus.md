@@ -488,15 +488,39 @@ After the change, a full boot reports **zero** frames anywhere between the intro
 and the menus that draw without the backdrop, across four runs including the
 timings that used to reproduce (1).
 
-**That covers the boot path only, and `escape` -> menus is a fourth instance of
-the same thing.** The seeding above reads the front-end stage, so leaving a race
-still opens the menus with no picture and shows black until the restarted feed
-produces frame 0 - one to three frames, by mechanism (2). That the loop
-*restarts* there is the deliberate judgement call already argued above; that it
-shows black first is not, and the original would show frame 0 whichever way the
-loop-phase question goes. Nobody has reported it, so it is recorded rather than
-fixed - see HANDOVER's task #8 row for the fix shape, which is the same one that
-closed the boot path: stash a picture beside the playhead when a race starts.
+**`escape` -> menus was a fourth instance of the same thing, closed 2026-08-19.**
+The seeding above read the front-end stage only, so leaving a race opened the
+menus with no picture and showed black until the restarted feed produced frame
+0 - one to three frames, by mechanism (2). That the loop *restarts* there is
+the deliberate judgement call already argued above and is unchanged; that it
+showed black first was not a deliberate call, and the original would show
+frame 0 whichever way the loop-phase question goes.
+
+The fix is the boot-path mechanism one stage later, not a new one:
+`MenuStage`'s own `Backdrop` gained a `held` field, filled from `take_upto`
+the same way `FrontendStage::held_backdrop` is, and `Session::launch_race`
+moves it out into `Session::held_menu_backdrop` before the outgoing
+`MenuStage` is dropped - the picture, not the playhead, which still restarts.
+`open_menus`'s seeding logic reads whichever of the two candidates the
+outgoing stage supplies, through a small pure function
+(`session::menus::backdrop_seed`) kept separate from the `Renderer`-touching
+code around it precisely so the seeding *decision* is unit-testable without a
+GPU - see `crates/game/src/main/tests.rs`. **Not independently verified on a
+live capture**: driving the windowed build under Xvfb to watch the transition
+the way the boot-path fix was diagnosed turned out to be blocked two ways in
+the sandbox this was written in, neither the missing key-injection tooling
+the ESC-rewiring row used to cite - `xdotool` and `Xvfb` are both present now.
+First, `import -window <id>` came back solid black throughout a run that was
+verifiably rendering (a logged `renderer: vulkan: NVIDIA...` line, movies
+decoding, ticks advancing), so screenshotting this build's window is not
+reliable on that machine regardless of input. Second, and only partly
+separable from the first, no synthetic key (`xdotool key`/`keydown`,
+including a plain `x` throttle test on a confirmed-focused window) was ever
+observed to change anything - which could mean the key never arrived or that
+it arrived and produced no *visible* effect, and the black-screenshot finding
+means that ambiguity cannot be resolved on this machine. See HANDOVER's
+ESC-rewiring row for the fuller account. A machine with working screen
+capture would settle the input question in one run.
 
 ## DISPLAY against GRAPHICS
 
