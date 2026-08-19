@@ -952,22 +952,21 @@ position. So this is not evidence that `body+0x30` is not position, only a
 recorded observation from one uncontrolled sample: worth a same-breakpoint,
 mid-race re-read before anyone treats it as a finding.
 
-**Why 68, and the `_q`, unchanged despite settling `T`.** The write site, its
-accumulate-not-overwrite semantics and the falloff formula are now traced
-across the whole function body, the source-position helper is resolved, and
-`T`'s identity is now measured rather than disputed - genuine gains. What
-still holds it under 70: the caller is found but unread (`FUN_08867b50`,
-`0x08867de4` - `get_xrefs_to` found nothing, which in this database means
-nothing on its own; see the entry on image-base-relative addressing silencing
-every xref tool in `HANDOVER.md`, and `search_instructions` on the
-image-relative operand found this call in one search once that was known - a
-rocket, a mine or a missile explosion is still the obvious guess given the
-address sits among `Rocket_Ctor`/`Rocket_Update`/`Missile_Update`, now
-narrowable by reading `FUN_08867b50` itself rather than by address proximity
-alone), the `stats` table's identity and its `sourceIndex`/`targetIndex`
-calling convention are read off this function alone with no second site to
-cross-check, and the `stats->0x368` branch's three cases are not understood,
-only observed.
+**Why 68, and the `_q`, unchanged despite settling `T` and reading the
+caller.** The write site, its accumulate-not-overwrite semantics and the
+falloff formula are now traced across the whole function body, the
+source-position helper is resolved, `T`'s identity is now measured rather
+than disputed, and the caller (`FUN_08867b50`, below) is now fully read
+rather than found-but-unread - genuine gains, and `targetIndex`'s origin (a
+range-checked sweep over every craft) is settled, not guessed. What still
+holds it under 70: the `stats` table's identity and its
+`sourceIndex`/`targetIndex` calling convention are still read off this
+function alone with no second independent site to cross-check; the
+`stats->0x368` branch's three cases are not understood, only observed; and
+the trigger two hops further up - what arms a craft's fuse timer and what
+calls `FUN_08867370` each tick - is still open, so "a rocket, a mine or a
+missile" is narrowed (see `FUN_08867370`'s own section for why a mine now
+fits best) but not confirmed.
 
 #### A second writer at `FUN_08868ea4` (`0x08868ea4`), not renamed
 
@@ -1137,6 +1136,83 @@ being `1` or `10`), `FUN_08844ec4` (unread), `FUN_0883f424` (unread), and
 `+0x1bc` state building what reads like HUD hit-notification text, not
 chased.
 
+### `FUN_08867b50` (`0x08867b50`-`0x08867f1b`): `Weapon_PostBlastImpulse_q`'s caller, and it settles `targetIndex`
+
+**Read 2026-08-19.** Disassembled in full (decompiler resistant, same as
+everything else on this page today). Signature `(craftArray, sourceIndex)` -
+no target argument at all. It loops every craft in the race
+(`0..*(0x0885b7f8)`, a fixed global - a different "how many craft" count than
+`FUN_08867370`'s own `craftArray+0x164`, both read this session, not yet
+reconciled to each other) as *candidate targets*, and for each one:
+
+1. Skip if a validity check (`FUN_0005ed4c` real address, unread) rejects the
+   candidate.
+2. **A box pre-check**, axis by axis: reject unless the candidate's position
+   lies within `±f20` of the source's position on every axis, where `f20` is
+   `+0x100` off a per-weapon-type stats entry - looked up through a **fixed
+   global weapon-type index** at `*(0x0885bff8)`, not through the source
+   craft's own `+0x40` field the way `Weapon_PostBlastImpulse_q` itself
+   indexes its `stats`. Whether these two lookups always agree (plausible if
+   the global tracks "the weapon type of the blast currently being
+   processed") is not shown here - left open rather than assumed.
+3. **A sphere check** against the same `f20`, then a **second, separate**
+   check against `+0xec` off the *same* fixed-global-indexed stats entry -
+   `+0xec` being the exact field `Weapon_PostBlastImpulse_q` itself reads as
+   `radius`. Two radii, coarse then precise, both from the same lookup.
+4. If both pass: `*(source+0x3c) |= 0x4` (a "this blast connected" flag, set
+   on the source, not the target), then **`Weapon_PostBlastImpulse_q(craftArray,
+   sourceIndex, candidateIndex)`** - `candidateIndex` is exactly this loop's
+   own counter. This settles `targetIndex` completely: it is not chosen by
+   any targeting logic in `Weapon_PostBlastImpulse_q` itself, it is handed in
+   by whichever candidate this sweep is currently on.
+
+After the loop, unconditionally: a two-call side effect (`0x0885abc4` then
+`0x0894c784`, both unread, called with a `100.0` literal and `-1`/`0`
+sentinel-shaped trailing arguments - a camera shake or a screen/audio cue is
+the obvious guess given the shape, not confirmed), gated on
+`*(0x0885b7f8)->0xb8 < 14` skipping it. Measured, not chased further; nothing
+here feeds the pending-impulse path.
+
+### `FUN_08867370` (`0x08867370`-`0x0886759b`): the fuse that drives the sweep
+
+**Read 2026-08-19**, following `FUN_08867b50`'s one confirmed caller
+(`search_instructions` on the image-relative `jal` operand, same method as
+every other caller found this session). Signature `(craftArray, dt)` - `dt`
+in `f12`, the leading-float-does-not-reserve-`a0` convention this project has
+already seen on `Ship_Damage`. It loops every craft
+(`0..craftArray+0x164`, **not** the same count field `FUN_08867b50` uses) and
+for each one:
+
+1. `craft->0x48 -= dt`, written back unconditionally - **a per-craft countdown
+   timer**, decremented every call.
+2. If the timer is now `<= 0.0`: an optional side effect identical in shape to
+   `FUN_08867b50`'s own post-loop block (same two unread calls, same `< 14`
+   gate, same `source+0x3c |= 0x4` flag - gated here on `*(craft+0x3c) & 0x1`
+   rather than always), then **unconditionally** `FUN_08867b50(craftArray,
+   thisCraftIndex)` - the expiring craft becomes the blast's `sourceIndex`.
+
+So the full chain, source to sink, is now: something arms `craft->0x48` to a
+positive value (unread - not found this session, and worth checking whether
+it is the same weapon-fire path `weapon-fire.md` already documents) → some
+per-tick caller feeds `FUN_08867370` a `dt` (unread - `search_instructions` on
+`FUN_08867370`'s own image-relative target found **zero** matches anywhere in
+a full-program scan, which given this database's addressing trap most likely
+means an indirect call through a function-pointer table this project has not
+located, not that the function is dead code) → `FUN_08867370` counts every
+craft's fuse down and fires `FUN_08867b50` for whichever one expires →
+`FUN_08867b50` sweeps every craft as a candidate target, box-then-sphere
+range-checks each one, and calls `Weapon_PostBlastImpulse_q` for every
+candidate that qualifies → `Weapon_PostBlastImpulse_q` posts the impulse this
+page has already fully read.
+
+A countdown timer that lives on the *craft's own struct* rather than a
+separate projectile entity is a specific enough shape to narrow the "rocket,
+mine or missile" guess: a proximity mine dropped behind a craft and armed
+against its own owner's position fits better than a rocket or missile, which
+would more naturally need a separate flying entity to track. Still a guess,
+not confirmed - nothing this session read a weapon-select or inventory label
+against `craft->0x48`.
+
 ### Not determined, again
 
 - **Whether step 2's Shield flag and `weapon-fire.md`'s `entity+0x1b8`
@@ -1148,17 +1224,28 @@ chased.
 - **What `*(entity+0x4c)+0x1bc`'s states mean**, beyond `1` and `10` gating a
   weapon-fire-bookkeeping call and the HUD-text branch above - a full case
   read of `FUN_0883f540` past what this pass needed.
-- **The four unread callers**: `FUN_08867b50` (`Weapon_PostBlastImpulse_q`'s),
-  `FUN_08868a10` and `FUN_088690fc` (the second writer's, two sites),
-  `FUN_0883f540` (`Ship_ApplyCollisionImpulse`'s - now partly read above, but
-  its own five unread callees are not). Reading them is what would identify
-  the two writers' triggers and confirm the consumer's calling context beyond
-  the `a1` answer above.
-- **What is still not wired.** `Ship_ApplyCollisionImpulse` has a Rust port
-  now - [`crate::wall::apply_pending_impulse`], correct and tested against a
-  directly-set [`crate::ShipState::pending_impulse`] - but nothing produces
-  one: neither writer is ported, so the consumer runs every tick against a
-  field that is always zero until one is.
+- **`Weapon_PostBlastImpulse_q`'s caller chain is now read two hops up**:
+  `FUN_08867b50` and its own caller `FUN_08867370` (the fuse driver), both
+  above. Still unread: `FUN_08868a10` and `FUN_088690fc` (the second writer's,
+  two call sites), `FUN_0883f540` (`Ship_ApplyCollisionImpulse`'s - now partly
+  read above, but its own five unread callees are not), what arms
+  `craft->0x48`'s fuse in the first place, and whatever calls
+  `FUN_08867370` itself every tick (not found via a static `jal` search -
+  see that section for why an indirect/table dispatch is the working guess).
+  Reading the second writer's callers is what would identify its own trigger
+  and confirm the consumer's calling context beyond the `a1` answer above.
+- **What is still not wired.** `Ship_ApplyCollisionImpulse` has a Rust port -
+  [`crate::wall::apply_pending_impulse`] - and so does
+  `Weapon_PostBlastImpulse_q` - [`crate::wall::post_blast_impulse`], both
+  correct and tested against directly-supplied inputs. But nothing in this
+  crate calls `post_blast_impulse`: `FUN_08867b50` and `FUN_08867370` are read
+  well enough now to know exactly *how* a blast is dispatched and *why*
+  `targetIndex` is whatever it is, but not well enough to know *when* one
+  actually fires - the fuse-arming site and the per-tick caller feeding
+  `FUN_08867370` its `dt` are both still open. The second writer has no port
+  at all. So `pending_impulse` is still never set by anything in this crate,
+  and `apply_pending_impulse` stays a correct, tested, but fully inert no-op
+  end to end.
 
 ### `0x08815ccc` is a stub, so craft-to-craft contact does not come from the narrowphase
 

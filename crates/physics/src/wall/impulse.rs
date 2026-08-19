@@ -214,15 +214,24 @@ pub fn apply_pending_impulse(state: &mut ShipState) {
 /// do, which this project does not do - see `CLAUDE.md`, "Never invent what
 /// the assets already author."
 ///
-/// # Nothing calls this yet
+/// # Nothing calls this yet, and now the shape of what would is known
 ///
-/// The original's caller, `FUN_08867b50`, is found but unread - which weapon
-/// types trigger a blast, at what `radius`/`power`, and how `source`/`target`
-/// are chosen are all still open. This crate has no `radius`/`power` table to
-/// read them from either. So this is a correct, tested, pure function with no
-/// wiring into any weapon or explosion yet, the same shape
-/// [`apply_pending_impulse`] was before this: provable on directly-supplied
-/// inputs, independent of whichever caller lands first.
+/// The original's caller, `FUN_08867b50`, is read in full: given a source
+/// craft index, it sweeps *every* craft as a candidate target, box-then-
+/// sphere range-checks each one against a per-weapon-type radius, and calls
+/// this function once per candidate that qualifies - which is where
+/// `target`/`source` and the range check this crate would need to reproduce
+/// actually come from. `FUN_08867b50`'s own caller, `FUN_08867370`, is read
+/// too: it decrements a per-craft countdown timer every tick and fires the
+/// sweep for whichever craft's timer expires - a shape that fits a proximity
+/// mine better than a rocket or missile, though unconfirmed. Still open:
+/// what arms that timer, what feeds `FUN_08867370` its own per-tick call, and
+/// the `radius`/`power` table itself, which this crate has not parsed. See
+/// `docs/ghidra/functions/psp-pulse-usa/contact-response.md` for the full
+/// two-hop read. So this is a correct, tested, pure function with no wiring
+/// into any weapon or explosion yet, the same shape [`apply_pending_impulse`]
+/// was before this: provable on directly-supplied inputs, independent of
+/// whichever caller lands first.
 pub fn post_blast_impulse(target: &mut ShipState, source_position: Vec3, radius: f32, power: f32) {
     let diff = target.body.position - source_position;
     let distance = diff.length();
