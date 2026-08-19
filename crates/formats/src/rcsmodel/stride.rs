@@ -96,9 +96,9 @@ impl Mesh {
     ///
     /// **Wipeout HD's road is not in the `.vex`.** All 126 `Mesh` nodes of
     /// `talons_junction/track.vex` are props - blimps, girders, sky traffic -
-    /// and the circuit itself is among the **904 of 983** chunks no node
-    /// references at all, drawn from the visibility set instead. Those chunks
-    /// have no authored box, so [`Self::solve_stride`] has nothing to ask.
+    /// and the circuit itself is among the **913 of 983** chunks no `Mesh`
+    /// node addresses, drawn in world space instead. Those chunks have no
+    /// authored box, so [`Self::solve_stride`] has nothing to ask.
     ///
     /// # Why the most compact reading is the right one
     ///
