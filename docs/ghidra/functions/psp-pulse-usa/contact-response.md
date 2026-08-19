@@ -302,11 +302,13 @@ the same per-contact impulse magnitude into three separate reactions (below) and
 writes no impulse anywhere.
 
 The captures agree, and they are the stronger leg:
-`data/traces/talons-junction-time-trial-lap.csv` is a complete lap, 3,146 ticks
-with `4.8 %` of them in wall contact, and `stun_timer` reads `0.0` on **every
-tick**; `data/traces/talons-junction-standing-start.csv` adds 300 more, 230 of
-them one continuous scrape, also `0.0` throughout. So the stun belongs to being
-hit by something - a rival, a weapon - and not to touching the track.
+`data/traces/talons-junction-time-trial-lap.csv` is 3,146 ticks (not a complete
+lap despite the name - it stalls and reverses somewhere in it, see
+`docs/tools/oag-trace.md`) with `4.8 %` of them in wall contact, and
+`stun_timer` reads `0.0` on **every tick**; `data/traces/talons-junction-standing-start.csv`
+adds 300 more, 230 of them one continuous scrape, also `0.0` throughout. So the
+stun belongs to being hit by something - a rival, a weapon - and not to
+touching the track.
 `crates/physics` used to arm it from the wall constraint and no longer does; see
 `crates/physics/src/wall.rs`'s `STUN_PER_CONTACT`. Confidence **88**.
 
