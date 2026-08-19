@@ -1214,12 +1214,12 @@ impl CameraView {
 
     /// Whether the player's own hull is drawn.
     ///
-    /// False for the cockpit view alone. The original sets one byte
-    /// (`craft+0x6d`) to 1 for `OPT_INT` and 0 for both external views and
-    /// mirrors it to the byte beside it; that it means "hide the own ship" is
-    /// inference from the correlation rather than from a consumer, at confidence
-    /// **70** - but it is the one thing that distinguishes a cockpit view, and
-    /// the alternative reading would leave a hull filling the frame.
+    /// False for the cockpit view alone. The original sets `craft+0x6d` to 1
+    /// for `OPT_INT` and 0 for both external views. **A consumer of it is now
+    /// read and agrees**: `ShipShield_Update` (`0x0885e254`) branches on it to
+    /// draw the shield's hull-shaped shell when clear and its cockpit sphere
+    /// when set, hiding the other - only sensible as "the camera is inside
+    /// this craft". Confidence **70** -> **82**; see `shield-pickup.md`.
     #[must_use]
     pub fn draws_own_ship(self) -> bool {
         self != Self::Internal

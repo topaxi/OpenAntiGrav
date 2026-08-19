@@ -375,6 +375,15 @@ pub struct Loaded {
     /// terms as [`Self::boost_model`] - a missing rocket model falls back to the
     /// billboard rather than failing the race.
     pub rocket_model: Option<Model>,
+    /// The sphere a fired Shield shows from **inside** the cockpit, drawn
+    /// instead of the per-team shell when the camera is in the craft.
+    ///
+    /// One entry for the whole game rather than one per team, which is the
+    /// original's own arrangement: `ShipShield_Construct` (`0x0885db38`) builds
+    /// the shell's name from the team's directory and this one from a literal
+    /// `Data\Weapons`. `None` on a source that does not carry it, on the same
+    /// terms as [`Self::rocket_model`].
+    pub shield_cockpit: Option<Model>,
     pub liveries: Vec<Livery>,
     /// The collision soup, if [`Options::collision`] asked for it.
     pub collision_model: Option<Model>,

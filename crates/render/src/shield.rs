@@ -12,7 +12,8 @@
 //! craft: `Data\Ships\<Team>\shipshield.vex`, a single additive shell the shape
 //! of the hull, and `Data\Weapons\vr_shield_cockpit.vex`, a noise-textured
 //! sphere. `ShipShield_Update` (`0x0885e254`) draws exactly one of them - the
-//! shell from an external camera, the sphere from the cockpit - at a scale that
+//! shell from an external camera, the sphere from the cockpit, on `craft+0x6d`
+//! and hiding whichever it did not draw - at a scale that
 //! swells on impact and settles, with an alpha that breathes. `ShipShield_Hit`
 //! (`0x0885eb04`) is what an absorbed hit calls, and it is the only thing that
 //! makes the shell visibly react.
@@ -121,9 +122,10 @@ pub const ALPHA_FLOOR: f32 = ALPHA_MID - ALPHA_FLICKER;
 
 /// What the cockpit sphere's scale is multiplied by. `1.8`.
 ///
-/// Only reachable from an internal camera, which this engine does not have -
-/// kept because it is recovered and because the constant is the whole of the
-/// difference between the two branches.
+/// **Not a decoration on the number**: `vr_shield_cockpit.vex` is authored at
+/// radius `3.99` against a hull of about `6.97`, so at `1.8` it reaches `7.2`
+/// and clears the hull the camera is sitting inside. Authored smaller and grown
+/// past, which is what the constant is *for*.
 pub const COCKPIT_SCALE: f32 = 1.8;
 
 /// Alpha at or below which a **fading** shell stops being drawn at all. `0.1`.

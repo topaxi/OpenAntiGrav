@@ -94,6 +94,14 @@ pub struct Scene {
     /// buffer every frame (`Drawable::tint`), so two craft with shields up at
     /// different points of their fade need two buffers.
     shield: Vec<Option<Drawable>>,
+    /// The shield seen from **inside** the cockpit: one sphere, not one per
+    /// craft, because only the player's camera can ever be inside one.
+    ///
+    /// Drawn *instead of* the player's entry in [`Self::shield`] while
+    /// `Race::draws_own_ship` is false, which is exactly the branch
+    /// `ShipShield_Update` takes on `craft+0x6d`. `None` on a source that does
+    /// not carry `Data\Weapons\vr_shield_cockpit.vex`.
+    shield_cockpit: Option<Drawable>,
     /// One drawable per projectile slot, for rockets drawn as their own model.
     ///
     /// **Empty** when `Data\Weapons\Rocket.vex` did not load, and the sprite
@@ -186,6 +194,7 @@ impl Scene {
         weapon_pad_model: Option<Model>,
         mode: Mode,
         rocket_model: Option<Model>,
+        shield_cockpit: Option<Model>,
         flare: Option<FlareTexture>,
         noise: Option<FlareTexture>,
         format: wgpu::TextureFormat,
@@ -532,6 +541,23 @@ impl Scene {
                 mesh_render::GlowMask::Written,
             )?));
         }
+        // The cockpit sphere, on the shell's own pipeline: same additive blend,
+        // same glow mask, same argument. One rather than eight - a craft whose
+        // camera is inside it is the player's, and there is one of those.
+        let shield_cockpit = match shield_cockpit.filter(|model| !model.indices.is_empty()) {
+            Some(model) => Some(Drawable::new(
+                device,
+                queue,
+                model,
+                format,
+                anisotropy,
+                sample_count,
+                scene_depth,
+                exhaust::BLEND,
+                mesh_render::GlowMask::Written,
+            )?),
+            None => None,
+        };
         // One per projectile slot, cloned the way the hulls and plumes above are.
         // A rocket's hull is opaque - it is a painted dart, not a glow - so this
         // takes the ordinary transparent blend and the protected glow mask the
@@ -589,6 +615,7 @@ impl Scene {
             ships,
             boost,
             shield,
+            shield_cockpit,
             rockets,
             boost_uv_transforms,
             collision,

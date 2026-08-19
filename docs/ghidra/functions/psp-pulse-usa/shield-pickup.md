@@ -350,6 +350,23 @@ an activation colour, writes `obj->0x60 = 0.15`, `obj->0x68 = 1.0`,
 The literals `0.15`, `0.2`, `1.0`, `1.1`, `0.012`, `0.25`, `0.75` and `1.8` are
 instruction immediates, read directly. Confidence **84**.
 
+### The camera branch is a second consumer of `craft+0x6d`
+
+`crate::display::CameraView::draws_own_ship` in this project reads the same
+byte and recorded it at confidence **70**, as "inference from the correlation
+rather than from a consumer" - the original sets it to 1 for `OPT_INT` and 0 for
+both external views, and nothing had been found that *used* it.
+
+This is that consumer, and it agrees. Choosing between a hull-shaped shell and a
+sphere scaled to clear the hull only makes sense as "the camera is inside this
+craft", and it is an independent site rather than the same correlation read
+twice. Raised to **82** on that page in the same change.
+
+**The `1.8` is not arbitrary either**: `vr_shield_cockpit.vex` is authored at
+radius `3.99` against an Assegai hull of `6.97`, so `1.8` carries it to `7.2` -
+just past the hull, which is exactly what a shell has to do to enclose a camera
+sitting inside one.
+
 **The flicker is `sinf`, and this nearly went down as unreadable.** The update
 calls one function with the object's accumulated time and spends the result on
 both the alpha and the scale, and the decompiler prints it as an unresolved

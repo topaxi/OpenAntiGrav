@@ -201,19 +201,31 @@ impl Scene {
             let Some(shell) = shell else {
                 continue;
             };
-            if !race.ship_active(slot) {
+            if !race.ship_active(slot) || !shell_visible(race, slot) {
                 continue;
             }
             let state = race.shield_of(slot);
-            if !state.visible() {
-                continue;
-            }
             shell.write(
                 queue,
                 view_projection,
                 race.ship_model_matrix_of(slot) * Mat4::from_scale(Vec3::splat(state.scale())),
             );
             shell.tint(queue, state.colour());
+        }
+        // The cockpit sphere, which replaces the player's shell rather than
+        // joining it - `ShipShield_Update` draws one *or* the other and hides
+        // the one it did not draw. At `cockpit_scale`, the recovered `1.8` times
+        // the shell's own, so it encloses a camera sitting inside the hull.
+        if let Some(sphere) = &self.shield_cockpit
+            && cockpit_shield_visible(race)
+        {
+            let state = race.shield_of(0);
+            sphere.write(
+                queue,
+                view_projection,
+                race.ship_model_matrix_of(0) * Mat4::from_scale(Vec3::splat(state.cockpit_scale())),
+            );
+            sphere.tint(queue, state.colour());
         }
         // One matrix per rocket in the air. `zip` bounds it the way the ships'
         // loop is bounded: nothing in the air writes nothing, and the drawables
@@ -508,10 +520,15 @@ impl Scene {
             let Some(shell) = shell else {
                 continue;
             };
-            if !race.ship_active(slot) || !race.shield_of(slot).visible() {
+            if !race.ship_active(slot) || !shell_visible(race, slot) {
                 continue;
             }
             stats.add(shell.draw(&mut pass, None, None, None));
+        }
+        if let Some(sphere) = &self.shield_cockpit
+            && cockpit_shield_visible(race)
+        {
+            stats.add(sphere.draw(&mut pass, None, None, None));
         }
         if let Some(collision) = &self.collision {
             stats.add(collision.draw(&mut pass, None, None, None));
@@ -596,4 +613,26 @@ pub(super) fn msaa_color_texture(
             view_formats: &[],
         })
     })
+}
+
+/// Whether one craft's hull-shaped shield shell is drawn this frame.
+///
+/// **The player's is swapped for the cockpit sphere, not merely hidden.**
+/// `ShipShield_Update` branches on `craft+0x6d` and draws the shell for an
+/// external camera or the sphere for an internal one, clearing the other's draw
+/// flag - so exactly one is up per craft. `craft+0x6d` is the same byte
+/// [`crate::display::CameraView::draws_own_ship`] reads, which is why that is
+/// the test here rather than a second source of truth.
+///
+/// Only slot 0 can take the cockpit branch: the byte is set for the local
+/// player alone, and an opponent's shell is drawn from outside whatever the
+/// player's camera is doing.
+fn shell_visible(race: &Race, slot: usize) -> bool {
+    race.shield_of(slot).visible() && (slot != 0 || race.draws_own_ship())
+}
+
+/// Whether the cockpit sphere is drawn this frame: the player's shield is up
+/// and the camera is inside the hull.
+fn cockpit_shield_visible(race: &Race) -> bool {
+    !race.draws_own_ship() && race.shield_of(0).visible() && race.ship_active(0)
 }

@@ -631,3 +631,46 @@ fn a_missile_with_nothing_to_lock_is_not_spent() {
         "the pickup was spent on a shot that never happened"
     );
 }
+
+/// The cockpit view swaps the shield's **model**, it does not merely hide the
+/// player's hull.
+///
+/// `ShipShield_Update` (`0x0885e254`) branches on `craft+0x6d` and draws the
+/// hull-shaped shell *or* the `vr_shield_cockpit.vex` sphere, clearing the
+/// other's draw flag - so exactly one is up. `craft+0x6d` is the same byte
+/// `CameraView::draws_own_ship` reads, which is what lets this be asserted
+/// without a second source of truth.
+///
+/// Asserted against the two predicates the frame actually gates on rather than
+/// against a rendered pixel, because a headless run has no window and the
+/// swap is a branch rather than a look. See
+/// `docs/ghidra/functions/psp-pulse-usa/shield-pickup.md`.
+#[test]
+fn the_cockpit_view_swaps_the_shield_shell_for_its_sphere() {
+    use crate::display::CameraView;
+
+    let mut race =
+        race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_shield_table());
+    let mut buttons = Buttons::new();
+    race.tick(&buttons.tick(CROSS));
+    race.tick(&buttons.tick(CROSS | SQUARE));
+    assert!(race.shield_of(0).visible(), "the shield never came up");
+
+    // External: the hull is drawn and so is the shell around it.
+    race.set_camera_view(CameraView::Far);
+    assert!(race.draws_own_ship());
+
+    // Internal: neither the hull nor the shell, and the sphere instead - at the
+    // recovered `1.8` times the shell's own scale, which is what carries it past
+    // a hull the camera is sitting inside.
+    race.set_camera_view(CameraView::Internal);
+    assert!(!race.draws_own_ship());
+    let state = race.shield_of(0);
+    assert!(
+        (state.cockpit_scale() - state.scale() * oag_render::shield::COCKPIT_SCALE).abs() < 1e-5
+    );
+    assert!(
+        state.cockpit_scale() > state.scale(),
+        "the cockpit sphere is not drawn larger than the shell"
+    );
+}

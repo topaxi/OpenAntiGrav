@@ -498,6 +498,10 @@ pub fn load(options: &Options) -> Result<Loaded> {
             None
         }
     };
+    // The cockpit half of the shield, on the same terms and for the same
+    // reason: not per team, not per track, one entry for every craft in the
+    // game. The shell beside it *is* per team and loads with the livery.
+    let shield_cockpit = crate::livery::cockpit_shield(&mut archives, options.lod, &mut report);
 
     // Shared with the sky and the pads below: all three are node classes inside
     // the same track file, and a material in any of them names a texture by its
@@ -925,6 +929,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         hd_bloom,
         liveries,
         rocket_model,
+        shield_cockpit,
         visibility,
         flare,
         noise,
