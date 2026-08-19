@@ -2,8 +2,8 @@
 
 **Binary:** `pulse-psp` `BOOT.BIN`, image base `0x08804000`.
 **Status:** the arm, the countdown, the consumers of its flag and the whole of
-its visual object are read end to end, statically. No runtime leg yet, so
-nothing here exceeds **88** per the
+its visual object - including its colours - are read end to end, statically. No
+runtime leg yet, so nothing here exceeds **88** per the
 [confidence rubric](../../../reverse-engineering/confidence-rubric.md).
 
 This page is about the **pickup** - the thing a Weapon Pad hands out and
@@ -361,15 +361,85 @@ alpha. The first implementation pass here filled that slot with an invented
 is general - an unresolved `func_0x...` in this image is not evidence that
 anything is unreadable, only that the call was not relocated.
 
-**The three colour vec4s are not resolved.** They are `lui 0x6`/`addiu`
-constant-pool loads - `0x627a8` (target), `0x627b8` (hit) and `0x627c8`
-(activation), unrelocated - and the relocation model that works for text and
-for string pointers puts all three inside `.text`, where the bytes decode as
-instructions. So the shield's **tint** is unknown; its geometry, its texture,
-its timing and its shape are not. Reproducing the tint by eye is exactly the
-invention `CLAUDE.md` forbids, so the reimplementation draws the model's own
-authored colour and records the gap here. Whoever fixes the relocation model
-closes this in one read.
+## The colours, and the two things that hid them
+
+The first pass on this page recorded the three colour vec4s as unresolvable and
+had the reimplementation draw the shell white. Both halves are now settled, and
+**how** they hid is the generally useful part - the same two traps sit under
+every unresolved constant in this image.
+
+### A data reference relocates against the *other* segment
+
+This is an `ET_SCE_RELEXEC` PRX with two `LOAD` segments: text+rodata+data at
+vaddr `0`, and `.cplinit`/`.linkonce.d`/`.ctors`/**`.bss`** at vaddr `0x2d5798`.
+Its relocations live in `SHT_PRXRELOC` (`0x700000a0`) sections of ordinary
+`Elf32_Rel` shape, and `r_info` packs three fields rather than one: the type in
+bits 0-7, the segment holding the *site* (`OFS_BASE`) in bits 8-15, and **the
+segment holding the *target* (`ADDR_BASE`) in bits 16-23**.
+
+Ghidra applies none of them, so a `lui`/`addiu` pair prints its raw addend and
+the reader has to supply the base. Adding the image base `0x08804000` - which is
+right for every `jal`, and right for the string pointers this page already used
+- puts `0x627a8` at `0x088667c8`, **inside `.text`**, where the bytes decode as
+instructions. That reads exactly like "there is no such constant", and it is why
+the first pass gave up.
+
+Read from the table instead, the `ShipShield_Hit` pair at raw `0x5ab04`/`0x5ab08`
+is `R_MIPS_HI16`/`R_MIPS_LO16` with `OFS_BASE=0` and **`ADDR_BASE=1`**. So the
+base is `0x2d5798 + 0x08804000 = 0x08ad9798`, and the three addends land at
+`0x08b3bf40`, `0x08b3bf50` and `0x08b3bf60` - in `.bss`. That also settles
+[contact-response.md](contact-response.md)'s `DAT_08b3bf50`, which is the same
+address reached by the same arithmetic.
+
+**The rule, for the next constant:** a `jal` target is `addend + 0x08804000`; a
+`lui`/`addiu` data reference is `addend + 0x08804000` when `ADDR_BASE` is `0`
+and `addend + 0x08ad9798` when it is `1`, and the only way to know which is to
+read `r_info`. A quick test that needs no parser: if the segment-0 reading lands
+below `0x08a76a3c` it is pointing into `.text` and is almost certainly wrong.
+
+### Their one writer is a static initialiser no call reaches
+
+`.bss` is zeroed at load, so the values have to be written at runtime - and
+nothing `jal`s the function that writes them. `FUN_0885eb54`, sitting
+immediately after `ShipShield_Hit`, stores all four vec4s from two registers
+(`f12 = 0.0`, `f13 = 1.0`) and returns; a whole-image scan for both a `jal` and
+a stored pointer to it finds **nothing**.
+
+It is not dead. It is entry 15 of **`.cplinit`**, the C++ static-initialiser
+list at `0x2d5798`, as the pair `(0x0885eb54, 0)` - found by scanning the raw
+image for the word rather than by following a reference. The same scan run
+against `ShipShield_Hit` finds its two known callers, which is what says the
+method works.
+
+### The values
+
+| Addend | Address | Value | Role |
+| --- | --- | --- | --- |
+| `0x627c8` | `0x08b3bf60` | `(0, 0, 0, 0)` | what `ShipShield_Activate` sets the **current** colour to |
+| `0x627a8` | `0x08b3bf40` | `(1, 1, 1, 1)` | what it sets the **target** to |
+| `0x627b8` | `0x08b3bf50` | `(0, 1, 1, 1)` | what `ShipShield_Hit` sets the current colour to |
+| `0x627d8` | `0x08b3bf70` | `(0, 0, 0, 0)` | written by the initialiser, read by nothing on this page |
+
+And two more from `.data`, which were never in doubt once the right base was
+used: `ShipShield_Activate` sets the swell to `0.7` (`0x08ab0f18`) and
+`ShipShield_Deactivate` retargets it to `1.2` (`0x08ab0f1c`).
+
+So the whole animation, which is a good deal more than "a shell appears":
+
+- **Activation** starts the shell at transparent black and `0.7` of its size,
+  and lerps it to white and `1.0`. It **fades up and grows into place**.
+- **An absorbed hit** sets the colour to `(0, 1, 1, 1)` and the swell to `1.1`.
+  The red channel alone drops out, so against the mesh's own authored
+  `(0.55, 0.50, 0.91, 0.50)` the flash is a **hue shift to cyan** rather than a
+  brightening - the alpha is untouched. Both settle back over about a quarter of
+  a second.
+- **Expiry** targets transparent black *and* `1.2`, so the shell **blows outward
+  as it fades** rather than shrinking away.
+
+White being the target is what makes the settled shell exactly what the artists
+painted: the draw multiplies these against the model's own vertex colours, and
+white is that multiply's identity. Confidence **84**, the same as the rest of
+the object - the arithmetic is unambiguous and there is still no runtime leg.
 
 ## Names recovered
 
@@ -387,6 +457,7 @@ All in `names.tsv` in this change.
 | `0x0885e1c0` | `ShipShield_Deactivate` | 84 |
 | `0x0885e254` | `ShipShield_Update` | 84 |
 | `0x0885eb04` | `ShipShield_Hit` | 80 |
+| `0x0885eb54` | `ShipShield_InitColours` | 82 |
 | `0x0883f13c` | `Ship_ApplyPendingWeaponDamage` | 82 |
 
 `0x08861534`, the Turbo's
@@ -397,7 +468,6 @@ database and no page section of its own, so it gets no row.
 
 - **No runtime leg.** Nothing on this page has been watched in PPSSPP. Every
   claim is a static read, which is why nothing exceeds 88.
-- **The three colour constants**, above.
 - **The block behind the contact loop's first shield gate**
   (`0x08841fe0`-`0x08842088`), which does more than post damage. The other
   three gates are read; see the table above.
@@ -410,6 +480,13 @@ database and no page section of its own, so it gets no row.
 
 ## History
 
+- 2026-08-19, third pass: **the colours resolved**, and with them the fade-up,
+  the grow-in, the cyan hit flash and the expand-on-expiry - none of which the
+  first two passes knew about. Two things had hidden them: a data reference
+  relocates against segment 1 (`ADDR_BASE=1` in the PRX relocation table, which
+  Ghidra does not apply), and their one writer is a `.cplinit` static
+  initialiser that no call reaches. Both are written up above as general traps,
+  because neither is specific to the shield.
 - 2026-08-19, same day, second pass: all four contact-loop gates read - the
   third suppresses the collision sparks, which is a finding of its own - and the
   flicker settled as `sinf` rather than left as an unread function. The asset

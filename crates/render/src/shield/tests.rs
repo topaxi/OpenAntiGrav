@@ -12,13 +12,68 @@ fn a_fresh_shield_draws_nothing() {
     assert!(!shield.visible());
 }
 
-/// `ShipShield_Activate` sets the object's active flag and nothing else has to
-/// happen for the shell to appear - no first frame of ramp, no reveal delay.
+/// `ShipShield_Activate` sets the object's active flag on the frame it is
+/// called, but the shell **fades up from nothing and grows from `0.7`** rather
+/// than appearing whole: the activation colour is transparent black and the
+/// target is white.
 #[test]
-fn activating_shows_the_shell_on_the_same_frame() {
+fn activating_fades_the_shell_up_rather_than_popping_it_in() {
     let mut shield = ShipShield::new();
     shield.activate();
-    assert!(shield.visible());
+    assert!(
+        shield.visible(),
+        "the shell is not up on the activate frame"
+    );
+    assert_eq!(shield.colour()[3], 0.0, "the shell appeared at full alpha");
+    assert!(
+        shield.scale() < SWELL_REST,
+        "the shell appeared at full size: {}",
+        shield.scale()
+    );
+
+    for _ in 0..40 {
+        shield.advance(DT);
+    }
+    assert!(
+        shield.colour()[3] > 0.9 * ALPHA_FLOOR,
+        "the shell never faded up: alpha {}",
+        shield.colour()[3]
+    );
+    assert!(
+        (shield.scale() - (SWELL_REST + SCALE_BASE)).abs() < 0.02,
+        "the shell never grew into place: {}",
+        shield.scale()
+    );
+}
+
+/// An absorbed hit flashes the shell **cyan** - the red channel alone drops to
+/// zero - and it lerps back to white. Against the mesh's own blue-violet that
+/// reads as a hue shift rather than a brightening, which is why the alpha is
+/// deliberately untouched by the flash.
+#[test]
+fn an_absorbed_hit_flashes_the_shell_cyan_and_settles_back_to_white() {
+    let mut shield = ShipShield::new();
+    shield.activate();
+    for _ in 0..60 {
+        shield.advance(DT);
+    }
+    let settled = shield.colour();
+    assert!(settled[0] > 0.9, "the settled shell is not white");
+
+    shield.hit();
+    let flash = shield.colour();
+    assert_eq!(flash[0], 0.0, "the flash left the red channel up");
+    assert_eq!(flash[1], 1.0);
+    assert_eq!(flash[2], 1.0);
+
+    for _ in 0..40 {
+        shield.advance(DT);
+    }
+    assert!(
+        shield.colour()[0] > 0.9,
+        "the flash never settled back to white: red {}",
+        shield.colour()[0]
+    );
 }
 
 /// `ShipShield_Hit` stores `1.1` into the swell, and the drawn scale is
@@ -29,6 +84,11 @@ fn activating_shows_the_shell_on_the_same_frame() {
 fn an_absorbed_hit_bulges_the_shell_past_the_flickers_reach() {
     let mut shield = ShipShield::new();
     shield.activate();
+    // Settled first: an activation *starts* at `SWELL_ON_ACTIVATE`, so a hit
+    // measured against the activate frame would be reading the grow-in.
+    for _ in 0..60 {
+        shield.advance(DT);
+    }
     let resting = shield.scale();
     shield.hit();
     let bulged = shield.scale();
@@ -76,6 +136,11 @@ fn a_hit_with_no_shield_up_is_a_no_op() {
 fn the_alpha_flicker_stays_inside_its_recovered_quarter() {
     let mut shield = ShipShield::new();
     shield.activate();
+    // Past the fade-up, so the bound is about the flicker rather than about the
+    // colour still ramping toward `TARGET_COLOUR`.
+    for _ in 0..120 {
+        shield.advance(DT);
+    }
     for tick in 0..600 {
         shield.advance(DT);
         let alpha = shield.colour()[3];
@@ -163,13 +228,26 @@ fn a_substep_shorter_than_the_originals_moves_no_lerp() {
 }
 
 /// Deactivating leaves the shell up. It disappears when its alpha crosses
-/// `0.1`, which is what makes an expiring shield dissolve. The colour target it
-/// fades toward is the one part of this the tint would change.
+/// `0.1`, which is what makes an expiring shield dissolve **while expanding** -
+/// the deactivate retargets the swell to `1.2`, above rest, so the shell blows
+/// outward as it thins.
 #[test]
 fn deactivating_fades_rather_than_hiding() {
     let mut shield = ShipShield::new();
     shield.activate();
+    for _ in 0..60 {
+        shield.advance(DT);
+    }
+    let settled = shield.scale();
     shield.deactivate();
+    for _ in 0..6 {
+        shield.advance(DT);
+    }
+    assert!(
+        shield.scale() > settled,
+        "an expiring shell shrank instead of expanding: {settled} -> {}",
+        shield.scale()
+    );
     assert!(
         shield.visible(),
         "the shell vanished on the deactivate frame"
