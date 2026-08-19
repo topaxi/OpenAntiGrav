@@ -46,7 +46,7 @@
 
 use anyhow::{Context, Result};
 
-use oag_render::post::{fsr1, fxaa, smaa};
+use oag_render::post::{fsr1, fullscreen_layout, fxaa, smaa};
 
 use crate::display::{AntiAliasing, Brightness, Gamma, Scale, Upscaler};
 
@@ -156,37 +156,7 @@ impl Framebuffer {
             source: wgpu::ShaderSource::Wgsl(include_str!("upscale.wgsl").into()),
         });
 
-        let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("upscale"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 2,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-            ],
-        });
+        let layout = fullscreen_layout(device, "upscale");
 
         // Linear both ways. Upscaling a low internal resolution with nearest
         // sampling gives hard pixel edges, which is a look this project has not

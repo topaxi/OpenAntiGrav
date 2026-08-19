@@ -25,7 +25,7 @@ default_scenario := "verification/scenarios/talons-junction-time-trial-lap.input
 native_video_flags := if os() == "linux" { "--features native-video" } else { "" }
 
 # fmt + lint + test + docs + architecture rules, the gate every commit must pass
-check: fmt-check lint test check-docs check-deps check-determinism check-size check-handover
+check: fmt-check lint test check-docs check-deps check-determinism check-size check-names check-handover
 
 # Documentation is a deliverable, so its links are checked like any other build output
 check-docs:
@@ -473,3 +473,8 @@ check-determinism:
 # over it grows. race.rs reached 11,294 lines before anything measured it
 check-size:
     python3 scripts/check-file-size.py
+
+# The names.tsv checks `just apply-names` already makes, minus the Ghidra bridge
+# it needs to make them. CI has no Ghidra, so without this nothing reads the file
+check-names:
+    python3 scripts/check-ghidra-names.py

@@ -16,7 +16,7 @@ for what is actually done versus planned before assuming a subsystem exists.
 ## Commands
 
 ```sh
-just              # fmt-check + lint + test + check-docs + check-deps + check-determinism + check-size + check-handover - the gate every commit must pass
+just              # fmt-check + lint + test + check-docs + check-deps + check-determinism + check-size + check-names + check-handover - the gate every commit must pass
 just fmt          # cargo fmt --all
 just lint         # cargo clippy --workspace --all-targets -- -D warnings
 just test         # cargo nextest run --workspace
@@ -25,6 +25,7 @@ just check-docs   # validates internal links in docs/ (scripts/check-doc-links.p
 just check-deps   # asserts the two dependency-boundary rules below (scripts/check-dependency-rules.py)
 just check-determinism # asserts no platform transcendental reaches simulation code (scripts/check-transcendentals.py)
 just check-size   # ratchet on file length (1k lines) and on inline #[cfg(test)] modules (200) (scripts/check-file-size.py)
+just check-names  # every names.tsv row still matches its evidence page, offline (scripts/check-ghidra-names.py)
 just check-handover # HANDOVER.md stays under 256 KiB, the Read tool's own ceiling (scripts/check-handover-size.py)
 just build        # cargo build --workspace
 just docs         # cargo doc --workspace --no-deps --document-private-items
@@ -201,7 +202,10 @@ Consequences that affect how you name and touch things in Ghidra / decompiled co
   `address<TAB>kind<TAB>name<TAB>confidence<TAB>page`, `kind` being `function` or `data`.
   `scripts/apply-ghidra-names.py` **refuses** a row whose address and name do not both
   still appear on the page it cites, so the row and its evidence page land together or
-  not at all. A name recovered but not written down is a name the next contributor
+  not at all. It only gets to refuse when a Ghidra bridge is up, so `just check-names`
+  makes the same checks offline and is part of the `just` gate. The name column holds
+  the **bare** name - the `_q` is derived from the confidence column, never written
+  there. A name recovered but not written down is a name the next contributor
   re-derives from scratch.
 - The loop is observe -> hypothesise -> verify -> document -> implement; don't skip
   straight to implementing from a plausible reading. See

@@ -1271,3 +1271,55 @@ every plausible displacement and call tree came up empty - see
 The shape generalises to any "who writes this heap field" question: derive the
 address live rather than guessing it, arm write-only/log-true, always run a
 control alongside, and read the writer's PC out of the emulator's own stdout.
+
+### A controlled watch can still miss a write - the pool slot outlives the log, does not
+
+**Found 2026-08-19**, chasing `contact-response.md`'s fuse-arming candidate
+(`FUN_0885bf84`). The "always arm a positive control" recipe above was
+followed exactly - not skipped, not half-done - and it still produced an
+uninterpretable result, which is worth a trap of its own since the existing
+sections only cover a control that *isn't* run, or a scenario that *doesn't*
+happen. Neither applies here.
+
+Setup: a write log watch (`enabled: False, log: True, size: 4`) on a
+freshly-armed entity's own field, plus a positive control (`write: True`,
+156 bytes) over a live craft body, both armed together, both left running
+free for 90 seconds. The control counted **30,413 hits** in the window - the
+watch mechanism, the logging path and the emulator were all demonstrably
+alive and unwedged the entire time, and the target's own single expected hit
+(the arming write itself) was caught and logged correctly, PC and all. By
+every check this page already recommends, the setup was sound.
+
+**And yet the target's own value changed during the window with no second
+log line for it.** Read directly at the end: the entity's type tag had
+flipped to a different value and the watched field held a new float, neither
+of which matches anything the arming write set. Something wrote there.
+Nothing logged it. Repeating the experiment on a second entity, lighter-
+weight and without the control, reproduced the same shape: the entity's tag
+changed within two to three minutes with no corresponding `CHK Write*(CPU)`
+line anywhere in the emulator's own stdout for that address, checked by
+grepping the whole log file, not just the watch's own hit counter.
+
+**The most likely reading: whatever recycles a freed pool slot's memory does
+not go through the CPU-instruction store path this debugger's watchpoints
+hook.** `strncpy` is proof some native/HLE helpers *are* instrumented -
+elsewhere in this same session a stray watchpoint caught three separate
+`Write8(CPU)` lines from `strncpy` touching the same address a byte at a
+time, PC correctly reported as `strncpy`'s own entry. So "native helper"
+alone does not explain a miss; whatever actually reinitializes a freed
+weapon-instance slot is either a still-different native path, a GPU/audio
+DMA write, or something else this page's author did not chase down. That
+mechanism is **not established** - what is established, directly and
+reproducibly, is the *symptom*: a passing positive control does not certify
+that every write to the target was seen, only that the ordinary path was
+capable of being seen.
+
+**Consequence for the existing "always arm a control" advice above: it is
+necessary, not sufficient.** A zero (or a low, fully-accounted-for) hit
+count on the target, even beside a healthy control, is good evidence nothing
+*ordinary* wrote there - it is not proof nothing wrote there at all if the
+target's own value is capable of changing by a route other than a normal
+CPU store. Before trusting an absence, cross-check the target's own value
+before and after the window, the way this session did by accident rather
+than by original design; a changed value with a silent log is the tell that
+the watch missed something, not that nothing happened.

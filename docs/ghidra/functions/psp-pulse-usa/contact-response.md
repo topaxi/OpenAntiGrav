@@ -1140,10 +1140,14 @@ chased.
 
 **Read 2026-08-19.** Disassembled in full (decompiler resistant, same as
 everything else on this page today). Signature `(craftArray, sourceIndex)` -
-no target argument at all. It loops every craft in the race
-(`0..*(0x0885b7f8)`, a fixed global - a different "how many craft" count than
-`FUN_08867370`'s own `craftArray+0x164`, both read this session, not yet
-reconciled to each other) as *candidate targets*, and for each one:
+no target argument at all. It sweeps `0..*(0x0885b7f8)` (a fixed global -
+a different count source than `FUN_08867370`'s own `craftArray+0x164`, which
+turned out live to be `1`, not a craft count at all - see that function's own
+section) as *candidate targets* over `craftArray`; whether `*(0x0885b7f8)`
+itself resolves to `8` is not independently measured here, but the *target*
+half of this sweep is corroborated another way - the live check settling
+`T`'s identity (two sections up) confirms at least one real candidate this
+sweep selects lands on a genuine craft. For each candidate:
 
 1. Skip if a validity check (`FUN_0005ed4c` real address, unread) rejects the
    candidate.
@@ -1179,9 +1183,9 @@ here feeds the pending-impulse path.
 (`search_instructions` on the image-relative `jal` operand, same method as
 every other caller found this session). Signature `(craftArray, dt)` - `dt`
 in `f12`, the leading-float-does-not-reserve-`a0` convention this project has
-already seen on `Ship_Damage`. It loops every craft
-(`0..craftArray+0x164`, **not** the same count field `FUN_08867b50` uses) and
-for each one:
+already seen on `Ship_Damage`. It loops `0..craftArray->0x164` - **corrected
+below: measured live at `1`, not `8`, so "every craft" was an unverified
+extrapolation from the loop's shape and is withdrawn** - and for each one:
 
 1. `craft->0x48 -= dt`, written back unconditionally - **a per-craft countdown
    timer**, decremented every call.
@@ -1191,26 +1195,43 @@ for each one:
    rather than always), then **unconditionally** `FUN_08867b50(craftArray,
    thisCraftIndex)` - the expiring craft becomes the blast's `sourceIndex`.
 
-So the full chain, source to sink, is now: something arms `craft->0x48` to a
-positive value (unread - not found this session, and worth checking whether
-it is the same weapon-fire path `weapon-fire.md` already documents) → some
-per-tick caller feeds `FUN_08867370` a `dt` (unread - `search_instructions` on
-`FUN_08867370`'s own image-relative target found **zero** matches anywhere in
-a full-program scan, which given this database's addressing trap most likely
-means an indirect call through a function-pointer table this project has not
-located, not that the function is dead code) → `FUN_08867370` counts every
-craft's fuse down and fires `FUN_08867b50` for whichever one expires →
-`FUN_08867b50` sweeps every craft as a candidate target, box-then-sphere
-range-checks each one, and calls `Weapon_PostBlastImpulse_q` for every
+So the chain from `FUN_08867370` down is: `FUN_08867370` counts down whatever
+`craftArray->0x164` names (see the correction just below - not a craft
+count), and fires `FUN_08867b50` sourced from whichever entry's timer
+expires → `FUN_08867b50` sweeps its own candidate targets over `craftArray`
+(a different, wider count - see that function's own section above), box-then-
+sphere range-checks each one, and calls `Weapon_PostBlastImpulse_q` for every
 candidate that qualifies → `Weapon_PostBlastImpulse_q` posts the impulse this
-page has already fully read.
+page has already fully read. What arms the timer, and what calls
+`FUN_08867370` itself, are both still open - the next two sections narrow the
+first without closing either.
 
-A countdown timer that lives on the *craft's own struct* rather than a
-separate projectile entity is a specific enough shape to narrow the "rocket,
-mine or missile" guess: a proximity mine dropped behind a craft and armed
-against its own owner's position fits better than a rocket or missile, which
-would more naturally need a separate flying entity to track. The next section
-firms this up further without fully closing it.
+**Correction, same session: `craftArray->0x164` is not "eight race craft" -
+but `craftArray` the pointer is still the roster.** A live breakpoint at
+`FUN_08867370` (`0x08867370`), read for its own `a0` and `*(a0+0x164)`,
+measured the count at **`1`** during a driven Single Race with a full
+eight-craft grid. "It loops every craft" - this page's own first attempt at
+describing this loop - does not survive that measurement: whatever
+`+0x164` off `craftArray` counts, it is not a fixed roster size, and the
+loop only visits that many entries via `craftArray + i*4 + 0x64`, so it is
+not visiting all eight craft as fuse-bearers either. That is a narrower claim
+than it first looks, though: it says `+0x164` is not a craft count, not that
+`craftArray` itself is some other base entirely. The pointer keeps flowing
+unchanged into `FUN_08867b50` and then `Weapon_PostBlastImpulse_q`, and
+*that* function's own target identity was independently settled at a live
+breakpoint two sections up, by a completely different route (enumerating
+craft off `Ship_ApplyCollisionImpulse`'s own `a0`, not through `craftArray`
+at all) - `T` matched a real craft's body pointer by direct equality, which
+would not hold if `craftArray` itself were some other pool. So the open
+question is narrow and specific: what `craftArray->0x164` actually counts,
+not what `craftArray` is a base of. **One guess it rules out rather than
+supports: "mines currently armed."** The breakpoint was hit right after
+loading into the race, before any craft had fired a weapon - no mine could
+have been armed yet - and the count still read `1`, not `0`. A count of `1`
+taken that early is at least as consistent with "the player's own craft" (the
+watchpoint script that follows enumerates entity `0` at this same point and
+it is the one whose `+0x48` gets hit repeatedly) as with any mine-related
+count. Left open rather than guessed at.
 
 ### `FUN_08863a20` (`0x08863a20`-`0x08863ba3`): `Weapons_DispatchFire`'s `world+0x44` handler, and it looks like the Mine's own fire handler
 
@@ -1265,14 +1286,9 @@ order:
 **`craft->0x48` - the fuse `FUN_08867370` decrements - is written nowhere in
 this function.** A clean negative result, not an oversight: every field this
 function touches on the new entity is listed above, and `+0x48` is not among
-them. The spawn call at `0x0885f188` is the remaining candidate - unread
-beyond its first ~300 bytes (transform/colour staging that looks like a
-shared visual-effect initializer, not weapon-specific state), and its own
-Ghidra function boundary is suspect: the call target lands **well inside**
-the body of `FUN_0885efc4` (`0x0885efc4`-`0x0885f487`) rather than at that
-function's start, the same undefined-boundary shape `FUN_0884dc60` had before
-its boundary was created. Left unread rather than guessed at: chasing it
-needs its own pass, not folded into this one.
+them. The spawn call at `0x0885f188` was the next candidate this page
+expected to chase - it did not pan out cleanly; see the next section for why
+and for where the search actually landed instead.
 
 **Confidence on "this is the Mine": informed guess, not measured.** The
 "fires backwards" mechanism, the subsystem-pool-plus-craftIndex-plus-unique-id
@@ -1281,6 +1297,109 @@ spawn shape, and process of elimination against the Rocket
 and Cannon (`Weapon_UpdateBurstFire_q`, the likelier read for the bit-`0x2`
 handler per `weapon-fire.md`) all point the same way, but nothing read this
 session confirms it against a weapon-select UI string or inventory label.
+
+### A fuse-arming candidate, found by searching for the write directly - unconfirmed
+
+**Read 2026-08-19**, after the register-provenance chase into `0x0885f188`
+(the previous section's own spawn-helper call) turned out too ambiguous to
+resolve statically - two callers jump directly into that address, past the
+function's real prologue at `0x0885efc4`, leaving its expected locals unset
+the way normal entry would set them. Rather than force that open question,
+`search_instructions` for every `swc1` storing to a `+0x48` offset off a
+non-stack register found **`FUN_0885bf84`** (`0x0885bf84`-`0x0885c153`):
+
+```
+entity->0x48 = |a2| * 3.6 + weaponTypeRecord->0xbc
+```
+
+`a2` is this function's own third argument, a vector whose magnitude is taken
+first; the per-type record comes from a **different** global table than the
+one `Weapon_PostBlastImpulse_q` reads (indexed the same "count-then-lookup"
+way, but a distinct base address and a distinct field, `+0xbc` rather than
+`+0xe8`/`+0xec`/`+0xf0`/`+0xfc`). This is exactly the shape a fuse-arming
+write should have - a distance- or launch-speed-scaled base time plus a
+per-weapon-type offset - and it is a `=`, not a `-=`, consistent with arming
+rather than the routine per-tick decrement `FUN_08867370` already reads.
+
+**Its caller, `FUN_0886a920`, is its own pool-allocation function - and its
+pool does not obviously match `FUN_08863a20`'s Mine pool.** Read for its
+shape only: cap `16` (`FUN_08863a20`'s was `32`), allocates via
+`subsystem + cursor*4 + 0x64` (`FUN_08863a20` used `+0x44`) - two real
+differences pointing at a **separate pool for a separate weapon type**, not
+the Mine's own path read in the previous section. (A third-looking signal
+doesn't hold up: this function also tags the new entity `+0x3c = 2` where
+`FUN_08863a20` set `1`, but both zero the field first and then set it in the
+same two-step shape, which reads just as well as one shared entity layout
+using `+0x3c` as a type discriminant as it does as two unrelated pools - the
+tag value alone isn't independent evidence either way, so only the cap and
+the indexing offset are counted above.) Reached through a two-instruction
+trampoline,
+`FUN_0886b458` (`0x0886b458`-`0x0886b473`, forwards its third argument into
+the second slot too), whose own caller is not found by a static `jal` search
+- the same indirect-dispatch shape as `FUN_08867370` itself.
+
+**A static re-read the same session found a positive match that cuts the other
+way, though.** `FUN_08867370`'s own decrement instruction - read in full this
+time (`disassemble_bytes` over the whole function, not inferred from the
+earlier partial trace) - resolves its per-slot entity with `lw s4, 0x64(s3)`,
+where `s3` walks `craftArray + i*4` exactly like every pool on this page. That
+is the identical `subsystem + i*4 + 0x64` indexing `FUN_0886a920` uses to
+allocate the very entity `FUN_0885bf84` arms, and the decrement itself -
+`lwc1 f12, 0x48(s4)` / `sub.s` / `swc1 f12, 0x48(s4)` at `0x088673fc`-
+`0x08867410` - lands on the exact field `FUN_0885bf84` writes. Two matches,
+not one: the slot arithmetic and the field offset both line up. What still
+does not line up: `FUN_0886a920`'s own allocation cursor lives at
+`subsystem+0xa4` (`sltiu a0, a2, 0x10` gates it against the cap `16` there),
+while `FUN_08867370`'s loop bound is `craftArray+0x164` - a different offset,
+so this is not proof the two functions read the very same field, only that
+they index the very same *shape* of array off what could plausibly be the
+same subsystem struct (a rotating write-cursor and a separate live-count on
+one struct is an ordinary shape, not a stretch). Confidence moves from
+"unconfirmed, pool shape doesn't match" to **"unconfirmed, but the slot
+arithmetic and the written field now both match exactly"** - a real
+upgrade, not a settled question.
+
+**A live check followed up on this, properly controlled - and it neither
+confirmed nor refuted it, for a new and specific reason.** A first attempt
+used a halting write watchpoint with no control alongside it, which
+`ppsspp-debugger.md`'s own "always arm a positive control" section already
+warns reads as indistinguishable from a false negative - so it is not
+reported on its own here, only folded into the second attempt below. Redone
+per that page's actual recipe - `enabled: False, log: True` at full speed,
+plus a positive control watchpoint over 156 bytes of a live craft body
+(the same shape as that page's own worked example) running alongside:
+caught `FUN_0885bf84` arming a fresh entity, armed the log watch on its
+`+0x48` and the control on the craft body, ran free for 90 seconds. The
+control counted **30,413 hits** - proof the watch mechanism, the log, and
+the emulator were all healthy the whole window, not stalled or wedged. The
+target counted exactly **one** hit, `FUN_0885bf84`'s own arming write,
+logged correctly with its PC. And yet by the end of the same 90 seconds,
+that entity's `+0x3c` tag had changed (`2` to `5`) and its `+0x48` field
+held a new value neither `0.0` nor what the arm write had set - meaning
+something wrote there, controls says the watch works, and the log has no
+line for it. Repeated with a lighter, uncontrolled version of the same
+setup on a separate entity, tag changed `9` to `5` inside three minutes;
+both changes read as the pool slot being freed and recycled to a different
+occupant faster than expected, well inside the two-to-three-minute windows
+tried here, and whatever writes a freed slot's memory during that handoff
+is not going through the path `CHK Write*(CPU)` logs. **New trap for
+`ppsspp-debugger.md`, not just a dead end on this page**: a watchpoint with
+a verified-working control can still miss a real write if the writer takes
+a different path than an ordinary CPU store - a zero count is not proof of
+absence the way the existing "always arm a control" section implies, only
+proof the *ordinary* path stayed silent. See
+[ppsspp-debugger.md](../../../reverse-engineering/ppsspp-debugger.md#a-controlled-watch-can-still-miss-a-write---the-pool-slot-outlives-the-log-does-not)
+for the full account.
+
+So: settling whether `FUN_0885bf84` is really the write `FUN_08867370` needs
+is still open, but for a narrower reason now - not "the pool shape doesn't
+match" (it mostly does), but "this weapon-instance's slot lifetime is
+apparently too short to catch mid-flight with a write watch, and the
+watch's blind spot for however it gets recycled is itself unexplained".
+Reading what `+0xbc`'s per-type table actually enumerates, finding
+`FUN_0886b458`'s own caller, or catching a slot at the *moment* it is
+armed and reading its `+0x48` on every single tick thereafter (rather than
+trusting a watchpoint to report absence) are the concrete next steps.
 
 ### Not determined, again
 

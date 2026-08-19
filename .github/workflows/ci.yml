@@ -32,6 +32,11 @@ jobs:
         run: python3 scripts/check-transcendentals.py
       - name: Assert no Rust file or inline test module grew past its ceiling
         run: python3 scripts/check-file-size.py
+      # `just apply-names` makes these same checks, but only ever with a Ghidra
+      # bridge up - which CI has not got, so until this step nothing here read
+      # names.tsv at all.
+      - name: Assert every names.tsv row still matches its evidence page
+        run: python3 scripts/check-ghidra-names.py
       - name: Assert HANDOVER.md is still under the Read tool's 256 KiB ceiling
         run: python3 scripts/check-handover-size.py
 
