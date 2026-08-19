@@ -22,22 +22,33 @@
 //! | --- | --- |
 //! | `Data\Ships\<Team>\Ship.vex` | **present** |
 //! | `Data\Ships\<Team>\shipboost.vex` | absent |
-//! | `Data\Ships\<Team>\Zone.vex` | absent |
+//! | `Data\Ships\<Team>\Zone.vex` | absent - **and now explained**, see below |
 //! | `Data\Ships\<Team>\Zoneboost.vex` | absent |
 //! | `<environment>\track_reversed.vex` | absent, on every circuit |
+//! | `<environment>\zone_track.vex` | absent - **and now explained**, see below |
 //!
-//! The last one is corroborated by the disc's own plugin definition, which
-//! carries **no `Reversed` attribute on any `PI_Track`** - so Pure ships no
+//! The `track_reversed` row is corroborated by the disc's own plugin definition,
+//! which carries **no `Reversed` attribute on any `PI_Track`** - so Pure ships no
 //! reversed circuits at all, where a third of Pulse's menu is them.
 //!
-//! The other three are facts about *entry names*, not about the title: Pure
-//! certainly has a boost plume and a Zone mode - its definition declares four
-//! `Zone` circuits and a `Zone_01` team - and **what it calls those files is
-//! unrecovered**. So nothing here guesses at a spelling, and no constant records
-//! the absence either: `oag_game::race::load` reports a boost model it cannot
-//! find and carries on, which makes the consequence a race with no plume rather
-//! than no race. An absent entry is a fact; a table saying "Pure's boost is
-//! called X" would be an invention.
+//! **Two of these rows stopped being holes on 2026-08-19**, and the reason is
+//! the same for both: Zone is *shaped differently* on this title rather than
+//! spelled differently. Pulse hangs Zone off the race circuit and the player's
+//! own team - one extra file in each directory. Pure declares Zone's circuits
+//! and Zone's craft as first-class entries in its plugin definition, `type="Zone"`
+//! against the `type="Race"` everything else carries: four circuits under
+//! `Data\Zone\`, and one team, `Data\Ships\Zone_01`, whose `handlingstats.xml`
+//! opens `<Stats team="ZoneMode">`. So `Zone.vex` and `zone_track.vex` are
+//! absent here not because their spelling is unrecovered but because this disc
+//! has nowhere to put them. See [`DEFAULT_ZONE_TRACK`] and [`ZONE_TEAM`].
+//!
+//! **The boost plume is still genuinely unrecovered**, and the distinction
+//! matters: Pure certainly has one, and **what it calls that file is unread**. So
+//! nothing here guesses at a spelling, and no constant records the absence
+//! either: `oag_game::race::load` reports a boost model it cannot find and
+//! carries on, which makes the consequence a race with no plume rather than no
+//! race. An absent entry is a fact; a table saying "Pure's boost is called X"
+//! would be an invention.
 //!
 //! [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
 
@@ -49,7 +60,77 @@
 pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     track: DEFAULT_TRACK,
     team: DEFAULT_TEAM,
+    zone: oag_title::ZoneCircuit::Separate(DEFAULT_ZONE_TRACK),
 };
+
+/// The circuit a Zone race loads when the caller names none.
+///
+/// **Pure's Zone circuits are circuits of their own**, and this is the one thing
+/// about Zone that this title and Pulse disagree on rather than merely spell
+/// differently. Pulse authors a second `.vex` inside each race circuit's own
+/// directory (`oag_pulse::race::ZONE_TRACK_PREFIX`); Pure authors four separate
+/// environments under `Data\Zone\` and declares them in its own plugin
+/// definition as `PI_Track` entries with `type="Zone"`:
+///
+/// ```xml
+/// <PI_Track name="Zone 1">
+///   <Values type="Zone" location="Data\Zone\01_Zone"></Values>
+/// </PI_Track>
+/// ```
+///
+/// Four of them, `01_Zone` through `04_Zone`, each unlocked by a medal on the
+/// one before. Each holds a plain `track.vex` - **no `zone_track.vex` exists
+/// anywhere on this disc**, and no race circuit carries a Zone variant either.
+/// So there is no mapping from a race circuit to a Zone one to be had, which is
+/// why [`oag_title::ZoneCircuit::Separate`] carries a circuit rather than a
+/// rewrite rule.
+///
+/// `01_Zone` because it is the first the definition declares and the only one
+/// not gated behind a medal on another - the same "the disc's own ordering is
+/// the best available answer" reasoning as [`DEFAULT_TRACK`].
+///
+/// Confidence **94**, on the same terms as everything else in this module:
+/// `Data\Zone\01_Zone\track.vex` resolves to a decodable version-4 `.vex` on
+/// `pure-psp-eu.chd`, probed 2026-08-19, and `Data\Zone\01_Zone\zone_track.vex`
+/// resolves to nothing.
+pub const DEFAULT_ZONE_TRACK: &str = r"Data\Zone\01_Zone\track.vex";
+
+/// The team a Zone race flies on this title.
+///
+/// **Recovered 2026-08-19, and it closes the "Pure's Zone hull is unrecovered"
+/// item this module's own docs used to carry.** The answer is that Pure does not
+/// express the Zone craft the way Pulse does at all. Pulse keeps a second model
+/// file inside every team's directory (`Data\Ships\<Team>\Zone.vex`, picked by
+/// `Ship_LoadModel`'s `case 6`); Pure declares an entire **team** for it, in the
+/// same plugin definition as the circuits:
+///
+/// ```xml
+/// <PI_Team name="Zone_01">
+///   <Values type="Zone" location="Data\Ships\Zone_01"></Values>
+/// </PI_Team>
+/// ```
+///
+/// `type="Zone"`, where every raceable team is `type="Race"` - so the definition
+/// itself says what this team is for. `Data\Ships\Zone_01\Ship.vex` resolves,
+/// and the directory's `handlingstats.xml` opens `<Stats team="ZoneMode">`,
+/// which is the disc naming the mode in its own words rather than this project
+/// inferring it. Confidence **94** for the identification; the two together are
+/// about as direct as a name probe gets.
+///
+/// **Nothing reads this yet**, deliberately, and the reason is the one
+/// `oag_title::race`'s module docs give: the craft axis has Pulse measured and
+/// Pure measured and HD unread, which is the two-of-three shape an
+/// [ADR-0022] type is not licensed for. It is recorded here, where its evidence
+/// is, exactly as [`oag_title::RaceDefaults::team`] sat with no reader before it
+/// had one. Wiring it needs `oag_game::race` to ask a title how it names the
+/// Zone craft, and that question is worth asking once HD's answer is known.
+///
+/// Not to be confused with the `PI_Team name="Zone"` beside it, which is
+/// `type="Race"` and is the unlockable *livery* a player earns by taking gold on
+/// all four Zone circuits - a raceable team, not the Zone-mode craft.
+///
+/// [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
+pub const ZONE_TEAM: &str = "Zone_01";
 
 /// The circuit a race loads when the caller names none.
 ///

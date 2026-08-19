@@ -52,6 +52,7 @@ so the flag is the only way in on that path.
 | Weapons | off | off | off | **on** |
 | Free turbo a lap | **yes** | **yes** | no | no |
 | HUD layout | `TimeTrial_HUD.xml` | `TimeTrial_HUD.xml` | `Zone_HUD.xml` | `Arcade_HUD.xml` |
+| Environment | the circuit's | the circuit's | **its own**, see below | the circuit's |
 
 Time trial and speed lap sharing a layout is the disc's arrangement, not a
 shortcut: there is no `SpeedLap_HUD.xml`, which is why
@@ -119,6 +120,53 @@ same selector, and every team's `Zone.vex` decodes to the same hull - see
 Confidence 84. `oag_game::race::ship_entry_name` picks the model this way, and
 the menu greys the TEAM row while MODE is Zone so a player is not offered a
 choice that no longer changes the shape drawn - only the colour it is drawn in.
+
+### Zone flies its own environment, and the disc authors every bit of it
+
+**The look is loaded, not computed.** A Zone circuit is a whole separate `.vex`
+with its own meshes, its own light rig, its own `fogCube` and its own
+`Skycube` - nothing here tints, desaturates or otherwise invents it, which is
+[`CLAUDE.md`](../../CLAUDE.md)'s rule about not authoring a stand-in for what the
+data already carries. The sky is the clearest single marker: of the 40 skies on
+the PSP disc, the twelve with one material are exactly the Zone variants against
+five or six for every race circuit ([skycube](../formats/skycube.md)).
+
+**Where that environment lives is a title fact**, and it is one of the few axes
+measured on all three titles rather than two:
+
+| | Zone's environment |
+| --- | --- |
+| Pulse (PSP and PS2) | the race circuit's own directory, one extra `zone_`-prefixed file |
+| Pure | `Data\Zone\NN_Zone\track.vex` - four circuits of its own, `type="Zone"` |
+| HD / Fury | `/data/environments/zone_N/track.vex` - four circuits of its own |
+
+Two shapes across three titles, which is what makes `oag_title::ZoneCircuit` a
+type with two variants and no third "unknown" state. Pulse derives the Zone name
+from the race one; Pure and HD cannot, because their discs author no mapping
+between the two sets - asking what Vineta K's Zone variant is has no answer in
+the data. Evidence and per-claim confidence: [track](../formats/track.md), and
+the sweep is `crates/game/tests/zone_ground_truth.rs`.
+
+**Sixteen of Pulse's twenty-four circuits can be raced in Zone**, declared by
+`availableInZone="true"` and confirmed by probing all 24 by name - the attribute
+predicts the file 24 times out of 24. A circuit without it carries no Zone
+environment, so this is load-correctness rather than menu data, and `race::load`
+says so by name when a Zone race asks for one that has none.
+
+**What is not wired: the menu still offers all 24 in Zone.** The track list is
+supplied once when the menus open and is not re-supplied when MODE changes, so
+picking a non-Zone circuit and then Zone gives a load error naming
+`availableInZone` rather than a row that was never offered. Deliberate: making
+the list mode-reactive is front-end work, and the error is honest in the
+meantime.
+
+**Zone's racing line is authored separately from the race one**, which was worth
+checking because `Course::START_LINE_OFFSET` is fitted on `16_Track`'s *race*
+file. Across the sixteen: fourteen have identical control-point counts and one
+environment does not - `10_Track` at 844 race / 848 zone, and its reversed twin
+`26_Track` at 847 / 852. So the fit carries on fourteen and is inherited rather
+than re-measured on the other two. Nothing about Zone lap timing is verified
+against the original either way.
 
 ### Zone's numbers are not in this repository
 

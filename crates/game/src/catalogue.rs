@@ -58,16 +58,39 @@ pub struct Track {
     pub location: String,
     /// Whether this entry is the circuit run the other way round.
     pub reversed: bool,
+    /// Whether a Zone race can be run on this circuit.
+    ///
+    /// **Read off the entry's own `availableInZone="true"`, and it is a
+    /// load-correctness fact rather than a menu one.** On a title whose Zone
+    /// circuits are the race ones with a prefixed file
+    /// ([`oag_title::ZoneCircuit::Prefixed`]), a circuit without this attribute
+    /// carries no `zone_track.vex` at all, so a Zone race on it asks the archive
+    /// for a name that hashes to nothing.
+    ///
+    /// That correlation is measured rather than assumed: all 24 of Pulse's
+    /// `PI_Track` entries were probed by name against `pulse-psp-usa.chd` and
+    /// the attribute predicts the file **24 times out of 24** - the sixteen that
+    /// declare it have their variant, the eight that do not have none.
+    /// `crates/game/tests/zone_ground_truth.rs` is that sweep.
+    ///
+    /// `false` on a title that declares no such attribute anywhere, which is
+    /// every title whose Zone circuits are separate - Pure marks its four with
+    /// `type="Zone"` instead, and [`zone_tracks`] is what reads either
+    /// arrangement.
+    pub available_in_zone: bool,
 }
 
 impl Track {
-    /// The archive entry name of the `.vex` this race loads.
+    /// The archive entry name of the `.vex` a *race* loads on this circuit.
     ///
     /// The four-file rule from `docs/formats/track.md`: a circuit ships
     /// `track.vex`, `track_reversed.vex` and the two zone variants, and a
-    /// `PI_Track` picks between the first two with `Reversed`. Zone entries are
-    /// a separate mode this build has no way into yet, so nothing here selects
-    /// them.
+    /// `PI_Track` picks between the first two with `Reversed`.
+    ///
+    /// **The Zone pair is reached by rewriting this**, not by a second method
+    /// here: which rewrite applies is a property of the title rather than of the
+    /// circuit, so it lives in [`oag_title::ZoneCircuit::variant_of`] and this
+    /// stays the one name a `PI_Track` names by itself.
     #[must_use]
     pub fn entry_name(&self) -> String {
         let file = if self.reversed {
@@ -270,9 +293,21 @@ pub fn all_tracks(documents: &[String]) -> Vec<Track> {
 }
 
 fn read_track(node: &Node) -> Option<Track> {
+    read_track_of_type(node, "Race")
+}
+
+/// One `PI_Track` whose `type` is the one asked for, or `None`.
+///
+/// The `type` is a parameter because two of them are raceable in this engine and
+/// which one a caller wants depends on the mode: `Race` for everything, `Zone`
+/// on a title that declares Zone circuits separately. An entry with no `type`
+/// attribute at all counts as `Race`, which is what the shipped files' own
+/// omissions mean - Pulse spells `type="Race"` on all 24 and Pure on all its
+/// race circuits, so no shipped entry actually relies on this.
+fn read_track_of_type(node: &Node, wanted: &str) -> Option<Track> {
     let id = node.attr("name")?.to_string();
     let values = node.children_named("Values").next()?;
-    if values.attr("type").is_some_and(|kind| kind != "Race") {
+    if values.attr("type").unwrap_or("Race") != wanted {
         return None;
     }
     Some(Track {
@@ -281,7 +316,63 @@ fn read_track(node: &Node) -> Option<Track> {
         // The shipped file spells it `Reversed="True"`, capitalised, which is
         // why this goes through `flag` rather than comparing to "true".
         reversed: values.flag("Reversed").unwrap_or(false),
+        // Lowercase `true` here, where `Reversed` is capitalised - the disc is
+        // inconsistent about it and `flag` accepts either, which is the whole
+        // reason it exists.
+        available_in_zone: values.flag("availableInZone").unwrap_or(false),
     })
+}
+
+/// The circuits a Zone race can be run on, in file order.
+///
+/// **Two arrangements, and the title says which one it is**, because the discs
+/// genuinely disagree rather than merely spelling one idea differently:
+///
+/// - [`oag_title::ZoneCircuit::Prefixed`] - Pulse. Zone runs on the *race*
+///   circuits, sixteen of the twenty-four, each declaring
+///   `availableInZone="true"`. The returned entries are race entries and their
+///   [`Track::entry_name`] is the race `.vex`;
+///   [`oag_title::ZoneCircuit::variant_of`] turns one into the Zone file beside
+///   it.
+/// - [`oag_title::ZoneCircuit::Separate`] - Pure, and HD on the evidence of its
+///   four `zone_N` environment directories. Zone runs on circuits of its own,
+///   declared `type="Zone"`, which the race listing in [`tracks`] deliberately
+///   skips. Their [`Track::entry_name`] is already the file to load.
+///
+/// So a caller gets a list it can race in Zone either way without knowing which
+/// disc it opened - which is the same job [`oag_title::HudLayouts`] does for the
+/// HUD and [`oag_title::RaceDefaults`] for the opening circuit.
+///
+/// **Empty is a real answer**, not a failure: HD's plugin definition declares no
+/// `PI_Track` at all this build has read, so its Zone circuits are reached
+/// through [`oag_title::ZoneCircuit::Separate`]'s own default rather than
+/// through a listing. A caller with an empty list still has a circuit to race.
+#[must_use]
+pub fn zone_tracks(definition_xml: &str, zone: oag_title::ZoneCircuit) -> Vec<Track> {
+    match zone {
+        oag_title::ZoneCircuit::Prefixed(_) => tracks(definition_xml)
+            .into_iter()
+            .filter(|track| track.available_in_zone)
+            .collect(),
+        oag_title::ZoneCircuit::Separate(_) => {
+            let root = parse(definition_xml);
+            let mut out = Vec::new();
+            collect_of_type(&root, "Zone", &mut out);
+            out
+        }
+    }
+}
+
+fn collect_of_type(node: &Node, wanted: &str, out: &mut Vec<Track>) {
+    for child in &node.children {
+        if child.name == "PI_Track" {
+            if let Some(track) = read_track_of_type(child, wanted) {
+                out.push(track);
+            }
+        } else {
+            collect_of_type(child, wanted, out);
+        }
+    }
 }
 
 #[cfg(test)]

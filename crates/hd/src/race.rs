@@ -28,7 +28,28 @@
 pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     track: DEFAULT_TRACK,
     team: DEFAULT_TEAM,
+    zone: oag_title::ZoneCircuit::Separate(DEFAULT_ZONE_TRACK),
 };
+
+/// The circuit a Zone race loads when the caller names none.
+///
+/// **HD is shaped like Pure here, not like Pulse**: Zone runs on circuits of its
+/// own rather than on a second `.vex` inside a race circuit's directory. Four of
+/// them, and this build already knew their names without knowing what they were
+/// for - `zone_1` through `zone_4` are four of the sixteen entries in
+/// [`crate::names::ENVIRONMENTS`], which `crates/hd/tests/hd_title_ground_truth.rs`
+/// re-derives from the manifest rather than trusting. Each holds a plain
+/// `track.vex`, the same as every other environment on the disc.
+///
+/// `zone_1` for the reason [`DEFAULT_TRACK`] gives for Talon's Junction inverted:
+/// there is no capture to match here, so the disc's own ordering answers.
+///
+/// **What is *not* claimed** is which of the four a player reaches first, or how
+/// they are unlocked. Pure declares that in its plugin definition and HD's
+/// track-selection XML has not been read - see [`crate::names::ENVIRONMENTS`],
+/// which says the same about the sixteen. This is a name that resolves, nothing
+/// more.
+pub const DEFAULT_ZONE_TRACK: &str = "/data/environments/zone_1/track.vex";
 
 /// The circuit a race loads when the caller names none.
 ///

@@ -46,6 +46,7 @@ const TITLE: &Title = &Title {
     race: &oag_title::RaceDefaults {
         track: r"Data\Environments\00_Nowhere\track.vex",
         team: "Nobody",
+        zone: oag_title::ZoneCircuit::Prefixed("zone_"),
     },
     // Unread here for the same reason as the circuit above: an in-race HUD is
     // read *through* archives, and which layout a mode wants is nothing this

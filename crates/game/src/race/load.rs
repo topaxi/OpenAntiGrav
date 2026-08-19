@@ -63,15 +63,33 @@ pub fn load(options: &Options) -> Result<Loaded> {
         }
     };
 
+    // **Zone flies a different environment, and the disc authors it.** A Zone
+    // circuit ships its own meshes, lights, `fogCube` and one-material
+    // `Skycube`, so the mode's whole look is a file to open rather than a filter
+    // to apply - `CLAUDE.md`'s rule about not inventing what the assets already
+    // carry, and the reason nothing here tints or desaturates anything.
+    //
+    // Which file, though, is a title fact: Pulse keeps it beside the race
+    // circuit under a prefixed name, Pure and HD keep whole circuits of their
+    // own. `ZoneCircuit` is that axis, measured on all three.
+    let track = if options.mode == Mode::Zone {
+        let zone = match &options.track {
+            Some(_) => title.race.zone.variant_of(&track),
+            None => title.race.zone.default_track(title.race.track),
+        };
+        if zone == track {
+            report.push(format!("zone: racing {track} as named"));
+        } else {
+            report.push(format!("zone: {track} -> {zone}"));
+        }
+        zone
+    } else {
+        track
+    };
+
     let spec = archives
         .locate(&track)
-        .ok_or_else(|| {
-            anyhow::anyhow!(
-                "{} is in none of this source's archives ({})",
-                track,
-                archives.layout.describe()
-            )
-        })?
+        .ok_or_else(|| assets::zone_circuit_miss(&track, options.mode, title, &archives))?
         .to_string();
 
     let (ai, label) = track_render::load(&spec, &track)?;

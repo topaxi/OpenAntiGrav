@@ -267,3 +267,46 @@ pub(crate) fn ps2_texture_set(
     let blob = archives.read_preceding(entry_name).ok()?;
     mesh::ps2_texture_set(&blob).ok()
 }
+
+/// The error a circuit that is in none of the source's archives produces.
+///
+/// **A Zone race gets a different sentence, and the reason is that it has a
+/// different commonest cause.** Any other mode reaching this point named a
+/// circuit that is not on the disc, and saying so is the whole story. A Zone
+/// race on a title whose Zone circuits are the race ones with a prefixed file
+/// reaches it for a second reason that looks identical from the archive's side:
+/// the circuit is there, and it simply has no Zone variant beside it. Sixteen of
+/// Pulse's twenty-four `PI_Track` entries carry one and eight do not, exactly as
+/// each declares with `availableInZone` - see
+/// [`crate::catalogue::Track::available_in_zone`].
+///
+/// Collapsing the two sends a reader after a name-mining problem that is not
+/// there, which is the failure [`unrecovered_or_absent`] exists to prevent one
+/// layer down.
+pub(super) fn zone_circuit_miss(
+    track: &str,
+    mode: Mode,
+    title: &oag_title::Title,
+    archives: &oag_assets::Archives,
+) -> anyhow::Error {
+    let layout = archives.layout.describe();
+    if mode != Mode::Zone {
+        return anyhow::anyhow!("{track} is in none of this source's archives ({layout})");
+    }
+    match title.race.zone {
+        oag_title::ZoneCircuit::Prefixed(prefix) => anyhow::anyhow!(
+            "{track} is in none of this source's archives ({layout}). A zone race \
+             flies the circuit's own zone environment, named with the `{prefix}` \
+             prefix, and not every circuit has one - on {} the plugin definition \
+             marks the ones that do with `availableInZone`. Pick one of those, or \
+             race another mode here",
+            title.name
+        ),
+        oag_title::ZoneCircuit::Separate(default) => anyhow::anyhow!(
+            "{track} is in none of this source's archives ({layout}). {} keeps its \
+             zone circuits apart from its race ones, so a race circuit's name will \
+             not do: {default} is the one this title opens by default",
+            title.name
+        ),
+    }
+}
