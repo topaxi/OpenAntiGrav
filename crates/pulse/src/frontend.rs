@@ -151,6 +151,14 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     // Measured. The XML states no selected colour at all.
     selected: Some(0xFF9D_FFFF),
     transition_secs: 0.5,
+    // **A measurement, not a gap.** Pulse's main menu is a vertical `<Menu>`,
+    // and no `<HorizMenu>` exists anywhere on either pressing: every blob of
+    // `Data.wad`, `FE.wad` and `FEData.wad` on `pulse-psp-usa.chd` (1,411
+    // files), of `Data.wad` on `pulse-psp-eu.chd` (1,138) and of `WADSP.WAD` on
+    // `pulse-ps2-eu.chd` (193) was searched, and the literal appears in none of
+    // them. See `oag_title::MenuStrip` for the whole census and for why a string
+    // search finds a shortened element.
+    strip: None,
 };
 
 #[cfg(test)]

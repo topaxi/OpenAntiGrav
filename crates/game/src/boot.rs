@@ -56,6 +56,8 @@ pub struct Boot {
     /// How this title lays its menus out and colours them. See
     /// [`Shell::menu_skin`].
     pub menu_skin: &'static oag_title::MenuSkin,
+    /// The frame its menus are drawn inside. See [`Shell::frame`].
+    pub frame: crate::menu::Frame,
     /// The face menu rows are drawn in. See [`Shell::menu_font`].
     pub menu_font: Option<crate::font::Atlas>,
     /// The text atlas: the disc's own font when it decodes, ours when it does
@@ -307,6 +309,19 @@ pub struct Shell {
     /// Presentation only. The menu *tree* is this build's own - see
     /// `docs/architecture/menus.md`.
     pub menu_skin: &'static oag_title::MenuSkin,
+    /// The widgets of the screen this title frames its menus with: what they
+    /// clear to and the marks they are drawn between.
+    ///
+    /// Which screen that was is [`oag_title::FrontEnd::menu_frame`] and is not
+    /// carried here - by this point it has been read, and a name nothing reads
+    /// is the inert-field smell this file avoids elsewhere. See
+    /// [`crate::menu::read_frame`].
+    ///
+    /// Built here rather than by whoever draws, because it needs the parsed
+    /// screens *and* the sprite sheet *and* the grid, and this is the only place
+    /// all three are in hand. Empty for a title whose frame is unread, which
+    /// draws the menus exactly as they were drawn before this existed.
+    pub frame: crate::menu::Frame,
     /// The face menu rows are drawn in, when the title names one and it
     /// reads. `None` falls the menus back to [`Self::font`].
     pub menu_font: Option<crate::font::Atlas>,
@@ -576,6 +591,17 @@ pub fn load_shell(options: &Options) -> Result<(Shell, oag_assets::Archives)> {
     // that a boot with no movie falls back to the *source's* shape rather than
     // to the PSP's. `frontend.set_space` takes the same value.
     let space = crate::frontend::Space::of(archives.layout.platform);
+    // The frame the menus are drawn inside, off the screen this title names -
+    // built here because this is where the parsed XML, the sheet and the grid
+    // are all in hand, and **reported** because which archive served the root
+    // decides what colour it comes out in: Wipeout HD's `HD_*` palette is its FE
+    // style, black and red in `DATA00` against white and teal in `DATA06`. A
+    // menu that looks like the wrong game is then a line in the boot report
+    // rather than a mystery. See [`crate::menu::frame`].
+    let frame = crate::menu::read_frame(&screens, &sprites, space, front_end.menu_frame);
+    if let Some(name) = front_end.menu_frame {
+        report.push(format!("menu frame {name}: {}", describe_frame(&frame)));
+    }
     report.push(steps.describe("the boot's first half"));
 
     Ok((
@@ -590,6 +616,7 @@ pub fn load_shell(options: &Options) -> Result<(Shell, oag_assets::Archives)> {
             space,
             profile,
             menu_skin: front_end.menu,
+            frame,
             menu_font,
             walked,
             movie_name,
@@ -930,6 +957,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         space,
         profile,
         menu_skin,
+        frame,
         menu_font,
         walked,
         movie_name: _,
@@ -1104,6 +1132,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
 
     Boot {
         menu_skin,
+        frame,
         menu_font,
         languages: offered,
         strings,
@@ -1336,6 +1365,32 @@ fn load_second_movie(
 /// [`oag_assets::Archives::read_name`], which searches the *bulk* archive
 /// first because that is the right default for a race: same size is not same
 /// bytes, and a front-end image should come off the front end's own archive.
+/// One line saying what a title's menu frame came out as.
+///
+/// The colour is the point: it is the only thing in the frame that a *different
+/// archive* would have made different, so a report that names it is what tells
+/// a reader which FE style they are looking at without opening the disc.
+fn describe_frame(frame: &crate::menu::Frame) -> String {
+    let hex = |color: [f32; 4]| {
+        let byte = |channel: f32| (channel.clamp(0.0, 1.0) * 255.0).round() as u8;
+        format!(
+            "#{:02x}{:02x}{:02x}",
+            byte(color[0]),
+            byte(color[1]),
+            byte(color[2])
+        )
+    };
+    let clear = match &frame.clear {
+        Some(crate::frontend::Draw::Fill { color, .. }) => format!("clears to {}", hex(*color)),
+        _ => "no clear".to_string(),
+    };
+    let ink = frame.ink.map_or_else(
+        || String::from("no single ink"),
+        |ink| format!("ink {}", hex(ink)),
+    );
+    format!("{clear}, {} mark(s), {ink}", frame.marks.len())
+}
+
 fn load_sprites(
     archives: &mut oag_assets::Archives,
     screens: &Screens,

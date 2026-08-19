@@ -108,19 +108,69 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     // naming a slot no plugin declares - what the engine does with that needs
     // the executable.
     menu_font: None,
-    // `FEGlobals->TextColor`. White, against Pulse's cyan.
+    // `FEGlobals->TextColor`. White, against Pulse's cyan - and **one of the
+    // globals that does not move between the archives**, which is worth saying
+    // here because half the palette does. See `selected` below.
     text: Some(0xFFFF_FFFF),
     // `FEGlobals->TitleColor`. HD's menu screens usually reach for an `HD_*`
     // palette instead, whose `HD_Grey` is declared to the same value - so the
     // two agree today and could diverge. See `hd-frontend.md`.
     title: Some(0xFF64_6464),
-    // A *measured* field. Nothing measured.
+    // **`None`, and the reason changed while this was being filled in.** It was
+    // "a measured field and nothing measured", which was true and incomplete.
+    //
+    // The disc *does* name a highlight colour: `highlightColor`, 25 times across
+    // its front end, and every one of the 25 is `FEGlobals->HD_Blue`, always
+    // beside a `color` of `FEGlobals->HD_Grey`. That is this field and
+    // [`MenuSkin::text`], on `<BracketButton>`s and the controls screen's button
+    // widgets rather than on a menu.
+    //
+    // **What stops it becoming a number here is that the number is the FE
+    // style.** The `HD_*` palette is declared per archive and the archives do
+    // not agree: `DATA06` says `HD_Blue` `0xff8ac0ca` and `HD_BG` white,
+    // `DATA00` says `0xffac0717` - red - and `HD_BG` black. Those are the two
+    // styles the `OPT_FE_STYLE` option offers (`HD` and `FURY`), and which one a
+    // boot draws is decided by which archive serves the front-end root. A
+    // constant here would hard-code one of them into a table that cannot say
+    // which. See `docs/formats/hd-frontend.md`.
     selected: None,
     // The dominant `<LeftLayer transition=>` across HD's own GUI files, which is
     // the weakest number here: confidence **70**, because HD spreads transitions
     // across eleven distinct values where Pulse uses four, so "dominant" carries
     // much less than it did there.
     transition_secs: 0.5,
+    // **HD's main menu is horizontal, and this is the widget that says so.**
+    // Read off `Data\Plugins\Frontend\Gui\MainMenu_Definition.xml`, whose one
+    // `<HorizMenu name="Mode">` is the screen's only menu widget:
+    //
+    // ```xml
+    // <HorizMenu name="Mode" focus="true" transition="0.4" delay="0.2">
+    //   <Values align="left" x="160" y="125" color="0xff705070"></Values>
+    // ```
+    //
+    // **Confidence 92.** Five of the seven archives carry that file - `DATA00`,
+    // `DATA02`, `DATA03`, `DATA05` and `DATA06`, the sound-only `DATA01` and
+    // `DATA04` carrying none - and all five write those three numbers
+    // identically, which is the "exact agreement across many real files" case
+    // the rubric puts at the top of the 85-94 band. It stops short of 95 for the
+    // same reason `menu_x` does: nothing shows the engine *consuming* them, and
+    // which copy the runtime serves is still open.
+    //
+    // Two things the widget does **not** state, both left to the drawing side
+    // and marked as ours there rather than invented here:
+    //
+    // - **No `scale`.** Its two siblings in `additional_definition.xml` say
+    //   `scale="1"`, and `FEGlobals->MenuScale` is 1.0, so nothing is lost by
+    //   taking `menu_scale` - but the main menu's own widget is silent and this
+    //   comment is the record of that.
+    // - **No spacing.** There is no `gap` on this widget and no second anchor to
+    //   derive one from, so how far apart two entries sit is unauthored. A
+    //   capture would settle it; none exists.
+    strip: Some(oag_title::MenuStrip {
+        x: 160.0,
+        y: 125.0,
+        color: 0xFF70_5070,
+    }),
 };
 
 /// The boot order HD's own `skin.xml` **declares**, which is not the same claim
@@ -186,6 +236,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     language_plugins: LANGUAGE_PLUGINS,
     menu: MENU_SKIN,
     boot: BOOT,
+    menu_frame: Some(states::FE_SCREEN),
 };
 
 /// The sixteen plugins that carry a language, named rather than numbered.
@@ -254,6 +305,32 @@ pub mod states {
     /// The screen carrying the real-time menu backdrop; see
     /// [`names::FRONT_END_SCENE`].
     pub const TOP_FE_SCREEN: &str = "Top FE Screen";
+    /// The frame every menu screen is drawn inside, and
+    /// [`TOP_FE_SCREEN`]'s only child.
+    ///
+    /// **What is authored on it** - all of it in `skin.xml`, all six copies
+    /// agreeing, and every screen the menus use is nested somewhere under it:
+    ///
+    /// - `<ScreenClear Colour="FEGlobals->HD_BG">`, which is `0xffffffff`.
+    ///   Wipeout HD's front end is drawn on **white**, not on the black this
+    ///   build clears to for want of anything else.
+    /// - two `line.gtf` rules, `1600x8` at `(160, 110)` and `(160, 975)`,
+    ///   tinted `FEGlobals->HD_Grey`, which are the horizontal bars above and
+    ///   below every page.
+    /// - `Title_Arrow_HD.gtf`, `32x32` at `(160, 73)`, tinted the same.
+    ///
+    /// The disc's own comment on the sibling `<Image name="networkbusy">` -
+    /// *"have this before movie and it doesnt appear! superb"* - is a reminder
+    /// that document order on this screen means something to the engine that
+    /// nothing here has read.
+    ///
+    /// **Its `<Text>` widgets are not part of the frame**, and that is a
+    /// distinction with a reason rather than a convenience: they are the trial
+    /// build's (`FE_TRIAL_MODE`, `FE_PURCHASE_NOW`) or belong to a
+    /// `<NavigationController>`, a widget that decides per screen which button
+    /// prompts to show and which this build does not have. The three images and
+    /// the clear carry no such owner.
+    pub const FE_SCREEN: &str = "FE Screen";
 }
 
 /// The three assets HD's front-end XML names for itself.

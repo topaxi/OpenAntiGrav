@@ -92,6 +92,11 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     language_plugins: &["PI008", "PI009", "PI010", "PI011", "PI012"],
     menu: frontend::MENU_SKIN,
     boot: frontend::BOOT_PROFILE,
+    // **A gap, not a measurement**, on the same terms as Pulse's: nothing has
+    // read what Pure's menu screens are framed by. Its `Skin.xml` declares six
+    // layout globals to Pulse's dozens, so what there is to find here may be
+    // less - but "may be less" is not "was looked at".
+    menu_frame: None,
 };
 
 pub mod frontend;

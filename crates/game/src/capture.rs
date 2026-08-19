@@ -124,6 +124,16 @@ fn menu_page(
     music_discs: &crate::audio::MusicDiscs,
     backdrop: Option<crate::menu::Backdrop>,
     skin: &crate::menu::Skin,
+    // The width of a string in the face the entries are drawn in, which a
+    // horizontal strip needs and a column does not. The same face `skin`'s line
+    // height came off, for the same reason: a strip laid out with the wrong
+    // widths overlaps its own entries.
+    measure: &dyn Fn(&str) -> f32,
+    // The disc's own frame around the page - its clear colour and its rules.
+    // Read here rather than left out, because a captured page that is missing
+    // the frame the window draws is exactly the divergence this module exists
+    // to prevent.
+    frame: &crate::menu::Frame,
     phase: Option<f32>,
 ) -> Result<Vec<crate::frontend::Draw>> {
     let definition = crate::menu::Definition::parse(crate::menu::BUILT_IN)
@@ -238,7 +248,14 @@ fn menu_page(
     // The same window the live menus use, so a captured page scrolls where a
     // played one does rather than where a default happened to put it.
     model.set_visible_rows(crate::menu::visible_rows(skin));
-    let layers = crate::menu::draw_list(&model, skin, &oag_input::keys::bound_keys, backdrop);
+    let layers = crate::menu::draw_list(
+        &model,
+        skin,
+        &oag_input::keys::bound_keys,
+        measure,
+        backdrop,
+        frame,
+    );
     let Some(phase) = phase else {
         return Ok(layers.flatten());
     };
@@ -280,6 +297,10 @@ pub fn run(
         font,
         sprites,
         menu_skin,
+        // Renamed on the way in: `frame` is taken in this function by the
+        // *movie* frame a backdrop is showing, and two things called `frame` in
+        // one scope is how the wrong one gets passed.
+        frame: menu_frame,
         menu_font,
         ..
     } = loaded;
@@ -548,6 +569,8 @@ pub fn run(
                     space,
                     menu_font.as_ref().unwrap_or(&font).line_height,
                 ),
+                &|text| crate::font::measure(menu_font.as_ref().unwrap_or(&font), text),
+                &menu_frame,
                 options.menu_anim_phase,
             )?;
             (backdrop, format, list, space)

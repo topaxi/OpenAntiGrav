@@ -238,6 +238,13 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     // takes is unread, because the element carrying it on Pulse does not exist
     // here.
     transition_secs: 0.5,
+    // **A measurement, not a gap**, and on this title it is the stronger of the
+    // two readings: Pure's menus are the 33 vertical `<Menu>` widgets
+    // `first_row_y` above was counted off, and searching every blob of
+    // `Data.wad`, `FE.wad` and `FEData.wad` on `pure-psp-eu.chd` - 1,241 files,
+    // 46 of them naming `Menu` at all - finds no `HorizMenu` anywhere. See
+    // `oag_title::MenuStrip`.
+    strip: None,
 };
 
 /// Pure's boot sequence, cold-boot measured on both pressings.

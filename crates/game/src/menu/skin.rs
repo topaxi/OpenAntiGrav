@@ -35,6 +35,20 @@ const VALUE_RIGHT: f32 = 440.0;
 /// that method's own docs.
 const OUR_LEADING: f32 = 6.0;
 
+/// The gap between two entries of a horizontal strip, **written in 480x272**
+/// and read through [`Skin::strip_gap`].
+///
+/// **Ours, and it has to be**: a `<HorizMenu>` states a position and a colour
+/// and nothing about spacing - no `gap`, no second anchor to derive one from,
+/// and no capture of the original's own strip exists to measure one off. So an
+/// entry is advanced past by its own measured width plus this, which is the one
+/// rule that cannot put two labels on top of each other whatever they say.
+///
+/// Deliberately larger than [`OUR_LEADING`]: entries sit side by side with no
+/// column edge to separate them, so the gap is the only thing that says where
+/// one ends and the next begins.
+const STRIP_GAP: f32 = 24.0;
+
 /// Where the rows start for a title whose own menu definitions are unread.
 ///
 /// **Ours**, and derived rather than a constant: a title can state where its
@@ -154,6 +168,31 @@ impl Skin {
         self.space
     }
 
+    /// This title's horizontal menu strip, in the grid being drawn in.
+    ///
+    /// `None` for a title that authors no `<HorizMenu>`, which both PSP titles
+    /// measurably do not - see [`oag_title::MenuStrip`]. There is no fallback
+    /// here and there must not be one: a strip this build invented for a title
+    /// whose disc draws a column would be the wrong picture, where a missing
+    /// figure inside a strip is only ever a spacing this build chose.
+    #[must_use]
+    pub fn strip(&self) -> Option<Strip> {
+        self.skin.strip.map(|strip| Strip {
+            x: strip.x * self.from_theirs.0,
+            y: strip.y * self.from_theirs.1,
+            // The widget's own colour, not `TextColor`: HD authors
+            // `0xff705070` here against a white `TextColor`.
+            color: argb(strip.color),
+        })
+    }
+
+    /// The gap between two strip entries, in the grid being drawn in. Ours; see
+    /// [`STRIP_GAP`].
+    #[must_use]
+    pub(super) fn strip_gap(&self) -> f32 {
+        STRIP_GAP * self.from_ours.0
+    }
+
     /// The right-hand edge a row's value is anchored to. Ours; see
     /// [`VALUE_RIGHT`].
     #[must_use]
@@ -244,7 +283,7 @@ impl Skin {
         )
     }
 
-    /// The screen title's colour.
+    /// The screen title's colour, for a title that draws no frame.
     ///
     /// **Not the disc's, deliberately.** Pulse authors `TitleColor` black,
     /// because on hardware the title sits on a light angled top bar
@@ -253,10 +292,33 @@ impl Skin {
     /// text on a dark backdrop - invisible, and wrong in a way that would look
     /// like a bug rather than like a missing feature. The same substitution the
     /// language picker already makes for the same reason.
+    ///
+    /// A title whose frame this build *does* draw does not come through here at
+    /// all: [`super::draw_list`] takes [`super::Frame::ink`] instead, which is
+    /// the colour that screen draws its own chrome in and resolves per archive.
+    /// The substitution was always about the missing frame rather than about the
+    /// colour.
     #[must_use]
     pub(super) fn title_color(&self) -> [f32; 4] {
         OUR_SELECTED
     }
+}
+
+/// A title's `<HorizMenu>`, converted into the grid the menus are drawn in.
+///
+/// The same relationship [`Skin`] has to [`oag_title::MenuSkin`], one field
+/// deep: what the disc authors is [`oag_title::MenuStrip`], and this is that
+/// after [`Skin::new`]'s conversion, so nothing downstream has to know which
+/// grid the numbers were written in.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Strip {
+    /// Left edge of the first entry. Authored.
+    pub x: f32,
+    /// Top of the entries' line box. Authored.
+    pub y: f32,
+    /// What an unselected entry is drawn in. Authored, and **not**
+    /// [`Skin::normal`].
+    pub color: [f32; 4],
 }
 
 /// How many rows are on screen at once, given the pitch in use.

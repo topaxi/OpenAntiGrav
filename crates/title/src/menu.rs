@@ -37,6 +37,73 @@
 /// compare the two without arithmetic.
 pub type Argb = u32;
 
+/// A menu drawn as one horizontal strip rather than as a column of rows.
+///
+/// The widget is the front end's own `<HorizMenu>`, and it is the second menu
+/// idiom the dialect has: entries run left to right from one anchor instead of
+/// down from one. Everything a `<HorizMenu>` authors is here and nothing else -
+/// the widget states a position and a colour, and states no spacing between
+/// entries at all, so how far apart they sit is the drawing side's own choice
+/// and is marked as such where it is made.
+///
+/// # Why this is an axis and not a Wipeout HD constant
+///
+/// [ADR-0022]'s bar is a *second* measured corpus, and this clears it the way
+/// the rest of [`MenuSkin`] does - by the two sides disagreeing, measured on
+/// each disc rather than assumed:
+///
+/// Every blob of every archive named below was extracted and searched, on
+/// 2026-08-19. The `Menu` column is the control - it is what says the search can
+/// see this vocabulary at all - and it is a plain substring, so it counts a
+/// screen called `MPMainMenu` as readily as a `<Menu>` widget.
+///
+/// | disc | archives read | files | holding `Menu` | holding `HorizMenu` |
+/// | --- | --- | ---: | ---: | ---: |
+/// | `pulse-psp-usa.chd` | `Data.wad`, `FE.wad`, `FEData.wad` | 1,411 | 30 | **0** |
+/// | `pulse-psp-eu.chd` | `Data.wad` | 1,138 | 27 | **0** |
+/// | `pulse-ps2-eu.chd` | `WADSP.WAD` | 193 | 43 | **0** |
+/// | `pure-psp-eu.chd` | `Data.wad`, `FE.wad`, `FEData.wad` | 1,241 | 46 | **0** |
+/// | `hdfury-ps3-eu-dec.iso` | `DATA06`'s front-end tree | 29 | 18 | **8** |
+///
+/// So `None` on both PSP titles is a **measurement** - four pressings across two
+/// titles and two consoles author no such widget anywhere - rather than a field
+/// nobody has filled in yet. HD's eight files carry ten `<HorizMenu>` widgets
+/// against seventeen vertical `<Menu>`, so it is an idiom of its front end and
+/// not one screen's exception.
+///
+/// The census is a string search on purpose: the PSP dialect shortens element
+/// names per file and writes the full name into that file's own `<code>`
+/// dictionary, so a `HorizMenu` anywhere would put the literal `HorizMenu` in
+/// the blob that used it. See `oag_formats::fexml`. **What it does not cover**
+/// is the PS2 pressing's other three archives - `WADS2.WAD`, `PRERACE.WAD` and
+/// `PS2MUSIC.WAD` - which were not swept; `WADSP.WAD` is where that disc's front
+/// end is.
+///
+/// [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MenuStrip {
+    /// Left edge of the first entry, in [`MenuSkin::space`]. Authored, the
+    /// widget's own `x`.
+    ///
+    /// The *left* edge and not a centre: every `<HorizMenu>` measured says
+    /// `align="left"`, which is why no alignment field sits beside this one.
+    pub x: f32,
+    /// Top of the entries' line box, in [`MenuSkin::space`]. Authored, the
+    /// widget's own `y`.
+    ///
+    /// This is what [`MenuSkin::first_row_y`] cannot be for a title whose main
+    /// menu is a strip: there is no first *row* to put a `y` on, and the number
+    /// that exists belongs to the strip rather than to a column.
+    pub y: f32,
+    /// The entries' own colour. Authored, the widget's own `color`.
+    ///
+    /// **Not [`MenuSkin::text`], and the two really do differ**: Wipeout HD's
+    /// `FEGlobals->TextColor` is `0xFFFFFFFF` while its `<HorizMenu>` widgets
+    /// say `0xff705070`. A strip drawn in `TextColor` would be drawing a colour
+    /// its own widget overrides.
+    pub color: Argb,
+}
+
 /// One title's menu presentation.
 ///
 /// Held by [`crate::Title`] so that opening one title's archives while drawing
@@ -80,6 +147,12 @@ pub struct MenuSkin {
     /// This is the top of the row's **line box**, not of its glyphs: a capture
     /// puts the first row's ink at y=40 for a 22-pixel face, and that 8-pixel
     /// inset is already baked into the glyph boxes the atlas hands back.
+    ///
+    /// A title whose main menu is a strip has no first row for this to be the
+    /// top of, and says so by leaving it `None` and filling [`Self::strip`]
+    /// instead. The two are not alternatives in general - a strip title still
+    /// authors vertical `<Menu>` widgets elsewhere - but for the one screen
+    /// each field is read off, they are.
     pub first_row_y: Option<f32>,
     /// Added to the row font's line height to get the row pitch. **Measured.**
     ///
@@ -117,7 +190,15 @@ pub struct MenuSkin {
     /// way, so the distinction lives in each title crate's own comment rather
     /// than in this type.
     pub menu_font: Option<&'static str>,
-    /// Unselected row text. Authored, `FEGlobals->TextColor`.
+    /// Unselected row text, as this title's own menu screens draw it.
+    ///
+    /// `FEGlobals->TextColor` on both PSP titles, whose menu widgets name that
+    /// global and nothing else. **Wipeout HD is the case that made the wording
+    /// "as its screens draw it" rather than "TextColor"**: it declares that
+    /// global white and clears its whole front end to a white `HD_BG`, so the
+    /// two cannot both describe what is on screen. See
+    /// `oag_hd::frontend::MENU_SKIN`, which records the contradiction rather
+    /// than resolving it, and takes the colour its screens actually use.
     ///
     /// `None` for a title whose `Skin.xml` does not declare it, which is Pure's
     /// case. The caller supplies its own and must not borrow the other title's.
@@ -127,9 +208,16 @@ pub struct MenuSkin {
     /// Pulse's is `0xFF000000`, black, because its title sits on a light top
     /// bar this build does not draw yet. `None` where undeclared.
     pub title: Option<Argb>,
-    /// The selected row. **Measured**, not authored.
+    /// The selected row. **Measured on Pulse; authored on Wipeout HD.**
     ///
-    /// Nothing in the XML states a selected colour. A capture shows the row
+    /// The two routes are worth telling apart, and the field cannot say which
+    /// it holds - each title's own comment does. Pulse's XML states no selected
+    /// colour anywhere, so its value came off a capture. HD's states one:
+    /// twenty-five `highlightColor` attributes across its front end, every
+    /// single one `FEGlobals->HD_Blue`, always paired with a `color` of
+    /// `HD_Grey` - which is this pair of fields, on widgets other than a menu.
+    ///
+    /// Nothing in Pulse's XML states a selected colour. A capture shows the row
     /// brightened toward white rather than given a fill bar or the pink
     /// `MenuHighLightArrowColor`, which appears nowhere on these screens. Two
     /// frames of the same still menu measured different peaks - rgb(157,255,255)
@@ -145,6 +233,18 @@ pub struct MenuSkin {
     /// authored `0.5` and its transition runs about 13 presented frames against
     /// a front end measured at 30 Hz.
     pub transition_secs: f32,
+    /// The main menu's `<HorizMenu>`, for a title that draws one.
+    ///
+    /// **`None` is a measurement here, not a gap** - see [`MenuStrip`] for the
+    /// census that makes it one. A title that authors no such widget anywhere is
+    /// not a title whose strip is unread.
+    ///
+    /// Read off the *main menu's own* widget rather than pooled across the
+    /// front end, because a strip is authored per screen exactly as
+    /// [`Self::first_row_y`] is: Wipeout HD's ten `<HorizMenu>` widgets agree on
+    /// `x` and on `align`, and six of them say `y="125"` against four at
+    /// `y="140"`.
+    pub strip: Option<MenuStrip>,
 }
 
 impl MenuSkin {
@@ -186,6 +286,8 @@ mod tests {
         title: Some(0xFF00_0000),
         selected: Some(0xFF9D_FFFF),
         transition_secs: 0.5,
+        // Pulse's own answer: its discs author no `<HorizMenu>` at all.
+        strip: None,
     };
 
     /// The four pitches measured off the original, reproduced by the rule.

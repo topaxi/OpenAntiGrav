@@ -238,6 +238,16 @@ pub(crate) struct Shell {
     /// The face menu rows are drawn in, which is a bigger one than the rest
     /// of the front end uses. `None` draws them in `font`.
     pub(crate) menu_font: Option<oag_game::font::Atlas>,
+    /// The disc's own frame around every menu page, read off the front-end XML
+    /// while it was still in hand.
+    ///
+    /// Built here rather than when the menus open for the reason `space` is
+    /// carried: it is a property of the source, it does not change while the
+    /// game runs, and building it needs the parsed screens - which the boot
+    /// shell has and a running session does not. Empty for a title whose frame
+    /// is unread, which draws the menus exactly as they were drawn before this
+    /// existed. See `oag_game::menu::read_frame`.
+    pub(crate) frame: menu::Frame,
 }
 
 impl Shell {

@@ -29,6 +29,10 @@ pub(crate) struct MenuStage {
     /// own, private atlas. Cheap to hold twice: [`font::Atlas`] is a small
     /// glyph table, not a GPU resource. See [`marquee::apply`].
     pub(crate) text_atlas: font::Atlas,
+    /// The disc's own frame around every page: what the screen clears to and
+    /// the rules it draws. Read once, off the front-end XML this source shipped
+    /// - see `menu::read_frame` - and empty for a title whose frame is unread.
+    pub(crate) frame: menu::Frame,
     /// The value marquee's clock: which row it is timing, and for how long.
     pub(crate) marquee: marquee::Timer,
     /// The page change in flight, if one is.
@@ -272,7 +276,14 @@ impl MenuStage {
             // over the menu rather than a missing picture.
             _ => None,
         };
-        let arriving = menu::draw_list(&self.menu, &self.skin, &keys::bound_keys, shown);
+        let arriving = menu::draw_list(
+            &self.menu,
+            &self.skin,
+            &keys::bound_keys,
+            &|text| font::measure(&self.text_atlas, text),
+            shown,
+            &self.frame,
+        );
         let (list, clip) = match &self.change {
             // The page being left grows and fades out; the one arriving grows
             // into place from smaller and fades in. Both run off one tween, so
