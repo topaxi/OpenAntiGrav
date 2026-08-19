@@ -896,6 +896,42 @@ machine and this checkout.
   22, `--refresh-video` implies it. ADRs are immutable, so nothing edited
   0017; making the *uncached* default the cache would need a new one.
 
+**The Ghidra bridge's `switch_program` can silently no-op, and its own reply
+says success when it does.** 2026-08-19. Four of this project's binaries share
+the bridge's display name `BOOT.BIN` (`psp-pulse-usa`, `psp-pulse-eu`,
+`psp-pure-usa`, `psp-pure-eu`), and `rename_function_by_address` /
+`create_function` both ignore the `program` field on the request and act on
+whichever program the bridge currently considers *truly* active - unlike
+`get_function_by_address`, which resolves `program` correctly on every call.
+`switch_program` is supposed to be the fix, but confirmed live: it returns
+`{"success":true}` while leaving the true active program completely
+unchanged, for any of the three non-`psp-pulse-usa` `BOOT.BIN`s. Tried
+switching away to a known-reachable program first in case it was
+call-order-dependent - it wasn't; those three are unreachable for writes
+through this bridge session regardless of sequence. `ps2-pulse-eu` and
+`ps3-hdfury-eu` are unaffected (uniquely named, genuinely switchable).
+
+The failure mode is not a loud error, it is silent cross-binary corruption:
+a `just apply-names` run for, say, `psp-pulse-eu` reports success while
+writing `psp-pulse-eu`'s documented names onto `psp-pulse-usa`'s addresses
+instead, at whatever address happens to also be a function start in the
+wrong binary. This had been happening for a while - live `psp-pulse-usa` on
+2026-08-19 carried 234 stray names (91 mismatched, 143 unsanctioned) before
+cleanup, every one traceable to a name legitimately documented at a nearby
+address in `psp-pulse-eu` or `ps2-pulse-eu`. `scripts/apply-ghidra-names.py`'s
+`Bridge.switch_program` (and `scripts/audit-ghidra-names.py`'s `--prune`, via
+`ensure_active`) now distrust the reply and re-read the bridge's true active
+program afterward with no `program` parameter, aborting loudly instead of
+writing blind - so `just apply-names` now correctly refuses `psp-pulse-eu`,
+`psp-pure-usa` and `psp-pure-eu` outright rather than corrupting whichever
+program was truly active. **Those three binaries cannot be named through this
+bridge at all right now** - that is a `bridge-mcp-ghidra` limitation, not
+something fixable from either script. `psp-pulse-usa` was cleaned (audits
+clean as of 2026-08-19); `psp-pulse-eu`/`psp-pure-usa`/`psp-pure-eu` still have
+no way to apply their `names.tsv` live until the bridge can disambiguate
+same-named programs, or until each is loaded in a Ghidra project without a
+`BOOT.BIN` name collision.
+
 ## Verification status: what to lean on
 
 **The disc chooser was driven end to end on this machine** (2026-08-18), which
