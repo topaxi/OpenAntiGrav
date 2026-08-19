@@ -809,66 +809,116 @@ session rather than these three functions being unusual).
 
 Signature as called: `(craftArray, sourceIndex, targetIndex)`, all three plain
 values, not pointers to a manifold. `craftArray + sourceIndex*4 + 0x64` gives
-a source entity, whose `+0x40` field indexes a global table this function
-reads three floats out of at `+0xe8`, `+0xec`, `+0xf0` - shaped exactly like a
-per-weapon stats block (compare `WeaponAIstats` in
-`docs/reverse-engineering/ppsspp-debugger.md`'s watchpoint section, a
-different table with the same "index through a global, read named floats"
-shape). `craftArray + targetIndex*4 + 0x44` gives what this function reads as
-the target entity, and it is this entity's `+0x110` that gets written - **what
-is measured, and no more**: the write instruction's operand computes
-`*(craftArray + targetIndex*4 + 0x44) + 0x110`, and the live watchpoint (armed
-at `*(entity+0x4c)+0x110`, `Ship_ApplyCollisionImpulse`'s own addressing) fired
-at exactly that address. The two chains landing on the same live address means
-`craftArray + targetIndex*4 + 0x44 == entity + 0x4c` for whatever `entity` and
-`targetIndex` were live at the time - which holds if `craftArray[targetIndex]`
-is `entity - 8`, an offset relationship nothing read here explains. Left
-unexplained rather than asserted as "the same double indirection."
+a source entity, call it `S`. `craftArray + targetIndex*4 + 0x44` gives, after
+one indirection, what this function reads as the target, call it `T` - and it
+is `T+0x110` that gets written - **what is measured, and no more**: the write
+instruction's operand computes `T + 0x110`, and the live watchpoint (armed at
+`*(entity+0x4c)+0x110`, `Ship_ApplyCollisionImpulse`'s own addressing) fired at
+exactly that address, so `T+0x110` really is the pending-impulse slot for
+whatever entity `T` names, corroborated at runtime rather than only in the
+static trace.
 
-The arithmetic, in order:
+**Full instruction-level re-read, 2026-08-19** (`disassemble_bytes` over
+`0x0886794c`-`0x08867b4f`, the whole function body), corrects and extends the
+first pass:
 
-1. `d = |target_position - source_position|` (`vsub.q` then `vdot.t`/`vsqrt.s`).
-2. `target->0x120 += stats->0xe8` - an accumulator on the target, read nowhere
-   in this function; a shake or cooldown timer is the obvious guess, unread.
-3. `falloff = 1.0 - d / stats->0xec` - a linear falloff over a radius, not
+1. `S->0x40` indexes a global table (`0x0885bff0`, itself image-base-relative
+   in the raw bytes - `0x00057ff0` plus `0x08804000`) of pointers, one per
+   weapon type; call the pointed-to block `stats`. Shaped exactly like a
+   per-weapon stats block (compare `WeaponAIstats` in
+   `docs/reverse-engineering/ppsspp-debugger.md`'s watchpoint section, a
+   different table with the same "index through a global, read named floats"
+   shape), read at `+0xe8`, `+0xec`, `+0xf0`, `+0xfc` and branched on
+   at `+0x368`.
+2. **Correction: the tri-state branch reads `stats->0x368`, not `source->0x368`.**
+   The first pass misattributed this field to the source entity; the
+   instruction sequence is `S->0x40` → table lookup → `stats` pointer → `lw
+   a0, 0x368(a0)`, three loads deep from `S`, landing on `stats`, not on `S`
+   itself. **This means the field
+   [HANDOVER.md](../../../../HANDOVER.md) flags as "the shield path's last
+   unmeasured field: `entity + 0x368`" is a different field from this one** -
+   that entry stands unchanged, and this page's own prior claim that the two
+   were the same field is withdrawn. What the tri-state actually gates,
+   corrected: **`T->0x124 = 1` when `stats->0x368` is `0` or `2`, skipped only
+   when it is `1`** (traced through the full three-way branch, not "when it is
+   not `0`" as the first pass had it - a case dispatch that sets a boolean
+   from `tri == 0 || tri == 2` is easy to misread as `tri != 0` from a partial
+   trace). Still unread: what `stats->0x368`'s three states mean, and what
+   `T->0x124` is consumed by. A per-weapon-type flag (rocket vs. mine vs.
+   missile behaving differently) is a better fit now than a per-source-craft
+   one, but that is still a guess.
+3. `S->0x90` is the source position - found by resolving the call at
+   `0886798c`'s `jal`: raw operand `0x00055cd4`, real address
+   `0x08859cd4` after the same image-base correction, a **three-instruction
+   leaf** (`a0 += 0x90; *a1 = *a0; jr ra`) that is exactly `Vec4
+   GetPosition_q(entity, out)` and nothing more, unnamed. The first pass did
+   not resolve this call at all.
+4. `d = |T->0x50 - S->0x90|` (`vsub.q` then `vdot.t`/`vsqrt.s`) - the first
+   pass's "target_position" is `T->0x50` specifically, and it is the **same**
+   subtraction reused for the direction below, not two separate reads as
+   steps 1 and 4 of the old list implied.
+5. `T->0x120 += stats->0xe8` - an accumulator on `T`, read nowhere in this
+   function; a shake or cooldown timer is the obvious guess, unread.
+6. `falloff = 1.0 - d / stats->0xec` - a linear falloff over a radius, not
    clamped here (a hit outside the radius drives `falloff` negative; nothing
    in this function stops that, so either the caller gates on distance first
    or a far hit posts a negative-magnitude impulse - unread).
-4. `direction = normalize(target->(+0x44 deref)+0x50)`, guarded against a
-   zero-length vector the way `FUN_08868ea4` below does too (`vrcp` on a
-   `MaxFloat`-substituted zero denominator rather than a divide-by-zero).
-5. `impulse = direction * (falloff * stats->0xf0)`.
-6. `*(target+0x110) = *(target+0x110) + impulse` - **accumulated**, via
-   `vadd.q`, not overwritten. Two blasts in the same tick stack. The write
-   itself is `sv.q C400, 0x0(a2)` at **`0x08867b0c`**, the address every
-   watchpoint hit logged.
+7. `direction = normalize(T->0x50 - S->0x90)` - the same difference vector
+   step 4 already computed, guarded against a zero-length vector the way
+   `FUN_08868ea4` below does too (`vrcp` on a `MaxFloat`-substituted zero
+   denominator rather than a divide-by-zero).
+8. `impulse = direction * (falloff * stats->0xf0)`.
+9. `*(T+0x110) = *(T+0x110) + impulse` - **accumulated**, via `vadd.q`, not
+   overwritten. Two blasts in the same tick stack. The write itself is `sv.q
+   C400, 0x0(a2)` at **`0x08867b0c`**, the address every watchpoint hit
+   logged.
+10. **Three more writes the first pass missed entirely**, all after the
+    pending-impulse accumulate and none touching it: `T->0x130 += stats->0xfc`
+    (a second, distinct scalar accumulator on `T`, unread consumer);
+    `T->0x138 = 4` (a literal, unread - a state or mode tag is the obvious
+    guess); `T->0x13c = S->0x40` (records the *source's* weapon-stat index
+    onto the target - "what hit me last" bookkeeping is the obvious guess,
+    unread). None of these three feed `Ship_ApplyCollisionImpulse` or
+    anything else this page has read, so they stay measured-and-unported.
 
-Before any of that, the function reads `source->0x368` (through the same
-`craftArray[sourceIndex]->0x64` entity) and branches three ways on whether it
-is `0`, `1`, or `2`, setting a byte flag at `target->(+0x44 deref)+0x124` when
-it is not `0`. **This is the same unread field
-[HANDOVER.md](../../../../HANDOVER.md) already flags as "the shield path's
-last unmeasured field: `entity + 0x368`"** - a second, independent function
-reading it as a tri-state, which narrows that thread without closing it: this
-adds "gates whether a blast sets `target+0x124`" to what is known, still not
-what the three states mean.
+**What `T` actually is, corrected from "unexplained" to "actively doubted".**
+The first pass's live-watchpoint correlation established that, for the one
+craft caught mid-hit, `T` and `*(entity+0x4c)` (`Ship_ApplyCollisionImpulse`'s
+own body pointer) landed on the same live address, and read that as evidence
+`T` might simply *be* that body pointer (`craftArray[targetIndex] == entity -
+8`). This full read weakens that reading rather than confirming it: `T+0x50`
+is used here exactly the way a world position is used (subtracted against
+another position, normalized into a direction), but `rigid-body.md`'s own
+offset table puts `body+0x40..0x70` as the **inverse inertia tensor, body
+space** - so if `T` really were the body pointer, `T+0x50` would be the
+tensor's second row, not a position, and the arithmetic above would not do
+what it visibly does. The two readings do not both hold. Since `T+0x110`
+matching `Ship_ApplyCollisionImpulse`'s address is independently confirmed at
+runtime (the watchpoint hit, corroborating fact rather than the disputed one),
+the more consistent picture is that `T` is a **different** struct from the
+body - plausibly the plain entity struct (`S` is read as one, and `S->0x90` is
+a position on it with no extra indirection) - whose own `+0x110` happens to
+alias the body's `+0x110` for a reason this page has not found, rather than
+`T` being the body pointer itself. Left as an open contradiction, not resolved
+either way; a future reader should not treat either hypothesis as settled.
 
-**Why 68, and the `_q`.** The write site, its accumulate-not-overwrite
-semantics, and the falloff formula are corroborated twice over - the static
-trace and a live watchpoint hit landing on the address the trace predicts -
-which is more than the rubric's single-function static-reading cap normally
-allows. What holds it under 70: the caller is found but unread (`FUN_08867b50`,
-`0x08867de4` - `get_xrefs_to` found nothing, which in this database means
-nothing on its own; see the entry on image-base-relative addressing silencing
-every xref tool in `HANDOVER.md`, and `search_instructions` on the
-image-relative operand found this call in one search once that was known - a
-rocket, a mine or a missile explosion is still the obvious guess given the
-address sits among `Rocket_Ctor`/`Rocket_Update`/`Missile_Update`, now
-narrowable by reading `FUN_08867b50` itself rather than by address proximity
-alone), the `stats` table's identity and its `sourceIndex`/`targetIndex`
-calling convention are read off this function alone with no second site to
-cross-check, and the `entity+0x368` branch's three cases are not understood,
-only observed.
+**Why 68, and the `_q`, unchanged despite the fuller read.** The write site,
+its accumulate-not-overwrite semantics and the falloff formula are now traced
+across the whole function body rather than partially, and the source-position
+helper is resolved - genuine gains. What holds it under 70 is not weaker than
+before: the caller is found but unread (`FUN_08867b50`, `0x08867de4` -
+`get_xrefs_to` found nothing, which in this database means nothing on its own;
+see the entry on image-base-relative addressing silencing every xref tool in
+`HANDOVER.md`, and `search_instructions` on the image-relative operand found
+this call in one search once that was known - a rocket, a mine or a missile
+explosion is still the obvious guess given the address sits among
+`Rocket_Ctor`/`Rocket_Update`/`Missile_Update`, now narrowable by reading
+`FUN_08867b50` itself rather than by address proximity alone), the `stats`
+table's identity and its `sourceIndex`/`targetIndex` calling convention are
+read off this function alone with no second site to cross-check, the
+`stats->0x368` branch's three cases are not understood, only observed, and `T`
+itself - the single most load-bearing unknown, per the paragraph above - is now
+actively disputed rather than merely unexplained.
 
 #### A second writer at `FUN_08868ea4` (`0x08868ea4`), not renamed
 
