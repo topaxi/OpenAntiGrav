@@ -718,16 +718,59 @@ same magnitude for both bodies regardless of mass.
 **No friction.** The one-body path folds `- f*vt` into the same impulse; this one
 has no tangential term at all.
 
-### Still not determined
+### The two calls after the impulses, resolved - and both ruled out as the pending-impulse writer
 
-- **The two calls after the impulses**, at unrelocated `0x499f8` and `0x49c60`.
-  Rebased they land *inside* `Ship_UpdateCraft` (`0x08849618`) rather than on a
-  function start, so either Ghidra's boundaries are wrong there or the rebasing
-  rule that works for every other call on this page does not hold for these two.
-  **Not guessed at.** One of them is the obvious candidate for arming the stun
-  and for posting the pending impulse at `entity->0x4c + 0x110`, which is this
-  page's other open item, so it is worth a careful second look rather than an
-  inference.
+**Read 2026-08-19, correcting the row above.** `Ship_UpdateCraft` was never
+checked against these two addresses; its real span is
+`0x08849618-0x08849ed0`, and `0x0884d9f8`/`0x0884dc60` both sit thousands of
+bytes before it - the "lands inside `Ship_UpdateCraft`" claim was a research
+error, not a real boundary trap. The rebasing rule holds fine, same as it
+does for `Body_ApplyImpulseAtPoint`'s call two lines above in the same tail.
+
+- **`0x0884d9f8` is `Body_Translate`**, already named and documented above.
+  Nothing new here - it is the pair path calling the same routine the
+  positional-correction section describes, once per body, with `∓0.25 * s`
+  each way.
+- **`0x0884dc60` had no function boundary at all** - a genuine, if narrow,
+  auto-analysis gap, bracketed by `Body_RecordContact`'s own `jr ra` just
+  before it and a `jr ra` of its own at `0x0884dcc4`. Boundary created
+  2026-08-19 (`FUN_0884dc60`, confidence 95 for the boundary itself - the
+  bracketing returns and both call-site xrefs agree). Its body is a
+  near-twin of `Body_RecordContact` just above: the same ring append at
+  `body+0x370`, the same `+0x180`/`+0x190`/`+0x1a0` writes, but it stores
+  `1` at `+0x170` where `Body_RecordContact` stores `0`, and it never
+  writes `+0x1a4` (it takes one fewer argument - no `contact+0x20`
+  equivalent). Read directly against the sibling function's bytes,
+  confidence 85. **Left unnamed rather than guessed at**: the call's `a1`
+  argument is not a "point" in either invocation - the first call passes
+  the *other body's own pointer* as `a1`, so the callee's `lv.q 0x0(a1)`
+  reads that body's `+0x00..0x0c` (an orientation-matrix row, not a
+  position), and the second call passes this function's own third
+  parameter (set up at entry exactly like the single-body path's
+  `contact`) as the record's *owner* (`a0`) rather than as a point source.
+  Whether that third parameter is a real manifold contact struct being
+  reused as a ring owner, or the pair path's actual second-craft data
+  wearing the name this page has been calling "contact," is unread.
+  Confidence on that question: 50, which is why the function stays
+  `FUN_0884dc60` rather than `Body_RecordContactPair` or similar.
+
+**Neither call posts the pending impulse.** `Body_Translate` only ever
+touches `body+0x30/0x34/0x38`. `FUN_0884dc60` only ever touches
+`body+0x170/0x180/0x190/0x1a0/0x370` on whatever it is handed as `a0`. There
+*are* two `swc1 f12,0x15c(...)` writes inside `Body_ResolveContactPair`
+itself (`0x0884eff8` on `s0`, `0x0884f190` on `s1`) that are tempting given
+`0x4c + 0x110 = 0x15c` - checked directly and ruled out: `f12` is the
+function's `0.0` constant at both sites, and each write clears the
+w-component of that body's own `+0x150..0x15c` quad immediately before the
+whole quad is reloaded (`lv.q`) for a `vtfm4.q` matrix transform two
+instructions later. That is a clear-to-zero on the body pointer directly,
+not a post to `*(entity+0x4c)+0x110` - a different object and a different
+operation. Confidence 90 this is unrelated to the stun mechanism.
+
+So the pending-impulse writer stays unfound, but the exclusion now covers
+both of `Body_ResolveContactPair`'s tail calls, not just an unresolved
+"lands somewhere odd" note. It is somewhere else in the weapon or
+rival-contact code, as the note below already said.
 ### `0x08815ccc` is a stub, so craft-to-craft contact does not come from the narrowphase
 
 **Read 2026-08-11, and it changes the picture.** `Collision_DispatchPair`
