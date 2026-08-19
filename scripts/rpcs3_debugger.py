@@ -177,6 +177,29 @@ class Debugger:
         time.sleep(seconds)
         self.pause()
 
+    def drain(self, settle=0.4):
+        """Throw away packets the stub volunteered, and say how many there were.
+
+        **Call this after every breakpoint stop.** A breakpoint set on a
+        function several threads run - `FwMutex_Lock`, say - is hit by more than
+        one of them, and each hit queues its own stop reply. The first read
+        issued afterwards then consumes a *stop reply* as if it were its answer,
+        every later packet is off by one, and the session dies on a timeout that
+        looks exactly like a hung emulator.
+        """
+        previous = self.sock.gettimeout()
+        self.sock.settimeout(settle)
+        dropped = 0
+        try:
+            while True:
+                self.read_packet()
+                dropped += 1
+        except (TimeoutError, socket.timeout):
+            self.buf = b""
+        finally:
+            self.sock.settimeout(previous)
+        return dropped
+
     def read(self, address, size):
         """`size` bytes of guest memory. Split to respect `PacketSize`.
 
