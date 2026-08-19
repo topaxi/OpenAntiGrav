@@ -228,7 +228,16 @@ the subsystem.
   above. The subsystem-pointer table is **not** pool-ordered, so adjacency
   arguments are weak here: `world+0x44`'s handler (`0x08863a20`) fires
   *backwards* (`vneg_q` on the craft's forward row), which reads as a Bomb or a
-  Mine and would be pool index 8 or 9 rather than -1.
+  Mine and would be pool index 8 or 9 rather than -1. **Read in full,
+  2026-08-19, chasing the collision-stun's pending-impulse producer chain**:
+  see
+  [contact-response.md](contact-response.md#fun_08863a20-0x08863a20-0x08863ba3-weapons_dispatchfires-world0x44-handler-and-it-looks-like-the-mines-own-fire-handler)
+  for the read - pool alloc, the negated-forward spawn confirmed as the exact
+  mechanism behind "fires backwards", and a correction worth carrying back
+  here: the newly spawned entity's `+0x40` is the *owning craft's own index*,
+  not a weapon-type enum, which is evidence (not proof) that the global
+  per-weapon stats table `Weapon_PostBlastImpulse_q` reads through that same
+  offset is keyed by craft rather than by weapon type.
 - **What writes `craft+0x1ac`**, the burst's round count. No store to that offset
   on a craft base was found outside the decrement itself. It is set by the code
   that arms a pickup - the same never-found grant/fire call site

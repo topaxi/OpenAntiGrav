@@ -1209,9 +1209,78 @@ A countdown timer that lives on the *craft's own struct* rather than a
 separate projectile entity is a specific enough shape to narrow the "rocket,
 mine or missile" guess: a proximity mine dropped behind a craft and armed
 against its own owner's position fits better than a rocket or missile, which
-would more naturally need a separate flying entity to track. Still a guess,
-not confirmed - nothing this session read a weapon-select or inventory label
-against `craft->0x48`.
+would more naturally need a separate flying entity to track. The next section
+firms this up further without fully closing it.
+
+### `FUN_08863a20` (`0x08863a20`-`0x08863ba3`): `Weapons_DispatchFire`'s `world+0x44` handler, and it looks like the Mine's own fire handler
+
+**Read 2026-08-19**, chasing `weapon-fire.md`'s own hint: "`world+0x44`'s
+handler ... fires *backwards* (`vneg_q` on the craft's forward row), which
+reads as a Bomb or a Mine". Disassembled in full - the decompiler fails on it
+too. Signature `(subsystem, craft, craftIndex)`, matching the dispatch call
+`FUN_08863a20(world+0x44, craft, i)` `weapon-fire.md` already documents. In
+order:
+
+1. Sets bit `0x2` on `subsystem+0x2c` (an armed/active flag on the subsystem
+   itself), clears `craft->held` (`craft+0x1bc = -1`) and its own dispatch bit
+   (`craft+0x1b8 &= ~0x100`) - the same "one shot, cleared immediately" shape
+   every other fire handler on this page uses.
+2. **A pool-capacity gate**: skip spawning entirely if `subsystem+0xc4` (a
+   cursor) is `>= 32`.
+3. Allocates the pool slot at `subsystem + cursor*4 + 0x44` - **the exact same
+   `+0x44` indexing every function on this page has been reading as
+   "craftArray-style, index then dereference to an entity pointer"** - and
+   sets, on the new entity: `+0x3c = 1` (an active/alive flag, the same
+   offset `Weapon_PostBlastImpulse_q` and its own callers read/write as a
+   tri-state or bit flag elsewhere on this page); `+0x40 = craftIndex`,
+   **the owning craft's own index, not a weapon-type index**; `+0x44` = the
+   next value of a global incrementing counter (a unique spawn id).
+4. **`+0x40 = craftIndex` corrects an assumption this page was carrying
+   forward uncritically.** `Weapon_PostBlastImpulse_q` reads `S->0x40` as
+   "indexes a global per-weapon-type stats table" purely from its shape (index
+   then dereference); this spawn site shows at least one entity's `+0x40` is
+   populated with the *craft's own index*, not a weapon-type enum. The two
+   are reconcilable if the table at `0x0885bff0` is keyed **by craft** (each
+   of the eight craft's currently-armed weapon) rather than by a flat weapon
+   type - consistent with everything read on this page, since a mine's
+   source craft and its currently-held weapon type would coincide at the
+   moment of firing - but that is an inference from one spawn site, not a
+   read of the table's own contents. Left as a correction to the assumption's
+   confidence, not a settled fact.
+5. Spawns the entity via a call at `0x0885f188(entity, craft's own node+0x30,
+   staged_direction)`, where `staged_direction` is the craft's forward row
+   **negated** (`vneg.q`) before being passed in - **this is the "fires
+   backwards" behaviour `weapon-fire.md` already flagged**, now traced to its
+   exact mechanism: not a separate reversed-facing spawn, a literal negation
+   of the same forward vector every other weapon fires along. Confirms this
+   handler places something *behind* the craft, the shape a dropped mine
+   wants and a forward-flying rocket or missile does not.
+6. The same `< 14` side-effect gate and the same two unread calls
+   (`0x0885abc4`/`0x0894c784`) every function on this page has now shown at
+   least once, here with a `20`-literal parameter where `FUN_08867b50` and
+   `FUN_08867370` both used `12` - a per-caller intensity/duration argument is
+   the obvious guess, unread.
+7. Increments the pool cursor.
+
+**`craft->0x48` - the fuse `FUN_08867370` decrements - is written nowhere in
+this function.** A clean negative result, not an oversight: every field this
+function touches on the new entity is listed above, and `+0x48` is not among
+them. The spawn call at `0x0885f188` is the remaining candidate - unread
+beyond its first ~300 bytes (transform/colour staging that looks like a
+shared visual-effect initializer, not weapon-specific state), and its own
+Ghidra function boundary is suspect: the call target lands **well inside**
+the body of `FUN_0885efc4` (`0x0885efc4`-`0x0885f487`) rather than at that
+function's start, the same undefined-boundary shape `FUN_0884dc60` had before
+its boundary was created. Left unread rather than guessed at: chasing it
+needs its own pass, not folded into this one.
+
+**Confidence on "this is the Mine": informed guess, not measured.** The
+"fires backwards" mechanism, the subsystem-pool-plus-craftIndex-plus-unique-id
+spawn shape, and process of elimination against the Rocket
+(`Weapon_FireRocket`), Missile (`Weapon_FireMissile`, `world+0x4c`'s handler)
+and Cannon (`Weapon_UpdateBurstFire_q`, the likelier read for the bit-`0x2`
+handler per `weapon-fire.md`) all point the same way, but nothing read this
+session confirms it against a weapon-select UI string or inventory label.
 
 ### Not determined, again
 
