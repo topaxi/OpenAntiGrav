@@ -79,16 +79,19 @@ appending a dated pass to it.
   about are gone**: the disc-backed `oag-game` and `oag-formats` suites are
   **1,269 of 1,269, 0 skipped** under `--run-ignored all` (re-measured
   2026-08-17 after the HD HUD and `.gtf` passes; `oag-game` alone read 739, then
-  656, then 652). **`oag-trace` is no longer 122 of 122, and it is
-  the `data/` trap rather than the code**: five tests across
-  `wall_contact_ground_truth` and `yaw_authority_ground_truth` now fail with
-  `No such file or directory` on `data/traces/talons-junction-clean-lap.csv` and
-  `-steer-left.csv`, because `data/traces/` does not exist on this machine at
-  all. See the "derived evidence is not durable" bullet below; the scenarios that
-  regenerate them are committed, the captures are not. **Unlike every other
-  ground-truth test in the tree, these two files have no skip-if-absent guard**,
-  so an absent capture reads as a red physics test rather than as a skip - which
-  is worth fixing before it costs someone a session. **Two of them are flaky rather than solid, and both are in
+  656, then 652). **`oag-trace`'s five `data/traces/` failures are fixed
+  (2026-08-19), and it is skips now, not reds**: `wall_contact_ground_truth` and
+  `yaw_authority_ground_truth` used to fail with `No such file or directory` on
+  `data/traces/talons-junction-standing-start.csv` and `-steer-left.csv`/`-steer-right.csv`
+  whenever `data/traces/` did not exist, because - unlike every other
+  ground-truth test in the tree - they read those files with a bare `expect`
+  instead of the usual skip-if-absent guard. Both files now gate on a
+  `capture()`/`capture_path()` helper matching the pattern `image()` already
+  uses elsewhere (`OAG_REQUIRE_GAME_DATA` forces a hard failure, otherwise a
+  missing capture prints the `verification/scenarios/*.inputs` command that
+  regenerates it and the test returns early). Verified both ways: all five skip
+  cleanly with `data/traces/` absent, and fail loudly under
+  `OAG_REQUIRE_GAME_DATA=1`. **Two of them are flaky rather than solid, and both are in
   `ps2_source_ground_truth`**:
   `an_uncapped_transcode_still_reports_a_total_to_divide_by` failed once and
   passed on the re-run, panicking in *ffprobe duration parsing* ("invalid float

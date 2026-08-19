@@ -99,6 +99,29 @@ fn workspace(relative: &str) -> std::path::PathBuf {
         .join(relative)
 }
 
+/// A capture under `data/traces/`, or `None` on a checkout that lacks it.
+///
+/// `data/traces/` is *derived* evidence, not durable the way `data/images/`
+/// is - see `HANDOVER.md`, "derived evidence under `data/` is not durable".
+/// The committed `verification/scenarios/*.inputs` are what regenerate it,
+/// named in `regenerate` so a skip points at the fix rather than a dead end.
+fn capture(relative: &str, regenerate: &str) -> Option<std::path::PathBuf> {
+    let path = workspace(relative);
+    if path.exists() {
+        return Some(path);
+    }
+    assert!(
+        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
+        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
+        path.display()
+    );
+    eprintln!(
+        "skipping: {} is not present; regenerate with `{regenerate}`",
+        path.display()
+    );
+    None
+}
+
 /// The tick the **original** first loses speed, and so first meets the wall.
 ///
 /// Read off the capture rather than asserted: `speed` rises on every one of ticks
@@ -118,7 +141,13 @@ const RECORDED_WALL_TICK: usize = 187;
 /// signs. Kept at the largest measurement plus one.
 const ALLOWED_TICK_GAP: usize = 6;
 
-fn load() -> (Handling, oag_physics::CollisionWorld, Trace) {
+fn load() -> Option<(Handling, oag_physics::CollisionWorld, Trace)> {
+    let capture_path = capture(
+        CAPTURE,
+        "just scripted-emu verification/scenarios/standing-start.inputs \
+         data/traces/talons-junction-standing-start.csv",
+    )?;
+
     let mut archives = pulse::open(
         workspace(IMAGE)
             .to_str()
@@ -143,10 +172,10 @@ fn load() -> (Handling, oag_physics::CollisionWorld, Trace) {
         handling::Special::default(),
     );
 
-    let text = std::fs::read_to_string(workspace(CAPTURE)).expect("reading the capture");
+    let text = std::fs::read_to_string(capture_path).expect("reading the capture");
     let trace = Trace::parse(&text).expect("parsing the capture");
 
-    (handling, collision, trace)
+    Some((handling, collision, trace))
 }
 
 /// The first recorded tick at which our hull reports a respondable contact.
@@ -233,7 +262,9 @@ fn firing_probe_index(
 #[test]
 #[ignore = "needs data/traces/ and a disc image; run with `just test-data`"]
 fn the_capture_still_dates_its_own_wall_the_way_this_test_assumes() {
-    let (_, _, trace) = load();
+    let Some((_, _, trace)) = load() else {
+        return;
+    };
     // A real deceleration, not the sub-tick jitter a craft at rest shows: the
     // capture's `speed` reads 0.021 at tick 0 and 0.015 at tick 1, which is a
     // stationary ship and not a wall. The impact itself is 4.38 units/s in one
@@ -256,7 +287,9 @@ fn the_capture_still_dates_its_own_wall_the_way_this_test_assumes() {
 #[test]
 #[ignore = "needs data/traces/ and a disc image; run with `just test-data`"]
 fn our_hull_finds_the_wall_within_a_few_ticks_of_where_the_original_does() {
-    let (handling, collision, trace) = load();
+    let Some((handling, collision, trace)) = load() else {
+        return;
+    };
     let ours = first_contact_on_the_recorded_line(&handling, &collision, &trace)
         .expect("our hull never finds the wall on a line that ends up scraping one");
     let probe = firing_probe_index(&handling, &collision, ours, &trace);
@@ -319,8 +352,16 @@ fn our_hull_finds_the_wall_within_a_few_ticks_of_where_the_original_does() {
 #[test]
 #[ignore = "needs data/traces/ and a disc image; run with `just test-data`"]
 fn the_same_gap_shows_on_the_lap_capture_and_the_same_probe_finds_it() {
-    let (handling, collision, _) = load();
-    let text = std::fs::read_to_string(workspace(LAP_CAPTURE)).expect("reading the lap capture");
+    let Some((handling, collision, _)) = load() else {
+        return;
+    };
+    let Some(lap_path) = capture(
+        LAP_CAPTURE,
+        "see docs/tools/oag-trace.md#a-whole-lap-and-where-it-came-from",
+    ) else {
+        return;
+    };
+    let text = std::fs::read_to_string(lap_path).expect("reading the lap capture");
     let trace = Trace::parse(&text).expect("parsing the lap capture");
 
     // The original's first contact, by the cleanliness test. Ticks 0-5 are the
