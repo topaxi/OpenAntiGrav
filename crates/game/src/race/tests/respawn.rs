@@ -522,4 +522,13 @@ fn a_shielded_scrape_bulges_the_shell_and_throws_no_sparks() {
         bulge > oag_render::shield::SCALE_FLICKER * 2.0,
         "the shell did not bulge on the absorbed hit: moved {bulge}"
     );
+    // And it flashes cyan: `ShipShield_Hit` drops the red channel alone, which
+    // against the mesh's own blue-violet reads as a hue shift. One tick of the
+    // `0.15`-per-substep settle has run, so red is a little above zero rather
+    // than exactly it.
+    let red = race.shield_of(0).colour()[0];
+    assert!(
+        red < 0.2,
+        "the shell did not flash cyan on the absorbed hit: red is {red}"
+    );
 }
