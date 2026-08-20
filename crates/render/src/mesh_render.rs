@@ -128,96 +128,11 @@ pub use crate::capture::{capture_from, capture_pixels_from};
 mod target;
 pub use target::{fragment_options, is_linear_target, linear_constants};
 
-/// Anisotropic filtering level: the one texture-filtering knob modern
-/// renderers expose to a user. Mip generation itself always runs (see
-/// [`mip_chain`]) and is not a setting - every renderer just does it.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum Anisotropy {
-    Off,
-    X2,
-    X4,
-    X8,
-    #[default]
-    X16,
-}
+mod anisotropy;
+pub use anisotropy::Anisotropy;
 
-impl Anisotropy {
-    /// The `wgpu::SamplerDescriptor::anisotropy_clamp` value this level maps to.
-    const fn clamp(self) -> u16 {
-        match self {
-            Self::Off => 1,
-            Self::X2 => 2,
-            Self::X4 => 4,
-            Self::X8 => 8,
-            Self::X16 => 16,
-        }
-    }
-}
-
-impl std::str::FromStr for Anisotropy {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.trim().to_ascii_lowercase().as_str() {
-            "off" | "1" | "1x" => Ok(Self::Off),
-            "2" | "2x" => Ok(Self::X2),
-            "4" | "4x" => Ok(Self::X4),
-            "8" | "8x" => Ok(Self::X8),
-            "16" | "16x" => Ok(Self::X16),
-            other => Err(format!(
-                "{other:?} is not an anisotropy level; try off, 2x, 4x, 8x or 16x"
-            )),
-        }
-    }
-}
-
-impl std::fmt::Display for Anisotropy {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(match self {
-            Self::Off => "off",
-            Self::X2 => "2x",
-            Self::X4 => "4x",
-            Self::X8 => "8x",
-            Self::X16 => "16x",
-        })
-    }
-}
-
-/// Downsamples `rgba` into a full mip chain by repeated 2x2 box filtering,
-/// down to a 1x1 level.
-///
-/// Track and ship textures are seen at every distance and grazing angle a
-/// chase camera produces; without mips, minification aliases into shimmer
-/// that a single sample can't fix. Filtering happens on `Rgba8UnormSrgb`
-/// sample data, matching what the sampler itself blends between levels.
-fn mip_chain(width: u32, height: u32, rgba: &[u8]) -> Vec<(u32, u32, Vec<u8>)> {
-    let mut levels: Vec<(u32, u32, Vec<u8>)> = vec![(width, height, rgba.to_vec())];
-    loop {
-        let (w, h, data) = levels.last().expect("levels is never empty");
-        let (w, h) = (*w, *h);
-        if w == 1 && h == 1 {
-            break;
-        }
-        let next_width = (w / 2).max(1);
-        let next_height = (h / 2).max(1);
-        let mut next = vec![0u8; (next_width * next_height * 4) as usize];
-        for y in 0..next_height {
-            let y0 = (y * 2).min(h - 1);
-            let y1 = (y * 2 + 1).min(h - 1);
-            for x in 0..next_width {
-                let x0 = (x * 2).min(w - 1);
-                let x1 = (x * 2 + 1).min(w - 1);
-                for c in 0..4usize {
-                    let texel = |sx: u32, sy: u32| data[((sy * w + sx) * 4) as usize + c] as u32;
-                    let sum = texel(x0, y0) + texel(x1, y0) + texel(x0, y1) + texel(x1, y1);
-                    next[((y * next_width + x) * 4) as usize + c] = ((sum + 2) / 4) as u8;
-                }
-            }
-        }
-        levels.push((next_width, next_height, next));
-    }
-    levels
-}
+mod texture;
+use texture::mip_chain;
 
 /// Everything [`build`] hands back: geometry, texture bindings, and the three
 /// pipelines a `Model` draws through.
