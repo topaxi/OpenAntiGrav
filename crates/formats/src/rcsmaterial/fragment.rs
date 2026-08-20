@@ -273,7 +273,9 @@ impl Program {
     /// taints the channels it writes when any operand it reads is tainted, and
     /// clears them when none is - so a register that is overwritten stops
     /// carrying what it used to. The answer is the taint standing on the
-    /// channels the final instruction writes.
+    /// **colour channels of the last instruction that writes one** - not on
+    /// the final instruction, which in most lit programs is `MOV H0.w,
+    /// {const}` and would report nothing.
     ///
     /// Two deliberate approximations, both toward **finding** a dependency
     /// rather than missing one, because the consequence of a false negative is
@@ -319,7 +321,9 @@ impl Program {
         // `tainted[reg]` is a bit per channel per interpolator, flattened: the
         // register file is small and 16 interpolators fit a `u16` each.
         let mut tainted: [[u16; 4]; 64] = [[0; 4]; 64];
-        let mut last: Option<(u8, u8)> = None;
+        // The last instruction to write a colour channel, which is what the
+        // picture is - see below.
+        let mut last: Option<u8> = None;
         for insn in &self.instructions {
             let mut from = 0u16;
             for source in insn.operands() {
@@ -345,14 +349,24 @@ impl Program {
                     *slot = from;
                 }
             }
-            last = Some((insn.dst, insn.mask));
+            // **The colour channels of the output, not the last write.** Most
+            // lit programs finish on `MOV H0.w, {const}` - alpha from a
+            // constant - and taking the taint standing on only that channel
+            // reports zero while the colour written several instructions
+            // earlier is discarded. Measured on seven Talon's Junction
+            // materials: every one whose last instruction was that `MOV`
+            // answered `0x0000` under the old rule, which is what made the
+            // lit-versus-emissive split unusable.
+            if insn.mask & 0b0111 != 0 {
+                last = Some(insn.dst);
+            }
         }
-        let Some((dst, mask)) = last else {
+        let Some(dst) = last else {
             return 0;
         };
         let mut out = 0u16;
         for (channel, slot) in tainted[usize::from(dst) & 63].iter().enumerate() {
-            if mask & (1 << channel) != 0 {
+            if channel < 3 {
                 out |= slot;
             }
         }

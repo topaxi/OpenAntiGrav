@@ -299,12 +299,23 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // everywhere, which is full gloss, as the original samples it too). Zero
     // whenever the authored rig is off: the stand-in never had one.
     //
-    // This term is the **only** way directional light reaches an HD surface.
-    // Both materials read so far agree: `track_surface` block #7 and
-    // `detonator_ship_rich_iridescent` block #2 each build a half vector from
-    // the same patched light direction and gate the result by `N.L`, and
-    // neither has a Lambert diffuse. See renderer.md, "Ships have no Lambert
-    // diffuse either".
+    // **This used to say the specular was the only way directional light
+    // reaches an HD surface. Five materials read on 2026-08-20 refute it.**
+    // `diffuse_with_specular_from_alpha` (86 chunks of Talon's Junction),
+    // `..._scalar` (80), `diffusewithalphachannel` (43), `track_wall` (33) and
+    // `glasstest` (33) each normalise their interpolated world normal, dot it
+    // against a patched direction, multiply by a patched colour, **gate it
+    // with a sun-occlusion scalar**, add the prelit term and multiply the sum
+    // into the albedo. `track_surface`, which the removal above was justified
+    // on, is the exception at 15 chunks.
+    //
+    // So the removal is a crude fix for a missing mask: this renderer applied
+    // `sun * (ndl * baked.a)` with `baked.a` at 1.0 from the no-lightmap
+    // placeholder - full sun, unoccluded - where the disc gates the same sun
+    // by a mask that is zero on 41 % of vertices. Unmasked sun was worse than
+    // none, which is why removing it measured better. **The faithful fix is
+    // the colour set's fourth byte**, which `mesh/rcs.rs` currently drops; see
+    // renderer.md, "The sun is real and it is masked".
     let to_eye = normalize(scene.fog.camera - in.world);
     let half_vector = to_eye + scene.light.direction;
     let ndh = clamp(

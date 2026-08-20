@@ -1239,8 +1239,20 @@ reciprocals against a per-channel map) **and an environment lookup on a third
 sampler**, neither of which is a light term and neither of which
 `oag-render` implements.
 
-So no HD material read so far - two, now - carries `sun * N.L` as a
-**diffuse** term. Directional light reaches both only through the specular.
+> **This generalisation was made on two materials and is false.** Five more
+> were read on 2026-08-20 and every one of them carries a Lambert sun diffuse:
+> `diffuse_with_specular_from_alpha` (86 chunks of Talon's Junction),
+> `..._scalar` (80), `diffusewithalphachannel` (43), `track_wall` (33) and
+> `glasstest` (33) - **275 chunks against `track_surface`'s 15**. Each
+> normalises its interpolated world normal, `DP3`s it against a patched
+> direction, multiplies by a patched colour, **gates it with a sun-occlusion
+> scalar**, adds the prelit term and multiplies the sum into the albedo, with
+> the `pow(N.H, e)` specular added afterwards. Confidence 88 on the structure;
+> 75 on the two constants being `directionalLight0DirectionWorldSpace` and
+> `directionalLight0Colour`, which rests on the declaration tables alone. See
+> "The sun is real and it is masked" below. **`track_surface` is the exception
+> on this circuit, not the rule**, and the shader change justified on it is
+> wrong for the majority.
 The sun removal is better founded than the first note claimed, and **the
 reason a hull renders dark is a missing material, not a missing light**:
 `ship.rcsmodel` is 57 meshes of which **4 declare a colour set and none
@@ -1258,6 +1270,70 @@ ship) and **300** (6). 32 is the commonest of the three round values and
 stays as the stand-in, now labelled as one. Confidence 80 - the sweep keys on
 an instruction pattern rather than on each block's meaning, so some of the 5s
 and 10s may be another `pow`.
+
+### The sun is real and it is masked (2026-08-20)
+
+Seven of Talon's Junction's materials were read variant by variant, naming what
+each interpolator carries - the per-material work the two refuted general rules
+left behind. Three things came out, and the first two change pages above.
+
+**1. Five of the seven carry a Lambert sun diffuse.** The idiom, from
+`diffuse_with_specular_from_alpha`'s vertex-coloured variant (block `0x7410`,
+86 chunks - the commonest material on the circuit):
+
+```text
+@0x0a  DP3 R0.w, f[TC3], f[TC3]          \  normalize the interpolated
+@0x0c  op3B R3.xyz, f[TC3], R0.wwww      /  world normal
+@0x0f  DP3 R0.w, R3, {..}                <- N . L, against a patched direction
+@0x12  MUL H6.xyz, R0.wwww, {..}         <- * a patched colour
+@0x14  MOV R3.zw, f[TC5].xxxy            <- the occlusion scalar
+@0x15  MAD H6.xyz, R3.zzzz, H6, R2       <- occl * that + the prelit term (TC0)
+@0x23  TEX H2, f[TC5].zwzz unit0         <- albedo
+@0x25  MUL H3.xyz, H2, H3                <- the whole sum multiplies the albedo
+```
+
+with `pow(N.H, e)` added *after* that multiply, structurally separate. The two
+patched slots are the only `float3`/`float4` the block declares -
+`0x02df31e5` `directionalLight0DirectionWorldSpace` and `0x2dba643d`
+`directionalLight0Colour`. Confidence 88 on the diffuse, 75 on the names, which
+rest on the declaration table because the `patch fslot` to `const@slot` mapping
+is unresolved.
+
+**2. The colour set's fourth byte is that occlusion scalar**, which closes an
+open question above. The vertex program routes `v[colourSet].w` to a spare
+channel - `o[TC5].x`, or `o[TC6].z` on `track_wall` - and the fragment program
+uses it in **two** places: the `MAD` that gates the sun, and the multiply that
+gates the specular. The *lightmapped* variants of the same materials use
+`lightmap.a` in exactly those two places. Two independently decoded carriers
+filling one role is the check, and it predicts the census this page already
+records - 41 % zero, 52 % full, a mask. Confidence 86.
+
+**3. So the sun removal shipped in `mesh.wgsl` was a crude fix for a missing
+mask.** `oag-render` applied `sun * (ndl * baked.a)` with `baked.a` at **1.0**
+from the no-lightmap placeholder - full sun, unoccluded, on every surface
+without a lightmap. The disc applies the same sun gated by a mask that is zero
+on 41 % of vertices. Removing the term measured better (16.5 % -> 10.2 %
+clipped) because unmasked sun was worse than none; the faithful fix is to
+decode the colour set's alpha as the mask and restore the sun behind it.
+`mesh/rcs.rs` currently takes only `.rgb` of the colour set and drops that
+byte.
+
+**What each variant carries, and why a table has to be per variant.** The seven
+vertex programs take two shapes and the shape follows the chunk key - the same
+quantities on different channels:
+
+| Carried | Lightmapped | Vertex-coloured |
+| --- | --- | --- |
+| prelit light | `o[TC0].xyz` is a zero constant | `pow(colourSet.rgb, prelitBias) * prelitScaleSpecular` |
+| sun-occlusion | `lightmap.a`, sampled | `o[TC5].x` / `o[TC6].z` = `colourSet.w` |
+| world normal | `o[TC0..2].w` | `o[TC3].xyz` or `o[TC4].xyz` |
+| view vector | `o[TC2].xyz` | `o[TC0..2].w` |
+| albedo uv | `o[TC4].xy` | `o[TC5].zw` / `o[TC6].xy` |
+| lightmap uv | `o[TC4].zw`, `o[TC6].xy` on `track_wall` | - |
+| view depth | `o[TC3].w` | `o[TC5].y` / `o[TC6].w` |
+
+Read by a subagent; the `diffuse_with_specular_from_alpha` block above was
+re-read here instruction by instruction before any of it was written down.
 
 ## What was deliberately not read
 

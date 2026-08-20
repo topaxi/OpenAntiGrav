@@ -208,3 +208,46 @@ fn an_overwrite_clears_what_a_register_carried() {
         "the second MOV replaced what the first put in R0"
     );
 }
+
+/// **A program that ends on `MOV H0.w, {const}` still reports its colour.**
+///
+/// The bug this fixes: taking the taint standing on the *final* instruction's
+/// channels reports nothing whenever a program finishes by writing only alpha
+/// from a constant, which is how most of Talon's Junction's lit materials end.
+/// Measured over seven of them, every such program answered `0x0000` and the
+/// colour written several instructions earlier was discarded.
+#[test]
+fn a_trailing_alpha_write_does_not_discard_the_colour() {
+    let mut b = Vec::new();
+    b.extend_from_slice(b"SHO\x08");
+    b.extend_from_slice(&1u32.to_be_bytes());
+    for v in [2u16, 0, 0, 0, 0x18, 0x18, 0x18, 0x18] {
+        b.extend_from_slice(&v.to_be_bytes());
+    }
+    let head = b.len();
+    b.extend_from_slice(&48u32.to_be_bytes());
+    b.resize(head + 0x10, 0);
+    b.extend_from_slice(&0x20u32.to_be_bytes());
+    b.resize(head + 0x20, 0);
+    let mut push = |words: [u32; 4]| {
+        for w in words {
+            b.extend_from_slice(&(w as u16).to_be_bytes());
+            b.extend_from_slice(&((w >> 16) as u16).to_be_bytes());
+        }
+    };
+    // ADD H0.xyz, f[TC1], f[TC1] - the colour, from interpolator 5.
+    push([0x03 << 24 | 5 << 13 | 0b111 << 9, 1, 1, 0]);
+    // MOV H0.w, {const} - alpha only, from an untainted source, END.
+    push([0x01 << 24 | 0b1000 << 9 | 1, 2, 0, 0]);
+    for _ in 0..4 {
+        b.extend_from_slice(&[0u8; 4]);
+    }
+    let p = Program::parse(&b, 0).expect("decodes");
+    assert_eq!(p.instructions.len(), 2);
+    assert_eq!(
+        p.output_depends_on(),
+        1 << 5,
+        "the trailing alpha write hid the colour"
+    );
+    assert_eq!(p.output_lit_by(), 1 << 5);
+}
