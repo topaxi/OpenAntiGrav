@@ -215,18 +215,57 @@ stubs never fire under either decoder** - `ppu_loader` logs the game's `sys_io`
 imports at boot (`[cellPadGetData] (0x8b72cda1) -> 0x759a44`, and `0x759a44`
 really does hold `li r12, 0`), but they are not PPU code paths.
 
-Two things about *choosing* the address, both of which cost a run:
+### The stub parks a thread at a breakpoint without announcing it
 
-- **The `Collision_*` functions are contact-gated, not per-frame.** One fired,
-  and then did not fire again in three separate 60-90 second windows of clean
-  flight with thrust held. A net of several addresses is the right shape, and a
-  genuinely per-frame function - `FwMutex_Lock` is the one that always hits -
-  is what to use when the question is "does this work at all".
+**This is the most expensive trap on the page** - it cost four runs and produced
+two confident, entirely wrong conclusions before an in-race control caught it.
+
+A `Z0` breakpoint stops the thread that reaches it, but RPCS3 does **not**
+always send a stop reply for that thread. `wait_for_stop()` therefore blocks
+until its timeout and reports nothing, which reads exactly like "this address
+never executes".
+
+Measured. A breakpoint on `Physics_StepWorld` (`0x000f8610`) returned nothing in
+90 seconds of a live race - screenshot-confirmed as lap 1 of 3 with the clock
+running and thrust held. Arming `FwMutex_Lock` in the *same* session then
+stopped in 0.04 s and reported:
+
+    physics step (tid 01000000, r3=0x3056cea0)
+    FwMutex_Lock (tid 0100000c, r3=0x00b6caf8)
+    FwMutex_Lock (tid 01000017, r3=0x32903730)
+
+Thread `01000000` had been sitting at the physics breakpoint the whole time.
+The only reliable question is "is any thread's PC at this address", and asking
+it means stopping the target first: arm, resume a slice, `pause()`, then walk
+every thread's registers. `Debugger.wait_at()` does exactly that and is what
+breakpoint work should use.
+
+**A negative from `wait_for_stop()` is not a negative.** Two readings written
+during this session - that the `Collision_*` functions are "contact-gated, not
+per-frame", and that the physics tick "does not run during a race" - were both
+produced this way and are both wrong. The first is separately ruled out by the
+disassembly: `bl 0x00038428` at `0x000f88bc` is straight-line code, so pair
+processing runs on every physics step. See
+[physics.md](../ghidra/functions/ps3-hdfury-eu/physics.md).
+
+### Breakpoints do re-arm, and that was never the problem
+
+Three consecutive hits on `FwMutex_Lock`, 0.04 s each, resuming between them
+without removing or re-adding anything. Re-arming is not required and is not
+where the once-then-never pattern came from.
+
+What *does* break is arming after an interrupt-pause while stop replies are
+still queued: `remove` then `resume` then `pause()` then `add` timed out
+outright. Two rules follow, both cheap:
+
+- **Arm on the attach-pause**, before the first `resume()`. Connecting pauses
+  the target anyway, so drive the pad into position *first* and attach last.
 - **A breakpoint on a function several threads run queues one stop reply per
   thread.** The first memory read afterwards then consumes a *stop reply* as its
   answer, everything after is off by one, and the session dies on a timeout that
   looks exactly like a hung emulator. `Debugger.drain()` exists for this; call
-  it after every breakpoint stop.
+  it after every breakpoint stop, and give it a longer settle than the default
+  before any `add_breakpoint`.
 
 ### What a stopped thread's PCs do and do not tell you
 
