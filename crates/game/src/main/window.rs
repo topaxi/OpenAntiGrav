@@ -4,6 +4,7 @@
 //! the display the window is going onto, which the settings menu asks again
 //! every time it is changed - see `Session::apply_window`.
 
+use log::warn;
 use oag_game::{display, icon, perf};
 
 /// The window's Wayland `app_id` and X11 `WM_CLASS` - the same field on both
@@ -88,7 +89,7 @@ pub(crate) fn choose_monitor(
         return monitors.into_iter().nth(index);
     }
     if let Some(wanted) = setting.name() {
-        eprintln!(
+        warn!(
             "no monitor named {wanted:?}; using the default (this machine has: {})",
             names.join(", ")
         );

@@ -45,6 +45,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Condvar, Mutex};
 
 use anyhow::{Context, Result, anyhow, bail};
+use log::{info, warn};
 use oag_formats::{av1, bik, ipf, pmf};
 
 use crate::at3;
@@ -216,8 +217,8 @@ impl MovieAudio {
 fn movie_audio(demuxed: &pmf::Demuxed, stream: pmf::AudioStream, key: &str) -> Option<MovieAudio> {
     let first = demuxed.audio.first()?;
     let Some(sample_rate) = stream.frequency_hz() else {
-        eprintln!(
-            "warning: {key}'s audio is sample-rate code {}, which this build does not know, so \
+        warn!(
+            "{key}'s audio is sample-rate code {}, which this build does not know, so \
              it stays silent",
             stream.frequency_code
         );
@@ -242,7 +243,7 @@ fn movie_audio(demuxed: &pmf::Demuxed, stream: pmf::AudioStream, key: &str) -> O
     let body = stream_bytes.get(start..).unwrap_or_default();
 
     if !body.starts_with(&ATRAC3PLUS_SYNC) {
-        eprintln!("warning: {key}'s first audio frame carries no sync word, so it stays silent");
+        warn!("{key}'s first audio frame carries no sync word, so it stays silent");
         return None;
     }
 
@@ -265,10 +266,7 @@ fn movie_audio(demuxed: &pmf::Demuxed, stream: pmf::AudioStream, key: &str) -> O
     for index in 0..frames {
         let at = index * stride;
         if body[at..at + 2] != ATRAC3PLUS_SYNC {
-            eprintln!(
-                "warning: {key}'s audio loses framing at frame {index} of {frames}, so it stays \
-                 silent"
-            );
+            warn!("{key}'s audio loses framing at frame {index} of {frames}, so it stays silent");
             return None;
         }
         blocks.extend_from_slice(&body[at + ATRAC3PLUS_FRAME_HEADER_LEN..at + stride]);
@@ -1124,8 +1122,8 @@ fn open_psmf(
     if demuxed.stray_bytes != 0 {
         // Not fatal, but it means the walk lost sync and the frame count below
         // is suspect, so it must be visible rather than swallowed.
-        eprintln!(
-            "warning: {} byte(s) of {key} were not part of any pack or PES packet",
+        warn!(
+            "{} byte(s) of {key} were not part of any pack or PES packet",
             demuxed.stray_bytes
         );
     }
@@ -1136,9 +1134,7 @@ fn open_psmf(
     // independent measurements of the same thing. Disagreeing by more than a
     // frame means one of them is being read wrong.
     if frame_count.abs_diff(expected) > 1 {
-        eprintln!(
-            "warning: {key} has {frame_count} access units but its duration implies {expected}"
-        );
+        warn!("{key} has {frame_count} access units but its duration implies {expected}");
     }
 
     let width = u32::from(video.width);
@@ -1276,15 +1272,15 @@ fn gst_frame_store(
         Ok(Some(decoder)) => decoder,
         Ok(None) => return None,
         Err(e) => {
-            eprintln!("warning: platform-native H.264 decode unavailable for {key}: {e:#}");
+            warn!("platform-native H.264 decode unavailable for {key}: {e:#}");
             return None;
         }
     };
 
     let geometry = decoder.geometry();
     if (geometry.width, geometry.height) != (width, height) {
-        eprintln!(
-            "warning: {key}'s GStreamer decode is {}x{}, but the movie declares {width}x{height}",
+        warn!(
+            "{key}'s GStreamer decode is {}x{}, but the movie declares {width}x{height}",
             geometry.width, geometry.height
         );
         return None;
@@ -1650,7 +1646,7 @@ fn run_ffmpeg(
     // Said before rather than after, because the whole 1200-frame intro takes
     // about 80 seconds and silence for that long reads as a hang. It happens
     // once per movie: the result is cached.
-    eprintln!(
+    info!(
         "transcoding {} into {} (once; cached after this)",
         frames.cap.map_or_else(
             || frames.total.map_or_else(

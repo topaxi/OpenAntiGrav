@@ -16,11 +16,14 @@
 //! Traces are derived game data and live under `data/traces/`, which is
 //! gitignored; nothing here can run in CI.
 
+mod logging;
+
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use clap::{Args, Parser, Subcommand, ValueEnum};
+use log::{info, warn};
 use oag_core::math::Vec3;
 use oag_formats::{collision, handling, track, vex};
 use oag_gameplay::ControlScheme;
@@ -48,13 +51,6 @@ const DEFAULT_TEAM: &str = "Assegai";
 
 /// Our own fixed timestep, for `--fixed-dt`. ADR-0007.
 const FIXED_DT: f32 = 1.0 / 60.0;
-
-/// Curve samples per control-point interval, for `oag-trace track`.
-///
-/// The same four `oag_render::track` draws the ribbon with and
-/// `oag_game::race::Spline` locates a ship with, so a dumped line and a drawn one
-/// are the same set of points.
-const STEPS_PER_SEGMENT: usize = 4;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -283,7 +279,7 @@ enum Command {
         #[arg(long, default_value = DEFAULT_TRACK)]
         track: String,
         /// Curve samples per control-point interval.
-        #[arg(long, default_value_t = STEPS_PER_SEGMENT)]
+        #[arg(long, default_value_t = Course::STEPS_PER_SEGMENT)]
         steps: usize,
     },
     /// Dump a track's pad trigger volumes as CSV, one row per pad.
@@ -544,6 +540,7 @@ impl From<ToleranceArgs> for Tolerances {
 }
 
 fn main() -> Result<()> {
+    logging::init();
     match Cli::parse().command {
         Command::Show { trace } => show(&trace),
         Command::Script { script, expand } => {
@@ -693,8 +690,8 @@ fn drive_scenario(args: DriveArgs) -> Result<()> {
     }
     let ticks = args.ticks.unwrap_or(script.len());
     if ticks > script.len() {
-        eprintln!(
-            "note: {} covers {} tick(s) and --ticks asks for {ticks}, so its last \
+        warn!(
+            "{} covers {} tick(s) and --ticks asks for {ticks}, so its last \
              state is held for the remaining {}",
             args.script.display(),
             script.len(),
@@ -705,18 +702,20 @@ fn drive_scenario(args: DriveArgs) -> Result<()> {
     let class = SpeedClass::from_name(&args.class)
         .with_context(|| format!("{:?} is not a speed class", args.class))?;
     let (handling, collision) = load(&args.source, &args.track, &args.team, class)?;
-    let samples: Vec<track::Sample> =
-        resample(&load_ai(&args.source, &args.track)?, STEPS_PER_SEGMENT)
-            .into_iter()
-            .map(|(_, sample)| sample)
-            .collect();
+    let samples: Vec<track::Sample> = resample(
+        &load_ai(&args.source, &args.track)?,
+        Course::STEPS_PER_SEGMENT,
+    )
+    .into_iter()
+    .map(|(_, sample)| sample)
+    .collect();
     let start_position = load_start_position(&args.source, &args.track)?;
     let start = samples
         .first()
         .copied()
         .context("the track's spline has no samples, so there is nowhere to start")?;
     let collision = if args.no_collision {
-        eprintln!("note: --no-collision, so the hover probes see nothing");
+        info!("--no-collision, so the hover probes see nothing");
         CollisionWorld::new()
     } else {
         collision
@@ -731,7 +730,7 @@ fn drive_scenario(args: DriveArgs) -> Result<()> {
     let pose = match (args.start, &start_position) {
         (Some(position), _) => {
             let near = nearest_sample(&samples, position);
-            eprintln!(
+            info!(
                 "--start ({:.3}, {:.3}, {:.3}), attitude from spline sample {near} \
                  yawed {:.1} degrees - not the track's own grid slot",
                 position.x, position.y, position.z, args.start_yaw,
@@ -744,14 +743,14 @@ fn drive_scenario(args: DriveArgs) -> Result<()> {
                 let ground = collision
                     .raycast(Ray::new(origin, Vec3::NEG_Y, 80.0), None, false)
                     .map(|hit| hit.point.y);
-                eprintln!(
+                info!(
                     "{}: Start Position {:?} facing {:?}, ground {ground:?}",
                     args.track, slot.position, slot.forward
                 );
                 Pose::from_start_position(slot, ground, spawn_height(&handling))
             }
             None => {
-                eprintln!(
+                warn!(
                     "{}: no Start Position node, starting on the spline",
                     args.track
                 );
@@ -811,7 +810,7 @@ fn drive_scenario(args: DriveArgs) -> Result<()> {
     if let Some(path) = &args.out {
         std::fs::write(path, run.to_csv())
             .with_context(|| format!("writing {}", path.display()))?;
-        eprintln!("wrote {}", path.display());
+        info!("wrote {}", path.display());
     }
     Ok(())
 }
@@ -847,7 +846,7 @@ fn plan_scenario(args: PlanArgs) -> Result<()> {
     let (handling, collision) = load(&args.source, &args.track, &args.team, class)?;
     let blob = read_track_blob(&args.source, &args.track)?;
     let ai = ai_of(&blob, &args.track)?;
-    let samples: Vec<track::Sample> = resample(&ai, STEPS_PER_SEGMENT)
+    let samples: Vec<track::Sample> = resample(&ai, Course::STEPS_PER_SEGMENT)
         .into_iter()
         .map(|(_, sample)| sample)
         .collect();
@@ -904,7 +903,7 @@ fn plan_scenario(args: PlanArgs) -> Result<()> {
     let pose = match args.start {
         Some(position) => {
             let near = nearest_sample(&samples, position);
-            eprintln!(
+            info!(
                 "start: ({:.3}, {:.3}, {:.3}), attitude from spline sample {near} \
                  yawed {:.1} degrees",
                 position.x, position.y, position.z, args.start_yaw,
@@ -919,7 +918,7 @@ fn plan_scenario(args: PlanArgs) -> Result<()> {
                     let ground = collision
                         .raycast(Ray::new(origin, Vec3::NEG_Y, 80.0), None, false)
                         .map(|hit| hit.point.y);
-                    eprintln!(
+                    info!(
                         "start: the track's own Start Position {:?}. This is *not* where \
                          a time trial begins - pass --start to plan for the emulator's.",
                         slot.position,
@@ -927,7 +926,7 @@ fn plan_scenario(args: PlanArgs) -> Result<()> {
                     Pose::from_start_position(slot, ground, spawn_height(&handling))
                 }
                 None => {
-                    eprintln!("start: no Start Position node, starting on the spline");
+                    warn!("start: no Start Position node, starting on the spline");
                     Pose::from_sample(&samples[0], samples[0].racing_line, spawn_height(&handling))
                 }
             }
@@ -1036,14 +1035,14 @@ fn plan_scenario(args: PlanArgs) -> Result<()> {
     match &args.out {
         Some(path) => {
             std::fs::write(path, &text).with_context(|| format!("writing {}", path.display()))?;
-            eprintln!("wrote {}", path.display());
+            info!("wrote {}", path.display());
         }
         None => println!("\n{text}"),
     }
     if let Some(path) = &args.trace_out {
         std::fs::write(path, planned.trace.to_csv())
             .with_context(|| format!("writing {}", path.display()))?;
-        eprintln!("wrote {}", path.display());
+        info!("wrote {}", path.display());
     }
     Ok(())
 }
@@ -1173,7 +1172,7 @@ fn ai_of(blob: &[u8], name: &str) -> Result<track::AiTrack> {
         .get(node.payload())
         .context("the WO Track payload runs past the end of the file")?;
     let ai = track::parse(payload).map_err(|e| anyhow::anyhow!("{name}: {e}"))?;
-    eprintln!(
+    info!(
         "{name}: {} path(s), {} junction(s), {} control point(s)",
         ai.paths.len(),
         ai.junctions.len(),
@@ -1188,7 +1187,7 @@ fn load_ai(source: &str, name: &str) -> Result<track::AiTrack> {
 
 /// Every path resampled, with the path each sample came from.
 ///
-/// The same `STEPS_PER_SEGMENT` and the same order `oag_game::race::Spline` and
+/// The same `Course::STEPS_PER_SEGMENT` and the same order `oag_game::race::Spline` and
 /// `oag_render::track` use, so a dumped line, a drawn line and the line a
 /// scenario run starts on are one set of points.
 fn resample(ai: &track::AiTrack, steps: usize) -> Vec<(usize, track::Sample)> {
@@ -1260,7 +1259,7 @@ fn dump_track(source: &str, name: &str, steps: usize) -> Result<()> {
         row.push(s.flags.to_string());
         println!("{}", row.join(","));
     }
-    eprintln!("{} sample(s) at {steps} per segment", samples.len());
+    info!("{} sample(s) at {steps} per segment", samples.len());
     Ok(())
 }
 
@@ -1359,7 +1358,7 @@ fn dump_pads(source: &str, name: &str, before: &[f32]) -> Result<()> {
             total += 1;
         }
     }
-    eprintln!(
+    info!(
         "{total} pad(s), course length {:.1}, start at ring index {}",
         course.length(),
         course.start_index()
@@ -1408,8 +1407,8 @@ fn run(args: RunArgs) -> Result<()> {
     let (handling, collision) = match &args.source {
         Some(source) => load(source, &args.track, &args.team, class)?,
         None => {
-            eprintln!(
-                "note: no --source, so there are no handling parameters and no track. \
+            warn!(
+                "no --source, so there are no handling parameters and no track. \
                  This run is a ballistic coast and says nothing about the force law."
             );
             let mut handling = Handling::ZERO;
@@ -1421,7 +1420,7 @@ fn run(args: RunArgs) -> Result<()> {
         }
     };
     let collision = if args.no_collision {
-        eprintln!("note: --no-collision, so the hover probes see nothing");
+        info!("--no-collision, so the hover probes see nothing");
         CollisionWorld::new()
     } else {
         collision
@@ -1440,8 +1439,8 @@ fn run(args: RunArgs) -> Result<()> {
         reseed: args.reseed,
     };
     if args.fixed_dt {
-        eprintln!(
-            "note: --fixed-dt steps at {FIXED_DT}s while the recording's own deltas vary, \
+        warn!(
+            "--fixed-dt steps at {FIXED_DT}s while the recording's own deltas vary, \
              so some of any divergence is the timestep rather than the physics"
         );
     }
@@ -1469,7 +1468,7 @@ fn run(args: RunArgs) -> Result<()> {
             None => simulated.to_csv(),
         };
         std::fs::write(path, csv).with_context(|| format!("writing {}", path.display()))?;
-        eprintln!("wrote {}", path.display());
+        info!("wrote {}", path.display());
     }
 
     if let Some(every) = args.reseed {
@@ -1498,8 +1497,8 @@ fn inputs(args: &RunArgs, ticks: usize) -> Result<Inputs> {
             bail!("{}: the script has no ticks in it", path.display());
         }
         if script.len() < ticks {
-            eprintln!(
-                "note: {} covers {} tick(s) and the recording has {ticks}, so the \
+            warn!(
+                "{} covers {} tick(s) and the recording has {ticks}, so the \
                  script's last state is held for the remaining {}. That is nearly \
                  always an over-short script rather than an intent.",
                 path.display(),
@@ -1559,7 +1558,7 @@ fn load(
         .with_context(|| format!("reading {track} out of {where_from}"))?;
     let nodes = collision::from_vex(&track_blob).map_err(|e| anyhow::anyhow!("{track}: {e}"))?;
     let collision = collision_world(&nodes);
-    eprintln!(
+    info!(
         "{track}: {} collision node(s) -> {} collider(s)",
         nodes.len(),
         collision.colliders().len()
@@ -1581,7 +1580,7 @@ fn load(
         .and_then(|blob| handling::global_from_blob(&blob).ok())
         .flatten();
     if global.is_none() {
-        eprintln!(
+        warn!(
             "{}: unreadable, so this replay applies no speed-pad boost",
             handling::GLOBAL_ENTRY
         );
@@ -1594,7 +1593,7 @@ fn load(
     // as a force-law error.
     let special = global.map(|global| global.special).unwrap_or_default();
     let handling = handling_for(&stats, class, pad_tunables, special);
-    eprintln!(
+    info!(
         "{stats_name}: team {:?}, {class:?} class, mass {}, ride_height {}",
         stats.team, handling.physical.mass, handling.antigrav.ride_height
     );

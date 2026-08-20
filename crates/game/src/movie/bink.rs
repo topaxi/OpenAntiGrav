@@ -36,6 +36,7 @@
 //! has no `ffmpeg` to hand still knows about itself.
 
 use super::*;
+use log::warn;
 
 /// Makes a Bink file's frames available, transcoding if it must.
 ///
@@ -62,8 +63,8 @@ pub(super) fn open(
     // it means the entry was read short or long, and every count below is then
     // describing a file this is not holding all of.
     if !header.declares_length_of(blob.len()) {
-        eprintln!(
-            "warning: {key} declares {} byte(s) and {} were read",
+        warn!(
+            "{key} declares {} byte(s) and {} were read",
             header.declared_len,
             blob.len()
         );
@@ -74,8 +75,8 @@ pub(super) fn open(
     if let Some(first) = oag_formats::bik::first_frame_offset(blob, &header)
         && first != header.header_len
     {
-        eprintln!(
-            "warning: {key}'s first frame is at {first} where its header ends at {}",
+        warn!(
+            "{key}'s first frame is at {first} where its header ends at {}",
             header.header_len
         );
     }

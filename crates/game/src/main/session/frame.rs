@@ -1,6 +1,7 @@
 //! One frame: the fixed timestep, the stage update, and the draw.
 
 use anyhow::Result;
+use log::{debug, error, info, warn};
 
 use oag_game::frontend::{self};
 use oag_game::keys;
@@ -29,13 +30,13 @@ impl Session {
             // Reported and stayed on rather than fatal: the chooser is still on
             // screen and the other rows are still there to try. A disc that
             // will not boot is exactly the case this screen exists to survive.
-            eprintln!("cannot boot {source}: {e:#}");
+            error!("cannot boot {source}: {e:#}");
         }
 
         // Before this frame's ticks, so the front end's own first frame is drawn
         // on the frame after the fade ended rather than a frame later still.
         if let Err(e) = self.finish_loading() {
-            eprintln!("cannot open the front end: {e:#}");
+            error!("cannot open the front end: {e:#}");
             self.quit = true;
             return Ok(());
         }
@@ -52,7 +53,7 @@ impl Session {
             && matches!(&self.stage, Stage::Frontend(stage) if stage.frontend.is_finished())
         {
             self.launched = true;
-            println!("\n{}: opening the menus", frontend::states::LAUNCH_GAME);
+            info!("{}: opening the menus", frontend::states::LAUNCH_GAME);
             // Whatever the picker settled on, remembered for next time. Taken
             // here rather than in the picker because this is where the front
             // end is known to be finished with it, and because `menu.rs` and
@@ -63,11 +64,11 @@ impl Session {
             {
                 self.settings.language = Some(language.to_string());
                 if let Err(e) = settings::save(&self.settings) {
-                    eprintln!("could not save the chosen language: {e:#}");
+                    warn!("could not save the chosen language: {e:#}");
                 }
             }
             if let Err(e) = self.open_menus() {
-                eprintln!("cannot open the menus: {e:#}");
+                error!("cannot open the menus: {e:#}");
             } else {
                 println!("\n{SHELL_KEYS}");
             }
@@ -328,7 +329,7 @@ impl Session {
                 return Ok(());
             }
             other => {
-                eprintln!("skipping frame: {other:?}");
+                debug!("skipping frame: {other:?}");
                 return Ok(());
             }
         };

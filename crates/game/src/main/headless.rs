@@ -6,6 +6,7 @@
 //! worker for the frames it is about to draw.
 
 use anyhow::{Context, Result};
+use log::{info, warn};
 
 use oag_game::{audio, boot, capture, loading, prefetch, race, settings};
 use oag_gameplay::ControlScheme;
@@ -48,10 +49,10 @@ pub(crate) fn run_windowless(
     // save.
     match (cli.pick_language, settings.language.as_deref()) {
         (false, Some(name)) if loaded.frontend.preselect_language(name) => {
-            println!("language {name} from settings, skipping the picker");
+            info!("language {name} from settings, skipping the picker");
         }
         (false, Some(name)) => {
-            eprintln!("this source does not offer {name:?}, so the picker is shown");
+            warn!("this source does not offer {name:?}, so the picker is shown");
         }
         _ => {}
     }

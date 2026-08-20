@@ -197,33 +197,107 @@ Same disconnect, different state: if the target was paused, the log adds
 *resumed* leaves the game running, debugger-less but alive. So a script that
 means to hand a live emulator back should `vCont;c` before dropping the socket.
 
-### `Z0` answers `OK` for breakpoints that can never fire
+### `Z0` breakpoints fire, but only under the interpreter
 
-Two separate reasons, both silent:
+**Settled 2026-08-19**, once a race gave an address that provably executes. This
+page previously carried it at confidence 35, untested; it is now measured.
 
-1. **The default `PPU Decoder: Recompiler (LLVM)` does not honour PPU
-   breakpoints.** `Interpreter (static)` is the decoder that does; it was tried
-   here (via `--config` on a copied `config.yml`, which is the clean way to
-   change a setting without touching the user's) and the title still booted, in
-   about 75 seconds rather than 30.
-2. **HLE import stubs are not PPU code paths.** `ppu_loader` logs the game's
-   `sys_io` imports at boot - `[cellPadGetData] (0x8b72cda1) -> 0x759a44`, and
-   `0x759a44` really does hold `li r12, 0` - but a breakpoint there never fires
-   under either decoder.
+**Under `PPU Decoder: Interpreter (static)` they work.** Mid-race, a breakpoint
+at `Collision_ProcessPairs` (`0x00038428`) stopped the main thread with a full
+register set - `lr = 0x000f88c0`, the unnamed caller one frame up - and a
+separate run stopped in `FwMutex_Lock` (`0x003931e0`). Booting under the
+interpreter costs about 75 seconds rather than 30 and runs the race perceptibly
+slower, but the front-end walk and the race both work.
 
-Under the interpreter, no breakpoint fired on any address sampled from a stopped
-thread either - but the sampled addresses are the wrong test, because nothing
-says they ever run again. **All 14 threads `qfThreadInfo` lists sit at identical
-PCs across a 1-second and a 10-second window of real running**, measured twice
-in sessions where the interrupt and resume were separately confirmed to work.
-The reading, at confidence 65: those are PPU threads parked in HLE waits, the
-game is waiting on something, and the 200-330 % CPU the process burns meanwhile
-is RSX and SPU work - which is consistent with HD, and which the thread list
-does not cover.
+**Under the default `Recompiler (LLVM)` they do not**, and the stub still
+answers `OK`, so a session built on them silently never stops. **HLE import
+stubs never fire under either decoder** - `ppu_loader` logs the game's `sys_io`
+imports at boot (`[cellPadGetData] (0x8b72cda1) -> 0x759a44`, and `0x759a44`
+really does hold `li r12, 0`), but they are not PPU code paths.
 
-So confidence that breakpoints work at all on this build is **35** - untested
-rather than refuted. The test needs an address known to execute, which needs the
-game past the screen it is sitting on, which needs input.
+### The stub parks a thread at a breakpoint without announcing it
+
+**This is the most expensive trap on the page** - it cost four runs and produced
+two confident, entirely wrong conclusions before an in-race control caught it.
+
+A `Z0` breakpoint stops the thread that reaches it, but RPCS3 does **not**
+always send a stop reply for that thread. `wait_for_stop()` therefore blocks
+until its timeout and reports nothing, which reads exactly like "this address
+never executes".
+
+Measured. A breakpoint on `Physics_StepWorld` (`0x000f8610`) returned nothing in
+90 seconds of a live race - screenshot-confirmed as lap 1 of 3 with the clock
+running and thrust held. Arming `FwMutex_Lock` in the *same* session then
+stopped in 0.04 s and reported:
+
+    physics step (tid 01000000, r3=0x3056cea0)
+    FwMutex_Lock (tid 0100000c, r3=0x00b6caf8)
+    FwMutex_Lock (tid 01000017, r3=0x32903730)
+
+Thread `01000000` had been sitting at the physics breakpoint the whole time.
+The only reliable question is "is any thread's PC at this address", and asking
+it means stopping the target first: arm, resume a slice, `pause()`, then walk
+every thread's registers. `Debugger.wait_at()` does exactly that and is what
+breakpoint work should use.
+
+**A negative from `wait_for_stop()` is not a negative.** Two readings written
+during this session - that the `Collision_*` functions are "contact-gated, not
+per-frame", and that the physics tick "does not run during a race" - were both
+produced this way and are both wrong. The first is separately ruled out by the
+disassembly: `bl 0x00038428` at `0x000f88bc` is straight-line code, so pair
+processing runs on every physics step. See
+[physics.md](../ghidra/functions/ps3-hdfury-eu/physics.md).
+
+### Breakpoints do re-arm, and that was never the problem
+
+Three consecutive hits on `FwMutex_Lock`, 0.04 s each, resuming between them
+without removing or re-adding anything. Re-arming is not required and is not
+where the once-then-never pattern came from.
+
+What *does* break is arming after an interrupt-pause while stop replies are
+still queued: `remove` then `resume` then `pause()` then `add` timed out
+outright. Two rules follow, both cheap:
+
+- **Arm on the attach-pause**, before the first `resume()`. Connecting pauses
+  the target anyway, so drive the pad into position *first* and attach last.
+- **A breakpoint on a function several threads run queues one stop reply per
+  thread.** The first memory read afterwards then consumes a *stop reply* as its
+  answer, everything after is off by one, and the session dies on a timeout that
+  looks exactly like a hung emulator. `Debugger.drain()` exists for this; call
+  it after every breakpoint stop, and give it a longer settle than the default
+  before any `add_breakpoint`.
+
+### What a stopped thread's PCs do and do not tell you
+
+Before a race was reachable, all 14 threads `qfThreadInfo` listed sat at
+identical PCs across a 1-second and a 10-second window of real running, measured
+twice with interrupt and resume separately confirmed. The reading, at confidence
+65, was that those are PPU threads parked in HLE waits while the 200-330 % CPU
+the process burns is RSX and SPU work the thread list does not cover. That
+reading stands, and the boot section explains what they were waiting on.
+
+## The address space during a race is 480 MiB in six pieces
+
+Probed a slice at a time with the stub, mid-race, 32 of 256 16-MiB slices
+answer a read:
+
+| Range | Size | What it is |
+| --- | --- | --- |
+| `0x01000000` | 16 MiB | main memory; the EBOOT's own code and data live below it |
+| `0x10000000` | 16 MiB | - |
+| `0x30000000`..`0x36ffffff` | 112 MiB | **the game heap** - every pointer the physics breakpoint handed back lands here |
+| `0x40000000`..`0x45ffffff` | 96 MiB | - |
+| `0x50000000` | 16 MiB | - |
+| `0xc0000000`..`0xcfffffff` | 256 MiB | RSX local memory |
+
+**A 512-MiB probe misses the heap entirely**, which is how an earlier pass here
+concluded the mapped space was 26 MiB: `0x30000000` is at 768 MiB. Probe the
+whole 4 GiB or find nothing.
+
+What that costs, stated because it decides the approach: at the stub's 13.2
+KiB/s a blind scan of the heap alone is about **2.4 hours**. Pointer-chasing
+from a breakpoint is the affordable route, and a scan is a last resort rather
+than a plan.
 
 ## Input: two silent gates, both now closed
 

@@ -37,6 +37,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
+use log::info;
 use oag_core::hash::StateHasher;
 
 /// Decoded interleaved samples and what they are.
@@ -486,7 +487,7 @@ fn content_key(bytes: &[u8]) -> String {
 /// `frontend1.at3`: forcing 2 channels at 44,100 Hz and letting `ffmpeg`
 /// choose produce byte-identical output.
 fn run_ffmpeg(input: &Path, output: &Path, format: Format) -> Result<()> {
-    eprintln!(
+    info!(
         "decoding {} into {} (once; cached after this)",
         input.display(),
         output.display()

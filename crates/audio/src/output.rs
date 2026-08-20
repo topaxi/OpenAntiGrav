@@ -17,6 +17,7 @@ use std::sync::{Arc, Mutex};
 
 use anyhow::{Context, Result};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use log::{error, warn};
 
 use crate::mixer::{CHANNELS, Mixer};
 
@@ -140,7 +141,7 @@ impl Output {
         match Self::open() {
             Ok(output) => output,
             Err(error) => {
-                println!("audio: no output device ({error:#}); running silent");
+                warn!("audio: no output device ({error:#}); running silent");
                 Self::null(DEFAULT_SAMPLE_RATE)
             }
         }
@@ -233,7 +234,7 @@ where
 
             spread(&scratch, data, device_channels);
         },
-        move |err| eprintln!("audio: output stream error: {err}"),
+        move |err| error!("audio: output stream error: {err}"),
         None,
     )?;
     stream.play()?;
