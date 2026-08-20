@@ -68,3 +68,4 @@
 0x000ef450	function	Craft_IntegrateHull	78	physics.md
 0x008636e0	data	g_CraftVtable	85	physics.md
 0x008638e8	data	g_DebrisVtable	72	physics.md
+0x000364c0	function	Collision_MarchSegment	72	physics.md

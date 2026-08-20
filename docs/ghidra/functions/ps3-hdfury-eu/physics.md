@@ -307,6 +307,36 @@ This run also reproduced the throttle force on a **third** boot - `entry+0x4c4`
 at `r = 0.935` against `0.942` - so that finding now rests on three independent
 races.
 
+### `Collision_MarchSegment` at `0x000364c0`, the per-hull-point query
+
+The call `Craft_IntegrateHull` makes four times a step. Ghidra stops its body at
+`0x000364e3`; disassembling past that shows what it does:
+
+    v10 = *r5 - *r4                      # the segment, query point minus hull point
+    v13 = dot(v10, v10)                  # vmaddfp then two vsldoi/vaddfp folds
+    v1  = vrsqrtefp(v13)                 # with a Newton refinement and a zero guard
+    f0  = length * <tuning>              # -0x75e8(r2)
+    r14 = (long)f0 + 1                   # fctidz, so a step count
+    f0  = 1.0 / (float)r14               # fcfid then fdivs against 1.0 at -0x7604
+    v30 = v10 * f0                       # one step along the segment
+    v7  = v7 + v30                       # and walk it
+
+So it **marches a segment in a bounded number of equal steps**, the count scaled
+from the segment's own length - which is what a hover craft's suspension probe
+needs, and it explains the four calls: one per hull point.
+
+Its arguments, from the call sites: `r3` = `craft+0x35c`, `r4` = the hull point,
+`r5` = the query point, `r6` = an entry in the `craft+0x2b8` array at `0x60`
+stride, `r7` = `body+0x4cc`, and it returns a byte stored into the
+`craft+0x2b4` array - a hit flag per point.
+
+**Confidence 72.** The marching is not in doubt; the `Collision_` prefix is the
+inference, resting on the function's literals - the `0.5` at `0x008a5e8c`, the
+`1.0` at `0x008a5ed4` and the globals between them - sitting within `0x50` of
+the `Collision.cpp` string slot at `0x008a5ec8` that [collision.md](collision.md)
+established, which is how the linker groups a compilation unit's TOC entries.
+Five functions call it, so it is shared machinery rather than craft-specific.
+
 ### Speed is not stored in either object
 
 Two scans over the deeper dumps, both empty. Correlating every scalar against
