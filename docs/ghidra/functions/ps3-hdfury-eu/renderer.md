@@ -1147,7 +1147,11 @@ Across the whole disc the decode's constants are **`x = 255.0` and
 
 **And that decode is unreachable on this disc.** It reads attribute
 `0x868f8229`, and **no `.rcsmodel` declares it** - 0 of 123 files contain the
-hash. What the models carry is a plain colour set (`0x1aaf7631` on 297 of
+hash. **The reason is now read**: `0x868f8229` is `~crc32("SpuVertexColours")`,
+a stream the SPU writes rather than one a model file carries, and the variant
+key's `SVC0` token - what all the disc's static geometry selects - means "no
+such stream". See [rcsmaterial.md](../../../formats/rcsmaterial.md), "What
+selects a variant". What the models carry is a plain colour set (`0x1aaf7631` on 297 of
 Talon's Junction's chunks, `colorSet1` on 54), and its fourth byte is **41 %
 zero and 52 % full** over 240,400 lit vertices: a mask, not an exponent.
 Applying the RGBE decode to it produces values around `1e-39` and blacks the

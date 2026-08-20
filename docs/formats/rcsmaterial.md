@@ -133,16 +133,139 @@ the slot nothing samples. `mageffectloop` is the same pair the other way round.
 So "the glass draws a gradient" is not a colour bug, a wrong texture or a
 swizzle: it is the second slot, and closing it needs the variant selection.
 
+## What selects a variant: the key is read (2026-08-20)
+
+**A variant is keyed by the two leading hashes of its own record, and both are
+`~crc32` of a string the executable builds.**
+
+    variant = the record whose ([0], [1]) == (hash(vertex class), hash(feature permutation))
+
+`[0]` is the **vertex-processing class**. Four exist disc-wide and all four
+preimage to NUL-terminated strings in `EBOOT.elf` at `0x7a3560`:
+
+| Hash | Class | Variants | Materials |
+| --- | --- | ---: | ---: |
+| `0x7893d2ec` | `Static` | 17,333 | 631 |
+| `0xd29c9ee2` | `StaticQuake` | 7,797 | 171 |
+| `0xdd70bfd5` | `RigidBody` | 4,389 | 153 |
+| `0xa9edfe7e` | `StaticUncompressed` | 1 | 1 |
+
+`[1]` is the **feature permutation**, and its name is the concatenation of the
+enabled feature tokens in one fixed order. The tokens are the twenty
+NUL-terminated strings at `0x7a3460` -
+
+```text
+ShadowToAlpha HalfBright Sun ShadowMap FalseLight ZoneMode ZoneTrans
+NoAlbedo SVC1 SVC0 IBL Ambient IleVertex IleLightmap
+Spot0 Spot1 Spot2 Spot3 ZAlphaOnly AmbientShadow
+```
+
+- plus `SunOcclusionLightmap` and `SunOcclusionVertex` at `0x7a3588`.
+
+**Confidence 96.** Every one of the **143 distinct `[1]` values across all
+29,520 variants of all 693 materials** is reproduced exactly by `~crc32` of such
+a concatenation - 100 %, no exceptions. 143 independent 32-bit preimages is not
+a resemblance. Three further checks make it self-consistent rather than lucky:
+the pairwise token-precedence graph over all 143 names is **acyclic** (19
+tokens, 86 edges), so one canonical order exists; the executable ships a built
+name as a literal at `0x7a17d0` - `HalfBrightAmbientSunSpot0SVC0`, which is
+variant #5 of `track_surface.rcsmaterial`; and `(h0, h1)` is unique within every
+file, **29,520 of 29,520**, so the pair is a key and not a filter.
+
+**`0x868f8229` is `SpuVertexColours`**, which closes the question
+[renderer.md](../ghidra/functions/ps3-hdfury-eu/renderer.md) leaves open under
+"The vertex-light constants are read": that attribute is a stream the SPU
+writes, not one a `.rcsmodel` carries, which is why none declares it. `SVC0` -
+what the disc's static geometry uses - means "no such stream".
+
+### Which half the chunk decides
+
+Confidence 75, deliberately lower: this is a correlation measured over the
+assets plus a string table, and **no code that computes the key has been read**.
+Counts are exact over all 29,520 variants.
+
+| Implication | Holds | Exceptions |
+| --- | ---: | --- |
+| `IleLightmap` -> a `lightmapUV` attribute | 5,796 / 5,796 | none |
+| `IleVertex` -> the colour set `0x1aaf7631` | 4,464 / 4,464 | none |
+| `SVC1` -> `SpuVertexColours` | 13,026 / 13,026 | none |
+| `ShadowToAlpha` -> the `shadowMapTex` sampler | 6,672 / 6,672 | none |
+| `IleLightmap` -> a `lightmap` sampler | 5,548 / 5,796 | **248, unexplained** |
+
+The converses hold with **named** rather than residual exceptions: a
+`lightmapUV` without `IleLightmap` occurs on exactly 360 variants and every one
+is the standalone permutation `SunOcclusionLightmap`; the colour set without
+`IleVertex` on exactly 360, every one `SunOcclusionVertex`. The 248 residue is
+12 emissive/billboard materials carrying a lightmapped permutation whose shader
+never samples one.
+
+So the **chunk-determined** axes are the ones the model file already answers -
+`lightmapUV` -> `IleLightmap`, colour set -> `IleVertex`, neither -> `Ambient`,
+and `SVC0` for anything the SPU does not write. The **frame-determined** axes
+are `HalfBright` vs `ShadowToAlpha`, `Sun`, `ShadowMap`, `Spot0..3`,
+`ZoneMode`/`ZoneTrans`, `IBL`, `NoAlbedo`, `FalseLight` and the four standalone
+names.
+
+**Two hypotheses are refuted, not merely unproven.** `track_surface` variants
+**#7, #17 and #27** declare the identical attribute set
+`{position, normal, tangent, Uv1, lightmapUV}` and differ only by
+`ZoneMode`/`ZoneTrans`, so **no function of a chunk's declaration** - exact set,
+best subset, or an attribute-input-mask compare - can pick a unique variant. Nor
+is the key in the asset: `track.rcsmodel` contains none of the candidate hashes.
+
+### The record, re-framed
+
+```text
++0x00  u32  variant count        +0x04  u32  offset of the variant table
++0x08  u32  offset of a pointer-relocation list      +0x0c  u32  0
+```
+
+Each record is `0x40` bytes of sixteen big-endian `u32` (the last record's
+trailing zeros are elided, so `tab2 == tab + count * 0x40 - 0x10` on 693/693):
+
+```text
+[0]  hash of the vertex class     [1]  hash of the feature permutation
+[2]  vertex-side binding count    [3]  fragment-side binding count
+[4]  vertex `SHO` offset          [5]  fragment `SHO` offset
+[6]  its size                     [7]  its size
+[8]  vertex program content hash  [9]  fragment program content hash
+[10] u16 (slot, reg) table        [11] pointer into the file's name list
+```
+
+`[8]` is constant across every set of variants sharing a `[4]` (25,040 of
+25,040) and `[9]` likewise across `[5]` (10,276 of 10,276) - they are content
+hashes, which is why variants share blocks. `[11]` advances by exactly
+`4 * ([2] + [3])` between records on 29,520 of 29,520, and `[10]`'s table holds
+`2 * ([2] + [3])` u16 entries on 29,520 of 29,520, with `reg >= 0x8000` meaning
+texture unit `reg & 0xff`. The table at `+0x08` is a **relocation list**, not an
+index: a count followed by that many word offsets whose contents are file
+offsets - on `track_surface`, `2 + 70 * 4` entries, the header's two pointers
+plus each record's `+0x10, +0x14, +0x28, +0x2c`.
+
+### Still open
+
+- **The frame-determined half.** A renderer can pick the chunk-determined axes
+  today; it cannot yet know which of `HalfBright`/`ShadowToAlpha`, `Sun`,
+  `ShadowMap`, `Spot0..3` or the Zone pair an ordinary race pass sets. The
+  anchor is surfaced: the `Job Render*` strings at `0x7a1048`-`0x7a1168`
+  (`Job RenderTrackWithLights_zWriters`, `Job RenderModelShadowsOnTrack`,
+  `Job RenderShips`, `Job RenderSpotShadowMaps`, ...). Reading which flags each
+  job sets is what turns the 75 above into a read.
+- **`StaticUncompressed` rests on a single occurrence** plus its preimage, and
+  is weaker than the other three classes.
+- The 248 `IleLightmap`-without-a-`lightmap`-sampler variants.
+
 ## Open
 
-- **What selects a variant.** The two leading hashes of a variant record are the
-  obvious place and are unread. Everything else on this page is downstream of
-  it.
-- **The rest of the 0x40-byte record**: two counts and further `(offset, length)`
-  pairs, one of which points at 16 bytes rather than a program.
 - **87 of the 125 sampler hashes**, including the three commonest
   (`0xd5e000d1`, `0x00e5b679`, `0x1f6f85a3`, ~4,400 uses each across every unit),
   which by their spread are engine samplers rather than a material's own.
+- **87 of the 125 sampler hashes**, including the three commonest
+  (`0xd5e000d1`, `0x00e5b679`, `0x1f6f85a3`, ~4,400 uses each across every unit),
+  which by their spread are engine samplers rather than a material's own. Three
+  of those three are now named - `zoneTexInner`, `zoneTexInnerNearest`,
+  `zoneTexVis` - by a preimage sweep over the executable's own identifier-shaped
+  strings, which is the technique that should be tried on the rest.
 - **The microcode**, which is where the operation - multiply, add, replace -
   actually is.
 
