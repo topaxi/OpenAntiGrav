@@ -253,6 +253,78 @@ This refines the reading above rather than contradicting it. The array is the
 physics world's body list; during a race in steady state that list *is* the
 eight craft.
 
+## The craft class, its integrator, and the throttle input
+
+Every body's `*entry` object carries its vtable at `+0x0`, and reading that live
+splits the array without needing any of the statistics above:
+
+| Vtable | Indices | Class |
+|---|---|---|
+| `0x008636e0` | 0-7 | `g_CraftVtable` - the eight racers |
+| `0x008638e8` | 8-26 | `g_DebrisVtable` - the wreckage |
+
+The two never mix, and the debris vtable appears only in the samples where the
+count spiked. That is an independent confirmation of the split inferred from the
+count, arrived at by reading four bytes rather than by correlating anything.
+
+`Physics_StepWorld` calls vtable slots `+0x38`, `+0x3c`, `+0x40` and `+0x44`.
+Slot `+0x3c` resolves through OPD `0x00874c88` to **`Craft_IntegrateHull` at
+`0x000ef450`**, and it is the craft's per-frame integration: AltiVec throughout,
+`r3` the craft, `f1` the delta, four near-identical blocks that each advance a
+hull point at `craft+0x120`/`+0x130`/`+0x140`/`+0x150` by a shared vector at
+`craft+0x240`, build a query point at `craft+0x160`..`+0x190`, and call
+`0x000364c0` - four hull points, four queries a step, which is what a hovering
+craft with four suspension points needs.
+
+**The craft object runs to at least `0x360`**, which is why the first pass at
+this found nothing: it dumped `0x200`. `Craft_IntegrateHull` reads `craft+0x264`
+(a flag word), `craft+0x270` (the rigid body - the same object the world's array
+points at, so the two reference each other), `craft+0x2b4`, `craft+0x2b8`,
+`craft+0x344` and `craft+0x35c`.
+
+### `craft+0x30c` is the throttle input, and it is exact
+
+Dumping `0x600` and re-running the twelve-sample thrust pattern on body 7:
+
+    craft+0x30c   100.00 100.00 100.00   0.00   0.00   0.00 100.00 100.00 100.00   0.00   0.00   0.00
+
+`r = 1.000`, and the values are not merely correlated - they are exactly `100`
+and exactly `0`, which is what a digital button written as a percentage looks
+like. **Confidence 90**: this is the throttle as the game reads it, not
+something derived from it.
+
+Three neighbours came with it, all on the craft rather than the rigid body:
+
+- **`craft+0x340`** mirrors `entry+0x4c4`, the thrust force - `73.38 / 61.59 /
+  67.45 / 9.23 ...` against `75.17 / 63.76 / 69.42 / 9.16 ...`. Same quantity,
+  sampled a moment apart.
+- **`craft+0x308`, `+0x320`, `+0x324`, `+0x348`** rise monotonically across all
+  twelve samples regardless of throttle, by about 3.8 each: game-time clocks,
+  offset from one another by fixed amounts.
+- **`craft+0x344`** sits at `4.12`, occasionally `4.95`.
+
+This run also reproduced the throttle force on a **third** boot - `entry+0x4c4`
+at `r = 0.935` against `0.942` - so that finding now rests on three independent
+races.
+
+### Speed is not stored in either object
+
+Two scans over the deeper dumps, both empty. Correlating every scalar against
+the throttle pattern finds only `+0x4c4` and `+0x30c`/`+0x340`. Correlating
+every three-float **vector magnitude** finds the same fields and nothing else,
+so speed is not hiding as a velocity whose components each look like noise.
+
+A third scan dropped correlation entirely and looked for the *shape* a speed
+must have - staying above a quarter of its peak while coasting rather than
+falling to zero, higher on average under throttle, falling through each coast
+stretch and rising through each thrust stretch. **Zero fields match, in the
+entry's first `0x500` bytes or the craft's first `0x600`.**
+
+The fields that do respond all collapse to near zero when the throttle is
+released, which makes them forces, not velocities. The likely answer is that the
+HUD's km/h is computed at draw time from a velocity the renderer reaches
+elsewhere, and that no speed scalar exists to find here.
+
 ## Globals
 
 | Address | Name | Confidence | Evidence |

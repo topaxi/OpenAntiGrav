@@ -65,3 +65,6 @@
 0x009389e4	data	g_CollisionWorld	82	physics.md
 0x008c1758	data	g_PhysicsSubstepCount	75	physics.md
 0x00938560	data	g_PhysicsHalfStep	72	physics.md
+0x000ef450	function	Craft_IntegrateHull	78	physics.md
+0x008636e0	data	g_CraftVtable	85	physics.md
+0x008638e8	data	g_DebrisVtable	72	physics.md
