@@ -360,6 +360,39 @@ ClearTrackVisibilityFlags
 Addresses quoted elsewhere as `0x7a1008`/`0x7a3460` are **file offsets**; load
 addresses are `+0x10000`.
 
+### The header declares its inputs - and does not name a lighting family
+
+A `SHO` block's header carries its parameter and sampler tables, so what a
+program is *fed* reads without decoding an instruction:
+`oag_formats::rcsmaterial::Declared` parses them, and the three tables abutting
+exactly is its framing check.
+
+**Splitting the lighting families on that was tried and does not work.**
+Classifying each drawn chunk of Talon's Junction by its *resolved* variant's
+fragment declaration - samples `lightmap` / takes `constantAmbientColour` /
+neither - gives 322, 144 and **447**, and that third bucket is not a family.
+Alongside the billboards and scanline screens it holds `track_wall` (22
+chunks), `glasstest` (33), `simplefogdiffuse` (31) and `diffusewithalphachannel`
+(29), which are ordinary lit surfaces.
+
+The reason is structural: **a surface lit only by the interpolated per-vertex
+term declares neither of those two, because both of its light sources are
+interpolators rather than uniforms**, and an interpolator is not in the
+declaration table. Telling a lit surface from an emissive one is the question
+of whether `f[TC1]` reaches the albedo multiply, which is an instruction-level
+fact. Treating the bucket as unlit would have drawn the track walls at full
+albedo.
+
+So `Declared` ships with `samples_lightmap` and `takes_constant_ambient`, which
+are facts, and deliberately **no** `lighting()`, which would invite a caller to
+believe the header can answer a question it cannot.
+
+Note also that this per-*variant* reading is a different measurement from the
+per-*material* taxonomy in the session reports: 322 prelit here against 535
+there, because a material may declare a lightmap in some variants and not in
+the one an ordinary lit pass binds. The 322 sits beside the 327 chunks that
+declare a `lightmapUV`, which is the consistency check.
+
 ### Still open
 
 - **The frame-determined half.** A renderer can pick the chunk-determined axes

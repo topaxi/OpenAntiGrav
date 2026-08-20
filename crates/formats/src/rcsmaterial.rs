@@ -397,6 +397,88 @@ pub struct Variant {
     pub fragment: Block,
 }
 
+/// What a program **declares** it is fed, read from its `SHO` block header.
+///
+/// **What it does not tell you is which lighting family the surface is in**,
+/// and that was tried. Splitting on "declares the `lightmap` sampler" /
+/// "declares `constantAmbientColour`" / "neither" puts **447 of Talon's
+/// Junction's 978 drawn chunks in the third bucket**, and that bucket is not a
+/// family: alongside the billboards and scanline screens it holds
+/// `track_wall` (22 chunks), `glasstest` (33), `simplefogdiffuse` (31) and
+/// `diffusewithalphachannel` (29) - ordinary lit surfaces. The reason is
+/// structural. A surface lit only by the interpolated per-vertex term declares
+/// neither of those two, **because both of its light sources are
+/// interpolators rather than uniforms**, and an interpolator is not in this
+/// table. Telling a lit surface from an emissive one needs the microcode - it
+/// is the question of whether `f[TC1]` reaches the albedo multiply - not the
+/// header. Treating the third bucket as unlit would have drawn the track walls
+/// at full albedo.
+///
+/// Layout, at the block's own offset: `SHO\x08`, a `u32` that is 1 for a
+/// fragment program, then eight big-endian `u16` - version, three counts
+/// (attributes, parameters, samplers), three table offsets, and where the
+/// program data starts. An attribute record is 8 bytes, a parameter record 12
+/// and a sampler record 8. The three tables abut exactly, which is the framing
+/// check.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Declared {
+    /// Every parameter name hash the block declares.
+    pub parameters: Vec<u32>,
+    /// Every sampler name hash, with the texture unit it binds.
+    pub samplers: Vec<(u32, u32)>,
+}
+
+/// `~crc32("lightmap")`, the sampler a prelit surface's atlas binds to.
+pub const LIGHTMAP_SAMPLER: u32 = 0x37b5_db58;
+/// `~crc32("constantAmbientColour")`, the `Lighting.Constant ambient colour`
+/// key of a circuit's `.envsettings`.
+pub const CONSTANT_AMBIENT: u32 = 0x81db_67ea;
+
+impl Declared {
+    /// Reads one `SHO` block's declaration tables, or `None` if `at` does not
+    /// open one.
+    #[must_use]
+    pub fn parse(data: &[u8], at: usize) -> Option<Self> {
+        if at + 0x18 > data.len() || &data.get(at..at + 4)? != b"SHO\x08" {
+            return None;
+        }
+        let u16_at = |o: usize| -> usize {
+            usize::from(u16::from_be_bytes([data[at + o], data[at + o + 1]]))
+        };
+        let u32_at = |o: usize| -> Option<u32> {
+            Some(u32::from_be_bytes(data.get(o..o + 4)?.try_into().ok()?))
+        };
+        let (attrs, params, samplers) = (u16_at(0x0a), u16_at(0x0c), u16_at(0x0e));
+        let (o0, o1, o2) = (u16_at(0x10), u16_at(0x12), u16_at(0x14));
+        // The framing check: each table starts where the previous one ended.
+        if o1 != o0 + 8 * attrs || o2 != o1 + 12 * params {
+            return None;
+        }
+        let parameters = (0..params)
+            .filter_map(|i| u32_at(at + o1 + i * 12))
+            .collect();
+        let samplers = (0..samplers)
+            .filter_map(|i| Some((u32_at(at + o2 + i * 8)?, u32_at(at + o2 + i * 8 + 4)?)))
+            .collect();
+        Some(Self {
+            parameters,
+            samplers,
+        })
+    }
+
+    /// Whether the block binds the circuit's baked lighting atlas.
+    #[must_use]
+    pub fn samples_lightmap(&self) -> bool {
+        self.samplers.iter().any(|(h, _)| *h == LIGHTMAP_SAMPLER)
+    }
+
+    /// Whether the block is patched with `constantAmbientColour`.
+    #[must_use]
+    pub fn takes_constant_ambient(&self) -> bool {
+        self.parameters.contains(&CONSTANT_AMBIENT)
+    }
+}
+
 /// A parsed `.rcsmaterial`: its variant table, and nothing else yet.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RcsMaterial {

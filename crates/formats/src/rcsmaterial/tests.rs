@@ -295,3 +295,55 @@ fn the_chunk_half_replaces_a_field_rather_than_joining_a_set() {
     assert!(Features::from_pass_word(zoned).has("ZoneMode"));
     assert!(Features::from_pass_word(zoned).has("Sun"));
 }
+
+/// A `SHO` block's declaration tables read, and refuse to read a non-block.
+#[test]
+fn a_declaration_table_reads_and_a_non_block_is_refused() {
+    // A minimal fragment block: one parameter, one sampler, tables abutting.
+    let mut b = Vec::new();
+    b.extend_from_slice(b"SHO\x08");
+    b.extend_from_slice(&1u32.to_be_bytes()); // fragment
+    for v in [
+        2u16, 0, 1, 1, // version, 0 attributes, 1 parameter, 1 sampler
+        0x18, 0x18, 0x24, 0x2c, // offsets: attrs, params, samplers, program
+    ] {
+        b.extend_from_slice(&v.to_be_bytes());
+    }
+    b.extend_from_slice(&CONSTANT_AMBIENT.to_be_bytes());
+    b.extend_from_slice(&[0u8; 8]); // ty/count/vreg/fslot
+    b.extend_from_slice(&LIGHTMAP_SAMPLER.to_be_bytes());
+    b.extend_from_slice(&2u32.to_be_bytes()); // unit 2
+    b.extend_from_slice(&[0u8; 16]);
+
+    let d = Declared::parse(&b, 0).expect("the block reads");
+    assert_eq!(d.parameters, vec![CONSTANT_AMBIENT]);
+    assert_eq!(d.samplers, vec![(LIGHTMAP_SAMPLER, 2)]);
+    assert!(d.samples_lightmap());
+    assert!(d.takes_constant_ambient());
+
+    assert!(Declared::parse(b"not a block at all", 0).is_none());
+    assert!(Declared::parse(&b, 4).is_none(), "no magic at that offset");
+
+    // The framing check: tables that do not abut are refused rather than read
+    // as something else.
+    let mut bad = b.clone();
+    bad[0x12] = 0x00;
+    bad[0x13] = 0x40; // params offset no longer follows the attributes
+    assert!(Declared::parse(&bad, 0).is_none());
+}
+
+/// **The declaration does not name a lighting family**, and this records why.
+///
+/// Splitting on `samples_lightmap` / `takes_constant_ambient` / neither puts
+/// 447 of Talon's Junction's 978 drawn chunks in the third bucket, which holds
+/// `track_wall`, `glasstest` and `simplefogdiffuse` beside the billboards. A
+/// surface lit only by the interpolated per-vertex term declares neither,
+/// because both of its light sources are interpolators rather than uniforms.
+#[test]
+fn declaring_neither_light_input_does_not_mean_unlit() {
+    let empty = Declared::default();
+    assert!(!empty.samples_lightmap());
+    assert!(!empty.takes_constant_ambient());
+    // Deliberately no `lighting()` to call: the header cannot answer it, and a
+    // method here would invite the caller to believe it can.
+}
