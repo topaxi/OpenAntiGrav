@@ -256,6 +256,34 @@ impl VertexDecl {
             .iter()
             .find(|a| a.is_texcoord() && a.name() == Some("lightmapUV"))
     }
+
+    /// The attribute HD bakes its **per-vertex light** into, shared-exponent.
+    ///
+    /// Three declarations on the disc are four normalised bytes: `tangent`
+    /// (87 chunks of Talon's Junction), `colorSet1` (54) and the unnamed
+    /// `0x1aaf7631` (297). The first is excluded **by name**, and the other
+    /// two are the same thing under two authoring names - 54 + 297 is exactly
+    /// the 351 chunks that declare a colour set, and no chunk declares both a
+    /// colour set and a `lightmapUV`.
+    ///
+    /// What makes this a light rather than a tint is the shader that reads it:
+    /// the vertex program moves it into `o[TC1]` and the fragment program
+    /// **adds** `f[TC1]` to the lightmap term before multiplying the albedo -
+    /// see `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`, "The lit track
+    /// material". [`super::Mesh::vertex_light`] reads it.
+    ///
+    /// **`0x1aaf7631` and `colorSet1` are treated as one attribute here, and
+    /// that is an inference, not a read**: nothing seen so far ties the two
+    /// hashes together. What supports it is the arithmetic - 297 + 54 is
+    /// exactly the 351 chunks with a colour set - and the exact
+    /// complementarity with `lightmap_texcoord`, which no chunk declares
+    /// alongside either.
+    #[must_use]
+    pub fn vertex_colour(&self) -> Option<&Attribute> {
+        self.attributes.iter().find(|a| {
+            a.components == 4 && a.rsx_type == RSX_UBYTE_NORM && a.name() != Some("tangent")
+        })
+    }
 }
 
 #[cfg(test)]

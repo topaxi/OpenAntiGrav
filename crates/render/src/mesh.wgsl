@@ -238,15 +238,32 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // The authored rig, and the combination is no longer this project's: it is
     // the one every lit variant of an HD circuit `.rcsmaterial` computes,
     // read out of the fragment microcode
-    // (docs/ghidra/functions/ps3-hdfury-eu/renderer.md). The lightmap enters
-    // through a power curve - `Prelit ambient colour scale/power`, the
-    // .envsettings names - and its **alpha** is a baked shadow mask gating
-    // the direct sun. The magnitudes are authored for a tonemapped linear
-    // target; here the render target's saturation stands in for that stage.
+    // (docs/ghidra/functions/ps3-hdfury-eu/renderer.md, "The lit track
+    // material"). The lightmap enters through a power curve - `Prelit ambient
+    // colour scale/power`, the .envsettings names - and is *added* to a
+    // constant, not multiplied by one:
+    //
+    //     block #9, lightmapped:  pow(lightmap, power) * scale + f[TC1]
+    //     block #8, no lightmap:  f[TC1] + constantAmbientColour
+    //
+    // and that sum multiplies the albedo. **Neither has an `N.L` or a sun
+    // colour**, which is why no sun term appears here: the disc's sun reaches
+    // this material only through the specular path below. A `sun * ndl *
+    // baked.a` summand used to stand where the comment ends, and with the
+    // lightmap-less placeholder's alpha of 1 it fired at full strength on the
+    // two thirds of a circuit that has no lightmap - measured as 14.3 % of
+    // the frame clipped to white against the reference's 5.8 %.
+    //
+    // `scene.light.ambient` is `constantAmbientColour` - the preimage of the
+    // hash the microcode patches into block #8's `{const}`. `f[TC1]` is HD's
+    // per-vertex light, which `mesh/rcs.rs` decodes out of the colour set's
+    // shared exponent and hands over in `in.colour.rgb`; it is **added**, as
+    // both variants add it, and is zero on a chunk that declares no colour
+    // set - which is what the original's own vertex programs broadcast there.
     let ndl = clamp(dot(n, scene.light.direction), 0.0, 1.0);
     let baked_linear = pow(baked.rgb, vec3<f32>(2.2));
     let prelit = scene.light.prelit_scale * pow(baked_linear, scene.light.prelit_power);
-    let authored = scene.light.ambient + prelit + scene.light.sun * (ndl * baked.a);
+    let authored = scene.light.ambient + prelit + in.colour.rgb;
 
     let texel = textureSample(albedo, albedo_sampler, in.texcoord);
 
@@ -273,8 +290,13 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // encoded back here; on the linear float target it leaves **unclamped**,
     // because values above 1.0 are exactly what the bloom gate reads, and the
     // saturate-and-encode happens in `post::hd_bloom`'s own pass instead.
+    // The vertex colour is **inside** `authored` on this path, not a factor
+    // outside it: the microcode's `(prelit + f[TC1]) * albedo` adds the two
+    // light terms and multiplies the albedo once. It stays a factor on the
+    // stand-in path below, where it is a tint and every other title authors
+    // it as one.
     let texel_linear = pow(texel.rgb, vec3<f32>(2.2));
-    let lit_linear = texel_linear * in.colour.rgb * authored + specular;
+    let lit_linear = texel_linear * authored + specular;
     let encoded = pow(
         clamp(lit_linear, vec3<f32>(0.0), vec3<f32>(1.0)),
         vec3<f32>(1.0 / 2.2),
@@ -288,7 +310,15 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // re-shade what is already shaded. On the linear target its gamma result
     // is decoded, so `post::hd_bloom`'s encode returns it byte-for-byte.
     let light = mix(vec3<f32>(1.0), stand_in, in.lit);
-    let plain = texel.rgb * in.colour.rgb * light;
+    // **The vertex colour is a tint here and a light term on the authored
+    // path, so this multiply must not see HD's.** `linear_out` is the
+    // discriminator and it is exact: it is set from `is_linear_target`, and
+    // the float scene target belongs to HD's bloom chain alone. Without this,
+    // any HD draw that binds `Light::stand_in` - the front end, or a circuit
+    // whose `.envsettings` fails to yield a rig - would multiply by a baked
+    // light that is zero wherever no colour set exists, and render black.
+    let tint = mix(in.colour.rgb, vec3<f32>(1.0), linear_out);
+    let plain = texel.rgb * tint * light;
     let plain_rgb = mix(plain, pow(plain, vec3<f32>(2.2)), linear_out);
 
     // Vertex colour modulates the texture on all four channels, as the GE's

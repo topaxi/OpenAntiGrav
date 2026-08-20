@@ -824,6 +824,54 @@ impl Mesh {
         self.coords_at(data, submesh, stride, usize::from(attribute.offset), format)
     }
 
+    /// One submesh's **baked per-vertex light**, or an error if the
+    /// declaration carries no colour set.
+    ///
+    /// This is HD's `f[TC1]`: the term the fragment program *adds* to the
+    /// lightmap contribution before multiplying the albedo - see
+    /// `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`, "The lit track
+    /// material". The vertex program moves it across unchanged
+    /// (`MOV o[TC1].xyz, v[N].xyzx`), so the three colour bytes normalise and
+    /// nothing else happens to them.
+    ///
+    /// **No shared exponent is applied, and the reason is a read.** HD's
+    /// vertex programs do carry an RGBE form - `v.xyz * exp2(v.w * 255 - 128)`,
+    /// whose `(255, 128)` are unanimous across all 6,946 blocks that use it -
+    /// but that form reads attribute `0x868f8229`, and **no `.rcsmodel` on the
+    /// disc declares it** (0 of 123). The attribute the models actually carry
+    /// is a plain colour set whose fourth byte is 41 % zero and 52 % full
+    /// across Talon's Junction's 240,400 lit vertices: a mask, not an
+    /// exponent. What that fourth byte gates is not read.
+    pub fn vertex_light(
+        &self,
+        data: &[u8],
+        submesh: &SubMesh,
+        stride: usize,
+    ) -> Result<Vec<[f32; 3]>> {
+        let decl = self.decl.as_ref().ok_or(Error::NoTexcoord)?;
+        let attribute = decl.vertex_colour().ok_or(Error::NoTexcoord)?;
+        let offset = usize::from(attribute.offset);
+        let end =
+            submesh.vertex_offset + stride * submesh.vertex_count.saturating_sub(1) + offset + 4;
+        if submesh.vertex_count > 0 && end > data.len() {
+            return Err(Error::OutOfBounds {
+                what: "a vertex buffer's colour set",
+                end,
+                len: data.len(),
+            });
+        }
+        Ok((0..submesh.vertex_count)
+            .map(|k| {
+                let at = submesh.vertex_offset + k * stride + offset;
+                [
+                    f32::from(data[at]) / 255.0,
+                    f32::from(data[at + 1]) / 255.0,
+                    f32::from(data[at + 2]) / 255.0,
+                ]
+            })
+            .collect())
+    }
+
     /// One submesh's coordinate pairs at a byte offset within the vertex.
     ///
     /// Shared by [`Self::texcoords`] and [`Self::lightmap_texcoords`], which

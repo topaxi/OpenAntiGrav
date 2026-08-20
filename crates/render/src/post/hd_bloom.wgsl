@@ -75,7 +75,7 @@ fn vs_main(@builtin(vertex_index) index: u32) -> VertexOutput {
 // state fs_adapt below maintains.
 @fragment
 fn fs_gate(in: VertexOutput) -> @location(0) vec4<f32> {
-    let frame = textureSample(source_tex, source_sampler, in.uv);
+    let frame = surface(textureSample(source_tex, source_sampler, in.uv));
     let adapted = textureSample(state_tex, source_sampler, vec2<f32>(0.5, 0.5)).x;
     let fade = 1.0 - min(adapted * constants.adaption_boost * 0.25, 1.0);
     let luminance = max(dot(frame.rgb, vec3<f32>(0.9, 1.77, 0.33)), 0.0);
@@ -100,7 +100,33 @@ fn fs_gate(in: VertexOutput) -> @location(0) vec4<f32> {
 // sounds like.
 @fragment
 fn fs_copy(in: VertexOutput) -> @location(0) vec4<f32> {
-    return textureSample(source_tex, source_sampler, in.uv);
+    return surface(textureSample(source_tex, source_sampler, in.uv));
+}
+
+// **What an 8-bit render target does to a value, done where this chain reads
+// one.** Every buffer the original's chain touches is
+// `CELL_GCM_SURFACE_A8R8G8B8`: the scene target created at `0x003e17a0` and
+// all seven ladder buffers `FUN_003af980` allocates - `li r6, 8` at seven
+// separate call sites, read off `EBOOT.elf` on 2026-08-20 together with the
+// surface-format word builder (`FUN_005c9a50`) and the render-target factory
+// (`FUN_005a6ce0`), whose `+0x24` field is confirmed as the raw RSX enum by
+// its own `32`/`64` depth branch. Only one `F_W16Z16Y16X16` surface exists in
+// the whole executable and it is neither the scene nor in the ladder.
+//
+// So **a value above 1.0 never reaches the original's gate**: the ROP clamps
+// when the frame is written and again at the half-res downsample. The gate's
+// `dot` weights being `(0.3, 0.59, 0.11) * 3` put its knee at luma ~1/3,
+// which is an LDR bright pass and not the HDR one this module's header used
+// to claim.
+//
+// This project's scene target stays [`SCENE_FORMAT`] (`Rgba16Float`) - 8 bits
+// of *linear* light bands visibly in the darks, and the shading that writes
+// it is ADR-0026's - so the hardware's clamp is applied here instead, at the
+// three points the chain samples the scene. Measured on the Talon's Junction
+// grid: clipped-white share 16.5 % -> 14.3 %, and the gate's peak argument
+// falls from ~1.6e5 to 2.43.
+fn surface(texel: vec4<f32>) -> vec4<f32> {
+    return clamp(texel, vec4<f32>(0.0), vec4<f32>(1.0));
 }
 
 // The adaptation update FUN_003b4690 runs on the CPU after reading back the
@@ -162,7 +188,7 @@ fn fs_blur(in: VertexOutput) -> @location(0) vec4<f32> {
 // ADD_SAT - and remains ADR-0026's display-encode stand-in.
 @fragment
 fn fs_encode(in: VertexOutput) -> @location(0) vec4<f32> {
-    let scene = textureSample(source_tex, source_sampler, in.uv).rgb;
+    let scene = surface(textureSample(source_tex, source_sampler, in.uv)).rgb;
     let bloom = textureSample(bloom_tex, source_sampler, in.uv).rgb;
     let adapted = textureSample(state_tex, source_sampler, vec2<f32>(0.5, 0.5)).x;
     let scale = constants.tone_maximum_brightness

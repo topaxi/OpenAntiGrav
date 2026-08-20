@@ -52,12 +52,25 @@
 //!
 //! # Why the chain owns the scene target
 //!
-//! The gate's luminance term reads the **pre-exposure linear scene** - on
-//! Talon's Junction it only produces the reference frame's glow when the
-//! weighted luminance runs over 1.0. So the race is drawn into a float
-//! target in linear light first, and that target is this chain's:
-//! [`Chain::scene_view`] is what the race pass attaches, and [`Chain::run`]
-//! is everything between it and the caller's own surface.
+//! The gate's luminance term reads the **pre-exposure scene**, so the race is
+//! drawn into this chain's own target first: [`Chain::scene_view`] is what
+//! the race pass attaches, and [`Chain::run`] is everything between it and
+//! the caller's own surface.
+//!
+//! **That target is a float one here and an 8-bit one on the disc, and the
+//! difference is corrected rather than kept.** This header used to say the
+//! gate "only produces the reference frame's glow when the weighted luminance
+//! runs over 1.0", i.e. that it reads an HDR scene. It does not: the original's
+//! scene surface and all seven of `FUN_003af980`'s ladder buffers are
+//! `CELL_GCM_SURFACE_A8R8G8B8`, read off `EBOOT.elf` on 2026-08-20 (`li r6, 8`
+//! at eight call sites of the render-target factory `FUN_005a6ce0`; exactly one
+//! `F_W16Z16Y16X16` surface exists in the executable and it is neither the
+//! scene nor in the ladder). The gate's `(0.3, 0.59, 0.11) * 3` weights put its
+//! knee at luma ~1/3, which is what an LDR bright pass looks like. Our target
+//! stays [`SCENE_FORMAT`] because 8 bits of *linear* light bands in the darks,
+//! and `hd_bloom.wgsl`'s `surface()` applies the hardware's clamp at the three
+//! points the chain samples the scene instead - see its own comment for the
+//! measurement.
 
 use anyhow::Result;
 

@@ -747,7 +747,89 @@ reads the **pre-exposure linear scene**. This renderer's race target is
 a float target first (scene in linear, gate, blur, composite, then the
 exposure stand-in and encode). That is the M6-for-HD work item, now with
 every constant read. *(Done the next day - the two sections below are what
-finished it.)*
+finished it.)* **The "pre-exposure linear scene" half of that paragraph is
+withdrawn** - see "The bloom chain runs on 8-bit surfaces" below, which reads
+the surface format itself and settles that no value above 1.0 ever reaches
+the gate.
+
+### The bloom chain runs on 8-bit surfaces (2026-08-20)
+
+Read off `EBOOT.elf` with `llvm-objdump` and an instruction sweep; **Ghidra's
+decompiler refuses this binary** (PPC64/TOC), so this section is disassembly
+only. Per-function TOC for the whole render cluster is `0x8bd3c4`.
+
+`FUN_005c9a50` builds the `NV4097_SET_SURFACE_FORMAT` word - `colour | depth |
+aa<<12 | type<<8 | log2w<<16 | log2h<<24` - emitted under header `0x00200200`
+by `FUN_005bd6dc`/`FUN_005c1b80`. Its colour and depth inputs are both field
+`+0x24` of a render-target object, and `FUN_005a6ce0` is that object's factory:
+`create(out, width, height, format, antialias, ...)`, storing
+`+0x1c`/`+0x20`/`+0x24`/`+0x28`/`+0x2c` at `0x5a6d94..0x5a6da0`. **That `+0x24`
+is the raw libgcm enum is a self-check rather than an assumption**: `0x5a6dd0`
+and `0x5a6dd4` branch on it being `32` or `64`, which are `Z16 << 5` and
+`Z24S8 << 5` - depth targets carry the pre-shifted bits 5-7, colour targets
+bits 0-4.
+
+Sweeping the literal `li r6, N` at all 39 call sites of `FUN_005a6ce0`:
+
+| Format | Sites |
+| --- | --- |
+| `A8R8G8B8` (8) | 27 |
+| `Z16 << 5` (32) / `Z24S8 << 5` (64) | 3 / 3 |
+| `R5G6B5` (3) | 2 |
+| `B8` (9) | 1 |
+| `F_W16Z16Y16X16` (11) | **1** |
+| computed | 2 |
+
+- **The scene colour surface is `A8R8G8B8`**, created at `0x003e17a0` inside
+  `FUN_003e12e0`, the frame's render-target set allocator - the same function
+  that calls the ladder allocator `FUN_003af980` at `0x003e23d8`. Its depth
+  companion at `0x003e1818` is `Z24S8` and shares its antialias register.
+  Confidence 85: `FUN_003e12e0` creates two colour+depth pairs plus a
+  full-res `aa = 0` target at `0x003e19d4` that looks like the MSAA resolve
+  destination, and which of them the chain's first downsample reads is unread.
+  All three are format 8, so the conclusion does not depend on it.
+- **All seven ladder buffers are `A8R8G8B8`**, `li r6, 8` at seven separate
+  sites - `0x3b09d8` (half), `0x3b0a54`/`0x3b0ac4`/`0x3b0b34`/`0x3b0ba4`
+  (four quarter), `0x3b0c1c`/`0x3b0c8c` (two eighth). Confidence 90, and this
+  is the part that carries the finding: even were the scene FP16, the
+  half-res downsample it is copied into is 8-bit and the ROP clamps there.
+- **The one `F_W16Z16Y16X16` surface in the executable** is `0x003c919c` in
+  the vtable-dispatched `FUN_003c9080`, half-width and full height, outside
+  both `FUN_003e12e0` and the ladder. Unidentified, and not the scene.
+
+**So the gate is an LDR bright pass.** Its `dot` weights are
+`(0.3, 0.59, 0.11) * 3`, which puts the knee at luma ~1/3 of the surface's own
+range; a white texel gives `3^4 * 0.03 = 2.43`. The `* 3` on the weights is
+what places the knee there. `oag_render::post::hd_bloom` draws into a float
+target for precision and applies the hardware's clamp where the chain samples
+the scene; before that clamp its gate was being handed arguments around
+`1.6e5`, which is the whole of why an HD race rendered as a wall of glow.
+
+**Two open questions this leaves**, both stated rather than assumed away:
+
+1. **Whether those 8 bits hold linear or gamma-encoded light.** The knee sits
+   at 1/3 *of whatever the buffer holds*, and the two readings are different
+   pictures. Nothing in the executable gamma-encodes: no `1/2.2`, `1/2.4` or
+   `1/2.233` float exists anywhere in it (checked big-endian and in the
+   fragment-microcode half-word-swapped ordering), and
+   `NV4097_SET_SHADER_PACKER` - the sRGB write enable - is never emitted with
+   a constant header. Taken at face value that says gamma, which conflicts
+   with [ADR-0026](../../../architecture/adr/0026-hd-authored-lighting-is-linear.md).
+   Confidence 70, and held rather than acted on: the scan can only find
+   *literal* exponents while the gate's own `pow` is an `LG2`/`EX2` pair with
+   a patched one, and ADR-0026 rests on a measurement against a real
+   reference frame. The obvious tiebreaker - that a gamma buffer would pin
+   `scale` at 1.0 forever and make the whole `Tone` family inert - **was run
+   and does not discriminate**: the reference frame's mean luma is 0.585
+   gamma / 0.42 linearised, and both are far above the `0.15` where
+   `4 - min(20 * adapted, 3)` stops varying.
+2. **Per-texture sRGB/`GAMMA` decode is still unestablished** (confidence 0,
+   no claim made): the texture method headers `0x1a00 + unit * 0x20` are
+   computed at runtime, so no constant exists for a header scan. The emitters
+   are at `0x5bf288`, `0x5bf328`, `0x5c653c`, `0x5c6644`, `0x640d20` and
+   `0x64ad9c`; reading their fill of the format word (`+0x1a04`) and
+   `CONTROL1` (`+0x1a10`) for the `CELL_GCM_TEXTURE_GAMMA_*` bits is the next
+   step, and it is what would settle question 1 as well.
 
 ### The chain runner, and every engine-fed parameter (2026-08-19)
 
@@ -820,7 +902,8 @@ out      = saturate(feedback * scale + bloom * scaleAdd + tint)
 ```
 
 with `scaleAdd` fed the constant 1.0 - **the bloom is added after the
-exposure scale, unscaled** - `scaleFeedback` fed `Bloom feedback + a runtime
+exposure scale, unscaled**; that fill was re-read end to end on 2026-08-20 and
+holds at confidence 92 (below, "`scaleAdd` re-read") - `scaleFeedback` fed `Bloom feedback + a runtime
 float` (inert at the authored default 0), and the resolve ending on its
 `ADD_SAT` with no gamma arithmetic. The correction variant
 (`downsamplescaleaddfeedbackcorrection_fp`) adds `saturation`/`finalScale`/
@@ -831,6 +914,281 @@ All of the above is implemented verbatim in `oag_render::post::hd_bloom`;
 its module header lists the four things that are deliberately *not* modelled
 (GPU-side adaptation in place of the readback, the event flash, the feedback
 mix and tint, and the final display encode).
+
+### `scaleAdd` re-read, and the parameter names are literals (2026-08-20)
+
+The resolve's three floats were traced from the PPU side rather than from the
+program's parameter table, and the two orders **disagree** - a trap worth
+carrying. `FUN_005e29c0`/`FUN_005e3f68` stash the arguments (`fmr 31,1 /
+fmr 30,2 / fmr 29,3`) and bind each into a lazily-resolved slot on the render
+globals (`0x5e2bac`/`0x5e2c28`/`0x5e2ca4` into `+0x218`/`+0x228`/`+0x238`).
+Each slot's resolver loads a TOC pointer, and against TOC `0x8bd3c4` those
+pointers are **plain ASCII strings**, not hashes:
+
+| Slot | TOC+ | Pointer | String |
+| --- | --- | --- | --- |
+| `+0x218` = f1 | 8084 | `0x007cdd38` | `scale` |
+| `+0x228` = f2 | 8100 | `0x007cdd58` | `scaleAdd` |
+| `+0x238` = f3 | 8128 | `0x007cdda8` | `scaleFeedback` |
+| `+0x248` | 8132 | `0x007cddb8` | `fullscreenTintColour` |
+
+So the crc32-preimage argument above is no longer what the four names rest on.
+**The program's own parameter table orders them `scale, scaleFeedback,
+scaleAdd` while the PPU binds `scale, scaleAdd, scaleFeedback`** - inferring
+the mapping from table order gives the wrong answer.
+
+What reaches `scaleAdd` at all four call sites (`0x3dfa18`, `0x3dfbbc`,
+`0x3e3800`, `0x3e3cb4`) is `lfs 2, -22232(2)` - `0x8b7cec`, which holds `1.0`
+- with no `fmuls` or `fsel` between the load and the `bl`. Confidence 92, two
+routes. Note `0x8b7cec` is that compilation unit's **shared** `1.0`, loaded
+from the same displacement at 31 sites, so "the constant at `0x8b7cec`" means
+only "the literal 1.0". Two corrections to the section above: `+0x28` holds
+the returned adapted luminance only transiently - `0x3e36d8` overwrites it
+with the clamped product before any reader - and `FUN_003e3268` is not the
+chain runner's caller; the two `bl 0x3b4690` sites are `0x3e2e58` and
+`0x3e3080`, both below it.
+
+**The chain issues seven draws, where this project issues five.** Tallying
+`bl` targets across `0x3b4690..0x3b8317`: the surface-bind wrapper
+`FUN_005a40f8` 14 times, and `FUN_005a4668`, `FUN_005cb6e0`, `FUN_005c1754`
+and `FUN_005c176c` 7 times each (parameter bind `FUN_005a3ef0`, 29). Only the
+`FUN_005a4668` count is a pass count: **14 surface binds is not 14 passes**,
+because several sit on mutually exclusive arms of the same branch - `0x3b50c0`
+and `0x3b7334` are the two sides of the `bne` at `0x3b5090` - and one,
+`0x3b5350`, is a loop body. The bind census below is what settles the two
+extra, and it is *not* a coarser blur level.
+
+### The 14 surface binds, read (2026-08-20)
+
+`FUN_005a40f8(ctx, depth, colour0, colour1, colour2, colour3)` takes **pointers
+to slots**, not targets: it dereferences each, counts the non-null colour ones,
+reads the first one's `+0x1c/+0x20/+0x24/+0x28` as width/height/**format**/pitch
+and the depth slot's `+0x24` as the depth format, and feeds them to the
+surface-format word builder `FUN_005c9a50`. All 14 call sites pass a **zeroed
+stack slot for depth and for colour1..3**, and a field of the chain object
+(`r25`) for colour0 - so every bloom pass is single-target, depthless
+(`FUN_005a40f8` substitutes `0x40`, `Z24S8 << 5`, at `0x005a45fc` when the depth
+slot is null). A third independent route to the 8-bit finding falls out of the
+same read: the one path where no colour target is bound at all, `0x005a4558`,
+hard-codes `li r6, 8`.
+
+Cross-referencing the `r25` offset at each bind against the allocation order in
+`FUN_003af980` - seven `FUN_005a6ce0` calls, each `li r6, 8`, with the
+dimension arguments shifted right by 1, 2, 2, 2, 2, 3, 3 (`rldicl` at
+`0x3b09b8`, `0x3b0a2c`, `0x3b0bf4`) - gives the ladder:
+
+| Slot | Res | Bound as target at |
+| --- | --- | --- |
+| `+0xd0` | half | `0x3b49c4` |
+| `+0xd4` | quarter | `0x3b6298`, `0x3b65c8`, `0x3b7ccc` |
+| `+0xd8` | quarter | `0x3b4d38`, `0x3b6460` |
+| `+0x84` | quarter | `0x3b7334`, `0x3b7510` (indexed `+0x84 + 4 * [+0x80]`) |
+| `+0x88` | quarter | (same indexed pair) |
+| `+0xdc` | eighth | `0x3b50c0`, `0x3b5350`, `0x3b6f74` |
+| `+0xe0` | eighth | `0x3b5a1c` |
+| caller's | full | `0x3b6a14`, `0x3b79f0` (`[sp+0x87c]`) |
+
+**The two eighth-res buffers are the luminance reduction, not a second blur.**
+Three of the seven draws target them, `0x3b5350` is inside the loop that begins
+at `0x3b5318`, and the pair ping-pongs (`+0xdc` and `+0xe0` swap roles between
+`0x3b5318` and `0x3b58a4`, alongside a matching swap of `+0xec`/`+0xf0`). That
+is exactly the "halved iteratively to a handful of pixels, then read back"
+adaptation this page already documents, and which `oag_render::post::hd_bloom`
+deliberately replaces with a GPU 1x1 ping-pong. **So the pass gap is a
+substitution this project already declares, not missing work** - and a coarser
+blur level would have had the wrong sign for the defect that prompted the read:
+the resolve adds bloom *after* the exposure scale and then saturates, so an
+extra additive level raises clipped white, while our frame measures brighter
+than the reference, not dimmer.
+
+Confidence 85. Static reading of one function; the slot-to-resolution mapping
+is two routes (allocation order and shift amount) but the reduction-loop
+reading rests on control flow alone, and **what the 29 parameter binds put in
+each pass's `sourceImage` is still unread** - that is what would raise it to a
+full producer/consumer graph. The `+0x84`/`+0x88` indexed pair and the radial
+keys at `+0x558..+0x570` are likewise untouched.
+
+### The lit track material, read: there is no sun in the diffuse path (2026-08-20)
+
+`scripts/ps3-microcode.py fp-file` on `talons_junction`'s
+`track_surface.rcsmaterial` (18 fragment blocks), with the sampler and
+parameter name hashes taken by the same `~crc32` preimage the `fogColour`
+section above establishes. New preimages: **`lightmap` (`0x37b5db58`)**,
+`DiffuseTexture` (`0x11cb4f74`), `NormalTexture` (`0x739a786e`),
+`shadowMapTex` (`0x730df9ee`), `prelitBias` (`0x002c73e8`),
+`SpecularColour` (`0x370a63cb`), `SpecularPower` (`0x81e0e773`); and on the
+vertex side `position` (`0xb9d31b0a`), `normal` (`0xde7a971b`),
+`tangent` (`0xdbe5f417`), `viewProj` (`0x2e7d5f33`).
+
+**Block #9 (`0x6450`) is the small lightmapped variant** and reads end to end:
+
+```text
+@0x00  TEX H0.xyz, f[TC4].zwzz unit1     <- lightmap, on TC4's *second* uv pair
+@0x01..0x11  LG2 / MUL / EX2 x3          <- pow(lightmap.rgb, k) per channel
+@0x12  MAD H2.xyz, H0, {scale}, f[TC1]   <- + the interpolated TC1 term
+@0x15  TEX H1.xyz, f[TC4] unit0          <- albedo, on TC4.xy
+@0x16  MAD R2.xyz, H2, H1, -{bias}       <- (light) * albedo - bias
+@0x18  TXP R1.x, f[TC0] unit2            <- shadowMapTex, projected
+@0x19  ADD H0.w, -R1.xxxx, {1}           <- alpha = 1 - shadow
+@0x1b  MAD H0.xyz, {fog}, R2, {fogColour}
+```
+
+**Block #8 (`0x6100`) is the same variant with no lightmap** and is three
+instructions of lighting:
+
+```text
+@0x03  ADD H2.xyz, f[TC1], {const}
+@0x07  TEX H1.xyz, f[TC4] unit0
+@0x08  MAD R2.xyz, H2, H1, -{bias}
+```
+
+So **the diffuse term carries no `N.L` and no sun colour at all**: it is
+`(pow(lightmap, power) * scale + f[TC1]) * albedo - bias`, and the whole
+difference between a lightmapped and a non-lightmapped surface is whether the
+first summand exists. Directional light *does* reach this material, but only
+through the **specular** path - block #7 (`0x5930`) normalises a light
+direction, dots it against the normal-mapped normal (`DP3_SAT R2.z, R3, R2`)
+and raises it to a power (`LG2`/`EX2`), and declares `SpecularColour` and
+`SpecularPower` to match. **"HD has no sun" would be wrong; "HD's diffuse has
+no sun" is what the microcode says.**
+
+**`f[TC1]` is the vertex light, and it is RGBE.** Most vertex blocks write
+`MOV o[TC1].xyz, c[208].xxxx` - a broadcast engine constant - but the two that
+source it from an input register (`v[4]` in one, `v[3]` in the other; the
+`attribute` lines name only the hashed slots, so which declared attribute that
+register is fed from is **not** established here) write
+
+```text
+ 4  MAD R0.x, v[4].wwww, c[208].xxxx, -c[208].yyyy
+ 9  EX2 R4.w, R0.xxxx
+15  MUL o[TC1].xyz, v[4].xyzx, R4.wwww
+```
+
+which is `rgb * exp2(a * k - b)` - a shared-exponent HDR decode, not a tint.
+That is what the vertex-colour census in [`HANDOVER.md`](../../../../HANDOVER.md)
+found without being able to name: of Talon's Junction's 983 chunks, 327 declare
+`lightmapUV` and no colour set and 351 the reverse, **0 both**. A chunk carries
+its baked light in the atlas or in its vertices, the shader adds whichever it
+has to `f[TC1]`, and `crates/render/src/mesh/rcs.rs` writes `[1, 1, 1, 1]` for
+every HD vertex - which is why wiring that attribute in as a *multiplied* tint
+blacked out the banner quads and the ship hulls when it was tried.
+
+Confidence 86 on the shape (static reading of the microcode's own arithmetic,
+two variants agreeing, and the vertex side corroborating the fragment side);
+**0 on the coefficients**, and that is the blocker. Every `{0, 0, 0, 0}` above
+is a real zero *in the file* - the tool resolves payloads, and does print
+`{2, -1, 0, 0}`, `{1.44269, 0, 0, 0}` and `{32, 0, 0, 0}` elsewhere in the same
+dump - because those slots are **patched at draw time**. Two of them are
+already known from the circuit's own `.envsettings`: `Lighting.Prelit ambient
+colour scale` is 4 and `... colour power` is 2, which `oag-render` already
+applies. `prelitBias` and the RGBE `k`/`b` at `c464` (declared `0x3466fc0e`,
+preimage not found; note the disassembly's `c[N]` is the declared `c[N+256]`)
+are not. **One shader change was made on this reading**: `mesh.wgsl`'s `authored`
+term dropped its `sun * (ndl * baked.a)` summand, which nothing in either
+variant computes. On the Talon's Junction grid that moves the clipped-white
+share from **14.25 % to 10.22 %** against the reference frame's 5.8 %, and
+mean luma from 0.583 to 0.487. The residual darkness is the missing `f[TC1]`,
+and it is deliberate: an absence this page can point at beats an invention
+that happened to fill the gap. Removing the *specular* as well - the
+`baked.a` gate on the lightmap-less placeholder - was measured too (9.08 %
+clipped, mean 0.467) and **not** taken, because the specular block that was
+read (#7) does compute a directional term and only its diffuse sibling does
+not.
+
+**The removal is wider than the evidence, deliberately, and here is the
+gap.** `mesh.wgsl` has one lit path for *all* HD geometry, while the read
+covers `track_surface.rcsmaterial` alone. Ships are not that material and do
+not behave like it: `data/materials/ships/detonator_ship_rich_iridescent.rcsmaterial`
+block #1 normalises `f[TC1]` (`DP3` with itself, then `op3B`) and
+`DP3_SAT`s it against a normal-mapped normal - so **on a ship `f[TC1]` is a
+light *direction*, not a colour**, and that material does carry a directional
+diffuse, folded into a reciprocal-based dodge that this renderer models in no
+way at all. The frame is a net gain because track surfaces are most of the
+pixels; the hull is darker than it should be, and it was already wrong before,
+just wrong in the other direction. **Ship, weapon and prop materials remain
+unread.** Whatever replaces the single `authored` path will have to be
+per-material, which is a larger change than this one.
+
+**Left unread**: whether `shadowMapTex`'s `1 - shadow` in `H0.w` reaches colour
+in a later pass - `oag-render` has no shadow map at all - and what fills
+`c464`. The registrar route that pinned the `HDR and Bloom.*` keys
+(`FUN_003a83d8`/`FUN_003a9520`) is the way to chase the latter.
+
+### The vertex-light constants are read, and where they live (2026-08-20)
+
+The question left by the section above - what fills the `k`/`b` of
+`o[TC1].xyz = v.xyz * exp2(v.w * k - b)` - is **answered**, and the route is
+not the one this page proposed. The registrar (`FUN_003a83d8`/`FUN_003a9520`)
+was a dead end: sweeping all 693 `.rcsmaterial` on the disc, the decode
+appears in **6,946 vertex blocks across 222 materials**, and in every one the
+register is *undeclared*, at an index sliding from `c[198]` to `c[208]`. A
+register no shader names cannot be reached by a route that maps
+`.envsettings` key strings onto settings fields.
+
+**The values are in the file, in a table this page had not framed.**
+`Rsx_UploadVertexConstants` (`0x005c176c`) is what pointed at it. It emits
+`NV4097_SET_TRANSFORM_PROGRAM_START` (`0x1ea0`, count 1),
+`NV4097_SET_VERTEX_ATTRIB_OUTPUT_MASK` (`0x1ff0`, count 2) and `0x1ef8`, then
+loops on `0x00141efc` - `NV4097_SET_TRANSFORM_CONSTANT_LOAD`, **count 5** -
+writing one word from a stream advancing 4 bytes and four from a stream
+advancing 16. One index plus one `vec4`, per iteration. Reading its own
+arithmetic backwards gives the layout, at the sub-object the caller reaches as
+`block + u16@+0x16`:
+
+```text
++0x16  u16   constant count
++0x18  u32[] the constant indices
+       vec4[] the values, at align16(0x18 + count * 4)
+```
+
+On `track_surface.rcsmaterial`'s block at `0x66c0` that is
+`c[464] = (255, 128, 0, 2)` and `c[463] = (1, 0, 0, 0)` - and the decode in
+that same block reads `c[208]`, which is `c464` under this page's `N + 256`
+rule. **The table names the register the disassembly reads**, which is the
+second route: the `+256` mapping and the constant values confirm each other.
+`c464.w = 2` and `c463.x = 1` are the `v * 2 - 1` the same program applies to
+its normal, and `c464.z = 0` is the zero it broadcasts.
+
+Across the whole disc the decode's constants are **`x = 255.0` and
+`y = 128.0` in all 6,946 blocks** - Radiance RGBE with the mantissa left as a
+`[0, 1]` fraction. Confidence 92.
+
+**And that decode is unreachable on this disc.** It reads attribute
+`0x868f8229`, and **no `.rcsmodel` declares it** - 0 of 123 files contain the
+hash. What the models carry is a plain colour set (`0x1aaf7631` on 297 of
+Talon's Junction's chunks, `colorSet1` on 54), and its fourth byte is **41 %
+zero and 52 % full** over 240,400 lit vertices: a mask, not an exponent.
+Applying the RGBE decode to it produces values around `1e-39` and blacks the
+frame out - measured, before the mistake was caught.
+
+The applicable form is the other one the same vertex programs carry:
+`MOV o[TC1].xyz, v[N].xyzx`, the colour set moved across unchanged. That is
+what `oag_formats::rcsmodel::Mesh::vertex_light` reads and `mesh.wgsl` now
+adds into its authored sum, and it restores the ship livery, the grandstands
+and the track's contrast that the sun removal had flattened: clipped white
+**10.20 %** against the reference's 5.8 %, mean **0.497** against 0.585.
+
+**Zero for a chunk with no colour set is read too**: the vertex blocks with no
+such attribute write `MOV o[TC1].xyz, c[K].xxxx`, and resolving `c[K]` through
+each program's own constant table gives **0.0 in 11,180 of the 11,184 blocks**
+that do it (4 carry no table).
+
+The selector `oag_formats` uses for it - four normalised bytes, not
+`tangent` - was checked against **all 123 `.rcsmodel` on the disc**, where the
+only four-byte-normalised hashes are `0x1aaf7631` (3,672 chunks),
+`VertexColour1` (496), `colorSet1` (484) and `tangent` (1,208).
+
+Two things this leaves open. **Whether `0x1aaf7631` and `colorSet1` are one
+attribute is an inference**, not a read - 297 + 54 is exactly the 351 chunks
+with a colour set, and neither is ever declared alongside a `lightmapUV`, but
+nothing seen ties the hashes together. And **what the fourth byte gates is
+unread**, so nothing consumes it.
+
+`0x005c6c5c` writes `0x00041ea4` with the payload `(arg3 << 4) | arg2`, and
+three inlined copies of the same emission sit at `0x005bf578`, `0x00642b50`
+and `0x0064bdd4`. None has a code cross-reference - only its OPD descriptor -
+and the method is not identified here, so it is **left unnamed** per
+[ADR-0005](../../../architecture/adr/0005-ghidra-conventions.md).
 
 ## What was deliberately not read
 

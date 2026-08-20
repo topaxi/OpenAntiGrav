@@ -878,13 +878,16 @@ pub fn build(
     // It also fills the slot of a `Texture` node we could not decode, keeping
     // every later texture at the index its materials expect.
     //
-    // A draw with no lightmap binds **black with alpha 1** instead: the
-    // shader's authored-rig branch computes the prelit term from the
-    // lightmap's colour and gates the sun by its alpha, so black-opaque is
-    // exactly the equation the original's own lightmap-less shader variants
-    // state - no baked light, full sun. Nothing multiplies a lightmap
-    // straight into the colour any more, so the old white identity has no
-    // reader left.
+    // A draw with no lightmap binds **black with alpha 1** instead. Black
+    // switches the prelit term off, which is what a surface with no lightmap
+    // gets in the original too. The alpha of 1 now gates **only the
+    // specular** - the diffuse sun term it used to gate as well was removed
+    // from `mesh.wgsl` once `track_surface.rcsmaterial` block #8 was read and
+    // turned out to light a lightmap-less surface with `(f[TC1] + k) *
+    // albedo`, no `N.L` and no sun colour at all. See renderer.md, "The lit
+    // track material". Full gloss is the honest default there: the specular
+    // block that *was* read (#7) masks by the lightmap's own alpha, and a
+    // surface with no lightmap has no mask to apply.
     let white = make(1, 1, &[255, 255, 255, 255], "white");
     let no_lightmap = make(1, 1, &[0, 0, 0, 255], "no lightmap");
     let mut texture_binds = vec![bind(&white, &no_lightmap, "white")];

@@ -60,3 +60,4 @@
 0x008bf1ac	data	g_ShaderRegistryHead	84	renderer.md
 0x005a2090	function	Crc32_HashString	92	renderer.md
 0x00921110	data	g_VexClassTable	95	vex-classes.md
+0x005c176c	function	Rsx_UploadVertexConstants	88	renderer.md

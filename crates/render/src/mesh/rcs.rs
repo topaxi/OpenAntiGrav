@@ -425,6 +425,7 @@ pub fn build_scene(
             let normals = mesh.normals(model_blob, submesh, stride).ok();
             let texcoords = mesh.texcoords(model_blob, submesh, stride).ok();
             let lightmap_texcoords = mesh.lightmap_texcoords(model_blob, submesh, stride).ok();
+            let vertex_light = mesh.vertex_light(model_blob, submesh, stride).ok();
             report.authored_normals += normals.as_deref().map_or(0, authored);
             emit(
                 &mut out,
@@ -433,6 +434,7 @@ pub fn build_scene(
                     normals: normals.as_deref(),
                     texcoords: texcoords.as_deref(),
                     lightmap_texcoords: lightmap_texcoords.as_deref(),
+                    vertex_light: vertex_light.as_deref(),
                     indices: &indices,
                 },
                 Mat4::IDENTITY,
@@ -557,6 +559,11 @@ struct Geometry<'a> {
     /// a `lightmapUV`. `None` leaves it at the origin, which a white lightmap
     /// makes harmless.
     lightmap_texcoords: Option<&'a [[f32; 2]]>,
+    /// HD's **baked per-vertex light**, from
+    /// `oag_formats::rcsmodel::Mesh::vertex_light`. `None` on 632 of Talon's
+    /// Junction's 983 chunks - not a gap but the other half of the split: a
+    /// chunk bakes into the lightmap atlas **or** its vertices, never both.
+    vertex_light: Option<&'a [[f32; 3]]>,
     indices: &'a [u16],
 }
 
@@ -613,6 +620,7 @@ fn emit(out: &mut Model, mesh: Geometry<'_>, to_world: Mat4, node: Option<u32>, 
         normals,
         texcoords,
         lightmap_texcoords,
+        vertex_light,
         indices,
     } = mesh;
     let first_vertex = u32::try_from(out.vertices.len()).unwrap_or(u32::MAX);
@@ -637,7 +645,18 @@ fn emit(out: &mut Model, mesh: Geometry<'_>, to_world: Mat4, node: Option<u32>, 
             position: p.to_array(),
             // Zero means the file gave none, and `face_normals` derives it.
             normal,
-            colour: [1.0, 1.0, 1.0, 1.0],
+            // HD's `f[TC1]`: the per-vertex light the fragment program
+            // **adds** to the lightmap term before multiplying the albedo, so
+            // `mesh.wgsl` folds it into the authored sum, not into a tint.
+            // The fourth byte is a mask whose consumer is unread, so only
+            // `.rgb` is taken and alpha stays the texture's own multiplier.
+            // **Zero for a chunk with no colour set is read**: the blocks
+            // without it write `MOV o[TC1].xyz, c[K].xxxx`, and `c[K]` against
+            // each program's local-constant table is 0.0 in 11,180 of 11,184.
+            colour: vertex_light
+                .and_then(|c| c.get(k))
+                .map(|&[r, g, b]| [finite(r), finite(g), finite(b), 1.0])
+                .unwrap_or([0.0, 0.0, 0.0, 1.0]),
             // A non-finite half is a vertex whose coordinate this reading does
             // not explain - 1.68 % of a circuit's stride-18 ones. Zero rather
             // than a NaN travelling into the vertex buffer.
@@ -791,6 +810,7 @@ pub fn build(
             let normals = mesh.normals(model_blob, submesh, stride).ok();
             let texcoords = mesh.texcoords(model_blob, submesh, stride).ok();
             let lightmap_texcoords = mesh.lightmap_texcoords(model_blob, submesh, stride).ok();
+            let vertex_light = mesh.vertex_light(model_blob, submesh, stride).ok();
             report.authored_normals += normals.as_deref().map_or(0, authored);
             emit(
                 &mut out,
@@ -799,6 +819,7 @@ pub fn build(
                     normals: normals.as_deref(),
                     texcoords: texcoords.as_deref(),
                     lightmap_texcoords: lightmap_texcoords.as_deref(),
+                    vertex_light: vertex_light.as_deref(),
                     indices: &indices,
                 },
                 to_world,
