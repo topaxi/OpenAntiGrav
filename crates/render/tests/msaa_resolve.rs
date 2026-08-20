@@ -87,6 +87,7 @@ fn triangle_model() -> Model {
         transparent_draws: Vec::new(),
         textures: Vec::new(),
         lightmaps: Vec::new(),
+        vertex_colour_is_light: false,
         centre: [0.0, 0.0, 0.0],
         radius: 2.0,
         anim_tracks: Vec::new(),

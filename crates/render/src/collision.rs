@@ -265,6 +265,7 @@ pub fn build_model(
         transparent_draws: Vec::new(),
         textures: Vec::new(),
         lightmaps: Vec::new(),
+        vertex_colour_is_light: false,
         centre,
         radius,
         mesh_count,

@@ -301,10 +301,15 @@ pub fn build(
     // constant, so every pipeline built here answers for the target it was
     // built against and no uniform needs a field the sky's zeroed scene
     // buffer would miss.
-    let linear_constants: &[(&str, f64)] = if is_linear_target(format) {
-        &[("linear_out", 1.0)]
-    } else {
-        &[]
+    // Two overrides, and they answer different questions: `linear_out` is the
+    // target's colour space and `colour_is_light` is the model's own vertex
+    // semantics. Conflating them is a bug this had - see
+    // [`Model::vertex_colour_is_light`].
+    let constants: &[(&str, f64)] = match (is_linear_target(format), model.vertex_colour_is_light) {
+        (true, true) => &[("linear_out", 1.0), ("colour_is_light", 1.0)],
+        (true, false) => &[("linear_out", 1.0)],
+        (false, true) => &[("colour_is_light", 1.0)],
+        (false, false) => &[],
     };
 
     let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -487,7 +492,7 @@ pub fn build(
                 write_mask: glow.writes(),
             })],
             compilation_options: wgpu::PipelineCompilationOptions {
-                constants: linear_constants,
+                constants,
                 ..Default::default()
             },
         }),
@@ -544,7 +549,7 @@ pub fn build(
                 write_mask: glow.writes(),
             })],
             compilation_options: wgpu::PipelineCompilationOptions {
-                constants: linear_constants,
+                constants,
                 ..Default::default()
             },
         }),
@@ -621,7 +626,7 @@ pub fn build(
                     write_mask: glow.writes(),
                 })],
                 compilation_options: wgpu::PipelineCompilationOptions {
-                    constants: linear_constants,
+                    constants,
                     ..Default::default()
                 },
             }),

@@ -3,7 +3,7 @@
 use anyhow::{Context, Result, bail};
 use oag_assets::Container;
 use oag_core::math::Mat4;
-use oag_formats::{ps2_texture, vex, wad};
+use oag_formats::vex;
 
 /// How many distinct texture-transform tracks one model may carry, matching
 /// `mesh.wgsl`'s `TexAnims` array.
@@ -270,6 +270,20 @@ pub struct Model {
     /// hole. Empty on every title but Wipeout HD, and `None` on the majority of
     /// its materials - see `oag_formats::rcsmodel::Material::lightmap`.
     pub lightmaps: Vec<Option<ModelTexture>>,
+    /// Whether [`GpuVertex::colour`] holds a **baked light** rather than a tint.
+    ///
+    /// True only for a Wipeout HD `.rcsmodel`, whose fragment programs *add*
+    /// the interpolated colour to the lightmap term before multiplying the
+    /// albedo - so multiplying by it, as every other title's assets intend,
+    /// darkens instead of tinting. `mesh.wgsl` reads it as a pipeline override.
+    ///
+    /// **A property of the model, not of the render target.** Keying it off the
+    /// target's colour space was tried and was wrong both ways: HD's capture
+    /// and viewer paths draw these models into a *gamma* target, where the
+    /// guard never fired and they rendered dark, and on the linear target it
+    /// over-fired onto every other model including the sky cube. `model_probe`
+    /// is what caught the first half.
+    pub vertex_colour_is_light: bool,
     /// Centre of the bounding box, so the camera can frame the model.
     pub centre: [f32; 3],
     /// Radius of the bounding sphere.
@@ -324,6 +338,7 @@ impl Model {
             transparent_draws: Vec::new(),
             textures: Vec::new(),
             lightmaps: Vec::new(),
+            vertex_colour_is_light: false,
             centre: [0.0; 3],
             radius: 0.0,
             mesh_count: 0,
@@ -915,6 +930,7 @@ fn build_class(
         transparent_draws,
         textures,
         lightmaps: Vec::new(),
+        vertex_colour_is_light: false,
         centre,
         radius,
         mesh_count,
@@ -929,60 +945,8 @@ fn build_class(
     Ok(model)
 }
 
-/// Decodes a PS2 texture set into slots a model can be re-skinned with.
-///
-/// PS2 `.vex` files declare a texture block of zero length: their textures are
-/// separate archive entries, and a model's set is gathered into a **nested WAD**
-/// of its own, one entry per `Texture` node and in the same order. Each entry is
-/// a Graphics Synthesizer upload packet, see
-/// [`oag_formats::ps2_texture`].
-///
-/// Slots are positional for the same reason [`build`] keeps them positional: a
-/// material names a texture by its ordinal, so an entry this build cannot decode
-/// stays `None` in place rather than shifting every later one.
-pub fn ps2_texture_set(blob: &[u8]) -> Result<Vec<Option<ModelTexture>>> {
-    let count = wad::Directory::peek_entry_count(blob).context("not a nested WAD")?;
-    let directory = wad::Directory::parse(blob, Some(blob.len() as u64))
-        .map_err(|e| anyhow::anyhow!("{e}"))
-        .context("parsing the texture set directory")?;
-
-    let mut out = Vec::with_capacity(count as usize);
-    for (index, entry) in directory.entries.iter().enumerate() {
-        let start = entry.offset as usize;
-        let end = start + entry.size as usize;
-        let Some(stored) = blob.get(start..end) else {
-            out.push(None);
-            continue;
-        };
-        let decompressed = match entry.compression {
-            wad::Compression::None => stored.to_vec(),
-            wad::Compression::Lzss => {
-                match oag_formats::lzss::decompress(stored, entry.size_uncompressed as usize) {
-                    Ok(bytes) => bytes,
-                    Err(_) => {
-                        out.push(None);
-                        continue;
-                    }
-                }
-            }
-            wad::Compression::Zlib => {
-                out.push(None);
-                continue;
-            }
-        };
-        out.push(
-            ps2_texture::parse(&decompressed)
-                .ok()
-                .map(|texture| ModelTexture {
-                    label: format!("#{index} {:08x}", entry.name_hash),
-                    width: u32::from(texture.width),
-                    height: u32::from(texture.height),
-                    rgba: texture.to_rgba(),
-                }),
-        );
-    }
-    Ok(out)
-}
+mod ps2_textures;
+pub use ps2_textures::ps2_texture_set;
 
 mod draw_call;
 pub use draw_call::{Bounds, DrawCall};

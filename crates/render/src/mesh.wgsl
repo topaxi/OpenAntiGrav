@@ -100,6 +100,17 @@ struct Scene {
 // miss it.
 override linear_out: f32 = 0.0;
 
+// **Whether `in.colour` is a baked light rather than a tint** - 1.0 only for a
+// Wipeout HD `.rcsmodel`, set from `Model::vertex_colour_is_light`. HD's
+// fragment programs *add* the interpolated colour to the lightmap term before
+// multiplying the albedo, so the stand-in path below must not multiply by it.
+//
+// A separate override from `linear_out` on purpose: that one is the *target's*
+// colour space and this is the *model's* vertex semantics. Keying this off
+// `linear_out` was tried and rendered HD dark wherever it draws into a gamma
+// target - the capture and viewer paths both do.
+override colour_is_light: f32 = 0.0;
+
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
 @group(1) @binding(0) var albedo: texture_2d<f32>;
 @group(1) @binding(1) var albedo_sampler: sampler;
@@ -266,7 +277,13 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     let ndl = clamp(dot(n, scene.light.direction), 0.0, 1.0);
     let baked_linear = pow(baked.rgb, vec3<f32>(2.2));
     let prelit = scene.light.prelit_scale * pow(baked_linear, scene.light.prelit_power);
-    let authored = scene.light.ambient + prelit + in.colour.rgb;
+    // `select` rather than a multiply by the override, so the value is not
+    // touched at all where the flag is set. (Measured: it makes no difference
+    // to the frame either way - both forms move the same 9 pixels of 1,175,040
+    // by one level, and that movement is the `tint` line below rather than this
+    // one. Kept because not multiplying is the clearer statement.)
+    let vertex_light = select(vec3<f32>(0.0), in.colour.rgb, colour_is_light > 0.5);
+    let authored = scene.light.ambient + prelit + vertex_light;
 
     let texel = textureSample(albedo, albedo_sampler, in.texcoord);
 
@@ -326,13 +343,20 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // is decoded, so `post::hd_bloom`'s encode returns it byte-for-byte.
     let light = mix(vec3<f32>(1.0), stand_in, in.lit);
     // **The vertex colour is a tint here and a light term on the authored
-    // path, so this multiply must not see HD's.** `linear_out` is the
-    // discriminator and it is exact: it is set from `is_linear_target`, and
-    // the float scene target belongs to HD's bloom chain alone. Without this,
-    // any HD draw that binds `Light::stand_in` - the front end, or a circuit
-    // whose `.envsettings` fails to yield a rig - would multiply by a baked
-    // light that is zero wherever no colour set exists, and render black.
-    let tint = mix(in.colour.rgb, vec3<f32>(1.0), linear_out);
+    // path, so this multiply must not see HD's.** Without the guard, any HD
+    // draw that binds `Light::stand_in` - the front end, or a circuit whose
+    // `.envsettings` fails to yield a rig - would multiply by a baked light
+    // that is zero wherever no colour set exists, and render black.
+    //
+    // **This used to key on `linear_out` and that was wrong twice.** It missed
+    // HD's capture and viewer paths, which draw the same models into a gamma
+    // target - `model_probe` found them rendering dark, 1,062 lit pixels of a
+    // 1024x1024 frame against 6,988 once fixed. And it over-fired on the race
+    // target, forcing *every* model's tint to white there including the sky
+    // cube, whose vertex colour genuinely is a tint because `mesh/sky_cube.rs`
+    // builds it rather than the HD loader. `colour_is_light` is a property of
+    // the model and answers both.
+    let tint = mix(in.colour.rgb, vec3<f32>(1.0), colour_is_light);
     let plain = texel.rgb * tint * light;
     let plain_rgb = mix(plain, pow(plain, vec3<f32>(2.2)), linear_out);
 

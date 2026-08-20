@@ -162,6 +162,7 @@ pub fn build_model(label: &str, ai: &AiTrack) -> Model {
         transparent_draws: Vec::new(),
         textures: Vec::new(),
         lightmaps: Vec::new(),
+        vertex_colour_is_light: false,
         centre,
         radius,
         anim_tracks: Vec::new(),

@@ -654,6 +654,12 @@ pub fn build(
     let (skins, lightmaps) = skin(&model, textures, &mut report);
     out.textures = skins;
     out.lightmaps = lightmaps;
+    // Every vertex this module writes carries HD's baked per-vertex light in
+    // `colour`, which the fragment programs **add** rather than multiply - see
+    // `emit`. The flag is what stops the stand-in shading path from tinting by
+    // it, and it is a property of the model rather than of the target because
+    // the capture and viewer paths draw these same models into a gamma one.
+    out.vertex_colour_is_light = true;
 
     for (index, node) in nodes
         .iter()
