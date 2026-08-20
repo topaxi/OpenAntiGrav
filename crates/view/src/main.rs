@@ -15,11 +15,13 @@
 
 mod assets;
 mod draws;
+mod logging;
 mod offscreen;
 mod orbit;
 
 use anyhow::{Context, Result};
 use clap::Parser;
+use log::warn;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -30,26 +32,6 @@ use oag_assets::Archive;
 use oag_formats::vex;
 use oag_render::mesh_render::Anisotropy;
 use oag_render::{collision, mesh, mesh_render, track};
-
-/// The box enclosing a built model's vertices.
-///
-/// The collision side has [`collision::bounds_of`] over decoded nodes; the
-/// ribbon only exists as a model, so it is measured after the fact.
-fn bounds_of_model(model: &mesh::Model) -> Option<collision::Aabb> {
-    let mut out: Option<collision::Aabb> = None;
-    for v in &model.vertices {
-        match &mut out {
-            None => out = Some((v.position, v.position)),
-            Some((lo, hi)) => {
-                for i in 0..3 {
-                    lo[i] = lo[i].min(v.position[i]);
-                    hi[i] = hi[i].max(v.position[i]);
-                }
-            }
-        }
-    }
-    out
-}
 
 use winit::application::ApplicationHandler;
 use winit::event::{ElementState, WindowEvent};
@@ -447,6 +429,7 @@ fn load_texture_set(spec: &str, entry: &str) -> Result<Vec<Option<mesh::ModelTex
 }
 
 fn main() -> Result<()> {
+    logging::init();
     let cli = Cli::parse();
 
     if let Some(name) = &cli.nodes {
@@ -488,7 +471,7 @@ fn main() -> Result<()> {
             (false, _) => None,
             (true, Ok((ai, _))) => Some(track::build_model(&label, &ai)),
             (true, Err(e)) => {
-                eprintln!("warning: --with-spline: {e:#}");
+                warn!("--with-spline: {e:#}");
                 None
             }
         };
@@ -496,7 +479,7 @@ fn main() -> Result<()> {
         let model = if let Some(ribbon) = ribbon {
             if let (Some(soup), Some(spline)) = (
                 collision::bounds_of(&nodes, collision::is_collidable),
-                bounds_of_model(&ribbon),
+                collision::bounds_of_model(&ribbon),
             ) {
                 // A sanity check, not a proof of enclosure: on a looping track
                 // both boxes are the whole envelope, so this catches a spline

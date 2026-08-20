@@ -6,6 +6,7 @@
 //! `race/tests/respawn.rs`.
 
 use super::*;
+use log::warn;
 
 impl Race {
     /// Whether this opponent has been away from its own driver's idea of where
@@ -230,7 +231,7 @@ impl Race {
             // author a line that runs *above* their own collision surface -
             // `05_Track` for 134 samples - so a craft put back there comes off
             // again in the same place, however many times it is rescued.
-            eprintln!(
+            warn!(
                 "reset: craft {slot} respawned {} times in a row without getting \
                  clear, giving up on it. Either the recovery pose is inside a \
                  Reset volume, or the racing line there runs above the collision \

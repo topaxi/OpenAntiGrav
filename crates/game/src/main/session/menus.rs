@@ -1,6 +1,7 @@
 //! Opening the menus, and what a menu event does.
 
 use anyhow::{Context, Result};
+use log::{error, info, warn};
 
 use oag_game::render::{Renderer, VideoFormat};
 use oag_game::{audio, catalogue, display, marquee, menu, movie, settings};
@@ -141,7 +142,7 @@ impl Session {
             .map(|name| menu::Value::Text(name.clone()))
             .collect();
         if !model.in_effect("graphics.renderer", &in_use) {
-            eprintln!("note: nothing in the menus defers graphics.renderer");
+            warn!("nothing in the menus defers graphics.renderer");
         }
         // What the row is set to comes from the settings file; what a race on
         // screen is actually *drawing* with can only come from its own
@@ -172,13 +173,13 @@ impl Session {
                 .map(|mode| menu::Value::Text(mode.to_string()))
                 .collect();
             if !model.in_effect("graphics.anti_aliasing", &in_use) {
-                eprintln!("note: nothing in the menus defers graphics.anti_aliasing");
+                warn!("nothing in the menus defers graphics.anti_aliasing");
             }
             // Same story as MSAA above, but a single tier baked in at
             // `Race::start` rather than a range of equivalent modes.
             let in_use = [menu::Value::Text(stage.race.boost_fov_kick().to_string())];
             if !model.in_effect("graphics.boost_fov_kick", &in_use) {
-                eprintln!("note: nothing in the menus defers graphics.boost_fov_kick");
+                warn!("nothing in the menus defers graphics.boost_fov_kick");
             }
         }
 
@@ -294,7 +295,7 @@ impl Session {
     fn seed_menu(&self, model: &mut menu::Menu) {
         for (key, value) in settings::menu_seeds(&self.settings, self.anisotropy) {
             if !model.seed(key, &value) {
-                eprintln!("note: nothing in the menus edits {key}");
+                warn!("nothing in the menus edits {key}");
             }
         }
     }
@@ -326,14 +327,14 @@ impl Session {
                 // here is unreachable in practice and says so rather than
                 // unwrapping.
                 let Some(mut race_options) = self.race_options.take() else {
-                    eprintln!("no disc image has been chosen yet, so there is nothing to race");
+                    warn!("no disc image has been chosen yet, so there is nothing to race");
                     return;
                 };
                 let chosen = self.shell.as_ref().and_then(|shell| {
                     shell
                         .track(&self.settings.race.track)
                         .or_else(|| {
-                            eprintln!(
+                            warn!(
                                 "this source does not offer {:?}; racing the first \
                                  circuit it does offer, which is what the menu shows",
                                 self.settings.race.track
@@ -344,7 +345,7 @@ impl Session {
                 });
                 match chosen {
                     Some(entry) => race_options.track = Some(entry),
-                    None => eprintln!(
+                    None => warn!(
                         "this source offers no circuit at all; racing whatever was \
                          already selected"
                     ),
@@ -363,7 +364,7 @@ impl Session {
                     .and_then(|shell| shell.team(&self.settings.race.team))
                 {
                     Some(team) => race_options.team = Some(team.to_string()),
-                    None => eprintln!(
+                    None => warn!(
                         "this source does not offer team {:?}, racing as {} instead",
                         self.settings.race.team,
                         race_options
@@ -389,8 +390,8 @@ impl Session {
                 {
                     race_options.difficulty = difficulty;
                 }
-                println!(
-                    "\nloading {}",
+                info!(
+                    "loading {}",
                     race_options
                         .track
                         .as_deref()
@@ -403,7 +404,7 @@ impl Session {
                     // Reported rather than fatal: leaving the menus on screen
                     // lets the player pick something else, where a vanished
                     // window would just look like a crash.
-                    Err(e) => eprintln!("cannot start a race: {e:#}"),
+                    Err(e) => error!("cannot start a race: {e:#}"),
                 }
             }
             // Backing out of the root page means the same thing as choosing
@@ -444,7 +445,7 @@ impl Session {
         }
 
         if matches!(self.stage, Stage::Race(_)) && self.shell.is_some() {
-            println!("\nleaving the race");
+            info!("leaving the race");
             // Before `open_menus`, not after: the menu voice this resumes has
             // to be sounding by the time the menus themselves draw. See
             // `Audio::pause_race_music`.
@@ -455,7 +456,7 @@ impl Session {
                 // menus cannot be rebuilt has nothing left to offer, but a
                 // window that vanished with no message would read as a crash.
                 Err(e) => {
-                    eprintln!("cannot return to the menus: {e:#}");
+                    error!("cannot return to the menus: {e:#}");
                     self.quit = true;
                 }
             }

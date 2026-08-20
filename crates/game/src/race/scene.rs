@@ -6,6 +6,7 @@
 //! frame with it is `race/frame.rs`; its tests are `race/tests/scene.rs`.
 
 use super::*;
+use log::warn;
 
 mod frame;
 
@@ -226,7 +227,7 @@ impl Scene {
         {
             Ok(hd) => hd,
             Err(e) => {
-                eprintln!("hd post chain unavailable ({e}) - the frame draws without it");
+                warn!("hd post chain unavailable ({e}) - the frame draws without it");
                 None
             }
         };
@@ -602,7 +603,7 @@ impl Scene {
         {
             Ok(bloom) => bloom,
             Err(e) => {
-                eprintln!("bloom unavailable ({e}) - the frame draws without it");
+                warn!("bloom unavailable ({e}) - the frame draws without it");
                 None
             }
         };

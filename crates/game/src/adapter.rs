@@ -31,6 +31,7 @@
 //! `graphics.render_scale` at 50 to be watchable at all.
 
 use anyhow::{Context, Result};
+use log::warn;
 
 use crate::display::Renderer;
 
@@ -210,7 +211,7 @@ pub fn choose(
         });
     }
     if let Some(wanted) = setting.name() {
-        eprintln!(
+        warn!(
             "no renderer named {wanted:?}; using the default (this machine has: {})",
             offered.join(", ")
         );

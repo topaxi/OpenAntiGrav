@@ -1,0 +1,22 @@
+//! The logger `oag-trace` installs, in a file of its own.
+//!
+//! Belongs to the binary rather than to `oag_trace` the library: a library
+//! never picks the sink, it only calls the `log` facade. `main.rs` declares it
+//! with `mod logging;`, which is why it is not reachable from `lib.rs`.
+
+/// Installs the sink every `log` call in this run ends up in.
+///
+/// **Notes and warnings only.** Every *report* this tool produces - the CSV,
+/// the summaries, the tables - is a `println!` on stdout, and is unaffected by
+/// anything here or by `RUST_LOG`: a filter must not be able to silence the
+/// thing the command was run for.
+///
+/// The default filter is `warn` globally with our own crates at `debug`, and
+/// the format carries the level and nothing else. Both match `oag-game`'s
+/// `init_logging`, whose doc comment gives the reasoning for each.
+pub fn init() {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn,oag=debug"))
+        .format_timestamp(None)
+        .format_target(false)
+        .init();
+}

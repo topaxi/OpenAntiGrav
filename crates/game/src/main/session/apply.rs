@@ -1,5 +1,6 @@
 //! Applying a changed setting to the live window, device and race.
 
+use log::{error, warn};
 use oag_game::{audio, display, menu, perf, settings};
 use oag_gameplay::ControlScheme;
 use oag_render::mesh_render::Anisotropy;
@@ -73,7 +74,7 @@ impl Session {
                     self.apply_window();
                 }
                 Err(e) => {
-                    eprintln!("ignoring {setting} = {text:?}: {e}");
+                    warn!("ignoring {setting} = {text:?}: {e}");
                     return;
                 }
             },
@@ -83,7 +84,7 @@ impl Session {
                     self.apply_window();
                 }
                 Err(e) => {
-                    eprintln!("ignoring {setting} = {text:?}: {e}");
+                    warn!("ignoring {setting} = {text:?}: {e}");
                     return;
                 }
             },
@@ -92,7 +93,7 @@ impl Session {
                 // viewport from this on the way into its pass.
                 Ok(aspect) => self.settings.display.aspect = aspect,
                 Err(e) => {
-                    eprintln!("ignoring {setting} = {text:?}: {e}");
+                    warn!("ignoring {setting} = {text:?}: {e}");
                     return;
                 }
             },
@@ -103,14 +104,14 @@ impl Session {
             "display.brightness" => match text.parse::<display::Brightness>() {
                 Ok(brightness) => self.settings.display.brightness = brightness,
                 Err(e) => {
-                    eprintln!("ignoring {setting} = {text:?}: {e}");
+                    warn!("ignoring {setting} = {text:?}: {e}");
                     return;
                 }
             },
             "display.gamma" => match text.parse::<display::Gamma>() {
                 Ok(gamma) => self.settings.display.gamma = gamma,
                 Err(e) => {
-                    eprintln!("ignoring {setting} = {text:?}: {e}");
+                    warn!("ignoring {setting} = {text:?}: {e}");
                     return;
                 }
             },
@@ -124,7 +125,7 @@ impl Session {
                     self.audio.apply(&self.settings.audio);
                 }
                 Err(e) => {
-                    eprintln!("ignoring {setting} = {text:?}: {e}");
+                    warn!("ignoring {setting} = {text:?}: {e}");
                     return;
                 }
             },
@@ -145,7 +146,7 @@ impl Session {
                     );
                 }
                 Err(e) => {
-                    eprintln!("ignoring {setting} = {text:?}: {e}");
+                    warn!("ignoring {setting} = {text:?}: {e}");
                     return;
                 }
             },
@@ -163,7 +164,7 @@ impl Session {
                 // every time and rebuilds it when the answer changes.
                 Ok(scale) => self.settings.graphics.render_scale = scale,
                 Err(e) => {
-                    eprintln!("ignoring {setting} = {text:?}: {e}");
+                    warn!("ignoring {setting} = {text:?}: {e}");
                     return;
                 }
             },
@@ -173,7 +174,7 @@ impl Session {
                 // compilation a player may notice once and never again.
                 Ok(upscaler) => self.settings.graphics.upscaler = upscaler,
                 Err(e) => {
-                    eprintln!("ignoring {setting} = {text:?}: {e}");
+                    warn!("ignoring {setting} = {text:?}: {e}");
                     return;
                 }
             },
@@ -182,7 +183,7 @@ impl Session {
                 // uniform, rewritten only when it moves.
                 Ok(sharpness) => self.settings.graphics.upscale_sharpness = sharpness,
                 Err(e) => {
-                    eprintln!("ignoring {setting} = {text:?}: {e}");
+                    warn!("ignoring {setting} = {text:?}: {e}");
                     return;
                 }
             },
@@ -197,7 +198,7 @@ impl Session {
             "graphics.anti_aliasing" => match text.parse::<display::AntiAliasing>() {
                 Ok(mode) => self.settings.graphics.anti_aliasing = mode,
                 Err(e) => {
-                    eprintln!("ignoring {setting} = {text:?}: {e}");
+                    warn!("ignoring {setting} = {text:?}: {e}");
                     return;
                 }
             },
@@ -207,7 +208,7 @@ impl Session {
                 // front end and the menus are drawn flat.
                 Ok(fov) => self.settings.graphics.fov = fov,
                 Err(e) => {
-                    eprintln!("ignoring {setting} = {text:?}: {e}");
+                    warn!("ignoring {setting} = {text:?}: {e}");
                     return;
                 }
             },
@@ -215,7 +216,7 @@ impl Session {
                 // Applied by the next frame, which draws it or does not.
                 Ok(mode) => self.settings.graphics.perf_overlay = mode,
                 Err(e) => {
-                    eprintln!("ignoring {setting} = {text:?}: {e}");
+                    warn!("ignoring {setting} = {text:?}: {e}");
                     return;
                 }
             },
@@ -232,7 +233,7 @@ impl Session {
                     self.stalled = true;
                 }
                 Err(e) => {
-                    eprintln!("ignoring {setting} = {text:?}: {e}");
+                    warn!("ignoring {setting} = {text:?}: {e}");
                     return;
                 }
             },
@@ -240,7 +241,7 @@ impl Session {
                 // Applied by the next `about_to_wait`, which is what waits.
                 Ok(limit) => self.settings.display.frame_limit = limit,
                 Err(e) => {
-                    eprintln!("ignoring {setting} = {text:?}: {e}");
+                    warn!("ignoring {setting} = {text:?}: {e}");
                     return;
                 }
             },
@@ -250,7 +251,7 @@ impl Session {
                     self.settings.graphics.anisotropy = level;
                 }
                 Err(e) => {
-                    eprintln!("ignoring {setting} = {text:?}: {e}");
+                    warn!("ignoring {setting} = {text:?}: {e}");
                     return;
                 }
             },
@@ -260,7 +261,7 @@ impl Session {
             "graphics.boost_fov_kick" => match text.parse::<display::BoostFovKick>() {
                 Ok(kick) => self.settings.graphics.boost_fov_kick = kick,
                 Err(e) => {
-                    eprintln!("ignoring {setting} = {text:?}: {e}");
+                    warn!("ignoring {setting} = {text:?}: {e}");
                     return;
                 }
             },
@@ -277,7 +278,7 @@ impl Session {
                     }
                 }
                 Err(e) => {
-                    eprintln!("ignoring {setting} = {text:?}: {e}");
+                    warn!("ignoring {setting} = {text:?}: {e}");
                     return;
                 }
             },
@@ -291,7 +292,7 @@ impl Session {
                     self.scheme = scheme;
                 }
                 Err(e) => {
-                    eprintln!("ignoring {setting} = {text:?}: {e}");
+                    warn!("ignoring {setting} = {text:?}: {e}");
                     return;
                 }
             },
@@ -302,12 +303,12 @@ impl Session {
             "ai.difficulty" => self.settings.ai.difficulty = text,
             "language" => self.settings.language = Some(text),
             other => {
-                eprintln!("note: nothing applies {other}");
+                warn!("nothing applies {other}");
                 return;
             }
         }
         if let Err(e) = settings::save(&self.settings) {
-            eprintln!("could not save settings: {e:#}");
+            error!("could not save settings: {e:#}");
         }
     }
 
@@ -337,7 +338,7 @@ impl Session {
         // `self.settings` when the page opens, so the `CAMERA VIEW` row already
         // opens on whatever the player last flew with.
         if let Err(e) = settings::save(&self.settings) {
-            eprintln!("could not save settings: {e:#}");
+            error!("could not save settings: {e:#}");
         }
     }
 }

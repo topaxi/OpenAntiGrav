@@ -5,6 +5,7 @@
 //! `scripts/check-file-size.py`; a move, with no behaviour change.
 
 use super::*;
+use log::warn;
 
 /// What a headless capture should do before it draws.
 #[derive(Debug, Clone)]
@@ -442,7 +443,7 @@ pub fn capture(
             Ok(mut overlay) => {
                 overlay.draw(&device, &queue, &mut encoder, &view, board, viewport);
             }
-            Err(why) => println!("the scoreboard did not build ({why}); capturing without one"),
+            Err(why) => warn!("the scoreboard did not build ({why}); capturing without one"),
         },
         None => match crate::hud::Overlay::new(&device, &queue, format, &hud) {
             Ok(Some(mut overlay)) => overlay.draw(
@@ -453,8 +454,8 @@ pub fn capture(
                 &race.readout(),
                 viewport,
             ),
-            Ok(None) => println!("no HUD layout: capturing without one"),
-            Err(why) => println!("the HUD overlay did not build ({why}); capturing without one"),
+            Ok(None) => warn!("no HUD layout: capturing without one"),
+            Err(why) => warn!("the HUD overlay did not build ({why}); capturing without one"),
         },
     }
     // The upscaler, the grade and the blit, through exactly the call the

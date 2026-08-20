@@ -74,6 +74,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use anyhow::{Context, Result};
+use log::{info, warn};
 use oag_formats::wad::Compression;
 use oag_pulse as pulse;
 
@@ -283,7 +284,7 @@ fn run(options: &Options, progress: &Mutex<Progress>, stop: &AtomicBool) {
     };
 
     if let Some(missing) = missing_tool() {
-        println!(
+        warn!(
             "prefetch: {missing} is not on PATH, so nothing can be converted ahead of time; \
              the game still runs, converting what it can when it needs it"
         );
@@ -291,18 +292,18 @@ fn run(options: &Options, progress: &Mutex<Progress>, stop: &AtomicBool) {
         return;
     }
 
-    println!("prefetch: reading the archives to see what needs converting");
+    info!("prefetch: reading the archives to see what needs converting");
     let started = std::time::Instant::now();
     let mut planned = match plan(options) {
         Ok(planned) => planned,
         Err(e) => {
-            println!("prefetch: nothing converted ({e:#})");
+            warn!("prefetch: nothing converted ({e:#})");
             finish(progress);
             return;
         }
     };
     for note in &planned.notes {
-        println!("prefetch: {note}");
+        info!("prefetch: {note}");
     }
 
     let total = planned.tasks.len();
@@ -313,7 +314,7 @@ fn run(options: &Options, progress: &Mutex<Progress>, stop: &AtomicBool) {
         state.total = total;
         state.cached = cached;
     }
-    println!(
+    info!(
         "prefetch: {total} asset(s) to convert, {cached} already cached, after {:.1} s of planning",
         started.elapsed().as_secs_f32()
     );
@@ -321,16 +322,16 @@ fn run(options: &Options, progress: &Mutex<Progress>, stop: &AtomicBool) {
     let mut failed = 0usize;
     for at in 0..total {
         if stop.load(Ordering::Relaxed) {
-            println!("prefetch: stopping after {at} of {total}; what finished stays cached");
+            info!("prefetch: stopping after {at} of {total}; what finished stays cached");
             break;
         }
         let label = planned.tasks[at].label().to_string();
         lock(progress).current = Some(label.clone());
-        println!("prefetch: [{}/{total}] {label}", at + 1);
+        info!("prefetch: [{}/{total}] {label}", at + 1);
 
         if let Err(e) = convert(&planned.tasks[at], &mut planned.archives, options) {
             failed += 1;
-            println!("prefetch: {label} failed: {e:#}");
+            warn!("prefetch: {label} failed: {e:#}");
         }
 
         let mut state = lock(progress);
@@ -339,7 +340,7 @@ fn run(options: &Options, progress: &Mutex<Progress>, stop: &AtomicBool) {
     }
 
     let done = lock(progress).done;
-    println!(
+    info!(
         "prefetch: {done} converted, {cached} already cached, {failed} failed, in {:.1} s",
         started.elapsed().as_secs_f32()
     );

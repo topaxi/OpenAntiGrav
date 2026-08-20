@@ -5,6 +5,7 @@
 //! `scripts/check-file-size.py`; a move, with no behaviour change.
 
 use super::*;
+use log::{info, warn};
 
 impl Race {
     /// Starts a race: one ship, on the racing line, at the start of the spline.
@@ -125,7 +126,7 @@ impl Race {
         let roster = match crate::pilots::load() {
             Ok(roster) => roster,
             Err(e) => {
-                eprintln!("pilots: {e:#} - racing with the built-in four");
+                warn!("pilots: {e:#} - racing with the built-in four");
                 crate::pilots::Roster::built_in()
             }
         };
@@ -189,12 +190,12 @@ impl Race {
             // is the only thing that says *which* pilot file differs. The
             // second line is for the player, who wants to know the grid they
             // are about to race. A `*` marks a pilot that came from a file.
-            eprintln!("pilots loaded: {}", roster.summary());
-            eprintln!("ai difficulty: {}", difficulty.name());
+            info!("pilots loaded: {}", roster.summary());
+            info!("ai difficulty: {}", difficulty.name());
             let grid: Vec<String> = (1..GRID_SLOTS as usize)
                 .map(|slot| format!("{slot}:{}", pilot_names[slot]))
                 .collect();
-            eprintln!("pilots on the grid: {}", grid.join(" "));
+            info!("pilots on the grid: {}", grid.join(" "));
         } else {
             world.ship_count = 1;
         }
