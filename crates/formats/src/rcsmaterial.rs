@@ -151,6 +151,54 @@ pub const TOKENS: [&str; 22] = [
     "NoAlbedo",
 ];
 
+/// The executable's own **flag-bit order** for the feature tokens, which is
+/// *not* the order they concatenate in.
+///
+/// A pointer table at `EBOOT.elf` vaddr `0x8b7f08` holds 21 token strings
+/// followed by the three [`Class`] names, and its index is the bit position a
+/// render pass sets. **Bit 3 points at an empty string** - a flag that
+/// contributes nothing to a permutation name - so it is `None` here rather than
+/// silently closing the gap.
+///
+/// This is the layout, not the assignment: **which bits a given pass sets is
+/// still unread.** The frame's own pass list is the anchor, thirteen job names
+/// in order at vaddr `0x7b1008`: `PrecomputeTrackFrameData`, a visibility
+/// fence, `RenderBillBoards`, `RenderModelShadowMaps`, `RenderSpotShadowMaps`,
+/// `RenderTrackReflect`, `RenderTrackRefract`,
+/// `RenderTrackWithLights_zWriters`, `RenderModelShadowsOnTrack`,
+/// `RenderModelAmbientShadowsOnTrack`, `RenderTrackWithLights_blended`,
+/// `RenderShips`, `ClearTrackVisibilityFlags`.
+///
+/// That the two orders differ is itself the finding that keeps [`TOKENS`]
+/// honest: a builder walking *this* table would spell variant #5 of
+/// `track_surface` `HalfBrightSunSVC0AmbientSpot0`, and the executable ships
+/// the string `HalfBrightAmbientSunSpot0SVC0`. So the concatenation order is
+/// straight-line code rather than a loop over this table, which is why
+/// [`TOKENS`] had to be derived from the names instead.
+pub const FLAG_BITS: [Option<&str>; 21] = [
+    Some("ShadowToAlpha"),
+    Some("HalfBright"),
+    Some("Sun"),
+    None,
+    Some("ShadowMap"),
+    Some("FalseLight"),
+    Some("ZoneMode"),
+    Some("ZoneTrans"),
+    Some("NoAlbedo"),
+    Some("SVC1"),
+    Some("SVC0"),
+    Some("IBL"),
+    Some("Ambient"),
+    Some("IleVertex"),
+    Some("IleLightmap"),
+    Some("Spot0"),
+    Some("Spot1"),
+    Some("Spot2"),
+    Some("Spot3"),
+    Some("ZAlphaOnly"),
+    Some("AmbientShadow"),
+];
+
 /// A set of [`TOKENS`], which is the `[1]` half of the key.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Features(u32);
@@ -182,6 +230,23 @@ impl Features {
             .iter()
             .position(|t| *t == name)
             .is_some_and(|bit| self.0 & (1 << bit) != 0)
+    }
+
+    /// The set a render pass's flags word names, by [`FLAG_BITS`].
+    ///
+    /// Bits with no token - bit 3, and anything above 20 - are ignored rather
+    /// than rejected: the layout is read and the *assignment* is not, so a word
+    /// carrying a bit this reading cannot name is a finding for the caller
+    /// rather than an error here.
+    #[must_use]
+    pub fn from_flags(flags: u32) -> Self {
+        let mut out = Self::NONE;
+        for (bit, token) in FLAG_BITS.iter().enumerate() {
+            if let Some(name) = token.filter(|_| flags & (1 << bit) != 0) {
+                out = out.with(Self::token(name));
+            }
+        }
+        out
     }
 
     /// The tokens, in canonical order.

@@ -263,6 +263,46 @@ draw. Because it never does, a per-material variant selector can ride in that
 bind group; if it ever did, the selector would have to move to the draw call.
 `a_material_slot_never_needs_two_different_variants` holds the line.
 
+### The flag bits, and why they are not the name order
+
+A pointer table at `EBOOT.elf` vaddr **`0x8b7f08`** holds 21 token strings
+followed by the three class names, and its index is the **bit position** a
+render pass sets:
+
+```text
+ 0 ShadowToAlpha   1 HalfBright   2 Sun        3 (empty)    4 ShadowMap
+ 5 FalseLight      6 ZoneMode     7 ZoneTrans  8 NoAlbedo   9 SVC1
+10 SVC0           11 IBL         12 Ambient   13 IleVertex 14 IleLightmap
+15 Spot0          16 Spot1       17 Spot2     18 Spot3     19 ZAlphaOnly
+20 AmbientShadow   | 21 Static  22 StaticQuake  23 RigidBody
+```
+
+**Bit 3 points at an empty string** - a flag contributing nothing to a name.
+
+**This order is not the concatenation order, and that is the finding.** A
+builder walking this table would spell variant #5 of `track_surface`
+`HalfBrightSunSVC0AmbientSpot0`; the executable ships the literal
+`HalfBrightAmbientSunSpot0SVC0`. So the name is assembled by straight-line
+code rather than a loop over the table, which is why the canonical order had to
+be derived from the 143 shipped names. `oag_formats::rcsmaterial` carries both -
+`FLAG_BITS` for the layout and `TOKENS` for the spelling - and
+`the_flag_bit_order_is_not_the_concatenation_order` asserts they differ, so a
+later editor cannot quietly collapse them into one.
+
+**Which bits a pass sets is still unread.** The anchor is the frame's own job
+list, thirteen names in order at vaddr `0x7b1008`:
+
+```text
+PrecomputeTrackFrameData | Preprocess Visibility Fence | RenderBillBoards
+RenderModelShadowMaps | RenderSpotShadowMaps | RenderTrackReflect
+RenderTrackRefract | RenderTrackWithLights_zWriters | RenderModelShadowsOnTrack
+RenderModelAmbientShadowsOnTrack | RenderTrackWithLights_blended | RenderShips
+ClearTrackVisibilityFlags
+```
+
+Note the addresses this page and the reports quoted as `0x7a1048`/`0x7a3460`
+are **file offsets**; the load addresses are `+0x10000`.
+
 ### Still open
 
 - **The frame-determined half.** A renderer can pick the chunk-determined axes

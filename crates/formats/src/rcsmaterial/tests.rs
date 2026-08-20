@@ -200,3 +200,47 @@ fn the_elided_trailing_words_of_the_last_record_are_not_an_error() {
         "the fields before the elision still read"
     );
 }
+
+/// The flag-bit order is the executable's table, and it is *not* the order the
+/// names concatenate in.
+///
+/// The second half is the load-bearing part. If a builder walked
+/// [`FLAG_BITS`] in order, variant #5 of `track_surface.rcsmaterial` would be
+/// spelled `HalfBrightSunSVC0AmbientSpot0` - and the executable ships the
+/// literal `HalfBrightAmbientSunSpot0SVC0`. That mismatch is why [`TOKENS`]
+/// has its own order, derived from the 143 shipped names rather than copied
+/// from this table.
+#[test]
+fn the_flag_bit_order_is_not_the_concatenation_order() {
+    // Bit 3 is an empty string in the table: a flag naming no token.
+    assert_eq!(FLAG_BITS[3], None);
+    assert_eq!(FLAG_BITS[0], Some("ShadowToAlpha"));
+    assert_eq!(FLAG_BITS[20], Some("AmbientShadow"));
+
+    let bits = (1 << 1) | (1 << 2) | (1 << 12) | (1 << 15) | (1 << 10);
+    let set = Features::from_flags(bits);
+    assert_eq!(set.name(), "HalfBrightAmbientSunSpot0SVC0");
+    assert_eq!(set.hash(), 0xfb61_d927);
+
+    // What walking the table in order would have produced instead.
+    let table_order: String = FLAG_BITS
+        .iter()
+        .enumerate()
+        .filter_map(|(bit, t)| (bits & (1 << bit) != 0).then_some(*t).flatten())
+        .collect();
+    assert_eq!(table_order, "HalfBrightSunSVC0AmbientSpot0");
+    assert_ne!(table_order, set.name(), "the two orders must differ");
+}
+
+/// A flags word carrying a bit this reading cannot name is ignored, not an
+/// error - the layout is read and the per-pass assignment is not.
+#[test]
+fn an_unnamed_flag_bit_is_ignored_rather_than_rejected() {
+    assert_eq!(Features::from_flags(1 << 3), Features::NONE);
+    assert_eq!(Features::from_flags(1 << 31), Features::NONE);
+    assert_eq!(
+        Features::from_flags((1 << 12) | (1 << 3)),
+        Features::token("Ambient"),
+        "an unnamed bit does not disturb the named ones"
+    );
+}
