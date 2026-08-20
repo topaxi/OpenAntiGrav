@@ -1118,6 +1118,34 @@ Named explicitly, with what each would take.
    answer it, and nothing has yet asked it the question. Until it does: a prop
    drawn because this project found its geometry somewhere is still a picture
    nobody can check, and nothing is wired.
+
+   **And none of the 56 is a building** (2026-08-20), which is worth stating
+   because a frame comparison read them as one. Listed with their names and
+   authored boxes by `crates/render/examples/hd_unaddressed.rs`, all 56 are
+   sky traffic (`Skycar_*`, `tug*`, `tanker*`, `shipintersteller*`,
+   `Eggship*`, `BlimpPart*`, `HyperContintentCraft*`), four camera-bot parts,
+   two 5-unit `amb_glas*` and the sixteen `pCube*` at 1.1 x 0.0 x 0.7. So
+   Talon's Junction's **static scenery is drawn in full**: nothing it carries
+   is missing from a frame, and the circuit reports no untextured material and
+   no texture-coordinate-less chunk either. Forcing `race::visibility::visible`
+   to `true` and re-rendering tick 80 of an autopilot lap changes **zero
+   pixels**, so the per-section PVS is not hiding anything at that viewpoint
+   either. **What is left to explain a side-by-side against a real capture is
+   therefore not a missing mesh - it is a covering one.** With the cameras
+   matched (`--pose="-96.4,-45.6,-209.8"` puts our chase camera where the
+   reference frame's is), the trackside structures a reference frame shows and
+   ours does not are **behind the circuit's own `clouds` chunks**, which paint
+   an opaque sheet across the foreground because their coverage is not in the
+   texture this renderer takes it from. That is identified by an ID render and
+   read out of the material's microcode in
+   [rcsmaterial.md](rcsmaterial.md#the-cloud-plate-paints-a-solid-sheet-and-the-microcode-says-why-2026-08-20).
+   The remaining differences are brightness (the authored-magnitude thread on
+   [envsettings.md](envsettings.md#it-is-authored-for-a-linear-hdr-pipeline-and-this-projects-now-is-one))
+   and the glass family's unread second slot
+   ([rcsmaterial.md](rcsmaterial.md#the-glass-familys-second-slot-traced-not-solved-2026-08-20)).
+   **Match the camera before quoting any figure from a pair of frames**: an
+   earlier pass compared a mid-lap reference against one of ours on the grid
+   and drew a clipped-pixel ratio from it, which measured the framing.
 7. ~~**Which chunk a `Skycube` or a pad belongs to.**~~ Made for the pads on
    2026-08-19: a `Weapon Pad` or `Speedup Pad` node names its chunk at the mesh
    payload's own `+0x30`, and the chunk is world-space baked - see "The pads
@@ -1127,7 +1155,21 @@ Named explicitly, with what each would take.
    a time rather than all 913 chunks at once.
 9. **What separates transparency mode 2 from mode 1**, and what the other 15
    bits of the state word select - 17 distinct combinations disc-wide, none of
-   them decoded. The microcode route is now open -
+   them decoded. **One thing about the split is now measured** (2026-08-20):
+   censused over all 12 circuits in both directions - 8,052 opaque, 2,151
+   mode-1 and 537 mode-2 chunks - **mode 2 is carried by exactly 6 distinct
+   material names and mode 1 by 52, and no name is ever both.** The partition
+   is by material, not per chunk. Mode 2's six are `nr_crowd_bustle` (96 % of
+   its triangles - the grandstand crowds), `jd_alphalambert_test`,
+   `fence_alpha`, `emissive_alpha_heathaze_test`, `cf_alpha4glow` and
+   `uv_anim_diffuse_alpha_emissive`; mode 1's include the glass, billboard,
+   glow, light-cone, tree, cloud and traffic families. The names suggest a
+   cutout, and **the obvious reading of that is refuted by the picture**:
+   routing mode 2 through `oag_render`'s existing alpha-test pipeline erases
+   the crowd entirely, because `crowd_avatars_22x4.gtf`'s alpha runs 0..255 at
+   a mean of 120 and the threshold takes most of it. So mode 2 is not a plain
+   0.5 cutout, and what it *is* still wants the microcode. The microcode route
+   is now open -
    [`scripts/ps3-microcode.py`](../../scripts/ps3-microcode.py) disassembles
    both RSX program kinds - but nothing has yet tied a state-word bit to a
    variant choice.

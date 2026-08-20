@@ -481,6 +481,69 @@ that reading cheap; it does not make it automatic.
   `DATA00`) plus its preimage, and is weaker than the other three classes.
 - The 248 `IleLightmap`-without-a-`lightmap`-sampler variants.
 
+## The cloud plate paints a solid sheet, and the microcode says why (2026-08-20)
+
+**This is what a frame comparison read as "a solid wall is missing from Talon's
+Junction".** It is not missing. A two-triangle cloud quad is painting an opaque
+bright sheet in front of it.
+
+Found by an **ID render** - every draw call tinted by its chunk index, the
+resolve passed straight through with no exposure or gamma, and the pixels read
+back. The huge white expanse filling the left of a start-line frame decodes to
+chunks 182, 183 and 184, all `talons_junction/materials/clouds.rcsmaterial`,
+2 to 60 triangles each. Dropping just those chunks restores the roadway's lane
+markings and the trackside structures behind them, so nothing there was ever
+unaddressed, unplaced or culled - it was covered.
+
+**Why it paints solid.** `oag_render`'s PS3 path takes a blended surface's
+coverage from its first texture's alpha channel. `clouds_new.gtf`'s alpha is
+**255 everywhere** (measured per channel: `r`/`g`/`b` 156..255 mean 219,
+`a` 255..255), so `SRC_ALPHA`/`ONE_MINUS_SRC_ALPHA` is a no-op and the quad
+replaces what is behind it with a bright grey plate.
+
+**What the disc actually does**, from the material's own fragment microcode
+(`scripts/ps3-microcode.py fp-file clouds.rcsmaterial`; blocks #2 and #3 agree,
+and #3 is the full lit-and-fogged one):
+
+```text
+@0x1f  TEX H4.xyz, R3.zwzz unit1     ; cloud mask.gtf -> RGB
+@0x2e  TEX H3.x,   f[TC4].zwzz unit0 ; clouds_new.gtf -> one channel only
+@0x30  MAD H2.xyz, H5, H4, H2        ; the mask is the COLOUR
+@0x34  ADD H0.xyz, R0, H2
+@0x35  MOV H0.w,   H3.xxxx END       ; the ALPHA is unit 0's .x
+```
+
+So the roles are **the opposite of the slot names**: unit 0 - the sampler named
+`diffuse` (`0x515e298e`, per [renderer.md](../ghidra/functions/ps3-hdfury-eu/renderer.md))
+carrying `clouds_new.gtf` - contributes **only its red channel, as alpha**, and
+never its RGB; unit 1, `cloud mask.gtf`, is what supplies colour. The channel
+statistics corroborate the direction: the "mask" is the one with a silhouette
+in it (0..255, mean 58, **60 % of texels under 32**) while the "diffuse" is a
+flat bright plate with no silhouette at all (156..255). A reader that assumes
+"first texture is the picture, its alpha is the coverage" gets both halves
+wrong on this material.
+
+**Two consequences worth carrying.**
+
+1. **A see-through material whose first texture has uniform alpha is a
+   contradiction, and it is measurable.** Six of Talon's Junction's 21
+   see-through materials are in that state - `clouds`, `tunnel_fx_glass`,
+   `dc_lightcone`, `etched_glass_tech`, `emissive_bloom` and `mageffectloop` -
+   each asking for a blend whose only alpha source is 1.0. Every one of them
+   currently paints an opaque sheet. That count is a ready-made ratchet for
+   whatever fixes this.
+2. **This is the sixth role for the second slot**, after normal map, emissive
+   map, coverage mask, lightmap and the glass family's facing ramp below - and
+   the first one read end to end out of the microcode rather than inferred
+   from a file name. It is also the one that most changes the picture.
+
+**Not implemented.** Drawing it correctly needs the second texture bound as an
+*albedo* and the alpha taken from a second UV set on the first - neither of
+which `mesh.wgsl` can express today, and both of which should be selected by
+what the resolved variant's microcode says rather than by a material name.
+`oag_formats::rcsmaterial` already decodes NV40 fragment microcode in Rust, so
+the classifier is buildable; nothing here guesses in the meantime.
+
 ## The glass family's second slot: traced, not solved (2026-08-20)
 
 **Why Talon's Junction's reflective glass and its crowd-filled tunnel tubes
