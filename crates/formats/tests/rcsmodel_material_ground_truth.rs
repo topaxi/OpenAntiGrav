@@ -747,3 +747,83 @@ fn a_see_through_material_does_not_always_author_a_source_of_src_alpha() {
         );
     }
 }
+
+/// A reversed circuit's atlases live in a differently-named directory, and the
+/// predicate has to see all of them.
+///
+/// The regression this exists for: [`rcsmodel::Material::lightmap`] used to
+/// require the literal `/lmaps/`, which is where a **forward** circuit keeps
+/// its atlases. A reversed one keeps them in `lmaps_rev/` and Fury's in
+/// `lmaps_dlc/`, so the predicate answered `None` for every reversed chunk and
+/// those surfaces would have bound the no-lightmap placeholder and lit without
+/// their bake. It was latent - nothing loads a reversed circuit yet - which is
+/// exactly why it needed a test rather than a note: the day one loads, the
+/// wrong picture would have looked like a shading bug rather than a path bug.
+#[test]
+#[ignore]
+fn a_reversed_circuit_finds_its_own_lightmap_atlases() {
+    let Some(image) = image() else {
+        return;
+    };
+    let mut archives: Vec<oag_assets::psarc::Archive> = ARCHIVES
+        .iter()
+        .map(|a| {
+            let spec = format!("{}:PS3_GAME/USRDIR/{a}.PSARC", image.display());
+            oag_assets::psarc::Archive::open(&spec).expect("the archive opens")
+        })
+        .collect();
+
+    let (mut measured, mut lightmapped, mut orphans) = (0usize, 0usize, 0usize);
+    let mut dirs: BTreeSet<String> = BTreeSet::new();
+    for circuit in CIRCUITS {
+        let path = format!("/data/environments/{circuit}/track_reversed.rcsmodel");
+        let Some(bytes) = archives.iter_mut().find_map(|a| a.read_path(&path).ok()) else {
+            continue;
+        };
+        let model = rcsmodel::Model::parse(&bytes).expect("the .rcsmodel parses");
+        measured += 1;
+        let mut here = 0usize;
+        for mesh in &model.meshes {
+            let Some(atlas) = model
+                .material_of(mesh)
+                .and_then(rcsmodel::Material::lightmap)
+            else {
+                continue;
+            };
+            here += 1;
+            if let Some(leaf) = atlas
+                .rsplit_once('/')
+                .and_then(|(dir, _)| dir.rsplit_once('/'))
+                .map(|(_, leaf)| leaf)
+            {
+                dirs.insert(leaf.to_string());
+            }
+            if mesh
+                .decl
+                .as_ref()
+                .and_then(rcsmodel::VertexDecl::lightmap_texcoord)
+                .is_none()
+            {
+                orphans += 1;
+            }
+        }
+        println!("  {circuit:<20} {here:4} lightmapped chunk(s) reversed");
+        lightmapped += here;
+    }
+    println!("{measured} reversed circuit(s), {lightmapped} lightmapped, dirs {dirs:?}");
+    assert!(
+        measured > 0,
+        "no reversed circuit was found on the disc at all"
+    );
+    assert!(
+        lightmapped > 100,
+        "only {lightmapped} lightmapped chunks across {measured} reversed \
+         circuit(s), so the atlas directory the predicate accepts has narrowed \
+         again - it must cover lmaps/, lmaps_rev/ and lmaps_dlc/"
+    );
+    assert_eq!(
+        orphans, 0,
+        "a reversed chunk carrying a lightmap with no coordinates to sample it \
+         through"
+    );
+}

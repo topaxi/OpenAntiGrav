@@ -159,7 +159,16 @@ pub struct Material {
 }
 
 /// Where a circuit keeps its baked lighting atlases.
-const LIGHTMAP_DIR: &str = "/lmaps/";
+///
+/// The prefix rather than `/lmaps/`, because a circuit keeps **three** of these
+/// and the narrower form saw only one: `lmaps/` on the forward models,
+/// `lmaps_rev/` on the reversed ones and `lmaps_dlc/` on Fury's. Measured over
+/// the 123 `.rcsmodel` of `DATA00.PSARC`: of 981 second textures ending in the
+/// suffix below, the old predicate matched 493 and missed **488, every one of
+/// them a `lmaps_rev/` path on a `track_reversed.rcsmodel`** - so this was
+/// latent rather than live, since nothing loads a reversed circuit today, and
+/// it is widened here so that it does not become live silently.
+const LIGHTMAP_DIR: &str = "/lmaps";
 
 /// What every one of them is called.
 const LIGHTMAP_SUFFIX: &str = "-lmap.gtf";

@@ -256,10 +256,13 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     //
     // `scene.light.ambient` is `constantAmbientColour` - the preimage of the
     // hash the microcode patches into block #8's `{const}`. `f[TC1]` is HD's
-    // per-vertex light, which `mesh/rcs.rs` decodes out of the colour set's
-    // shared exponent and hands over in `in.colour.rgb`; it is **added**, as
-    // both variants add it, and is zero on a chunk that declares no colour
-    // set - which is what the original's own vertex programs broadcast there.
+    // per-vertex light, which `mesh/rcs.rs` decodes out of the colour set and
+    // hands over in `in.colour.rgb`; it is **added**, as both variants add
+    // it, and is zero on a chunk that declares no colour set - which is what
+    // the original's own vertex programs broadcast there. Note `f[TC1]` is
+    // that material's interpolator and not a convention: the same closer
+    // arrives on `f[TC0]` in `talons_junction/bluemetal`, so a per-material
+    // path will have to read which varying carries it.
     let ndl = clamp(dot(n, scene.light.direction), 0.0, 1.0);
     let baked_linear = pow(baked.rgb, vec3<f32>(2.2));
     let prelit = scene.light.prelit_scale * pow(baked_linear, scene.light.prelit_power);

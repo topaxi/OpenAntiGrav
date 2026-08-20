@@ -1170,6 +1170,15 @@ The selector `oag_formats` uses for it - four normalised bytes, not
 only four-byte-normalised hashes are `0x1aaf7631` (3,672 chunks),
 `VertexColour1` (496), `colorSet1` (484) and `tangent` (1,208).
 
+**`f[TC1]` is this material's interpolator, not a convention.** A taxonomy
+sweep of all 693 materials found the same `ADD interpolator, {const}` into
+`MAD light, albedo, -bias` closer arriving on **`f[TC0]`** in
+`talons_junction/bluemetal` block #2, so which varying carries the vertex
+light is per-program and has to be read per material rather than assumed.
+`oag-render` binds one interpolator and is right only for the family read
+here. Confidence 82 on the `bluemetal` reading, which is a second-hand
+measurement recorded rather than re-derived.
+
 Two things this leaves open. **Whether `0x1aaf7631` and `colorSet1` are one
 attribute is an inference**, not a read - 297 + 54 is exactly the 351 chunks
 with a colour set, and neither is ever declared alongside a `lightmapUV`, but
