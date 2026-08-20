@@ -267,12 +267,24 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
 
     let texel = textureSample(albedo, albedo_sampler, in.texcoord);
 
-    // The read specular term: half-vector against the sun, exponent 32 - an
-    // inline constant of the microcode, the same in every lit variant - and
-    // masked by the sun's own incidence, the lightmap's shadow alpha and the
-    // diffuse texture's alpha (gloss lives there; a DXT1 diffuse has alpha 1
+    // The read specular term: half-vector against the sun, and the exponent
+    // is a **stand-in**. It is an inline constant of each fragment program,
+    // not a shared one: sweeping every material on the disc for the literal a
+    // saturated dot is multiplied by between its `LG2` and its `EX2` gives 5
+    // on 759 blocks, 10 on 704, 32 on 295, and a tail of 26.156, 40 (the
+    // ships) and 300. 32 is the commonest round value and holds the place
+    // until the pipeline can pick one per material. Masked by
+    // the sun's own incidence, the lightmap's shadow alpha and the diffuse
+    // texture's alpha (gloss lives there; a DXT1 diffuse has alpha 1
     // everywhere, which is full gloss, as the original samples it too). Zero
     // whenever the authored rig is off: the stand-in never had one.
+    //
+    // This term is the **only** way directional light reaches an HD surface.
+    // Both materials read so far agree: `track_surface` block #7 and
+    // `detonator_ship_rich_iridescent` block #2 each build a half vector from
+    // the same patched light direction and gate the result by `N.L`, and
+    // neither has a Lambert diffuse. See renderer.md, "Ships have no Lambert
+    // diffuse either".
     let to_eye = normalize(scene.fog.camera - in.world);
     let half_vector = to_eye + scene.light.direction;
     let ndh = clamp(

@@ -1095,19 +1095,11 @@ clipped, mean 0.467) and **not** taken, because the specular block that was
 read (#7) does compute a directional term and only its diffuse sibling does
 not.
 
-**The removal is wider than the evidence, deliberately, and here is the
-gap.** `mesh.wgsl` has one lit path for *all* HD geometry, while the read
-covers `track_surface.rcsmaterial` alone. Ships are not that material and do
-not behave like it: `data/materials/ships/detonator_ship_rich_iridescent.rcsmaterial`
-block #1 normalises `f[TC1]` (`DP3` with itself, then `op3B`) and
-`DP3_SAT`s it against a normal-mapped normal - so **on a ship `f[TC1]` is a
-light *direction*, not a colour**, and that material does carry a directional
-diffuse, folded into a reciprocal-based dodge that this renderer models in no
-way at all. The frame is a net gain because track surfaces are most of the
-pixels; the hull is darker than it should be, and it was already wrong before,
-just wrong in the other direction. **Ship, weapon and prop materials remain
-unread.** Whatever replaces the single `authored` path will have to be
-per-material, which is a larger change than this one.
+**The removal was first recorded as wider than its evidence. Reading a ship
+material narrowed the gap the other way** - see "Ships have no Lambert
+diffuse either" below. What stays true is that `mesh.wgsl` has one lit path
+for all HD geometry while the reads cover two materials, and that whatever
+replaces it will have to be per-material.
 
 **Left unread**: whether `shadowMapTex`'s `1 - shadow` in `H0.w` reaches colour
 in a later pass - `oag-render` has no shadow map at all - and what fills
@@ -1189,6 +1181,70 @@ three inlined copies of the same emission sit at `0x005bf578`, `0x00642b50`
 and `0x0064bdd4`. None has a code cross-reference - only its OPD descriptor -
 and the method is not identified here, so it is **left unnamed** per
 [ADR-0005](../../../architecture/adr/0005-ghidra-conventions.md).
+
+### Ships have no Lambert diffuse either (2026-08-20)
+
+The section above first recorded ships as a counter-example - that
+`detonator_ship_rich_iridescent.rcsmaterial` carried a directional diffuse
+the sun removal had taken away. **That was wrong, and reading the material
+properly reverses it.**
+
+Its **vertex** side settles what `f[TC1]` is. Block #1 (`0x3370`) builds
+
+```text
+10  ADD R0.xyz, -R4.xyzx, c[209].xyzx   <- camera - world position
+14  DP3 o[TC1].z, R0.xyzx, v[1].xyzx    <- . normal
+15  DP3 o[TC1].x, R0.xyzx, R2.xyzx      <- . tangent
+18  DP3 o[TC1].y, R0.xyzx, R2.xyzx      <- . bitangent
+```
+
+with `c[209]` the parameter `0x3466fc0e` - which this pins as the **camera
+position**. So `f[TC1]` on a ship is the **view vector in tangent space**,
+and the `DP3_SAT` against the normal map that the earlier note read as `N.L`
+is `N.V`. **No ship material declares a light direction on the vertex side
+at all**: all four checked declare the same set - `viewProj`, camera,
+`positionScale`, `positionBias`, `world`, and two further `float4 x4`
+matrices (`0x9f21b213`, `0xa2419ba3`).
+
+The **fragment** side is where a direction does arrive, and it arrives the
+same way track surfaces get theirs. Block #2 (`0x3a00`) reconstructs the
+world normal from the tangent basis and the normal map, then
+
+```text
+@0x13  DP3_SAT R0.y, normalize(f[TC5]), {const}   <- N.L
+@0x17  ADD R2.xzw, normalize(f[TC1]), {const}     <- V + L, the half vector
+@0x24  DP3 R2.z, normalize(half), normal
+@0x40  LG2 / @0x43 MUL by 40 / @0x46 EX2          <- pow(N.H, 40)
+@0x4c  MUL R0.x, spec, R0.yyyy                    <- times N.L
+```
+
+That `{const}` is the light direction, patched by the same `0x02df31e5` that
+`track_surface` block #7 patches into its own half-vector - the specular
+this project already implements. **What ships have and track surfaces do not
+is a view-driven colour dodge and burn** (`1/(1 - N.V)` and `1/N.V`
+reciprocals against a per-channel map) **and an environment lookup on a third
+sampler**, neither of which is a light term and neither of which
+`oag-render` implements.
+
+So no HD material read so far - two, now - carries `sun * N.L` as a
+**diffuse** term. Directional light reaches both only through the specular.
+The sun removal is better founded than the first note claimed, and **the
+reason a hull renders dark is a missing material, not a missing light**:
+`ship.rcsmodel` is 57 meshes of which **4 declare a colour set and none
+declares a `lightmapUV`**, so 53 of them fall to `albedo * ambient` in a
+renderer that has no iridescence and no environment map. That is a
+per-material shader path, which is a feature rather than a patch, and
+nothing here fakes it.
+
+**One thing this does falsify.** `mesh.wgsl` hard-codes the specular
+exponent at 32 and calls it "an inline constant of the microcode, the same in
+every lit variant". It is not: sweeping every material for the literal a
+saturated dot is multiplied by between its `LG2` and its `EX2` gives **5**
+(759 blocks), **10** (704), **32** (295), **26.156** (10), **40** (10, the
+ship) and **300** (6). 32 is the commonest of the three round values and
+stays as the stand-in, now labelled as one. Confidence 80 - the sweep keys on
+an instruction pattern rather than on each block's meaning, so some of the 5s
+and 10s may be another `pow`.
 
 ## What was deliberately not read
 
