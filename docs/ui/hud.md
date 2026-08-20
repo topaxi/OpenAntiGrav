@@ -208,6 +208,43 @@ and HD is what showed it:
 Neither could have been caught from Pulse's own data, which is the argument for
 pointing a parser at a second title even when no milestone is open on it.
 
+### And the grid is the source's, not the PSP's
+
+A layout carries bare numbers and says nothing about the space they are in, so
+the renderer has to be told which one. `oag_game::hud::Overlay` never told it,
+and `crate::render::Renderer` starts at `Space::PSP` - so **every HUD, on every
+title, was drawn as if authored at 480x272**. That is right for both Pulse
+pressings on PSP and for Pure, silently wrong for the PS2 pressing's 640x448,
+and badly wrong for HD's 1920x1080: a factor of four in both axes.
+
+Measured 2026-08-20, on `01_vineta_k` and `talons_junction` at tick 1, before
+and after. The symptom nobody read as a HUD bug is the reason this section
+exists: `hud_lap_counters.xml` authors the lap number as
+`<Text name="Lap" color="0xFFFFFF00" x="100" y="88">` under a parent at
+`OffsetX="40" OffsetY="40"`, so `(140, 88+40)` in a 1920x1080 grid is the
+top-left panel - and in a 480x272 one it is a quarter of the way into the
+picture at four times the size. Drawn there, in the disc's own yellow, over a
+circuit's grandstands, **it reads as a piece of scenery**: a solid vertical
+slab that was reported as "a tower our renderer does not draw properly". It is
+the digit `1`. The same frame put `LapOf`'s grey `3` in the middle of the sky
+and pushed the speed bar, the total time and the lap times off the right and
+bottom edges entirely, which is why an HD race looked like it drew almost no
+HUD at all.
+
+The fix is one value, not a scaling pass: `Assets::space` carries
+`Space::of(archives.layout.platform)` - the same call `boot::load_shell`
+already made for the front end - and `Overlay::new` sets it on both renderers.
+`Space` was built for exactly this when the PS2's grid arrived; see
+`crate::frontend::Space` for why the grid and the display aspect are two
+numbers.
+
+**What it does not fix.** HD's sprites still come from up to six atlases in one
+layout against the one sheet everything downstream binds
+(`oag_game::hud::Layout::atlas`), so the lap panel behind that digit is still
+not drawn - the digit now sits in the right place with no hexagon around it.
+And the PS2's own lap panel is absent for a reason not yet chased. The
+placement is what moved.
+
 ## The HUD fonts are pre-outlined, and that cost a renderer change
 
 The single biggest surprise in implementing this. `PulseHud.fnt` and `small.fnt`

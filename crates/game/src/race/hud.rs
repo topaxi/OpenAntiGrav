@@ -154,6 +154,12 @@ pub(super) fn load_hud(
         font,
         small_font,
         strings,
+        // The grid the layout's numbers are in, off the mounted source rather
+        // than defaulted: `Space::default()` is the PSP's 480x272, and an HD
+        // layout read in it lands every widget four times oversized and a
+        // quarter of the way into the picture. Same call `boot::load_shell`
+        // makes for the front end.
+        space: crate::frontend::Space::of(archives.layout.platform),
     }
 }
 

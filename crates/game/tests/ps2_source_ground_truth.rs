@@ -295,6 +295,34 @@ fn the_exhaust_textures_decode_off_both_discs() {
     }
 }
 
+/// Each pressing hands the HUD **its own** grid, and the two are not the same.
+///
+/// The HUD renderer used to be told nothing and start at `Space::PSP`, so the
+/// PS2's layouts - authored in a 640x448 grid, `docs/ui/hud.md` - were drawn a
+/// third oversized and pushed off the right and bottom edges. The same defect
+/// on HD's 1920x1080 was four times worse and is pinned in
+/// `crates/game/tests/hd_hud_ground_truth.rs`; this is the two-pressing half of
+/// it, and it is the one a Pulse-only reader would have called a non-issue.
+///
+/// Structural, like everything else in this file: it asserts which grid each
+/// source names, not a single coordinate out of either layout.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn each_pressing_hands_the_hud_its_own_coordinate_grid() {
+    for (source, expected) in [
+        (PS2_IMAGE, oag_game::frontend::Space::PS2),
+        (PSP_IMAGE, oag_game::frontend::Space::PSP),
+    ] {
+        let Some(loaded) = load(source) else {
+            continue;
+        };
+        assert_eq!(
+            loaded.hud.space, expected,
+            "{source} should draw its HUD in its own grid"
+        );
+    }
+}
+
 /// The loading screen's glow strip is on the PS2 disc too, under the same rule.
 ///
 /// Found while fixing the exhaust textures and fixed in the same change: this

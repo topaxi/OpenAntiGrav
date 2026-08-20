@@ -315,6 +315,46 @@ fn the_anonymous_widgets_are_kept_rather_than_dropped() {
     assert_eq!(anonymous, 106);
 }
 
+/// The grid a race hands the HUD renderer is the **source's**, not the PSP's.
+///
+/// The defect this pins was invisible from the layout side, because a layout
+/// carries bare numbers and every one of them parses the same whatever grid it
+/// is in. `crate::render::Renderer` starts at `Space::PSP` and `hud::Overlay`
+/// never told it otherwise, so HD's 1920x1080 layouts were drawn four times
+/// oversized: the lap digit landed a quarter of the way into the picture as a
+/// solid yellow slab that reads as scenery, and the speed bar, the total time
+/// and the lap times fell off the right and bottom edges.
+///
+/// Asserted against `Space::PSP` as well as for `Space::HD`, because equality
+/// with the right value and inequality with the default are different claims -
+/// the second is the one that fails if `Space::of` ever stops being consulted.
+/// See `docs/ui/hud.md`, "And the grid is the source's, not the PSP's".
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_race_hands_the_hud_hds_own_grid_rather_than_the_psps() {
+    let Some(image) = image() else {
+        return;
+    };
+    let loaded = oag_game::race::load(&oag_game::race::Options {
+        source: image.display().to_string(),
+        class: oag_physics::SpeedClass::Venom,
+        mode: oag_race::Mode::TimeTrial,
+        ..oag_game::race::Options::default()
+    })
+    .expect("loading the race");
+    assert_eq!(
+        loaded.hud.space,
+        oag_game::frontend::Space::HD,
+        "an HD source authors its HUD in 1920x1080"
+    );
+    assert_ne!(
+        loaded.hud.space,
+        oag_game::frontend::Space::PSP,
+        "the PSP's 480x272 is the default a `Renderer` starts at, and drawing \
+         HD's layouts in it is the bug this test exists for"
+    );
+}
+
 /// The check that ties the two readings together.
 ///
 /// A sprite carries `U`, `V`, `TxtrWidth` and `TxtrHeight` - a rectangle inside

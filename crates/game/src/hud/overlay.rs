@@ -60,7 +60,7 @@ impl Overlay {
             return Ok(None);
         };
 
-        let values = crate::render::Renderer::new(
+        let mut values = crate::render::Renderer::new(
             device,
             queue,
             format,
@@ -68,10 +68,14 @@ impl Overlay {
             assets.font.clone(),
             &assets.sheet,
         )?;
+        // The layout's own grid, on both renderers. A `Renderer` starts at
+        // `Space::PSP` and every widget rect here is in the *source's* space -
+        // see `Assets::space`, which is where the HD case is written down.
+        values.set_space(assets.space);
         // The captions renderer never draws a sprite, but it binds the sheet
         // anyway: `Renderer::new` takes one unconditionally, and a second copy of
         // a 256x256 atlas is cheaper than making the parameter optional.
-        let captions = crate::render::Renderer::new(
+        let mut captions = crate::render::Renderer::new(
             device,
             queue,
             format,
@@ -79,6 +83,7 @@ impl Overlay {
             assets.small_font.clone(),
             &assets.sheet,
         )?;
+        captions.set_space(assets.space);
 
         Ok(Some(Self {
             hud_line_height: assets.font.line_height,

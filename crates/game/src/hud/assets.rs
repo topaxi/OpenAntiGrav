@@ -31,6 +31,17 @@ pub struct Assets {
     pub small_font: crate::font::Atlas,
     /// The language's string table, for the `IG_HUD_*` captions.
     pub strings: crate::language::StringTable,
+    /// The grid this layout's coordinates are in, and what it is shown as.
+    ///
+    /// **The source's, not the PSP's.** A HUD layout carries bare numbers and
+    /// says nothing about the space they are in, so the renderer has to be told:
+    /// Pulse and Pure author 480x272, the PS2 pressing 640x448, and HD 1920x1080
+    /// ([hd-frontend.md](../../../docs/formats/hd-frontend.md#the-coordinate-space-is-1920x1080),
+    /// confidence 90). Left at the default, HD's lap counter drew four times
+    /// oversized in the middle of the picture instead of in its panel at the
+    /// top-left corner - a yellow slab that reads as scenery rather than as a
+    /// digit. See [`crate::frontend::Space`].
+    pub space: crate::frontend::Space,
 }
 
 impl Assets {
