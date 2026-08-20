@@ -46,6 +46,7 @@
 
 use anyhow::{Context, Result, ensure};
 use clap::Parser;
+use log::warn;
 
 use oag_game::frontend;
 use oag_game::{audio, display, launcher, loading, race, settings, source};
@@ -101,7 +102,31 @@ use crate::cli::Cli;
 use crate::headless::{run_race, run_windowless};
 use crate::pose::{parse_pose, pose_from_trace};
 
+/// Installs the sink every `log` call in this workspace ends up in.
+///
+/// **The default filter is `warn` globally with our own crates at `debug`.**
+/// Our own crates are loud on purpose while the engine is still being built:
+/// the cheapest bug report is one where the reporter did not have to be told to
+/// re-run with a flag. Everything else stays at `warn` because it is not ours
+/// to read - at `info` the graphics stack alone narrates every adapter, shader
+/// module and pipeline it builds, and the engine's own lines drown in it.
+///
+/// `RUST_LOG` replaces the whole expression: `RUST_LOG=info` to quieten this
+/// down to milestones, `RUST_LOG=oag_game::audio=trace` for one module,
+/// `RUST_LOG=warn,wgpu_core=info` to hear the graphics stack instead.
+///
+/// The format carries the level and nothing else. These lines are read by a
+/// player watching a terminal, not shipped to a collector, and a timestamp and
+/// a module path on each would be wider than most of the messages.
+fn init_logging() {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn,oag=debug"))
+        .format_timestamp(None)
+        .format_target(false)
+        .init();
+}
+
 fn main() -> Result<()> {
+    init_logging();
     let cli = Cli::parse();
 
     // Ahead of settings and the disc search, deliberately: rasterising the
@@ -261,7 +286,7 @@ fn main() -> Result<()> {
         // hanging its exit on ten minutes of `ffmpeg` would invert the one
         // thing it is for.
         if cli.prefetch {
-            println!(
+            warn!(
                 "--prefetch has no effect with --race: it converts the front end's movies and \
                  sounds, which a race never opens. Run it without --race once."
             );
@@ -270,7 +295,7 @@ fn main() -> Result<()> {
         // waits on while that conversion runs, so on a route that does not run
         // it there is nothing for the screen to be about.
         if cli.loading_screen.is_some() {
-            println!("--loading-screen has no effect with --race; run it without --race.");
+            warn!("--loading-screen has no effect with --race; run it without --race.");
         }
         let source = source::resolve(cli.source.as_deref(), settings.source.image.as_deref())?;
         let music_discs = pending.music_discs(&source);

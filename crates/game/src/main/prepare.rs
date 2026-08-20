@@ -17,6 +17,7 @@
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
+use log::info;
 
 use oag_game::frontend;
 use oag_game::{audio, boot, loading, menu, movie, prefetch, race, settings};
@@ -148,7 +149,7 @@ impl Pending {
             return audio::MusicDiscs::default();
         }
         let discs = audio::MusicDiscs::survey(source);
-        println!("audio: music discs, {}", discs.describe());
+        info!("audio: music discs, {}", discs.describe());
         discs
     }
 

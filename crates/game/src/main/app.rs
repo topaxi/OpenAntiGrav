@@ -4,6 +4,7 @@
 //! the window existed and hands it to a [`Session`] on the first resume.
 
 use anyhow::{Context, Result};
+use log::{error, info};
 use oag_core::{TickClock, TickRate};
 
 use oag_game::render::Renderer;
@@ -208,7 +209,7 @@ impl App {
 
         let controls = Controls::new();
         for name in controls.pad().names() {
-            println!("gamepad: {name}");
+            info!("gamepad: {name}");
         }
 
         // Built now rather than when the setting is first turned on, and from
@@ -284,7 +285,7 @@ impl App {
         };
         let outstanding = prefetch.progress();
         if !outstanding.finished {
-            println!(
+            info!(
                 "waiting for --prefetch: {} of {} converted",
                 outstanding.done, outstanding.total
             );
@@ -326,7 +327,7 @@ impl ApplicationHandler for App {
             Ok(Some(session)) => self.state = Some(session),
             Ok(None) => event_loop.exit(),
             Err(e) => {
-                eprintln!("error: {e:#}");
+                error!("{e:#}");
                 event_loop.exit();
             }
         }
@@ -365,7 +366,7 @@ impl ApplicationHandler for App {
 
             WindowEvent::RedrawRequested => {
                 if let Err(e) = session.frame() {
-                    eprintln!("frame error: {e:#}");
+                    error!("frame error: {e:#}");
                     event_loop.exit();
                 }
             }

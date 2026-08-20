@@ -17,6 +17,7 @@ oag-assets.workspace = true
 oag-core.workspace = true
 oag-formats.workspace = true
 anyhow.workspace = true
+log.workspace = true
 
 # The device layer only. Voices, mixing, pitch and volume are this crate's job,
 # because the original's are `sceSasCore` semantics we will have to model rather

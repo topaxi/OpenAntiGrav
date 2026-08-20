@@ -9,6 +9,7 @@
 //! shadows the import the body right here needs.
 
 use anyhow::{Context, Result};
+use log::info;
 
 use oag_game::render::{Renderer, VideoFormat};
 use oag_game::{audio, boot, loading, movie, race, settings};
@@ -297,7 +298,7 @@ impl Stage {
         race.set_control_scheme(scheme);
         race.set_autopilot(autopilot);
         if autopilot {
-            println!("--autopilot: the player's craft is being flown for them");
+            info!("--autopilot: the player's craft is being flown for them");
         }
         Ok(Self::Race(Box::new(RaceStage {
             scene,

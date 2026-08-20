@@ -28,6 +28,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
+use log::{info, warn};
 use oag_audio::{Bus, Output, Play, Sound, VoiceId};
 use oag_disc::{DiscImage, Platform};
 use oag_formats::ps2_music;
@@ -612,7 +613,7 @@ impl Audio {
             None => Output::open_or_null(),
         };
         if let Some(name) = output.device_name() {
-            println!("audio: {name} at {} Hz", output.sample_rate());
+            info!("audio: {name} at {} Hz", output.sample_rate());
         }
         let audio = Self {
             output,
@@ -718,10 +719,10 @@ impl Audio {
                     .output
                     .with_mixer(|mixer| mixer.play(Play::looping(loaded.sound, Bus::Music)));
                 self.music_from = self.music.and(loaded.from);
-                println!("audio: music {}, {seconds:.1} s, looping", loaded.what);
+                info!("audio: music {}, {seconds:.1} s, looping", loaded.what);
             }
-            Ok(None) => println!("audio: this source carries no music this can play"),
-            Err(error) => println!("audio: no music ({error:#})"),
+            Ok(None) => info!("audio: this source carries no music this can play"),
+            Err(error) => warn!("audio: no music ({error:#})"),
         }
     }
 
@@ -791,7 +792,7 @@ impl Audio {
         }
         match Self::booted_soundtrack_len(discs) {
             0 => {
-                println!(
+                warn!(
                     "audio: could not re-read the booted disc's own soundtrack length, so the \
                      race playlist starts at track {MUSIC_TRACK} rather than one past the menu's"
                 );
@@ -844,15 +845,15 @@ impl Audio {
                 });
                 self.race_from = self.race_voice.and(loaded.from);
                 match seek {
-                    Some(seek) => println!(
+                    Some(seek) => info!(
                         "audio: race music {}, {seconds:.1} s, resuming from {seek:.1} s",
                         loaded.what
                     ),
-                    None => println!("audio: race music {}, {seconds:.1} s", loaded.what),
+                    None => info!("audio: race music {}, {seconds:.1} s", loaded.what),
                 }
             }
-            Ok(None) => println!("audio: this source carries no race music this can play"),
-            Err(error) => println!("audio: no race music ({error:#})"),
+            Ok(None) => info!("audio: this source carries no race music this can play"),
+            Err(error) => warn!("audio: no race music ({error:#})"),
         }
     }
 
@@ -963,12 +964,12 @@ impl Audio {
                     self.music = started;
                 });
                 self.music_from = self.music.and(loaded.from);
-                println!("audio: music {}, from {at:.1} s", loaded.what);
+                info!("audio: music {}, from {at:.1} s", loaded.what);
             }
             Ok(None) => {
-                println!("audio: no soundtrack on the {wanted} release, so nothing changed")
+                warn!("audio: no soundtrack on the {wanted} release, so nothing changed")
             }
-            Err(error) => println!("audio: the music stays where it is ({error:#})"),
+            Err(error) => warn!("audio: the music stays where it is ({error:#})"),
         }
     }
 
@@ -1009,12 +1010,12 @@ impl Audio {
                     *cached_discs = discs.clone();
                     *cached_choice = choice;
                 }
-                println!("audio: race music {}, from {at:.1} s", loaded.what);
+                info!("audio: race music {}, from {at:.1} s", loaded.what);
             }
             Ok(None) => {
-                println!("audio: no soundtrack on the {wanted} release, so nothing changed")
+                warn!("audio: no soundtrack on the {wanted} release, so nothing changed")
             }
-            Err(error) => println!("audio: the race music stays where it is ({error:#})"),
+            Err(error) => warn!("audio: the race music stays where it is ({error:#})"),
         }
     }
 
@@ -1184,7 +1185,7 @@ impl Audio {
     /// invisible in exactly the place it needs to be visible.
     pub fn start_boot_movie(&mut self, what: &str, sound: Option<crate::at3::Pcm>) {
         let Some(pcm) = sound else {
-            println!("audio: {what} plays silently");
+            warn!("audio: {what} plays silently");
             return;
         };
         let seconds = pcm.samples.len() as f64
@@ -1193,15 +1194,15 @@ impl Audio {
         match Sound::new(pcm.samples, pcm.channels, pcm.sample_rate) {
             Ok(sound) => {
                 if self.start_movie(sound) {
-                    println!("audio: {what}'s own track, {seconds:.2} s, clocking the picture");
+                    info!("audio: {what}'s own track, {seconds:.2} s, clocking the picture");
                 } else {
                     // A mixer with every slot busy, which cannot happen today -
                     // the music is the only other voice - but is reported rather
                     // than leaving a movie silent for no stated reason.
-                    println!("audio: no free voice for {what}, so it plays silently");
+                    warn!("audio: no free voice for {what}, so it plays silently");
                 }
             }
-            Err(error) => println!("audio: {what} plays silently ({error:#})"),
+            Err(error) => warn!("audio: {what} plays silently ({error:#})"),
         }
     }
 

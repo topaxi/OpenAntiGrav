@@ -1,6 +1,7 @@
 //! `--pose` and `--pose-from`: where a captured frame puts the craft.
 
 use anyhow::{Context, Result, ensure};
+use log::warn;
 
 use oag_game::race;
 
@@ -66,7 +67,7 @@ pub(crate) fn pose_from_trace(
     let camera = match (no_camera, replay::camera_orientation_of(frame)) {
         (true, _) | (false, None) => {
             if !no_camera {
-                eprintln!(
+                warn!(
                     "{}: no camera columns (captured without --camera); using the chase camera",
                     path.display()
                 );

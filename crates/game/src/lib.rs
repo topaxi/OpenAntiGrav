@@ -69,6 +69,8 @@ pub mod state_machine;
 pub mod title;
 pub mod upscale;
 
+use log::info;
+
 /// Frames of the reel `Intro Screen->IntroMovie1` can possibly show, plus one.
 ///
 /// That state stops at frame 260 whatever the movie's length, so the reel leg
@@ -77,12 +79,16 @@ pub mod upscale;
 /// one by hand.
 pub const INTRO_FRAMES_NEEDED: usize = frontend::FINISH_FRAME + 1;
 
-/// Prints transitions, always for entries and only under `trace` for exits.
+/// Logs transitions, always for entries and only under `trace` for exits.
+///
+/// Both at `info` rather than the exits at `debug`: `trace` is `--trace`, and a
+/// level that hid what the flag was asked for would make the flag do nothing at
+/// the default filter.
 pub fn report(events: &[state_machine::Event], trace: bool) {
     for event in events {
         match event {
-            state_machine::Event::Enter(name) => println!("-> {name}"),
-            state_machine::Event::Exit(name) if trace => println!("<- {name}"),
+            state_machine::Event::Enter(name) => info!("-> {name}"),
+            state_machine::Event::Exit(name) if trace => info!("<- {name}"),
             state_machine::Event::Exit(_) => {}
         }
     }

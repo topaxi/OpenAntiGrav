@@ -45,6 +45,7 @@
 //! comparison wants a picture of a window; a bug report does not.
 
 use anyhow::{Context, Result};
+use log::warn;
 
 use oag_render::post::{fsr1, fullscreen_layout, fxaa, smaa};
 
@@ -307,7 +308,7 @@ impl Framebuffer {
                     // but it must not be a crash in a player's frame loop: say
                     // so once and carry on unfiltered.
                     Err(why) => {
-                        eprintln!("the FXAA pipeline did not build ({why:#}); staying unfiltered");
+                        warn!("the FXAA pipeline did not build ({why:#}); staying unfiltered");
                         None
                     }
                 }
@@ -333,7 +334,7 @@ impl Framebuffer {
                     // but it must not be a crash in a player's frame loop: say
                     // so once and carry on unfiltered.
                     Err(why) => {
-                        eprintln!("the SMAA pipelines did not build ({why:#}); staying unfiltered");
+                        warn!("the SMAA pipelines did not build ({why:#}); staying unfiltered");
                         None
                     }
                 }
@@ -353,7 +354,7 @@ impl Framebuffer {
                     // it must not be a crash in a player's frame loop: say so once
                     // and carry on bilinear.
                     Err(why) => {
-                        eprintln!("the FSR 1 pipelines did not build ({why:#}); staying bilinear");
+                        warn!("the FSR 1 pipelines did not build ({why:#}); staying bilinear");
                         return None;
                     }
                 };

@@ -24,6 +24,7 @@
 //! over plain values, so every case is testable with no pad attached - which
 //! is also why `just test` passes on a machine that has none.
 
+use log::warn;
 use oag_gameplay::input::button;
 
 /// How far a trigger has to travel before it counts as a button press.
@@ -181,7 +182,7 @@ impl Pad {
         match gilrs::Gilrs::new() {
             Ok(gilrs) => Self { gilrs: Some(gilrs) },
             Err(e) => {
-                eprintln!("no gamepad support ({e}); keyboard only");
+                warn!("no gamepad support ({e}); keyboard only");
                 Self { gilrs: None }
             }
         }

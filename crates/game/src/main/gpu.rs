@@ -3,6 +3,7 @@
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
+use log::{info, warn};
 
 use oag_game::{adapter, display, perf, settings};
 
@@ -112,7 +113,7 @@ impl Gpu {
         // silently becomes the default. The driver comes with it because "which
         // llvmpipe" and "which Mesa" are the next questions.
         let info = chosen.adapter.get_info();
-        println!(
+        info!(
             "renderer: {} (setting: {renderer}, driver: {} {})",
             adapter::label(info.backend, &info.name, info.device_type),
             if info.driver.is_empty() {
@@ -199,8 +200,8 @@ impl Gpu {
             // the settings file is the only other way back, and a player who
             // cannot start the game cannot be told that from inside it.
             Err(e) if !renderer.is_default() => {
-                eprintln!("renderer {renderer} could not be brought up: {e:#}");
-                eprintln!(
+                warn!("renderer {renderer} could not be brought up: {e:#}");
+                warn!(
                     "falling back to the default; set graphics.renderer = \"{}\" to keep it there",
                     display::Renderer::DEFAULT
                 );
@@ -249,8 +250,8 @@ impl Gpu {
                 return *wanted;
             }
         }
-        println!(
-            "note: this surface offers {:?}, so vsync {vsync} falls back to Fifo",
+        warn!(
+            "this surface offers {:?}, so vsync {vsync} falls back to Fifo",
             self.offered
         );
         wgpu::PresentMode::Fifo

@@ -50,6 +50,25 @@ oag-trace = { path = "crates/trace" }
 anyhow = "1"
 thiserror = "2"
 
+# Diagnostics. Everything that used to be a bare `println!`/`eprintln!` note
+# about what the engine is doing goes through the `log` facade instead, so it
+# carries a level and can be filtered with `RUST_LOG`.
+#
+# `env_logger` is a dependency of the **binaries alone** - a library never picks
+# the sink. It is also deliberately absent from the simulation crates
+# (`oag-core`, `oag-physics`, `oag-ai`, `oag-race`, `oag-gameplay`), which log
+# nothing at all: they take a snapshot in and emit one out, and a logger there
+# would be a side effect the determinism tests cannot see.
+#
+# What stays a `println!` is a command's **output** rather than a note about it:
+# `oag-unpack`'s tables, `oag-wad`'s listings, `oag-trace`'s CSV and summaries,
+# `oag-view`'s reports, and the key hints the game prints to the terminal. Those
+# are what a user redirects; routing them through a logger would stamp every
+# line with a timestamp and a module path, and let `RUST_LOG` silence a
+# program's whole reason for running.
+log = "0.4"
+env_logger = "0.11"
+
 # Our own transcendentals, for the simulation only. `determinism.md` names
 # bringing an implementation into `oag-core` as the fix when platform libm
 # differences would otherwise reach simulation state; this is that

@@ -2,6 +2,7 @@
 //! progress, and the handoff into a race.
 
 use anyhow::Result;
+use log::{info, warn};
 
 use oag_game::frontend::{self};
 use oag_game::render::VideoFormat;
@@ -42,7 +43,7 @@ impl Session {
         // `stalled` field, and the note in `Session::frame` about why a load is
         // not a frame time.
         self.stalled = true;
-        println!("\ndisc image: {source}");
+        info!("disc image: {source}");
 
         let prepared = {
             let Some(pending) = self.pending.as_ref() else {
@@ -195,10 +196,10 @@ impl Session {
         // halves have met.
         match (self.pick_language, self.settings.language.as_deref()) {
             (false, Some(name)) if loaded.frontend.preselect_language(name) => {
-                println!("language {name} from settings, skipping the picker");
+                info!("language {name} from settings, skipping the picker");
             }
             (false, Some(name)) => {
-                eprintln!("this source does not offer {name:?}, so the picker is shown");
+                warn!("this source does not offer {name:?}, so the picker is shown");
             }
             _ => {}
         }

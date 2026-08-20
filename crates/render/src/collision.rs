@@ -161,6 +161,22 @@ pub fn bounds_of(nodes: &[CollisionNode], keep: impl Fn(SurfaceKind) -> bool) ->
     out
 }
 
+/// The box enclosing a built model's vertices.
+///
+/// [`bounds_of`]'s counterpart for geometry that only exists as a [`Model`]:
+/// the track ribbon is built rather than decoded, so there is no
+/// [`CollisionNode`] to measure and it is measured after the fact. Here beside
+/// the node-side one because comparing the two boxes is the whole point of
+/// either - see `oag-view --collision --with-spline`.
+#[must_use]
+pub fn bounds_of_model(model: &Model) -> Option<Aabb> {
+    let mut out = None;
+    for vertex in &model.vertices {
+        grow(&mut out, std::slice::from_ref(&vertex.position));
+    }
+    out
+}
+
 /// Whether `inner` sits entirely inside `outer`, allowing `slack` either side.
 #[must_use]
 pub fn contains(outer: Aabb, inner: Aabb, slack: f32) -> bool {

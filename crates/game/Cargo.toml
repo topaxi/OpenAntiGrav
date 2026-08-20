@@ -57,6 +57,8 @@ oag-render.workspace = true
 oag-trace.workspace = true
 anyhow.workspace = true
 clap.workspace = true
+env_logger.workspace = true
+log.workspace = true
 bytemuck = { workspace = true, features = ["derive"] }
 wgpu = "30"
 winit = "0.30"

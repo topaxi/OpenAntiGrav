@@ -14,6 +14,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use anyhow::{Context, Result};
+use log::{debug, error};
 
 use winit::application::ApplicationHandler;
 use winit::event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent};
@@ -105,7 +106,7 @@ impl ApplicationHandler for App {
         match Session::new(event_loop, model, self.orbit, self.anisotropy) {
             Ok(session) => self.state = Some(session),
             Err(e) => {
-                eprintln!("error: {e:#}");
+                error!("{e:#}");
                 event_loop.exit();
             }
         }
@@ -160,7 +161,7 @@ impl ApplicationHandler for App {
 
             WindowEvent::RedrawRequested => {
                 if let Err(e) = session.frame() {
-                    eprintln!("render error: {e:#}");
+                    error!("render error: {e:#}");
                     event_loop.exit();
                 }
             }
@@ -490,7 +491,7 @@ impl Session {
                 return Ok(());
             }
             other => {
-                eprintln!("skipping frame: {other:?}");
+                debug!("skipping frame: {other:?}");
                 return Ok(());
             }
         };

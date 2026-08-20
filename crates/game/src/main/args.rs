@@ -5,6 +5,7 @@
 //! declares and nothing interprets.
 
 use anyhow::{Result, ensure};
+use log::warn;
 
 use oag_game::input;
 use oag_game::{loading, movie, prefetch, settings};
@@ -21,7 +22,7 @@ pub(crate) fn resolve_difficulty(settings: &settings::Settings) -> oag_ai::Diffi
     let token = &settings.ai.difficulty;
     oag_ai::Difficulty::from_name(token).unwrap_or_else(|| {
         let fallback = oag_ai::Difficulty::default();
-        eprintln!(
+        warn!(
             "ignoring [ai] difficulty = {token:?}; using {}",
             fallback.name()
         );
@@ -44,7 +45,7 @@ pub(crate) fn resolve_scheme(cli: &Cli, settings: &settings::Settings) -> Contro
     let token = &settings.controls.scheme;
     ControlScheme::from_name(token).unwrap_or_else(|| {
         let fallback = ControlScheme::default();
-        eprintln!("ignoring [controls] scheme = {token:?}; using {fallback}");
+        warn!("ignoring [controls] scheme = {token:?}; using {fallback}");
         fallback
     })
 }
