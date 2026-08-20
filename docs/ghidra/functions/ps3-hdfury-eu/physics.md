@@ -127,6 +127,44 @@ So these are a transform that moves as the craft moves. A stored speed scalar
 has not been located, and identifying the player's body needs a run that keeps
 the raw dumps rather than a ranked summary.
 
+## Which of the eight is the player: not settled
+
+The dumps for this are kept out of the repository - they are guest memory, which
+is game content and never commits. `just audit-leakage` covers the rule.
+
+All eight bodies were dumped whole at four moments on a fixed cadence, three
+with thrust held and one after cutting thrust and holding both airbrakes, on the
+theory that seven bodies keep covering ground and the player does not. It did
+not separate them:
+
+    body 0    37.30/s    10.01/s    26.95/s
+    body 1    35.63/s    10.01/s    31.15/s
+    body 3    36.93/s    13.54/s    26.53/s
+    body 7    15.10/s     4.74/s     0.26/s
+
+*Every* body slowed across the braking interval and most recovered, which is not
+what eight racers do when one of them brakes. Either the positions are not in
+world space, or the interval is not measuring what it looks like.
+
+Scanning instead for offsets where exactly one body behaves unlike the other
+seven across that interval flags **body 3**, at three offsets in one cluster
+(`+0x1a0`, `+0x1b4`, `+0x1c0`, ratios 4.9 to 6.9 against the next body). The
+screenshot for that sample explains it and spoils it at once: the craft is
+barrel-rolled against a wall with **shield 100% -> 0%** and the speed readout
+down from 100 to 77. So the run measured a crash, not braking. Body 3 spiking
+in the interval the player crashed is consistent with body 3 being the player,
+and equally consistent with those offsets being a contact impulse - which every
+body would show on its own collisions.
+
+**Confidence 55, below the naming floor, so nothing is renamed for it.** The
+test that would settle it has to avoid touching anything: cut thrust on a
+straight and coast, or compare against the position indicator the HUD already
+draws.
+
+Structurally the dumps are mostly inert - of the entry's 320 words, 229 are
+byte-identical across all eight bodies and all four samples, 80 move, and 11 are
+constant per body.
+
 ## Globals
 
 | Address | Name | Confidence | Evidence |
