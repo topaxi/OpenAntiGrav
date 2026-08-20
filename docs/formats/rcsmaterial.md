@@ -433,6 +433,41 @@ helpers from their position in the stream, which is a reading of a use rather
 than of an opcode. A fourth appearing would mean the corpus grew or the stride
 is wrong somewhere, and the test says so.
 
+### What the microcode does and does not settle
+
+With the decoder there, the natural next question is whether a surface takes
+the scene's light or is emissive - which the header could not answer. It has a
+dataflow answer and **the dataflow does not settle it either**.
+
+`Program::output_lit_by` is a forward taint over the register file, per
+channel, with **taint blocked at a texture lookup**: a sampled value depends on
+the texture's contents, not on the magnitude of the coordinate that addressed
+it, so blocking there turns "did this interpolator reach the picture" into "was
+it *combined* into it". That primitive is right, and checked against two blocks
+read by hand - `track_surface` #8 and #9 both report `TC1`, their per-vertex
+light, and **not** `TC4`, their albedo coordinate
+(`the_lighting_dataflow_agrees_with_the_blocks_read_by_hand`).
+
+**As a lit-versus-emissive classifier it still fails.** Taking "the output is
+combined with some interpolator other than `FOGC`" over Talon's Junction's
+drawn chunks gives 745 lit, 168 unlit - and the split is wrong at both ends.
+`cf_billboard1` (53 chunks) and `scanlinebillboard` (49) come out **lit**,
+because a billboard is modulated by an interpolated term too - a scroll or a
+fade - which is not scene light. `track_wall` splits 11 lit against 22 unlit.
+
+The reason is the same one that defeated the header, one level down: **which
+interpolator carries scene light is a per-material fact**, not a property of
+the program's shape. It is `f[TC1]` on `track_surface` and `f[TC0]` on
+`bluemetal`, and no generic rule over the instruction stream distinguishes a
+light term from any other interpolated modulation.
+
+So two general rules have now been tried and rejected on evidence. What is left
+is per-material work: read a material, name what each of its interpolators
+carries, and record it - the way `track_surface` and
+`detonator_ship_rich_iridescent` already are in
+[renderer.md](../ghidra/functions/ps3-hdfury-eu/renderer.md). The decoder makes
+that reading cheap; it does not make it automatic.
+
 ### Still open
 
 - **The frame-determined half.** A renderer can pick the chunk-determined axes

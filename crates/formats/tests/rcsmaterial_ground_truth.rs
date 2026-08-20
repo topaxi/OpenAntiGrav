@@ -436,3 +436,77 @@ fn every_fragment_program_on_the_disc_decodes_to_a_clean_end() {
          Python census counted the same number"
     );
 }
+
+/// **The dataflow reproduces two blocks that were read by hand.**
+///
+/// `track_surface.rcsmaterial` block #9 is the lightmapped lit variant and
+/// block #8 the lightmap-less one, both quoted instruction by instruction in
+/// `docs/ghidra/functions/ps3-hdfury-eu/renderer.md` under "The lit track
+/// material". Both take their interpolated per-vertex light from `f[TC1]` and
+/// their albedo coordinate from `f[TC4]`, so the lighting rule must report
+/// `TC1` and **not** `TC4` - the coordinate reaches the picture but is not
+/// combined into it.
+///
+/// If the taint leaked through texture lookups this would report TC4 as well,
+/// and if it did not propagate at all it would report nothing.
+#[test]
+#[ignore]
+fn the_lighting_dataflow_agrees_with_the_blocks_read_by_hand() {
+    let Some(image) = image() else {
+        return;
+    };
+    let spec = format!("{}:PS3_GAME/USRDIR/DATA00.PSARC", image.display());
+    let Ok(mut archive) = oag_assets::psarc::Archive::open(&spec) else {
+        return;
+    };
+    let path = "/data/environments/talons_junction/materials/track_surface.rcsmaterial";
+    let Ok(bytes) = archive.read_path(path) else {
+        return;
+    };
+
+    // Fragment blocks in file order, which is how the doc numbers them.
+    let mut offsets = Vec::new();
+    let mut at = 0usize;
+    while let Some(i) = bytes[at..].windows(4).position(|w| w == b"SHO\x08") {
+        let block = at + i;
+        at = block + 4;
+        if bytes.get(block + 4..block + 8) == Some(&1u32.to_be_bytes()[..]) {
+            offsets.push(block);
+        }
+    }
+    assert!(offsets.len() > 9, "only {} fragment blocks", offsets.len());
+
+    const TC1: u16 = 1 << 5;
+    const TC4: u16 = 1 << 8;
+    for (index, lightmapped) in [(8usize, false), (9usize, true)] {
+        let p = fragment::Program::parse(&bytes, offsets[index])
+            .unwrap_or_else(|| panic!("block #{index} decodes"));
+        assert_eq!(
+            p.declared.samples_lightmap(),
+            lightmapped,
+            "block #{index} is the wrong variant"
+        );
+        let lit = p.output_lit_by();
+        println!(
+            "  block #{index}: lit by {lit:#06x}, reads {:#06x}",
+            p.interpolators()
+        );
+        assert_ne!(
+            lit & TC1,
+            0,
+            "block #{index} takes its per-vertex light from f[TC1] and the \
+             dataflow lost it"
+        );
+        assert_eq!(
+            lit & TC4,
+            0,
+            "block #{index} uses f[TC4] as a texture coordinate, so taint \
+             leaked through a lookup"
+        );
+        assert_ne!(
+            p.interpolators() & TC4,
+            0,
+            "block #{index} does read f[TC4] - the check above is not vacuous"
+        );
+    }
+}

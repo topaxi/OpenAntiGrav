@@ -158,3 +158,53 @@ fn a_block_that_does_not_frame_is_refused_rather_than_decoded() {
     bad[0x18 + 0x13] = 0xff;
     assert!(Program::parse(&bad, 0).is_none());
 }
+
+/// A texture lookup blocks taint, which is what separates a coordinate from a
+/// light term.
+#[test]
+fn a_texture_lookup_blocks_the_taint_a_plain_dependency_carries() {
+    let data = synthetic();
+    let p = Program::parse(&data, 0).expect("decodes");
+    // The TEX writes H1 from f[TC1] as a coordinate; the MAD then reads R1 and
+    // f[TC1] directly. Under the plain rule both paths carry TC1; under the
+    // lighting rule only the direct read does - and here they agree because the
+    // MAD reads the interpolator itself.
+    assert_eq!(p.output_depends_on(), 1 << 5);
+    assert_eq!(p.output_lit_by(), 1 << 5);
+}
+
+/// A register overwritten by an untainted instruction stops carrying taint.
+#[test]
+fn an_overwrite_clears_what_a_register_carried() {
+    let mut b = Vec::new();
+    b.extend_from_slice(b"SHO\x08");
+    b.extend_from_slice(&1u32.to_be_bytes());
+    for v in [2u16, 0, 0, 0, 0x18, 0x18, 0x18, 0x18] {
+        b.extend_from_slice(&v.to_be_bytes());
+    }
+    let head = b.len();
+    b.extend_from_slice(&32u32.to_be_bytes());
+    b.resize(head + 0x10, 0);
+    b.extend_from_slice(&0x20u32.to_be_bytes());
+    b.resize(head + 0x20, 0);
+    let mut push = |words: [u32; 4]| {
+        for w in words {
+            b.extend_from_slice(&(w as u16).to_be_bytes());
+            b.extend_from_slice(&((w >> 16) as u16).to_be_bytes());
+        }
+    };
+    // MOV R0, f[TC1]  - taints R0 with interpolator 5.
+    push([0x01 << 24 | 5 << 13 | 0xf << 9, 1, 0, 0]);
+    // MOV R0, {const} - overwrites every channel from an untainted source, END.
+    push([0x01 << 24 | 0xf << 9 | 1, 2, 0, 0]);
+    for _ in 0..4 {
+        b.extend_from_slice(&[0u8; 4]);
+    }
+    let p = Program::parse(&b, 0).expect("decodes");
+    assert_eq!(p.instructions.len(), 2);
+    assert_eq!(
+        p.output_depends_on(),
+        0,
+        "the second MOV replaced what the first put in R0"
+    );
+}

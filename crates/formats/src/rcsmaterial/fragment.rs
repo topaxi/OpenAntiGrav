@@ -266,6 +266,98 @@ impl Program {
             .filter(|i| i.operands().any(|s| s == Source::Input))
             .fold(0u16, |acc, i| acc | 1u16 << i.input)
     }
+
+    /// Which interpolators the program's **output** actually depends on.
+    ///
+    /// A forward taint over the register file, per channel: an instruction
+    /// taints the channels it writes when any operand it reads is tainted, and
+    /// clears them when none is - so a register that is overwritten stops
+    /// carrying what it used to. The answer is the taint standing on the
+    /// channels the final instruction writes.
+    ///
+    /// Two deliberate approximations, both toward **finding** a dependency
+    /// rather than missing one, because the consequence of a false negative is
+    /// worse: a surface wrongly called independent of its light term would be
+    /// drawn unlit, at full albedo.
+    ///
+    /// - **Half and full registers are treated as one file.** `H0` and `R0`
+    ///   name the same storage on NV40; keeping them apart would let taint
+    ///   vanish across a precision change.
+    /// - **Source swizzles are ignored.** A source reading only `.w` of a
+    ///   tainted register counts as tainted. Tracking swizzles would narrow
+    ///   this, and narrowing it is the direction that risks a false negative.
+    ///
+    /// A texture sample propagates taint from its coordinate, which is what
+    /// makes this answer "does this interpolator reach the picture" rather
+    /// than "is it added to it" - a coordinate reaching the output is a real
+    /// dependency, just not a lighting one. Callers separating light from
+    /// coordinate need [`Instruction::is_texture`] as well.
+    #[must_use]
+    pub fn output_depends_on(&self) -> u16 {
+        self.taint(true)
+    }
+
+    /// Which interpolators reach the output **as values rather than as
+    /// addresses**.
+    ///
+    /// [`Self::output_depends_on`] with taint blocked at a texture lookup. A
+    /// `TEX` result depends on the texture's contents, not on the magnitude of
+    /// the coordinate that addressed it, so propagating through one answers
+    /// "did this interpolator reach the picture" where the lighting question is
+    /// "did this interpolator get *combined* into it".
+    ///
+    /// That distinction is the whole point: on `track_surface` every block's
+    /// output depends on `TC0` under the first rule, because `TC0` is the
+    /// texture coordinate. Under this one only the blocks that add or multiply
+    /// an interpolator into the result report it.
+    #[must_use]
+    pub fn output_lit_by(&self) -> u16 {
+        self.taint(false)
+    }
+
+    fn taint(&self, through_textures: bool) -> u16 {
+        // `tainted[reg]` is a bit per channel per interpolator, flattened: the
+        // register file is small and 16 interpolators fit a `u16` each.
+        let mut tainted: [[u16; 4]; 64] = [[0; 4]; 64];
+        let mut last: Option<(u8, u8)> = None;
+        for insn in &self.instructions {
+            let mut from = 0u16;
+            for source in insn.operands() {
+                match source {
+                    Source::Input => from |= 1u16 << insn.input.min(15),
+                    Source::Register { index, .. } => {
+                        for ch in tainted[usize::from(index) & 63] {
+                            from |= ch;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            // A sampled value is the texture's, not the coordinate's.
+            if insn.is_texture() && !through_textures {
+                from = 0;
+            }
+            let dst = usize::from(insn.dst) & 63;
+            for (channel, slot) in tainted[dst].iter_mut().enumerate() {
+                if insn.mask & (1 << channel) != 0 {
+                    // Written this instruction: it carries what was read, and
+                    // nothing of what it held before.
+                    *slot = from;
+                }
+            }
+            last = Some((insn.dst, insn.mask));
+        }
+        let Some((dst, mask)) = last else {
+            return 0;
+        };
+        let mut out = 0u16;
+        for (channel, slot) in tainted[usize::from(dst) & 63].iter().enumerate() {
+            if mask & (1 << channel) != 0 {
+                out |= slot;
+            }
+        }
+        out
+    }
 }
 
 #[cfg(test)]
