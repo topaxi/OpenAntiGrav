@@ -778,6 +778,21 @@ the picture: the sky traffic visible on the circuit is the 33 world-space
 `animating_traffic` chunks, which the second pass draws; the 56 nodes were
 never the visible traffic.
 
+The same pattern holds where a name in the unresolved set could plausibly *be*
+the road: `03_track`'s `wohdtrack_*` node family looks like numbered track
+segments by name alone, and is not one - checked 2026-08-20
+(`the_unresolved_node_phenomenon_is_disc_wide`). 141 of 142 `wohdtrack_*`
+nodes resolve normally in `track.vex`, 144 of 164 in `track_reversed.vex`; the
+handful that do not are a small minority of a family that mostly resolves like
+any other prop. And the road itself is not on the node path at all in either
+direction: `track_reversed.rcsmodel` carries 1,272 second-pass (unaddressed,
+world-space) chunks against 501 node-addressed ones, `track.rcsmodel` 1,213
+against 477 - the same lopsided ratio Talon's Junction shows - and the two
+second-pass sets share the *same* world-space bias extent (x `-1799..1292`, z
+`-1195..1500`) in both directions, which is what one physical track baked once
+per direction looks like. A name that reads as road geometry is not evidence
+the road is missing.
+
 **What drives it at runtime is unread.** HD moved visibility out of the `.vex`
 into 28 `.pvs` files, and the obvious hypothesis is that a `.pvs` names the
 chunks a section draws. Nothing here has read one.
@@ -1048,25 +1063,61 @@ Named explicitly, with what each would take.
    two-layout finding.
 6. **56 of Talon's Junction's 126 `Mesh` nodes address no chunk**, and the
    shared-props-archive guess this page used to carry is **refuted**. Every
-   `.rcsmodel` under `/data/environments/` sits in one of exactly 16 circuit
-   directories; there is no seventeenth for anything they share. What the sweep
-   found instead, over all 643 files and 39,414 chunks: **18 of the 56 hashes
-   are carried by other circuits' models** - the sky traffic by `amphiseum` and
-   `tech_de_ra`, and eight `pCube*` nodes by three circuits sharing nothing else
-   with Talon's Junction. **13 of those 18 have a donor whose geometry is
-   demonstrably the node's** - judged at the stride the donor chunk declares,
-   over the vertices a triangle names, and required to *fill* the node's box
-   rather than merely sit inside it - and 5 have none, the three `pCube*` among
-   them. The check is per donor and not per hash, because a hash appears in
-   several circuits' models and is the right mesh in only one of them:
-   `Skycar_1Shape` fills its box in `tech_de_ra` and not in `amphiseum`. So the
-   **identity** is settled and the **mechanism** is not, and nothing is wired:
-   what says the original resolves a node against another circuit's model file,
-   or draws these nodes at all, is unrecovered, and a prop drawn because this
-   project found its geometry somewhere is a picture nobody can check. The
-   remaining 38 are nowhere on the disc under this addressing. The hash is **not** a hash of the node's name under
-   `wad::hash_name`, FNV-1a, DJB2, SDBM or CRC32 in any of three casings, so why
-   a name shared between circuits shares a hash is itself unexplained.
+   `.rcsmodel` under `/data/environments/` sits in one of exactly 16
+   directories - **12 circuits and Zone mode's 4 `zone_N` maps**, corrected
+   2026-08-20 from "16 circuits"; there is no seventeenth for anything they
+   share. What the sweep found instead, over all 643 files and 39,414 chunks:
+   **18 of the 56 hashes are carried by other circuits' models** - the sky
+   traffic by `amphiseum` and `tech_de_ra`, and eight `pCube*` nodes by three
+   circuits sharing nothing else with Talon's Junction. **13 of those 18 have a
+   donor whose geometry is demonstrably the node's** - judged at the stride the
+   donor chunk declares, over the vertices a triangle names, and required to
+   *fill* the node's box rather than merely sit inside it - and 5 have none,
+   the three `pCube*` among them. The remaining 38 are nowhere on the disc
+   under this addressing. The hash is **not** a hash of the node's name under
+   `wad::hash_name`, FNV-1a, DJB2, SDBM or CRC32, over 7 name variants (raw,
+   both cases, Maya-path-qualified, `Shape`-stripped and `Shape`-appended) -
+   checked against all 70 of Talon's Junction's *resolved* pairs, not only the
+   56 unresolved ones, so the negative is not an artifact of only ever testing
+   names that were never going to hash to anything.
+
+   **Disc-wide, not Talon's-specific** (`the_unresolved_node_phenomenon_is_disc_wide`,
+   2026-08-20). Every one of the 12 circuits was censused, both directions:
+   `04_chenghou_project` and `10_sebenco_climb` resolve every node they carry,
+   most circuits sit under 15 unresolved out of several hundred, and Talon's
+   Junction's 56 of 126 is the outlier, not the typical case. That retires the
+   DLC-packaging framing this finding could otherwise have suggested - it is
+   not specific to the Fury pack's cook, or to Talon's Junction's own.
+
+   **The donor identity is now confirmed a second, independent way**
+   (`nine_of_the_thirteen_confirmed_donors_are_index_identical`, 2026-08-20),
+   stronger than the box-fill test that first found it: **9 of the 13 donor
+   hashes are index-byte-identical, at equal vertex count, in every file that
+   carries them.** The other 4 are not a counter-example - each splits into
+   exactly two vertex-count tiers across its files (`Skycar_1Shape` 40
+   vertices in one, 848 in another; `shipintersteller1Shape` 8 vs 1280;
+   `WesSkycar_C1Shape` 48 vs 824; `HyperContintentCraft1Shape` 72 vs 3568),
+   the same key naming two levels of detail of the same asset rather than two
+   unrelated meshes. That is what a key derived from the *source* asset would
+   produce, and it is the explanation this page never had for why
+   `Skycar_1Shape` fills Talon's Junction's box in `tech_de_ra` (the 848-vertex
+   copy) and not in `amphiseum` (the 40-vertex stub): both circuits carry
+   *something* under that key, at whatever detail their own cook baked.
+
+   So identity is settled two ways now, and it settles as **a shared
+   per-title asset key, independently cooked per circuit** - not "the game
+   resolves a node against another circuit's file at runtime", which was
+   this page's original framing and which the evidence never actually
+   distinguished from "these are dead references to an asset this circuit's
+   cook chose not to bake". **The mechanism question is narrower now, and
+   still open:** does the shipped executable ever hold a second circuit's
+   `.rcsmodel` open while a level is resident? A negative there is what would
+   turn "nothing is wired" into a documented negative rather than a
+   plausibility argument; the RPCS3 GDB harness (`HANDOVER.md`, "A PS3 title
+   now boots, drives and screenshots from a script") is the route that would
+   answer it, and nothing has yet asked it the question. Until it does: a prop
+   drawn because this project found its geometry somewhere is still a picture
+   nobody can check, and nothing is wired.
 7. ~~**Which chunk a `Skycube` or a pad belongs to.**~~ Made for the pads on
    2026-08-19: a `Weapon Pad` or `Speedup Pad` node names its chunk at the mesh
    payload's own `+0x30`, and the chunk is world-space baked - see "The pads

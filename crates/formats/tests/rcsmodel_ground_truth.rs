@@ -231,13 +231,16 @@ fn the_nodes_that_address_no_chunk_are_not_in_a_shared_props_file() {
     );
 
     // 1. **There is no shared props model**, because every `.rcsmodel` under
-    //    `/data/environments/` sits in a circuit's own directory. 16 circuits,
-    //    16 directories, and no seventeenth for anything they have in common.
+    //    `/data/environments/` sits in a circuit's own directory or in one of
+    //    Zone mode's four `zone_N` map directories - **12 circuits and 4 Zone
+    //    maps, 16 directories total** (corrected 2026-08-20; this used to say
+    //    "16 circuits", which is not what the sweep counted) - and no
+    //    seventeenth for anything they have in common.
     assert_eq!(
         environment_models.len(),
         16,
-        "/data/environments/ has a directory that is not one of the 16 \
-         circuits, which is where a shared props model would be"
+        "/data/environments/ has a directory that is not one of the 12 \
+         circuits or 4 Zone maps, which is where a shared props model would be"
     );
 
     // 2. Some of the wanted hashes are in other circuits' models.
@@ -449,5 +452,223 @@ fn every_model_on_the_disc_parses_in_one_of_two_chunk_layouts() {
         submeshes,
         "{} submesh(es) do not hold a whole number of triangles",
         submeshes - triangles
+    );
+}
+
+/// Claim 10: the unresolved-`Mesh`-node phenomenon claim 8 measured on
+/// Talon's Junction is **disc-wide**, not a Talon's-Junction or a DLC-cook
+/// peculiarity - and two circuits resolve every node they carry.
+///
+/// **What retires the DLC-packaging framing.** Every one of the disc's 12
+/// circuits (`amphiseum`, `modesto_heights`, `talons_junction`, `tech_de_ra`
+/// shipped with the base game; `01_vineta_k` through `15_anulpha_pass` added
+/// by the Fury pack, both `track` and its `track_reversed`) was censused, not
+/// just the one this page's prose otherwise quotes. `04_chenghou_project` and
+/// `10_sebenco_climb` resolve every node in both directions; Talon's Junction
+/// is the outlier at 56 of 126, not the typical case - most circuits sit under
+/// 15 unresolved out of several hundred.
+///
+/// A ratchet, not a fixed count: the per-file numbers are printed so a
+/// regression is visible, and the assertion only catches the total getting
+/// worse.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn the_unresolved_node_phenomenon_is_disc_wide() {
+    let Some(image) = image() else {
+        return;
+    };
+    // (directory, archive holding `track`, archive holding `track_reversed`).
+    // Base-game circuits carry both in DATA00; the Fury pack splits them
+    // across DATA02 (forward) and DATA03 (reversed). `zone_1`..`zone_4` are
+    // Zone mode's single-`Mesh`-node maps, not circuits, and are censused
+    // anyway because they sit in the same 16 directories claim 8 counted.
+    let circuits: &[(&str, &str, &str)] = &[
+        ("amphiseum", "DATA00", "DATA00"),
+        ("modesto_heights", "DATA00", "DATA00"),
+        ("talons_junction", "DATA00", "DATA00"),
+        ("tech_de_ra", "DATA00", "DATA00"),
+        ("01_vineta_k", "DATA02", "DATA03"),
+        ("02_track", "DATA02", "DATA03"),
+        ("03_track", "DATA02", "DATA03"),
+        ("04_chenghou_project", "DATA02", "DATA03"),
+        ("05_ubermall", "DATA02", "DATA03"),
+        ("10_sebenco_climb", "DATA02", "DATA03"),
+        ("12_sol_2", "DATA02", "DATA03"),
+        ("15_anulpha_pass", "DATA02", "DATA03"),
+        ("zone_1", "DATA00", "DATA00"),
+        ("zone_2", "DATA00", "DATA00"),
+        ("zone_3", "DATA00", "DATA00"),
+        ("zone_4", "DATA00", "DATA00"),
+    ];
+
+    let mut total_nodes = 0usize;
+    let mut total_unresolved = 0usize;
+    let mut files_seen = 0usize;
+    let mut clean_files = 0usize;
+    for &(dir, fwd_archive, rev_archive) in circuits {
+        for (archive, variant) in [(fwd_archive, "track"), (rev_archive, "track_reversed")] {
+            let vex_path = format!("/data/environments/{dir}/{variant}.vex");
+            let model_path = format!("/data/environments/{dir}/{variant}.rcsmodel");
+            let spec = format!("{}:PS3_GAME/USRDIR/{archive}.PSARC", image.display());
+            let mut open = oag_assets::psarc::Archive::open(&spec).expect("the archive opens");
+            let (Ok(vex_blob), Ok(model_blob)) =
+                (open.read_path(&vex_path), open.read_path(&model_path))
+            else {
+                // `zone_1`..`zone_4` have no `track_reversed`.
+                continue;
+            };
+            files_seen += 1;
+            let model = rcsmodel::Model::parse(&model_blob).expect("the .rcsmodel parses");
+            let nodes = mesh_nodes(&vex_blob);
+            let unresolved = nodes
+                .iter()
+                .filter(|(_, hash, ..)| model.mesh(*hash).is_none())
+                .count();
+            total_nodes += nodes.len();
+            total_unresolved += unresolved;
+            clean_files += usize::from(unresolved == 0);
+            println!(
+                "{archive}:{vex_path}: {}/{} Mesh nodes resolve",
+                nodes.len() - unresolved,
+                nodes.len()
+            );
+        }
+    }
+    println!(
+        "{files_seen} files censused, {total_unresolved} of {total_nodes} Mesh nodes unresolved \
+         disc-wide, {clean_files} file(s) resolve every node"
+    );
+    assert!(files_seen >= 24, "only {files_seen} files censused");
+    assert!(
+        clean_files >= 2,
+        "expected at least two files with nothing unresolved"
+    );
+    assert!(
+        total_unresolved <= 300,
+        "{total_unresolved} unresolved nodes disc-wide, more than this ratchet allows"
+    );
+}
+
+/// Claim 11: 9 of the 13 donor hashes claim 8 confirmed by bounding-box fit
+/// are also **index-byte-identical, at equal vertex count**, across every
+/// file that carries them - a stronger and independent confirmation that the
+/// hash addresses a shared asset rather than being a box-fit coincidence.
+///
+/// **The remaining 4 do not contradict that**: each splits into exactly two
+/// vertex-count tiers across the files that carry it (`Skycar_1Shape` 40
+/// vertices in one file and 848 in another; `shipintersteller1Shape` 1280 vs
+/// 8; `WesSkycar_C1Shape` 824 vs 48; `HyperContintentCraft1Shape` 3568 vs
+/// 72) - the same key naming two different levels of detail rather than two
+/// unrelated meshes. That is what a key derived from the *source* asset
+/// rather than from its cooked, per-file bytes would produce, and it is also
+/// what explains a finding claim 8 already carried without an explanation:
+/// `Skycar_1Shape` fills Talon's Junction's box in `tech_de_ra` (848
+/// vertices) and not in `amphiseum` (the 40-vertex stub).
+///
+/// **What this does not settle.** Shared identity is not the same claim as
+/// "nothing resolves these hashes at runtime" - this project has not watched
+/// whether the shipped executable ever holds a second circuit's `.rcsmodel`
+/// open while a level is resident, which is what would turn "no donor is
+/// wired" into a documented negative rather than an open question. The RPCS3
+/// GDB harness in `HANDOVER.md` ("A PS3 title now boots, drives and
+/// screenshots from a script") is the route that would answer it.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn nine_of_the_thirteen_confirmed_donors_are_index_identical() {
+    let Some(image) = image() else {
+        return;
+    };
+    // The 13 hashes claim 8 found a donor for, read off its own printed
+    // output rather than re-derived, so this test is a second, independent
+    // reading of the same finding rather than a restatement of the first.
+    const CONFIRMED: [(u32, &str); 13] = [
+        (0x1163c558, "Skycar_1Shape"),
+        (0x237bd8a2, "animation_tug1aShape"),
+        (0x515ad82e, "tanker1aShape"),
+        (0xcbd56798, "shipintersteller1Shape"),
+        (0x296ae2e0, "WesSkycar_C1Shape"),
+        (0x1c84ed86, "HyperContintentCraft1Shape"),
+        (0x126a1690, "tug3bShape"),
+        (0x5c863b87, "Eggship24Shape"),
+        (0xd35e6954, "animation_tug2Shape"),
+        (0x4b008620, "shipintersteller4Shape"),
+        (0xa040b44c, "shipintersteller5Shape"),
+        (0x76f2bc7b, "tug5Shape"),
+        (0xcd72c9e1, "tanker5Shape"),
+    ];
+
+    // hash -> per-file (index buffer bytes, vertex count), one entry per
+    // distinct file that carries a chunk under that hash.
+    let mut by_hash: std::collections::BTreeMap<
+        u32,
+        std::collections::BTreeMap<String, (Vec<u8>, usize)>,
+    > = Default::default();
+    for archive in [
+        "DATA00", "DATA01", "DATA02", "DATA03", "DATA04", "DATA05", "DATA06",
+    ] {
+        let spec = format!("{}:PS3_GAME/USRDIR/{archive}.PSARC", image.display());
+        let mut open = oag_assets::psarc::Archive::open(&spec).expect("the archive opens");
+        let paths: Vec<String> = open
+            .paths()
+            .iter()
+            .filter(|p| p.ends_with(".rcsmodel"))
+            .cloned()
+            .collect();
+        for path in paths {
+            let Ok(bytes) = open.read_path(&path) else {
+                continue;
+            };
+            let Ok(model) = rcsmodel::Model::parse(&bytes) else {
+                continue;
+            };
+            for mesh in &model.meshes {
+                if !CONFIRMED.iter().any(|(h, _)| *h == mesh.hash) {
+                    continue;
+                }
+                let mut idx_bytes = Vec::new();
+                let mut vertex_total = 0usize;
+                for sm in &mesh.submeshes {
+                    if let Some(ib) =
+                        bytes.get(sm.index_offset..sm.index_offset + sm.index_count * 2)
+                    {
+                        idx_bytes.extend_from_slice(ib);
+                    }
+                    vertex_total += sm.vertex_count;
+                }
+                by_hash
+                    .entry(mesh.hash)
+                    .or_default()
+                    .entry(format!("{archive}:{path}"))
+                    .or_insert((idx_bytes, vertex_total));
+            }
+        }
+    }
+
+    let mut identical = 0usize;
+    let mut tiered = 0usize;
+    for (hash, name) in CONFIRMED {
+        let files = by_hash.get(&hash).cloned().unwrap_or_default();
+        let vertex_counts: std::collections::BTreeSet<usize> =
+            files.values().map(|(_, v)| *v).collect();
+        let all_index_identical = {
+            let mut it = files.values().map(|(i, _)| i);
+            let first = it.next();
+            first.is_some_and(|f| it.all(|i| i == f))
+        };
+        println!(
+            "{name} {hash:#010x}: {} file(s), vertex_counts={vertex_counts:?}, \
+             index-identical={all_index_identical}",
+            files.len()
+        );
+        if all_index_identical && vertex_counts.len() == 1 {
+            identical += 1;
+        } else if vertex_counts.len() == 2 {
+            tiered += 1;
+        }
+    }
+    assert_eq!(
+        (identical, tiered),
+        (9, 4),
+        "the identity split this finding is: 9 index-identical, 4 in two vertex-count tiers"
     );
 }
