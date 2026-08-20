@@ -250,6 +250,19 @@ index: a count followed by that many word offsets whose contents are file
 offsets - on `track_surface`, `2 + 70 * 4` entries, the header's two pointers
 plus each record's `+0x10, +0x14, +0x28, +0x2c`.
 
+### One slot, one variant
+
+**Every chunk sharing a material slot needs the same variant.** Measured over
+all 123 `.rcsmodel` of `DATA00.PSARC` and the 3,566 material slots they use:
+**zero** slots serve chunks whose chunk-determined keys differ.
+
+That is an architectural fact rather than a curiosity. The chunk-to-material
+map is many-to-one, so a slot *could* have had to be two things at once, and
+`oag-render` binds one texture bind group per material slot rather than per
+draw. Because it never does, a per-material variant selector can ride in that
+bind group; if it ever did, the selector would have to move to the draw call.
+`a_material_slot_never_needs_two_different_variants` holds the line.
+
 ### Still open
 
 - **The frame-determined half.** A renderer can pick the chunk-determined axes

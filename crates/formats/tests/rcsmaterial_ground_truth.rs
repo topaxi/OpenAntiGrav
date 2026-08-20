@@ -240,3 +240,64 @@ fn a_chunk_determined_key_selects_a_variant_that_exists() {
          the key is not what this reads it as"
     );
 }
+
+/// **Every chunk sharing a material slot needs the same variant.**
+///
+/// This is an architectural invariant, not a curiosity. `oag-render` binds one
+/// texture bind group per *material slot*, not per draw, so a per-material
+/// variant selector can ride in that group only if a slot never has to be two
+/// things at once. The chunk-to-material map is many-to-one, so it could.
+///
+/// Measured over all 123 `.rcsmodel` of `DATA00.PSARC` and their 3,566 slots in
+/// use: it never does. If this ever fails, the selector has to move from the
+/// bind group to the draw call.
+#[test]
+#[ignore]
+fn a_material_slot_never_needs_two_different_variants() {
+    let Some(image) = image() else {
+        return;
+    };
+    let spec = format!("{}:PS3_GAME/USRDIR/DATA00.PSARC", image.display());
+    let Ok(mut archive) = oag_assets::psarc::Archive::open(&spec) else {
+        return;
+    };
+    let paths: Vec<String> = archive
+        .paths()
+        .iter()
+        .filter(|p| p.ends_with(".rcsmodel"))
+        .cloned()
+        .collect();
+
+    let (mut models, mut slots, mut split) = (0usize, 0usize, 0usize);
+    for path in paths {
+        let Ok(bytes) = archive.read_path(&path) else {
+            continue;
+        };
+        let Ok(model) = oag_formats::rcsmodel::Model::parse(&bytes) else {
+            continue;
+        };
+        models += 1;
+        let mut per_slot: BTreeMap<u32, BTreeSet<String>> = BTreeMap::new();
+        for mesh in &model.meshes {
+            per_slot
+                .entry(mesh.material)
+                .or_default()
+                .insert(Features::for_chunk(mesh.decl.as_ref()).name());
+        }
+        for (slot, keys) in &per_slot {
+            slots += 1;
+            if keys.len() > 1 {
+                split += 1;
+                println!("  {path} slot {slot}: {keys:?}");
+            }
+        }
+    }
+    println!("{models} model(s), {slots} material slot(s) in use");
+    assert!(models >= 123, "only {models} models; the corpus narrowed");
+    assert!(slots >= 3_566, "only {slots} slots; the corpus narrowed");
+    assert_eq!(
+        split, 0,
+        "a material slot serves chunks needing different variants, so a \
+         per-slot selector is not enough and it has to move to the draw call"
+    );
+}
