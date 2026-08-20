@@ -20,7 +20,7 @@ mod rcsmodel_common;
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use oag_formats::rcsmaterial::{Class, Features, PASS_WORD_BITS, RcsMaterial};
+use oag_formats::rcsmaterial::{Class, Features, PASS_WORD_BITS, RcsMaterial, fragment};
 use rcsmodel_common::image;
 
 /// Every archive on the disc that holds `.rcsmaterial` files.
@@ -360,5 +360,79 @@ fn every_shipped_permutation_is_one_this_reading_can_build() {
         unmatched.is_empty(),
         "{} shipped permutation(s) this reading cannot build",
         unmatched.len()
+    );
+}
+
+/// **Every fragment program on the disc decodes, and stops where it says it
+/// does.**
+///
+/// The decoder's own acceptance test. A wrong instruction stride, a
+/// mis-detected inline constant or a wrong end bit all show up here as a block
+/// that runs past its declared code length or never reaches an `END`, because
+/// the stream would desynchronise within a few instructions.
+///
+/// The port is checked against `scripts/ps3-microcode.py` rather than only
+/// against itself. On `DATA00.PSARC`'s 693 materials the two agree on **10,276
+/// of 10,276** blocks reaching a clean `END` and on **330** instructions
+/// carrying opcode `0x3e`; diffing three real blocks instruction by
+/// instruction - `track_surface` #7 and #9, and
+/// `detonator_ship_rich_iridescent` #2 - gives identical opcode and destination
+/// sequences, differing only where the reference prints its `op3B`/`op3D`
+/// placeholders and this leaves them unnamed. The numbers below are larger
+/// because this walks all seven archives.
+#[test]
+#[ignore]
+fn every_fragment_program_on_the_disc_decodes_to_a_clean_end() {
+    let Some(_) = image() else {
+        return;
+    };
+    let (mut blocks, mut clean, mut instructions) = (0usize, 0usize, 0usize);
+    let mut unnamed: BTreeMap<u8, usize> = BTreeMap::new();
+    for (path, bytes) in &every_material() {
+        let mut at = 0usize;
+        while let Some(i) = bytes[at..].windows(4).position(|w| w == b"SHO\x08") {
+            let block = at + i;
+            at = block + 4;
+            // Fragment blocks only; the vertex ones are a different encoding.
+            if bytes.get(block + 4..block + 8) != Some(&1u32.to_be_bytes()[..]) {
+                continue;
+            }
+            blocks += 1;
+            match fragment::Program::parse(bytes, block) {
+                Some(p) if p.instructions.last().is_some_and(|i| i.end) => {
+                    clean += 1;
+                    instructions += p.instructions.len();
+                    for i in &p.instructions {
+                        if i.name().is_none() {
+                            *unnamed.entry(i.opcode).or_default() += 1;
+                        }
+                    }
+                }
+                _ => println!("  {path}: block at {block:#x} does not reach an END"),
+            }
+        }
+    }
+    println!("{blocks} fragment block(s), {clean} clean, {instructions} instruction(s)");
+    println!("  opcodes outside the table: {unnamed:?}");
+
+    assert!(
+        blocks >= 37_461,
+        "only {blocks} blocks; the corpus narrowed"
+    );
+    assert_eq!(clean, blocks, "a block did not stop where it said it would");
+    assert!(instructions > 1_900_000, "only {instructions} instructions");
+    // Exactly three opcodes in shipped code are outside nouveau's table. If a
+    // fourth appeared, either the corpus grew or the stride is wrong somewhere
+    // and garbage is being read as an opcode.
+    assert_eq!(
+        unnamed.keys().copied().collect::<Vec<_>>(),
+        vec![0x3b, 0x3d, 0x3e],
+        "an opcode outside the three known-unnamed ones"
+    );
+    assert_eq!(
+        unnamed.get(&0x3e).copied(),
+        Some(1_155),
+        "the rarest of the three - 330 in DATA00 alone, which is where an independent \
+         Python census counted the same number"
     );
 }

@@ -586,5 +586,7 @@ impl RcsMaterial {
     }
 }
 
+pub mod fragment;
+
 #[cfg(test)]
 mod tests;

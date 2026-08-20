@@ -393,6 +393,46 @@ there, because a material may declare a lightmap in some variants and not in
 the one an ordinary lit pass binds. The 322 sits beside the 327 chunks that
 declare a `lightmapUV`, which is the consistency check.
 
+### The fragment microcode decodes in Rust (2026-08-20)
+
+`oag_formats::rcsmaterial::fragment` ports the decoder from
+[`scripts/ps3-microcode.py`](../../scripts/ps3-microcode.py), which stays the
+reference: that script established the container facts empirically, by scoring
+every candidate ordering, and this reimplements the reading rather than
+re-deriving it.
+
+Three container facts it rests on, none guessable from the bytes:
+
+- **A fragment dword is stored with its 16-bit halves swapped** - a word is
+  `(u16 at +2) << 16 | (u16 at +0)`. Read as a plain big-endian `u32` the
+  stream decodes to garbage.
+- **An instruction whose source selects an inline constant is followed by that
+  constant's 16 bytes**, so the stream advances 32 rather than 16 there.
+- The code's byte length is at the program sub-header's `+0x00`, its offset at
+  `+0x10`.
+
+**Checked against the reference rather than only against itself.** On
+`DATA00.PSARC`'s 693 materials the two agree on **10,276 of 10,276** fragment
+blocks reaching a clean `END` at exactly their declared length, and on **330**
+instructions carrying opcode `0x3e`. Diffing three real blocks instruction by
+instruction - `track_surface` #7 and #9, and `detonator_ship_rich_iridescent`
+#2 - gives identical opcode and destination sequences, differing only where the
+reference prints its `op3B`/`op3D` placeholders and this leaves them unnamed.
+
+Across all seven archives: **37,461 of 37,461 blocks clean, 1,920,588
+instructions** (`every_fragment_program_on_the_disc_decodes_to_a_clean_end`).
+That check is sharper than it looks - a wrong stride, a mis-detected inline
+constant or a wrong end bit desynchronises the stream within a few
+instructions, and the block then runs past its declared length instead of
+stopping on an `END`.
+
+**Exactly three opcodes in shipped code are outside nouveau's table**: `0x3b`
+(86,664 uses), `0x3d` (28,634) and `0x3e` (1,155). They stay **unnamed** here
+rather than guessed - `renderer.md` reads `0x3b`/`0x3d` as normalise/rsq
+helpers from their position in the stream, which is a reading of a use rather
+than of an opcode. A fourth appearing would mean the corpus grew or the stride
+is wrong somewhere, and the test says so.
+
 ### Still open
 
 - **The frame-determined half.** A renderer can pick the chunk-determined axes
