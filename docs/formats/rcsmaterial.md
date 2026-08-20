@@ -316,6 +316,22 @@ hashes, no collisions**, and of the **143** distinct permutation values across
 every material, **138 come from the word and 5 from the standalone names,
 leaving none unmatched** (`every_shipped_permutation_is_one_this_reading_can_build`).
 
+**What that sweep does and does not prove.** It is *invariant under any
+permutation of which bit means what*: if `name_for'(v) = name_for(pi(v))` for a
+bijection `pi` on 0..4095, the generated name set - and so the hash set - is
+unchanged. So the sweep is decisive about the **token vocabulary**, the **field
+structure** (two two-bit selectors rather than four independent bits) and the
+**concatenation order**, and contributes **nothing** about numeric bit
+positions. Those rest on the loop's own bit tests and on four independent
+agreements from the pass code, which is why the layout is recorded at
+confidence **93** while the vocabulary and order sit at 97. And even at 97 it is
+a *sufficiency* check: it proves every shipped name is generated, not that no
+other generator would also generate them.
+
+The practical consequence is that `LIT_RACE_PASS = 1` is a **code reading**, not
+a disc measurement. A permuted layout would still reproduce all 143 names while
+putting the lit race pass at a different word.
+
 > **A retracted reading.** An earlier round of this page described a "pointer
 > table" of 21 one-bit tokens at vaddr `0x8b7f08`. **There is no such table.**
 > Those 24 consecutive words are a slice of the **TOC** at base `0x8bd3c4` -

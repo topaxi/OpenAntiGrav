@@ -189,11 +189,15 @@ pub const TOKENS: [&str; 22] = [
 /// which belongs to a flag layout. A selector built on that order would have
 /// picked the wrong variant every time.
 ///
-/// Confidence 95: read from the loop's own bit tests, and checked by sweeping
-/// all 4096 words - **4096 distinct hashes, no collisions**, and of the 143
-/// distinct permutation hashes across 29,520 variants, **138 are produced by
-/// this word and the remaining 5 are the standalone names, leaving none
-/// unmatched**.
+/// Confidence 93, and the sweep is **not** what earns it. Sweeping all 4096
+/// words does give 4096 distinct hashes with no collisions, and accounts for
+/// all 143 shipped permutations - but that result is *invariant under any
+/// permutation of which bit means what*, since relabelling the bits is a
+/// bijection on 0..4095 and leaves the generated name set alone. The sweep is
+/// therefore decisive about the token vocabulary, the field structure and the
+/// concatenation order, and says nothing about numeric bit positions. Those
+/// come from the loop's own bit tests, corroborated by four independent
+/// agreements in the pass code.
 pub const PASS_WORD_BITS: u32 = 12;
 
 /// The permutation word an **ordinary lit race pass** sets on a track surface.
@@ -207,9 +211,11 @@ pub const PASS_WORD_BITS: u32 = 12;
 /// The chunk half is added on top: `| 0b100` for a lightmapped chunk
 /// (`IleLightmap`), `| 0b010` for a vertex-coloured one (`IleVertex`).
 ///
-/// Confidence 95. `Job RenderTrackWithLights_zWriters` (`0x408fa8`) and
-/// `_blended` (`0x4074e0`) - reached through slot 3 of each job's vtable -
-/// never write bits 5, 6 or 7. `ShadowToAlpha` belongs to the shadow
+/// Confidence 95, and it is a **code reading rather than a disc measurement**:
+/// see [`PASS_WORD_BITS`] on why the 143-of-143 sweep cannot corroborate a bit
+/// position. `Job RenderTrackWithLights_zWriters` (`0x408fa8`) and `_blended`
+/// (`0x4074e0`) - reached through slot 3 of each job's vtable - never write
+/// bits 5, 6 or 7. `ShadowToAlpha` belongs to the shadow
 /// compositing pass (`li 9,32` at `0x405d48`) and `ShadowMap` only to the
 /// model and ship path (`li 6,64` at `0x3ea58c`), which is why no shipped
 /// variant pairs `ShadowMap` with an `Ile*` token.
