@@ -99,9 +99,9 @@ constants at `+0x010`, `+0x024` and `+0x038` - `17.333`, `24.000`, `17.333` -
 which are the diagonal of a 4x4 float matrix based at `+0x10` and identical
 across all eight bodies and all samples: a per-body extent or inertia diagonal.
 
-**Confidence 75 that this array is the craft.** The count matching the grid
-size and a constant shape diagonal are two independent signs, but no single
-body has been tied to the player yet.
+**Confidence 88 that this array is the craft.** The count matches the grid
+size, the shape diagonal is constant per body, and - settled below - one element
+responds to the controller's throttle.
 
 The world pointer is **not** static - it was `0x3056cea0` on one boot and
 `0x3056cda0` on the next - so the breakpoint-and-poll route is the anchor, and
@@ -127,43 +127,52 @@ So these are a transform that moves as the craft moves. A stored speed scalar
 has not been located, and identifying the player's body needs a run that keeps
 the raw dumps rather than a ranked summary.
 
-## Which of the eight is the player: not settled
+## Which of the eight is the player, and where the throttle goes
 
 The dumps for this are kept out of the repository - they are guest memory, which
 is game content and never commits. `just audit-leakage` covers the rule.
 
-All eight bodies were dumped whole at four moments on a fixed cadence, three
-with thrust held and one after cutting thrust and holding both airbrakes, on the
-theory that seven bodies keep covering ground and the player does not. It did
-not separate them:
+**Body 7 is the player, and `entry+0x4c4` is engine thrust. Confidence 85.**
+Driving a *pattern* rather than a single change is what settled it: two full
+cycles of three samples thrusting and three coasting, twelve samples in all,
+with every float offset of every body scored against the input signal. One field
+of one body came out, and it is not close:
 
-    body 0    37.30/s    10.01/s    26.95/s
-    body 1    35.63/s    10.01/s    31.15/s
-    body 3    36.93/s    13.54/s    26.53/s
-    body 7    15.10/s     4.74/s     0.26/s
+    entry+0x4c4, pattern TTT---TTT---
+    body 7   r=+0.942   thrust mean  77.25   coast mean   0.73
+    body 3   r=+0.530   thrust mean 118.31   coast mean  89.23
+    body 4   r=+0.328   thrust mean 104.86   coast mean  95.89
+    body 0   r=+0.239   thrust mean 104.87   coast mean  97.37
+    body 1   r=+0.044   thrust mean 110.06   coast mean 108.47
 
-*Every* body slowed across the braking interval and most recovered, which is not
-what eight racers do when one of them brakes. Either the positions are not in
-world space, or the interval is not measuring what it looks like.
+Body 7 reads `78.6  56.9  73.1` while the button is held and `2.5  0.7  0.7`
+after it is released, then `77.7  60.9  116.3` and `0.3  0.1  0.1` on the second
+cycle. It collapses to nothing the moment the throttle goes and comes straight
+back. Every other body carries the same field at a steady 90-120 throughout,
+which is what it should be - the AI craft are running their own engines, and
+only one of the eight is on the end of this pad.
 
-Scanning instead for offsets where exactly one body behaves unlike the other
-seven across that interval flags **body 3**, at three offsets in one cluster
-(`+0x1a0`, `+0x1b4`, `+0x1c0`, ratios 4.9 to 6.9 against the next body). The
-screenshot for that sample explains it and spoils it at once: the craft is
-barrel-rolled against a wall with **shield 100% -> 0%** and the speed readout
-down from 100 to 77. So the run measured a crash, not braking. Body 3 spiking
-in the interval the player crashed is consistent with body 3 being the player,
-and equally consistent with those offsets being a contact impulse - which every
-body would show on its own collisions.
+That is also the direct confirmation the body array was missing, so **the
+reading that this array is the craft goes to confidence 88**: one element of it
+responds to the controller.
 
-**Confidence 55, below the naming floor, so nothing is renamed for it.** The
-test that would settle it has to avoid touching anything: cut thrust on a
-straight and coast, or compare against the position indicator the HUD already
-draws.
+The player's index is not fixed. An earlier run flagged a different body, and
+the grid slot has no reason to be stable across races.
 
-Structurally the dumps are mostly inert - of the entry's 320 words, 229 are
-byte-identical across all eight bodies and all four samples, 80 move, and 11 are
-constant per body.
+### Two negatives worth keeping, because both looked like results
+
+**Braking is not a usable manipulation.** Cutting thrust and holding both
+airbrakes put the craft into a wall - shield `100% -> 0%`, speed readout `100 ->
+77`, the craft barrel-rolled - and the body that then stood out was as easily
+carrying a contact impulse as being the player. The manipulation has to be one
+that touches nothing.
+
+**Six samples is not enough to correlate anything.** A six-sample run scored
+`entry+0x068` on body 2 at `r=-0.987` and it looked clean and unarguable. At
+twelve samples that same body and offset scores `r=-0.040`, and the whole
+cluster around it collapses into noise. With this few degrees of freedom a
+single cycle will hand out `|r| > 0.9` to chance; two cycles and twelve samples
+are what made the real field separate from seven near-identical decoys.
 
 ## Globals
 
