@@ -146,6 +146,10 @@ struct VertexInput {
     @location(5) anim: u32,
     @location(6) lightmap_texcoord: vec2<f32>,
     @location(7) xform: u32,
+    // HD's sun-occlusion mask - see `oag_render::mesh::GpuVertex::sun_mask`.
+    // Not carried by `colour.a`, which is already the boost plume's baked
+    // falloff on other titles and the bloom glow mask on this one.
+    @location(8) sun_mask: f32,
 };
 
 struct VertexOutput {
@@ -159,6 +163,7 @@ struct VertexOutput {
     // Clip-space w, which for a perspective projection is view-space depth.
     // What Wipeout HD's own vertex programs hand their fog - see `Fog::curve`.
     @location(6) view_depth: f32,
+    @location(7) sun_mask: f32,
 };
 
 @vertex
@@ -200,6 +205,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     out.lit = in.lit;
     out.world = world.xyz;
     out.view_depth = out.clip.w;
+    out.sun_mask = in.sun_mask;
     return out;
 }
 
@@ -257,13 +263,9 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     //     block #9, lightmapped:  pow(lightmap, power) * scale + f[TC1]
     //     block #8, no lightmap:  f[TC1] + constantAmbientColour
     //
-    // and that sum multiplies the albedo. **Neither has an `N.L` or a sun
-    // colour**, which is why no sun term appears here: the disc's sun reaches
-    // this material only through the specular path below. A `sun * ndl *
-    // baked.a` summand used to stand where the comment ends, and with the
-    // lightmap-less placeholder's alpha of 1 it fired at full strength on the
-    // two thirds of a circuit that has no lightmap - measured as 14.3 % of
-    // the frame clipped to white against the reference's 5.8 %.
+    // and that sum multiplies the albedo. **Neither block has an `N.L` or a
+    // sun colour of its own** - `track_surface`'s 15 chunks of Talon's
+    // Junction compute exactly this and nothing more.
     //
     // `scene.light.ambient` is `constantAmbientColour` - the preimage of the
     // hash the microcode patches into block #8's `{const}`. `f[TC1]` is HD's
@@ -283,7 +285,44 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // by one level, and that movement is the `tint` line below rather than this
     // one. Kept because not multiplying is the clearer statement.)
     let vertex_light = select(vec3<f32>(0.0), in.colour.rgb, colour_is_light > 0.5);
-    let authored = scene.light.ambient + prelit + vertex_light;
+
+    // **The sun-occlusion mask, restored 2026-08-20.** Two independently
+    // decoded carriers of the same scalar: a lightmapped chunk's shadow lives
+    // in its lightmap's own alpha, and a vertex-lit chunk's lives in its
+    // colour set's fourth byte - `in.sun_mask`, from
+    // `oag_formats::rcsmodel::Mesh::vertex_light`. They never both carry real
+    // data (a chunk bakes into the lightmap atlas *or* its vertices, never
+    // both - see `mesh/rcs.rs`), and each side's absence is `1.0`
+    // (unmasked): the no-lightmap placeholder's alpha, and `sun_mask`'s own
+    // default for a chunk with no colour set. So the product reads whichever
+    // side is real and is the identity where neither is.
+    //
+    // **A prior version of this comment said no sun term belonged here at
+    // all**, because the general block #8/#9 formula above has none. That
+    // was the read on two materials; seven read variant-by-variant on
+    // 2026-08-20 refute it. `diffuse_with_specular_from_alpha` (86 chunks of
+    // Talon's Junction), `..._scalar` (80), `diffusewithalphachannel` (43),
+    // `track_wall` (33) and `glasstest` (33) - **275 of Talon's Junction's
+    // 301 drawn materials, against `track_surface`'s 15** - each normalise
+    // their interpolated world normal, dot it against the sun direction,
+    // multiply by the sun colour, gate it by this same mask, add the prelit
+    // term and multiply the sum into the albedo. So this is the rule and
+    // `track_surface` the exception, applied to every chunk alike for want of
+    // the per-material branch that would tell the two apart - a stand-in of
+    // the same shape as the shared specular exponent below, and the
+    // 15-of-301 minority it is wrong for reads unlit rather than lit, which
+    // this project has not yet measured against the frame.
+    //
+    // **What this replaces.** A `sun * (ndl * baked.a)` summand once stood
+    // here with `baked.a` fixed at the no-lightmap placeholder's `1.0` -
+    // full sun, unoccluded, everywhere - measured at 14.3 % of the frame
+    // clipped to white against the reference's 5.8 %, worse than the sun
+    // term being absent entirely, which is why it was removed rather than
+    // left wrong. `mesh/rcs.rs` used to take only `.rgb` from the colour set
+    // and this mask did not exist yet.
+    let mask = baked.a * in.sun_mask;
+    let sun_diffuse = scene.light.sun * (ndl * mask);
+    let authored = scene.light.ambient + prelit + vertex_light + sun_diffuse;
 
     let texel = textureSample(albedo, albedo_sampler, in.texcoord);
 
@@ -293,29 +332,12 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // saturated dot is multiplied by between its `LG2` and its `EX2` gives 5
     // on 759 blocks, 10 on 704, 32 on 295, and a tail of 26.156, 40 (the
     // ships) and 300. 32 is the commonest round value and holds the place
-    // until the pipeline can pick one per material. Masked by
-    // the sun's own incidence, the lightmap's shadow alpha and the diffuse
+    // until the pipeline can pick one per material. Gated by `mask` above -
+    // the same sun-occlusion scalar the diffuse term reads, exactly where the
+    // disc's own microcode gates its specular by it too - and by the diffuse
     // texture's alpha (gloss lives there; a DXT1 diffuse has alpha 1
     // everywhere, which is full gloss, as the original samples it too). Zero
     // whenever the authored rig is off: the stand-in never had one.
-    //
-    // **This used to say the specular was the only way directional light
-    // reaches an HD surface. Five materials read on 2026-08-20 refute it.**
-    // `diffuse_with_specular_from_alpha` (86 chunks of Talon's Junction),
-    // `..._scalar` (80), `diffusewithalphachannel` (43), `track_wall` (33) and
-    // `glasstest` (33) each normalise their interpolated world normal, dot it
-    // against a patched direction, multiply by a patched colour, **gate it
-    // with a sun-occlusion scalar**, add the prelit term and multiply the sum
-    // into the albedo. `track_surface`, which the removal above was justified
-    // on, is the exception at 15 chunks.
-    //
-    // So the removal is a crude fix for a missing mask: this renderer applied
-    // `sun * (ndl * baked.a)` with `baked.a` at 1.0 from the no-lightmap
-    // placeholder - full sun, unoccluded - where the disc gates the same sun
-    // by a mask that is zero on 41 % of vertices. Unmasked sun was worse than
-    // none, which is why removing it measured better. **The faithful fix is
-    // the colour set's fourth byte**, which `mesh/rcs.rs` currently drops; see
-    // renderer.md, "The sun is real and it is masked".
     let to_eye = normalize(scene.fog.camera - in.world);
     let half_vector = to_eye + scene.light.direction;
     let ndh = clamp(
@@ -324,7 +346,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         1.0,
     );
     let specular = scene.light.sun
-        * (pow(ndh, 32.0) * ndl * baked.a * texel.a * scene.light.specular_scale
+        * (pow(ndh, 32.0) * ndl * mask * texel.a * scene.light.specular_scale
             * scene.light.enabled * in.lit);
 
     // The authored path shades in linear light, as the RSX does: the samples

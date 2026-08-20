@@ -119,6 +119,7 @@ pub fn build(label: &str, blob: &[u8], rotation_degrees: f32) -> Result<Model> {
                 anim: 0,
                 lightmap_texcoord: [0.0, 0.0],
                 xform: 0,
+                sun_mask: 1.0,
             });
         }
         let start = indices.len() as u32;

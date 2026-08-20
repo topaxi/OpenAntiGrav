@@ -267,6 +267,7 @@ fn swap_fixture() -> (TrackPvs, SwapConflicts) {
         lit: 1.0,
         anim: 0,
         xform: 0,
+        sun_mask: 1.0,
     };
     model.indices.clear();
     for (draw, base_x) in [(0usize, 100.0f32), (1, 0.0), (2, 0.0), (3, 0.0)] {

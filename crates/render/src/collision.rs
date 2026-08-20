@@ -375,6 +375,7 @@ fn vertex(position: [f32; 3], normal: [f32; 3], colour: [f32; 4], lit: f32) -> G
         lit,
         anim: 0,
         xform: 0,
+        sun_mask: 1.0,
     }
 }
 

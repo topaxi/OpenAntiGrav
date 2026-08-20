@@ -824,13 +824,13 @@ impl Mesh {
         self.coords_at(data, submesh, stride, usize::from(attribute.offset), format)
     }
 
-    /// One submesh's **baked per-vertex light**, or an error if the
-    /// declaration carries no colour set.
+    /// One submesh's **baked per-vertex light**, and the sun-occlusion mask
+    /// beside it, or an error if the declaration carries no colour set.
     ///
-    /// This is HD's `f[TC1]`: the term the fragment program *adds* to the
-    /// lightmap contribution before multiplying the albedo - see
-    /// `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`, "The lit track
-    /// material". The vertex program moves it across unchanged
+    /// `[r, g, b, mask]`. The colour is HD's `f[TC1]`: the term the fragment
+    /// program *adds* to the lightmap contribution before multiplying the
+    /// albedo - see `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`, "The
+    /// lit track material". The vertex program moves it across unchanged
     /// (`MOV o[TC1].xyz, v[N].xyzx`), so the three colour bytes normalise and
     /// nothing else happens to them.
     ///
@@ -839,15 +839,22 @@ impl Mesh {
     /// whose `(255, 128)` are unanimous across all 6,946 blocks that use it -
     /// but that form reads attribute `0x868f8229`, and **no `.rcsmodel` on the
     /// disc declares it** (0 of 123). The attribute the models actually carry
-    /// is a plain colour set whose fourth byte is 41 % zero and 52 % full
-    /// across Talon's Junction's 240,400 lit vertices: a mask, not an
-    /// exponent. What that fourth byte gates is not read.
+    /// is a plain colour set.
+    ///
+    /// **The fourth byte is the sun-occlusion mask**, settled 2026-08-20: 41 %
+    /// zero and 52 % full across Talon's Junction's 240,400 lit vertices, and
+    /// the vertex program routes `colourSet.w` to a spare interpolator the
+    /// fragment program reads in two places - gating the sun term and gating
+    /// the specular, exactly where a lightmapped variant of the same material
+    /// uses `lightmap.a` instead. See
+    /// `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`, "The sun is real and
+    /// it is masked". Confidence 86.
     pub fn vertex_light(
         &self,
         data: &[u8],
         submesh: &SubMesh,
         stride: usize,
-    ) -> Result<Vec<[f32; 3]>> {
+    ) -> Result<Vec<[f32; 4]>> {
         let decl = self.decl.as_ref().ok_or(Error::NoTexcoord)?;
         let attribute = decl.vertex_colour().ok_or(Error::NoTexcoord)?;
         let offset = usize::from(attribute.offset);
@@ -867,6 +874,7 @@ impl Mesh {
                     f32::from(data[at]) / 255.0,
                     f32::from(data[at + 1]) / 255.0,
                     f32::from(data[at + 2]) / 255.0,
+                    f32::from(data[at + 3]) / 255.0,
                 ]
             })
             .collect())

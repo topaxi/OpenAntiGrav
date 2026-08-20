@@ -477,7 +477,7 @@ pub fn build(
                 step_mode: wgpu::VertexStepMode::Vertex,
                 attributes: &wgpu::vertex_attr_array![
                     0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x2,
-                    4 => Float32, 5 => Uint32, 6 => Float32x2, 7 => Uint32
+                    4 => Float32, 5 => Uint32, 6 => Float32x2, 7 => Uint32, 8 => Float32
                 ],
             })],
             compilation_options: Default::default(),
@@ -534,7 +534,7 @@ pub fn build(
                 step_mode: wgpu::VertexStepMode::Vertex,
                 attributes: &wgpu::vertex_attr_array![
                     0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x2,
-                    4 => Float32, 5 => Uint32, 6 => Float32x2, 7 => Uint32
+                    4 => Float32, 5 => Uint32, 6 => Float32x2, 7 => Uint32, 8 => Float32
                 ],
             })],
             compilation_options: Default::default(),
@@ -610,7 +610,7 @@ pub fn build(
                     step_mode: wgpu::VertexStepMode::Vertex,
                     attributes: &wgpu::vertex_attr_array![
                         0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x2,
-                        4 => Float32, 5 => Uint32, 6 => Float32x2, 7 => Uint32
+                        4 => Float32, 5 => Uint32, 6 => Float32x2, 7 => Uint32, 8 => Float32
                     ],
                 })],
                 compilation_options: Default::default(),

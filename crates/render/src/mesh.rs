@@ -814,6 +814,7 @@ fn build_class(
                         lit: if v.colour.is_some() { 0.0 } else { 1.0 },
                         anim,
                         xform,
+                        sun_mask: 1.0,
                     });
                 }
                 for tri in batch.triangles() {

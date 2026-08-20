@@ -186,6 +186,7 @@ mod tests {
             lit: 0.0,
             anim: 0,
             xform: 0,
+            sun_mask: 1.0,
         }
     }
 

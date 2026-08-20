@@ -77,4 +77,15 @@ pub struct GpuVertex {
     /// `docs/rendering/scenery-animation.md` for why the class cannot simply be
     /// folded into the bake.
     pub xform: u32,
+    /// HD's sun-occlusion mask, `1.0` where nothing is known to occlude it.
+    ///
+    /// **Not `colour.a`.** That channel is already spoken for twice over - the
+    /// PSP/PS2 boost plume's baked alpha falloff, and the bloom pass's glow
+    /// mask in `mesh.wgsl`'s fragment output - and HD's mask means neither.
+    /// `oag_formats::rcsmodel::Mesh::vertex_light`'s fourth component for a
+    /// chunk that carries a colour set, `1.0` (unmasked) for one that does
+    /// not and for every non-HD title, which never reads this field at all.
+    /// See `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`, "The sun is real
+    /// and it is masked".
+    pub sun_mask: f32,
 }

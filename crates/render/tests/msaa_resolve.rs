@@ -42,6 +42,7 @@ fn triangle_model() -> Model {
             lit: 0.0,
             anim: 0,
             xform: 0,
+            sun_mask: 1.0,
         },
         GpuVertex {
             position: [0.0, 1.0, -1.0],
@@ -52,6 +53,7 @@ fn triangle_model() -> Model {
             lit: 0.0,
             anim: 0,
             xform: 0,
+            sun_mask: 1.0,
         },
         GpuVertex {
             position: [0.0, 0.0, 1.0],
@@ -62,6 +64,7 @@ fn triangle_model() -> Model {
             lit: 0.0,
             anim: 0,
             xform: 0,
+            sun_mask: 1.0,
         },
     ];
     Model {

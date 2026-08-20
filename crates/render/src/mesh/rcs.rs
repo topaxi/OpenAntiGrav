@@ -386,11 +386,12 @@ struct Geometry<'a> {
     /// a `lightmapUV`. `None` leaves it at the origin, which a white lightmap
     /// makes harmless.
     lightmap_texcoords: Option<&'a [[f32; 2]]>,
-    /// HD's **baked per-vertex light**, from
-    /// `oag_formats::rcsmodel::Mesh::vertex_light`. `None` on 632 of Talon's
-    /// Junction's 983 chunks - not a gap but the other half of the split: a
-    /// chunk bakes into the lightmap atlas **or** its vertices, never both.
-    vertex_light: Option<&'a [[f32; 3]]>,
+    /// HD's **baked per-vertex light and sun-occlusion mask**, `[r, g, b,
+    /// mask]`, from `oag_formats::rcsmodel::Mesh::vertex_light`. `None` on 632
+    /// of Talon's Junction's 983 chunks - not a gap but the other half of the
+    /// split: a chunk bakes into the lightmap atlas **or** its vertices, never
+    /// both.
+    vertex_light: Option<&'a [[f32; 4]]>,
     indices: &'a [u16],
 }
 
@@ -468,6 +469,7 @@ fn emit(out: &mut Model, mesh: Geometry<'_>, to_world: Mat4, node: Option<u32>, 
                     .to_array()
             })
             .unwrap_or([0.0, 0.0, 0.0]);
+        let light = vertex_light.and_then(|c| c.get(k));
         out.vertices.push(GpuVertex {
             position: p.to_array(),
             // Zero means the file gave none, and `face_normals` derives it.
@@ -475,14 +477,13 @@ fn emit(out: &mut Model, mesh: Geometry<'_>, to_world: Mat4, node: Option<u32>, 
             // HD's `f[TC1]`: the per-vertex light the fragment program
             // **adds** to the lightmap term before multiplying the albedo, so
             // `mesh.wgsl` folds it into the authored sum, not into a tint.
-            // The fourth byte is a mask whose consumer is unread, so only
-            // `.rgb` is taken and alpha stays the texture's own multiplier.
+            // Alpha stays the texture's own multiplier - `colour.a` is not
+            // where the fourth byte goes, see `sun_mask` below.
             // **Zero for a chunk with no colour set is read**: the blocks
             // without it write `MOV o[TC1].xyz, c[K].xxxx`, and `c[K]` against
             // each program's local-constant table is 0.0 in 11,180 of 11,184.
-            colour: vertex_light
-                .and_then(|c| c.get(k))
-                .map(|&[r, g, b]| [finite(r), finite(g), finite(b), 1.0])
+            colour: light
+                .map(|&[r, g, b, _]| [finite(r), finite(g), finite(b), 1.0])
                 .unwrap_or([0.0, 0.0, 0.0, 1.0]),
             // A non-finite half is a vertex whose coordinate this reading does
             // not explain - 1.68 % of a circuit's stride-18 ones. Zero rather
@@ -498,6 +499,14 @@ fn emit(out: &mut Model, mesh: Geometry<'_>, to_world: Mat4, node: Option<u32>, 
             lit: 1.0,
             anim: 0,
             xform: 0,
+            // The colour set's fourth byte - see
+            // `oag_formats::rcsmodel::Mesh::vertex_light` and
+            // `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`, "The sun is
+            // real and it is masked". `1.0` (unmasked) for a chunk with no
+            // colour set, which is what a lightmapped chunk uses instead -
+            // `mesh.wgsl` multiplies this by the lightmap's own alpha, so
+            // `1.0` here leaves that gate untouched.
+            sun_mask: light.map(|&[.., m]| finite(m)).unwrap_or(1.0),
         });
     }
     let centre = centre / points.len() as f32;

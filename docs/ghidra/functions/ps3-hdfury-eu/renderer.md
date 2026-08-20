@@ -1313,10 +1313,31 @@ mask.** `oag-render` applied `sun * (ndl * baked.a)` with `baked.a` at **1.0**
 from the no-lightmap placeholder - full sun, unoccluded, on every surface
 without a lightmap. The disc applies the same sun gated by a mask that is zero
 on 41 % of vertices. Removing the term measured better (16.5 % -> 10.2 %
-clipped) because unmasked sun was worse than none; the faithful fix is to
+clipped) because unmasked sun was worse than none; the faithful fix was to
 decode the colour set's alpha as the mask and restore the sun behind it.
-`mesh/rcs.rs` currently takes only `.rgb` of the colour set and drops that
-byte.
+
+**Wired 2026-08-20, same day.** `oag_formats::rcsmodel::Mesh::vertex_light`
+now reads all four bytes (`[r, g, b, mask]`), a new
+`oag_render::mesh::GpuVertex::sun_mask` field carries it into the shader
+(not `colour.a`, which is already the PSP/PS2 boost plume's baked falloff and
+this project's own bloom glow mask - a third meaning would have collided with
+both), and `mesh.wgsl`'s `lit_texel` restores `sun * ndl * mask` in the
+diffuse sum and gates the specular by the same `mask = baked.a * sun_mask`
+rather than by `baked.a` alone. Applied to every lit chunk alike, not only the
+five material families measured above, for want of the per-material branch
+that would tell `track_surface`'s 15-of-301 minority apart - the same kind of
+stand-in the shared specular exponent already is, and wrong in the same
+direction (a small minority reads lit where the disc's own formula would
+leave it ambient-only).
+
+Verified two ways, neither of them "the frame looks better": the decoded
+mask's zero/full split off the real disc data reads 41.4 % / 51.7 %,
+matching this page's independently-measured census on the same 240,400
+vertices; and re-rendering Talon's Junction at a fixed race tick against
+itself before the change moves 88.6 % of the frame's pixels and its mean
+brightness from 128.7 to 137.3 (both 0-255), which is the direction restoring
+a removed light source should move it. Not yet checked against an RPCS3
+reference frame pixel-for-pixel - see `HANDOVER.md`.
 
 **What each variant carries, and why a table has to be per variant.** The seven
 vertex programs take two shapes and the shape follows the chunk key - the same

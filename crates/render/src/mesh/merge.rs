@@ -158,6 +158,7 @@ mod merge_tests {
                     lit: 1.0,
                     anim: 0,
                     xform: 0,
+                    sun_mask: 1.0,
                 })
                 .collect(),
             indices: (0..vertices as u32).collect(),

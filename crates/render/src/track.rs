@@ -224,6 +224,7 @@ fn strip(
             lit: 1.0,
             anim: 0,
             xform: 0,
+            sun_mask: 1.0,
         });
         vertices.push(GpuVertex {
             position: edges_of(s, right, lift),
@@ -234,6 +235,7 @@ fn strip(
             lit: 1.0,
             anim: 0,
             xform: 0,
+            sun_mask: 1.0,
         });
     }
     for i in 0..samples.len() as u32 - 1 {
