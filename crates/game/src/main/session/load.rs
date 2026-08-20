@@ -182,7 +182,7 @@ impl Session {
             .map(boot::MediaWorker::join)
             .unwrap_or_default();
         for line in &media.report {
-            println!("{line}");
+            info!("{line}");
         }
         let mut loaded = boot::assemble(shell, media);
         if self.boot_overlay {
@@ -204,7 +204,7 @@ impl Session {
             _ => {}
         }
         for line in &loaded.report {
-            println!("{line}");
+            info!("{line}");
         }
         // A source with no intro reel at all - which is every PS2 source, whose
         // intro is an MPEG-2 program stream outside the archives - has no video
@@ -280,7 +280,7 @@ impl Session {
             .ok_or_else(|| anyhow::anyhow!("no disc image has been chosen yet"))?;
         let loaded = race::load(options)?;
         for line in &loaded.report {
-            println!("{line}");
+            info!("{line}");
         }
         // Taken out of the outgoing `MenuStage` before it is dropped below -
         // not the playhead, which `menu_playhead` restarts deliberately on the

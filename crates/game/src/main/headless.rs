@@ -57,7 +57,7 @@ pub(crate) fn run_windowless(
         _ => {}
     }
     for line in &loaded.report {
-        println!("{line}");
+        info!("{line}");
     }
 
     if cli.dry_run {
@@ -102,7 +102,7 @@ pub(crate) fn run_windowless(
         let phase = parse_step(cli.loading_step.as_deref())?;
         let assets = loading::Assets::load(&options.source, &loaded.strings);
         for note in &assets.notes {
-            println!("{note}");
+            info!("{note}");
         }
         capture::loading(
             &assets,
@@ -328,7 +328,7 @@ pub(crate) fn run_race(
 ) -> Result<()> {
     let loaded = race::load(&options)?;
     for line in &loaded.report {
-        println!("{line}");
+        info!("{line}");
     }
 
     if cli.dry_run {

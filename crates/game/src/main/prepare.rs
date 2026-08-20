@@ -175,7 +175,7 @@ impl Pending {
         // Leaving these in would print the whole first half twice, seconds
         // apart, which reads as the disc having been opened again.
         for line in boot_shell.report.drain(..) {
-            println!("{line}");
+            info!("{line}");
         }
         let media = boot::MediaWorker::spawn(archives, &boot_shell, &options);
 
@@ -242,7 +242,7 @@ impl Pending {
         let loading_assets = {
             let assets = loading::Assets::load(source, &boot_shell.strings);
             for note in &assets.notes {
-                println!("{note}");
+                info!("{note}");
             }
             assets
         };

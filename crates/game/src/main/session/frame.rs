@@ -222,7 +222,7 @@ impl Session {
                     }
                     report(&events, stage.trace);
                     for note in stage.frontend.take_notes() {
-                        println!("{note}");
+                        info!("{note}");
                     }
                     // The movie's sound outlives neither leg, and a skip leaves
                     // the state without finishing the player - see

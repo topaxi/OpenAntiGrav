@@ -7,6 +7,7 @@
 //! path would prove nothing.
 
 use anyhow::{Context, Result};
+use log::info;
 use oag_render::mesh_render::Anisotropy;
 
 use crate::boot::Boot;
@@ -441,7 +442,7 @@ pub fn run(
         }
         crate::report(&events, options.trace);
         for note in frontend.take_notes() {
-            println!("{note}");
+            info!("{note}");
         }
         ticks += 1;
     }
@@ -465,7 +466,7 @@ pub fn run(
     {
         let loaded = race::load(race_options)?;
         for line in &loaded.report {
-            println!("{line}");
+            info!("{line}");
         }
         // The same handoff `App::launch_race` makes: the menu voice this loop
         // started above stops, and the race playlist takes over - one music
