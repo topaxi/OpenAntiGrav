@@ -156,11 +156,19 @@ That is also the direct confirmation the body array was missing, so **the
 reading that this array is the craft goes to confidence 88**: one element of it
 responds to the controller.
 
-The player's index is not fixed, and two earlier candidates are **retracted**:
-body 3, flagged at `+0x1a0`/`+0x1b4`/`+0x1c0` by a run that turned out to be
-measuring a crash, and body 2, flagged at `+0x068` by a six-sample correlation
-that does not survive twelve. Only body 7 stands, and only on this run's grid -
-the slot has no reason to be stable across races.
+Two earlier candidates are **retracted**: body 3, flagged at
+`+0x1a0`/`+0x1b4`/`+0x1c0` by a run that turned out to be measuring a crash, and
+body 2, flagged at `+0x068` by a six-sample correlation that does not survive
+twelve. Both clean identifications - this one and the airbrake run below -
+landed on index 7, which is worth noting but is two boots, not a rule.
+
+**The multiple-comparison arithmetic matters here and is what makes this one
+safe.** 748 of the dumped fields actually varied enough to be scored, so a
+`|r| >= 0.80` threshold expects about 1.3 false positives by chance alone -
+which is why the six-sample result was worthless and why a single hit at 0.80
+would prove nothing. At `r = 0.942` with twelve samples `p = 4.7e-6`, and over
+748 tests the expected number of false positives is **0.00**. That is the whole
+argument.
 
 ### Two negatives worth keeping, because both looked like results
 
@@ -176,6 +184,31 @@ twelve samples that same body and offset scores `r=-0.040`, and the whole
 cluster around it collapses into noise. With this few degrees of freedom a
 single cycle will hand out `|r| > 0.9` to chance; two cycles and twelve samples
 are what made the real field separate from seven near-identical decoys.
+
+### Steering: a candidate at `entry+0x284`, not yet a result
+
+The same twelve-sample method run against the airbrakes - thrust held
+throughout, left brake for three samples then right for three, twice over, so
+the craft wanders rather than walking into a wall. One field crossed the
+threshold, again on body 7:
+
+    entry+0x284, pattern LLLRRRLLLRRR
+    0.00  0.00  0.00  0.00  -31.54  -16.26  6.39  7.27  7.27  -34.36  -34.36  -34.36
+
+Signed with the brake direction, which is what a yaw or roll term should look
+like. But `r = 0.834` over 735 tested fields gives `p = 7.6e-4` and **0.55
+expected false positives** - a coin flip. On the correlation alone this is not
+established.
+
+What lifts it is that the hit landed on body 7 specifically, and body 7 was
+independently confirmed as the player *in this same run* by the throttle field:
+holding an airbrake the whole way depressed `+0x4c4` to a mean of `66.32` for
+body 7 against `82.72` to `101.83` for the other seven. A chance hit would pick
+a body uniformly, so landing on the one body already known to be the player is
+worth roughly a factor of eight.
+
+**Confidence 65.** Below the floor, so nothing is named for it. The cheap fix is
+more samples: the same run at twenty-four would settle it either way.
 
 ### Speed is not in the bytes that were dumped
 
