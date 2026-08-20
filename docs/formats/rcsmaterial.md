@@ -481,6 +481,91 @@ that reading cheap; it does not make it automatic.
   `DATA00`) plus its preimage, and is weaker than the other three classes.
 - The 248 `IleLightmap`-without-a-`lightmap`-sampler variants.
 
+## The glass family's second slot: traced, not solved (2026-08-20)
+
+**Why Talon's Junction's reflective glass and its crowd-filled tunnel tubes
+render flat instead of tinted and populated.** Prompted by a side-by-side
+against a real RPCS3 capture, which is a stronger prompt than a code-read
+alone: the annotated frame showed the tube's glass as plain grey where the
+reference shows green-tinted glass with a crowd visible through it.
+
+**The second texture is real and unloaded, for four glass materials measured
+this way.** `oag_formats::rcsmodel::Material::second_texture` is populated on
+`glass_texture_customr` (`j_tower_glass_r.gtf`), `etched_glass_tech`
+(`glass_etched_tech.gtf`, matching "What this explains about the picture"
+above), `tunnel_fx_glass` (`tunnel_fx_diffuse.gtf`) and `ds_booth_glass` (a
+real `-lmap.gtf`, so `Material::lightmap()` does return it there). Only the
+lightmap case is ever loaded: `mesh/rcs/skin.rs::skin` calls
+`Material::lightmap()`, which answers `None` for all four **unless** the path
+matches the `lmaps/`+`-lmap.gtf` pattern - so `j_tower_glass_r.gtf`,
+`glass_etched_tech.gtf` and `tunnel_fx_diffuse.gtf` are never even read off
+the disc today, let alone bound.
+
+**The resolved variant - not a majority vote across all twenty - names the
+sampler that wants it.** Using the same `Class::Static` /
+`LIT_RACE_PASS`-keyed resolution `skin.rs::variants` already does, then
+reading that one fragment block's own declaration
+(`rcsmaterial::Declared::parse` at the resolved `Variant::fragment.offset`):
+`glass_texture_customr`'s and `etched_glass_tech`'s resolved variants both
+declare `unit 0 = 0x3bdc0403` (`Texture1`, the first `.gtf`) and
+`unit 1 = 0x9edd3243` - unnamed, and the same hash `ds_booth_glass`'s
+resolved variant declares at unit 2 alongside its lightmap at unit 1. So the
+second slot's consumer is real and it is not the lightmap: this is the fifth
+distinct role recorded for this slot family, after normal map, emissive map,
+coverage mask and lightmap.
+
+**The fragment program samples it through a computed coordinate, not a raw
+vertex UV - traced instruction by instruction on `glass_texture_customr`'s
+resolved block (`scripts/ps3-microcode.py fp-file`, block 5 at `0x2db0`).**
+Unit 0 samples `f[TC5].zw` directly - an ordinary vertex UV, confirmed against
+the paired vertex program (`vp-file`, same block index), which writes
+`o[TC5].zw = v[2].xxxy` straight from an attribute. Unit 1 samples a register
+built over roughly ten instructions from a saturated dot product
+(`DP3_SAT R0.y, R3, R0.yzww`) and several `MAD`/`ADD` remaps, ending
+`ADD R3.x, R0.wwww, {0.25, ...}` immediately before the `TEX ... unit1`. That
+shape - a scalar coordinate built from a clamped dot product, offset by a
+constant - is what a Fresnel-style facing term feeding a lookup looks like,
+not what a diffuse UV does, and it would make `0x9edd3243` a real, if
+unnamed, candidate for the `FacingRamp` input already listed as absent in
+`HANDOVER.md`'s per-material row.
+
+**What breaks that read from being a finding: the paired vertex program
+shows the dot product's own inputs are not what they look like.**
+`o[TC1].xyz` and `o[TC2].xyz` - both operands the fragment block's early `DP3`
+chain reads - are written `MOV o[TCn].xyz, c[206].xxxx`: a broadcast from
+constant register `c[206]`, the same value on every vertex of the draw, not a
+per-vertex normal or a per-pixel view vector. `c[206]` is not among this
+variant's own six patched parameters (`0x02df31e5` through `0xab31c2b1`,
+`fslot 0x70`-`0x7a`), so it is bound some other way - a scene-wide uniform
+set once per frame is the shape that fits, and a camera-relative direction
+would explain why a large flat glass panel gets one shared "facing" value
+rather than a per-pixel one, but neither is read. `o[TC3].xyz = v[1].xyzx` is
+a real per-vertex attribute and is very likely the world normal, unlike its
+neighbours.
+
+**Confidence 55 on "this is a Fresnel-shaped lookup", and that is as far as
+this reading goes.** The instruction shapes fit; the operand identities do
+not confirm it, and a `MOV o[TCn].xyz, c[Const].xxxx` idiom this project has
+not seen before is exactly where a wrong guess would look plausible. Two
+negative sweeps for `0x9edd3243`'s own name: the ~2,000-word Cg/engine
+parameter sweep noted above found nothing, and a second sweep here over 5,408
+identifier-shaped strings `search_strings` returns for this ELF also found
+nothing - but that sweep also failed to recover `lightmap` and `Texture1`,
+both names this page already has from elsewhere, so it is not evidence the
+executable lacks the string, only that Ghidra's auto-detected string list
+does not carry it at the address this method reaches. Not implemented: wiring
+`second_texture` into the shader without knowing whether unit 1 multiplies,
+adds, or Fresnel-blends into the output would be inventing the picture, which
+is the one thing this project's own rules forbid outright.
+
+**What would close it**: what fills `c[206]` each frame (the constant-binding
+walk `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`'s `viewProj`/`c256`
+finding used is the precedent), and the rest of the ~0x51-instruction block
+traced to its `END` with the same discipline `renderer.md`'s "The sun is real
+and it is masked" applied to `diffuse_with_specular_from_alpha` - which
+materials share `0x9edd3243` and at what unit is at least already known,
+above.
+
 ## Open
 
 - **87 of the 125 sampler hashes**, including the three commonest
