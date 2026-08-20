@@ -150,6 +150,8 @@ preimage to NUL-terminated strings in `EBOOT.elf` at `0x7a3560`:
 | `0xdd70bfd5` | `RigidBody` | 4,389 | 153 |
 | `0xa9edfe7e` | `StaticUncompressed` | 1 | 1 |
 
+Those four counts are `DATA00`'s; the disc-wide figures are in the note below.
+
 `[1]` is the **feature permutation**, and its name is the concatenation of the
 enabled feature tokens in one fixed order. The tokens are the twenty
 NUL-terminated strings at `0x7a3460` -
@@ -163,8 +165,14 @@ Spot0 Spot1 Spot2 Spot3 ZAlphaOnly AmbientShadow
 - plus `SunOcclusionLightmap` and `SunOcclusionVertex` at `0x7a3588`.
 
 **Confidence 96.** Every one of the **143 distinct `[1]` values across all
-29,520 variants of all 693 materials** is reproduced exactly by `~crc32` of such
-a concatenation - 100 %, no exceptions. 143 independent 32-bit preimages is not
+29,520 variants of the 693 materials in `DATA00.PSARC`** is reproduced exactly
+by `~crc32` of such a concatenation - 100 %, no exceptions. (`DATA00` is where
+that sweep ran; the whole disc carries **1,632 materials and 76,358 variants**
+across seven archives, and `oag_formats::rcsmaterial`'s ground-truth tests
+confirm every *structural* claim at that larger scale - no class outside the
+four, no repeated key in any file, no program offset carrying two different
+content hashes. The per-class census disc-wide is `Static` 43,370,
+`StaticQuake` 19,257, `RigidBody` 13,724, `StaticUncompressed` 7.) 143 independent 32-bit preimages is not
 a resemblance. Three further checks make it self-consistent rather than lucky:
 the pairwise token-precedence graph over all 143 names is **acyclic** (19
 tokens, 86 edges), so one canonical order exists; the executable ships a built
@@ -251,8 +259,8 @@ plus each record's `+0x10, +0x14, +0x28, +0x2c`.
   (`Job RenderTrackWithLights_zWriters`, `Job RenderModelShadowsOnTrack`,
   `Job RenderShips`, `Job RenderSpotShadowMaps`, ...). Reading which flags each
   job sets is what turns the 75 above into a read.
-- **`StaticUncompressed` rests on a single occurrence** plus its preimage, and
-  is weaker than the other three classes.
+- **`StaticUncompressed` rests on seven occurrences disc-wide** (one in
+  `DATA00`) plus its preimage, and is weaker than the other three classes.
 - The 248 `IleLightmap`-without-a-`lightmap`-sampler variants.
 
 ## Open
