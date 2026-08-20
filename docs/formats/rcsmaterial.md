@@ -529,31 +529,72 @@ not what a diffuse UV does, and it would make `0x9edd3243` a real, if
 unnamed, candidate for the `FacingRamp` input already listed as absent in
 `HANDOVER.md`'s per-material row.
 
-**What breaks that read from being a finding: the paired vertex program
-shows the dot product's own inputs are not what they look like.**
-`o[TC1].xyz` and `o[TC2].xyz` - both operands the fragment block's early `DP3`
-chain reads - are written `MOV o[TCn].xyz, c[206].xxxx`: a broadcast from
-constant register `c[206]`, the same value on every vertex of the draw, not a
-per-vertex normal or a per-pixel view vector. `c[206]` is not among this
-variant's own six patched parameters (`0x02df31e5` through `0xab31c2b1`,
-`fslot 0x70`-`0x7a`), so it is bound some other way - a scene-wide uniform
-set once per frame is the shape that fits, and a camera-relative direction
-would explain why a large flat glass panel gets one shared "facing" value
-rather than a per-pixel one, but neither is read. `o[TC3].xyz = v[1].xyzx` is
-a real per-vertex attribute and is very likely the world normal, unlike its
-neighbours.
+**What broke that read, and what a closer look found instead: `c[206]` is not
+an engine input at all - it is a static zero, baked into the file, dead in
+the combine.** `o[TC1].xyz` and `o[TC2].xyz` - both operands the fragment
+block's early `DP3` chain reads - are written `MOV o[TCn].xyz, c[206].xxxx`,
+which first read as a scene-wide uniform (a camera-relative direction, say)
+the material declares nowhere. It is not one. `Rsx_UploadVertexConstants`
+(`0x005c176c`, confidence 88, already named in
+[renderer.md](../ghidra/functions/ps3-hdfury-eu/renderer.md)) is the same raw
+constant-patch mechanism that page already established for HD's vertex-light
+RGBE decode - a sliding, undeclared register carrying a literal baked at
+export time, not a per-frame value. Read the same way here (validated first
+against that page's own `c[464] = (255, 128, 0, 2)` / `c[463] = (1, 0, 0, 0)`
+before trusting it on glass): `const[462]` (`c[206]` under the `+256` rule)
+is `(0.0, 0.0, 0.0, 0.0)`, in both `glass_texture_customr`'s and
+`etched_glass_tech`'s resolved blocks. And it is not merely inert: `f[TC2]` is
+read a second time at `@0x21 MOV R1.xyz, f[TC2]`, overwriting `R1` with that
+same zero, and `R1` is never written again before
+`@0x50 ADD H0.xyz, R1, H0 END` - the block's own last instruction adds this
+zero directly into the final colour. Confidence 90 on "dead", checked by
+exhaustive register-flow tracing rather than by pattern alone.
 
-**Confidence 55 on "this is a Fresnel-shaped lookup", and that is as far as
-this reading goes.** The instruction shapes fit; the operand identities do
-not confirm it, and a `MOV o[TCn].xyz, c[Const].xxxx` idiom this project has
-not seen before is exactly where a wrong guess would look plausible. Two
-negative sweeps for `0x9edd3243`'s own name: the ~2,000-word Cg/engine
-parameter sweep noted above found nothing, and a second sweep here over 5,408
-identifier-shaped strings `search_strings` returns for this ELF also found
-nothing - but that sweep also failed to recover `lightmap` and `Texture1`,
-both names this page already has from elsewhere, so it is not evidence the
-executable lacks the string, only that Ghidra's auto-detected string list
-does not carry it at the address this method reaches.
+**The `DP3_SAT` Fresnel-shaped term is real, on different and better-attested
+operands.** `o[TC3].xyz = v[1].xyzx` is a genuine per-vertex attribute (the
+world normal). The chain's other side, traced through `R1`'s `.w`-lane
+assembly (`f[TC0].w`, `f[TC1].w`, `f[TC2].w`), resolves to camera position
+minus world position - a real, per-vertex **view vector**, using `c[209]`
+(camera position, already pinned in renderer.md's ship reading) rather than
+`c[206]`. Confidence 70 on this reattribution: mechanical register tracing,
+not the pattern-matching the original "Fresnel-shaped" read was.
+
+**A finding that changes what the term even is: the patched light direction
+and colour feed the coordinate build too, not only the classic `N.L` and
+diffuse multiply.** Decoded the `patch fslot` to `const@slot` mapping this
+page and renderer.md's "sun is real" section both left unresolved - a `u32`
+entry count and offset table inside the block's own sub-header, each entry a
+`u16` count of `u16` code-slot indices a parameter patches - and validated it
+first against `diffuse_with_specular_from_alpha`'s already-published const
+slots (`0x9`, `0x13`) before trusting it on glass. On
+`glass_texture_customr`'s block: `directionalLight0DirectionWorldSpace`
+patches **both** the expected `N.L`-shaped slot **and** the coordinate-build
+`ADD` at `@0x13`; `directionalLight0Colour` patches **both** the Lambert
+multiply **and** two slots deep in the final combine (`@0x44`, `@0x48`). A
+worked numeric example (a head-on normal, view and light direction) saturates
+the term to `1.0` rather than the low value a grazing-angle Fresnel term
+should give there - a signal this is not a plain view-facing Fresnel lookup
+but something closer to "brighten where both lit and facing", gated by the
+same sun-occlusion mask the diffuse path already uses. Confidence ~55 on the
+coordinate build as a whole: internally consistent and now traced on real
+operands, but resting on one unconfirmed opcode (`op3B`, very likely `NRM` -
+a G70 instruction one generation past the NV30/NV40 headers this project's
+disassembler is built from, and already glossed as "normalize" in renderer.md's
+own prose without the opcode table agreeing - see renderer.md for the
+reasoning). `op3D`, seen only in `etched_glass_tech`, has no hypothesis at
+all.
+
+**One formula does not cover the family.** `etched_glass_tech`'s resolved
+block diverges from `glass_texture_customr`'s in code, not only in patched
+constants: a third sampler unit (`0x94b2b285`, plausibly the etched detail
+layer its own name implies), two parameters neither shares, `op3D` where
+`glass_texture_customr` has none, and a different ending - a separate alpha
+write from the diffuse sample, against `glass_texture_customr`'s single
+`ADD ... END` with alpha left untouched since the diffuse `TEX`. Both share
+the "`c[206]` dead, twice over" finding independently; neither shares the
+other's combine logic. The same caveat renderer.md's sun-diffuse reading
+already carries for `track_surface`'s minority applies here at the level of
+the whole glass family, not one exception inside it.
 
 **Not the first time this shape has turned up.** `renderer.md`'s "Ships have
 no Lambert diffuse either" reads `detonator_ship_rich_iridescent` carrying "a
@@ -564,19 +605,25 @@ glass family's second slot reads as the same category of gap on different
 materials, not a new one, which is why it stays unfaked here too: **loading**
 `second_texture` is now real (`mesh/rcs/skin.rs::skin`, 2026-08-20 -
 `Report::second_texture_loaded`, 252 of Talon's Junction's materials), but
-**wiring** it into the shader without knowing whether unit 1 multiplies,
-adds, or Fresnel-blends into the output would be inventing the picture, which
-is the one thing this project's own rules forbid outright. Loaded and
+**wiring** it into the shader on a ~55-confidence combine, per material,
+would still be inventing the picture more than reading it. Loaded and
 unbound is the honest middle state between "not read at all" and "guessed
 at".
 
-**What would close it**: what fills `c[206]` each frame (the constant-binding
-walk `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`'s `viewProj`/`c256`
-finding used is the precedent), and the rest of the ~0x51-instruction block
-traced to its `END` with the same discipline `renderer.md`'s "The sun is real
-and it is masked" applied to `diffuse_with_specular_from_alpha` - which
-materials share `0x9edd3243` and at what unit is at least already known,
-above.
+**What would close it, and what probably would not.** More static reading is
+not expected to move the last ~15-20 points of confidence efficiently: the
+gap is one unconfirmed opcode feeding a coordinate whose exact curve this
+page cannot verify without either an RPCS3 register-state watch at the
+`TEX ... unit1` call, or another disc material that uses `op3B`/`op3D` in a
+more decomposable context than glass's does. Two things below that ceiling
+are worth doing regardless of whether the formula ever closes: the
+`patch fslot` to `const@slot` decoder is a durable technique - it should be
+promoted out of this page's evidence trail and into
+[renderer.md](../ghidra/functions/ps3-hdfury-eu/renderer.md) itself, which
+already has (see above); and per-material work on the glass family, should it
+become worth wiring, has to be scoped like the sun-diffuse reading already
+is - `glass_texture_customr` and `etched_glass_tech` are two materials, not
+one reading.
 
 ## Open
 

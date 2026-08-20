@@ -1299,6 +1299,34 @@ patched slots are the only `float3`/`float4` the block declares -
 rest on the declaration table because the `patch fslot` to `const@slot` mapping
 is unresolved.
 
+**The `patch fslot` to `const@slot` mapping is resolved (2026-08-20), reading
+the glass family's second slot** (`docs/formats/rcsmaterial.md`). Within the
+vertex/fragment sub-header, `+0x14` is a `u32` entry count, `+0x18` an array
+of `u32` entry-offsets relative to the sub-header, and each entry is
+`u16 count` followed by that many `u16` code-slot indices the parameter
+patches. Validated against this block before trusting it elsewhere: parsed
+this way, `0x02df31e5` (`directionalLight0DirectionWorldSpace`) patches
+const-slot `0x9` - the `N.L` `DP3` at `@0x0f`, exactly as read above - and
+`0x2dba643d` (`directionalLight0Colour`) patches `0x13`, the diffuse `MUL` at
+`@0x12`. Both agree with the instruction-level read this section already had,
+which is what makes the chain trustworthy rather than merely self-consistent.
+Confidence 85 on the mapping.
+
+**`op3B` is very likely `NRM`** (normalize), confidence ~70: RSX is a G70-class
+chip, one generation past the NV30/NV40 Mesa headers `scripts/ps3-microcode.py`
+is built from, and G70 fragment shaders are documented to add a dedicated
+normalize instruction beyond that instruction set. `op3B`'s usage shape here -
+always a self-`DP3` immediately followed by `op3B` combining the original
+vector with that dot's result - is `v * rsqrt(dot(v, v))`, and this page's own
+comment above already glosses it that way ("normalize the interpolated world
+normal") without the opcode table agreeing yet. Not applied to
+`scripts/ps3-microcode.py`'s `FP_OPS` table - confidence 70 is the line this
+project's own naming rule draws for a rename, and an opcode table entry is the
+same kind of claim. `op3D` has no hypothesis at all; seen only in
+`etched_glass_tech`, always as `op3D R63, R0, R0` - self-referencing, into the
+same "special" destination `SGT` also targets, which is what a predicate or
+flag-setting op would look like and is exactly that far from being a reading.
+
 **2. The colour set's fourth byte is that occlusion scalar**, which closes an
 open question above. The vertex program routes `v[colourSet].w` to a spare
 channel - `o[TC5].x`, or `o[TC6].z` on `track_wall` - and the fragment program
