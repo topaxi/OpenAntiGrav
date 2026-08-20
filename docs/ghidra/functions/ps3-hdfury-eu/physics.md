@@ -197,18 +197,19 @@ threshold, again on body 7:
 
 Signed with the brake direction, which is what a yaw or roll term should look
 like. But `r = 0.834` over 735 tested fields gives `p = 7.6e-4` and **0.55
-expected false positives** - a coin flip. On the correlation alone this is not
-established.
+expected false positives** - a coin flip - so it was held at confidence 65,
+below the naming floor, pending more samples.
 
-What lifts it is that the hit landed on body 7 specifically, and body 7 was
-independently confirmed as the player *in this same run* by the throttle field:
-holding an airbrake the whole way depressed `+0x4c4` to a mean of `66.32` for
-body 7 against `82.72` to `101.83` for the other seven. A chance hit would pick
-a body uniformly, so landing on the one body already known to be the player is
-worth roughly a factor of eight.
+**Twenty-four samples refute it.** The same run repeated at double the length
+put *nothing* above `|r| = 0.80`, on any body, in either object. `entry+0x284`
+was the coin landing heads. **No steering field is identified**, and the
+threshold that found the throttle is not sensitive enough to find one - either
+the airbrakes do not write a field in the range dumped, or they write one that
+the eight-second sampling cadence cannot resolve.
 
-**Confidence 65.** Below the floor, so nothing is named for it. The cheap fix is
-more samples: the same run at twenty-four would settle it either way.
+The run did confirm the player a third time, and independently of any
+correlation: holding an airbrake throughout depressed `+0x4c4` to a mean of
+`62.65` for body 7 against `97.87` to `106.40` for the other seven.
 
 ### Speed is not in the bytes that were dumped
 
@@ -223,6 +224,34 @@ object's first `0x200`**, and the throttle field is the only input-responsive
 one in that range. The search moves outward: the entry's true size is unknown
 past `0x4d1`, and the craft almost certainly has a game-side object that is not
 this rigid body.
+
+## The array is not craft-only: debris appends to it
+
+The twenty-four-sample run ran long enough for the accumulated airbrake wall
+scrapes to destroy the player's craft, and the count moved with it:
+
+    r19:  8 bodies
+    r20: 27 bodies      <- the craft explodes
+    r21: 23 bodies
+    r22: 23 bodies
+    r23: 21 bodies
+    r24:  8 bodies      <- respawned, back to the grid
+
+The screenshot for `r20` is a fireball with debris fragments thrown across the
+sky and no HUD. So the array holds **every** body the physics world simulates,
+and wreckage joins it as transient entries.
+
+Two things follow. **`world+0x2c8` is not the grid size** - it is 8 in steady
+state during an eight-craft race, which is what made the count such good
+evidence, but it is not a constant and anything keyed on it must re-read it
+every sample. And **the craft hold stable low indices while transients append
+above them**: the throttle field at index 7 separated cleanly across all
+twenty-four samples including the ones with 27 bodies, which it could not have
+done if the array were being compacted or reordered.
+
+This refines the reading above rather than contradicting it. The array is the
+physics world's body list; during a race in steady state that list *is* the
+eight craft.
 
 ## Globals
 
