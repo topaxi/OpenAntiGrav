@@ -20,7 +20,7 @@ mod rcsmodel_common;
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use oag_formats::rcsmaterial::{Class, Features, RcsMaterial};
+use oag_formats::rcsmaterial::{Class, Features, PASS_WORD_BITS, RcsMaterial};
 use rcsmodel_common::image;
 
 /// Every archive on the disc that holds `.rcsmaterial` files.
@@ -299,5 +299,66 @@ fn a_material_slot_never_needs_two_different_variants() {
         split, 0,
         "a material slot serves chunks needing different variants, so a \
          per-slot selector is not enough and it has to move to the draw call"
+    );
+}
+
+/// **Every permutation the disc ships is one this reading can build.**
+///
+/// The closing check on the whole variant key. Sweeping the 4096 permutation
+/// words and adding the five standalone names must account for every distinct
+/// `[1]` value in every material - if one were left over, the word's layout or
+/// the token order would be wrong somewhere this cannot see.
+#[test]
+#[ignore]
+fn every_shipped_permutation_is_one_this_reading_can_build() {
+    let Some(_) = image() else {
+        return;
+    };
+    let mut buildable: BTreeMap<u32, String> = BTreeMap::new();
+    for word in 0..(1u32 << PASS_WORD_BITS) {
+        let f = Features::from_pass_word(word);
+        buildable.insert(f.hash(), f.name());
+    }
+    let from_word = buildable.len();
+    for name in [
+        "ZAlphaOnly",
+        "AmbientShadow",
+        "SunOcclusionLightmap",
+        "SunOcclusionVertex",
+        "Ambient",
+    ] {
+        let f = Features::token(name);
+        buildable.insert(f.hash(), f.name());
+    }
+
+    let mut shipped: BTreeSet<u32> = BTreeSet::new();
+    for (_, bytes) in &every_material() {
+        if let Ok(parsed) = RcsMaterial::parse(bytes) {
+            shipped.extend(parsed.variants.iter().map(|v| v.feature_hash));
+        }
+    }
+    let unmatched: Vec<u32> = shipped
+        .iter()
+        .copied()
+        .filter(|h| !buildable.contains_key(h))
+        .collect();
+    println!(
+        "{} distinct permutation(s) shipped; {from_word} buildable from the word, \
+         {} with the standalone names",
+        shipped.len(),
+        buildable.len()
+    );
+    for h in &unmatched {
+        println!("  unmatched {h:#010x}");
+    }
+    assert!(
+        shipped.len() >= 143,
+        "only {} distinct permutations; the corpus narrowed",
+        shipped.len()
+    );
+    assert!(
+        unmatched.is_empty(),
+        "{} shipped permutation(s) this reading cannot build",
+        unmatched.len()
     );
 }

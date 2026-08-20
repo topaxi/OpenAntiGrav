@@ -263,45 +263,86 @@ draw. Because it never does, a per-material variant selector can ride in that
 bind group; if it ever did, the selector would have to move to the draw call.
 `a_material_slot_never_needs_two_different_variants` holds the line.
 
-### The flag bits, and why they are not the name order
+### The permutation word is read, and so is the lit race pass (2026-08-20)
 
-A pointer table at `EBOOT.elf` vaddr **`0x8b7f08`** holds 21 token strings
-followed by the three class names, and its index is the **bit position** a
-render pass sets:
+**The key's second half is a twelve-bit word of fields**, not one bit per
+token, and `0x003f0ff8` is the whole accessor:
 
 ```text
- 0 ShadowToAlpha   1 HalfBright   2 Sun        3 (empty)    4 ShadowMap
- 5 FalseLight      6 ZoneMode     7 ZoneTrans  8 NoAlbedo   9 SVC1
-10 SVC0           11 IBL         12 Ambient   13 IleVertex 14 IleLightmap
-15 Spot0          16 Spot1       17 Spot2     18 Spot3     19 ZAlphaOnly
-20 AmbientShadow   | 21 Static  22 StaticQuake  23 RigidBody
+3f0ff8: slwi 3,3,2 ; lwz 9,-21696(2) -> 0x00d3e220 ; lwzx 3,9,3 ; blr
 ```
 
-**Bit 3 points at an empty string** - a flag contributing nothing to a name.
+so the permutation hash is literally `table[word]`. `0x003f1028` is the startup
+loop that fills that table: it runs a mask from **0 to 4095**
+(`cmpdi 7,28,4096` at `0x3f11d0`), builds each name, hashes it (`bl 0x5a2090`
+then `not 3,3`) and stores it. The loop's own bit tests give the layout:
 
-**This order is not the concatenation order, and that is the finding.** A
-builder walking this table would spell variant #5 of `track_surface`
-`HalfBrightSunSVC0AmbientSpot0`; the executable ships the literal
-`HalfBrightAmbientSunSpot0SVC0`. So the name is assembled by straight-line
-code rather than a loop over the table, which is why the canonical order had to
-be derived from the 143 shipped names. `oag_formats::rcsmaterial` carries both -
-`FLAG_BITS` for the layout and `TOKENS` for the spelling - and
-`the_flag_bit_order_is_not_the_concatenation_order` asserts they differ, so a
-later editor cannot quietly collapse them into one.
+| Bits | Meaning |
+| --- | --- |
+| 0 | `Sun` |
+| 1-2 | `Ambient` / `IleVertex` / `IleLightmap` / `IBL` |
+| 3-4 | `Spot0` / `Spot1` / `Spot2` / `Spot3` |
+| 5 | set `ShadowToAlpha`, clear `HalfBright` |
+| 6 | `ShadowMap` |
+| 7 | `FalseLight` |
+| 8 | `ZoneMode` |
+| 9 | `ZoneTrans` |
+| 10 | `NoAlbedo` |
+| 11 | set `SVC1`, clear `SVC0` |
 
-**Which bits a pass sets is still unread.** The anchor is the frame's own job
-list, thirteen names in order at vaddr `0x7b1008`:
+`ZAlphaOnly`, `AmbientShadow`, `SunOcclusionLightmap` and `SunOcclusionVertex`
+are **not in this word**: `0x003f1300` hashes each standalone into
+`0x00d3e220 + 0x4a20`, past the `0x4000` bytes the table occupies.
+
+**The concatenation order is now read too**, from the append sequence at
+`0x3f111c`-`0x3f11bc`, and it agrees with the order derived a round earlier
+from a precedence graph over the 143 names. Two derivations sharing no method
+agreeing on one order is worth more than either alone.
+
+**What an ordinary lit race pass sets: `Sun`, and nothing else it decides.**
+The word is `1` - `HalfBright` and `SVC0` are the clear sides of bits 5 and 11
+and `Spot0` is field zero - which names `HalfBrightAmbientSunSpot0SVC0`, the
+one permutation the executable ships as a *string literal* rather than
+building. Add the chunk half on top: `| 0b100` lightmapped, `| 0b010`
+vertex-coloured. Confidence 95: `Job RenderTrackWithLights_zWriters`
+(`0x408fa8`) and `_blended` (`0x4074e0`), reached through slot 3 of each job's
+vtable, never write bits 5, 6 or 7; `ShadowToAlpha` belongs to the shadow
+compositing pass (`li 9,32` at `0x405d48`) and `ShadowMap` only to the model
+and ship path (`li 6,64` at `0x3ea58c`) - which is why no shipped variant pairs
+`ShadowMap` with an `Ile*` token.
+
+Checked against the disc: sweeping all 4096 words gives **4096 distinct
+hashes, no collisions**, and of the **143** distinct permutation values across
+every material, **138 come from the word and 5 from the standalone names,
+leaving none unmatched** (`every_shipped_permutation_is_one_this_reading_can_build`).
+
+> **A retracted reading.** An earlier round of this page described a "pointer
+> table" of 21 one-bit tokens at vaddr `0x8b7f08`. **There is no such table.**
+> Those 24 consecutive words are a slice of the **TOC** at base `0x8bd3c4` -
+> the token strings sit together in `.rodata` because they were declared
+> together, so their TOC entries sit together too. The entry immediately before
+> them points at `0x00d3e220` itself, and two entries after them are `time` and
+> `viewProj`. The "empty string at bit 3" was the empty string the loop's
+> *clear* chain loads for every optional token. A selector built on that order
+> would have picked the wrong variant every time, and it shipped in
+> `oag_formats::rcsmaterial` for one commit before this read caught it.
+
+### The frame's pass order
+
+Thirteen job names in order at vaddr `0x7b1008`, with the run function of each
+reached through slot 3 of its vtable:
 
 ```text
 PrecomputeTrackFrameData | Preprocess Visibility Fence | RenderBillBoards
 RenderModelShadowMaps | RenderSpotShadowMaps | RenderTrackReflect
-RenderTrackRefract | RenderTrackWithLights_zWriters | RenderModelShadowsOnTrack
-RenderModelAmbientShadowsOnTrack | RenderTrackWithLights_blended | RenderShips
+RenderTrackRefract | RenderTrackWithLights_zWriters (0x408fa8)
+RenderModelShadowsOnTrack (0x4053e0) | RenderModelAmbientShadowsOnTrack
+RenderTrackWithLights_blended (0x4074e0) | RenderShips (0x3ea368)
 ClearTrackVisibilityFlags
 ```
 
-Note the addresses this page and the reports quoted as `0x7a1048`/`0x7a3460`
-are **file offsets**; the load addresses are `+0x10000`.
+Addresses quoted elsewhere as `0x7a1008`/`0x7a3460` are **file offsets**; load
+addresses are `+0x10000`.
 
 ### Still open
 

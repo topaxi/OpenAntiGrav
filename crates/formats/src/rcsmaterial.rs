@@ -151,53 +151,69 @@ pub const TOKENS: [&str; 22] = [
     "NoAlbedo",
 ];
 
-/// The executable's own **flag-bit order** for the feature tokens, which is
-/// *not* the order they concatenate in.
+/// **The permutation word: twelve bits of fields, not one bit per token.**
 ///
-/// A pointer table at `EBOOT.elf` vaddr `0x8b7f08` holds 21 token strings
-/// followed by the three [`Class`] names, and its index is the bit position a
-/// render pass sets. **Bit 3 points at an empty string** - a flag that
-/// contributes nothing to a permutation name - so it is `None` here rather than
-/// silently closing the gap.
+/// `Features::from_pass_word` decodes it. The layout is read out of
+/// `0x003f1028`, a startup loop that runs a mask from 0 to 4095
+/// (`cmpdi 7,28,4096` at `0x3f11d0`), builds each permutation name, hashes it
+/// (`bl 0x5a2090`, then `not 3,3` - the `~crc32` above) and fills a
+/// 4096-entry table at the global `0x00d3e220`. `0x003f0ff8` is the whole
+/// accessor - `slwi 3,3,2 ; lwz 9,-21696(2) ; lwzx 3,9,3 ; blr` - so the
+/// key's second half is literally `table[word]`.
 ///
-/// This is the layout, not the assignment: **which bits a given pass sets is
-/// still unread.** The frame's own pass list is the anchor, thirteen job names
-/// in order at vaddr `0x7b1008`: `PrecomputeTrackFrameData`, a visibility
-/// fence, `RenderBillBoards`, `RenderModelShadowMaps`, `RenderSpotShadowMaps`,
-/// `RenderTrackReflect`, `RenderTrackRefract`,
-/// `RenderTrackWithLights_zWriters`, `RenderModelShadowsOnTrack`,
-/// `RenderModelAmbientShadowsOnTrack`, `RenderTrackWithLights_blended`,
-/// `RenderShips`, `ClearTrackVisibilityFlags`.
+/// | Bits | Meaning |
+/// | --- | --- |
+/// | 0 | `Sun` |
+/// | 1-2 | `Ambient` / `IleVertex` / `IleLightmap` / `IBL` |
+/// | 3-4 | `Spot0` / `Spot1` / `Spot2` / `Spot3` |
+/// | 5 | set `ShadowToAlpha`, clear `HalfBright` |
+/// | 6 | `ShadowMap` |
+/// | 7 | `FalseLight` |
+/// | 8 | `ZoneMode` |
+/// | 9 | `ZoneTrans` |
+/// | 10 | `NoAlbedo` |
+/// | 11 | set `SVC1`, clear `SVC0` |
 ///
-/// That the two orders differ is itself the finding that keeps [`TOKENS`]
-/// honest: a builder walking *this* table would spell variant #5 of
-/// `track_surface` `HalfBrightSunSVC0AmbientSpot0`, and the executable ships
-/// the string `HalfBrightAmbientSunSpot0SVC0`. So the concatenation order is
-/// straight-line code rather than a loop over this table, which is why
-/// [`TOKENS`] had to be derived from the names instead.
-pub const FLAG_BITS: [Option<&str>; 21] = [
-    Some("ShadowToAlpha"),
-    Some("HalfBright"),
-    Some("Sun"),
-    None,
-    Some("ShadowMap"),
-    Some("FalseLight"),
-    Some("ZoneMode"),
-    Some("ZoneTrans"),
-    Some("NoAlbedo"),
-    Some("SVC1"),
-    Some("SVC0"),
-    Some("IBL"),
-    Some("Ambient"),
-    Some("IleVertex"),
-    Some("IleLightmap"),
-    Some("Spot0"),
-    Some("Spot1"),
-    Some("Spot2"),
-    Some("Spot3"),
-    Some("ZAlphaOnly"),
-    Some("AmbientShadow"),
-];
+/// Two of the twenty-two [`TOKENS`] are the *clear* side of a bit rather than
+/// a bit of their own, and four more are not in this word at all:
+/// `ZAlphaOnly`, `AmbientShadow`, `SunOcclusionLightmap` and
+/// `SunOcclusionVertex` are hashed standalone by `0x003f1300` into
+/// `0x00d3e220 + 0x4a20`, past the 0x4000 bytes the table occupies.
+///
+/// **A previous reading of this had one bit per token, from a "pointer table"
+/// at `0x8b7f08`. There is no such table.** Those 24 consecutive words are a
+/// slice of the **TOC** at base `0x8bd3c4`: the token strings sit together in
+/// `.rodata` because they were declared together, so their TOC entries sit
+/// together too. The entry immediately before them points at `0x00d3e220`
+/// itself and two entries after them are `time` and `viewProj` - neither of
+/// which belongs to a flag layout. A selector built on that order would have
+/// picked the wrong variant every time.
+///
+/// Confidence 95: read from the loop's own bit tests, and checked by sweeping
+/// all 4096 words - **4096 distinct hashes, no collisions**, and of the 143
+/// distinct permutation hashes across 29,520 variants, **138 are produced by
+/// this word and the remaining 5 are the standalone names, leaving none
+/// unmatched**.
+pub const PASS_WORD_BITS: u32 = 12;
+
+/// The permutation word an **ordinary lit race pass** sets on a track surface.
+///
+/// `Sun`, and nothing else the pass decides: `HalfBright` and `SVC0` are the
+/// clear sides of bits 5 and 11, and `Spot0` is field value zero, so the word
+/// is `1`. Its name is `HalfBrightAmbientSunSpot0SVC0`, which the executable
+/// ships as a literal at `0x7b17d0` - the only permutation name that appears in
+/// the binary as a string rather than being built.
+///
+/// The chunk half is added on top: `| 0b100` for a lightmapped chunk
+/// (`IleLightmap`), `| 0b010` for a vertex-coloured one (`IleVertex`).
+///
+/// Confidence 95. `Job RenderTrackWithLights_zWriters` (`0x408fa8`) and
+/// `_blended` (`0x4074e0`) - reached through slot 3 of each job's vtable -
+/// never write bits 5, 6 or 7. `ShadowToAlpha` belongs to the shadow
+/// compositing pass (`li 9,32` at `0x405d48`) and `ShadowMap` only to the
+/// model and ship path (`li 6,64` at `0x3ea58c`), which is why no shipped
+/// variant pairs `ShadowMap` with an `Ile*` token.
+pub const LIT_RACE_PASS: u32 = 0b0000_0000_0001;
 
 /// A set of [`TOKENS`], which is the `[1]` half of the key.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -232,21 +248,39 @@ impl Features {
             .is_some_and(|bit| self.0 & (1 << bit) != 0)
     }
 
-    /// The set a render pass's flags word names, by [`FLAG_BITS`].
+    /// The set a **permutation word** names - see [`PASS_WORD_BITS`] for the
+    /// layout and where it was read.
     ///
-    /// Bits with no token - bit 3, and anything above 20 - are ignored rather
-    /// than rejected: the layout is read and the *assignment* is not, so a word
-    /// carrying a bit this reading cannot name is a finding for the caller
-    /// rather than an error here.
+    /// Bits above 11 are ignored: the word is twelve bits wide and a caller
+    /// holding more has a different quantity.
     #[must_use]
-    pub fn from_flags(flags: u32) -> Self {
-        let mut out = Self::NONE;
-        for (bit, token) in FLAG_BITS.iter().enumerate() {
-            if let Some(name) = token.filter(|_| flags & (1 << bit) != 0) {
-                out = out.with(Self::token(name));
-            }
-        }
-        out
+    pub fn from_pass_word(word: u32) -> Self {
+        let one = |set: bool, name: &str| {
+            if set { Self::token(name) } else { Self::NONE }
+        };
+        Self::NONE
+            .with(one(word & 1 != 0, "Sun"))
+            .with(Self::token(
+                ["Ambient", "IleVertex", "IleLightmap", "IBL"][(word >> 1) as usize & 3],
+            ))
+            .with(Self::token(
+                ["Spot0", "Spot1", "Spot2", "Spot3"][(word >> 3) as usize & 3],
+            ))
+            .with(Self::token(if word >> 5 & 1 != 0 {
+                "ShadowToAlpha"
+            } else {
+                "HalfBright"
+            }))
+            .with(one(word >> 6 & 1 != 0, "ShadowMap"))
+            .with(one(word >> 7 & 1 != 0, "FalseLight"))
+            .with(one(word >> 8 & 1 != 0, "ZoneMode"))
+            .with(one(word >> 9 & 1 != 0, "ZoneTrans"))
+            .with(one(word >> 10 & 1 != 0, "NoAlbedo"))
+            .with(Self::token(if word >> 11 & 1 != 0 {
+                "SVC1"
+            } else {
+                "SVC0"
+            }))
     }
 
     /// The tokens, in canonical order.

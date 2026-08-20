@@ -201,46 +201,73 @@ fn the_elided_trailing_words_of_the_last_record_are_not_an_error() {
     );
 }
 
-/// The flag-bit order is the executable's table, and it is *not* the order the
-/// names concatenate in.
+/// The permutation word decodes to the name the executable ships as a literal.
 ///
-/// The second half is the load-bearing part. If a builder walked
-/// [`FLAG_BITS`] in order, variant #5 of `track_surface.rcsmaterial` would be
-/// spelled `HalfBrightSunSVC0AmbientSpot0` - and the executable ships the
-/// literal `HalfBrightAmbientSunSpot0SVC0`. That mismatch is why [`TOKENS`]
-/// has its own order, derived from the 143 shipped names rather than copied
-/// from this table.
+/// `HalfBrightAmbientSunSpot0SVC0` sits at `EBOOT.elf 0x7b17d0` and is variant
+/// #5 of `track_surface.rcsmaterial`, whose `[1]` is `0xfb61d927`. The word is
+/// `1` - `Sun` set, and every other pass-decided token the *clear* side of its
+/// bit or the zero of its field.
 #[test]
-fn the_flag_bit_order_is_not_the_concatenation_order() {
-    // Bit 3 is an empty string in the table: a flag naming no token.
-    assert_eq!(FLAG_BITS[3], None);
-    assert_eq!(FLAG_BITS[0], Some("ShadowToAlpha"));
-    assert_eq!(FLAG_BITS[20], Some("AmbientShadow"));
-
-    let bits = (1 << 1) | (1 << 2) | (1 << 12) | (1 << 15) | (1 << 10);
-    let set = Features::from_flags(bits);
+fn the_lit_race_pass_word_is_the_name_the_executable_ships() {
+    let set = Features::from_pass_word(LIT_RACE_PASS);
     assert_eq!(set.name(), "HalfBrightAmbientSunSpot0SVC0");
     assert_eq!(set.hash(), 0xfb61_d927);
 
-    // What walking the table in order would have produced instead.
-    let table_order: String = FLAG_BITS
-        .iter()
-        .enumerate()
-        .filter_map(|(bit, t)| (bits & (1 << bit) != 0).then_some(*t).flatten())
-        .collect();
-    assert_eq!(table_order, "HalfBrightSunSVC0AmbientSpot0");
-    assert_ne!(table_order, set.name(), "the two orders must differ");
+    // The chunk half rides in bits 1-2, which is the same field `for_chunk`
+    // answers by name.
+    assert_eq!(
+        Features::from_pass_word(LIT_RACE_PASS | 0b100).name(),
+        "HalfBrightIleLightmapSunSpot0SVC0"
+    );
+    assert_eq!(
+        Features::from_pass_word(LIT_RACE_PASS | 0b010).name(),
+        "HalfBrightIleVertexSunSpot0SVC0"
+    );
 }
 
-/// A flags word carrying a bit this reading cannot name is ignored, not an
-/// error - the layout is read and the per-pass assignment is not.
+/// Every field of the word, exercised one at a time.
 #[test]
-fn an_unnamed_flag_bit_is_ignored_rather_than_rejected() {
-    assert_eq!(Features::from_flags(1 << 3), Features::NONE);
-    assert_eq!(Features::from_flags(1 << 31), Features::NONE);
+fn each_field_of_the_permutation_word_names_what_it_should() {
+    assert!(Features::from_pass_word(1 << 5).has("ShadowToAlpha"));
+    assert!(!Features::from_pass_word(1 << 5).has("HalfBright"));
+    assert!(Features::from_pass_word(0).has("HalfBright"), "bit 5 clear");
+    assert!(Features::from_pass_word(0).has("SVC0"), "bit 11 clear");
+    assert!(Features::from_pass_word(1 << 11).has("SVC1"));
+    for (bit, name) in [
+        (6, "ShadowMap"),
+        (7, "FalseLight"),
+        (8, "ZoneMode"),
+        (9, "ZoneTrans"),
+        (10, "NoAlbedo"),
+    ] {
+        assert!(Features::from_pass_word(1 << bit).has(name), "bit {bit}");
+    }
+    for (n, name) in ["Spot0", "Spot1", "Spot2", "Spot3"].into_iter().enumerate() {
+        assert!(Features::from_pass_word((n as u32) << 3).has(name));
+    }
+    for (n, name) in ["Ambient", "IleVertex", "IleLightmap", "IBL"]
+        .into_iter()
+        .enumerate()
+    {
+        assert!(Features::from_pass_word((n as u32) << 1).has(name));
+    }
+    // Above the word's width is a different quantity, and is ignored.
     assert_eq!(
-        Features::from_flags((1 << 12) | (1 << 3)),
-        Features::token("Ambient"),
-        "an unnamed bit does not disturb the named ones"
+        Features::from_pass_word(1 << 12).name(),
+        Features::from_pass_word(0).name()
     );
+}
+
+/// **Sweeping all 4096 words produces 4096 distinct hashes.**
+///
+/// No collisions is what makes `table[word]` a lookup rather than a lottery,
+/// and it is the check that would catch a mis-read field width - overlapping
+/// fields would collapse two words onto one name.
+#[test]
+fn the_whole_permutation_word_space_hashes_without_collision() {
+    let mut seen = std::collections::BTreeSet::new();
+    for word in 0..(1u32 << PASS_WORD_BITS) {
+        seen.insert(Features::from_pass_word(word).hash());
+    }
+    assert_eq!(seen.len(), 1 << PASS_WORD_BITS, "two words share a hash");
 }
