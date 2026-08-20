@@ -65,6 +65,31 @@ pub struct Report {
     /// than picking an attribute that is not one, and this counts the refusals
     /// so a flat-coloured surface is a reported absence and not a mystery.
     pub no_texcoord: usize,
+    /// Material slots whose shader variant the lit-race key resolved to a row
+    /// the file actually ships.
+    ///
+    /// See `super::variants`. Nothing shades differently for it yet; the count
+    /// is here because a reading that reaches 90 % of a circuit and one that
+    /// reaches 20 % look identical from the picture.
+    pub variants_resolved: usize,
+    /// Slots whose material was read but which ship no row for the key.
+    ///
+    /// Expected rather than alarming for now: the pass half of the key is a
+    /// single reading of an ordinary lit race, and a material that only ever
+    /// draws in some other pass ships no row for this one.
+    pub variants_unshipped: usize,
+    /// Slots whose `.rcsmaterial` could not be read from the archive at all.
+    pub materials_unread: usize,
+    /// Chunks drawn by a slot whose variant resolved.
+    ///
+    /// **The number that means something.** A slot count treats a material used
+    /// once the same as one used eighty times; this weights each by what it
+    /// actually draws, and the two diverge sharply - on Talon's Junction the
+    /// key resolves for the materials that draw most of the circuit and misses
+    /// a long tail of rare ones.
+    pub variant_chunks: usize,
+    /// Chunks drawn by a slot that ships no row for the key.
+    pub variant_chunks_missed: usize,
 }
 
 impl Report {
@@ -97,6 +122,20 @@ impl Report {
         } + &match self.lightmap_undecoded {
             0 => String::new(),
             n => format!(", {n} lightmap(s) named but not loaded"),
+        } + &match (
+            self.variants_resolved,
+            self.variants_unshipped,
+            self.materials_unread,
+        ) {
+            (0, 0, 0) => String::new(),
+            (ok, none, unread) => format!(
+                ", {ok} of {} drawn material(s) resolved to a shipped shader \
+                 variant for the lit race pass, covering {} of {} chunk(s) \
+                 ({unread} unread)",
+                ok + none,
+                self.variant_chunks,
+                self.variant_chunks + self.variant_chunks_missed,
+            ),
         } + &match self.no_texcoord {
             0 => String::new(),
             n => format!(", {n} chunk(s) declaring no texture coordinate"),

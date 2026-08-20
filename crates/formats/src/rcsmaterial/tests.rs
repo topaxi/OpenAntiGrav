@@ -271,3 +271,27 @@ fn the_whole_permutation_word_space_hashes_without_collision() {
     }
     assert_eq!(seen.len(), 1 << PASS_WORD_BITS, "two words share a hash");
 }
+
+/// The chunk half is a **field**, so composing it as a set is wrong.
+///
+/// The trap this exists for, caught in the renderer wiring: `LIT_RACE_PASS`
+/// already carries `Ambient` (bits 1-2 at zero), so `with`-ing a lightmapped
+/// chunk's `IleLightmap` onto it leaves **both** set and names a permutation no
+/// material ships. On Talon's Junction that dropped variant resolution from 913
+/// chunks to 289. `chunk_word` replaces the field instead.
+#[test]
+fn the_chunk_half_replaces_a_field_rather_than_joining_a_set() {
+    // The union that looks right and is not.
+    let wrong = Features::from_pass_word(LIT_RACE_PASS).with(Features::token("IleLightmap"));
+    assert_eq!(wrong.name(), "HalfBrightAmbientIleLightmapSunSpot0SVC0");
+
+    // The word that is right: bits 1-2 replaced, everything else kept.
+    let right = Features::from_pass_word(Features::chunk_word(LIT_RACE_PASS, None) | 0b100);
+    assert_eq!(right.name(), "HalfBrightIleLightmapSunSpot0SVC0");
+    assert!(!right.has("Ambient"), "the field was replaced, not joined");
+
+    // A base with other pass bits set keeps them.
+    let zoned = Features::chunk_word(LIT_RACE_PASS | (1 << 8), None);
+    assert!(Features::from_pass_word(zoned).has("ZoneMode"));
+    assert!(Features::from_pass_word(zoned).has("Sun"));
+}

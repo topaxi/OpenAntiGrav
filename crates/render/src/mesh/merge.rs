@@ -36,6 +36,8 @@ pub fn merge(label: &str, models: Vec<Model>) -> Model {
         transparent_draws: Vec::new(),
         textures: Vec::new(),
         lightmaps: Vec::new(),
+        material_variants: Vec::new(),
+
         vertex_colour_is_light: false,
         centre: [0.0; 3],
         radius: 1.0,
@@ -177,6 +179,8 @@ mod merge_tests {
             transparent_draws: Vec::new(),
             textures: (0..textures).map(|_| None).collect(),
             lightmaps: Vec::new(),
+            material_variants: Vec::new(),
+
             vertex_colour_is_light: false,
             centre: [0.0; 3],
             radius: 1.0,

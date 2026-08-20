@@ -75,6 +75,8 @@ fn moving_quad(xform: u32) -> Model {
         airbrakes: [None, None],
         anim_tracks: Vec::new(),
         lightmaps: Vec::new(),
+        material_variants: Vec::new(),
+
         vertex_colour_is_light: false,
         node_vertex_ranges: Vec::new(),
         anim_nodes: vec![AnimNode {

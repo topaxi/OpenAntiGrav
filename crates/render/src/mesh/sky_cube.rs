@@ -153,6 +153,8 @@ pub fn build(label: &str, blob: &[u8], rotation_degrees: f32) -> Result<Model> {
         transparent_draws: Vec::new(),
         textures,
         lightmaps,
+        material_variants: Vec::new(),
+
         vertex_colour_is_light: false,
         centre: [0.0; 3],
         radius: HALF_EXTENT * 3.0f32.sqrt(),

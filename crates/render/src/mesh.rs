@@ -270,6 +270,16 @@ pub struct Model {
     /// hole. Empty on every title but Wipeout HD, and `None` on the majority of
     /// its materials - see `oag_formats::rcsmodel::Material::lightmap`.
     pub lightmaps: Vec<Option<ModelTexture>>,
+    /// Which shader variant each material slot resolves to, positionally
+    /// beside [`Self::textures`], or `None` where the material could not be
+    /// read or ships no row for the key.
+    ///
+    /// **Read, not yet acted on.** `mesh.wgsl` still shades every surface one
+    /// way; this is what a per-material path would key on, and what
+    /// `mesh/rcs.rs`'s report counts so a reading that reaches most of a
+    /// circuit can be told from one that does not. Empty on every title but
+    /// Wipeout HD - see `oag_formats::rcsmaterial`.
+    pub material_variants: Vec<Option<oag_formats::rcsmaterial::Variant>>,
     /// Whether [`GpuVertex::colour`] holds a **baked light** rather than a tint.
     ///
     /// True only for a Wipeout HD `.rcsmodel`, whose fragment programs *add*
@@ -338,6 +348,8 @@ impl Model {
             transparent_draws: Vec::new(),
             textures: Vec::new(),
             lightmaps: Vec::new(),
+            material_variants: Vec::new(),
+
             vertex_colour_is_light: false,
             centre: [0.0; 3],
             radius: 0.0,
@@ -930,6 +942,8 @@ fn build_class(
         transparent_draws,
         textures,
         lightmaps: Vec::new(),
+        material_variants: Vec::new(),
+
         vertex_colour_is_light: false,
         centre,
         radius,

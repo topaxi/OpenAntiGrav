@@ -30,7 +30,7 @@
 
 use anyhow::{Context, Result, bail};
 use oag_core::math::{Mat4, Vec3};
-use oag_formats::{gtf, rcsmodel, vex};
+use oag_formats::{rcsmodel, vex};
 
 use super::{Bounds, DrawCall, GpuVertex, Model, ModelTexture};
 
@@ -132,81 +132,8 @@ pub fn no_textures(_: &str) -> Option<Vec<u8>> {
     None
 }
 
-/// Decodes one material's texture, or says which way it could not be.
-///
-/// **A `.gtf` that will not decode draws nothing rather than something.**
-/// `Texture::to_rgba` refuses the RSX's Morton-swizzled layouts and cubemaps -
-/// 53 of the disc's 7,333 files - and a refusal here leaves the slot `None`,
-/// which `mesh_render::build` binds its white 1x1 for. That is the same white
-/// sheet this module has been removing, so it is counted in
-/// [`Report::untextured`] rather than left to be discovered in a screenshot.
-fn decode_texture(label: &str, blob: &[u8]) -> Option<ModelTexture> {
-    let parsed = gtf::Gtf::parse(blob).ok()?;
-    let texture = parsed.only()?;
-    let rgba = texture.to_rgba(blob).ok()?;
-    let (width, height) = texture.level_size(0);
-    Some(ModelTexture {
-        label: label.to_string(),
-        width,
-        height,
-        rgba: rgba.into_iter().flatten().collect(),
-    })
-}
-
-/// One texture slot per material, in material-table order.
-///
-/// Positional and never compacted, because a chunk names its material by
-/// ordinal - dropping the ones that fail to decode would re-skin the model.
-fn skin(
-    model: &rcsmodel::Model,
-    textures: Textures<'_>,
-    report: &mut Report,
-) -> (Vec<Option<ModelTexture>>, Vec<Option<ModelTexture>>) {
-    let mut cache: std::collections::HashMap<String, Option<ModelTexture>> = Default::default();
-    let mut load = |path: &str, textures: Textures<'_>| {
-        // A circuit's 442 materials name far fewer distinct textures, and
-        // decoding a 2048x2048 DXT5 twice is the cost this avoids. The two
-        // slots share the cache because a lightmap atlas is named by dozens of
-        // materials at once.
-        cache
-            .entry(path.to_string())
-            .or_insert_with(|| {
-                textures(path)
-                    .as_deref()
-                    .and_then(|blob| decode_texture(path, blob))
-            })
-            .clone()
-    };
-    let mut skins = Vec::with_capacity(model.materials.len());
-    let mut lightmaps = Vec::with_capacity(model.materials.len());
-    for material in &model.materials {
-        if material.texture.is_empty() {
-            report.untextured += 1;
-            skins.push(None);
-        } else {
-            let decoded = load(&material.texture, textures);
-            if decoded.is_none() {
-                report.untextured += 1;
-            }
-            skins.push(decoded);
-        }
-        // **Only the slot the material identifies as a lightmap**, which is a
-        // reading rather than a preference for the second texture - see
-        // `oag_formats::rcsmodel::Material::lightmap`. A second texture that is
-        // an emissive map, a normal map or a coverage mask stays unsampled.
-        let lit = material.lightmap().map(|path| load(path, textures));
-        match &lit {
-            Some(Some(_)) => report.lightmapped += 1,
-            // Named and did not decode: counted apart, because a lightmap that
-            // silently fails to load leaves the surface at full brightness,
-            // which is what an unlit surface looks like anyway.
-            Some(None) => report.lightmap_undecoded += 1,
-            None => {}
-        }
-        lightmaps.push(lit.flatten());
-    }
-    (skins, lightmaps)
-}
+mod skin;
+use skin::{skin, variants};
 
 /// The bounding box and chunk hash a PS3 `Mesh` node's payload carries.
 ///
@@ -652,6 +579,7 @@ pub fn build(
     let mut out = Model::none(label);
     let mut report = Report::default();
     let (skins, lightmaps) = skin(&model, textures, &mut report);
+    let material_variants = variants(&model, textures, &mut report);
     out.textures = skins;
     out.lightmaps = lightmaps;
     // Every vertex this module writes carries HD's baked per-vertex light in
@@ -660,6 +588,7 @@ pub fn build(
     // it, and it is a property of the model rather than of the target because
     // the capture and viewer paths draw these same models into a gamma one.
     out.vertex_colour_is_light = true;
+    out.material_variants = material_variants;
 
     for (index, node) in nodes
         .iter()
@@ -864,11 +793,21 @@ mod tests {
             lightmap_undecoded: 0,
             no_texcoord: 9,
             authored_normals: 531_904,
+            variants_resolved: 40,
+            variants_unshipped: 2,
+            materials_unread: 1,
+            variant_chunks: 300,
+            variant_chunks_missed: 4,
         };
         let line = report.describe();
         assert!(line.contains("59 of 126"), "{line}");
         assert!(line.contains("56 addressed no chunk"), "{line}");
         assert!(line.contains("257 chunk(s) drawn see-through"), "{line}");
+        assert!(
+            line.contains("40 of 42 drawn material(s) resolved"),
+            "{line}"
+        );
+        assert!(line.contains("covering 300 of 304 chunk(s)"), "{line}");
         assert!(
             line.contains("3 material(s) whose .gtf did not paint"),
             "a draw with no texture binds the white 1x1 and paints a sheet, which \

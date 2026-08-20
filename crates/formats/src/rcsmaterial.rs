@@ -310,6 +310,30 @@ impl Features {
         name_hash(&self.name())
     }
 
+    /// **The half of the key a chunk decides, as bits of a permutation word.**
+    ///
+    /// Composing with [`Self::with`] instead is a trap and does not work:
+    /// `Features` is a *set*, so unioning a chunk's `IleLightmap` onto a pass
+    /// word that already carries `Ambient` leaves both set and names a
+    /// permutation no material ships. Bits 1-2 are a four-way **field**, so
+    /// they have to be replaced rather than added.
+    ///
+    /// ```
+    /// use oag_formats::rcsmaterial::{Features, LIT_RACE_PASS};
+    /// let word = Features::chunk_word(LIT_RACE_PASS, None);
+    /// assert_eq!(Features::from_pass_word(word).name(), "HalfBrightAmbientSunSpot0SVC0");
+    /// ```
+    #[must_use]
+    pub fn chunk_word(base: u32, decl: Option<&VertexDecl>) -> u32 {
+        let field = match decl {
+            Some(d) if d.lightmap_texcoord().is_some() => 2,
+            Some(d) if d.vertex_colour().is_some() => 1,
+            // No lightmap coordinate and no colour set: `Ambient`, field zero.
+            _ => 0,
+        };
+        (base & !0b110) | (field << 1)
+    }
+
     /// **The half of the key a chunk's own declaration decides.**
     ///
     /// Measured over all 29,520 variants: `IleLightmap` implies a `lightmapUV`
