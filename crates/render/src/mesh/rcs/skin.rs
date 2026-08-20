@@ -78,7 +78,23 @@ pub(super) fn skin(
             // silently fails to load leaves the surface at full brightness,
             // which is what an unlit surface looks like anyway.
             Some(None) => report.lightmap_undecoded += 1,
-            None => {}
+            None => {
+                // Not a lightmap by the four-signal reading above, but a
+                // second texture may still be named - see
+                // `docs/formats/rcsmaterial.md`, "The glass family's second
+                // slot: traced, not solved". Decoded and counted so the load
+                // report says a second slot exists and is unread rather than
+                // that nothing does; not bound to a sampler, because which
+                // texture unit the resolved shader actually reads it through,
+                // and by what operation, is not confirmed - drawing it would
+                // be a guess at the picture, not a reading of it.
+                if let Some(path) = material.second_texture.as_deref() {
+                    match load(path, textures) {
+                        Some(_) => report.second_texture_loaded += 1,
+                        None => report.second_texture_unread += 1,
+                    }
+                }
+            }
         }
         lightmaps.push(lit.flatten());
     }

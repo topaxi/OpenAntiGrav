@@ -553,10 +553,22 @@ identifier-shaped strings `search_strings` returns for this ELF also found
 nothing - but that sweep also failed to recover `lightmap` and `Texture1`,
 both names this page already has from elsewhere, so it is not evidence the
 executable lacks the string, only that Ghidra's auto-detected string list
-does not carry it at the address this method reaches. Not implemented: wiring
-`second_texture` into the shader without knowing whether unit 1 multiplies,
+does not carry it at the address this method reaches.
+
+**Not the first time this shape has turned up.** `renderer.md`'s "Ships have
+no Lambert diffuse either" reads `detonator_ship_rich_iridescent` carrying "a
+view-driven colour dodge and burn... and an environment lookup on a third
+sampler, neither of which is a light term and neither of which `oag-render`
+implements" - stated flatly, deliberately, "and nothing here fakes it". The
+glass family's second slot reads as the same category of gap on different
+materials, not a new one, which is why it stays unfaked here too: **loading**
+`second_texture` is now real (`mesh/rcs/skin.rs::skin`, 2026-08-20 -
+`Report::second_texture_loaded`, 252 of Talon's Junction's materials), but
+**wiring** it into the shader without knowing whether unit 1 multiplies,
 adds, or Fresnel-blends into the output would be inventing the picture, which
-is the one thing this project's own rules forbid outright.
+is the one thing this project's own rules forbid outright. Loaded and
+unbound is the honest middle state between "not read at all" and "guessed
+at".
 
 **What would close it**: what fills `c[206]` each frame (the constant-binding
 walk `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`'s `viewProj`/`c256`

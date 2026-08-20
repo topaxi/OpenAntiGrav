@@ -58,6 +58,20 @@ pub struct Report {
     pub lightmapped: usize,
     /// Materials naming a lightmap whose `.gtf` did not load or decode.
     pub lightmap_undecoded: usize,
+    /// Materials whose second texture names a `.gtf` that is not the
+    /// circuit's baked lighting atlas, and which decodes.
+    ///
+    /// **Loaded, and not yet drawn.** `docs/formats/rcsmaterial.md`'s
+    /// "traced, not solved" section is why: which texture unit the resolved
+    /// shader actually samples it through, and by what operation, is read
+    /// only on `glass_texture_customr`'s own block and not confirmed there
+    /// either. Counted so the loader report says a second slot exists and is
+    /// unread, rather than that nothing does - the same asymmetry
+    /// [`Self::lightmapped`] exists for.
+    pub second_texture_loaded: usize,
+    /// Materials whose second texture names a `.gtf` that is not the
+    /// lighting atlas and which did not decode.
+    pub second_texture_unread: usize,
     /// Chunks whose vertex declaration names no texture coordinate at all.
     ///
     /// 984 of the disc's chunks. They draw at the origin of their texture,
@@ -122,6 +136,12 @@ impl Report {
         } + &match self.lightmap_undecoded {
             0 => String::new(),
             n => format!(", {n} lightmap(s) named but not loaded"),
+        } + &match self.second_texture_loaded {
+            0 => String::new(),
+            n => format!(", {n} second texture(s) loaded but not drawn (role unread)"),
+        } + &match self.second_texture_unread {
+            0 => String::new(),
+            n => format!(", {n} second texture(s) named but not loaded"),
         } + &match (
             self.variants_resolved,
             self.variants_unshipped,

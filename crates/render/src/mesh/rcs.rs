@@ -800,6 +800,8 @@ mod tests {
             untextured: 3,
             lightmapped: 4,
             lightmap_undecoded: 0,
+            second_texture_loaded: 6,
+            second_texture_unread: 0,
             no_texcoord: 9,
             authored_normals: 531_904,
             variants_resolved: 40,
@@ -829,6 +831,10 @@ mod tests {
         );
         assert!(
             line.contains("11 had no recoverable vertex stride"),
+            "{line}"
+        );
+        assert!(
+            line.contains("6 second texture(s) loaded but not drawn (role unread)"),
             "{line}"
         );
         assert!(line.contains("2 submesh(es) dropped as strays"), "{line}");
