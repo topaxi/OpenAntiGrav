@@ -156,8 +156,11 @@ That is also the direct confirmation the body array was missing, so **the
 reading that this array is the craft goes to confidence 88**: one element of it
 responds to the controller.
 
-The player's index is not fixed. An earlier run flagged a different body, and
-the grid slot has no reason to be stable across races.
+The player's index is not fixed, and two earlier candidates are **retracted**:
+body 3, flagged at `+0x1a0`/`+0x1b4`/`+0x1c0` by a run that turned out to be
+measuring a crash, and body 2, flagged at `+0x068` by a six-sample correlation
+that does not survive twelve. Only body 7 stands, and only on this run's grid -
+the slot has no reason to be stable across races.
 
 ### Two negatives worth keeping, because both looked like results
 
@@ -173,6 +176,20 @@ twelve samples that same body and offset scores `r=-0.040`, and the whole
 cluster around it collapses into noise. With this few degrees of freedom a
 single cycle will hand out `|r| > 0.9` to chance; two cycles and twelve samples
 are what made the real field separate from seven near-identical decoys.
+
+### Speed is not in the bytes that were dumped
+
+With the player identified, the same twelve samples were re-scored against a
+leaky integral of the throttle - what a speed that accumulates thrust and bleeds
+off would look like - at three decay rates. Nothing in body 7 reached `|r| =
+0.85` in either object. Scored against the square wave directly, `+0x4c4` is
+alone at `0.942` and the next field down is `0.591`.
+
+So **no speed scalar lives in the entry's first `0x500` bytes or the inner
+object's first `0x200`**, and the throttle field is the only input-responsive
+one in that range. The search moves outward: the entry's true size is unknown
+past `0x4d1`, and the craft almost certainly has a game-side object that is not
+this rigid body.
 
 ## Globals
 
