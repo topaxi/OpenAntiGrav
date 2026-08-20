@@ -171,11 +171,59 @@ class Debugger:
         finally:
             self.sock.settimeout(previous)
 
+    def wait_at(self, address, tries=12, slice_seconds=0.5):
+        """`(tid, registers)` for a thread parked at `address`, or `(None, None)`.
+
+        **Use this and not `wait_for_stop()` for breakpoint work.** RPCS3 parks
+        a thread at a `Z0` breakpoint *without ever sending a stop reply for
+        it*, so a `wait_for_stop()` on a breakpoint that has already hit blocks
+        until its timeout and then reports nothing - which reads exactly like
+        "the address never executes" and is how this harness twice concluded a
+        function does not run during a race when a thread was sitting in it the
+        whole time. The only reliable question is "is any thread's PC here",
+        and asking it means stopping the target first.
+        """
+        for _ in range(tries):
+            self.resume()
+            time.sleep(slice_seconds)
+            self.pause()
+            for tid in self.threads():
+                regs = self.registers(tid)
+                if regs is None:
+                    continue
+                pc = int.from_bytes(regs[REG_PC:REG_PC + 8], "big")
+                if pc == address:
+                    return tid, regs
+        return None, None
+
     def run_for(self, seconds):
         """Let the game run for a wall-clock stretch, then stop it again."""
         self.resume()
         time.sleep(seconds)
         self.pause()
+
+    def drain(self, settle=0.4):
+        """Throw away packets the stub volunteered, and say how many there were.
+
+        **Call this after every breakpoint stop.** A breakpoint set on a
+        function several threads run - `FwMutex_Lock`, say - is hit by more than
+        one of them, and each hit queues its own stop reply. The first read
+        issued afterwards then consumes a *stop reply* as if it were its answer,
+        every later packet is off by one, and the session dies on a timeout that
+        looks exactly like a hung emulator.
+        """
+        previous = self.sock.gettimeout()
+        self.sock.settimeout(settle)
+        dropped = 0
+        try:
+            while True:
+                self.read_packet()
+                dropped += 1
+        except (TimeoutError, socket.timeout):
+            self.buf = b""
+        finally:
+            self.sock.settimeout(previous)
+        return dropped
 
     def read(self, address, size):
         """`size` bytes of guest memory. Split to respect `PacketSize`.

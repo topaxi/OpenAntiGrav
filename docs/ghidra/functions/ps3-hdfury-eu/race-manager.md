@@ -98,13 +98,17 @@ identical**: 0 of 12288 words changed. No float in the object moved into or
 within a speed-like band in that time.
 
 So whatever holds craft dynamics - position, velocity, the speed the HUD prints
-- is *not* in the RaceManager base object. That is a useful negative: it rules
-out the one runtime structure this binary had a named entry point into, and says
-the next search has to start somewhere else. Confidence 80: the measurement is
-unambiguous, but `0xc000` is this page's own estimate of where the base object's
-fields stop, and a derived race mode's fields begin above it - `0x00045178`
-writes at index `0xb8e`, past the `0xb75` the base is read to end at - so a
-per-frame field living in the *derived* part would sit outside what was dumped.
+- is *not* in the RaceManager object. That is a useful negative: it rules out
+the one runtime structure this binary had a named entry point into, and says the
+next search has to start somewhere else.
+
+**Confidence 85, and the derived fields are covered rather than excluded.** The
+indices on this page are into a word-sized array, so `0x00045178`'s write at
+index `0xb8e` is byte offset `0x2e38` and the base's own last field near `0xb75`
+is `0x2dd4` - both comfortably inside the `0xc000` that was dumped, which
+reaches word index `0x3000`. The dump therefore covers the base object and the
+derived race mode's known fields together, four times over. What it cannot rule
+out is a subclass whose fields run past `0xc000`, which nothing here measures.
 
 ### `RaceManager_GetInstance`
 

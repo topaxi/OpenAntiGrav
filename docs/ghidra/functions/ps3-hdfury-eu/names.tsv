@@ -60,3 +60,12 @@
 0x008bf1ac	data	g_ShaderRegistryHead	84	renderer.md
 0x005a2090	function	Crc32_HashString	92	renderer.md
 0x00921110	data	g_VexClassTable	95	vex-classes.md
+0x000f8a88	function	Physics_TickWorld	80	physics.md
+0x000f8610	function	Physics_StepWorld	80	physics.md
+0x009389e4	data	g_CollisionWorld	82	physics.md
+0x008c1758	data	g_PhysicsSubstepCount	75	physics.md
+0x00938560	data	g_PhysicsHalfStep	72	physics.md
+0x000ef450	function	Craft_IntegrateHull	78	physics.md
+0x008636e0	data	g_CraftVtable	85	physics.md
+0x008638e8	data	g_DebrisVtable	72	physics.md
+0x000364c0	function	Collision_MarchSegment	72	physics.md
