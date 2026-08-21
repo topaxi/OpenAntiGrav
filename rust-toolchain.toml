@@ -4,5 +4,5 @@
 # makes "the toolchain moved" and "the code moved" distinguishable if the
 # determinism gate ever fires. Bump deliberately, not as a side effect of
 # something else.
-channel = "1.97.1"
+channel = "1.98.0"
 components = ["rustfmt", "clippy"]
