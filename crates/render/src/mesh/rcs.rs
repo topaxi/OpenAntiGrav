@@ -32,7 +32,7 @@ use anyhow::{Context, Result, bail};
 use oag_core::math::{Mat4, Vec3};
 use oag_formats::{rcsmodel, vex};
 
-use super::{Bounds, DrawCall, GpuVertex, Model, ModelTexture};
+use super::{Bounds, DrawCall, GpuVertex, Model, ModelTexture, slots};
 
 /// How far a dequantised point may miss the authored box face by, in world
 /// units, before a stride is rejected.
@@ -133,7 +133,7 @@ pub fn no_textures(_: &str) -> Option<Vec<u8>> {
 }
 
 mod skin;
-use skin::{skin, variants};
+use skin::{roles, skin, variants};
 
 /// The bounding box and chunk hash a PS3 `Mesh` node's payload carries.
 ///
@@ -235,7 +235,7 @@ pub fn build_scene(
             report.no_stride += 1;
             continue;
         };
-        let surface = surface(&model, mesh, &out.textures);
+        let surface = surface(&model, mesh, &out.textures, &out.material_slots);
         report.see_through += usize::from(surface.blend.is_some());
         report.no_texcoord += usize::from(declares_no_texcoord(mesh));
         let mut emitted = false;
@@ -323,9 +323,13 @@ fn surface(
     model: &rcsmodel::Model,
     mesh: &rcsmodel::Mesh,
     skin: &[Option<ModelTexture>],
+    material_slots: &[u32],
 ) -> Surface {
     let slot = mesh.material as usize;
     let texture = skin.get(slot).and_then(Option::as_ref).map(|_| slot);
+    // `DEFAULT` for a slot with no reading, which is what every title but HD
+    // has and what an HD material whose microcode did not trace answers.
+    let roles = material_slots.get(slot).copied().unwrap_or(slots::DEFAULT);
     let blend = match model.material_of(mesh).map(rcsmodel::Material::blend) {
         // Only a painted surface can be blended - see above.
         Some(rcsmodel::Blend::Factors { src, dst }) if texture.is_some() => {
@@ -333,7 +337,11 @@ fn surface(
         }
         _ => None,
     };
-    Surface { texture, blend }
+    Surface {
+        texture,
+        blend,
+        roles,
+    }
 }
 
 /// One authored factor pair as the state a pipeline is built with.
@@ -401,6 +409,9 @@ struct Surface {
     /// Index into `Model::textures`, or `None` for a material with no painted
     /// texture.
     texture: Option<usize>,
+    /// What the material's own microcode says its two texture units are for,
+    /// packed as [`slots`] and handed to every vertex this surface emits.
+    roles: u32,
     /// The blend equation the material authors, or `None` for the opaque pass.
     ///
     /// The state itself rather than a `vex::BlendClass`, because a PS3 material
@@ -498,6 +509,7 @@ fn emit(out: &mut Model, mesh: Geometry<'_>, to_world: Mat4, node: Option<u32>, 
                 .unwrap_or([0.0, 0.0]),
             lit: 1.0,
             anim: 0,
+            slots: surface.roles,
             xform: 0,
             // The colour set's fourth byte - see
             // `oag_formats::rcsmodel::Mesh::vertex_light` and
@@ -587,10 +599,12 @@ pub fn build(
 
     let mut out = Model::none(label);
     let mut report = Report::default();
-    let (skins, lightmaps) = skin(&model, textures, &mut report);
+    let (skins, seconds) = skin(&model, textures, &mut report);
     let material_variants = variants(&model, textures, &mut report);
+    // After the variants, because the roles are read off the resolved one.
+    let material_slots = roles(&model, &material_variants, &seconds, textures);
     out.textures = skins;
-    out.lightmaps = lightmaps;
+    out.lightmaps = seconds;
     // Every vertex this module writes carries HD's baked per-vertex light in
     // `colour`, which the fragment programs **add** rather than multiply - see
     // `emit`. The flag is what stops the stand-in shading path from tinting by
@@ -598,6 +612,7 @@ pub fn build(
     // the capture and viewer paths draw these same models into a gamma one.
     out.vertex_colour_is_light = true;
     out.material_variants = material_variants;
+    out.material_slots = material_slots;
 
     for (index, node) in nodes
         .iter()
@@ -628,7 +643,7 @@ pub fn build(
         };
 
         let to_world = Mat4::from_cols_array(&world[index]);
-        let surface = surface(&model, mesh, &out.textures);
+        let surface = surface(&model, mesh, &out.textures, &out.material_slots);
         report.see_through += usize::from(surface.blend.is_some());
         report.no_texcoord += usize::from(declares_no_texcoord(mesh));
         let mut emitted = false;

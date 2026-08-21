@@ -187,6 +187,7 @@ mod tests {
             anim: 0,
             xform: 0,
             sun_mask: 1.0,
+            slots: crate::mesh::slots::DEFAULT,
         }
     }
 

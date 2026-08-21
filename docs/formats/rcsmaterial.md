@@ -537,12 +537,41 @@ wrong on this material.
    the first one read end to end out of the microcode rather than inferred
    from a file name. It is also the one that most changes the picture.
 
-**Not implemented.** Drawing it correctly needs the second texture bound as an
-*albedo* and the alpha taken from a second UV set on the first - neither of
-which `mesh.wgsl` can express today, and both of which should be selected by
-what the resolved variant's microcode says rather than by a material name.
-`oag_formats::rcsmaterial` already decodes NV40 fragment microcode in Rust, so
-the classifier is buildable; nothing here guesses in the meantime.
+**Implemented 2026-08-21, and one half of the prescription below did not land
+as scoped.** `rcsmaterial::fragment::Program::output_texels` is the
+classifier this section called buildable: a swizzle-aware forward taint
+(`fragment.rs`'s doc comment) that answers, per output lane, which texture
+unit and channel reaches it - honouring swizzles (the difference this section
+is named for) and keeping `H`/`R` register files apart, both measured against
+this same `clouds.rcsmaterial` block. `mesh::rcs::skin::roles` turns a
+positive trace into `mesh::slots` bits per material (`ALBEDO_FROM_SECOND`,
+`ALPHA_FROM_SECOND`, packed with the already-shipped `SECOND_IS_LIGHTMAP`),
+carried per vertex and decoded in `mesh.wgsl`'s `fs_main`. Verified visually:
+Talon's Junction's cloud plate now draws as a translucent wisp with the
+roadway and trackside structures visible through it, where it used to paint
+the opaque sheet described above; a sanity sweep of Wipeout Pulse and three
+further HD circuits (Vineta K, Sol 2, Talon's Junction) at one tick each
+showed no corruption from the change.
+
+**The alpha did not come from a second UV set - it is sampled at the first
+texture's own coordinate instead**, which `mesh.wgsl` states plainly as an
+approximation, not a reading: the cloud plate's own program builds both
+units' coordinates from the same interpolator and a chunk in this role
+declares no second coordinate set to use instead, but a material that tiles
+its two textures at different scales would come out wrong under this rule -
+visibly mismatched rather than misplaced, and not yet measured on any such
+material. Only a *positive* trace is acted on, **per lane, independently for
+colour and alpha** - a colour merge that comes out `Texel::Mixed` leaves the
+albedo at the first texture untouched even when the alpha lane traces
+cleanly. Checked directly on the glass family below: both
+`glass_texture_customr`'s and `etched_glass_tech`'s colour merges come out
+`Mixed` (unsurprising - their combine is the unresolved `DP3_SAT`/Fresnel
+chain that section describes), so neither gets `ALBEDO_FROM_SECOND`; but
+`etched_glass_tech`'s alpha traces to unit 0 channel 0, which *does* move its
+alpha channel off the `slots::DEFAULT` assumption of channel 3 - a real
+reading, not a guess, and not the glass family's "not solved" combine, which
+is about colour. Normal map, emissive map and coverage mask - three of the
+five other roles this slot plays - are still not selected by anything.
 
 ## The glass family's second slot: traced, not solved (2026-08-20)
 

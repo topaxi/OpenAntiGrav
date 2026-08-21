@@ -262,14 +262,28 @@ pub struct Model {
     /// are positional because materials name a texture by its ordinal, so
     /// compacting them would re-skin the model.
     pub textures: Vec<Option<ModelTexture>>,
-    /// The baked lighting atlas each material carries, positionally beside
-    /// [`Self::textures`].
+    /// Each material's **second** texture, positionally beside
+    /// [`Self::textures`], under whatever role it plays there.
+    ///
+    /// Named for the common case, not the only one: most of the time this is
+    /// the circuit's baked lighting atlas (`oag_formats::rcsmodel::Material::lightmap`),
+    /// but it is loaded whenever the material names one at all, and
+    /// [`Self::material_slots`] is what says which role a given entry
+    /// actually plays - see `mesh::rcs::skin::skin` and [`slots`].
     ///
     /// **Parallel and never compacted**, for the same reason `textures` is: a
     /// draw names its material by ordinal, so a missing entry has to stay a
     /// hole. Empty on every title but Wipeout HD, and `None` on the majority of
-    /// its materials - see `oag_formats::rcsmodel::Material::lightmap`.
+    /// its materials.
     pub lightmaps: Vec<Option<ModelTexture>>,
+    /// What each material slot's own microcode says its two texture units are
+    /// for, packed as [`slots`], in the same order as [`Self::textures`].
+    ///
+    /// Empty for every title but Wipeout HD, whose materials are the only ones
+    /// carrying a shader table to read. A slot with no entry draws as
+    /// [`slots::DEFAULT`], which is what this renderer did before the reading
+    /// existed. See `mesh::rcs::skin::roles`.
+    pub material_slots: Vec<u32>,
     /// Which shader variant each material slot resolves to, positionally
     /// beside [`Self::textures`], or `None` where the material could not be
     /// read or ships no row for the key.
@@ -348,6 +362,7 @@ impl Model {
             transparent_draws: Vec::new(),
             textures: Vec::new(),
             lightmaps: Vec::new(),
+            material_slots: Vec::new(),
             material_variants: Vec::new(),
 
             vertex_colour_is_light: false,
@@ -363,7 +378,7 @@ impl Model {
 }
 
 mod vertex;
-pub use vertex::GpuVertex;
+pub use vertex::{GpuVertex, slots};
 
 mod anim_node;
 pub use anim_node::{AnimNode, NODE_ANIM_LIMIT};
@@ -815,6 +830,7 @@ fn build_class(
                         anim,
                         xform,
                         sun_mask: 1.0,
+                        slots: crate::mesh::slots::DEFAULT,
                     });
                 }
                 for tri in batch.triangles() {
@@ -943,6 +959,7 @@ fn build_class(
         transparent_draws,
         textures,
         lightmaps: Vec::new(),
+        material_slots: Vec::new(),
         material_variants: Vec::new(),
 
         vertex_colour_is_light: false,

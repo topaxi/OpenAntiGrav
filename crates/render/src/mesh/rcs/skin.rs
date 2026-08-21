@@ -34,6 +34,11 @@ pub(super) fn decode_texture(label: &str, blob: &[u8]) -> Option<ModelTexture> {
 ///
 /// Positional and never compacted, because a chunk names its material by
 /// ordinal - dropping the ones that fail to decode would re-skin the model.
+///
+/// Returns the first texture and the **second**, whatever its role. Until
+/// 2026-08-20 the second was loaded and dropped unless it was the circuit's
+/// lightmap, on the grounds that its role was unread; [`roles`] reads it now,
+/// so the texture has to be there for the role to mean anything.
 pub(super) fn skin(
     model: &rcsmodel::Model,
     textures: Textures<'_>,
@@ -55,7 +60,7 @@ pub(super) fn skin(
             .clone()
     };
     let mut skins = Vec::with_capacity(model.materials.len());
-    let mut lightmaps = Vec::with_capacity(model.materials.len());
+    let mut seconds = Vec::with_capacity(model.materials.len());
     for material in &model.materials {
         if material.texture.is_empty() {
             report.untextured += 1;
@@ -67,38 +72,102 @@ pub(super) fn skin(
             }
             skins.push(decoded);
         }
-        // **Only the slot the material identifies as a lightmap**, which is a
-        // reading rather than a preference for the second texture - see
-        // `oag_formats::rcsmodel::Material::lightmap`. A second texture that is
-        // an emissive map, a normal map or a coverage mask stays unsampled.
-        let lit = material.lightmap().map(|path| load(path, textures));
-        match &lit {
-            Some(Some(_)) => report.lightmapped += 1,
+        // The lightmap is still counted apart from every other use of the
+        // slot, because the two are answered by different evidence: the
+        // lightmap by `Material::lightmap`'s four-signal path reading, and
+        // everything else by the material's own microcode. See
+        // `oag_formats::rcsmodel::Material::lightmap` and [`roles`].
+        let second = material
+            .second_texture
+            .as_deref()
+            .map(|path| load(path, textures));
+        match (material.lightmap().is_some(), &second) {
+            (true, Some(Some(_))) => report.lightmapped += 1,
             // Named and did not decode: counted apart, because a lightmap that
             // silently fails to load leaves the surface at full brightness,
             // which is what an unlit surface looks like anyway.
-            Some(None) => report.lightmap_undecoded += 1,
-            None => {
-                // Not a lightmap by the four-signal reading above, but a
-                // second texture may still be named - see
-                // `docs/formats/rcsmaterial.md`, "The glass family's second
-                // slot: traced, not solved". Decoded and counted so the load
-                // report says a second slot exists and is unread rather than
-                // that nothing does; not bound to a sampler, because which
-                // texture unit the resolved shader actually reads it through,
-                // and by what operation, is not confirmed - drawing it would
-                // be a guess at the picture, not a reading of it.
-                if let Some(path) = material.second_texture.as_deref() {
-                    match load(path, textures) {
-                        Some(_) => report.second_texture_loaded += 1,
-                        None => report.second_texture_unread += 1,
-                    }
+            (true, _) => report.lightmap_undecoded += 1,
+            (false, Some(Some(_))) => report.second_texture_loaded += 1,
+            (false, Some(None)) => report.second_texture_unread += 1,
+            (false, None) => {}
+        }
+        seconds.push(second.flatten());
+    }
+    (skins, seconds)
+}
+
+/// What each material slot's own microcode says its two texture units are for,
+/// packed as [`crate::mesh::slots`], in material-table order.
+///
+/// **The reading this project spent a year without.** A `.rcsmaterial` is a
+/// table of shader variants; [`variants`] already resolves which one an
+/// ordinary lit race draws through, and that variant's fragment program states
+/// outright which unit it samples for the picture and which unit and channel it
+/// writes to the output alpha.
+/// `oag_formats::rcsmaterial::fragment::Program::output_texels` traces it, and
+/// this turns the answer into the four bits `mesh.wgsl` decodes.
+///
+/// **Only a positive reading is acted on.** A lane the taint could not follow
+/// answers [`rcsmaterial::fragment::Texel::Untraced`] - a constant, an
+/// interpolator, or an opcode this decoder does not model - and `Untraced` is
+/// not the same claim as "opaque". Those slots keep
+/// [`crate::mesh::slots::DEFAULT`], which is exactly what this renderer did
+/// before any of this existed, so the reading can only add correct surfaces
+/// and never take a working one away. The same rule covers a unit above 1: a
+/// `.rcsmodel` material names two textures and some programs sample four, so
+/// an alpha traced to unit 2 is recorded by the census and not acted on here.
+pub(super) fn roles(
+    model: &rcsmodel::Model,
+    variants: &[Option<rcsmaterial::Variant>],
+    seconds: &[Option<ModelTexture>],
+    textures: Textures<'_>,
+) -> Vec<u32> {
+    use crate::mesh::slots;
+    use rcsmaterial::fragment::{Program, Texel};
+
+    let mut cache: std::collections::HashMap<String, Option<Vec<u8>>> = Default::default();
+    let mut out = Vec::with_capacity(model.materials.len());
+    for (slot, material) in model.materials.iter().enumerate() {
+        let mut packed = slots::DEFAULT;
+        if material.lightmap().is_some() {
+            packed |= slots::SECOND_IS_LIGHTMAP;
+        }
+        let program = variants.get(slot).copied().flatten().and_then(|variant| {
+            let blob = cache
+                .entry(material.name.clone())
+                .or_insert_with(|| textures(&format!("/{}", material.name)))
+                .clone()?;
+            Program::parse(&blob, variant.fragment.offset)
+        });
+        // **Only where there is a second texture to point at.** A program's
+        // unit 1 and a `.rcsmodel` material's second slot are not the same
+        // thing: 40 of the disc's materials sample two units while naming one
+        // texture, and pointing the albedo at a unit nothing is bound to
+        // samples `mesh_render::build`'s black placeholder - which is a
+        // black surface, the loudest possible way to be wrong. Caught by the
+        // picture on the first run of this reading.
+        let bound = seconds.get(slot).is_some_and(Option::is_some);
+        if let (Some(program), true) = (program, bound) {
+            let texels = program.output_texels();
+            let colour = texels[0].merge(texels[1]).merge(texels[2]);
+            if colour.unit() == Some(1) {
+                packed |= slots::ALBEDO_FROM_SECOND;
+            }
+            if let Texel::Unit {
+                unit: unit @ (0 | 1),
+                channel: Some(channel),
+            } = texels[3]
+            {
+                packed &= !slots::alpha_channel(3);
+                packed |= slots::alpha_channel(u32::from(channel));
+                if unit == 1 {
+                    packed |= slots::ALPHA_FROM_SECOND;
                 }
             }
         }
-        lightmaps.push(lit.flatten());
+        out.push(packed);
     }
-    (skins, lightmaps)
+    out
 }
 
 /// Which shader variant each material slot resolves to, in material-table

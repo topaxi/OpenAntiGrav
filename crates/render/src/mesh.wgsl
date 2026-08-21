@@ -150,6 +150,12 @@ struct VertexInput {
     // Not carried by `colour.a`, which is already the boost plume's baked
     // falloff on other titles and the bloom glow mask on this one.
     @location(8) sun_mask: f32,
+    // Which texture this surface's colour and coverage come from - see
+    // `oag_render::mesh::slots`, whose bit layout this file decodes and which
+    // is changed together with it. Read off the material's own fragment
+    // microcode; `slots::DEFAULT` is the first texture's colour and the first
+    // texture's alpha, which is what every title but Wipeout HD carries.
+    @location(9) slots: u32,
 };
 
 struct VertexOutput {
@@ -164,6 +170,9 @@ struct VertexOutput {
     // What Wipeout HD's own vertex programs hand their fog - see `Fog::curve`.
     @location(6) view_depth: f32,
     @location(7) sun_mask: f32,
+    // Flat, because it is a property of the material rather than of the
+    // vertex: interpolating a bit field would produce roles nothing authored.
+    @location(8) @interpolate(flat) slots: u32,
 };
 
 @vertex
@@ -206,6 +215,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     out.world = world.xyz;
     out.view_depth = out.clip.w;
     out.sun_mask = in.sun_mask;
+    out.slots = in.slots;
     return out;
 }
 
@@ -250,7 +260,20 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // alpha-1 placeholder, which zeroes the prelit term and passes the sun
     // below - exactly the equation the original's own lightmap-less shader
     // variants state.
-    let baked = textureSample(lightmap, albedo_sampler, in.lightmap_texcoord);
+    // **Only when the second texture actually is one.** Binding the second
+    // slot unconditionally is what let its other roles be read at all, and it
+    // is also how the prelit term could silently start sampling a cloud mask:
+    // a non-lightmap chunk declares no `lightmapUV`, so this would read one
+    // texel at (0, 0) of whatever is bound instead of the black placeholder
+    // that switches the term off. `slots::SECOND_IS_LIGHTMAP` is the material's
+    // own four-signal reading; without it the value is the placeholder's, to
+    // the bit.
+    let atlas = textureSample(lightmap, albedo_sampler, in.lightmap_texcoord);
+    let baked = select(
+        vec4<f32>(0.0, 0.0, 0.0, 1.0),
+        atlas,
+        (in.slots & 1u) != 0u,
+    );
 
     // The authored rig, and the combination is no longer this project's: it is
     // the one every lit variant of an HD circuit `.rcsmaterial` computes,
@@ -324,7 +347,25 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     let sun_diffuse = scene.light.sun * (ndl * mask);
     let authored = scene.light.ambient + prelit + vertex_light + sun_diffuse;
 
-    let texel = textureSample(albedo, albedo_sampler, in.texcoord);
+    // **Which texture is the picture and which is the coverage, off the
+    // material's own microcode** - see `oag_render::mesh::slots` and
+    // `docs/formats/rcsmaterial.md`. The common case is `slots::DEFAULT`:
+    // colour and alpha both from the first texture, which is what every title
+    // but Wipeout HD carries and what an HD material whose program this
+    // reading could not follow keeps.
+    //
+    // The second texture is sampled at the **diffuse** coordinate, which is a
+    // stated approximation rather than a reading: the cloud plate's own
+    // program addresses both units from coordinates it builds out of the same
+    // interpolator, and a chunk in this role declares no second coordinate set
+    // for us to use instead. A material that tiles its two textures
+    // differently would come out wrong here and would show as a mismatched
+    // scale rather than as a missing surface.
+    let first = textureSample(albedo, albedo_sampler, in.texcoord);
+    let second = textureSample(lightmap, albedo_sampler, in.texcoord);
+    let picture = select(first, second, (in.slots & 2u) != 0u);
+    let coverage = select(first, second, (in.slots & 4u) != 0u);
+    let texel = vec4<f32>(picture.rgb, coverage[(in.slots >> 3u) & 3u]);
 
     // The read specular term: half-vector against the sun, and the exponent
     // is a **stand-in**. It is an inline constant of each fragment program,

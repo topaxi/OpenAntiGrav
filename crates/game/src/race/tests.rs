@@ -49,6 +49,7 @@ fn model(slots: usize, decoded: usize) -> Model {
             })
             .collect(),
         lightmaps: Vec::new(),
+        material_slots: Vec::new(),
         material_variants: Vec::new(),
 
         vertex_colour_is_light: false,

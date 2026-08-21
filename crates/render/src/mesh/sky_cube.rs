@@ -120,6 +120,7 @@ pub fn build(label: &str, blob: &[u8], rotation_degrees: f32) -> Result<Model> {
                 lightmap_texcoord: [0.0, 0.0],
                 xform: 0,
                 sun_mask: 1.0,
+                slots: crate::mesh::slots::DEFAULT,
             });
         }
         let start = indices.len() as u32;
@@ -154,6 +155,7 @@ pub fn build(label: &str, blob: &[u8], rotation_degrees: f32) -> Result<Model> {
         transparent_draws: Vec::new(),
         textures,
         lightmaps,
+        material_slots: Vec::new(),
         material_variants: Vec::new(),
 
         vertex_colour_is_light: false,

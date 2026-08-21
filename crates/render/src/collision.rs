@@ -281,6 +281,7 @@ pub fn build_model(
         transparent_draws: Vec::new(),
         textures: Vec::new(),
         lightmaps: Vec::new(),
+        material_slots: Vec::new(),
         material_variants: Vec::new(),
 
         vertex_colour_is_light: false,
@@ -376,6 +377,7 @@ fn vertex(position: [f32; 3], normal: [f32; 3], colour: [f32; 4], lit: f32) -> G
         anim: 0,
         xform: 0,
         sun_mask: 1.0,
+        slots: crate::mesh::slots::DEFAULT,
     }
 }
 

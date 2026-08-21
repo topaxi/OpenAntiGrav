@@ -43,6 +43,7 @@ fn triangle_model() -> Model {
             anim: 0,
             xform: 0,
             sun_mask: 1.0,
+            slots: oag_render::mesh::slots::DEFAULT,
         },
         GpuVertex {
             position: [0.0, 1.0, -1.0],
@@ -54,6 +55,7 @@ fn triangle_model() -> Model {
             anim: 0,
             xform: 0,
             sun_mask: 1.0,
+            slots: oag_render::mesh::slots::DEFAULT,
         },
         GpuVertex {
             position: [0.0, 0.0, 1.0],
@@ -65,6 +67,7 @@ fn triangle_model() -> Model {
             anim: 0,
             xform: 0,
             sun_mask: 1.0,
+            slots: oag_render::mesh::slots::DEFAULT,
         },
     ];
     Model {
@@ -90,6 +93,7 @@ fn triangle_model() -> Model {
         transparent_draws: Vec::new(),
         textures: Vec::new(),
         lightmaps: Vec::new(),
+        material_slots: Vec::new(),
         material_variants: Vec::new(),
 
         vertex_colour_is_light: false,

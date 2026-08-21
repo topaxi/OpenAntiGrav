@@ -88,4 +88,49 @@ pub struct GpuVertex {
     /// See `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`, "The sun is real
     /// and it is masked".
     pub sun_mask: f32,
+    /// Which texture the shader takes this surface's colour and coverage from,
+    /// as [`slots`] packs it.
+    ///
+    /// **Read off the material's own fragment microcode**, not guessed from a
+    /// file name: a `.rcsmaterial` variant states which unit it samples for the
+    /// picture and which unit and channel it puts in the output alpha, and
+    /// `oag_formats::rcsmaterial::fragment::Program::output_texels` traces it.
+    /// See [`slots::DEFAULT`] for what every title that is not Wipeout HD
+    /// carries here, which is the behaviour this field replaced.
+    ///
+    /// Per vertex rather than per draw because the alternative is a second
+    /// uniform and a second bind group, and a chunk's vertices are emitted
+    /// together anyway - the same argument [`Self::anim`] makes.
+    pub slots: u32,
+}
+
+/// How [`GpuVertex::slots`] packs a material's texture roles.
+///
+/// Bit-for-bit the same layout `mesh.wgsl`'s `fs_main` decodes; the two are
+/// changed together.
+pub mod slots {
+    /// The second texture is the circuit's baked lighting atlas, so the prelit
+    /// curve applies to it and its alpha is the sun mask.
+    pub const SECOND_IS_LIGHTMAP: u32 = 1 << 0;
+    /// The surface's colour comes from the **second** texture rather than the
+    /// first.
+    ///
+    /// Rare and real: Talon's Junction's cloud plate samples `clouds_new.gtf`
+    /// for one channel of alpha and never for colour, and takes its picture
+    /// from the file its material calls a mask. See
+    /// `docs/formats/rcsmaterial.md`.
+    pub const ALBEDO_FROM_SECOND: u32 = 1 << 1;
+    /// The output alpha comes from the second texture rather than the first.
+    pub const ALPHA_FROM_SECOND: u32 = 1 << 2;
+    /// Which channel of that texture the alpha is, in bits 3 and 4.
+    #[must_use]
+    pub const fn alpha_channel(channel: u32) -> u32 {
+        (channel & 3) << 3
+    }
+    /// The first texture's colour and the first texture's **alpha** channel.
+    ///
+    /// What every PSP and PS2 source carries, and what an HD material carries
+    /// whose microcode this reading could not follow - so a zero-information
+    /// answer leaves the picture exactly as it was rather than guessing.
+    pub const DEFAULT: u32 = alpha_channel(3);
 }

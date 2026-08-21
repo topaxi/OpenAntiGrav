@@ -49,6 +49,15 @@ pub enum Source {
     Unknown,
 }
 
+/// The four lane indices a source's swizzle field selects.
+fn swizzle_of(bits: u32) -> [u8; 4] {
+    let mut out = [0u8; 4];
+    for (i, lane) in out.iter_mut().enumerate() {
+        *lane = ((bits >> (9 + 2 * i)) & 3) as u8;
+    }
+    out
+}
+
 impl Source {
     fn of(bits: u32) -> Self {
         match bits & 3 {
@@ -84,6 +93,16 @@ pub struct Instruction {
     pub unit: u8,
     /// The three source slots, however many [`Self::arity`] uses.
     pub sources: [Source; 3],
+    /// Each source's four-component swizzle, as lane indices `0..=3`.
+    ///
+    /// Beside [`Self::sources`] rather than inside [`Source`] because it is a
+    /// property of the *read*, not of where the value lives: the same register
+    /// is read `.xyzw` by one instruction and `.wwww` by the next, and folding
+    /// the swizzle into the enum would make those two different sources.
+    ///
+    /// The encoding is the reference decoder's: component `i` selects lane
+    /// `(bits >> (9 + 2 * i)) & 3`, so an unswizzled read is `[0, 1, 2, 3]`.
+    pub swizzles: [[u8; 4]; 3],
     /// The inline constant that followed, when a source selected one.
     pub constant: Option<[f32; 4]>,
     /// Whether this instruction ends the program.
@@ -222,6 +241,11 @@ impl Program {
                 Source::of(bits[1]),
                 Source::of(bits[2]),
             ];
+            let swizzles = [
+                swizzle_of(bits[0]),
+                swizzle_of(bits[1]),
+                swizzle_of(bits[2]),
+            ];
             // A source selecting an inline constant makes the stream advance 32
             // rather than 16, and the four floats are that constant.
             let constant = sources.contains(&Source::Constant).then(|| {
@@ -240,6 +264,7 @@ impl Program {
                 input: ((d0 >> 13) & 0xf) as u8,
                 unit: ((d0 >> 17) & 0xf) as u8,
                 sources,
+                swizzles,
                 constant,
                 end: d0 & 1 != 0,
             };
@@ -371,6 +396,174 @@ impl Program {
             }
         }
         out
+    }
+}
+
+/// Where one lane of a fragment program's output comes from.
+///
+/// The answer [`Program::output_texels`] gives per output channel, and the
+/// primitive the second-texture-role reading in `oag_render` is built on: a
+/// material that samples two units says in its own microcode which of them is
+/// the picture and which channel of which is the coverage, and every earlier
+/// attempt at that question guessed from a file name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Texel {
+    /// Nothing this reading follows reaches this lane: an interpolator, a
+    /// constant, or a chain it lost.
+    #[default]
+    Untraced,
+    /// One texture unit's sample reaches it, and no other does.
+    Unit {
+        /// The unit sampled.
+        unit: u8,
+        /// Which channel of the sample, when every contribution agrees on one.
+        /// `None` when the lane mixes channels of the same unit.
+        channel: Option<u8>,
+    },
+    /// More than one unit reaches it.
+    Mixed,
+}
+
+impl Texel {
+    /// Two contributions to one lane, combined.
+    ///
+    /// [`Self::Untraced`] is the identity rather than an absorber, and that is
+    /// the load-bearing choice: a texel multiplied by a light term or a
+    /// constant is still that texel's, and treating the constant as diluting
+    /// it would report `Untraced` for every shaded surface on the disc.
+    #[must_use]
+    pub fn merge(self, other: Self) -> Self {
+        match (self, other) {
+            (Self::Untraced, x) | (x, Self::Untraced) => x,
+            (Self::Mixed, _) | (_, Self::Mixed) => Self::Mixed,
+            (
+                Self::Unit {
+                    unit: a,
+                    channel: p,
+                },
+                Self::Unit {
+                    unit: b,
+                    channel: q,
+                },
+            ) => {
+                if a == b {
+                    Self::Unit {
+                        unit: a,
+                        channel: if p == q { p } else { None },
+                    }
+                } else {
+                    Self::Mixed
+                }
+            }
+        }
+    }
+
+    /// The unit this lane comes from, when exactly one does.
+    #[must_use]
+    pub fn unit(self) -> Option<u8> {
+        match self {
+            Self::Unit { unit, .. } => Some(unit),
+            _ => None,
+        }
+    }
+}
+
+impl Program {
+    /// Which texture unit and channel each of the output's four lanes comes
+    /// from: `[x, y, z, w]`.
+    ///
+    /// A forward taint like [`Program::output_depends_on`]'s, and different
+    /// from it in the two ways that matter for this question:
+    ///
+    /// - **Source swizzles are honoured.** That is the whole point. The
+    ///   difference between a cloud plate whose alpha is unit 0's `.x` and one
+    ///   whose alpha is unit 0's `.w` is a swizzle, and this project drew the
+    ///   second for a year because nothing read the first.
+    /// - **A texture sample starts a taint rather than propagating one.** The
+    ///   value is the texture's; the coordinate that addressed it is not part
+    ///   of the answer.
+    ///
+    /// # Half and full registers are two files here, and that is measured
+    ///
+    /// [`Program::output_depends_on`] treats `H2` and `R2` as one storage, on
+    /// the grounds that they name the same register on NV40 - a safe
+    /// over-approximation for a yes/no dependency question, where merging two
+    /// registers can only *add* taint. It is not safe for this one, and a
+    /// shipped program says so. `talons_junction/materials/clouds.rcsmaterial`,
+    /// fragment block `0x1540`:
+    ///
+    /// ```text
+    /// @25  MAD H2.xyz, H5, H4, H2   ; H4 is unit 1's sample - H2 now carries it
+    /// @26  MAD R2.xyz, {c}, R1.wwww, {c}
+    /// @27  MAD H2.xyz, R1.wwww, H2, R2   ; reads H2 back, still unit 1's
+    /// ```
+    ///
+    /// Under one file `@26` clobbers what `@25` put in `H2` and `@27` reads a
+    /// register the program never wrote, so the colour comes out
+    /// [`Texel::Untraced`] where the disassembly plainly shows unit 1 reaching
+    /// it. Two files reproduce the hand read. That is consistent with the
+    /// hardware either way: NV40 packs `H[2i]`/`H[2i+1]` into `R[i]`, so
+    /// `H2` and `R2` were never the same storage - index identity was the
+    /// wrong pairing rather than the wrong idea, and a compiler that allocated
+    /// these disjointly is served correctly by keeping them apart.
+    ///
+    /// A conditional or a loop would be read straight through; shipped
+    /// fragment programs here are straight-line code and none was found with a
+    /// branch, so the question does not arise on this disc.
+    ///
+    /// The output register is the one the **end instruction** writes, and its
+    /// colour lanes are usually written several instructions earlier: a lit
+    /// program characteristically finishes `MOV H0.w, <sample>.xxxx END`
+    /// after an `ADD H0.xyz`. Taking all four lanes of that register is what
+    /// makes both halves readable at once.
+    #[must_use]
+    pub fn output_texels(&self) -> [Texel; 4] {
+        // Indexed `[half][register]`, the two files kept apart - see above.
+        let mut file = [[[Texel::Untraced; 4]; 64]; 2];
+        let mut output = (0usize, 0usize);
+        for insn in &self.instructions {
+            let dst = (usize::from(insn.dst_half), usize::from(insn.dst) & 63);
+            // A dot product collapses every lane of its sources into one
+            // scalar, so a per-lane read would miss most of what feeds it.
+            let scalar = matches!(insn.name(), Some("DP3" | "DP4" | "DP2A" | "RFL"));
+            let mut lanes = [Texel::Untraced; 4];
+            if insn.is_texture() {
+                // Destination lane `i` receives channel `i` of the sample, so
+                // `TEX H0.x` is the red channel and nothing else.
+                for (i, lane) in lanes.iter_mut().enumerate() {
+                    *lane = Texel::Unit {
+                        unit: insn.unit,
+                        channel: Some(i as u8),
+                    };
+                }
+            } else {
+                for (slot, source) in insn.operands().enumerate() {
+                    let Source::Register { index, half } = source else {
+                        continue;
+                    };
+                    let held = file[usize::from(half)][usize::from(index) & 63];
+                    for (i, lane) in lanes.iter_mut().enumerate() {
+                        if scalar {
+                            for read in held {
+                                *lane = lane.merge(read);
+                            }
+                        } else {
+                            let pick = usize::from(insn.swizzles[slot][i]);
+                            *lane = lane.merge(held[pick]);
+                        }
+                    }
+                }
+            }
+            for (i, slot) in file[dst.0][dst.1].iter_mut().enumerate() {
+                if insn.mask & (1 << i) != 0 {
+                    *slot = lanes[i];
+                }
+            }
+            if insn.end {
+                output = dst;
+            }
+        }
+        file[output.0][output.1]
     }
 }
 

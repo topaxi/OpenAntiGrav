@@ -41,6 +41,7 @@ fn insn(opcode: u8) -> Instruction {
         input: 0,
         unit: 0,
         sources: [Source::Input; 3],
+        swizzles: [[0, 1, 2, 3]; 3],
         constant: None,
         end: false,
     }
@@ -250,4 +251,177 @@ fn a_trailing_alpha_write_does_not_discard_the_colour() {
         "the trailing alpha write hid the colour"
     );
     assert_eq!(p.output_lit_by(), 1 << 5);
+}
+
+/// The inverse of [`swizzle_of`], for building a swizzled register source -
+/// every test below that needs one goes through this rather than hand-packing
+/// bits a second time.
+fn register_source(index: u8, half: bool, lanes: [u8; 4]) -> u32 {
+    let mut bits = u32::from(index) << 2;
+    if half {
+        bits |= 1 << 8;
+    }
+    for (i, &lane) in lanes.iter().enumerate() {
+        bits |= u32::from(lane) << (9 + 2 * i);
+    }
+    bits
+}
+
+#[test]
+fn swizzle_of_decodes_the_documented_bit_packing() {
+    assert_eq!(
+        swizzle_of(register_source(0, false, [0, 1, 2, 3])),
+        [0, 1, 2, 3]
+    );
+    assert_eq!(
+        swizzle_of(register_source(0, false, [3, 3, 3, 3])),
+        [3, 3, 3, 3],
+        ".wwww"
+    );
+    assert_eq!(
+        swizzle_of(0),
+        [0, 0, 0, 0],
+        "no swizzle bits set decodes as .xxxx, not as the identity"
+    );
+}
+
+#[test]
+fn texel_merge_is_untraced_identity_mixed_absorbing_and_channel_only_on_agreement() {
+    let a = Texel::Unit {
+        unit: 1,
+        channel: Some(2),
+    };
+    assert_eq!(
+        Texel::Untraced.merge(a),
+        a,
+        "Untraced is the identity on the left"
+    );
+    assert_eq!(a.merge(Texel::Untraced), a, "and on the right");
+    assert_eq!(Texel::Mixed.merge(a), Texel::Mixed, "Mixed absorbs");
+    assert_eq!(a.merge(Texel::Mixed), Texel::Mixed);
+    assert_eq!(
+        a.merge(Texel::Unit {
+            unit: 1,
+            channel: Some(0)
+        }),
+        Texel::Unit {
+            unit: 1,
+            channel: None
+        },
+        "same unit, disagreeing channel: the unit survives, the channel does not"
+    );
+    assert_eq!(
+        a.merge(Texel::Unit {
+            unit: 0,
+            channel: Some(2)
+        }),
+        Texel::Mixed,
+        "different units is Mixed even when the channel happens to agree"
+    );
+}
+
+/// The bug the swizzle field exists to catch: a source read `.wwww` puts its
+/// **own** lane 3 in every output lane it feeds, not the lane the destination
+/// happens to write. "This project drew the second [texture] for a year
+/// because nothing read the first" - see [`Program::output_texels`].
+#[test]
+fn a_swizzled_source_reads_its_own_lane_not_the_destinations() {
+    let mut b = Vec::new();
+    b.extend_from_slice(b"SHO\x08");
+    b.extend_from_slice(&1u32.to_be_bytes());
+    for v in [2u16, 0, 0, 0, 0x18, 0x18, 0x18, 0x18] {
+        b.extend_from_slice(&v.to_be_bytes());
+    }
+    let head = b.len();
+    b.extend_from_slice(&32u32.to_be_bytes());
+    b.resize(head + 0x10, 0);
+    b.extend_from_slice(&0x20u32.to_be_bytes());
+    b.resize(head + 0x20, 0);
+    let mut push = |words: [u32; 4]| {
+        for w in words {
+            b.extend_from_slice(&(w as u16).to_be_bytes());
+            b.extend_from_slice(&((w >> 16) as u16).to_be_bytes());
+        }
+    };
+    // TEX H1, f[TC0] unit1 - H1's four lanes are unit 1's four channels.
+    push([
+        0x17 << 24 | 1 << 17 | 4 << 13 | 0xf << 9 | 1 << 7 | 1 << 1,
+        1,
+        0,
+        0,
+    ]);
+    // MOV H0.x, H1.wwww, END - reads unit 1's channel 3, not its channel 0.
+    push([
+        0x01 << 24 | 1 << 9 | 1 << 7 | 1,
+        register_source(1, true, [3, 3, 3, 3]),
+        0,
+        0,
+    ]);
+    let p = Program::parse(&b, 0).expect("decodes");
+    assert_eq!(p.instructions.len(), 2);
+    assert_eq!(
+        p.output_texels()[0],
+        Texel::Unit {
+            unit: 1,
+            channel: Some(3)
+        },
+        "the .wwww swizzle should read the sampled alpha channel, not the red one"
+    );
+}
+
+/// **Half and full registers are two files, not one** - the decision
+/// [`Program::output_texels`]'s own doc comment stakes a measured claim on,
+/// citing a real block (`talons_junction/materials/clouds.rcsmaterial`,
+/// `0x1540`): writing `R2` must not disturb `H2`. Reproduced in miniature - a
+/// `TEX` feeds `H2`, an unrelated `MOV` from a constant clobbers `R2`'s same
+/// channel, and the final instruction reads `H2` back. Under one shared file
+/// the clobber reaches `H2` and the colour comes out [`Texel::Untraced`];
+/// kept apart, as here, it survives.
+#[test]
+fn a_half_register_and_its_same_numbered_full_register_are_different_storage() {
+    let mut b = Vec::new();
+    b.extend_from_slice(b"SHO\x08");
+    b.extend_from_slice(&1u32.to_be_bytes());
+    for v in [2u16, 0, 0, 0, 0x18, 0x18, 0x18, 0x18] {
+        b.extend_from_slice(&v.to_be_bytes());
+    }
+    let head = b.len();
+    b.extend_from_slice(&64u32.to_be_bytes());
+    b.resize(head + 0x10, 0);
+    b.extend_from_slice(&0x20u32.to_be_bytes());
+    b.resize(head + 0x20, 0);
+    let mut push = |words: [u32; 4]| {
+        for w in words {
+            b.extend_from_slice(&(w as u16).to_be_bytes());
+            b.extend_from_slice(&((w >> 16) as u16).to_be_bytes());
+        }
+    };
+    // TEX H2, f[TC0] unit1 - H2 now carries unit 1's sample on every lane.
+    push([
+        0x17 << 24 | 1 << 17 | 4 << 13 | 0xf << 9 | 1 << 7 | 2 << 1,
+        1,
+        0,
+        0,
+    ]);
+    // MOV R2.x, {const} - same register ordinal, the full-precision file,
+    // and it carries no texel at all.
+    push([0x01 << 24 | 1 << 9 | 2 << 1, 2, 0, 0]);
+    push([0, 0, 0, 0]); // the constant itself - value irrelevant, it carries no texel
+    // MOV H0.x, H2.xxxx, END - reads H2 back.
+    push([
+        0x01 << 24 | 1 << 9 | 1 << 7 | 1,
+        register_source(2, true, [0, 0, 0, 0]),
+        0,
+        0,
+    ]);
+    let p = Program::parse(&b, 0).expect("decodes");
+    assert_eq!(p.instructions.len(), 3);
+    assert_eq!(
+        p.output_texels()[0],
+        Texel::Unit {
+            unit: 1,
+            channel: Some(0)
+        },
+        "R2's write must not have clobbered H2 - they are different storage"
+    );
 }
