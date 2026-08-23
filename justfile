@@ -397,6 +397,51 @@ rpcs3-record image="data/images/hdfury-ps3-eu-dec.iso" *ARGS:
 rpcs3-speed video *ARGS:
     uv run --with numpy python3 scripts/rpcs3_hud.py read {{video}} {{ARGS}}
 
+# Wipeout Pulse (PS2) with no window and no human: Xvfb, PCSX2's OpenGL
+# renderer, PINE for memory and savestates, XTEST for buttons. Uses a data path
+# of its own under ~/.cache/oag-pcsx2, so the user's ~/.config/PCSX2 is never
+# touched. See docs/reverse-engineering/pcsx2-debugger.md, whose trap list is
+# the one that costs runs - especially the two silent input gates.
+pcsx2-boot image="data/images/pulse-ps2-eu.chd" *ARGS:
+    uv run --with python-xlib python3 scripts/pcsx2-drive.py boot --image {{image}} {{ARGS}}
+
+# What the harness thinks is up: the virtual display, the process, PINE, the game.
+pcsx2-status:
+    python3 scripts/pcsx2-drive.py status
+
+# Tap abstract buttons at the running game: `just pcsx2-press cross start`.
+pcsx2-press *BUTTONS:
+    uv run --with python-xlib python3 scripts/pcsx2-drive.py press {{BUTTONS}}
+
+# A frame the emulator is actually presenting, at GS resolution, into a file of
+# your choosing. Not frame-exact - use `pcsx2-frame` for that.
+pcsx2-shot path="/tmp/pcsx2-frame.png":
+    uv run --with python-xlib python3 scripts/pcsx2-drive.py shot {{path}}
+
+# THE deterministic capture: load a savestate, step exactly `frames` emulated
+# frames with `hold` held down, and grab the paused frame. Pass `--from-state
+# <slot>` or it is not repeatable - two runs of
+#   just pcsx2-frame /tmp/a.png 30 cross --from-state 2
+# produce byte-identical PNGs, without it they do not. Stepping is verified
+# against a guest frame counter and costs about 0.35 s a frame, deliberately.
+pcsx2-frame path="/tmp/pcsx2-frame.png" frames="30" hold="cross" *ARGS:
+    uv run --with python-xlib python3 scripts/pcsx2-drive.py frames {{frames}} --hold {{hold}} --shot {{path}} {{ARGS}}
+
+# Save or load a PCSX2 savestate over PINE, by slot: `just pcsx2-state save 2`.
+# The file lands in ~/.cache/oag-pcsx2/PCSX2/sstates/, never in the repository.
+pcsx2-state action="save" slot="1":
+    python3 scripts/pcsx2-drive.py state {{action}} {{slot}}
+
+# Read EE memory at the Ghidra corpus's own addresses, no rebasing:
+#   just pcsx2-read 0x002849e8 8
+pcsx2-read addr count="1":
+    python3 scripts/pcsx2_pine.py read {{addr}} {{count}}
+
+# Stop the headless emulator. Always run this when you are done; a stale
+# process holds the PINE socket and the next launch looks broken.
+pcsx2-stop:
+    python3 scripts/pcsx2-drive.py stop
+
 # Run a committed scenario through OUR OWN physics and print a run report: where
 # the ship is every N ticks, how fast, whether it is still on the track. Needs a
 # disc image (for the track and the handling stats) and nothing else - no
