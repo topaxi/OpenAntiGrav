@@ -129,6 +129,20 @@ impl Session {
                     return;
                 }
             },
+            // The other half of the original's two volumes, and the same
+            // mechanism: straight onto `Bus::Sfx`'s gain. A held `~ENGINE`
+            // voice follows it without being restarted, because a bus gain is
+            // applied at mix time rather than at play time.
+            "audio.sfx_volume" => match text.parse::<audio::Volume>() {
+                Ok(volume) => {
+                    self.settings.audio.sfx_volume = volume;
+                    self.audio.apply(&self.settings.audio);
+                }
+                Err(e) => {
+                    warn!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
             // Applied on the spot, and **seeked rather than restarted**: the
             // two releases' encodes of a track agree in length to 11 ms, so
             // carrying the playhead across lands in the same bar. The first

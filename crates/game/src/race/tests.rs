@@ -15,6 +15,7 @@ use super::*;
 use oag_formats::track;
 
 mod camera;
+mod cues;
 mod field;
 mod hash;
 mod held_buttons;
@@ -175,6 +176,9 @@ fn setup(handling: Handling) -> Setup {
         // A headless test that wants real particles parses a blob itself
         // and inserts it here.
         effects: psys::Library::new(),
+        // No disc, so no banks: a headless race raises its cues and plays none
+        // of them, which is the same path a source with no sound banks takes.
+        sounds: crate::audio::sfx::Banks::default(),
         // A synthetic track authors no pads, which is also what every Pure
         // track does: an empty set is an ordinary state, not a stub.
         speedup_pads: Vec::new(),

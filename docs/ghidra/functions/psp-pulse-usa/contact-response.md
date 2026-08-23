@@ -576,6 +576,20 @@ further:
   in a loop over up to 10 attached instances, staggering a global float
   (`DAT_08abf564`) by `0.1` per iteration - unrelated to wall/track contact.
 
+**Both cues are now played**, and they are the same `Sound_Play` calls this page
+found rather than a reconstruction: `"COLLISIONS"` on a contact past the
+0.8-second gate, `"ABSORB"` when the shield is up and the sparks are therefore
+suppressed. Two caveats are recorded rather than papered over. `"COLLISIONS"`
+is stored in `ship.bnk` as **`".COLLISIONS"`** and no bank on either disc holds
+the undotted name, so the port looks up the dotted one - SCREAM's own
+sound/child-sound distinction, at confidence 70. And `"ABSORB"` is re-armed on
+the same 0.8 seconds, where `FUN_08840640` **bypasses** that gate and has its
+own 0.1-second stagger; how often the game calls it is not recovered, so a
+shared cooldown is a stated approximation and the alternative - no gate at all -
+would fire it sixty times a second through a scrape. See
+[psp-audio.md](../../../formats/psp-audio.md#a-cue-owns-a-run-of-the-command-table)
+and `oag_game::audio::sfx`.
+
 **Also checked and ruled out**: the `Ship Collision Fx` `0x3d0` class's own
 registration wrapper, `FUN_08924bf0` (`Vex_RegisterClass(&DAT_08b63f18,
 0x3d0)`), installs `FUN_08a6ba70` into the class descriptor's constructor

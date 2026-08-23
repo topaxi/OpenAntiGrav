@@ -301,6 +301,19 @@ pub struct Setup {
     /// than the game's. Headless tests that build a `Race` by hand leave the
     /// library empty, which is the same path.
     pub effects: psys::Library,
+    /// The decoded sound cues, out of `Data\Sound\*.bnk`.
+    ///
+    /// The audio counterpart of [`Self::effects`] and held to the same rule: a
+    /// cue that would not resolve is **silent** rather than substituted, and a
+    /// source that ships no sound banks at all - Wipeout Pure - loads an empty
+    /// library and races without effects. Headless tests that build a `Race` by
+    /// hand leave it empty, which is the same path.
+    ///
+    /// Decoded PCM and nothing device-shaped, so this belongs beside the
+    /// simulation the way the particle library does; the mixer, the voices and
+    /// the choice of which alternate sounds all live in
+    /// [`crate::audio::Audio`]. See `docs/architecture/adr/0018-audio-mixer-architecture.md`.
+    pub sounds: crate::audio::sfx::Banks,
     /// The track's speedup pads, as trigger volumes.
     ///
     /// The same nodes [`Loaded::pad_model`] draws, decoded for what they *do*

@@ -312,6 +312,118 @@ Confidence **94** for both rules, the rubric's cap for a reading that makes an
 arithmetic invariant come out exactly across many real files. Nothing here has
 been run under an emulator.
 
+## A cue owns a run of the command table
+
+The name table gives a cue index and [`Bank::sounds`](#where-each-sound-starts)
+gives the bank's waveforms, but until 2026-08-23 nothing joined the two: a name
+resolved to a cue and a cue's `+0x08` was only "the third word indexes the
+command table". The join is one division:
+
+```text
+first command = *(u32 *)(cue + 0x08) / 8
+command count =  *(u8 *)(cue + 0x04)
+```
+
+`+0x08` is a **byte offset into the command table, biased by nothing**;
+`COMMAND_LEN` is 8, so the division is the whole of it. `Scream_StepCommandList`
+(`0x0898efd8`) steps the same field by 8 per command and ends the list when the
+program counter passes `*(i8 *)(cue + 4) - 1`, which is where the count comes
+from - SCREAM fixes the offset up to a pointer at load time, so the runtime
+never shows the file's own form.
+
+Implemented as [`Bank::cue`, `Bank::cue_named` and
+`Bank::cue_sounds`](../../crates/formats/src/sblk/cue.rs).
+
+### The base was chosen by elimination, not by intuition
+
+An earlier probe read `+0x08` as an offset into the *descriptor section* and
+subtracted the command table's own offset. It resolved on some banks and not
+others, and this page recorded it as "does not resolve on every bank". Rather
+than refine that reading, seven candidate bases were run against every bank on
+both discs:
+
+| Reading of `cue + 0x08` | Banks where every cue lands in the table |
+| --- | ---: |
+| raw index | 0 of 83 |
+| **`v / 8`** | **83 of 83** |
+| `(v - command_offset) / 8` (the earlier probe) | 0 of 83 |
+| `(v - parameter_offset) / 8` | 0 of 83 |
+| `(v & 0xffffff) / 8` | 83 of 83 |
+| `v & 0xffffff` | 0 of 83 |
+| `v - command_offset` | 0 of 83 |
+
+The two survivors are the same rule: no playable cue has anything in `+0x08`'s
+top byte, so the mask changes nothing. Five of the seven are not close - they
+place fewer than 140 of 1,282 cues inside the table.
+
+### The runs tile the command table exactly
+
+That is the evidence, and it is the same shape as the waveform-span finding:
+
+| Check | Result |
+| --- | --- |
+| Banks (39 PSP + 44 PS2) | 83 |
+| Playable cues | 1,282 |
+| Cues landing inside the command table | **1,282 of 1,282** |
+| Banks whose cue runs **tile** the table with no gap or overlap | **83 of 83** |
+| Cues the runtime refuses to play (`+0x04` zero) | 5 |
+| Distinct `+0x08` values among those five | **1**, `0xfffffff8` |
+
+Nothing in the format declares that a bank's cues partition its command table,
+and a wrong base cannot make it come out: the runs would overlap or leave holes.
+
+The five exclusions are not a threshold chosen to make this pass. They are
+`Scream_StartSound`'s own gate - its first check after the bounds test is that
+`cue + 0x04` is non-zero - and every one of them stores the same sentinel
+where a real offset would be.
+
+### The names agree with the descriptor flags
+
+A second check, from a direction the arithmetic knows nothing about. The name
+table and the waveform descriptor's `+0x0e` flag word are written by different
+parts of whatever built these banks and neither refers to the other, so if the
+cue-to-command join is right, the two should line up:
+
+| | Waveforms reached | Of those, looping |
+| --- | ---: | ---: |
+| Cues named with a leading `~` | 1,101 | **616** |
+| Cues named without one | 800 | **6** |
+
+A plainly named cue essentially never loops - 0.75% against 56%. A wrong join
+would scatter the flag at the same rate on both rows.
+
+It is deliberately **not** claimed as a biconditional. `~` means *hand the
+caller a voice handle* (`Sound_Play`'s out-parameter, see
+[ADR-0018](../architecture/adr/0018-audio-mixer-architecture.md)), and a
+one-shot like `~SPARKS` wants a handle too, so `~` does not imply looping. The
+one-way implication is what holds and what is asserted.
+
+Named cues resolving to no waveform at all: **247 of 1,287**. Those run some
+part of the 43 unread opcodes instead of a key-on, which is an open question
+rather than a failure of the rule.
+
+Confidence **94**, the rubric's cap for a reading that makes an arithmetic
+invariant come out exactly across many real files - reached from an exact
+tiling on 83 banks and corroborated by a flag word the rule never touches.
+
+### Which of a cue's waveforms sounds is still open
+
+`ship.bnk`'s `.COLLISIONS` binds **fifteen** waveforms, `ship_zone.bnk`'s ten,
+and `SHIP_ZM`'s `~ENGINE` nine. Something chooses, and it is one of the 43
+unread opcodes.
+
+The candidate is `0x19`, which sits immediately before a run of key-ons in
+several banks with its **low operand byte equal to the number of key-ons in the
+run** - `0x0f` before fifteen, `0x0a` before ten, `0x02` before two. Across the
+corpus that holds in **61 of 87** occurrences, with the failures being cues
+where the `0x19` sits *after* its key-ons rather than before. 61 of 87 is a
+lead, not a finding, and it is recorded here as one.
+
+What the *data* says regardless of the opcode is that these are **alternates,
+not layers**: `.COLLISIONS`'s fifteen samples all fall between 0.20 s and
+0.35 s, which is fifteen recordings of one event. `oag_game::audio::sfx` plays
+one of them, chosen by its own generator, and says so.
+
 ## The waveforms are PS-ADPCM
 
 Sony's 16-byte block: one predictor/shift byte, one flag byte, then 14 bytes
@@ -374,14 +486,59 @@ an exact identity and nothing has been run under an emulator. Per the
 [rubric](../reverse-engineering/confidence-rubric.md) data agreement caps at 94
 either way.
 
-**Validated against one disc**, `pulse-psp-usa`. *Wipeout Pure*'s UMD was
-checked and **holds no `SBlk` bank at all**: not one entry in any of its three
-archives begins with that magic, even though its executable names
-`Data\Sound\*.bnk` paths. Pure's 25 RIFF entries are `WAVE_FORMAT_EXTENSIBLE`,
-two channels at 44.1 kHz. So `SBlk` looks like a Pulse-era container rather than
-a lineage-wide one, and whatever indexes Pure's streams has not been looked at.
-Confidence **85** on the absence, from a magic scan over all 1,229 entries. See
-the [Pure probe](pure-status.md).
+## The PS2 ships the same container, byte for byte
+
+Despite the page's title, this format is not PSP-only within Pulse. The PS2
+disc's `WADS2.WAD` holds **44 `SBlk` banks**, and
+[`sblk::Bank::parse`](../../crates/formats/src/sblk.rs) accepts every one of
+them **with no endian switch and no relaxed framing**. That is a real result
+rather than a weak one, because `Bank::parse` refuses anything whose sections do
+not close exactly: parsing at all *is* the finding.
+
+| Check | PS2 result |
+| --- | --- |
+| `03000000` entries in `WADS2.WAD` | 44 |
+| Parsed by the unmodified PSP reader | **44 of 44** |
+| PS-ADPCM blocks | 646,287 |
+| Blocks with an in-spec predictor and shift | 645,984 (99.95%) |
+| Banks with a self-name | 40 |
+| Sound names recovered | 680 |
+| Banks where the name count equals `cue_count` | **44 of 44** |
+| Banks whose waveform spans tile the section exactly | **44 of 44** |
+| Banks whose cue runs tile the command table exactly | **44 of 44** |
+
+The self-names are the same set the PSP carries - `HUD`, `SHIP`, `SHIP_ZM`,
+`basilic`, `metropi`, `talonsj` and so on - and the banks the game asks for by
+path resolve identically: `Data\Sound\hud.bnk`, `ship.bnk`, `ship_zone.bnk` and
+`weapons.bnk` all hash to entries in `WADS2.WAD`, and the four cues
+`oag_game::audio::sfx` wires resolve to **the same frame counts on all three
+discs** - `pulse-psp-usa`, `pulse-psp-eu` and `pulse-ps2-eu` - down to the
+individual sample. `SPEEDUPPAD` is 20,384 frames on every one.
+
+`WADSP.WAD`, the PS2's `FE.wad` counterpart, holds **none**; the PSP splits
+three banks into `FE.wad` and the PS2 does not.
+
+This is why nothing in the game's audio path branches on the platform. The
+consequence for [ADR-0025](../architecture/adr/0025-a-boot-chain-carries-its-provenance.md)'s
+axis language is that sound banks are a *lineage* fact for Pulse rather than a
+per-release one.
+
+Contrast **HD**, whose `.bnk` is the same container big-endian with two
+alignment changes and is deliberately not implemented - see `HANDOVER.md`.
+
+## Wipeout Pure has no `SBlk` bank at all
+
+Checked directly: not one entry in any of Pure's three archives begins with
+that magic, even though its executable names `Data\Sound\*.bnk` paths. Pure's
+25 RIFF entries are `WAVE_FORMAT_EXTENSIBLE`, two channels at 44.1 kHz. So
+`SBlk` is a *Pulse* container rather than a lineage-wide one, and whatever
+indexes Pure's streams has not been looked at. Confidence **85** on the
+absence, from a magic scan over all 1,229 entries. See the
+[Pure probe](pure-status.md).
+
+**A Pure source therefore races silently**, by design rather than by accident:
+`oag_game::audio::sfx::Banks::load` reports each bank it could not read and
+plays nothing, which is the honest outcome for a format nobody has decoded.
 
 ## Reproducing
 
@@ -429,6 +586,55 @@ span roughness    mean 0.321, worst 1.418 over 593 spans (white noise is ~1.41)
 as rough as noise 35 spans, 10 distinct waveforms
 ```
 
+The cue rule and the PS2 claim have their own file,
+[`crates/formats/tests/sblk_cue_ground_truth.rs`](../../crates/formats/tests/sblk_cue_ground_truth.rs),
+which runs over both discs at once and reports:
+
+```text
+banks          83
+  raw index                  banks   0/83  cues   138/1282
+  v / 8                      banks  83/83  cues  1282/1282
+  (v - command_offset) / 8   banks   0/83  cues   714/1282
+  (v - parameter_offset) / 8 banks   0/83  cues     0/1282
+  (v & 0xffffff) / 8         banks  83/83  cues  1282/1282
+  v & 0xffffff               banks   0/83  cues   138/1282
+  v - command_offset         banks   0/83  cues    75/1282
+playable cues  1282
+empty cues     5, every one storing +0x08 = [0xfffffff8]
+tiles exactly  83 of 83
+named cues     1287, reaching no waveform 247
+~name          616 of 1101 waveforms loop
+plain name     6 of 800 waveforms loop
+ps2 banks      44
+adpcm blocks   646287, in spec 645984
+names          680
+spans tile     44 of 44
+```
+
+### Reading a bank without a debugger
+
+`oag-wad sounds` lists every bank in an archive and every cue each one names,
+with the waveforms the cue resolves to:
+
+```sh
+just wad sounds 'data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/Data.wad' --bank SHIP
+```
+
+```text
+#860 cbd73678  SHIP      9 cues, 34 commands, 22 waveforms, 239 KiB
+    .COLLISIONS        cue   1  cmds   1..18  15 waveform(s), 0 looping, 4.23s total
+    EXPLBIG            cue   3  cmds  19..22   3 waveform(s), 0 looping, 2.39s total
+    EXPLSMALL          cue   2  cmds  18..19   1 waveform(s), 0 looping, 0.59s total
+    FLIP               cue   5  cmds  23..25   2 waveform(s), 0 looping, 0.63s total
+    MALFUNCTION        cue   6  cmds  25..28   1 waveform(s), 1 looping, 1.61s total
+    RESET              cue   4  cmds  22..23   1 waveform(s), 0 looping, 0.19s total
+    ~ENGINE            cue   0  cmds   0..1    1 waveform(s), 1 looping, 1.21s total
+```
+
+The seconds are at [the assumed rate](#not-determined), which is not recovered.
+`--cue` filters the same way, so `--cue COLLISION` over a whole archive finds
+every bank that has one.
+
 ## Not determined
 
 - ~~**Where each sound starts.**~~ **Solved and validated** - see [above](#where-each-sound-starts).
@@ -450,15 +656,14 @@ as rough as noise 35 spans, 10 distinct waveforms
   are unread.
 - **`+0x24` = 20544.** Still not determined; the shape of it suggests an
   audio-RAM base address.
-- **Which cue owns which commands.** A name resolves to a cue, and a cue's
-  `+0x08` is its command list, so the last link between a name and a waveform is
-  the cue record. Probed by hand while validating the above: reading `+0x08` as
-  a byte offset into the descriptor section and converting it to a command index
-  with `(cue[0x08] - command_table_offset) / 8`, with `+0x04` as the count,
-  attributes the noisy spans to plausible cues - `~FLYBY_DIST`, `~HAWK`,
-  `~MONORAIL` - but it does not resolve on every bank, and it is not
-  implemented. Worth an hour, and it would make `sblk` able to report a sound by
-  name rather than by span.
+- ~~**Which cue owns which commands.**~~ **Solved and validated** - see
+  [above](#a-cue-owns-a-run-of-the-command-table). The earlier probe recorded
+  here read `+0x08` as a *descriptor-section* offset,
+  `(cue[0x08] - command_table_offset) / 8`, and did not resolve on every bank.
+  It is simpler than that: the field is a byte offset into the command table
+  biased by nothing, so the base subtraction was the error. **Which one of a
+  cue's several waveforms sounds is still open** and is the interesting
+  remainder.
 - ~~**`+0x08` = 772/260.**~~ **Partly settled.** The runtime gates its
   name lookup on `bank[2] & 0x100`, and 772 is `0x304` while 260 is `0x104`, so
   **bit `0x100` means "this bank carries a name table"** - a capability flag
@@ -468,6 +673,24 @@ as rough as noise 35 spans, 10 distinct waveforms
   rate, so it comes from a per-sound pitch value, and the 24-byte parameter
   records' first word is the obvious candidate - `0x42aa7f00`, `0x42a15000`,
   `0x42a76400` in `frontend.bnk`, which vary per sound and cluster tightly.
+
+  **This is now load-bearing rather than academic**, because the game plays
+  these waveforms: `oag_formats::sblk::ASSUMED_SAMPLE_RATE` is **44,100 and is
+  a placeholder**, chosen because it is the rate the PS2's own voice archive
+  uses ([ps2-voice.md](ps2-voice.md)) and because it puts the recovered cues at
+  plausible lengths - a collision impact at 0.28 s, `~ENGINE` at 1.21 s. That
+  is the whole argument for it. Every consumer goes through the one named
+  constant so that decoding the field is a one-line change.
+
+  One observation worth carrying forward: read as four bytes rather than as a
+  float, the high byte of that word is `0x42` on all three `frontend.bnk`
+  examples while the next varies (`0xaa`, `0xa1`, `0xa7`). That reads more like
+  a constant note plus a per-sound fine-tune than like a single float, which is
+  the opposite of what this entry originally assumed. Not pursued.
+
+  The technique that would settle it is already in this tree: the 48 kHz music
+  finding came from cross-correlating PS2 PCM against rate-declaring PSP
+  ATRAC3plus. `speech.bnk` against `PRERACE.WAD` is the same pairing.
 - ~~**Whether this is Sony's SCREAM engine.**~~ **Settled: it is.** The PSP
   executable carries nineteen `SCREAM` strings including the verbatim copyright
   line `" SCREAM PSP    (c)2006 Sony Computer Entertainment America"` and a

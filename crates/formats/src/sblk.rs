@@ -63,10 +63,35 @@
 //! against all 39 banks on the disc, where the spans tile every waveform
 //! section exactly.
 //!
+//! # From a name to a sound
+//!
+//! [`Bank::cue_named`] resolves a cue string the way the runtime does, and
+//! [`Bank::cue_sounds`] gives the waveforms that cue's own run of the command
+//! table binds. That is the last link between `"SPEEDUPPAD"` and audio; see
+//! [`cue`] for the rule and its evidence.
+//!
 //! # What is not decoded
 //!
-//! 43 of the 45 command opcodes, the sample rate each waveform plays at, and
-//! the header's `+0x24`. See the format page's open questions.
+//! 43 of the 45 command opcodes - including whichever one **chooses** between a
+//! cue's several waveforms - the sample rate each waveform plays at, and the
+//! header's `+0x24`. See the format page's open questions.
+
+/// The rate a waveform is played back at, **which is not recovered**.
+///
+/// Nothing in the bank states it. PS-ADPCM carries no rate of its own, and the
+/// per-sound rate the hardware is given comes from a pitch value this project
+/// has not decoded - the 24-byte descriptor's first word is the candidate, and
+/// `docs/formats/psp-audio.md` lists it under "Not determined".
+///
+/// So this is a **placeholder, and every consumer of it is playing a guess**.
+/// It exists as one named constant rather than as a literal in each caller so
+/// that decoding the field is a one-line change and so that a reader of the
+/// playback path is told, here, that the number is not evidence. 44,100 is
+/// chosen because it is the rate the PS2 disc's own voice archive uses
+/// (`docs/formats/ps2-voice.md`) and it puts the recovered cues at plausible
+/// lengths - a collision impact at a third of a second, `~ENGINE` at 1.2 - but
+/// "plausible" is the whole of the argument for it.
+pub const ASSUMED_SAMPLE_RATE: u32 = 44_100;
 
 /// Bytes before the section table.
 pub const HEADER_LEN: usize = 8;
@@ -564,6 +589,9 @@ pub fn decode_adpcm(data: &[u8]) -> Vec<i16> {
     }
     out
 }
+
+pub mod cue;
+pub use cue::Cue;
 
 #[cfg(test)]
 mod tests;

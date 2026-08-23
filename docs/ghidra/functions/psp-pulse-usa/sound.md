@@ -441,8 +441,25 @@ already had.
   [psp-audio.md](../../../formats/psp-audio.md#where-each-sound-starts). That
   takes the key-on arithmetic from 90 to **94**, the rubric's cap for a reading
   that makes an arithmetic invariant come out exactly across many real files.
-- **What the cue record's `+0x08` points at after fixup.** Its `+0x04` is read
-  as the handler's `+0x12`, a `s16` the play loop tests against zero.
+- ~~**What the cue record's `+0x08` points at after fixup.**~~ **Settled from
+  the data side.** On disc it is a **byte offset into the command table biased
+  by nothing**, so `first_command = *(u32 *)(cue + 0x08) / 8` and the count is
+  `*(u8 *)(cue + 0x04)` - the same `cue + 4` this page already reads as the
+  command count. The runs so derived **tile each bank's command table exactly**
+  on all 83 banks across the PSP and PS2 discs, and the five zero-count cues
+  that sit outside are the ones `Scream_StartSound`'s own `cue + 0x04` gate
+  refuses to play. See
+  [psp-audio.md](../../../formats/psp-audio.md#a-cue-owns-a-run-of-the-command-table).
+  What the *fixup itself* does - which function walks the cues at load and adds
+  the base - is still unread; the arithmetic no longer needs it. Its `+0x04` is
+  also read as the handler's `+0x12`, a `s16` the play loop tests against zero.
+- **Which command in a cue's run selects the waveform that sounds.** A cue may
+  own fifteen key-ons (`ship.bnk`'s `.COLLISIONS`); something picks one, and
+  `0x19` is the candidate - its low operand byte equals the key-ons that follow
+  it in **61 of 87** occurrences, which is a lead rather than a finding. This
+  is now the most valuable of the 43 unread opcodes, because it is the one
+  thing standing between `oag_game::audio::sfx` and playing what the original
+  plays rather than one of the right set.
 - **The name hash**, `FUN_089924ec`. Not needed to extract names - the entry
   array walks linearly - but needed to reproduce a lookup faithfully.
 - **What consumes the cue-request list.** `Sound_Play` pushes 0x30-byte nodes

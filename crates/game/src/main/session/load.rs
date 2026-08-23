@@ -303,6 +303,12 @@ impl Session {
             self.scheme,
             self.autopilot,
         )?;
+        // The outgoing race's held voices, if this is a relaunch rather than a
+        // first start. The back-out path does this too, but a race launched
+        // straight from a race never passes through it - and a carried-over
+        // `SfxVoices` holds a `VoiceId` into a pool the new race is about to
+        // reuse. See `Audio::stop_race_sfx`.
+        self.audio.stop_race_sfx();
         // After the stage swap succeeds, not before: both loads above can fail
         // with `?`, and a failed launch must leave the menu music playing
         // rather than having already silenced it. See `Audio::start_race_music`.

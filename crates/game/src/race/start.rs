@@ -36,6 +36,7 @@ impl Race {
             nozzles,
             collision_fx,
             effects,
+            sounds,
             speedup_pads,
             weapon_pads,
             weapons,
@@ -253,6 +254,7 @@ impl Race {
             collision_fx,
             sparks: psys::System::new(),
             effects,
+            sounds,
             stage: psys::Stage::new(),
             engine_flare: [None; MAX_SHIPS],
             projectile_flare: [None; oag_gameplay::projectile::MAX_PROJECTILES],
@@ -266,6 +268,8 @@ impl Race {
             sparks_attached: false,
             autopilot: false,
             results: None,
+            cues: Vec::new(),
+            contact_cue_cooldown: 0.0,
             // Every pad starts due for a real test. `Pad_Bind` zeroes the same
             // cache at load, so the first tick measures rather than trusting a
             // distance nothing has computed yet.

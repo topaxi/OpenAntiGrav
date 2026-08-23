@@ -539,8 +539,13 @@ arrays, most likely by breakpointing `0x08849db4` in a live race.
   and samples every ready pad at the race clock instead, which cross-fades at
   the right rate but keeps them in lockstep. See `oag_render::weapon_pad`'s
   own doc comment.
-- **The `"SPEEDUPPAD"` sound.** There is no audio system yet, so neither emitter
-  path is reproduced. `oag_game::race` arms the flare and nothing else.
+- ~~**The `"SPEEDUPPAD"` sound.**~~ **Played**, off `hud.bnk`, on exactly the
+  edge this function arms the flare on - `oag_game::race::pads` raises the cue
+  beside the `exhaust[slot].boost(...)` call. What is *not* reproduced is the
+  two-emitter split: the original picks between them on `racer+0x368`, and this
+  port has no positional audio at all, so **only slot 0 is audible**. See
+  `oag_game::audio::sfx` and
+  [psp-audio.md](../../../formats/psp-audio.md#a-cue-owns-a-run-of-the-command-table).
 - **`craft+0x318`'s curve.** See the open question above.
 - **Mode `8`.** Read as Eliminator by elimination, not confirmed independently
   - see `Pad_ContainsPoint` above.
