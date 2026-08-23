@@ -212,6 +212,7 @@ impl Scene {
         flare: Option<FlareTexture>,
         noise: Option<FlareTexture>,
         trail_blend: Option<wgpu::BlendState>,
+        trail_shape: Option<FlareTexture>,
         format: wgpu::TextureFormat,
         size: (u32, u32),
         anisotropy: Anisotropy,
@@ -655,6 +656,7 @@ impl Scene {
             format,
             &flare,
             &noise,
+            trail_shape.as_ref(),
             trail_blend,
             sample_count,
         ));

@@ -106,7 +106,11 @@ pub(super) fn trail_texture(
     archives: &mut oag_assets::Archives,
     title: &oag_title::Title,
     report: &mut Vec<String>,
-) -> (Option<FlareTexture>, Option<wgpu::BlendState>) {
+) -> (
+    Option<FlareTexture>,
+    Option<wgpu::BlendState>,
+    Option<FlareTexture>,
+) {
     match title.exhaust {
         oag_title::exhaust::Exhaust::Unread => {
             report.push(format!(
@@ -114,26 +118,26 @@ pub(super) fn trail_texture(
                  falls back to a procedural glow",
                 title.name
             ));
-            (None, None)
+            (None, None, None)
         }
         oag_title::exhaust::Exhaust::Named(name) => match exhaust_texture(archives, name) {
             Ok((texture, note)) => {
                 report.push(note);
-                (Some(texture), None)
+                (Some(texture), None, None)
             }
             Err(why) => {
                 report.push(format!("{why} - the trail falls back to a procedural glow"));
-                (None, None)
+                (None, None, None)
             }
         },
         oag_title::exhaust::Exhaust::Authored(model) => match authored_ribbon(archives, model) {
-            Ok((texture, blend, notes)) => {
+            Ok((texture, blend, shape, notes)) => {
                 report.extend(notes);
-                (Some(texture), Some(blend))
+                (Some(texture), Some(blend), shape)
             }
             Err(why) => {
                 report.push(format!("{why} - the trail falls back to a procedural glow"));
-                (None, None)
+                (None, None, None)
             }
         },
     }
@@ -143,7 +147,15 @@ pub(super) fn trail_texture(
 fn authored_ribbon(
     archives: &mut oag_assets::Archives,
     model: &str,
-) -> std::result::Result<(FlareTexture, wgpu::BlendState, Vec<String>), String> {
+) -> std::result::Result<
+    (
+        FlareTexture,
+        wgpu::BlendState,
+        Option<FlareTexture>,
+        Vec<String>,
+    ),
+    String,
+> {
     let blob = archives
         .read_name(model)
         .map_err(|e| format!("{model}: not in the archive set ({e})"))?;
@@ -183,17 +195,33 @@ fn authored_ribbon(
         ));
     };
     let blend = mesh::rcs::blend_state(src, dst);
-    let notes = vec![
+    // The *first* texture: the ribbon's own coverage. Its alpha is what HD's
+    // fragment program multiplies into the output - the file is called
+    // `..._alphaistrail.gtf` and the program agrees - so this is the term that
+    // gives the ribbon a shape of its own rather than the PSP preset's.
+    // Reported either way: a decode failure here draws the ribbon exactly as it
+    // drew before, which is a silent regression unless it is stated.
+    let mut notes = vec![
         format!(
             "{noise}: {width}x{height} .gtf - the ribbon's noise, named by {model}'s own material"
         ),
         format!("{model}: blend {src:?}/{dst:?} off the material, not the PSP preset's"),
-        format!(
-            "{}: located and not drawn - this renderer's ribbon samples one texture where \
-             HD's material names two, and this is the one carrying the trail's own shape",
-            material.texture
-        ),
     ];
+    let shape = match decode_gtf(archives, &material.texture) {
+        Ok(shape) => {
+            notes.push(format!(
+                "{}: {}x{} .gtf - the ribbon's own coverage, multiplied into its alpha",
+                material.texture, shape.width, shape.height
+            ));
+            Some(shape)
+        }
+        Err(why) => {
+            notes.push(format!(
+                "{why} - the ribbon keeps the shape the PSP preset's constants give it"
+            ));
+            None
+        }
+    };
     Ok((
         FlareTexture {
             width,
@@ -201,8 +229,36 @@ fn authored_ribbon(
             rgba: rgba.into_iter().flatten().collect(),
         },
         blend,
+        shape,
         notes,
     ))
+}
+
+/// One `.gtf` out of the archive set, as pixels the exhaust pipeline can bind.
+///
+/// The `.gtf` half of [`authored_ribbon`], lifted out when the ribbon needed a
+/// second texture and both wanted the same reporting.
+fn decode_gtf(
+    archives: &mut oag_assets::Archives,
+    name: &str,
+) -> std::result::Result<FlareTexture, String> {
+    let pixels = archives
+        .read_name(name)
+        .map_err(|e| format!("{name}: not in the archive set ({e})"))?;
+    let gtf = oag_formats::gtf::Gtf::parse(&pixels)
+        .map_err(|e| format!("{name}: {} bytes, does not parse ({e})", pixels.len()))?;
+    let texture = gtf
+        .only()
+        .ok_or_else(|| format!("{name}: parses, but is not a single texture"))?;
+    let rgba = texture
+        .to_rgba(&pixels)
+        .map_err(|e| format!("{name}: does not decode ({e})"))?;
+    let (width, height) = texture.level_size(0);
+    Ok(FlareTexture {
+        width,
+        height,
+        rgba: rgba.into_iter().flatten().collect(),
+    })
 }
 
 /// The flare's sprite texture, from wherever this title keeps it - or nothing

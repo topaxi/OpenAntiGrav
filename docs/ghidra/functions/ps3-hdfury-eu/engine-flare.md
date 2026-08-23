@@ -327,6 +327,55 @@ by name rather than by evidence:
 0x008b4484  'EngineTrail/TrailEffectManager.cpp'
 ```
 
+#### The ribbon's own fragment program
+
+`hd_enginetrail_bluered.rcsmaterial` disassembles to 29 instructions, and its
+patch chain resolves the same way `flame_test`'s did:
+
+| Parameter | code slot | Value | What it is |
+| --- | --- | ---: | --- |
+| `TrailSpeed` (`0x07431a35`) | `0x3` | 1.0 | added to the `u` coordinate |
+| `0xe296b1ed` | `0xc`, `0x11` | 0.15 | the facing-fade band's bound *and* its divisor |
+| `0xbb48e390` | `0x18` | 0.0 | the mix between the two textures' colours |
+
+and the two samplers resolve by hash against the model record's own entries:
+`0xcc5bb827` is `hd_enginetrail_red_alphaisnoise.gtf` on **unit 0** and
+`0x2743292b` is `hd_enginetrail_blue_alphaistrail.gtf` on **unit 1**. So:
+
+```text
+@0x01  TEX R1.w, f[TC3].zwzz unit0      <- the red texture's ALPHA
+@0x02  ADD R0.x, R0.z, {TrailSpeed}     <- u + the scroll
+@0x06  ADD R2.z, R0.x, R1.w             <- displaced by that alpha: the noise
+@0x0b  MIN H0.w, dot, {0.15}            \
+@0x0e  MAX H0.x, H0.w, {0}               |  saturate(clamp(dot, 0, 0.15) / 0.15)
+@0x10  DIV_SAT H2.w, H0.x, {0.15}       /
+@0x0d  TEX H1.xyz, R2.zwzz unit0        <- the red texture's colour
+@0x12  TEX H0,     R2.zwzz unit1        <- the blue texture, all four channels
+@0x14  MUL_SAT R0.w, f[POS].zzzz, {0.75}<- a window-depth fade, inline
+@0x16  MUL H2.w, f[TC4].xxxx, H2        <- times a per-vertex scalar
+@0x17  MAD H0.xyz, H2, {0.0}, H0        <- mix the two colours: the identity
+@0x1a  MUL H0.w, H0, H2                 <- alpha = blue.a * that fade
+@0x1b  MUL H0.w, H0, R0                 <-       * the depth fade
+@0x1c  MUL H0.xyz, H0, f[TC0] END       <- colour * the vertex colour
+```
+
+**Three names confirmed by three independent routes.** The filename says
+`alphaisnoise`; the sampler hash puts that file on unit 0; and unit 0's alpha
+is what displaces the coordinate. Same for `alphaistrail` on unit 1, whose
+alpha is the output's coverage. Confidence 92.
+
+**Implemented**: the sample itself - the noise's alpha displaces the
+coordinate and the blue texture is read there for colour and alpha, which is
+`@0x06`, `@0x12`, `@0x1a` and `@0x1c` above. **Read and not implemented**: the
+`TrailSpeed` scroll (the authored 1.0 is the identity under a repeating
+sampler, so the engine patches that slot live and what with is unread), the
+colour mix
+(the identity on this disc anyway), the facing fade (it needs two interpolated
+vectors this ribbon does not carry), the `f[POS].z * 0.75` depth fade, and the
+per-vertex `f[TC4].x` the engine writes. Each is a term this project would have
+had to invent before; now each is a number waiting for the geometry to carry
+it.
+
 **`Trail_ModelPath` is the `bluered` pair, not the `enginetrail_triangle` one**
 this renderer loaded until now, and the plain one is named nowhere in the
 executable. `Trail_ConstructManager` (`0x002e2da8`) allocates `0x11b00` bytes

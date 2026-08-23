@@ -126,6 +126,42 @@ loader that has not been found. Neither threatens the engine trail's
 conclusion - no bare `enginetrail_triangle` stem exists anywhere in the
 binary - but both are worth someone's next hour.
 
+**The ribbon draws from the blue texture now, and which texture is which is
+the whole of it.** The property to keep in mind: **the noise map's alpha
+averages 17 of 255 and the coverage map's averages 162**, so anything that
+treats the noise as the ribbon's coverage erases the trail. The one-texture
+path does exactly that - correctly, for a title whose one texture *is* the
+coverage - and the texture this loader hands it on HD is the noise.
+`crates/game/tests/hd_engine_flare_ground_truth.rs` pins the two apart by that
+same property.
+
+HD's program is unambiguous about the roles: unit 0's alpha displaces the `u`
+coordinate, and unit 1 - the blue one - supplies the colour **and** the output
+alpha. `exhaust.wgsl` now does exactly that where `trail_shape` is on: the
+noise's alpha offsets the coordinate, the blue texture is sampled there, and
+its `rgba` replaces the sample the one-texture path would have used. The blue
+alpha is a **cross-ribbon falloff** - by row, 1, 112, 166, 213, 255, 220, 172,
+117 out of 255 - so the ribbon has a soft edge of its own for the first time.
+
+`TrailSpeed` is **not** added. The material authors 1.0, and adding a whole 1.0
+to a coordinate this sampler repeats is the identity, so the engine must patch
+that slot per frame with something else - and what, is unread. A scroll of this
+project's choosing would be the fitted coefficient this tree keeps out.
+
+Every other title compiles the pipeline it always had - `trail_shape` is a
+pipeline constant set only where the material names two textures - and Pulse
+and Pure frames are byte-identical either side.
+
+**Two things this does not make right, and neither is a reason to tune.**
+HD draws **one** strip where `oag_render::exhaust` draws `LAYERS` = 3, so the
+coverage falloff is applied three times over and `LAYER_COLOUR`'s baked tint
+sits on top of it. And that falloff runs along **`v`**, the around-the-tube
+coordinate, which this ribbon *scrolls* (`LAYER_SCROLL_V`) under a repeating
+sampler - where HD's own program displaces `u` and never touches `v` at all.
+Two frames three ticks apart show no travelling band, so nothing visible turns
+on it today; it is recorded because the next person to change the scroll needs
+to know the coverage is riding it.
+
 **Still PSP's, unchanged**: every geometry number. `TrailEffectManager`'s
 per-craft state is 0x1230 bytes with a 0x1200-byte buffer, eight of them, and
 what that buffer's stride and sample count are has not been read. `TrailSpeed`

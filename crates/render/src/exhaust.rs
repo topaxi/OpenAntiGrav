@@ -1071,6 +1071,9 @@ pub const MAX_TRAIL_VERTICES: usize = MAX_TRAILS * TRAIL_VERTICES_PER_CRAFT;
 /// same target format, same [`crate::mesh_render::DEPTH_FORMAT`], sample count 1,
 /// and the same 128-byte uniform block so
 /// [`crate::mesh_render::UNIFORMS_SIZE`] describes both.
+mod texture;
+pub use texture::FlareTexture;
+
 #[derive(Debug)]
 pub struct Pipeline {
     pipeline: wgpu::RenderPipeline,
@@ -1101,12 +1104,14 @@ impl Pipeline {
     /// `Data\Tex\EngineFlare\grabbedEngineFlare128x64x8.mip` decoded by
     /// `oag_formats::texture`. `format` must match the caller's render pass and
     /// `sample_count` its multisample state - see `mesh_render::build`.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         format: wgpu::TextureFormat,
         flare: &FlareTexture,
         noise: &FlareTexture,
+        trail_shape: Option<&FlareTexture>,
         trail_blend: wgpu::BlendState,
         sample_count: u32,
     ) -> Self {
@@ -1148,6 +1153,16 @@ impl Pipeline {
                     ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                     count: None,
                 },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
             ],
         });
 
@@ -1157,56 +1172,70 @@ impl Pipeline {
             immediate_size: 0,
         });
 
-        let build_pipeline =
-            |label: &str, blend: wgpu::BlendState, write_mask: wgpu::ColorWrites| {
-                device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                    label: Some(label),
-                    layout: Some(&pipeline_layout),
-                    vertex: wgpu::VertexState {
-                        module: &shader,
-                        entry_point: Some("vs_main"),
-                        buffers: &[Some(wgpu::VertexBufferLayout {
-                            array_stride: std::mem::size_of::<GpuVertex>() as u64,
-                            step_mode: wgpu::VertexStepMode::Vertex,
-                            attributes: &wgpu::vertex_attr_array![
-                                0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x2,
-                                4 => Float32
-                            ],
-                        })],
-                        compilation_options: Default::default(),
-                    },
-                    fragment: Some(wgpu::FragmentState {
-                        module: &shader,
-                        entry_point: Some("fs_main"),
-                        targets: &[Some(wgpu::ColorTargetState {
-                            format,
-                            blend: Some(blend),
-                            write_mask,
-                        })],
-                        compilation_options: crate::mesh_render::fragment_options(format),
-                    }),
-                    primitive: wgpu::PrimitiveState {
-                        // A camera-facing quad has no meaningful winding: the basis it
-                        // is built from flips as the camera orbits. The original
-                        // disables cull for both the flare and the ribbon.
-                        cull_mode: None,
+        // **The ribbon's second texture is a pipeline constant, not a uniform.**
+        // Only a title that authors its ribbon supplies one, and whether the
+        // shader reads slot 2 is a property of that title's asset rather than
+        // of the frame - the same shape as `linear_out` beside it. A pipeline
+        // built without one never samples the view bound there.
+        let mut trail_constants = crate::mesh_render::linear_constants(format).to_vec();
+        if trail_shape.is_some() {
+            trail_constants.push(("trail_shape", 1.0));
+        }
+        let build_pipeline = |label: &str,
+                              blend: wgpu::BlendState,
+                              write_mask: wgpu::ColorWrites,
+                              constants: &[(&str, f64)]| {
+            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some(label),
+                layout: Some(&pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: &shader,
+                    entry_point: Some("vs_main"),
+                    buffers: &[Some(wgpu::VertexBufferLayout {
+                        array_stride: std::mem::size_of::<GpuVertex>() as u64,
+                        step_mode: wgpu::VertexStepMode::Vertex,
+                        attributes: &wgpu::vertex_attr_array![
+                            0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x2,
+                            4 => Float32
+                        ],
+                    })],
+                    compilation_options: Default::default(),
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &shader,
+                    entry_point: Some("fs_main"),
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format,
+                        blend: Some(blend),
+                        write_mask,
+                    })],
+                    compilation_options: wgpu::PipelineCompilationOptions {
+                        constants,
                         ..Default::default()
                     },
-                    depth_stencil: Some(wgpu::DepthStencilState {
-                        format: crate::mesh_render::DEPTH_FORMAT,
-                        depth_write_enabled: Some(false),
-                        depth_compare: Some(wgpu::CompareFunction::Less),
-                        stencil: Default::default(),
-                        bias: Default::default(),
-                    }),
-                    multisample: wgpu::MultisampleState {
-                        count: sample_count,
-                        ..Default::default()
-                    },
-                    multiview_mask: None,
-                    cache: None,
-                })
-            };
+                }),
+                primitive: wgpu::PrimitiveState {
+                    // A camera-facing quad has no meaningful winding: the basis it
+                    // is built from flips as the camera orbits. The original
+                    // disables cull for both the flare and the ribbon.
+                    cull_mode: None,
+                    ..Default::default()
+                },
+                depth_stencil: Some(wgpu::DepthStencilState {
+                    format: crate::mesh_render::DEPTH_FORMAT,
+                    depth_write_enabled: Some(false),
+                    depth_compare: Some(wgpu::CompareFunction::Less),
+                    stencil: Default::default(),
+                    bias: Default::default(),
+                }),
+                multisample: wgpu::MultisampleState {
+                    count: sample_count,
+                    ..Default::default()
+                },
+                multiview_mask: None,
+                cache: None,
+            })
+        };
         // **The flare writes colour only, and that is a deliberate limit on the
         // evidence rather than an oversight.** The ribbon's write to the bloom's
         // glow mask is explicit and recovered - `Trail_BuildStateList` opens the
@@ -1221,10 +1250,20 @@ impl Pipeline {
         // flare's contribution is read rather than inferred, only the ribbon
         // feeds the bloom. See `crate::post::bloom` and
         // `docs/ghidra/functions/psp-pulse-usa/bloom.md`.
-        let pipeline = build_pipeline("exhaust", BLEND, wgpu::ColorWrites::COLOR);
+        let pipeline = build_pipeline(
+            "exhaust",
+            BLEND,
+            wgpu::ColorWrites::COLOR,
+            crate::mesh_render::linear_constants(format),
+        );
         // The caller's, not [`TRAIL_BLEND`]: a title that authors its ribbon
         // passes its material's own pair - `race::Loaded::trail_blend`.
-        let trail_pipeline = build_pipeline("exhaust trail", trail_blend, wgpu::ColorWrites::ALL);
+        let trail_pipeline = build_pipeline(
+            "exhaust trail",
+            trail_blend,
+            wgpu::ColorWrites::ALL,
+            &trail_constants,
+        );
 
         let uniforms = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("exhaust uniforms"),
@@ -1255,8 +1294,15 @@ impl Pipeline {
             mapped_at_creation: false,
         });
 
-        let texture = flare.bind(device, queue, &texture_layout, "engine flare", false);
-        let noise = noise.bind(device, queue, &texture_layout, "engine noise", true);
+        let texture = flare.bind(device, queue, &texture_layout, "engine flare", false, None);
+        let noise = noise.bind(
+            device,
+            queue,
+            &texture_layout,
+            "engine noise",
+            true,
+            trail_shape,
+        );
 
         Self {
             pipeline,
@@ -1335,128 +1381,6 @@ impl Pipeline {
             pass.set_vertex_buffer(0, self.vertices.slice(..));
             pass.draw(0..self.count, 0..1);
         }
-    }
-}
-
-/// An RGBA8 image for the flare, with its dimensions.
-///
-/// A plain struct rather than a borrow of `oag_formats`' type, so this crate
-/// keeps depending on nothing but `oag-core` and `wgpu` for the exhaust: the
-/// caller decodes the `.mip` and hands the pixels over.
-#[derive(Debug, Clone)]
-pub struct FlareTexture {
-    /// Width in texels.
-    pub width: u32,
-    /// Height in texels.
-    pub height: u32,
-    /// `width * height * 4` bytes, RGBA8.
-    pub rgba: Vec<u8>,
-}
-
-impl FlareTexture {
-    /// A soft radial glow, for when the disc's own texture is unavailable.
-    ///
-    /// Used by tests and by the headless capture path. **Not** a silent
-    /// substitute in the game: the caller reports a missing archive entry rather
-    /// than quietly drawing this, because a stand-in that looks plausible is how
-    /// a decode failure survives review.
-    #[must_use]
-    pub fn placeholder(size: u32) -> Self {
-        let mut rgba = Vec::with_capacity((size * size * 4) as usize);
-        let centre = (size as f32 - 1.0) / 2.0;
-        for y in 0..size {
-            for x in 0..size {
-                let dx = (x as f32 - centre) / centre;
-                let dy = (y as f32 - centre) / centre;
-                // Squared falloff, so the edge reaches zero rather than clipping.
-                let d = (dx * dx + dy * dy).sqrt().min(1.0);
-                let a = (1.0 - d) * (1.0 - d);
-                rgba.extend_from_slice(&[255, 255, 255, (a * 255.0) as u8]);
-            }
-        }
-        Self {
-            width: size,
-            height: size,
-            rgba,
-        }
-    }
-
-    fn bind(
-        &self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        layout: &wgpu::BindGroupLayout,
-        label: &str,
-        wrap_v: bool,
-    ) -> wgpu::BindGroup {
-        let texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some(label),
-            size: wgpu::Extent3d {
-                width: self.width.max(1),
-                height: self.height.max(1),
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8Unorm,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-            view_formats: &[],
-        });
-        queue.write_texture(
-            wgpu::TexelCopyTextureInfo {
-                texture: &texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
-            &self.rgba,
-            wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(self.width.max(1) * 4),
-                rows_per_image: Some(self.height.max(1)),
-            },
-            wgpu::Extent3d {
-                width: self.width.max(1),
-                height: self.height.max(1),
-                depth_or_array_layers: 1,
-            },
-        );
-        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        // The ribbon's state list sets `sceGuTexWrap(GU_REPEAT, GU_REPEAT)`, and
-        // it needs both: `u` tiles `LAYER_TEX_SCALE_U` times along the trail
-        // plus a scroll offset, and `v` runs once around the diamond tube plus
-        // its own scroll, so either coordinate routinely leaves `[0, 1]`. The
-        // flare quad samples exactly 0..1 and keeps `v` clamped so its soft
-        // edge cannot bleed the opposite row in under bilinear filtering.
-        let v_mode = if wrap_v {
-            wgpu::AddressMode::Repeat
-        } else {
-            wgpu::AddressMode::ClampToEdge
-        };
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some(label),
-            address_mode_u: wgpu::AddressMode::Repeat,
-            address_mode_v: v_mode,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Linear,
-            ..Default::default()
-        });
-        device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some(label),
-            layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&sampler),
-                },
-            ],
-        })
     }
 }
 

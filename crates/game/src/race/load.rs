@@ -831,7 +831,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // The ribbon's texture is a title axis, not a constant: Pulse and Pure name
     // one, HD authors a template whose material names its own. See
     // `oag_title::exhaust::Exhaust` and `assets::trail_texture`.
-    let (noise, trail_blend) = assets::trail_texture(&mut archives, title, &mut report);
+    let (noise, trail_blend, trail_shape) =
+        assets::trail_texture(&mut archives, title, &mut report);
 
     // The flare is a title axis too, and a second one rather than a variant of
     // the ribbon's: Pulse and Pure name a sprite texture, HD authors a per-team
@@ -940,6 +941,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         flare,
         noise,
         trail_blend,
+        trail_shape,
         report,
     })
 }

@@ -238,3 +238,48 @@ fn every_flare_carries_the_flames_own_shader_parameters() {
         }
     }
 }
+
+/// The ribbon's two textures, and **which is which**.
+///
+/// This is the assertion that would have caught a role swap that cost a round:
+/// the loader once multiplied the coverage into the *noise* rather than
+/// replacing it, and since the noise map's alpha averages 17 of 255 the ribbon
+/// nearly vanished. The two are told apart by exactly the property that makes
+/// the mistake fatal - one is nearly transparent and the other is not - so a
+/// future swap fails here rather than on screen.
+///
+/// The names agree, the sampler units agree, and HD's own fragment program
+/// agrees; see `docs/ghidra/functions/ps3-hdfury-eu/engine-flare.md`.
+#[test]
+#[ignore = "needs a disc image"]
+fn the_ribbons_noise_is_the_near_transparent_one_and_its_coverage_is_not() {
+    let Some(loaded) = load() else {
+        return;
+    };
+    let mean = |texture: &oag_render::exhaust::FlareTexture| {
+        let pixels = texture.rgba.as_chunks::<4>().0;
+        let total: u64 = pixels.iter().map(|p| u64::from(p[3])).sum();
+        total as f64 / pixels.len() as f64
+    };
+    let noise = loaded.noise.as_ref().expect("the ribbon's noise texture");
+    let shape = loaded
+        .trail_shape
+        .as_ref()
+        .expect("the ribbon's coverage texture");
+    let (noise_alpha, shape_alpha) = (mean(noise), mean(shape));
+    assert!(
+        noise_alpha < 40.0,
+        "the noise map's alpha averages {noise_alpha:.1}, not the ~17 that says it is \
+         the displacement source rather than the coverage"
+    );
+    assert!(
+        shape_alpha > 120.0,
+        "the coverage map's alpha averages {shape_alpha:.1}, not the ~162 that says it \
+         is the ribbon's own falloff"
+    );
+    assert!(
+        shape_alpha > noise_alpha * 4.0,
+        "the two textures are not far enough apart to be sure they are the right way \
+         round: noise {noise_alpha:.1}, coverage {shape_alpha:.1}"
+    );
+}

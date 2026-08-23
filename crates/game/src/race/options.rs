@@ -448,6 +448,13 @@ pub struct Loaded {
     /// equation the PSP preset and the PS2's GS register write both land on,
     /// from a third independent source.
     pub trail_blend: Option<wgpu::BlendState>,
+    /// The ribbon's own coverage texture, for a title whose material names two.
+    ///
+    /// `None` on Pulse, Pure and the PS2 port, which name one - and on a
+    /// Wipeout HD source whose first texture would not decode, which the load
+    /// report says rather than leaving the ribbon quietly shaped by the PSP
+    /// preset. See `assets::trail_texture`.
+    pub trail_shape: Option<FlareTexture>,
     /// The engine-flare texture off the disc, when it decodes.
     ///
     /// `None` falls back to [`Exhaust`]'s procedural glow, and the load report

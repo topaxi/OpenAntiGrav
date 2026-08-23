@@ -57,6 +57,7 @@ fn the_exhaust_pipeline_builds_and_draws_on_a_real_device() {
         FORMAT,
         &flare,
         &noise,
+        None,
         exhaust::TRAIL_BLEND,
         1,
     );
