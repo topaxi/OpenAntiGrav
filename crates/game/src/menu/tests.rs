@@ -22,7 +22,7 @@ use super::*;
 /// layer split exists for the transition, and none of these animate.
 fn list(
     menu: &Menu,
-    bindings: &dyn Fn(u8) -> Vec<&'static str>,
+    bindings: &dyn Fn(Button) -> Vec<&'static str>,
     backdrop: Option<Backdrop>,
 ) -> Vec<Draw> {
     draw_list(
@@ -75,9 +75,9 @@ fn built_in() -> Definition {
 }
 
 /// One tick with `buttons` newly down, which is what the edges above read.
-fn press(menu: &mut Menu, buttons: &[u8]) -> Vec<MenuEvent> {
+fn press(menu: &mut Menu, buttons: &[Button]) -> Vec<MenuEvent> {
     let mut input = Input::new();
-    let mask = buttons.iter().fold(0u32, |mask, &b| mask | 1 << b);
+    let mask = buttons.iter().fold(0u32, |mask, &b| mask | 1 << b.index());
     input.begin_frame(mask);
     menu.update(&mut input)
 }
@@ -120,6 +120,6 @@ fn fixture() -> Definition {
 
 /// No keys bound to anything, for the layout tests: what a binding row
 /// shows is `oag-input`'s business and is asserted there.
-fn no_bindings(_: u8) -> Vec<&'static str> {
+fn no_bindings(_: Button) -> Vec<&'static str> {
     Vec::new()
 }

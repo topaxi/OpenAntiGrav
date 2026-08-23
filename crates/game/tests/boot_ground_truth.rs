@@ -28,7 +28,7 @@ use std::path::{Path, PathBuf};
 
 use oag_game::boot;
 use oag_game::frontend::states;
-use oag_game::input::{Input, button};
+use oag_game::input::{Button, Input};
 use oag_pulse as pulse;
 
 fn image() -> Option<PathBuf> {
@@ -301,14 +301,14 @@ fn the_sequence_runs_from_boot_to_launch_game() {
 
     // Move to English, the last of the five, and pick it.
     for _ in 0..4 {
-        input.begin_frame(1 << button::DOWN);
+        input.begin_frame(1 << Button::Down.index());
         frontend.update(dt, &mut input, None);
         input.begin_frame(0);
         frontend.update(dt, &mut input, None);
     }
     assert_eq!(frontend.selected(), 4);
 
-    input.begin_frame(1 << button::CROSS);
+    input.begin_frame(1 << Button::Cross.index());
     frontend.update(dt, &mut input, None);
     assert_eq!(frontend.chosen(), Some("English"));
 
@@ -338,7 +338,7 @@ fn the_sequence_runs_from_boot_to_launch_game() {
         "and it has no timeout"
     );
 
-    input.begin_frame(1 << button::START);
+    input.begin_frame(1 << Button::Start.index());
     frontend.update(dt, &mut input, None);
     assert!(frontend.is_finished());
     assert!(frontend.machine().is(states::LAUNCH_GAME));
@@ -364,7 +364,7 @@ fn the_picker_draws_every_language_in_its_own_name() {
     let mut input = Input::new();
 
     // START skips straight there.
-    input.begin_frame(1 << button::START);
+    input.begin_frame(1 << Button::Start.index());
     frontend.update(1.0 / 60.0, &mut input, None);
     input.begin_frame(0);
     frontend.update(1.0 / 60.0, &mut input, None);

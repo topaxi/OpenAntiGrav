@@ -155,8 +155,8 @@ fn an_unselected_entry_takes_the_widgets_colour_rather_than_textcolor() {
 fn a_page_with_a_value_column_stays_a_column() {
     let mut menu = Menu::new(built_in());
     menu.set_strip_layout(true);
-    press(&mut menu, &[button::DOWN]);
-    press(&mut menu, &[button::CROSS]);
+    press(&mut menu, &[Button::Down]);
+    press(&mut menu, &[Button::Cross]);
     assert_eq!(menu.page().id, "options", "the page with the choice on it");
 
     let skin = hd_skin();
@@ -207,11 +207,11 @@ fn right_and_left_step_a_strip() {
     let mut menu = Menu::new(built_in());
     menu.set_strip_layout(true);
     assert_eq!(menu.selected(), 0);
-    press(&mut menu, &[button::RIGHT]);
+    press(&mut menu, &[Button::Right]);
     assert_eq!(menu.selected(), 1, "right moves along the strip");
-    press(&mut menu, &[button::LEFT]);
+    press(&mut menu, &[Button::Left]);
     assert_eq!(menu.selected(), 0, "and left moves back");
-    press(&mut menu, &[button::LEFT]);
+    press(&mut menu, &[Button::Left]);
     assert_eq!(menu.selected(), 2, "wrapping the way up and down do");
 }
 
@@ -221,7 +221,7 @@ fn right_and_left_step_a_strip() {
 fn right_and_left_do_not_step_a_column() {
     let mut menu = Menu::new(built_in());
     menu.set_strip_layout(false);
-    press(&mut menu, &[button::RIGHT]);
+    press(&mut menu, &[Button::Right]);
     assert_eq!(
         menu.selected(),
         0,
@@ -232,11 +232,11 @@ fn right_and_left_do_not_step_a_column() {
     // the flag says what the disc draws, `suits` says which pages.
     let mut menu = Menu::new(built_in());
     menu.set_strip_layout(true);
-    press(&mut menu, &[button::DOWN]);
-    press(&mut menu, &[button::CROSS]);
+    press(&mut menu, &[Button::Down]);
+    press(&mut menu, &[Button::Cross]);
     assert_eq!(menu.page().id, "options");
     let selected = menu.selected();
-    press(&mut menu, &[button::RIGHT]);
+    press(&mut menu, &[Button::Right]);
     assert_eq!(
         menu.selected(),
         selected,

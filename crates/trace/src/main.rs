@@ -1519,9 +1519,9 @@ fn inputs(args: &RunArgs, ticks: usize) -> Result<Inputs> {
     }
     let mut buttons = 0u32;
     for name in &args.hold {
-        let index = button_from_name(name)
+        let button = button_from_name(name)
             .with_context(|| format!("{name:?} is not a button name the front end knows"))?;
-        buttons |= 1u32 << (index & 0x1f);
+        buttons |= 1u32 << (button.index() & 0x1f);
     }
     Ok(Inputs::Held(Held {
         buttons,

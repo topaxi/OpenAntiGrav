@@ -14,31 +14,31 @@
 
 use winit::keyboard::{Key, NamedKey};
 
-use oag_gameplay::input::button;
+use oag_gameplay::input::Button;
 
 /// Maps a key to an abstract button index, or `None` if it is not bound.
 #[must_use]
-pub fn map_key(key: &Key) -> Option<u8> {
+pub fn map_key(key: &Key) -> Option<Button> {
     Some(match key {
-        Key::Named(NamedKey::ArrowUp) => button::UP,
-        Key::Named(NamedKey::ArrowDown) => button::DOWN,
-        Key::Named(NamedKey::ArrowLeft) => button::LEFT,
-        Key::Named(NamedKey::ArrowRight) => button::RIGHT,
-        Key::Named(NamedKey::Enter) => button::CROSS,
-        Key::Named(NamedKey::Backspace) => button::CIRCLE,
-        Key::Named(NamedKey::Space) => button::START,
-        Key::Named(NamedKey::Tab) => button::SELECT,
+        Key::Named(NamedKey::ArrowUp) => Button::Up,
+        Key::Named(NamedKey::ArrowDown) => Button::Down,
+        Key::Named(NamedKey::ArrowLeft) => Button::Left,
+        Key::Named(NamedKey::ArrowRight) => Button::Right,
+        Key::Named(NamedKey::Enter) => Button::Cross,
+        Key::Named(NamedKey::Backspace) => Button::Circle,
+        Key::Named(NamedKey::Space) => Button::Start,
+        Key::Named(NamedKey::Tab) => Button::Select,
         Key::Character(text) => match text.to_ascii_lowercase().as_str() {
-            "w" => button::UP,
-            "s" => button::DOWN,
-            "a" => button::LEFT,
-            "d" => button::RIGHT,
-            "x" => button::CROSS,
-            "z" => button::CIRCLE,
-            "c" => button::SQUARE,
-            "v" => button::TRIANGLE,
-            "q" => button::L,
-            "e" => button::R,
+            "w" => Button::Up,
+            "s" => Button::Down,
+            "a" => Button::Left,
+            "d" => Button::Right,
+            "x" => Button::Cross,
+            "z" => Button::Circle,
+            "c" => Button::Square,
+            "v" => Button::Triangle,
+            "q" => Button::L,
+            "e" => Button::R,
             _ => return None,
         },
         _ => return None,
@@ -82,7 +82,7 @@ fn candidates() -> Vec<(&'static str, Key)> {
 /// Empty when nothing does, which is a real answer rather than a failure: not
 /// every abstract button the game knows has a key on this layout.
 #[must_use]
-pub fn bound_keys(button: u8) -> Vec<&'static str> {
+pub fn bound_keys(button: Button) -> Vec<&'static str> {
     candidates()
         .into_iter()
         .filter(|(_, key)| map_key(key) == Some(button))
@@ -100,11 +100,11 @@ mod tests {
     /// version of that mistake a player would notice.
     #[test]
     fn every_mapped_button_has_a_key_to_show_for_it() {
-        let mut mapped: Vec<u8> = candidates()
+        let mut mapped: Vec<Button> = candidates()
             .iter()
             .filter_map(|(_, k)| map_key(k))
             .collect();
-        mapped.sort_unstable();
+        mapped.sort_unstable_by_key(|button| button.index());
         mapped.dedup();
         for button in mapped {
             assert!(
@@ -116,53 +116,53 @@ mod tests {
 
     #[test]
     fn a_button_with_two_keys_reports_both() {
-        assert_eq!(bound_keys(button::UP), ["UP", "W"]);
-        assert_eq!(bound_keys(button::CROSS), ["ENTER", "X"]);
+        assert_eq!(bound_keys(Button::Up), ["UP", "W"]);
+        assert_eq!(bound_keys(Button::Cross), ["ENTER", "X"]);
     }
 
     #[test]
     fn a_button_no_key_produces_reports_nothing() {
         // Nothing on this layout is bound to the PSP's own `any` pseudo-button.
-        assert!(bound_keys(oag_gameplay::input::button::ANY).is_empty());
+        assert!(bound_keys(oag_gameplay::input::Button::Any).is_empty());
     }
 
     #[test]
     fn return_and_x_are_both_activate() {
-        assert_eq!(map_key(&Key::Named(NamedKey::Enter)), Some(button::CROSS));
-        assert_eq!(map_key(&Key::Character("x".into())), Some(button::CROSS));
-        assert_eq!(map_key(&Key::Character("X".into())), Some(button::CROSS));
+        assert_eq!(map_key(&Key::Named(NamedKey::Enter)), Some(Button::Cross));
+        assert_eq!(map_key(&Key::Character("x".into())), Some(Button::Cross));
+        assert_eq!(map_key(&Key::Character("X".into())), Some(Button::Cross));
     }
 
     #[test]
     fn space_is_start_so_the_intro_can_be_skipped() {
-        assert_eq!(map_key(&Key::Named(NamedKey::Space)), Some(button::START));
+        assert_eq!(map_key(&Key::Named(NamedKey::Space)), Some(Button::Start));
     }
 
     #[test]
     fn wasd_and_the_arrow_keys_both_steer() {
-        assert_eq!(map_key(&Key::Character("w".into())), Some(button::UP));
-        assert_eq!(map_key(&Key::Character("a".into())), Some(button::LEFT));
-        assert_eq!(map_key(&Key::Character("s".into())), Some(button::DOWN));
-        assert_eq!(map_key(&Key::Character("d".into())), Some(button::RIGHT));
-        assert_eq!(map_key(&Key::Named(NamedKey::ArrowUp)), Some(button::UP));
+        assert_eq!(map_key(&Key::Character("w".into())), Some(Button::Up));
+        assert_eq!(map_key(&Key::Character("a".into())), Some(Button::Left));
+        assert_eq!(map_key(&Key::Character("s".into())), Some(Button::Down));
+        assert_eq!(map_key(&Key::Character("d".into())), Some(Button::Right));
+        assert_eq!(map_key(&Key::Named(NamedKey::ArrowUp)), Some(Button::Up));
         assert_eq!(
             map_key(&Key::Named(NamedKey::ArrowLeft)),
-            Some(button::LEFT)
+            Some(Button::Left)
         );
         assert_eq!(
             map_key(&Key::Named(NamedKey::ArrowDown)),
-            Some(button::DOWN)
+            Some(Button::Down)
         );
         assert_eq!(
             map_key(&Key::Named(NamedKey::ArrowRight)),
-            Some(button::RIGHT)
+            Some(Button::Right)
         );
     }
 
     #[test]
     fn square_and_triangle_moved_off_wasd_onto_c_and_v() {
-        assert_eq!(map_key(&Key::Character("c".into())), Some(button::SQUARE));
-        assert_eq!(map_key(&Key::Character("v".into())), Some(button::TRIANGLE));
+        assert_eq!(map_key(&Key::Character("c".into())), Some(Button::Square));
+        assert_eq!(map_key(&Key::Character("v".into())), Some(Button::Triangle));
     }
 
     #[test]

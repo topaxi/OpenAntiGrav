@@ -78,7 +78,7 @@
 //! does not know that: it fires the transition the original's own literal names
 //! and stops, and what happens next is the composition root's business.
 
-use crate::input::{Input, button};
+use crate::input::{Button, Input};
 use crate::language::{Language, StringTable};
 use crate::screen::{Screen, Screens, argb_to_rgba, parse_argb};
 use crate::state_machine::{Event, StateMachine};
@@ -900,7 +900,7 @@ impl Frontend {
     /// `LogoFMVRedirectScreen`. Only the buttons the abstract layer carries are
     /// read here, which is start and cross.
     fn update_logo_fmv(&mut self, dt: f64, input: &mut Input, playhead: Option<f64>) {
-        for button in [button::START, button::CROSS] {
+        for button in [Button::Start, Button::Cross] {
             if input.is_pressed(button) {
                 input.consume_press(button);
                 self.notes.push(format!(
@@ -937,13 +937,13 @@ impl Frontend {
     fn update_intro(&mut self, dt: f64, input: &mut Input, playhead: Option<f64>) {
         // The skip. The player never reads the pad; the state does, and it fires
         // the cached redirect rather than stopping playback.
-        if input.is_pressed(button::START)
+        if input.is_pressed(Button::Start)
             && let Some(target) = self.dev_pub_redirect.take()
         {
             self.notes
                 .push(format!("START skipped the intro, firing {target}"));
             self.machine.fire(&target);
-            input.consume_press(button::START);
+            input.consume_press(Button::Start);
             return;
         }
 
@@ -1022,14 +1022,14 @@ impl Frontend {
         }
 
         let count = self.languages.len();
-        if input.is_pressed(button::DOWN) {
-            input.consume_press(button::DOWN);
+        if input.is_pressed(Button::Down) {
+            input.consume_press(Button::Down);
             self.selected = (self.selected + 1) % count;
-        } else if input.is_pressed(button::UP) {
-            input.consume_press(button::UP);
+        } else if input.is_pressed(Button::Up) {
+            input.consume_press(Button::Up);
             self.selected = (self.selected + count - 1) % count;
-        } else if input.is_pressed(button::CROSS) {
-            input.consume_press(button::CROSS);
+        } else if input.is_pressed(Button::Cross) {
+            input.consume_press(Button::Cross);
             self.confirm_language();
         }
     }
@@ -1106,7 +1106,7 @@ impl Frontend {
     ///
     /// See `docs/architecture/pure-boot.md`.
     fn update_developer_publisher(&mut self, dt: f64, input: &mut Input, playhead: Option<f64>) {
-        for button in [button::START, button::CROSS] {
+        for button in [Button::Start, Button::Cross] {
             if input.is_pressed(button) {
                 input.consume_press(button);
                 self.advance("the reel was skipped");
@@ -1164,8 +1164,8 @@ impl Frontend {
     /// Its own text is deliberately not the disc's - see
     /// [`pure_states::MEMORY_STICK_WARNING`] and [`Self::draw_storage_warning`].
     fn update_memory_stick_warning(&mut self, input: &mut Input) {
-        if input.is_pressed(button::CROSS) {
-            input.consume_press(button::CROSS);
+        if input.is_pressed(Button::Cross) {
+            input.consume_press(Button::Cross);
             self.advance("the storage warning was acknowledged");
         }
     }
@@ -1191,8 +1191,8 @@ impl Frontend {
     /// **What that something is has not been found**, and a guess would be a
     /// hidden timeout, so it is left unfired here rather than modelled.
     fn update_show_logo(&mut self, input: &mut Input) {
-        if input.is_pressed(button::START) {
-            input.consume_press(button::START);
+        if input.is_pressed(Button::Start) {
+            input.consume_press(Button::Start);
             self.notes.push(format!(
                 "START pressed on {}, firing {}",
                 states::SHOW_LOGO,
@@ -1227,8 +1227,8 @@ impl Frontend {
     /// original's code fires, and what fires it has not been found on either
     /// title. Guessing a hidden timeout here would be inventing a duration.
     fn update_title_screen(&mut self, input: &mut Input) {
-        if input.is_pressed(button::START) {
-            input.consume_press(button::START);
+        if input.is_pressed(Button::Start) {
+            input.consume_press(Button::Start);
             self.notes.push(format!(
                 "START pressed on {}, firing {}",
                 pure_states::TITLE_SCREEN,
@@ -1264,7 +1264,7 @@ impl Frontend {
     /// of this body under an HD name would have been two places to fix the next
     /// time a skip button changes.
     fn update_plain_movie(&mut self, dt: f64, input: &mut Input, playhead: Option<f64>) {
-        for button in [button::START, button::CROSS] {
+        for button in [Button::Start, Button::Cross] {
             if input.is_pressed(button) {
                 input.consume_press(button);
                 self.advance("the video was skipped");

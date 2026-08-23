@@ -9,7 +9,7 @@ use super::*;
 #[test]
 fn a_drawn_page_has_a_title_a_row_each_and_one_highlight() {
     let mut menu = Menu::new(fixture());
-    press(&mut menu, &[button::CROSS]);
+    press(&mut menu, &[Button::Cross]);
     let list = list(&menu, &no_bindings, None);
 
     let texts: Vec<&String> = list
@@ -67,7 +67,7 @@ fn values_are_right_aligned_on_one_edge() {
         skin.value_right()
     );
     let mut menu = Menu::new(fixture());
-    press(&mut menu, &[button::CROSS]);
+    press(&mut menu, &[Button::Cross]);
     for draw in list(&menu, &no_bindings, None) {
         if let Draw::Text { align, x, .. } = draw
             && align == Align::Right

@@ -6,7 +6,7 @@ use log::{debug, error, info, warn};
 use oag_game::frontend::{self};
 use oag_game::keys;
 use oag_game::{boot, display, font, menu, movie, perf, race, report, settings, upscale};
-use oag_gameplay::input::button;
+use oag_gameplay::input::Button;
 
 use crate::hints::SHELL_KEYS;
 use crate::stage::Stage;
@@ -151,9 +151,9 @@ impl Session {
             // rather than after, so the frame this tick produces is already drawn
             // from the new view.
             if matches!(self.stage, Stage::Race(_))
-                && self.controls.buttons().is_pressed(button::SELECT)
+                && self.controls.buttons().is_pressed(Button::Select)
             {
-                self.controls.buttons_mut().consume_press(button::SELECT);
+                self.controls.buttons_mut().consume_press(Button::Select);
                 self.cycle_camera_view();
             }
             // What leaves the results table, and it is the same thing escape
@@ -166,11 +166,11 @@ impl Session {
             // **A rising edge**, so the thrust the player was holding as they
             // crossed the line cannot dismiss the board they have not read yet.
             if matches!(&self.stage, Stage::Race(stage) if stage.race.finished())
-                && [button::CROSS, button::START]
+                && [Button::Cross, Button::Start]
                     .into_iter()
                     .any(|press| self.controls.buttons().is_pressed(press))
             {
-                for press in [button::CROSS, button::START] {
+                for press in [Button::Cross, Button::Start] {
                     self.controls.buttons_mut().consume_press(press);
                 }
                 self.escape();

@@ -70,7 +70,7 @@
 
 use std::fmt;
 
-use oag_gameplay::input::button;
+use oag_gameplay::input::Button;
 
 /// The most ticks a script may expand to.
 ///
@@ -82,19 +82,19 @@ pub const MAX_TICKS: usize = 1 << 20;
 ///
 /// [`button::ANY`] is deliberately absent: it is synthesised from the others by
 /// [`oag_gameplay::input::Input::begin_frame`] and is not a thing a pad has.
-const SCRIPTABLE: [(&str, u8); 12] = [
-    ("cross", button::CROSS),
-    ("circle", button::CIRCLE),
-    ("square", button::SQUARE),
-    ("triangle", button::TRIANGLE),
-    ("up", button::UP),
-    ("down", button::DOWN),
-    ("left", button::LEFT),
-    ("right", button::RIGHT),
-    ("l", button::L),
-    ("r", button::R),
-    ("start", button::START),
-    ("select", button::SELECT),
+const SCRIPTABLE: [(&str, Button); 12] = [
+    ("cross", Button::Cross),
+    ("circle", Button::Circle),
+    ("square", Button::Square),
+    ("triangle", Button::Triangle),
+    ("up", Button::Up),
+    ("down", Button::Down),
+    ("left", Button::Left),
+    ("right", Button::Right),
+    ("l", Button::L),
+    ("r", Button::R),
+    ("start", Button::Start),
+    ("select", Button::Select),
 ];
 
 /// One tick of scripted controller state.
@@ -120,8 +120,8 @@ pub struct State {
 impl State {
     /// Whether an abstract button index is held.
     #[must_use]
-    pub fn is_held(&self, index: u8) -> bool {
-        self.buttons & (1u32 << (index & 0x1f)) != 0
+    pub fn is_held(&self, button: Button) -> bool {
+        self.buttons & (1u32 << (button.index() & 0x1f)) != 0
     }
 
     /// The state a set of held buttons alone describes.
@@ -137,10 +137,10 @@ impl State {
             buttons,
             ..Self::default()
         };
-        state.stick_x = axis(state.is_held(button::RIGHT), state.is_held(button::LEFT));
-        state.stick_y = axis(state.is_held(button::UP), state.is_held(button::DOWN));
-        state.airbrake_left = f32::from(u8::from(state.is_held(button::L)));
-        state.airbrake_right = f32::from(u8::from(state.is_held(button::R)));
+        state.stick_x = axis(state.is_held(Button::Right), state.is_held(Button::Left));
+        state.stick_y = axis(state.is_held(Button::Up), state.is_held(Button::Down));
+        state.airbrake_left = f32::from(u8::from(state.is_held(Button::L)));
+        state.airbrake_right = f32::from(u8::from(state.is_held(Button::R)));
         state
     }
 }
@@ -453,7 +453,7 @@ fn parse_state<'a>(
             overrides.push((name, parsed));
             continue;
         }
-        let index = SCRIPTABLE
+        let button = SCRIPTABLE
             .iter()
             .find(|(name, _)| *name == token)
             .map(|(_, index)| *index)
@@ -461,7 +461,7 @@ fn parse_state<'a>(
                 line,
                 token: token.to_string(),
             })?;
-        buttons |= 1u32 << (index & 0x1f);
+        buttons |= 1u32 << (button.index() & 0x1f);
     }
 
     if let Some(token) = nothing

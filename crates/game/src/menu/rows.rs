@@ -10,6 +10,8 @@
 //! for every page that has a value column - so it is still what almost every
 //! page in `assets/ui/menu.toml` is drawn as. See [`super::strip::suits`].
 
+use oag_gameplay::input::Button;
+
 use crate::frontend::{Align, Draw};
 
 use super::{DIMMED, Entry, Menu, Skin, WARNING, visible_rows};
@@ -22,7 +24,7 @@ use super::{DIMMED, Entry, Menu, Skin, WARNING, visible_rows};
 pub(super) fn draw(
     menu: &Menu,
     skin: &Skin,
-    bindings: &dyn Fn(u8) -> Vec<&'static str>,
+    bindings: &dyn Fn(Button) -> Vec<&'static str>,
 ) -> Vec<Draw> {
     let page = menu.page();
     let margin_x = skin.menu_x();

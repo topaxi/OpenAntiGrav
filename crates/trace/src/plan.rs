@@ -28,7 +28,7 @@
 
 use oag_core::math::Vec3;
 use oag_formats::track::{HOVER_LIFT, Sample};
-use oag_gameplay::input::button;
+use oag_gameplay::input::Button;
 use oag_physics::{Environment, Handling, Raycaster, ShipState};
 
 use crate::replay::{DriveOptions, Held, drive_with};
@@ -348,7 +348,7 @@ pub fn to_gate<R: Raycaster + ?Sized>(
             // chase the last run-on point from behind and read as "turn round".
             // The tail is only there so the script does not end on the gate.
             if crossing.is_some() {
-                return Some(Held::from_buttons(1 << button::CROSS));
+                return Some(Held::from_buttons(1 << Button::Cross.index()));
             }
 
             index = path.nearest(position, index);
@@ -382,22 +382,22 @@ fn steer(state: &ShipState, path: &Path, index: usize, tuning: &Tuning) -> Held 
     let error = want.dot(body.right());
     let forward = want.dot(body.forward());
 
-    let mut buttons = 1u32 << button::CROSS;
+    let mut buttons = 1u32 << Button::Cross.index();
     if error > tuning.deadband {
-        buttons |= 1 << button::RIGHT;
+        buttons |= 1 << Button::Right.index();
         if error > tuning.brake_at {
-            buttons |= 1 << button::R;
+            buttons |= 1 << Button::R.index();
         }
     } else if error < -tuning.deadband {
-        buttons |= 1 << button::LEFT;
+        buttons |= 1 << Button::Left.index();
         if error < -tuning.brake_at {
-            buttons |= 1 << button::L;
+            buttons |= 1 << Button::L.index();
         }
     }
     // Aimed away from where the line goes: thrust would only drive it further
     // off, so coast and let the steering come round.
     if forward < tuning.reverse_at {
-        buttons &= !(1 << button::CROSS);
+        buttons &= !(1 << Button::Cross.index());
     }
     Held::from_buttons(buttons)
 }
@@ -490,6 +490,6 @@ mod tests {
         // The line runs away to the craft's right, and a default body faces `-Z`
         // with its right at `+X`, so the aim point is off to the *left* of the
         // nose. What matters is that exactly one of the two is held.
-        assert!(held.is_held(button::LEFT) != held.is_held(button::RIGHT));
+        assert!(held.is_held(Button::Left) != held.is_held(Button::Right));
     }
 }

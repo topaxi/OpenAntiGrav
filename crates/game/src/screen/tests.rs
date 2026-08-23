@@ -8,7 +8,7 @@
 //! gate.
 
 use super::*;
-use crate::input::button;
+use crate::input::Button;
 
 /// The shape of the real `Language Selection` and `LogoFMV` screens, cut
 /// down to what this module reads. Attribute spellings, the `FEGlobals->`
@@ -246,7 +246,7 @@ fn redirects_map_buttons_to_screens() {
     assert_eq!(auto.goto.as_deref(), Some("Show Logo"));
     assert_eq!(auto.forward, None, "\"none\" is not a button");
 
-    let start = logo.redirect_for(button::START).unwrap();
+    let start = logo.redirect_for(Button::Start).unwrap();
     assert_eq!(start.goto.as_deref(), Some("LogoFMVRedirectScreen"));
 }
 
@@ -272,13 +272,13 @@ fn show_logo_advances_on_start_and_nothing_else() {
     let screens = Screens::from_xml(SAMPLE);
     let logo = screens.by_name("Show Logo").unwrap();
 
-    let start = logo.redirect_for(button::START).unwrap();
+    let start = logo.redirect_for(Button::Start).unwrap();
     assert_eq!(start.goto.as_deref(), Some("RemoveMemoryStickWarning"));
     // `LogoFMV` takes all five; the screen that says "Press START button"
     // takes one. Nothing else on it is a redirect with a button, and there
     // is no timer of any kind.
-    assert!(logo.redirect_for(button::CROSS).is_none());
-    assert!(logo.redirect_for(button::CIRCLE).is_none());
+    assert!(logo.redirect_for(Button::Cross).is_none());
+    assert!(logo.redirect_for(Button::Circle).is_none());
     assert_eq!(logo.redirects.len(), 2);
 }
 

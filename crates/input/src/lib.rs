@@ -15,7 +15,7 @@ pub mod keys;
 pub mod pad;
 
 use oag_gameplay::InputSnapshot;
-use oag_gameplay::input::{Input, button};
+use oag_gameplay::input::{Button, Input};
 use winit::keyboard::Key;
 
 pub use pad::Pad;
@@ -54,10 +54,10 @@ impl Keyboard {
     /// Unbound keys are ignored rather than being an error: a player pressing
     /// F5 is not a fault condition.
     pub fn set_key(&mut self, key: &Key, pressed: bool) {
-        let Some(index) = keys::map_key(key) else {
+        let Some(button) = keys::map_key(key) else {
             return;
         };
-        let bit = 1u32 << (index & 0x1f);
+        let bit = 1u32 << (button.index() & 0x1f);
         if pressed {
             self.held |= bit;
             self.tapped |= bit;
@@ -107,15 +107,15 @@ impl Keyboard {
         InputSnapshot {
             buttons: self.buttons,
             stick_x: axis(
-                self.buttons.is_held(button::RIGHT),
-                self.buttons.is_held(button::LEFT),
+                self.buttons.is_held(Button::Right),
+                self.buttons.is_held(Button::Left),
             ),
             stick_y: axis(
-                self.buttons.is_held(button::UP),
-                self.buttons.is_held(button::DOWN),
+                self.buttons.is_held(Button::Up),
+                self.buttons.is_held(Button::Down),
             ),
-            airbrake_left: f32::from(u8::from(self.buttons.is_held(button::L))),
-            airbrake_right: f32::from(u8::from(self.buttons.is_held(button::R))),
+            airbrake_left: f32::from(u8::from(self.buttons.is_held(Button::L))),
+            airbrake_right: f32::from(u8::from(self.buttons.is_held(Button::R))),
         }
         .sanitised()
     }
@@ -213,21 +213,21 @@ impl Controls {
             .begin_frame(self.keyboard.held_mask() | self.keyboard.take_taps() | pad.held);
 
         let digital_x = axis(
-            self.buttons.is_held(button::RIGHT),
-            self.buttons.is_held(button::LEFT),
+            self.buttons.is_held(Button::Right),
+            self.buttons.is_held(Button::Left),
         );
         let digital_y = axis(
-            self.buttons.is_held(button::UP),
-            self.buttons.is_held(button::DOWN),
+            self.buttons.is_held(Button::Up),
+            self.buttons.is_held(Button::Down),
         );
-        let shoulder = |index: u8| f32::from(u8::from(self.buttons.is_held(index)));
+        let shoulder = |button: Button| f32::from(u8::from(self.buttons.is_held(button)));
 
         InputSnapshot {
             buttons: self.buttons,
             stick_x: pad::larger(digital_x, pad.stick_x),
             stick_y: pad::larger(digital_y, pad.stick_y),
-            airbrake_left: shoulder(button::L).max(pad.airbrake_left),
-            airbrake_right: shoulder(button::R).max(pad.airbrake_right),
+            airbrake_left: shoulder(Button::L).max(pad.airbrake_left),
+            airbrake_right: shoulder(Button::R).max(pad.airbrake_right),
         }
         .sanitised()
     }
@@ -264,15 +264,15 @@ mod tests {
         let mut keyboard = Keyboard::new();
         keyboard.set_key(&key(NamedKey::Space), true);
         let snapshot = keyboard.snapshot();
-        assert!(snapshot.buttons.is_pressed(button::START));
-        assert!(snapshot.buttons.is_held(button::START));
+        assert!(snapshot.buttons.is_pressed(Button::Start));
+        assert!(snapshot.buttons.is_held(Button::Start));
 
         let snapshot = keyboard.snapshot();
         assert!(
-            !snapshot.buttons.is_pressed(button::START),
+            !snapshot.buttons.is_pressed(Button::Start),
             "held, not pressed"
         );
-        assert!(snapshot.buttons.is_held(button::START));
+        assert!(snapshot.buttons.is_held(Button::Start));
     }
 
     #[test]
@@ -295,8 +295,8 @@ mod tests {
         assert_eq!(snapshot.stick_x, 0.0);
         // The buttons are still both held: only the derived axis cancels, since
         // a menu that binds left and right separately must still see both.
-        assert!(snapshot.buttons.is_held(button::LEFT));
-        assert!(snapshot.buttons.is_held(button::RIGHT));
+        assert!(snapshot.buttons.is_held(Button::Left));
+        assert!(snapshot.buttons.is_held(Button::Right));
     }
 
     #[test]
@@ -319,7 +319,7 @@ mod tests {
         keyboard.release_all();
         let snapshot = keyboard.snapshot();
         assert_eq!(snapshot.stick_x, 0.0);
-        assert!(snapshot.buttons.is_released(button::LEFT));
+        assert!(snapshot.buttons.is_released(Button::Left));
     }
 
     /// The merge has to be one `Input`, or a press on one device would be an
@@ -329,11 +329,11 @@ mod tests {
         let mut controls = Controls::without_pad();
         controls.set_key(&Key::Named(NamedKey::Space), true);
         let snapshot = controls.snapshot();
-        assert!(snapshot.buttons.is_pressed(button::START));
+        assert!(snapshot.buttons.is_pressed(Button::Start));
 
-        controls.buttons_mut().consume_press(button::START);
-        assert!(!controls.buttons().is_pressed(button::START));
-        assert!(controls.buttons().is_held(button::START));
+        controls.buttons_mut().consume_press(Button::Start);
+        assert!(!controls.buttons().is_pressed(Button::Start));
+        assert!(controls.buttons().is_held(Button::Start));
     }
 
     /// A pad is read fresh every tick, so `Controls` still works as a keyboard
@@ -402,13 +402,13 @@ mod tests {
 
         let first = keyboard.snapshot();
         assert!(
-            first.buttons.is_held(button::CROSS),
+            first.buttons.is_held(Button::Cross),
             "the tap was dropped between the two reads"
         );
 
         let second = keyboard.snapshot();
         assert!(
-            !second.buttons.is_held(button::CROSS),
+            !second.buttons.is_held(Button::Cross),
             "a latched tap must release, or it repeats for ever"
         );
     }
@@ -421,6 +421,6 @@ mod tests {
         keyboard.set_key(&Key::Named(NamedKey::Enter), true);
         keyboard.set_key(&Key::Named(NamedKey::Enter), false);
         keyboard.release_all();
-        assert!(!keyboard.snapshot().buttons.is_held(button::CROSS));
+        assert!(!keyboard.snapshot().buttons.is_held(Button::Cross));
     }
 }

@@ -16,50 +16,105 @@
 //! snapshot *type*, and whatever produces it - a keyboard, a pad, a replay, a
 //! test - depends on this, not the reverse.
 
+use std::fmt::Display;
+
 /// Abstract button indices. These are bit positions, not masks.
-pub mod button {
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Button {
     /// D-pad up.
-    pub const UP: u8 = 0;
+    Up = 0,
     /// D-pad down.
-    pub const DOWN: u8 = 1;
+    Down = 1,
     /// D-pad left.
-    pub const LEFT: u8 = 2;
+    Left = 2,
     /// D-pad right.
-    pub const RIGHT: u8 = 3;
+    Right = 3,
     /// Circle, which the front end also calls `cancel` and `backward`.
-    pub const CIRCLE: u8 = 4;
+    Circle = 4,
     /// Cross, which the front end also calls `activate` and `forward`.
-    pub const CROSS: u8 = 5;
+    Cross = 5,
     /// Triangle.
-    pub const TRIANGLE: u8 = 6;
+    Triangle = 6,
     /// Square.
-    pub const SQUARE: u8 = 7;
+    Square = 7,
     /// Left shoulder.
-    pub const L: u8 = 8;
+    L = 8,
     /// Right shoulder.
-    pub const R: u8 = 9;
+    R = 9,
     /// START. The intro skip tests this index, and it is `0xe`, not a mask.
-    pub const START: u8 = 14;
+    Start = 14,
     /// SELECT.
-    pub const SELECT: u8 = 15;
+    Select = 15,
     /// The synthetic "any button" index, `0x14`.
-    pub const ANY: u8 = 0x14;
+    Any = 0x14,
+}
+
+impl Button {
+    #[must_use]
+    pub fn from_index(index: u8) -> Self {
+        match index {
+            0 => Button::Up,
+            1 => Button::Down,
+            2 => Button::Left,
+            3 => Button::Right,
+            4 => Button::Circle,
+            5 => Button::Cross,
+            6 => Button::Triangle,
+            7 => Button::Square,
+            8 => Button::L,
+            9 => Button::R,
+            14 => Button::Start,
+            15 => Button::Select,
+            _ => Button::Any,
+        }
+    }
+
+    #[must_use]
+    pub const fn index(self) -> u8 {
+        self as u8
+    }
+
+    #[must_use]
+    const fn bit(self) -> u32 {
+        1u32 << (self.index() & 0x1f)
+    }
+}
+
+impl Display for Button {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Button::Up => "up",
+            Button::Down => "down",
+            Button::Left => "left",
+            Button::Right => "right",
+            Button::Circle => "circle",
+            Button::Cross => "cross",
+            Button::Triangle => "triangle",
+            Button::Square => "square",
+            Button::L => "l",
+            Button::R => "r",
+            Button::Start => "start",
+            Button::Select => "select",
+            Button::Any => "any",
+        })
+    }
 }
 
 /// Every real button, for building the synthetic [`button::ANY`] bit.
-const REAL_BUTTONS: [u8; 12] = [
-    button::UP,
-    button::DOWN,
-    button::LEFT,
-    button::RIGHT,
-    button::CIRCLE,
-    button::CROSS,
-    button::TRIANGLE,
-    button::SQUARE,
-    button::L,
-    button::R,
-    button::START,
-    button::SELECT,
+const REAL_BUTTONS: [Button; 12] = [
+    Button::Up,
+    Button::Down,
+    Button::Left,
+    Button::Right,
+    Button::Circle,
+    Button::Cross,
+    Button::Triangle,
+    Button::Square,
+    Button::L,
+    Button::R,
+    Button::Start,
+    Button::Select,
 ];
 
 /// Maps a front-end XML button name to its abstract index.
@@ -67,21 +122,21 @@ const REAL_BUTTONS: [u8; 12] = [
 /// Mirrors `Input_ParseButtonName`, which is how the data-driven front end binds
 /// `forward="start"` and `backward="circle"` to actual buttons.
 #[must_use]
-pub fn button_from_name(name: &str) -> Option<u8> {
+pub fn button_from_name(name: &str) -> Option<Button> {
     Some(match name.to_ascii_lowercase().as_str() {
-        "up" => button::UP,
-        "down" => button::DOWN,
-        "left" => button::LEFT,
-        "right" => button::RIGHT,
-        "circle" | "cancel" | "backward" => button::CIRCLE,
-        "cross" | "activate" | "forward" => button::CROSS,
-        "triangle" => button::TRIANGLE,
-        "square" => button::SQUARE,
-        "l" => button::L,
-        "r" => button::R,
-        "start" => button::START,
-        "select" => button::SELECT,
-        "any" => button::ANY,
+        "up" => Button::Up,
+        "down" => Button::Down,
+        "left" => Button::Left,
+        "right" => Button::Right,
+        "circle" | "cancel" | "backward" => Button::Circle,
+        "cross" | "activate" | "forward" => Button::Cross,
+        "triangle" => Button::Triangle,
+        "square" => Button::Square,
+        "l" => Button::L,
+        "r" => Button::R,
+        "start" => Button::Start,
+        "select" => Button::Select,
+        "any" => Button::Any,
         // "none" is a real value in the XML and means "no button", so it is a
         // successful parse of nothing rather than an error.
         _ => return None,
@@ -120,25 +175,25 @@ impl Input {
         self.released = self.held_last & !held;
     }
 
-    /// Whether `index` is held right now.
+    /// Whether `button` is held right now.
     #[must_use]
-    pub fn is_held(&self, index: u8) -> bool {
-        self.held & bit(index) != 0
+    pub fn is_held(&self, button: Button) -> bool {
+        self.held & button.bit() != 0
     }
 
-    /// Whether `index` went down this frame.
+    /// Whether `button` went down this frame.
     ///
     /// `Input_IsPressed` tests `*(u32 *)(this + 0x48) & (1 << (index & 0x1f))`,
     /// so the masking of the index is reproduced rather than tidied away.
     #[must_use]
-    pub fn is_pressed(&self, index: u8) -> bool {
-        self.pressed & bit(index) != 0
+    pub fn is_pressed(&self, button: Button) -> bool {
+        self.pressed & button.bit() != 0
     }
 
-    /// Whether `index` came up this frame.
+    /// Whether `button` came up this frame.
     #[must_use]
-    pub fn is_released(&self, index: u8) -> bool {
-        self.released & bit(index) != 0
+    pub fn is_released(&self, button: Button) -> bool {
+        self.released & button.bit() != 0
     }
 
     /// Clears a pressed bit so one press cannot be handled twice.
@@ -146,12 +201,28 @@ impl Input {
     /// `Input_ConsumePress`. The intro skip calls it after firing the redirect,
     /// which is what stops the same START from also being seen by whatever the
     /// transition lands on.
-    pub fn consume_press(&mut self, index: u8) {
-        self.pressed &= !bit(index);
+    pub fn consume_press(&mut self, button: Button) {
+        self.pressed &= !button.bit();
         // A consumed real press must also clear the synthetic "any" bit, or the
         // next screen sees a press nobody made.
-        if index != button::ANY && self.pressed & real_mask() == 0 {
-            self.pressed &= !bit(button::ANY);
+        if button != Button::Any && self.pressed & real_mask() == 0 {
+            self.pressed &= !Button::Any.bit();
+        }
+    }
+
+    /// Reads a button as an **edge** and consumes it in one step.
+    ///
+    /// Menus are not held down, and one press must not be seen twice - by two rows,
+    /// or by the menus and then by whatever a transition lands on. The front end
+    /// spells the same pair out at every site it needs it (`is_pressed` then
+    /// `consume_press`); this is that pair with a name, because a menu tick needs
+    /// six of them and the shape is what matters rather than each instance.
+    pub fn take(&mut self, button: Button) -> bool {
+        if self.is_pressed(button) {
+            self.consume_press(button);
+            true
+        } else {
+            false
         }
     }
 
@@ -223,20 +294,16 @@ fn clamp_axis(value: f32, min: f32) -> f32 {
     }
 }
 
-fn bit(index: u8) -> u32 {
-    1u32 << (index & 0x1f)
-}
-
 fn real_mask() -> u32 {
-    REAL_BUTTONS.iter().fold(0, |acc, &b| acc | bit(b))
+    REAL_BUTTONS.iter().fold(0, |acc, &b| acc | b.bit())
 }
 
 /// Adds the synthetic `0x14` bit when any real button is down.
 fn with_any_bit(held: u32) -> u32 {
     if held & real_mask() != 0 {
-        held | bit(button::ANY)
+        held | Button::Any.bit()
     } else {
-        held & !bit(button::ANY)
+        held & !Button::Any.bit()
     }
 }
 
@@ -266,72 +333,72 @@ mod tests {
     #[test]
     fn edges_are_computed_from_consecutive_frames() {
         let mut input = Input::new();
-        input.begin_frame(bit(button::CROSS));
-        assert!(input.is_pressed(button::CROSS));
-        assert!(input.is_held(button::CROSS));
+        input.begin_frame(Button::Cross.bit());
+        assert!(input.is_pressed(Button::Cross));
+        assert!(input.is_held(Button::Cross));
 
-        input.begin_frame(bit(button::CROSS));
-        assert!(!input.is_pressed(button::CROSS), "held is not pressed");
-        assert!(input.is_held(button::CROSS));
+        input.begin_frame(Button::Cross.bit());
+        assert!(!input.is_pressed(Button::Cross), "held is not pressed");
+        assert!(input.is_held(Button::Cross));
 
         input.begin_frame(0);
-        assert!(input.is_released(button::CROSS));
-        assert!(!input.is_held(button::CROSS));
+        assert!(input.is_released(Button::Cross));
+        assert!(!input.is_held(Button::Cross));
     }
 
     #[test]
     fn any_button_is_synthesised() {
         let mut input = Input::new();
-        input.begin_frame(bit(button::START));
-        assert!(input.is_pressed(button::ANY));
+        input.begin_frame(Button::Start.bit());
+        assert!(input.is_pressed(Button::Any));
         input.begin_frame(0);
-        assert!(!input.is_held(button::ANY));
+        assert!(!input.is_held(Button::Any));
     }
 
     #[test]
     fn consuming_a_press_clears_it_and_the_any_bit() {
         let mut input = Input::new();
-        input.begin_frame(bit(button::START));
-        assert!(input.is_pressed(button::START));
-        input.consume_press(button::START);
-        assert!(!input.is_pressed(button::START));
+        input.begin_frame(Button::Start.bit());
+        assert!(input.is_pressed(Button::Start));
+        input.consume_press(Button::Start);
+        assert!(!input.is_pressed(Button::Start));
         assert!(
-            !input.is_pressed(button::ANY),
+            !input.is_pressed(Button::Any),
             "the synthetic bit must go with the last real press"
         );
-        assert!(input.is_held(button::START), "consuming is not releasing");
+        assert!(input.is_held(Button::Start), "consuming is not releasing");
     }
 
     #[test]
     fn consuming_one_of_two_presses_keeps_the_any_bit() {
         let mut input = Input::new();
-        input.begin_frame(bit(button::START) | bit(button::CROSS));
-        input.consume_press(button::START);
-        assert!(input.is_pressed(button::CROSS));
-        assert!(input.is_pressed(button::ANY));
+        input.begin_frame(Button::Start.bit() | Button::Cross.bit());
+        input.consume_press(Button::Start);
+        assert!(input.is_pressed(Button::Cross));
+        assert!(input.is_pressed(Button::Any));
     }
 
     #[test]
     fn start_is_index_fourteen_not_a_mask() {
         // The intro skip reads `Input_IsPressed(g_input, 0xe, 0)`. Reading 0xe
         // as a mask would test up and down instead.
-        assert_eq!(button::START, 0xe);
+        assert_eq!(Button::Start.index(), 0xe);
         let mut input = Input::new();
         input.begin_frame(1 << 14);
-        assert!(input.is_pressed(button::START));
-        assert!(!input.is_pressed(button::UP));
-        assert!(!input.is_pressed(button::DOWN));
+        assert!(input.is_pressed(Button::Start));
+        assert!(!input.is_pressed(Button::Up));
+        assert!(!input.is_pressed(Button::Down));
     }
 
     #[test]
     fn xml_names_map_to_indices() {
-        assert_eq!(button_from_name("start"), Some(button::START));
-        assert_eq!(button_from_name("circle"), Some(button::CIRCLE));
-        assert_eq!(button_from_name("cancel"), Some(button::CIRCLE));
-        assert_eq!(button_from_name("cross"), Some(button::CROSS));
-        assert_eq!(button_from_name("activate"), Some(button::CROSS));
-        assert_eq!(button_from_name("forward"), Some(button::CROSS));
-        assert_eq!(button_from_name("backward"), Some(button::CIRCLE));
+        assert_eq!(button_from_name("start"), Some(Button::Start));
+        assert_eq!(button_from_name("circle"), Some(Button::Circle));
+        assert_eq!(button_from_name("cancel"), Some(Button::Circle));
+        assert_eq!(button_from_name("cross"), Some(Button::Cross));
+        assert_eq!(button_from_name("activate"), Some(Button::Cross));
+        assert_eq!(button_from_name("forward"), Some(Button::Cross));
+        assert_eq!(button_from_name("backward"), Some(Button::Circle));
         assert_eq!(button_from_name("none"), None);
         assert_eq!(button_from_name("nonsense"), None);
     }

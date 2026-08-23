@@ -10,11 +10,11 @@ use super::*;
 fn the_cursor_wraps_both_ways() {
     let mut menu = Menu::new(fixture());
     assert_eq!(menu.selected(), 0);
-    press(&mut menu, &[button::DOWN]);
+    press(&mut menu, &[Button::Down]);
     assert_eq!(menu.selected(), 1);
-    press(&mut menu, &[button::DOWN]);
+    press(&mut menu, &[Button::Down]);
     assert_eq!(menu.selected(), 0, "past the last row wraps to the first");
-    press(&mut menu, &[button::UP]);
+    press(&mut menu, &[Button::Up]);
     assert_eq!(menu.selected(), 1, "and back off the top wraps to the last");
 }
 
@@ -57,18 +57,18 @@ fn a_long_page_scrolls_one_row_before_the_cursor_reaches_the_bottom() {
     // Down to the second-last visible row. Nothing has moved yet: the last
     // one is still below the cursor, which is the lookahead.
     for _ in 0..visible() - 2 {
-        press(&mut menu, &[button::DOWN]);
+        press(&mut menu, &[Button::Down]);
     }
     assert_eq!(menu.selected(), visible() - 2);
     assert_eq!(menu.scroll(), 0, "the page does not move until it must");
 
     // One more, and it moves by one - not by a screenful.
-    press(&mut menu, &[button::DOWN]);
+    press(&mut menu, &[Button::Down]);
     assert_eq!(menu.selected(), visible() - 1);
     assert_eq!(menu.scroll(), 1);
     assert_eq!(rows_drawn(&menu).first().map(String::as_str), Some("ROW1"));
 
-    press(&mut menu, &[button::DOWN]);
+    press(&mut menu, &[Button::Down]);
     assert_eq!(menu.scroll(), 2);
 }
 
@@ -179,7 +179,7 @@ fn the_final_row_sits_at_the_bottom_of_a_full_window() {
     let rows = visible() + 3;
     let mut menu = Menu::new(long_page(rows));
     for _ in 0..rows - 1 {
-        press(&mut menu, &[button::DOWN]);
+        press(&mut menu, &[Button::Down]);
     }
     assert_eq!(menu.selected(), rows - 1);
     assert_eq!(menu.scroll(), rows - visible());
@@ -199,19 +199,19 @@ fn moving_back_up_scrolls_one_row_before_the_cursor_reaches_the_top() {
     let rows = visible() + 3;
     let mut menu = Menu::new(long_page(rows));
     for _ in 0..rows - 1 {
-        press(&mut menu, &[button::DOWN]);
+        press(&mut menu, &[Button::Down]);
     }
     let bottom = menu.scroll();
 
     // Back up to the second row of the window: still nothing to do, the row
     // above the cursor is drawn.
     for _ in 0..visible() - 2 {
-        press(&mut menu, &[button::UP]);
+        press(&mut menu, &[Button::Up]);
     }
     assert_eq!(menu.scroll(), bottom, "the window has not moved yet");
     assert_eq!(menu.selected(), bottom + 1);
 
-    press(&mut menu, &[button::UP]);
+    press(&mut menu, &[Button::Up]);
     assert_eq!(menu.scroll(), bottom - 1, "one row, not a screenful");
 }
 
@@ -223,13 +223,13 @@ fn wrapping_takes_the_window_with_it() {
     let rows = visible() + 3;
     let mut menu = Menu::new(long_page(rows));
     for _ in 0..rows {
-        press(&mut menu, &[button::DOWN]);
+        press(&mut menu, &[Button::Down]);
     }
     assert_eq!(menu.selected(), 0, "past the last row wraps to the first");
     assert_eq!(menu.scroll(), 0);
     assert_eq!(rows_drawn(&menu).first().map(String::as_str), Some("ROW0"));
 
-    press(&mut menu, &[button::UP]);
+    press(&mut menu, &[Button::Up]);
     assert_eq!(menu.selected(), rows - 1);
     assert_eq!(menu.scroll(), rows - visible());
 }
@@ -241,7 +241,7 @@ fn wrapping_takes_the_window_with_it() {
 fn a_page_that_fits_never_moves() {
     let mut menu = Menu::new(long_page(visible()));
     for _ in 0..visible() * 2 {
-        press(&mut menu, &[button::DOWN]);
+        press(&mut menu, &[Button::Down]);
         assert_eq!(menu.scroll(), 0, "on row {}", menu.selected());
     }
 }
@@ -274,7 +274,7 @@ fn no_shipped_page_draws_a_row_off_the_bottom_of_the_screen() {
                     );
                 }
             }
-            press(&mut menu, &[button::DOWN]);
+            press(&mut menu, &[Button::Down]);
         }
     }
 }
@@ -284,19 +284,19 @@ fn no_shipped_page_draws_a_row_off_the_bottom_of_the_screen() {
 #[test]
 fn the_back_stack_restores_the_cursor() {
     let mut menu = Menu::new(fixture());
-    press(&mut menu, &[button::DOWN]);
-    press(&mut menu, &[button::UP]);
-    press(&mut menu, &[button::CROSS]);
+    press(&mut menu, &[Button::Down]);
+    press(&mut menu, &[Button::Up]);
+    press(&mut menu, &[Button::Cross]);
     assert_eq!(menu.page().id, "options");
     assert_eq!(menu.depth(), 2);
 
-    press(&mut menu, &[button::DOWN]);
+    press(&mut menu, &[Button::Down]);
     assert_eq!(menu.selected(), 1);
-    press(&mut menu, &[button::CIRCLE]);
+    press(&mut menu, &[Button::Circle]);
     assert_eq!(menu.page().id, "main");
     assert_eq!(menu.selected(), 0, "the row OPTIONS was entered from");
 
-    press(&mut menu, &[button::CROSS]);
+    press(&mut menu, &[Button::Cross]);
     assert_eq!(
         menu.selected(),
         1,

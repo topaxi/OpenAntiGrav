@@ -23,14 +23,14 @@ fn a_disabled_row_is_inert_until_the_row_that_disables_it_moves_off_the_value() 
     menu.seed("display.vsync", &Value::Text("on".to_string()));
     menu.seed("display.frame_limit", &Value::Text("60".to_string()));
     for _ in 0..row {
-        press(&mut menu, &[button::DOWN]);
+        press(&mut menu, &[Button::Down]);
     }
     assert_eq!(menu.selected(), row);
 
     // Right does nothing, and says nothing: an event here would persist a
     // change the player did not make.
-    assert_eq!(press(&mut menu, &[button::RIGHT]), Vec::new());
-    assert_eq!(press(&mut menu, &[button::CROSS]), Vec::new());
+    assert_eq!(press(&mut menu, &[Button::Right]), Vec::new());
+    assert_eq!(press(&mut menu, &[Button::Cross]), Vec::new());
     assert_eq!(
         menu.page().entries[row].chosen(),
         Some(Value::Text("60".to_string()))
@@ -40,7 +40,7 @@ fn a_disabled_row_is_inert_until_the_row_that_disables_it_moves_off_the_value() 
     // again - `smooth` especially, where the limiter is the only thing
     // stopping the GPU rendering frames that get discarded.
     menu.seed("display.vsync", &Value::Text("smooth".to_string()));
-    let events = press(&mut menu, &[button::RIGHT]);
+    let events = press(&mut menu, &[Button::Right]);
     assert_eq!(events.len(), 1, "{events:?}");
     assert_ne!(
         menu.page().entries[row].chosen(),
@@ -71,14 +71,14 @@ fn a_row_whose_source_has_nothing_is_inert_rather_than_a_panic() {
         .position(|entry| entry.setting() == Some("audio.music_source"))
         .expect("the music source is on the audio page");
     for _ in 0..row {
-        press(&mut menu, &[button::DOWN]);
+        press(&mut menu, &[Button::Down]);
     }
 
     let entry = &menu.page().entries[row];
     assert_eq!(entry.value(), None, "an empty row shows no value");
     assert_eq!(entry.chosen(), None);
 
-    for buttons in [&[button::LEFT], &[button::RIGHT], &[button::CROSS]] {
+    for buttons in [&[Button::Left], &[Button::Right], &[Button::Cross]] {
         assert!(
             press(&mut menu, buttons).is_empty(),
             "an empty row must report no change"
@@ -131,7 +131,7 @@ fn a_disabled_row_is_drawn_dimmed_even_when_it_is_selected() {
         .position(|entry| entry.setting() == Some("display.frame_limit"))
         .expect("the frame limit is on the display page");
     for _ in 0..row {
-        press(&mut menu, &[button::DOWN]);
+        press(&mut menu, &[Button::Down]);
     }
 
     let label_colour = |menu: &Menu| {
@@ -334,13 +334,13 @@ fn the_restart_note_appears_only_once_the_row_leaves_what_is_running() {
 
     // Moving it is the whole point, and the row is *not* greyed: it is the
     // way back from an adapter that will not draw.
-    let events = press(&mut menu, &[button::RIGHT]);
+    let events = press(&mut menu, &[Button::Right]);
     assert_eq!(events.len(), 1, "{events:?}");
     assert!(menu.restart_note(&row(&menu)).is_some());
 
     // And back again, because a note that never clears teaches a player to
     // ignore it.
-    press(&mut menu, &[button::LEFT]);
+    press(&mut menu, &[Button::Left]);
     assert!(menu.restart_note(&row(&menu)).is_none());
 }
 
@@ -372,7 +372,7 @@ fn naming_the_adapter_the_default_already_resolved_to_is_not_a_change() {
     };
 
     // `default` -> `vulkan: Card`, the adapter it already resolved to.
-    press(&mut menu, &[button::RIGHT]);
+    press(&mut menu, &[Button::Right]);
     assert_eq!(
         row(&menu).chosen(),
         Some(Value::Text("vulkan: Card".to_string()))
@@ -380,7 +380,7 @@ fn naming_the_adapter_the_default_already_resolved_to_is_not_a_change() {
     assert!(menu.restart_note(&row(&menu)).is_none());
 
     // One further along is a different card, and that does need a restart.
-    press(&mut menu, &[button::RIGHT]);
+    press(&mut menu, &[Button::Right]);
     assert!(menu.restart_note(&row(&menu)).is_some());
 }
 
@@ -407,7 +407,7 @@ fn a_restart_note_is_drawn_in_the_margin_and_under_the_rows() {
     };
     assert!(amber(&menu).is_empty(), "nothing has been changed yet");
 
-    press(&mut menu, &[button::RIGHT]);
+    press(&mut menu, &[Button::Right]);
     let drawn = amber(&menu);
     assert_eq!(drawn.len(), 2, "a marker and a message: {drawn:?}");
     assert_eq!(drawn[0], "!");

@@ -26,8 +26,8 @@ fn broken(name: &str) -> Candidate {
     }
 }
 
-fn press(input: &mut Input, index: u8) {
-    input.begin_frame(1 << index);
+fn press(input: &mut Input, button: Button) {
+    input.begin_frame(1 << button.index());
 }
 
 #[test]
@@ -47,7 +47,7 @@ fn a_row_that_will_not_open_is_stepped_over() {
     assert_eq!(launcher.cursor(), 0);
 
     let mut input = Input::new();
-    press(&mut input, button::DOWN);
+    press(&mut input, Button::Down);
     assert!(launcher.update(&mut input).is_none());
     assert_eq!(launcher.cursor(), 2, "the broken row is not landed on");
 }
@@ -57,11 +57,11 @@ fn the_cursor_wraps_in_both_directions() {
     let mut launcher = Launcher::new(vec![playable("a.chd"), playable("b.chd")]);
     let mut input = Input::new();
 
-    press(&mut input, button::UP);
+    press(&mut input, Button::Up);
     launcher.update(&mut input);
     assert_eq!(launcher.cursor(), 1);
 
-    press(&mut input, button::DOWN);
+    press(&mut input, Button::Down);
     launcher.update(&mut input);
     assert_eq!(launcher.cursor(), 0);
 }
@@ -73,7 +73,7 @@ fn a_list_with_nothing_playable_neither_moves_nor_picks() {
     let mut launcher = Launcher::new(vec![broken("one.iso"), broken("two.iso")]);
     let mut input = Input::new();
 
-    press(&mut input, button::DOWN);
+    press(&mut input, Button::Down);
     assert!(launcher.update(&mut input).is_none());
     assert_eq!(launcher.cursor(), 0);
     assert!(!launcher.has_playable());
@@ -85,9 +85,9 @@ fn confirming_returns_the_source_under_the_cursor() {
     let mut launcher = Launcher::new(vec![playable("a.chd"), playable("b.chd")]);
     let mut input = Input::new();
 
-    press(&mut input, button::DOWN);
+    press(&mut input, Button::Down);
     launcher.update(&mut input);
-    press(&mut input, button::CROSS);
+    press(&mut input, Button::Cross);
     assert_eq!(launcher.update(&mut input).unwrap(), "data/images/b.chd");
 }
 
@@ -98,7 +98,7 @@ fn start_confirms_too() {
     let mut launcher = Launcher::new(vec![playable("a.chd")]);
     let mut input = Input::new();
 
-    press(&mut input, button::START);
+    press(&mut input, Button::Start);
     assert_eq!(launcher.update(&mut input).unwrap(), "data/images/a.chd");
 }
 
@@ -113,12 +113,12 @@ fn a_held_button_moves_once() {
     ]);
     let mut input = Input::new();
 
-    press(&mut input, button::DOWN);
+    press(&mut input, Button::Down);
     launcher.update(&mut input);
     assert_eq!(launcher.cursor(), 1);
 
     // Same mask again: held, not pressed.
-    input.begin_frame(1 << button::DOWN);
+    input.begin_frame(1 << Button::Down.index());
     launcher.update(&mut input);
     assert_eq!(launcher.cursor(), 1);
 }

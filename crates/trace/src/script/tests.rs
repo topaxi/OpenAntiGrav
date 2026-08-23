@@ -12,7 +12,7 @@ use super::*;
 fn a_run_length_line_expands_to_that_many_ticks() {
     let script = Script::parse("3 cross\n2 none\n").expect("parses");
     assert_eq!(script.len(), 5);
-    assert!(script.states[2].is_held(button::CROSS));
+    assert!(script.states[2].is_held(Button::Cross));
     assert_eq!(script.states[3], State::default());
 }
 
@@ -44,7 +44,7 @@ fn an_explicit_axis_overrides_the_one_the_buttons_derive() {
     let script = Script::parse("1 left stick_x=-0.25\n").expect("parses");
     assert_eq!(script.states[0].stick_x, -0.25);
     assert!(
-        script.states[0].is_held(button::LEFT),
+        script.states[0].is_held(Button::Left),
         "the button is still held; only the axis is overridden"
     );
 }
@@ -92,7 +92,7 @@ fn a_script_round_trips_through_its_own_text() {
 fn a_short_script_holds_its_last_state() {
     let script = Script::parse("2 cross\n").expect("parses");
     assert_eq!(script.at(0), script.at(99));
-    assert!(script.at(99).is_held(button::CROSS));
+    assert!(script.at(99).is_held(Button::Cross));
 }
 
 #[test]
@@ -190,7 +190,7 @@ fn the_committed_scenarios_parse_and_are_two_hundred_ticks() {
         let script = Script::parse(&text).unwrap_or_else(|e| panic!("{name}: {e}"));
         assert_eq!(script.len(), 200, "{name}");
         assert!(
-            script.states.iter().all(|s| s.is_held(button::CROSS)),
+            script.states.iter().all(|s| s.is_held(Button::Cross)),
             "{name}: both scenarios hold thrust throughout"
         );
     }
@@ -241,7 +241,7 @@ fn the_whole_lap_scenario_is_a_lap_of_thrust() {
     let thrusting = script
         .states
         .iter()
-        .filter(|s| s.is_held(button::CROSS))
+        .filter(|s| s.is_held(Button::Cross))
         .count();
     assert!(
         thrusting * 20 > script.len() * 19,

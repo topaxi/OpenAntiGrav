@@ -55,23 +55,7 @@
 use std::collections::{BTreeSet, HashMap};
 
 use crate::frontend::{Align, Draw};
-use crate::input::{Input, button, button_from_name};
-
-/// Reads a button as an **edge** and consumes it in one step.
-///
-/// Menus are not held down, and one press must not be seen twice - by two rows,
-/// or by the menus and then by whatever a transition lands on. The front end
-/// spells the same pair out at every site it needs it (`is_pressed` then
-/// `consume_press`); this is that pair with a name, because a menu tick needs
-/// six of them and the shape is what matters rather than each instance.
-fn take(input: &mut Input, index: u8) -> bool {
-    if input.is_pressed(index) {
-        input.consume_press(index);
-        true
-    } else {
-        false
-    }
-}
+use crate::input::{Button, Input, button_from_name};
 
 /// The menu tree this build ships with.
 ///
@@ -523,8 +507,8 @@ pub enum Entry {
     Binding {
         /// Row label.
         label: String,
-        /// Abstract button index, from [`crate::input::button`].
-        button: u8,
+        /// Abstract button.
+        button: Button,
     },
     /// Goes back to the previous page, or leaves the menus from the root.
     Back {
@@ -1479,11 +1463,11 @@ impl Menu {
 
         let page = self.current();
         let mut moved = false;
-        if take(input, button::DOWN) && rows > 0 {
+        if input.take(Button::Down) && rows > 0 {
             self.cursor[page] = (self.cursor[page] + 1) % rows;
             moved = true;
         }
-        if take(input, button::UP) && rows > 0 {
+        if input.take(Button::Up) && rows > 0 {
             self.cursor[page] = (self.cursor[page] + rows - 1) % rows;
             moved = true;
         }
@@ -1496,8 +1480,8 @@ impl Menu {
             self.scroll[page] = self.scroll();
         }
 
-        let right = take(input, button::RIGHT);
-        let left = take(input, button::LEFT);
+        let right = input.take(Button::Right);
+        let left = input.take(Button::Left);
         // On a page drawn as a strip, left and right are what *step* it: the
         // entries run that way on screen, so a cursor that only answered up and
         // down would be moving across an axis the page does not have. There is
@@ -1523,10 +1507,10 @@ impl Menu {
             out.push(event);
         }
 
-        if take(input, button::CROSS) || take(input, button::START) {
+        if input.take(Button::Cross) || input.take(Button::Start) {
             out.extend(self.activate());
         }
-        if take(input, button::CIRCLE) {
+        if input.take(Button::Circle) {
             out.extend(self.back());
         }
 
@@ -1920,7 +1904,7 @@ impl Default for Transition {
 pub fn draw_list(
     menu: &Menu,
     skin: &Skin,
-    bindings: &dyn Fn(u8) -> Vec<&'static str>,
+    bindings: &dyn Fn(Button) -> Vec<&'static str>,
     measure: &dyn Fn(&str) -> f32,
     backdrop: Option<Backdrop>,
     frame: &Frame,

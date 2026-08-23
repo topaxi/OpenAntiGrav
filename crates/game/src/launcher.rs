@@ -42,7 +42,7 @@
 use std::path::{Path, PathBuf};
 
 use oag_disc::{DiscImage, Platform};
-use oag_gameplay::input::{Input, button};
+use oag_gameplay::input::{Button, Input};
 use oag_title::Title;
 
 use crate::frontend::{Align, Draw, SCREEN};
@@ -241,14 +241,14 @@ impl Launcher {
     /// and for the same reason: one press is one press whichever device saw it,
     /// and a held key must not walk the list.
     pub fn update(&mut self, input: &mut Input) -> Option<String> {
-        if take(input, button::DOWN) {
+        if input.take(Button::Down) {
             self.step(1);
         }
-        if take(input, button::UP) {
+        if input.take(Button::Up) {
             self.step(-1);
         }
 
-        let confirmed = take(input, button::CROSS) | take(input, button::START);
+        let confirmed = input.take(Button::Cross) | input.take(Button::Start);
         if confirmed { self.pick() } else { None }
     }
 
@@ -284,19 +284,6 @@ impl Launcher {
                 return;
             }
         }
-    }
-}
-
-/// A button press, read as an edge and consumed.
-///
-/// The same helper `menu.rs` keeps private, spelled again here rather than
-/// made public there: `menu.rs` is at its size ceiling and this is three lines.
-fn take(input: &mut Input, index: u8) -> bool {
-    if input.is_pressed(index) {
-        input.consume_press(index);
-        true
-    } else {
-        false
     }
 }
 

@@ -47,7 +47,7 @@
 use std::num::NonZeroUsize;
 
 use oag_core::math::{Mat3, Quat, Vec3};
-use oag_gameplay::input::{Input, button};
+use oag_gameplay::input::{Button, Input};
 use oag_gameplay::{ControlScheme, InputSnapshot, Ship, World, ship_controls};
 use oag_physics::controls::CONTROL_RANGE;
 use oag_physics::{Environment, Handling, Raycaster, ShipState};
@@ -722,7 +722,7 @@ fn snapshot_for(
     let (mask, snapshot) = match inputs {
         Inputs::FromTrace => (
             if recorded.throttle > 0.0 {
-                1u32 << button::CROSS
+                1u32 << Button::Cross.index()
             } else {
                 0
             },

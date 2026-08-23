@@ -79,10 +79,10 @@ impl Race {
     pub(super) fn spend_pickup(&mut self, snapshot: &InputSnapshot) {
         let fire = snapshot
             .buttons
-            .is_pressed(oag_gameplay::input::button::SQUARE);
+            .is_pressed(oag_gameplay::input::Button::Square);
         let absorb = snapshot
             .buttons
-            .is_pressed(oag_gameplay::input::button::CIRCLE);
+            .is_pressed(oag_gameplay::input::Button::Circle);
         if !fire && !absorb {
             return;
         }

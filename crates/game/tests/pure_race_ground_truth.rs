@@ -226,7 +226,7 @@ fn a_craft_under_power_drives_a_pure_circuit_and_a_wall_stops_it() {
         let mut input = oag_gameplay::InputSnapshot::default();
         input
             .buttons
-            .begin_frame(1 << oag_gameplay::input::button::CROSS);
+            .begin_frame(1 << oag_gameplay::input::Button::Cross.index());
 
         let start = race.world.ships[0].physics.body.position;
         let mut furthest_from_spline = 0.0f32;

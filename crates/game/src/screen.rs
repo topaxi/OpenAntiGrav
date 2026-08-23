@@ -24,6 +24,7 @@ use crate::input::button_from_name;
 // decoder share one copy rather than growing two. Re-exported because this
 // module is where the rest of the crate reaches for it.
 pub use oag_formats::fexml::{Node, parse};
+use oag_gameplay::input::Button;
 
 /// Container extensions a `Movie` widget's `src` may already carry.
 ///
@@ -133,9 +134,9 @@ pub struct Redirect {
     /// movie; `LanguageAutoRedirect` by the language menu.
     pub name: Option<String>,
     /// Abstract button index that fires it forward, if any.
-    pub forward: Option<u8>,
+    pub forward: Option<Button>,
     /// Abstract button index that fires it backward, if any.
-    pub backward: Option<u8>,
+    pub backward: Option<Button>,
     /// Target screen name from the `Default` child's `goto`.
     pub goto: Option<String>,
 }
@@ -251,7 +252,7 @@ impl Screen {
 
     /// Where pressing `button` goes, if anywhere.
     #[must_use]
-    pub fn redirect_for(&self, button: u8) -> Option<&Redirect> {
+    pub fn redirect_for(&self, button: Button) -> Option<&Redirect> {
         self.redirects
             .iter()
             .find(|r| r.forward == Some(button) || r.backward == Some(button))

@@ -43,7 +43,7 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_gameplay::input::button;
+use oag_gameplay::input::Button;
 use oag_physics::SpeedClass;
 use oag_pulse as pulse;
 
@@ -213,7 +213,7 @@ fn a_ship_spawns_and_steps_on_the_ps2_disc() {
         race.ship().physics.body.up()
     );
 
-    let mut held = race::HeldButtons::new(1 << button::CROSS);
+    let mut held = race::HeldButtons::new(1 << Button::Cross.index());
     let mut grounded_ticks = 0u32;
     for tick in 0..TICKS {
         let snapshot = held.snapshot();

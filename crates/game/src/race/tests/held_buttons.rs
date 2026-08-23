@@ -6,7 +6,7 @@
 //! `tests.rs`.
 
 use super::*;
-use oag_gameplay::input::button;
+use oag_gameplay::input::Button;
 use oag_input::keys::map_key;
 
 /// `HeldButtons::set_held` drives the keyboard path with per-tick levels:
@@ -15,13 +15,13 @@ use oag_input::keys::map_key;
 #[test]
 fn set_held_levels_reach_the_snapshot_and_release() {
     let mut held = HeldButtons::new(0);
-    held.set_held((1 << button::CROSS) | (1 << button::LEFT));
+    held.set_held((1 << Button::Cross.index()) | (1 << Button::Left.index()));
     let snap = held.snapshot();
-    assert!(snap.buttons.is_held(button::CROSS));
+    assert!(snap.buttons.is_held(Button::Cross));
     assert!(snap.stick_x < 0.0, "left must steer negative x");
     held.set_held(0);
     let snap = held.snapshot();
-    assert!(!snap.buttons.is_held(button::CROSS));
+    assert!(!snap.buttons.is_held(Button::Cross));
     assert_eq!(snap.stick_x, 0.0);
 }
 
@@ -30,11 +30,11 @@ fn set_held_levels_reach_the_snapshot_and_release() {
 #[test]
 fn every_key_in_the_inverse_table_maps_back_to_its_button() {
     for index in 0..32u8 {
-        let Some(key) = key_for_button(index) else {
+        let Some(key) = key_for_button(Button::from_index(index)) else {
             continue;
         };
         assert_eq!(
-            map_key(&key),
+            map_key(&key).map(|b| b.index()),
             Some(index),
             "button {index} maps to {key:?}, which maps back to something else"
         );
@@ -45,13 +45,13 @@ fn every_key_in_the_inverse_table_maps_back_to_its_button() {
 #[test]
 fn thrust_steering_and_both_airbrakes_all_have_a_key() {
     for wanted in [
-        button::CROSS,
-        button::LEFT,
-        button::RIGHT,
-        button::UP,
-        button::DOWN,
-        button::L,
-        button::R,
+        Button::Cross,
+        Button::Left,
+        Button::Right,
+        Button::Up,
+        Button::Down,
+        Button::L,
+        Button::R,
     ] {
         assert!(key_for_button(wanted).is_some(), "no key for {wanted}");
     }
@@ -67,15 +67,15 @@ fn thrust_steering_and_both_airbrakes_all_have_a_key() {
 #[test]
 fn a_pulsed_button_keeps_producing_edges_and_a_held_one_does_not() {
     let mut pulsed = HeldButtons::new(0);
-    let mut held = HeldButtons::new(1 << button::L);
+    let mut held = HeldButtons::new(1 << Button::L.index());
     let (mut pulsed_edges, mut held_edges) = (0, 0);
 
     for tick in 0..8u32 {
-        pulsed.pulse(1 << button::L, 0, tick.is_multiple_of(2));
-        if pulsed.snapshot().buttons.is_pressed(button::L) {
+        pulsed.pulse(1 << Button::L.index(), 0, tick.is_multiple_of(2));
+        if pulsed.snapshot().buttons.is_pressed(Button::L) {
             pulsed_edges += 1;
         }
-        if held.snapshot().buttons.is_pressed(button::L) {
+        if held.snapshot().buttons.is_pressed(Button::L) {
             held_edges += 1;
         }
     }
@@ -90,14 +90,14 @@ fn a_pulsed_button_keeps_producing_edges_and_a_held_one_does_not() {
 /// tick, which reads as an airbrake that stutters for no visible reason.
 #[test]
 fn pulsing_a_button_that_is_also_held_leaves_it_down() {
-    let mut buttons = HeldButtons::new(1 << button::L);
-    buttons.pulse(1 << button::L, 1 << button::L, false);
-    assert!(buttons.snapshot().buttons.is_held(button::L));
+    let mut buttons = HeldButtons::new(1 << Button::L.index());
+    buttons.pulse(1 << Button::L.index(), 1 << Button::L.index(), false);
+    assert!(buttons.snapshot().buttons.is_held(Button::L));
 }
 
 #[test]
 fn a_held_cross_becomes_thrust() {
-    let mut held = HeldButtons::new(1 << button::CROSS);
+    let mut held = HeldButtons::new(1 << Button::Cross.index());
     let controls = ship_controls(&held.snapshot(), ControlScheme::default());
     assert_eq!(controls.thrust, 1.0);
     assert_eq!(controls.steer_x, 0.0);
@@ -105,7 +105,7 @@ fn a_held_cross_becomes_thrust() {
 
 #[test]
 fn holding_left_steers_left() {
-    let mut held = HeldButtons::new(1 << button::LEFT);
+    let mut held = HeldButtons::new(1 << Button::Left.index());
     assert_eq!(
         ship_controls(&held.snapshot(), ControlScheme::default()).steer_x,
         -1.0
@@ -116,7 +116,7 @@ fn holding_left_steers_left() {
 /// the controls either.
 #[test]
 fn a_button_with_no_key_is_ignored() {
-    let mut held = HeldButtons::new(1 << button::START);
+    let mut held = HeldButtons::new(1 << Button::Start.index());
     assert_eq!(
         ship_controls(&held.snapshot(), ControlScheme::default()),
         oag_physics::ShipControls::default()

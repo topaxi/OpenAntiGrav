@@ -349,15 +349,15 @@ fn a_scripted_dpad_reaches_the_stick_axis_and_the_cross_bit() {
     let mut buttons = Input::new();
     let snapshot = snapshot_for(&Frame::default(), &mut buttons, &inputs, 0);
     assert_eq!(snapshot.stick_x, -1.0, "left is negative stick x");
-    assert!(snapshot.buttons.is_held(button::CROSS));
+    assert!(snapshot.buttons.is_held(Button::Cross));
     assert!(
-        snapshot.buttons.is_pressed(button::LEFT),
+        snapshot.buttons.is_pressed(Button::Left),
         "tick 0 is an edge"
     );
 
     let snapshot = snapshot_for(&Frame::default(), &mut buttons, &inputs, 1);
     assert!(
-        !snapshot.buttons.is_pressed(button::LEFT),
+        !snapshot.buttons.is_pressed(Button::Left),
         "a button held across two scripted ticks is not pressed twice"
     );
 }

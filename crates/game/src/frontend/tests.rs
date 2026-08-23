@@ -220,14 +220,14 @@ fn pure(fmv_frames: usize) -> Frontend {
 /// storage warning. Three steps, because the disc has three - which is the
 /// whole point of the chain being a chain.
 fn reach_the_second_movie(frontend: &mut Frontend, input: &mut Input) {
-    input.begin_frame(1 << button::CROSS);
+    input.begin_frame(1 << Button::Cross.index());
     frontend.update(FRAME, input, None);
     run_until(frontend, input, 1200, |f| {
         f.machine().is(pure_states::MEMORY_STICK_WARNING)
     });
     input.begin_frame(0);
     frontend.update(FRAME, input, None);
-    input.begin_frame(1 << button::CROSS);
+    input.begin_frame(1 << Button::Cross.index());
     frontend.update(FRAME, input, None);
 }
 
@@ -294,14 +294,14 @@ fn run_until(
 
 /// Walks from the picker to `Show Logo`, leaving the machine there.
 fn pick_a_language(frontend: &mut Frontend, input: &mut Input) {
-    input.begin_frame(1 << button::START);
+    input.begin_frame(1 << Button::Start.index());
     frontend.update(FRAME, input, None);
     input.begin_frame(0);
     frontend.update(FRAME, input, None);
 
-    input.begin_frame(1 << button::DOWN);
+    input.begin_frame(1 << Button::Down.index());
     frontend.update(FRAME, input, None);
     input.begin_frame(0);
-    input.begin_frame(1 << button::CROSS);
+    input.begin_frame(1 << Button::Cross.index());
     frontend.update(FRAME, input, None);
 }

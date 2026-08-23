@@ -8,7 +8,7 @@
 
 use oag_physics::ship::{ShipControls, Sideshift};
 
-use crate::input::{InputSnapshot, button};
+use crate::input::{Button, InputSnapshot};
 
 /// Which of the original's two control schemes the pilot is using.
 ///
@@ -129,18 +129,18 @@ pub fn ship_controls(snapshot: &InputSnapshot, scheme: ControlScheme) -> ShipCon
         // input boundary, which is where a player would also expect to find it if
         // it ever becomes an option.
         steer_y: -snapshot.stick_y,
-        thrust: f32::from(u8::from(snapshot.buttons.is_held(button::CROSS))),
+        thrust: f32::from(u8::from(snapshot.buttons.is_held(Button::Cross))),
         airbrake_left: snapshot.airbrake_left,
         airbrake_right: snapshot.airbrake_right,
         sideshift: Sideshift::None,
         // Action 7, `OPT_CTRL_SS`, bound to `L` by the shipped default mapping.
-        shift_modifier: novice && snapshot.buttons.is_held(button::L),
+        shift_modifier: novice && snapshot.buttons.is_held(Button::L),
         // Actions 5 and 6, `OPT_CTRL_LAB`/`OPT_CTRL_RAB`, bound to `L` and `R`.
         // Read off the *pressed* mask rather than held, because the original
         // reads the pressed mask at `*(craft+0x78) + 0x20` for this branch and
         // a held airbrake must not repeat-fire a shift.
-        shift_tap_left: !novice && snapshot.buttons.is_pressed(button::L),
-        shift_tap_right: !novice && snapshot.buttons.is_pressed(button::R),
+        shift_tap_left: !novice && snapshot.buttons.is_pressed(Button::L),
+        shift_tap_right: !novice && snapshot.buttons.is_pressed(Button::R),
     }
 }
 
@@ -149,16 +149,16 @@ mod tests {
     use super::*;
     use crate::input::Input;
 
-    fn held(index: u8) -> Input {
+    fn held(button: Button) -> Input {
         let mut input = Input::new();
-        input.begin_frame(1u32 << (index & 0x1f));
+        input.begin_frame(1u32 << (button.index() & 0x1f));
         input
     }
 
     #[test]
     fn cross_is_thrust() {
         let snapshot = InputSnapshot {
-            buttons: held(button::CROSS),
+            buttons: held(Button::Cross),
             ..InputSnapshot::new()
         };
         assert_eq!(
@@ -172,7 +172,7 @@ mod tests {
     #[test]
     fn circle_is_not_thrust() {
         let snapshot = InputSnapshot {
-            buttons: held(button::CIRCLE),
+            buttons: held(Button::Circle),
             ..InputSnapshot::new()
         };
         assert_eq!(
@@ -211,7 +211,7 @@ mod tests {
     #[test]
     fn a_scheme_fills_only_its_own_gesture_fields() {
         let snapshot = InputSnapshot {
-            buttons: held(button::L),
+            buttons: held(Button::L),
             ..InputSnapshot::new()
         };
 
@@ -233,14 +233,14 @@ mod tests {
     #[test]
     fn a_veteran_tap_is_an_edge_and_not_a_level() {
         let mut buttons = Input::new();
-        buttons.begin_frame(1 << button::L);
+        buttons.begin_frame(1 << Button::L.index());
         let first = InputSnapshot {
             buttons,
             ..InputSnapshot::new()
         };
         assert!(ship_controls(&first, ControlScheme::Veteran).shift_tap_left);
 
-        buttons.begin_frame(1 << button::L);
+        buttons.begin_frame(1 << Button::L.index());
         let second = InputSnapshot {
             buttons,
             ..InputSnapshot::new()
@@ -255,7 +255,7 @@ mod tests {
     #[test]
     fn no_scheme_produces_a_direct_sideshift_request() {
         let snapshot = InputSnapshot {
-            buttons: held(button::L),
+            buttons: held(Button::L),
             airbrake_left: 1.0,
             stick_x: 1.0,
             ..InputSnapshot::new()

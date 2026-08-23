@@ -6,6 +6,7 @@
 //! `race/tests/held_buttons.rs`.
 
 use oag_gameplay::InputSnapshot;
+use oag_gameplay::input::Button;
 use oag_input::Keyboard;
 
 /// A held-button mask, as one snapshot per tick, through the real keyboard path.
@@ -32,7 +33,7 @@ impl HeldButtons {
             if mask & (1u32 << index) == 0 {
                 continue;
             }
-            if let Some(key) = key_for_button(index) {
+            if let Some(key) = key_for_button(Button::from_index(index)) {
                 keyboard.set_key(&key, true);
             }
         }
@@ -52,7 +53,7 @@ impl HeldButtons {
     /// skipped, same as [`Self::new`].
     pub fn set_held(&mut self, mask: u32) {
         for index in 0..32u8 {
-            if let Some(key) = key_for_button(index) {
+            if let Some(key) = key_for_button(Button::from_index(index)) {
                 self.keyboard.set_key(&key, mask & (1u32 << index) != 0);
             }
         }
@@ -71,7 +72,7 @@ impl HeldButtons {
             if mask & (1u32 << index) == 0 || held & (1u32 << index) != 0 {
                 continue;
             }
-            if let Some(key) = key_for_button(index) {
+            if let Some(key) = key_for_button(Button::from_index(index)) {
                 self.keyboard.set_key(&key, down);
             }
         }
@@ -83,26 +84,25 @@ impl HeldButtons {
 /// The inverse of [`oag_input::keys::map_key`], for the buttons a race uses. An
 /// inverse and not a second mapping: a unit test asserts every pair round-trips,
 /// so this table cannot drift away from the one the window uses.
-pub(crate) fn key_for_button(index: u8) -> Option<winit::keyboard::Key> {
-    use oag_gameplay::input::button;
+pub(crate) fn key_for_button(button: Button) -> Option<winit::keyboard::Key> {
     use winit::keyboard::{Key, NamedKey};
 
-    let key = match index {
-        button::UP => Key::Named(NamedKey::ArrowUp),
-        button::DOWN => Key::Named(NamedKey::ArrowDown),
-        button::LEFT => Key::Named(NamedKey::ArrowLeft),
-        button::RIGHT => Key::Named(NamedKey::ArrowRight),
-        button::CROSS => Key::Character("x".into()),
+    let key = match button {
+        Button::Up => Key::Named(NamedKey::ArrowUp),
+        Button::Down => Key::Named(NamedKey::ArrowDown),
+        Button::Left => Key::Named(NamedKey::ArrowLeft),
+        Button::Right => Key::Named(NamedKey::ArrowRight),
+        Button::Cross => Key::Character("x".into()),
         // Fire and absorb, the two buttons a pickup reads. The same keys
         // `oag_input::keys::map_key` binds them to, so a capture presses what a
         // player presses. **They were missing until weapons existed**, which
         // made `--press square` a silent no-op and a weapon capture impossible -
         // the mask named a button, `key_for_button` returned `None`, and the
         // skip this function documents swallowed it.
-        button::SQUARE => Key::Character("c".into()),
-        button::CIRCLE => Key::Character("z".into()),
-        button::L => Key::Character("q".into()),
-        button::R => Key::Character("e".into()),
+        Button::Square => Key::Character("c".into()),
+        Button::Circle => Key::Character("z".into()),
+        Button::L => Key::Character("q".into()),
+        Button::R => Key::Character("e".into()),
         _ => return None,
     };
     Some(key)

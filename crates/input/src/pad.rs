@@ -25,7 +25,7 @@
 //! is also why `just test` passes on a machine that has none.
 
 use log::warn;
-use oag_gameplay::input::button;
+use oag_gameplay::input::Button;
 
 /// How far a trigger has to travel before it counts as a button press.
 ///
@@ -44,22 +44,20 @@ pub const STICK_DEADZONE: f32 = 0.15;
 /// The action pad follows the original's own naming rather than the host pad's
 /// letters: the South button is cross whatever the pad prints on it.
 #[must_use]
-pub fn map_button(pad: gilrs::Button) -> Option<u8> {
-    use gilrs::Button;
-
+pub fn map_button(pad: gilrs::Button) -> Option<Button> {
     Some(match pad {
-        Button::DPadUp => button::UP,
-        Button::DPadDown => button::DOWN,
-        Button::DPadLeft => button::LEFT,
-        Button::DPadRight => button::RIGHT,
-        Button::South => button::CROSS,
-        Button::East => button::CIRCLE,
-        Button::West => button::SQUARE,
-        Button::North => button::TRIANGLE,
-        Button::LeftTrigger => button::L,
-        Button::RightTrigger => button::R,
-        Button::Start => button::START,
-        Button::Select => button::SELECT,
+        gilrs::Button::DPadUp => Button::Up,
+        gilrs::Button::DPadDown => Button::Down,
+        gilrs::Button::DPadLeft => Button::Left,
+        gilrs::Button::DPadRight => Button::Right,
+        gilrs::Button::South => Button::Cross,
+        gilrs::Button::East => Button::Circle,
+        gilrs::Button::West => Button::Square,
+        gilrs::Button::North => Button::Triangle,
+        gilrs::Button::LeftTrigger => Button::L,
+        gilrs::Button::RightTrigger => Button::R,
+        gilrs::Button::Start => Button::Start,
+        gilrs::Button::Select => Button::Select,
         _ => return None,
     })
 }
@@ -125,18 +123,18 @@ pub struct PadState {
 pub fn resolve(reading: Reading) -> PadState {
     let mut held = reading.buttons;
     if reading.throttle > TRIGGER_THRESHOLD {
-        held |= 1u32 << button::CROSS;
+        held |= 1u32 << Button::Cross.index();
     }
 
-    let shoulder = |index: u8| f32::from(u8::from(held & (1u32 << index) != 0));
+    let shoulder = |button: Button| f32::from(u8::from(held & (1u32 << button.index()) != 0));
     let brake = reading.brake.clamp(0.0, 1.0);
 
     PadState {
         held,
         stick_x: deadzone(reading.stick_x),
         stick_y: deadzone(reading.stick_y),
-        airbrake_left: shoulder(button::L).max(brake),
-        airbrake_right: shoulder(button::R).max(brake),
+        airbrake_left: shoulder(Button::L).max(brake),
+        airbrake_right: shoulder(Button::R).max(brake),
     }
 }
 
@@ -230,11 +228,11 @@ impl Pad {
 
         let mut reading = Reading::default();
         for (_, pad) in gilrs.gamepads() {
-            for button in BOUND_BUTTONS {
-                if pad.is_pressed(button)
-                    && let Some(index) = map_button(button)
+            for bound_button in BOUND_BUTTONS {
+                if pad.is_pressed(bound_button)
+                    && let Some(button) = map_button(bound_button)
                 {
-                    reading.buttons |= 1u32 << index;
+                    reading.buttons |= 1u32 << button.index();
                 }
             }
             reading.stick_x = larger(reading.stick_x, pad.value(gilrs::Axis::LeftStickX));
@@ -268,17 +266,17 @@ mod tests {
 
     #[test]
     fn the_south_button_is_cross_whatever_the_pad_prints_on_it() {
-        assert_eq!(map_button(gilrs::Button::South), Some(button::CROSS));
-        assert_eq!(map_button(gilrs::Button::East), Some(button::CIRCLE));
+        assert_eq!(map_button(gilrs::Button::South), Some(Button::Cross));
+        assert_eq!(map_button(gilrs::Button::East), Some(Button::Circle));
     }
 
     #[test]
     fn the_shoulders_are_the_airbrakes() {
-        assert_eq!(map_button(gilrs::Button::LeftTrigger), Some(button::L));
-        assert_eq!(map_button(gilrs::Button::RightTrigger), Some(button::R));
+        assert_eq!(map_button(gilrs::Button::LeftTrigger), Some(Button::L));
+        assert_eq!(map_button(gilrs::Button::RightTrigger), Some(Button::R));
 
         let state = resolve(Reading {
-            buttons: 1u32 << button::L,
+            buttons: 1u32 << Button::L.index(),
             ..Reading::default()
         });
         assert_eq!(state.airbrake_left, 1.0);
@@ -308,13 +306,17 @@ mod tests {
             throttle: TRIGGER_THRESHOLD,
             ..Reading::default()
         });
-        assert_eq!(idle.held & (1u32 << button::CROSS), 0, "resting trigger");
+        assert_eq!(
+            idle.held & (1u32 << Button::Cross.index()),
+            0,
+            "resting trigger"
+        );
 
         let pulled = resolve(Reading {
             throttle: 1.0,
             ..Reading::default()
         });
-        assert_ne!(pulled.held & (1u32 << button::CROSS), 0);
+        assert_ne!(pulled.held & (1u32 << Button::Cross.index()), 0);
     }
 
     /// L2 is "brake", which the original's action set does not have. Both
@@ -334,7 +336,7 @@ mod tests {
     #[test]
     fn a_held_shoulder_wins_over_a_lighter_brake() {
         let state = resolve(Reading {
-            buttons: 1u32 << button::R,
+            buttons: 1u32 << Button::R.index(),
             brake: 0.3,
             ..Reading::default()
         });

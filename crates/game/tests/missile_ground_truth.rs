@@ -41,7 +41,7 @@ use std::path::{Path, PathBuf};
 
 use oag_formats::weapons::Weapon;
 use oag_game::race;
-use oag_gameplay::input::{Input, button};
+use oag_gameplay::input::{Button, Input};
 use oag_physics::SpeedClass;
 
 fn image() -> Option<PathBuf> {
@@ -78,14 +78,14 @@ fn single_race() -> Option<race::Loaded> {
     Some(loaded)
 }
 
-/// One input snapshot with `index` newly pressed, off a fresh `Input`.
+/// One input snapshot with `button` newly pressed, off a fresh `Input`.
 ///
 /// Two `begin_frame` calls, because the fire path is edge-triggered: a snapshot
 /// built with the bit already held reports no press.
-fn press(index: u8) -> oag_gameplay::InputSnapshot {
+fn press(button: Button) -> oag_gameplay::InputSnapshot {
     let mut buttons = Input::new();
     buttons.begin_frame(0);
-    buttons.begin_frame(1 << index);
+    buttons.begin_frame(1 << button.index());
     oag_gameplay::InputSnapshot {
         buttons,
         ..oag_gameplay::InputSnapshot::new()
@@ -349,7 +349,7 @@ fn a_pad_can_hand_out_a_missile_and_firing_one_spends_it() {
     race.world.projectiles.clear();
 
     race.world.ships[0].pickup.weapon = Some(Weapon::Missile);
-    race.tick(&press(button::SQUARE));
+    race.tick(&press(Button::Square));
     assert_eq!(
         race.ship_pickup(),
         None,
