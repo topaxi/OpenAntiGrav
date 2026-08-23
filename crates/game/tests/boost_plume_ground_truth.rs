@@ -1,5 +1,26 @@
-//! Decodes **every PSP team's** `shipboost.vex` off the disc and checks what
-//! came out - the plume model `oag_game::race::load` reads beside `Ship.vex`.
+//! Decodes **every team's** boost plume off the disc and checks what came out -
+//! the model `oag_game::race::load` reads beside `Ship.vex`.
+//!
+//! **Two discs, and they do not ship the same model.** Most of this file is the
+//! PSP's `shipboost.vex`, which is where the plume's look was measured; the
+//! last two tests are the PS2's, which is a differently authored file that
+//! happens to sit under the same name. What differs, measured across all 24 of
+//! the PS2 disc's plume files (twelve teams, `shipboost` and `Zoneboost` each)
+//! and all 16 of the PSP's:
+//!
+//! | | PSP | PS2 |
+//! | --- | --- | --- |
+//! | triangles | 113 | 142 |
+//! | `Texture` nodes | 1, `Data\Tex\pulse_boost2_ADD.tga` | 2, the team's own `Textures\*_GLOW.tga` |
+//! | texture pixels | embedded in the file | the archive entry **before** it |
+//! | `Mesh` parent | `World` directly | an `Anim Transform` each |
+//! | authored motion | a UV scroll over 90 frames | a UV scroll over 100 frames **and** a 67-key anchor scale flicker looping at 1.6667 s |
+//!
+//! Both differences are load-bearing rather than trivia: a PS2 plume built
+//! through the PSP's path draws untextured, with both meshes collapsed onto the
+//! craft's origin several units ahead of the engines, because geometry under an
+//! `Anim Transform` is baked in that node's space. See `livery::ps2_skin` and
+//! `race::scene::frame`'s draw loop.
 //!
 //! **`#[ignore]`d and never run in CI.** It needs game content, which this
 //! project does not ship. See
@@ -60,11 +81,12 @@
 //! `Van_Uber` is the one name still unaccounted for, and it is a *Pure* team
 //! rather than a Pulse one - see `docs/formats/pure-status.md`.
 //!
-//! This file asserts only what a bare disc offers: the eight teams' plume
-//! shape, and the four DLC teams' absence *from the disc itself*, by name-hash
-//! miss rather than decode failure - see [`TEAMS`]. That absence is now the
-//! evidence that they are downloadable, so it is worth keeping rather than
-//! deleting.
+//! The PSP tests here assert only what a bare disc offers: the eight teams'
+//! plume shape, and the four DLC teams' absence *from the disc itself*, by
+//! name-hash miss rather than decode failure - see [`TEAMS`]. That absence is
+//! now the evidence that they are downloadable, so it is worth keeping rather
+//! than deleting. The PS2 tests read [`PS2_TEAMS`], all twelve, because that
+//! disc ships all twelve outright.
 
 use std::path::{Path, PathBuf};
 
@@ -72,10 +94,41 @@ use oag_formats::vex;
 use oag_pulse as pulse;
 use oag_render::mesh;
 
+/// The PS2 release, Europe-only, `SCES-54748` - the same image
+/// `ps2_source_ground_truth.rs` reads.
+const PS2_IMAGE: &str = "pulse-ps2-eu.chd";
+
+/// The full twelve-team roster the PS2 disc bundles, against [`TEAMS`]'s eight.
+/// The four the PSP sold as downloadable content are on this disc outright -
+/// see `docs/formats/dlc-pack.md`, and this file's own doc comment.
+const PS2_TEAMS: [&str; 12] = [
+    "AG_Systems",
+    "Assegai",
+    "Auricom",
+    "EGX",
+    "Feisar",
+    "Goteki",
+    "Harimau",
+    "Icaras",
+    "Mantis",
+    "Piranha",
+    "Qirex",
+    "Triakis",
+];
+
+/// Both plume files every PS2 team ships, in the pairing
+/// `race::boost_entry_name` picks between on mode.
+const PS2_STEMS: [&str; 2] = ["shipboost", "Zoneboost"];
+
 fn image() -> Option<PathBuf> {
+    image_named("pulse-psp-usa.chd")
+}
+
+fn image_named(file: &str) -> Option<PathBuf> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
-        .join("data/images/pulse-psp-usa.chd");
+        .join("data/images")
+        .join(file);
 
     if path.exists() {
         return Some(path);
@@ -496,5 +549,264 @@ fn every_psp_teams_boost_plume_authors_the_same_uv_scroll_track() {
             meshes += 1;
         }
         assert_eq!(meshes, 2, "{name}: {meshes} mesh(es) with a track, not 2");
+    }
+}
+
+/// The PS2 plume's shape, which is not the PSP plume's: two meshes hung off
+/// two `Anim Transform` anchors, each carrying an authored scale track.
+///
+/// **This is what makes the model unusable through the PSP's path.**
+/// `mesh::anim_node::placement` bakes geometry under an `Anim Transform` in
+/// that node's own space and leaves the world placement to the shader's node
+/// table - so a caller that never writes the table draws both meshes at the
+/// craft's origin, on top of each other, several units ahead of the engines.
+/// `race::scene::frame`'s draw loop is what writes it; this test is what says
+/// the anchors it depends on are really there, on every team, rather than on
+/// the one that was opened by hand.
+///
+/// The scale track is pinned too, and it is the reason that loop needs a clock
+/// at all: the anchors flicker in `z` rather than sitting still. Its period is
+/// what the clock choice was argued from - see the draw loop's comment for
+/// what is measured and what is a reading.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn every_ps2_teams_boost_plume_hangs_two_meshes_off_two_animated_anchors() {
+    let Some(image) = image_named(PS2_IMAGE) else {
+        return;
+    };
+    let mut archives = pulse::open(&image.display().to_string()).expect("opening the PS2 archives");
+
+    for team in PS2_TEAMS {
+        for stem in PS2_STEMS {
+            let name = format!(r"Data\Ships\{team}\{stem}.vex");
+            let blob = archives
+                .read_name(&name)
+                .unwrap_or_else(|e| panic!("reading {name}: {e}"));
+            let model = mesh::build_with_textures(&name, &blob, None, mesh::Lod::Both)
+                .unwrap_or_else(|e| panic!("decoding {name}: {e}"));
+
+            assert_eq!(
+                model.mesh_count, 2,
+                "{name} carries {} mesh(es), not the two the plume is built from",
+                model.mesh_count
+            );
+            assert_eq!(
+                model.anim_nodes.len(),
+                2,
+                "{name} carries {} Anim Transform node(s), not the two its meshes hang \
+                 off - race::scene::frame's node-anim write no longer places this plume",
+                model.anim_nodes.len()
+            );
+
+            // The anchors are where the nozzles are, and "behind the craft" is
+            // the part that matters: a bake that lost them would put the plume
+            // at `z == 0`. Asserted as a sign and a bound rather than as
+            // twelve exact triples, which would be shipped design data.
+            let nodes = vex::nodes(&blob).expect("nodes");
+            let placed: Vec<[f32; 16]> = vex::anchor_world(&blob, &nodes, 0.0)
+                .into_iter()
+                .flatten()
+                .collect();
+            assert_eq!(placed.len(), 2, "{name}: {} anchor(s) placed", placed.len());
+            for anchor in &placed {
+                assert!(
+                    anchor[14] < -1.0,
+                    "{name}: an anchor sits at z {:.3}, not behind the craft - the \
+                     plume would draw through the hull",
+                    anchor[14]
+                );
+            }
+
+            for (index, anim) in model.anim_nodes.iter().enumerate() {
+                assert!(
+                    anim.transform.rotation.is_empty(),
+                    "{name}: anchor {index} carries a rotation track, which nothing here \
+                     accounts for"
+                );
+                assert!(
+                    !anim.transform.scale.is_empty(),
+                    "{name}: anchor {index} carries no scale track - the plume's authored \
+                     flicker has gone, and the draw loop's clock has nothing left to drive"
+                );
+                // The clock argument in `race::scene::frame` rests on this
+                // period outlasting a reveal, so the flicker plays one
+                // monotonic pass and never wraps. `exhaust::PLUME_SECONDS` is
+                // 1.5; a track that dropped below it would wrap mid-boost and
+                // that argument would need re-making.
+                assert!(
+                    anim.transform.loop_seconds > 1.5,
+                    "{name}: anchor {index} loops at {:.4} s, inside the {:.1} s a plume \
+                     stays up - see race::scene::frame on why the reveal timer was chosen",
+                    anim.transform.loop_seconds,
+                    oag_render::exhaust::PLUME_SECONDS,
+                );
+            }
+        }
+    }
+}
+
+/// The PS2 plume's pixels are the archive entry directly before it, and both
+/// of its slots fill from that one entry.
+///
+/// A third model type answering to the directory-position rule
+/// (`docs/formats/ps2-texture.md`), after the hull and the track - and the
+/// first one asserted for *every* file rather than extrapolated from one,
+/// because the rule is positional and each of these 24 entries has its own
+/// neighbour.
+///
+/// **Both halves are asserted, and the second is the one that catches a
+/// regression quietly.** That the preceding entry decodes says the lookup
+/// found something; that rebuilding through it leaves no empty slot says the
+/// ordinals lined up. A set shorter than the slot count would pass the first
+/// and fail the second, and would draw a plume half-skinned rather than
+/// visibly broken.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn every_ps2_teams_boost_plume_is_skinned_by_the_entry_before_it() {
+    let Some(image) = image_named(PS2_IMAGE) else {
+        return;
+    };
+    let mut archives = pulse::open(&image.display().to_string()).expect("opening the PS2 archives");
+
+    for team in PS2_TEAMS {
+        for stem in PS2_STEMS {
+            let name = format!(r"Data\Ships\{team}\{stem}.vex");
+            let blob = archives
+                .read_name(&name)
+                .unwrap_or_else(|e| panic!("reading {name}: {e}"));
+            let bare = mesh::build_with_textures(&name, &blob, None, mesh::Lod::Both)
+                .unwrap_or_else(|e| panic!("decoding {name}: {e}"));
+
+            // The gate `livery::plume` takes this branch on. A PS2 model
+            // declares its texture nodes and embeds none of their pixels; a
+            // PSP one embeds all of them and must never reach here.
+            assert!(
+                !bare.textures.is_empty() && bare.textures.iter().all(Option::is_none),
+                "{name}: {} of {} texture slot(s) came out of the file itself, so this is \
+                 not the empty-block PS2 signature livery::ps2_skin gates on",
+                bare.textures.iter().filter(|t| t.is_some()).count(),
+                bare.textures.len()
+            );
+
+            let preceding = archives
+                .read_preceding(&name)
+                .unwrap_or_else(|e| panic!("{name}: reading the entry before it: {e}"));
+            let set = mesh::ps2_texture_set(&preceding).unwrap_or_else(|e| {
+                panic!("{name}: the entry before it is not a texture set ({e})")
+            });
+            assert_eq!(
+                set.len(),
+                bare.textures.len(),
+                "{name}: the preceding entry holds {} texture(s) against {} declared \
+                 slot(s) - the ordinals a material indexes would not line up",
+                set.len(),
+                bare.textures.len()
+            );
+
+            let skinned = mesh::build_with_textures(&name, &blob, Some(set), mesh::Lod::Both)
+                .unwrap_or_else(|e| panic!("re-skinning {name}: {e}"));
+            assert!(
+                skinned.textures.iter().all(Option::is_some),
+                "{name}: {} of {} slot(s) still empty after re-skinning - the plume draws \
+                 partly untextured",
+                skinned.textures.iter().filter(|t| t.is_none()).count(),
+                skinned.textures.len()
+            );
+        }
+    }
+}
+
+/// The PS2 plume's batches are classified **opaque**, and this is the premise
+/// `race::Drawable::draw_additive` exists to override rather than a licence to
+/// draw them opaque.
+///
+/// The classification is real: `pass_mask & 0x0700 == 0` on all four, so
+/// `Model::transparent_draws` is empty and the ordinary draw path would submit
+/// them through the opaque pipeline. It is also the exact opposite of what
+/// `every_psp_teams_boost_plume_decodes_with_two_meshes_and_its_texture`
+/// asserts for the PSP model, which is why the PSP-shaped expectation cannot
+/// simply be reused here.
+///
+/// **What the classification does *not* settle is how the original blends
+/// it.** A PCSX2 capture of a real PS2 boost shows soft plumes with no geometry
+/// edge and the hull visible through them; drawn opaque, the same model puts a
+/// hard hexagon over each nozzle. So the original blends it, and the dispatch
+/// that says so has not been found - see
+/// `docs/ghidra/functions/ps2-pulse-eu/batch-draw-state.md`, which records both
+/// the reading and its refutation.
+///
+/// **`pass_mask & 0xc0` is the part that survived**: the PS2 plume sets it and
+/// the PSP one does not, and on the original it stamps the alpha channel
+/// through `KEEP, KEEP, REPLACE`, which the bloom reads. That is why
+/// `race::Scene` giving the plume `GlowMask::Written` is right on both discs.
+///
+/// Pinned rather than left to a screenshot so that the override above keeps a
+/// stated premise: if a re-export ever tags these batches `0x200`, this test
+/// fails and `draw_additive` becomes unnecessary rather than silently
+/// redundant.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn every_ps2_teams_boost_plume_is_authored_opaque_and_glow_masked() {
+    let Some(image) = image_named(PS2_IMAGE) else {
+        return;
+    };
+    let mut archives = pulse::open(&image.display().to_string()).expect("opening the PS2 archives");
+
+    for team in PS2_TEAMS {
+        for stem in PS2_STEMS {
+            let name = format!(r"Data\Ships\{team}\{stem}.vex");
+            let blob = archives
+                .read_name(&name)
+                .unwrap_or_else(|e| panic!("reading {name}: {e}"));
+            let model = mesh::build_with_textures(&name, &blob, None, mesh::Lod::Both)
+                .unwrap_or_else(|e| panic!("decoding {name}: {e}"));
+            assert!(
+                model.transparent_draws.is_empty() && model.alpha_tested_draws.is_empty(),
+                "{name}: {} transparent / {} cutout draw(s) - the PS2 plume used to be \
+                 wholly opaque-classified, which is the premise Drawable::draw_additive \
+                 overrides; if that changed, the override may no longer be needed",
+                model.transparent_draws.len(),
+                model.alpha_tested_draws.len()
+            );
+            assert!(
+                !model.draws.is_empty(),
+                "{name}: no opaque draw(s) at all, so nothing draws"
+            );
+
+            let classes = vex::classes_of(&blob).expect("class table");
+            let nodes = vex::nodes(&blob).expect("nodes");
+            let mut checked = 0usize;
+            for node in nodes.iter().filter(|n| Some(n.class_id) == classes.mesh) {
+                let payload = &blob[node.payload()];
+                for list in 0..2u8 {
+                    for batch in vex::mesh_batches(payload, list)
+                        .unwrap_or_else(|e| panic!("{name}: batch list {list}: {e}"))
+                    {
+                        assert!(
+                            !batch.is_transparent(),
+                            "{name}: a batch carries a 0x0700 class bit (pass_mask {:#06x}), \
+                             so it would pick its own blend class and no longer need \
+                             Drawable::draw_additive's override",
+                            batch.pass_mask
+                        );
+                        assert!(
+                            batch.pass_mask & 0x00c0 != 0,
+                            "{name}: a batch (pass_mask {:#06x}) does not set the glow-mask \
+                             bits - without them the plume is opaque geometry the bloom never \
+                             picks up, which is a solid hexagon and nothing else",
+                            batch.pass_mask
+                        );
+                        assert!(
+                            batch.is_additive_blend(),
+                            "{name}: a batch (header_flags {:#04x}) takes the \"replace\" \
+                             branch rather than the additive one",
+                            batch.header_flags
+                        );
+                        checked += 1;
+                    }
+                }
+            }
+            assert!(checked > 0, "{name}: decoded zero batches to check");
+        }
     }
 }

@@ -392,6 +392,28 @@ figure says this rule will not fit - that piece is still open and is a
 separate, smaller RE task from "does a circuit's own `track.vex` get its
 textures back," which this section now answers.
 
+**A third model type, and the first checked exhaustively: the boost plume**
+(2026-08-23, confidence 90). Every one of the PS2 disc's 24 plume files -
+`Data\Ships\<Team>\shipboost.vex` and `Zoneboost.vex`, twelve teams each -
+declares exactly two `Texture` nodes, embeds neither, and is preceded at delta
+-1 by a set that decodes **exactly two** entries. 24 of 24 exact, with no near
+misses at all, which is the cleanest agreement any of the three model types has
+produced; the ship finding's eleven and the track finding's 27-of-32 both
+predate it. `oag_game::livery::ps2_skin` is the call site, on the same
+all-slots-empty gate the hull takes, and
+`crates/game/tests/boost_plume_ground_truth.rs` asserts both halves for every
+file - that the preceding entry decodes, *and* that rebuilding through it
+leaves no slot empty. The second half is the one that matters as a regression
+test: a set shorter than the slot count would pass the first and draw a plume
+half-skinned rather than visibly broken.
+
+Unlike the hull, the plume also names its textures per team
+(`Data\Ships\<Team>\Textures\Lights_GLOW.tga` and `Engine_GLOW.tga`) rather
+than sharing one `Data\Tex\` file the way the PSP model does - so the PS2
+build carries twelve plume skins where the PSP build carries one. That is a
+fact about the two authorings, not about the lookup rule, but it is why the
+plume could not simply borrow the PSP path's single embedded texture.
+
 ## A standalone texture is under its declared name with the extension rewritten
 
 The PS2 build shares its XML, its models and its authored asset paths with the

@@ -507,6 +507,19 @@ impl Scene {
                 )?));
             }
         }
+        // **A PS2 plume reaches none of that**: its four batches carry no
+        // `0x0700` class bit, so they land in `Model::draws` and `draw` would
+        // submit them through the opaque pipeline. `frame` calls
+        // `Drawable::draw_additive` for the plume instead, which puts every
+        // list on `ADDITIVE_BLEND` - the same equation the PSP plume's own
+        // `0x200` batches already select, so the two discs share one blend.
+        // That is a **model-scoped override, not a decode**, and the reference
+        // frame that justifies it plus the PS2 dispatch still unfollowed are
+        // both on `draw_additive`. The `pass_mask & 0xc0` glow-mask stamp is a
+        // separate and still-standing read, and it is why `GlowMask::Written`
+        // below is right on both discs. See
+        // `docs/ghidra/functions/ps2-pulse-eu/batch-draw-state.md`.
+
         // The shield shell, on the plume's own additive pipeline. Both models'
         // textures carry the artists' `_ADD` suffix - `pulse_shield_test_ADD`
         // here, `pulse_boost2_ADD` there - which is what says they share a
