@@ -129,16 +129,22 @@ pub(super) fn per_team(
                  is racing"
                     .to_string()
             } else {
-                // **The gate is this engine's, not HD's.** The group's name is
-                // the whole reason it is wired to a boost at all; HD's own
-                // executable is unread, so what reveals it there - a speed pad,
-                // the Boost pickup, a thrust threshold, or all three - is not
-                // recovered. `Exhaust::plume_visible` is the condition Pulse's
-                // plume was measured on, reused here and labelled. Confidence
-                // 80: see docs/rendering/trail-ribbon.md.
-                "revealed on this engine's own boost gate (Exhaust::plume_visible, \
-                 Pulse's recovered one), not on a condition read out of HD's \
-                 executable"
+                // **The mechanism is read; what starts it is not.**
+                // `EngineFlare_Update` (`0x002a3100`) counts a timer down at
+                // `+0x12c`, and `EngineFlare_PlaceShapes` snaps a blend to 1.0
+                // while that timer is above a threshold and decays it
+                // exponentially otherwise - the same three parts as the
+                // *Pulse* gate this engine already runs on (`boost_timer`,
+                // `BOOST_GATE`, `BOOST_DECAY`). So reusing `plume_visible` is
+                // a matched mechanism rather than a guess off a node name.
+                // What writes the timer is outside the flare's own vtable and
+                // is unread, so how long HD's boost lasts is still ours.
+                // Confidence 88 - see
+                // docs/ghidra/functions/ps3-hdfury-eu/engine-flare.md.
+                "revealed on this engine's boost gate (Exhaust::plume_visible, \
+                 Pulse's recovered one). HD's own gate is the same shape - a \
+                 countdown, a snap, an exponential decay - but what starts its \
+                 timer is unread, so the duration is this project's"
                     .to_string()
             }
         ));

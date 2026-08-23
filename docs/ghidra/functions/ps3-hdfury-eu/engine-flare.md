@@ -193,6 +193,124 @@ a depth or mask variant. `#2` is `#1` with `fogColour` (`0x3dc31258`, already
 named on [renderer.md](renderer.md)) and the `float2` still unresolved: the
 fogged permutation. Neither changes anything above.
 
+## The runtime, read 2026-08-23
+
+**`EBOOT.elf` is imported now**, so this section is the executable's half. Five
+findings, and the one that matters most is the boost gate this project had
+been carrying as a labelled guess.
+
+### The per-team path is the executable's own literal
+
+`0x00782388` holds `%s\\engineflare.vex`, labelled
+`EngineFlare_ModelPathFormat`. So composing
+`Data\Ships\<Team>\engineflare.vex` is not this project's convention applied
+to a filename it found - it is the format string the loader itself uses, with
+the team directory in `%s`, exactly as `oag_pulse::race::ships::entry_name`
+assembles it. **Confidence 95.**
+
+### The eleven shapes are bound by name, and the slot order is the split
+
+`EngineFlare_PlaceShapes` (`0x002a1f00`, vtable slot 4) looks node names up in
+the loaded model **once** - the whole lookup block sits behind a bound-yet flag
+at `+0x184` - and stores each handle in its own field, `+0x15c` through
+`+0x184`. Every frame after that it computes the transforms and submits the
+shapes it bound.
+
+The names come from the TOC pointer table at `0x008b2fbc`, and **their order is
+the finding**:
+
+| Slot | Name | Subtree in the `.vex` |
+| --- | --- | --- |
+| `+0x15c` | `ef_OuterShape` | `EF_Main` |
+| `+0x160` | `ef_InnerShape` | `EF_Main` |
+| `+0x164` | `ef_Spikes1Shape` | `EF_Main` |
+| `+0x168` | `ef_Spikes2Shape` | `EF_Main` |
+| `+0x16c` | `ef_Spikes3Shape` | `EF_Main` |
+| `+0x170` | `ef_BoostLeftShape` | `EF_Boost` |
+| `+0x174` | `ef_SpikesLeftShape` | `EF_Boost` |
+| `+0x178` | `ef_BoostRightShape` | `EF_Boost` |
+| `+0x17c` | `ef_SpikesRightShape` | `EF_Boost` |
+| `+0x180` | `ef_DiamondsShape` | `EF_Boost` |
+| `+0x184` | `ef_FlareShape` | **authored by no craft measured** |
+
+`ef_OuterShape` (`0x0079be80`), `ef_BoostLeftShape` (`0x0079bed0`, labelled
+`EngineFlare_BoostLeftShapeName`) and `ef_BoostRightShape` (`0x0079bf00`,
+`EngineFlare_BoostRightShapeName`) are the three the decompiler shows as plain
+literals; the rest are the same run of strings, `0x0079be80` to `0x0079bf58`.
+
+**The engine never looks up `EF_Main` or `EF_Boost`** - it addresses each shape
+individually. But its first five slots are exactly the five the `.vex` hangs
+under `EF_Main` and its next five exactly the five under `EF_Boost`, in that
+order, which is a partition arrived at from the other side of the asset.
+`oag_render::mesh::groups::split` reaches the same one by walking the subtrees.
+**Confidence 90.**
+
+Two loose ends the table names. `ef_FlareShape` is a slot the runtime binds and
+no craft on this disc authors, so it is either a shape only some model has or a
+name that outlived its geometry. And the entry after the eleven, at
+`0x0079bf58`, is `AlphaScaler` - looked up through a different call in the same
+function, and **not** a shader-parameter hash (`~crc32("AlphaScaler")` is
+`0xa657095c`, which matches none of `flame_test`'s), so it is another node.
+Neither is followed here.
+
+### The boost gate is a timer, a snap and an exponential decay
+
+`EngineFlare_Update` (`0x002a3100`, vtable slot 5) is the per-frame method,
+taking `dt` as its first argument. It carries a countdown at `+0x12c`:
+
+```c
+/* EngineFlare_Update */
+*(float *)(this + 300) = *(float *)(this + 300) - dt;   /* floored at 0 */
+
+/* EngineFlare_PlaceShapes */
+if (threshold < *(float *)(this + 300)) {
+    *(float *)(this + 0x144) = 1.0f;                    /* snap */
+}
+...
+blend = *(float *)(this + 0x144) + *(float *)(this + 0x150);
+```
+
+and where the snap does not fire, `+0x144` is multiplied down by `(1 - k)` once
+per substep - an exponential decay. That blend then scales the flare's own
+transform.
+
+**So the boost really is timer-driven, and the shape of the gate is the shape
+this engine already had**: a countdown set by something else, a hard reveal
+while it is above a threshold, a decay after. `oag_render::exhaust`'s recovered
+Pulse gate - `boost_timer`, `BOOST_GATE`, `BOOST_DECAY` - is the same three
+parts. Wiring `EF_Boost` to `Exhaust::plume_visible` is therefore a *matched
+mechanism* rather than a guess off a node name. **Confidence 88**, up from the
+80 this carried when only the name was evidence.
+
+**What still is not read is what *sets* `+0x12c`.** Nothing in the flare's own
+vtable writes it - slots 6 through 10 are lerp helpers
+(`0x002a3708` linear, `0x002a3730` inverse-lerp, `0x002a3788` a packed-colour
+lerp) - so the timer is written by the craft code that owns the flare. Until
+that is followed, *how long* a boost lasts on HD and *what* starts it remain
+this engine's numbers.
+
+### A second flare path exists, and it is not what draws the model
+
+`0x0079bdd8` holds `Data/Tex/EngineFlare/Engine_Flare_Rich.gtf`, and
+`0x007a1000`/`0x007a1010` hold the shader-registry names `engineflare_vp` and
+`engineflare_fp`. Neither resolves through
+[`scripts/ps3-registry.py`](../../../../scripts/ps3-registry.py), which reaches
+62 of the 121 registered programs.
+
+**It is not the program the flare *model* is drawn by, and the parameter table
+is what says so.** Each craft's `engineflare.rcsmodel` supplies six values
+whose hashes are one-for-one the six `flame_test.rcsmaterial`'s block #1
+declares, each landing on a resolved code slot in that block. A program
+registered in the executable has no per-model material record to read them
+from; the material does, and that is the binding this renderer follows.
+
+What the registry pair plausibly draws instead is a **billboard**:
+`Engine_Flare_Rich.gtf` sits under `Data/Tex/EngineFlare/`, the same
+sprite-shaped directory Pulse keeps `grabbedEngineFlare128x64x8.mip` in. So HD
+may well draw a sprite flare *as well as* the model, which would be a second
+thing to reproduce rather than a correction to this one. Open, with a stated
+leading answer.
+
 ## Reproducing this
 
 ```sh

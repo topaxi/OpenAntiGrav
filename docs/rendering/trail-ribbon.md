@@ -210,12 +210,16 @@ model is asserted non-empty per craft by
 `crates/game/tests/hd_engine_flare_ground_truth.rs` - but *the `EF_Boost` draw
 itself is unconfirmed in a capture* and should be recorded that way.
 
-**What is a reading rather than a finding is the trigger.** `EF_Boost` is
-drawn on this engine's own boost gate - `Exhaust::plume_visible`, the condition
-recovered for *Pulse's* plume - because HD's executable is unread and what
-reveals it there is not recovered. The loader says so on every HD race.
-Confidence 80: the group's name is the whole basis, and it is a strong one, but
-it is a name.
+**The trigger's mechanism is read and its source is not.** `EF_Boost` is drawn
+on this engine's own boost gate - `Exhaust::plume_visible`, the condition
+recovered for *Pulse's* plume. Reading HD's `EngineFlare_Update` on 2026-08-23
+showed its gate is the same three parts: a countdown timer, a hard snap to 1.0
+while it is above a threshold, an exponential decay after. So this is a matched
+mechanism rather than an inference off a node name - **confidence 88**, up from
+80. What *writes* that timer is outside the flare's own vtable and is still
+unread, so how long HD's boost lasts remains this project's number, and the
+loader says so on every race. See
+[engine-flare.md](../ghidra/functions/ps3-hdfury-eu/engine-flare.md).
 
 ### What the flame's own shader does
 
@@ -337,8 +341,12 @@ kind `CLAUDE.md` names. The load report says so on every HD race.
 - **`SpecScale` is authored per material instance** (235 on a hull's paint, 500
   on its glass), which is what would retire `renderer.md`'s "32 is a stand-in"
   note. Nothing reads it. Same for `Bloom` = 1.0 on `emissive_bloom`.
-- What reveals `EF_Boost` in the original, and whether `EF_Main` is ever
-  modulated - `AnimEnd`, `Speed` and `time` are all declared and all unread.
+- What *writes* the flare's boost timer at `+0x12c` - the gate's own mechanism
+  is read, its source is not - and whether `EF_Main` is ever modulated
+  (`AnimEnd`, `Speed` and `time` are all declared and all unread).
+- **A second, sprite-shaped flare path**: `Engine_Flare_Rich.gtf` and the
+  registry names `engineflare_vp`/`engineflare_fp` exist in the executable, and
+  nothing establishes which of the two a race draws, or whether it draws both.
 - A matched-pose HD reference frame from RPCS3. None has ever been captured, so
   every HD picture in this tree is judged against the loader report rather than
   against the original.
