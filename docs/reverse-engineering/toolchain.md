@@ -295,7 +295,16 @@ For cross-validation.
 sudo pacman -S pcsx2
 ```
 
-Provides an EE and IOP debugger, memory search, and save states.
+Provides an EE and IOP debugger, memory search, and save states - and, more
+usefully, **PINE**, a memory-read/write socket API the stock build already has
+compiled in. It boots Wipeout Pulse with no window and no human
+(`just pcsx2-boot`) and, uniquely among the three emulators here, replays a
+savestate frame for frame: the same scripted thirty frames produce a
+pixel-identical capture twice.
+
+See [Driving PCSX2 from PINE](pcsx2-debugger.md) for the protocol, the exact
+commands, and the traps - the ini path `-datapath` invents, the Vulkan renderer
+that cannot present to a virtual display, and the two silent input gates.
 
 ### RPCS3 (PS3)
 
