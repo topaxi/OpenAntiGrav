@@ -29,7 +29,7 @@ fn main() -> anyhow::Result<()> {
     let (width, height) = texture.level_size(0);
     let mut buckets = [0usize; 8];
     let mut alpha = [0usize; 8];
-    for texel in rgba.chunks_exact(4) {
+    for texel in rgba.as_chunks::<4>().0 {
         let luma = (0.3 * f32::from(texel[0])
             + 0.59 * f32::from(texel[1])
             + 0.11 * f32::from(texel[2])) as usize;

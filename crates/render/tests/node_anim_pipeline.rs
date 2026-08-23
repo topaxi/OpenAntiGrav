@@ -255,7 +255,9 @@ fn the_texture_table_scrolls_a_surface() {
     // diluted by background and moves only a few percent; the count of lit
     // pixels is the quantity the scroll actually changes.
     let white = |p: &[u8]| {
-        p.chunks_exact(4)
+        p.as_chunks::<4>()
+            .0
+            .iter()
             .filter(|c| u32::from(c[0]) + u32::from(c[1]) + u32::from(c[2]) > 400)
             .count()
     };

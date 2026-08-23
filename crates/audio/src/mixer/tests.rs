@@ -253,7 +253,7 @@ fn a_mono_source_arrives_on_both_channels() {
     mixer.play(Play::looping(tone(512, 1, 44_100), Bus::Sfx));
     let mut out = vec![0.0f32; 64 * CHANNELS];
     mixer.render(&mut out);
-    for pair in out.chunks_exact(CHANNELS) {
+    for pair in out.as_chunks::<CHANNELS>().0 {
         assert_eq!(pair[0], pair[1], "mono must duplicate, not pan");
     }
 }

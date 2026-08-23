@@ -64,11 +64,15 @@ fn main() -> anyhow::Result<()> {
         digest = digest.wrapping_mul(0x1000_0000_01b3);
     }
     let lit = pixels
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .filter(|p| u32::from(p[0]) + u32::from(p[1]) + u32::from(p[2]) > 100)
         .count();
     let mean = pixels
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .map(|p| f64::from(p[0]) + f64::from(p[1]) + f64::from(p[2]))
         .sum::<f64>()
         / (pixels.len() / 4) as f64

@@ -721,7 +721,7 @@ fn face_normals(model: &mut Model) {
     // better than anything derivable here, because it carries the hard edges the
     // exporter split vertices for and a smooth average by construction cannot.
     let mut derived = vec![Vec3::ZERO; model.vertices.len()];
-    for triangle in model.indices.chunks_exact(3) {
+    for triangle in model.indices.as_chunks::<3>().0 {
         let [a, b, c] = [triangle[0], triangle[1], triangle[2]].map(|i| i as usize);
         let (pa, pb, pc) = (
             Vec3::from_array(model.vertices[a].position),

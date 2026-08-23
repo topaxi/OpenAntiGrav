@@ -460,7 +460,7 @@ impl Mixer {
             let frames = sound.frames();
 
             let mut finished = false;
-            for chunk in out.chunks_exact_mut(CHANNELS) {
+            for chunk in out.as_chunks_mut::<CHANNELS>().0 {
                 if frames == 0 {
                     finished = true;
                     break;

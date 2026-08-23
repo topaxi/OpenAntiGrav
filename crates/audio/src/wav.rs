@@ -76,7 +76,9 @@ mod tests {
         let file = from_samples(&samples, 48_000);
         let pcm = &file[44..];
         let decoded: Vec<i16> = pcm
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .map(|c| i16::from_le_bytes([c[0], c[1]]))
             .collect();
         for (sample, got) in samples.iter().zip(&decoded) {

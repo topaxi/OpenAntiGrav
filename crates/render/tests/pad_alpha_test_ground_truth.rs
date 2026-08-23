@@ -55,7 +55,9 @@ fn archive_spec() -> Option<String> {
 /// not count, only a fragment the pad's cutout pipeline actually kept.
 fn lit_pixel_count(pixels: &[u8]) -> usize {
     pixels
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .filter(|px| u32::from(px[0]) + u32::from(px[1]) + u32::from(px[2]) > 100)
         .count()
 }

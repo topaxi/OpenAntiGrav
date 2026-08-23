@@ -362,7 +362,9 @@ fn row_profile(pixels: &[u8], width: u32, height: u32) -> Vec<u64> {
     (0..height as usize)
         .map(|y| {
             pixels[y * width as usize * 4..(y + 1) * width as usize * 4]
-                .chunks_exact(4)
+                .as_chunks::<4>()
+                .0
+                .iter()
                 .map(|p| u64::from(p[0]) + u64::from(p[1]) + u64::from(p[2]))
                 .sum()
         })
@@ -376,7 +378,7 @@ fn column_profile(pixels: &[u8], width: u32, height: u32) -> Vec<u64> {
         .chunks_exact(width as usize * 4)
         .take(height as usize)
     {
-        for (x, pixel) in row.chunks_exact(4).enumerate() {
+        for (x, pixel) in row.as_chunks::<4>().0.iter().enumerate() {
             out[x] += u64::from(pixel[0]) + u64::from(pixel[1]) + u64::from(pixel[2]);
         }
     }
@@ -480,7 +482,9 @@ fn the_band_draws_where_the_original_puts_it_at_any_resolution() {
         let row = &pixels[centre_row_range(centre, width, height)];
         let brightness = |slice: &[u8]| -> u64 {
             slice
-                .chunks_exact(4)
+                .as_chunks::<4>()
+                .0
+                .iter()
                 .map(|p| u64::from(p[0]) + u64::from(p[1]) + u64::from(p[2]))
                 .sum()
         };
@@ -609,7 +613,9 @@ fn the_games_own_glow_strip_reaches_the_shader() {
     // as grey or as a colour cast rather than as a crash.
     let brightest = strip
         .rgba
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .max_by_key(|p| u32::from(p[0]) + u32::from(p[1]) + u32::from(p[2]))
         .expect("a texel");
     assert!(
@@ -617,7 +623,7 @@ fn the_games_own_glow_strip_reaches_the_shader() {
         "brightest texel {brightest:?} is not on the black-to-cyan ramp"
     );
     assert!(
-        strip.rgba.chunks_exact(4).all(|p| p[3] == 255),
+        strip.rgba.as_chunks::<4>().0.iter().all(|p| p[3] == 255),
         "every palette entry is opaque, which is why the shader ignores texel alpha"
     );
 
@@ -640,7 +646,9 @@ fn the_games_own_glow_strip_reaches_the_shader() {
     let pixels = capture(&device, &queue, &strip, &vertices, width, height);
 
     let lit = pixels
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .filter(|p| u32::from(p[0]) + u32::from(p[1]) + u32::from(p[2]) > 0)
         .count();
     assert!(

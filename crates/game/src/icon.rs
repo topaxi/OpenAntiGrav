@@ -85,7 +85,7 @@ mod tests {
         // pass "right length" - so the regression this test actually guards
         // is the ring's own pixels reaching the buffer, not just its shape.
         let icon = rasterize(64);
-        let opaque = icon.pixels.chunks_exact(4).any(|p| p[3] > 0);
+        let opaque = icon.pixels.as_chunks::<4>().0.iter().any(|p| p[3] > 0);
         assert!(opaque, "rasterized icon has no opaque pixel");
     }
 

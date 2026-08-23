@@ -35,7 +35,7 @@ use crate::mesh_render::{
 /// that is not a multiple of four leaves its tail alone rather than panicking,
 /// because a truncated readback is already a reported error elsewhere.
 pub fn make_opaque(pixels: &mut [u8]) {
-    for pixel in pixels.chunks_exact_mut(4) {
+    for pixel in pixels.as_chunks_mut::<4>().0 {
         pixel[3] = 0xff;
     }
 }

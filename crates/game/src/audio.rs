@@ -1388,7 +1388,9 @@ fn load_ps2_track(source: &str, index: usize) -> Result<Option<Sound>> {
     // established. `chunks_exact` drops a trailing odd byte, which
     // `Directory::parse` has already rejected as a partial frame.
     let samples: Vec<i16> = pcm
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|pair| i16::from_le_bytes([pair[0], pair[1]]))
         .collect();
     let sound = Sound::new(samples, ps2_music::CHANNELS, ps2_music::SAMPLE_RATE)

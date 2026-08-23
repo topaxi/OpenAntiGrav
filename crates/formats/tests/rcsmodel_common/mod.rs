@@ -127,7 +127,7 @@ pub fn unit3(v: [f32; 3]) -> Option<[f32; 3]> {
 /// circuit does everywhere.
 pub fn smooth_normals(points: &[[f32; 3]], indices: &[u16]) -> Vec<Option<[f32; 3]>> {
     let mut acc = vec![[0.0f32; 3]; points.len()];
-    for t in indices.chunks_exact(3) {
+    for t in indices.as_chunks::<3>().0 {
         let [a, b, c] = [t[0], t[1], t[2]].map(|i| points[i as usize]);
         let (u, v) = (
             [b[0] - a[0], b[1] - a[1], b[2] - a[2]],
