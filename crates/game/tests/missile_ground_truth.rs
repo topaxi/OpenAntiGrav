@@ -85,7 +85,7 @@ fn single_race() -> Option<race::Loaded> {
 fn press(button: Button) -> oag_gameplay::InputSnapshot {
     let mut buttons = Input::new();
     buttons.begin_frame(0);
-    buttons.begin_frame(1 << button.index());
+    buttons.begin_frame(button.bit());
     oag_gameplay::InputSnapshot {
         buttons,
         ..oag_gameplay::InputSnapshot::new()

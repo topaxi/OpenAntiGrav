@@ -187,7 +187,7 @@ fn a_ship_spawns_on_the_track_and_flies_along_it() {
         race.ship().physics.body.up()
     );
 
-    let mut held = race::HeldButtons::new(1 << Button::Cross.index());
+    let mut held = race::HeldButtons::new(Button::Cross.bit());
     let mut grounded_ticks = 0u32;
     // Counted apart, because one probe in contact and two are different situations:
     // a single probe is a pitch torque applied every tick.
@@ -307,7 +307,7 @@ fn the_front_end_hands_off_into_a_driveable_race() {
 
     // START skips the intro through `LogoFMVRedirectScreen`, cross picks a
     // language, and START again presses through `Show Logo`.
-    input.begin_frame(1 << Button::Start.index());
+    input.begin_frame(Button::Start.bit());
     frontend.update(dt, &mut input, None);
     input.begin_frame(0);
     frontend.update(dt, &mut input, None);
@@ -317,14 +317,14 @@ fn the_front_end_hands_off_into_a_driveable_race() {
         frontend.machine().current()
     );
 
-    input.begin_frame(1 << Button::Cross.index());
+    input.begin_frame(Button::Cross.bit());
     frontend.update(dt, &mut input, None);
     assert!(frontend.machine().is(states::SHOW_LOGO));
 
     // `Show Logo` is the disc's PRESS START screen and it sits between the
     // picker and everything after it, so the front end is not finished until
     // START goes through it.
-    input.begin_frame(1 << Button::Start.index());
+    input.begin_frame(Button::Start.bit());
     frontend.update(dt, &mut input, None);
     assert!(frontend.machine().is(states::LAUNCH_GAME));
     assert!(
@@ -336,7 +336,7 @@ fn the_front_end_hands_off_into_a_driveable_race() {
     let Some(loaded) = load() else { return };
     let bound = envelope(&loaded);
     let mut race = race::Race::start(loaded.setup);
-    let mut held = race::HeldButtons::new(1 << Button::Cross.index());
+    let mut held = race::HeldButtons::new(Button::Cross.bit());
     let mut grounded_ticks = 0u32;
 
     for tick in 0..HANDOFF_TICKS {
@@ -413,7 +413,7 @@ fn a_ship_stays_on_the_track_for_ten_seconds() {
     let Some(loaded) = load() else { return };
     let bound = envelope(&loaded);
     let mut race = race::Race::start(loaded.setup);
-    let mut held = race::HeldButtons::new(1 << Button::Cross.index());
+    let mut held = race::HeldButtons::new(Button::Cross.bit());
 
     let mut worst_distance: f32 = 0.0;
     let mut worst_at = 0u32;
@@ -1375,8 +1375,8 @@ fn a_weapon_pad_on_the_disc_hands_out_a_pickup_in_a_single_race() {
     let mut fired = race_at_pad_seeded(oag_race::Mode::SingleRace, Some(turbo_seed));
     let mut control_buttons = Input::new();
     let mut fired_buttons = Input::new();
-    const CROSS: u32 = 1 << Button::Cross.index();
-    const SQUARE: u32 = 1 << Button::Square.index();
+    const CROSS: u32 = Button::Cross.bit();
+    const SQUARE: u32 = Button::Square.bit();
 
     let snapshot = |buttons: &mut Input, mask: u32| {
         buttons.begin_frame(mask);
@@ -1503,7 +1503,7 @@ fn a_rocket_fired_on_a_real_track_flies_and_detonates() {
             ..Default::default()
         }
     };
-    const SQUARE: u32 = 1 << Button::Square.index();
+    const SQUARE: u32 = Button::Square.bit();
 
     race.tick(&snapshot(&mut buttons, 0));
     assert_eq!(

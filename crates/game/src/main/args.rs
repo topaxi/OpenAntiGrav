@@ -95,7 +95,7 @@ pub(crate) fn button_mask(names: Option<&str>) -> u32 {
     names.map_or(0, |list| {
         list.split(',')
             .filter_map(|name| input::button_from_name(name.trim()))
-            .fold(0u32, |mask, button| mask | (1u32 << button.index()))
+            .fold(0u32, |mask, button| mask | button.bit())
     })
 }
 

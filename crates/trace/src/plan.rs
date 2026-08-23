@@ -348,7 +348,7 @@ pub fn to_gate<R: Raycaster + ?Sized>(
             // chase the last run-on point from behind and read as "turn round".
             // The tail is only there so the script does not end on the gate.
             if crossing.is_some() {
-                return Some(Held::from_buttons(1 << Button::Cross.index()));
+                return Some(Held::from_buttons(Button::Cross.bit()));
             }
 
             index = path.nearest(position, index);
@@ -382,22 +382,22 @@ fn steer(state: &ShipState, path: &Path, index: usize, tuning: &Tuning) -> Held 
     let error = want.dot(body.right());
     let forward = want.dot(body.forward());
 
-    let mut buttons = 1u32 << Button::Cross.index();
+    let mut buttons = Button::Cross.bit();
     if error > tuning.deadband {
-        buttons |= 1 << Button::Right.index();
+        buttons |= Button::Right.bit();
         if error > tuning.brake_at {
-            buttons |= 1 << Button::R.index();
+            buttons |= Button::R.bit();
         }
     } else if error < -tuning.deadband {
-        buttons |= 1 << Button::Left.index();
+        buttons |= Button::Left.bit();
         if error < -tuning.brake_at {
-            buttons |= 1 << Button::L.index();
+            buttons |= Button::L.bit();
         }
     }
     // Aimed away from where the line goes: thrust would only drive it further
     // off, so coast and let the steering come round.
     if forward < tuning.reverse_at {
-        buttons &= !(1 << Button::Cross.index());
+        buttons &= !Button::Cross.bit();
     }
     Held::from_buttons(buttons)
 }

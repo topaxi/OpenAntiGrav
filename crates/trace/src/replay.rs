@@ -722,7 +722,7 @@ fn snapshot_for(
     let (mask, snapshot) = match inputs {
         Inputs::FromTrace => (
             if recorded.throttle > 0.0 {
-                1u32 << Button::Cross.index()
+                Button::Cross.bit()
             } else {
                 0
             },

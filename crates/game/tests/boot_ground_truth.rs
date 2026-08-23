@@ -301,14 +301,14 @@ fn the_sequence_runs_from_boot_to_launch_game() {
 
     // Move to English, the last of the five, and pick it.
     for _ in 0..4 {
-        input.begin_frame(1 << Button::Down.index());
+        input.begin_frame(Button::Down.bit());
         frontend.update(dt, &mut input, None);
         input.begin_frame(0);
         frontend.update(dt, &mut input, None);
     }
     assert_eq!(frontend.selected(), 4);
 
-    input.begin_frame(1 << Button::Cross.index());
+    input.begin_frame(Button::Cross.bit());
     frontend.update(dt, &mut input, None);
     assert_eq!(frontend.chosen(), Some("English"));
 
@@ -338,7 +338,7 @@ fn the_sequence_runs_from_boot_to_launch_game() {
         "and it has no timeout"
     );
 
-    input.begin_frame(1 << Button::Start.index());
+    input.begin_frame(Button::Start.bit());
     frontend.update(dt, &mut input, None);
     assert!(frontend.is_finished());
     assert!(frontend.machine().is(states::LAUNCH_GAME));
@@ -364,7 +364,7 @@ fn the_picker_draws_every_language_in_its_own_name() {
     let mut input = Input::new();
 
     // START skips straight there.
-    input.begin_frame(1 << Button::Start.index());
+    input.begin_frame(Button::Start.bit());
     frontend.update(1.0 / 60.0, &mut input, None);
     input.begin_frame(0);
     frontend.update(1.0 / 60.0, &mut input, None);

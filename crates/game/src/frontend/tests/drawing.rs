@@ -51,12 +51,12 @@ fn show_logo_draws_the_pulse_logo_and_its_press_start_line() {
 fn circle_does_not_select() {
     let mut frontend = frontend(300);
     let mut input = Input::new();
-    input.begin_frame(1 << Button::Start.index());
+    input.begin_frame(Button::Start.bit());
     frontend.update(FRAME, &mut input, None);
     input.begin_frame(0);
     frontend.update(FRAME, &mut input, None);
 
-    input.begin_frame(1 << Button::Circle.index());
+    input.begin_frame(Button::Circle.bit());
     frontend.update(FRAME, &mut input, None);
     assert_eq!(
         frontend.chosen(),
@@ -75,7 +75,7 @@ fn the_discs_own_redirect_is_reported_not_followed() {
 fn the_picker_draws_one_row_per_language() {
     let mut frontend = frontend(300);
     let mut input = Input::new();
-    input.begin_frame(1 << Button::Start.index());
+    input.begin_frame(Button::Start.bit());
     frontend.update(FRAME, &mut input, None);
     input.begin_frame(0);
     frontend.update(FRAME, &mut input, None);
@@ -131,11 +131,11 @@ fn an_empty_language_list_does_not_panic() {
         false,
     );
     let mut input = Input::new();
-    input.begin_frame(1 << Button::Start.index());
+    input.begin_frame(Button::Start.bit());
     frontend.update(FRAME, &mut input, None);
     input.begin_frame(0);
     frontend.update(FRAME, &mut input, None);
-    input.begin_frame(1 << Button::Cross.index());
+    input.begin_frame(Button::Cross.bit());
     frontend.update(FRAME, &mut input, None);
     assert_eq!(frontend.chosen(), None);
     let _ = frontend.draw_list();

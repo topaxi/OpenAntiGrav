@@ -27,7 +27,7 @@ fn broken(name: &str) -> Candidate {
 }
 
 fn press(input: &mut Input, button: Button) {
-    input.begin_frame(1 << button.index());
+    input.begin_frame(button.bit());
 }
 
 #[test]
@@ -118,7 +118,7 @@ fn a_held_button_moves_once() {
     assert_eq!(launcher.cursor(), 1);
 
     // Same mask again: held, not pressed.
-    input.begin_frame(1 << Button::Down.index());
+    input.begin_frame(Button::Down.bit());
     launcher.update(&mut input);
     assert_eq!(launcher.cursor(), 1);
 }

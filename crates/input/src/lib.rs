@@ -57,7 +57,7 @@ impl Keyboard {
         let Some(button) = keys::map_key(key) else {
             return;
         };
-        let bit = 1u32 << (button.index() & 0x1f);
+        let bit = button.bit();
         if pressed {
             self.held |= bit;
             self.tapped |= bit;

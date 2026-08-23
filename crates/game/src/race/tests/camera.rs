@@ -192,7 +192,7 @@ fn cycling_the_camera_changes_no_simulation_state() {
 
     // Thrust held, so the craft is moving rather than parked: a stationary
     // ship would hash the same however badly the camera behaved.
-    let held = 1u32 << oag_gameplay::input::Button::Cross.index();
+    let held = oag_gameplay::input::Button::Cross.bit();
 
     let mut control = Race::start(setup(Handling::default()));
     let mut cycled = Race::start(setup(Handling::default()));

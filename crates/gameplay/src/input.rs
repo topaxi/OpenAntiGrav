@@ -75,8 +75,14 @@ impl Button {
         self as u8
     }
 
+    /// The single-bit mask for this button, for building a held mask.
+    ///
+    /// `Input_IsPressed` tests `*(u32 *)(this + 0x48) & (1 << (index & 0x1f))`,
+    /// so the masking of the index is reproduced here rather than tidied away.
+    /// This is the one place that turns an index into a mask - the abstract
+    /// layer is indices everywhere else, per `Input_BuildState`.
     #[must_use]
-    const fn bit(self) -> u32 {
+    pub const fn bit(self) -> u32 {
         1u32 << (self.index() & 0x1f)
     }
 }
@@ -101,7 +107,7 @@ impl Display for Button {
     }
 }
 
-/// Every real button, for building the synthetic [`button::ANY`] bit.
+/// Every real button, for building the synthetic [`Button::Any`] bit.
 const REAL_BUTTONS: [Button; 12] = [
     Button::Up,
     Button::Down,
@@ -183,8 +189,7 @@ impl Input {
 
     /// Whether `button` went down this frame.
     ///
-    /// `Input_IsPressed` tests `*(u32 *)(this + 0x48) & (1 << (index & 0x1f))`,
-    /// so the masking of the index is reproduced rather than tidied away.
+    /// `Input_IsPressed`; see [`Button::bit`] for the mask it tests against.
     #[must_use]
     pub fn is_pressed(&self, button: Button) -> bool {
         self.pressed & button.bit() != 0
@@ -254,7 +259,7 @@ pub struct InputSnapshot {
     pub stick_y: f32,
     /// Left airbrake, `0.0..=1.0`.
     ///
-    /// An axis rather than the [`button::L`] bit because the recovered force law
+    /// An axis rather than the [`Button::L`] bit because the recovered force law
     /// ramps each side toward "its analog input"; on a PSP pad that input can
     /// only ever be 0 or 1, and on anything else it need not be.
     pub airbrake_left: f32,

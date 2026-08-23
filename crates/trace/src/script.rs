@@ -105,7 +105,7 @@ const SCRIPTABLE: [(&str, Button); 12] = [
 /// by [`oag_gameplay::input::Input::begin_frame`] during the run.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct State {
-    /// Abstract button indices, as a mask. See [`oag_gameplay::input::button`].
+    /// Abstract button indices, as a mask. See [`oag_gameplay::input::Button`].
     pub buttons: u32,
     /// Analog stick X, `-1..=1`, positive right.
     pub stick_x: f32,
@@ -121,7 +121,7 @@ impl State {
     /// Whether an abstract button index is held.
     #[must_use]
     pub fn is_held(&self, button: Button) -> bool {
-        self.buttons & (1u32 << (button.index() & 0x1f)) != 0
+        self.buttons & button.bit() != 0
     }
 
     /// The state a set of held buttons alone describes.
@@ -461,7 +461,7 @@ fn parse_state<'a>(
                 line,
                 token: token.to_string(),
             })?;
-        buttons |= 1u32 << (button.index() & 0x1f);
+        buttons |= button.bit();
     }
 
     if let Some(token) = nothing

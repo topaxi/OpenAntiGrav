@@ -157,7 +157,7 @@ fn pures_picker_leads_to_its_second_boot_movie_then_the_title_screen() {
 
         // Confirm whatever is highlighted. The picker is the boot's first screen
         // here, so there is nothing to run through to reach it.
-        input.begin_frame(1 << Button::Cross.index());
+        input.begin_frame(Button::Cross.bit());
         loaded.frontend.update(1.0 / 60.0, &mut input, None);
         assert!(
             loaded.frontend.chosen().is_some(),
@@ -193,7 +193,7 @@ fn pures_picker_leads_to_its_second_boot_movie_then_the_title_screen() {
             "{label}: the cards advance themselves; got {:?}",
             loaded.frontend.machine().current()
         );
-        input.begin_frame(1 << Button::Cross.index());
+        input.begin_frame(Button::Cross.bit());
         loaded.frontend.update(1.0 / 60.0, &mut input, None);
         assert!(
             loaded.frontend.machine().is(pure_states::FMV_INTRO),
@@ -233,7 +233,7 @@ fn pures_picker_leads_to_its_second_boot_movie_then_the_title_screen() {
         // carries, alternated with none, must leave it exactly where it is; a
         // hidden timeout would show up here.
         for tick in 0..600 {
-            let held = !(1u32 << Button::Start.index());
+            let held = !Button::Start.bit();
             input.begin_frame(if tick % 2 == 0 { held } else { 0 });
             loaded.frontend.update(1.0 / 60.0, &mut input, None);
         }
@@ -253,7 +253,7 @@ fn pures_picker_leads_to_its_second_boot_movie_then_the_title_screen() {
         // Pulse's `Show Logo` leads to four Memory Stick screens it does not
         // have either. Both titles reach the menus by the same edge; see
         // `docs/architecture/pure-boot.md`.
-        input.begin_frame(1 << Button::Start.index());
+        input.begin_frame(Button::Start.bit());
         loaded.frontend.update(1.0 / 60.0, &mut input, None);
         assert!(
             loaded.frontend.machine().is(states::LAUNCH_GAME),

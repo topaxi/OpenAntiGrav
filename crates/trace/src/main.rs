@@ -1521,7 +1521,7 @@ fn inputs(args: &RunArgs, ticks: usize) -> Result<Inputs> {
     for name in &args.hold {
         let button = button_from_name(name)
             .with_context(|| format!("{name:?} is not a button name the front end knows"))?;
-        buttons |= 1u32 << (button.index() & 0x1f);
+        buttons |= button.bit();
     }
     Ok(Inputs::Held(Held {
         buttons,

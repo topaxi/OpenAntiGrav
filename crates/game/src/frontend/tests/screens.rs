@@ -56,7 +56,7 @@ fn pure_walks_the_five_screens_the_disc_walks() {
     let mut input = Input::new();
     assert!(frontend.machine().is(pure_states::LANGUAGE_SELECTION));
 
-    input.begin_frame(1 << Button::Cross.index());
+    input.begin_frame(Button::Cross.bit());
     frontend.update(FRAME, &mut input, None);
     assert!(
         frontend.machine().is(pure_states::DEVELOPER_PUBLISHER),
@@ -88,7 +88,7 @@ fn pure_walks_the_five_screens_the_disc_walks() {
         frontend.machine().is(pure_states::MEMORY_STICK_WARNING),
         "the storage warning has no timeout - it holds for cross"
     );
-    input.begin_frame(1 << Button::Cross.index());
+    input.begin_frame(Button::Cross.bit());
     frontend.update(FRAME, &mut input, None);
     assert!(frontend.machine().is(pure_states::FMV_INTRO));
 
@@ -128,7 +128,7 @@ fn start_on_pures_title_screen_launches_the_game() {
     // seconds. The screen has no timeout of its own either - its unnamed
     // redirect is left unfired on purpose - so this must not move.
     for _ in 0..600 {
-        input.begin_frame(!(1u32 << Button::Start.index()));
+        input.begin_frame(!Button::Start.bit());
         frontend.update(FRAME, &mut input, None);
     }
     assert!(
@@ -138,7 +138,7 @@ fn start_on_pures_title_screen_launches_the_game() {
     );
     assert!(!frontend.is_finished());
 
-    input.begin_frame(1 << Button::Start.index());
+    input.begin_frame(Button::Start.bit());
     frontend.update(FRAME, &mut input, None);
     assert!(
         frontend.machine().is(states::LAUNCH_GAME),
@@ -161,7 +161,7 @@ fn the_storage_warning_is_worded_for_a_machine_with_storage() {
     // Back up: walk a fresh one only as far as the warning.
     let mut frontend = pure(60);
     let mut input = Input::new();
-    input.begin_frame(1 << Button::Cross.index());
+    input.begin_frame(Button::Cross.bit());
     frontend.update(FRAME, &mut input, None);
     run_until(&mut frontend, &mut input, 1200, |f| {
         f.machine().is(pure_states::MEMORY_STICK_WARNING)
@@ -213,7 +213,7 @@ fn no_screen_ever_draws_two_videos_at_once() {
             );
             seen += 1;
             input.begin_frame(if seen % 120 == 0 {
-                1 << Button::Cross.index()
+                Button::Cross.bit()
             } else {
                 0
             });
@@ -246,7 +246,7 @@ fn start_on_show_logo_launches_the_game() {
     pick_a_language(&mut frontend, &mut input);
 
     input.begin_frame(0);
-    input.begin_frame(1 << Button::Start.index());
+    input.begin_frame(Button::Start.bit());
     let events = frontend.update(FRAME, &mut input, None);
 
     assert!(frontend.is_finished());

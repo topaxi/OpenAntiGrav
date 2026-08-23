@@ -213,7 +213,7 @@ fn a_ship_spawns_and_steps_on_the_ps2_disc() {
         race.ship().physics.body.up()
     );
 
-    let mut held = race::HeldButtons::new(1 << Button::Cross.index());
+    let mut held = race::HeldButtons::new(Button::Cross.bit());
     let mut grounded_ticks = 0u32;
     for tick in 0..TICKS {
         let snapshot = held.snapshot();

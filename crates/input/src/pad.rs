@@ -123,10 +123,10 @@ pub struct PadState {
 pub fn resolve(reading: Reading) -> PadState {
     let mut held = reading.buttons;
     if reading.throttle > TRIGGER_THRESHOLD {
-        held |= 1u32 << Button::Cross.index();
+        held |= Button::Cross.bit();
     }
 
-    let shoulder = |button: Button| f32::from(u8::from(held & (1u32 << button.index()) != 0));
+    let shoulder = |button: Button| f32::from(u8::from(held & button.bit() != 0));
     let brake = reading.brake.clamp(0.0, 1.0);
 
     PadState {
@@ -232,7 +232,7 @@ impl Pad {
                 if pad.is_pressed(bound_button)
                     && let Some(button) = map_button(bound_button)
                 {
-                    reading.buttons |= 1u32 << button.index();
+                    reading.buttons |= button.bit();
                 }
             }
             reading.stick_x = larger(reading.stick_x, pad.value(gilrs::Axis::LeftStickX));
@@ -276,7 +276,7 @@ mod tests {
         assert_eq!(map_button(gilrs::Button::RightTrigger), Some(Button::R));
 
         let state = resolve(Reading {
-            buttons: 1u32 << Button::L.index(),
+            buttons: Button::L.bit(),
             ..Reading::default()
         });
         assert_eq!(state.airbrake_left, 1.0);
@@ -306,17 +306,13 @@ mod tests {
             throttle: TRIGGER_THRESHOLD,
             ..Reading::default()
         });
-        assert_eq!(
-            idle.held & (1u32 << Button::Cross.index()),
-            0,
-            "resting trigger"
-        );
+        assert_eq!(idle.held & Button::Cross.bit(), 0, "resting trigger");
 
         let pulled = resolve(Reading {
             throttle: 1.0,
             ..Reading::default()
         });
-        assert_ne!(pulled.held & (1u32 << Button::Cross.index()), 0);
+        assert_ne!(pulled.held & Button::Cross.bit(), 0);
     }
 
     /// L2 is "brake", which the original's action set does not have. Both
@@ -336,7 +332,7 @@ mod tests {
     #[test]
     fn a_held_shoulder_wins_over_a_lighter_brake() {
         let state = resolve(Reading {
-            buttons: 1u32 << Button::R.index(),
+            buttons: Button::R.bit(),
             brake: 0.3,
             ..Reading::default()
         });

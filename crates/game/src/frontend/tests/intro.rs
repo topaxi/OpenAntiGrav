@@ -129,7 +129,7 @@ fn start_skips_the_intro_by_firing_the_redirect() {
     let mut frontend = reel(300);
     let mut input = Input::new();
 
-    input.begin_frame(1 << Button::Start.index());
+    input.begin_frame(Button::Start.bit());
     frontend.update(FRAME, &mut input, None);
     assert_eq!(
         frontend.machine().current(),
@@ -149,7 +149,7 @@ fn the_redirect_target_is_cleared_so_it_cannot_fire_twice() {
     let mut frontend = reel(300);
     let mut input = Input::new();
 
-    input.begin_frame(1 << Button::Start.index());
+    input.begin_frame(Button::Start.bit());
     frontend.update(FRAME, &mut input, None);
     assert!(
         run_until(&mut frontend, &mut input, 2000, |f| f
@@ -201,24 +201,24 @@ fn no_picture_still_plays_the_sequence() {
 fn the_picker_moves_and_wraps_both_ways() {
     let mut frontend = frontend(300);
     let mut input = Input::new();
-    input.begin_frame(1 << Button::Start.index());
+    input.begin_frame(Button::Start.bit());
     frontend.update(FRAME, &mut input, None);
     input.begin_frame(0);
     frontend.update(FRAME, &mut input, None);
     assert!(frontend.machine().is(states::LANGUAGE_SELECTION));
 
     assert_eq!(frontend.selected(), 0);
-    input.begin_frame(1 << Button::Down.index());
+    input.begin_frame(Button::Down.bit());
     frontend.update(FRAME, &mut input, None);
     assert_eq!(frontend.selected(), 1);
 
     input.begin_frame(0);
-    input.begin_frame(1 << Button::Up.index());
+    input.begin_frame(Button::Up.bit());
     frontend.update(FRAME, &mut input, None);
     assert_eq!(frontend.selected(), 0);
 
     input.begin_frame(0);
-    input.begin_frame(1 << Button::Up.index());
+    input.begin_frame(Button::Up.bit());
     frontend.update(FRAME, &mut input, None);
     assert_eq!(
         frontend.selected(),
@@ -245,7 +245,7 @@ fn a_boot_that_runs_out_of_chain_opens_the_menus() {
     let mut input = Input::new();
 
     // Pick a language, which is the only step ahead of the reel.
-    input.begin_frame(1 << Button::Cross.index());
+    input.begin_frame(Button::Cross.bit());
     frontend.update(FRAME, &mut input, None);
     assert!(
         run_until(&mut frontend, &mut input, 200, |f| f
@@ -274,7 +274,7 @@ fn a_boot_that_runs_out_of_chain_opens_the_menus() {
 fn the_chain_running_out_is_reported_rather_than_silent() {
     let mut frontend = hd(20);
     let mut input = Input::new();
-    input.begin_frame(1 << Button::Cross.index());
+    input.begin_frame(Button::Cross.bit());
     frontend.update(FRAME, &mut input, None);
     run_until(&mut frontend, &mut input, 600, |f| {
         f.machine().is(states::LAUNCH_GAME)

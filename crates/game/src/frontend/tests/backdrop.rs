@@ -144,7 +144,7 @@ fn the_screens_after_the_intro_all_sit_on_the_backdrop() {
         if state == states::LANGUAGE_SELECTION {
             // START skips the movie, and the redirect that follows it
             // spends one update on its way to the picker.
-            input.begin_frame(1 << Button::Start.index());
+            input.begin_frame(Button::Start.bit());
             frontend.update(FRAME, &mut input, None);
             input.begin_frame(0);
             frontend.update(FRAME, &mut input, None);
@@ -153,7 +153,7 @@ fn the_screens_after_the_intro_all_sit_on_the_backdrop() {
             if state == states::LAUNCH_GAME {
                 // `Show Logo` leaves on START and on nothing else.
                 input.begin_frame(0);
-                input.begin_frame(1 << Button::Start.index());
+                input.begin_frame(Button::Start.bit());
                 frontend.update(FRAME, &mut input, None);
             }
         }

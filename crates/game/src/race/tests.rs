@@ -325,9 +325,9 @@ impl Buttons {
     }
 }
 
-const CROSS: u32 = 1 << oag_gameplay::input::Button::Cross.index();
-const SQUARE: u32 = 1 << oag_gameplay::input::Button::Square.index();
-const CIRCLE: u32 = 1 << oag_gameplay::input::Button::Circle.index();
+const CROSS: u32 = oag_gameplay::input::Button::Cross.bit();
+const SQUARE: u32 = oag_gameplay::input::Button::Square.bit();
+const CIRCLE: u32 = oag_gameplay::input::Button::Circle.bit();
 
 /// A race with weapon pads, the mode that arms them, and a table to draw
 /// from. `refresh` is `<WeaponPad refresh_time>`.

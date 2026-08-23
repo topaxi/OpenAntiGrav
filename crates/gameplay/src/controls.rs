@@ -151,7 +151,7 @@ mod tests {
 
     fn held(button: Button) -> Input {
         let mut input = Input::new();
-        input.begin_frame(1u32 << (button.index() & 0x1f));
+        input.begin_frame(button.bit());
         input
     }
 
@@ -233,14 +233,14 @@ mod tests {
     #[test]
     fn a_veteran_tap_is_an_edge_and_not_a_level() {
         let mut buttons = Input::new();
-        buttons.begin_frame(1 << Button::L.index());
+        buttons.begin_frame(Button::L.bit());
         let first = InputSnapshot {
             buttons,
             ..InputSnapshot::new()
         };
         assert!(ship_controls(&first, ControlScheme::Veteran).shift_tap_left);
 
-        buttons.begin_frame(1 << Button::L.index());
+        buttons.begin_frame(Button::L.bit());
         let second = InputSnapshot {
             buttons,
             ..InputSnapshot::new()
