@@ -42,6 +42,9 @@ const TITLE: &Title = &Title {
     // one that has no front end, which is the case that motivated the field.
     front_end: None,
     exhaust: &oag_title::exhaust::Exhaust::Unread,
+    // `Unread` on the same terms as the ribbon beside it: this crate resolves
+    // archives and never draws an exhaust.
+    flare: &oag_title::flare::Flare::Unread,
     // Present for the same reason and equally unread: resolving archives has
     // nothing to do with which circuit a race opens on.
     race: &oag_title::RaceDefaults {

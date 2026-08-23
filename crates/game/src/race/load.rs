@@ -483,6 +483,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         &slot_teams,
         options.mode,
         title.race.zone_craft,
+        title.flare,
         options.lod,
         &mut report,
     )?;
@@ -832,19 +833,10 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // `oag_title::exhaust::Exhaust` and `assets::trail_texture`.
     let (noise, trail_blend) = assets::trail_texture(&mut archives, title, &mut report);
 
-    let flare = match exhaust_texture(&mut archives, FLARE_TEXTURE) {
-        Ok((texture, note)) => {
-            report.push(note);
-            Some(texture)
-        }
-        Err(why) => {
-            // Reported rather than silently swapped for the placeholder. A
-            // stand-in that looks plausible is how a decode failure survives
-            // review; see the note on `FlareTexture::placeholder`.
-            report.push(format!("{why} - the flare falls back to a procedural glow"));
-            None
-        }
-    };
+    // The flare is a title axis too, and a second one rather than a variant of
+    // the ribbon's: Pulse and Pure name a sprite texture, HD authors a per-team
+    // model. See `oag_title::flare::Flare` and `assets::flare_texture`.
+    let flare = assets::flare_texture(&mut archives, title, &mut report);
 
     // The plugin list is the title's, and an empty one is a real answer rather
     // than a missing case: a title whose front end is unrecovered has no

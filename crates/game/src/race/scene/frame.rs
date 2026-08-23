@@ -266,6 +266,19 @@ impl Scene {
         // craft's `plume_timer` rather than one shared clock. Indexed by slot -
         // not `zip`ped over `ship_model_matrices`, which filters inactive craft
         // and so does not keep slot alignment.
+        // The always-on flame, on the craft's own matrix and nothing else: its
+        // vertices were already moved to the `Engine Flare` locator at load, so
+        // it rides the hull exactly as the plume does. See
+        // `crate::livery::flare::per_team` for why the placement is baked.
+        for (slot, flare) in self.flares.iter().enumerate().take(drawn) {
+            let Some(flare) = flare else {
+                continue;
+            };
+            if !race.ship_active(slot) {
+                continue;
+            }
+            flare.write(queue, view_projection, race.ship_model_matrix_of(slot));
+        }
         for (slot, boost) in self.boost.iter().enumerate().take(drawn) {
             // `None` is a slot whose *team* ships no plume, which is a
             // reported absence rather than a hidden one - see `livery::plume`.
@@ -529,6 +542,29 @@ impl Scene {
         // craft's plume the write above was gated on - a plume drawn from a
         // uniform buffer that was not written this frame would be last frame's
         // pose.
+        // With the plumes and for the same reason: the hulls' depth is in the
+        // buffer, and this model's own material blend writes none of its own.
+        //
+        // **Gated on the craft being in the race and nothing else.** The flame
+        // is authored as a permanent part of the craft - `EF_Main` carries no
+        // reveal condition and the file's every transform is the identity - so
+        // a throttle or speed gate here would be this project's invention
+        // rather than the asset's. What the original *does* animate on it is
+        // unread: `EF_Main` carries one attribute, `AnimEnd = 1.0`, and
+        // nothing here plays it. See docs/rendering/trail-ribbon.md.
+        for (slot, flare) in self.flares.iter().enumerate().take(drawn) {
+            let Some(flare) = flare else {
+                continue;
+            };
+            if !race.ship_active(slot) {
+                continue;
+            }
+            // `draw`, not `draw_additive`: every batch of this model already
+            // carries its material's own factor pair, so the ordinary path
+            // routes it through the authored pipeline. The override the plume
+            // needs is for a model that authors none.
+            stats.add(flare.draw(&mut pass, None, None, None));
+        }
         for (slot, boost) in self.boost.iter().enumerate().take(drawn) {
             let Some(boost) = boost else {
                 continue;

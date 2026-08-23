@@ -56,6 +56,8 @@ use oag_render::mesh::{self, Model};
 
 use crate::race::{boost_entry_name, ps2_texture_set, ship_entry_name};
 
+mod flare;
+
 /// Everything a single grid slot draws that belongs to its team.
 #[derive(Debug)]
 pub struct Livery {
@@ -71,7 +73,17 @@ pub struct Livery {
     /// nozzle put the flare inside the fuselage on some of them.
     pub nozzle: Option<Vec3>,
     /// The additive plume a speed pad reveals, `shipboost.vex` beside the hull.
+    ///
+    /// **On Wipeout HD this is the `EF_Boost` group of the flare model**, not a
+    /// file of its own - HD ships no `shipboost.vex` and the plume is a subtree
+    /// of `engineflare.vex`. See [`flare::per_team`].
     pub boost: Option<Model>,
+    /// The always-on engine flame, for a title that authors one as a model.
+    ///
+    /// `None` on Pulse, Pure and the PS2 port, whose flare is a sprite the
+    /// exhaust pipeline draws rather than geometry - see
+    /// [`oag_title::flare::Flare`].
+    pub flare: Option<Model>,
     /// The additive shell a fired Shield pickup raises,
     /// `shipshield.vex` beside the hull - or `Data\Weapons\shield.vex` on a
     /// source that carries no per-team one, which is every Pure source.
@@ -141,6 +153,7 @@ pub fn load(
     teams: &[String],
     mode: Mode,
     zone: oag_title::ZoneCraft,
+    flare: &oag_title::flare::Flare,
     lod: mesh::Lod,
     report: &mut Vec<String>,
 ) -> Result<Vec<Livery>> {
@@ -157,6 +170,7 @@ pub fn load(
                 collision_fx: source.collision_fx.clone(),
                 boost: source.boost.clone(),
                 boost_uv: source.boost_uv.clone(),
+                flare: source.flare.clone(),
                 shield: source.shield.clone(),
             };
             report.push(format!(
@@ -167,7 +181,7 @@ pub fn load(
             continue;
         }
 
-        match one(archives, team, mode, zone, lod, report) {
+        match one(archives, team, mode, zone, flare, lod, report) {
             Ok(livery) => out.push(livery),
             Err(error) if slot == 0 => return Err(error),
             Err(error) => {
@@ -184,6 +198,7 @@ pub fn load(
                     collision_fx: player.collision_fx.clone(),
                     boost: player.boost.clone(),
                     boost_uv: player.boost_uv.clone(),
+                    flare: player.flare.clone(),
                     shield: player.shield.clone(),
                 });
             }
@@ -198,6 +213,7 @@ fn one(
     team: &str,
     mode: Mode,
     zone: oag_title::ZoneCraft,
+    flare: &oag_title::flare::Flare,
     lod: mesh::Lod,
     report: &mut Vec<String>,
 ) -> Result<Livery> {
@@ -225,6 +241,7 @@ fn one(
                 collision_fx: Vec::new(),
                 boost: None,
                 boost_uv: None,
+                flare: None,
                 shield: None,
             });
         };
@@ -237,12 +254,18 @@ fn one(
         )?;
         report.push(format!("{hull_name}: {}", built.describe()));
         let (nozzle, collision_fx) = locators(archives, &hull_name, &blob, report);
+        // **The plume comes from here too on this title.** HD ships no
+        // `shipboost.vex`; `EF_Boost` inside the flare model is what a speed
+        // pad reveals, so both halves come out of one load. See
+        // `flare::per_team`.
+        let lit = authored_flare(archives, team, flare, nozzle, report);
         return Ok(Livery {
             team: team.to_string(),
             nozzle,
             collision_fx,
             hull,
-            boost: None,
+            boost: lit.boost,
+            flare: lit.always,
             boost_uv: None,
             // **The shell is loaded on PS3 too**, unlike the plume: HD carries a
             // per-team `shipshield.vex` with its geometry in the `.rcsmodel`
@@ -273,6 +296,11 @@ fn one(
 
     let (boost, boost_uv) = plume(archives, team, mode, zone, lod, report);
     let shield = shell(archives, team, lod, report);
+    // Nothing on a title whose flare is a sprite, which is every source that
+    // reaches this branch today - the match is here rather than at the PS3
+    // branch alone so a fourth source is answered by its own axis and not by
+    // which decoder its hull happened to take.
+    let lit = authored_flare(archives, team, flare, nozzle, report);
     Ok(Livery {
         team: team.to_string(),
         hull,
@@ -280,8 +308,32 @@ fn one(
         collision_fx,
         boost,
         boost_uv,
+        flare: lit.always,
         shield,
     })
+}
+
+/// The flare this title authors as geometry, or nothing at all.
+///
+/// **A `Sprite` title yields nothing here and that is not a gap**: its flare is
+/// six camera-facing vertices the exhaust pipeline draws from a texture, which
+/// is a different mechanism entirely rather than a missing model. See
+/// [`oag_title::flare::Flare`].
+fn authored_flare(
+    archives: &mut oag_assets::Archives,
+    team: &str,
+    flare: &oag_title::flare::Flare,
+    nozzle: Option<Vec3>,
+    report: &mut Vec<String>,
+) -> flare::Flare {
+    match flare {
+        oag_title::flare::Flare::PerTeam(authored) => {
+            flare::per_team(archives, team, authored, nozzle, report)
+        }
+        oag_title::flare::Flare::Sprite(_) | oag_title::flare::Flare::Unread => {
+            flare::Flare::default()
+        }
+    }
 }
 
 /// The hull's `Engine Flare` and `Ship Collision Fx` locators, from whichever

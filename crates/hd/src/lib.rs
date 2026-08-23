@@ -80,6 +80,16 @@ pub const TITLE: &Title = &Title {
     exhaust: &oag_title::exhaust::Exhaust::Authored(
         "/data/ribboneffects/enginetrail_triangle.rcsmodel",
     ),
+    // **HD authors its flare too, and per team.** It carries none of Pulse's
+    // `grabbedEngineFlare` sprite; every one of its fourteen craft ships an
+    // `engineflare.vex`/`.rcsmodel` pair of 961-2141 triangles instead, split
+    // into an always-on `EF_Main` group and an `EF_Boost` one. See
+    // `docs/rendering/trail-ribbon.md`, "HD's flare is a model, not a sprite".
+    flare: &oag_title::flare::Flare::PerTeam(oag_title::flare::Authored {
+        stem: "engineflare",
+        always: "EF_Main",
+        boost: "EF_Boost",
+    }),
     // **The same file the soundtrack is declared in**, because on this title the
     // front-end plugin *is* the game plugin - it carries the `PI_Team` and
     // `PI_Track` nodes beside the `PI_Music` ones. See

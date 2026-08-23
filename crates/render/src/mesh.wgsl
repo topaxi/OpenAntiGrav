@@ -100,6 +100,26 @@ struct Scene {
 // miss it.
 override linear_out: f32 = 0.0;
 
+// **Wipeout HD's engine-flare program**, off by default and on only for a model
+// whose material declares the whole parameter set it reads - see
+// `oag_render::mesh::Flame`, which carries the arithmetic and the evidence, and
+// `docs/ghidra/functions/ps3-hdfury-eu/engine-flare.md`, which carries the
+// disassembly the arithmetic came from.
+//
+// **Every number is the material's, passed in as a pipeline constant**, because
+// they are a property of the *model* exactly as `colour_is_light` is, and a
+// uniform field would have to be mirrored by every pipeline in this crate and
+// by the asset viewer. The defaults are zero rather than the shipped values on
+// purpose: a model that reaches this path without its parameters must draw
+// nothing recognisable, not a flame with numbers this file invented.
+override flame_shading: f32 = 0.0;
+override flame_rim_power: f32 = 0.0;
+override flame_rim_scale: f32 = 0.0;
+override flame_rim_min: f32 = 0.0;
+override flame_alpha_scale: f32 = 0.0;
+override flame_colour_scale: f32 = 0.0;
+
+
 // **Whether `in.colour` is a baked light rather than a tint** - 1.0 only for a
 // Wipeout HD `.rcsmodel`, set from `Model::vertex_colour_is_light`. HD's
 // fragment programs *add* the interpolated colour to the lightmap term before
@@ -439,10 +459,43 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // vertex colour's own alpha here is what made the boost plume's baked
     // falloff vanish; see `every_psp_teams_boost_plume_vertex_alpha_is_bimodal`
     // in `crates/game/tests/boost_plume_ground_truth.rs`.
-    return vec4<f32>(
+
+    // **The flame, when this model is one.** `flame_shading` is 1.0 only for a
+    // craft's `engineflare` model, and then this replaces everything above
+    // rather than modifying it - the program it reproduces has no ambient, no
+    // sun, no lightmap and no specular, so lighting the flame and then
+    // overwriting it is the honest shape as well as the cheap one.
+    //
+    // `rim` is the same angle HD's program computes. Its own vertex program
+    // dots an *untransformed* normal attribute against
+    // `eyePositionWorldSpace - position`, which is only meaningful if the eye
+    // reaches it in model space; the angle between the two is the same number
+    // under a rigid transform, so it is computed here from the world normal and
+    // the real camera.
+    //
+    // **`texel.a` is deliberately absent.** The program's `TEX H0.xyz` writes
+    // three components and the fourth is the vertex ramp from the moment
+    // `MOV H0.w, f[TC2]` puts it there, so the sampled alpha never reaches the
+    // output. Multiplying it in - which the line below this one does for every
+    // other surface - is what held the flame at about a third of its
+    // brightness.
+    let rim = clamp(1.0 - dot(to_eye, n), 0.0, 1.0);
+    let flame_alpha = flame_alpha_scale
+        * (1.0 - (pow(rim, flame_rim_power) * flame_rim_scale + flame_rim_min));
+    let flame_rgb = texel.rgb * flame_colour_scale;
+    // Decoded on a linear target the way the stand-in path's colour is, and for
+    // the same reason: what a sampler hands back is in the space the asset was
+    // authored in, whatever this frame's target holds.
+    let flame = vec4<f32>(
+        mix(flame_rgb, pow(flame_rgb, vec3<f32>(2.2)), linear_out),
+        flame_alpha * in.colour.a,
+    );
+
+    let shaded = vec4<f32>(
         mix(plain_rgb, authored_rgb, scene.light.enabled * in.lit),
         texel.a * in.colour.a,
     );
+    return mix(shaded, flame, flame_shading);
 }
 
 @fragment

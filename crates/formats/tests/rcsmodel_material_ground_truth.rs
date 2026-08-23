@@ -226,6 +226,7 @@ fn every_factor_the_disc_uses_is_one_of_the_four_named_ones() {
             dst_factor: dst,
             texture: String::new(),
             second_texture: None,
+            parameters: Vec::new(),
         };
         match material.blend() {
             Blend::Opaque | Blend::Factors { .. } => mapped += 1,
@@ -826,4 +827,113 @@ fn a_reversed_circuit_finds_its_own_lightmap_atlases() {
         "a reversed chunk carrying a lightmap with no coordinates to sample it \
          through"
     );
+}
+
+/// The per-instance **parameter table**, disc-wide, and the numbers the engine
+/// flare's material authors.
+///
+/// **This is where a shipped shader's constants live**, and until
+/// [`rcsmodel::material::parameters`] existed it was the unread tail of a
+/// record: the `.rcsmaterial` declares that a program takes a `power1`, and the
+/// value is here, per model.
+///
+/// The layout claim is `+0x30` count, `+0x34` table, `0x20`-byte entries,
+/// `+0x04` kind (`0x8001` sampler, `0` parameter), `+0x18` value offset,
+/// `+0x1c` quad count. A wrong walk reads arbitrary bytes as floats, so the
+/// disc-wide half asserts that **every** value on the disc is a finite number
+/// of ordinary magnitude - 20,445 of them across 9,757 materials, which is what
+/// the confidence in `engine-flare.md` rests on.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn every_material_parameter_on_the_disc_is_a_plausible_number() {
+    let Some(image) = image() else {
+        return;
+    };
+    let mut total = 0usize;
+    let mut with_table = 0usize;
+    for archive in ARCHIVES {
+        let spec = format!("{}:PS3_GAME/USRDIR/{archive}.PSARC", image.display());
+        let mut open = oag_assets::psarc::Archive::open(&spec).expect("the archive opens");
+        let paths: Vec<String> = open
+            .paths()
+            .iter()
+            .filter(|p| p.ends_with(".rcsmodel"))
+            .cloned()
+            .collect();
+        for path in paths {
+            let Ok(bytes) = open.read_path(&path) else {
+                continue;
+            };
+            let Ok(model) = rcsmodel::Model::parse(&bytes) else {
+                continue;
+            };
+            for material in &model.materials {
+                if material.parameters.is_empty() {
+                    continue;
+                }
+                with_table += 1;
+                for parameter in &material.parameters {
+                    total += 1;
+                    assert!(
+                        parameter
+                            .value
+                            .iter()
+                            .all(|v| v.is_finite() && v.abs() < 1.0e6),
+                        "{path}: {} parameter {:#010x} reads {:?}, which is not a \
+                         number a shader takes - the table walk is off",
+                        material.name,
+                        parameter.hash,
+                        parameter.value
+                    );
+                }
+            }
+        }
+    }
+    assert!(
+        with_table > 9_000 && total > 20_000,
+        "only {with_table} material(s) with a table and {total} parameter(s); the \
+         census was 9,757 and 20,445"
+    );
+}
+
+/// Feisar's engine flare, parameter by parameter.
+///
+/// The five the flame's fragment program patches into inline constants, plus
+/// the `Speed` its unimplemented scroll takes. Named where a `~crc32` preimage
+/// was found - see `docs/ghidra/functions/ps3-hdfury-eu/engine-flare.md`.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_engine_flares_material_authors_the_numbers_its_program_patches() {
+    let Some(image) = image() else {
+        return;
+    };
+    let spec = format!("{}:PS3_GAME/USRDIR/DATA02.PSARC", image.display());
+    let mut open = oag_assets::psarc::Archive::open(&spec).expect("the archive opens");
+    let bytes = open
+        .read_path("/data/ships/feisar/engineflare.rcsmodel")
+        .expect("Feisar's engine flare");
+    let model = rcsmodel::Model::parse(&bytes).expect("it parses");
+    let material = model.materials.first().expect("its one material");
+    assert!(
+        material.name.ends_with("engines/flame_test.rcsmaterial"),
+        "{}",
+        material.name
+    );
+    let value = |hash: u32| {
+        material
+            .parameters
+            .iter()
+            .find(|p| p.hash == hash)
+            .unwrap_or_else(|| panic!("{hash:#010x} is not in the table"))
+            .value[0]
+    };
+    let name_hash = oag_formats::rcsmaterial::name_hash;
+    assert_eq!(value(name_hash("power1")), 10.0);
+    assert_eq!(value(name_hash("scale1")), 0.3);
+    assert_eq!(value(name_hash("min1")), 0.45);
+    assert_eq!(value(name_hash("Speed")), 2.0);
+    // The two with no preimage, read by the code slot they patch rather than by
+    // a name: the alpha term's scale and the colour's.
+    assert_eq!(value(0x92fc_84bf), 2.0);
+    assert_eq!(value(0x17d9_b3d3), 1.0);
 }

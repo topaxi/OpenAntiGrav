@@ -155,7 +155,7 @@ pub(crate) use assets::ps2_texture_set;
 // report line each one produces without spelling the literal a second time -
 // the names are the executable's, and one copy of them is the point.
 pub use assets::{FLARE_TEXTURE, NOISE_TEXTURE};
-use assets::{exhaust_texture, particle_effect, unrecovered_or_absent, untextured_note};
+use assets::{particle_effect, unrecovered_or_absent, untextured_note};
 
 use camera::target_of;
 #[cfg(test)]

@@ -12,6 +12,12 @@ use super::*;
 /// At `0x08a84c80`, loaded by `Texture_LoadEngineFlare`. Being a literal means the
 /// WAD lookup is an exact `wad::hash_name` hit rather than a mined candidate, which
 /// is unusual for this project and worth the note.
+///
+/// **The loader reaches it through [`oag_title::flare::Flare::Sprite`] now**,
+/// not by name from here: Wipeout HD carries no such entry and authors a model
+/// instead. This stays as the PSP and PS2 literal that
+/// `crates/game/tests/ps2_source_ground_truth.rs` asserts both discs decode,
+/// on the same footing as [`NOISE_TEXTURE`] beside it.
 pub const FLARE_TEXTURE: &str = r"Data\Tex\EngineFlare\grabbedEngineFlare128x64x8.mip";
 
 /// The trail ribbon's texture, also a literal in the executable.
@@ -193,6 +199,55 @@ fn authored_ribbon(
         blend,
         notes,
     ))
+}
+
+/// The flare's sprite texture, from wherever this title keeps it - or nothing
+/// at all, for a title that authors the flare as a model instead.
+///
+/// **A `PerTeam` title is not a failure here and must not read as one.** Until
+/// this axis existed every HD load report ended with "the flare falls back to a
+/// procedural glow", because the loader asked HD's disc for a Pulse name it
+/// does not carry. HD's flare is `Data\Ships\<Team>\engineflare.vex`, loaded
+/// per craft by [`crate::livery::flare`] and reported there; the sprite
+/// pipeline keeps its stand-in texture for the *rocket* billboard fallback,
+/// which is a separate use of the same slot.
+pub(super) fn flare_texture(
+    archives: &mut oag_assets::Archives,
+    title: &oag_title::Title,
+    report: &mut Vec<String>,
+) -> Option<FlareTexture> {
+    match title.flare {
+        oag_title::flare::Flare::Sprite(name) => match exhaust_texture(archives, name) {
+            Ok((texture, note)) => {
+                report.push(note);
+                Some(texture)
+            }
+            Err(why) => {
+                // Reported rather than silently swapped for the placeholder. A
+                // stand-in that looks plausible is how a decode failure
+                // survives review; see the note on `FlareTexture::placeholder`.
+                report.push(format!("{why} - the flare falls back to a procedural glow"));
+                None
+            }
+        },
+        oag_title::flare::Flare::PerTeam(authored) => {
+            report.push(format!(
+                "{}: the engine flare is authored geometry here, not a sprite - one \
+                 {}.vex per craft, reported with each livery. No flare texture is \
+                 loaded and none is missing",
+                title.name, authored.stem
+            ));
+            None
+        }
+        oag_title::flare::Flare::Unread => {
+            report.push(format!(
+                "{}: no engine flare is located for this title - the flare falls back \
+                 to a procedural glow",
+                title.name
+            ));
+            None
+        }
+    }
 }
 
 pub(super) fn exhaust_texture(
