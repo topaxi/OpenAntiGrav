@@ -37,12 +37,22 @@
 //! recovered; see its doc comment. Everything below plays at it.
 //!
 //! **Which waveform of a cue sounds.** `.COLLISIONS` binds fifteen impact
-//! samples and the opcode that chooses between them is one of the 43 that are
+//! samples and the opcode that chooses between them is one of the 41 that are
 //! unread, so [`Bank::pick`] chooses with its own generator. That is a
 //! deliberate approximation rather than a stand-in for missing data: the
 //! fifteen alternates *are* the disc's own audio, all of them within a tenth of
 //! a second of each other in length, and playing all fifteen at once - the only
 //! reading that needs no choice - is the one thing that is certainly wrong.
+//!
+//! The same approximation now reaches one level further down on Wipeout HD,
+//! where `.COLLISIONS` plays `c_CShipShip` and `c_CShipWall` and each of those
+//! has `S`/`M`/`L` children - 112 waveforms once the tree is walked. **The
+//! split is visible and is not wired**: which child a parent picks is guarded
+//! by opcode `0x22`, whose operand is not decoded, so nothing here pairs
+//! ship-against-wall or a severity band with a suffix. The game does know which
+//! of those happened, and pairing them off the names would be a mapping
+//! invented here rather than one read off the disc - the same refusal this file
+//! already makes about `oag_render::sparks::severity`.
 //!
 //! # Positional audio does not exist yet
 //!
@@ -354,11 +364,16 @@ impl Cue {
     /// **The dot is written here rather than stripped at lookup**, so that
     /// [`Bank::cue`](oag_formats::sblk::Bank::cue_named) stays the runtime's own
     /// 16-byte comparison and cannot resolve a name the original would have
-    /// rejected. Recorded as a hypothesis at confidence **70**: the name is
-    /// otherwise exact, it is the only candidate on either disc, and the parent
-    /// lookup is not implemented - so if a child cue turns out to select among
-    /// its parents rather than the other way round, this is the line that is
-    /// wrong.
+    /// rejected. The name is otherwise exact and it is the only candidate on
+    /// any disc.
+    ///
+    /// This comment used to add "if a child cue turns out to select among its
+    /// parents rather than the other way round, this is the line that is
+    /// wrong", and Wipeout HD's bank now answers it: `.COLLISIONS` is the
+    /// **parent**, and the cues it plays are the plainly named `c_CShipShip`
+    /// and `c_CShipWall`. So the leading dot does not mark a cue as somebody's
+    /// child - it is a naming convention, and the lookup stands.
+    /// See [`oag_formats::sblk::child`].
     #[must_use]
     pub fn name(self) -> &'static str {
         match self {
@@ -415,10 +430,9 @@ impl Banks {
     /// **Never fails, and reports every cue either way.** Every title in the
     /// lineage does carry banks - a claim this project got wrong about Pure for
     /// months - but a cue can still be missing for reasons that are ordinary
-    /// rather than broken: Wipeout HD has no `~ENGINE` at all, and its
-    /// `.COLLISIONS` binds no waveform because its commands are among the 43
-    /// unread opcodes. Each miss is a line in [`Self::report`] and silence, not
-    /// an error and not a substitute.
+    /// rather than broken: Wipeout HD has no `~ENGINE` at all, its ship audio
+    /// being a per-event `c_*` set rather than a held loop. Each miss is a line
+    /// in [`Self::report`] and silence, not an error and not a substitute.
     ///
     /// A race that refused to start because a bank was missing would make the
     /// audio work a precondition for every other kind of work in the tree.
@@ -494,7 +508,12 @@ fn load_cue(blob: &[u8], cue: Cue) -> anyhow::Result<(Loaded, usize)> {
     let record = bank
         .cue_named(cue.name())
         .ok_or_else(|| anyhow::anyhow!("{:?} names no cue in {}", cue.name(), bank.name))?;
-    let sounds = bank.cue_sounds(&record);
+    // **The tree, not the cue's own run.** On the PSP, PS2 and Pure discs no
+    // wired cue plays a child, so this is `cue_sounds` there and the two are
+    // the same call. Wipeout HD's `.COLLISIONS` binds nothing itself and plays
+    // `c_CShipShip` and `c_CShipWall`, each of which has S/M/L children of its
+    // own - 112 waveforms in all. See `oag_formats::sblk::child`.
+    let sounds = bank.cue_tree_sounds(&record);
     anyhow::ensure!(
         !sounds.is_empty(),
         "{} binds no waveform: its {} command(s) are all opcodes this does not read",

@@ -142,8 +142,9 @@ impl Bank<'_> {
     ///
     /// Empty for a cue that [does not play](Cue::plays) and for one whose
     /// commands are all opcodes that bind nothing - 242 of the 1,282 playable
-    /// cues on the two discs, which run some part of the 43 unread opcodes
-    /// instead.
+    /// cues on the two discs, which run some part of the 41 unread opcodes
+    /// instead. Some of those bind a waveform one level down, by playing
+    /// another cue; [`Bank::cue_tree_sounds`] is the walk that follows them.
     ///
     /// **All of them, not the one that would sound.** See the module docs: the
     /// selection opcode is not decoded, so returning a set is the honest shape

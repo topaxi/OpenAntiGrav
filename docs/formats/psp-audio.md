@@ -5,7 +5,7 @@ codec, **where each individual sound starts** and **what each sound is called**
 are all decoded, implemented in
 [`oag-formats::sblk`](../../crates/formats/src/sblk.rs) and validated across all
 39 banks on the PSP disc. What remains open is about *playing* a bank rather
-than reading one: 43 of the 45 command opcodes, and the sample rate each
+than reading one: 41 of the 45 command opcodes, and the sample rate each
 waveform runs at.
 
 These are the `03000000` blobs from the [WAD](wad.md) census - 3 in `FE.wad`,
@@ -400,8 +400,9 @@ one-shot like `~SPARKS` wants a handle too, so `~` does not imply looping. The
 one-way implication is what holds and what is asserted.
 
 Named cues resolving to no waveform at all: **247 of 1,287**. Those run some
-part of the 43 unread opcodes instead of a key-on, which is an open question
-rather than a failure of the rule.
+part of the 41 unread opcodes instead of a key-on, which is an open question
+rather than a failure of the rule - except where the cue plays *another cue*,
+which is [decoded below](#a-cue-that-plays-other-cues).
 
 Confidence **94**, the rubric's cap for a reading that makes an arithmetic
 invariant come out exactly across many real files - reached from an exact
@@ -410,20 +411,118 @@ tiling on 83 banks and corroborated by a flag word the rule never touches.
 ### Which of a cue's waveforms sounds is still open
 
 `ship.bnk`'s `.COLLISIONS` binds **fifteen** waveforms, `ship_zone.bnk`'s ten,
-and `SHIP_ZM`'s `~ENGINE` nine. Something chooses, and it is one of the 43
+and `SHIP_ZM`'s `~ENGINE` nine. Something chooses, and it is one of the 41
 unread opcodes.
 
-The candidate is `0x19`, which sits immediately before a run of key-ons in
-several banks with its **low operand byte equal to the number of key-ons in the
-run** - `0x0f` before fifteen, `0x0a` before ten, `0x02` before two. Across the
-corpus that holds in **61 of 87** occurrences, with the failures being cues
-where the `0x19` sits *after* its key-ons rather than before. 61 of 87 is a
-lead, not a finding, and it is recorded here as one.
+The candidate is `0x19`, which sits immediately before a run of key-ons and
+**counts them**. Its three operand bytes read `(a, b, c)` from the top of the
+normalised word down:
+
+| Reading | Where the count is | What `b` is |
+| --- | --- | --- |
+| Pulse, Pure (PSP/PS2 SCREAM) | `c`, the low byte | 1, or 2 for a stereo pair |
+| Wipeout HD (PS3 SCREAM) | `a`, the high byte | 1 mono, 2 stereo |
+
+`b * count` predicts the run length in **530 of the 576** occurrences that have
+a run at all, across all six discs - `00 01 0f` before fifteen key-ons,
+`00 02 0a` before twenty, HD's `10 01 00` before sixteen and `04 02 00` before
+eight. A further 29 occurrences have no key-on after them at all, which is the
+`0x19`-sits-after-its-key-ons case and is counted separately rather than
+folded in.
+
+**This is still a lead, not a finding**, and the reason is that counting a
+group is not the same as choosing from it: nothing here says *which* member
+sounds, or whether the choice is random, round-robin or weighted. What it does
+establish is that the two library generations put the same field at opposite
+ends of the operand - which is worth knowing before anyone reads `0x19`'s
+handler and finds the two builds disagreeing.
+
+An earlier version of this section reported **61 of 87** for a weaker form of
+the same rule. That number came from a scan whose run-length walk did not stop
+at the cue boundary, so a cue's last group absorbed the next cue's key-ons; the
+walk is clipped now.
 
 What the *data* says regardless of the opcode is that these are **alternates,
 not layers**: `.COLLISIONS`'s fifteen samples all fall between 0.20 s and
 0.35 s, which is fifteen recordings of one event. `oag_game::audio::sfx` plays
 one of them, chosen by its own generator, and says so.
+
+## A cue that plays other cues
+
+Some cues bind no waveform of their own. Their grains **play other cues**,
+which bind the waveforms - so `cue_sounds` comes back empty for a cue that is
+perfectly well formed and audibly does something on the original hardware.
+
+Two opcodes do it, `0x05` and `0x08`. Both carry a 24-bit operand that is an
+offset from the parameter block, exactly as a key-on's is, and both land on a
+**32-byte** record:
+
+```text
++0x00  u32       volume, 0..127
++0x04  i32       unread; 0, or a small negative number
++0x08  u32       unread; zero in every record seen
++0x0c  u32       the child's cue index, or 0xffffffff
++0x10  char[16]  the child's name, empty when +0x0c is an index
+```
+
+**The two forms are exclusive**, and Wipeout HD's own `EBOOT.elf` - which
+ships SCREAM with its debug strings intact - names one message per form:
+
+| Address | String |
+| --- | --- |
+| `0x007cfaa0` | `SCREAM: Didn't find child sound named -> %s\n` |
+| `0x007cfad0` | `SCREAM: snd_SFX_GRAIN_TYPE_BRANCH invalid sound index %d\n` |
+
+Those strings are also where the vocabulary on this page comes from: SCREAM
+calls a command a **grain**, and `0x007d0bf0`..`0x007d0e40` carry
+`snd_DoGrain` errors naming "Loop Start", "Loop End", "Loop Continue", "Goto
+Marker", "Goto Random Marker" and "Random/Cycle Play blocks" - a fair map of
+what the 41 still-unread opcodes are for.
+
+### The evidence
+
+Across all 230 bank entries on the five PSP/PS2 discs and Wipeout HD, of
+**1,461** child grains:
+
+| Form | Count | Where |
+| --- | --- | --- |
+| In-range cue index, name field empty | 1,153 | every PSP and PS2 grain |
+| `0xffffffff` and a name the bank holds | 300 | Wipeout HD only |
+| `0xffffffff` and a name in *another* bank | 1 | `env0_det.bnk` asks for `.COLLISIONS` |
+| Neither | 7 | see below |
+
+**Not one record carries both an index and a name.** That exclusivity is the
+assertion that says the two fields are what they are taken to be: a wrong
+stride or a wrong offset does not produce 1,153 in-range indices *and* 300
+exact name-table hits *and* zero overlaps.
+
+The seven that are neither are worth keeping rather than smoothing away. Six
+grains in `speech_results.bnk` set `0xffffffff` with no name at all; one in
+`weapons_det.bnk` holds index **65** in a **55-cue** bank - which is precisely
+what `snd_SFX_GRAIN_TYPE_BRANCH invalid sound index %d` exists to print. The
+data contains the error the binary complains about.
+
+Confidence **85**: two independent encodings of the same relation, an exact
+exclusivity across the corpus, and both forms named by strings in the
+executable. It is not 94 because the handler function has not been located -
+`0x05` and `0x08` are known to *both* play a child and are **not** known to
+differ from each other.
+
+### What it does not decide
+
+**Which child plays.** A parent's grains are guarded by `0x22`, whose operand
+is not decoded. `oag_formats::sblk::Bank::cue_tree_sounds` therefore returns
+every reachable leaf, and the caller chooses - the same honest gap as
+[which alternate sounds](#which-of-a-cues-waveforms-sounds-is-still-open), one
+level up.
+
+A structural reading of the surrounding grains is *suggestive* and is recorded
+here as a hypothesis only: `0x23` looks like a marker and `0x24` like a goto,
+with the marker id in operand byte 1. Under that reading every goto in every
+bank on all six discs finds its marker, and 3.4% of HD's grains and 1.8% of
+Pure's become unreachable - but 15% of Pulse's do, and the check cannot tell
+the two byte readings apart on the goto side at all, so **`0x22`, `0x23` and
+`0x24` stay undecoded.**
 
 ## `0x80` means "not ADPCM", and this page had it backwards
 
@@ -724,7 +823,7 @@ noise per block - a plausible-looking stand-in, which
 [`CLAUDE.md`](../../CLAUDE.md) forbids and which would also destroy the
 evidence above by making the wrong thing sound like the right one.
 
-### HD makes four of the six sounds
+### HD makes five of the six sounds
 
 The difference between HD and the other titles turned out to be **which file a
 cue is in**, and nothing else - the cue strings are identical across the
@@ -747,6 +846,7 @@ container.
 ```text
 sfx: SPEEDUPPAD -> 7 waveform(s) from Data\Sound\weapons.bnk
 sfx: .COLLISIONS not loaded: .COLLISIONS binds no waveform: its 4 command(s) are all opcodes this does not read
+sfx: .COLLISIONS -> 112 waveform(s) from Data\Sound\shiphd.bnk
 sfx: ABSORB -> 6 waveform(s) from Data\Sound\weapons.bnk
 sfx: ~ENGINE not loaded: "~ENGINE" names no cue in shipHD
 sfx: ~SHIELD -> 6 waveform(s) from Data\Sound\weapons.bnk, 2 skipped as not PS-ADPCM
@@ -757,24 +857,26 @@ sfx: shieldactive -> 2 waveform(s) from Data\Sound\speech.bnk
   `c_CShipWall`, `c_CShipShip`, `c_GShipShip`, `c_ElecArcA`..`D`,
   `c_CrackLoopL/C/R` - which is a different design and not a renamed cue.
   Nothing is substituted; the held voice never opens.
-- **`.COLLISIONS` exists and binds no waveform**, so **HD has no collision
-  sound**. Its four commands are all among the 43 unread opcodes, and
-  `shiphd.bnk` also carries `.COLLSHIELD`, `.GRIND` and `.GRINDSHIELD` beside
-  `c_CShipWall`, `c_CShipWallL/M/S`, `c_CShipShip` and `c_GShipShipL/M/S` -
-  which reads as a *selector* cue dispatching to child sounds by severity.
+- **`.COLLISIONS` binds no waveform of its own, and plays other cues instead.**
+  This page recorded it for a day as "all four commands are among the 43 unread
+  opcodes", which was true and was a dead end wearing the shape of a finding.
+  Two of the four are `0x08`, [the child-sound grain](#a-cue-that-plays-other-cues),
+  and the tree under it reaches **112 waveforms**, all PS-ADPCM:
 
-  **This is the single most valuable of the 43 unread opcodes.** Decoding the
-  four commands in `.COLLISIONS` would give HD its collision sound *and* very
-  likely answer
-  [which alternate sounds](#which-of-a-cues-waveforms-sounds-is-still-open) on
-  Pulse, because both are the same question - a cue choosing among children -
-  reached from two directions. One target, two open questions.
+  ```text
+  .COLLISIONS
+  |- c_CShipShip -> c_CShipShipS, c_CShipShipM, c_CShipShipL
+  \- c_CShipWall -> c_CShipWallS, c_CShipWallM, c_CShipWallL
+  ```
 
-  Nothing is wired off the `c_*` names in the meantime. The `L`/`M`/`S` suffixes
-  look like a severity split and `oag_render::sparks::severity` already computes
-  one, but which suffix goes with which band is not written down anywhere on the
-  disc, and pairing them here would be an invention wearing the shape of a
-  reading.
+  **Nothing is wired off the split.** Which child a parent plays is guarded by
+  opcode `0x22`, whose operand is not decoded, so `oag_game::audio::sfx` takes
+  every reachable leaf and chooses among them with its own generator - the same
+  approximation it already makes among a single cue's alternates, one level
+  further down. The game does know whether it hit a wall or a ship, and
+  `oag_render::sparks::severity` already computes a severity band, but pairing
+  either against these names would be a mapping invented here rather than one
+  read off the disc.
 
 The `~SHIELD` line is also the not-PS-ADPCM path working end to end: six of
 HD's eight `~SHIELD` waveforms decode and two are dropped.

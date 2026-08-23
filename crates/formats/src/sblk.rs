@@ -88,9 +88,16 @@
 //! table binds. That is the last link between `"SPEEDUPPAD"` and audio; see
 //! [`cue`] for the rule and its evidence.
 //!
+//! # Cues that play cues
+//!
+//! Some cues bind no waveform of their own and play **other cues** instead.
+//! Wipeout HD's `.COLLISIONS` is one: four grains, no key-on, and a tree of
+//! `c_CShipShip` and `c_CShipWall` underneath it. [`Bank::cue_tree_sounds`]
+//! follows them and [`child`] carries the record and the evidence.
+//!
 //! # What is not decoded
 //!
-//! 43 of the 45 command opcodes - including whichever one **chooses** between a
+//! 41 of the 45 command opcodes - including whichever one **chooses** between a
 //! cue's several waveforms - the sample rate each waveform plays at, and the
 //! header's `+0x24`. See the format page's open questions.
 
@@ -757,7 +764,9 @@ pub fn decode_adpcm(data: &[u8]) -> Vec<i16> {
 
 use crate::byte_order::ByteOrder;
 
+pub mod child;
 pub mod cue;
+pub use child::Child;
 pub use cue::Cue;
 
 #[cfg(test)]

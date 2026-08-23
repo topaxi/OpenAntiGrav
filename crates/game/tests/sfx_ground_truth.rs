@@ -148,18 +148,21 @@ fn every_wired_cue_resolves_on_every_psp_and_ps2_disc() {
     assert!(ran > 0, "no disc image was present");
 }
 
-/// Wipeout HD loads four of the six cues, and the two it misses each say why.
+/// Wipeout HD loads five of the six cues, and says why it misses the sixth.
 ///
 /// Pinned as a *list* rather than a count, because the interesting part is
-/// which two and for which reason - both are real limits and neither is a bug:
+/// which one and for which reason. `~ENGINE` does not exist on HD at all: its
+/// ship audio is a per-event `c_*` set, a different design rather than a
+/// renamed cue, so nothing is substituted and the held voice never opens.
 ///
-/// - `~ENGINE` does not exist on HD at all. Its ship audio is a per-event
-///   `c_*` set, a different design rather than a renamed cue.
-/// - `.COLLISIONS` exists in `shiphd.bnk` and binds no waveform, because all
-///   four of its commands are among the 43 unread opcodes.
+/// `.COLLISIONS` used to be the second miss, recorded here as binding no
+/// waveform "because all four of its commands are among the 43 unread
+/// opcodes". Two of those four are `0x08`, which plays another cue by name -
+/// see `oag_formats::sblk::child` - so the cue now resolves through a tree of
+/// `c_CShipShip` and `c_CShipWall` to 112 waveforms.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn wipeout_hd_loads_the_four_cues_it_has_and_reports_the_two_it_does_not() {
+fn wipeout_hd_loads_the_five_cues_it_has_and_reports_the_one_it_does_not() {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
         .join("data/images/hdfury-ps3-eu-dec.iso");
@@ -185,7 +188,13 @@ fn wipeout_hd_loads_the_four_cues_it_has_and_reports_the_two_it_does_not() {
         .collect();
     assert_eq!(
         loaded,
-        vec!["SPEEDUPPAD", "ABSORB", "~SHIELD", "shieldactive"],
+        vec![
+            "SPEEDUPPAD",
+            ".COLLISIONS",
+            "ABSORB",
+            "~SHIELD",
+            "shieldactive"
+        ],
         "HD's loadable cue set changed"
     );
 
@@ -197,7 +206,11 @@ fn wipeout_hd_loads_the_four_cues_it_has_and_reports_the_two_it_does_not() {
         r"SPEEDUPPAD -> 7 waveform(s) from Data\Sound\weapons.bnk"
     ));
     assert!(says(r#"~ENGINE" names no cue in shipHD"#));
-    assert!(says(".COLLISIONS binds no waveform"));
+    // The child-grain walk, end to end: 112 leaves under a cue that binds
+    // nothing itself. A regression to the cue's own run reads 0 here.
+    assert!(says(
+        r".COLLISIONS -> 112 waveform(s) from Data\Sound\shiphd.bnk"
+    ));
     // The not-PS-ADPCM path, working end to end on the only disc that needs it.
     assert!(
         says("skipped as not PS-ADPCM"),
