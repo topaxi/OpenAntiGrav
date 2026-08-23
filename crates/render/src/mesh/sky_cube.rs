@@ -159,6 +159,8 @@ pub fn build(label: &str, blob: &[u8], rotation_degrees: f32) -> Result<Model> {
         material_variants: Vec::new(),
 
         vertex_colour_is_light: false,
+
+        flame: None,
         centre: [0.0; 3],
         radius: HALF_EXTENT * 3.0f32.sqrt(),
         mesh_count: 6,

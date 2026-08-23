@@ -305,12 +305,30 @@ pub fn build(
     // target's colour space and `colour_is_light` is the model's own vertex
     // semantics. Conflating them is a bug this had - see
     // [`Model::vertex_colour_is_light`].
-    let constants: &[(&str, f64)] = match (is_linear_target(format), model.vertex_colour_is_light) {
-        (true, true) => &[("linear_out", 1.0), ("colour_is_light", 1.0)],
-        (true, false) => &[("linear_out", 1.0)],
-        (false, true) => &[("colour_is_light", 1.0)],
-        (false, false) => &[],
-    };
+    //
+    // A third answers a third: `flame_*` is the parameter set Wipeout HD's
+    // engine-flare material authors, carried per model because that is where
+    // the values are - see [`crate::mesh::Flame`]. A `Vec` rather than the
+    // match this used to be, since those six are numbers off the disc rather
+    // than a fixed table.
+    let mut constants: Vec<(&str, f64)> = Vec::new();
+    if is_linear_target(format) {
+        constants.push(("linear_out", 1.0));
+    }
+    if model.vertex_colour_is_light {
+        constants.push(("colour_is_light", 1.0));
+    }
+    if let Some(flame) = model.flame {
+        constants.extend([
+            ("flame_shading", 1.0),
+            ("flame_rim_power", f64::from(flame.rim_power)),
+            ("flame_rim_scale", f64::from(flame.rim_scale)),
+            ("flame_rim_min", f64::from(flame.rim_min)),
+            ("flame_alpha_scale", f64::from(flame.alpha_scale)),
+            ("flame_colour_scale", f64::from(flame.colour_scale)),
+        ]);
+    }
+    let constants = constants.as_slice();
 
     let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("mesh"),

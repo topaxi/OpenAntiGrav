@@ -80,6 +80,94 @@ Named-file checks, rather than the index sweep, are what make this readable:
   unknown, but a mount authored on eight of twelve racing craft is not
   accidental.
 
+## The ribbon this project loaded was the disc's dead one - 2026-08-23
+
+**`Data/RibbonEffects/enginetrail_bluered_triangle.vex` is the path the shipped
+executable names**, at `0x007a2d70` in `EBOOT.elf`, in `TrailEffectManager`'s
+own TOC block beside `EngineTrail/TrailEffectManager.cpp` and its
+`position`/`normal`/`Uv1`/`VertexColour1` attribute names. The plain
+`enginetrail_triangle` this page describes below, and this project loaded until
+now, is **named nowhere in the executable**: the string sweep finds three
+`enginetrail` matches and none of them is it. It sits in `DATA02` where the
+`bluered` pair sits in `DATA06`, which is the Fury archive - so it is the
+pre-Fury build's ribbon, left on the disc. **Confidence 92.**
+
+The difference is not academic. The two carry different textures, and the
+`bluered` pair's are **self-documenting**:
+
+| | `enginetrail_triangle` (dead) | `enginetrail_bluered_triangle` (named) |
+| --- | --- | --- |
+| first texture | `hd_enginetrail.gtf` 256x256 | `hd_enginetrail_blue_alphaistrail.gtf` 256x256 |
+| second | `hd_enginetrail_noise.gtf` 128x128 | `hd_enginetrail_red_alphaisnoise.gtf` 256x256 |
+| samplers | `Texture1`, `Texture2` | two hashes with no preimage |
+| parameters | `TrailSpeed` = 1.0, `0xe296b1ed` = 0.15 | the same two, plus `0xbb48e390` = 0.0 |
+
+`alphaistrail` and `alphaisnoise` say outright what the two alpha channels
+carry, and they cut both ways. They **confirm the rule this loader already
+followed** - the second slot is the noise, in its alpha - so
+`race::assets::trail_texture` needed no change beyond the model it is pointed
+at. And they say the *first* slot carries **the ribbon's own shape mask**,
+which this renderer's one-texture shader has no slot for. The leftover texture
+is no longer "a colour map with nowhere to go"; it is the trail's silhouette,
+which is a much better reason to want a two-texture ribbon.
+
+The picture changes accordingly. Against a frame from the same autopilot run,
+switching the model moves **35,738 pixels**, and what was a fat white blowout
+behind the nozzle becomes a narrower trail with a visible taper and its own
+colour. That is a *data* correction, not a tuning one: no `TRAIL_*` constant
+moved.
+
+Two loose ends the sweep turned up and did not chase. `engineTrail` sits at
+`0x007b3c60` in camelCase and in a different neighbourhood - plausibly a config
+key. And `Data\RibbonEffects\` with bare stems (`waketrail_triangle`,
+`leachbeam_triangle`) at `0x0079c1xx`-`0x0079c3xx` uses **backslashes** where
+`Trail_ModelPath` uses forward slashes, so there is plausibly a second ribbon
+loader that has not been found. Neither threatens the engine trail's
+conclusion - no bare `enginetrail_triangle` stem exists anywhere in the
+binary - but both are worth someone's next hour.
+
+**The ribbon draws from the blue texture now, and which texture is which is
+the whole of it.** The property to keep in mind: **the noise map's alpha
+averages 17 of 255 and the coverage map's averages 162**, so anything that
+treats the noise as the ribbon's coverage erases the trail. The one-texture
+path does exactly that - correctly, for a title whose one texture *is* the
+coverage - and the texture this loader hands it on HD is the noise.
+`crates/game/tests/hd_engine_flare_ground_truth.rs` pins the two apart by that
+same property.
+
+HD's program is unambiguous about the roles: unit 0's alpha displaces the `u`
+coordinate, and unit 1 - the blue one - supplies the colour **and** the output
+alpha. `exhaust.wgsl` now does exactly that where `trail_shape` is on: the
+noise's alpha offsets the coordinate, the blue texture is sampled there, and
+its `rgba` replaces the sample the one-texture path would have used. The blue
+alpha is a **cross-ribbon falloff** - by row, 1, 112, 166, 213, 255, 220, 172,
+117 out of 255 - so the ribbon has a soft edge of its own for the first time.
+
+`TrailSpeed` is **not** added. The material authors 1.0, and adding a whole 1.0
+to a coordinate this sampler repeats is the identity, so the engine must patch
+that slot per frame with something else - and what, is unread. A scroll of this
+project's choosing would be the fitted coefficient this tree keeps out.
+
+Every other title compiles the pipeline it always had - `trail_shape` is a
+pipeline constant set only where the material names two textures - and Pulse
+and Pure frames are byte-identical either side.
+
+**Two things this does not make right, and neither is a reason to tune.**
+HD draws **one** strip where `oag_render::exhaust` draws `LAYERS` = 3, so the
+coverage falloff is applied three times over and `LAYER_COLOUR`'s baked tint
+sits on top of it. And that falloff runs along **`v`**, the around-the-tube
+coordinate, which this ribbon *scrolls* (`LAYER_SCROLL_V`) under a repeating
+sampler - where HD's own program displaces `u` and never touches `v` at all.
+Two frames three ticks apart show no travelling band, so nothing visible turns
+on it today; it is recorded because the next person to change the scroll needs
+to know the coverage is riding it.
+
+**Still PSP's, unchanged**: every geometry number. `TrailEffectManager`'s
+per-craft state is 0x1230 bytes with a 0x1200-byte buffer, eight of them, and
+what that buffer's stride and sample count are has not been read. `TrailSpeed`
+= 1.0 and `0xe296b1ed` = 0.15 are the only ribbon numbers the *data* authors,
+and neither has been placed in the geometry yet.
+
 ## HD/Fury author the whole thing, and it already decodes
 
 There is no `Trail` node anywhere in HD's 183 `.vex` files. It uses a different
@@ -88,7 +176,7 @@ model plus a material plus textures.
 
 | Ribbon | Files |
 | --- | --- |
-| engine trail | `enginetrail_triangle.{vex,rcsmodel}`, `materials/hd_enginetrail.rcsmaterial`, `textures/hd_enginetrail.gtf`, `textures/hd_enginetrail_noise.gtf` |
+| engine trail | `enginetrail_triangle.{vex,rcsmodel}`, `materials/hd_enginetrail.rcsmaterial`, `textures/hd_enginetrail.gtf`, `textures/hd_enginetrail_noise.gtf` - **and the `enginetrail_bluered_triangle` pair beside it, which is the one the executable names; see the section above** |
 | wake trail | `waketrail_triangle.*`, `hd_waketrail.rcsmaterial`, `hd_waketrail.gtf`, `hd_waketrail_clouds.gtf` |
 | rocket trail | `rockettrail_triangle.*`, plus a separate `rockettrail_shadow_triangle.*` |
 | leech beam | `leachbeam_triangle.*`, `hd_leechbeam_glow.gtf` |
@@ -124,6 +212,12 @@ are the shared `ribboneffects` ones, and the livery pair almost certainly
 belongs to the flare - which is a hypothesis, not a finding: the flare's own
 material has not been read.
 
+**The flare's material has since been read, and it refutes that too** - see
+"HD's flare is a model, not a sprite" below. Every `engineflare.rcsmodel` on the
+disc names a `flame_01.gtf`, and no `.rcsmodel` material names either
+per-livery file. The pair belongs to neither the ribbon nor the flare so far as
+the model tables go.
+
 **Which reopens the question.** There is no `fury`-named ribbon asset (all 120
 `fury` paths on the EU disc are front-end - track-select emblems, `envsettings`,
 campaign flyers), and the ribbon asset that does exist is shared and carries no
@@ -146,6 +240,133 @@ and HD's own material data. Three platforms, three encodings, one equation.
 
 The sibling ribbons discriminate, which is what says the field is really read:
 the rocket trail is `0x0302`/`0x0303`, alpha-over rather than additive.
+
+
+## HD's flare is a model, not a sprite - and the plume is inside it
+
+Added 2026-08-23, and it changes two of this page's own conclusions.
+
+### The flare
+
+`race::load` used to ask every disc for
+`Data\Tex\EngineFlare\grabbedEngineFlare128x64x8.mip` - a Pulse literal - and
+HD carries no such entry, so every HD load report ended with *"the flare falls
+back to a procedural glow"*. It was the same failure class the ribbon had, and
+the answer is the same shape: **HD authors its flare as an asset**, and per
+team rather than shared.
+
+**Every one of the fourteen craft ships `Data\Ships\<Team>\engineflare.vex`
+and the `.rcsmodel` beside it** - the twelve teams, plus `zone` and
+`detonator`. 961 to 2,141 triangles each, built by
+`oag_render::mesh::rcs::build` with no new decoder, exactly as the hull is. One
+material each, always the shared
+`data/materials/ships/engines/flame_test.rcsmaterial`, always additive
+(`0x0302`/`0x0001`). Confidence 92 - a directory listing of all 11,664 archive
+entries, and every pair builds.
+
+### The plume was there all along
+
+`livery::one`'s PS3 branch returned `boost: None` because a sweep for a
+`shipboost.vex` equivalent finds nothing on the disc. That sweep was right and
+its conclusion was wrong. **The plume is a subtree of the flare model**:
+
+```text
+root
+  EF_Boost            <- the boost plume
+    Joint_BoostLeft  -> ef_BoostLeftShape, ef_SpikesLeftShape
+    Joint_BoostRight -> ef_BoostRightShape, ef_SpikesRightShape
+    Joint_Diamonds   -> ef_DiamondsShape
+  EF_Main             <- the always-on flame
+    ef_OuterShape, ef_InnerShape, ef_Spikes1Shape .. ef_Spikes3Shape
+```
+
+Five shapes each, on all fourteen craft; 350-961 triangles for `EF_Main` and
+616-1,492 for `EF_Boost` across the eight teams that reach a grid. Every node
+transform in the file is the identity, so the model is authored about its own
+origin and the craft's `Engine Flare` locator is what places it. Confidence 90
+on the split - the group names say what they are and nothing else in the file
+distinguishes the ten shapes.
+
+**`EF_Main` is confirmed on screen and `EF_Boost` is not.** Five HD frames
+(ticks 120, 160, 240, 300, 400 of the same autopilot run) were captured either
+side of a stashed build and diffed: each changes 297-916 pixels, all of them in
+a 60x150 box at the nozzle, which is the always-on flame appearing and nothing
+else. **No sampled tick shows a plume-sized change**, so either the run never
+tripped the boost gate or the plume drew where the ribbon had already saturated
+to white. The draw path is the one that already draws Pulse's plume, and the
+model is asserted non-empty per craft by
+`crates/game/tests/hd_engine_flare_ground_truth.rs` - but *the `EF_Boost` draw
+itself is unconfirmed in a capture* and should be recorded that way.
+
+**The trigger's mechanism is read and its source is not.** `EF_Boost` is drawn
+on this engine's own boost gate - `Exhaust::plume_visible`, the condition
+recovered for *Pulse's* plume. Reading HD's `EngineFlare_Update` on 2026-08-23
+showed its gate is the same three parts: a countdown timer, a hard snap to 1.0
+while it is above a threshold, an exponential decay after. So this is a matched
+mechanism rather than an inference off a node name - **confidence 88**, up from
+80. What *writes* that timer is outside the flare's own vtable and is still
+unread, so how long HD's boost lasts remains this project's number, and the
+loader says so on every race. See
+[engine-flare.md](../ghidra/functions/ps3-hdfury-eu/engine-flare.md).
+
+### What the flame's own shader does
+
+`flame_test.rcsmaterial`'s fragment microcode is read instruction by
+instruction on
+[engine-flare.md](../ghidra/functions/ps3-hdfury-eu/engine-flare.md). Three
+things follow for the picture:
+
+- **The colour set's fourth byte is the flame's opacity ramp** - the program's
+  last instruction multiplies `VertexColour1.w` into the output alpha, and the
+  attribute is named by hash preimage rather than inferred. `mesh/rcs.rs` files
+  that byte as the sun-occlusion mask, which is right for the circuit materials
+  it was measured on and wrong here. `livery::flare::alpha_ramp` moves it into
+  the vertex alpha for this one model and leaves the mask unset. Confidence 92.
+- **The flame is unlit, and its numbers are on the disc.** Its colour is the
+  sampled `rgb` times a scalar, with no `N.L`, no ambient and no lightmap - and
+  the **sampled alpha is never read**, the fourth component being the vertex
+  ramp from the moment the program puts it there. The five constants the
+  program patches are *not* in the shader file: they are in each craft's own
+  `.rcsmodel` material record, in a per-instance parameter table that was the
+  unread tail of that record until now. `power1` = 10, `scale1` = 0.3,
+  `min1` = 0.45, an alpha scale of 2.0 and a colour scale of 1.0, identical on
+  all fourteen craft and read per craft anyway. `oag_render::mesh::Flame`
+  carries them to `mesh.wgsl` as pipeline constants, and the whole path is off
+  for a material that does not declare the full set.
+- **`Speed` = 2.0 is authored and `time` is not**, which is what says the
+  latter is an engine clock. The surface scrolls and this renderer does not
+  animate it - read, not implemented, and said in the load report. `EF_Main`
+  also carries one `.vex` attribute, `AnimEnd = 1.0`, which nothing reads.
+
+### The per-livery textures, refuted again and with a stated limit
+
+The section above left `engine_flame1.gtf`/`engine_flame_noise.gtf` as a
+"hypothesis, confidence 75" that they were the *flare's*. **They are not.**
+Every `engineflare.rcsmodel` on the disc names `flame_01.gtf` - under
+`data/ships/flame_test/`, `data/weapons/textures/`, or the craft's own
+`textures_dlc/livery1/` on a Fury ship - and no material names either
+per-livery file.
+
+**The limit on that claim**: the sweep read the material records embedded in
+`.rcsmodel` files, not standalone `.rcsmaterial` ones, which
+`oag_formats::rcsmaterial` decodes only in part. So what is earned is *no
+`.rcsmodel` material on the disc names them*, which is enough to keep them
+unwired and not enough to say nothing does.
+
+One incidental oddity worth recording: `egx_c1/engineflare.rcsmodel` names
+`ships/auricom_c1/textures_dlc/livery1/flame_01.gtf` where every other Fury
+ship names its own directory. That reads as a shipped data bug rather than as
+anything to reproduce.
+
+### The two engine effects that stay unwired
+
+`/data/psys/wo_engine_flare.pob` (3 emitters: `WO_ENGINE_FLARE`, `rings`,
+`core`) and `/data/psys/wo_engine_jetflare.pob` (1 emitter) both **parse
+cleanly** and neither is in `RACE_EFFECTS`. So their absence is a missing
+*trigger*, not a missing decoder - and per `CLAUDE.md` an effect with no
+recovered trigger stays unwired rather than fired on a guess. Wiring either
+needs HD's executable read; the third of the family,
+`wo_ship_engineflare.pob`, is already wired and rides the nozzle.
 
 ## What follows for the code
 
@@ -197,5 +418,23 @@ kind `CLAUDE.md` names. The load report says so on every HD race.
   version-3 class numbering being unrecovered.
 - 1 of Pulse PSP's 3 hits and 9 of the PS2's 10 are unidentified by name.
 - The single 0-byte `Trail` payload on Pure - every other one of the 78 is 64.
-- `hd_enginetrail.rcsmaterial`'s own contents, which would settle the
-  per-livery-texture question and supply HD's scroll and width parameters.
+- `hd_enginetrail.rcsmaterial`'s own contents, which would supply HD's scroll
+  and width parameters. (The per-livery-texture question it was also meant to
+  settle is answered above, from the flare's side.)
+- The flame's **scroll**: `Speed` and `time` are read, the instructions are
+  read, and nothing animates.
+- Four parameter hashes in `flame_test.rcsmaterial` with no preimage yet, one
+  of them the unit-0 sampler; two of the four carry values this renderer uses
+  by the code slot they patch.
+- **`SpecScale` is authored per material instance** (235 on a hull's paint, 500
+  on its glass), which is what would retire `renderer.md`'s "32 is a stand-in"
+  note. Nothing reads it. Same for `Bloom` = 1.0 on `emissive_bloom`.
+- What *writes* the flare's boost timer at `+0x12c` - the gate's own mechanism
+  is read, its source is not - and whether `EF_Main` is ever modulated
+  (`AnimEnd`, `Speed` and `time` are all declared and all unread).
+- **A second, sprite-shaped flare path**: `Engine_Flare_Rich.gtf` and the
+  registry names `engineflare_vp`/`engineflare_fp` exist in the executable, and
+  nothing establishes which of the two a race draws, or whether it draws both.
+- A matched-pose HD reference frame from RPCS3. None has ever been captured, so
+  every HD picture in this tree is judged against the loader report rather than
+  against the original.

@@ -76,6 +76,26 @@ chunks, which declare nothing.
 
 The four bytes between the normal and it are partly identified; see below.
 
+**A material record carries the shipped values of its shader's parameters**,
+added 2026-08-23 and read by `oag_formats::rcsmodel::material::parameters`.
+Past `+0x38` - the tail this page used to describe as unread, records being 96
+to 768 bytes where the shortest holds everything else - two words name a table:
+`+0x30` an entry count and `+0x34` its offset, each entry `0x20` bytes of
+`(name hash, kind, ..., value offset, quad count)`, with `0x8001` for a sampler
+and `0` for a parameter, and a parameter's value four big-endian `f32`s.
+
+This is where a `.rcsmaterial`'s declared constants actually come from: the
+shader file says its program takes a `power1`, and *what it is* is authored per
+model, here. **Confidence 92, from a disc-wide check rather than the file it
+was read on**: 20,445 parameters across 9,757 materials of 643 `.rcsmodel`s,
+every one a finite float of ordinary magnitude. The worked example is the
+engine flare, on
+[engine-flare.md](../ghidra/functions/ps3-hdfury-eu/engine-flare.md); the
+finding with the widest reach is that `SpecScale` is per instance (235 on a
+hull's paint, 500 on its glass) where
+[renderer.md](../ghidra/functions/ps3-hdfury-eu/renderer.md) records the
+specular exponent as a shared stand-in. Nothing reads `SpecScale` yet.
+
 ## A chunk comes in two layouts, and byte `+0x06` says which
 
 **Found by counting.** Every number on this page used to come from three files;

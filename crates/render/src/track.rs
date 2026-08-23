@@ -166,6 +166,8 @@ pub fn build_model(label: &str, ai: &AiTrack) -> Model {
         material_variants: Vec::new(),
 
         vertex_colour_is_light: false,
+
+        flame: None,
         centre,
         radius,
         anim_tracks: Vec::new(),

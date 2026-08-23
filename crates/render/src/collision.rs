@@ -285,6 +285,8 @@ pub fn build_model(
         material_variants: Vec::new(),
 
         vertex_colour_is_light: false,
+
+        flame: None,
         centre,
         radius,
         mesh_count,

@@ -37,6 +37,7 @@
 
 pub mod boot;
 pub mod exhaust;
+pub mod flare;
 pub mod hud;
 pub mod menu;
 pub mod race;
@@ -95,6 +96,11 @@ pub struct Title {
     /// the same kind of thing: Pulse and Pure name a texture, Wipeout HD ships
     /// a ribbon template whose material names its own.
     pub exhaust: &'static exhaust::Exhaust,
+    /// Where this title keeps the **engine flare** - the light at the nozzle,
+    /// as distinct from the ribbon [`Self::exhaust`] answers for. See
+    /// [`flare::Flare`], and see that module for why the two are separate axes
+    /// rather than variants of one.
+    pub flare: &'static flare::Flare,
     /// The plugin definition declaring what this release carries to race with:
     /// one `PI_Team` node per team, one `PI_Track` per circuit, one `PI_Music`
     /// per soundtrack track.
