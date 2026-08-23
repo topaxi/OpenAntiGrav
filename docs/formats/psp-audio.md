@@ -642,6 +642,98 @@ the loop flag to be kept per waveform rather than per cue.
 Pure's ship bank is also thinner - six cues to Pulse's nine, and it adds
 `~AMBIENCE` and `rumble`, which Pulse has not got.
 
+## Wipeout HD: the same container, byte-swapped whole
+
+**2026-08-23.** HD's 50 `.bnk` entries - spread over the seven PSARCs, several
+of them the same name in more than one archive - all parse with
+[`sblk`](../../crates/formats/src/sblk.rs), and every rule this page recovered
+from the PSP executable works on them unchanged.
+
+`HANDOVER.md` had recorded HD's banks as measured but deliberately
+unimplemented, on the grounds that a framing-only relaxation would hand back a
+`Bank` whose `sounds()`, `sound_names()` and `decode_adpcm()` were all
+unverified. Each of those now has a number against it.
+
+### What differs, and it is two alignments
+
+| | PSP / PS2 / Pure | HD |
+| --- | --- | --- |
+| Byte order | little | **big** - the magic reads `klBS` |
+| Section 0 starts at | 24, the table's own end | **32** |
+| Section 1 starts | where section 0 ends | 0, 4, 8 or 12 bytes later |
+| Section 1 ends | exactly on the blob | **exactly on the blob** |
+| `+0x24` | 20544 | 20544 |
+
+Both differences are section 0 being 16-byte aligned at each end, so the two
+*starts* are checked as "aligned, at or after" rather than "exactly at". **The
+tail stays exact**, on all 50 - it is the one check that says the blob has been
+read to its end rather than into the middle of something else, and it costs
+nothing to keep.
+
+The order is **sniffed off the magic** rather than passed in, because the
+container is byte-swapped a `u32` at a time and so `SBlk` and `klBS` tell the
+two apart by themselves. The ground-truth test also asserts that every HD bank
+**fails** to parse little-endian, so "big-endian" is a statement rather than a
+permissive reader.
+
+### The three rules transfer intact
+
+| Check | Result |
+| --- | --- |
+| `.bnk` entries across the seven PSARCs | 50 |
+| Parsed | **50 of 50** |
+| Also parsing little-endian | **0** |
+| Cue runs tiling the command table | **50 of 50** |
+| Waveform spans tiling their section | **50 of 50** |
+| Names recovered | 1,963 |
+| Banks where names equal `cue_count` | **50 of 50** |
+
+Three exact tilings and a name table that covers every cue, on a disc from a
+different console and a different generation, off arithmetic read out of a PSP
+executable. That is the strongest evidence this page has that the arithmetic is
+the format's rather than one build's.
+
+### A third of HD's waveforms are not PS-ADPCM
+
+Grouped by [the `0x80` flag](#0x80-means-not-adpcm-and-this-page-had-it-backwards):
+
+| Spans | In PS-ADPCM spec |
+| ---: | ---: |
+| 5,381 with `0x80` **clear** | **99.98%** |
+| 1,167 with `0x80` **set** | **7.19%** |
+
+**What that second codec is has not been identified.** The spans carry no magic
+at their head, and they are not 16-bit PCM in either byte order - read as
+either, the mean step over RMS is 0.94 and 1.04 against about 1.41 for white
+noise, where real PCM sits far below. MP3 and ATRAC3 are the obvious candidates
+on a PS3 and neither has been tested.
+
+So nothing decodes them. `oag_formats::sblk::Sound::is_adpcm` is the predicate
+and `oag_game::audio::sfx` **drops** a waveform it rejects, with a line in the
+load report. Running the ADPCM decoder over one would produce 28 samples of
+noise per block - a plausible-looking stand-in, which
+[`CLAUDE.md`](../../CLAUDE.md) forbids and which would also destroy the
+evidence above by making the wrong thing sound like the right one.
+
+### The game does not play HD's banks yet, and that is a separate job
+
+Reading them is done; wiring them is not, and the reason is naming rather than
+format:
+
+- HD has **no `hud.bnk`**. Its ship bank is `shiphd.bnk`, and `SPEEDUPPAD`
+  lives in `weapons.bnk`.
+- There is **no `~ENGINE` at all**. HD's ship audio is a per-event set -
+  `c_CShipWall`, `c_CShipShip`, `c_GShipShip`, `c_ElecArcA`..`D`,
+  `c_CrackLoopL/C/R` - which is a different design, not a renamed cue.
+- Five of the six cues this port fires do exist (`SPEEDUPPAD`, `.COLLISIONS`,
+  `ABSORB`, `~SHIELD`, `shieldactive`), but in different banks.
+
+That needs a per-title bank-and-cue axis on `Title`, the same shape as
+`ArchiveCandidates` and `Music::tracks` -
+[ADR-0022](../architecture/adr/0022-title-packages.md) territory. And
+**no HD trigger has ever been read**: every cue edge this project has is
+Pulse's, applied to a different game.
+
 ## Reproducing
 
 ```sh

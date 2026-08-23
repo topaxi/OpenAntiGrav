@@ -46,7 +46,7 @@
 //! unread, along with 42 others. [`Bank::cue_sounds`] therefore returns the
 //! whole set in command order and leaves the choice to the caller.
 
-use super::{Bank, COMMAND_LEN, CUE_LEN, Sound, half, word};
+use super::{Bank, COMMAND_LEN, CUE_LEN, Sound};
 
 /// A cue: one playable sound, and the run of commands that plays it.
 ///
@@ -104,7 +104,7 @@ impl Bank<'_> {
     pub fn cue(&self, index: u16) -> Option<Cue> {
         let at = usize::from(index) * CUE_LEN;
         let record = self.cues.get(at..)?.get(..CUE_LEN)?;
-        let raw = word(record, 0x08);
+        let raw = self.order.u32(record, 0x08);
         Some(Cue {
             index,
             // A byte offset into the command table, biased by nothing. The
@@ -112,7 +112,7 @@ impl Bank<'_> {
             // `0xfffffff8` divides to a nonsense index that nothing reads.
             first_command: raw as usize / COMMAND_LEN,
             commands: usize::from(record[0x04]),
-            flags: half(record, 0x06),
+            flags: self.order.u16(record, 0x06),
             raw,
         })
     }

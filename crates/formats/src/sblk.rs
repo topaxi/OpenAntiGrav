@@ -11,8 +11,19 @@
 //!        section 1: PS-ADPCM waveform data
 //! ```
 //!
-//! The sections abut, the first starts immediately after the table, and the
-//! last ends exactly at the end of the file.
+//! On the PSP, PS2 and Pure the sections abut, the first starts immediately
+//! after the table, and the last ends exactly at the end of the file. **Wipeout
+//! HD pads**: section 0 starts at 32 rather than at the table's own end of 24,
+//! and section 1 starts 0-12 bytes later - both of them section 0 being
+//! 16-byte aligned at each end. The tail is exact everywhere.
+//!
+//! # Two byte orders
+//!
+//! The container is byte-swapped **whole**, a `u32` at a time, so on HD the
+//! magic arrives as `klBS` and every field reads big-endian. The order is
+//! sniffed off the magic ([`byte_order_of`]) rather than passed in, the same
+//! way [`crate::vex::byte_order`] does it; nothing above this module needs to
+//! know which disc a blob came from.
 //!
 //! The `SBlk` block opens with a 64-byte header:
 //!
@@ -46,12 +57,18 @@
 //! number agreeing on all 39 banks is what says the header is being read at the
 //! right offsets rather than plausibly.
 //!
-//! # The waveforms are PS-ADPCM
+//! # The waveforms are PS-ADPCM, except where the descriptor says otherwise
 //!
 //! Sony's 16-byte block format: one predictor/shift byte, one flag byte, and 14
-//! bytes holding 28 four-bit residuals. Nothing declares it - it is established
-//! by the flag byte, which has to be one of eight values and is on 99.96% of the
-//! disc's 530,916 blocks.
+//! bytes holding 28 four-bit residuals. Nothing in the container declares it -
+//! it is established by the flag byte, which has to be one of eight values and
+//! is on 99.96% of the PSP disc's 530,916 blocks.
+//!
+//! A **waveform descriptor** does declare it, in the negative:
+//! [`NOT_ADPCM_FLAG`]. Every waveform on every PSP and PS2 disc is PS-ADPCM
+//! and none sets the bit; about a third of Wipeout HD's do, in a codec this
+//! project has not identified. [`Sound::is_adpcm`] is the predicate, and a
+//! caller that ignores it will feed the ADPCM decoder noise.
 //!
 //! # Splitting a bank into its sounds
 //!
@@ -110,6 +127,14 @@ pub const VERSION: u32 = 3;
 
 /// Bytes per PS-ADPCM block.
 pub const ADPCM_BLOCK_LEN: usize = 16;
+
+/// What a section start is aligned to when a build pads between them.
+///
+/// The PSP and PS2 pad by nothing at all, so this only shows on Wipeout HD:
+/// section 0 starts at 32 rather than at the table's own end of 24, and
+/// section 1 starts 0, 4, 8 or 12 bytes after section 0 ends. Both are section
+/// 0 being 16-byte aligned at each end.
+pub const SECTION_ALIGN: usize = 4;
 
 /// Samples a PS-ADPCM block expands to.
 pub const ADPCM_BLOCK_SAMPLES: usize = 28;
@@ -254,20 +279,72 @@ pub struct Bank<'a> {
     pub name_offset: u32,
     /// PS-ADPCM waveform data, a whole number of 16-byte blocks.
     pub waveforms: &'a [u8],
-}
-
-fn word(data: &[u8], at: usize) -> u32 {
-    u32::from_le_bytes([data[at], data[at + 1], data[at + 2], data[at + 3]])
-}
-
-fn half(data: &[u8], at: usize) -> u16 {
-    u16::from_le_bytes([data[at], data[at + 1]])
+    /// Which end of a multi-byte field comes first in this bank.
+    ///
+    /// Little on every PSP and PS2 disc; big on Wipeout HD, whose container is
+    /// byte-swapped a `u32` at a time - which is why its magic reads `klBS`.
+    pub order: ByteOrder,
 }
 
 /// Whether `data` looks like a sound bank, without parsing it.
+///
+/// # The magic is at `0x18`, not at `0`
+///
+/// Behind the eight-byte container header and the two eight-byte section-table
+/// entries. **A scan for `SBlk` at offset 0 finds nothing on any disc**,
+/// including the ones this project has decoded 39 banks from - and reading
+/// such a scan as "this title has no banks" is how Wipeout Pure was recorded
+/// for months as shipping none. See `docs/formats/pure-status.md`.
 #[must_use]
 pub fn looks_like_bank(data: &[u8]) -> bool {
-    data.len() >= 0x1c && word(data, 0) == VERSION && &data[0x18..0x1c] == MAGIC
+    byte_order_of(data).is_some()
+}
+
+/// Which byte order this blob's `SBlk` container is written in, if either.
+///
+/// Sniffed rather than passed in, the same way [`crate::vex::byte_order`]
+/// does it, because the magic is a `u32` constant and so tells the two apart
+/// by itself: `SBlk` little-endian, `klBS` big-endian.
+#[must_use]
+pub fn byte_order_of(data: &[u8]) -> Option<ByteOrder> {
+    [ByteOrder::Little, ByteOrder::Big]
+        .into_iter()
+        .find(|&order| looks_like_bank_as(data, order))
+}
+
+/// Whether `data` looks like a sound bank read in one particular order.
+///
+/// The magic's offset is **read out of the section table** rather than assumed
+/// to follow it. On the PSP and PS2 those are the same number - the descriptor
+/// section starts at the table's own end, 24 - but Wipeout HD pads it to 32,
+/// and a check that assumed 24 would reject every HD bank while looking like a
+/// statement about the magic.
+#[must_use]
+pub fn looks_like_bank_as(data: &[u8], order: ByteOrder) -> bool {
+    let table_end = HEADER_LEN + 2 * SECTION_LEN;
+    if data.len() < table_end || order.u32(data, 0) != VERSION {
+        return false;
+    }
+    let magic_at = order.u32(data, HEADER_LEN) as usize;
+    magic_at >= table_end
+        && data
+            .get(magic_at..magic_at + 4)
+            .is_some_and(|found| found == magic_bytes(order))
+}
+
+/// The magic as it appears in a file of this byte order.
+///
+/// Wipeout HD stores `SBlk` as `klBS`: the container is byte-swapped whole, a
+/// `u32` at a time, which is the same one-word reversal `.fnt` has. So the
+/// magic is not a character array that survives the swap - it is a `u32`
+/// constant that does not.
+#[must_use]
+pub fn magic_bytes(order: ByteOrder) -> [u8; 4] {
+    let mut out = *MAGIC;
+    if order == ByteOrder::Big {
+        out.reverse();
+    }
+    out
 }
 
 impl<'a> Bank<'a> {
@@ -281,14 +358,28 @@ impl<'a> Bank<'a> {
     /// those is a statement the file makes about itself, so a failure means this
     /// is not a bank rather than that it is a damaged one.
     pub fn parse(data: &'a [u8]) -> Result<Self> {
+        let order = byte_order_of(data).unwrap_or_default();
+        Self::parse_as(data, order)
+    }
+
+    /// Parses a bank read in a stated byte order.
+    ///
+    /// [`Bank::parse`] sniffs the order off the magic and is what every caller
+    /// wants; this exists so a survey can assert that a blob does *not* parse
+    /// the other way round.
+    ///
+    /// # Errors
+    ///
+    /// The same set [`Bank::parse`] raises.
+    pub fn parse_as(data: &'a [u8], order: ByteOrder) -> Result<Self> {
         if data.len() < HEADER_LEN {
             return Err(Error::TooShort { got: data.len() });
         }
-        let version = word(data, 0);
+        let version = order.u32(data, 0);
         if version != VERSION {
             return Err(Error::UnsupportedVersion { version });
         }
-        let count = word(data, 4);
+        let count = order.u32(data, 4);
         if count != 2 {
             return Err(Error::UnexpectedSectionCount { count });
         }
@@ -300,13 +391,33 @@ impl<'a> Bank<'a> {
         let mut sections = [(0u32, 0u32); 2];
         for (index, section) in sections.iter_mut().enumerate() {
             let at = HEADER_LEN + index * SECTION_LEN;
-            *section = (word(data, at), word(data, at + 4));
+            *section = (order.u32(data, at), order.u32(data, at + 4));
         }
-        // The framing has no slack: first section starts at the table's end,
-        // the second starts where the first stops, and the second ends on the
-        // blob. All three hold on every bank on the disc.
-        let spans = sections[0].0 as usize == table_end
-            && sections[0].0.checked_add(sections[0].1) == Some(sections[1].0)
+        // # The framing, and the one place it is not exact
+        //
+        // On every PSP and PS2 bank there is no slack at all: section 0 starts
+        // at the table's end, section 1 starts where section 0 stops, and
+        // section 1 ends on the blob.
+        //
+        // Wipeout HD pads. Section 0 starts at **32** rather than 24, and
+        // section 1 starts 0, 4, 8 or 12 bytes after section 0 ends - both of
+        // which are section 0 being 16-byte aligned at each end. So the two
+        // starts are checked as "at or after, within one alignment unit"
+        // instead of "exactly at".
+        //
+        // **The tail is still exact**, and deliberately: it holds on all 50 HD
+        // banks as well as all 83 Pulse and 29 Pure ones, so relaxing it would
+        // give up the one check that says the blob has been read to its end
+        // rather than into the middle of something else.
+        let aligned_after = |from: usize, to: u32| {
+            let to = to as usize;
+            to >= from && to - from < ADPCM_BLOCK_LEN && to.is_multiple_of(SECTION_ALIGN)
+        };
+        let spans = aligned_after(table_end, sections[0].0)
+            && sections[0]
+                .0
+                .checked_add(sections[0].1)
+                .is_some_and(|end| aligned_after(end as usize, sections[1].0))
             && sections[1]
                 .0
                 .checked_add(sections[1].1)
@@ -318,11 +429,11 @@ impl<'a> Bank<'a> {
         let block = &data[sections[0].0 as usize..][..sections[0].1 as usize];
         let waveforms = &data[sections[1].0 as usize..][..sections[1].1 as usize];
 
-        if block.len() < SBLK_HEADER_LEN || &block[..4] != MAGIC {
+        if block.len() < SBLK_HEADER_LEN || block[..4] != magic_bytes(order) {
             return Err(Error::NotSblk);
         }
-        let declared = word(block, 0x28);
-        if declared != word(block, 0x2c) || declared != sections[1].1 {
+        let declared = order.u32(block, 0x28);
+        if declared != order.u32(block, 0x2c) || declared != sections[1].1 {
             return Err(Error::SizeDisagreement {
                 declared,
                 section: sections[1].1,
@@ -334,14 +445,14 @@ impl<'a> Bank<'a> {
             });
         }
 
-        let flags = word(block, 0x08);
-        let cue_count = half(block, 0x16);
-        let command_count = half(block, 0x18);
-        let waveform_count = half(block, 0x1a);
-        let cue_offset = word(block, 0x1c);
-        let command_offset = word(block, 0x20);
-        let parameter_offset = word(block, 0x34);
-        let name_offset = word(block, 0x38);
+        let flags = order.u32(block, 0x08);
+        let cue_count = order.u16(block, 0x16);
+        let command_count = order.u16(block, 0x18);
+        let waveform_count = order.u16(block, 0x1a);
+        let cue_offset = order.u32(block, 0x1c);
+        let command_offset = order.u32(block, 0x20);
+        let parameter_offset = order.u32(block, 0x34);
+        let name_offset = order.u32(block, 0x38);
 
         let slice = |offset: u32, len: usize, name: &'static str| -> Result<&'a [u8]> {
             let start = offset as usize;
@@ -377,6 +488,7 @@ impl<'a> Bank<'a> {
             parameter_offset,
             name_offset,
             waveforms,
+            order,
         })
     }
 
@@ -408,7 +520,7 @@ impl<'a> Bank<'a> {
             .iter()
             .enumerate()
         {
-            let first = word(command, 0);
+            let first = self.order.u32(command, 0);
             // The opcode is the high byte of the first word, which is byte 3 in
             // memory: `Scream_StepCommandList` reads `*(u8 *)(cmd + 3)`.
             let opcode = (first >> 24) as u8;
@@ -429,9 +541,9 @@ impl<'a> Bank<'a> {
                 command: index,
                 opcode,
                 descriptor: at,
-                mode: half(record, 0x0e),
-                offset: word(record, 0x10),
-                length: word(record, 0x14),
+                mode: self.order.u16(record, 0x0e),
+                offset: self.order.u32(record, 0x10),
+                length: self.order.u32(record, 0x14),
             });
         }
         out
@@ -462,7 +574,7 @@ impl<'a> Bank<'a> {
         // Relative to the name block, not to the section: the word reads 0x98
         // on all 39 banks even though their name blocks sit at wildly different
         // offsets. The runtime fixes it up to a pointer before using it.
-        let entries = word(block, 0x08) as usize;
+        let entries = self.order.u32(block, 0x08) as usize;
         // The buckets fill the gap between the name block's fixed head and the
         // entry array, so their count follows from the two offsets rather than
         // from the hash's range, which is not known.
@@ -473,7 +585,7 @@ impl<'a> Bank<'a> {
         let mut out = Vec::new();
         let mut seen = Vec::new();
         for bucket in 0..bucket_bytes / 2 {
-            let head = usize::from(half(block, NAME_BUCKETS_AT + bucket * 2));
+            let head = usize::from(self.order.u16(block, NAME_BUCKETS_AT + bucket * 2));
             let mut at = entries + head * NAME_ENTRY_LEN;
             while let Some(entry) = block.get(at..).and_then(|tail| tail.get(..NAME_ENTRY_LEN)) {
                 if entry[0] == 0 {
@@ -484,7 +596,7 @@ impl<'a> Bank<'a> {
                     let end = entry[..16].iter().position(|&b| b == 0).unwrap_or(16);
                     out.push(SoundName {
                         name: String::from_utf8_lossy(&entry[..end]).into_owned(),
-                        cue: half(entry, 0x10),
+                        cue: self.order.u16(entry, 0x10),
                     });
                 }
                 at += NAME_ENTRY_LEN;
@@ -632,6 +744,8 @@ pub fn decode_adpcm(data: &[u8]) -> Vec<i16> {
     }
     out
 }
+
+use crate::byte_order::ByteOrder;
 
 pub mod cue;
 pub use cue::Cue;
