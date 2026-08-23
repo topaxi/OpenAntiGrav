@@ -303,10 +303,10 @@ pub struct Movie {
     /// The picture's intended display aspect ratio, as `(width, height)`.
     ///
     /// A `.PMF`'s pixels are square, so this is just `(width, height)` and
-    /// changes nothing. A PS2 `.PSS` is not: `INTRO512.PSS` decodes to a
-    /// square 512x512 but samples are non-square, and its own display aspect
-    /// is 4:3 - drawing it stretched into a 480x272 (~16:9) box would squash
-    /// it. Read by `ffprobe` alongside width and height; see [`probe`].
+    /// changes nothing. The PS2's containers are neither their own shape nor
+    /// their tag's - `INTRO512.PSS` is a square 512x512 declaring 4:3 - and are
+    /// drawn at [`PS2_DISPLAY_ASPECT`], the frame they were cut to fill, which
+    /// is measured off the picture rather than read off the stream.
     pub display_aspect: (u32, u32),
     /// Where the decoded frames are, if a transcode happened.
     pub frames: Option<FrameStore>,
@@ -1326,14 +1326,18 @@ fn backdrop_frame_rate(width: u32) -> (u64, u64) {
     }
 }
 
-/// The display aspect both PS2 backdrop cuts are drawn at.
+/// The display aspect every PS2 movie is drawn at: the frame it fills.
 ///
-/// Same as the `.PSS` intro cuts of the same two sizes, which declare `4:3` in
-/// their own sequence headers - neither `512x512` nor `640x448` is 4:3 as a
-/// pixel grid, and the PS2's front end draws its movie over a `640x448` black
-/// `Image` filling the screen. An `IPUF` carries no aspect field, so this is
-/// taken from the paired cut rather than read.
-const BACKDROP_DISPLAY_ASPECT: (u32, u32) = (4, 3);
+/// **Not the `4:3` the `.PSS` cuts declare, which this used to be.** The film's
+/// closing card is the `wipEout PULSE` logo, the same artwork as
+/// `pulse_logo.mip`: its ink measures 4.20 wide-to-tall where the PSP front end
+/// draws that texture and 4.23 with the film scaled to 16:9, against 3.14 at
+/// the declared 4:3. The PS2 draws its `Movie` widget with no size of its own
+/// over a `640x448` black `Image`, so the film fills the frame - and spelling
+/// this `(480, 272)` says whose frame: [`crate::frontend::Space::PS2`]'s. An
+/// `IPUF` declares no aspect and takes this as it takes its rate. See
+/// `docs/ps2/aspect-ratio.md`.
+pub(crate) const PS2_DISPLAY_ASPECT: (u32, u32) = (480, 272);
 
 /// Makes a PS2 `.IPF` backdrop's frames available, transcoding if it must.
 ///
@@ -1366,7 +1370,7 @@ fn open_ipuf(
             width,
             height,
             frame_rate,
-            display_aspect: BACKDROP_DISPLAY_ASPECT,
+            display_aspect: PS2_DISPLAY_ASPECT,
             frames: None,
             no_picture_reason: Some("--no-video was given".to_string()),
             audio: None,
@@ -1393,7 +1397,7 @@ fn open_ipuf(
             width,
             height,
             frame_rate,
-            display_aspect: BACKDROP_DISPLAY_ASPECT,
+            display_aspect: PS2_DISPLAY_ASPECT,
             frames: Some(frames),
             no_picture_reason: None,
             audio: None,
@@ -1404,7 +1408,7 @@ fn open_ipuf(
             width,
             height,
             frame_rate,
-            display_aspect: BACKDROP_DISPLAY_ASPECT,
+            display_aspect: PS2_DISPLAY_ASPECT,
             frames: None,
             no_picture_reason: Some(format!("{reason:#}")),
             audio: None,

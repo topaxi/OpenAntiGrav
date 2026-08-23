@@ -5,6 +5,7 @@ Findings specific to the PlayStation 2 release. Pulse on PS2 was Europe-only.
 | Document | Covers |
 | --- | --- |
 | [Pulse disc layout](pulse-disc-layout.md) | Contents of the Pulse DVD, with findings |
+| [Aspect ratio](aspect-ratio.md) | The 640x448 frame is anamorphic; what the disc's own 4:3/16:9 option moves, and what it does not |
 
 ## Key facts
 
@@ -18,6 +19,11 @@ Findings specific to the PlayStation 2 release. Pulse on PS2 was Europe-only.
   reports CD units; the sectors inside are ordinary 2048-byte user data. See
   [the disc layout](pulse-disc-layout.md#the-container-is-a-dvd-packed-as-a-cd).
 - 76% of the disc is a single padding file.
+- **The 640x448 frame is anamorphic.** The port stretched the PSP's 480x272
+  layout into it on each axis separately, so it is undistorted only when shown
+  at ~16:9; the disc's own `Aspect Ratio` option multiplies the *camera's*
+  aspect by 4/3 and touches nothing else. See
+  [aspect ratio](aspect-ratio.md).
 
 ## Related
 
