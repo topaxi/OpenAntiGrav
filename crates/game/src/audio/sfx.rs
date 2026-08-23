@@ -19,6 +19,18 @@
 //! When a page like `shield-pickup.md` names a `Sound_Play` call site, that cue
 //! belongs here, and `Cue::ALL` is the whole set of them.
 //!
+//! # One caveat, and it is per title
+//!
+//! Every trigger below was read out of a **PSP Wipeout Pulse** executable.
+//! The cue names and the banks are each title's own data - Pure spells them as
+//! Pulse does, HD keeps two of them elsewhere, see
+//! [`oag_title::SoundBanks`] - but **no Pure or HD dispatch has ever been
+//! looked at**. Firing a Pulse-recovered edge on those titles is a bet that
+//! games in one series with the same cue names and the same middleware fire
+//! them at the same moments. Reasonable, and not a reading; confidence 50,
+//! which is below this project's naming threshold and so is written down
+//! rather than implied.
+//!
 //! # Two things here are honest placeholders, and both are load-bearing
 //!
 //! **The sample rate.** [`oag_formats::sblk::ASSUMED_SAMPLE_RATE`] is not
@@ -227,20 +239,28 @@ pub enum BankName {
 }
 
 impl BankName {
-    /// The archive entry to read, given whether this is a Zone race.
+    /// The archive entry to read, given a title's own table and whether this is
+    /// a Zone race.
     ///
-    /// Only [`Self::Ship`] moves. `SHIP_ZM` is a different bank with the same
-    /// cue names and different audio - a nine-layer `~ENGINE` against one, and
-    /// ten collision alternates against fifteen - so a Zone race that played
-    /// `ship.bnk` would be quietly playing the wrong craft.
+    /// **Which file a cue is in is a per-title fact and the cue's name is not.**
+    /// All three titles spell `SPEEDUPPAD` and `.COLLISIONS` identically; HD
+    /// keeps the first in `weapons.bnk` because it has no `hud.bnk` at all, and
+    /// the second in `shiphd.bnk`. See [`oag_title::SoundBanks`].
+    ///
+    /// Only [`Self::Ship`] moves with `zone`, and on Pulse and Pure that is
+    /// load-bearing: `SHIP_ZM` is a different bank with the same cue names and
+    /// different audio - a nine-layer `~ENGINE` against one, ten collision
+    /// alternates against fifteen - so a Zone race reading `ship.bnk` would be
+    /// quietly playing the wrong craft. HD ships no separate Zone bank and its
+    /// table says so by repeating itself.
     #[must_use]
-    pub fn entry(self, zone: bool) -> &'static str {
+    pub fn entry(self, banks: &oag_title::SoundBanks, zone: bool) -> &'static str {
         match self {
-            Self::Hud => r"Data\Sound\hud.bnk",
-            Self::Ship if zone => r"Data\Sound\ship_zone.bnk",
-            Self::Ship => r"Data\Sound\ship.bnk",
-            Self::Weapons => r"Data\Sound\weapons.bnk",
-            Self::Speech => r"Data\Sound\speech.bnk",
+            Self::Hud => banks.hud,
+            Self::Ship if zone => banks.ship_zone,
+            Self::Ship => banks.ship,
+            Self::Weapons => banks.weapons,
+            Self::Speech => banks.speech,
         }
     }
 }
@@ -398,13 +418,13 @@ impl Banks {
     /// that refused to start because a bank was missing would make the audio
     /// work a precondition for every other kind of work in the tree.
     #[must_use]
-    pub fn load(archives: &mut Archives, zone: bool) -> Self {
+    pub fn load(archives: &mut Archives, banks: &oag_title::SoundBanks, zone: bool) -> Self {
         let mut sounds = BTreeMap::new();
         let mut report = Vec::new();
         let mut blobs: BTreeMap<BankName, Vec<u8>> = BTreeMap::new();
 
         for cue in Cue::ALL {
-            let entry = cue.bank().entry(zone);
+            let entry = cue.bank().entry(banks, zone);
             let blob = match blobs.get(&cue.bank()) {
                 Some(blob) => blob,
                 None => match archives.read_name(entry) {

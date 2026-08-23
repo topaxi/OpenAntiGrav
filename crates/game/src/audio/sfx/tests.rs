@@ -70,18 +70,41 @@ fn an_unloaded_cue_is_silent_rather_than_substituted() {
 fn every_cue_names_a_bank_and_a_string() {
     for cue in Cue::ALL {
         assert!(!cue.name().is_empty());
-        assert!(cue.bank().entry(false).starts_with(r"Data\Sound\"));
-        assert!(cue.bank().entry(true).starts_with(r"Data\Sound\"));
+        for banks in [oag_pulse::race::SOUND_BANKS, oag_hd::race::SOUND_BANKS] {
+            // One spelling reaches a WAD and a PSARC alike, because
+            // `oag_assets::psarc` folds case and separators.
+            assert!(cue.bank().entry(banks, false).starts_with(r"Data\Sound\"));
+            assert!(cue.bank().entry(banks, true).starts_with(r"Data\Sound\"));
+        }
     }
     // Zone moves the ship bank and nothing else, because `SHIP_ZM` is the only
-    // bank with a Zone counterpart on either disc.
-    assert_eq!(BankName::Ship.entry(false), r"Data\Sound\ship.bnk");
-    assert_eq!(BankName::Ship.entry(true), r"Data\Sound\ship_zone.bnk");
-    assert_eq!(BankName::Hud.entry(true), BankName::Hud.entry(false));
+    // bank with a Zone counterpart on either Pulse disc.
+    let pulse = oag_pulse::race::SOUND_BANKS;
+    assert_eq!(BankName::Ship.entry(pulse, false), r"Data\Sound\ship.bnk");
     assert_eq!(
-        BankName::Weapons.entry(true),
-        BankName::Weapons.entry(false)
+        BankName::Ship.entry(pulse, true),
+        r"Data\Sound\ship_zone.bnk"
     );
+    assert_eq!(
+        BankName::Hud.entry(pulse, true),
+        BankName::Hud.entry(pulse, false)
+    );
+    assert_eq!(
+        BankName::Weapons.entry(pulse, true),
+        BankName::Weapons.entry(pulse, false)
+    );
+
+    // HD moves two of them, and repeats itself for Zone because it ships no
+    // separate Zone ship bank. This is the whole of the per-title difference.
+    let hd = oag_hd::race::SOUND_BANKS;
+    assert_eq!(BankName::Hud.entry(hd, false), r"Data\Sound\weapons.bnk");
+    assert_eq!(BankName::Ship.entry(hd, false), r"Data\Sound\shiphd.bnk");
+    assert_eq!(
+        BankName::Ship.entry(hd, true),
+        BankName::Ship.entry(hd, false)
+    );
+    // Pure spells them exactly as Pulse does - the finding, not the assumption.
+    assert_eq!(oag_pure::race::SOUND_BANKS, pulse);
     // The two cues this port holds a handle to, and only those two: a held cue
     // must not also be fired as a one-shot from the drain loop.
     let held: Vec<Cue> = Cue::ALL.into_iter().filter(|c| c.held()).collect();

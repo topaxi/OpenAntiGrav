@@ -830,7 +830,11 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // The same shape for sound, and for the same reason: adding a cue is adding
     // its name and its trigger, never a loader. Zone races read `ship_zone.bnk`
     // instead of `ship.bnk` - a different bank with the same cue names.
-    let sounds = crate::audio::sfx::Banks::load(&mut archives, options.mode == Mode::Zone);
+    let sounds = crate::audio::sfx::Banks::load(
+        &mut archives,
+        title.race.sounds,
+        options.mode == Mode::Zone,
+    );
     report.extend(sounds.report.iter().cloned());
 
     let noise = match exhaust_texture(&mut archives, NOISE_TEXTURE) {

@@ -715,24 +715,64 @@ noise per block - a plausible-looking stand-in, which
 [`CLAUDE.md`](../../CLAUDE.md) forbids and which would also destroy the
 evidence above by making the wrong thing sound like the right one.
 
-### The game does not play HD's banks yet, and that is a separate job
+### HD makes four of the six sounds
 
-Reading them is done; wiring them is not, and the reason is naming rather than
-format:
+The difference between HD and the other titles turned out to be **which file a
+cue is in**, and nothing else - the cue strings are identical across the
+lineage. That is a five-field path table per title
+([`oag_title::SoundBanks`](../../crates/title/src/race.rs)), not a new axis:
 
-- HD has **no `hud.bnk`**. Its ship bank is `shiphd.bnk`, and `SPEEDUPPAD`
-  lives in `weapons.bnk`.
-- There is **no `~ENGINE` at all**. HD's ship audio is a per-event set -
+| Cue | Pulse and Pure | Wipeout HD |
+| --- | --- | --- |
+| `SPEEDUPPAD` | `hud.bnk` | **`weapons.bnk`** - HD has no `hud.bnk` |
+| `.COLLISIONS` | `ship.bnk` | **`shiphd.bnk`** |
+| `ABSORB`, `~SHIELD` | `weapons.bnk` | `weapons.bnk` |
+| `shieldactive` | `speech.bnk` | `speech.bnk` |
+
+One spelling - `Data\Sound\...` - reaches a WAD and a PSARC alike, because
+`oag_assets::psarc` folds case and separators, so no caller branches on the
+container.
+
+**Two cues do not load on HD, and each says why in the race's own report:**
+
+```text
+sfx: SPEEDUPPAD -> 7 waveform(s) from Data\Sound\weapons.bnk
+sfx: .COLLISIONS not loaded: .COLLISIONS binds no waveform: its 4 command(s) are all opcodes this does not read
+sfx: ABSORB -> 6 waveform(s) from Data\Sound\weapons.bnk
+sfx: ~ENGINE not loaded: "~ENGINE" names no cue in shipHD
+sfx: ~SHIELD -> 6 waveform(s) from Data\Sound\weapons.bnk, 2 skipped as not PS-ADPCM
+sfx: shieldactive -> 2 waveform(s) from Data\Sound\speech.bnk
+```
+
+- **`~ENGINE` does not exist on HD.** Its ship audio is a per-event set -
   `c_CShipWall`, `c_CShipShip`, `c_GShipShip`, `c_ElecArcA`..`D`,
-  `c_CrackLoopL/C/R` - which is a different design, not a renamed cue.
-- Five of the six cues this port fires do exist (`SPEEDUPPAD`, `.COLLISIONS`,
-  `ABSORB`, `~SHIELD`, `shieldactive`), but in different banks.
+  `c_CrackLoopL/C/R` - which is a different design and not a renamed cue.
+  Nothing is substituted; the held voice never opens.
+- **`.COLLISIONS` exists and binds no waveform.** Its four commands are all
+  among the 43 unread opcodes, and `shiphd.bnk` also carries `.COLLSHIELD`,
+  `.GRIND` and `.GRINDSHIELD` beside a wall of `c_CShipWallL/M/S`-style names -
+  which reads as a *selector* cue dispatching to child sounds. Decoding the
+  opcode that does the dispatching is the same open question as
+  [which alternate sounds](#which-of-a-cues-waveforms-sounds-is-still-open),
+  reached from a second direction.
 
-That needs a per-title bank-and-cue axis on `Title`, the same shape as
-`ArchiveCandidates` and `Music::tracks` -
-[ADR-0022](../architecture/adr/0022-title-packages.md) territory. And
-**no HD trigger has ever been read**: every cue edge this project has is
-Pulse's, applied to a different game.
+The `~SHIELD` line is also the not-PS-ADPCM path working end to end: six of
+HD's eight `~SHIELD` waveforms decode and two are dropped.
+
+### HD's cue edges are Pulse's, and that is an assumption
+
+Worth stating plainly, because the rest of this page is measurement. The cue
+*names* and the *banks* above are HD's own data, read off HD's own disc. The
+**moments they fire on** are not: every trigger this project has -
+`Ship_ApplySpeedupPad`, `ShipCollisionFx_Trigger`, `FUN_08840640`,
+`Shield_Activate` - was read out of a **PSP Pulse** executable, and **no HD
+dispatch has ever been looked at**.
+
+Applying them is a bet that two games in one series with the same designer,
+the same cue names and the same middleware fire those cues at the same moments.
+That is a reasonable bet and it is not a reading. Recorded at confidence
+**50** - below this project's naming threshold, which is why it is written here
+as a caveat rather than implied by the code.
 
 ## Reproducing
 

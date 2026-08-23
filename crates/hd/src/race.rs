@@ -30,6 +30,34 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     team: DEFAULT_TEAM,
     zone: oag_title::ZoneCircuit::Separate(DEFAULT_ZONE_TRACK),
     zone_craft: oag_title::ZoneCraft::OwnShip(ZONE_SHIP),
+    sounds: SOUND_BANKS,
+};
+
+/// Where each race cue lives, and the one title where two of them move.
+///
+/// Measured off the disc rather than assumed from Pulse: the seven PSARCs hold
+/// 18 distinct `.bnk` names and **`hud.bnk` is not among them**. `SPEEDUPPAD`
+/// is in `weapons.bnk` here, and the ship bank is `shiphd.bnk`.
+///
+/// Spelled `Data\Sound\...` even though a PSARC stores `/data/sound/...`,
+/// because [`oag_assets::psarc`] folds case and separators - so one spelling
+/// reaches every container in the lineage and no caller branches on the disc.
+///
+/// **`ship_zone` is `shiphd.bnk` because HD ships no separate Zone ship bank.**
+/// Its Zone content is `env0_zone.bnk` and `speech_zone.bnk`, which are a
+/// circuit and a voice-over; there is no `shiphd_zone.bnk` to point at, and
+/// "the same bank" is the honest answer rather than a fallback.
+///
+/// **HD has no `~ENGINE`.** Its ship audio is a per-event set - `c_CShipWall`,
+/// `c_CShipShip`, `c_GShipShip`, `c_ElecArcA`..`D`, `c_CrackLoopL/C/R` - which
+/// is a different design and not a renamed cue, so no field here can supply it
+/// and the loader reports the miss. See `docs/formats/psp-audio.md`.
+pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
+    hud: r"Data\Sound\weapons.bnk",
+    ship: r"Data\Sound\shiphd.bnk",
+    ship_zone: r"Data\Sound\shiphd.bnk",
+    weapons: r"Data\Sound\weapons.bnk",
+    speech: r"Data\Sound\speech.bnk",
 };
 
 /// The ship directory a Zone race flies out of.

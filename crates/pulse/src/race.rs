@@ -23,6 +23,21 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
         hull: ships::ZONE_HULL,
         boost: ships::ZONE_BOOST,
     },
+    sounds: SOUND_BANKS,
+};
+
+/// Where each race cue lives.
+///
+/// Every one of these is a literal string in the PSP executable and hashes to a
+/// real archive entry on **both** Pulse pressings and on the PS2 disc - see
+/// `docs/formats/psp-audio.md`'s table, which lists the `BOOT.BIN` address of
+/// each. Nothing here is a guessed spelling.
+pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
+    hud: r"Data\Sound\hud.bnk",
+    ship: r"Data\Sound\ship.bnk",
+    ship_zone: r"Data\Sound\ship_zone.bnk",
+    weapons: r"Data\Sound\weapons.bnk",
+    speech: r"Data\Sound\speech.bnk",
 };
 
 /// What Pulse puts on the front of a circuit's file name to reach the Zone

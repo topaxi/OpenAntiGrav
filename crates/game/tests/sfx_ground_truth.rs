@@ -56,11 +56,16 @@ fn image(name: &str) -> Option<PathBuf> {
 }
 
 /// Opens a source the way a race does, and loads its banks.
+///
+/// **Takes the bank table off whichever title the source turned out to be**,
+/// exactly as `race::load` does. Hard-coding Pulse's here would make the HD leg
+/// below test the wrong paths and pass for the wrong reason.
 fn banks(image: &Path, zone: bool) -> Banks {
     let opened = oag_game::title::open_source(&image.display().to_string(), Vec::new())
         .expect("opening the source");
+    let sounds = opened.title.race.sounds;
     let mut archives = opened.archives;
-    Banks::load(&mut archives, zone)
+    Banks::load(&mut archives, sounds, zone)
 }
 
 /// Plays one sound through a real mixer and reports what came out.
@@ -140,6 +145,63 @@ fn every_wired_cue_resolves_on_both_pulse_releases() {
         }
     }
     assert!(ran > 0, "no disc image was present");
+}
+
+/// Wipeout HD loads four of the six cues, and the two it misses each say why.
+///
+/// Pinned as a *list* rather than a count, because the interesting part is
+/// which two and for which reason - both are real limits and neither is a bug:
+///
+/// - `~ENGINE` does not exist on HD at all. Its ship audio is a per-event
+///   `c_*` set, a different design rather than a renamed cue.
+/// - `.COLLISIONS` exists in `shiphd.bnk` and binds no waveform, because all
+///   four of its commands are among the 43 unread opcodes.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn wipeout_hd_loads_the_four_cues_it_has_and_reports_the_two_it_does_not() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("data/images/hdfury-ps3-eu-dec.iso");
+    if !path.exists() {
+        assert!(
+            std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
+            "OAG_REQUIRE_GAME_DATA is set but {} is missing",
+            path.display()
+        );
+        println!("skipping: {} not present", path.display());
+        return;
+    }
+    let banks = banks(&path, false);
+    for line in &banks.report {
+        println!("{line}");
+    }
+
+    let mut rng = oag_core::Rng::new(3);
+    let loaded: Vec<&str> = Cue::ALL
+        .into_iter()
+        .filter(|&c| banks.pick(c, &mut rng).is_some())
+        .map(Cue::name)
+        .collect();
+    assert_eq!(
+        loaded,
+        vec!["SPEEDUPPAD", "ABSORB", "~SHIELD", "shieldactive"],
+        "HD's loadable cue set changed"
+    );
+
+    // The paths are the finding: HD has no `hud.bnk`, so `SPEEDUPPAD` comes out
+    // of `weapons.bnk`, and a run that quietly fell back to Pulse's table would
+    // load nothing at all rather than the wrong thing.
+    let says = |needle: &str| banks.report.iter().any(|l| l.contains(needle));
+    assert!(says(
+        r"SPEEDUPPAD -> 7 waveform(s) from Data\Sound\weapons.bnk"
+    ));
+    assert!(says(r#"~ENGINE" names no cue in shipHD"#));
+    assert!(says(".COLLISIONS binds no waveform"));
+    // The not-PS-ADPCM path, working end to end on the only disc that needs it.
+    assert!(
+        says("skipped as not PS-ADPCM"),
+        "no HD cue exercised the non-ADPCM skip"
+    );
 }
 
 #[test]
