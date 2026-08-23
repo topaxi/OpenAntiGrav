@@ -219,6 +219,8 @@ pub fn capture(
         visibility,
         flare,
         noise,
+        trail_blend,
+        trail_shape,
         ..
     } = loaded;
     let mode = setup.mode;
@@ -326,6 +328,8 @@ pub fn capture(
         shield_cockpit,
         flare,
         noise,
+        trail_blend,
+        trail_shape,
         format,
         scene_size,
         options.anisotropy,

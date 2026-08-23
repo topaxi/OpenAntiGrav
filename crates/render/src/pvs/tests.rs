@@ -99,6 +99,8 @@ fn model_of(draws: Vec<DrawCall>) -> Model {
         material_variants: Vec::new(),
 
         vertex_colour_is_light: false,
+
+        flame: None,
         centre: [0.0; 3],
         radius: 1.0,
         anim_tracks: Vec::new(),

@@ -157,11 +157,17 @@ impl Drawable {
     /// One buffer write per drawable per frame, whatever the geometry: the
     /// curve is evaluated once per *track*, not per vertex or per draw call.
     ///
-    /// **Not called for the boost plume**, whose table stays all-identity.
-    /// The plume needs its own clock - its flare's life timer, reset at every
-    /// reveal, rather than the race's - and already gets it through
-    /// [`Self::apply_uv_transform`], which rewrites its vertices directly.
-    /// Driving it from here as well would apply the transform twice.
+    /// **Not called for the boost plume**, whose *texture-transform* table
+    /// stays all-identity. The plume needs its own clock - its flare's life
+    /// timer, reset at every reveal, rather than the race's - and already
+    /// gets it through [`Self::apply_uv_transform`], which rewrites its
+    /// vertices directly. Driving it from here as well would apply the
+    /// transform twice.
+    ///
+    /// That says nothing about [`Self::write_node_anims`], which is a
+    /// different buffer: the plume's *node* table is written, off the same
+    /// reveal timer, because a PS2 plume's two meshes hang off `Anim
+    /// Transform` anchors and draw at the craft's origin without it.
     pub(super) fn write_anims(&self, queue: &wgpu::Queue, seconds: f32) {
         if self.model.anim_tracks.is_empty() {
             return;
@@ -176,8 +182,10 @@ impl Drawable {
     /// The sibling of [`Self::write_anims`], and the same trade: one buffer
     /// write per drawable per frame, with each node's chain resolved once
     /// rather than per vertex. A model with no `Anim Transform` - every ship,
-    /// the sky, both pad models, the collision overlay - writes nothing and
-    /// keeps the identity table `mesh_render::build` initialised it with.
+    /// the sky, both pad models, the collision overlay, and every **PSP**
+    /// boost plume - writes nothing and keeps the identity table
+    /// `mesh_render::build` initialised it with. A **PS2** plume carries two
+    /// and is placed entirely by them.
     pub(super) fn write_node_anims(&self, queue: &wgpu::Queue, seconds: f32) {
         if self.model.anim_nodes.is_empty() {
             return;
@@ -438,6 +446,74 @@ impl Drawable {
                 continue;
             }
             let pipeline = pipelines.select(draw);
+            if !current.is_some_and(|set| std::ptr::eq(set, pipeline)) {
+                pass.set_pipeline(pipeline);
+                current = Some(pipeline);
+            }
+            stats.draws_submitted += 1;
+            stats.triangles += (draw.range.end - draw.range.start) / 3;
+            let slot = draw.texture.map_or(0, |t| t + 1);
+            pass.set_bind_group(1, &self.textures[slot.min(self.textures.len() - 1)], &[]);
+            pass.draw_indexed(draw.range.clone(), 0, 0..1);
+        }
+        stats
+    }
+
+    /// Draws **every** list of this model through the additive pipeline,
+    /// ignoring which list each batch's `pass_mask` put it in.
+    ///
+    /// **Only the PS2 boost plume uses this, and only because a reference
+    /// frame settled it.** That model's four batches carry no `0x0700` class
+    /// bit, so they land in [`Model::draws`] and [`Self::draw`] would submit
+    /// them through the opaque pipeline - which draws each nozzle as a solid
+    /// hexagon with hard edges, occluding the hull behind it. A PCSX2 capture
+    /// of the original (2026-08-23, the first this project has taken) shows
+    /// the opposite: soft violet plumes with no geometry edge anywhere and the
+    /// hull visible through them. So the original blends this model, and the
+    /// question is only where it says so.
+    ///
+    /// **Where it says so is unrecovered, and that is why this is a
+    /// model-scoped override rather than a decode.** `Gfx_BuildBatchStateList`
+    /// (`0x001e9088`) does disable blending for a `0x0700`-clear batch - read
+    /// on the PS2 executable, and every other `pass_mask` bit it tests matches
+    /// the PSP's - but it is reached through `Mesh_DrawBatches` for sort keys
+    /// of layer `0x750`, and the plume's own object queues at `0x7d0`. The
+    /// draw its vtable (`0x0029a3a0`) reaches for that layer has not been
+    /// followed yet. See
+    /// `docs/ghidra/functions/ps2-pulse-eu/batch-draw-state.md`.
+    ///
+    /// The equation is not invented either: `mesh_render::ADDITIVE_BLEND` is
+    /// the `0x200` class's own recovered equation, byte-identical to
+    /// [`oag_render::exhaust::BLEND`], and it is what the **PSP** plume
+    /// already draws with - its batches carry `0x200` and
+    /// `TransparentPipelines::select` routes them there. So this puts the two
+    /// discs' plumes on one blend rather than giving them two.
+    ///
+    /// A PSP plume never reaches this method's opaque or cutout lists, both
+    /// being empty there, so calling it for both titles changes nothing on
+    /// PSP.
+    pub(super) fn draw_additive(&self, pass: &mut wgpu::RenderPass<'_>) -> SceneStats {
+        let mut stats = SceneStats::default();
+        if self.model.indices.is_empty() {
+            return stats;
+        }
+        pass.set_bind_group(0, &self.uniform_bind, &[]);
+        pass.set_bind_group(2, &self.fog_bind, &[]);
+        pass.set_bind_group(3, &self.anim_bind, &[]);
+        pass.set_vertex_buffer(0, self.vertices.slice(..));
+        pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint32);
+        let mut current: Option<&wgpu::RenderPipeline> = None;
+        for draw in self
+            .model
+            .draws
+            .iter()
+            .chain(&self.model.alpha_tested_draws)
+            .chain(&self.model.transparent_draws)
+        {
+            // Two-sidedness stays the batch's own: the plume's `0x20` is set
+            // on both discs, so nothing here is culled, and a future model
+            // that sets it differently should still be obeyed.
+            let pipeline = &self.additive_pipeline[usize::from(draw.culled)];
             if !current.is_some_and(|set| std::ptr::eq(set, pipeline)) {
                 pass.set_pipeline(pipeline);
                 current = Some(pipeline);

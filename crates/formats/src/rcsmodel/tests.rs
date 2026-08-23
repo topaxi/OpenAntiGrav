@@ -192,6 +192,7 @@ fn both_factors_come_through_and_an_unknown_one_is_not_guessed_at() {
         dst_factor: dst,
         texture: String::new(),
         second_texture: None,
+        parameters: Vec::new(),
     };
     for (src, named) in [
         (material::FACTOR_ONE, material::Factor::One),
@@ -236,6 +237,7 @@ fn the_unused_transparency_encoding_is_not_guessed_at() {
         dst_factor: 0x0303,
         texture: String::new(),
         second_texture: None,
+        parameters: Vec::new(),
     };
     assert_eq!(odd.transparency(), None);
     assert!(

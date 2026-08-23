@@ -70,3 +70,10 @@
 0x008636e0	data	g_CraftVtable	85	physics.md
 0x008638e8	data	g_DebrisVtable	72	physics.md
 0x000364c0	function	Collision_MarchSegment	72	physics.md
+0x002a3100	function	EngineFlare_Update	88	engine-flare.md
+0x002a1f00	function	EngineFlare_PlaceShapes	80	engine-flare.md
+0x00782388	data	EngineFlare_ModelPathFormat	95	engine-flare.md
+0x0079bed0	data	EngineFlare_BoostLeftShapeName	90	engine-flare.md
+0x0079bf00	data	EngineFlare_BoostRightShapeName	90	engine-flare.md
+0x002e2da8	function	Trail_ConstructManager	85	engine-flare.md
+0x007a2d70	data	Trail_ModelPath	95	engine-flare.md

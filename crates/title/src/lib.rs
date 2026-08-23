@@ -36,6 +36,8 @@
 //! [ADR-0023]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0023-boot-sequence-as-title-data.md
 
 pub mod boot;
+pub mod exhaust;
+pub mod flare;
 pub mod hud;
 pub mod menu;
 pub mod race;
@@ -89,6 +91,16 @@ pub struct Title {
     /// promoted temporaries whose addresses need not be equal. Carrying the
     /// answer removes the question.
     pub race: &'static race::RaceDefaults,
+    /// Where this title keeps the exhaust ribbon's texture. See
+    /// [`exhaust::Exhaust`], which is an axis because the two answers are not
+    /// the same kind of thing: Pulse and Pure name a texture, Wipeout HD ships
+    /// a ribbon template whose material names its own.
+    pub exhaust: &'static exhaust::Exhaust,
+    /// Where this title keeps the **engine flare** - the light at the nozzle,
+    /// as distinct from the ribbon [`Self::exhaust`] answers for. See
+    /// [`flare::Flare`], and see that module for why the two are separate axes
+    /// rather than variants of one.
+    pub flare: &'static flare::Flare,
     /// The plugin definition declaring what this release carries to race with:
     /// one `PI_Team` node per team, one `PI_Track` per circuit, one `PI_Music`
     /// per soundtrack track.

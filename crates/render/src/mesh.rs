@@ -308,6 +308,9 @@ pub struct Model {
     /// over-fired onto every other model including the sky cube. `model_probe`
     /// is what caught the first half.
     pub vertex_colour_is_light: bool,
+    /// Wipeout HD's engine-flare shading, for the one model that is one, and
+    /// `None` for every other model of every title. See [`Flame`].
+    pub flame: Option<Flame>,
     /// Centre of the bounding box, so the camera can frame the model.
     pub centre: [f32; 3],
     /// Radius of the bounding sphere.
@@ -366,6 +369,8 @@ impl Model {
             material_variants: Vec::new(),
 
             vertex_colour_is_light: false,
+
+            flame: None,
             centre: [0.0; 3],
             radius: 0.0,
             mesh_count: 0,
@@ -963,6 +968,8 @@ fn build_class(
         material_variants: Vec::new(),
 
         vertex_colour_is_light: false,
+
+        flame: None,
         centre,
         radius,
         mesh_count,
@@ -983,6 +990,9 @@ pub use ps2_textures::ps2_texture_set;
 mod draw_call;
 pub use draw_call::{Bounds, DrawCall};
 
+mod flame;
+pub mod groups;
+pub use flame::Flame;
 mod merge;
 mod order;
 pub use merge::merge;

@@ -44,39 +44,76 @@ fn a_ps2_grid_is_not_its_own_display_aspect() {
     assert!((Space::PSP.display_aspect - Space::PSP.size.0 / Space::PSP.size.1).abs() < 1e-6);
     let as_grid = Space::PS2.size.0 / Space::PS2.size.1;
     assert!(
-        (as_grid - Space::PS2.display_aspect).abs() > 0.09,
-        "640/448 is {as_grid}, and taking it for the display aspect is the 7% stretch"
+        (as_grid - Space::PS2.display_aspect).abs() > 0.3,
+        "640/448 is {as_grid}, and taking it for the display aspect squeezes the front end"
     );
+}
+
+/// The display aspect is the one that undoes the port's own stretch.
+///
+/// The PS2 draws the PSP's artwork - same texture, same source rectangle -
+/// scaled by `640/480` across and `448/272` down, and the executable applies
+/// those same two factors itself in `FUN_001e9370`. A rectangle stretched by
+/// two different factors comes out square only at one display aspect, and this
+/// is the arithmetic that names it. See `docs/ps2/aspect-ratio.md`.
+#[test]
+fn the_display_aspect_undoes_the_anamorphic_stretch() {
+    let (sx, sy) = Space::PS2.texture_scale();
+    // A texel square, drawn `sx` by `sy` grid units, shown as `display_aspect`.
+    let on_screen = (sx / sy) * Space::PS2.display_aspect * Space::PS2.size.1 / Space::PS2.size.0;
+    assert!(
+        (on_screen - 1.0).abs() < 1e-5,
+        "a square comes out {on_screen} times as wide as it is tall"
+    );
+    // And 4:3, which is what this used to carry, is where the squash was.
+    let squashed = (sx / sy) * (4.0 / 3.0) * Space::PS2.size.1 / Space::PS2.size.0;
+    assert!((squashed - 0.7556).abs() < 0.001, "{squashed}");
 }
 
 /// A picture already the screen's shape fills it, on either disc.
 ///
-/// The PS2 half is the case that was wrong and stayed wrong after the
-/// renderer was fixed: `INTRO512.PSS` declares 4:3, the PS2 screen *is* 4:3,
-/// and the old square-pixel comparison boxed it inside itself anyway.
+/// The PS2's own movies are that case: `INTRO512.PSS` decodes to a square
+/// 512x512 and declares 4:3, and is neither - it is cut to fill the frame, so
+/// [`crate::movie::PS2_DISPLAY_ASPECT`] is the frame's own numbers and this
+/// returns the whole screen.
 #[test]
 fn a_picture_of_the_screens_own_shape_is_not_boxed() {
     assert_eq!(
         pillarbox_in(Space::PSP, (480, 272)),
         [0.0, 0.0, 480.0, 272.0]
     );
-    let ps2 = pillarbox_in(Space::PS2, (4, 3));
+    let ps2 = pillarbox_in(Space::PS2, crate::movie::PS2_DISPLAY_ASPECT);
     assert!(
         (ps2[2] - 640.0).abs() < 0.01 && (ps2[3] - 448.0).abs() < 0.01,
-        "a 4:3 cut fills a 4:3 screen: {ps2:?}"
+        "a cut of the frame's own shape fills it: {ps2:?}"
     );
     assert!(ps2[0].abs() < 0.01 && ps2[1].abs() < 0.01, "{ps2:?}");
 }
 
-/// A wider picture is letterboxed, and the bars are in grid units.
+/// A narrower picture is pillarboxed, and the bars are in grid units.
 #[test]
-fn a_wider_picture_is_letterboxed_within_the_grid() {
-    let ps2 = pillarbox_in(Space::PS2, (16, 9));
-    assert!((ps2[2] - 640.0).abs() < 0.01, "full width: {ps2:?}");
-    // 4:3 shown, 16:9 wanted, so the height gives up 3/4 of itself.
-    let wanted = (4.0 / 3.0) * 448.0 / (16.0 / 9.0);
-    assert!((ps2[3] - wanted).abs() < 0.01, "{ps2:?} against {wanted}");
-    assert!((ps2[1] - (448.0 - wanted) / 2.0).abs() < 0.01, "centred");
+fn a_narrower_picture_is_pillarboxed_within_the_grid() {
+    let ps2 = pillarbox_in(Space::PS2, (4, 3));
+    assert!((ps2[3] - 448.0).abs() < 0.01, "full height: {ps2:?}");
+    // ~16:9 shown, 4:3 wanted, so the width gives up what it is narrower by.
+    let wanted = (4.0 / 3.0) * 640.0 / Space::PS2.display_aspect;
+    assert!((ps2[2] - wanted).abs() < 0.01, "{ps2:?} against {wanted}");
+    assert!((ps2[0] - (640.0 - wanted) / 2.0).abs() < 0.01, "centred");
+}
+
+/// Only the PS2 rescales a texture's own size, and by its own two factors.
+#[test]
+fn a_texture_size_is_psp_pixels_until_the_ps2_says_otherwise() {
+    assert_eq!(Space::PSP.texture_scale(), (1.0, 1.0));
+    assert_eq!(Space::HD.texture_scale(), (1.0, 1.0));
+    let (sx, sy) = Space::PS2.texture_scale();
+    assert!((sx - 640.0 / 480.0).abs() < 1e-6, "{sx}");
+    assert!((sy - 448.0 / 272.0).abs() < 1e-6, "{sy}");
+    // `Show Logo`'s 512x128 logo, which is the same file on both discs, ends
+    // up the same fraction of the screen it is on.
+    let (w, h) = (512.0 * sx, 128.0 * sy);
+    assert!((w / Space::PS2.size.0 - 512.0 / SCREEN.0).abs() < 1e-6);
+    assert!((h / Space::PS2.size.1 - 128.0 / SCREEN.1).abs() < 1e-6);
 }
 
 /// The old two-argument form is the square-pixel case and is unchanged.

@@ -50,7 +50,7 @@ pub enum Aspect {
     /// [`crate::race::AUTHORED_ASPECT`].
     #[default]
     Psp,
-    /// 4:3, which is what the PS2 release output.
+    /// 4:3, the PS2's television - not the shape its own artwork wants.
     Ps2,
     /// Whatever the window is.
     ///

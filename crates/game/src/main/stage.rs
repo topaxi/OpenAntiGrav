@@ -249,6 +249,8 @@ impl Stage {
             visibility,
             flare,
             noise,
+            trail_blend,
+            trail_shape,
             ..
         } = loaded;
         let scene = race::Scene::new(
@@ -265,6 +267,8 @@ impl Stage {
             shield_cockpit,
             flare,
             noise,
+            trail_blend,
+            trail_shape,
             gpu.config.format,
             size,
             anisotropy,

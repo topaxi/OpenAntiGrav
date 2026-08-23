@@ -451,6 +451,23 @@ pub struct Loaded {
     pub visibility: Option<TrackVisibility>,
     /// The trail ribbon's noise texture off the disc, when it decodes.
     pub noise: Option<FlareTexture>,
+    /// The ribbon's blend, when the title **authors** one rather than leaving
+    /// it to the recovered PSP preset.
+    ///
+    /// `None` on Pulse and Pure, where `exhaust::TRAIL_BLEND` is what
+    /// `Trail_BuildStateList` records and there is nothing on the disc to
+    /// override it with. `Some` on Wipeout HD, whose ribbon material carries
+    /// its own factor pair - `SrcAlpha`/`One`, which is the same additive
+    /// equation the PSP preset and the PS2's GS register write both land on,
+    /// from a third independent source.
+    pub trail_blend: Option<wgpu::BlendState>,
+    /// The ribbon's own coverage texture, for a title whose material names two.
+    ///
+    /// `None` on Pulse, Pure and the PS2 port, which name one - and on a
+    /// Wipeout HD source whose first texture would not decode, which the load
+    /// report says rather than leaving the ribbon quietly shaped by the PSP
+    /// preset. See `assets::trail_texture`.
+    pub trail_shape: Option<FlareTexture>,
     /// The engine-flare texture off the disc, when it decodes.
     ///
     /// `None` falls back to [`Exhaust`]'s procedural glow, and the load report

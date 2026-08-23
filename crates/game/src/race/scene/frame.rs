@@ -138,7 +138,9 @@ impl Scene {
         // from `mesh_render::build`. Whether the original fogs the plume is
         // unrecovered - it is scene geometry like the ship, but additive like
         // the flare, and the flare's own post-projection draw is not answered
-        // by fog either way. Left unfogged rather than guessed.
+        // by fog either way. Left unfogged rather than guessed. Its animation
+        // tables are written below instead, off its own reveal timer rather
+        // than the race clock these lists ride.
 
         // The sky rides with the eye. Translating it to the camera is what makes
         // an authored cube tens of units across stand in for a horizon: the
@@ -264,6 +266,19 @@ impl Scene {
         // craft's `plume_timer` rather than one shared clock. Indexed by slot -
         // not `zip`ped over `ship_model_matrices`, which filters inactive craft
         // and so does not keep slot alignment.
+        // The always-on flame, on the craft's own matrix and nothing else: its
+        // vertices were already moved to the `Engine Flare` locator at load, so
+        // it rides the hull exactly as the plume does. See
+        // `crate::livery::flare::per_team` for why the placement is baked.
+        for (slot, flare) in self.flares.iter().enumerate().take(drawn) {
+            let Some(flare) = flare else {
+                continue;
+            };
+            if !race.ship_active(slot) {
+                continue;
+            }
+            flare.write(queue, view_projection, race.ship_model_matrix_of(slot));
+        }
         for (slot, boost) in self.boost.iter().enumerate().take(drawn) {
             // `None` is a slot whose *team* ships no plume, which is a
             // reported absence rather than a hidden one - see `livery::plume`.
@@ -288,6 +303,37 @@ impl Scene {
                 None => ((1.0, 1.0), (0.0, 0.0)),
             };
             boost.apply_uv_transform(queue, scale, offset);
+            // **The PS2 plume is two nozzle flares on moving anchors; the PSP
+            // one is loose geometry with none.** Both meshes of every PS2
+            // `shipboost.vex`/`Zoneboost.vex` sit under an `Anim Transform`,
+            // so they are baked in that node's space (`mesh::anim_node`) and
+            // this table is what puts them back at the nozzles - all twelve
+            // teams, at roughly `(+-1.0, -0.2, -6.5)`. Leaving it identity, as
+            // this loop used to, drew both fins on top of each other at the
+            // craft's own origin, several units forward of the engines. A PSP
+            // plume carries no `Anim Transform` at all, so this early-returns
+            // there and the PSP picture is untouched.
+            //
+            // **The clock is the plume's own reveal timer, the same one the UV
+            // scroll above rides, and that is a reading rather than a
+            // recovery** - confidence 65. What is measured: the anchors carry
+            // a 67-key z-scale flicker (0.55 to 1.13) looping at 1.6667 s,
+            // identical across all 24 PS2 plume files, keyed at 1/60 s beside
+            // the UV track in the same file; on `plume_timer` it plays one
+            // monotonic pass per reveal and never wraps, where the race clock
+            // reaches the wrap and restarts the flicker mid-boost. What is
+            // not: no PS2 executable has been read, so which clock the
+            // original feeds its node evaluator is unrecovered, and the
+            // one-pass fit is approximate rather than exact - `PLUME_SECONDS`
+            // is 1.5 and PSP-recovered, against this track's 1.6667. The
+            // "wrong in both directions" argument HANDOVER records for the UV
+            // ramp is weaker here: an arbitrary start phase on a flicker still
+            // reads as a flicker.
+            //
+            // Seconds, not frames. `vex::AnimTransform::sample` takes seconds
+            // and wraps at the track's own `loop_seconds`, where the UV track
+            // above takes 60 Hz frames and clamps.
+            boost.write_node_anims(queue, race.exhaust_of(slot).plume_timer());
         }
         if let Some(collision) = &self.collision {
             collision.write(queue, view_projection, Mat4::IDENTITY);
@@ -496,6 +542,29 @@ impl Scene {
         // craft's plume the write above was gated on - a plume drawn from a
         // uniform buffer that was not written this frame would be last frame's
         // pose.
+        // With the plumes and for the same reason: the hulls' depth is in the
+        // buffer, and this model's own material blend writes none of its own.
+        //
+        // **Gated on the craft being in the race and nothing else.** The flame
+        // is authored as a permanent part of the craft - `EF_Main` carries no
+        // reveal condition and the file's every transform is the identity - so
+        // a throttle or speed gate here would be this project's invention
+        // rather than the asset's. What the original *does* animate on it is
+        // unread: `EF_Main` carries one attribute, `AnimEnd = 1.0`, and
+        // nothing here plays it. See docs/rendering/trail-ribbon.md.
+        for (slot, flare) in self.flares.iter().enumerate().take(drawn) {
+            let Some(flare) = flare else {
+                continue;
+            };
+            if !race.ship_active(slot) {
+                continue;
+            }
+            // `draw`, not `draw_additive`: every batch of this model already
+            // carries its material's own factor pair, so the ordinary path
+            // routes it through the authored pipeline. The override the plume
+            // needs is for a model that authors none.
+            stats.add(flare.draw(&mut pass, None, None, None));
+        }
         for (slot, boost) in self.boost.iter().enumerate().take(drawn) {
             let Some(boost) = boost else {
                 continue;
@@ -506,7 +575,10 @@ impl Scene {
             if !race.exhaust_of(slot).plume_visible() {
                 continue;
             }
-            stats.add(boost.draw(&mut pass, None, None, None));
+            // Additive for every list, not just the transparent one - see
+            // `Drawable::draw_additive`, which carries the reference frame
+            // that settled it and the PS2 dispatch that has not been followed.
+            stats.add(boost.draw_additive(&mut pass));
         }
         // With the plumes, and after the hulls for the same reason: the shell
         // wraps a craft whose depth has to already be in the buffer, or the far

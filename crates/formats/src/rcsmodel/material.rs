@@ -11,11 +11,18 @@
 //! # What is *not* decoded
 //!
 //! The `.rcsmaterial` file the [`Material::name`] path leads to is compiled RSX
-//! shader code and is not read - so *which* of a material's two textures the
-//! shader samples for what is unknown, and only the first is painted. The
-//! textures themselves are read: [`Material::texture`] names a `.gtf` and
-//! `oag_formats::gtf` decodes it, which is where a surface's **alpha** comes
-//! from and why [`Blend`] can be drawn at all.
+//! shader code and is largely not read - so *which* of a material's two
+//! textures the shader samples for what is unknown in general, and only the
+//! first is painted. The textures themselves are read: [`Material::texture`]
+//! names a `.gtf` and `oag_formats::gtf` decodes it, which is where a surface's
+//! **alpha** comes from and why [`Blend`] can be drawn at all.
+//!
+//! **Two things have since come off that pile.** The *values* a material
+//! instance supplies to its program are decoded here - see [`parameters`] - and
+//! one program, the engine flare's `flame_test`, is read instruction by
+//! instruction on
+//! `docs/ghidra/functions/ps3-hdfury-eu/engine-flare.md`. Every other
+//! `.rcsmaterial` on the disc is still compiled code nothing here follows.
 //!
 //! # Layout
 //!
@@ -40,6 +47,9 @@
 //! them.
 
 use crate::ByteOrder;
+
+mod parameters;
+pub use parameters::{KIND_SAMPLER, Parameter, parameters};
 
 /// How many low bits of the state word select the transparency mode.
 const TRANSPARENCY_BITS: u32 = 0x3;
@@ -109,7 +119,9 @@ impl Factor {
 
 /// One entry of the material table: what the file says about how a surface is
 /// drawn, short of the shader itself.
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// **`PartialEq` but not `Eq`**, since [`Self::parameters`] holds `f32`s.
+#[derive(Debug, Clone, PartialEq)]
 pub struct Material {
     /// The `.rcsmaterial` path, out of the file's own string pool.
     ///
@@ -156,6 +168,12 @@ pub struct Material {
     /// **nothing samples this** and a surface whose coverage lives here paints
     /// solid - the cloud plate above being the one that shows.
     pub second_texture: Option<String>,
+    /// The named values this **instance** supplies to its shader - see
+    /// [`parameters`].
+    ///
+    /// Empty on a record too short to carry the table, which is an ordinary
+    /// state rather than a failure: most materials on the disc declare none.
+    pub parameters: Vec<Parameter>,
 }
 
 /// Where a circuit keeps its baked lighting atlases.
@@ -286,6 +304,7 @@ impl Material {
             dst_factor: ByteOrder::Big.u16(data, at + 0x16),
             texture: path(0x58).unwrap_or_default(),
             second_texture: path(0x78),
+            parameters: parameters(data, at),
         })
     }
 

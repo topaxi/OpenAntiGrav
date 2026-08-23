@@ -80,6 +80,19 @@ pub struct Scene {
     /// rather than `Option<Vec<_>>` so the no-plume source and the iteration read
     /// the same way `ships` does.
     boost: Vec<Option<Drawable>>,
+
+    /// One always-on engine flame per craft, for a title that authors its flare
+    /// as geometry rather than as a sprite.
+    ///
+    /// **Empty of everything but `None` on Pulse, Pure and the PS2 port**,
+    /// whose flare is the six camera-facing vertices `exhaust::Pipeline`
+    /// draws: a different mechanism, not a missing model. See
+    /// [`oag_title::flare::Flare`] and `crate::livery::flare`.
+    ///
+    /// Indexed by slot for the reason [`Self::boost`] is: eight craft need
+    /// eight model matrices a frame, and the draw loop indexes rather than
+    /// zips.
+    flares: Vec<Option<Drawable>>,
     /// One shield shell per craft, on the same additive pipeline as
     /// [`Self::boost`] and for the same reason: both textures carry the artists'
     /// `_ADD` suffix.
@@ -198,6 +211,8 @@ impl Scene {
         shield_cockpit: Option<Model>,
         flare: Option<FlareTexture>,
         noise: Option<FlareTexture>,
+        trail_blend: Option<wgpu::BlendState>,
+        trail_shape: Option<FlareTexture>,
         format: wgpu::TextureFormat,
         size: (u32, u32),
         anisotropy: Anisotropy,
@@ -477,9 +492,44 @@ impl Scene {
         // rather than a shorter `Vec` - the draw loop indexes by slot.
         let mut boost = Vec::new();
         let mut boost_uv_transforms = Vec::new();
+        let mut flares = Vec::new();
         for slot in 0..GRID_SLOTS as usize {
             let livery = &liveries[slot.min(liveries.len().saturating_sub(1))];
             boost_uv_transforms.push(livery.boost_uv.clone());
+            // **The material's own equation reaches the pipeline by itself.**
+            // Every draw of an HD flare carries the factor pair its
+            // `.rcsmaterial` authors (`SrcAlpha`/`One`), and
+            // `mesh_render::TransparentPipelines::select` prefers that over any
+            // class - so this argument is the fallback for a model that
+            // authored none, and it is the same equation either way.
+            //
+            // **`GlowMask::Protected`, unlike the plume's.** The plume's
+            // `Written` is a *recovered* override - the original's draw path
+            // opens the alpha channel there. Nothing has been read out of HD's
+            // executable about its flare, so it takes the default every
+            // authored batch gets. It still reaches HD's bloom through that
+            // chain's luminance term, which is not a substitute for the
+            // reading and is not being treated as one.
+            flares.push(
+                match livery
+                    .flare
+                    .as_ref()
+                    .filter(|model| !model.indices.is_empty())
+                {
+                    Some(model) => Some(Drawable::new(
+                        device,
+                        queue,
+                        model.clone(),
+                        format,
+                        anisotropy,
+                        sample_count,
+                        scene_depth,
+                        mesh_render::ADDITIVE_BLEND,
+                        mesh_render::GlowMask::Protected,
+                    )?),
+                    None => None,
+                },
+            );
             let Some(model) = livery
                 .boost
                 .as_ref()
@@ -507,6 +557,19 @@ impl Scene {
                 )?));
             }
         }
+        // **A PS2 plume reaches none of that**: its four batches carry no
+        // `0x0700` class bit, so they land in `Model::draws` and `draw` would
+        // submit them through the opaque pipeline. `frame` calls
+        // `Drawable::draw_additive` for the plume instead, which puts every
+        // list on `ADDITIVE_BLEND` - the same equation the PSP plume's own
+        // `0x200` batches already select, so the two discs share one blend.
+        // That is a **model-scoped override, not a decode**, and the reference
+        // frame that justifies it plus the PS2 dispatch still unfollowed are
+        // both on `draw_additive`. The `pass_mask & 0xc0` glow-mask stamp is a
+        // separate and still-standing read, and it is why `GlowMask::Written`
+        // below is right on both discs. See
+        // `docs/ghidra/functions/ps2-pulse-eu/batch-draw-state.md`.
+
         // The shield shell, on the plume's own additive pipeline. Both models'
         // textures carry the artists' `_ADD` suffix - `pulse_shield_test_ADD`
         // here, `pulse_boost2_ADD` there - which is what says they share a
@@ -584,12 +647,17 @@ impl Scene {
         // decode; `load` has already reported that when it happens.
         let flare = flare.unwrap_or_else(|| FlareTexture::placeholder(64));
         let noise = noise.unwrap_or_else(|| FlareTexture::placeholder(64));
+        // The ribbon's own blend where the title authors one, and the recovered
+        // PSP preset's otherwise - see `Loaded::trail_blend`.
+        let trail_blend = trail_blend.unwrap_or(exhaust::TRAIL_BLEND);
         let exhaust = std::cell::RefCell::new(exhaust::Pipeline::new(
             device,
             queue,
             format,
             &flare,
             &noise,
+            trail_shape.as_ref(),
+            trail_blend,
             sample_count,
         ));
         let sparks = std::cell::RefCell::new(sparks::Pipeline::new(device, format, sample_count));
@@ -615,6 +683,7 @@ impl Scene {
             visibility,
             ships,
             boost,
+            flares,
             shield,
             shield_cockpit,
             rockets,

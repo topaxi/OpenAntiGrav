@@ -56,6 +56,8 @@ use oag_render::mesh::{self, Model};
 
 use crate::race::{boost_entry_name, ps2_texture_set, ship_entry_name};
 
+mod flare;
+
 /// Everything a single grid slot draws that belongs to its team.
 #[derive(Debug)]
 pub struct Livery {
@@ -71,7 +73,17 @@ pub struct Livery {
     /// nozzle put the flare inside the fuselage on some of them.
     pub nozzle: Option<Vec3>,
     /// The additive plume a speed pad reveals, `shipboost.vex` beside the hull.
+    ///
+    /// **On Wipeout HD this is the `EF_Boost` group of the flare model**, not a
+    /// file of its own - HD ships no `shipboost.vex` and the plume is a subtree
+    /// of `engineflare.vex`. See [`flare::per_team`].
     pub boost: Option<Model>,
+    /// The always-on engine flame, for a title that authors one as a model.
+    ///
+    /// `None` on Pulse, Pure and the PS2 port, whose flare is a sprite the
+    /// exhaust pipeline draws rather than geometry - see
+    /// [`oag_title::flare::Flare`].
+    pub flare: Option<Model>,
     /// The additive shell a fired Shield pickup raises,
     /// `shipshield.vex` beside the hull - or `Data\Weapons\shield.vex` on a
     /// source that carries no per-team one, which is every Pure source.
@@ -141,6 +153,7 @@ pub fn load(
     teams: &[String],
     mode: Mode,
     zone: oag_title::ZoneCraft,
+    flare: &oag_title::flare::Flare,
     lod: mesh::Lod,
     report: &mut Vec<String>,
 ) -> Result<Vec<Livery>> {
@@ -157,6 +170,7 @@ pub fn load(
                 collision_fx: source.collision_fx.clone(),
                 boost: source.boost.clone(),
                 boost_uv: source.boost_uv.clone(),
+                flare: source.flare.clone(),
                 shield: source.shield.clone(),
             };
             report.push(format!(
@@ -167,7 +181,7 @@ pub fn load(
             continue;
         }
 
-        match one(archives, team, mode, zone, lod, report) {
+        match one(archives, team, mode, zone, flare, lod, report) {
             Ok(livery) => out.push(livery),
             Err(error) if slot == 0 => return Err(error),
             Err(error) => {
@@ -184,6 +198,7 @@ pub fn load(
                     collision_fx: player.collision_fx.clone(),
                     boost: player.boost.clone(),
                     boost_uv: player.boost_uv.clone(),
+                    flare: player.flare.clone(),
                     shield: player.shield.clone(),
                 });
             }
@@ -198,6 +213,7 @@ fn one(
     team: &str,
     mode: Mode,
     zone: oag_title::ZoneCraft,
+    flare: &oag_title::flare::Flare,
     lod: mesh::Lod,
     report: &mut Vec<String>,
 ) -> Result<Livery> {
@@ -225,6 +241,7 @@ fn one(
                 collision_fx: Vec::new(),
                 boost: None,
                 boost_uv: None,
+                flare: None,
                 shield: None,
             });
         };
@@ -237,12 +254,18 @@ fn one(
         )?;
         report.push(format!("{hull_name}: {}", built.describe()));
         let (nozzle, collision_fx) = locators(archives, &hull_name, &blob, report);
+        // **The plume comes from here too on this title.** HD ships no
+        // `shipboost.vex`; `EF_Boost` inside the flare model is what a speed
+        // pad reveals, so both halves come out of one load. See
+        // `flare::per_team`.
+        let lit = authored_flare(archives, team, flare, nozzle, report);
         return Ok(Livery {
             team: team.to_string(),
             nozzle,
             collision_fx,
             hull,
-            boost: None,
+            boost: lit.boost,
+            flare: lit.always,
             boost_uv: None,
             // **The shell is loaded on PS3 too**, unlike the plume: HD carries a
             // per-team `shipshield.vex` with its geometry in the `.rcsmodel`
@@ -273,6 +296,11 @@ fn one(
 
     let (boost, boost_uv) = plume(archives, team, mode, zone, lod, report);
     let shield = shell(archives, team, lod, report);
+    // Nothing on a title whose flare is a sprite, which is every source that
+    // reaches this branch today - the match is here rather than at the PS3
+    // branch alone so a fourth source is answered by its own axis and not by
+    // which decoder its hull happened to take.
+    let lit = authored_flare(archives, team, flare, nozzle, report);
     Ok(Livery {
         team: team.to_string(),
         hull,
@@ -280,8 +308,32 @@ fn one(
         collision_fx,
         boost,
         boost_uv,
+        flare: lit.always,
         shield,
     })
+}
+
+/// The flare this title authors as geometry, or nothing at all.
+///
+/// **A `Sprite` title yields nothing here and that is not a gap**: its flare is
+/// six camera-facing vertices the exhaust pipeline draws from a texture, which
+/// is a different mechanism entirely rather than a missing model. See
+/// [`oag_title::flare::Flare`].
+fn authored_flare(
+    archives: &mut oag_assets::Archives,
+    team: &str,
+    flare: &oag_title::flare::Flare,
+    nozzle: Option<Vec3>,
+    report: &mut Vec<String>,
+) -> flare::Flare {
+    match flare {
+        oag_title::flare::Flare::PerTeam(authored) => {
+            flare::per_team(archives, team, authored, nozzle, report)
+        }
+        oag_title::flare::Flare::Sprite(_) | oag_title::flare::Flare::Unread => {
+            flare::Flare::default()
+        }
+    }
 }
 
 /// The hull's `Engine Flare` and `Ship Collision Fx` locators, from whichever
@@ -605,7 +657,7 @@ fn plume(
         ));
         return (None, None);
     };
-    let model = match mesh::build_with_textures(&boost_name, &blob, None, lod) {
+    let mut model = match mesh::build_with_textures(&boost_name, &blob, None, lod) {
         Ok(model) => model,
         Err(error) => {
             report.push(format!(
@@ -619,6 +671,16 @@ fn plume(
         "{boost_name}: {} triangle(s) - drawn additively while the plume is up",
         model.indices.len() / 3
     ));
+    // The same PS2 signature the hull takes at [`one`], on the same gate and
+    // for the same reason: `Texture` nodes exist and every one of them is
+    // missing, because a PS2 model's own texture block is empty by design and
+    // its pixels are the archive entry directly before it. The gate is what
+    // keeps a PSP plume - one embedded `pulse_boost2_ADD` - out of this branch
+    // entirely, and it must stay narrow enough never to overwrite a model that
+    // already decoded on its own. See `ps2_texture_set`.
+    if !model.textures.is_empty() && model.textures.iter().all(Option::is_none) {
+        ps2_skin(archives, &boost_name, &blob, lod, &mut model, report);
+    }
     // The authored u-scroll: the keyframe block after each mesh's material
     // array, which the engine lerps per frame and feeds the GE as
     // `TEXOFFSET`/`TEXSCALE`. Both plume meshes carry the identical track on
@@ -637,7 +699,69 @@ fn plume(
             transform.offset.period(),
         ));
     }
+    // **The PS2 plume hangs off two moving anchors and the PSP one off
+    // nothing**, which is the second half of what the two files disagree
+    // about. Reported rather than assumed because the placement and the
+    // motion both come from it: geometry under an `Anim Transform` is baked
+    // in that node's own space, so a plume whose table is never written draws
+    // at the craft's origin with its two fins collapsed together. See
+    // `race::scene::frame`'s draw loop, which writes it from the plume's own
+    // reveal timer.
+    if !model.anim_nodes.is_empty() {
+        report.push(format!(
+            "{boost_name}: {} anchor(s) with authored motion - the plume is placed \
+             and animated by them, not by the mesh alone",
+            model.anim_nodes.len(),
+        ));
+    }
     (model.into(), transform)
+}
+
+/// Re-skins a PS2 model from the texture set in the archive entry before it.
+///
+/// Split out of [`plume`] rather than inlined the way [`one`]'s is, because a
+/// missing plume is a reported absence and not an error: every branch here
+/// leaves `model` drawable and says in the report which one it took. A
+/// silently untextured plume and a correctly skinned one look the same in a
+/// log that only counts triangles.
+///
+/// **The lookup is the same directory-position rule the hull and the track
+/// already use** - see `ps2_texture_set` and `docs/formats/ps2-texture.md`.
+/// This is a third model type answering to it, not a new heuristic: every one
+/// of the PS2 disc's 24 plume files (twelve teams, `shipboost` and
+/// `Zoneboost` each) declares exactly two `Texture` nodes and is preceded by a
+/// set that decodes exactly two entries.
+fn ps2_skin(
+    archives: &mut oag_assets::Archives,
+    name: &str,
+    blob: &[u8],
+    lod: mesh::Lod,
+    model: &mut mesh::Model,
+    report: &mut Vec<String>,
+) {
+    let slots = model.textures.len();
+    let Some(external) = ps2_texture_set(archives, name) else {
+        report.push(format!(
+            "{name}: {slots} empty texture slot(s) and the preceding archive entry is \
+             not a texture set - the plume draws untextured"
+        ));
+        return;
+    };
+    let found = external.len();
+    let decoded = external.iter().filter(|t| t.is_some()).count();
+    match mesh::build_with_textures(name, blob, Some(external), lod) {
+        Ok(rebuilt) => {
+            *model = rebuilt;
+            report.push(format!(
+                "{name}: {decoded} of {found} texture(s) from the preceding archive entry, \
+                 into {slots} slot(s)"
+            ));
+        }
+        Err(error) => report.push(format!(
+            "{name}: the preceding archive entry holds {found} texture(s) but re-skinning \
+             failed ({error}) - the plume draws untextured"
+        )),
+    }
 }
 
 #[cfg(test)]
