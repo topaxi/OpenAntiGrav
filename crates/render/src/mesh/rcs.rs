@@ -357,7 +357,7 @@ fn surface(
 /// premultiplied should not disagree with its own colour channels. The disc says
 /// nothing about the alpha channel either way - a `CellGcmBlendFunc` pair is
 /// programmed for both and only the colour half is what these materials vary.
-fn blend_state(src: rcsmodel::Factor, dst: rcsmodel::Factor) -> wgpu::BlendState {
+pub fn blend_state(src: rcsmodel::Factor, dst: rcsmodel::Factor) -> wgpu::BlendState {
     fn factor(f: rcsmodel::Factor) -> wgpu::BlendFactor {
         match f {
             rcsmodel::Factor::One => wgpu::BlendFactor::One,

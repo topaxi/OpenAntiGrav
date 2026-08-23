@@ -73,6 +73,13 @@ pub const TITLE: &Title = &Title {
     front_end: Some(frontend::FRONT_END),
     hud: hud::LAYOUTS,
     race: race::DEFAULTS,
+    // **HD authors its ribbon rather than naming a texture.** The template is
+    // one triangle; its material names the colour texture, the noise texture
+    // and the blend factors, so this one path supplies all three. See
+    // `docs/rendering/trail-ribbon.md`.
+    exhaust: &oag_title::exhaust::Exhaust::Authored(
+        "/data/ribboneffects/enginetrail_triangle.rcsmodel",
+    ),
     // **The same file the soundtrack is declared in**, because on this title the
     // front-end plugin *is* the game plugin - it carries the `PI_Team` and
     // `PI_Track` nodes beside the `PI_Music` ones. See

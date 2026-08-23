@@ -827,16 +827,10 @@ pub fn load(options: &Options) -> Result<Loaded> {
         }
     }
 
-    let noise = match exhaust_texture(&mut archives, NOISE_TEXTURE) {
-        Ok((texture, note)) => {
-            report.push(note);
-            Some(texture)
-        }
-        Err(why) => {
-            report.push(format!("{why} - the trail falls back to a procedural glow"));
-            None
-        }
-    };
+    // The ribbon's texture is a title axis, not a constant: Pulse and Pure name
+    // one, HD authors a template whose material names its own. See
+    // `oag_title::exhaust::Exhaust` and `assets::trail_texture`.
+    let (noise, trail_blend) = assets::trail_texture(&mut archives, title, &mut report);
 
     let flare = match exhaust_texture(&mut archives, FLARE_TEXTURE) {
         Ok((texture, note)) => {
@@ -953,6 +947,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         visibility,
         flare,
         noise,
+        trail_blend,
         report,
     })
 }

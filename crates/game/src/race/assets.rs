@@ -76,6 +76,125 @@ pub(super) fn particle_effect(
 /// HUD atlas uses it: the PS2 keeps these two under the declared name with its
 /// own extension. The PSP path is unchanged - the declared name answers first
 /// and the rewrite is never reached.
+/// The ribbon's texture and blend, from wherever this title keeps them.
+///
+/// **Two sources, because the titles disagree about what kind of thing the
+/// answer is** - see [`oag_title::exhaust::Exhaust`]. A title that *names* a
+/// texture gets the existing lookup and the ribbon's recovered PSP blend; a
+/// title that *authors* the ribbon hands back its material's own noise texture
+/// and its own factor pair, both read off the disc.
+///
+/// **The colour texture is located and deliberately not wired.** HD's material
+/// names two - a 256x256 colour map and a 128x128 noise map - where this
+/// renderer's ribbon shader samples one, and the one it samples is a noise map
+/// (`Trail_DrawRibbon` scrolls `Engine_noise` at three rates per layer). Putting
+/// the colour map in that slot would be a plausible-looking substitution of
+/// exactly the kind `CLAUDE.md` names, so the noise map goes in the noise slot
+/// and the report says what is left over. Wiring the second one needs a shader
+/// that samples two, and HD's own ribbon code is unread.
+pub(super) fn trail_texture(
+    archives: &mut oag_assets::Archives,
+    title: &oag_title::Title,
+    report: &mut Vec<String>,
+) -> (Option<FlareTexture>, Option<wgpu::BlendState>) {
+    match title.exhaust {
+        oag_title::exhaust::Exhaust::Unread => {
+            report.push(format!(
+                "{}: no exhaust ribbon texture is located for this title - the trail \
+                 falls back to a procedural glow",
+                title.name
+            ));
+            (None, None)
+        }
+        oag_title::exhaust::Exhaust::Named(name) => match exhaust_texture(archives, name) {
+            Ok((texture, note)) => {
+                report.push(note);
+                (Some(texture), None)
+            }
+            Err(why) => {
+                report.push(format!("{why} - the trail falls back to a procedural glow"));
+                (None, None)
+            }
+        },
+        oag_title::exhaust::Exhaust::Authored(model) => match authored_ribbon(archives, model) {
+            Ok((texture, blend, notes)) => {
+                report.extend(notes);
+                (Some(texture), Some(blend))
+            }
+            Err(why) => {
+                report.push(format!("{why} - the trail falls back to a procedural glow"));
+                (None, None)
+            }
+        },
+    }
+}
+
+/// The `Authored` half: a `.rcsmodel` whose first material names everything.
+fn authored_ribbon(
+    archives: &mut oag_assets::Archives,
+    model: &str,
+) -> std::result::Result<(FlareTexture, wgpu::BlendState, Vec<String>), String> {
+    let blob = archives
+        .read_name(model)
+        .map_err(|e| format!("{model}: not in the archive set ({e})"))?;
+    let parsed = oag_formats::rcsmodel::Model::parse(&blob)
+        .map_err(|e| format!("{model}: {} bytes, does not parse ({e})", blob.len()))?;
+    let material = parsed
+        .materials
+        .first()
+        .ok_or_else(|| format!("{model}: parses, but names no material"))?;
+    // The *second* texture is the noise map on every ribbon in this family -
+    // `hd_enginetrail_noise`, `hd_waketrail_clouds`, `smoke_trails_frame2`.
+    // A material with only one is a shape this has not seen, so it says so
+    // rather than falling back to the colour map in a noise slot.
+    let noise = material
+        .second_texture
+        .as_deref()
+        .ok_or_else(|| format!("{model}: its material names no second texture"))?;
+    let pixels = archives
+        .read_name(noise)
+        .map_err(|e| format!("{noise}: named by {model}'s material but not in the set ({e})"))?;
+    let gtf = oag_formats::gtf::Gtf::parse(&pixels)
+        .map_err(|e| format!("{noise}: {} bytes, does not parse ({e})", pixels.len()))?;
+    let texture = gtf
+        .only()
+        .ok_or_else(|| format!("{noise}: parses, but is not a single texture"))?;
+    let rgba = texture
+        .to_rgba(&pixels)
+        .map_err(|e| format!("{noise}: does not decode ({e})"))?;
+    let (width, height) = texture.level_size(0);
+    // Through the recovered mapping rather than a second reading of the same
+    // bytes: `Material::blend` names the factors and `rcs::blend_state` turns
+    // that pair into a pipeline state, and both already draw every HD surface.
+    let authored = material.blend();
+    let oag_formats::rcsmodel::Blend::Factors { src, dst } = authored else {
+        return Err(format!(
+            "{model}: its material's blend is {authored:?} rather than a factor pair"
+        ));
+    };
+    let blend = mesh::rcs::blend_state(src, dst);
+    let notes = vec![
+        format!(
+            "{noise}: {width}x{height} .gtf - the ribbon's noise, named by {model}'s own material"
+        ),
+        format!("{model}: blend {src:?}/{dst:?} off the material, not the PSP preset's"),
+        format!(
+            "{}: located and not drawn - this renderer's ribbon samples one texture where HD's \
+             material names two",
+            material.texture
+        ),
+    ];
+    Ok((
+        FlareTexture {
+            width,
+            height,
+            rgba: rgba.into_iter().flatten().collect(),
+        },
+        blend,
+        notes,
+    ))
+}
+
 pub(super) fn exhaust_texture(
     archives: &mut oag_assets::Archives,
     name: &str,

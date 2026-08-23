@@ -42,6 +42,11 @@ pub const TITLE: &Title = &Title {
     front_end: Some(FRONT_END),
     hud: hud::LAYOUTS,
     race: race::DEFAULTS,
+    // `Data\Tex\engineFlare\Engine_noise.mip`, a literal string in both the
+    // PSP and PS2 executables, so an exact archive hit rather than a mined
+    // candidate. Everything else the ribbon needs is `Trail_InitPreset`'s
+    // table in the code - see `docs/rendering/trail-ribbon.md`.
+    exhaust: &oag_title::exhaust::Exhaust::Named(r"Data\Tex\engineFlare\Engine_noise.mip"),
     plugin_definition: names::GAME_PLUGIN_DEFINITION,
     music: Some(MUSIC),
 };

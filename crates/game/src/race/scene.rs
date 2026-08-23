@@ -198,6 +198,7 @@ impl Scene {
         shield_cockpit: Option<Model>,
         flare: Option<FlareTexture>,
         noise: Option<FlareTexture>,
+        trail_blend: Option<wgpu::BlendState>,
         format: wgpu::TextureFormat,
         size: (u32, u32),
         anisotropy: Anisotropy,
@@ -597,12 +598,16 @@ impl Scene {
         // decode; `load` has already reported that when it happens.
         let flare = flare.unwrap_or_else(|| FlareTexture::placeholder(64));
         let noise = noise.unwrap_or_else(|| FlareTexture::placeholder(64));
+        // The ribbon's own blend where the title authors one, and the recovered
+        // PSP preset's otherwise - see `Loaded::trail_blend`.
+        let trail_blend = trail_blend.unwrap_or(exhaust::TRAIL_BLEND);
         let exhaust = std::cell::RefCell::new(exhaust::Pipeline::new(
             device,
             queue,
             format,
             &flare,
             &noise,
+            trail_blend,
             sample_count,
         ));
         let sparks = std::cell::RefCell::new(sparks::Pipeline::new(device, format, sample_count));

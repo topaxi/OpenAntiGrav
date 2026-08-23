@@ -50,7 +50,12 @@
   own `exhaust::BLEND` - they take the ordinary mesh draw path's pure-additive
   blend branch, the same equation the ribbon already uses, not the flare's
   alpha-weighted one; see
-  [`mesh-draw.md`](../ghidra/functions/psp-pulse-usa/mesh-draw.md))
+  [`mesh-draw.md`](../ghidra/functions/psp-pulse-usa/mesh-draw.md)). **The
+  ribbon's numbers are not asset-derivable and that was measured rather than
+  assumed** - a `Trail` node's payload is 64 bytes of mount transform and
+  nothing else, on all 78 of them across three discs, while HD/Fury drop the
+  class entirely for a `/data/ribboneffects/` template family that already
+  decodes; see [`trail-ribbon.md`](trail-ribbon.md))
   and collision sparks (**done** and **recovered**, no longer "authored":
   `oag_render::sparks` reads `Data\Psys\WO_SHIP_COLL_SPARK_DAMAGE.POB` at the emitter level, all
   four emitters transcribed from the file's own bytes and corroborated live in

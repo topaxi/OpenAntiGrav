@@ -1099,15 +1099,15 @@ impl Pipeline {
     ///
     /// `flare` is RGBA8, normally
     /// `Data\Tex\EngineFlare\grabbedEngineFlare128x64x8.mip` decoded by
-    /// `oag_formats::texture`. `format` must be the target the caller's render
-    /// pass writes, and `sample_count` must match its multisample state - see
-    /// `mesh_render::build`.
+    /// `oag_formats::texture`. `format` must match the caller's render pass and
+    /// `sample_count` its multisample state - see `mesh_render::build`.
     pub fn new(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         format: wgpu::TextureFormat,
         flare: &FlareTexture,
         noise: &FlareTexture,
+        trail_blend: wgpu::BlendState,
         sample_count: u32,
     ) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -1222,7 +1222,9 @@ impl Pipeline {
         // feeds the bloom. See `crate::post::bloom` and
         // `docs/ghidra/functions/psp-pulse-usa/bloom.md`.
         let pipeline = build_pipeline("exhaust", BLEND, wgpu::ColorWrites::COLOR);
-        let trail_pipeline = build_pipeline("exhaust trail", TRAIL_BLEND, wgpu::ColorWrites::ALL);
+        // The caller's, not [`TRAIL_BLEND`]: a title that authors its ribbon
+        // passes its material's own pair - `race::Loaded::trail_blend`.
+        let trail_pipeline = build_pipeline("exhaust trail", trail_blend, wgpu::ColorWrites::ALL);
 
         let uniforms = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("exhaust uniforms"),

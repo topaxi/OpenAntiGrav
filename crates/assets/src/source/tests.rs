@@ -41,6 +41,7 @@ const TITLE: &Title = &Title {
     // the archive rules below are now exercised against a title shaped like the
     // one that has no front end, which is the case that motivated the field.
     front_end: None,
+    exhaust: &oag_title::exhaust::Exhaust::Unread,
     // Present for the same reason and equally unread: resolving archives has
     // nothing to do with which circuit a race opens on.
     race: &oag_title::RaceDefaults {
