@@ -664,10 +664,19 @@ unverified. Each of those now has a number against it.
 | Section 1 ends | exactly on the blob | **exactly on the blob** |
 | `+0x24` | 20544 | 20544 |
 
-Both differences are section 0 being 16-byte aligned at each end, so the two
-*starts* are checked as "aligned, at or after" rather than "exactly at". **The
-tail stays exact**, on all 50 - it is the one check that says the blob has been
-read to its end rather than into the middle of something else, and it costs
+Both differences are padding, so the two *starts* are checked as "aligned, at
+or after, within one 16-byte block" rather than "exactly at".
+
+**The alignment enforced is 4, not 16**, and the distinction is worth keeping
+straight because HD's own values would satisfy either: it starts section 0 at
+32 and section 1 at a multiple of 4 past section 0's end. The check cannot be
+16, because **the PSP's section 0 starts at 24** - the section table's own end,
+8-aligned - so a 16-byte rule would reject every Pulse and Pure bank while
+reading like a statement about HD's padding. See
+`oag_formats::sblk::SECTION_ALIGN`.
+
+**The tail stays exact**, on all 50 - it is the one check that says the blob has
+been read to its end rather than into the middle of something else, and it costs
 nothing to keep.
 
 The order is **sniffed off the magic** rather than passed in, because the
@@ -748,13 +757,24 @@ sfx: shieldactive -> 2 waveform(s) from Data\Sound\speech.bnk
   `c_CShipWall`, `c_CShipShip`, `c_GShipShip`, `c_ElecArcA`..`D`,
   `c_CrackLoopL/C/R` - which is a different design and not a renamed cue.
   Nothing is substituted; the held voice never opens.
-- **`.COLLISIONS` exists and binds no waveform.** Its four commands are all
-  among the 43 unread opcodes, and `shiphd.bnk` also carries `.COLLSHIELD`,
-  `.GRIND` and `.GRINDSHIELD` beside a wall of `c_CShipWallL/M/S`-style names -
-  which reads as a *selector* cue dispatching to child sounds. Decoding the
-  opcode that does the dispatching is the same open question as
-  [which alternate sounds](#which-of-a-cues-waveforms-sounds-is-still-open),
-  reached from a second direction.
+- **`.COLLISIONS` exists and binds no waveform**, so **HD has no collision
+  sound**. Its four commands are all among the 43 unread opcodes, and
+  `shiphd.bnk` also carries `.COLLSHIELD`, `.GRIND` and `.GRINDSHIELD` beside
+  `c_CShipWall`, `c_CShipWallL/M/S`, `c_CShipShip` and `c_GShipShipL/M/S` -
+  which reads as a *selector* cue dispatching to child sounds by severity.
+
+  **This is the single most valuable of the 43 unread opcodes.** Decoding the
+  four commands in `.COLLISIONS` would give HD its collision sound *and* very
+  likely answer
+  [which alternate sounds](#which-of-a-cues-waveforms-sounds-is-still-open) on
+  Pulse, because both are the same question - a cue choosing among children -
+  reached from two directions. One target, two open questions.
+
+  Nothing is wired off the `c_*` names in the meantime. The `L`/`M`/`S` suffixes
+  look like a severity split and `oag_render::sparks::severity` already computes
+  one, but which suffix goes with which band is not written down anywhere on the
+  disc, and pairing them here would be an invention wearing the shape of a
+  reading.
 
 The `~SHIELD` line is also the not-PS-ADPCM path working end to end: six of
 HD's eight `~SHIELD` waveforms decode and two are dropped.

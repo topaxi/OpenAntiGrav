@@ -412,11 +412,16 @@ pub struct Banks {
 impl Banks {
     /// Reads and decodes every cue in [`Cue::ALL`] out of `archives`.
     ///
-    /// **Never fails.** A source with no sound banks - Wipeout Pure ships none,
-    /// see `docs/formats/pure-status.md` - loads nothing and the race is silent,
-    /// which is the honest outcome and is what [`Self::report`] says. A race
-    /// that refused to start because a bank was missing would make the audio
-    /// work a precondition for every other kind of work in the tree.
+    /// **Never fails, and reports every cue either way.** Every title in the
+    /// lineage does carry banks - a claim this project got wrong about Pure for
+    /// months - but a cue can still be missing for reasons that are ordinary
+    /// rather than broken: Wipeout HD has no `~ENGINE` at all, and its
+    /// `.COLLISIONS` binds no waveform because its commands are among the 43
+    /// unread opcodes. Each miss is a line in [`Self::report`] and silence, not
+    /// an error and not a substitute.
+    ///
+    /// A race that refused to start because a bank was missing would make the
+    /// audio work a precondition for every other kind of work in the tree.
     #[must_use]
     pub fn load(archives: &mut Archives, banks: &oag_title::SoundBanks, zone: bool) -> Self {
         let mut sounds = BTreeMap::new();

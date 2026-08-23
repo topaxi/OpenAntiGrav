@@ -14,8 +14,9 @@
 //! On the PSP, PS2 and Pure the sections abut, the first starts immediately
 //! after the table, and the last ends exactly at the end of the file. **Wipeout
 //! HD pads**: section 0 starts at 32 rather than at the table's own end of 24,
-//! and section 1 starts 0-12 bytes later - both of them section 0 being
-//! 16-byte aligned at each end. The tail is exact everywhere.
+//! and section 1 starts 0-12 bytes later. HD's own values are all 16-aligned,
+//! but the rule enforced here is the weaker one that also admits Pulse's
+//! 8-aligned 24 - see [`SECTION_ALIGN`]. The tail is exact everywhere.
 //!
 //! # Two byte orders
 //!
@@ -128,12 +129,20 @@ pub const VERSION: u32 = 3;
 /// Bytes per PS-ADPCM block.
 pub const ADPCM_BLOCK_LEN: usize = 16;
 
-/// What a section start is aligned to when a build pads between them.
+/// What a section start has to be a multiple of.
 ///
-/// The PSP and PS2 pad by nothing at all, so this only shows on Wipeout HD:
-/// section 0 starts at 32 rather than at the table's own end of 24, and
-/// section 1 starts 0, 4, 8 or 12 bytes after section 0 ends. Both are section
-/// 0 being 16-byte aligned at each end.
+/// **Four, and not sixteen** - which is worth stating because HD's own values
+/// are all 16-aligned and it is tempting to check that instead. The PSP and PS2
+/// pad by nothing at all, and their descriptor section starts at the section
+/// table's own end of **24**, which is 8-aligned and not 16-aligned. So a
+/// 16-byte check would reject every Pulse and Pure bank while looking like a
+/// statement about padding.
+///
+/// The padding *is* 16-byte alignment where it appears - HD starts section 0 at
+/// 32 and section 1 at 0, 4, 8 or 12 bytes past section 0's end - but the rule
+/// this module can enforce across the corpus is the weaker one: **4-aligned,
+/// and within one [`ADPCM_BLOCK_LEN`] of where the section would sit with no
+/// padding at all.**
 pub const SECTION_ALIGN: usize = 4;
 
 /// Samples a PS-ADPCM block expands to.
@@ -400,10 +409,11 @@ impl<'a> Bank<'a> {
         // section 1 ends on the blob.
         //
         // Wipeout HD pads. Section 0 starts at **32** rather than 24, and
-        // section 1 starts 0, 4, 8 or 12 bytes after section 0 ends - both of
-        // which are section 0 being 16-byte aligned at each end. So the two
-        // starts are checked as "at or after, within one alignment unit"
-        // instead of "exactly at".
+        // section 1 starts 0, 4, 8 or 12 bytes after section 0 ends. So the two
+        // starts are checked as "aligned, at or after, within one block"
+        // instead of "exactly at" - and the alignment is [`SECTION_ALIGN`]'s 4
+        // rather than the 16 HD's own values happen to satisfy, because the
+        // PSP's section 0 sits at 24 and a 16-byte check would reject it.
         //
         // **The tail is still exact**, and deliberately: it holds on all 50 HD
         // banks as well as all 83 Pulse and 29 Pure ones, so relaxing it would

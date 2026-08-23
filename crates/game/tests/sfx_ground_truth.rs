@@ -1,4 +1,5 @@
-//! Loads the race's sound cues off a real disc, on both Pulse releases.
+//! Loads the race's sound cues off a real disc: both Pulse releases, the PS2
+//! pressing, both Pure pressings, and Wipeout HD.
 //!
 //! **`#[ignore]`d and never run in CI.** They need game content, which this
 //! project does not ship. See `docs/architecture/adr/0006-no-copyrighted-content.md`.
@@ -18,11 +19,11 @@
 //! run, descriptor, PS-ADPCM - and that what comes out the far end is audio
 //! rather than a buffer of zeros.
 //!
-//! The PS2 leg is the one that would break silently. Nothing in `audio::sfx`
-//! branches on the platform: it asks `Archives::read_name` for
-//! `Data\Sound\hud.bnk` and lets the source decide where that lives. If the PS2
-//! build had named its banks differently, the only symptom would be a silent
-//! race and a line in a report nobody reads.
+//! The legs that would break silently are the ones where nothing in `audio::sfx`
+//! branches: it asks `Archives::read_name` for whatever
+//! [`oag_title::SoundBanks`] names and lets the source decide where that lives.
+//! A wrong path is a silent race and a line in a report nobody reads - which is
+//! why the HD test below asserts the *report text* as well as the cue set.
 
 use std::path::{Path, PathBuf};
 
@@ -87,7 +88,7 @@ fn render(sound: std::sync::Arc<oag_audio::Sound>) -> (f32, f32) {
 
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn every_wired_cue_resolves_on_both_pulse_releases() {
+fn every_wired_cue_resolves_on_every_psp_and_ps2_disc() {
     let mut ran = 0;
     for (file, label) in DISCS {
         let Some(path) = image(file) else {
