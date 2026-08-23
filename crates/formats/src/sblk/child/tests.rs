@@ -1,8 +1,9 @@
 //! Hardware-free tests for the child-sound grain.
 //!
 //! Every bank here is assembled byte by byte, so nothing needs game content.
-//! The corpus half - 1,153 indexed children and 300 named ones across four
-//! titles - is `crates/formats/tests/sblk_child_ground_truth.rs`.
+//! The corpus half - 1,153 indexed children and 300 named ones across the five
+//! PSP/PS2 discs and Wipeout HD - is
+//! `crates/formats/tests/sblk_child_ground_truth.rs`.
 
 use crate::sblk::{
     Bank, COMMAND_LEN, CUE_LEN, HAS_NAME_TABLE, HEADER_LEN, MAGIC, NAME_BUCKETS_AT, NAME_ENTRY_LEN,
@@ -266,4 +267,47 @@ fn the_walk_stops_at_the_depth_cap() {
     // Depth 0 through MAX inclusive is MAX + 1 cues; the one past it is not
     // visited, so its key-on is not collected.
     assert_eq!(bank.cue_tree_sounds(&root).len(), MAX_CHILD_DEPTH + 1);
+}
+
+#[test]
+fn a_record_carrying_both_an_index_and_a_name_is_reported_as_both() {
+    // The corpus assertion is "no record carries both forms", and a parser
+    // that derived the name from "the index did not resolve" would make that
+    // unfalsifiable. This is the case the ground-truth test looks for, so it
+    // has to be one this reader can express.
+    let mut data = build(&[
+        Spec("ROOT", vec![Grain::ByIndex(1)]),
+        Spec("LEAF", vec![Grain::KeyOn(0, 16)]),
+    ]);
+    let block_at = HEADER_LEN + 2 * SECTION_LEN;
+    let parameter_offset = Bank::parse(&data).expect("parse").parameter_offset as usize;
+    let name_at = block_at + parameter_offset + 0x10;
+    data[name_at..name_at + 4].copy_from_slice(b"BOTH");
+
+    let bank = Bank::parse(&data).expect("parse");
+    let root = bank.cue_named("ROOT").expect("ROOT");
+    let children = bank.cue_children(&root);
+    assert_eq!(children[0].cue, Some(1), "the index is still read");
+    assert_eq!(children[0].name, "BOTH", "the name is read independently");
+    assert!(children[0].is_both());
+    // The index wins, which is what the runtime's own load-time fixup leaves
+    // behind: it is the resolved form, and the name is what it resolved from.
+    assert_eq!(bank.resolve_child(&children[0]).map(|c| c.index), Some(1));
+}
+
+#[test]
+fn an_out_of_range_index_is_not_mistaken_for_a_named_child() {
+    // `weapons_det.bnk` holds index 65 in a 55-cue bank. Folding "the index
+    // did not resolve" into "so read the name" would have made that grain
+    // arrive looking like a named child of whatever the name field held.
+    let data = build(&[
+        Spec("ROOT", vec![Grain::ByIndex(99)]),
+        Spec("LEAF", vec![Grain::KeyOn(0, 16)]),
+    ]);
+    let bank = Bank::parse(&data).expect("parse");
+    let root = bank.cue_named("ROOT").expect("ROOT");
+    let child = &bank.cue_children(&root)[0];
+    assert!(!child.is_both());
+    assert!(!child.is_named());
+    assert!(!child.is_resolvable());
 }

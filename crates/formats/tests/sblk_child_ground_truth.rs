@@ -72,8 +72,22 @@ const BY_INDEX: usize = 1153;
 /// Of those, the ones carrying a name their own bank holds.
 const BY_NAME: usize = 300;
 
-/// Grains that resolve to neither, which SCREAM has an error string for.
-const MALFORMED: usize = 7;
+/// Grains that resolve to no child at all. Two different faults, and worth
+/// keeping apart: [`NEITHER_FIELD`] plus [`OUT_OF_RANGE_INDEX`].
+const MALFORMED: usize = NEITHER_FIELD + OUT_OF_RANGE_INDEX;
+
+/// Grains storing `0xffffffff` with no name to fall back on: six, all in
+/// `speech_results.bnk`. The record says "resolve me by name" and carries none.
+const NEITHER_FIELD: usize = 6;
+
+/// Grains storing an index past the end of their own cue table: one, in
+/// `weapons_det.bnk`, which holds 65 in a 55-cue bank.
+///
+/// **Not the same fault as [`NEITHER_FIELD`], and the raw byte check is what
+/// separates them**: this record does store an index, so a check for "neither
+/// field is set" does not see it. It is what SCREAM's
+/// `snd_SFX_GRAIN_TYPE_BRANCH invalid sound index %d` exists to print.
+const OUT_OF_RANGE_INDEX: usize = 1;
 
 fn image(name: &str) -> Option<PathBuf> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -182,6 +196,9 @@ fn a_child_grain_is_an_index_or_a_name_and_almost_never_neither() {
     let mut foreign = 0;
     let mut malformed = Vec::new();
     let mut indexed_and_named = 0;
+    let mut raw_both = 0;
+    let mut raw_neither = 0;
+    let mut raw_out_of_range = 0;
 
     for (label, blob) in &banks {
         let bank = Bank::parse(blob).unwrap_or_else(|e| panic!("{label}: {e}"));
@@ -189,6 +206,25 @@ fn a_child_grain_is_an_index_or_a_name_and_almost_never_neither() {
         for cue in bank.cues().iter().filter(|c| c.plays()) {
             for child in bank.cue_children(cue) {
                 grains += 1;
+
+                // **Straight off the bytes, not off `Child`.** The struct is
+                // what is under test, so classifying by its fields would make
+                // the exclusivity below a property of the parser. These two
+                // reads go to the record itself.
+                let at = child.record as usize;
+                let record = &bank.block[at..at + 32];
+                let stored = bank.order.u32(record, 0x0c);
+                let has_index = stored != u32::MAX;
+                let has_name = record[0x10] != 0;
+                match (has_index, has_name) {
+                    (true, true) => raw_both += 1,
+                    (false, false) => raw_neither += 1,
+                    _ => {}
+                }
+                if has_index && u64::from(stored) >= u64::from(bank.cue_count) {
+                    raw_out_of_range += 1;
+                }
+
                 match (child.cue, child.name.is_empty()) {
                     (Some(_), true) => by_index += 1,
                     (None, false) if known.contains(&child.name) => by_name += 1,
@@ -218,7 +254,29 @@ fn a_child_grain_is_an_index_or_a_name_and_almost_never_neither() {
     // record is being read at the right offsets rather than plausibly: an
     // index and a name in the same record would mean the two fields are not
     // what they are taken to be.
+    //
+    // Asserted off the raw bytes first, because that is the form that can
+    // fail. `Child`'s own fields agree, and are checked second so that a
+    // future change to `cue_children` that quietly derived one field from the
+    // other would show up as a disagreement between the two counts rather than
+    // as a test that still passes.
+    println!("raw both       {raw_both}");
+    println!("raw neither    {raw_neither}");
+    println!("raw bad index  {raw_out_of_range}");
+    assert_eq!(raw_both, 0, "a record stored an index and a name");
     assert_eq!(indexed_and_named, 0, "a record carried both forms");
+
+    // The two faults, kept apart. `weapons_det.bnk`'s grain *does* store an
+    // index - it is simply past the end of the bank - so a check for "neither
+    // field is set" counts six here and not seven. Asserting seven was this
+    // test's own sloppiness and the raw read is what exposed it.
+    assert_eq!(raw_neither, NEITHER_FIELD);
+    assert_eq!(raw_out_of_range, OUT_OF_RANGE_INDEX);
+    assert_eq!(
+        raw_neither + raw_out_of_range,
+        malformed.len(),
+        "the two raw faults account for every unresolvable grain"
+    );
 
     // The split by platform, which is a fact about the two library
     // generations rather than about this reader: every PSP and PS2 grain is

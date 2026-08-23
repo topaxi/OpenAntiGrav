@@ -128,6 +128,18 @@ impl Child {
     pub fn is_resolvable(&self) -> bool {
         self.cue.is_some() || !self.name.is_empty()
     }
+
+    /// Whether the record carries an index *and* a name.
+    ///
+    /// **False for all 1,461 child grains on all six discs**, which is the
+    /// assertion that says `+0x0c` and `+0x10` are the two fields they are
+    /// taken to be rather than one field being read twice. Kept as a predicate
+    /// so the ground-truth test states the property rather than restating how
+    /// [`Bank::cue_children`] happens to build the struct.
+    #[must_use]
+    pub fn is_both(&self) -> bool {
+        self.cue.is_some() && !self.name.is_empty()
+    }
 }
 
 impl Bank<'_> {
@@ -163,17 +175,22 @@ impl Bank<'_> {
                 continue;
             };
 
+            // **The two fields are read independently.** Deriving the name
+            // from "the index did not resolve" would make the exclusivity in
+            // the module docs a property of this function rather than of the
+            // data, and the ground-truth test that asserts it would be unable
+            // to fail. It would also fold two different faults together: an
+            // index past the cue table would arrive looking like a named
+            // child, which is exactly what `weapons_det.bnk`'s index 65 is
+            // not.
             let raw = self.order.u32(bytes, CHILD_INDEX_AT);
-            // An index past the cue table is dropped here rather than carried
-            // as a `Some` that every caller would have to re-check. The bank
-            // that does it is named in the module docs.
             let cue = (raw != CHILD_BY_NAME)
                 .then(|| u16::try_from(raw).ok())
                 .flatten()
                 .filter(|&index| index < self.cue_count);
             let field = &bytes[CHILD_NAME_AT..CHILD_NAME_AT + 16];
             let end = field.iter().position(|&b| b == 0).unwrap_or(field.len());
-            let name = if cue.is_none() && field[..end].iter().all(u8::is_ascii_graphic) {
+            let name = if end > 0 && field[..end].iter().all(u8::is_ascii_graphic) {
                 String::from_utf8_lossy(&field[..end]).into_owned()
             } else {
                 String::new()
