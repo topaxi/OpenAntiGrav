@@ -41,7 +41,7 @@ use clap::{Parser, Subcommand};
 use oag_assets::Archive;
 use oag_formats::texture::Texture;
 use oag_formats::wad::{self, Blob, Compression, Directory};
-use oag_formats::{fexml, lzss, png, ps2_texture};
+use oag_formats::{fexml, lzss, png, ps2_texture, sblk};
 use oag_tools::humanise;
 
 /// How much of a blob to read when only its type tag is wanted.
@@ -106,6 +106,23 @@ enum Command {
         archive: String,
     },
 
+    /// List the sound banks in an archive, and every cue each one names.
+    ///
+    /// A cue's waveform count is what `Bank::cue_sounds` resolves through the
+    /// command table; `loop` is the descriptor's own `+0x40` flag. Seconds are
+    /// at the rate `oag_game::audio::sfx` assumes, which is **not recovered** -
+    /// see `docs/formats/psp-audio.md`.
+    Sounds {
+        /// A `.wad` path, or `<image>:<path-on-disc>`.
+        archive: String,
+        /// Only banks whose own name contains this, case-insensitively.
+        #[arg(long)]
+        bank: Option<String>,
+        /// Only cues whose name contains this, case-insensitively.
+        #[arg(long)]
+        cue: Option<String>,
+    },
+
     /// Extract every blob.
     Extract {
         /// A `.wad` path, or `<image>:<path-on-disc>`.
@@ -138,8 +155,86 @@ fn main() -> Result<()> {
             entry,
             expand,
         } => cat(&archive, &entry, expand),
+        Command::Sounds { archive, bank, cue } => sounds(&archive, bank.as_deref(), cue.as_deref()),
         Command::Extract { archive, out, png } => extract(&archive, &out, png),
     }
+}
+
+/// Lists every `SBlk` bank in an archive with the cues it names.
+///
+/// Reads every blob, because a bank may be compressed and the magic is inside
+/// the payload. That is a whole-archive decompress on `WADS2.WAD`; it is the
+/// same cost `verify` pays and the same cost the game pays at load.
+fn sounds(spec: &str, bank_filter: Option<&str>, cue_filter: Option<&str>) -> Result<()> {
+    let mut archive = Archive::open(spec)?;
+    let entries = archive.directory().entries.clone();
+
+    summarise(&archive);
+    println!();
+
+    let matches = |haystack: &str, needle: Option<&str>| {
+        needle.is_none_or(|n| haystack.to_lowercase().contains(&n.to_lowercase()))
+    };
+
+    let mut banks = 0;
+    let mut cues = 0;
+    for (index, entry) in entries.iter().enumerate() {
+        if entry.size == 0 {
+            continue;
+        }
+        let blob = archive.read(index)?;
+        if !sblk::looks_like_bank(&blob) {
+            continue;
+        }
+        let parsed = sblk::Bank::parse(&blob)?;
+        if !matches(&parsed.name, bank_filter) {
+            continue;
+        }
+        banks += 1;
+        println!(
+            "#{index} {:08x}  {:<8}  {} cues, {} commands, {} waveforms, {}",
+            entry.name_hash,
+            if parsed.name.is_empty() {
+                "(unnamed)"
+            } else {
+                &parsed.name
+            },
+            parsed.cue_count,
+            parsed.command_count,
+            parsed.waveform_count,
+            humanise::bytes(parsed.waveforms.len() as u64),
+        );
+        let mut names = parsed.sound_names();
+        names.sort_by(|a, b| a.name.cmp(&b.name));
+        for name in names {
+            if !matches(&name.name, cue_filter) {
+                continue;
+            }
+            cues += 1;
+            let Some(cue) = parsed.cue(name.cue) else {
+                continue;
+            };
+            let waveforms = parsed.cue_sounds(&cue);
+            let looping = waveforms.iter().filter(|s| s.mode & 0x40 != 0).count();
+            let frames: usize = waveforms
+                .iter()
+                .map(|s| (s.length as usize / sblk::ADPCM_BLOCK_LEN) * sblk::ADPCM_BLOCK_SAMPLES)
+                .sum();
+            println!(
+                "    {:<18} cue {:>3}  cmds {:>3}..{:<3} {:>2} waveform(s), {} looping, {:.2}s total",
+                name.name,
+                name.cue,
+                cue.first_command,
+                cue.first_command + cue.commands,
+                waveforms.len(),
+                looping,
+                frames as f64 / f64::from(sblk::ASSUMED_SAMPLE_RATE),
+            );
+        }
+    }
+    println!();
+    println!("{banks} bank(s), {cues} cue(s)");
+    Ok(())
 }
 
 fn summarise(archive: &Archive) {

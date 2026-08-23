@@ -472,18 +472,25 @@ label = "BACK"
 id = "audio"
 title = "AUDIO"
 
-# One volume row, because there is one bus with anything on it: the soundtrack
-# decodes and plays and nothing else does yet. The effects bus gets a row when
-# it gets a sound.
+# Two volume rows, because the original's options menu has exactly two volumes
+# and no more: `"Music Volume"` at `0x08a78658` and `"SFX Volume"` at
+# `0x08a78668`. The second one earned its row when the sound banks started
+# decoding - see `oag_game::audio::sfx`.
 #
-# Applied on the next tick - the change goes straight onto `Bus::Music`'s gain,
-# so it is audible on the row the player is standing on rather than after a
-# restart, the way BRIGHTNESS is visible on its own page. Zero is offered and
-# means silence: unlike a black screen there is no way to get lost in it.
+# Applied on the next tick - the change goes straight onto the bus's gain, so it
+# is audible on the row the player is standing on rather than after a restart,
+# the way BRIGHTNESS is visible on its own page. Zero is offered and means
+# silence: unlike a black screen there is no way to get lost in it.
 [[page.entry]]
 kind = "choice"
 label = "MUSIC VOLUME"
 setting = "audio.music_volume"
+values = ["0", "25", "50", "75", "90", "100"]
+
+[[page.entry]]
+kind = "choice"
+label = "SFX VOLUME"
+setting = "audio.sfx_volume"
 values = ["0", "25", "50", "75", "90", "100"]
 
 # Which release's encode of the **soundtrack** plays. Only the sixteen

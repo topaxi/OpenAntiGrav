@@ -133,6 +133,21 @@ impl Race {
                 // original arms `ExhaustFlare_OnSpeedupPad` from inside the
                 // per-craft update, with that craft's own flare.
                 self.exhaust[slot].boost(exhaust::BOOST_SECONDS);
+                // The sound is on the same edge and from the same branch:
+                // `Ship_ApplySpeedupPad` calls `Sound_Play(..., "SPEEDUPPAD",
+                // ...)` here, immediately beside `ExhaustFlare_OnSpeedupPad`.
+                // The two used to differ only in that this port had no audio
+                // system - see pads.md's own "Not determined" entry, which this
+                // closes.
+                //
+                // **Slot 0 only, and that is a gap rather than a reading.** The
+                // original gives every craft a positional emitter and plays the
+                // cue on whichever crossed; nothing here can pan, so an
+                // opponent's pad is silent instead of arriving dry in the
+                // middle of the mix. See `crate::audio::sfx`.
+                if slot == 0 {
+                    self.cues.push(crate::audio::sfx::Cue::SpeedupPad);
+                }
             }
         }
 

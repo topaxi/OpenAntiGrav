@@ -30,7 +30,7 @@ payloads themselves - is what stops `oag-view` drawing a Pure ship today.
 | Front-end XML | Reads; the name-shortening optimisation **does not exist yet** |
 | Handling stats | Same addressing, schema enumerated in full; the absent `<pitch>` is now optional and a labelled stand-in fills it |
 | Collision classes | **All three named**: floor and wall by facing 2026-08-12, and the whole renumbering by [class-name table index](#the-renumbering-is-a-table-index-and-both-executables-carry-the-table) - which also settles reset at `0x37f` |
-| `SBlk` sound bank | **Not present on Pure at all** |
+| [`SBlk` sound bank](#sound-effects-the-same-container-after-all) | **Present, 29 banks, and playing**: the same container Pulse uses, unmodified |
 | [Music](#music-recovered-by-name-and-played) | **Recovered by name and played**: front end and all nineteen soundtrack tracks |
 
 ## Disc layout
@@ -81,7 +81,7 @@ Counts below are over all three archives, 1,229 entries, unless stated.
 | [Handling stats](handling-stats.md) | reads | Addressing holds and the schema is enumerated in full. `<pitch>` became **optional** on 2026-08-12 - Pure authors none in any `<Class>` - and `oag_gameplay::handling::PITCH_STAND_IN` fills it, reported by name. See [below](#handling-stats-the-schema-holds-the-parser-does-not) | 94 |
 | [Bitmap font](fnt.md) | reads | 6 fonts. Version `1` + `"FNT"`, codepoint table at `0x30`, offset table at `0x30 + 2*count`, and `atlas + 0x40 + clut_size + texel_size == file length` exact on **6/6**, with `texel_size == width * height / 2`. The atlas flag bit is set on 6/6, same as Pulse | 94 |
 | [PSP movie](pmf.md) | reads | 14 movies. `stream_offset == 0x800` and `stream_offset + stream_size == file length` exact on **14/14**; two streams each, ids `0xe0` and `0xbd`. Version string `"0012"` only, where Pulse ships both `"0012"` and `"0014"` | 94 |
-| [PSP sound bank](psp-audio.md) | **absent** | No entry in any Pure archive begins `SBlk`, though the executable names `Data\Sound\*.bnk` paths. Pure's 25 RIFF entries are `WAVE_FORMAT_EXTENSIBLE`, 2 channels, 44.1 kHz | 85 |
+| [PSP sound bank](psp-audio.md) | **understood, and playing** | **29 banks on each pressing**, all accepted by the unmodified reader. The earlier "absent" row was a scan for the magic at offset 0, where it sits at `0x18` - the same scan finds nothing on a Pulse disc either. Bank names, cue names and the six wired cues are all Pulse's, so a Pure race sounds with no code branch. 461 waveform spans, 0 of them non-PS-ADPCM | 94 |
 | [Particle system (`.pob`)](#pures-particle-systems-decode-unchanged) | reads | 37 `SYSP` entries in `Data.wad` and 37 in `FE.wad`, against Pulse's 35 and 27. **Decodes unchanged**: three of the four effects a race loads by name resolve on Pure and play, emitter trees and all | 92 |
 
 ## The class-ID space is renumbered
@@ -654,9 +654,9 @@ them adjacent to `c:/Work/Wipeout/Code/System/Sound/MusicManager.cpp`:
 - **A soundtrack track is `music.at3` inside a directory**, `%s\%s` supplying
   the join. The directory comes from the plugin definition below.
 
-The three `Data\Sound\*.bnk` names are present on both pressings and are
-**not** decoded: Pure ships no `SBlk`, and what its banks are is unread.
-Recorded here so the next contributor starts from a name rather than a search.
+The three `Data\Sound\*.bnk` names are present on both pressings and **are
+decoded** - see [below](#sound-effects-the-same-container-after-all). The
+sentence that stood here until 2026-08-23 said the opposite.
 
 ### The directories are declared, not derived
 
@@ -709,6 +709,57 @@ just wad cat "data/images/pure-psp-usa.chd:PSP_GAME/USRDIR/Data.wad" \
 just wad hash 'Data\Music\frontend.at3'          # -> 1ddc4f8e
 cargo nextest run -p oag-game --test pure_music_ground_truth --run-ignored all
 ```
+
+## Sound effects: the same container after all
+
+**2026-08-23.** Pure has **29 `SBlk` sound banks** on each pressing, every one
+accepted by [`oag_formats::sblk`](../../crates/formats/src/sblk.rs) with no
+change, and **a Pure race now makes the same six sounds a Pulse race does**.
+
+### How the absence claim came about
+
+This page and [psp-audio.md](psp-audio.md) both recorded, at confidence 85,
+that no entry in any Pure archive begins with `SBlk`. That is **true**, and it
+is equally true of Wipeout Pulse: the magic sits at offset `0x18`, behind the
+container's own eight-byte header and its two eight-byte section-table entries.
+The Pulse census never tripped over it because it went through
+`sblk::looks_like_bank`, which reads `0x18`; the Pure probe scanned offset 0.
+
+A search that would have returned the same empty result on a disc known to be
+full of banks was read as evidence of absence. **A magic-scan miss is only
+evidence when the scan has been shown to hit on a positive control.**
+
+### What is there
+
+| | Pure USA | Pure EU |
+| --- | ---: | ---: |
+| `SBlk` banks | 29 | 29 |
+| Parsed unmodified | 29 | 29 |
+| Sound names | 254 in `Data.wad`, 18 in `FE.wad` | same |
+| Waveform spans | 461 | 461 |
+| Spans in a non-PS-ADPCM codec | 0 | 0 |
+
+The bank paths are Pulse's, hash for hash - `Data\Sound\hud.bnk`, `ship.bnk`,
+`ship_zone.bnk`, `weapons.bnk`, `speech.bnk`, `frontend.bnk`,
+`generaltrack.bnk` - and so are the cue strings the game fires. `SPEEDUPPAD`,
+`.COLLISIONS`, `ABSORB`, `~ENGINE`, `~SHIELD` and `shieldactive` all resolve,
+so `oag_game::audio::sfx` needed **no Pure branch at all**.
+
+Pure's own content differs in ways that are worth recording because one of them
+was load-bearing:
+
+- **`~SHIELD` binds four waveforms of which only two loop**, where Pulse's
+  binds two and both do. That is the case that forced the loop flag to be kept
+  per waveform rather than collapsed to the cue - a play site that assumed the
+  cue was uniform would loop a one-shot on about half the draws.
+- Pure's `ship.bnk` has **six** cues to Pulse's nine, and carries `~AMBIENCE`
+  and `rumble`, which Pulse has not got.
+- Pure names its circuit banks in full - `SEBCLIM`, `CITTANU`, `VINETTA`,
+  `MODESTO`, `CHENGOU` - where Pulse abbreviates.
+
+Verified end to end: `pure-psp-eu.chd` under `--race --autopilot --ticks 600
+--dump-audio` reports all six cues loading and writes ten seconds of audio
+peaking at 0.83 with three silent ticks at the head.
 
 ## Reported elsewhere
 

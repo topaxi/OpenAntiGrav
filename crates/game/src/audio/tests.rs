@@ -290,6 +290,7 @@ fn changing_the_music_source_seeks_rather_than_restarting() {
         race_cache: None,
         menu_sound: None,
         race_context: None,
+        sfx: None,
     };
     audio.start_music(&discs, MusicSource::Auto, Path::new("unused"));
     assert_eq!(
@@ -377,6 +378,7 @@ fn asking_for_the_music_again_never_restarts_it() {
         race_cache: None,
         menu_sound: None,
         race_context: None,
+        sfx: None,
     };
 
     audio.start_music(&discs, MusicSource::Auto, Path::new("unused"));
@@ -424,6 +426,7 @@ fn a_source_with_no_music_is_not_retried_every_tick() {
         race_cache: None,
         menu_sound: None,
         race_context: None,
+        sfx: None,
     };
     audio.start_music(&nothing, MusicSource::Auto, Path::new("unused"));
     assert!(audio.music.is_none(), "there was nothing to play");
@@ -489,6 +492,7 @@ fn music_with_no_counterpart_is_left_alone_whatever_the_row_says() {
         race_cache: None,
         menu_sound: None,
         race_context: None,
+        sfx: None,
     };
     audio.music = audio
         .output
@@ -544,6 +548,7 @@ fn a_dump_is_exactly_as_long_as_the_ticks_it_was_given() {
         race_cache: None,
         menu_sound: None,
         race_context: None,
+        sfx: None,
     };
     for _ in 0..120 {
         audio.tick();
@@ -594,6 +599,7 @@ fn the_picture_stays_within_a_frame_of_the_sound_for_a_whole_reel() {
         race_cache: None,
         menu_sound: None,
         race_context: None,
+        sfx: None,
     };
     assert!(audio.start_movie(sound), "a free voice");
 
@@ -643,6 +649,7 @@ fn a_mixer_that_is_never_advanced_offers_no_clock() {
         race_cache: None,
         menu_sound: None,
         race_context: None,
+        sfx: None,
     };
     let sound = Sound::new(vec![0i16; 44_100 * 2], 2, 44_100).expect("a sound");
     assert!(audio.start_movie(sound), "a free voice");
@@ -676,6 +683,7 @@ fn a_movie_with_no_voice_has_no_playhead() {
         race_cache: None,
         menu_sound: None,
         race_context: None,
+        sfx: None,
     };
     assert_eq!(audio.movie_playhead(), None, "nothing started");
 
@@ -706,6 +714,7 @@ fn a_run_with_no_dump_accumulates_nothing() {
         race_cache: None,
         menu_sound: None,
         race_context: None,
+        sfx: None,
     };
     for _ in 0..120 {
         audio.tick();
@@ -762,6 +771,7 @@ fn psp_boot_fixture() -> (Audio, Arc<Sound>, Arc<Sound>) {
         race_cache: Some((Platform::Psp, MUSIC_TRACK, Arc::clone(&race_sound))),
         menu_sound: Some(Arc::clone(&menu_sound)),
         race_context: None,
+        sfx: None,
     };
     audio.music = audio
         .output
@@ -900,6 +910,7 @@ fn music_source_changed_while_a_race_is_live_moves_the_race_voice() {
         race_cache: Some((Platform::Psp, 0, Arc::clone(&psp_track))),
         menu_sound: None,
         race_context: None,
+        sfx: None,
     };
     audio.race_voice = audio
         .output
@@ -955,6 +966,7 @@ fn a_source_with_no_decodable_race_music_still_resumes_menu_music_cleanly() {
         race_cache: None,
         menu_sound: Some(Arc::clone(&menu_sound)),
         race_context: None,
+        sfx: None,
     };
 
     audio.start_race_music(&discs, MusicSource::Auto, Path::new("unused"));

@@ -242,6 +242,14 @@ pub struct Audio {
     /// its own audio approximate. See [`crate::audio::DUMP_SAMPLE_RATE`].
     #[serde(default)]
     pub music_volume: crate::audio::Volume,
+    /// How loud the effects bus is, as a percentage. Defaults to 100.
+    ///
+    /// The original's options menu has exactly two volumes and this is the
+    /// other one: `"Music Volume"` at `0x08a78658` and `"SFX Volume"` at
+    /// `0x08a78668`, with nothing else. See
+    /// `docs/architecture/adr/0018-audio-mixer-architecture.md`.
+    #[serde(default)]
+    pub sfx_volume: crate::audio::Volume,
     /// Which release's encode of the soundtrack plays: `auto`, `psp` or `ps2`.
     ///
     /// **`auto`, the booted disc, by default.** Only the sixteen soundtrack

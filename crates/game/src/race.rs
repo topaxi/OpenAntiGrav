@@ -148,6 +148,7 @@ pub use load::load;
 pub use options::{CameraOverride, Loaded, Options, PoseRequest, Setup};
 pub use scene::Scene;
 pub use spline::Spline;
+pub use telemetry::Telemetry;
 pub use visibility::{SceneStats, TrackVisibility};
 
 pub(crate) use assets::ps2_texture_set;
@@ -435,35 +436,6 @@ const ALONGSIDE_WIDTH: f32 = 12.0;
 /// as they did.
 pub use oag_gameplay::spawn::{box_inertia, spawn_height};
 
-/// One tick's worth of what the simulation did, for a log or an overlay.
-///
-/// Everything here is read out of the state *after* a step; nothing in it is an
-/// input to the next one.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Telemetry {
-    /// Ticks elapsed since the race began.
-    pub tick: u64,
-    /// Where the ship is.
-    pub position: Vec3,
-    /// How fast it is going, in world units per second.
-    pub speed: f32,
-    /// Probes in contact over two: `0.0`, `0.5` or `1.0`.
-    pub grounded: f32,
-    /// Distance to the nearest spline sample.
-    pub spline_distance: f32,
-    /// Height above that sample along its own up axis. Negative is below the
-    /// surface line.
-    pub height_above_spline: f32,
-    /// What the craft is carrying, if anything.
-    ///
-    /// Here so `--race --screenshot`'s own log answers "did the pad grant
-    /// anything" without a debugger. It is the question every weapon capture
-    /// starts with, and a HUD icon in a screenshot is a poor way to ask it.
-    pub pickup: Option<oag_formats::weapons::Weapon>,
-    /// How many projectiles are in the air.
-    pub projectiles: usize,
-}
-
 /// A race in progress: the world, the track it is on, and the camera behind it.
 #[derive(Debug)]
 pub struct Race {
@@ -633,6 +605,9 @@ pub struct Race {
     sparks: psys::System,
     /// Every `.pob` this race loaded - see [`Setup::effects`].
     effects: psys::Library,
+    /// The decoded sound cues, straight out of [`Setup::sounds`]. Data, not a
+    /// device - the mixer and the held voices are [`crate::audio::Audio`]'s.
+    sounds: crate::audio::sfx::Banks,
     /// The multi-instance pool everything *except* the hull-mounted sparks
     /// plays in: the rockets' flares and their detonations today, and
     /// whatever gets a recovered trigger next.
@@ -828,6 +803,25 @@ pub struct Race {
     /// already holds, so hashing it would hash the same facts twice, and a
     /// replay reproduces it by reaching the same tick. See [`Self::results`].
     results: Option<crate::scoreboard::Board>,
+    /// One-shot sound cues this tick asked for, awaiting a drain.
+    ///
+    /// **A per-tick output, never state** - the shape ADR-0018 requires, and
+    /// deliberately absent from [`Self::state_hash`]: a race that made no sound
+    /// and one that made every sound must hash alike. See [`Self::drain_cues`].
+    cues: Vec<crate::audio::sfx::Cue>,
+    /// Seconds before a wall contact may raise a sound cue again.
+    ///
+    /// Its own timer rather than [`Self::sparks_cooldown`], because a shielded
+    /// contact raises `ABSORB` and ignites no sparks - so that timer would
+    /// never re-arm. Render-side state, and out of the hash for the same
+    /// reason. See [`Self::tick`], where the two are set side by side.
+    contact_cue_cooldown: f32,
+    /// Whether the player's shield was up on the previous tick.
+    ///
+    /// The latch behind `shieldactive`'s rising edge. Kept here rather than in
+    /// the audio layer so that every cue *edge* is raised from one place - see
+    /// [`Self::tick`] - and out of the hash like the rest of this group.
+    shield_was_up: bool,
 }
 
 /// How fast the kick opens, per second, as an exponential approach.

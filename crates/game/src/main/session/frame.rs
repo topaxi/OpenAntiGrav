@@ -299,6 +299,15 @@ impl Session {
                     // headless capture and the disc-backed AI tests all drive,
                     // and a tick that quietly became a no-op would change what
                     // every one of them produces. See `race::results`.
+                    //
+                    // **The audio still advances**, because it is not the
+                    // simulation: `~ENGINE` is a held voice with a spin-down
+                    // law, and leaving it unticked here would hold the engine
+                    // at racing pitch under the results table for as long as
+                    // the player looked at it. Nothing this call touches is
+                    // `World` state, so "nothing is stepped" is still true of
+                    // the thing that sentence is about.
+                    self.audio.race_tick(&mut stage.race);
                 }
                 Stage::Race(stage) => {
                     // Outside `Race::tick`, so this cannot reach the hash: it
@@ -311,6 +320,11 @@ impl Session {
                         }
                     }
                     stage.race.tick(&snapshot);
+                    // Immediately after the tick and inside this loop, so a cue
+                    // lands on the tick that raised it whether the frame
+                    // stepped once, twice or not at all. See
+                    // `audio::Audio::race_tick`.
+                    self.audio.race_tick(&mut stage.race);
                     if self.log_every > 0 && stage.race.world.tick % u64::from(self.log_every) == 0
                     {
                         println!("{}", race::describe(&stage.race.telemetry()));

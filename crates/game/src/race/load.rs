@@ -828,6 +828,16 @@ pub fn load(options: &Options) -> Result<Loaded> {
         }
     }
 
+    // The same shape for sound, and for the same reason: adding a cue is adding
+    // its name and its trigger, never a loader. Zone races read `ship_zone.bnk`
+    // instead of `ship.bnk` - a different bank with the same cue names.
+    let sounds = crate::audio::sfx::Banks::load(
+        &mut archives,
+        title.race.sounds,
+        options.mode == Mode::Zone,
+    );
+    report.extend(sounds.report.iter().cloned());
+
     // The ribbon's texture is a title axis, not a constant: Pulse and Pure name
     // one, HD authors a template whose material names its own. See
     // `oag_title::exhaust::Exhaust` and `assets::trail_texture`.
@@ -916,6 +926,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             nozzles: liveries.iter().map(|livery| livery.nozzle).collect(),
             collision_fx,
             effects,
+            sounds,
             speedup_pads,
             weapon_pads,
             weapons,

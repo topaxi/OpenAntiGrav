@@ -46,7 +46,7 @@ pub use boot::{BootProfile, BootStep, Provenance};
 pub use hud::HudLayouts;
 pub use menu::{MenuSkin, MenuStrip};
 pub use oag_disc::Platform;
-pub use race::{RaceDefaults, ZoneCircuit, ZoneCraft};
+pub use race::{RaceDefaults, SoundBanks, ZoneCircuit, ZoneCraft};
 
 /// One title's release-level facts.
 ///

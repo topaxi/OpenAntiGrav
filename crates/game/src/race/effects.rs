@@ -299,6 +299,45 @@ impl Race {
         &self.sparks
     }
 
+    /// Takes the one-shot sound cues this tick raised, leaving the queue empty.
+    ///
+    /// The seam ADR-0018 asks for: cues are a per-tick *output*, so the caller
+    /// that owns the mixer drains them **inside the fixed-step loop**, next to
+    /// the tick that raised them. Draining once per frame instead would
+    /// coalesce or duplicate them on a frame that stepped twice or none.
+    ///
+    /// A caller with no audio need never call this. The queue is one `Vec` and
+    /// a race that is never drained grows it by at most a handful of entries a
+    /// second, all of them fixed-size - but the composition root does drain it,
+    /// and a headless test that does not is bounded by its own tick count.
+    pub fn drain_cues(&mut self) -> Vec<crate::audio::sfx::Cue> {
+        std::mem::take(&mut self.cues)
+    }
+
+    /// The cues raised so far and not yet drained, for tests.
+    #[must_use]
+    pub fn pending_cues(&self) -> &[crate::audio::sfx::Cue] {
+        &self.cues
+    }
+
+    /// The decoded sound banks this race loaded.
+    #[must_use]
+    pub fn sounds(&self) -> &crate::audio::sfx::Banks {
+        &self.sounds
+    }
+
+    /// Whether the player's shield pickup is currently up.
+    ///
+    /// A *level*, not an edge, and that is what `~SHIELD` wants:
+    /// `Shield_Activate` opens a looping voice with a handle and the shield's
+    /// own expiry releases it, so the voice's lifetime is exactly this
+    /// predicate's. The same timer gates the collision sparks - see
+    /// [`Self::tick`] - so "the shell is up" is one fact read in two places.
+    #[must_use]
+    pub fn shield_is_up(&self) -> bool {
+        self.world.ships[0].physics.shield_pickup_timer > 0.0
+    }
+
     /// The track's speed-pad trigger volumes.
     ///
     /// Empty on a track that authors none, which is an ordinary state rather than

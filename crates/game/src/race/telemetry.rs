@@ -2,9 +2,40 @@
 //! test, and the HUD's readout.
 //!
 //! Split out of `race.rs` under the 1,000-line rule in
-//! `scripts/check-file-size.py`; a move, with no behaviour change.
+//! `scripts/check-file-size.py`; a move, with no behaviour change. The
+//! [`Telemetry`] struct itself followed it out of the root on 2026-08-23, for
+//! the same reason and to the module it was always named for.
 
 use super::*;
+
+/// One tick's worth of what the simulation did, for a log or an overlay.
+///
+/// Everything here is read out of the state *after* a step; nothing in it is an
+/// input to the next one.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Telemetry {
+    /// Ticks elapsed since the race began.
+    pub tick: u64,
+    /// Where the ship is.
+    pub position: Vec3,
+    /// How fast it is going, in world units per second.
+    pub speed: f32,
+    /// Probes in contact over two: `0.0`, `0.5` or `1.0`.
+    pub grounded: f32,
+    /// Distance to the nearest spline sample.
+    pub spline_distance: f32,
+    /// Height above that sample along its own up axis. Negative is below the
+    /// surface line.
+    pub height_above_spline: f32,
+    /// What the craft is carrying, if anything.
+    ///
+    /// Here so `--race --screenshot`'s own log answers "did the pad grant
+    /// anything" without a debugger. It is the question every weapon capture
+    /// starts with, and a HUD icon in a screenshot is a poor way to ask it.
+    pub pickup: Option<oag_formats::weapons::Weapon>,
+    /// How many projectiles are in the air.
+    pub projectiles: usize,
+}
 
 impl Race {
     /// What the ship did, as of the last tick.

@@ -78,6 +78,54 @@ pub struct RaceDefaults {
     pub zone: ZoneCircuit,
     /// Where this title keeps the craft a Zone race flies. See [`ZoneCraft`].
     pub zone_craft: ZoneCraft,
+    /// Which `.bnk` each of this title's race cues is looked up in. See
+    /// [`SoundBanks`].
+    pub sounds: &'static SoundBanks,
+}
+
+/// Which sound bank a title keeps each race cue in.
+///
+/// # Why this is an axis rather than a constant
+///
+/// The banks and the cue strings inside them are **shared across the lineage** -
+/// Pulse, Pure and Wipeout HD all carry `SPEEDUPPAD`, `.COLLISIONS`, `ABSORB`,
+/// `~SHIELD` and `shieldactive`, spelled identically. What moves is which file
+/// they live in, and only on HD:
+///
+/// | Cue | Pulse and Pure | Wipeout HD |
+/// | --- | --- | --- |
+/// | `SPEEDUPPAD` | `hud.bnk` | **`weapons.bnk`** - HD has no `hud.bnk` |
+/// | `.COLLISIONS` | `ship.bnk` | **`shiphd.bnk`** |
+/// | `ABSORB`, `~SHIELD` | `weapons.bnk` | `weapons.bnk` |
+/// | `shieldactive` | `speech.bnk` | `speech.bnk` |
+///
+/// So this is a five-field path table, measured per title, and not a
+/// re-derivation of anything. `oag_game::audio::sfx::Cue` maps a cue to a field
+/// here; nothing else knows a filename.
+///
+/// # A missing cue is an ordinary state
+///
+/// HD has **no `~ENGINE` at all** - its ship audio is a per-event `c_*` set
+/// (`c_CShipWall`, `c_ElecArcA`..`D`) rather than one held loop, which is a
+/// different design and not a renamed cue. There is no field for "the bank a
+/// cue this title has not got lives in": the loader reports the miss and the
+/// engine voice never opens. See `docs/formats/psp-audio.md`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SoundBanks {
+    /// Where `SPEEDUPPAD` is. `hud.bnk` everywhere but HD.
+    pub hud: &'static str,
+    /// Where `~ENGINE` and `.COLLISIONS` are.
+    pub ship: &'static str,
+    /// The Zone counterpart of [`Self::ship`].
+    ///
+    /// Equal to `ship` on a title that ships no separate Zone bank, which is
+    /// what HD does - the field is not an `Option` because "the same bank" is
+    /// the honest answer there rather than "none".
+    pub ship_zone: &'static str,
+    /// Where `ABSORB` and `~SHIELD` are.
+    pub weapons: &'static str,
+    /// Where `shieldactive` is: the announcer, not an effect.
+    pub speech: &'static str,
 }
 
 /// Where a title keeps the hull a Zone race flies.

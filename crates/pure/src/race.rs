@@ -62,6 +62,23 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     team: DEFAULT_TEAM,
     zone: oag_title::ZoneCircuit::Separate(DEFAULT_ZONE_TRACK),
     zone_craft: oag_title::ZoneCraft::OwnShip(ZONE_TEAM),
+    sounds: SOUND_BANKS,
+};
+
+/// Where each race cue lives - **Pulse's spelling exactly**.
+///
+/// Pure's `BOOT.BIN` names only three of these (`frontend.bnk`, `hud.bnk`,
+/// `generaltrack.bnk`), but all five hash to real entries on both pressings and
+/// every cue the game fires resolves inside them. That agreement is the finding
+/// rather than the assumption: this project recorded for months that Pure
+/// shipped no `SBlk` bank at all, on the strength of a magic scan run at the
+/// wrong offset. See `docs/formats/pure-status.md`.
+pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
+    hud: r"Data\Sound\hud.bnk",
+    ship: r"Data\Sound\ship.bnk",
+    ship_zone: r"Data\Sound\ship_zone.bnk",
+    weapons: r"Data\Sound\weapons.bnk",
+    speech: r"Data\Sound\speech.bnk",
 };
 
 /// The circuit a Zone race loads when the caller names none.

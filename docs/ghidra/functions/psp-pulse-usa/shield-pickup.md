@@ -141,6 +141,16 @@ prefix is this binary's own convention for a looping cue - `~AIRBRAKE_MONO`,
 `~ROCKETTVL`, `~MISSILETVL`, `~BLOWUP` all carry it - so `~SHIELD` runs for the
 duration and `shieldactive` is the one-shot on activation.
 
+**Both are now played, and the banks corroborate the reading.** `~SHIELD`
+resolves in `weapons.bnk` to **two waveforms, both carrying the descriptor's
+loop flag**; `shieldactive` resolves in **`speech.bnk`**, not `weapons.bnk`,
+which is what says it is a voice line rather than an effect. The loop flag is a
+field the name table knows nothing about, so the `~` convention read above is
+confirmed from the data side rather than restated. `oag_game::audio::sfx` holds
+the looping voice for exactly as long as `shield_pickup_timer` runs and fires
+the announcer once on the same activation. See
+[psp-audio.md](../../../formats/psp-audio.md#a-cue-owns-a-run-of-the-command-table).
+
 ## What the flag gates: two drains and a contact loop, and no fourth thing
 
 `craft+0x1b8 & 0x10` is tested in exactly nine places in the whole image, found

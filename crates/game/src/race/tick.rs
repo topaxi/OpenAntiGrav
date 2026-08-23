@@ -356,6 +356,16 @@ impl Race {
         // the whole design: sparks are the hull being hurt and the hull is not
         // being hurt. See `docs/.../shield-pickup.md`.
         let shielded = self.world.ships[0].physics.shield_pickup_timer > 0.0;
+        // The announcer, on the shield coming up and not on it being up.
+        // `Shield_Activate` plays `"shieldactive"` one line above the
+        // `Sound_PlayLooping` that opens `~SHIELD`, so the two share an instant
+        // and differ in shape: a one-shot on this edge, a held voice on the
+        // level the edge starts. The level half is `Race::shield_is_up`, read
+        // by the audio layer; the edge is here, with every other cue edge.
+        if shielded && !self.shield_was_up {
+            self.cues.push(crate::audio::sfx::Cue::ShieldActive);
+        }
+        self.shield_was_up = shielded;
         let can_fire = !shielded
             && if attached_effect {
                 // Ignite once per contact, not once per cooldown: re-arming
@@ -366,6 +376,28 @@ impl Race {
             } else {
                 evaluated.wall.impact && self.sparks_cooldown <= 0.0
             };
+        // The two contact sounds, on their own re-arm rather than on the spark
+        // one. They cannot share `sparks_cooldown`: a shielded contact never
+        // ignites, so that timer would sit at zero and `ABSORB` would fire
+        // sixty times a second through a scrape.
+        //
+        // `ShipCollisionFx_Trigger` plays `"COLLISIONS"` once per call that
+        // gets past its own 0.8-second gate, which is the same 0.8 seconds
+        // `oag_render::sparks::COLLISION_COOLDOWN` carries - one constant in
+        // the original, read twice here. `"ABSORB"` comes from
+        // `FUN_08840640`, which **bypasses** that gate and staggers its own ten
+        // instances by 0.1 s; how often the game calls it is not recovered, so
+        // it is re-armed on the same 0.8 s and that is a stated approximation
+        // rather than a reading. See `docs/.../contact-response.md`.
+        self.contact_cue_cooldown = (self.contact_cue_cooldown - self.dt).max(0.0);
+        if evaluated.wall.impact && self.contact_cue_cooldown <= 0.0 {
+            self.cues.push(if shielded {
+                crate::audio::sfx::Cue::Absorb
+            } else {
+                crate::audio::sfx::Cue::Collision
+            });
+            self.contact_cue_cooldown = sparks::COLLISION_COOLDOWN;
+        }
         let model_matrix = self.ship_model_matrix();
         if can_fire && let Some(contact) = evaluated.wall.resolved {
             // `contact.point` is deliberately the *penetrating* hull sample

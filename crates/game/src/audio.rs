@@ -36,6 +36,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::display::percentage;
 
+pub mod sfx;
+
 /// A bus volume, as a percentage of unattenuated.
 ///
 /// Zero is off and 100 is the samples as they were stored. Unlike
@@ -521,6 +523,12 @@ pub struct Audio {
     /// successfully loads one; `None` when this source carries no decodable
     /// menu music at all.
     menu_sound: Option<Arc<Sound>>,
+    /// The race's held voices and its own generator, while a race is running.
+    ///
+    /// `None` outside a race and on a source whose banks did not load. Made on
+    /// the first tick that has cues to play rather than at race start, so a
+    /// silent source never allocates one.
+    sfx: Option<sfx::SfxVoices>,
     /// What [`Audio::start_race_music`] was last called with, kept so the
     /// advance-on-finish check in [`Audio::tick`] can fetch the next track on
     /// its own - `tick` runs every simulation tick from several call sites,
@@ -633,6 +641,7 @@ impl Audio {
             race_cache: None,
             menu_sound: None,
             race_context: None,
+            sfx: None,
         };
         audio.apply(settings);
         audio
@@ -644,8 +653,10 @@ impl Audio {
     /// game runs and the change should be audible on the row the player is
     /// standing on, the way `BRIGHTNESS` is visible on it.
     pub fn apply(&self, settings: &crate::settings::Audio) {
-        self.output
-            .with_mixer(|mixer| mixer.set_bus_gain(Bus::Music, settings.music_volume.gain()));
+        self.output.with_mixer(|mixer| {
+            mixer.set_bus_gain(Bus::Music, settings.music_volume.gain());
+            mixer.set_bus_gain(Bus::Sfx, settings.sfx_volume.gain());
+        });
     }
 
     /// The output, and through it the mixer.

@@ -55,6 +55,15 @@ const TITLE: &Title = &Title {
             hull: "Zone",
             boost: "Zoneboost",
         },
+        // Unread here too, and named after nothing on any disc so that a test
+        // which started reading it would fail loudly rather than resolve.
+        sounds: &oag_title::SoundBanks {
+            hud: r"Data\Sound\nowhere.bnk",
+            ship: r"Data\Sound\nowhere.bnk",
+            ship_zone: r"Data\Sound\nowhere.bnk",
+            weapons: r"Data\Sound\nowhere.bnk",
+            speech: r"Data\Sound\nowhere.bnk",
+        },
     },
     // Unread here for the same reason as the circuit above: an in-race HUD is
     // read *through* archives, and which layout a mode wants is nothing this
