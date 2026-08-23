@@ -77,8 +77,21 @@ pub const TITLE: &Title = &Title {
     // one triangle; its material names the colour texture, the noise texture
     // and the blend factors, so this one path supplies all three. See
     // `docs/rendering/trail-ribbon.md`.
+    // **The `bluered` one, because that is the one the shipped executable
+    // names.** `Data/RibbonEffects/enginetrail_bluered_triangle.vex` is a
+    // literal at `0x007a2d70` in `EBOOT.elf`, in `TrailEffectManager`'s own
+    // TOC block; the plain `enginetrail_triangle` beside it in `DATA02` is
+    // named nowhere in the executable and is the pre-Fury build's. See
+    // `docs/rendering/trail-ribbon.md`.
+    //
+    // **This path is on the Fury disc's `DATA06` only.** `Exhaust::Authored`
+    // carries one path, so a base-HD pressing without that archive would report
+    // the entry as missing and fall back to a procedural glow rather than
+    // silently drawing the dead `enginetrail_triangle` beside it - which is the
+    // right way round, and is a loud failure this project has never seen
+    // because Fury is the only HD image it has.
     exhaust: &oag_title::exhaust::Exhaust::Authored(
-        "/data/ribboneffects/enginetrail_triangle.rcsmodel",
+        "/data/ribboneffects/enginetrail_bluered_triangle.rcsmodel",
     ),
     // **HD authors its flare too, and per team.** It carries none of Pulse's
     // `grabbedEngineFlare` sprite; every one of its fourteen craft ships an

@@ -90,14 +90,18 @@ pub(super) fn particle_effect(
 /// title that *authors* the ribbon hands back its material's own noise texture
 /// and its own factor pair, both read off the disc.
 ///
-/// **The colour texture is located and deliberately not wired.** HD's material
-/// names two - a 256x256 colour map and a 128x128 noise map - where this
-/// renderer's ribbon shader samples one, and the one it samples is a noise map
-/// (`Trail_DrawRibbon` scrolls `Engine_noise` at three rates per layer). Putting
-/// the colour map in that slot would be a plausible-looking substitution of
-/// exactly the kind `CLAUDE.md` names, so the noise map goes in the noise slot
-/// and the report says what is left over. Wiring the second one needs a shader
-/// that samples two, and HD's own ribbon code is unread.
+/// **The first texture is located and deliberately not wired, and on HD's real
+/// ribbon that is now the expensive half.** Its material names two, and the
+/// `bluered` pair the executable points at spells out what each is for:
+/// `hd_enginetrail_blue_alphaistrail.gtf` and
+/// `hd_enginetrail_red_alphaisnoise.gtf`. So the second slot carries the noise
+/// **in its alpha**, which is the rule this loader already followed - and the
+/// first carries *the ribbon's own shape mask*, which this renderer's
+/// one-texture shader has no slot for. That is a stronger reason to want a
+/// two-texture ribbon than "a colour map is left over" was. Putting either in
+/// the wrong slot would be the plausible-looking substitution `CLAUDE.md`
+/// names, so the noise goes in the noise slot and the report says what is left
+/// out.
 pub(super) fn trail_texture(
     archives: &mut oag_assets::Archives,
     title: &oag_title::Title,
@@ -185,8 +189,8 @@ fn authored_ribbon(
         ),
         format!("{model}: blend {src:?}/{dst:?} off the material, not the PSP preset's"),
         format!(
-            "{}: located and not drawn - this renderer's ribbon samples one texture where HD's \
-             material names two",
+            "{}: located and not drawn - this renderer's ribbon samples one texture where \
+             HD's material names two, and this is the one carrying the trail's own shape",
             material.texture
         ),
     ];

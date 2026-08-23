@@ -311,6 +311,30 @@ may well draw a sprite flare *as well as* the model, which would be a second
 thing to reproduce rather than a correction to this one. Open, with a stated
 leading answer.
 
+### The ribbon, from the same TOC block
+
+`TrailEffectManager`'s own TOC neighbourhood carries the trail's whole
+interface, and one entry of it corrects an asset choice this project had made
+by name rather than by evidence:
+
+```text
+0x008b444c  'Trails'
+0x008b4450  0x3f4ccccd                      = 0.8f, inline
+0x008b4454  'position' 'normal' 'Uv1' 'VertexColour1'
+0x008b446c  -> 0x007a2d70 'Data/RibbonEffects/enginetrail_bluered_triangle.vex'
+                                                        Trail_ModelPath
+0x008b4478  'TrailSpeed'
+0x008b4484  'EngineTrail/TrailEffectManager.cpp'
+```
+
+**`Trail_ModelPath` is the `bluered` pair, not the `enginetrail_triangle` one**
+this renderer loaded until now, and the plain one is named nowhere in the
+executable. `Trail_ConstructManager` (`0x002e2da8`) allocates `0x11b00` bytes
+and initialises **eight** per-craft trails, each `0x1230` bytes with a
+`0x1200`-byte GPU buffer. The buffer's stride and sample count are not read, so
+`oag_render::exhaust`'s geometry constants stay PSP's. The rest is on
+[trail-ribbon.md](../../../rendering/trail-ribbon.md).
+
 ## Reproducing this
 
 ```sh

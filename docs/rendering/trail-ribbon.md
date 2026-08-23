@@ -80,6 +80,58 @@ Named-file checks, rather than the index sweep, are what make this readable:
   unknown, but a mount authored on eight of twelve racing craft is not
   accidental.
 
+## The ribbon this project loaded was the disc's dead one - 2026-08-23
+
+**`Data/RibbonEffects/enginetrail_bluered_triangle.vex` is the path the shipped
+executable names**, at `0x007a2d70` in `EBOOT.elf`, in `TrailEffectManager`'s
+own TOC block beside `EngineTrail/TrailEffectManager.cpp` and its
+`position`/`normal`/`Uv1`/`VertexColour1` attribute names. The plain
+`enginetrail_triangle` this page describes below, and this project loaded until
+now, is **named nowhere in the executable**: the string sweep finds three
+`enginetrail` matches and none of them is it. It sits in `DATA02` where the
+`bluered` pair sits in `DATA06`, which is the Fury archive - so it is the
+pre-Fury build's ribbon, left on the disc. **Confidence 92.**
+
+The difference is not academic. The two carry different textures, and the
+`bluered` pair's are **self-documenting**:
+
+| | `enginetrail_triangle` (dead) | `enginetrail_bluered_triangle` (named) |
+| --- | --- | --- |
+| first texture | `hd_enginetrail.gtf` 256x256 | `hd_enginetrail_blue_alphaistrail.gtf` 256x256 |
+| second | `hd_enginetrail_noise.gtf` 128x128 | `hd_enginetrail_red_alphaisnoise.gtf` 256x256 |
+| samplers | `Texture1`, `Texture2` | two hashes with no preimage |
+| parameters | `TrailSpeed` = 1.0, `0xe296b1ed` = 0.15 | the same two, plus `0xbb48e390` = 0.0 |
+
+`alphaistrail` and `alphaisnoise` say outright what the two alpha channels
+carry, and they cut both ways. They **confirm the rule this loader already
+followed** - the second slot is the noise, in its alpha - so
+`race::assets::trail_texture` needed no change beyond the model it is pointed
+at. And they say the *first* slot carries **the ribbon's own shape mask**,
+which this renderer's one-texture shader has no slot for. The leftover texture
+is no longer "a colour map with nowhere to go"; it is the trail's silhouette,
+which is a much better reason to want a two-texture ribbon.
+
+The picture changes accordingly. Against a frame from the same autopilot run,
+switching the model moves **35,738 pixels**, and what was a fat white blowout
+behind the nozzle becomes a narrower trail with a visible taper and its own
+colour. That is a *data* correction, not a tuning one: no `TRAIL_*` constant
+moved.
+
+Two loose ends the sweep turned up and did not chase. `engineTrail` sits at
+`0x007b3c60` in camelCase and in a different neighbourhood - plausibly a config
+key. And `Data\RibbonEffects\` with bare stems (`waketrail_triangle`,
+`leachbeam_triangle`) at `0x0079c1xx`-`0x0079c3xx` uses **backslashes** where
+`Trail_ModelPath` uses forward slashes, so there is plausibly a second ribbon
+loader that has not been found. Neither threatens the engine trail's
+conclusion - no bare `enginetrail_triangle` stem exists anywhere in the
+binary - but both are worth someone's next hour.
+
+**Still PSP's, unchanged**: every geometry number. `TrailEffectManager`'s
+per-craft state is 0x1230 bytes with a 0x1200-byte buffer, eight of them, and
+what that buffer's stride and sample count are has not been read. `TrailSpeed`
+= 1.0 and `0xe296b1ed` = 0.15 are the only ribbon numbers the *data* authors,
+and neither has been placed in the geometry yet.
+
 ## HD/Fury author the whole thing, and it already decodes
 
 There is no `Trail` node anywhere in HD's 183 `.vex` files. It uses a different
@@ -88,7 +140,7 @@ model plus a material plus textures.
 
 | Ribbon | Files |
 | --- | --- |
-| engine trail | `enginetrail_triangle.{vex,rcsmodel}`, `materials/hd_enginetrail.rcsmaterial`, `textures/hd_enginetrail.gtf`, `textures/hd_enginetrail_noise.gtf` |
+| engine trail | `enginetrail_triangle.{vex,rcsmodel}`, `materials/hd_enginetrail.rcsmaterial`, `textures/hd_enginetrail.gtf`, `textures/hd_enginetrail_noise.gtf` - **and the `enginetrail_bluered_triangle` pair beside it, which is the one the executable names; see the section above** |
 | wake trail | `waketrail_triangle.*`, `hd_waketrail.rcsmaterial`, `hd_waketrail.gtf`, `hd_waketrail_clouds.gtf` |
 | rocket trail | `rockettrail_triangle.*`, plus a separate `rockettrail_shadow_triangle.*` |
 | leech beam | `leachbeam_triangle.*`, `hd_leechbeam_glow.gtf` |
