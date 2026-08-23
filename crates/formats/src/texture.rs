@@ -308,9 +308,9 @@ impl Texture {
         }
 
         let palette = data[HEADER_LEN..HEADER_LEN + palette_len]
-            .chunks_exact(4)
-            .map(|c| [c[0], c[1], c[2], c[3]])
-            .collect();
+            .as_chunks::<4>()
+            .0
+            .to_vec();
 
         // Level 0 only. Slicing to `pixel_len` rather than taking the rest of the
         // blob is what keeps `indices` exactly `width * height` long on a

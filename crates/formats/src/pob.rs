@@ -321,7 +321,9 @@ impl<'a> ParticleSystem<'a> {
         }
 
         let slots = data[HEADER_LEN..table_end]
-            .chunks_exact(SLOT_LEN)
+            .as_chunks::<SLOT_LEN>()
+            .0
+            .iter()
             .map(|chunk| {
                 let value = order.u32(chunk, 0);
                 (value != EMPTY_SLOT).then_some(value)
@@ -817,8 +819,8 @@ fn parse_emitter(
     // A palette entry is a `u32` and not four bytes, so on a big-endian file
     // it arrives reversed - alpha first rather than last. See the module docs.
     let mut colours = Box::new([[0u8; 4]; 256]);
-    for (entry, bytes) in colours.iter_mut().zip(record[0xc4..].chunks_exact(4)) {
-        entry.copy_from_slice(bytes);
+    for (entry, bytes) in colours.iter_mut().zip(record[0xc4..].as_chunks::<4>().0) {
+        *entry = *bytes;
         if order == ByteOrder::Big {
             entry.reverse();
         }

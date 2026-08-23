@@ -376,7 +376,13 @@ impl<'a> Bank<'a> {
     #[must_use]
     pub fn sounds(&self) -> Vec<Sound> {
         let mut out = Vec::new();
-        for (index, command) in self.commands.chunks_exact(COMMAND_LEN).enumerate() {
+        for (index, command) in self
+            .commands
+            .as_chunks::<COMMAND_LEN>()
+            .0
+            .iter()
+            .enumerate()
+        {
             let first = word(command, 0);
             // The opcode is the high byte of the first word, which is byte 3 in
             // memory: `Scream_StepCommandList` reads `*(u8 *)(cmd + 3)`.
@@ -530,7 +536,7 @@ pub fn decode_adpcm(data: &[u8]) -> Vec<i16> {
     let mut out = Vec::with_capacity(data.len() / ADPCM_BLOCK_LEN * ADPCM_BLOCK_SAMPLES);
     let mut history = (0i32, 0i32);
 
-    for block in data.chunks_exact(ADPCM_BLOCK_LEN) {
+    for block in data.as_chunks::<ADPCM_BLOCK_LEN>().0 {
         let mut shift = u32::from(block[0] & 0x0f);
         let filter = usize::from(block[0] >> 4);
         // Out of spec on 224 of the disc's 530,916 blocks. The hardware does

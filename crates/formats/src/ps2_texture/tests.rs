@@ -110,13 +110,7 @@ fn the_palette_reordering_is_its_own_inverse() {
     let once = unswizzle_clut(&stored, 8);
     let flat: Vec<u8> = once.iter().flatten().copied().collect();
     let twice = unswizzle_clut(&flat, 8);
-    assert_eq!(
-        twice,
-        stored
-            .chunks_exact(4)
-            .map(|c| [c[0], c[1], c[2], c[3]])
-            .collect::<Vec<_>>()
-    );
+    assert_eq!(twice, stored.as_chunks::<4>().0.to_vec());
 }
 
 #[test]

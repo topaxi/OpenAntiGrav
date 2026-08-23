@@ -1385,7 +1385,7 @@ fn load_ps2_track(source: &str, index: usize) -> Result<Option<Sound>> {
     let pcm = archive.read(u64::from(entry.offset), u64::from(entry.size))?;
     // Signed 16-bit little-endian, two channels interleaved left first - none of
     // which the file states; see `docs/formats/ps2-audio.md` for how each was
-    // established. `chunks_exact` drops a trailing odd byte, which
+    // established. `as_chunks` drops a trailing odd byte, which
     // `Directory::parse` has already rejected as a partial frame.
     let samples: Vec<i16> = pcm
         .as_chunks::<2>()

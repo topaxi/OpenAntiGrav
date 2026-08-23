@@ -526,10 +526,7 @@ pub fn psmt4_offset(x: usize, y: usize, width: usize) -> (usize, usize) {
 /// rectangle and needs no reordering.
 #[must_use]
 pub fn unswizzle_clut(stored: &[u8], bits_per_pixel: u8) -> Vec<[u8; 4]> {
-    let entries: Vec<[u8; 4]> = stored
-        .chunks_exact(4)
-        .map(|c| [c[0], c[1], c[2], c[3]])
-        .collect();
+    let entries: Vec<[u8; 4]> = stored.as_chunks::<4>().0.to_vec();
     if bits_per_pixel != 8 {
         return entries;
     }

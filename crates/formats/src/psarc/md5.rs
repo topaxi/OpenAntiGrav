@@ -52,10 +52,10 @@ pub fn digest(data: &[u8]) -> [u8; 16] {
     }
     message.extend_from_slice(&bit_len.to_le_bytes());
 
-    for chunk in message.chunks_exact(64) {
+    for chunk in message.as_chunks::<64>().0 {
         let mut m = [0u32; 16];
-        for (word, bytes) in m.iter_mut().zip(chunk.chunks_exact(4)) {
-            *word = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+        for (word, bytes) in m.iter_mut().zip(chunk.as_chunks::<4>().0) {
+            *word = u32::from_le_bytes(*bytes);
         }
         let [mut a, mut b, mut c, mut d] = state;
         for i in 0..64 {
@@ -83,8 +83,8 @@ pub fn digest(data: &[u8]) -> [u8; 16] {
     }
 
     let mut out = [0u8; 16];
-    for (slot, word) in out.chunks_exact_mut(4).zip(state) {
-        slot.copy_from_slice(&word.to_le_bytes());
+    for (slot, word) in out.as_chunks_mut::<4>().0.iter_mut().zip(state) {
+        *slot = word.to_le_bytes();
     }
     out
 }

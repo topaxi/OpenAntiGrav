@@ -421,9 +421,9 @@ impl Font {
         }
 
         let palette = atlas[ATLAS_HEADER_LEN..ATLAS_HEADER_LEN + clut_size]
-            .chunks_exact(4)
-            .map(|c| [c[0], c[1], c[2], c[3]])
-            .collect();
+            .as_chunks::<4>()
+            .0
+            .to_vec();
 
         let texels = &atlas[ATLAS_HEADER_LEN + clut_size..];
         let row_bytes = usize::from(width) / 2;

@@ -793,7 +793,9 @@ fn parse_object(
 
     let vertices = find(CHUNK_VERTICES).map_or_else(Vec::new, |chunk| {
         let body = &payload[chunk.payload.clone()];
-        body.chunks_exact(VERTEX_STRIDE)
+        body.as_chunks::<VERTEX_STRIDE>()
+            .0
+            .iter()
             .map(|v| {
                 [
                     f32_at(order, v, 0),
@@ -806,7 +808,9 @@ fn parse_object(
 
     let triangles: Vec<[u16; 3]> = find(CHUNK_TRIANGLES).map_or_else(Vec::new, |chunk| {
         let body = &payload[chunk.payload.clone()];
-        body.chunks_exact(TRIANGLE_STRIDE)
+        body.as_chunks::<TRIANGLE_STRIDE>()
+            .0
+            .iter()
             .map(|t| {
                 [
                     u16_at(order, t, 0),
@@ -846,7 +850,9 @@ fn parse_object(
                 });
             }
             payload[chunk.payload.clone()]
-                .chunks_exact(SCALAR_STRIDE)
+                .as_chunks::<SCALAR_STRIDE>()
+                .0
+                .iter()
                 .map(|s| f32_at(order, s, 0))
                 .collect()
         }

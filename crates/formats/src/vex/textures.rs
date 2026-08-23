@@ -156,10 +156,7 @@ pub fn textures(data: &[u8]) -> Result<Vec<Option<EmbeddedTexture>>> {
             continue;
         }
 
-        let palette: Vec<[u8; 4]> = data[at..at + clut_size]
-            .chunks_exact(4)
-            .map(|c| [c[0], c[1], c[2], c[3]])
-            .collect();
+        let palette: Vec<[u8; 4]> = data[at..at + clut_size].as_chunks::<4>().0.to_vec();
 
         // Only the base level; mips follow it and are not needed for viewing.
         let pixels = usize::from(width) * usize::from(height);

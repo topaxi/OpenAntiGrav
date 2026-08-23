@@ -196,10 +196,8 @@ fn the_ps2_music_archive_chains_exactly_and_holds_interleaved_stereo() {
         let raw = disc
             .read_entry_range(&archive, probe, len)
             .expect("track bytes");
-        let samples: Vec<i16> = raw
-            .chunks_exact(2)
-            .map(|c| i16::from_le_bytes([c[0], c[1]]))
-            .collect();
+        let words = raw.as_chunks::<2>().0;
+        let samples: Vec<i16> = words.iter().map(|c| i16::from_le_bytes(*c)).collect();
 
         let lag1 = neighbour_distance(&samples, 1);
         let lag2 = neighbour_distance(&samples, 2);
@@ -274,14 +272,12 @@ fn the_ps2_prerace_archive_chains_exactly_and_holds_dual_mono() {
         let raw = disc
             .read_entry_range(&archive, probe, len)
             .expect("clip bytes");
-        let samples: Vec<i16> = raw
-            .chunks_exact(2)
-            .map(|c| i16::from_le_bytes([c[0], c[1]]))
-            .collect();
+        let words = raw.as_chunks::<2>().0;
+        let samples: Vec<i16> = words.iter().map(|c| i16::from_le_bytes(*c)).collect();
 
-        let pairs = samples.chunks_exact(2);
+        let pairs = samples.as_chunks::<2>().0;
         let total = pairs.len();
-        let same = samples.chunks_exact(2).filter(|p| p[0] == p[1]).count();
+        let same = pairs.iter().filter(|p| p[0] == p[1]).count();
         let ratio = same as f64 / total as f64;
         println!("  {index:2} {:9} bytes  L==R {ratio:.4}", entry.size);
         identical += usize::from(ratio > 0.99);
@@ -297,17 +293,19 @@ fn the_ps2_prerace_archive_chains_exactly_and_holds_dual_mono() {
 
 /// Frames of digital silence at the start of a dual-mono clip.
 fn leading_silent_frames(bytes: &[u8]) -> Option<usize> {
-    bytes
-        .chunks_exact(ps2_music::FRAME_LEN)
-        .position(|f| f != [0u8; ps2_music::FRAME_LEN])
+    let frames = bytes.as_chunks::<{ ps2_music::FRAME_LEN }>().0;
+    frames
+        .iter()
+        .position(|f| *f != [0u8; ps2_music::FRAME_LEN])
 }
 
 /// Frames of digital silence at the end of a dual-mono clip.
 fn trailing_silent_frames(bytes: &[u8]) -> Option<usize> {
-    bytes
-        .chunks_exact(ps2_music::FRAME_LEN)
+    let frames = bytes.as_chunks::<{ ps2_music::FRAME_LEN }>().0;
+    frames
+        .iter()
         .rev()
-        .position(|f| f != [0u8; ps2_music::FRAME_LEN])
+        .position(|f| *f != [0u8; ps2_music::FRAME_LEN])
 }
 
 /// The sample rate, from the PS2 side alone.
@@ -607,7 +605,7 @@ fn survey_banks(disc: &mut DiscImage, archive_path: &str, into: &mut BankSurvey)
             Bank::parse(&blob).unwrap_or_else(|e| panic!("{archive_path} entry {index}: {e}"));
         into.banks += 1;
         into.blocks += bank.adpcm_blocks();
-        for block in bank.waveforms.chunks_exact(sblk::ADPCM_BLOCK_LEN) {
+        for block in bank.waveforms.as_chunks::<{ sblk::ADPCM_BLOCK_LEN }>().0 {
             into.in_spec += usize::from(sblk::adpcm_block_is_in_spec(block));
             into.defined_flags += usize::from(sblk::adpcm_flag_is_defined(block));
         }
@@ -812,9 +810,9 @@ struct SoundSurvey {
 fn survey_bank_sounds(bank: &Bank<'_>, name_hash: u32, into: &mut SoundSurvey) {
     into.banks += 1;
 
-    let key_on = bank
-        .commands
-        .chunks_exact(sblk::COMMAND_LEN)
+    let commands = bank.commands.as_chunks::<{ sblk::COMMAND_LEN }>().0;
+    let key_on = commands
+        .iter()
         .filter(|command| sblk::KEY_ON_OPCODES.contains(&command[3]))
         .count();
     into.key_on_commands += key_on;
@@ -934,7 +932,9 @@ fn survey_bank_sounds(bank: &Bank<'_>, name_hash: u32, into: &mut SoundSurvey) {
         };
         let blocks = span.len() / sblk::ADPCM_BLOCK_LEN;
         let last = span
-            .chunks_exact(sblk::ADPCM_BLOCK_LEN)
+            .as_chunks::<{ sblk::ADPCM_BLOCK_LEN }>()
+            .0
+            .iter()
             .enumerate()
             .filter(|(_, block)| matches!(block[1], 1 | 3 | 5 | 7))
             .map(|(index, _)| blocks - 1 - index)

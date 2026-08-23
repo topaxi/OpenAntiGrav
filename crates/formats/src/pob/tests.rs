@@ -201,7 +201,7 @@ impl Record {
     /// reversing each four-byte group from [`NAME_LEN`] on is exactly what the
     /// big-endian exporter emits - including the palette, which is `u32`s.
     fn big_endian(mut self) -> Self {
-        for word in self.0[NAME_LEN..].chunks_exact_mut(4) {
+        for word in self.0[NAME_LEN..].as_chunks_mut::<4>().0 {
             word.reverse();
         }
         self
