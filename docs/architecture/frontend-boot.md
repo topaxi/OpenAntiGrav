@@ -211,7 +211,10 @@ the boot order. See [what the disc actually does](#what-the-disc-actually-does-a
 ### The PS2 places its widgets in a different grid
 
 **`Skin.xml` on the PS2 disc authors in 640x448, not the PSP's 480x272, and that
-grid is shown as 4:3 rather than as itself. Confidence 95.**
+grid is shown at the PSP's own 480/272 rather than as itself. Confidence 95 on
+the grid, 95 on the display aspect - see
+[aspect-ratio](../ps2/aspect-ratio.md), which is where the second half was
+measured and where the 4:3 this page used to claim was retired.**
 
 Most of the PS2 layout is the PSP's scaled by the resolution ratio, and the
 coordinates that do scale agree on this grid and no other - which is what makes
@@ -265,21 +268,29 @@ The identical over-reading was made about `Arcade_HUD.xml` and corrected in
 extremes*.
 
 **The grid and the display aspect are two numbers, and conflating them is a
-silent 7% error.** 640/448 is 1.429; a PAL frame is shown as 4:3 = 1.333,
-because its pixels are not square. Three places need one or the other, and on the
-PSP they are the same number so a wrong choice shows nothing:
+silent 24% error.** 640/448 is 1.429; the frame is shown at the PSP's own
+480/272 = 1.765, because the port stretched a 480x272 layout into it on each
+axis separately and its pixels are that far from square. Three places need one
+or the other, and on the PSP they are the same number so a wrong choice shows
+nothing:
 
 - the renderer's `screen` uniform, which maps a draw rect onto the viewport,
   wants the **grid**;
 - `render::letterbox_in`, which fits that grid into a window, wants the
-  **display aspect** - feeding it 640/448 leaves the front end 7% short of the
-  window it should fill exactly;
+  **display aspect** - feeding it 640/448 leaves the front end in a column a
+  fifth narrower than the window it should fill exactly;
 - `frontend::pillarbox_in` wants **both**: it returns a rect in grid
   coordinates, but whether a picture is wider or narrower than the screen is a
-  question about display aspects. This is the one that stays wrong after the
-  other two are fixed, and `INTRO512.PSS` is what runs into it - it declares
-  4:3, the PS2 screen *is* 4:3, and a square-pixel comparison boxed it inside
-  itself anyway.
+  question about display aspects.
+
+**That display aspect was 4:3 here until 2026-08-23**, taken from the PAL
+television rather than measured, and the same sources that place the widgets
+also *size* them: the PS2 draws the PSP's own textures at `640/480` across and
+`448/272` down, and the executable applies those two factors itself in
+`FUN_001e9370`. [aspect-ratio](../ps2/aspect-ratio.md) is the measurement, what
+the disc's own 4:3/16:9 menu option really does (it moves the camera and nothing
+else), and why `INTRO512.PSS` fills this frame rather than being boxed inside
+it.
 
 `frontend::Space` carries the pair, `boot::load` sets it from the archives' own
 platform, and `SCREEN` stays the PSP constant it always was - our own layouts
@@ -290,7 +301,7 @@ opts in rather than redefining it.
 **What this fixed.** Before it, every PS2 widget landed off the bottom-right of a
 screen a third too small and the PS2's `Show Logo` drew nothing whatever. It now
 draws the Pulse logo, `START-Taste drücken` where the XML puts it, and the
-`.ipf` backdrop filling the 4:3 frame.
+`.ipf` backdrop filling the frame.
 
 The logo needed a second, independent thing that landed the same day: the sheet
 could not decode a PS2 texture at all, so `pulse_logo.mip` was reported missing

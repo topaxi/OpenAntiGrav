@@ -413,8 +413,13 @@ impl Frontend {
             // right edge. Confidence 85 - measured from the one image there is,
             // not read out of the widget's layout code.
             // See `docs/architecture/frontend-boot.md`.
-            let w = image.width.unwrap_or(placed.width as f32);
-            let h = image.height.unwrap_or(placed.height as f32);
+            // A texture's own size is in PSP pixels whichever disc it came off,
+            // so on the PS2's larger grid the fallback is scaled the way that
+            // build scales every other PSP-grid number. See
+            // `Space::texture_scale`.
+            let (scale_x, scale_y) = self.space.texture_scale();
+            let w = image.width.unwrap_or(placed.width as f32 * scale_x);
+            let h = image.height.unwrap_or(placed.height as f32 * scale_y);
             let x = if image.x == 0.0 {
                 (self.space.size.0 - w) / 2.0
             } else {

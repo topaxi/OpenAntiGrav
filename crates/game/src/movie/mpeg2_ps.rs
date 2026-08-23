@@ -53,7 +53,7 @@ pub(super) fn open(
             width: probed.width,
             height: probed.height,
             frame_rate: probed.frame_rate,
-            display_aspect: probed.display_aspect,
+            display_aspect: PS2_DISPLAY_ASPECT,
             frames: None,
             no_picture_reason: Some("--no-video was given".to_string()),
             audio: None,
@@ -80,7 +80,7 @@ pub(super) fn open(
             width: probed.width,
             height: probed.height,
             frame_rate: probed.frame_rate,
-            display_aspect: probed.display_aspect,
+            display_aspect: PS2_DISPLAY_ASPECT,
             frames: Some(frames),
             no_picture_reason: None,
             audio: None,
@@ -91,7 +91,7 @@ pub(super) fn open(
             width: probed.width,
             height: probed.height,
             frame_rate: probed.frame_rate,
-            display_aspect: probed.display_aspect,
+            display_aspect: PS2_DISPLAY_ASPECT,
             frames: None,
             no_picture_reason: Some(format!("{reason:#}")),
             audio: None,
@@ -142,11 +142,16 @@ fn transcode(video: &[u8], to: Conversion<'_>, frames: Frames) -> Result<FrameSt
 }
 
 /// What `probe` reads off a raw MPEG-2 program stream with `ffprobe`.
+///
+/// **No display aspect.** This used to carry the stream's own
+/// `display_aspect_ratio` - `4:3` on both cuts - and the picture does not
+/// agree with it; a PS2 movie is drawn at [`PS2_DISPLAY_ASPECT`] instead, which
+/// is measured rather than declared. Reading a field only to override it would
+/// have been the confusing half of both.
 struct Probed {
     width: u32,
     height: u32,
     frame_rate: (u64, u64),
-    display_aspect: (u32, u32),
     frame_count: usize,
 }
 
@@ -162,11 +167,7 @@ fn probe(blob: &[u8], key: &str, cache_dir: &Path) -> Result<Probed> {
     let source = cache_dir.join(format!("{key}.pss"));
     std::fs::write(&source, blob).with_context(|| format!("writing {}", source.display()))?;
 
-    let stream = run_ffprobe(
-        &source,
-        "stream",
-        "width,height,r_frame_rate,display_aspect_ratio",
-    )?;
+    let stream = run_ffprobe(&source, "stream", "width,height,r_frame_rate")?;
     let width: u32 = field(&stream, "width")
         .context("ffprobe printed no width")?
         .parse()
@@ -183,13 +184,6 @@ fn probe(blob: &[u8], key: &str, cache_dir: &Path) -> Result<Probed> {
         num.parse().context("parsing ffprobe's frame rate")?,
         den.parse().context("parsing ffprobe's frame rate")?,
     );
-    // Square pixels (no `display_aspect_ratio` line, or one ffprobe could not
-    // work out) fall back to the decoded size itself, same as a `.PMF`.
-    let display_aspect = field(&stream, "display_aspect_ratio")
-        .and_then(|dar| dar.split_once(':'))
-        .and_then(|(w, h)| Some((w.parse().ok()?, h.parse().ok()?)))
-        .unwrap_or((width, height));
-
     let format = run_ffprobe(&source, "format", "duration")?;
     let duration: f64 = field(&format, "duration")
         .context("ffprobe printed no duration")?
@@ -201,7 +195,6 @@ fn probe(blob: &[u8], key: &str, cache_dir: &Path) -> Result<Probed> {
         width,
         height,
         frame_rate,
-        display_aspect,
         frame_count,
     })
 }

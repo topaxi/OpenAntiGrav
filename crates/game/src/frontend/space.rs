@@ -6,7 +6,7 @@
 //! shown as?** - which is exactly the question that stopped having one answer
 //! when a second console arrived, and then a third.
 //!
-//! Three spaces now: the PSP's 480x272, the PS2's 640x448 shown as 4:3, and
+//! Three spaces now: the PSP's 480x272, the PS2's 640x448 shown as ~16:9, and
 //! Wipeout HD's 1920x1080. [`SCREEN`] survives all three as a constant because
 //! its remaining readers are the ones for which the PSP's pixels are right
 //! whatever disc is mounted - this project's own loading screen, the HUD bounds
@@ -47,11 +47,12 @@ pub const SCREEN: (f32, f32) = (480.0, 272.0);
 ///
 /// On the PSP they are the same ratio and nothing notices. On the PS2 they are
 /// not, because its pixels are not square: `Skin.xml` places widgets in a
-/// **640x448** grid, and a PAL 640x448 frame is shown as **4:3**. Deriving the
-/// display aspect from the grid would stretch the whole front end 7% wide
-/// (640/448 = 1.429 against 4:3 = 1.333), and using the display aspect as the
-/// grid would put every widget in the wrong place. Three sites need one or the
-/// other and picking the wrong one is silent on the PSP:
+/// **640x448** grid, and that grid is shown at the PSP's own **480/272**, near
+/// enough the 16:9 its own menu offers. Deriving the display aspect from the
+/// grid would squeeze the whole front end (640/448 = 1.429 against 1.765), and
+/// using the display aspect as the grid would put every widget in the wrong
+/// place. Three sites need one or the other and picking the wrong one is silent
+/// on the PSP:
 ///
 /// - the renderer's `screen` uniform, which maps a draw's rect onto the
 ///   viewport, wants the **grid**;
@@ -68,9 +69,28 @@ pub const SCREEN: (f32, f32) = (480.0, 272.0);
 /// on the PSP, and both ratios land on 640/480 and 448/272 to better than a
 /// tenth of a percent: 613/460 = 1.3326 against 1.3333, 415/252 = 1.6468
 /// against 1.6471. Confidence **95** - the arithmetic is unambiguous and
-/// 640x448 is PAL's own frame. What is not independently confirmed is the
-/// *display* aspect, which is taken from `crate::display::Aspect::Ps2`'s
-/// existing 4:3 rather than measured here.
+/// 640x448 is PAL's own frame.
+///
+/// # Evidence for the PS2 display aspect
+///
+/// **The grid is shown at 480/272, not at 4:3, and this used to say the
+/// opposite.** The same two factors that place the widgets also *size* them: an
+/// `<Image>` naming the same texture and the same source rectangle on both
+/// discs is drawn 224x24 on the PSP and 299x40 on the PS2, 168x26 against
+/// 224x43 in `Arcade_HUD.xml`, and eighteen more pairs in that one file. A
+/// rectangle stretched by two different factors is only undistorted when the
+/// destination frame is shown at the source's shape, and the arithmetic gives
+/// that shape exactly: `A x (1.3333 x 448) / (1.6471 x 640) = 1` at
+/// `A = 1.7647 = 480/272`. 16:9, which the disc's own `Aspect Ratio` menu
+/// offers, is `(16/9)/(480/272) = 1.0074` of that.
+///
+/// The executable does the same stretch itself where the data did not:
+/// `FUN_001e9370` multiplies a rectangle's `x` by 1.3333334 and its `y` by
+/// 1.6470588, and `Loading_Show` is one of its callers. Confidence **95**; see
+/// [aspect-ratio](../../../docs/ps2/aspect-ratio.md) for the measurements, for
+/// what the disc's own 4:3/16:9 option actually does (it moves the camera and
+/// nothing else) and for the intro film, which is anamorphic to this same frame
+/// despite declaring 4:3.
 ///
 /// # What the grid does not mean
 ///
@@ -104,10 +124,11 @@ impl Space {
         size: SCREEN,
         display_aspect: SCREEN.0 / SCREEN.1,
     };
-    /// PAL's 640x448, shown as 4:3.
+    /// PAL's 640x448, shown as the PSP's own 480/272 - anamorphic, and 0.74%
+    /// off the 16:9 the disc's menu calls it.
     pub const PS2: Self = Self {
         size: (640.0, 448.0),
-        display_aspect: 4.0 / 3.0,
+        display_aspect: SCREEN.0 / SCREEN.1,
     };
     /// Wipeout HD's 1920x1080 square pixels, shown as itself.
     ///
@@ -131,6 +152,38 @@ impl Space {
         size: (1920.0, 1080.0),
         display_aspect: 16.0 / 9.0,
     };
+
+    /// What a texture's own pixel size means in this grid, per axis.
+    ///
+    /// **Only for the one case where the data gives no size**: an `<Image>` with
+    /// no `width`/`height`, of which `Show Logo`'s `pulse_logo.mip` is the only
+    /// one in the PS2 front-end XML measured - `Skin.xml`,
+    /// `Additional_Definition.xml`, `InGame_Definition.xml`,
+    /// `Controls_Definition_PS2.xml` and `Arcade_HUD.xml`, whose other
+    /// size-less `src`s are movies, `LoadXML`s and `.vex` models. Everything
+    /// else carries a size the source already scaled.
+    ///
+    /// A texture's dimensions are PSP pixels - `pulse_logo.mip` is the same
+    /// 512x128 file on both discs - so drawing one at its texel size in a
+    /// 640x448 grid shrinks it against everything around it: the boot logo
+    /// would span 62% of the screen where the PSP's spans 80%, at 3/4 of the
+    /// shape. These are the factors the PS2 build applies to PSP-grid numbers
+    /// itself (`FUN_001e9370`, 1.3333334 on `x` and 1.6470588 on `y`), and
+    /// applying them here puts the logo exactly where the PSP has it.
+    ///
+    /// **Confidence 70, and a reimplementation choice rather than a reading.**
+    /// That the port scales PSP-grid *coordinates* this way is measured; that it
+    /// scales a *texture's own size* this way is inference, and the original's
+    /// default-size path has not been read. See
+    /// [aspect-ratio](../../../docs/ps2/aspect-ratio.md).
+    #[must_use]
+    pub fn texture_scale(self) -> (f32, f32) {
+        if self.size == Self::PS2.size {
+            (self.size.0 / SCREEN.0, self.size.1 / SCREEN.1)
+        } else {
+            (1.0, 1.0)
+        }
+    }
 
     /// The space a source authors in, from what its archives say it is.
     #[must_use]
@@ -156,10 +209,10 @@ impl Default for Space {
 ///
 /// A `.PMF`'s `aspect` is its own decoded size, which is [`SCREEN`]'s own
 /// ratio, so this returns `[0, 0, screen.0, screen.1]` unchanged - the video
-/// quad this always drew. A PS2 `.PSS`'s `aspect` is not: `INTRO512.PSS`
-/// decodes to a square 512x512 but its own display aspect is 4:3, narrower
-/// than `SCREEN`'s ~16:9, so this pillarboxes it rather than stretching it
-/// wide. See `crate::movie::Movie::display_aspect`.
+/// quad this always drew. The PS2's containers report the frame they were cut
+/// to fill rather than their decoded size, so they fill it too; a movie that
+/// genuinely disagreed with its screen is what the boxing is here for. See
+/// `crate::movie::Movie::display_aspect`.
 pub fn pillarbox(screen: (f32, f32), aspect: (u32, u32)) -> [f32; 4] {
     pillarbox_in(
         Space {
@@ -175,8 +228,8 @@ pub fn pillarbox(screen: (f32, f32), aspect: (u32, u32)) -> [f32; 4] {
 ///
 /// The returned rect is in `space.size`'s coordinates, but which way a picture
 /// has to be boxed is decided against `space.display_aspect`. The two agree on
-/// the PSP and disagree on the PS2 by 7%, which is a `.PSS` pillarboxed inside
-/// a screen that was already its own shape. See [`Space`].
+/// the PSP and disagree on the PS2 by 24%, so a rect computed from the grid
+/// would box a picture that fills the screen. See [`Space`].
 #[must_use]
 pub fn pillarbox_in(space: Space, aspect: (u32, u32)) -> [f32; 4] {
     let (screen_w, screen_h) = space.size;

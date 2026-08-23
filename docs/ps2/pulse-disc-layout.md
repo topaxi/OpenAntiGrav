@@ -191,29 +191,26 @@ is the only reason `BG512.IPF` is played at 25 Hz and `BG640.IPF` at 29.97: the
 same global picks between them, and the resulting durations are 9.000 s and
 9.009 s. See [`ipf.md`](../formats/ipf.md#the-frame-rate-is-inferred-not-read).
 
-**The encode itself is not stretched footage - it is genuinely anamorphic, and
-that is confidence 95, not an assumption from the SAR tag alone.** A regular,
-symmetric UI icon (a four-point rotation/compass mark, also in the PSP cut)
-decodes at native square-pixel 512x512 as a tall, pinched hourglass; scaled to
-the declared 4:3 display aspect it becomes a well-proportioned symmetric
-star. That is the tell that distinguishes real anamorphic storage from a
-mislabelled square-pixel source: a mislabelled source looks *right* undone
-and *wrong* corrected, and this is the other way round. So `512`/`640` are a
-deliberate space-saving encode (a smaller pixel grid holding a full 4:3
-picture, the same trick anamorphic widescreen DVD uses), not a naive stretch
-anyone should undo differently.
+**The encode is anamorphic - but to the frame, not to the 4:3 it declares.**
+This page said 4:3 until 2026-08-23, on the strength of a symmetric UI mark
+looking right when corrected to it. That mark is a stylised helix whose correct
+proportions were assumed; the film's closing card is the `wipEout PULSE` logo,
+which is the same artwork as `pulse_logo.mip` and can therefore be compared
+against the PSP front end drawing that very texture. Its ink measures **4.20**
+wide-to-tall there, **4.23** with the film scaled to 16:9, and **3.14** at the
+declared 4:3. So `512`/`640` are a space-saving encode of a *wide* picture, and
+the declared SAR is a tag the picture does not honour. Confidence 88; the
+measurement, and what it means for the 2D layer around it, is
+[aspect-ratio.md](aspect-ratio.md).
 
-**The original's front end does not stretch it either, and that settled a
-rendering bug in this build, not in the original.** Checked against
+**The original's front end does not stretch it either.** Checked against
 `Skin.xml`: the PS2's `Movie` widget declares no `width`/`height` at all
 (unlike the PSP's, which does), and the black `Image` behind it in
 `LogoFMV`/`Play Intro` is `640x448` - the NTSC cut's own decoded resolution,
 exactly. So the original's front end and its video shared one native buffer,
-with nothing to stretch. `oag-game`'s own front end always filled a fixed,
-PSP-shaped 480x272 virtual screen regardless of source platform, which
-squashed the video's real 4:3 picture into that box; see
-`docs/tools/oag-game.md` for the fix (`Movie::display_aspect`,
-`frontend::pillarbox`).
+with nothing to stretch, and that buffer is itself shown wide. `oag-game` draws
+these cuts at the frame's aspect for that reason (`movie::PS2_DISPLAY_ASPECT`);
+`docs/tools/oag-game.md` has the history of the boxing that got them there.
 
 ## Comparison with the PSP release
 

@@ -985,8 +985,8 @@ pub fn letterbox(target: (u32, u32)) -> [f32; 2] {
 /// [`letterbox`], for a screen that is not the PSP's shape.
 ///
 /// `screen_aspect` is a **display** aspect, not a grid one - the PS2's 640x448
-/// grid is shown as 4:3, and fitting 640/448 into the window instead would
-/// stretch the whole front end 7% wide. See `crate::frontend::Space`.
+/// grid is shown at the PSP's own 480/272, and fitting 640/448 into the window
+/// instead would squeeze the whole front end. See `crate::frontend::Space`.
 #[must_use]
 pub fn letterbox_in(target: (u32, u32), screen_aspect: f32) -> [f32; 2] {
     let (width, height) = (target.0.max(1) as f32, target.1.max(1) as f32);
@@ -1002,24 +1002,24 @@ pub fn letterbox_in(target: (u32, u32), screen_aspect: f32) -> [f32; 2] {
 mod tests {
     use super::*;
 
-    /// A PS2 front end is fitted as 4:3, not as its own 640x448.
+    /// A PS2 front end is fitted as 480/272, not as its own 640x448.
     ///
-    /// The difference is 7%, it is a horizontal stretch of the entire front end,
-    /// and it is invisible on the PSP because there the two numbers agree. See
-    /// `crate::frontend::Space`.
+    /// The difference is 24%, it is a horizontal squeeze of the entire front
+    /// end, and it is invisible on the PSP because there the two numbers agree.
+    /// See `crate::frontend::Space` and `docs/ps2/aspect-ratio.md`.
     #[test]
     fn a_ps2_screen_is_letterboxed_by_what_it_is_shown_as() {
-        // A 4:3 window: the PS2 front end fills it exactly.
-        let fitted = letterbox_in((640, 480), Space::PS2.display_aspect);
+        // A window of the shape the artwork was stretched for: it fills.
+        let window = (480 * 3, 272 * 3);
+        let fitted = letterbox_in(window, Space::PS2.display_aspect);
         assert!((fitted[0] - 1.0).abs() < 1e-6, "{fitted:?}");
         assert!((fitted[1] - 1.0).abs() < 1e-6, "{fitted:?}");
-        // Fitting it by the grid instead would leave it 7% too wide to fit.
-        // 640/448 is *wider* than the 4:3 window, so fitting by the grid gives
-        // the height away instead of filling: a front end 7% short of the
-        // window it should have filled exactly.
-        let by_grid = letterbox_in((640, 480), Space::PS2.size.0 / Space::PS2.size.1);
+        // Fitting it by the grid instead: 640/448 is *narrower* than that
+        // window, so it gives the width away and leaves the front end in a
+        // pillarboxed column a fifth short of the window it should have filled.
+        let by_grid = letterbox_in(window, Space::PS2.size.0 / Space::PS2.size.1);
         assert!(
-            by_grid[1] < 0.94,
+            by_grid[0] < 0.82,
             "the bug this exists to stop: {by_grid:?}"
         );
     }

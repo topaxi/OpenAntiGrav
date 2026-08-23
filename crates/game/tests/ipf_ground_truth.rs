@@ -182,7 +182,13 @@ fn both_ipf_files_decode_through_the_movie_cache() {
         assert_eq!(described.width, width, "{path}: width");
         assert_eq!(described.height, height, "{path}: height");
         assert_eq!(described.frame_count, frames, "{path}: frame count");
-        assert_eq!(described.display_aspect, (4, 3), "{path}: display aspect");
+        // The frame it fills, not the 4:3 its paired `.PSS` declares - see
+        // `movie::PS2_DISPLAY_ASPECT` and `docs/ps2/aspect-ratio.md`.
+        assert_eq!(
+            described.display_aspect,
+            (480, 272),
+            "{path}: display aspect"
+        );
         let expected_rate = if width == 640 {
             (30_000, 1001)
         } else {
