@@ -278,6 +278,12 @@ fn the_engine_sounds_while_a_race_runs_and_stops_when_it_finishes() {
     for _ in 0..120 {
         race.tick(&oag_gameplay::InputSnapshot::default());
         audio.race_tick(&mut race);
+        // The other half of the composition root's per-tick pair: with the
+        // null backend this is the only thing that renders, and a voice that is
+        // never rendered never *ends* - so without it a fired one-shot would
+        // sit in the pool for the whole test and every count below would be
+        // measuring the wrong thing.
+        audio.tick();
     }
     assert!(
         voices(&audio) >= 1,
@@ -292,11 +298,95 @@ fn the_engine_sounds_while_a_race_runs_and_stops_when_it_finishes() {
         // Deliberately **not** calling `race.tick` - that is exactly what the
         // finished arm does not do.
         audio.race_tick(&mut race);
+        audio.tick();
+        // The other half of the composition root's per-tick pair: with the
+        // null backend this is the only thing that renders, and a voice that is
+        // never rendered never *ends* - so without it a fired one-shot would
+        // sit in the pool for the whole test and every count below would be
+        // measuring the wrong thing.
+        audio.tick();
     }
     assert_eq!(
         voices(&audio),
         0,
         "the engine is still sounding ten seconds after the race ended"
+    );
+}
+
+/// The shield's two cues through the whole path, which nothing else covers.
+///
+/// `~SHIELD` is driven by a *level* rather than by an edge - the audio layer
+/// reads `Race::shield_is_up` - so it is the one held voice with no queue entry
+/// to inspect, and the only way to see it is to watch the pool.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_shield_opens_a_held_voice_and_closes_it_when_the_pickup_expires() {
+    let Some(path) = image("pulse-psp-usa.chd") else {
+        return;
+    };
+    let loaded = race::load(&race::Options {
+        source: path.display().to_string(),
+        ..race::Options::default()
+    })
+    .expect("loading the race");
+    let mut race = race::Race::start(loaded.setup);
+    let mut audio = oag_game::audio::Audio::open(
+        &oag_game::settings::Audio::default(),
+        Some(std::path::PathBuf::from("/dev/null")),
+    );
+    let voices =
+        |audio: &oag_game::audio::Audio| audio.output().with_mixer(|mixer| mixer.active_voices());
+
+    // Settle first, so the engine's own voice is already open and the counts
+    // below are differences rather than absolutes.
+    for _ in 0..60 {
+        race.tick(&oag_gameplay::InputSnapshot::default());
+        audio.race_tick(&mut race);
+        // The other half of the composition root's per-tick pair: with the
+        // null backend this is the only thing that renders, and a voice that is
+        // never rendered never *ends* - so without it a fired one-shot would
+        // sit in the pool for the whole test and every count below would be
+        // measuring the wrong thing.
+        audio.tick();
+    }
+    let idle = voices(&audio);
+    assert!(idle >= 1, "the engine never opened");
+
+    // Set directly: this is the field `oag_physics::damage` drives and the one
+    // `Race::shield_is_up` reads, and granting a real pickup would be testing
+    // the pad table instead.
+    race.world.ships[0].physics.shield_pickup_timer = 1.0;
+    race.tick(&oag_gameplay::InputSnapshot::default());
+    audio.race_tick(&mut race);
+    assert!(
+        voices(&audio) > idle,
+        "the shield came up and opened no voice"
+    );
+
+    // Held across ticks rather than re-triggered - it is a `~` cue.
+    let held = voices(&audio);
+    for _ in 0..30 {
+        race.tick(&oag_gameplay::InputSnapshot::default());
+        audio.race_tick(&mut race);
+        // The other half of the composition root's per-tick pair: with the
+        // null backend this is the only thing that renders, and a voice that is
+        // never rendered never *ends* - so without it a fired one-shot would
+        // sit in the pool for the whole test and every count below would be
+        // measuring the wrong thing.
+        audio.tick();
+    }
+    assert!(
+        voices(&audio) <= held,
+        "the shield loop is being re-triggered every tick"
+    );
+
+    race.world.ships[0].physics.shield_pickup_timer = 0.0;
+    race.tick(&oag_gameplay::InputSnapshot::default());
+    audio.race_tick(&mut race);
+    assert_eq!(
+        voices(&audio),
+        idle,
+        "the shield dropped and its voice kept sounding"
     );
 }
 

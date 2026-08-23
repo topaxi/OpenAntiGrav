@@ -270,6 +270,7 @@ impl Race {
             results: None,
             cues: Vec::new(),
             contact_cue_cooldown: 0.0,
+            shield_was_up: false,
             // Every pad starts due for a real test. `Pad_Bind` zeroes the same
             // cache at load, so the first tick measures rather than trusting a
             // distance nothing has computed yet.

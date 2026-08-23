@@ -356,6 +356,16 @@ impl Race {
         // the whole design: sparks are the hull being hurt and the hull is not
         // being hurt. See `docs/.../shield-pickup.md`.
         let shielded = self.world.ships[0].physics.shield_pickup_timer > 0.0;
+        // The announcer, on the shield coming up and not on it being up.
+        // `Shield_Activate` plays `"shieldactive"` one line above the
+        // `Sound_PlayLooping` that opens `~SHIELD`, so the two share an instant
+        // and differ in shape: a one-shot on this edge, a held voice on the
+        // level the edge starts. The level half is `Race::shield_is_up`, read
+        // by the audio layer; the edge is here, with every other cue edge.
+        if shielded && !self.shield_was_up {
+            self.cues.push(crate::audio::sfx::Cue::ShieldActive);
+        }
+        self.shield_was_up = shielded;
         let can_fire = !shielded
             && if attached_effect {
                 // Ignite once per contact, not once per cooldown: re-arming

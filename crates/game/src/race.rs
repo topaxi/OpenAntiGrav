@@ -816,6 +816,12 @@ pub struct Race {
     /// never re-arm. Render-side state, and out of the hash for the same
     /// reason. See [`Self::tick`], where the two are set side by side.
     contact_cue_cooldown: f32,
+    /// Whether the player's shield was up on the previous tick.
+    ///
+    /// The latch behind `shieldactive`'s rising edge. Kept here rather than in
+    /// the audio layer so that every cue *edge* is raised from one place - see
+    /// [`Self::tick`] - and out of the hash like the rest of this group.
+    shield_was_up: bool,
 }
 
 /// How fast the kick opens, per second, as an exponential approach.
