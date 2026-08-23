@@ -148,13 +148,15 @@ Confidence **85**, inherited from the PAL/NTSC reading of `0x0027a85c` rather
 than measured here. Nothing visible depends on it being exact: the backdrop
 loops.
 
-Display aspect is taken the same way - `4:3`, which both `.PSS` cuts declare in
-their own sequence headers, neither `512x512` nor `640x448` being 4:3 as a pixel
-grid. The PS2 front end draws its `Movie` widget over a `640x448` black `Image`
-and declares no size on the widget itself, so on real hardware the video and the
-frame buffer were the same rectangle; see
-[the disc layout](../ps2/pulse-disc-layout.md) for why that is a deliberate
-anamorphic encode rather than a stretch to undo.
+Display aspect is taken the same way, and it is **the frame's, not the `4:3`
+both `.PSS` cuts declare in their own sequence headers**. The PS2 front end
+draws its `Movie` widget over a `640x448` black `Image` and declares no size on
+the widget itself, so on real hardware the video and the frame buffer were the
+same rectangle - and that buffer is shown at the PSP's own 480/272, near enough
+the 16:9 the disc's menu calls it. Measuring the intro's closing logo against
+the texture the front end draws puts the film at 16:9 and not at its tag; see
+[aspect-ratio](../ps2/aspect-ratio.md). `movie::PS2_DISPLAY_ASPECT` is that one
+number for both containers.
 
 ## Where the name comes from
 

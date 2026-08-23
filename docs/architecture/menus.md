@@ -332,8 +332,9 @@ is what keeps the two apart.
 
 On PSP it is a 480x272 `.PMF`, 270 frames, 9.01 seconds. On PS2 the same name
 resolves through `boot::LOOSE_MOVIES` to `BG512.IPF` / `BG640.IPF` - IPU video,
-512x512 or 640x448 with a declared 4:3 display aspect, so it is **pillarboxed
-rather than stretched**, exactly as the `.PSS` intro cuts already are.
+512x512 or 640x448, drawn at the frame it was cut to fill exactly as the `.PSS`
+intro cuts are. Neither is boxed: the 4:3 those cuts declare is a tag their own
+picture does not honour, measured in [aspect-ratio](../ps2/aspect-ratio.md).
 
 Five decisions worth having written down:
 

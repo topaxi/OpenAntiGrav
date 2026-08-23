@@ -69,28 +69,33 @@ fn image(name: &str) -> Option<PathBuf> {
     None
 }
 
-/// Reads and expands a disc's front-end root.
+/// Reads and expands one XML entry off a disc.
 ///
-/// The PS2 pressing stores the same entry unshortened, so the dictionary step is
+/// The PS2 pressing stores its entries unshortened, so the dictionary step is
 /// conditional exactly as it is in `oag_game::boot`.
-fn skin(name: &str) -> Option<Coords> {
+fn xml(name: &str, entry: &str) -> Option<String> {
     let path = image(name)?;
     let mut archives = oag_pulse::open(&path.display().to_string())
         .unwrap_or_else(|e| panic!("{name} opens as Pulse: {e}"));
     let blob = archives
-        .read_name(oag_pulse::names::FRONTEND_ROOT)
+        .read_name(entry)
         .unwrap_or_else(|e| panic!("{name}: {e}"));
-    let xml = if fexml::is_fexml(&blob) {
+    Some(if fexml::is_fexml(&blob) {
         fexml::expand(&blob).expect("expanding the front-end XML")
     } else {
         String::from_utf8(blob).expect("the front-end XML is text")
-    };
+    })
+}
+
+/// Reads and expands a disc's front-end root.
+fn skin(name: &str) -> Option<Coords> {
+    let text = xml(name, oag_pulse::names::FRONTEND_ROOT)?;
 
     // Walked from the root's children rather than from the root, which is the
     // parser's synthetic `#document` and would prefix every key with itself.
     let mut out = Coords::new();
     let mut seen = BTreeMap::new();
-    for child in &fexml::parse(&xml).children {
+    for child in &fexml::parse(&text).children {
         walk(child, "", &mut out, &mut seen);
     }
     assert!(!out.is_empty(), "{name}: Skin.xml carries no coordinates");
@@ -321,5 +326,130 @@ fn the_two_psp_pressings_differ_in_exactly_one_coordinate() {
             "/Screen/Screen[Top FE Screen]/Screen[FE Screen]/Screen[Show Logo]/Text/Values@y: usa 220 vs eu 230"
         ],
         "the pressings' layouts diverge somewhere new"
+    );
+}
+
+/// One `<Image>`'s draw size and the source rectangle it draws: `[width,
+/// height, TxtrWidth, TxtrHeight]`.
+type Sizes = BTreeMap<String, [f32; 4]>;
+
+/// Every element carrying all four of those, keyed the way [`walk`] keys a
+/// coordinate.
+fn walk_sizes(node: &fexml::Node, path: &str, out: &mut Sizes, seen: &mut BTreeMap<String, usize>) {
+    let mut here = format!("{path}/{}", segment(node));
+    let count = seen.entry(here.clone()).or_insert(0);
+    if *count > 0 {
+        here = format!("{here}#{count}");
+    }
+    *count += 1;
+
+    let field = |name: &str| node.attr(name).and_then(|v| v.parse::<f32>().ok());
+    if let (Some(w), Some(h), Some(tw), Some(th)) = (
+        field("width"),
+        field("height"),
+        field("TxtrWidth"),
+        field("TxtrHeight"),
+    ) && tw > 0.0
+        && th > 0.0
+    {
+        out.insert(here.clone(), [w, h, tw, th]);
+    }
+
+    let mut children = BTreeMap::new();
+    for child in &node.children {
+        walk_sizes(child, &here, out, &mut children);
+    }
+}
+
+/// Every sized image in one entry of one disc.
+fn sizes(name: &str, entry: &str) -> Option<Sizes> {
+    let text = xml(name, entry)?;
+    let mut out = Sizes::new();
+    let mut seen = BTreeMap::new();
+    for child in &fexml::parse(&text).children {
+        walk_sizes(child, "", &mut out, &mut seen);
+    }
+    Some(out)
+}
+
+/// **The measurement `Space::PS2`'s display aspect rests on.**
+///
+/// The PS2 pressing draws the PSP's own textures - same file, same source
+/// rectangle in it - at a *destination* size scaled by `640/480` across and
+/// `448/272` down. Two different factors on one rectangle mean the frame is not
+/// shown as its own 640x448: it is shown at whatever undoes them, which is the
+/// PSP's `480/272`. `docs/ps2/aspect-ratio.md` carries the arithmetic; this
+/// carries the pairs, so the conclusion can be re-derived from the discs rather
+/// than believed.
+///
+/// Source rectangles are asserted **identical**, which is what makes the
+/// destination ratio mean anything: a texture re-authored wider for the PS2
+/// would produce the same numbers with a completely different cause.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd and pulse-ps2-eu.chd"]
+fn the_ps2_draws_the_psps_own_textures_stretched_by_the_grid_ratio() {
+    const HUD: &str = r"Data\XML\Arcade_HUD.xml";
+    let entries = [oag_pulse::names::FRONTEND_ROOT, HUD];
+
+    let (psp_space, ps2_space) = (
+        oag_game::frontend::Space::PSP,
+        oag_game::frontend::Space::PS2,
+    );
+    let (want_x, want_y) = (
+        ps2_space.size.0 / psp_space.size.0,
+        ps2_space.size.1 / psp_space.size.1,
+    );
+
+    let mut pairs = 0;
+    let (mut sum_x, mut sum_y) = (0.0f32, 0.0f32);
+    for entry in entries {
+        let (Some(psp), Some(ps2)) = (sizes(PSP_USA, entry), sizes(PS2, entry)) else {
+            return;
+        };
+        for (key, psp_box) in &psp {
+            let Some(ps2_box) = ps2.get(key) else {
+                continue;
+            };
+            assert_eq!(
+                (psp_box[2], psp_box[3]),
+                (ps2_box[2], ps2_box[3]),
+                "{entry} {key}: the two discs sample different source rectangles, \
+                 so their draw sizes are not comparable"
+            );
+            // **Compared in pixels, not in ratios.** The source authors whole
+            // pixels, so a 7-pixel bar rounds to 12 where the ratio predicts
+            // 11.5 and reads as 1.714 - a 4% "error" that is one pixel of
+            // rounding. The coordinate half of this file compares the same way
+            // and for the same reason.
+            let (x, y) = (ps2_box[0] / psp_box[0], ps2_box[1] / psp_box[1]);
+            assert!(
+                (ps2_box[0] - psp_box[0] * want_x).abs() <= 1.0
+                    && (ps2_box[1] - psp_box[1] * want_y).abs() <= 1.0,
+                "{entry} {key}: {psp_box:?} -> {ps2_box:?} is ({x:.3}, {y:.3}), \
+                 not ({want_x:.3}, {want_y:.3})"
+            );
+            sum_x += x;
+            sum_y += y;
+            pairs += 1;
+        }
+    }
+
+    assert!(
+        pairs >= 20,
+        "only {pairs} image pairs measured, which is not enough to conclude \
+         anything about the layout"
+    );
+
+    // And the display aspect is the one that undoes the mean of them. A square
+    // texel drawn `x` by `y` grid units, in a `w` by `h` grid shown at `a`,
+    // comes out `(x/y) * a * h / w` wide-to-tall; the front end is undistorted
+    // where that is 1.
+    let (mean_x, mean_y) = (sum_x / pairs as f32, sum_y / pairs as f32);
+    let shape = (mean_x / mean_y) * ps2_space.display_aspect * ps2_space.size.1 / ps2_space.size.0;
+    assert!(
+        (shape - 1.0).abs() < 0.02,
+        "at {} the PS2 front end draws a square texel {shape:.3} times as wide \
+         as it is tall; the mean measured stretch is ({mean_x:.3}, {mean_y:.3})",
+        ps2_space.display_aspect
     );
 }

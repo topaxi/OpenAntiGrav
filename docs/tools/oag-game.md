@@ -221,9 +221,16 @@ PS2's own `Skin.xml`: its `Movie` widget declares no `width`/`height` at all,
 unlike the PSP's, and the black `Image` behind it is `640x448` - the NTSC
 cut's own decoded resolution exactly. So the original's front end and the
 video shared one native buffer with nothing to stretch; the squash was this
-build treating every source as PSP-shaped regardless of what it opened. Now
-pillarboxed to the movie's own aspect - see `Movie::display_aspect` and
-`frontend::pillarbox`.
+build treating every source as PSP-shaped regardless of what it opened.
+
+**Then it was pillarboxed, and that was wrong too.** Boxing it to the declared
+4:3 believed a tag the picture does not honour: the film's closing logo is the
+same artwork as `pulse_logo.mip`, and measured against the PSP front end drawing
+that texture it wants 16:9, not 4:3. Both PS2 containers now report the frame
+they were cut to fill (`movie::PS2_DISPLAY_ASPECT`), which is
+`frontend::Space::PS2`'s own display aspect, so `frontend::pillarbox` returns
+the whole screen and the boxing is left for a movie that really does disagree
+with its screen. See [aspect-ratio](../ps2/aspect-ratio.md).
 
 The rest of the PS2 front end gets **further than expected**, and this was measured
 rather than assumed: `WADS2.WAD` carries `Data\Plugins\PI001\GUI\Skin.xml` under
