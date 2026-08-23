@@ -184,8 +184,9 @@ section length exactly.
 
 Implemented as [`Bank::sounds`](../../crates/formats/src/sblk.rs). The
 descriptor's other fields, from the runtime: `+0x01` a note, `+0x04` an angle in
-degrees, `+0x0e` a flags word whose `0x40` selects loop mode and `0x80` asserts
-ADPCM. Those are exposed as raw values, not interpreted.
+degrees, `+0x0e` a flags word whose `0x40` selects loop mode and `0x80` marks a
+waveform that is **not** PS-ADPCM. Those are exposed as raw values, not
+interpreted; see [the `0x80` polarity](#0x80-means-not-adpcm-and-this-page-had-it-backwards).
 
 ### What the ground-truth test proves
 
@@ -424,6 +425,71 @@ not layers**: `.COLLISIONS`'s fifteen samples all fall between 0.20 s and
 0.35 s, which is fifteen recordings of one event. `oag_game::audio::sfx` plays
 one of them, chosen by its own generator, and says so.
 
+## `0x80` means "not ADPCM", and this page had it backwards
+
+**Corrected 2026-08-23.** A waveform descriptor's `+0x0e` was documented here
+and on [the sound engine page](../ghidra/functions/psp-pulse-usa/sound.md) as
+*"`0x80` asserts ADPCM"*. It asserts the opposite, and the decompilation that
+was already on that page says so:
+
+```c
+undefined4 Sas_QueueSetVoice(voice, addr, size, loop, only_adpcm) {
+  if (only_adpcm != 0) printf("SCREAM ERROR: THIS SYSTEM ONLY SUPPORTS ADPCM VOICE DATA!\n");
+  ...
+```
+
+`Scream_KeyOnVoice` passes `(wf+0x0e & 0x80) != 0` as that fifth argument, and
+the whole of what the function does with a non-zero one is **complain**. A
+system that only supports ADPCM prints that when handed something that is not
+ADPCM. So the bit marks a non-ADPCM waveform and the PSP refuses to play it.
+
+The reading was written the natural way round and never tested, because on a
+PSP disc nothing distinguishes the two: **the bit is never set**.
+
+### Two independent confirmations
+
+**A build that refuses the bit ships nothing that sets it.** Censused over
+every waveform span on four discs:
+
+| Disc | Spans | Carrying `0x80` |
+| --- | ---: | ---: |
+| `pulse-psp-usa` | 916 | **0** |
+| `pulse-ps2-eu` | 985 | **0** |
+| `pure-psp-usa` | 461 | **0** |
+| `pure-psp-eu` | 461 | **0** |
+
+**And where the bit *is* used, it predicts the payload.** Wipeout HD runs on
+hardware that decodes more than one codec, and about a third of its spans set
+it. Grouped by the descriptor's mode word, against the share of each span's own
+bytes that are in PS-ADPCM spec:
+
+| Mode word | `0x80` | Spans | In spec |
+| --- | :---: | ---: | ---: |
+| `0x0100` | clear | 1,733 | **100.00%** |
+| `0x0101` | clear | 1,341 | **100.00%** |
+| `0x0141` | clear | 563 | 99.93% |
+| `0x0105` | clear | 480 | **100.00%** |
+| `0x0140` | clear | 466 | 99.92% |
+| `0x0185` | **set** | 377 | **3.52%** |
+| `0x0180` | **set** | 316 | **8.99%** |
+| `0x01c0` | **set** | 171 | **1.72%** |
+| `0x01c5` | **set** | 158 | **0.09%** |
+
+That is a clean split with nothing in between, over ~5,600 spans, from a field
+the byte census knows nothing about. The bit is a codec selector.
+
+### What the other codec is, is not known
+
+It is not identified, and nothing decodes it. `oag_game::audio::sfx` **drops**
+a non-ADPCM waveform and says so in the load report rather than running the
+ADPCM decoder over it, which would produce 28 samples of noise per block -
+`CLAUDE.md`'s plausible-looking stand-in exactly. `oag_formats::sblk::Sound::is_adpcm`
+is the predicate.
+
+Confidence **90**: a decompiled argument whose only use is an error message,
+plus a 4-disc zero census, plus a near-perfect correlation on a fifth disc that
+uses the bit. What stops it being higher is that no emulator has been run.
+
 ## The waveforms are PS-ADPCM
 
 Sony's 16-byte block: one predictor/shift byte, one flag byte, then 14 bytes
@@ -526,19 +592,55 @@ per-release one.
 Contrast **HD**, whose `.bnk` is the same container big-endian with two
 alignment changes and is deliberately not implemented - see `HANDOVER.md`.
 
-## Wipeout Pure has no `SBlk` bank at all
+## Wipeout Pure ships the same container too - and this page said otherwise
 
-Checked directly: not one entry in any of Pure's three archives begins with
-that magic, even though its executable names `Data\Sound\*.bnk` paths. Pure's
-25 RIFF entries are `WAVE_FORMAT_EXTENSIBLE`, two channels at 44.1 kHz. So
-`SBlk` is a *Pulse* container rather than a lineage-wide one, and whatever
-indexes Pure's streams has not been looked at. Confidence **85** on the
-absence, from a magic scan over all 1,229 entries. See the
-[Pure probe](pure-status.md).
+**Corrected 2026-08-23.** This page carried, at confidence 85, the claim that
+*"not one entry in any of Pure's three archives begins with that magic"*. Pure
+has **29 `SBlk` banks**, every one of which `Bank::parse` accepts unmodified,
+and the six cues `oag_game::audio::sfx` fires all resolve in them.
 
-**A Pure source therefore races silently**, by design rather than by accident:
-`oag_game::audio::sfx::Banks::load` reports each bank it could not read and
-plays nothing, which is the honest outcome for a format nobody has decoded.
+### The trap, which is worth more than the correction
+
+The claim was not sloppy - it was *precisely true and useless*. **No bank
+begins with `SBlk`.** The magic sits at offset `0x18`, after the eight-byte
+container header and the two eight-byte section-table entries, and a scan for
+the magic at offset 0 finds nothing on **any** disc, Pulse included. The Pulse
+census never noticed because it went through
+[`looks_like_bank`](../../crates/formats/src/sblk.rs), which reads `0x18`.
+
+So a search whose result would have been identical on a disc known to be full
+of banks was taken as evidence of absence. The general form: **a magic-scan
+miss is only evidence when the scan is run against a positive control.** This
+is the same shape as the `frontend.bnk` contiguity trap
+[above](#the-field-is-an-abbreviation-not-a-truncation) - a search that worked for a
+reason other than the one assumed.
+
+The "25 RIFF entries at 44.1 kHz" in the old text are real and are a different
+thing; they are not what the `.bnk` paths point at.
+
+### What Pure carries
+
+| Check | Pure USA | Pure EU |
+| --- | ---: | ---: |
+| `SBlk` banks | 29 | 29 |
+| Parsed by the unmodified reader | 29 | 29 |
+| Waveform spans | 461 | 461 |
+| Spans carrying `0x80` (not PS-ADPCM) | **0** | **0** |
+
+The bank *names* are Pulse's, hash for hash: `Data\Sound\hud.bnk`,
+`ship.bnk`, `ship_zone.bnk`, `weapons.bnk`, `speech.bnk`, `frontend.bnk`,
+`generaltrack.bnk` all resolve on both pressings. So do the cue strings -
+`SPEEDUPPAD`, `.COLLISIONS`, `ABSORB`, `~ENGINE`, `~SHIELD` and `shieldactive`
+are all present, and **a Pure race makes the same six sounds a Pulse race
+does with no code branch at all**.
+
+What differs is per-cue detail rather than structure, and one difference is
+load-bearing: Pure's `~SHIELD` binds **four** waveforms of which only **two**
+carry the loop flag, where Pulse's binds two and both do. That is what forced
+the loop flag to be kept per waveform rather than per cue.
+
+Pure's ship bank is also thinner - six cues to Pulse's nine, and it adds
+`~AMBIENCE` and `rumble`, which Pulse has not got.
 
 ## Reproducing
 

@@ -505,14 +505,57 @@ pub struct Sound {
     pub descriptor: u32,
     /// The descriptor's `+0x0e` flags word.
     ///
-    /// `Scream_KeyOnVoice` passes `0x40` to `sceSasSetVoice` as its loop mode
-    /// and treats `0x80` as an assertion that the data is ADPCM. The rest is
-    /// unread, so this is exposed as the raw word rather than as booleans.
+    /// `Scream_KeyOnVoice` passes `0x40` to `sceSasSetVoice` as its loop mode,
+    /// and `0x80` as an argument whose meaning is the **opposite** of what it
+    /// looks like - see [`Sound::is_adpcm`]. The rest is unread, so this is
+    /// exposed as the raw word rather than as booleans.
     pub mode: u16,
     /// Byte offset of the waveform within [`Bank::waveforms`].
     pub offset: u32,
     /// Length of the waveform in bytes.
     pub length: u32,
+}
+
+/// The `+0x0e` bit that selects a looping voice.
+pub const LOOP_FLAG: u16 = 0x40;
+
+/// The `+0x0e` bit that marks a waveform as **not** PS-ADPCM.
+///
+/// The polarity is the reverse of the obvious reading, and this project had it
+/// backwards until 2026-08-23. `Scream_KeyOnVoice` passes `(wf+0x0e & 0x80) != 0`
+/// as `Sas_QueueSetVoice`'s fifth argument, and that function's whole body for
+/// a non-zero fifth argument is:
+///
+/// ```text
+/// printf("SCREAM ERROR: THIS SYSTEM ONLY SUPPORTS ADPCM VOICE DATA!")
+/// ```
+///
+/// So the bit says "this one is not ADPCM" and the PSP complains. Confirmed
+/// from the data on four discs: **0 of 916 Pulse PSP spans, 0 of 985 Pulse PS2,
+/// 0 of 461 on each Pure pressing** carry it - a build that refuses the bit
+/// ships nothing that sets it. And on Wipeout HD, which runs on hardware that
+/// can decode more than one codec, the bit predicts the payload exactly: spans
+/// with it clear are 100% in PS-ADPCM spec and spans with it set are 0-44%.
+///
+/// See `docs/formats/psp-audio.md`.
+pub const NOT_ADPCM_FLAG: u16 = 0x80;
+
+impl Sound {
+    /// Whether this waveform is PS-ADPCM, and so whether [`decode_adpcm`] means
+    /// anything for it.
+    ///
+    /// `false` only on Wipeout HD, whose second codec is not identified. See
+    /// [`NOT_ADPCM_FLAG`].
+    #[must_use]
+    pub fn is_adpcm(&self) -> bool {
+        self.mode & NOT_ADPCM_FLAG == 0
+    }
+
+    /// Whether the voice loops.
+    #[must_use]
+    pub fn is_looping(&self) -> bool {
+        self.mode & LOOP_FLAG != 0
+    }
 }
 
 /// One entry of a bank's name table.

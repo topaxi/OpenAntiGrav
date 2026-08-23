@@ -38,6 +38,16 @@ const PSP_ARCHIVES: [&str; 2] = ["PSP_GAME/USRDIR/FE.wad", "PSP_GAME/USRDIR/Data
 /// The PS2 bulk archive. `WADSP.WAD`, its `FE.wad` counterpart, holds none.
 const PS2_ARCHIVES: [&str; 1] = ["54748/WADS2.WAD"];
 
+/// Pure's three archives. `FEData.wad` holds no bank.
+const PURE_ARCHIVES: [&str; 3] = [
+    "PSP_GAME/USRDIR/Data.wad",
+    "PSP_GAME/USRDIR/FE.wad",
+    "PSP_GAME/USRDIR/FEData.wad",
+];
+
+/// Banks Wipeout Pure carries, on each pressing.
+const PURE_BANKS: usize = 29;
+
 /// Banks the PSP disc carries. Fewer means the walk stopped finding them.
 const PSP_BANKS: usize = 39;
 
@@ -376,6 +386,110 @@ fn a_cue_name_agrees_with_the_flags_of_the_waveforms_it_reaches() {
             "ps2 SHIP_ZM  ~ENGINE      9 waveform(s)",
         ]
     );
+}
+
+/// Wipeout Pure carries `SBlk` banks, and this project said for months that it
+/// did not.
+///
+/// # The claim that was wrong, and why it looked right
+///
+/// `pure-status.md` and `psp-audio.md` both recorded, at confidence 85, that
+/// *"not one entry in any of Pure's three archives begins with that magic"*.
+/// That sentence is **true**. It is also true of Wipeout Pulse, whose banks
+/// this project had already decoded 39 of: the magic sits at offset `0x18`,
+/// behind the container header and the section table, so a scan at offset 0
+/// finds nothing anywhere.
+///
+/// The first assertion below is therefore the *control* the original probe
+/// lacked - it shows the offset-0 scan failing on a disc full of banks - and
+/// the rest is the correction.
+#[test]
+#[ignore = "needs a disc image"]
+fn wipeout_pure_carries_sblk_banks_after_all() {
+    let mut ran = 0;
+    for disc in ["pure-psp-usa.chd", "pure-psp-eu.chd"] {
+        let Some(path) = image(disc) else {
+            continue;
+        };
+        ran += 1;
+        let mut image = DiscImage::open(&path).expect("open");
+        let mut banks = 0;
+        let mut spans = 0;
+        let mut not_adpcm = 0;
+        let mut names = 0;
+        let mut at_offset_zero = 0;
+        for archive_path in PURE_ARCHIVES {
+            for (_, blob) in banks_in(&mut image, archive_path) {
+                let bank = Bank::parse(&blob).expect("a Pure bank parses as a Pulse one");
+                banks += 1;
+                at_offset_zero += usize::from(blob.starts_with(sblk::MAGIC));
+                names += bank.sound_names().len();
+                for sound in bank.sounds() {
+                    spans += 1;
+                    not_adpcm += usize::from(!sound.is_adpcm());
+                }
+                assert_eq!(
+                    bank.sound_names().len(),
+                    usize::from(bank.cue_count),
+                    "{}: names and cues disagree",
+                    bank.name
+                );
+            }
+        }
+        println!("{disc}: {banks} banks, {names} names, {spans} spans");
+
+        // The control. Every one of these banks was just parsed, and not one
+        // of them starts with the magic - which is the whole of what the old
+        // probe measured.
+        assert_eq!(
+            at_offset_zero, 0,
+            "a bank now begins with the magic, so the trap this records is gone"
+        );
+        assert_eq!(banks, PURE_BANKS, "Pure's bank count changed");
+        // Pure is a PSP title, so it can carry nothing its hardware refuses.
+        assert_eq!(not_adpcm, 0, "a Pure span is marked not-PS-ADPCM");
+    }
+    assert!(ran > 0, "no Pure disc image was present");
+}
+
+/// `+0x0e`'s `0x80` marks a waveform that is **not** PS-ADPCM, so a PSP or PS2
+/// build - which refuses one - can ship none.
+///
+/// The polarity was documented backwards until 2026-08-23. See
+/// `docs/formats/psp-audio.md`.
+#[test]
+#[ignore = "needs a disc image"]
+fn no_psp_or_ps2_waveform_is_marked_as_not_adpcm() {
+    let mut rows = Vec::new();
+    for (disc, archives) in [
+        ("pulse-psp-usa.chd", &PSP_ARCHIVES[..]),
+        ("pulse-ps2-eu.chd", &PS2_ARCHIVES[..]),
+        ("pure-psp-usa.chd", &PURE_ARCHIVES[..]),
+        ("pure-psp-eu.chd", &PURE_ARCHIVES[..]),
+    ] {
+        let Some(path) = image(disc) else {
+            continue;
+        };
+        let mut image = DiscImage::open(&path).expect("open");
+        let (mut spans, mut flagged) = (0usize, 0usize);
+        for archive_path in archives {
+            for (_, blob) in banks_in(&mut image, archive_path) {
+                for sound in Bank::parse(&blob).expect("parse").sounds() {
+                    spans += 1;
+                    flagged += usize::from(!sound.is_adpcm());
+                }
+            }
+        }
+        println!("{disc}: {flagged} of {spans} spans are marked not-PS-ADPCM");
+        rows.push((disc, spans, flagged));
+    }
+    assert!(!rows.is_empty(), "no disc image was present");
+    for (disc, spans, flagged) in rows {
+        assert!(spans > 100, "{disc}: only {spans} spans found");
+        // A build whose only response to the bit is to print "THIS SYSTEM ONLY
+        // SUPPORTS ADPCM VOICE DATA" cannot ship a waveform that sets it.
+        assert_eq!(flagged, 0, "{disc} carries {flagged} non-ADPCM spans");
+    }
 }
 
 #[test]

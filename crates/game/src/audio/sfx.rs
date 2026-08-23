@@ -67,8 +67,15 @@ const SFX_SEED: u64 = 0x0aa9_5f10_0000_5f58;
 /// `oag_render::sparks` splits its pipeline from its particle state.
 pub(super) struct SfxVoices {
     engine: Engine,
-    /// The shield's held voice, while one is up. See [`Cue::Shield`].
+    /// The shield's held voice, while one is up and the alternate drawn was a
+    /// loop. See [`Cue::Shield`].
     shield: Option<VoiceId>,
+    /// Whether the shield has already been responded to for this activation.
+    ///
+    /// The latch, kept apart from [`Self::shield`] because "a voice is held"
+    /// and "this activation has been handled" are different facts and only the
+    /// second one may gate the trigger.
+    shield_open: bool,
     rng: Rng,
 }
 
@@ -101,6 +108,7 @@ impl Audio {
         let voices = self.sfx.get_or_insert_with(|| SfxVoices {
             engine: Engine::new(&mut Rng::new(SFX_SEED)),
             shield: None,
+            shield_open: false,
             rng: Rng::new(SFX_SEED),
         });
         let banks = race.sounds();
@@ -132,15 +140,34 @@ impl Audio {
             // `Shield_Activate` opens `~SHIELD` with a handle and the shield's
             // own drop releases it, so this is a *level* rather than an edge:
             // the voice exists exactly while the pickup timer is running.
-            match (shielded, voices.shield) {
-                (true, None) => {
-                    if let Some((sound, _)) = banks.pick(Cue::Shield, &mut voices.rng) {
-                        voices.shield = mixer.play(Play::looping(sound, Bus::Sfx));
+            // Latched on `shield_open` rather than on the voice handle, so
+            // this fires **once per activation** whatever happened to the
+            // voice. Keying on `Option<VoiceId>` would re-enter the arm every
+            // tick whenever no handle came back - a full voice pool, or a
+            // non-looping alternate that is played and not held - and repeat
+            // the sound sixty times a second under exactly the conditions that
+            // are already going wrong.
+            match (shielded, voices.shield_open) {
+                (true, false) => {
+                    voices.shield_open = true;
+                    // **The alternate's own loop flag decides**, not the cue's.
+                    // Pulse's `~SHIELD` is two waveforms and both loop; Pure's
+                    // is four of which only two do, so forcing `Play::looping`
+                    // here would loop a one-shot on about half the draws.
+                    if let Some((sound, looping)) = banks.pick(Cue::Shield, &mut voices.rng) {
+                        voices.shield = if looping {
+                            mixer.play(Play::looping(sound, Bus::Sfx))
+                        } else {
+                            let _ = mixer.play(Play::once(sound, Bus::Sfx));
+                            None
+                        };
                     }
                 }
-                (false, Some(id)) => {
-                    mixer.stop(id);
-                    voices.shield = None;
+                (false, true) => {
+                    voices.shield_open = false;
+                    if let Some(id) = voices.shield.take() {
+                        mixer.stop(id);
+                    }
                 }
                 _ => {}
             }
@@ -165,6 +192,7 @@ impl Audio {
                 if let Some(id) = voices.shield.take() {
                     mixer.stop(id);
                 }
+                voices.shield_open = false;
             });
         }
         self.sfx = None;
@@ -388,9 +416,14 @@ impl Banks {
                 },
             };
             match load_cue(blob, cue) {
-                Ok(loaded) => {
+                Ok((loaded, skipped)) => {
+                    let undecoded = if skipped == 0 {
+                        String::new()
+                    } else {
+                        format!(", {skipped} skipped as not PS-ADPCM")
+                    };
                     report.push(format!(
-                        "sfx: {} -> {} waveform(s) from {entry}",
+                        "sfx: {} -> {} waveform(s) from {entry}{undecoded}",
                         cue.name(),
                         loaded.waveforms.len()
                     ));
@@ -431,7 +464,7 @@ impl Banks {
 }
 
 /// Resolves one cue in one bank blob and decodes what it binds.
-fn load_cue(blob: &[u8], cue: Cue) -> anyhow::Result<Loaded> {
+fn load_cue(blob: &[u8], cue: Cue) -> anyhow::Result<(Loaded, usize)> {
     let bank = sblk::Bank::parse(blob)?;
     let record = bank
         .cue_named(cue.name())
@@ -445,7 +478,18 @@ fn load_cue(blob: &[u8], cue: Cue) -> anyhow::Result<Loaded> {
     );
 
     let mut waveforms = Vec::with_capacity(sounds.len());
+    let mut skipped = 0;
     for sound in &sounds {
+        // **Not every waveform is PS-ADPCM, and the descriptor says which.**
+        // On Wipeout HD about a third set `+0x0e`'s `0x80`, a codec this
+        // project has not identified; decoding one as ADPCM would produce 28
+        // samples a block of noise, which is exactly the plausible-looking
+        // stand-in `CLAUDE.md` forbids. Dropped, and counted so the load
+        // report says so. See `oag_formats::sblk::NOT_ADPCM_FLAG`.
+        if !sound.is_adpcm() {
+            skipped += 1;
+            continue;
+        }
         let data = bank.waveform(sound).ok_or_else(|| {
             anyhow::anyhow!("{} reaches outside the waveform section", cue.name())
         })?;
@@ -455,15 +499,16 @@ fn load_cue(blob: &[u8], cue: Cue) -> anyhow::Result<Loaded> {
                 1,
                 sblk::ASSUMED_SAMPLE_RATE,
             )?),
-            sound.mode & LOOP_FLAG != 0,
+            sound.is_looping(),
         ));
     }
-    Ok(Loaded { waveforms })
+    anyhow::ensure!(
+        !waveforms.is_empty(),
+        "all {skipped} of {}'s waveforms are in a codec this does not decode",
+        cue.name()
+    );
+    Ok((Loaded { waveforms }, skipped))
 }
-
-/// The descriptor flag `Scream_KeyOnVoice` passes as `sceSasSetVoice`'s loop
-/// mode, from `+0x0e`.
-const LOOP_FLAG: u16 = 0x40;
 
 /// The engine voice, and the law that drives its pitch and volume.
 ///

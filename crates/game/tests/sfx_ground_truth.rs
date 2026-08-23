@@ -30,10 +30,12 @@ use oag_game::audio::sfx::{Banks, Cue};
 use oag_game::race;
 
 /// The discs this runs against, and what each is called in a failure message.
-const DISCS: [(&str, &str); 3] = [
+const DISCS: [(&str, &str); 5] = [
     ("pulse-psp-usa.chd", "Pulse PSP USA"),
     ("pulse-psp-eu.chd", "Pulse PSP EU"),
     ("pulse-ps2-eu.chd", "Pulse PS2 EU"),
+    ("pure-psp-usa.chd", "Pure PSP USA"),
+    ("pure-psp-eu.chd", "Pure PSP EU"),
 ];
 
 fn image(name: &str) -> Option<PathBuf> {
@@ -115,16 +117,26 @@ fn every_wired_cue_resolves_on_both_pulse_releases() {
         // own flag saying so rather than the name - two statements agreeing.
         let (_, engine_loops) = banks.pick(Cue::Engine, &mut rng).expect("engine");
         assert!(engine_loops, "{label}: ~ENGINE is not marked looping");
-        let (_, shield_loops) = banks.pick(Cue::Shield, &mut rng).expect("shield");
-        assert!(shield_loops, "{label}: ~SHIELD is not marked looping");
+        // **Asserted as "at least one alternate loops", not "every draw does".**
+        // Pulse's `~SHIELD` is two waveforms and both loop; Pure's is four and
+        // only two do, so a per-draw assertion here would fail on about half
+        // of the seeds. The mixed case is the reason `Loaded` keeps the flag
+        // per waveform - see `audio::sfx`.
+        let mut shield_loops = false;
+        for _ in 0..64 {
+            shield_loops |= banks.pick(Cue::Shield, &mut rng).expect("shield").1;
+        }
+        assert!(shield_loops, "{label}: no ~SHIELD alternate loops");
         for cue in [
             Cue::SpeedupPad,
             Cue::Collision,
             Cue::Absorb,
             Cue::ShieldActive,
         ] {
-            let (_, loops) = banks.pick(cue, &mut rng).expect("cue");
-            assert!(!loops, "{label}: {} loops and should not", cue.name());
+            for _ in 0..64 {
+                let (_, loops) = banks.pick(cue, &mut rng).expect("cue");
+                assert!(!loops, "{label}: {} loops and should not", cue.name());
+            }
         }
     }
     assert!(ran > 0, "no disc image was present");

@@ -273,7 +273,7 @@ wf + 0x02   s8    a note or pitch base
 wf + 0x03   s8    a second one
 wf + 0x0a   u16   paired with +0x0c into an envelope call
 wf + 0x0c   u16
-wf + 0x0e   u16   flags; 0x40 selects loop mode, 0x80 the ADPCM assertion
+wf + 0x0e   u16   flags; 0x40 selects loop mode, 0x80 marks NOT-ADPCM
 wf + 0x10   u32   the waveform's offset
 wf + 0x14   u32   the waveform's length
 ```
