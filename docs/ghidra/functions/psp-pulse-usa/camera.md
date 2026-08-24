@@ -212,6 +212,15 @@ the string setting above; `+0x1dc` is the spectator/photo camera.
 Confidence **90**: the mode was polled across the same ten presses that visibly
 changed the view and never moved.
 
+**Mode `5` exists and is the death camera, found 2026-08-24 from the other
+side.** The list above is what the *photo-mode* code names, and its cycle
+(`1 -> 4 -> 3 -> 2 -> 7 -> 1`) skips `5`; `Ship_SetState`'s case 4 - the
+craft's own explosion - calls `Camera_SetMode(camera, 5)` at `0x08844524`
+after handing the camera the wrecked craft as its subject. So the enum has at
+least one value the photo path never reaches, and this is it. What mode 5
+*looks like* is unread. See
+[zone-mode.md](zone-mode.md), which carries case 4 at instruction level.
+
 ## `pos_length` is a signed offset along forward, and the disc value is used as-is
 
 This is the open item [HANDOVER.md](../../../../HANDOVER.md) records, and it is

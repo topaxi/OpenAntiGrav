@@ -298,8 +298,9 @@ The dirty flag is set from bit 22 (`0x400000`) of `entity+0x860`, which reads as
    | `0x088444c8` | `(*(0x08ab2120))+0x58 = 0`, a byte |
    | `0x088444e4` | `(*(0x08ab10e8))+0x2c &= ~6` |
    | `0x088444f0` | **`(*(0x08ab10b0))+0xe4 = 0.0`** - the active camera, and `+0xe4` is the *duration* field of the shake setter `FUN_08878750` writes, so this **cancels a running shake** |
+   | `0x088444fc` | `FUN_0888058c(camera, craft, 1)` - the camera's **subject setter**: it writes `camera+0x1e0 = craft` and places the camera off the craft's own node. See below. |
    | `0x08844514` | `(*(0x088594cc))+0x2c \|= 6`, then `+0x26c = 0` |
-   | `0x08844524` | a call with **`a1 = 5`** - the camera mode this page names |
+   | `0x08844524` | **`Camera_SetMode(camera, 5)`** (`0x08880724`) - already a named function, and `5` is the mode this page names |
    | `0x0884453c` | `(*(0x0885c01c))+0x1a08 = 4.5` |
 
    **`_BLOWUP` is `~BLOWUP`** - the string is at `0x08a7b6c0`, reached through
@@ -319,11 +320,32 @@ The dirty flag is set from bit 22 (`0x400000`) of `entity+0x860`, which reads as
    the evidence supports.
 
    **Still not ported, and now with addresses rather than a shrug**: the HUD
-   hide and the camera mode. Three of the four globals above
-   (`0x08ab0838`, `0x08ab2120`, `0x08ab10e8`, `0x088594cc`) are unidentified,
-   and until they are, "hides the HUD" is a summary of a call rather than a
-   reading of one. The camera-mode call at `0x08844524` passes `5` and is the
-   most tractable of them.
+   hide and the camera hand-off. Three of the four globals above
+   (`0x08ab0838`, `0x08ab2120`, `0x08ab10e8`) are unidentified, and until they
+   are, "hides the HUD" is a summary of a call rather than a reading of one.
+
+   **The camera half is much closer than it looks**, and the two things that
+   make it so are worth having written down:
+
+   - `0x088594cc` holds the camera object `Camera_SetMode` (`0x08880724`)
+     drives - the **spectator/photo** camera of
+     [`camera.md`](camera.md#a-second-separate-camera-enum-exists-and-it-is-not-this-one),
+     `camera+0x1dc`, not the player's in-race view.
+   - **Mode `5` is not one of the five that page names.** The photo-mode code
+     names `1` internal, `2` above, `3` front, `4` close, `7` track, and its
+     cycle skips `5` entirely. So mode 5 is reached from here and nowhere the
+     photo path goes: it is the *death* camera specifically. Recorded at
+     **80** - the call is unambiguous, and what mode 5 then looks like is
+     unread.
+
+   `FUN_0888058c`, the subject setter case 4 calls just before it, is
+   unnamed and half-read: it writes `camera+0x1e0 = craft` and places the
+   camera off the craft's node at `craft+0x794`, and it has a second branch
+   taken when `craft+0xc3c` is non-zero which attaches to *that* object and
+   forces mode `7` instead. `Craft_Construct_q` zeroes `craft+0xc3c`, so the
+   second branch needs something else to have filled it, and this pass did not
+   find what. Its third argument - `1` from case 4 - selects a
+   `rand(-10, 20)` height offset over a stored one.
 
    **One thing that came free**: the shake cancel at `0x088444f0` is a second,
    independent sighting of `FUN_08878750`'s field layout - see
