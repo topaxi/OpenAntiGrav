@@ -204,17 +204,9 @@ appending a dated pass to it.
 ### The 2026-08-18 review's findings
 
 [`docs/reviews/2026-08-18-code-review.md`](docs/reviews/2026-08-18-code-review.md)
-lists the findings; the do-now batch (S1, D1, D2, F1, I5/I1/I3), the
-next-session batch (I2, D3, S3, U1, S2) and the P2/P3 sweep (F2-F7, R1-R3, U2,
-U5-U9, G1-G5) are all landed, one commit each, full `just` green throughout.
-Headline fixes: `oag-hd` is enforced into `GAMEPLAY_CRATES` by the checker
-itself now, so a fourth title crate cannot silently sit outside rule 1 again;
-`quat_from_axis_angle` (`oag_core::math`) replaces a hand-rolled quaternion
-path; Zone races stopped taking ~2x contact damage now that `damage_rules`
-reads `Mode::weapons_enabled` instead of restating it; PSMT8 got the bounds
-guard PSMT4 already had; `check-transcendentals.py` now scans `oag-formats`
-too, not just tick-time code; `oag_title::HudLayouts` composes on every
-title, taking HD's HUD from 0 sprites / 0 labels to 51/43 out of 14 files.
+lists the findings and the headline fixes. The do-now batch, the next-session
+batch and the P2/P3 sweep are all landed, one commit each, full `just` green
+throughout; what was not done is below.
 
 **Not done, and why**: S4/S5 (a per-asset `(Archives, &Title)` split and a
 title-probe table - racebox groundwork the review itself grades L/M and puts
@@ -233,6 +225,16 @@ has no screen in the set), and silently turned the flag into a no-op.
 thing keeping that path from rotting, and it is `#[ignore]`d, so `just`
 stayed green throughout. A validity check applied to a state the *operator*
 named rather than a chain led to is a check against the wrong question.
+
+### The AI ram was already a sideshift; its clearance gate was the bug
+
+**2026-08-24, from play: "the AI steers into me and puts its nose in the wall".**
+It never steered - the gate in front of the shove was wrong. **When a report
+names a mechanism, measure before believing it.** Account, sweep and the two
+remainders: [ai.md](docs/gameplay/ai.md), guarded by
+`crates/game/tests/ram_ground_truth.rs`, `#[ignore]`d so **CI does not run it**.
+Beyond that page: a sideshift is the **most violent lateral event in the game**
+(`sideshift="450"` on `mass="1"`), the player's too, never checked on a capture.
 
 ### M4 and M5
 

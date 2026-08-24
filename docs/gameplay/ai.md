@@ -772,6 +772,54 @@ first), no shift already running, a rival actually alongside, and **corridor roo
 on the side being shifted toward**. A ram that puts the rammer into the wall is
 not aggression, it is a bug with a personality.
 
+#### The clearance gate asked the wrong question, and the wrong number
+
+**Reported from play 2026-08-24 as "the AI steers into me and puts its nose in
+the wall".** The mechanism was already right - a ram has been a
+`ShipControls::sideshift` since it landed, never a steering command, and nothing
+in this controller ever aims a craft at another one. What was wrong was the gate
+in front of it, in two ways at once.
+
+**It measured the room from the line rather than from the craft.**
+`Frame::room` answers "how far may the *line* go this way", and a craft is
+hardly ever on its line - `drift` puts it off, a corner puts it off, the last
+shove it took puts it off. Measured on `16_Track` before the fix: a shove fired
+with 3.13 units of corridor to its left while the craft was already 11.67 units
+past that edge.
+
+**And it asked for three units, when one shift covers about eight.** A sideshift
+is `handling.airbrake.sideshift` as a force for
+`oag_physics::airbrake::SIDESHIFT_DURATION`, and on Pulse that is `450` against
+a mass of `1` - the most violent lateral event in the game. Measured over six
+seeded elite races on `16_Track`, a craft that throws one reaches a **median 8.2
+units** across the corridor before its own grip and steering claw it back, p90
+12-15, with a tail past 20 when the shove connects and the contact throws it
+further.
+
+How often the rammer ended up outside the corridor edge it shifted toward:
+
+| room measured from | clearance | shifts | ended outside |
+| --- | --- | --- | --- |
+| the line | 3.0 | 208 | 54 (26%) |
+| the line | 12.0 | 123 | 25 (20%) |
+| the craft | 3.0 | 223 | 56 (25%) |
+| **the craft** | **12.0** | **138** | **11 (8%)** |
+
+**Neither half does much alone**, which is why both landed together: at three
+units, where the room is measured from hardly ever changes the verdict, and
+asking twelve of the *line* still lets a craft already ten units out shift
+further out. Past 12 the sweep keeps improving - 16 gives 4 of 72, 20 gives 0 of
+20 - but by making a ram rare rather than by making it safe.
+
+**Two remainders, recorded rather than chased.** The gate reads the corridor at
+the craft's *current* index, and the shift plays out over a second in which the
+craft covers a hundred units downtrack into a corridor that may have narrowed.
+And a shove that connects hands the rammer whatever `oag_physics::pair::resolve`
+gives it, which is not the driver's to gate - those are most of the 8% that
+remain. Also: `RAM_CLEARANCE` is measured against **one hull**. The reach scales
+with `handling.airbrake.sideshift / mass`, a physics quantity `oag-ai` cannot
+see - `Context` carries a line, a tuning, a pilot and a field, and no handling.
+
 **What a ram does not do**, and this is worth saying plainly:
 `Race::resolve_craft_pairs` discards the `PairContact` it computes and nothing
 arms `stun_timer`, so a ram **shoves and nothing else** - no stun, no damage, no
@@ -1962,7 +2010,9 @@ rebase onto a function start, so they were left alone rather than guessed at.
 | A driver that loses a place is provoked and calms down again, and one that gains a place is not | three tests in `driver::tests` | yes |
 | **A craft placed for the first time is not treated as having been overtaken** | `driver::tests::a_driver_that_has_never_been_placed_is_not_provoked_by_its_first_placing` | yes |
 | Provocation is capped however often a driver is passed, and a provoked driver covers harder | two tests in `driver::tests` | yes |
-| A ram goes toward the craft alongside, waits for the physics' own lockout, and never goes toward a corridor edge it has no room for | five tests in `driver::tests` | yes |
+| A ram goes toward the craft alongside, waits for the physics' own lockout, and never goes toward a corridor edge it has no room for | six tests in `driver::tests::ramming_tests` | yes |
+| **And the room it measures is the craft's own, not the line's** | `ramming_tests::a_ram_measures_its_room_from_the_craft_and_not_from_the_line` | yes |
+| The same gate holds on real geometry, and a ram rarely throws the rammer out of the corridor | `ram_ground_truth`, two tests | **no** - needs a disc image. **Run and passing 2026-08-24**: 138 shifts over six races, none under the clearance, 11 ending outside. |
 | `Driver` stays `Copy + Eq`, which is what keeps it in the world snapshot | `driver::tests::a_driver_stays_copy_and_eq`, a compile-time guard | yes |
 | A roll is uniform, per-tick independent, and its streams disagree | five tests in `noise::tests` | yes |
 | A driver fires at a craft ahead and inside its cone, and not at one beside it, out of range, at point-blank, or round a corner | six tests in `driver::tests` | yes |

@@ -14,7 +14,7 @@ use super::*;
 use crate::field::Rival;
 use crate::line::Frame;
 use oag_core::math::{Quat, Vec3};
-use oag_physics::Body;
+use oag_physics::{Body, Sideshift};
 
 mod line_following_tests;
 mod personality_tests;
