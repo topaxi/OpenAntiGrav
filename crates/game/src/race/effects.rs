@@ -76,7 +76,10 @@ impl Race {
             return Vec::new();
         }
         let exhaust = &self.exhaust[slot];
-        let brightness = exhaust.intensity() * exhaust.speed_ramp();
+        // HD's ramp, not Pulse's: the gained speed field saturates it near
+        // 167 km/h, so a racing craft's trail is at full brightness and even
+        // a wall-scraper still shows one - see `hd::speed_ramp`.
+        let brightness = exhaust.intensity() * exhaust::hd::speed_ramp(exhaust.speed_kmh());
         let s01 = exhaust::hd::speed01(
             exhaust.speed_kmh(),
             if exhaust.engine_on() { 1.0 } else { 0.0 },

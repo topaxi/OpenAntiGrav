@@ -38,15 +38,56 @@ fn main() -> anyhow::Result<()> {
     }
     let camera = race.camera_position();
     let mut visible = 0usize;
-    for v in &verts {
+    let mut hist = [0usize; 10];
+    let mut best = (0.0f32, 0usize);
+    for (i, v) in verts.iter().enumerate() {
         let n = oag_core::math::Vec3::from_array(v.normal);
         let view = camera - oag_core::math::Vec3::from_array(v.position);
         let d = n.normalize_or_zero().dot(view.normalize_or_zero());
         let facing = (d.clamp(0.0, 0.15) / 0.15).clamp(0.0, 1.0);
-        if facing * v.colour[3] > 0.05 {
+        let a = facing * v.colour[3] * 0.75;
+        if a > 0.05 {
             visible += 1;
         }
+        hist[((a * 9.99) as usize).min(9)] += 1;
+        if a > best.0 {
+            best = (a, i);
+        }
     }
-    println!("verts passing facing*alpha > 0.05 from the race camera: {visible}");
+    println!("verts passing facing*alpha*depth > 0.05: {visible}");
+    println!("alpha histogram (0.1 bins): {hist:?}");
+    println!(
+        "best effective alpha {:.3} at vert {} pos {:?}",
+        best.0, best.1, verts[best.1].position
+    );
+    let per_fin = verts.len() / 3;
+    for fin in 0..3 {
+        let mut facing_sum = 0.0f32;
+        let mut alpha_sum = 0.0f32;
+        let mut n_behind = 0usize;
+        for v in &verts[fin * per_fin..(fin + 1) * per_fin] {
+            let n = oag_core::math::Vec3::from_array(v.normal);
+            let view = camera - oag_core::math::Vec3::from_array(v.position);
+            let d = n.normalize_or_zero().dot(view.normalize_or_zero());
+            if d < 0.0 {
+                n_behind += 1;
+            }
+            facing_sum += (d.clamp(0.0, 0.15) / 0.15).clamp(0.0, 1.0);
+            alpha_sum += v.colour[3];
+        }
+        println!(
+            "fin {fin}: mean facing {:.3}, mean vertex alpha {:.3}, backfacing {}/{}",
+            facing_sum / per_fin as f32,
+            alpha_sum / per_fin as f32,
+            n_behind,
+            per_fin
+        );
+    }
+    println!("camera {:?}", camera);
+    println!(
+        "head pos {:?} tail pos {:?}",
+        verts[0].position,
+        verts[per_fin - 2].position
+    );
     Ok(())
 }

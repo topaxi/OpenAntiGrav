@@ -79,11 +79,19 @@ index buffer (`0x780` bytes at `alloc+0x119f4`'s copy) covers the draw call's
 **The ribbon is three flat fins through the trail line**, not a closed tube
 and not camera-facing: at every ring, each fin's two edge vertices sit
 diametrically opposite at exactly `0.5` world units from the ring centre -
-full width `1.0`, no taper anywhere - with fin 0 spanning the sample's up
-axis and fins 1 and 2 rotated `+-60` degrees about the segment direction.
-Each fin has a real normal (`cross(direction, fin)`, left unnormalised where
-samples bunch), which is what the shader's facing fade consumes. The buffer
-is face-major: fin 0's 108 vertices, then fin 1's, then fin 2's.
+full width `1.0`, no taper anywhere - with the fins at **0, 60 and 120
+degrees from the sample's up axis**, rotating toward `up x back`. As *lines*
+that is the same set as "up and +-60", but the fin *directions* decide the
+single-sided normals and those decide everything under the facing fade: the
+dumped normals are `cross(back, fin_dir)` with `back` the older-minus-newer
+tangent - `(0, 0.87, -0.5)` and `(0, 0.87, +0.5)` for the two off-vertical
+fins, **both tilted toward up** - so a camera anywhere above the trail keeps
+two fins lit. Reconstructed the mirror-naive way (`+-60`,
+`cross(forward, fin)`) one fin faces fully away from a chase camera and the
+trail all but vanishes dead-astern, which is how this was caught: the
+first implementation drew exactly that. Normals are left unnormalised where
+samples bunch. The buffer is face-major: fin 0's 108 vertices, then fin 1's,
+then fin 2's.
 
 Per-ring vertex attributes, fitted exactly against six buffers (three craft,
 two frames, speeds from near-rest to race pace):
@@ -128,8 +136,16 @@ literally the same numbers, read at `0x008b2fe0..0x008b3018`: intensity rise
 boost gate `EngineFlare_BoostGate` (`0x008b2ff4`) = **0.2** - the PSP's
 `BOOST_GATE` value exactly,
 which raises the "matched mechanism" reading of the plume gate from 88 to
-**92**. HD's one difference: the speed field is multiplied by **3.6** first,
-so its world speeds are m/s where the PSP's tests are already km/h.
+**92**. **The 3.6 the speed field is multiplied by first is a gain, not a
+unit conversion** - this page first read it as m/s-to-km/h and the dumps
+refute that twice over: the slowest dumped craft (~140 km/h by its own ring
+spacing) carried brightness 0.443 where the ungained ramp predicts 0.08, and
+the measured head `u` of 0.5733 at ~195 km/h needs `speed01 = 0.711`, i.e. a
+gained field of ~711. So `+0x104` is km/h-scale times 3.6, and HD's speed
+ramp saturates near **167 km/h** - every racing craft trails at full
+brightness, and a wall-scraper still blazes, where Pulse's own ramp is still
+climbing at 600. `oag_render::exhaust::hd::speed_ramp` and `speed01` carry
+the gained law; `Exhaust::speed_ramp` stays Pulse's.
 
 `EngineFlare_PlaceShapes` then scales rather than shows/hides:
 
@@ -188,7 +204,12 @@ the scales above are not.
 Implemented in `oag_render::exhaust::hd` (the tube and the flame blends),
 `exhaust.wgsl` (facing fade, depth fade `saturate(window_z * 0.75)`, the
 blue-red mix, the baked scroll) and `oag_game::race` (per-slot state, the
-Fury flag from the team directory, the group scales). Divergences, stated:
+Fury flag from the team directory, the group scales). **The tube skips the
+renderer's gamma decode on the linear scene target**: its 29-instruction
+fragment program applies no transfer function anywhere, so the original adds
+gamma-space samples into its linear target as they are, and decoding them
+cut the trail's green and blue channels to a third. The sampler's sRGB-remap
+state is the one unread bit of that claim. Divergences, stated:
 samples push at the fixed 60 Hz tick rather than per rendered frame
 ([ADR-0007](../../../architecture/adr/0007-fixed-timestep-vs-original.md));
 the ring is reconstructed from `{position, up}` rather than the full stored

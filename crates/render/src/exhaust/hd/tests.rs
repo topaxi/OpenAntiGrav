@@ -49,19 +49,31 @@ fn fin_zero_spans_the_up_axis_and_the_others_sit_at_sixty_degrees() {
     let tube = full_tube(Vec3::X);
     let verts = tube.vertices(1.0, 0.0, 0.0);
     let per_fin = VERTICES_PER_CRAFT / FINS;
-    // Fins are emitted at -60, 0, +60 degrees from up; the middle block is
-    // fin 0. Its first two vertices are the two edges of the head ring.
-    let e0 = Vec3::from_array(verts[per_fin].position);
-    let e1 = Vec3::from_array(verts[per_fin + 1].position);
+    // Fins are emitted at 0, 60, 120 degrees from up; block 0 is the
+    // up-spanning fin. Its first two vertices are the head ring's edges.
+    let e0 = Vec3::from_array(verts[0].position);
+    let e1 = Vec3::from_array(verts[1].position);
     assert!((e0 - Vec3::new(53.0, -0.5, 0.0)).length() < 1e-4, "{e0:?}");
     assert!((e1 - Vec3::new(53.0, 0.5, 0.0)).length() < 1e-4, "{e1:?}");
-    // The outer fins' edge directions make 60 degrees with up.
-    for fin in [0, 2] {
+    // The other fins' edge directions make 60 degrees with up either way.
+    for fin in [1, 2] {
         let a = Vec3::from_array(verts[fin * per_fin].position);
         let b = Vec3::from_array(verts[fin * per_fin + 1].position);
         let dir = (b - a).normalize();
         let cos = dir.dot(Vec3::Y).abs();
         assert!((cos - 0.5).abs() < 1e-4, "fin {fin} cos {cos}");
+    }
+    // The single-sided facing fade is what makes the normal *directions*
+    // load-bearing: with travel along +X and up +Y, the dumped normals are
+    // -Z for the vertical fin and (0, +0.87, -+0.5) for the other two -
+    // both tilted toward up, so a camera above the trail keeps two fins
+    // lit. See the fin comment in `Tube::vertices`.
+    let n0 = Vec3::from_array(verts[6].normal).normalize();
+    assert!((n0 - Vec3::new(0.0, 0.0, -1.0)).length() < 1e-4, "{n0:?}");
+    for (fin, expect_z) in [(1, -0.5), (2, 0.5)] {
+        let n = Vec3::from_array(verts[fin * per_fin + 6].normal).normalize();
+        let want = Vec3::new(0.0, 3.0f32.sqrt() / 2.0, expect_z);
+        assert!((n - want).length() < 1e-4, "fin {fin}: {n:?} want {want:?}");
     }
 }
 
@@ -128,9 +140,20 @@ fn the_scroll_phase_advances_per_push_and_wraps() {
 }
 
 #[test]
-fn speed01_combines_speed_and_thrust_and_clamps() {
+fn speed01_combines_the_gained_speed_and_thrust_and_clamps() {
     assert_eq!(speed01(0.0, 0.0), 0.0);
-    assert!((speed01(500.0, 0.0) - 0.5).abs() < 1e-6);
-    assert!((speed01(500.0, 1.0) - 0.75).abs() < 1e-6);
-    assert_eq!(speed01(1000.0, 1.0), 1.0);
+    // 100 km/h -> field 360 -> 0.36; the dump's cross-check: ~195 km/h and
+    // no thrust share puts the head u at 1 - 0.6 * 0.7 = 0.58.
+    assert!((speed01(100.0, 0.0) - 0.36).abs() < 1e-6);
+    assert!((speed01(100.0, 1.0) - 0.61).abs() < 1e-6);
+    assert_eq!(speed01(600.0, 1.0), 1.0);
+}
+
+#[test]
+fn the_brightness_ramp_saturates_where_hd_races() {
+    // Pulse's own ramp is 0.08 at 140 km/h; the dumped craft at that speed
+    // carried brightness 0.443, which only the gained field explains.
+    assert_eq!(speed_ramp(0.0), 0.0);
+    assert!(speed_ramp(140.0) > 0.443);
+    assert_eq!(speed_ramp(200.0), 1.0);
 }

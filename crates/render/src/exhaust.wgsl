@@ -145,6 +145,16 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // On the linear float target the flare's gamma-authored colour is decoded
     // so the additive blend and the encode after it round-trip; on a gamma
     // target this is the identity.
-    let out_rgb = mix(rgb, pow(rgb, vec3<f32>(2.2)), linear_out);
+    //
+    // **The HD tube skips that decode on purpose.** Its own fragment program
+    // multiplies the raw texture samples into the output with no transfer
+    // function anywhere in its 29 instructions, so the original adds
+    // gamma-space values into its linear scene target as they are - decoding
+    // them here cut the trail's green and blue channels to a third and was
+    // most of why it read too faint. The sampler's sRGB-remap state is the
+    // one unread bit; if it turns out to be on, this line is where that
+    // lands. See docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md.
+    let decoded = mix(rgb, pow(rgb, vec3<f32>(2.2)), linear_out);
+    let out_rgb = mix(decoded, rgb, trail_shape);
     return vec4<f32>(out_rgb, shape * in.colour.a * hd_fade);
 }

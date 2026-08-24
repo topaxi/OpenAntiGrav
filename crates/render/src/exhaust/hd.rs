@@ -219,10 +219,20 @@ impl Tube {
 
         let mut out = Vec::with_capacity(VERTICES_PER_CRAFT);
         for fin in 0..FINS {
-            // Fin 0 along the sample's up; 1 and 2 rotated +-60 degrees
-            // about the tangent. `fin as f32 - 1.0` orders them -60, 0, +60,
-            // which only relabels the dumped 0, +60, -60.
-            let angle = (fin as f32 - 1.0) * FIN_STEP;
+            // Fins at 0, 60 and 120 degrees from the sample's up, rotating
+            // toward `side` - as *lines* the same set as "up and +-60", but
+            // the directions fix the single-sided normals, and those decide
+            // everything under the facing fade. The dumped normals are
+            // `cross(back, fin_dir)` with `back` the older-minus-newer
+            // tangent: `(0, 0.87, -0.5)` and `(0, 0.87, +0.5)` for the two
+            // off-vertical fins - BOTH tilted toward the sample's up - and
+            // `-side` for the vertical one. Reconstructed the mirror-naive
+            // way (fins at -60/0/+60, `cross(forward, fin)`), one of the
+            // three fins faces fully away from a chase camera and the trail
+            // all but vanishes dead-astern; this exact construction is what
+            // keeps two fins lit from above, and it reproduces the dump to
+            // three decimals.
+            let angle = fin as f32 * FIN_STEP;
             let (sin, cos) = angle.sin_cos();
             for k in 0..SAMPLES - 1 {
                 let corner = |k: usize, edge: f32| {
@@ -235,7 +245,9 @@ impl Tube {
                     let tint = ring_tint(k);
                     GpuVertex {
                         position: (s.position + fin_dir * (edge * FIN_HALF_WIDTH)).to_array(),
-                        normal: d.cross(fin_dir).to_array(),
+                        // `cross(back, fin) = cross(fin, forward)`, the
+                        // dumped orientation - see the fin comment above.
+                        normal: fin_dir.cross(d).to_array(),
                         colour: [1.0, tint, tint, ring_alpha(k)],
                         texcoord: [ring_u(k), (edge + 1.0) * 0.5],
                         lit: red_mix,
@@ -271,15 +283,41 @@ pub fn u_head(speed01: f32) -> f32 {
     1.0 - TEX_USCALE_MAX * speed01
 }
 
+/// The gain `EngineFlare_Update` applies to the craft's speed field on its
+/// way into the flare's speed input (`+0x104 = node[0x4c4] * 3.6`).
+///
+/// **A second gain on an already-km/h-scale field, not a unit conversion** -
+/// the first reading here took the 3.6 for m/s-to-km/h and it is refuted by
+/// the live dumps two ways: the slowest dumped craft (~140 km/h by its own
+/// ring spacing) carried brightness 0.443 where a plain `(kmh-100)/500` ramp
+/// predicts 0.08, and the measured head `u` of 0.5733 at ~195 km/h needs
+/// `speed01 = 0.711`, i.e. a field of ~711 = 195 * 3.6. Both close exactly
+/// under this gain.
+pub const SPEED_FIELD_GAIN: f32 = 3.6;
+
 /// The normalised speed the scroll and stretch ride on.
 ///
-/// `(speed_kmh - Ship Min) / Ship Range + thrust * Thrust Contrib`, clamped -
-/// the authored `Ship Min` is 0. `speed_kmh` is this engine's own km/h
-/// (`Exhaust::speed_kmh`); HD's field reads in the same hundreds-of-km/h
-/// scale its HUD shows.
+/// `(field - Ship Min) / Ship Range + thrust * Thrust Contrib`, clamped -
+/// the authored `Ship Min` is 0 and the field is the craft's km/h times
+/// [`SPEED_FIELD_GAIN`], so `speed01` saturates near 278 km/h.
 #[must_use]
 pub fn speed01(speed_kmh: f32, thrust: f32) -> f32 {
-    (speed_kmh / SPEED01_RANGE_KMH + thrust * SPEED01_THRUST_CONTRIB).clamp(0.0, 1.0)
+    (speed_kmh * SPEED_FIELD_GAIN / SPEED01_RANGE_KMH + thrust * SPEED01_THRUST_CONTRIB)
+        .clamp(0.0, 1.0)
+}
+
+/// The trail-brightness speed ramp, HD's own: `(field - 100) / 500` clamped,
+/// with the field again km/h times [`SPEED_FIELD_GAIN`].
+///
+/// The *shape* is Pulse's recovered ramp constant for constant (floor 100,
+/// span 500, from `0x008b3010`/`0x008b3004`), but the gained field saturates
+/// it near **167 km/h** - which is why every racing craft in HD trails at
+/// full brightness and a craft scraping a wall still blazes, where Pulse's
+/// own ramp is still climbing at 600. `Exhaust::speed_ramp` stays Pulse's;
+/// this is the HD consumer's.
+#[must_use]
+pub fn speed_ramp(speed_kmh: f32) -> f32 {
+    ((speed_kmh * SPEED_FIELD_GAIN - 100.0) / 500.0).clamp(0.0, 1.0)
 }
 
 /// One craft's vertex budget: 53 segments x 3 fins x 6 vertices.
