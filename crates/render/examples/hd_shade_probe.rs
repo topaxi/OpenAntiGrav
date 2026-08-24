@@ -31,6 +31,9 @@ fn main() -> anyhow::Result<()> {
     let mut normal_y = (1.0f32, -1.0f32, 0.0f64);
     let mut lit_sum = 0.0f64;
     let (mut umin, mut umax, mut vmin, mut vmax) = (f32::MAX, f32::MIN, f32::MAX, f32::MIN);
+    // Where in the atlas the surface actually sits, in tenths of v.
+    let mut bands = [0usize; 10];
+    let mut band_lum = [0.0f64; 10];
 
     for (list, draws) in [
         ("opaque", &model.draws),
@@ -60,6 +63,7 @@ fn main() -> anyhow::Result<()> {
                 normal_y.2 += f64::from(v.normal[1]);
                 lit_sum += f64::from(v.lit);
                 let [u, w] = v.texcoord;
+                bands[((w.rem_euclid(1.0) * 10.0) as usize).min(9)] += 1;
                 umin = umin.min(u);
                 umax = umax.max(u);
                 vmin = vmin.min(w);
@@ -74,6 +78,10 @@ fn main() -> anyhow::Result<()> {
                     albedo[c] += f64::from(b);
                     albedo_max[c] = albedo_max[c].max(b);
                 }
+                let band = ((w.rem_euclid(1.0) * 10.0) as usize).min(9);
+                band_lum[band] += 0.299 * f64::from(texture.rgba[at])
+                    + 0.587 * f64::from(texture.rgba[at + 1])
+                    + 0.114 * f64::from(texture.rgba[at + 2]);
             }
         }
     }
@@ -106,6 +114,19 @@ fn main() -> anyhow::Result<()> {
     );
     println!("  lit           mean {:.3}", lit_sum / f);
     println!("  u {umin:.2}..{umax:.2}  v {vmin:.2}..{vmax:.2}");
+    println!("  where in the atlas (v band -> share of vertices, mean albedo luma):");
+    for (i, &count) in bands.iter().enumerate() {
+        if count == 0 {
+            continue;
+        }
+        println!(
+            "    v {:.1}-{:.1}  {:5.1}%  luma {:5.1}",
+            i as f32 / 10.0,
+            (i + 1) as f32 / 10.0,
+            count as f64 / f * 100.0,
+            band_lum[i] / count as f64
+        );
+    }
     println!(
         "  albedo at its own UV  mean [{:.1}, {:.1}, {:.1}]  max [{}, {}, {}]",
         albedo[0] / f,
