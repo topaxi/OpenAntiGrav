@@ -336,6 +336,23 @@ The `a > 179` branch phase-inverts one channel for the rear half of the circle.
 bookkeeping - which reads the previous frame's output signs - is therefore
 unexercised on this path and was not chased.
 
+## A consequence the numbers do not advertise
+
+**Two seconds after the flag, the field is already out of engine range.** The
+engine emitter's radius is `50.0` and the AI opens a gap immediately, so a race
+left to itself renders the *player's* engine and nothing else - measured, not
+predicted: `sfx_ground_truth::the_whole_grid_is_audible_and_not_all_from_one_place`
+first asserted a stereo spread across the grid and got `0.00009`, because seven
+of the eight voices were sitting at gain zero. It now moves a rival to the
+camera's right on purpose.
+
+That is what the recovered numbers say, and it is worth flagging rather than
+tuning away: a "field of eight engines" is not what this law produces. The
+collision and pad cues, at `200.0`, carry four times the range and are what a
+player actually hears from the field. If a live capture ever shows rivals
+audible further out than this, the radius or the `1.25` is where to look
+first - both are read off one function and neither has been seen running.
+
 ## Confidence, and what would raise it
 
 | Claim | Score | Why not higher |
