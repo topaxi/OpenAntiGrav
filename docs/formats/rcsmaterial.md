@@ -932,6 +932,20 @@ counted in `Report::isolated` so a mutilated frame says so in the loader report:
 | `OAG_SKIP_MATERIAL=clouds,glass` | drop the chunks that match |
 | `OAG_ONLY_MATERIAL=track_surface` | keep only the chunks that match |
 | `OAG_OPAQUE_ONLY=1` | drop every chunk the material asks to be blended |
+| `OAG_TINT_MATERIALS=1` | paint every material a flat colour keyed by its slot |
+
+**`OAG_TINT_MATERIALS` is the cheap half of an ID render**, added 2026-08-24
+after the question "*what* is this pixel" came up three times and was answered
+three times by guesswork. It replaces each material's picture with a 1x1 solid
+colour from a golden-ratio walk round the hue wheel and draws the geometry
+unlit, so the palette entry reaches the frame as itself and one sampled pixel
+decodes to a material ordinal. It needs no pipeline of its own - the texture is
+simply substituted - which is why it exists at all where a per-draw-call tint
+would have been a pass, a shader entry point and a bind group. It found the
+structure behind Talon's Junction's floating platforms in one frame:
+`(79, 162, 235)` decodes to slot 441, `uv_anim_diffuse_alpha` /
+`air_traffic_test_a_atoc.gtf`, the circuit's largest material at 66 chunks -
+drawn, and so pale in an ordinary frame that it reads as sky.
 
 Matching the texture and not only the material is what makes it usable on a
 circuit: Talon's Junction names `track_surface.rcsmaterial` in fifteen slots

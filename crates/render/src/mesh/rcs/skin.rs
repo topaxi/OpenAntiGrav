@@ -66,6 +66,16 @@ pub(super) fn skin(
         let pick = picks.get(slot).copied().unwrap_or_default();
         let entry =
             |index: Option<usize>| -> Option<&str> { material.samplers.get(index?)?.1.as_deref() };
+        if super::isolate::tinting() {
+            skins.push(Some(ModelTexture {
+                label: format!("tint:{slot}"),
+                width: 1,
+                height: 1,
+                rgba: super::isolate::tint(slot).to_vec(),
+            }));
+            seconds.push(None);
+            continue;
+        }
         match entry(Some(pick.albedo)) {
             None => {
                 report.untextured += 1;

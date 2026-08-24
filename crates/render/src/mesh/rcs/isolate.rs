@@ -13,6 +13,9 @@
 //! - `OAG_OPAQUE_ONLY=1` drops every chunk the material asks to be blended,
 //!   which is the one-run answer to "is there anything solid behind all this
 //!   see-through geometry at this camera pose".
+//! - `OAG_TINT_MATERIALS=1` replaces every material's picture with a flat
+//!   colour keyed by its slot ordinal, which answers "**what** is this pixel"
+//!   - see [`tint`].
 //!
 //! Both match the material's own archive path
 //! (`data/environments/talons_junction/materials/clouds.rcsmaterial`) **or
@@ -95,4 +98,48 @@ pub(super) fn excludes(model: &rcsmodel::Model, mesh: &rcsmodel::Mesh) -> bool {
         return true;
     }
     matches(&filter.skip)
+}
+
+/// Whether every material's picture is replaced by a flat colour keyed by its
+/// slot ordinal (`OAG_TINT_MATERIALS`).
+pub(super) fn tinting() -> bool {
+    static ON: OnceLock<bool> = OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("OAG_TINT_MATERIALS").is_some())
+}
+
+/// The flat colour material `slot` paints under [`tinting`].
+///
+/// **The cheap half of an ID render.** The technique
+/// `docs/formats/rcsmaterial.md` used to find the cloud plate tints every
+/// draw and reads the frame back; this tints every *material*, which needs no
+/// pipeline of its own - the texture is simply replaced - and answers the
+/// question that keeps coming up: a large surface that renders as a flat
+/// black band, or a structure that looks absent, is identified by sampling
+/// one pixel and matching its hue.
+///
+/// **It is a hue, not an exact value.** The lit path still multiplies by the
+/// light rig, so the frame's colours are the palette *shaded*; the hue
+/// survives that and the magnitude does not. A golden-ratio walk round the
+/// wheel keeps neighbouring ordinals far apart, which matters because
+/// adjacent slots are usually adjacent surfaces.
+pub(super) fn tint(slot: usize) -> [u8; 4] {
+    // 0.618034 is 1/phi: the standard low-discrepancy hue step.
+    let hue = (slot as f32 * 0.618_034).fract() * 6.0;
+    let sector = hue as u32;
+    let f = hue - sector as f32;
+    let (q, t) = (1.0 - f, f);
+    let [r, g, b] = match sector {
+        0 => [1.0, t, 0.0],
+        1 => [q, 1.0, 0.0],
+        2 => [0.0, 1.0, t],
+        3 => [0.0, q, 1.0],
+        4 => [t, 0.0, 1.0],
+        _ => [1.0, 0.0, q],
+    };
+    [
+        (r * 255.0) as u8,
+        (g * 255.0) as u8,
+        (b * 255.0) as u8,
+        0xff,
+    ]
 }

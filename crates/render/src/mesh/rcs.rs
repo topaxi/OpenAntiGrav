@@ -585,7 +585,12 @@ fn emit(out: &mut Model, mesh: Geometry<'_>, to_world: Mat4, node: Option<u32>, 
                 .and_then(|t| t.get(k))
                 .map(|&[u, v]| [finite(u), finite(v)])
                 .unwrap_or([0.0, 0.0]),
-            lit: 1.0,
+            // **Unlit under the tint diagnostic**, so the flat colour reaches
+            // the frame as itself: `lit` 0.0 takes `mesh.wgsl`'s stand-in
+            // path, whose light and tint are both 1.0 for an HD model, and
+            // the palette entry can be matched exactly rather than by hue
+            // through a coloured light rig.
+            lit: if isolate::tinting() { 0.0 } else { 1.0 },
             anim: 0,
             slots: surface.roles,
             xform: 0,
