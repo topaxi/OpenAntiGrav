@@ -411,7 +411,14 @@ def resolve_chain(gdb, chain):
     for step in terms[1:]:
         if not value:
             return None
-        value = int.from_bytes(gdb.read(value, 4), "big") + _offset(step)
+        # The null test is on what the pointer *held*, before the offset is
+        # added. Testing after it turns a null pointer plus `+0x14` into the
+        # perfectly non-zero address `0x14`, which the stub then answers `E01`
+        # for - and that read is what killed a whole boot.
+        value = int.from_bytes(gdb.read(value, 4), "big")
+        if not value:
+            return None
+        value += _offset(step)
     return value or None
 
 
@@ -497,13 +504,24 @@ def cmd_capture(args):
                 shot = screenshot(out / ("%s.png" % stem), trim=True)
                 blobs = []
                 for chain, size in regions:
-                    at = resolve_chain(gdb, chain)
+                    # A region that will not resolve or will not read is
+                    # reported and skipped, never raised: the boot that got
+                    # here cost three minutes and the other regions are still
+                    # worth having.
+                    try:
+                        at = resolve_chain(gdb, chain)
+                    except Exception as error:  # noqa: BLE001 - see above
+                        print("  %s: %s" % (chain, error), flush=True)
+                        continue
                     if not at:
                         print("  %s resolves to nothing yet" % chain, flush=True)
                         continue
                     print("  reading %#x bytes at %#010x (%s)"
                           % (size, at, chain), flush=True)
-                    blobs.append((at, gdb.read(at, size)))
+                    try:
+                        blobs.append((at, gdb.read(at, size)))
+                    except Exception as error:  # noqa: BLE001 - see above
+                        print("  %#010x: %s" % (at, error), flush=True)
 
                 pose = describe(blobs, track, shot)
                 (out / ("%s.json" % stem)).write_text(
