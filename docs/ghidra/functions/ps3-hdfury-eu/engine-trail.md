@@ -230,10 +230,14 @@ Open, in rough order of visible cost:
 - The flame surface's `Speed * time` scroll: `time`'s provider is still
   unread ([engine-flare.md](engine-flare.md)); the ribbon's phase at
   `+0x1210` is a *different* accumulator and does not answer it.
-- The `Engine_Flare_Rich.gtf` sprite flare: `Enable Flare Sprite` is 1 and
-  the file authors its radius (3), fade distances (15/15), jitter and
-  chromatic dispersion - but its shader (`engineflare_vp/fp`) is unresolved,
-  so it stays undrawn and reported.
+- The `Engine_Flare_Rich.gtf` sprite flare **draws now** with its authored
+  radius (3, jittered by 0.5, floored at 2) and the `Slow Alpha Noise`
+  opacity walk (0.5..0.8, chase 0.1, retarget every 10) - the flare's init
+  (`0x002a1528`) loads the texture and four corner pairs, so the sprite is
+  real, and it is most of the "solid core" the exhaust reads as in the
+  original. Still unread and undrawn: its spin, chromatic dispersion,
+  `Flare Fadeout Dist/Range` term and the occluder query - the shader pair
+  (`engineflare_vp/fp`) resolves through no registry read so far.
 - What the SPU does with a part-empty ring at a race start; this engine
   reuses the PSP's full-ring gate.
 - `+0x11e4`, the dt-scaled per-frame global every trail shares, unplaced.

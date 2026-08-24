@@ -329,3 +329,54 @@ fn the_tube_constants_are_the_discs_own_tuning_file() {
     assert_eq!(value("Tex UScale Max"), hd::TEX_USCALE_MAX);
     assert_eq!(value("Enable Engine Trails"), 1.0);
 }
+
+/// The sprite flare's constants are the tuning file's too, and its texture is
+/// the executable's own literal.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn the_sprite_flares_constants_are_the_discs_own() {
+    let Some(image) = image() else {
+        return;
+    };
+    let spec = format!("{}:PS3_GAME/USRDIR/DATA02.PSARC", image.display());
+    let text = String::from_utf8(
+        oag_render::mesh::read_blob(&spec, "/data/ships/shipeffectstweaks.txt")
+            .expect("the tuning file"),
+    )
+    .expect("ascii");
+    let value = |key: &str| -> f32 {
+        let line = text
+            .lines()
+            .find(|line| line.contains(key))
+            .unwrap_or_else(|| panic!("no {key}"));
+        line.split('=')
+            .nth(1)
+            .expect("=")
+            .trim()
+            .parse()
+            .expect("float")
+    };
+    use oag_render::exhaust::hd;
+    assert_eq!(value("Enable Flare Sprite"), 1.0);
+    assert_eq!(
+        value("\"Ship Effects.Engine Trails.Flare Radius\""),
+        hd::SPRITE_RADIUS
+    );
+    assert_eq!(value("Flare Radius Min"), hd::SPRITE_RADIUS_MIN);
+    assert_eq!(value("Max Radius Jitter"), hd::SPRITE_RADIUS_JITTER);
+    assert_eq!(value("Slow Alpha Noise Min"), hd::SPRITE_ALPHA_NOISE.0);
+    assert_eq!(value("Slow Alpha Noise Max"), hd::SPRITE_ALPHA_NOISE.1);
+    assert_eq!(
+        value("Slow Alpha Noise Chase Speed"),
+        hd::SPRITE_ALPHA_CHASE
+    );
+    assert_eq!(
+        value("Slow Alpha Noise Timer"),
+        hd::SPRITE_ALPHA_RETARGET as f32
+    );
+    assert_eq!(value("Flare Opacity Max"), hd::SPRITE_OPACITY_MAX);
+    // And the texture the flare's init names decodes from the archive set.
+    let blob = oag_render::mesh::read_blob(&spec, "/data/tex/engineflare/engine_flare_rich.gtf")
+        .expect("Engine_Flare_Rich.gtf");
+    assert!(blob.len() > 100_000, "{} bytes", blob.len());
+}

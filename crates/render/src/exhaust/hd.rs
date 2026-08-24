@@ -351,6 +351,103 @@ pub const BOOST_EXTRA_XY: f32 = 1.4;
 /// See [`BOOST_EXTRA_XY`].
 pub const BOOST_EXTRA_Z: f32 = 2.0;
 
+/// `Flare Radius` from `Data/ships/shipeffectstweaks.txt`: the sprite
+/// flare's base half-size in world units.
+///
+/// The sprite is real and always built: `Enable Flare Sprite` is authored 1,
+/// the flare's own init (`0x002a1528`) loads
+/// `Data/Tex/EngineFlare/Engine_Flare_Rich.gtf` and four corner pairs, and
+/// this is the bright core the exhaust reads as "solid" in the original -
+/// the tube alone is an additive wash without it.
+pub const SPRITE_RADIUS: f32 = 3.0;
+
+/// `Flare Radius Min`: the floor the jittered radius may not fall under.
+pub const SPRITE_RADIUS_MIN: f32 = 2.0;
+
+/// `Max Radius Jitter`: the per-frame radius wobble's span.
+///
+/// The *law* tying the three radius numbers together is unread - this
+/// implementation jitters `RADIUS +- rand * JITTER`, floored at `MIN`, which
+/// uses each authored number in its stated role and nothing else.
+pub const SPRITE_RADIUS_JITTER: f32 = 0.5;
+
+/// `Slow Alpha Noise Min` / `Max`: the band the sprite's opacity wanders in.
+pub const SPRITE_ALPHA_NOISE: (f32, f32) = (0.5, 0.8);
+
+/// `Slow Alpha Noise Chase Speed`: the per-tick lerp toward the target.
+pub const SPRITE_ALPHA_CHASE: f32 = 0.1;
+
+/// `Slow Alpha Noise Timer`: ticks between picking a new target.
+pub const SPRITE_ALPHA_RETARGET: u32 = 10;
+
+/// `Flare Opacity Max`: the ceiling on the walked alpha.
+pub const SPRITE_OPACITY_MAX: f32 = 1.0;
+
+/// The sprite flare's per-craft state: a slow alpha walk and a jittered
+/// radius, both from the authored constants above.
+///
+/// Read and deliberately **not** implemented, said here so the absence is a
+/// decision: the `Max Rotate Angle` spin, the `Max Chromatic Dispersion`
+/// fringe, the `Flare Fadeout Dist`/`Range` term (whether it fades the
+/// sprite by camera distance or by occlusion is unread, and the wrong guess
+/// erases every opponent's flare), and the `Flare Occluder Radius` /
+/// `Flare Depth Bias` occlusion query - the shader pair that would settle
+/// them (`engineflare_vp`/`fp`) resolves through no registry read so far.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Sprite {
+    alpha: f32,
+    target: f32,
+    ticks: u32,
+    radius: f32,
+}
+
+impl Default for Sprite {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Sprite {
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            alpha: SPRITE_ALPHA_NOISE.0,
+            target: SPRITE_ALPHA_NOISE.1,
+            ticks: 0,
+            radius: SPRITE_RADIUS,
+        }
+    }
+
+    /// Advances one tick: re-targets the alpha walk every
+    /// [`SPRITE_ALPHA_RETARGET`] ticks, chases it, and jitters the radius.
+    ///
+    /// `next` supplies uniform randoms in `0..1` - the caller's seeded
+    /// per-craft stream, never OS entropy.
+    pub fn advance(&mut self, mut next: impl FnMut() -> f32) {
+        if self.ticks == 0 {
+            self.ticks = SPRITE_ALPHA_RETARGET;
+            let (lo, hi) = SPRITE_ALPHA_NOISE;
+            self.target = lo + (hi - lo) * next();
+        }
+        self.ticks -= 1;
+        self.alpha += (self.target - self.alpha) * SPRITE_ALPHA_CHASE;
+        self.radius =
+            (SPRITE_RADIUS + (next() * 2.0 - 1.0) * SPRITE_RADIUS_JITTER).max(SPRITE_RADIUS_MIN);
+    }
+
+    /// This tick's half-size, in world units.
+    #[must_use]
+    pub fn radius(&self) -> f32 {
+        self.radius
+    }
+
+    /// This tick's opacity, already ceilinged by [`SPRITE_OPACITY_MAX`].
+    #[must_use]
+    pub fn alpha(&self) -> f32 {
+        self.alpha.min(SPRITE_OPACITY_MAX)
+    }
+}
+
 /// The flame's per-craft animation state: HD's `EngineFlare` blends.
 ///
 /// Two numbers, from `EngineFlare_Update`/`_PlaceShapes` (0x002a3100 /

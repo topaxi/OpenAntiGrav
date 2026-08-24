@@ -417,6 +417,10 @@ impl Scene {
             if !race.engine_flare_effect() {
                 vertices.extend(exhaust.vertices(nozzle, right, up));
             }
+            // HD's sprite flare - Engine_Flare_Rich.gtf, enabled by the
+            // disc's own tuning file - is the bright core the exhaust's
+            // "solidity" comes from; the flare texture slot holds it on HD.
+            vertices.extend(race.hd_sprite_quad(slot, right, up));
             // Wipeout HD draws its own measured tube - three fins over a
             // 54-sample ring, extruded in the craft's frame rather than the
             // camera's - and every other source the PSP preset's ribbon.

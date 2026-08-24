@@ -583,12 +583,12 @@ pub struct Race {
     /// capture taken against a single-craft race, and it couples eight flares
     /// that should be independent. See [`exhaust_seed`].
     exhaust_rng: [Rng; MAX_SHIPS],
-    /// Wipeout HD's exhaust (tube ring, active flag from `Setup::hd_trail`,
-    /// Fury red mix, flame blends). Render-only; see `oag_render::exhaust::hd`.
+    /// Wipeout HD's exhaust states. Render-only; see `oag_render::exhaust::hd`.
     hd_trail: [exhaust::hd::Tube; MAX_SHIPS],
     hd_trail_active: bool,
     hd_trail_red: [f32; MAX_SHIPS],
     hd_flame: [exhaust::hd::Flame; MAX_SHIPS],
+    hd_sprite: [exhaust::hd::Sprite; MAX_SHIPS],
     /// Each craft's shield shell animation, when one is up.
     ///
     /// Render-only for the reason [`Self::exhaust`] is: the *simulation* half of

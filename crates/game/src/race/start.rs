@@ -256,6 +256,7 @@ impl Race {
             hd_trail_active: hd_trail.is_some(),
             hd_trail_red: hd_trail.unwrap_or([0.0; MAX_SHIPS]),
             hd_flame: [exhaust::hd::Flame::new(); MAX_SHIPS],
+            hd_sprite: [exhaust::hd::Sprite::new(); MAX_SHIPS],
             shield: [ShipShield::new(); MAX_SHIPS],
             nozzles,
             collision_fx,

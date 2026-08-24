@@ -43,6 +43,8 @@ impl Race {
                     thrust > 0.0,
                     self.exhaust[slot].boost_timer() > exhaust::BOOST_GATE,
                 );
+                let rng = &mut self.exhaust_rng[slot];
+                self.hd_sprite[slot].advance(|| rng.next_f32());
             }
             if let Some(nozzle) = self.nozzle_of(slot) {
                 self.exhaust[slot].push_trail(nozzle, back);
@@ -77,8 +79,8 @@ impl Race {
         }
         let exhaust = &self.exhaust[slot];
         // HD's ramp, not Pulse's: the gained speed field saturates it near
-        // 167 km/h, so a racing craft's trail is at full brightness and even
-        // a wall-scraper still shows one - see `hd::speed_ramp`.
+        // 400 km/h, so a craft at pace trails at or near full brightness -
+        // see `hd::speed_ramp` and the live table on engine-trail.md.
         let brightness = exhaust.intensity() * exhaust::hd::speed_ramp(exhaust.speed_kmh());
         let s01 = exhaust::hd::speed01(
             exhaust.speed_kmh(),
@@ -97,6 +99,26 @@ impl Race {
     #[must_use]
     pub fn hd_flame_of(&self, slot: usize) -> &exhaust::hd::Flame {
         &self.hd_flame[slot]
+    }
+
+    /// One craft's sprite-flare quad: `Engine_Flare_Rich.gtf` at the nozzle,
+    /// at this tick's jittered radius and walked alpha. Empty off HD or
+    /// where no locator exists.
+    #[must_use]
+    pub fn hd_sprite_quad(
+        &self,
+        slot: usize,
+        right: Vec3,
+        up: Vec3,
+    ) -> Vec<oag_render::mesh::GpuVertex> {
+        if !self.hd_trail_active {
+            return Vec::new();
+        }
+        let Some(nozzle) = self.nozzle_of(slot) else {
+            return Vec::new();
+        };
+        let sprite = &self.hd_sprite[slot];
+        exhaust::sprite(nozzle, right, up, sprite.radius(), sprite.alpha()).to_vec()
     }
 
     /// Advances every craft's shield shell, and starts the fade on the tick its

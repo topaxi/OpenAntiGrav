@@ -864,8 +864,9 @@ pub fn load(options: &Options) -> Result<Loaded> {
         report.push(
             "read and not drawn on HD: the flame spikes' per-shape random flicker \
              (0.65..0.85), the Fury afterburner's second boost blend, the flame surface's \
-             Speed*time scroll (the clock is still unread), and the Engine_Flare_Rich \
-             sprite flare"
+             Speed*time scroll (the clock is still unread), and the sprite flare's spin, \
+             chromatic fringe, distance fade and occlusion query (its radius, alpha walk \
+             and texture do draw - exhaust::hd::Sprite)"
                 .into(),
         );
     }

@@ -271,6 +271,11 @@ fn decode_gtf(
 /// per craft by [`crate::livery::flare`] and reported there; the sprite
 /// pipeline keeps its stand-in texture for the *rocket* billboard fallback,
 /// which is a separate use of the same slot.
+/// The sprite flare's texture, `Data/Tex/EngineFlare/Engine_Flare_Rich.gtf`
+/// as the executable's own literal at `0x0079bdd8` spells it, in the archive
+/// set's lower-case path form.
+const HD_SPRITE_FLARE: &str = "/data/tex/engineflare/engine_flare_rich.gtf";
+
 pub(super) fn flare_texture(
     archives: &mut oag_assets::Archives,
     title: &oag_title::Title,
@@ -292,12 +297,30 @@ pub(super) fn flare_texture(
         },
         oag_title::flare::Flare::PerTeam(authored) => {
             report.push(format!(
-                "{}: the engine flare is authored geometry here, not a sprite - one \
-                 {}.vex per craft, reported with each livery. No flare texture is \
-                 loaded and none is missing",
+                "{}: the engine flare is authored geometry here - one {}.vex per \
+                 craft, reported with each livery - and a sprite flare rides on \
+                 top of it",
                 title.name, authored.stem
             ));
-            None
+            // HD draws a sprite flare *as well as* the model: the tuning file
+            // authors `Enable Flare Sprite` = 1 with its radius and alpha
+            // walk, and the flare's own init (`0x002a1528`) loads this
+            // texture and four corner pairs. The modulation this engine does
+            // not reproduce is listed on `exhaust::hd::Sprite`.
+            match decode_gtf(archives, HD_SPRITE_FLARE) {
+                Ok(texture) => {
+                    report.push(format!(
+                        "{HD_SPRITE_FLARE}: {}x{} .gtf - the sprite flare the \
+                         executable loads beside the flare model",
+                        texture.width, texture.height
+                    ));
+                    Some(texture)
+                }
+                Err(why) => {
+                    report.push(format!("{why} - no sprite flare rides the nozzle"));
+                    None
+                }
+            }
         }
         oag_title::flare::Flare::Unread => {
             report.push(format!(
