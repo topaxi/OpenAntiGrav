@@ -16,6 +16,12 @@
 //! - `OAG_TINT_MATERIALS=1` replaces every material's picture with a flat
 //!   colour keyed by its slot ordinal, which answers "**what** is this pixel"
 //!   - see [`tint`].
+//! - `OAG_ALBEDO_ONLY=1` keeps every real picture but switches the light rig
+//!   off, which answers the question that follows: "is this surface dark
+//!   because its *art* is dark, or because the light reaching it is". Both
+//!   this and `OAG_TINT_MATERIALS` work by clearing `GpuVertex::lit`, the
+//!   flag `mesh.wgsl` already reads to pick its unlit path, so neither needs a
+//!   pipeline or a shader of its own.
 //!
 //! Both match the material's own archive path
 //! (`data/environments/talons_junction/materials/clouds.rcsmaterial`) **or
@@ -105,6 +111,18 @@ pub(super) fn excludes(model: &rcsmodel::Model, mesh: &rcsmodel::Mesh) -> bool {
 pub(super) fn tinting() -> bool {
     static ON: OnceLock<bool> = OnceLock::new();
     *ON.get_or_init(|| std::env::var_os("OAG_TINT_MATERIALS").is_some())
+}
+
+/// Whether to draw every surface's own picture with no light on it at all.
+///
+/// The complement of [`tinting`]: that one keeps the lighting question out of
+/// the way to answer *which* material a pixel is, this one keeps the material
+/// and takes the lighting out to answer *what its art looks like* before the
+/// rig touches it. Reading the two frames against the lit one attributes a
+/// black surface to its texture or to its light in two runs.
+pub(super) fn unlit() -> bool {
+    static ON: OnceLock<bool> = OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("OAG_ALBEDO_ONLY").is_some())
 }
 
 /// The flat colour material `slot` paints under [`tinting`].

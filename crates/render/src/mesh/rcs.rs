@@ -590,7 +590,11 @@ fn emit(out: &mut Model, mesh: Geometry<'_>, to_world: Mat4, node: Option<u32>, 
             // path, whose light and tint are both 1.0 for an HD model, and
             // the palette entry can be matched exactly rather than by hue
             // through a coloured light rig.
-            lit: if isolate::tinting() { 0.0 } else { 1.0 },
+            lit: if isolate::tinting() || isolate::unlit() {
+                0.0
+            } else {
+                1.0
+            },
             anim: 0,
             slots: surface.roles,
             xform: 0,
