@@ -362,6 +362,23 @@ impl Race {
         &self.sounds
     }
 
+    /// Whether the player's craft is mid-explosion.
+    ///
+    /// A *level*, like [`Self::shield_is_up`] and for the same reason:
+    /// `Ship_SetState`'s case 4 opens `~BLOWUP` with a handle and keeps it at
+    /// `craft+0xcac`, so it is a held voice rather than a one-shot. See
+    /// [zone-mode.md](../../../docs/ghidra/functions/psp-pulse-usa/zone-mode.md).
+    ///
+    /// **Where the original releases that handle is unread**, so this port ties
+    /// the voice to the state's own recovered `0.5 s` - the shortest lifetime
+    /// the evidence supports, and stated rather than assumed. If the original
+    /// turns out to hold it through state 5 as well, this predicate is the one
+    /// line that changes.
+    #[must_use]
+    pub fn craft_is_exploding(&self) -> bool {
+        self.world.ships[0].physics.craft_state == oag_physics::CraftState::Destroyed
+    }
+
     /// Whether the player's shield pickup is currently up.
     ///
     /// A *level*, not an edge, and that is what `~SHIELD` wants:

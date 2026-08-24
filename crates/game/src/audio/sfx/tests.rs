@@ -105,10 +105,12 @@ fn every_cue_names_a_bank_and_a_string() {
     );
     // Pure spells them exactly as Pulse does - the finding, not the assumption.
     assert_eq!(oag_pure::race::SOUND_BANKS, pulse);
-    // The two cues this port holds a handle to, and only those two: a held cue
-    // must not also be fired as a one-shot from the drain loop.
+    // The cues this port holds a handle to, and only those: a held cue must
+    // not also be fired as a one-shot from the drain loop. All three are ones
+    // the original opens with an out-parameter and keeps - `~ENGINE` at
+    // `flare+0x7c`, `~SHIELD` at `entity+0x54`, `~BLOWUP` at `craft+0xcac`.
     let held: Vec<Cue> = Cue::ALL.into_iter().filter(|c| c.held()).collect();
-    assert_eq!(held, vec![Cue::Engine, Cue::Shield]);
+    assert_eq!(held, vec![Cue::Engine, Cue::Shield, Cue::Blowup]);
 }
 
 #[test]
@@ -164,7 +166,7 @@ fn every_cue_states_where_it_is_heard_from() {
     // Two are `Unplaced` and each for its own reason: `ShieldActive`'s call
     // site is recorded as a full-volume pan-zero play, and `Disengaging`'s is
     // *read* as the no-emitter path. Both are announcer lines.
-    const DRY: [Cue; 2] = [Cue::ShieldActive, Cue::Disengaging];
+    const DRY: [Cue; 3] = [Cue::ShieldActive, Cue::Disengaging, Cue::Blowup];
     for cue in Cue::ALL {
         let placement = cue.placement();
         if DRY.contains(&cue) {

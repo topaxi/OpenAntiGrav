@@ -162,7 +162,7 @@ fn every_wired_cue_resolves_on_every_psp_and_ps2_disc() {
 /// `c_CShipShip` and `c_CShipWall` to 112 waveforms.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn wipeout_hd_loads_the_five_cues_it_has_and_reports_the_one_it_does_not() {
+fn wipeout_hd_loads_the_seven_cues_it_has_and_reports_the_one_it_does_not() {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
         .join("data/images/hdfury-ps3-eu-dec.iso");
@@ -186,6 +186,16 @@ fn wipeout_hd_loads_the_five_cues_it_has_and_reports_the_one_it_does_not() {
         .filter(|&c| banks.pick(c, &mut rng).is_some())
         .map(Cue::name)
         .collect();
+    // **Seven since 2026-08-24**, and both additions were free: `disengaging`
+    // and `~BLOWUP` resolve on HD's own banks with no per-title work at all,
+    // the same way the first five did. `~ENGINE` is still the one miss - HD's
+    // ship audio is a per-event `c_*` set - see `oag_title::SoundBanks`.
+    //
+    // **This test is `#[ignore]`d, so `just` stayed green while it was stale.**
+    // `disengaging` was added a commit earlier and this list was not updated
+    // with it; the failure surfaced only on the next `--run-ignored all`. The
+    // same shape as the `--reel` trap on HANDOVER: a guard that does not run in
+    // the gate is a guard that lags.
     assert_eq!(
         loaded,
         vec![
@@ -193,7 +203,9 @@ fn wipeout_hd_loads_the_five_cues_it_has_and_reports_the_one_it_does_not() {
             ".COLLISIONS",
             "ABSORB",
             "~SHIELD",
-            "shieldactive"
+            "shieldactive",
+            "disengaging",
+            "~BLOWUP"
         ],
         "HD's loadable cue set changed"
     );
@@ -398,6 +410,75 @@ fn the_engine_sounds_while_a_race_runs_and_stops_when_it_finishes() {
         voices(&audio),
         0,
         "the engine is still sounding ten seconds after the race ended"
+    );
+}
+
+/// A destroyed craft opens `~BLOWUP` and lets it go when the explosion ends.
+///
+/// The level-driven half of `Ship_SetState`'s case 4, off the real `hud.bnk`
+/// waveform rather than a fixture: the cue is looping, so a port that fired it
+/// as a one-shot or never released it would drone under whatever came next.
+/// `docs/ghidra/functions/psp-pulse-usa/zone-mode.md`.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_destroyed_craft_sounds_and_stops_sounding() {
+    let Some(path) = image("pulse-psp-usa.chd") else {
+        return;
+    };
+    let loaded = race::load(&race::Options {
+        source: path.display().to_string(),
+        ..race::Options::default()
+    })
+    .expect("loading the race");
+    let mut race = race::Race::start(loaded.setup);
+    let mut audio = oag_game::audio::Audio::open(
+        &oag_game::settings::Audio::default(),
+        Some(std::path::PathBuf::from("/dev/null")),
+    );
+    let voices =
+        |audio: &oag_game::audio::Audio| audio.output().with_mixer(|mixer| mixer.active_voices());
+
+    for _ in 0..30 {
+        race.tick(&oag_gameplay::InputSnapshot::default());
+        audio.race_tick(&mut race);
+        audio.tick();
+    }
+    let engine_only = voices(&audio);
+    assert!(engine_only >= 1, "the engine never opened");
+    assert!(
+        !race.craft_is_exploding(),
+        "the fixture blew up before the test began"
+    );
+
+    // Set directly - reaching zero shield honestly is `oag_physics`'s business
+    // and needs a wall this fixture has no reason to build. What is under test
+    // is the audio layer reading the state.
+    race.world.ships[0].physics.craft_state = oag_physics::CraftState::Destroyed;
+    audio.race_tick(&mut race);
+    audio.tick();
+    assert!(
+        voices(&audio) > engine_only,
+        "the craft blew up and nothing sounded"
+    );
+
+    // And it is released when the state ends rather than looping for ever.
+    //
+    // **Rendered out rather than checked on the next tick**, because
+    // `.pick` draws between two alternates and only one of them loops: the
+    // non-looping one is played and forgotten, so it is still sounding a tick
+    // later either way. A second of audio separates the two answers - a
+    // one-shot is 0.37 s and has ended, and a loop that was not released never
+    // will.
+    race.world.ships[0].physics.craft_state = oag_physics::CraftState::Eliminated;
+    for _ in 0..60 {
+        audio.race_tick(&mut race);
+        audio.tick();
+    }
+    assert_eq!(
+        voices(&audio),
+        engine_only,
+        "`~BLOWUP` is still sounding after the explosion ended - it loops, so \
+         nothing else will stop it"
     );
 }
 

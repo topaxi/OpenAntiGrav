@@ -277,6 +277,58 @@ The dirty flag is set from bit 22 (`0x400000`) of `entity+0x860`, which reads as
    No runtime leg. Implemented as `oag_physics::damage::CraftState` and
    `oag_race::RaceState::eliminate`.
 
+   **Case 4 read at instruction level, 2026-08-24**, because the decompiler
+   cannot render it: `Ship_SetState` dispatches through a nine-entry jump table
+   the decompiler gives up on (`"Could not emulate address calculation"`), so
+   the whole state machine reads as one indirect call. **The table is at
+   `0x08a7bc18`** and its arms are `0x0884416c`, `0x0884417c`, `0x0884418c`,
+   `0x0884419c`, **`0x0884430c`** (state 4), **`0x08844548`** (state 5),
+   `0x088445a0`, `0x088445ec`, `0x088446ec`. Disassemble the arm; do not try to
+   decompile the function.
+
+   What case 4 actually does, in order:
+
+   | | |
+   | --- | --- |
+   | first ~30 instructions | **multiplayer only** - a game-mode `>= 0xe` gate and two debug strings about Quake ownership on destroy (`0x08a7bacc`, `0x08a7bb08`). Nothing to port. |
+   | `0x08844434` | `craft+0x874 = 0.5` - the state timer this page already had |
+   | `0x08844448` | `FUN_0883e9b0(craft, hud_bank, "~BLOWUP", 0x400, 0)`, handle kept at `craft+0xcac` |
+   | `0x08844454` | **`if (craft+0x368 != 0) return`** - everything below is the local player's alone |
+   | `0x088444b4` | a call on `*(0x08ab0838)`, unidentified - the HUD hide is presumably here |
+   | `0x088444c8` | `(*(0x08ab2120))+0x58 = 0`, a byte |
+   | `0x088444e4` | `(*(0x08ab10e8))+0x2c &= ~6` |
+   | `0x088444f0` | **`(*(0x08ab10b0))+0xe4 = 0.0`** - the active camera, and `+0xe4` is the *duration* field of the shake setter `FUN_08878750` writes, so this **cancels a running shake** |
+   | `0x08844514` | `(*(0x088594cc))+0x2c \|= 6`, then `+0x26c = 0` |
+   | `0x08844524` | a call with **`a1 = 5`** - the camera mode this page names |
+   | `0x0884453c` | `(*(0x0885c01c))+0x1a08 = 4.5` |
+
+   **`_BLOWUP` is `~BLOWUP`** - the string is at `0x08a7b6c0`, reached through
+   the pointer at `0x08a7b6c8`, and `Data\Sound\hud.bnk` carries it as two
+   waveforms, one looping, 0.37 s. It is played through the **no-emitter**
+   path at volume `0x400` - the one
+   [`positional-audio.md`](positional-audio.md) identifies as the local
+   player's - and `FUN_0883e9b0` returns without playing when `craft+0x368` is
+   non-zero, so **an opponent's destruction plays nothing here**. Whatever an
+   opponent's explosion sounds like comes from somewhere this pass did not
+   find. Confidence **85** on the cue and the path; the argument order is
+   `FUN_0883e9b0`'s, read once here and once on the autopilot's warning.
+
+   **Ported**: `oag_game::audio::sfx::Cue::Blowup`, held on
+   `Race::craft_is_exploding` - the state's own `0.5 s`, because where the
+   original releases `craft+0xcac` is unread and that is the shortest lifetime
+   the evidence supports.
+
+   **Still not ported, and now with addresses rather than a shrug**: the HUD
+   hide and the camera mode. Three of the four globals above
+   (`0x08ab0838`, `0x08ab2120`, `0x08ab10e8`, `0x088594cc`) are unidentified,
+   and until they are, "hides the HUD" is a summary of a call rather than a
+   reading of one. The camera-mode call at `0x08844524` passes `5` and is the
+   most tractable of them.
+
+   **One thing that came free**: the shake cancel at `0x088444f0` is a second,
+   independent sighting of `FUN_08878750`'s field layout - see
+   [`autopilot.md`](autopilot.md), which found the setter from the other side.
+
    The original text is kept below because its *negative* result is still
    correct and still useful: `Zone_UpdateRacing` tests bit 12 (`0x1000`) of
    `entity+0x860` and moves the mode to state 3 on it, but the `sw ...,0x860(...)`

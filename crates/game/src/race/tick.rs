@@ -218,10 +218,13 @@ impl Race {
         if self.world.ships[0].physics.craft_state == oag_physics::CraftState::Eliminated
             && self.world.race.eliminate()
         {
-            // The original plays `_BLOWUP`, hides the HUD and swings the camera
-            // into its mode 5 on the way here. **None of that is built** - there
-            // is no explosion, no HUD hide and no camera mode - so the race
-            // simply stops. See `oag_physics::damage::CraftState`.
+            // The original plays `~BLOWUP`, hides the HUD and swings the camera
+            // into its mode 5 on the way here. **The sound is built** and is
+            // held on `Race::craft_is_exploding` rather than raised here,
+            // because case 4 opens a handle rather than firing a one-shot. The
+            // HUD hide and the camera mode are still absent - case 4's own
+            // addresses for both are on zone-mode.md. See
+            // `oag_physics::damage::CraftState`.
         }
 
         if let Some(course) = &self.course {
