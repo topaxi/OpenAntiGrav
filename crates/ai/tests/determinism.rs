@@ -25,8 +25,9 @@
 //! catch the difference rather than merely asserted to**: with
 //! `oag_core::math::acos` temporarily put back on `f32::acos`,
 //! [`the_drivers_match_the_committed_reference`] fails on the `field`/600-tick
-//! trajectory hash (`0x3fb6_79e7_685e_a9b3` against the committed
-//! `0xe2c9_292e_b42a_9aeb`).
+//! trajectory hash (`0x3fb6_79e7_685e_a9b3` against the then-committed
+//! `0xe2c9_292e_b42a_9aeb`; both numbers are the 2026-08-15 run's, and
+//! [`REFERENCE`] has moved once since - see its own history).
 //!
 //! **What that same check also showed, and it is the reason `Field` rows are in
 //! the reference at all**: the `solo`/600 row still matched. One craft
@@ -78,6 +79,16 @@ use oag_ai::probe::{self, Scenario};
 /// - **First recorded 2026-08-15**, when this gate was added alongside the
 ///   `acos` fix it exists to guard. Nothing was regenerated: there was no
 ///   previous reference, because no determinism gate had ever run a driver.
+/// - **Both `Field` rows regenerated twice on 2026-08-24**, both times for a
+///   deliberate change of behaviour and not a bug. First: `Driver::ram` measures
+///   its corridor clearance from where the craft is rather than from the line,
+///   and asks for `oag_ai::driver`'s widened `RAM_CLEARANCE`. Second: a ram may
+///   only target the player's slot, because AI-on-AI shoving spirals in a clump
+///   (see `driver::ram`'s `PLAYER_SLOT`). Fewer shifts fire either way, so a
+///   field that shoves diverges. **`Scenario::Solo` did not move on either**,
+///   which is the check that says each change is confined to the path it claims:
+///   a craft with nobody alongside never reaches the gate. `oag_gameplay`'s own
+///   gate did not move either - its scenario flies no pilot.
 const REFERENCE: [(u32, Scenario, u64, u64); 3] = [
     (
         600,
@@ -88,14 +99,14 @@ const REFERENCE: [(u32, Scenario, u64, u64); 3] = [
     (
         600,
         Scenario::Field,
-        0x3a60_b014_0bef_5744,
-        0xe2c9_292e_b42a_9aeb,
+        0x7ee7_ebe8_a4e7_0eb4,
+        0x4ff0_3247_e0d1_5638,
     ),
     (
         1_800,
         Scenario::Field,
-        0xf8cb_fb75_8272_1250,
-        0xf0fa_4cfc_89c8_9df1,
+        0xe491_376f_2f5a_ab08,
+        0xfd6f_2537_4bac_a80d,
     ),
 ];
 

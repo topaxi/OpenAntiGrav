@@ -22,7 +22,7 @@
 
 use oag_core::Rng;
 use oag_core::math::Vec3;
-use oag_physics::{ShipControls, ShipState, Sideshift};
+use oag_physics::{ShipControls, ShipState};
 
 use crate::field::Field;
 use crate::line::{Aim, Line};
@@ -625,11 +625,21 @@ const WEAPON_CONE: f32 = 0.94;
 /// worth taking.
 const WEAPON_CURVATURE: f32 = 1.0 / 400.0;
 
-/// How much corridor room a driver wants on the side it is shifting toward.
+/// How much corridor room a driver wants on the side it is shifting toward,
+/// measured **from where the craft is** rather than from the line.
 ///
 /// A ram that puts the rammer into the wall is not aggression, it is a bug with
-/// a personality.
-const RAM_CLEARANCE: f32 = 3.0;
+/// a personality - and this was `3.0`, less than half of the **median 8.2
+/// units** a shift is measured to cover on `16_Track`, so the gate did not mean
+/// what it said. Twelve *and* the craft's own room took the rammer ending up
+/// outside the corridor from 54 of 208 to 11 of 138; neither half does much
+/// alone. Sweep, method and the two remainders are in `docs/gameplay/ai.md`,
+/// guarded by `crates/game/tests/ram_ground_truth.rs`.
+///
+/// **Ours, and measured against one hull.** The reach scales with
+/// `handling.airbrake.sideshift / mass` - `450` against `1` on Pulse - which
+/// this crate cannot see: `Context` carries no handling.
+const RAM_CLEARANCE: f32 = 12.0;
 
 /// The turn, in radians across the stretch between a craft and its aim point,
 /// at which [`Personality::inside`] is asking for all the room it is allowed.
@@ -936,56 +946,6 @@ impl Driver {
     /// How provoked this driver is, `0.0..=1.0`.
     fn provoked(&self) -> f32 {
         f32::from(self.provocation) / f32::from(PROVOCATION_MAX)
-    }
-
-    /// Whether to throw the craft sideways at a rival this tick, and which way.
-    ///
-    /// **Gated on the physics' own `ShipState::shift_lockout`** rather than on a
-    /// cooldown of the driver's own: the timer deciding whether a shift can fire
-    /// is already in the snapshot and already hashed, and a second one beside it
-    /// would be a second source of truth that drifts out of step with the first.
-    ///
-    /// Four conditions, and the last is the one that is easy to forget: there
-    /// has to be **corridor room on the side being shifted toward**. See
-    /// [`RAM_CLEARANCE`].
-    ///
-    /// Worth saying plainly: `Race::resolve_craft_pairs` discards the contact it
-    /// computes and nothing arms `stun_timer`, so **a ram shoves and nothing
-    /// else** - no stun, no damage, no score. Its payoff is positional.
-    fn ram(&self, state: &ShipState, ctx: &Context<'_>, personality: &Personality) -> Sideshift {
-        if personality.ram <= 0.0 || state.shift_lockout > 0.0 {
-            return Sideshift::None;
-        }
-        if state.sideshift_timers.iter().any(|timer| *timer > 0.0) {
-            return Sideshift::None;
-        }
-        let Some(rival) = ctx.field.alongside else {
-            return Sideshift::None;
-        };
-
-        // Rammed toward the rival, so the room that matters is on its side.
-        let toward = rival.offset;
-        if toward.abs() <= f32::EPSILON {
-            return Sideshift::None;
-        }
-        let room = ctx
-            .line
-            .aim(self.index as usize, 0.0)
-            .corridor
-            .map_or(f32::INFINITY, |frame| frame.room(toward));
-        if room < RAM_CLEARANCE {
-            return Sideshift::None;
-        }
-
-        let appetite = personality.ram * (1.0 + self.provoked());
-        if roll(self.seed, self.phase, RAM_STREAM) >= appetite * RAM_RATE {
-            return Sideshift::None;
-        }
-        if toward > 0.0 {
-            Sideshift::Right
-        } else {
-            Sideshift::Left
-        }
     }
 
     /// How much of its thrust this driver keeps when it is closing on a craft
@@ -1377,6 +1337,8 @@ fn airbrakes(brake: f32, differential: f32, floor: f32) -> (f32, f32) {
         (high, low)
     }
 }
+
+mod ram;
 
 #[cfg(test)]
 mod tests;
