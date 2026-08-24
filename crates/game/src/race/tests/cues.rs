@@ -135,6 +135,12 @@ fn every_cue_has_something_that_raises_it() {
         // outside `tick` on purpose - this is a fixture, not a pickup grant.
         race.world.ships[0].physics.shield_pickup_timer =
             if (60..180).contains(&tick) { 1.0 } else { 0.0 };
+        // An Autopilot armed once, long enough to reach its own one-second
+        // warning inside this run. Set directly for the same reason the shield
+        // above is: this is a fixture reaching an edge, not a pickup grant.
+        if tick == 0 {
+            race.world.ships[0].autopilot_timer = 2.0;
+        }
         // Re-aimed at the wall every tick, so each one sees a fresh inbound
         // contact rather than the ship bouncing away after the first.
         let body = &mut race.world.ships[0].physics.body;
@@ -162,6 +168,7 @@ fn every_cue_has_something_that_raises_it() {
         Cue::Collision,
         Cue::Absorb,
         Cue::ShieldActive,
+        Cue::Disengaging,
     ] {
         assert!(raised.contains(&cue), "{} was never raised", cue.name());
     }

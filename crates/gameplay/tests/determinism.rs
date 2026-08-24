@@ -144,6 +144,25 @@ fn run(ticks: u32) -> (u64, u64) {
 ///
 /// # History
 ///
+/// - **Moved 2026-08-24**, when `Ship::autopilot_timer` joined the hash. The
+///   Autopilot pickup arms it and the composition root reads it to decide
+///   whether slot 0 is flown by its own driver, so it is simulation state and a
+///   replay that lost it would diverge - see
+///   `docs/ghidra/functions/psp-pulse-usa/autopilot.md`. **Isolated the
+///   documented way**: with only `write_f32(*autopilot_timer)` removed from
+///   `oag_gameplay::hash::write_ship` and nothing else changed, the previous
+///   constants - `0x603b_7db8_2f52_2c56` / `0xe133_7ae6_7445_d5ec` at 60 ticks
+///   and `0x38cb_c8b3_20d6_50c3` / `0xf14f_a426_00c6_3801` at 600, and
+///   `0x3518_c7a7_def5_c624` / `0xc9d2_d53c_8f24_9cc0` and
+///   `0xc8e9_756b_9c7f_7337` / `0x9ae4_9df4_2937_0236` for the volley -
+///   reproduce bit for bit. So the movement is four more bytes per ship per
+///   tick entering the stream and nothing the simulation does. Neither scenario
+///   collects a pickup, so the field is `0.0` throughout both.
+///
+///   Note that `pickup::IMPLEMENTED` gained `Weapon::Autopilot` in the same
+///   change and that did **not** move anything here: these scenarios assign
+///   `pickup.weapon` directly rather than drawing from the pool.
+///
 /// - **Moved 2026-08-17 (second time that day)**, when `pickup::Held` grew
 ///   `last`. The pickup draw refuses to hand out the same weapon twice running -
 ///   recovered from `WeaponPickup_Grant` (`0x08861d20`) - so what a craft was
@@ -319,8 +338,8 @@ fn run(ticks: u32) -> (u64, u64) {
 /// beneath this comment and isolate the cause first, by removing the new field's
 /// own write and checking that the previous constants reproduce bit for bit.
 const REFERENCE: &[(u32, u64, u64)] = &[
-    (60, 0x603b_7db8_2f52_2c56, 0xe133_7ae6_7445_d5ec),
-    (600, 0x38cb_c8b3_20d6_50c3, 0xf14f_a426_00c6_3801),
+    (60, 0xffc0_1c63_959d_dbf6, 0xe299_6e55_2185_5b6c),
+    (600, 0x5ed5_6f2b_3d34_7983, 0x4611_ee6c_59a8_b981),
 ];
 
 /// The volley scenario: a craft at an angle fires a real fanned Rocket volley
@@ -406,6 +425,10 @@ fn run_volley(ticks: u32) -> (u64, u64) {
 ///
 /// # History
 ///
+/// - **Moved 2026-08-24**, by `Ship::autopilot_timer` joining the hash. The
+///   isolation and the previous constants are in [`REFERENCE`]'s history note,
+///   which covers both scenarios in one pass rather than twice.
+///
 /// - **Recorded 2026-08-18**, with the scenario, as finding D1's gate. There is
 ///   no earlier value: no committed hash had ever covered
 ///   [`projectile::launch`]. Recorded *after* the fix, so what these pin is the
@@ -421,8 +444,8 @@ fn run_volley(ticks: u32) -> (u64, u64) {
 /// **Never edit these to make the test pass**, for the same reason
 /// [`REFERENCE`] says at length.
 const REFERENCE_VOLLEY: &[(u32, u64, u64)] = &[
-    (60, 0x3518_c7a7_def5_c624, 0xc9d2_d53c_8f24_9cc0),
-    (600, 0xc8e9_756b_9c7f_7337, 0x9ae4_9df4_2937_0236),
+    (60, 0xa1a8_de37_f513_74c4, 0xa755_4730_fc35_b820),
+    (600, 0xb6e6_af7d_a1f9_fb77, 0x32e3_49c0_29f2_3e96),
 ];
 
 #[test]

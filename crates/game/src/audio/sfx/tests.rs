@@ -161,9 +161,13 @@ fn every_cue_states_where_it_is_heard_from() {
     // The point is that no cue is *unstated*. `Unplaced` is a legitimate answer
     // and it means "the call site has not been read", so it must be reached
     // deliberately rather than by a match arm nobody revisited.
+    // Two are `Unplaced` and each for its own reason: `ShieldActive`'s call
+    // site is recorded as a full-volume pan-zero play, and `Disengaging`'s is
+    // *read* as the no-emitter path. Both are announcer lines.
+    const DRY: [Cue; 2] = [Cue::ShieldActive, Cue::Disengaging];
     for cue in Cue::ALL {
         let placement = cue.placement();
-        if cue == Cue::ShieldActive {
+        if DRY.contains(&cue) {
             assert_eq!(placement, Placement::Unplaced);
         } else {
             assert_ne!(

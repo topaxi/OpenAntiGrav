@@ -42,16 +42,23 @@
 //!
 //! # Only what has an effect is handed out
 //!
-//! [`IMPLEMENTED`] is the pool a pad draws from: Turbo, Shield, Rocket and
-//! Missile.
+//! [`IMPLEMENTED`] is the pool a pad draws from: Turbo, Shield, Rocket, Missile
+//! and Autopilot.
 //!
 //! Of the nine still out, most need a beam, track deformation or the slowdown
 //! mechanic behind `<Global slowdown_limit>` - Quake needs to deform the track,
-//! LeachBeam needs a beam and a victim. Autopilot is the AI's own controller
-//! taking over (`Ai_Construct` names the local player's input source the literal
-//! `"autopilot input"`), so it is AI work rather than pickup work; it is
-//! **weapon id 6, fire-request bit `0x1000`**, which
-//! `docs/ghidra/functions/psp-pulse-usa/missile.md` records on the way past.
+//! LeachBeam needs a beam and a victim.
+//!
+//! **The Autopilot left that list on 2026-08-24**, and like the Missile before
+//! it what let it was a reading rather than a mechanic: `Autopilot_Fire`
+//! (`0x088613bc`) and `Autopilot_Update` (`0x08861404`) give the duration's
+//! source, the running bit, the countdown, the one-second `disengaging` warning
+//! and the fact that **pressing fire cancels it**. See
+//! `docs/ghidra/functions/psp-pulse-usa/autopilot.md`. What is still ours is the
+//! *takeover itself* - the original hands the craft to the driver
+//! `Ai_Construct` names `"autopilot input"`, and which code makes that swap was
+//! not found - so this engine reuses [`oag_ai::Driver`] the way
+//! `Race::set_autopilot` already did.
 //!
 //! **The Missile left that list on 2026-08-17**, and what let it was not a
 //! mechanic but a reading: its lock is recovered whole from `Ship_AcquireLock`
@@ -91,6 +98,7 @@ pub const IMPLEMENTED: &[Weapon] = &[
     Weapon::Shield,
     Weapon::Rocket,
     Weapon::Missile,
+    Weapon::Autopilot,
 ];
 
 /// Which column of `<Pickupodds>` a craft draws from, and how its place bends it.

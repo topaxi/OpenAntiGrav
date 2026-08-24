@@ -72,6 +72,23 @@ pub struct Ship {
     ///
     /// [`World::race`]: World::race
     pub standing: oag_race::Standing,
+    /// Seconds left on an Autopilot pickup, or zero.
+    ///
+    /// `Autopilot_Fire` (`0x088613bc`) writes
+    /// `<Weapon type="Autopilot"><Stats time>` into `craft+0x148` and sets a
+    /// running bit; `Autopilot_Update` (`0x08861404`) counts it down and clears
+    /// the bit at zero. See
+    /// `docs/ghidra/functions/psp-pulse-usa/autopilot.md`.
+    ///
+    /// **Here rather than on [`ShipState`]**, for the reason [`Self::pickup`]
+    /// gives about itself: `oag-physics` depends on nothing but `oag-core`, and
+    /// no force reads this. What it changes is *which controls the craft is
+    /// handed*, which the composition root decides - so it belongs beside the
+    /// pickup that arms it and the driver that flies it, not beside the body.
+    ///
+    /// Hashed all the same: a craft being driven for is a different race from
+    /// one being driven, and a replay that lost this would diverge.
+    pub autopilot_timer: f32,
     /// Whether this slot holds a ship at all.
     pub active: bool,
 }
@@ -85,6 +102,7 @@ impl Default for Ship {
             pickup: crate::pickup::Held::empty(),
             driver: oag_ai::Driver::default(),
             standing: oag_race::Standing::default(),
+            autopilot_timer: 0.0,
             active: false,
         }
     }

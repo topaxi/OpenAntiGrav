@@ -378,17 +378,32 @@ pub enum Cue {
     /// `speech.bnk` rather than `weapons.bnk`, which is what says it is a voice
     /// line and not an effect.
     ShieldActive,
+    /// The announcer, one second before an Autopilot pickup lets go.
+    ///
+    /// `Autopilot_Update` (`0x08861404`) plays it on the tick the remaining
+    /// time crosses `1.0` - an edge it keeps `craft+0x144` for - through the
+    /// **dry, full-volume** path rather than through the craft's emitter, which
+    /// is what says it is a voice line in the player's ear rather than a thing
+    /// happening in the world. `docs/ghidra/functions/psp-pulse-usa/autopilot.md`,
+    /// confidence 85.
+    ///
+    /// **Its two partners on the disc are deliberately unwired**: `~AUTOPILOT`
+    /// in `hud.bnk` is a held loop the handler *stops* and no located code
+    /// starts, and `autopilot_eng` sits beside this one in `speech.bnk` with no
+    /// call site at all. An effect whose trigger is not recovered stays silent.
+    Disengaging,
 }
 
 impl Cue {
     /// Every cue this port fires, which is every one it knows how to load.
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::SpeedupPad,
         Self::Collision,
         Self::Absorb,
         Self::Engine,
         Self::Shield,
         Self::ShieldActive,
+        Self::Disengaging,
     ];
 
     /// The bank the cue is looked up in.
@@ -398,7 +413,7 @@ impl Cue {
             Self::SpeedupPad => BankName::Hud,
             Self::Collision | Self::Engine => BankName::Ship,
             Self::Absorb | Self::Shield => BankName::Weapons,
-            Self::ShieldActive => BankName::Speech,
+            Self::ShieldActive | Self::Disengaging => BankName::Speech,
         }
     }
 
@@ -435,6 +450,7 @@ impl Cue {
             Self::Engine => "~ENGINE",
             Self::Shield => "~SHIELD",
             Self::ShieldActive => "shieldactive",
+            Self::Disengaging => "disengaging",
         }
     }
 
@@ -485,7 +501,11 @@ impl Cue {
             // Recorded as `Sound_Play(entity, ..., "shieldactive", 0x400, 0)` -
             // full volume and pan zero, which is the shape of the *non*-emitter
             // path. Left dry, which is also what this port has always done.
-            Self::ShieldActive => Placement::Unplaced,
+            //
+            // `Disengaging` joins it on a stronger footing: its call site is
+            // read, and it is `FUN_0883e9b0` -> `FUN_0893a768`, the path that
+            // takes no emitter at all.
+            Self::ShieldActive | Self::Disengaging => Placement::Unplaced,
         }
     }
 }

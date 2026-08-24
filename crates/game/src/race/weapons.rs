@@ -98,6 +98,18 @@ impl Race {
         // spend it, so the two can only race on a tick where the player pressed
         // both.
         if fire {
+            // **Firing while the autopilot is running cancels it and fires
+            // nothing**, and that is recovered: `FUN_08844ec4` tests
+            // `craft->0x1b8 & 0x800` before its held-weapon jump table and,
+            // when it is set, stores `0.0` into the timer and branches past the
+            // table entirely. The pickup is untouched on that path - the
+            // original clears `craft+0x1bc` in the grant and in each handler,
+            // never here - so the player keeps whatever they were holding. See
+            // `docs/ghidra/functions/psp-pulse-usa/autopilot.md`.
+            if self.world.ships[0].autopilot_timer > 0.0 {
+                self.world.ships[0].autopilot_timer = 0.0;
+                return;
+            }
             match weapon {
                 oag_formats::weapons::Weapon::Turbo => {
                     let Some(simple) = weapons.simple(weapon) else {
@@ -134,6 +146,27 @@ impl Race {
                         self.world.ships[0].physics.shield_pickup_timer = simple.time;
                         self.shield[0].activate();
                     }
+                }
+                oag_formats::weapons::Weapon::Autopilot => {
+                    let Some(simple) = weapons.simple(weapon) else {
+                        // As the two arms above: nothing to hand the craft over
+                        // *for*, so the pickup is kept rather than spent.
+                        return;
+                    };
+                    // **Re-arming is allowed here and is not for the Shield**,
+                    // and the difference is read rather than chosen:
+                    // `Shield_Fire` wraps its whole body in
+                    // `if ((craft->0x1b8 & 0x10) == 0)` and `Autopilot_Fire`
+                    // has no such guard - it assigns the timer unconditionally.
+                    // It cannot fire into a running one anyway, because the
+                    // branch above cancels instead.
+                    self.world.ships[0].autopilot_timer = simple.time;
+                    // The driver has to be told where the craft is before it
+                    // flies it, for the windowed-search reason
+                    // `Race::set_autopilot` records. A pickup is collected
+                    // anywhere on the circuit, so this matters more here than
+                    // it does for the operator's flag.
+                    self.locate_player_driver();
                 }
                 oag_formats::weapons::Weapon::Rocket => {
                     let Some(stats) = weapons.rocket() else {

@@ -556,3 +556,5 @@
 0x0893a87c	function	SoundManager_VolumeCurve	88	positional-audio.md
 0x08995a9c	function	Scream_PanVolumePair	85	positional-audio.md
 0x08ac4a2c	data	g_scream_pan_table	94	positional-audio.md
+0x088613bc	function	Autopilot_Fire	88	autopilot.md
+0x08861404	function	Autopilot_Update	85	autopilot.md

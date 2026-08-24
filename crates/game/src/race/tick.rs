@@ -12,12 +12,16 @@ impl Race {
     /// The snapshot is mapped through [`oag_gameplay::ship_controls`], which is the
     /// one place "cross is thrust" is written down.
     pub fn tick(&mut self, snapshot: &InputSnapshot) -> Evaluated {
-        // Under autopilot the snapshot is not consulted at all - see
-        // [`Race::set_autopilot`], which is a verification aid and not a mode.
+        // Flown for the player by either route - the operator's `--autopilot`
+        // or the pickup - and then the snapshot is not consulted for steering
+        // at all. See [`Race::flown_for_the_player`].
+        //
         // Before `spend_pickup`, which still reads the snapshot: an autopiloted
         // craft is steered for and fires nothing, because nothing picks a target
-        // for anybody yet.
-        let controls = if self.autopilot {
+        // for anybody yet. It also means a pickup armed *this* tick takes hold
+        // on the next one, which is a tick of latency this port has and has not
+        // measured against the original.
+        let controls = if self.flown_for_the_player() {
             self.autopilot_controls()
         } else {
             ship_controls(snapshot, self.scheme)
@@ -25,6 +29,10 @@ impl Race {
 
         // Before the force law, so a Turbo fired this tick boosts this tick.
         self.spend_pickup(snapshot);
+        // After it, so a pickup armed this tick gets its whole duration rather
+        // than a tick less, and so the cancel-on-fire branch inside
+        // `spend_pickup` is not immediately undone by a decrement.
+        self.tick_autopilot();
 
         // The two spline samples the magstrip hold reads. In the original these are
         // `AiTrack_LocatePosition`'s two output records on the ship entity; here

@@ -8,6 +8,12 @@
 
 use super::*;
 
+/// How much of an Autopilot pickup is left when the announcer warns.
+///
+/// `Autopilot_Update`'s test is `now < 1.0 && previous > 1.0`, a literal in the
+/// handler rather than anything the disc authors.
+const AUTOPILOT_WARNING_SECONDS: f32 = 1.0;
+
 impl Race {
     /// Replaces what the opponents are flown with, mid-race.
     ///
@@ -71,7 +77,19 @@ impl Race {
     /// drawn for a slot the roster never dealt.
     pub fn set_autopilot(&mut self, on: bool) {
         self.autopilot = on;
-        if !on || self.racing_line.is_empty() {
+        if on {
+            self.locate_player_driver();
+        }
+    }
+
+    /// Puts slot 0's driver where slot 0 actually is.
+    ///
+    /// Shared by the operator's flag above and by the **Autopilot pickup**,
+    /// which arrives at any point on the circuit and so needs it more: a driver
+    /// left at index zero steers at the piece of line it thinks it is on, for
+    /// the windowed-search reason [`Self::set_autopilot`] spells out.
+    pub(super) fn locate_player_driver(&mut self) {
+        if self.racing_line.is_empty() {
             return;
         }
         let position = self.world.ships[0].physics.body.position;
@@ -79,6 +97,47 @@ impl Race {
             .racing_line
             .nearest(position, 0, self.racing_line.len());
         self.world.ships[0].driver.index = u32::try_from(index).unwrap_or(0);
+    }
+
+    /// Whether slot 0 is being flown for the player this tick, by either route.
+    ///
+    /// The operator's `--autopilot` and the pickup are deliberately separate
+    /// facts joined here rather than one flag: the first is a verification aid
+    /// that runs a whole race, the second is a weapon with a timer, and a test
+    /// that sets one must not silently spend the other.
+    #[must_use]
+    pub fn flown_for_the_player(&self) -> bool {
+        self.autopilot || self.world.ships[0].autopilot_timer > 0.0
+    }
+
+    /// Counts the Autopilot pickup down and lets go of the craft at zero.
+    ///
+    /// `Autopilot_Update` (`0x08861404`), ported: subtract `dt`, raise the
+    /// `disengaging` announcer on the tick the remainder crosses one second,
+    /// and stop at zero. See
+    /// `docs/ghidra/functions/psp-pulse-usa/autopilot.md`.
+    ///
+    /// **The original keeps last tick's value in `craft+0x144` and this does
+    /// not need to.** That field exists only to make the warning an edge, and
+    /// with a fixed timestep the previous value *is* `timer + dt` exactly -
+    /// ADR-0007. One consequence is recorded rather than hidden: a pickup armed
+    /// with less than a second on it would fire the warning on the original's
+    /// first tick and not here, because there is no stale previous value to
+    /// cross. No authored `<Weapon type="Autopilot"><Stats time>` is anywhere
+    /// near that short.
+    pub(super) fn tick_autopilot(&mut self) {
+        let timer = self.world.ships[0].autopilot_timer;
+        if timer <= 0.0 {
+            return;
+        }
+        let now = timer - self.dt;
+        self.world.ships[0].autopilot_timer = now.max(0.0);
+        if now < AUTOPILOT_WARNING_SECONDS && timer > AUTOPILOT_WARNING_SECONDS {
+            self.cues.push(crate::audio::sfx::CueEvent::new(
+                crate::audio::sfx::Cue::Disengaging,
+                0,
+            ));
+        }
     }
 
     /// Whether the player's craft is being driven for them.
@@ -599,9 +658,15 @@ impl Race {
     ///   `oag_ai::Driver::wants_to_fire` picks - a craft ahead, in range, inside
     ///   a cone, with straight enough road between. It is kept rather than spent
     ///   when there is no target, no authored rocket or no free slot.
+    /// - **An Autopilot is absorbed**, and for once that is not a policy but
+    ///   the only thing it could be: the pickup hands a craft to its driver, and
+    ///   an opponent is already flown by one. There is nothing for it to do. It
+    ///   is named here rather than left to fall through the default below,
+    ///   because "no effect by design" and "no arm written yet" must not look
+    ///   the same in this file.
     /// - **Everything else is absorbed**, which pays energy into the pool and is
     ///   a real effect rather than a discard. It is also what a cautious human
-    ///   does with a weapon they cannot aim, and the remaining nine cannot be
+    ///   does with a weapon they cannot aim, and the remaining eight cannot be
     ///   aimed: they need a lock, a beam or a mechanic nothing has read.
     pub(super) fn spend_opponent_pickup(
         &mut self,
