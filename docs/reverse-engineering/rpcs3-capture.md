@@ -110,6 +110,34 @@ matrix decomposes to be orthonormal (six constraints), the field of view to be
 between 10 and 170 degrees, the aspect to be between 0.5 and 4, and the eye not
 to be the origin.
 
+### Where the live camera is not
+
+Four places have been dumped from a running race and searched, and the point of
+recording it is that each is a boot someone else does not have to spend:
+
+| Where | Chain | What is there |
+| --- | --- | --- |
+| The EBOOT's data and BSS | `0x860000:0xe0000` | seven matrices, every one a static constant |
+| The `RenderManager` | `0x008b3d00@+0x14@:0x4d90` | one, the same 90-degree 1:1 cube face |
+| `Render_FrameContextPtr`'s target | `0x936fd4@:0x8000` | eight, all the same cube face |
+| 1 MB of heap at `0x30000000` | `0x30000000:0x100000` | **0.3 %** of it changes between two frames five seconds apart, and exactly one changed window parses as a camera - another 90-degree 1:1 |
+
+Relaxing the unit-`w` test - in case the projection scales that row - adds
+nothing convincing to any of them.
+
+**So the working hypothesis is that no CPU-side copy of `viewProj` is kept.**
+The vertex program is fed `c[0..3]` and the engine may compute the matrix and
+push it straight into the command buffer, in which case the only place it
+exists is the RSX pushbuffer - where it is *exactly* findable rather than
+heuristically, as the operand of a `NV4097_SET_TRANSFORM_CONSTANT_LOAD`.
+
+The next step is therefore the GCM context rather than more heap.
+`g_GcmContext` (`0x008c0854`, confidence 85) holds `0x013be314`, and a
+`CellGcmContextData` is `{begin, end, current, callback}`:
+
+    --region "0x008c0854@:0x20"          # the context: begin, end, current
+    --region "<current - N>:<N>"         # the pushbuffer behind the write head
+
 ## What is free, and what costs packets
 
 The circuit costs nothing: HD prints `Loading track model Data\Environments\...`
