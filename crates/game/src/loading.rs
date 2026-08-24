@@ -609,27 +609,52 @@ impl Screen {
             }
         }
 
+        // **Where the counted rows go depends on which layout is up**, and
+        // getting that wrong drew two bars: the feature layout has a bar of its
+        // own, low and wide, and this block used to draw the centred layout's
+        // thin one on top of the prose whatever was on screen. Found by asking
+        // what a half-filled bar looks like, which is a state neither a race
+        // load nor a warm cache ever reaches.
+        let boxed = self.illustration.is_some();
+        let (rows_x, rows_width, counts_y, row_pitch) = if boxed {
+            // Under the bar and above the closing rule, which is 26 units of
+            // room for three rows - so they are pitched tighter here than on
+            // the centred layout, which has the whole lower half.
+            (
+                PANEL_X,
+                BAR_BOX.2,
+                BAR_BOX.1 + BAR_BOX.3 + 3.0,
+                BOXED_ROW_PITCH,
+            )
+        } else {
+            (BAR_X, BAR_WIDTH, COUNTS_Y, CENTRED_ROW_PITCH)
+        };
+
         // The bar and the counts say the same thing twice on purpose: the bar is
         // what is read at a glance across ten minutes, and the figures are what
         // distinguish "slow" from "stuck" when the bar has not visibly moved.
         //
         // All of it together, or none of it: see [`counted`].
         if counted(progress) {
-            let filled = fraction(phase, progress) * BAR_WIDTH;
-            out.push(Draw::Fill {
-                rect: [BAR_X, BAR_Y, BAR_WIDTH, BAR_HEIGHT],
-                color: dim(BAR_TROUGH),
-            });
-            if filled > 0.0 && !progress.planning {
+            // The trough only where there is not one already. The feature
+            // layout draws its own above, in the disc's own colours.
+            if !boxed {
+                let filled = fraction(phase, progress) * BAR_WIDTH;
                 out.push(Draw::Fill {
-                    rect: [BAR_X, BAR_Y, filled, BAR_HEIGHT],
-                    color: dim(BAR_FILL),
+                    rect: [BAR_X, BAR_Y, BAR_WIDTH, BAR_HEIGHT],
+                    color: dim(BAR_TROUGH),
                 });
+                if filled > 0.0 && !progress.planning {
+                    out.push(Draw::Fill {
+                        rect: [BAR_X, BAR_Y, filled, BAR_HEIGHT],
+                        color: dim(BAR_FILL),
+                    });
+                }
             }
 
             out.push(Draw::Text {
-                x: BAR_X,
-                y: COUNTS_Y,
+                x: rows_x,
+                y: counts_y,
                 scale: self.text(COUNTS_SCALE),
                 color: ink(COUNTS),
                 border,
@@ -637,8 +662,8 @@ impl Screen {
                 text: counts(phase, progress),
             });
             out.push(Draw::Text {
-                x: BAR_X + BAR_WIDTH,
-                y: COUNTS_Y,
+                x: rows_x + rows_width,
+                y: counts_y,
                 scale: self.text(COUNTS_SCALE),
                 color: ink(COUNTS),
                 border,
@@ -653,13 +678,13 @@ impl Screen {
             .filter(|_| !self.caption_leads(progress))
         {
             out.push(Draw::Text {
-                x: BAR_X,
-                y: CURRENT_Y,
+                x: rows_x,
+                y: counts_y + row_pitch,
                 scale: self.text(CURRENT_SCALE),
                 color: ink(CURRENT),
                 border,
                 align: Align::Left,
-                text: elide(atlas, current, self.text(CURRENT_SCALE), BAR_WIDTH),
+                text: elide(atlas, current, self.text(CURRENT_SCALE), rows_width),
             });
         }
 
@@ -669,8 +694,8 @@ impl Screen {
         // to lose. Two short lines are both legible at any name length.
         if let Some(step) = step_line(phase) {
             out.push(Draw::Text {
-                x: BAR_X,
-                y: STEP_Y,
+                x: rows_x,
+                y: counts_y + row_pitch * 2.0,
                 scale: self.text(CURRENT_SCALE),
                 color: ink(CURRENT),
                 border,
@@ -814,6 +839,12 @@ const IMAGE_BOX: (f32, f32, f32, f32) = (PANEL_X, 60.0, 150.0, 84.0);
 /// Where the feature's name and prose go, right of the picture.
 const PROSE_BOX: (f32, f32, f32, f32) = (206.0, 60.0, PANEL_RIGHT - 206.0, 84.0);
 
+/// How far apart the counted rows sit under a feature layout's bar.
+///
+/// Tighter than the centred layout's, which has the lower half of the screen to
+/// itself; here there are 26 units between the bar and the closing rule.
+const BOXED_ROW_PITCH: f32 = 11.0;
+
 /// Where the progression bar goes: `x, y, width, height`.
 ///
 /// The original's runs most of the width with a gauge to its right; this build
@@ -907,12 +938,14 @@ const COUNTS_Y: f32 = 152.0;
 const COUNTS_SCALE: f32 = 0.9;
 const COUNTS: [f32; 4] = [0.85, 0.9, 0.95, 1.0];
 
-const CURRENT_Y: f32 = 168.0;
 const CURRENT_SCALE: f32 = 0.8;
 const CURRENT: [f32; 4] = [0.5, 0.58, 0.66, 1.0];
 
-/// One line under the entry name, at the same scale. See [`step_line`].
-const STEP_Y: f32 = 180.0;
+/// How far apart the counted rows sit on the centred layout.
+///
+/// The gap `CURRENT_Y` was defined at, kept as the pitch now that both
+/// layouts space their three rows the same way from their own first one.
+const CENTRED_ROW_PITCH: f32 = 16.0;
 
 mod assets;
 mod wording;

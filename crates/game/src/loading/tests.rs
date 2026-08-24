@@ -764,3 +764,57 @@ fn the_feature_layout_draws_its_heading_its_title_and_its_prose() {
         "its prose: {drawn:?}"
     );
 }
+
+/// A feature layout draws **one** bar, not two.
+///
+/// The regression this pins was visible only in a state neither wait this
+/// screen covers ever reaches on a title with features: a race load counts
+/// nothing, and a warm cache leaves the counted phases too fast to look at. So
+/// the centred layout's thin bar was drawing through the prose whenever a
+/// counted phase met a feature screen, and nothing said so. Found by rendering
+/// a half-filled bar on purpose.
+#[test]
+fn a_feature_layout_draws_one_bar_and_puts_its_counts_under_it() {
+    let atlas = Atlas::build();
+    let screen = feature_screen();
+    let state = progress(1, 2);
+    let list = screen.draw_list(Phase::Prefetch, &state, &atlas);
+
+    // The cleared frame is a `Fill` too, so the bar's own are what is left.
+    let fills: Vec<[f32; 4]> = list
+        .iter()
+        .filter_map(|draw| match draw {
+            Draw::Fill { rect, .. } => Some(*rect),
+            _ => None,
+        })
+        .filter(|rect| rect[1] > 0.0)
+        .collect();
+    assert_eq!(
+        fills.len(),
+        2,
+        "one trough and one fill, not two of each: {fills:?}"
+    );
+    for rect in &fills {
+        assert!(
+            (rect[1] - BAR_BOX.1).abs() < f32::EPSILON,
+            "both belong to the feature layout's own bar: {rect:?}"
+        );
+    }
+    // Half of two, in the bar's own width.
+    assert!(
+        (fills[1][2] - BAR_BOX.2 / 2.0).abs() < 1.0,
+        "the fill is the fraction wide: {:?}",
+        fills[1]
+    );
+
+    // And the counts sit under that bar rather than in the centred layout's
+    // slot, which is where they used to cross the prose.
+    let counted_row = list.iter().find_map(|draw| match draw {
+        Draw::Text { y, text, .. } if text.contains("/ 2") => Some(*y),
+        _ => None,
+    });
+    assert!(
+        counted_row.is_some_and(|y| y > BAR_BOX.1 + BAR_BOX.3),
+        "the counts are below the bar: {counted_row:?}"
+    );
+}
