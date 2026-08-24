@@ -44,6 +44,11 @@ python3 scripts/rpcs3-drive.py display        # Xvfb :77, TCP-addressable
 uv run --with evdev python3 scripts/rpcs3-drive.py race --drive 20 --shots
 ```
 
+`--load-shots N` adds N evenly spaced screenshots across the load window, which
+is the only way to catch a screen that is up for none of the run either side of
+it - the loading screen is the case it was added for. See
+[hd-loading.md](../formats/hd-loading.md).
+
 Measured on that path: `Main Menu` in about 45 seconds, a race running on
 Talon's Junction about 80 seconds after that, and screenshots that are real
 frames rather than black.
@@ -71,6 +76,17 @@ Two more things about the invocation:
   old one. Whether that is an explicit single-instance lock or just the failed
   bind was not established; the symptom is what matters, and it is that a stale
   process looks exactly like a broken command line.
+- **A terminated run poisons every run after it, and on a newer build the
+  failure changed shape.** `rpcs3-drive.py`'s `Session.__exit__` calls
+  `proc.terminate()`, and a terminated RPCS3 leaves `~/.cache/rpcs3/RPCS3.buf`
+  behind. On build `0.0.42-19777` the next launch does **not** exit quietly: it
+  puts a modal dialog on the virtual display ("Another instance of RPCS3 is
+  running"), so the process stays up, `TTY.log` stays empty, and every wait
+  times out against what looks exactly like a game that booted and stalled. Two
+  runs were lost to it before a screenshot of the display showed the dialog -
+  which is the general lesson, since the display is the only channel that
+  carries a dialog. `Session.__enter__` clears the lock now when no RPCS3 is
+  running.
 
 `just launch-hdfury-ps3` defaulted to the *encrypted* image until 2026-08-19 and
 so could never boot; the recipe now points at the decrypted one.
