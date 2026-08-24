@@ -201,6 +201,7 @@ impl Pending {
         let shell = Shell {
             definition: self.definition.clone(),
             strings: boot_shell.strings.clone(),
+            entries: boot_shell.entries.clone(),
             modes: menu::mode_choices(&boot_shell.strings),
             // The disc's own names for its stylings, so the row offers what the
             // source has rather than a list this build holds.
@@ -262,6 +263,7 @@ impl Pending {
             let assets = loading::Assets::load(
                 source,
                 &boot_shell.strings,
+                boot_shell.entries.as_deref(),
                 crate::args::style_of(&self.settings),
             );
             for note in &assets.notes {

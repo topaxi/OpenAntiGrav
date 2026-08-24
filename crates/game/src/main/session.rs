@@ -122,6 +122,13 @@ pub(crate) struct Session {
     /// should be is a property of the window and the settings rather than of
     /// what happens to be on screen.
     pub(crate) framebuffer: upscale::Framebuffer,
+    /// How many races this run has launched, which is what varies the loading
+    /// screen's feature draw.
+    ///
+    /// **A counter rather than a clock**, so a run is reproducible: the seed a
+    /// screen draws with is this, and two runs that launch the same races in
+    /// the same order see the same features. See `loading::Screen::new`.
+    pub(crate) races_launched: u64,
     /// Set when a menu asks to quit, read by the event loop.
     pub(crate) quit: bool,
     /// What the menus need, when this run has menus at all.
@@ -231,6 +238,9 @@ pub(crate) struct Shell {
     /// feature's strings again, and they were resolved once with the archives
     /// open. See `Session::reload_loading_assets`.
     pub(crate) strings: oag_game::language::StringTable,
+    /// The chosen language's table entry, for the same reload. See
+    /// `boot::Shell::entries`.
+    pub(crate) entries: Option<String>,
     /// The front-end stylings this source ships art for, valued and labelled by
     /// the disc's own names for them.
     ///

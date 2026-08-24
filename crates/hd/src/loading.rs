@@ -218,14 +218,15 @@ const fn feature(
 /// reads whichever copy is served rather than choosing one.
 ///
 /// Confidence **90** on the set and the order - four `lwz` from one TOC block,
-/// in one basic block, into four adjacent fields. **60** on which colour plays
-/// which role, which is a reading of a screenshot; see
-/// [`oag_title::loading::Palette`].
+/// in one basic block, into four adjacent fields. **80** on the roles, which
+/// come from how often the draw function reads each and from the values
+/// themselves rather than from the names; see [`oag_title::loading::Palette`],
+/// and note that the one role still unidentified is `HD_LightGrey`'s.
 pub const PALETTE: oag_title::loading::Palette = oag_title::loading::Palette {
     background: "HD_BG",
-    rule: "HD_Grey",
+    ink: "HD_Grey",
     accent: "HD_Blue",
-    text: "HD_LightGrey",
+    dim: "HD_LightGrey",
 };
 
 /// The chrome the screen is framed with, named in the same run of the

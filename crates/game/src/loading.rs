@@ -204,25 +204,45 @@ impl Screen {
     /// are all per-title now, and threading four arguments through every caller
     /// would put the same four together at each of them.
     #[must_use]
-    pub fn new(assets: &Assets, line_height: f32) -> Self {
+    pub fn new(assets: &Assets, line_height: f32, draw: u64) -> Self {
+        // **One feature, drawn.** The original picks a feature every time this
+        // screen goes up - `LoadingScreen_Construct` reduces a counter modulo a
+        // range its race mode selects, five for Eliminator and three or four
+        // otherwise. So this draws too, from `draw`, which the caller varies
+        // per screen and which is a seed rather than a clock read: a capture of
+        // this screen has to be reproducible.
+        //
+        // **From all of them, not from the mode's own deck.** Mapping this
+        // project's race modes onto the twenty-two ids HD's `g_GameState`
+        // carries is a separate inference, and eleven of those ids are named
+        // while the rest are not. Drawing from everything the title ships is
+        // the honest approximation of a deck whose size this build cannot pick.
+        // See `docs/ghidra/functions/ps3-hdfury-eu/loading-screen.md`.
+        let shown = (!assets.features.is_empty())
+            .then(|| oag_core::rng::Rng::new(draw).next_u32() as usize % assets.features.len());
         Self {
             wave: Wave::new(),
             has_wave: assets.wave,
             rng: oag_core::rng::Rng::new(WAVE_SEED),
             tips: assets.tips.clone(),
-            illustration: assets.art.as_ref().and_then(|art| art.illustration),
+            illustration: shown
+                .and_then(|at| {
+                    assets
+                        .art
+                        .as_ref()
+                        .and_then(|art| art.illustrations.get(at))
+                })
+                .copied(),
             title_arrow: assets.art.as_ref().and_then(|art| art.title_arrow),
             subtitle_arrow: assets.art.as_ref().and_then(|art| art.subtitle_arrow),
             rule: assets.art.as_ref().and_then(|art| art.rule),
             corner: assets.art.as_ref().and_then(|art| art.corner),
             palette: assets.palette,
-            feature_title: assets
-                .feature
-                .as_ref()
+            feature_title: shown
+                .and_then(|at| assets.features.get(at))
                 .and_then(|feature| feature.title.clone()),
-            feature_text: assets
-                .feature
-                .as_ref()
+            feature_text: shown
+                .and_then(|at| assets.features.get(at))
                 .map(|feature| feature.description.clone()),
             caption: assets.caption.clone(),
             // Guarded against a zero line height, which no real face has: a
@@ -391,21 +411,25 @@ impl Screen {
         // underneath is not one of the four colours and the text crosses it.
         let border = over_backdrop.then(|| dim(OUTLINE));
         let tint = self.palette;
+        // **One ink for everything written and drawn**, which is a usage count
+        // rather than a preference: the original's own draw function reads
+        // `HD_Grey` about ten times per screen variant and its other three
+        // colours once each. The names mislead - "light grey" is the *dark*
+        // half-alpha one on the archive this disc serves - so the roles come
+        // from the values and the counts. See
+        // `docs/ghidra/functions/ps3-hdfury-eu/loading-screen.md`.
         let ink = |colour: [f32; 4]| match tint {
-            Some(palette) => dim(palette.text),
+            Some(palette) => dim(palette.ink),
             None if over_backdrop => dim(ON_BACKDROP),
             None => dim(colour),
         };
-        let rule_ink = tint.map_or(dim(RULE_INK), |palette| dim(palette.rule));
-        // **The trough is not the accent.** The original's bar is a dark dotted
-        // grid with the *filled* part in the accent colour - red on Fury's
-        // palette - so painting the whole trough in it draws a full bar over a
-        // load that has not started. The trough takes the rule's colour at a
-        // third, which is what a dotted grid averages to.
-        let bar_trough = tint.map_or(dim(BAR_DOTS), |palette| {
-            let [r, g, b, a] = palette.rule;
-            dim([r, g, b, a * BAR_TROUGH_ALPHA])
-        });
+        let rule_ink = tint.map_or(dim(RULE_INK), |palette| dim(palette.ink));
+        // The trough is the one translucent colour, which is a **hypothesis**:
+        // `HD_LightGrey` is read once per variant and is a half-alpha dark grey
+        // on the served palette, which is the shape a trough has. Confidence
+        // 55, and the alternative is that it belongs to something this build
+        // does not draw at all.
+        let bar_trough = tint.map_or(dim(BAR_DOTS), |palette| dim(palette.dim));
         let bar_fill = tint.map_or(dim(BAR_FILL), |palette| dim(palette.accent));
 
         // The frame is cleared either way: the backdrop is stretched over the
@@ -779,14 +803,6 @@ const RULE_INK: [f32; 4] = [0.75, 0.78, 0.82, 1.0];
 /// black frame rather than for a gauge a fifth of the screen tall. See
 /// [`Screen::draw_list`] for why this is a flat colour and not `dot.gtf`.
 const BAR_DOTS: [f32; 4] = [0.20, 0.23, 0.28, 1.0];
-
-/// How much of the rule's colour the bar's trough keeps.
-///
-/// A third, which is about what the original's dotted grid averages to against
-/// its own ground - it is a grid of dots on the ground colour, not a solid
-/// band. See [`Screen::draw_list`] for why it is not drawn as the dots
-/// themselves.
-const BAR_TROUGH_ALPHA: f32 = 0.35;
 
 /// The marker sprites' drawn size, and the bracket corners'.
 const MARKER_SIZE: f32 = 7.0;

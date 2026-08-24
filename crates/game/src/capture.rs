@@ -860,7 +860,9 @@ pub fn loading(
     sprites: &crate::sprite::Sheet,
     options: &LoadingOptions,
 ) -> Result<()> {
-    let mut screen = crate::loading::Screen::new(assets, font.line_height);
+    // Seed 0: a capture has to be reproducible, and which feature it draws is
+    // part of the picture. See `loading::Screen::new`.
+    let mut screen = crate::loading::Screen::new(assets, font.line_height, 0);
     // Stepped rather than jumped to: the tip rotation counts frames, and the
     // wave draws from its own `Rng` on every one of them, so frame `n` is only
     // reachable by having drawn the `n - 1` before it.

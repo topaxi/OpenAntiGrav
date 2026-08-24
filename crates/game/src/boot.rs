@@ -63,6 +63,9 @@ pub struct Boot {
     /// The text atlas: the disc's own font when it decodes, ours when it does
     /// not.
     pub font: crate::font::Atlas,
+    /// The chosen language's string-table entry, carried through from
+    /// [`Shell::entries`] for the one caller that needs the other copies of it.
+    pub entries: Option<String>,
     /// Every language this source offers, for the menus' own language row.
     ///
     /// The picker inside [`Self::frontend`] has the same list; this is the copy
@@ -289,6 +292,13 @@ pub struct Shell {
     pub strings: StringTable,
     /// The raceable circuits, for the menus.
     pub tracks: Vec<crate::catalogue::Track>,
+    /// The chosen language's string-table entry, when it names one.
+    ///
+    /// Carried because the loading screen needs the *other copies* of it: two
+    /// of Wipeout HD's five feature descriptions are only in the copy that also
+    /// carries all 28 circuit names, and picking that copy needs the path. See
+    /// `crate::loading::Assets::load`.
+    pub entries: Option<String>,
     /// This title's own loading-screen table, carried for the same reason
     /// [`Self::menu_skin`] is: it is a property of the source, settled while the
     /// serial was in hand, and the menus need its style names to offer a row.
@@ -629,6 +639,8 @@ pub fn load_shell(options: &Options) -> Result<(Shell, oag_assets::Archives)> {
     Ok((
         Shell {
             screens,
+            entries: chosen_language(&languages, options.language.as_deref())
+                .and_then(|language| language.entries.clone()),
             loading: title.loading,
             languages: offered,
             strings,
@@ -972,6 +984,7 @@ impl MediaWorker {
 pub fn assemble(shell: Shell, media: Media) -> Boot {
     let Shell {
         screens,
+        entries,
         loading: _,
         languages,
         strings,
@@ -1157,6 +1170,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
     }
 
     Boot {
+        entries,
         menu_skin,
         frame,
         menu_font,

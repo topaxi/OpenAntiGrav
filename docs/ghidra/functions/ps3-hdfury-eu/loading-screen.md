@@ -54,10 +54,31 @@ is the same open question about `skin.xml`'s six copies that
 [hd-frontend.md](../../../formats/hd-frontend.md) already carries.
 
 Confidence **90** on the set and the order: four `lwz` out of one TOC block in
-one basic block into four adjacent fields. **Which colour plays which role is
-not here** - the drawing code that reads `+0x95c` has not been traced - so
-`oag_hd::loading::PALETTE`'s role assignment is a reading of a screenshot at
-confidence 60.
+one basic block into four adjacent fields.
+
+### The roles, from the draw function's usage counts
+
+`FUN_002b61c8` - the function immediately after this one, and the only other
+reader of `+0x95c` - reads them at these rates, per screen variant (the function
+has two near-identical blocks, one per loading-screen type):
+
+| global | reads | what it feeds |
+| --- | ---: | --- |
+| `HD_BG` | 1 | passed to `0x00678138` before the variant branch, guarded on the screen kind not being 0 or 7 - the ground |
+| `HD_Grey` | ~10 | everything else drawn |
+| `HD_Blue` | 1 | unpacked to components and stacked for a draw |
+| `HD_LightGrey` | 1 | the same, one element |
+
+**The names mislead.** Each palette names its colours against its own ground:
+`DATA00` has `HD_BG` black with `HD_Grey` at `ff969696`, `DATA06` has `HD_BG`
+white with `HD_Grey` at `ff646464`. So `HD_Grey` is the ink in both and
+"light grey" is the *dark* half-alpha one (`7f646464`) on the served copy -
+reading it as the text colour draws a heading dimmer than its own body.
+
+Confidence **80** on ground/ink/accent, from the counts and the values together.
+`HD_LightGrey` is **not identified**: it is one element and the only translucent
+one, and `oag_game::loading` draws it as the progression bar's trough on that
+shape alone - a hypothesis at 55.
 
 ## The feature is a random draw, and the range is the race mode's
 
@@ -108,17 +129,18 @@ a `% 5` draw and prove nothing about the range.
 source's own `FEGlobals`, so the reimplemented screen is tinted by the disc
 rather than by a scheme this project chose.
 
-The **draw is not** wired, and what blocks it has moved. It is no longer the
-range: the moduli are read and eleven of the mode ids are named, so an
-Eliminator race draws from five and a single race from three or four. What
-blocks it now is two smaller things:
+The **draw is wired**: `oag_game::loading` loads all five illustrations into one
+sheet and `Screen::new` picks one per screen from a seeded `Rng`, varied by the
+run's race count. What is *not* reproduced is the deck - this build draws from
+all five where the original draws from three, four or five by mode, because
+mapping this project's race modes onto the twenty-two ids is a separate
+inference and only eleven are named.
 
-- **The asset path.** This build loads one illustration at boot; drawing per
-  race means loading all five, which is a change to how `oag_game::loading`
-  reads rather than to a constant.
+Two things would close that:
+
 - **The byte at `*0x00b979fc + 1`**, which decides whether the common
-  `SPArcade` case is `% 3` or `% 4`. Unread, so even the single-race deck is one
-  card wide of settled.
-
-Neither is a reason to approximate. The screen shows the feature both
-observations of the running game showed, and says so.
+  `SPArcade` case is `% 3` or `% 4`. The arithmetic is recovered -
+  `((byte - 1) >> 31) + 4`, so four when the byte is at least one - and the
+  object is not: `0x00b979fc` is read from about twenty places, so naming it is
+  its own thread.
+- **The seven unnamed mode ids**, three of which pick a deck.

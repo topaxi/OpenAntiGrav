@@ -93,22 +93,36 @@ pub struct Wave {
 /// together at object offset `0x95c`. The `FE_` prefix is the lookup's; the
 /// globals themselves are `HD_BG` and friends in `skin.xml`.
 ///
-/// **Which of the four goes where is not recovered.** The constructor stores
-/// them and the drawing code that reads them has not been traced, so the roles
-/// below are this project's reading of a screenshot: the ground is `BG`, the
-/// text is `LightGrey`, the rules and bracket marks are `Grey`, and `Blue` is
-/// the accent. That is a mapping of four known colours onto four visible roles
-/// rather than a guess at unknown values.
+/// # The roles are the usage counts, not the names
+///
+/// The names mislead, because each palette names its colours relative to its
+/// own ground: on the archive whose `HD_BG` is white, `HD_Grey` is the *dark*
+/// ink; on the archive whose `HD_BG` is black, `HD_Grey` is the *light* one. So
+/// "light grey" is not the bright one and cannot be read as the text colour.
+///
+/// What settles it is how often the original's own draw function reads each,
+/// per screen variant: `HD_BG` **once**, `HD_Grey` about **ten** times,
+/// `HD_Blue` **once**, `HD_LightGrey` **once**. One ground, one workhorse and
+/// two single-element colours - which matches the values, where `HD_Grey` is
+/// the only one that is a legible ink against both grounds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Palette {
-    /// The screen's ground.
+    /// The screen's ground. Read once, before the variant branch.
     pub background: &'static str,
-    /// The rules and the bracket marks.
-    pub rule: &'static str,
-    /// The accent.
+    /// Everything written and every mark drawn: text, rules, bracket corners.
+    ///
+    /// The workhorse, and the only one of the four that is a legible ink
+    /// against both of the grounds this title ships.
+    pub ink: &'static str,
+    /// The accent - Fury's red, the base game's pale blue. One element.
     pub accent: &'static str,
-    /// The text.
-    pub text: &'static str,
+    /// The one translucent colour, read once and **not identified**.
+    ///
+    /// On the served archive it is a half-alpha dark grey, which is the shape a
+    /// bar trough has and is why this build draws it as one - a hypothesis at
+    /// confidence 55, recorded as such. See
+    /// `docs/ghidra/functions/ps3-hdfury-eu/loading-screen.md`.
+    pub dim: &'static str,
 }
 
 /// One piece of a loading screen's own chrome.

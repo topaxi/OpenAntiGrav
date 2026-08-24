@@ -41,13 +41,17 @@ pub struct Assets {
     /// The four colours this source's own front end tints the screen with, when
     /// the title names them. See [`oag_title::loading::Palette`].
     pub palette: Option<Palette>,
-    /// The illustrated feature this screen teaches, when the title has any.
+    /// Every illustrated feature this title teaches, in its own order.
+    ///
+    /// Empty on a title with none. The screen draws one of them; which is
+    /// [`super::Screen::new`]'s to decide, because the original decides it per
+    /// screen rather than per disc.
     ///
     /// One of the set, chosen at load: HD rotates through five and this build
     /// picks one for the run rather than cycling, because which one the
     /// original picks is `Feature type == %i` and what drives that is unread.
     /// See [`Feature`].
-    pub feature: Option<Feature>,
+    pub features: Vec<Feature>,
     /// The word under the screen, resolved out of the disc's string table.
     ///
     /// `None` on a title that names no caption id, or whose table does not
@@ -79,12 +83,12 @@ pub struct Feature {
 pub struct Palette {
     /// The screen's ground.
     pub background: [f32; 4],
-    /// The rules and the bracket marks.
-    pub rule: [f32; 4],
+    /// Everything written and every mark drawn.
+    pub ink: [f32; 4],
     /// The accent.
     pub accent: [f32; 4],
-    /// The text.
-    pub text: [f32; 4],
+    /// The one translucent colour, drawn as the bar's trough on a hypothesis.
+    pub dim: [f32; 4],
 }
 
 /// Every picture the screen draws, in one sheet, with where each one sits.
@@ -101,8 +105,12 @@ pub struct Palette {
 pub struct Art {
     /// The stacked sheet.
     pub sheet: crate::sprite::Sheet,
-    /// Where the feature illustration sits in it.
-    pub illustration: Option<[f32; 4]>,
+    /// Where each feature's illustration sits in it, in the title's own order.
+    ///
+    /// **All of them, not the one on show.** The original draws a feature at
+    /// random every time the screen goes up, so the picture cannot be chosen
+    /// when the disc is read - see [`super::Screen::new`].
+    pub illustrations: Vec<[f32; 4]>,
     /// The marker before the screen's own title.
     pub title_arrow: Option<[f32; 4]>,
     /// The marker before a feature's name.
@@ -142,7 +150,7 @@ impl Default for Assets {
             wave: true,
             art: None,
             palette: None,
-            feature: None,
+            features: Vec::new(),
             caption: None,
             notes: Vec::new(),
         }
@@ -178,7 +186,12 @@ impl Assets {
     /// because a stand-in for an authored illustration is a picture this build
     /// made up.
     #[must_use]
-    pub fn load(source: &str, strings: &StringTable, style: Option<&str>) -> Self {
+    pub fn load(
+        source: &str,
+        strings: &StringTable,
+        entries: Option<&str>,
+        style: Option<&str>,
+    ) -> Self {
         let mut notes = Vec::new();
         let mut tips = Vec::new();
         let mut strip = None;
@@ -246,11 +259,49 @@ impl Assets {
         // what drives that number is unread, so cycling here would be inventing
         // a rhythm. `pick_feature` says how the one is chosen and why it is not
         // arbitrary.
-        // **One sheet for the whole screen.** The illustration and the marks
-        // the original frames this screen with go into the same atlas, because
-        // a renderer is built with one and every `Draw::Sprite` indexes it. See
-        // `Art`.
-        let chosen = pick_feature(loading.features, style, &mut notes);
+        // **One sheet for the whole screen, and every feature in it.** The
+        // illustrations and the marks the original frames this screen with go
+        // into the same atlas, because a renderer is built with one and every
+        // `Draw::Sprite` indexes it. All five illustrations rather than one,
+        // because the original draws a feature per screen and this is read once
+        // per disc - see `Screen::new`.
+        let chosen = pick_style(loading.features, style, &mut notes);
+        // **The copy that carries every feature's prose, which is not the one
+        // the front end is served.** Two of Wipeout HD's five descriptions -
+        // `FE_ABSORB_INST` and `FE_FLIP_INST`, the two Fury mechanics - are in
+        // one copy of the string table only, and it is the same copy that
+        // carries all 28 circuit names. That is `oag_game::language::CircuitNames`'s
+        // finding arriving a second time from a different direction, and it is
+        // what stops this screen offering three features on a disc that ships
+        // five. See `docs/formats/hd-frontend.md`.
+        let wanted: Vec<String> = chosen
+            .map(|style| style.features)
+            .unwrap_or_default()
+            .iter()
+            .map(|feature| feature.description.to_string())
+            .collect();
+        let prose = entries.filter(|_| !wanted.is_empty()).and_then(|entries| {
+            let copies: Vec<(String, StringTable)> = archives
+                .read_every_name(entries)
+                .into_iter()
+                .filter_map(|(label, blob)| {
+                    let xml = crate::boot::xml::expand(&blob).ok()?;
+                    Some((label, StringTable::from_xml(&xml)))
+                })
+                .collect();
+            let (label, table) = copies
+                .into_iter()
+                .find(|(_, table)| wanted.iter().all(|id| table.get(id).is_some()))?;
+            notes.push(format!(
+                "loading screen: {} feature description(s) from {label}",
+                wanted.len()
+            ));
+            Some(table)
+        });
+        // The served table where no copy covers them all, which is every title
+        // but this one and is what a miss falls back to.
+        let prose = prose.as_ref().unwrap_or(strings);
+
         let mut blobs: Vec<(String, Vec<u8>)> = Vec::new();
         let mut read = |entry: &str, notes: &mut Vec<String>| match archives.read_name(entry) {
             Ok(blob) => {
@@ -262,7 +313,29 @@ impl Assets {
                 false
             }
         };
-        let illustrated = chosen.is_some_and(|feature| read(feature.image, &mut notes));
+        // Only the features whose picture *and* prose both resolve are offered,
+        // so a draw cannot land on a half-loaded one.
+        let mut features = Vec::new();
+        let mut illustrated: Vec<&str> = Vec::new();
+        for feature in chosen.map(|style| style.features).unwrap_or_default() {
+            let Some(description) = prose.get(feature.description) else {
+                notes.push(format!("{}: no such string", feature.description));
+                continue;
+            };
+            if !read(feature.image, &mut notes) {
+                continue;
+            }
+            illustrated.push(feature.image);
+            features.push(Feature {
+                // `get` rather than `get_or_id`: a missing title draws no title,
+                // where showing the id would put `FE_PILOT_ASSIST` on screen.
+                title: feature
+                    .title
+                    .and_then(|id| prose.get(id))
+                    .map(str::to_string),
+                description: description.to_string(),
+            });
+        }
         for (_, entry) in loading.chrome {
             read(entry, &mut notes);
         }
@@ -293,9 +366,7 @@ impl Assets {
             };
             use oag_title::loading::Chrome;
             Art {
-                illustration: chosen
-                    .filter(|_| illustrated)
-                    .and_then(|feature| at(feature.image)),
+                illustrations: illustrated.iter().filter_map(|entry| at(entry)).collect(),
                 title_arrow: mark(Chrome::TitleArrow),
                 subtitle_arrow: mark(Chrome::SubtitleArrow),
                 rule: mark(Chrome::Rule),
@@ -303,18 +374,6 @@ impl Assets {
                 dot: mark(Chrome::Dot),
                 sheet,
             }
-        });
-
-        let feature = chosen.and_then(|chosen| {
-            Some(Feature {
-                // `get` rather than `get_or_id`: a missing title draws no title,
-                // where showing the id would put `FE_PILOT_ASSIST` on screen.
-                title: chosen
-                    .title
-                    .and_then(|id| strings.get(id))
-                    .map(str::to_string),
-                description: strings.get(chosen.description)?.to_string(),
-            })
         });
 
         // **The source's own tint**, read out of the front end it actually
@@ -337,13 +396,13 @@ impl Assets {
             };
             let resolved = Palette {
                 background: colour(names.background)?,
-                rule: colour(names.rule)?,
+                ink: colour(names.ink)?,
                 accent: colour(names.accent)?,
-                text: colour(names.text)?,
+                dim: colour(names.dim)?,
             };
             notes.push(format!(
                 "loading screen palette from {root}: {} {} {} {}",
-                names.background, names.rule, names.accent, names.text
+                names.background, names.ink, names.accent, names.dim
             ));
             Some(resolved)
         });
@@ -372,35 +431,27 @@ impl Assets {
             wave: loading.wave.is_some(),
             art,
             palette,
-            feature,
+            features,
             caption,
             notes,
         }
     }
 }
 
-/// Which feature to illustrate, out of the styles a title ships.
+/// Which styling to take the illustrations from, out of the ones a title ships.
 ///
-/// **The style is chosen, the feature is not.** `style` is a saved setting and
-/// names one of the title's own - `HD` or `FURY` on Wipeout HD, which ships
-/// every illustration twice. Which *feature* within it is the original's
-/// `Feature type == %i`, and what drives that number has not been read - so
-/// this takes the one that number was observed at rather than rotating on a
-/// rhythm this build made up.
-///
-/// **Index 2, corroborated twice.** A screenshot of a running Fury race and
-/// this project's own RPCS3 capture both show `Pilot_Assist`, and both runs
-/// logged `Feature type == 2`; `Pilot_Assist` is third in the order the
-/// executable names the ten images in. That is two observations of one value,
-/// not a measurement of what selects it - see `docs/formats/hd-loading.md`.
+/// **The styling is chosen here and the feature is not.** `style` is a saved
+/// setting naming one of the title's own - `HD` or `FURY` on Wipeout HD, which
+/// ships every illustration twice. Which *feature* is up is drawn per screen by
+/// the original and per screen here too; see [`super::Screen::new`].
 ///
 /// An unknown style name falls back to the title's first and says so, the same
 /// way a saved language this source does not carry falls through.
-fn pick_feature<'a>(
+fn pick_style<'a>(
     styles: &'a [oag_title::loading::FeatureStyle],
     style: Option<&str>,
     notes: &mut Vec<String>,
-) -> Option<&'a oag_title::loading::Feature> {
+) -> Option<&'a oag_title::loading::FeatureStyle> {
     let chosen = match style {
         Some(name) => styles
             .iter()
@@ -415,24 +466,13 @@ fn pick_feature<'a>(
             }),
         None => styles.first(),
     }?;
-    let feature = chosen.features.get(OBSERVED_FEATURE).or_else(|| {
-        // A style with fewer than three would be a different disc; answered
-        // rather than panicked, because a loading screen is not worth a crash.
-        chosen.features.first()
-    })?;
     notes.push(format!(
-        "loading screen: {} style, {}",
-        chosen.name, feature.image
+        "loading screen: {} style, {} feature(s)",
+        chosen.name,
+        chosen.features.len()
     ));
-    Some(feature)
+    Some(chosen)
 }
-
-/// Which of a style's features this build shows.
-///
-/// See [`pick_feature`]: `Feature type == 2` is what both observations of the
-/// running game logged, and index 2 is `Pilot_Assist` in the order its
-/// executable names them.
-const OBSERVED_FEATURE: usize = 2;
 
 /// Every `<PI_LoadingScreen>`'s body string, resolved through `strings`.
 ///

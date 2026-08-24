@@ -115,6 +115,7 @@ pub(crate) fn run_windowless(
         let assets = loading::Assets::load(
             &options.source,
             &loaded.strings,
+            loaded.entries.as_deref(),
             crate::args::style_of(settings),
         );
         for note in &assets.notes {

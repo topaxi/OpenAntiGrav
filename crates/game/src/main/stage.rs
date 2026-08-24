@@ -123,7 +123,9 @@ impl Stage {
             atlas: shell.font.clone(),
             renderer,
             wave,
-            screen: loading::Screen::new(assets, line_height),
+            // Seed 0 on the boot screen: it goes up once per run, and the
+            // title that has features does not draw this one anyway.
+            screen: loading::Screen::new(assets, line_height, 0),
             shell: Some(shell),
             media,
             race: None,
@@ -149,6 +151,7 @@ impl Stage {
         font: &oag_game::font::Atlas,
         sprites: &oag_game::sprite::Sheet,
         assets: &loading::Assets,
+        draw: u64,
         trace: bool,
     ) -> Result<Self> {
         let renderer = Renderer::new(
@@ -173,7 +176,7 @@ impl Stage {
             atlas: font.clone(),
             renderer,
             wave,
-            screen: loading::Screen::new(assets, font.line_height),
+            screen: loading::Screen::new(assets, font.line_height, draw),
             shell: None,
             media: None,
             race: Some(worker),

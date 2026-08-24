@@ -255,6 +255,7 @@ impl App {
             scheme: self.scheme,
             anisotropy: self.anisotropy,
             launched: false,
+            races_launched: 0,
             settings: self.settings.clone(),
             shell: self.shell.clone(),
             // Moved rather than cloned: `Assets` owns a decoded glow strip and

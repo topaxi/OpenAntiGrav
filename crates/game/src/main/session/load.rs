@@ -305,8 +305,13 @@ impl Session {
         let Some(strings) = self.shell.as_ref().map(|shell| shell.strings.clone()) else {
             return;
         };
-        let assets =
-            loading::Assets::load(&source, &strings, crate::args::style_of(&self.settings));
+        let entries = self.shell.as_ref().and_then(|shell| shell.entries.clone());
+        let assets = loading::Assets::load(
+            &source,
+            &strings,
+            entries.as_deref(),
+            crate::args::style_of(&self.settings),
+        );
         for note in &assets.notes {
             info!("{note}");
         }
@@ -368,6 +373,9 @@ impl Session {
                 .and_then(|backdrop| backdrop.held.take()),
             _ => None,
         };
+        // Bumped before the screen is built, so the first race of a run draws
+        // with 1 rather than with the same seed a capture uses.
+        self.races_launched = self.races_launched.saturating_add(1);
         let worker = race::LoadWorker::spawn(options, label);
         let shell = self.shell.clone().ok_or_else(|| {
             anyhow::anyhow!("this run has no menus, so it has no font to draw with")
@@ -378,6 +386,7 @@ impl Session {
             &shell.font,
             &shell.sprites,
             &self.loading_assets,
+            self.races_launched,
             self.trace,
         )?;
         Ok(())

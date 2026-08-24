@@ -111,29 +111,64 @@ that "what drives that number has not been read" is superseded. The mode is
 [mode-manager.md](../ghidra/functions/ps3-hdfury-eu/mode-manager.md#the-mode-enum-22-ids-eleven-of-them-named),
 which this screen's question is what prompted.
 
-**This build shows one feature and does not draw.** It loads a single
-illustration at boot; drawing per race means loading all five, which is a change
-to the asset path rather than to a constant — and with the mode ids unread there
-is no honest range to draw from. Both observations of the running game logged
-type 2, which is Pilot Assist, and that is the one loaded.
+**This build draws too.** `Screen::new` picks one per screen from a seeded
+`Rng`, varied by how many races the run has launched - a counter rather than a
+clock, so a run is reproducible and a capture of this screen is stable. All five
+illustrations are loaded into the one sheet the screen draws from, because the
+original picks per screen and the disc is read once per boot.
 
-### The four colours are the disc's, and named in the executable
+**From all five rather than the mode's own deck.** Mapping this project's race
+modes onto the twenty-two ids `g_GameState` carries is a separate inference, and
+only eleven of those ids are named. Drawing from everything the title ships is
+the honest approximation of a deck whose size this build cannot pick.
+
+### The four colours are the disc's, and their roles are usage counts
 
 The same constructor resolves `FE_HD_BG`, `FE_HD_Grey`, `FE_HD_Blue` and
 `FE_HD_LightGrey` through the palette lookup and keeps the four together. Those
 are `FEGlobals` in `skin.xml`, so `oag_hd::loading::PALETTE` names them and
-`oag_game::loading::Assets` reads their values off the source itself — the
-screen is tinted by the disc rather than by a scheme this project chose.
+`oag_game::loading::Assets` reads their values off the source itself.
 
-Their **values differ by archive**: `DATA06` gives `HD_BG` as `0xffffffff` and
-the served copy does not, which is why the screen comes out white-and-blue on
-one and black-and-red on the other. That is the same open question about
-`skin.xml`'s six copies [hd-frontend.md](hd-frontend.md) already carries, and it
-lines up suggestively with `OPT_FE_STYLE` — suggestively, and unproven.
+**The names mislead and the values say so**, which is what an early wiring of
+this got wrong. Each palette names its colours relative to its own ground:
 
-Which of the four plays which role is **not** recovered: the drawing code that
-reads them has not been traced, so the assignment (ground, rule, accent, text)
-is a reading of a screenshot at confidence 60.
+| global | `DATA00` (served) | `DATA06` |
+| --- | --- | --- |
+| `HD_BG` | `ff000000` black | `ffffffff` white |
+| `HD_Grey` | `ff969696` | `ff646464` |
+| `HD_Blue` | `ffac0717` red | `ff8ac0ca` blue |
+| `HD_LightGrey` | `7f646464` half-alpha | `ffdedede` |
+
+So "light grey" is the *dark, translucent* one on the archive this disc serves,
+and reading it as the text colour drew a heading dimmer than its own body text.
+
+What settles the roles is how often the original's draw function reads each, per
+screen variant: `HD_BG` **once**, `HD_Grey` about **ten** times, `HD_Blue`
+**once**, `HD_LightGrey` **once**. One ground, one workhorse and two
+single-element colours — and `HD_Grey` is the only one of the four that is a
+legible ink against both grounds. So everything written and every mark drawn is
+`HD_Grey`, the accent is `HD_Blue`, and `HD_LightGrey` is drawn as the bar's
+trough on a **hypothesis** (it is the one translucent colour, and a trough is
+the one element that shape fits) at confidence 55.
+
+Confidence **80** on the rest of the roles, up from 60 when they were a reading
+of a screenshot alone. See
+[loading-screen.md](../ghidra/functions/ps3-hdfury-eu/loading-screen.md).
+
+### Two of the five descriptions are in one copy of the string table only
+
+`FE_ABSORB_INST` and `FE_FLIP_INST` — Absorb and Flip, the two Fury mechanics —
+are absent from the served `entries.xml` and present in `DATA06`'s. Every copy
+carries the other three.
+
+**That is the circuit-name finding arriving a second time from a different
+direction.** `DATA06` is the copy that carries all 28 circuit names too (see
+[hd-frontend.md](hd-frontend.md)), and it is now needed twice for two unrelated
+reasons — which is the strongest evidence yet that it is the complete, Fury-era
+table. `oag_game::loading::Assets` picks the copy that resolves every
+description, the same way `CircuitNames` picks the one that names every circuit,
+and reports which it took. Without it this screen offers three features on a
+disc that ships five.
 
 ## A `.gtf`'s rows run bottom-up, and nothing 2D knew
 
@@ -283,8 +318,12 @@ on a modal dialog.
 - **Seven of the twenty-two mode ids** - `0`, `6`, `7`, `11`, `13`, `14`, `15`,
   the ones with no `ModeManager` of their own. Three of them pick a feature
   range, so they are real modes rather than gaps.
-- **Which of the four palette colours plays which role**, and whether
-  `FUN_006762f8` is a random source or a frame counter.
+- **What `HD_LightGrey` colours.** One element per variant, translucent, drawn
+  here as the bar trough on a confidence-55 hypothesis.
+- **Whether `FUN_006762f8` is a random source or a frame counter**, and the byte
+  at `*0x00b979fc + 1` that decides whether a non-Eliminator deck is three or
+  four - the arithmetic is `((byte - 1) >> 31) + 4`, so four when it is at least
+  one.
 - **`LOADING SCREEN TYPE type == %i`**, observed only at 0. It sits with
   `scePresents.gtf`, the twelve `presents_<language>.gtf` files and the cut demo
   still, so more than one type exists and the presents screens may be among

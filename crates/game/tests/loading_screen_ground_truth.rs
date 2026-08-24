@@ -57,15 +57,21 @@ fn image(name: &str) -> Option<PathBuf> {
     None
 }
 
-/// The chosen language's table off one source, for the caption lookup.
-fn strings(source: &Path) -> StringTable {
+/// The chosen language's table **and** the entry it came from, which is what
+/// `Assets::load` needs to reach the other copies of it.
+fn table_and_entries(source: &Path) -> (StringTable, Option<String>) {
     let opened = oag_game::title::open_source(&source.display().to_string(), Vec::new())
         .expect("the source opens");
     let mut archives = opened.archives;
     let mut report = Vec::new();
     let plugins: &[&str] = opened.title.front_end.map_or(&[], |fe| fe.language_plugins);
     let languages = oag_game::boot::load_languages(&mut archives, plugins, &mut report);
-    oag_game::boot::load_strings(&mut archives, &languages, Some("English"), &mut report)
+    let chosen = oag_game::boot::chosen_language(&languages, Some("English"));
+    let entries = chosen.and_then(|language| language.entries.clone());
+    (
+        oag_game::boot::load_strings(&mut archives, &languages, Some("English"), &mut report),
+        entries,
+    )
 }
 
 /// Every feature illustration HD names is on the disc, in both stylings, and
@@ -134,8 +140,8 @@ fn hd_draws_a_feature_and_a_caption_and_no_wave() {
         return;
     };
     let source = image.display().to_string();
-    let table = strings(&image);
-    let assets = Assets::load(&source, &table, None);
+    let (table, entries) = table_and_entries(&image);
+    let assets = Assets::load(&source, &table, entries.as_deref(), None);
     for note in &assets.notes {
         println!("{note}");
     }
@@ -150,34 +156,76 @@ fn hd_draws_a_feature_and_a_caption_and_no_wave() {
 
     // The default styling is the base game's, and the feature is the one both
     // observations of the running game showed.
-    let feature = assets.feature.as_ref().expect("HD ships features");
+    // **All five**, because the original draws one per screen and this is read
+    // once per disc.
+    assert_eq!(assets.features.len(), 5, "HD ships five features");
     let art = assets.art.as_ref().expect("HD ships art");
-    assert!(
-        art.illustration.is_some(),
-        "the illustration is in the sheet"
+    assert_eq!(
+        art.illustrations.len(),
+        5,
+        "and five illustrations for them"
     );
-    assert!(
-        art.sheet.get(r"Data\FE\Images\Pilot_Assist.gtf").is_some(),
-        "and it is the one both observations of the running game showed"
-    );
+    for (_, entry) in oag_hd::loading::FEATURES[0]
+        .features
+        .iter()
+        .map(|f| ((), f.image))
+    {
+        assert!(
+            art.sheet.get(entry).is_some(),
+            "{entry} is in the one sheet the screen draws from"
+        );
+    }
     // The marks the original frames the screen with are in the same sheet.
     assert!(art.title_arrow.is_some());
     assert!(art.subtitle_arrow.is_some());
     assert!(art.rule.is_some());
     assert!(art.corner.is_some());
     assert!(art.dot.is_some());
-    assert_eq!(feature.title.as_deref(), Some("PILOT ASSIST"));
+
+    let pilot = assets
+        .features
+        .iter()
+        .find(|feature| feature.title.as_deref() == Some("PILOT ASSIST"))
+        .expect("Pilot Assist is one of them");
     assert!(
-        feature
+        pilot
             .description
             .starts_with("Pilot Assist can aid your navigation"),
         "{:?}",
-        feature.description
+        pilot.description
+    );
+
+    // **Two of the five descriptions are in one copy of the string table
+    // only**, and it is the same copy that carries all 28 circuit names - the
+    // finding `oag_game::language::CircuitNames` records, arriving a second
+    // time from a different direction. Pinned both ways: the served table has
+    // three of the five, and the loader still offers five.
+    let missing: Vec<&str> = ["FE_ABSORB_INST", "FE_FLIP_INST"]
+        .into_iter()
+        .filter(|id| table.get(id).is_none())
+        .collect();
+    assert_eq!(
+        missing,
+        ["FE_ABSORB_INST", "FE_FLIP_INST"],
+        "the served copy is missing the two Fury mechanics' prose"
+    );
+    assert!(
+        table.get("FE_PA_INST").is_some(),
+        "and carries the three that are not Fury's"
+    );
+
+    // The four colours are the source's own, and `HD_BG` is the served
+    // archive's rather than a value spelled in this repository.
+    let palette = assets.palette.expect("HD names four globals");
+    assert_eq!(palette.background[3], 1.0, "the ground is opaque");
+    assert!(
+        palette.dim[3] < 1.0,
+        "the one translucent colour is translucent: {:?}",
+        palette.dim
     );
 
     // Asking for Fury's styling gets Fury's art and the same words.
-    let fury = Assets::load(&source, &table, Some("FURY"));
-    let fury_feature = fury.feature.as_ref().expect("Fury ships features too");
+    let fury = Assets::load(&source, &table, entries.as_deref(), Some("FURY"));
     let fury_art = fury.art.as_ref().expect("Fury ships art");
     assert!(
         fury_art
@@ -186,7 +234,7 @@ fn hd_draws_a_feature_and_a_caption_and_no_wave() {
             .is_some(),
         "asking for Fury's styling gets Fury's art"
     );
-    assert_eq!(fury_feature.description, feature.description);
+    assert_eq!(fury.features.len(), assets.features.len());
 
     // And the two entries a wave would need really are absent, so this reads as
     // "cut" rather than "not looked for". The running game agrees: its own
@@ -215,8 +263,8 @@ fn pulse_still_gets_its_tips_and_its_own_strip() {
         return;
     };
     let source = image.display().to_string();
-    let table = strings(&image);
-    let assets = Assets::load(&source, &table, None);
+    let (table, entries) = table_and_entries(&image);
+    let assets = Assets::load(&source, &table, entries.as_deref(), None);
     for note in &assets.notes {
         println!("{note}");
     }
@@ -228,7 +276,7 @@ fn pulse_still_gets_its_tips_and_its_own_strip() {
         assets.tips.len()
     );
     assert!(
-        assets.feature.is_none(),
+        assets.features.is_empty(),
         "Pulse ships no illustrated features"
     );
     assert!(assets.art.is_none(), "and so draws no illustration");
@@ -259,15 +307,15 @@ fn pure_authors_no_loading_screen_and_says_so() {
         return;
     };
     let source = image.display().to_string();
-    let table = strings(&image);
-    let assets = Assets::load(&source, &table, None);
+    let (table, entries) = table_and_entries(&image);
+    let assets = Assets::load(&source, &table, entries.as_deref(), None);
     for note in &assets.notes {
         println!("{note}");
     }
 
     assert!(!assets.wave);
     assert!(assets.tips.is_empty());
-    assert!(assets.feature.is_none());
+    assert!(assets.features.is_empty());
     assert!(assets.art.is_none());
     assert!(
         assets

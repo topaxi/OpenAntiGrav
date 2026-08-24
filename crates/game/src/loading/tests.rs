@@ -22,6 +22,7 @@ fn screen_with(tips: Vec<String>) -> Screen {
             ..Assets::default()
         },
         AUTHORED_LINE_HEIGHT,
+        0,
     )
 }
 
@@ -613,6 +614,7 @@ fn a_race_load_draws_the_discs_caption_and_no_counts() {
             ..Assets::default()
         },
         AUTHORED_LINE_HEIGHT,
+        0,
     );
     let state = Progress {
         current: Some("Talon's Junction".to_string()),
@@ -664,6 +666,7 @@ fn a_caption_does_not_replace_a_counted_heading() {
             ..Assets::default()
         },
         AUTHORED_LINE_HEIGHT,
+        0,
     );
     let state = progress(3, 9);
     let drawn = text_of(&screen.draw_list(Phase::Prefetch, &state, &atlas));
@@ -686,6 +689,7 @@ fn a_title_with_no_wave_draws_no_quads() {
             ..Assets::default()
         },
         AUTHORED_LINE_HEIGHT,
+        0,
     );
     for _ in 0..10 {
         assert!(screen.quads().is_empty());
@@ -708,20 +712,21 @@ fn feature_screen() -> Screen {
             wave: false,
             art: Some(Art {
                 sheet: crate::sprite::Sheet::default(),
-                illustration: Some([0.0, 0.0, 64.0, 32.0]),
+                illustrations: vec![[0.0, 0.0, 64.0, 32.0]],
                 title_arrow: Some([0.0, 0.0, 8.0, 8.0]),
                 subtitle_arrow: Some([0.0, 0.0, 8.0, 8.0]),
                 rule: Some([0.0, 0.0, 8.0, 8.0]),
                 corner: Some([0.0, 0.0, 8.0, 8.0]),
                 dot: Some([0.0, 0.0, 8.0, 8.0]),
             }),
-            feature: Some(Feature {
+            features: vec![Feature {
                 title: Some("PILOT ASSIST".to_string()),
                 description: "Pilot Assist can aid your navigation.".to_string(),
-            }),
+            }],
             ..Assets::default()
         },
         AUTHORED_LINE_HEIGHT,
+        0,
     )
 }
 
