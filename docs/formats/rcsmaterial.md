@@ -1338,6 +1338,56 @@ What it moves is in [`rcsmodel.md`](rcsmodel.md#a-texture-coordinates-orientatio
 with the six explanations that were measured and died before the microcode was
 read.
 
+## The lighting family is three-way, and the directional light is what makes it hold (2026-08-24)
+
+**Confidence 88.** [`renderer.md`](../ghidra/functions/ps3-hdfury-eu/renderer.md)
+records that splitting materials into lighting families on what their `SHO`
+header *declares* was tried and refuted: keying on the lightmap sampler and
+`constantAmbientColour` put **447 of Talon's Junction's 978 drawn chunks** in a
+"neither" bucket alongside `track_wall` and `glasstest`, which are ordinary lit
+surfaces.
+
+**Asking about the directional light as well is what fixes that**, and it is
+one extra question rather than a different idea. `track_wall` and `glasstest`
+declare `directionalLight0DirectionWorldSpace` and `directionalLight0Colour`,
+so under a three-way key they land in "sun only" - which is what they are - and
+the "neither" bucket empties of everything except the surfaces that really are
+fed no scene light.
+
+| Fed | Talon's Junction | Anulpha Pass |
+| --- | --- | --- |
+| ambient + sun | 24 materials, 144 chunks | 58 materials, 179 chunks |
+| sun only | 224 materials, 618 chunks | 218 materials, 827 chunks |
+| **neither** | 35 materials, 151 chunks | 33 materials, 95 chunks |
+
+**The confirmation is in the names, and it was not designed for.** The split is
+made on declared parameters alone, and every material that falls into "neither"
+on either circuit is a sign or a glow: `sign_emissive`, `sign_emissive_glow`,
+`cf_glow_tube`, `cf_plasma_glow2`/`3`, `cf_startbeam_glow`,
+`mr_uvanim_em_alpha`, `cf_uvanim_emssive_glowtint`, `nr_holobowlparallax`,
+`nr_twinblend`, `cf_billboard1`, `scanlinebillboard`, `dc_lightcone`,
+`loopmaterial`, `nr_scalinguvs`. Two independent circuits, no exceptions.
+
+`oag_formats::rcsmaterial::Declared::takes_directional_light` reads it, and
+`mesh::slots::NO_AMBIENT`/`NO_SUN` carry the pair to the renderer.
+
+### What is acted on, and what is not
+
+**Only the emissive branch.** `mesh.wgsl` gives a surface fed no scene light an
+`authored` of `1.0` and no specular, so its albedo is the picture exactly as
+the microcode leaves it. Measured: 3.2 % of an Anulpha frame changes and 6.9 %
+of a Talon's Junction one, 87 % and 62 % of it brighter.
+
+**Dropping the ambient from the "sun only" family is not shipped**, though the
+bit that would gate it is read. It was tried on 2026-08-24 and is a regression:
+those materials declare `prelitBias` and `prelitScaleSpecular` and are lit by
+the lightmap, and this renderer applies no bias term at all
+(`prelit = scale * lightmap^power`, against the microcode's
+`... - bias`). Removing their ambient before supplying what replaces it turned
+Anulpha Pass from brown to black. The number that decides it is the overlap
+between those 827 chunks and the ones that actually carry a lightmap, and that
+has not been measured yet.
+
 ## Open
 
 - **87 of the 125 sampler hashes**, including the three commonest

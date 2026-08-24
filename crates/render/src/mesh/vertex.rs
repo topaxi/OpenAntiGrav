@@ -161,6 +161,33 @@ pub mod slots {
     /// the original is cyan and white.
     pub const NO_AMBIENT: u32 = 1 << 6;
 
+    /// The material's fragment program is **not** fed a directional light
+    /// either - neither `directionalLight0Colour` nor
+    /// `directionalLight0DirectionWorldSpace`.
+    ///
+    /// Set under the same rule as [`NO_AMBIENT`]: only where the declaration
+    /// was read. Together the two make a three-way key, and it is the addition
+    /// of *this* one that makes the split hold where an earlier attempt did
+    /// not. That attempt keyed on the lightmap sampler and the ambient alone
+    /// and put `track_wall` and `glasstest` - ordinary lit surfaces - in the
+    /// "neither" bucket; asking about the directional light as well moves both
+    /// into "sun only", which is what they are.
+    ///
+    /// **A program fed neither is emissive**, and the names that fall out say
+    /// so without having been asked: on Anulpha Pass the 33 materials in that
+    /// bucket are `sign_emissive`, `sign_emissive_glow`, `cf_glow_tube`,
+    /// `cf_plasma_glow2`/`3`, `cf_startbeam_glow`, `mr_uvanim_em_alpha`,
+    /// `cf_uvanim_emssive_glowtint`, `nr_holobowlparallax`, `nr_twinblend`;
+    /// on Talon's Junction the 35 are `cf_billboard1`, `scanlinebillboard`,
+    /// `sign_emissive_glow`, `cf_startbeam_glow`, `dc_lightcone`,
+    /// `loopmaterial`, `nr_scalinguvs`. Two independent circuits, every name a
+    /// sign or a glow.
+    pub const NO_SUN: u32 = 1 << 7;
+
+    /// Both of the above: the program is fed no scene light at all, so its
+    /// albedo is the picture and the rig must not touch it.
+    pub const EMISSIVE: u32 = NO_AMBIENT | NO_SUN;
+
     /// Which channel of that texture the alpha is, in bits 3 and 4.
     #[must_use]
     pub const fn alpha_channel(channel: u32) -> u32 {

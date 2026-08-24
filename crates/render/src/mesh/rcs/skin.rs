@@ -405,6 +405,14 @@ pub(super) fn roles(
         {
             packed |= slots::NO_AMBIENT;
         }
+        // And the sun is one too. The pair is the three-way lighting key, and
+        // a program fed neither is emissive - see `slots::NO_SUN`.
+        if declared
+            .as_ref()
+            .is_some_and(|d| !d.takes_directional_light())
+        {
+            packed |= slots::NO_SUN;
+        }
         let (first_unit, second_unit) = units(
             declared.as_ref(),
             material,

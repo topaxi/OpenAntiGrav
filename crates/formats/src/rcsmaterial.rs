@@ -433,6 +433,10 @@ pub const LIGHTMAP_SAMPLER: u32 = 0x37b5_db58;
 /// `~crc32("constantAmbientColour")`, the `Lighting.Constant ambient colour`
 /// key of a circuit's `.envsettings`.
 pub const CONSTANT_AMBIENT: u32 = 0x81db_67ea;
+/// `~crc32("directionalLight0Colour")`, the sun's colour.
+pub const SUN_COLOUR: u32 = 0x2dba_643d;
+/// `~crc32("directionalLight0DirectionWorldSpace")`, the sun's direction.
+pub const SUN_DIRECTION: u32 = 0x02df_31e5;
 
 impl Declared {
     /// Reads one `SHO` block's declaration tables, or `None` if `at` does not
@@ -470,6 +474,20 @@ impl Declared {
     #[must_use]
     pub fn samples_lightmap(&self) -> bool {
         self.samplers.iter().any(|(h, _)| *h == LIGHTMAP_SAMPLER)
+    }
+
+    /// Whether the block declares the scene's **directional light**.
+    ///
+    /// Either half of it counts: a program fed the sun's direction is fed the
+    /// sun. Together with [`Self::takes_constant_ambient`] this is the
+    /// three-way lighting key - see `oag_render::mesh::slots::NO_SUN` for why
+    /// asking about the directional light is what makes the split hold where
+    /// an earlier one did not.
+    #[must_use]
+    pub fn takes_directional_light(&self) -> bool {
+        self.parameters
+            .iter()
+            .any(|hash| matches!(*hash, SUN_COLOUR | SUN_DIRECTION))
     }
 
     /// Whether the block is patched with `constantAmbientColour`.

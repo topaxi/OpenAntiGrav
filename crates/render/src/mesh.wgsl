@@ -376,7 +376,20 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // with the ambient removed turns them black. Anulpha traded a brown
     // circuit for a black one. The branch this wants is the per-material
     // lighting path HANDOVER has open, not one bit.
-    let authored = scene.light.ambient + prelit + vertex_light + sun_diffuse;
+    // **A program fed no scene light is emissive, and the rig must not touch
+    // it.** `slots::EMISSIVE` is the material's own declaration: neither
+    // `constantAmbientColour` nor `directionalLight0*`. On Anulpha Pass that
+    // is 33 materials over 95 chunks and on Talon's Junction 35 over 151, and
+    // every name in both is a sign or a glow - `sign_emissive`, `cf_glow_tube`,
+    // `cf_plasma_glow2`, `dc_lightcone`, `scanlinebillboard` - which is a
+    // confirmation the split was not designed for.
+    //
+    // Multiplying by `1.0` rather than adding anything: the albedo *is* the
+    // picture for these, exactly as the microcode leaves it. The specular goes
+    // with it, because a program with no sun has no half-vector term either.
+    let emissive = (in.slots & 192u) == 192u;
+    let lit_sum = scene.light.ambient + prelit + vertex_light + sun_diffuse;
+    let authored = select(lit_sum, vec3<f32>(1.0), emissive);
 
     // **Which texture is the picture and which is the coverage, off the
     // material's own microcode** - see `oag_render::mesh::slots` and
@@ -419,7 +432,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     );
     let specular = scene.light.sun
         * (pow(ndh, 32.0) * ndl * mask * texel.a * scene.light.specular_scale
-            * scene.light.enabled * in.lit);
+            * scene.light.enabled * in.lit * select(1.0, 0.0, emissive));
 
     // The authored path shades in linear light, as the RSX does: the samples
     // are sRGB-decoded and lit by the authored magnitudes. On a gamma target

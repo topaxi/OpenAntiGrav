@@ -45,6 +45,10 @@ fn main() -> anyhow::Result<()> {
     let (mut takes, mut not, mut unread) = (0usize, 0usize, 0usize);
     let (mut takes_chunks, mut not_chunks) = (0usize, 0usize);
     let mut examples: Vec<String> = Vec::new();
+    // The three-way split the per-material lighting branch would key on:
+    // an ambient, a directional light, both, or neither.
+    let mut family: std::collections::BTreeMap<&str, (usize, usize, Vec<String>)> =
+        Default::default();
     for (slot, variant) in model.material_variants.iter().enumerate() {
         let Some(material) = source.materials.get(slot) else {
             continue;
@@ -63,6 +67,33 @@ fn main() -> anyhow::Result<()> {
                     oag_formats::rcsmaterial::Declared::parse(&blob, variant.fragment.offset)
                 })
         });
+        if let Some(d) = declared.as_ref() {
+            const SUN_COLOUR: u32 = 0x2dba_643d;
+            const SUN_DIRECTION: u32 = 0x02df_31e5;
+            let ambient = d.takes_constant_ambient();
+            let sun = d
+                .parameters
+                .iter()
+                .any(|h| *h == SUN_COLOUR || *h == SUN_DIRECTION);
+            let key = match (ambient, sun) {
+                (true, true) => "ambient + sun",
+                (true, false) => "ambient only",
+                (false, true) => "sun only",
+                (false, false) => "neither",
+            };
+            let row = family.entry(key).or_default();
+            row.0 += 1;
+            row.1 += chunks;
+            let stem = material
+                .name
+                .rsplit('/')
+                .next()
+                .unwrap_or_default()
+                .to_string();
+            if row.2.len() < 10 && !row.2.contains(&stem) {
+                row.2.push(stem);
+            }
+        }
         match declared {
             Some(declared) if declared.takes_constant_ambient() => {
                 takes += 1;
@@ -95,7 +126,30 @@ fn main() -> anyhow::Result<()> {
         "{takes} drawn material(s) declare constantAmbientColour ({takes_chunks} chunk(s)), \
          {not} do not ({not_chunks} chunk(s)), {unread} unread"
     );
-    println!("  not declaring it:");
+    // What actually reaches the shader, as opposed to what the declaration
+    // says: the bits `mesh::rcs::skin::roles` packed.
+    let mut emissive_slots = 0usize;
+    for (slot, packed) in model.material_slots.iter().enumerate() {
+        if packed & oag_render::mesh::slots::EMISSIVE == oag_render::mesh::slots::EMISSIVE {
+            emissive_slots += 1;
+            if emissive_slots <= 6 {
+                println!(
+                    "  slot {slot} packs EMISSIVE: {}",
+                    source.materials.get(slot).map_or("?", |m| m.name.as_str())
+                );
+            }
+        }
+    }
+    println!("{emissive_slots} slot(s) pack slots::EMISSIVE");
+
+    println!("\nby what the program is fed:");
+    for (key, (slots, chunks, names)) in &family {
+        println!(
+            "  {key:<14} {slots:>4} material(s) {chunks:>5} chunk(s)  {}",
+            names.join(", ")
+        );
+    }
+    println!("\n  not declaring an ambient:");
     for line in &examples {
         println!("    {line}");
     }
