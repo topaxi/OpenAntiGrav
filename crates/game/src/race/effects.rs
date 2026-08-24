@@ -193,10 +193,7 @@ impl Race {
                     continue;
                 }
                 let at = self.world.ships[intruder].physics.body.position;
-                let reach = self.hull_reach[intruder] + exhaust::hd::FIN_HALF_WIDTH;
-                let hit = self.hd_trail[owner]
-                    .nearest(at)
-                    .is_some_and(|(_, distance)| distance <= reach);
+                let hit = self.trail_touches(intruder, owner);
                 let bit = 1u8 << intruder;
                 if hit {
                     self.trail_inside[owner] |= bit;
@@ -283,6 +280,48 @@ impl Race {
             return;
         };
         self.stage.play(&effect, probe, 1.0);
+    }
+
+    /// Whether any of the craft's own authored hull points is inside the
+    /// ribbon - the trail-hit test.
+    ///
+    /// **The hull's own points, not a sphere around it.** This first tested the
+    /// craft's centre against the ribbon within
+    /// [`Race::hull_reach`] + [`FIN_HALF_WIDTH`](exhaust::hd::FIN_HALF_WIDTH),
+    /// and a player reported the sparks firing before the craft touched the
+    /// trail: that reach is the origin-to-nozzle distance, about half a hull
+    /// *length*, so as a radius it reaches well past a hull that is far
+    /// narrower than it is long. The `Ship Collision Fx` locators are points on
+    /// the hull itself, so asking whether one of *them* is within the ribbon's
+    /// measured half-width is both tighter and made of authored data. A hull
+    /// that authors none falls back to the sphere.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn trail_touches_for_tests(&self, slot: usize, owner: usize) -> bool {
+        self.trail_touches(slot, owner)
+    }
+
+    /// [`Self::hull_reach`] for one slot, for the test that measures how much
+    /// tighter the anchor test is than the sphere it replaced.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn hull_reach_for_tests(&self, slot: usize) -> f32 {
+        self.hull_reach[slot]
+    }
+
+    fn trail_touches(&self, slot: usize, owner: usize) -> bool {
+        let tube = &self.hd_trail[owner];
+        let at = self.world.ships[slot].physics.body.position;
+        let Some(anchors) = self.spark_anchors.get(slot).filter(|a| !a.is_empty()) else {
+            let reach = self.hull_reach[slot] + exhaust::hd::FIN_HALF_WIDTH;
+            return tube.nearest(at).is_some_and(|(_, away)| away <= reach);
+        };
+        let matrix = model_matrix_of(&self.world.ships[slot]);
+        anchors.iter().any(|local| {
+            let world = matrix.transform_point3(*local);
+            tube.nearest(world)
+                .is_some_and(|(_, away)| away <= exhaust::hd::FIN_HALF_WIDTH)
+        })
     }
 
     /// The craft's own authored hull spark anchor nearest `contact`, in world

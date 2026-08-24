@@ -472,3 +472,40 @@ fn a_craft_inside_a_trail_sparks_from_its_leading_half() {
          is the exhaust end, which is the bug this pins"
     );
 }
+
+/// **How much tighter the anchor test is than the sphere it replaced.**
+///
+/// A player reported the sparks firing before the craft touched the trail. The
+/// sphere was `hull_reach` - the origin-to-nozzle distance, about half a hull
+/// length - around the craft's centre, which on a hull far narrower than it is
+/// long reaches well past its side. This walks a craft sideways out of another's
+/// ribbon and reports the centre distance at which each test stops firing.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn the_anchor_test_fires_later_than_the_sphere_it_replaced() {
+    let Some(loaded) = load() else { return };
+    let mut race = race::Race::start(loaded.setup);
+    race.set_autopilot(true);
+    for _ in 0..300 {
+        race.tick(&oag_gameplay::InputSnapshot::default());
+    }
+    let lead = race.world.ships[0].physics.body;
+    race.world.ships[1].physics.body.orientation = lead.orientation;
+
+    let mut anchor_edge = 0.0_f32;
+    for step in 0..200 {
+        let across = step as f32 * 0.1;
+        race.world.ships[1].physics.body.position =
+            lead.position - lead.forward() * 12.0 + lead.up() * across;
+        if race.spark_anchor_of(1, 0).is_some() && race.trail_touches_for_tests(1, 0) {
+            anchor_edge = across;
+        }
+    }
+    let sphere_edge = race.hull_reach_for_tests(1) + oag_render::exhaust::hd::FIN_HALF_WIDTH;
+    println!("anchor test stops firing at {anchor_edge:.2} units off the ribbon");
+    println!("the sphere it replaced fired out to {sphere_edge:.2}");
+    assert!(
+        anchor_edge < sphere_edge,
+        "the anchor test ({anchor_edge:.2}) is not tighter than the sphere ({sphere_edge:.2})"
+    );
+}

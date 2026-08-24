@@ -463,8 +463,8 @@ by `crates/game/tests/hd_engine_flare_ground_truth.rs` - and
 `oag_game::race::Race::advance_trail_hits` fires it. **Nothing about the effect
 is invented; only the moment it fires is.** Three things there are this
 engine's and are named in that method's own doc rather than buried: the
-geometric test (the craft's own origin-to-nozzle distance plus the ribbon's
-measured half-width, against the trail's centre line -
+geometric test (**any of the craft's own authored `Ship Collision Fx` locators
+within the ribbon's measured half-width of its centre line** -
 `exhaust::hd::Tube::nearest`), the rate (**every tick a craft is inside**), and
 the attachment point (**the intruder's own authored `Ship Collision Fx` locator
 nearest the contact**, re-spawned each tick so it rides the ship).
@@ -511,6 +511,16 @@ screen.
   the grid and then never re-armed for the rest of the race. The craft's own
   origin-to-nozzle distance is the same quantity in the right space: **3.7 to
   6.0 units**, about half a hull length, off a locator the disc authors.
+- **The test was a sphere, and a hull is not one.** It first asked whether the
+  craft's *centre* was within `hull_reach + 0.5` of the ribbon, and
+  `hull_reach` is the origin-to-nozzle distance - about half a hull **length** -
+  so as a radius it reaches far past a hull that is much narrower than it is
+  long. A player reported the sparks firing before the craft touched the trail.
+  Testing the hull's own authored anchors instead is both tighter and made of
+  the disc's data: walked sideways out of a ribbon on a real HD hull, the
+  anchor test stops firing at **0.50 units** off the centre line where the
+  sphere fired out to **4.20**.
+  `the_anchor_test_fires_later_than_the_sphere_it_replaced` measures it.
 - **The rate was edge-triggered, and the asset says it should not be.**
   `WO_TRAIL_HITSHIP` parses as a **one-shot**: duration 1 tick, `looping`
   false, 5 particles of 0.2..0.5 units with a size channel down to a third by

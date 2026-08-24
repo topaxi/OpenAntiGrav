@@ -42,8 +42,11 @@ fn a_craft_inside_the_ribbon_is_marked_and_one_outside_is_not() {
     assert_ne!(race.trail_inside[0] & 0b10, 0);
 }
 
+/// The **fallback** only - a hull that authors no `Ship Collision Fx` locators,
+/// which no HD craft is. The path every real race takes is the anchor test
+/// below.
 #[test]
-fn the_reach_is_the_hull_reach_plus_the_measured_half_width() {
+fn the_fallback_reach_is_the_hull_reach_plus_the_measured_half_width() {
     let mut race = race_with_a_trail();
     let reach = 2.0 + oag_render::exhaust::hd::FIN_HALF_WIDTH;
     place_and_step(&mut race, Vec3::new(-40.0, reach - 0.01, 0.0));
@@ -118,4 +121,29 @@ fn the_burst_sits_on_the_hull_facing_the_contact() {
     );
     // Degenerate: a contact at the centre has no direction, so the centre it is.
     assert_eq!(hull_contact_point(centre, centre, 4.0), centre);
+}
+
+/// **The test a real race takes: the hull's own authored points, not a sphere.**
+///
+/// A player reported the sparks firing before the craft touched the trail. The
+/// sphere is `hull_reach` wide - about half a hull *length* - so it reaches
+/// past a hull side long before the hull does. An anchor a hull-width off the
+/// ribbon must not fire; the same anchor on it must.
+#[test]
+fn an_authored_anchor_decides_the_hit_and_the_sphere_does_not() {
+    let mut race = race_with_a_trail();
+    // One anchor, on the craft's centreline. The ribbon runs along -X at y = 0.
+    race.spark_anchors = vec![Vec::new(); oag_gameplay::MAX_SHIPS];
+    race.spark_anchors[1] = vec![Vec3::ZERO];
+    // Two units off the ribbon: inside the 2.0 + 0.5 sphere the fallback would
+    // use, and well outside the ribbon's own 0.5 half-width.
+    place_and_step(&mut race, Vec3::new(-40.0, 2.0, 0.0));
+    assert_eq!(
+        race.trail_inside[0] & 0b10,
+        0,
+        "the sphere would have fired here and the hull has not touched anything"
+    );
+    // On it, and it fires.
+    place_and_step(&mut race, Vec3::new(-40.0, 0.2, 0.0));
+    assert_ne!(race.trail_inside[0] & 0b10, 0);
 }
