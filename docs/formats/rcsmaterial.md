@@ -550,7 +550,10 @@ wrong on this material.
    so the sheet is authored. The remaining four have not been re-measured
    channel by channel, so the honest count today is **one confirmed authored
    (`clouds`), one refuted (`etched_glass_tech`), four unmeasured** - and the
-   ratchet is that recount, not the original six.
+   ratchet is that recount, not the original six. **One of the four is fixed as
+   of 2026-08-24**: `dc_lightcone` takes its colour from its second texture
+   now, off the sampler-hash reading below, and its cones draw as gradients
+   rather than noise.
 2. **This is the sixth role for the second slot**, after normal map, emissive
    map, coverage mask, lightmap and the glass family's facing ramp below - and
    the first one read end to end out of the microcode rather than inferred
@@ -989,14 +992,58 @@ path with the `lightmapUV` attribute, and neither is this word), but a
 slot-level signal 3 would change answers, so it is named here rather than
 folded in quietly.
 
-**Nothing is rebound on this yet, on purpose.** Acting on it would move about
-90 % of the disc's material slots to a different texture unit at once, on an
-80-confidence reading with a live counter-example; the measurement and its
-harness land first. It is the direct route to the two absences this page
-records - the cloud plate's inversion, which stops being an inversion once the
-slot says which unit it is for, and `etched_glass_tech`'s unbound base colour.
+### Acted on 2026-08-24, additively, and it fixed the light cones
 
-**It is also where the glass floor's contradiction has to be resolved.** The
+**`mesh::rcs::skin::units` reads the hash and `roles` uses it - but only ever
+to *add* an identification, never to replace one.** Two measurements forced
+that shape, and both are worth keeping because a strict rule looks obviously
+right until you render it:
+
+1. **Replacing the ordinal takes working surfaces away.** It moved 27 of
+   Talon's Junction's 442 slots off `ALPHA_FROM_SECOND`, and the circuit's
+   perforated trackside barrier - the one beside the blimp at tick 295 - lost
+   its holes and washed out to a flat sheet. The cloud plate is the same
+   hazard on paper: its second slot's hash is `lightmap`, its variant declares
+   no `lightmap`, and its microcode samples the mask at unit 1 regardless.
+2. **The second slot must never be the lightmap.** With the hash accepted but
+   no guard, nine lightmapped slots gained `ALPHA_FROM_SECOND` and the same
+   barrier washed out again - because a lightmap's alpha is the sun-occlusion
+   mask (`mesh.wgsl` reads it as exactly that, `mask = baked.a * in.sun_mask`)
+   and its RGB is a light term. Pointing coverage at it paints a shadow map as
+   a stencil. `roles` now refuses both roles wherever `SECOND_IS_LIGHTMAP` is
+   set.
+
+With both rules in place the change is **strictly additive**: on Talon's
+Junction four slots gain a second-slot role and none loses one, and the
+tick-295 race frame is byte-identical. The gains are real where those surfaces
+are on screen. `dc_lightcone` - one of the six materials the ratchet above
+names - is the clearest: it painted `dc_gradient_noise.gtf`, and its cones
+rendered as ragged noisy wisps; the hash puts its second texture
+`dc_gradient_e.gtf` on the unit the program samples for colour, and they render
+as the smooth teardrop falloffs a light cone is. Both circuits that author it
+change the same way.
+
+```sh
+OAG_ONLY_MATERIAL=dc_lightcone cargo run --release -p oag-render \
+    --example model_probe -- \
+    data/images/hdfury-ps3-eu-dec.iso:PS3_GAME/USRDIR/DATA00.PSARC \
+    /data/environments/amphiseum/track.vex /tmp/cones.png
+```
+
+Swept for regressions on six circuit models through `model_probe`: five move
+by single-digit lit pixels and one (`01_vineta_k`) not at all; a full race
+frame on `amphiseum` at tick 400 is byte-identical. **What it did not fix is
+the glass floor**, and that was predicted rather than discovered: that
+material's colour merge comes out `Texel::Mixed` and its alpha traces to
+unit 0 either way, so no remapping of units can move it.
+
+**What is still not rebound.** The hash is not yet used to *bind* a texture to
+a unit the model record's slots do not already reach - `etched_glass_tech`'s
+`glass_etched_tech.gtf` names sampler `lightmap`, which none of its 30 variants
+declares, so the picture the reference shows still has no route into the
+shader. That is the open half, and it is the one the glass floor waits on.
+
+**The glass floor's contradiction is still where it has to be resolved.** The
 section above shows the original painting `glass_etched_tech.gtf` in the plane
 of the floor while no variant of that material samples any second texture at a
 surface UV. The model record binds that `.gtf` to sampler `lightmap`, which

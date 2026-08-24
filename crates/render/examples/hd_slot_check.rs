@@ -90,6 +90,22 @@ fn main() -> anyhow::Result<()> {
                 );
             }
         }
+        let traced = model
+            .material_variants
+            .get(slot)
+            .and_then(|v| v.as_ref())
+            .and_then(|v| {
+                let blob = oag_assets::Container::open(&spec)
+                    .and_then(|mut c| c.read_entry(&format!("/{}", material.name)))
+                    .ok()?;
+                let program =
+                    oag_formats::rcsmaterial::fragment::Program::parse(&blob, v.fragment.offset)?;
+                let t = program.output_texels();
+                let colour = t[0].merge(t[1]).merge(t[2]);
+                Some(format!("colour {colour:?} | alpha {:?}", t[3]))
+            })
+            .unwrap_or_else(|| "no trace".into());
+        println!("     traced {traced}");
         let blend = format!(
             "{:?} src {:#06x} dst {:#06x} state {:#010x}",
             material.blend(),

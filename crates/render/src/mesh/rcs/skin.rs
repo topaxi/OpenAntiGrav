@@ -132,13 +132,20 @@ pub(super) fn roles(
         if material.lightmap().is_some() {
             packed |= slots::SECOND_IS_LIGHTMAP;
         }
-        let program = variants.get(slot).copied().flatten().and_then(|variant| {
-            let blob = cache
+        let variant = variants.get(slot).copied().flatten();
+        let blob = variant.and_then(|_| {
+            cache
                 .entry(material.name.clone())
                 .or_insert_with(|| textures(&format!("/{}", material.name)))
-                .clone()?;
-            Program::parse(&blob, variant.fragment.offset)
+                .clone()
         });
+        let program = variant
+            .zip(blob.as_deref())
+            .and_then(|(variant, blob)| Program::parse(blob, variant.fragment.offset));
+        let declared = variant.zip(blob.as_deref()).and_then(|(variant, blob)| {
+            rcsmaterial::Declared::parse(blob, variant.fragment.offset)
+        });
+        let (first_unit, second_unit) = units(declared.as_ref(), material);
         // **Only where there is a second texture to point at.** A program's
         // unit 1 and a `.rcsmodel` material's second slot are not the same
         // thing: 40 of the disc's materials sample two units while naming one
@@ -150,17 +157,40 @@ pub(super) fn roles(
         if let (Some(program), true) = (program, bound) {
             let texels = program.output_texels();
             let colour = texels[0].merge(texels[1]).merge(texels[2]);
-            if colour.unit() == Some(1) {
+            // **Either reading identifies the second slot, and that is
+            // deliberate.** `units` says which unit the slot's own sampler
+            // hash reaches; the ordinal says unit 1. Where they disagree,
+            // accepting only the hash *removes* bindings this renderer draws
+            // correctly today - measured, not feared: Talon's Junction's
+            // perforated trackside barrier beside the blimp loses its holes
+            // and washes out at tick 295, one of 27 slots that changed that
+            // way. So the hash may **add** a second-slot identification the
+            // ordinal would have missed and may never take one away, which
+            // keeps this function's own contract: the reading can only add
+            // correct surfaces.
+            // **Never the lightmap.** When the second slot is the circuit's
+            // baked atlas, its alpha is the sun-occlusion mask - `mesh.wgsl`
+            // reads it as exactly that, `mask = baked.a * in.sun_mask` - and
+            // its RGB is a light term, not a picture. Pointing coverage or
+            // albedo at it paints a shadow map as a stencil. Measured on the
+            // frame: without this guard nine of Talon's Junction's
+            // lightmapped slots took `ALPHA_FROM_SECOND`, and the circuit's
+            // perforated trackside barrier beside the blimp lost its holes
+            // and washed out at tick 295.
+            let lightmapped = packed & slots::SECOND_IS_LIGHTMAP != 0;
+            let is_second = |unit: u32| !lightmapped && (unit == second_unit || unit == 1);
+            if colour.unit().map(u32::from).is_some_and(is_second) {
                 packed |= slots::ALBEDO_FROM_SECOND;
             }
             if let Texel::Unit {
-                unit: unit @ (0 | 1),
+                unit,
                 channel: Some(channel),
             } = texels[3]
+                && (u32::from(unit) == first_unit || is_second(u32::from(unit)))
             {
                 packed &= !slots::alpha_channel(3);
                 packed |= slots::alpha_channel(u32::from(channel));
-                if unit == 1 {
+                if is_second(u32::from(unit)) {
                     packed |= slots::ALPHA_FROM_SECOND;
                 }
             }
@@ -168,6 +198,58 @@ pub(super) fn roles(
         out.push(packed);
     }
     out
+}
+
+/// Which texture unit each of a material's two `.gtf` slots reaches, read from
+/// the **sampler name hash** the slot carries beside its path
+/// (`rcsmodel::Material::texture_sampler`) against the resolved variant's own
+/// sampler declaration.
+///
+/// # Why this is not the slot's ordinal
+///
+/// **Confidence 80**, and the number that earns it: of the disc's 13,933
+/// populated texture slots, 8,021 carry a hash the material's own lit-race
+/// variant declares as a sampler - and **only 776 of those land on the slot's
+/// own ordinal**. The first slot reaches unit 1 on 4,751 of them. Reading the
+/// hash is therefore closer to the file than counting slots is, on nine slots
+/// out of ten. `docs/formats/rcsmaterial.md`, "A texture slot names its
+/// sampler, and the slot's ordinal is not its unit", carries the sweep and the
+/// three preimages (`Texture1`, `diffuse`, `lightmap`) that identify the field.
+///
+/// # Why the caller accepts this *and* the ordinal
+///
+/// **The hash adds identifications; it never removes them**, and that is a
+/// measurement rather than caution. Two things break if it replaces the
+/// ordinal outright. Talon's Junction's cloud plate is the first: its second
+/// slot's hash is `lightmap`, its resolved variant declares no `lightmap` at
+/// all, and its microcode plainly samples `cloud mask.gtf` at unit 1 - the
+/// reading `docs/formats/rcsmaterial.md` traced end to end and this renderer
+/// already draws correctly. The second showed up in a frame: replacing the
+/// ordinal moved 27 of Talon's Junction's 442 slots off
+/// `ALPHA_FROM_SECOND`, and the circuit's perforated trackside barrier - the
+/// one beside the blimp at tick 295 - lost its holes and washed out. So
+/// [`roles`] treats a unit as the second slot if *either* reading says so.
+///
+/// Where the variant declares no such sampler at all, this answers the
+/// ordinal, which is what the caller would have used anyway.
+fn units(declared: Option<&rcsmaterial::Declared>, material: &rcsmodel::Material) -> (u32, u32) {
+    let unit_of = |hash: Option<u32>| {
+        let (declared, hash) = (declared?, hash?);
+        declared
+            .samplers
+            .iter()
+            .find(|(h, _)| *h == hash)
+            .map(|&(_, unit)| unit)
+    };
+    let first = unit_of((!material.texture.is_empty()).then_some(material.texture_sampler));
+    let second = unit_of(material.second_texture_sampler);
+    // A material whose two slots resolve to the same unit is a reading that
+    // cannot be right, and taking it would paint the first texture through the
+    // second's role. The ordinal answers for the second slot there.
+    match (first.unwrap_or(0), second) {
+        (f, Some(s)) if s != f => (f, s),
+        (f, _) => (f, u32::from(f != 1)),
+    }
 }
 
 /// Which shader variant each material slot resolves to, in material-table
@@ -255,4 +337,75 @@ pub(super) fn variants(
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn declared(samplers: &[(u32, u32)]) -> rcsmaterial::Declared {
+        rcsmaterial::Declared {
+            parameters: Vec::new(),
+            samplers: samplers.to_vec(),
+        }
+    }
+
+    fn material(first: u32, second: Option<u32>) -> rcsmodel::Material {
+        rcsmodel::Material {
+            name: "m.rcsmaterial".to_string(),
+            state: 1,
+            src_factor: 0,
+            dst_factor: 0,
+            texture: "a.gtf".to_string(),
+            second_texture: second.map(|_| "b.gtf".to_string()),
+            texture_sampler: first,
+            second_texture_sampler: second,
+            parameters: Vec::new(),
+        }
+    }
+
+    /// The declared binding wins over the ordinal, which is the whole point:
+    /// Talon's Junction's `track_surface` puts its first texture at unit 1 and
+    /// its second at unit 2.
+    #[test]
+    fn a_slots_sampler_hash_names_its_unit_and_the_ordinal_does_not() {
+        let d = declared(&[(0x11cb_4f74, 0), (0x739a_786e, 1), (0x37b5_db58, 2)]);
+        assert_eq!(
+            units(Some(&d), &material(0x739a_786e, Some(0x37b5_db58))),
+            (1, 2)
+        );
+    }
+
+    /// No declaration to read - no variant resolved, or a block this reader
+    /// cannot frame - answers exactly what the caller would have assumed.
+    #[test]
+    fn with_nothing_declared_the_ordinal_answers() {
+        assert_eq!(
+            units(None, &material(0x3bdc_0403, Some(0x37b5_db58))),
+            (0, 1)
+        );
+    }
+
+    /// The cloud plate's shape: the first slot's hash is declared, the second
+    /// slot's is not, and the second falls back to the ordinal rather than
+    /// going unknown - which is what keeps that surface drawing.
+    #[test]
+    fn an_undeclared_second_slot_keeps_the_ordinal() {
+        let d = declared(&[(0x515e_298e, 0), (0xfd66_9142, 1)]);
+        assert_eq!(
+            units(Some(&d), &material(0x515e_298e, Some(0x37b5_db58))),
+            (0, 1)
+        );
+    }
+
+    /// Both slots resolving to one unit cannot be right, and taking it would
+    /// paint the first texture through the second's role.
+    #[test]
+    fn two_slots_on_one_unit_is_refused() {
+        let d = declared(&[(0xaaaa_aaaa, 1)]);
+        assert_eq!(
+            units(Some(&d), &material(0xaaaa_aaaa, Some(0xaaaa_aaaa))),
+            (1, 0)
+        );
+    }
 }
