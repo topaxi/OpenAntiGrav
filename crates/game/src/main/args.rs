@@ -10,6 +10,7 @@ use log::warn;
 use oag_game::input;
 use oag_game::{loading, movie, prefetch, settings};
 use oag_gameplay::ControlScheme;
+use oag_input::pad::TriggerMode;
 
 use crate::cli::Cli;
 
@@ -46,6 +47,24 @@ pub(crate) fn resolve_scheme(cli: &Cli, settings: &settings::Settings) -> Contro
     ControlScheme::from_name(token).unwrap_or_else(|| {
         let fallback = ControlScheme::default();
         warn!("ignoring [controls] scheme = {token:?}; using {fallback}");
+        fallback
+    })
+}
+
+/// What the analog triggers do: `[controls] triggers`, or the default.
+///
+/// An unrecognised token is **reported and ignored** rather than fatal, exactly
+/// as [`resolve_scheme`] handles its own. There is no flag to override it: the
+/// CONTROLS page can change it mid-race, which is the thing a `--triggers`
+/// would exist to make convenient.
+///
+/// The sensitivity beside it needs no resolver - it is typed, so serde has
+/// already refused anything outside its range by the time settings load.
+pub(crate) fn resolve_triggers(settings: &settings::Settings) -> TriggerMode {
+    let token = &settings.controls.triggers;
+    TriggerMode::from_name(token).unwrap_or_else(|| {
+        let fallback = TriggerMode::default();
+        warn!("ignoring [controls] triggers = {token:?}; using {fallback}");
         fallback
     })
 }

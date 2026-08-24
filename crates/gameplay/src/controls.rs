@@ -89,10 +89,12 @@ impl std::str::FromStr for ControlScheme {
 /// Maps one tick of input onto ship controls.
 ///
 /// The snapshot's axes are used as they are, having already been clamped by
-/// [`InputSnapshot::sanitised`]. Thrust and braking are buttons on a PSP pad and
-/// so are read as 0 or 1 here; a pad with analog triggers would want them as
-/// axes on the snapshot instead, which is a change to
-/// [`InputSnapshot`](crate::input::InputSnapshot) and not to this function.
+/// [`InputSnapshot::sanitised`]. **Thrust is still a button** - it is the cross
+/// button on the original and the snapshot carries no throttle axis - while the
+/// airbrakes are axes, which a PSP pad can only ever drive to 0 or 1 and a pad
+/// with analog triggers can drive anywhere between. Which device produced the
+/// value is not visible from here, and must not be: see
+/// `oag_input::pad::TriggerMode` for where that decision lives.
 ///
 /// # Sideshift
 ///

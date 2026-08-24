@@ -207,7 +207,12 @@ impl App {
             return Ok(None);
         };
 
-        let controls = Controls::new();
+        let mut controls = Controls::new();
+        // The pad's own preferences, which belong to the device rather than to
+        // a race - so they are applied once here and then only by the menu row
+        // that changes them. See `Session::apply_setting`.
+        controls.set_trigger_mode(crate::args::resolve_triggers(&self.settings));
+        controls.set_trigger_curve(self.settings.controls.trigger_sensitivity.exponent());
         for name in controls.pad().names() {
             info!("gamepad: {name}");
         }

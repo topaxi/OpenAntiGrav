@@ -199,6 +199,16 @@ impl Controls {
         &self.pad
     }
 
+    /// Binds the pad's analog triggers. See [`Pad::set_trigger_mode`].
+    pub fn set_trigger_mode(&mut self, mode: pad::TriggerMode) {
+        self.pad.set_trigger_mode(mode);
+    }
+
+    /// Sets the pad's trigger response curve. See [`Pad::set_trigger_curve`].
+    pub fn set_trigger_curve(&mut self, curve: f32) {
+        self.pad.set_trigger_curve(curve);
+    }
+
     /// Ends the tick: merges the devices, computes the edges, derives the axes.
     ///
     /// An axis a device produces digitally (a key, a d-pad) is -1, 0 or 1; a
@@ -206,11 +216,22 @@ impl Controls {
     /// resting on the stick does not veto the d-pad and vice versa.
     pub fn snapshot(&mut self) -> InputSnapshot {
         let pad = self.pad.poll();
+        self.merge(pad)
+    }
+
+    /// [`Self::snapshot`] with the pad's contribution supplied rather than
+    /// polled.
+    ///
+    /// The whole merge lives here so a test can state a pad reading directly.
+    /// Everything this function decides - which device wins an axis, and which
+    /// bits count as a shoulder - is invisible to `snapshot`'s caller and
+    /// impossible to reach on a machine with no pad, which is every CI run.
+    fn merge(&mut self, pad: pad::PadState) -> InputSnapshot {
         // The keyboard's *taps* as well as what it still holds - see
         // [`Keyboard::take_taps`]. The pad is polled rather than
         // event-driven, so it has no equivalent to latch.
-        self.buttons
-            .begin_frame(self.keyboard.held_mask() | self.keyboard.take_taps() | pad.held);
+        let keys = self.keyboard.held_mask() | self.keyboard.take_taps();
+        self.buttons.begin_frame(keys | pad.held);
 
         let digital_x = axis(
             self.buttons.is_held(Button::Right),
@@ -220,7 +241,14 @@ impl Controls {
             self.buttons.is_held(Button::Up),
             self.buttons.is_held(Button::Down),
         );
-        let shoulder = |button: Button| f32::from(u8::from(self.buttons.is_held(button)));
+        // Off the *keyboard's* bits, not the merged mask. A pad trigger under
+        // `pad::TriggerMode::Airbrakes` contributes its shoulder's bit as well
+        // as an analog value, so reading the merge here would answer `1.0` for
+        // a trigger at `0.4` and `.max` would quantise the pull away - the same
+        // trap `pad::resolve` documents, one layer up. The taps are folded in
+        // because a Q pressed and released between two reads is still a full
+        // airbrake for its frame; see [`Keyboard::take_taps`].
+        let shoulder = |button: Button| f32::from(u8::from(keys & button.bit() != 0));
 
         InputSnapshot {
             buttons: self.buttons,
@@ -251,176 +279,4 @@ fn axis(positive: bool, negative: bool) -> f32 {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use winit::keyboard::NamedKey;
-
-    fn key(name: NamedKey) -> Key {
-        Key::Named(name)
-    }
-
-    #[test]
-    fn a_held_key_becomes_a_held_button() {
-        let mut keyboard = Keyboard::new();
-        keyboard.set_key(&key(NamedKey::Space), true);
-        let snapshot = keyboard.snapshot();
-        assert!(snapshot.buttons.is_pressed(Button::Start));
-        assert!(snapshot.buttons.is_held(Button::Start));
-
-        let snapshot = keyboard.snapshot();
-        assert!(
-            !snapshot.buttons.is_pressed(Button::Start),
-            "held, not pressed"
-        );
-        assert!(snapshot.buttons.is_held(Button::Start));
-    }
-
-    #[test]
-    fn steering_comes_out_of_the_arrow_keys() {
-        let mut keyboard = Keyboard::new();
-        keyboard.set_key(&key(NamedKey::ArrowRight), true);
-        assert_eq!(keyboard.snapshot().stick_x, 1.0);
-
-        keyboard.set_key(&key(NamedKey::ArrowRight), false);
-        keyboard.set_key(&key(NamedKey::ArrowLeft), true);
-        assert_eq!(keyboard.snapshot().stick_x, -1.0);
-    }
-
-    #[test]
-    fn opposing_keys_held_together_cancel() {
-        let mut keyboard = Keyboard::new();
-        keyboard.set_key(&key(NamedKey::ArrowLeft), true);
-        keyboard.set_key(&key(NamedKey::ArrowRight), true);
-        let snapshot = keyboard.snapshot();
-        assert_eq!(snapshot.stick_x, 0.0);
-        // The buttons are still both held: only the derived axis cancels, since
-        // a menu that binds left and right separately must still see both.
-        assert!(snapshot.buttons.is_held(Button::Left));
-        assert!(snapshot.buttons.is_held(Button::Right));
-    }
-
-    #[test]
-    fn the_shoulders_are_the_airbrakes() {
-        let mut keyboard = Keyboard::new();
-        keyboard.set_key(&Key::Character("q".into()), true);
-        let snapshot = keyboard.snapshot();
-        assert_eq!(snapshot.airbrake_left, 1.0);
-        assert_eq!(snapshot.airbrake_right, 0.0);
-    }
-
-    /// A key held across a focus loss is never seen to come up, so without this
-    /// the ship keeps turning while the player is in another window.
-    #[test]
-    fn releasing_everything_clears_held_keys() {
-        let mut keyboard = Keyboard::new();
-        keyboard.set_key(&key(NamedKey::ArrowLeft), true);
-        assert_eq!(keyboard.snapshot().stick_x, -1.0);
-
-        keyboard.release_all();
-        let snapshot = keyboard.snapshot();
-        assert_eq!(snapshot.stick_x, 0.0);
-        assert!(snapshot.buttons.is_released(Button::Left));
-    }
-
-    /// The merge has to be one `Input`, or a press on one device would be an
-    /// edge the other device's `consume_press` cannot clear.
-    #[test]
-    fn controls_merge_the_keyboard_into_one_button_state() {
-        let mut controls = Controls::without_pad();
-        controls.set_key(&Key::Named(NamedKey::Space), true);
-        let snapshot = controls.snapshot();
-        assert!(snapshot.buttons.is_pressed(Button::Start));
-
-        controls.buttons_mut().consume_press(Button::Start);
-        assert!(!controls.buttons().is_pressed(Button::Start));
-        assert!(controls.buttons().is_held(Button::Start));
-    }
-
-    /// A pad is read fresh every tick, so `Controls` still works as a keyboard
-    /// on a machine with none - which is every headless capture and CI run.
-    #[test]
-    fn controls_steer_from_the_keyboard_with_no_pad_attached() {
-        let mut controls = Controls::without_pad();
-        controls.set_key(&Key::Character("a".into()), true);
-        assert_eq!(controls.snapshot().stick_x, -1.0);
-
-        controls.set_key(&Key::Character("q".into()), true);
-        assert_eq!(controls.snapshot().airbrake_left, 1.0);
-
-        controls.release_all();
-        let snapshot = controls.snapshot();
-        assert_eq!(snapshot.stick_x, 0.0);
-        assert_eq!(snapshot.airbrake_left, 0.0);
-    }
-
-    #[test]
-    fn an_unbound_key_changes_nothing() {
-        let mut keyboard = Keyboard::new();
-        keyboard.set_key(&key(NamedKey::F1), true);
-        assert_eq!(keyboard.snapshot().buttons.held_mask(), 0);
-    }
-
-    /// Every axis a keyboard produces is already in range, so this pins that the
-    /// sanitiser is on the path rather than that it is needed here.
-    #[test]
-    fn every_axis_a_keyboard_produces_is_in_range() {
-        let mut keyboard = Keyboard::new();
-        for named in [
-            NamedKey::ArrowUp,
-            NamedKey::ArrowDown,
-            NamedKey::ArrowLeft,
-            NamedKey::ArrowRight,
-        ] {
-            keyboard.set_key(&key(named), true);
-        }
-        keyboard.set_key(&Key::Character("q".into()), true);
-        keyboard.set_key(&Key::Character("e".into()), true);
-        let snapshot = keyboard.snapshot();
-        for axis in [
-            snapshot.stick_x,
-            snapshot.stick_y,
-            snapshot.airbrake_left,
-            snapshot.airbrake_right,
-        ] {
-            assert!((-1.0..=1.0).contains(&axis), "axis out of range: {axis}");
-        }
-    }
-
-    /// Finding U5's guard: a press and release entirely between two reads is
-    /// still a press.
-    ///
-    /// Both halves matter - the tap has to *arrive*, and it has to arrive as an
-    /// edge that goes away again, or a menu confirm would repeat for ever.
-    #[test]
-    fn a_tap_between_two_snapshots_is_not_lost() {
-        let mut keyboard = Keyboard::new();
-        let key = Key::Named(NamedKey::Enter);
-
-        keyboard.set_key(&key, true);
-        keyboard.set_key(&key, false);
-        assert_eq!(keyboard.held_mask(), 0, "nothing is held any more");
-
-        let first = keyboard.snapshot();
-        assert!(
-            first.buttons.is_held(Button::Cross),
-            "the tap was dropped between the two reads"
-        );
-
-        let second = keyboard.snapshot();
-        assert!(
-            !second.buttons.is_held(Button::Cross),
-            "a latched tap must release, or it repeats for ever"
-        );
-    }
-
-    /// Focus loss clears the latch too: a tap the player made on the way out
-    /// belongs to whatever they switched to.
-    #[test]
-    fn release_all_drops_a_latched_tap() {
-        let mut keyboard = Keyboard::new();
-        keyboard.set_key(&Key::Named(NamedKey::Enter), true);
-        keyboard.set_key(&Key::Named(NamedKey::Enter), false);
-        keyboard.release_all();
-        assert!(!keyboard.snapshot().buttons.is_held(Button::Cross));
-    }
-}
+mod tests;
