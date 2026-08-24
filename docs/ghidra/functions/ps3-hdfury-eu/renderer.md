@@ -1384,6 +1384,82 @@ quantities on different channels:
 Read by a subagent; the `diffuse_with_specular_from_alpha` block above was
 re-read here instruction by instruction before any of it was written down.
 
+
+## The shader parameter names are a table in the binary, not a wordlist problem
+
+**Recovered 2026-08-24, confidence 95.** `EBOOT.elf` carries the engine's whole
+shader vocabulary as an array of `const char *` at **`0x008b7f08`** -
+`g_ShaderParameterNames`, 107 entries with one empty. Every hash the `SHO`
+tables carry for a parameter, a sampler or a feature token is a name in it, so
+the `~crc32` preimages this page and
+[rcsmaterial.md](../../../formats/rcsmaterial.md) had been recovering "a few at
+a time" against a candidate wordlist are all available at once.
+
+**Why it is 95 and not higher.** Three names that were already known
+independently - `lightmap`, `constantAmbientColour` and the vertex attribute
+`Uv1` - hash to their own entries here, and every other entry hashes to a word
+some shipped shader table actually uses. What keeps it off 100 is that the
+table's *purpose* is inferred from its content: nothing in the image references
+it. No `lis`/`addi` pair builds its address and the word `0x008b7f08` never
+appears as a pointer, which is also why the runtime location of the *values*
+is not reachable by a cross-reference - see
+[rpcs3-capture.md](../../../reverse-engineering/rpcs3-capture.md), which hunts
+`viewProj` in a memory dump for exactly that reason.
+
+The two that matter most for a matched-pose comparison:
+
+| Name | Hash | Type | What |
+| --- | --- | --- | --- |
+| `viewProj` | `0x2e7d5f33` | `float4 x4` | the world -> clip matrix |
+| `eyePositionWorldSpace` | `0x3466fc0e` | `float3` | the camera position |
+
+Three more settle open readings elsewhere in this tree at a stroke:
+`directionalLight0DirectionWorldSpace` (`0x02df31e5`) and
+`directionalLight0Colour` (`0x2dba643d`) were this page's own 75-confidence
+guess for the sun's two constants and are now read; `positionScale`
+(`0x9cc5ab3a`) and `positionBias` (`0xa4972b78`) are the chunk dequantisation
+`oag_formats::rcsmodel` reads at a chunk header's `+0x40` and `+0x30`, named by
+the engine in the same terms.
+
+The whole table, in file order:
+
+| `ShadowToAlpha` `0xffb75262` | `HalfBright` `0x855aa07f` | `Sun` `0x960677e8` |
+| `ShadowMap` `0x56a86a01` | `FalseLight` `0xaacd10cc` | `ZoneMode` `0x5655520a` |
+| `ZoneTrans` `0x0333fd5b` | `NoAlbedo` `0x405d6be9` | `SVC1` `0xe5b8ce51` |
+| `SVC0` `0x92bffec7` | `IBL` `0xc2d0b09e` | `Ambient` `0x735324ab` |
+| `IleVertex` `0x6a92551b` | `IleLightmap` `0xb04cd0f4` | `Spot0` `0x03501d26` |
+| `Spot1` `0x74572db0` | `Spot2` `0xed5e7c0a` | `Spot3` `0x9a594c9c` |
+| `ZAlphaOnly` `0x31dc632b` | `AmbientShadow` `0x0b8d3814` | `Static` `0x7893d2ec` |
+| `StaticQuake` `0xd29c9ee2` | `RigidBody` `0xdd70bfd5` | `SunOcclusionLightmap` `0x73fc2269` |
+| `SunOcclusionVertex` `0x702db2aa` | `time` `0x906b67ba` | `viewProj` `0x2e7d5f33` |
+| `view` `0x01025471` | `world` `0xc588eebc` | `eyePositionWorldSpace` `0x3466fc0e` |
+| `positionBias` `0xa4972b78` | `positionScale` `0x9cc5ab3a` | `fogColour` `0x3dc31258` |
+| `paraboloidReflectionTex` `0x9edd3243` | `paraboloidIblTex` `0x872ed3bd` | `constantAmbientColour` `0x81db67ea` |
+| `falseLightDirectionPower` `0xfce47a44` | `prelitScaleSpecular` `0x8670f0be` | `prelitBias` `0x002c73e8` |
+| `directionalLight0DirectionWorldSpace` `0x02df31e5` | `directionalLight0Colour` `0x2dba643d` | `directionalLight0Proj` `0x3b00ed5c` |
+| `directionalLight0ShadowTex` `0x9becc725` | `directionalLight0LightmapTex` `0xa51b8b14` | `pointLight0PositionWorldSpace` `0x69a6ba16` |
+| `pointLight0Colour` `0xead721a1` | `pointLight0Falloff` `0x407290f8` | `textureSpot0PositionWorldSpace` `0xa434de79` |
+| `textureSpot0Proj` `0x9f21b213` | `textureSpot0Tex` `0x1f0f1fa1` | `textureSpot0ShadowTex` `0x21c54273` |
+| `textureSpot0Colour` `0xa18fdfb3` | `textureSpot0Falloff` `0xb380b94e` | `textureSpot1PositionWorldSpace` `0x73d65e21` |
+| `textureSpot1Proj` `0xa2419ba3` | `textureSpot1Tex` `0xa7b378c4` | `textureSpot1ShadowTex` `0xce07294d` |
+| `textureSpot1Colour` `0x07f8d407` | `textureSpot1Falloff` `0x7f2ab9d0` | `textureSpot2PositionWorldSpace` `0xd080d888` |
+| `textureSpot2Proj` `0xe5e1e173` | `textureSpot2Tex` `0xb506d72a` | `textureSpot2ShadowTex` `0x2530924e` |
+| `textureSpot2Colour` `0x3610ce9a` | `textureSpot2Falloff` `0xf1a5be33` | `shadowMatrix` `0x6c1a1be7` |
+| `shadowMapTex` `0x730df9ee` | `shadowMapTexSize` `0x86a174d7` | `quakePointA` `0xfda0bc88` |
+| `quakePointB` `0x64a9ed32` | `quakeOffset` `0x4bc7a9f1` | `quakeTrackUpNormal` `0x3fe2642d` |
+| `distortion` `0x9fc59444` | `refractProject` `0x590bc10e` | `reflectProject` `0xac608eb9` |
+| `screenSpaceRefractionTex` `0x88a0df95` | `screenSpaceReflectionTex` `0xec2b3fc2` | `zoneColourTint` `0xa410aa44` |
+| `zoneEffectInner` `0x5b79f09f` | `zoneEffectOuter` `0x4290f307` | `zoneBaseInner` `0x1cc42e87` |
+| `zoneBaseOuter` `0x052d2d1f` | `zoneBaseAltInner` `0x6f756a07` | `zoneBaseAltOuter` `0x769c699f` |
+| `zoneOrigin` `0x0ab4efed` | `zoneTexInner` `0xd5e000d1` | `zoneTexOuter` `0xcc090349` |
+| `zoneTexInnerNearest` `0x00e5b679` | `zoneTexOuterNearest` `0x52834137` | `zoneTexVis` `0x1f6f85a3` |
+| `zoneAnisoPalette` `0xabfaed85` | `zoneAnisoPaletteOuter` `0xdb88e56b` | `zoneAnisoPower` `0x7d494659` |
+| `GradientColour` `0x29b4bba0` | `GradientColour1` `0x87211769` | `GradientColour2` `0x1e2846d3` |
+| `GradientColour3` `0x692f7645` | `iblScalePower` `0x7480de6d` | `ambientShadowMatrix` `0x72a9a183` |
+| `ambientShadowBlendFactor` `0xe3686260` | `ambientShadowTex` `0xa567d33c` | `globalAlphaScaler` `0x4c13d3af` |
+| `auroraBrightness` `0xbfbe5fce` | `auroraOffset` `0xe51e436f` | `auroraColour` `0x46ecec71` |
+| `engineTrail` `0xbb48e390` |  |  |
+
 ## What was deliberately not read
 
 - **The draw path.** No mesh submission, no state setting, no shader binding.

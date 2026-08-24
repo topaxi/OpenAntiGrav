@@ -566,7 +566,7 @@ def main(argv=None):
 
     cap = sub.add_parser("capture",
                          help="screenshot and camera, paired, many per boot")
-    cap.set_defaults(func=cmd_capture)
+    cap.set_defaults(run=cmd_capture)
     cap.add_argument("--timeout", type=float, default=180.0)
     cap.add_argument("--settle", type=float, default=12.0)
     cap.add_argument("--load", type=float, default=50.0)
