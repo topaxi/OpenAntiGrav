@@ -8,17 +8,15 @@
 //! layer the keyboard produces, so the simulation cannot tell which device a
 //! snapshot came from.
 //!
-//! Two decisions worth naming, because neither is a 1:1 binding:
+//! The shoulders are a 1:1 binding - L1 and R1 are the abstract `L` and `R`,
+//! which are the two airbrakes. What the *analog triggers* do is a choice, and
+//! [`TriggerMode`] is that choice; see its variants for the two mappings and
+//! why the old one is still offered.
 //!
-//! - **R2 is thrust.** The snapshot has no analog throttle - the original's
-//!   thrust is the cross *button* - so R2 counts as cross once it is past
-//!   [`TRIGGER_THRESHOLD`]. Cross itself (the South button) still works, which
-//!   is the original's own convention.
-//! - **L2 is "brake", and there is no brake.** The original's action set has
-//!   none: the closest thing an anti-gravity ship has is pulling both
-//!   airbrakes, so L2 feeds *both* airbrake axes with its analog value. It
-//!   deliberately does **not** set the L and R button bits, which would throw
-//!   away the analog value the moment it crossed the threshold.
+//! Whichever mode is live, a trigger's travel is conditioned before it means
+//! anything - [`condition`]. A pad's trigger does not rest at zero and often
+//! does not reach one, and neither is a preference: it is a defect being
+//! corrected, the way [`STICK_DEADZONE`] corrects a drifting stick.
 //!
 //! The mapping itself is [`map_button`] and [`resolve`], both free functions
 //! over plain values, so every case is testable with no pad attached - which
@@ -31,13 +29,189 @@ use oag_gameplay::input::Button;
 ///
 /// A resting trigger on a worn pad does not read exactly zero, and thrust that
 /// engages itself is worse than thrust that needs a deliberate pull.
+///
+/// **Deliberately further than [`TRIGGER_DEADZONE`]**, and the gap is the
+/// point: under [`TriggerMode::Airbrakes`] a trigger is braking from the
+/// deadzone up but only counts as a *press* from here, so feathering the brake
+/// through a corner cannot fire the veteran double-tap sideshift. Two
+/// thresholds on one input reads as an oversight otherwise.
 pub const TRIGGER_THRESHOLD: f32 = 0.25;
+
+/// Trigger travel below this is treated as released.
+///
+/// The stick has [`STICK_DEADZONE`] and the triggers had nothing, which was
+/// harmless only while a trigger's analog value went to thrust: a resting
+/// trigger that reads `0.05` is 5% of an airbrake applied for a whole race.
+pub const TRIGGER_DEADZONE: f32 = 0.10;
+
+/// Trigger travel at or above this is treated as fully pulled.
+///
+/// The mirror of [`TRIGGER_DEADZONE`] at the other end. A pad whose trigger
+/// tops out at `0.97` must still be able to ask for a full airbrake.
+pub const TRIGGER_SATURATION: f32 = 0.95;
 
 /// Stick movement below this is treated as centred.
 ///
 /// [`oag_gameplay::InputSnapshot::sanitised`] clamps an axis into range; it
 /// cannot tell drift from intent, which is what this is for.
 pub const STICK_DEADZONE: f32 = 0.15;
+
+/// The narrowest and widest response curve [`TriggerConfig`] will apply.
+///
+/// The exponent arrives as a bare `f32` from a settings file, and an exponent
+/// of zero is a trigger that is fully pulled the instant it leaves the
+/// deadzone. Bounded for the reason `oag_game::settings::TriggerSensitivity`
+/// is bounded, one layer up, rather than trusting that it was.
+pub const CURVE_RANGE: std::ops::RangeInclusive<f32> = 0.25..=4.0;
+
+/// What the two analog triggers do.
+///
+/// The shoulders are the airbrakes on any pad; this is only about L2 and R2,
+/// which the PSP does not have at all - so neither mapping is recovered
+/// behaviour and neither is claimed to be.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum TriggerMode {
+    /// **The triggers are the two airbrakes**, analog: L2 is the left and R2
+    /// the right, each feeding its own axis. Thrust is cross alone, which is
+    /// the original's own convention.
+    ///
+    /// The default, because it is the only mapping that uses what the hardware
+    /// offers: the force law ramps each side toward "its analog input", and on
+    /// a PSP pad that input can only ever be 0 or 1. Here it need not be.
+    ///
+    /// A trigger past [`TRIGGER_THRESHOLD`] **also sets its shoulder's button
+    /// bit**, exactly as L1 or R1 would. That is not decoration:
+    /// `oag_gameplay::ship_controls` reads the veteran sideshift's double-tap
+    /// off the *pressed* mask of `L` and `R`, so without the bit a player on
+    /// the triggers could not sideshift at all. The analog value survives it -
+    /// see the note on [`resolve`].
+    #[default]
+    Airbrakes,
+    /// **R2 is thrust and L2 is "brake"**, which is what this file did before
+    /// the airbrakes were analog.
+    ///
+    /// Kept rather than deleted because both halves were deliberate. The
+    /// snapshot has no analog throttle - the original's thrust is the cross
+    /// *button* - so R2 counts as cross once it is past [`TRIGGER_THRESHOLD`].
+    /// And the original's action set has no brake at all: the closest thing an
+    /// anti-gravity ship has is pulling both airbrakes, so L2 feeds *both*
+    /// axes and deliberately sets no button bit.
+    ThrustBrake,
+}
+
+impl TriggerMode {
+    /// Every mode, in the order a menu should offer them.
+    pub const ALL: [Self; 2] = [Self::Airbrakes, Self::ThrustBrake];
+
+    /// The token this mode is stored and configured as.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Airbrakes => "airbrakes",
+            Self::ThrustBrake => "thrust_brake",
+        }
+    }
+
+    /// The mode a token names, or `None` if nothing does.
+    ///
+    /// `None` rather than a default, for the reason
+    /// `oag_gameplay::ControlScheme::from_name` gives: a settings file naming a
+    /// mode this build does not have should be visible to the caller, not
+    /// silently become the default.
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|mode| mode.name() == name)
+    }
+}
+
+impl std::fmt::Display for TriggerMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+impl std::str::FromStr for TriggerMode {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::from_name(&s.to_ascii_lowercase()).ok_or_else(|| {
+            let names: Vec<_> = Self::ALL.iter().map(|m| m.name()).collect();
+            format!("{s:?} is not a trigger mode; try {}", names.join(" or "))
+        })
+    }
+}
+
+/// How the analog triggers are read: what they do, and how hard.
+///
+/// One value rather than two arguments to [`resolve`], so the mode and the
+/// curve cannot be passed in the wrong order and a test can state a whole
+/// trigger setup on one line.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TriggerConfig {
+    /// What L2 and R2 are bound to.
+    pub mode: TriggerMode,
+    /// The exponent applied to conditioned travel. `1.0` is linear; below it
+    /// the brake arrives sooner, above it the low end is finer.
+    ///
+    /// Held clamped to [`CURVE_RANGE`] by [`Self::with_curve`], which is the
+    /// only way in from outside.
+    curve: f32,
+}
+
+impl Default for TriggerConfig {
+    fn default() -> Self {
+        Self {
+            mode: TriggerMode::default(),
+            curve: 1.0,
+        }
+    }
+}
+
+impl TriggerConfig {
+    /// The same config with a new response curve, clamped to [`CURVE_RANGE`].
+    ///
+    /// A NaN exponent becomes linear rather than propagating: it would reach
+    /// the airbrake axis, and `InputSnapshot::sanitised` maps NaN to zero, so
+    /// the failure would look like an airbrake that quietly stopped working.
+    #[must_use]
+    pub fn with_curve(self, curve: f32) -> Self {
+        let curve = if curve.is_nan() {
+            1.0
+        } else {
+            curve.clamp(*CURVE_RANGE.start(), *CURVE_RANGE.end())
+        };
+        Self { curve, ..self }
+    }
+
+    /// The exponent in effect.
+    #[must_use]
+    pub fn curve(self) -> f32 {
+        self.curve
+    }
+}
+
+/// One trigger's raw travel as an axis: deadzoned, saturated, curved.
+///
+/// Rescaled between the two ends rather than merely clipped at them, so a
+/// trigger still reaches both `0.0` and `1.0` instead of jumping from zero to
+/// [`TRIGGER_DEADZONE`] and never arriving at full.
+#[must_use]
+pub fn condition(raw: f32, curve: f32) -> f32 {
+    let raw = if raw.is_nan() {
+        0.0
+    } else {
+        raw.clamp(0.0, 1.0)
+    };
+    let travel =
+        ((raw - TRIGGER_DEADZONE) / (TRIGGER_SATURATION - TRIGGER_DEADZONE)).clamp(0.0, 1.0);
+    // Guarded rather than left to `powf`, which answers 0^0 with 1 - a resting
+    // trigger asking for a full airbrake.
+    if travel == 0.0 {
+        0.0
+    } else {
+        travel.powf(curve)
+    }
+}
 
 /// Maps a pad button to an abstract button index, or `None` if it is not bound.
 ///
@@ -90,9 +264,11 @@ pub struct Reading {
     pub stick_x: f32,
     /// Left stick, up positive, which is the sign the keyboard's UP produces.
     pub stick_y: f32,
-    /// R2, 0 to 1.
+    /// R2, 0 to 1, raw. Named for what [`TriggerMode::ThrustBrake`] makes of
+    /// it; under [`TriggerMode::Airbrakes`] it is the right airbrake.
     pub throttle: f32,
-    /// L2, 0 to 1.
+    /// L2, 0 to 1, raw. The left airbrake, or the brake - see
+    /// [`Self::throttle`].
     pub brake: f32,
 }
 
@@ -103,38 +279,66 @@ pub struct Reading {
 /// is computed. See [`crate::Controls`].
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct PadState {
-    /// Abstract buttons held, the d-pad and R2-as-thrust included.
+    /// Abstract buttons held, the d-pad and whatever the triggers synthesise
+    /// included - see [`TriggerMode`].
     pub held: u32,
     /// Steering, deadzoned.
     pub stick_x: f32,
     /// Pitch, deadzoned.
     pub stick_y: f32,
-    /// Left airbrake: L1, or L2 as a brake.
+    /// Left airbrake: L1, or a conditioned trigger.
     pub airbrake_left: f32,
-    /// Right airbrake: R1, or L2 as a brake.
+    /// Right airbrake: R1, or a conditioned trigger.
     pub airbrake_right: f32,
 }
 
 /// Turns one tick's readings into what the pad contributes.
 ///
-/// The whole mapping policy is here: the trigger threshold, the deadzone, and
-/// L2 meaning both airbrakes.
+/// The whole mapping policy is here: the stick deadzone, and what
+/// [`TriggerConfig`] says the triggers are.
+///
+/// # The shoulder term reads `reading.buttons`, not `held`
+///
+/// Not tidiness. Under [`TriggerMode::Airbrakes`] a pulled trigger *adds* its
+/// shoulder's bit to `held`, so a `shoulder` closure over `held` would answer
+/// `1.0` for a trigger at `0.4` and `.max` would quantise the pull straight
+/// back to full travel - the exact granularity this mapping exists to keep.
+/// The digital contribution is L1 and R1 and nothing else.
 #[must_use]
-pub fn resolve(reading: Reading) -> PadState {
+pub fn resolve(reading: Reading, config: TriggerConfig) -> PadState {
     let mut held = reading.buttons;
-    if reading.throttle > TRIGGER_THRESHOLD {
-        held |= Button::Cross.bit();
-    }
+    let shoulder = |button: Button| f32::from(u8::from(reading.buttons & button.bit() != 0));
+    let mut airbrake_left = shoulder(Button::L);
+    let mut airbrake_right = shoulder(Button::R);
 
-    let shoulder = |button: Button| f32::from(u8::from(held & button.bit() != 0));
-    let brake = reading.brake.clamp(0.0, 1.0);
+    match config.mode {
+        TriggerMode::Airbrakes => {
+            for (raw, button, axis) in [
+                (reading.brake, Button::L, &mut airbrake_left),
+                (reading.throttle, Button::R, &mut airbrake_right),
+            ] {
+                *axis = axis.max(condition(raw, config.curve));
+                if raw > TRIGGER_THRESHOLD {
+                    held |= button.bit();
+                }
+            }
+        }
+        TriggerMode::ThrustBrake => {
+            if reading.throttle > TRIGGER_THRESHOLD {
+                held |= Button::Cross.bit();
+            }
+            let brake = condition(reading.brake, config.curve);
+            airbrake_left = airbrake_left.max(brake);
+            airbrake_right = airbrake_right.max(brake);
+        }
+    }
 
     PadState {
         held,
         stick_x: deadzone(reading.stick_x),
         stick_y: deadzone(reading.stick_y),
-        airbrake_left: shoulder(Button::L).max(brake),
-        airbrake_right: shoulder(Button::R).max(brake),
+        airbrake_left,
+        airbrake_right,
     }
 }
 
@@ -157,6 +361,10 @@ fn deadzone(value: f32) -> f32 {
 /// keyboard-only session, which is what every headless capture and CI run is.
 pub struct Pad {
     gilrs: Option<gilrs::Gilrs>,
+    /// What [`Self::poll`] makes of the analog triggers. Held here rather than
+    /// passed in per tick because it is a pilot preference that outlives any
+    /// one frame, and the frame has no business knowing about it.
+    triggers: TriggerConfig,
 }
 
 impl std::fmt::Debug for Pad {
@@ -177,11 +385,18 @@ impl Pad {
     /// Opens the pad subsystem, or reports why it could not and carries on.
     #[must_use]
     pub fn new() -> Self {
+        let triggers = TriggerConfig::default();
         match gilrs::Gilrs::new() {
-            Ok(gilrs) => Self { gilrs: Some(gilrs) },
+            Ok(gilrs) => Self {
+                gilrs: Some(gilrs),
+                triggers,
+            },
             Err(e) => {
                 warn!("no gamepad support ({e}); keyboard only");
-                Self { gilrs: None }
+                Self {
+                    gilrs: None,
+                    triggers,
+                }
             }
         }
     }
@@ -194,13 +409,37 @@ impl Pad {
     /// one person.
     #[must_use]
     pub fn none() -> Self {
-        Self { gilrs: None }
+        Self {
+            gilrs: None,
+            triggers: TriggerConfig::default(),
+        }
     }
 
     /// Whether a pad subsystem was opened at all.
     #[must_use]
     pub fn is_available(&self) -> bool {
         self.gilrs.is_some()
+    }
+
+    /// Binds the analog triggers to something else.
+    ///
+    /// Takes effect on the next [`Self::poll`], which is why nothing has to be
+    /// restarted for a menu row to change it: no state is carried across a
+    /// tick by either mapping.
+    pub fn set_trigger_mode(&mut self, mode: TriggerMode) {
+        self.triggers.mode = mode;
+    }
+
+    /// Sets the trigger response curve, clamped by
+    /// [`TriggerConfig::with_curve`].
+    pub fn set_trigger_curve(&mut self, curve: f32) {
+        self.triggers = self.triggers.with_curve(curve);
+    }
+
+    /// How the triggers are being read right now.
+    #[must_use]
+    pub fn triggers(&self) -> TriggerConfig {
+        self.triggers
     }
 
     /// Names every connected pad, for the line the game prints at startup.
@@ -242,7 +481,7 @@ impl Pad {
                 .max(analog(&pad, gilrs::Button::RightTrigger2));
             reading.brake = reading.brake.max(analog(&pad, gilrs::Button::LeftTrigger2));
         }
-        resolve(reading)
+        resolve(reading, self.triggers)
     }
 }
 
@@ -261,125 +500,4 @@ pub(crate) fn larger(a: f32, b: f32) -> f32 {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn the_south_button_is_cross_whatever_the_pad_prints_on_it() {
-        assert_eq!(map_button(gilrs::Button::South), Some(Button::Cross));
-        assert_eq!(map_button(gilrs::Button::East), Some(Button::Circle));
-    }
-
-    #[test]
-    fn the_shoulders_are_the_airbrakes() {
-        assert_eq!(map_button(gilrs::Button::LeftTrigger), Some(Button::L));
-        assert_eq!(map_button(gilrs::Button::RightTrigger), Some(Button::R));
-
-        let state = resolve(Reading {
-            buttons: Button::L.bit(),
-            ..Reading::default()
-        });
-        assert_eq!(state.airbrake_left, 1.0);
-        assert_eq!(state.airbrake_right, 0.0);
-    }
-
-    #[test]
-    fn every_bound_button_is_in_the_polled_list() {
-        for button in BOUND_BUTTONS {
-            assert!(map_button(button).is_some(), "{button:?} is polled unbound");
-        }
-    }
-
-    #[test]
-    fn an_unbound_button_changes_nothing() {
-        assert_eq!(map_button(gilrs::Button::Mode), None);
-        assert_eq!(map_button(gilrs::Button::LeftThumb), None);
-        // The analog triggers are deliberately not buttons: they are read as
-        // axes and turned into thrust and brake by `resolve`.
-        assert_eq!(map_button(gilrs::Button::RightTrigger2), None);
-        assert_eq!(map_button(gilrs::Button::LeftTrigger2), None);
-    }
-
-    #[test]
-    fn r2_past_the_threshold_is_thrust() {
-        let idle = resolve(Reading {
-            throttle: TRIGGER_THRESHOLD,
-            ..Reading::default()
-        });
-        assert_eq!(idle.held & Button::Cross.bit(), 0, "resting trigger");
-
-        let pulled = resolve(Reading {
-            throttle: 1.0,
-            ..Reading::default()
-        });
-        assert_ne!(pulled.held & Button::Cross.bit(), 0);
-    }
-
-    /// L2 is "brake", which the original's action set does not have. Both
-    /// airbrakes is the closest thing to one, and it stays analog: setting the
-    /// L and R bits instead would quantise it to 0 or 1.
-    #[test]
-    fn l2_pulls_both_airbrakes_and_stays_analog() {
-        let state = resolve(Reading {
-            brake: 0.4,
-            ..Reading::default()
-        });
-        assert_eq!(state.airbrake_left, 0.4);
-        assert_eq!(state.airbrake_right, 0.4);
-        assert_eq!(state.held, 0, "no button bit, or the analog value is lost");
-    }
-
-    #[test]
-    fn a_held_shoulder_wins_over_a_lighter_brake() {
-        let state = resolve(Reading {
-            buttons: Button::R.bit(),
-            brake: 0.3,
-            ..Reading::default()
-        });
-        assert_eq!(state.airbrake_left, 0.3);
-        assert_eq!(state.airbrake_right, 1.0);
-    }
-
-    #[test]
-    fn drift_inside_the_deadzone_does_not_steer() {
-        let state = resolve(Reading {
-            stick_x: STICK_DEADZONE * 0.9,
-            stick_y: -STICK_DEADZONE * 0.9,
-            ..Reading::default()
-        });
-        assert_eq!(state.stick_x, 0.0);
-        assert_eq!(state.stick_y, 0.0);
-    }
-
-    #[test]
-    fn a_stick_at_full_travel_still_reaches_one() {
-        let state = resolve(Reading {
-            stick_x: 1.0,
-            stick_y: -1.0,
-            ..Reading::default()
-        });
-        assert_eq!(state.stick_x, 1.0);
-        assert_eq!(state.stick_y, -1.0);
-    }
-
-    #[test]
-    fn the_deadzone_is_rescaled_rather_than_stepped() {
-        let just_outside = resolve(Reading {
-            stick_x: STICK_DEADZONE + 0.001,
-            ..Reading::default()
-        });
-        assert!(
-            just_outside.stick_x.abs() < 0.01,
-            "a step at the edge of the deadzone: {}",
-            just_outside.stick_x
-        );
-    }
-
-    #[test]
-    fn a_pad_that_could_not_be_opened_reads_as_nothing_held() {
-        let mut pad = Pad::none();
-        assert!(!pad.is_available());
-        assert_eq!(pad.poll(), PadState::default());
-        assert!(pad.names().is_empty());
-    }
-}
+mod tests;

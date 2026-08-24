@@ -605,6 +605,30 @@ label = "SIDESHIFT"
 setting = "controls.scheme"
 values = ["veteran", "novice"]
 
+# The other two rows that are not read-only, and the only ones on this page
+# about hardware the original never had: the PSP has no analog triggers. So
+# neither is recovered behaviour, and neither is a rebinding - the shoulders are
+# the airbrakes whatever these say. `airbrakes` puts an airbrake on each trigger
+# and thrust back on cross alone; `thrust_brake` is the older mapping, where R2
+# is a second thrust button and L2 pulls both airbrakes together. See
+# `oag_input::pad::TriggerMode`.
+[[page.entry]]
+kind = "choice"
+label = "TRIGGERS"
+setting = "controls.triggers"
+values = ["airbrakes", "thrust_brake"]
+
+# How much airbrake a given pull asks for, as a percentage of a linear one.
+# Ordered low to high rather than default-first, the way BRIGHTNESS is: the
+# first value only decides what the row opens on when nothing *seeds* it, and
+# `settings::menu_seeds` seeds this one. The list must agree with
+# `settings::TriggerSensitivity::OFFERED`, which a test asserts.
+[[page.entry]]
+kind = "choice"
+label = "TRIGGER SENSITIVITY"
+setting = "controls.trigger_sensitivity"
+values = ["50", "75", "100", "125", "150", "200"]
+
 [[page.entry]]
 kind = "back"
 label = "BACK"

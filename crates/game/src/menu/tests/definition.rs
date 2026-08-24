@@ -166,6 +166,73 @@ fn the_mode_row_is_seeded_by_the_settings_module() {
     );
 }
 
+/// Every row on the CONTROLS page is seeded, for the same reason the mode row
+/// above needs its own test: `every_settings_row_is_one_the_game_seeds` sweeps
+/// `display` and `graphics` and nothing else.
+///
+/// Written as a sweep of the page rather than as two named rows so that a row
+/// added later is covered the day it lands. TRIGGER SENSITIVITY is the one that
+/// would break quietly - an unseeded `choice` opens on its list's *first* value,
+/// so it would read 50 whatever the file said, and the first press would move a
+/// player at 100 straight to 75.
+#[test]
+fn every_controls_row_is_seeded_by_the_settings_module() {
+    let definition = built_in();
+    let page = definition
+        .pages
+        .iter()
+        .find(|page| page.id == "controls")
+        .expect("a controls page");
+    let seeds = crate::settings::menu_seeds(
+        &crate::settings::Settings::default(),
+        oag_render::mesh_render::Anisotropy::default(),
+    );
+
+    for entry in &page.entries {
+        let Some(setting) = entry.setting() else {
+            continue;
+        };
+        assert!(
+            seeds.iter().any(|(seeded, _)| *seeded == setting),
+            "{setting} is on the controls page and is not seeded"
+        );
+    }
+}
+
+/// The sensitivity row offers exactly the percentages the type does.
+///
+/// The list is in `assets/ui/menu.toml` and the values it must agree with are
+/// `settings::TriggerSensitivity::OFFERED`. A spare value in the row is a
+/// choice that fails to apply, and a missing one is a setting a player cannot
+/// reach from the menus at all.
+#[test]
+fn the_sensitivity_row_offers_what_the_type_offers() {
+    let definition = built_in();
+    let page = definition
+        .pages
+        .iter()
+        .find(|page| page.id == "controls")
+        .expect("a controls page");
+    let offered: Vec<String> = crate::settings::TriggerSensitivity::OFFERED
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+
+    let values: Vec<String> = page
+        .entries
+        .iter()
+        .find_map(|entry| match entry {
+            Entry::Choice {
+                setting, values, ..
+            } if setting == "controls.trigger_sensitivity" => {
+                Some(values.iter().map(|v| v.value.clone()).collect())
+            }
+            _ => None,
+        })
+        .expect("a trigger sensitivity row");
+    assert_eq!(values, offered);
+}
+
 /// The RACE page opens on a time trial, and that is what the row's *first*
 /// value plus the settings default together have to say. Either one alone
 /// would leave the other free to drift.

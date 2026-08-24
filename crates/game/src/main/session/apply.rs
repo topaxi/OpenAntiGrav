@@ -1,8 +1,10 @@
 //! Applying a changed setting to the live window, device and race.
 
 use log::{error, warn};
+use oag_game::settings::TriggerSensitivity;
 use oag_game::{audio, display, menu, perf, settings};
 use oag_gameplay::ControlScheme;
+use oag_input::pad::TriggerMode;
 use oag_render::mesh_render::Anisotropy;
 
 use crate::stage::Stage;
@@ -304,6 +306,30 @@ impl Session {
                 Ok(scheme) => {
                     self.settings.controls.scheme = scheme.name().to_string();
                     self.scheme = scheme;
+                }
+                Err(e) => {
+                    warn!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
+            // Both trigger rows apply *now*, unlike the scheme above: nothing
+            // carries across a tick either way - `pad::resolve` is a function
+            // of one frame's readings - so there is no half-finished gesture to
+            // strand, and a player tuning the feel of a brake needs to feel it.
+            "controls.triggers" => match text.parse::<TriggerMode>() {
+                Ok(mode) => {
+                    self.settings.controls.triggers = mode.name().to_string();
+                    self.controls.set_trigger_mode(mode);
+                }
+                Err(e) => {
+                    warn!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
+            "controls.trigger_sensitivity" => match text.parse::<TriggerSensitivity>() {
+                Ok(sensitivity) => {
+                    self.settings.controls.trigger_sensitivity = sensitivity;
+                    self.controls.set_trigger_curve(sensitivity.exponent());
                 }
                 Err(e) => {
                     warn!("ignoring {setting} = {text:?}: {e}");

@@ -1,0 +1,231 @@
+//! The `[controls]` section: how the pilot's buttons reach the ship.
+//!
+//! Its own module rather than another block in [`crate::settings`] because two
+//! of its three keys are about a device the original never had. The PSP has no
+//! analog triggers at all, so nothing here is recovered behaviour and nothing
+//! here claims to be - `scheme` is the one key that mirrors the original's own
+//! `Control_Type`.
+
+use serde::{Deserialize, Serialize};
+
+use oag_input::pad::TriggerMode;
+
+/// How the pilot's buttons reach the ship.
+///
+/// Its own section rather than a corner of `[race]` because these are pilot
+/// preferences that outlive any one race, the way `[display]` is.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Controls {
+    /// Control scheme: `veteran` or `novice`.
+    ///
+    /// A **token**, not a typed enum, for the reason `Race::mode` is: a bad
+    /// value in this file must not fail the boot, and `load` propagates a serde
+    /// error rather than falling back. An unrecognised scheme is reported and
+    /// the default is used - that fallback lives in `main.rs`'s
+    /// `resolve_scheme`, which is also where `--scheme` overrides this.
+    ///
+    /// The two differ in *how a sideshift is asked for*, not in what the ship
+    /// does: veteran double-taps an airbrake, novice holds a dedicated button
+    /// and flicks the stick. See
+    /// `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`.
+    #[serde(default = "default_scheme")]
+    pub scheme: String,
+    /// What the analog triggers do: `airbrakes` or `thrust_brake`.
+    ///
+    /// A **token** for the same reason `scheme` is one, and resolved the same
+    /// way - `main.rs`'s `resolve_triggers` reports an unrecognised value and
+    /// carries on. See [`TriggerMode`] for what each mapping is and why the
+    /// older one is still offered.
+    #[serde(default = "default_triggers")]
+    pub triggers: String,
+    /// How hard a trigger has to be pulled for a given amount of airbrake.
+    ///
+    /// **Typed rather than a token**, unlike the two above, for the reason
+    /// [`crate::display::Brightness`] is typed: this one is a number, and a
+    /// number out of range is a file that fails to load with a message rather
+    /// than a control discovered by feel to do nothing.
+    #[serde(default)]
+    pub trigger_sensitivity: TriggerSensitivity,
+}
+
+/// How much airbrake a given amount of trigger travel asks for, as a
+/// percentage. 100 is a linear pull.
+///
+/// The same shape as [`crate::display::Gamma`], and for the same reason: an
+/// exponent curve is the honest way to say "the same travel, distributed
+/// differently", and a percentage is the only way to say it that the menus can
+/// render - their entry kinds are `action`, `back`, `binding`, `choice` and
+/// `submenu`, and there is no slider among them.
+///
+/// Above 100 the brake arrives with less travel; below it the first half of the
+/// pull buys less brake, which is what a pilot who wants to feather one side
+/// through a corner is asking for. Both ends still map to nothing and to
+/// everything at every setting - see `oag_input::pad::condition`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "u32", into = "u32")]
+pub struct TriggerSensitivity(u32);
+
+impl TriggerSensitivity {
+    /// A linear pull: the airbrake tracks the trigger one for one.
+    pub const NEUTRAL: Self = Self(100);
+
+    /// The gentlest and sharpest this may be.
+    ///
+    /// Bounded at both ends because both ends are a trigger that does not work:
+    /// far enough down and full braking is unreachable in practice, far enough
+    /// up and the first millimetre of travel is a full airbrake.
+    pub const RANGE: std::ops::RangeInclusive<u32> = 25..=400;
+
+    /// The percentages the menus offer.
+    pub const OFFERED: [Self; 6] = [
+        Self(50),
+        Self(75),
+        Self(100),
+        Self(125),
+        Self(150),
+        Self(200),
+    ];
+
+    /// The exponent this percentage means, for `oag_input::pad::condition`.
+    ///
+    /// Inverted, because the percentage reads as *sensitivity* and the exponent
+    /// works the other way: 200% is an exponent of 0.5, which reaches a full
+    /// airbrake at half travel.
+    #[must_use]
+    pub fn exponent(self) -> f32 {
+        100.0 / self.0 as f32
+    }
+
+    /// The percentage itself.
+    #[must_use]
+    pub fn percent(self) -> u32 {
+        self.0
+    }
+}
+
+impl Default for TriggerSensitivity {
+    fn default() -> Self {
+        Self::NEUTRAL
+    }
+}
+
+impl TryFrom<u32> for TriggerSensitivity {
+    type Error = String;
+
+    fn try_from(percent: u32) -> Result<Self, Self::Error> {
+        if Self::RANGE.contains(&percent) {
+            Ok(Self(percent))
+        } else {
+            Err(format!(
+                "trigger sensitivity {percent} is outside {}..={}",
+                Self::RANGE.start(),
+                Self::RANGE.end()
+            ))
+        }
+    }
+}
+
+impl From<TriggerSensitivity> for u32 {
+    fn from(value: TriggerSensitivity) -> Self {
+        value.0
+    }
+}
+
+impl std::fmt::Display for TriggerSensitivity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::str::FromStr for TriggerSensitivity {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let percent: u32 = s
+            .trim()
+            .parse()
+            .map_err(|_| format!("{s:?} is not a whole percentage"))?;
+        Self::try_from(percent)
+    }
+}
+
+/// Veteran, because it is what the original ships unless a profile says
+/// `novice` - `Options_LoadControlMapping`'s fall-through sets the scheme flag
+/// and the built-in mapping blob carries the same value. Confidence 75; the
+/// value a never-configured profile holds was not read.
+fn default_scheme() -> String {
+    oag_gameplay::ControlScheme::default().name().to_string()
+}
+
+/// The airbrakes, because they are the only trigger mapping that uses what the
+/// hardware offers. See [`TriggerMode::Airbrakes`].
+fn default_triggers() -> String {
+    TriggerMode::default().name().to_string()
+}
+
+impl Default for Controls {
+    fn default() -> Self {
+        Self {
+            scheme: default_scheme(),
+            triggers: default_triggers(),
+            trigger_sensitivity: TriggerSensitivity::default(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_neutral_sensitivity_is_a_linear_pull() {
+        assert_eq!(TriggerSensitivity::default().exponent(), 1.0);
+        assert_eq!(TriggerSensitivity::NEUTRAL.percent(), 100);
+    }
+
+    /// Higher percent means more sensitive, which is the opposite direction to
+    /// the exponent it becomes - the single most likely slip in this file.
+    #[test]
+    fn a_higher_percentage_reaches_full_braking_sooner() {
+        let sharp = TriggerSensitivity::try_from(200).unwrap();
+        let gentle = TriggerSensitivity::try_from(50).unwrap();
+        assert!(sharp.exponent() < TriggerSensitivity::NEUTRAL.exponent());
+        assert!(gentle.exponent() > TriggerSensitivity::NEUTRAL.exponent());
+
+        let half = 0.5f32;
+        assert!(half.powf(sharp.exponent()) > half.powf(gentle.exponent()));
+    }
+
+    #[test]
+    fn a_percentage_outside_the_range_is_refused_rather_than_clamped() {
+        assert!(TriggerSensitivity::try_from(0).is_err());
+        assert!(TriggerSensitivity::try_from(10_000).is_err());
+        assert!(TriggerSensitivity::try_from(*TriggerSensitivity::RANGE.start()).is_ok());
+        assert!(TriggerSensitivity::try_from(*TriggerSensitivity::RANGE.end()).is_ok());
+    }
+
+    #[test]
+    fn every_offered_percentage_is_inside_the_range() {
+        for offered in TriggerSensitivity::OFFERED {
+            assert!(
+                TriggerSensitivity::RANGE.contains(&offered.percent()),
+                "the menus offer {offered}, which cannot be applied"
+            );
+            assert_eq!(offered.to_string().parse(), Ok(offered));
+        }
+        assert!(
+            TriggerSensitivity::OFFERED.contains(&TriggerSensitivity::NEUTRAL),
+            "no way back to a linear pull once it is changed"
+        );
+    }
+
+    #[test]
+    fn the_defaults_are_tokens_the_input_layer_knows() {
+        let controls = Controls::default();
+        assert_eq!(
+            TriggerMode::from_name(&controls.triggers),
+            Some(TriggerMode::Airbrakes)
+        );
+        assert!(oag_gameplay::ControlScheme::from_name(&controls.scheme).is_some());
+    }
+}
