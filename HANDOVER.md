@@ -276,12 +276,9 @@ docs page with the evidence - **do not requote from this file**:
   six cues on Pulse and Pure, four of the six on HD.
   [psp-audio.md](docs/formats/psp-audio.md#a-cue-owns-a-run-of-the-command-table).
 
-**What M5 still wants**: Zone's explosion. Positional audio and the
-Autopilot pickup both landed 2026-08-24 - see their rows under Open threads. - its dispatch half is read (weapon id 6, fire-request bit
-`0x1000`, handler `FUN_088613bc`), what it *does* is not.
-`Race::set_autopilot` / `--autopilot` exists as the driver-takeover mechanism
-this needs (slot 0 to `oag_ai::Driver`, seeded at the flag rather than at
-spawn), but the pickup itself - duration, how it ends - is unbuilt.
+**What M5 still wants**: Zone's explosion. Positional audio and the Autopilot
+pickup both landed 2026-08-24; each has a row under Open threads carrying what
+is still unread about it.
 
 The force law, angular-momentum model, contact response and mag-lock
 attitude hold are all recovered at instruction level and implemented, and
