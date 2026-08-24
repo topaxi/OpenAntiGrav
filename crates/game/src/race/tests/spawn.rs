@@ -312,3 +312,59 @@ fn a_ship_over_nothing_falls_and_stays_finite() {
     assert_eq!(race.world.tick, 60);
     assert!(race.telemetry().spline_distance.is_finite());
 }
+
+/// A slot pointing back down its own track is turned round.
+///
+/// The synthetic straight runs along `+x`, so a slot authored facing `-x` is
+/// the state nine of Wipeout HD's 28 circuit files are actually in: the node
+/// was dragged to the other end for the reversed build and never re-authored.
+/// Its ground-truth counterpart is
+/// `crates/game/tests/spawn_heading_ground_truth.rs`, which CI never runs -
+/// this is the half that runs everywhere.
+#[test]
+fn a_slot_facing_back_down_its_own_track_is_turned_round() {
+    let mut setup = setup(hulled_handling());
+    setup.start_position = Some(oag_formats::track::StartPosition {
+        position: [0.0, 0.0, 0.0],
+        left: [0.0, 0.0, 1.0],
+        up: [0.0, 1.0, 0.0],
+        forward: [-1.0, 0.0, 0.0],
+    });
+    let race = Race::start(setup);
+
+    let forward = race.ship().physics.body.forward();
+    assert!(
+        forward.x > 0.9,
+        "the track runs along +x and the craft must too: {forward}"
+    );
+    // Still level: only the heading is taken from the spline.
+    assert!(forward.y.abs() < 1.0e-3, "{forward}");
+}
+
+/// A slot that agrees with its track keeps its **own** heading, not the
+/// spline's rounding of it.
+///
+/// The pair to the test above, and the one that makes it mean something: the
+/// authored value is the one to prefer wherever it is maintained, so a craft on
+/// a slot deliberately angled a few degrees off the tangent must come out at
+/// that angle. Every circuit file on both PSP discs is in this state.
+#[test]
+fn a_slot_that_agrees_keeps_its_own_heading() {
+    let angled = oag_formats::track::StartPosition {
+        position: [0.0, 0.0, 0.0],
+        left: [0.0, 0.0, 1.0],
+        up: [0.0, 1.0, 0.0],
+        // About 11 degrees off the straight's own `+x`, and well inside the
+        // band that counts as agreement.
+        forward: [0.98058, 0.0, 0.19612],
+    };
+    let mut setup = setup(hulled_handling());
+    setup.start_position = Some(angled);
+    let race = Race::start(setup);
+
+    let forward = race.ship().physics.body.forward();
+    assert!(
+        (forward.z - angled.forward[2]).abs() < 1.0e-3,
+        "the authored angle survives: {forward}"
+    );
+}

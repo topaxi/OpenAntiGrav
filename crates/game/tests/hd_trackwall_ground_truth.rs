@@ -420,20 +420,26 @@ fn a_ship_thrown_at_hds_barrier_does_not_pass_through_it() {
 /// on, and a straight line extrapolated from one end runs off a curve over the
 /// grid's 138-unit span. See `grid_poses`'s own doc comment for the fix.
 ///
-/// `KNOWN_SHORT` is the one slot this does not close: `modesto_heights`'s
-/// reversed grid still comes up one slot short of collision under it, at 21.42
-/// units from the driveable line - well inside the track's own half-width, so
-/// it is a probe missing the surface at one specific spot rather than a slot
-/// off the track, and it was not chased further here. A regression that adds a
-/// second exception, or moves this one's number outside a generous band, is
-/// worth reading before waving through.
+/// **`KNOWN_SHORT` is empty, and it did not start that way.** It carried one
+/// slot - `modesto_heights` reversed, one of eight coming up with no collision
+/// under it at 21.42 units from the driveable line - recorded as a probe
+/// missing the surface at one spot rather than a slot off the track, and not
+/// chased further. It was neither: `modesto_heights` reversed is one of the
+/// nine HD circuits whose authored `Start Position` heading was never
+/// re-authored for the direction its spline runs, so the whole field was being
+/// laid out along the track the wrong way from the base slot. Correcting the
+/// heading closes it with nothing here changed but this constant. See
+/// `oag_game::race::spawn` and `spawn_heading_ground_truth.rs`.
+///
+/// So a row added back here is now a real regression rather than a known
+/// wrinkle, and is worth reading before waving through.
 #[test]
 #[ignore = "needs a decrypted PS3 disc image in data/images"]
 fn every_hd_grid_lands_on_the_track() {
     let Some(image) = image() else { return };
 
     /// `(circuit, file, allowed slots with no collision under them)`.
-    const KNOWN_SHORT: &[(&str, &str, usize)] = &[("modesto_heights", "track_reversed", 1)];
+    const KNOWN_SHORT: &[(&str, &str, usize)] = &[];
 
     for (_, circuit, file) in CIRCUITS {
         let track = format!("/data/environments/{circuit}/{file}.vex");

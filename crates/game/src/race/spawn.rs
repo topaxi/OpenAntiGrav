@@ -70,15 +70,121 @@ pub(super) fn spawn_pose(
 ) -> Option<Pose> {
     let height = spawn_height(handling);
     if let Some(slot) = start_position {
-        return Some(Pose::from_start_position(
-            slot,
-            ground_under(collision, slot),
-            height,
-        ));
+        let pose = Pose::from_start_position(slot, ground_under(collision, slot), height);
+        return Some(face_the_way_the_track_runs(pose, slot, spline));
     }
     spline
         .start()
         .map(|sample| Pose::from_sample(sample, sample.racing_line, height))
+}
+
+/// How far the authored heading may be off the spline's own before the spline
+/// is believed instead: `cos 60 degrees`.
+///
+/// **A threshold across an empty band rather than a tuned number.** All 92
+/// authored slots measured fall at one end or the other: the ones that agree
+/// run `+0.920` to `+1.000` and the ones that do not are `0.000` and below, so
+/// nothing sits anywhere near this value. See [`face_the_way_the_track_runs`]
+/// for the census.
+const SLOT_AGREES_WITH_THE_SPLINE: f32 = 0.5;
+
+/// The same pose, turned to the spline's own direction when the authored slot
+/// disagrees with it.
+///
+/// # The slot is usually right, and on one title it is sometimes stale
+///
+/// A `Start Position` node carries a heading and it is the value to prefer:
+/// where a ship points on the grid is authored deliberately, and a spline
+/// tangent is this crate's resampling of a curve. So this changes nothing
+/// wherever the two agree, which is almost everywhere.
+///
+/// They do not always agree. Every shipped circuit file on all four discs in
+/// hand was measured - the authored forward against the tangent of the nearest
+/// resampled point to the slot:
+///
+/// | source | files | agree | stale |
+/// | --- | ---: | ---: | ---: |
+/// | `pulse-psp-eu.chd` | 24 | 24 (`+0.925` to `+1.000`) | 0 |
+/// | `pure-psp-eu.chd` | 8 | 8 (`+0.988` to `+1.000`) | 0 |
+/// | `pulse-ps2-eu.chd` | 32 | 31 (`+0.920` to `+1.000`) | **1** (`-0.441`) |
+/// | `hdfury-ps3-eu-dec.iso` | 28 | 19 (`+0.999` to `+1.000`) | **9** (`-1.000`, one `0.000`) |
+///
+/// HD's nine are `01_vineta_k`, `04_chenghou_project`, `05_ubermall`,
+/// `10_sebenco_climb`, `12_sol_2` and `15_anulpha_pass` reversed,
+/// `modesto_heights` reversed, `tech_de_ra` reversed, and `zone_3`
+/// **forward** - so it is stale authoring rather than a rule about reversed
+/// circuits. On eight of them the rotation rows are byte-identical to the
+/// forward file's and only the position row moved: the slot was dragged to the
+/// other end of the track and never turned round. `tech_de_ra` reversed is the
+/// ninth and carries a bare identity matrix, which is a slot nobody authored at
+/// all.
+///
+/// # The PS2's one stale slot is what corroborates the correction
+///
+/// `09_Track` is the same circuit on the PSP and PS2 pressings and its slot has
+/// a **byte-identical position** on both, `(-506.0834, 2.1623526, 242.45824)`.
+/// The rotation is not identical: the PSP's forward row runs straight down the
+/// track and the PS2's is 116 degrees off it. One slot, exported twice, one
+/// rotation maintained and one not - which is HD's failure mode appearing on a
+/// disc from four years earlier.
+///
+/// So one case exists where the right answer is on another pressing, and it can
+/// be checked: the heading this substitutes on the PS2 file agrees with the PSP
+/// file's **authored** one to within **0.08 degrees**. Nothing about that
+/// comparison went into deriving the rule.
+///
+/// A ship spawned on one of those faces backwards down its own circuit, and so
+/// does the whole grid: [`grid_poses`] walks the spline in `base`'s forward
+/// direction, so a reversed base lays the field out ahead of pole instead of
+/// behind it.
+///
+/// # Why the tangent and not the negated slot
+///
+/// Negating a heading that disagrees would fix the eight and leave the ninth
+/// pointing across the track, and it would be a correction with nothing behind
+/// it - the slot is not "backwards", it is *unmaintained*, and there is no
+/// reason the next unmaintained one is exactly 180 degrees out. The spline is a
+/// real measurement of which way the circuit runs at that point, so it is what
+/// is used. Where the slot is right, the two are the same direction to three
+/// decimal places anyway.
+///
+/// # The replacement is levelled, because the bind levels the authored one
+///
+/// `oag_formats::track::start_position` drops the authored forward's `y` before
+/// normalising it - the bind handler at `0x08926ae8` forces the up row to world
+/// `(0, 1, 0)` and re-orthonormalises around it, so **every** slot on **every**
+/// track yields an exactly horizontal heading. A spline tangent is not
+/// horizontal: on a climbing circuit like `10_sebenco_climb` it carries real
+/// pitch. Handing it over raw would spawn those nine craft in a frame the
+/// original's bind cannot produce, and leave the other 43 track files in a
+/// different convention from them.
+///
+/// So the tangent is flattened the same way the authored value is, against the
+/// same world up. That is reproducing the bind rather than smoothing anything:
+/// the pitch is not being discarded because it looks wrong, it is being
+/// discarded because the handler this is standing in for discards it.
+///
+/// **Position, height and the grid's own layout are untouched**, and so is
+/// every slot that agrees - which is every track file on both PSP discs, so no
+/// Pulse trace, hash or capture comparison moves by this. The one PS2 file that
+/// does move was spawning its craft 116 degrees across its own track.
+fn face_the_way_the_track_runs(pose: Pose, slot: &StartPosition, spline: &Spline) -> Pose {
+    let Some((_, sample, _)) = spline.nearest(pose.position) else {
+        return pose;
+    };
+    let Some(tangent) = Vec3::from_array(sample.tangent).try_normalize() else {
+        return pose;
+    };
+    if Vec3::from_array(slot.forward).dot(tangent) > SLOT_AGREES_WITH_THE_SPLINE {
+        return pose;
+    }
+    // Levelled, as the bind levels the authored row - see above. A tangent that
+    // is purely vertical has nothing left once `y` is dropped, and no shipped
+    // track has one; the slot is kept rather than replaced by nothing.
+    let Some(levelled) = Vec3::new(tangent.x, 0.0, tangent.z).try_normalize() else {
+        return pose;
+    };
+    pose.facing(levelled)
 }
 
 /// Every grid slot's pose, front to back, re-dropped onto the track under each.

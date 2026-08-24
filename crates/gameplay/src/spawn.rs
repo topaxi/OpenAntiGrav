@@ -142,6 +142,34 @@ impl Pose {
             orientation: orientation_from_axes(forward, up),
         }
     }
+
+    /// This pose re-pointed along `forward`, keeping its position and its up
+    /// axis.
+    ///
+    /// **For the case where the authored slot's heading is stale and the track
+    /// itself is the better witness**, which is a real state on Wipeout HD and
+    /// on no other title measured: nine of its 28 circuit files carry a `Start
+    /// Position` whose rotation was never re-authored for the direction the
+    /// spline runs. Where the slot is right - which is all 24 PSP track files
+    /// and 19 of HD's 28 - nothing calls this. See `oag_game::race::spawn`,
+    /// which holds the measurement and the rule.
+    ///
+    /// The up axis is taken from the pose rather than passed in, so a caller
+    /// cannot re-point a ship and tilt it in the same step. A `forward` that is
+    /// zero, or parallel to up, leaves the pose alone rather than returning the
+    /// identity: the authored heading is wrong but present, and an arbitrary one
+    /// is worse.
+    #[must_use]
+    pub fn facing(self, forward: Vec3) -> Self {
+        let up = self.orientation * Vec3::Y;
+        match try_orientation_from_axes(forward, up) {
+            Some(orientation) => Self {
+                orientation,
+                ..self
+            },
+            None => self,
+        }
+    }
 }
 
 /// Builds a rotation whose forward is `-Z` and whose up is `+Y`, matching
@@ -153,12 +181,21 @@ impl Pose {
 /// the identity, which is wrong but recoverable, where a `NaN` quaternion would
 /// poison the state hash for the rest of the race.
 fn orientation_from_axes(forward: Vec3, up: Vec3) -> Quat {
+    try_orientation_from_axes(forward, up).unwrap_or(Quat::IDENTITY)
+}
+
+/// The same, saying `None` where the input is degenerate instead of answering
+/// with the identity.
+///
+/// The two are not the same question, and [`Pose::facing`] is why: `forward =
+/// -Z` with `up = +Y` *is* the identity, so a caller that took the identity as
+/// "that did not work" would refuse the one heading it is most likely to be
+/// handed.
+fn try_orientation_from_axes(forward: Vec3, up: Vec3) -> Option<Quat> {
     let z = -forward.normalize_or_zero();
     let y = up - z * up.dot(z);
-    let (Some(z), Some(y)) = (z.try_normalize(), y.try_normalize()) else {
-        return Quat::IDENTITY;
-    };
-    Quat::from_mat3(&Mat3::from_cols(y.cross(z), y, z))
+    let (z, y) = (z.try_normalize()?, y.try_normalize()?);
+    Some(Quat::from_mat3(&Mat3::from_cols(y.cross(z), y, z)))
 }
 
 impl Ship {
