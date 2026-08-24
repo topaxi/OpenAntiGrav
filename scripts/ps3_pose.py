@@ -56,6 +56,24 @@ UNIT_TOLERANCE = 3e-2
 #: about 2,200 from the origin; this is an order of magnitude of headroom.
 WORLD_LIMIT = 50_000.0
 
+#: How far the view basis may be from orthonormal. Loose for a basis that has
+#: been through two `f32` matrix products, tight enough that nothing but a
+#: rotation passes.
+BASIS_TOLERANCE = 1e-2
+
+#: The vertical field of view a real camera can have, in degrees. A degenerate
+#: matrix - all zeros, or an identity - passes every *algebraic* test here and
+#: then decomposes to a field of view of nothing, which is what a first run of
+#: this against a live dump found and reported as a camera.
+FOV_RANGE = (10.0, 170.0)
+
+#: The aspect a console frame can have. 16:9 and 4:3 with room either side.
+ASPECT_RANGE = (0.5, 4.0)
+
+#: A camera exactly at the origin is what a zeroed matrix decomposes to, not
+#: where a race camera ever is.
+ORIGIN_EPSILON = 1e-3
+
 
 def _finite(values):
     return all(math.isfinite(v) and abs(v) < 1e6 for v in values)
@@ -100,9 +118,20 @@ def eye_of(m):
 def score(m):
     """How much like a perspective world -> clip matrix these 16 floats are.
 
-    Returns `(unit_error, eye)` or `None`. `unit_error` is how far the `w`
-    row's length is from 1.0 - see the module docstring for why that is the
-    test.
+    Returns `(unit_error, eye)` or `None`.
+
+    Four things have to hold together, and the first alone is not enough. The
+    `w` row must be a unit vector (the module docstring says why); the frustum
+    apex must be a place a camera could be; the view basis the matrix
+    decomposes to must be **orthonormal**, three mutually perpendicular unit
+    vectors, which is six constraints that arbitrary floats do not satisfy; and
+    the field of view and aspect must be ones a console frame could have.
+
+    **The last two exist because of what a first live run found.** A region of
+    zeroed memory passes the unit test and the apex test - it decomposes to a
+    camera at the origin with a field of view of nothing - and was duly
+    reported as the camera. An algebraic test that a degenerate matrix passes
+    is not a test.
     """
     if not _finite(m):
         return None
@@ -114,6 +143,21 @@ def score(m):
     eye = eye_of(m)
     if eye is None or not _finite(eye) or max(abs(v) for v in eye) > WORLD_LIMIT:
         return None
+    if max(abs(v) for v in eye) < ORIGIN_EPSILON:
+        return None
+    pose = decompose(m)
+    if pose is None:
+        return None
+    if not FOV_RANGE[0] <= pose["fov_y_deg"] <= FOV_RANGE[1]:
+        return None
+    if not ASPECT_RANGE[0] <= pose["aspect"] <= ASPECT_RANGE[1]:
+        return None
+    basis = (pose["right"], pose["up"], pose["forward"])
+    for a in range(3):
+        for b in range(a, 3):
+            dot = sum(basis[a][k] * basis[b][k] for k in range(3))
+            if abs(dot - (1.0 if a == b else 0.0)) > BASIS_TOLERANCE:
+                return None
     return (error, eye)
 
 

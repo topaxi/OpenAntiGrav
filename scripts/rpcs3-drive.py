@@ -173,8 +173,16 @@ def emulator_env():
     return env
 
 
-def screenshot(path):
-    """Grab the virtual root window. Returns the path, or None if it failed."""
+def screenshot(path, trim=False):
+    """Grab the virtual root window. Returns the path, or None if it failed.
+
+    `trim` crops the pure-black border away, which matters because the root
+    window is the *display's* size and the emulator's frame is a rectangle
+    somewhere inside it - a comparison against a rendered frame has to be of
+    the frame, not of the desktop it happened to be presented on. The crop is
+    on exactly `#000000` and nothing near it, so a dark scene keeps its own
+    black; only pixels no renderer wrote are removed.
+    """
     result = subprocess.run(
         ["import", "-display", DISPLAY, "-window", "root", str(path)],
         capture_output=True)
@@ -182,6 +190,11 @@ def screenshot(path):
         print("screenshot failed: %s" % result.stderr.decode()[:160],
               file=sys.stderr)
         return None
+    if trim:
+        subprocess.run(
+            ["mogrify", "-bordercolor", "black", "-fuzz", "0%", "-trim",
+             "+repage", str(path)],
+            capture_output=True)
     return path
 
 
@@ -360,11 +373,77 @@ DATA_SEGMENT = (0x00860000, 0x000E0000)
 
 
 def parse_region(text):
-    """`addr:len`, or `@addr:len` to dereference a pointer first."""
-    follow = text.startswith("@")
-    body = text[1:] if follow else text
-    addr, _, size = body.partition(":")
-    return (follow, int(addr, 0), int(size, 0) if size else 0x10000)
+    """A place to read, as `<chain>:<len>`.
+
+    A chain is an address expression with `@` as a **suffix** meaning "read the
+    32-bit pointer here and carry on from there":
+
+        0x860000                 a literal address
+        r2                       the PPU's TOC pointer, out of the registers
+        0x936fd4@                the pointer stored at that address
+        r2+0x6828@+0x14@         `[[r2 + 0x6828] + 0x14]`
+
+    A suffix rather than a prefix because that is the order the reads happen
+    in, and because it makes a chain of any length one rule instead of two.
+
+    **The register form is what reaches a heap object at all.** `viewProj` is
+    not in the executable's data or BSS: a live dump of the whole `0xe0000`
+    span holds seven perspective matrices and every one is a static constant -
+    exact to the bit, eye at the origin - so the live camera is in a heap
+    allocation, and the only handles on those are chains that start at a
+    register or a global.
+    """
+    body, _, size = text.rpartition(":")
+    if not body:
+        body, size = size, ""
+    return (body, int(size, 0) if size else 0x10000)
+
+
+def resolve_chain(gdb, chain):
+    """Walks a `parse_region` chain against a stopped target, or `None`.
+
+    A null anywhere ends the walk with `None` rather than reading address zero:
+    a render context that has not been built yet is an ordinary state early in
+    a boot, not an error to raise through.
+    """
+    terms = chain.split("@")
+    value = _term(gdb, terms[0])
+    for step in terms[1:]:
+        if not value:
+            return None
+        value = int.from_bytes(gdb.read(value, 4), "big") + _offset(step)
+    return value or None
+
+
+def _term(gdb, text):
+    """One chain term: a number, or `rN` with offsets after it."""
+    text = text.strip()
+    if text[:1] == "r" and text[1:2].isdigit():
+        head, rest = text, ""
+        for k, ch in enumerate(text):
+            if ch in "+-":
+                head, rest = text[:k], text[k:]
+                break
+        return gdb.gpr(int(head[1:])) + _offset(rest)
+    return _offset(text)
+
+
+def _offset(text):
+    """A sum of signed numbers, `""` being zero."""
+    total, sign, number = 0, 1, ""
+    text = text.strip()
+    if text and text[0] not in "+-":
+        text = "+" + text
+    for ch in text:
+        if ch in "+-":
+            if number:
+                total += sign * int(number, 0)
+            sign, number = (1 if ch == "+" else -1), ""
+        else:
+            number += ch
+    if number:
+        total += sign * int(number, 0)
+    return total
 
 
 def cmd_capture(args):
@@ -381,11 +460,12 @@ def cmd_capture(args):
     """
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     import ps3_pose
-    from rpcs3_debugger import Rpcs3Debugger
+    from rpcs3_debugger import Debugger
 
     out = Path(args.out).resolve()
     out.mkdir(parents=True, exist_ok=True)
-    regions = [parse_region(r) for r in args.region] or [(False, *DATA_SEGMENT)]
+    regions = [parse_region(r) for r in args.region] or [
+        ("%#x" % DATA_SEGMENT[0], DATA_SEGMENT[1])]
 
     with Session(args.image, args.log_dir) as session:
         print("rpcs3 pid %d" % session.proc.pid, flush=True)
@@ -405,7 +485,7 @@ def cmd_capture(args):
         track = track_name()
         print("track: %s" % (track or "<not logged>"), flush=True)
 
-        with Rpcs3Debugger() as gdb:
+        with Debugger() as gdb:
             for n in range(args.shots):
                 session.pad.set("cross", True)
                 gdb.resume()
@@ -414,17 +494,15 @@ def cmd_capture(args):
                 session.pad.set("cross", False)
 
                 stem = "%02d" % n
-                shot = screenshot(out / ("%s.png" % stem))
+                shot = screenshot(out / ("%s.png" % stem), trim=True)
                 blobs = []
-                for follow, addr, size in regions:
-                    at = addr
-                    if follow:
-                        at = int.from_bytes(gdb.read(addr, 4), "big")
-                        print("  %#010x -> %#010x" % (addr, at), flush=True)
-                        if not at:
-                            continue
-                    print("  reading %#x bytes at %#010x" % (size, at),
-                          flush=True)
+                for chain, size in regions:
+                    at = resolve_chain(gdb, chain)
+                    if not at:
+                        print("  %s resolves to nothing yet" % chain, flush=True)
+                        continue
+                    print("  reading %#x bytes at %#010x (%s)"
+                          % (size, at, chain), flush=True)
                     blobs.append((at, gdb.read(at, size)))
 
                 pose = describe(blobs, track, shot)

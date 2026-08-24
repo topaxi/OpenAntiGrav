@@ -77,6 +77,39 @@ is the unit forward. `oag-game --camera-pose` takes the first nine of those and
 `--camera-fov` the tenth, so a captured frame and ours can be rendered from one
 camera.
 
+## `viewProj` is not in the executable's data, and that is measured
+
+**The first live capture answered this, and it is the thing to know before
+spending a boot.** A dump of the whole `0x00860000`+`0xe0000` span - the
+EBOOT's initialised data and the BSS behind it - holds **seven** matrices that
+pass the perspective test, and every one of them is a static constant: unit
+error exactly `0.0`, an axis-aligned basis, an eye within 3.3 units of the
+origin. Those are authored cube-face and shadow matrices. The live camera is
+in a heap allocation.
+
+So a capture reaches it by pointer chain, and `--region` takes one, with `@` as
+a suffix meaning "read the pointer here and carry on from there":
+
+| Chain | What |
+| --- | --- |
+| `0x860000` | a literal address |
+| `r2` | the PPU's TOC pointer, out of the register dump |
+| `0x936fd4@` | the pointer stored at `Render_FrameContextPtr` |
+| `r2+0x6828@+0x14@` | the `RenderManager` instance |
+
+The last one is free from Ghidra: `RenderManager_CreateInstance`
+(`0x002d6190`) is three statements, `instance = alloc(0x4d90)` followed by
+`*(*(r2 + 0x6828) + 0x14) = instance`. Reading its 19,856 bytes is **34
+packets** against the data segment's 1,556, which is the difference between a
+second and a minute.
+
+**A degenerate matrix passes every algebraic test**, which the same first run
+also proved by reporting a region of zeroed memory as the camera - eye at the
+origin, field of view of nothing. `score` now also requires the basis the
+matrix decomposes to be orthonormal (six constraints), the field of view to be
+between 10 and 170 degrees, the aspect to be between 0.5 and 4, and the eye not
+to be the origin.
+
 ## What is free, and what costs packets
 
 The circuit costs nothing: HD prints `Loading track model Data\Environments\...`
@@ -85,6 +118,12 @@ to `TTY.log` on every load, and the capture reads it there. Everything else is
 initialised data and the BSS behind it, `0x00860000` for `0xe0000` bytes, about
 a minute. `--region @addr:len` dereferences a pointer first, which is how a
 render context reached through a global costs kilobytes instead of a megabyte.
+
+The frame is trimmed to the emulator's own rectangle before it is written:
+the root window is the *display's* size and RPCS3 presents into a rectangle
+somewhere inside it, so an untrimmed capture compares a desktop against a
+render. The crop is on exactly `#000000` and nothing near it, so a dark scene
+keeps its own black.
 
 **The stop comes before the screenshot, deliberately.** `screenshot()` grabs the
 virtual root window rather than asking RPCS3 for a frame, so it is unaffected by
