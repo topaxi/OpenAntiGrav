@@ -104,6 +104,7 @@ pub static LOADING: oag_title::Loading = oag_title::Loading {
     wave: None,
     features: FEATURES,
     chrome: CHROME,
+    palette: Some(PALETTE),
     caption: Some(CAPTION),
 };
 
@@ -200,6 +201,32 @@ const fn feature(
         description,
     }
 }
+
+/// The four globals the loading screen's constructor resolves.
+///
+/// Read out of `EBOOT.elf`: the constructor at `0x002b3bb0` loads these four
+/// names from its own TOC, in this order, passes each through the palette
+/// lookup and keeps the results together at object offset `0x95c`. The `FE_`
+/// prefix the code carries is the lookup's; the globals in `skin.xml` are
+/// `HD_BG` and friends.
+///
+/// **The values differ by archive**, which is the same open question
+/// `docs/formats/hd-frontend.md` carries about `skin.xml`'s six copies -
+/// `DATA06`'s `HD_BG` is `0xffffffff` and `DATA00`'s is not, so the served copy
+/// decides whether this screen is white-and-blue or black-and-red. That
+/// correspondence with `OPT_FE_STYLE` is suggestive and unproven; the loader
+/// reads whichever copy is served rather than choosing one.
+///
+/// Confidence **90** on the set and the order - four `lwz` from one TOC block,
+/// in one basic block, into four adjacent fields. **60** on which colour plays
+/// which role, which is a reading of a screenshot; see
+/// [`oag_title::loading::Palette`].
+pub const PALETTE: oag_title::loading::Palette = oag_title::loading::Palette {
+    background: "HD_BG",
+    rule: "HD_Grey",
+    accent: "HD_Blue",
+    text: "HD_LightGrey",
+};
 
 /// The chrome the screen is framed with, named in the same run of the
 /// executable as the illustrations.

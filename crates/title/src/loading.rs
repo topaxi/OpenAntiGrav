@@ -44,6 +44,15 @@ pub struct Loading {
     /// the disc ships art for, the first being what a source with no saved
     /// choice gets. See [`FeatureStyle`] and [`Feature`].
     pub features: &'static [FeatureStyle],
+    /// The four front-end globals this screen draws with, when the title names
+    /// them.
+    ///
+    /// **Names, not colours.** They are looked up in the source's own
+    /// `FEGlobals`, so a disc that re-tints its front end re-tints this screen
+    /// with it - which Wipeout HD does: its `HD_*` globals differ between
+    /// archives, black-and-red in one and white-and-blue in another. See
+    /// [`Palette`].
+    pub palette: Option<Palette>,
     /// The marks the screen is framed with: arrows, rules, bracket corners and
     /// the bar's own fill.
     ///
@@ -74,6 +83,32 @@ pub struct Wave {
     pub tips: &'static str,
     /// The strip every column of the wave samples.
     pub glow_strip: &'static str,
+}
+
+/// The four front-end globals a loading screen resolves, by name.
+///
+/// **Recovered from the executable**, in this order: Wipeout HD's loading-screen
+/// constructor looks up `FE_HD_BG`, `FE_HD_Grey`, `FE_HD_Blue` and
+/// `FE_HD_LightGrey` through the palette lookup and keeps the four results
+/// together at object offset `0x95c`. The `FE_` prefix is the lookup's; the
+/// globals themselves are `HD_BG` and friends in `skin.xml`.
+///
+/// **Which of the four goes where is not recovered.** The constructor stores
+/// them and the drawing code that reads them has not been traced, so the roles
+/// below are this project's reading of a screenshot: the ground is `BG`, the
+/// text is `LightGrey`, the rules and bracket marks are `Grey`, and `Blue` is
+/// the accent. That is a mapping of four known colours onto four visible roles
+/// rather than a guess at unknown values.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Palette {
+    /// The screen's ground.
+    pub background: &'static str,
+    /// The rules and the bracket marks.
+    pub rule: &'static str,
+    /// The accent.
+    pub accent: &'static str,
+    /// The text.
+    pub text: &'static str,
 }
 
 /// One piece of a loading screen's own chrome.

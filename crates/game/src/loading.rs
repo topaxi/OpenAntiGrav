@@ -146,6 +146,11 @@ pub struct Screen {
     subtitle_arrow: Option<[f32; 4]>,
     rule: Option<[f32; 4]>,
     corner: Option<[f32; 4]>,
+    /// The four colours this source tints the screen with, when it names them.
+    ///
+    /// `None` keeps the palette this build chose against a near-black frame,
+    /// which is what both PSP titles get. See [`Assets::palette`].
+    palette: Option<assets::Palette>,
     /// The feature's own name, when its id was recovered.
     feature_title: Option<String>,
     /// The paragraph under it, which takes the tip line's place on a title that
@@ -210,6 +215,7 @@ impl Screen {
             subtitle_arrow: assets.art.as_ref().and_then(|art| art.subtitle_arrow),
             rule: assets.art.as_ref().and_then(|art| art.rule),
             corner: assets.art.as_ref().and_then(|art| art.corner),
+            palette: assets.palette,
             feature_title: assets
                 .feature
                 .as_ref()
@@ -374,14 +380,33 @@ impl Screen {
         // no backdrop draws exactly what it drew before - both PSP discs, and
         // any run with no title in hand.
         let over_backdrop = self.illustration.is_some();
+        // **The disc's own tint where this source names one.** The four
+        // globals the original's loading screen resolves are read out of its
+        // own `FEGlobals` - see `oag_hd::loading::PALETTE` for the constructor
+        // they came off - so a screen drawn here is the colour that disc draws
+        // it, white-and-blue or black-and-red, rather than a scheme this build
+        // picked. A title that names none keeps what it always drew.
+        //
+        // An outline is still drawn over an illustration, because the picture
+        // underneath is not one of the four colours and the text crosses it.
         let border = over_backdrop.then(|| dim(OUTLINE));
-        let ink = |colour: [f32; 4]| {
-            if over_backdrop {
-                dim(ON_BACKDROP)
-            } else {
-                dim(colour)
-            }
+        let tint = self.palette;
+        let ink = |colour: [f32; 4]| match tint {
+            Some(palette) => dim(palette.text),
+            None if over_backdrop => dim(ON_BACKDROP),
+            None => dim(colour),
         };
+        let rule_ink = tint.map_or(dim(RULE_INK), |palette| dim(palette.rule));
+        // **The trough is not the accent.** The original's bar is a dark dotted
+        // grid with the *filled* part in the accent colour - red on Fury's
+        // palette - so painting the whole trough in it draws a full bar over a
+        // load that has not started. The trough takes the rule's colour at a
+        // third, which is what a dotted grid averages to.
+        let bar_trough = tint.map_or(dim(BAR_DOTS), |palette| {
+            let [r, g, b, a] = palette.rule;
+            dim([r, g, b, a * BAR_TROUGH_ALPHA])
+        });
+        let bar_fill = tint.map_or(dim(BAR_FILL), |palette| dim(palette.accent));
 
         // The frame is cleared either way: the backdrop is stretched over the
         // whole of it, so this is only ever seen through the fade - but the
@@ -389,7 +414,7 @@ impl Screen {
         // last stage left behind.
         out.push(Draw::Fill {
             rect: [0.0, 0.0, SCREEN.0, SCREEN.1],
-            color: BACKDROP,
+            color: tint.map_or(BACKDROP, |palette| dim(palette.background)),
         });
 
         let (heading_x, heading_align) = if self.illustration.is_some() {
@@ -442,7 +467,7 @@ impl Screen {
                     out.push(Draw::Sprite {
                         rect: [PANEL_X, y, PANEL_RIGHT - PANEL_X, RULE_HEIGHT],
                         uv,
-                        color: dim(RULE_INK),
+                        color: rule_ink,
                     });
                 }
             }
@@ -451,7 +476,7 @@ impl Screen {
                     out.push(Draw::Sprite {
                         rect: [x, y, CORNER_SIZE, CORNER_SIZE],
                         uv,
-                        color: dim(RULE_INK),
+                        color: rule_ink,
                     });
                 }
             }
@@ -515,7 +540,7 @@ impl Screen {
         if self.illustration.is_some() {
             out.push(Draw::Fill {
                 rect: [BAR_BOX.0, BAR_BOX.1, BAR_BOX.2, BAR_BOX.3],
-                color: dim(BAR_DOTS),
+                color: bar_trough,
             });
             let filled = if counted(progress) {
                 fraction(phase, progress) * BAR_BOX.2
@@ -525,7 +550,7 @@ impl Screen {
             if filled > 0.0 {
                 out.push(Draw::Fill {
                     rect: [BAR_BOX.0, BAR_BOX.1, filled, BAR_BOX.3],
-                    color: dim(BAR_FILL),
+                    color: bar_fill,
                 });
             }
         }
@@ -754,6 +779,14 @@ const RULE_INK: [f32; 4] = [0.75, 0.78, 0.82, 1.0];
 /// black frame rather than for a gauge a fifth of the screen tall. See
 /// [`Screen::draw_list`] for why this is a flat colour and not `dot.gtf`.
 const BAR_DOTS: [f32; 4] = [0.20, 0.23, 0.28, 1.0];
+
+/// How much of the rule's colour the bar's trough keeps.
+///
+/// A third, which is about what the original's dotted grid averages to against
+/// its own ground - it is a grid of dots on the ground colour, not a solid
+/// band. See [`Screen::draw_list`] for why it is not drawn as the dots
+/// themselves.
+const BAR_TROUGH_ALPHA: f32 = 0.35;
 
 /// The marker sprites' drawn size, and the bracket corners'.
 const MARKER_SIZE: f32 = 7.0;

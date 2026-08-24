@@ -39,6 +39,7 @@ pub static LOADING: oag_title::Loading = oag_title::Loading {
     // heading. See `oag_title::Loading`.
     features: &[],
     chrome: &[],
+    palette: None,
     caption: None,
 };
 

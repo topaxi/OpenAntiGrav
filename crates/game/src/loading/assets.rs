@@ -38,6 +38,9 @@ pub struct Assets {
     pub wave: bool,
     /// Every picture this screen draws, when the title has any. See [`Art`].
     pub art: Option<Art>,
+    /// The four colours this source's own front end tints the screen with, when
+    /// the title names them. See [`oag_title::loading::Palette`].
+    pub palette: Option<Palette>,
     /// The illustrated feature this screen teaches, when the title has any.
     ///
     /// One of the set, chosen at load: HD rotates through five and this build
@@ -65,6 +68,23 @@ pub struct Feature {
     pub title: Option<String>,
     /// The paragraph under it.
     pub description: String,
+}
+
+/// A loading screen's four colours, resolved out of the source's own
+/// `FEGlobals`.
+///
+/// See [`oag_title::loading::Palette`] for where the four names come from and
+/// which of the roles below are read rather than recovered.
+#[derive(Debug, Clone, Copy)]
+pub struct Palette {
+    /// The screen's ground.
+    pub background: [f32; 4],
+    /// The rules and the bracket marks.
+    pub rule: [f32; 4],
+    /// The accent.
+    pub accent: [f32; 4],
+    /// The text.
+    pub text: [f32; 4],
 }
 
 /// Every picture the screen draws, in one sheet, with where each one sits.
@@ -121,6 +141,7 @@ impl Default for Assets {
             ),
             wave: true,
             art: None,
+            palette: None,
             feature: None,
             caption: None,
             notes: Vec::new(),
@@ -296,6 +317,37 @@ impl Assets {
             })
         });
 
+        // **The source's own tint**, read out of the front end it actually
+        // ships rather than spelled here: `HD_BG` and its three neighbours are
+        // `FEGlobals`, and Wipeout HD's differ between archives - the served
+        // copy decides whether this screen is white-and-blue or black-and-red.
+        // See `oag_hd::loading::PALETTE`, which records the constructor those
+        // four names were read out of.
+        let palette = loading.palette.and_then(|names| {
+            let root = title.front_end?.root;
+            let blob = archives.read_name(root).ok()?;
+            let xml = crate::boot::xml::expand(&blob).ok()?;
+            let globals = crate::screen::Screens::from_xml(&xml).globals;
+            let colour = |name: &str| {
+                let raw = globals.get(name)?;
+                let hex = raw.trim().trim_start_matches("0x").trim_start_matches("0X");
+                let argb = u32::from_str_radix(hex, 16).ok()?;
+                let byte = |shift: u32| ((argb >> shift) & 0xff) as f32 / 255.0;
+                Some([byte(16), byte(8), byte(0), byte(24)])
+            };
+            let resolved = Palette {
+                background: colour(names.background)?,
+                rule: colour(names.rule)?,
+                accent: colour(names.accent)?,
+                text: colour(names.text)?,
+            };
+            notes.push(format!(
+                "loading screen palette from {root}: {} {} {} {}",
+                names.background, names.rule, names.accent, names.text
+            ));
+            Some(resolved)
+        });
+
         let caption = loading.caption.and_then(|id| {
             let text = strings.get(id);
             if text.is_none() {
@@ -319,6 +371,7 @@ impl Assets {
             strip,
             wave: loading.wave.is_some(),
             art,
+            palette,
             feature,
             caption,
             notes,

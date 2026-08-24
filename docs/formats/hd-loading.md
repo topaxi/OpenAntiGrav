@@ -96,15 +96,42 @@ game's. Asserted in
 `every_feature_illustration_is_on_the_disc_in_both_stylings`, which checks all
 ten resolve and that the Fury name is the base name plus a suffix.
 
-### Which feature is up is unread
+### The feature is a random draw, and the deck is the race mode's
 
-`Feature type == %i` on the `TTY.log` reports it, and what drives that number
-has not been read. Two independent observations — a screenshot of a running Fury
-race, and this project's own RPCS3 capture — both logged **type 2** and both
-showed Pilot Assist, which is third in the executable's order. So this build
-shows that one rather than rotating on a rhythm it made up. Two observations of
-one value is not a measurement of what selects it; see
-`oag_game::loading::pick_feature`.
+Read out of the screen's own constructor —
+[loading-screen.md](../ghidra/functions/ps3-hdfury-eu/loading-screen.md), which
+is also where the four colours below come from. `Feature type == %i` reports
+`object+0x444`, and that field is a counter reduced modulo a range the race mode
+picks: `% 5` on two modes, `% 3` on two more, a fixed `1` on one, `% 2` on
+another, and `% 3` or `% 4` otherwise.
+
+So it is neither a rotation nor a fixed choice, and this section's earlier claim
+that "what drives that number has not been read" is superseded. What is still
+unread is what the mode values mean.
+
+**This build shows one feature and does not draw.** It loads a single
+illustration at boot; drawing per race means loading all five, which is a change
+to the asset path rather than to a constant — and with the mode ids unread there
+is no honest range to draw from. Both observations of the running game logged
+type 2, which is Pilot Assist, and that is the one loaded.
+
+### The four colours are the disc's, and named in the executable
+
+The same constructor resolves `FE_HD_BG`, `FE_HD_Grey`, `FE_HD_Blue` and
+`FE_HD_LightGrey` through the palette lookup and keeps the four together. Those
+are `FEGlobals` in `skin.xml`, so `oag_hd::loading::PALETTE` names them and
+`oag_game::loading::Assets` reads their values off the source itself — the
+screen is tinted by the disc rather than by a scheme this project chose.
+
+Their **values differ by archive**: `DATA06` gives `HD_BG` as `0xffffffff` and
+the served copy does not, which is why the screen comes out white-and-blue on
+one and black-and-red on the other. That is the same open question about
+`skin.xml`'s six copies [hd-frontend.md](hd-frontend.md) already carries, and it
+lines up suggestively with `OPT_FE_STYLE` — suggestively, and unproven.
+
+Which of the four plays which role is **not** recovered: the drawing code that
+reads them has not been traced, so the assignment (ground, rule, accent, text)
+is a reading of a screenshot at confidence 60.
 
 ## A `.gtf`'s rows run bottom-up, and nothing 2D knew
 
@@ -251,8 +278,11 @@ on a modal dialog.
 
 ## Still unread
 
-- **What selects a feature.** `Feature type == %i`, observed at 2 twice and
-  never at anything else.
+- **What the race-mode values mean**, which is what picks a feature's range.
+  The moduli are read; `8`, `0xd`, `0xe`, `6`, `0x11`, `0x14` and `0x15` are
+  not.
+- **Which of the four palette colours plays which role**, and whether
+  `FUN_006762f8` is a random source or a frame counter.
 - **`LOADING SCREEN TYPE type == %i`**, observed only at 0. It sits with
   `scePresents.gtf`, the twelve `presents_<language>.gtf` files and the cut demo
   still, so more than one type exists and the presents screens may be among

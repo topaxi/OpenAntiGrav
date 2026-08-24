@@ -97,3 +97,4 @@
 0x007a2da8	data	Trail_SpeedParamName	95	engine-trail.md
 0x003f1300	function	Shader_InitEngineParams	90	renderer.md
 0x005d4cf8	function	Shader_InitParamEntry	88	renderer.md
+0x002b3bb0	function	LoadingScreen_Construct	85	loading-screen.md
