@@ -136,16 +136,24 @@ literally the same numbers, read at `0x008b2fe0..0x008b3018`: intensity rise
 boost gate `EngineFlare_BoostGate` (`0x008b2ff4`) = **0.2** - the PSP's
 `BOOST_GATE` value exactly,
 which raises the "matched mechanism" reading of the plume gate from 88 to
-**92**. **The 3.6 the speed field is multiplied by first is a gain, not a
-unit conversion** - this page first read it as m/s-to-km/h and the dumps
-refute that twice over: the slowest dumped craft (~140 km/h by its own ring
-spacing) carried brightness 0.443 where the ungained ramp predicts 0.08, and
-the measured head `u` of 0.5733 at ~195 km/h needs `speed01 = 0.711`, i.e. a
-gained field of ~711. So `+0x104` is km/h-scale times 3.6, and HD's speed
-ramp saturates near **167 km/h** - every racing craft trails at full
-brightness, and a wall-scraper still blazes, where Pulse's own ramp is still
-climbing at 600. `oag_render::exhaust::hd::speed_ramp` and `speed01` carry
-the gained law; `Exhaust::speed_ramp` stays Pulse's.
+**92**. **The speed field `+0x104` is world speed times ~5.4, and a fourth
+session read it directly** - all eight craft, two snapshots, alongside the
+ramp at `+0x108` and the trail block's brightness:
+
+- `brightness = ramp = (field - 100) / 500` holds to six decimals on every
+  row (fields 248..592 gave ramps 0.296..0.983, each exact), and the engine
+  blend sits at 1.0 throughout a driven race - so a craft at pace trails at
+  or near full brightness, where Pulse's own ramp would still be climbing.
+- `u_head = 1 - 0.6 * (field / 1000 + 0.25 * throttle)` back-solves to a
+  throttle of exactly 1.0 on every thrusting craft.
+- The field against each craft's own ring spacing (at the game's 1/60 step)
+  is `world speed * 5.0..6.6`, median 5.3 - two readings of this page took
+  the `* 3.6` in `EngineFlare_Update` for m/s-to-km/h and then for a gain on
+  km/h; both are refuted by the direct read. The composition is the read
+  3.6 times an unexplained ~1.5 already in `node[0x4c4]`; only the product
+  is load-bearing, and `oag_render::exhaust::hd::SPEED_FIELD_GAIN` carries
+  it as 1.5 over this engine's own km/h. `Exhaust::speed_ramp` stays
+  Pulse's.
 
 `EngineFlare_PlaceShapes` then scales rather than shows/hides:
 

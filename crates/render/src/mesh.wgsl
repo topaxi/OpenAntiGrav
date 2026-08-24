@@ -483,13 +483,18 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     let flame_alpha = flame_alpha_scale
         * (1.0 - (pow(rim, flame_rim_power) * flame_rim_scale + flame_rim_min));
     let flame_rgb = texel.rgb * flame_colour_scale;
-    // Decoded on a linear target the way the stand-in path's colour is, and for
-    // the same reason: what a sampler hands back is in the space the asset was
-    // authored in, whatever this frame's target holds.
-    let flame = vec4<f32>(
-        mix(flame_rgb, pow(flame_rgb, vec3<f32>(2.2)), linear_out),
-        flame_alpha * in.colour.a,
-    );
+    // **Not decoded on the linear target, on purpose - and this is a change
+    // of mind recorded in place.** The decode used to sit here on the "what a
+    // sampler hands back is authored-space" argument, but the flame's own
+    // program is read instruction by instruction and applies no transfer
+    // function anywhere: the original multiplies the raw sample into a
+    // target the exposure resolve then scales, `ADD_SAT`s and presents with
+    // no gamma arithmetic (renderer.md, "no `1/2.2` ... exists anywhere in
+    // it"). Decoding here dimmed the flame's mid-tones by up to a third
+    // against that arithmetic - the same divergence the HD trail's path had,
+    // fixed the same day. See
+    // docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md.
+    let flame = vec4<f32>(flame_rgb, flame_alpha * in.colour.a);
 
     let shaded = vec4<f32>(
         mix(plain_rgb, authored_rgb, scene.light.enabled * in.lit),

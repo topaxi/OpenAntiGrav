@@ -283,23 +283,28 @@ pub fn u_head(speed01: f32) -> f32 {
     1.0 - TEX_USCALE_MAX * speed01
 }
 
-/// The gain `EngineFlare_Update` applies to the craft's speed field on its
-/// way into the flare's speed input (`+0x104 = node[0x4c4] * 3.6`).
+/// What multiplies this engine's km/h into the flare's speed input
+/// (`+0x104`), which every consumer here reads.
 ///
-/// **A second gain on an already-km/h-scale field, not a unit conversion** -
-/// the first reading here took the 3.6 for m/s-to-km/h and it is refuted by
-/// the live dumps two ways: the slowest dumped craft (~140 km/h by its own
-/// ring spacing) carried brightness 0.443 where a plain `(kmh-100)/500` ramp
-/// predicts 0.08, and the measured head `u` of 0.5733 at ~195 km/h needs
-/// `speed01 = 0.711`, i.e. a field of ~711 = 195 * 3.6. Both close exactly
-/// under this gain.
-pub const SPEED_FIELD_GAIN: f32 = 3.6;
+/// Measured, then verified against the live fields directly: a fourth
+/// session read `+0x104` and `+0x108` on all eight craft twice, confirming
+/// `brightness = ramp = (field - 100) / 500` to six decimals and
+/// `speed01 = field / 1000 + 0.25 * throttle` exactly - and the field is
+/// `world speed * 5.4` (median 5.3, range 5.0..6.6 across eight craft's own
+/// ring spacings at the game's 1/60 step), i.e. this engine's km/h times
+/// 1.5. The composition on the original's side is the read `* 3.6` in
+/// `EngineFlare_Update` times an unexplained 1.5 already in the node's
+/// field; only the product is load-bearing here. An earlier revision used
+/// 3.6 (taking the field for km/h-as-shown), which overshot by 1.5x -
+/// saturating everything it fed slightly early.
+pub const SPEED_FIELD_GAIN: f32 = 1.5;
 
 /// The normalised speed the scroll and stretch ride on.
 ///
 /// `(field - Ship Min) / Ship Range + thrust * Thrust Contrib`, clamped -
 /// the authored `Ship Min` is 0 and the field is the craft's km/h times
-/// [`SPEED_FIELD_GAIN`], so `speed01` saturates near 278 km/h.
+/// [`SPEED_FIELD_GAIN`], so `speed01` saturates near 500 km/h at full
+/// throttle.
 #[must_use]
 pub fn speed01(speed_kmh: f32, thrust: f32) -> f32 {
     (speed_kmh * SPEED_FIELD_GAIN / SPEED01_RANGE_KMH + thrust * SPEED01_THRUST_CONTRIB)
@@ -311,8 +316,8 @@ pub fn speed01(speed_kmh: f32, thrust: f32) -> f32 {
 ///
 /// The *shape* is Pulse's recovered ramp constant for constant (floor 100,
 /// span 500, from `0x008b3010`/`0x008b3004`), but the gained field saturates
-/// it near **167 km/h** - which is why every racing craft in HD trails at
-/// full brightness and a craft scraping a wall still blazes, where Pulse's
+/// it near **400 km/h** - the live fields sat at 0.58..0.98 through an AI
+/// race, so a craft at pace trails at or near full brightness where Pulse's
 /// own ramp is still climbing at 600. `Exhaust::speed_ramp` stays Pulse's;
 /// this is the HD consumer's.
 #[must_use]

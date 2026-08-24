@@ -142,18 +142,19 @@ fn the_scroll_phase_advances_per_push_and_wraps() {
 #[test]
 fn speed01_combines_the_gained_speed_and_thrust_and_clamps() {
     assert_eq!(speed01(0.0, 0.0), 0.0);
-    // 100 km/h -> field 360 -> 0.36; the dump's cross-check: ~195 km/h and
-    // no thrust share puts the head u at 1 - 0.6 * 0.7 = 0.58.
-    assert!((speed01(100.0, 0.0) - 0.36).abs() < 1e-6);
-    assert!((speed01(100.0, 1.0) - 0.61).abs() < 1e-6);
+    // 100 km/h -> field 150 -> 0.15; the dump's cross-check: a live field of
+    // 456 under full throttle read back u_head = 1 - 0.6 * 0.706 = 0.576.
+    assert!((speed01(100.0, 0.0) - 0.15).abs() < 1e-6);
+    assert!((speed01(304.0, 1.0) - 0.706).abs() < 1e-6);
     assert_eq!(speed01(600.0, 1.0), 1.0);
 }
 
 #[test]
 fn the_brightness_ramp_saturates_where_hd_races() {
-    // Pulse's own ramp is 0.08 at 140 km/h; the dumped craft at that speed
-    // carried brightness 0.443, which only the gained field explains.
+    // The live fields: 456 -> ramp 0.7117 (exact), 248 -> 0.2959, and our
+    // km/h is the field over 1.5.
     assert_eq!(speed_ramp(0.0), 0.0);
-    assert!(speed_ramp(140.0) > 0.443);
-    assert_eq!(speed_ramp(200.0), 1.0);
+    assert!((speed_ramp(456.0 / 1.5) - 0.7117).abs() < 1e-3);
+    assert!((speed_ramp(248.0 / 1.5) - 0.2959).abs() < 1e-2);
+    assert_eq!(speed_ramp(400.0), 1.0);
 }
