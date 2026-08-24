@@ -331,7 +331,7 @@ was not.** No constant moved for this finding, and none should: what changed
 is that the vertex law and the draw-time constant are now two measurements
 instead of one fused guess.
 
-## Does another craft disturb the ribbon? Measured, and no
+## Does another craft disturb the ribbon? The geometry, no - but a craft flying through one **does** spark
 
 A plausible memory of the original - and a plausible reading of the code -
 is that flying through someone's exhaust pushes it aside. The code half is
@@ -381,12 +381,87 @@ where it is stored, which is a stated approximation until that is read.
 
 **Confidence 88** on the negative: two pauses, eight trails, 864 rings, craft
 inside the tube, and the one quantity that a rigid displacement could not
-hide - the width - is bit-exact everywhere. What this does *not* establish is
-what the contexts are **for**, because the `Trails` SPU job's own code is
-still unread; the mundane reading is that a compacted array has to be
-searched by craft index, which is why its length has to travel with it, and
-that the vec4 feeds the frustum cull the block's own six planes already serve.
-Neither is read, and neither needs to be for the question above.
+hide - the width - is bit-exact everywhere.
+
+
+### But the craft sparks, and the disc names the effect for it
+
+**A first pass of this page stopped at the negative above and was too narrow.**
+The ribbon's *geometry* is untouched, which is what the vertex dump measures -
+and the reaction happens somewhere the vertex dump cannot see: a particle
+system on the struck **hull**. The disc names it, in two colours:
+
+```text
+007a1ac0  'Data\Psys\WO_TRAIL_HITSHIP_RED.POB'
+007a1ae8  'Data\Psys\WO_TRAIL_HITSHIP.POB'
+0x007a1cc8  'WO_TRAIL_HITSHIP_RED'    <- Trail_HitShipEffectNameRed
+0x007a1ce0  'WO_TRAIL_HITSHIP'        <- Trail_HitShipEffectName
+```
+
+The last two are the bare names `Trail_HitShipEffect` looks the systems up by;
+the first two are the paths `0x002d9270` preloads.
+
+They sit in the ship-effect run **between**
+`WO_SHIP_SPARK_DAMAGE_WEAPON.POB` and `WO_NITRO_DEBRIS_SPARKS.POB`, and
+`0x002d9270` preloads them per craft in the same block as
+`WO_SHIP_COLL_SPARK_DAMAGE.POB` / `..._NODAMAGE.POB` - so they are literally
+authored as a sibling of the collision sparks.
+
+The chain, read end to end:
+
+1. **The SPU job raises a flag.** Bit 61 of the trail block's `+0x11d0`
+   (`0x2000000000000000`) means "this trail hit a ship this frame";
+   `+0x11f0` holds the trail slot of the craft involved and `+0x11dc` a float
+   the spawner takes in `f1`. **Nothing on the PPU sets that bit** - a scan of
+   every `ld`/`std`/`lwz`/`stw` in the image at displacement `0x11d0` finds 26
+   accesses, all in the trail manager, and each one either sets the slot index
+   (bits 55-58), bit 60, bit 63, or *clears* bit 61 after reading it. The whole
+   field sits inside the `0x1200` bytes `Trail_InitCraftSlot` DMAs to and from
+   the job. **So the `Trails` job does the intersection test** - which is what
+   the per-craft contexts and the `+0x11e8` count are for, the question the
+   section above had to leave open.
+2. **`Trail_SpawnHitEffect` (`0x002e3858`, with an identical twin at
+   `0x002e2678`) consumes it**, once a frame, over all eight slots. For a slot
+   with the flag set it walks **ten attachment nodes on the craft**,
+   `craft + 0x79d0` through `+0x79f4`, keeps the one nearest the contact point
+   (sentinel distance `100000.0` at `0x008b443c`), gates on the craft being in
+   neither of two states (`+0x5ed8`, `+0x5f42` - unread) or on a global mode
+   flag, spawns, and clears bit 61.
+3. **`Trail_HitShipEffect` (`0x002d9ec0`) spawns it**, parented to that node,
+   under a four-character tag - `'TRLI'` for the blue variant and `'TRLR'` for
+   the red.
+
+**The colour follows the ribbon, from one instruction.** The call site is
+unambiguous:
+
+```text
+002e3b78  lfs  f1, 0x11dc(r30)     <- the float the block carried
+002e3b88  lwz  r11, 0x1204(r30)    <- the craft
+002e3b90  lbz  r5, 0x7d2c(r11)     <- its Fury-skin byte, as the variant select
+002e3b94  lwz  r3, 0x0(r9)         <- the nearest attachment node
+002e3b98  bl   0x002d9ec0
+```
+
+`craft + 0x7d2c` is **the same byte** `Ship_SetFuryTrailFlag` writes and
+`Trail_BuildDrawState` turns into the `engineTrail` colour-mix vec4 that makes
+the ribbon red. So the sparks are red exactly when the ribbon is. In practice a
+grid is uniformly Fury or classic (every craft of a Fury event derefs to
+`concept1`), so the two always agree on screen.
+
+**Confidence 88** on the chain: every function is decompiled, the two `.pob`
+names resolve from the executable's own strings through
+[`scripts/ps3-toc.py`](../../../../scripts/ps3-toc.py), the variant select is
+read off the instruction, and the SPU's role is established by elimination over
+every access to the flag word in the image. What is **not** read: the test
+itself (the `Trails` job's code), what `+0x11dc` and the two craft-state gates
+mean, and whether `+0x11f0` names the striking or the struck craft - the effect
+attaches to *that* craft's hull either way.
+
+**Not implemented.** `oag_render::psys` already plays any `Data\Psys\*.POB`
+by name, so the effect itself is a name away; the **trigger** is the part that
+needs the ribbon-versus-craft test this engine does not have, and per this
+repository's rule an effect with no recovered trigger stays unwired rather than
+fired on a guess.
 
 ## The third sampler is the lightmap slot, empty
 
@@ -579,10 +654,13 @@ Open, in rough order of visible cost:
   the four pointers - see "the scroll phase is bound by pointer". Nothing in
   the renderer changed for it; the scroll was already applied the right number
   of times, for a reason the comments had wrong.)
-- What the `Trails` SPU job does with the seven *other* craft contexts it is
-  handed every frame (`+0x11e8` carries the count). Deforming the ribbon is
-  ruled out by measurement above; searching a compacted array by craft index
-  and culling against the vec4 are the unread candidates.
+- `WO_TRAIL_HITSHIP` / `WO_TRAIL_HITSHIP_RED` - **read and not drawn.** The
+  trigger is the `Trails` SPU job's own ribbon-versus-craft test, which this
+  engine has no equivalent of; the effect plays through `oag_render::psys`
+  the moment one exists. See "the craft sparks" above.
+- What `+0x11dc` carries into the spawner's `f1`, what the two craft-state
+  gates at `+0x5ed8`/`+0x5f42` mean, and whether `+0x11f0` names the striking
+  or the struck craft.
 - What the original does to the ring across a **respawn** - the race start is
   read (born full, bunched, dark) but a respawn was never captured; this
   engine re-bunches at the new pose as a stated approximation.
