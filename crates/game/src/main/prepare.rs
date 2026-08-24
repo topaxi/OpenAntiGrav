@@ -20,7 +20,7 @@ use anyhow::{Context, Result};
 use log::info;
 
 use oag_game::frontend;
-use oag_game::{audio, boot, loading, menu, movie, prefetch, race, settings};
+use oag_game::{audio, boot, catalogue, loading, menu, movie, prefetch, race, settings};
 use oag_physics::SpeedClass;
 
 use crate::args::{resolve_difficulty, resolve_scheme};
@@ -214,7 +214,12 @@ impl Pending {
                 .map(|track| {
                     (
                         track.clone(),
-                        boot_shell.strings.get_or_id(&track.id).to_string(),
+                        catalogue::label(
+                            track,
+                            &boot_shell.circuit_names,
+                            &boot_shell.strings,
+                            &boot_shell.tracks,
+                        ),
                     )
                 })
                 .collect(),

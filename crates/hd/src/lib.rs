@@ -240,6 +240,17 @@ pub mod names {
     /// Confidence **85**: every copy is read off the disc and every team it
     /// declares resolves to a `ship.vex`, a `ship.rcsmodel`, a `locators.vex`
     /// and a `handlingstats.xml`, but nothing has been watched running.
+    ///
+    /// # The names of what it declares are in a *different* archive
+    ///
+    /// The asymmetry is the recovered fact and it is easy to walk into: the
+    /// circuit **list** comes from `DATA00`'s copy of this file, and the only
+    /// string table that names all 28 of them is `DATA06`'s `entries.xml` -
+    /// `DATA00` ships none at all, and the other four copies stop at 24 keys,
+    /// lacking exactly the four Zone circuits. Taking the list and the names
+    /// from whichever archive precedence happens to serve puts a confident
+    /// wrong name on eight circuits. See `oag_game::language::CircuitNames` and
+    /// `docs/formats/hd-frontend.md`.
     pub const FRONT_END_PLUGIN_DEFINITION: &str = r"Data\Plugins\frontend\definition.xml";
 
     /// The file a `PI_Music` location holds, joined onto that location to

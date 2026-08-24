@@ -280,6 +280,46 @@ impl Archives {
             .map(Held::Pack)
     }
 
+    /// Every archive holding `name`, in [`Self::holder_of`]'s own order.
+    ///
+    /// The same rule applied to completion instead of stopped at the first hit,
+    /// so the two cannot disagree about precedence: the head of this is always
+    /// [`Self::holder_of`]'s answer.
+    fn holders_of(&self, name: &str) -> Vec<Held> {
+        let mut out = Vec::new();
+        if self.data.contains(name) {
+            out.push(Held::Data);
+        }
+        if self.fe.as_ref().is_some_and(|fe| fe.contains(name)) {
+            out.push(Held::Fe);
+        }
+        out.extend(
+            self.extra
+                .iter()
+                .enumerate()
+                .filter(|(_, extra)| extra.contains(name))
+                .map(|(index, _)| Held::Extra(index)),
+        );
+        out.extend(
+            self.packs
+                .iter()
+                .enumerate()
+                .filter(|(_, pack)| pack.contains(name))
+                .map(|(index, _)| Held::Pack(index)),
+        );
+        out
+    }
+
+    /// The specifier of the archive a [`Held`] names.
+    fn label_at(&self, at: Held) -> &str {
+        match at {
+            Held::Data => self.data.label(),
+            Held::Fe => self.fe.as_ref().expect("holder_of found it here").label(),
+            Held::Extra(index) => self.extra[index].label(),
+            Held::Pack(index) => self.packs[index].label(),
+        }
+    }
+
     /// Which mounted archive holds this name *hash*, if any.
     ///
     /// The same search order as [`Self::holder_of`], for the entries whose names
@@ -324,12 +364,31 @@ impl Archives {
     /// Mounted packs come last; see [`Self::open_with_packs`].
     #[must_use]
     pub fn locate(&self, name: &str) -> Option<&str> {
-        Some(match self.holder_of(name)? {
-            Held::Data => self.data.label(),
-            Held::Fe => self.fe.as_ref().expect("holder_of found it here").label(),
-            Held::Extra(index) => self.extra[index].label(),
-            Held::Pack(index) => self.packs[index].label(),
-        })
+        Some(self.label_at(self.holder_of(name)?))
+    }
+
+    /// Every archive holding `name`, in the same order [`Self::locate`] searches.
+    ///
+    /// **[`Self::locate`] answers "which copy wins"; this answers "how many are
+    /// there", and on one source the difference decides what a player reads.**
+    /// Wipeout HD ships its language string table in five of its seven
+    /// archives, and the copies disagree: `DATA02`'s numbers the circuits the
+    /// way the base game did and `DATA06`'s the way the Fury-era front-end
+    /// definition does. Precedence lands on the first, the circuit list comes
+    /// out of the last, and the result was a confidently wrong name on eight
+    /// circuits - see `oag_game::boot::load_circuit_names`, which uses this to
+    /// pick the copy that agrees with the list rather than the copy that
+    /// happens to be mounted first.
+    ///
+    /// Empty when nothing holds `name`. Both PSP titles return at most one
+    /// element for any front-end file, so a caller written against this behaves
+    /// there exactly as it would against [`Self::locate`].
+    #[must_use]
+    pub fn locations(&self, name: &str) -> Vec<&str> {
+        self.holders_of(name)
+            .into_iter()
+            .map(|at| self.label_at(at))
+            .collect()
     }
 
     /// Reads and decompresses `name` out of whichever archive holds it.
@@ -343,6 +402,31 @@ impl Archives {
             Some(at) => self.held(at).read_entry(name),
             None => self.data.read_entry(name),
         }
+    }
+
+    /// Reads **every** archive's copy of `name`, labelled with the archive it
+    /// came from, in [`Self::locations`] order.
+    ///
+    /// The many-copy counterpart of [`Self::read_name`], for a caller that has
+    /// to choose between copies on their content rather than take the first.
+    /// See [`Self::locations`] for the source that needs it.
+    ///
+    /// A copy that will not read is dropped rather than failing the lot: the
+    /// question this answers is "what copies are there", and one unreadable
+    /// archive does not make the others unusable. An empty result means either
+    /// no copy or no *readable* copy, which a caller falling back to
+    /// [`Self::read_name`] handles the same way.
+    pub fn read_every_name(&mut self, name: &str) -> Vec<(String, Vec<u8>)> {
+        self.holders_of(name)
+            .into_iter()
+            .filter_map(|at| {
+                let label = self.label_at(at).to_string();
+                self.held(at)
+                    .read_entry(name)
+                    .ok()
+                    .map(|blob| (label, blob))
+            })
+            .collect()
     }
 
     /// Reads the entry with this name hash out of whichever archive holds it.

@@ -289,6 +289,13 @@ pub struct Shell {
     pub strings: StringTable,
     /// The raceable circuits, for the menus.
     pub tracks: Vec<crate::catalogue::Track>,
+    /// What to call each of them, resolved beside them.
+    ///
+    /// Not folded into [`Self::strings`] because it may come out of a
+    /// **different copy** of the string table than the rest of the front end
+    /// does; see [`crate::language::CircuitNames`]. Empty on a source where no
+    /// copy names every circuit, which shows each one its id.
+    pub circuit_names: crate::language::CircuitNames,
     /// The raceable teams, for the menus.
     pub teams: Vec<crate::catalogue::Team>,
     /// The text atlas.
@@ -495,6 +502,15 @@ pub fn load_shell(options: &Options) -> Result<(Shell, oag_assets::Archives)> {
     let documents = definitions(&mut archives, definition, &mut report);
     let tracks = load_tracks(&mut archives, definition, &documents, &mut report);
     let teams = load_teams(&mut archives, definition, &documents, &mut report);
+    // After the circuits, because which copy of the string table names them all
+    // is a question about the list this just produced.
+    let circuit_names = load_circuit_names(
+        &mut archives,
+        chosen_language(&languages, options.language.as_deref()),
+        &strings,
+        &tracks,
+        &mut report,
+    );
     steps.lap("catalogue");
     let sprites = load_sprites(&mut archives, &screens, &mut report);
     steps.lap("sprites");
@@ -610,6 +626,7 @@ pub fn load_shell(options: &Options) -> Result<(Shell, oag_assets::Archives)> {
             languages: offered,
             strings,
             tracks,
+            circuit_names,
             teams,
             font,
             sprites,
@@ -951,6 +968,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         languages,
         strings,
         tracks,
+        circuit_names: _,
         teams,
         font,
         sprites,
@@ -1555,6 +1573,29 @@ pub fn load_languages(
     out
 }
 
+/// Which language a boot reads its text in.
+///
+/// The saved language first, then English, then whatever comes first. The
+/// fallback chain used to end at English with a note that there was nothing
+/// saved to prefer; there is now. A saved name this source does not carry falls
+/// through rather than failing - the same rule the picker's own preselection
+/// follows, and for the same reason: a settings file written against the EU
+/// disc must not stop the USA one booting.
+///
+/// Its own function so that [`load_strings`] and
+/// [`roster::load_circuit_names`] cannot answer it differently and put half the
+/// front end in one language and the circuit list in another.
+#[must_use]
+pub fn chosen_language<'a>(
+    languages: &'a [Language],
+    preferred: Option<&str>,
+) -> Option<&'a Language> {
+    preferred
+        .and_then(|name| languages.iter().find(|l| l.name.eq_ignore_ascii_case(name)))
+        .or_else(|| languages.iter().find(|l| l.name == "English"))
+        .or_else(|| languages.first())
+}
+
 /// The chosen language's string table.
 ///
 /// Public for the same reason [`load_languages`] is: the HUD resolves `IG_HUD_*`
@@ -1565,18 +1606,7 @@ pub fn load_strings(
     preferred: Option<&str>,
     report: &mut Vec<String>,
 ) -> StringTable {
-    // The saved language first, then English, then whatever comes first. The
-    // fallback chain used to end at English with a note that there was nothing
-    // saved to prefer; there is now. A saved name this source does not carry
-    // falls through rather than failing - the same rule the picker's own
-    // preselection follows, and for the same reason: a settings file written
-    // against the EU disc must not stop the USA one booting.
-    let chosen = preferred
-        .and_then(|name| languages.iter().find(|l| l.name.eq_ignore_ascii_case(name)))
-        .or_else(|| languages.iter().find(|l| l.name == "English"))
-        .or_else(|| languages.first());
-
-    let Some(language) = chosen else {
+    let Some(language) = chosen_language(languages, preferred) else {
         return StringTable::default();
     };
     let Some(entries) = language.entries.as_deref() else {
@@ -1647,7 +1677,7 @@ mod xml;
 use fonts::{load_font, load_menu_font};
 pub use movies::EntryRef;
 use movies::load_movie;
-use roster::{definitions, load_teams, load_tracks};
+use roster::{definitions, load_circuit_names, load_teams, load_tracks};
 use xml::expand;
 
 /// The default movie cache directory: `data/cache/movies` in a repository

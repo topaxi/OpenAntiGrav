@@ -244,41 +244,79 @@ above and below every screen, so a sheet with *some* width would not have been
 enough to notice; the sizes are asserted in
 `every_front_end_image_this_disc_names_decodes`.
 
-## A circuit's name cannot be looked up on this disc
+## A circuit's name is in a different archive from the circuit list
 
-**Confidence 92, and it is a finding rather than a gap.** The front-end plugin
-keys circuits `NN_Track` and every string table keys their names `NN_TRACK`, so
-the obvious repair is to fold the case. Doing that resolves sixteen of the
-twenty-eight and puts a **confidently wrong** name on eight, because the two
-files were numbered at different times:
+**Confidence 92.** The front-end plugin keys circuits `NN_Track` and every
+string table keys their names `NN_TRACK`, so nothing on the RACE page resolved
+and every circuit drew as its own id. This page used to conclude that the names
+were unreachable, on the grounds that folding the case resolves sixteen of the
+twenty-eight and puts a **confidently wrong** name on eight. That much was
+right. The conclusion was not, and the measurement it was missing is **which
+copy**: HD ships `entries.xml` five times, and only one of the five names every
+circuit `DATA00` declares.
 
-| Archive | `PI_Track` nodes | `17_TRACK` reads |
+| Archive | `NN_TRACK` keys | `17_TRACK` reads |
 | --- | ---: | --- |
-| `DATA00` | 28 | *no `entries.xml` at all* |
-| `DATA02` | 8 | `SEBENCO CLIMB REVERSE` |
-| `DATA03` | 16 | `SEBENCO CLIMB REVERSE` |
-| `DATA05` | 16 | `SEBENCO CLIMB REVERSE` |
-| `DATA06` | 16 | `TALON'S JUNCTION` |
+| `DATA00` | *no `entries.xml` at all* | - |
+| `DATA02` | 24 | `SEBENCO CLIMB REVERSE` |
+| `DATA03` | 24 | `SEBENCO CLIMB REVERSE` |
+| `DATA04` | 24 | `SEBENCO CLIMB REVERSE` |
+| `DATA05` | 24 | `SEBENCO CLIMB REVERSE` |
+| `DATA06` | **28** | `TALON'S JUNCTION` |
 
-`DATA00` supplies the 28 circuits this build offers, and `17_Track` there loads
-`Data\Environments\Talons_Junction`. `DATA06` is the only table whose numbering
-agrees with that - and it is a different archive, so **no copy on the disc pairs
-the circuit list with its own names.** The same table keeps a parallel `_OLD`
-set (`09_TRACK_OLD` = `TALON'S JUNCTION`, `10_TRACK_OLD` = `TECH DE RA`,
+`oag_assets::Archives` serves `DATA02`'s, which is the copy with the base
+game's numbering; `DATA00` supplies the circuit list, whose `17_Track` loads
+`Data\Environments\Talons_Junction`. The four keys the others lack are exactly
+the four Zone circuits - `25_Track`..`28_Track`, `Zone_1`..`Zone_4`, which
+`DATA06` names `PRO TOZO`, `MALLAVOL`, `CORRIDON 12` and `SYNCOPIA`. So the
+copy is chosen on **coverage**: the one table that names the whole list. Read
+off **all sixteen languages in all five archives** - 24 keys everywhere but
+`DATA06`, 28 there, with no exception - so it is a property of the archive
+rather than of one language file.
+
+**What corroborates the choice is the geometry.** Twelve of HD's environments
+are declared twice, once each way round. On `DATA06`'s copy every such pair
+reads one name - `17_Track` and `18_Track` both load `Talons_Junction` and both
+read `TALON'S JUNCTION`. On the served copy they read `SEBENCO CLIMB REVERSE`
+and `SOL 2 REVERSE`: two names for one piece of track, which is the mismatch
+stating itself. That agreement is checked and asserted, and it is deliberately
+**not** the selector - it is false by design on Pulse, where `16_Track` and
+`32_Track` share an environment and are named separately.
+
+The same table keeps a parallel `_OLD` set carrying the old numbering
+(`09_TRACK_OLD` = `TALON'S JUNCTION`, `10_TRACK_OLD` = `TECH DE RA`,
 `11_TRACK_OLD` = `MODESTO HEIGHTS`, `12_TRACK_OLD` = `THE AMPHISEUM`), which is
 the renumbering saying so in the data.
 
-So this is the same open question [the six `skin.xml`
-copies](#six-skins-one-layout) pose - *which copy does the runtime serve?* - and
-it needs the executable rather than another reading. Until it is settled,
-`StringTable::get` matches exactly and a circuit row shows its id. An id is an
-honest, visible absence; a name this build cannot vouch for is not. Pinned by
-`a_circuit_shows_its_id_rather_than_a_name_from_the_wrong_numbering`, which
-asserts the mismatch is still what it was measured to be so the test fails the
-day a matching copy is served rather than passing for having found none.
+**Only the circuits move.** The served table stays served for everything else:
+`DATA02`'s and `DATA06`'s copies differ on 42 shared keys in english and 72 in
+german, none of them a circuit, and which copy the runtime loads is the same
+open question [the six `skin.xml` copies](#six-skins-one-layout) pose. Swapping
+the whole table would be answering it; choosing a copy for the one column whose
+pairing is checkable is not.
 
-**Everything else in the menus resolves exactly**, including the twelve team
-names, so the fold buys nothing anywhere but here.
+Pinned by `a_circuit_is_named_off_the_copy_that_agrees_with_the_circuit_list`,
+which asserts the pairing, the coverage and the one-environment-one-name
+corroboration, and still asserts that the served copy holds the old numbering -
+so a future change that swaps the whole table fails here rather than passing
+quietly.
+
+### The direction is drawn beside the name, not inside it
+
+`DATA06` names a circuit and its reverse **identically**: `01_Track` and
+`09_Track` are Vineta K forward and backward and both read `VINETA K`. The
+older copies carried a suffix and the `_OLD` keys still do (`13_TRACK_OLD` is
+`VINETA K REVERSE`), so the renumbering dropped it deliberately - and the disc
+ships `FE_REVERSE` (`REVERSE`, `RÜCKWÄRTS`, in every copy and every language)
+to draw the direction with.
+
+This build's RACE page is one column, where the original's is not, so twelve
+pairs of identical rows would be a menu nobody can use. `oag_game::catalogue::label`
+appends `FE_REVERSE`'s own string to a reversed circuit **only where it would
+otherwise read the same as the circuit it shares an environment with** - two of
+the disc's strings joined, rather than a word this build made up, and nothing
+at all on either PSP title, whose tables already name the two directions
+separately.
 
 ## Sixteen languages, four of which the disc misnames
 
