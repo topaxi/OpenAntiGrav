@@ -796,7 +796,8 @@ units** across the corridor before its own grip and steering claw it back, p90
 12-15, with a tail past 20 when the shove connects and the contact throws it
 further.
 
-How often the rammer ended up outside the corridor edge it shifted toward:
+How often the rammer ended up outside the corridor edge it shifted toward (all
+four rows measured before the ram was narrowed to the player, below):
 
 | room measured from | clearance | shifts | ended outside |
 | --- | --- | --- | --- |
@@ -810,6 +811,32 @@ units, where the room is measured from hardly ever changes the verdict, and
 asking twelve of the *line* still lets a craft already ten units out shift
 further out. Past 12 the sweep keeps improving - 16 gives 4 of 72, 20 gives 0 of
 20 - but by making a ram rare rather than by making it safe.
+
+#### And a ram may only target the player, because a clump of AI spirals
+
+**Reported from play the same day**, once shoves started landing: opponents
+shoving *each other* in a clump does not settle. The shove provokes, and
+`Driver::stew` turns provocation into appetite for the next one, so three or
+four craft running together feed each other until the group is off the racing
+line - a positive feedback loop between `stew` and `ram` with nothing damping
+it. From outside it reads as a pile-up that will not stop rather than as racing.
+
+`ram` now returns `None` unless `Field::alongside` names **slot zero**, the same
+player-slot convention `Driver::for_slot` already runs on. Two other dampers
+were available and both are worse. A cooldown longer than the physics'
+`SIDESHIFT_LOCKOUT` would be a second source of truth beside a timer already in
+the snapshot, which is exactly what gating on `shift_lockout` exists to avoid. A
+"not while several rivals are near" gate needs a count `Field` does not carry,
+and would let the loop run right up to its own threshold. Aggression toward the
+player is the part that was wanted, and `Field::alongside` already carries the
+slot, so it costs nothing.
+
+**The cost, recorded rather than hidden**: the field no longer shoves itself, so
+an opponent battle mid-pack is quieter than it was, and a ram fires about a
+fifth as often - 27 shifts across six three-minute races against 138. Wire it
+back the day something damps the loop. The honest damper is the victim's
+provocation being *spent* by the contact rather than only added to, and
+`Race::resolve_craft_pairs` already computes the contact that would do it.
 
 **Two remainders, recorded rather than chased.** The gate reads the corridor at
 the craft's *current* index, and the shift plays out over a second in which the
@@ -2010,9 +2037,10 @@ rebase onto a function start, so they were left alone rather than guessed at.
 | A driver that loses a place is provoked and calms down again, and one that gains a place is not | three tests in `driver::tests` | yes |
 | **A craft placed for the first time is not treated as having been overtaken** | `driver::tests::a_driver_that_has_never_been_placed_is_not_provoked_by_its_first_placing` | yes |
 | Provocation is capped however often a driver is passed, and a provoked driver covers harder | two tests in `driver::tests` | yes |
-| A ram goes toward the craft alongside, waits for the physics' own lockout, and never goes toward a corridor edge it has no room for | six tests in `driver::tests::ramming_tests` | yes |
+| A ram goes toward the craft alongside, waits for the physics' own lockout, and never goes toward a corridor edge it has no room for | seven tests in `driver::tests::ramming_tests` | yes |
+| **And it goes at the player and never at another opponent** | `ramming_tests::a_ram_goes_at_the_player_and_never_at_another_opponent`, over all seven opponent slots | yes |
 | **And the room it measures is the craft's own, not the line's** | `ramming_tests::a_ram_measures_its_room_from_the_craft_and_not_from_the_line` | yes |
-| The same gate holds on real geometry, and a ram rarely throws the rammer out of the corridor | `ram_ground_truth`, two tests | **no** - needs a disc image. **Run and passing 2026-08-24**: 138 shifts over six races, none under the clearance, 11 ending outside. |
+| The same gate holds on real geometry, and a ram rarely throws the rammer out of the corridor | `ram_ground_truth`, two tests | **no** - needs a disc image. **Run and passing 2026-08-24**: 27 shifts over six races, none under the clearance, 2 ending outside. |
 | `Driver` stays `Copy + Eq`, which is what keeps it in the world snapshot | `driver::tests::a_driver_stays_copy_and_eq`, a compile-time guard | yes |
 | A roll is uniform, per-tick independent, and its streams disagree | five tests in `noise::tests` | yes |
 | A driver fires at a craft ahead and inside its cone, and not at one beside it, out of range, at point-blank, or round a corner | six tests in `driver::tests` | yes |

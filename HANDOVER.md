@@ -230,11 +230,12 @@ named rather than a chain led to is a check against the wrong question.
 
 **2026-08-24, from play: "the AI steers into me and puts its nose in the wall".**
 It never steered - the gate in front of the shove was wrong. **When a report
-names a mechanism, measure before believing it.** Account, sweep and the two
-remainders: [ai.md](docs/gameplay/ai.md), guarded by
-`crates/game/tests/ram_ground_truth.rs`, `#[ignore]`d so **CI does not run it**.
-Beyond that page: a sideshift is the **most violent lateral event in the game**
-(`sideshift="450"` on `mass="1"`), the player's too, never checked on a capture.
+names a mechanism, measure before believing it.** A ram targets **only the
+player** now: AI-on-AI shoving spirals in a clump, since a shove provokes and
+provocation buys the next. Account, sweep and remainders:
+[ai.md](docs/gameplay/ai.md), including how violent a sideshift measures.
+Guarded by `crates/game/tests/ram_ground_truth.rs`, `#[ignore]`d so **CI does
+not run it**.
 
 ### M4 and M5
 

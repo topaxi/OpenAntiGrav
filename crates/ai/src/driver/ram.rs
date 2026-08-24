@@ -9,6 +9,35 @@
 use super::{Context, Driver, Personality, RAM_CLEARANCE, RAM_RATE, RAM_STREAM, roll};
 use oag_physics::{ShipState, Sideshift};
 
+/// The grid slot a ram is allowed to target: **the player's, and only the
+/// player's**.
+///
+/// The same slot-zero convention [`Driver::for_slot`] already runs on, used
+/// here as a rule rather than as an optimisation.
+///
+/// **Reported from play 2026-08-24: AI-on-AI ramming spirals in a clump.** The
+/// gesture is a shove that lands and provokes, and provocation raises the
+/// appetite for the next one - so three or four craft running together feed
+/// each other until the whole group is off the racing line. That is a positive
+/// feedback loop between `Self::stew` and this function with nothing damping
+/// it, and it does not read as racing from the outside; it reads as a pile-up
+/// that will not stop.
+///
+/// Two other ways out were available and both are worse. A cooldown longer than
+/// the physics' own `SIDESHIFT_LOCKOUT` would be a second source of truth
+/// beside a timer already in the snapshot - the thing this function's own doc
+/// refuses. Suppressing a shove while several rivals are near would need a
+/// count `Field` does not carry, and would let the loop run right up to the
+/// threshold. **Aggression toward the player is the part that was wanted**, and
+/// it costs nothing to keep it: `Field::alongside` already names the slot.
+///
+/// The cost, recorded rather than hidden: the field no longer shoves *itself*,
+/// so an opponent battle mid-pack is quieter than it was. Wire it back the day
+/// something damps the loop - the victim's provocation being spent by the
+/// contact rather than only added to would be the honest damper, and
+/// `Race::resolve_craft_pairs` already computes the contact it would need.
+const PLAYER_SLOT: u8 = 0;
+
 impl Driver {
     /// Whether to throw the craft sideways at a rival this tick, and which way.
     ///
@@ -17,9 +46,10 @@ impl Driver {
     /// is already in the snapshot and already hashed, and a second one beside it
     /// would be a second source of truth that drifts out of step with the first.
     ///
-    /// Four conditions, and the last is the one that is easy to forget: there
-    /// has to be **corridor room on the side being shifted toward, measured from
-    /// where the craft is** and not from the line. See [`RAM_CLEARANCE`].
+    /// Five conditions, and two are easy to forget: there has to be **corridor
+    /// room on the side being shifted toward, measured from where the craft
+    /// is** and not from the line (see [`RAM_CLEARANCE`]), and the rival has to
+    /// be **the player** (see [`PLAYER_SLOT`]).
     ///
     /// Worth saying plainly: `Race::resolve_craft_pairs` discards the contact it
     /// computes and nothing arms `stun_timer`, so **a ram shoves and nothing
@@ -39,6 +69,9 @@ impl Driver {
         let Some(rival) = ctx.field.alongside else {
             return Sideshift::None;
         };
+        if rival.slot != PLAYER_SLOT {
+            return Sideshift::None;
+        }
 
         // Rammed toward the rival, so the room that matters is on its side.
         let toward = rival.offset;

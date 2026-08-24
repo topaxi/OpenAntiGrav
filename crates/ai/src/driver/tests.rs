@@ -42,10 +42,14 @@ fn stewing(driver: &mut Driver, line: &Line, field: &Field, personality: &Person
     );
 }
 
-fn alongside(offset: f32) -> Field {
+/// A craft level with this one, in the grid slot given.
+///
+/// **The slot is a parameter because the ram reads it**: only the player's is a
+/// target - see `driver::ram`'s `PLAYER_SLOT`.
+fn alongside_slot(slot: u8, offset: f32) -> Field {
     Field {
         alongside: Some(Rival {
-            slot: 2,
+            slot,
             gap: 1.0,
             offset,
             closing: 0.0,
@@ -54,6 +58,11 @@ fn alongside(offset: f32) -> Field {
         }),
         ..Field::EMPTY
     }
+}
+
+/// The player, level with this craft.
+fn alongside(offset: f32) -> Field {
+    alongside_slot(0, offset)
 }
 
 fn shove(driver: &Driver, state: &ShipState, line: &Line, field: &Field, ram: f32) -> Sideshift {

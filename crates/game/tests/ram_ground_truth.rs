@@ -30,8 +30,14 @@
 //! `oag_physics::pair::resolve` gives it, which is not the driver's to gate. So
 //! some shifts still end up outside, and the bound here is "no worse than
 //! today" rather than a target. Measured 2026-08-24 over the six races below:
-//! **11 of 138**, against 54 of 208 before the gate was fixed. See
+//! **2 of 27**, against 54 of 208 before the gate was fixed. See
 //! `oag_ai::driver`'s `RAM_CLEARANCE` for the sweep.
+//!
+//! **Twenty-seven and not a hundred and thirty-eight**, because a ram may only
+//! target the player - `oag_ai`'s `driver::ram::PLAYER_SLOT`, after AI-on-AI
+//! shoving was reported to spiral in a clump. That is most of what this file
+//! counts: the field shoves about a fifth as often as it did, and the sample
+//! behind the bound below is correspondingly thinner.
 
 use std::path::{Path, PathBuf};
 
@@ -42,8 +48,9 @@ use oag_physics::SpeedClass;
 ///
 /// Long rather than short, because the rate this measures is not stationary: a
 /// grid is packed for the first minute and strung out afterwards, so a one-lap
-/// window measures the start rather than the race. Six races of a minute give
-/// 31 shifts and a rate of 19%; six of this length give 138 and 8%.
+/// window measures the start rather than the race. Measured before the ram was
+/// narrowed to the player: six races of a minute gave 31 shifts and a rate of
+/// 19%, six of this length 138 and 8%.
 const TICKS: usize = 12_000;
 
 /// How many seeded races the measurement runs over.
@@ -234,13 +241,13 @@ fn a_ram_rarely_throws_the_rammer_out_of_the_corridor() {
         "{outside} of {} shifts ended outside the corridor",
         shifts.len()
     );
-    // 11 of 138 measured 2026-08-24, against 54 of 208 before the gate was
-    // fixed. A sixth is "no worse than today" with room for the noise six races
-    // carry, not a target.
+    // 2 of 27 measured 2026-08-24, against 54 of 208 before the gate was fixed.
+    // A sixth is "no worse than today" with room for the noise a sample this
+    // thin carries, not a target - see the module docs for why it is thin.
     assert!(
         outside * 6 <= shifts.len(),
         "{outside} of {} shifts ended past the corridor edge they went toward, \
-         which is worse than the 11 of 138 this was measured at",
+         which is worse than the 2 of 27 this was measured at",
         shifts.len()
     );
 }

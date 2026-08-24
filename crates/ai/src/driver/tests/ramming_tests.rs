@@ -118,6 +118,29 @@ fn a_ram_measures_its_room_from_the_craft_and_not_from_the_line() {
     );
 }
 
+/// **An opponent shoves the player and never another opponent.**
+///
+/// Reported from play: a clump of AI shoving each other spirals, because the
+/// shove provokes and provocation raises the appetite for the next one. See
+/// `super::super::ram`'s `PLAYER_SLOT` for the loop and for the two dampers
+/// that were rejected in favour of this.
+#[test]
+fn a_ram_goes_at_the_player_and_never_at_another_opponent() {
+    let line = wide();
+    let state = craft(Vec3::ZERO, 40.0);
+    for slot in 1..8u8 {
+        assert_eq!(
+            first_shift(&state, &line, &alongside_slot(slot, 4.0)),
+            None,
+            "shoved slot {slot}, which is another opponent"
+        );
+    }
+    assert!(
+        first_shift(&state, &line, &alongside_slot(0, 4.0)).is_some(),
+        "refused to shove the player, which is the one craft a ram is for"
+    );
+}
+
 #[test]
 fn a_driver_with_no_appetite_never_rams() {
     let line = wide();
