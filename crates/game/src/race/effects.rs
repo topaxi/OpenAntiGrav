@@ -222,10 +222,7 @@ impl Race {
                 // contact - the place the nearest of ten hull nodes would be -
                 // and re-spawns it every tick, which is what makes it follow.
                 let contact = self.hd_trail[owner].nearest(at).map_or(at, |(on, _)| on);
-                let toward = contact - at;
-                let point = toward.try_normalize().map_or(at, |dir| {
-                    at + dir * toward.length().min(self.hull_reach[intruder])
-                });
+                let point = hull_contact_point(at, contact, self.hull_reach[intruder]);
                 // Neutral severity, as the rocket blast uses: the scale the
                 // collision sparks derive from an impulse has no counterpart
                 // here, and the float the original carries into the spawner
