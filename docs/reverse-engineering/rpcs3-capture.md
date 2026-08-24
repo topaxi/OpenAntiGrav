@@ -16,6 +16,30 @@ camera, and the `oag-game` command line that renders this project from it.
 `--keep-dumps` and out of everything tracked - see
 [legal.md](../overview/legal.md).
 
+## Reaching a circuit other than the one every default row leads to
+
+The walk into a race presses cross and takes the highlighted row every time,
+which lands on **Campaign**, event 01/08, Talon's Junction - and on a fresh
+save every other cell in that grid is padlocked, so Campaign cannot reach a
+chosen circuit at all.
+
+**Racebox can.** It is the Main Menu's second tab, so one `right`, and its
+`Track Creation` screen is a plain `TRACK SELECT` with a circuit carousel:
+
+    --nav "Main Menu=right" --nav "Track Creation=right"
+
+`--nav SCREEN=BUTTONS` presses those buttons on arriving at that screen and
+before the next cross. It is repeatable, and `--nav-shots` photographs every
+distinct screen on the way in so the next plan can be written from what is
+actually on them - nothing in this tree describes HD's menus, and `TTY.log`
+names a screen without saying what is on it.
+
+**A screen must settle before it is photographed.** `TTY.log` names the new
+screen at the *start* of its transition, so a shot taken on the name change
+catches the animation: the first pass of this photographed two menus mid-flight
+and both came back as unreadable red smear. `Session.SCREEN_SETTLE` is the
+three seconds that fixed it.
+
 ## What a frame's camera actually is
 
 Wipeout HD's shaders take the camera as two named engine parameters:

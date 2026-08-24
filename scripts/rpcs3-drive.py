@@ -283,7 +283,49 @@ class Session:
             time.sleep(0.3)
         return was, current_screen()
 
-    def walk_to_race(self, max_presses=12):
+    #: Where `photograph` writes, set by a caller that wants the menus seen.
+    screens_seen = None
+    shot_dir = None
+
+    #: Seconds to let a screen settle before photographing it. HD animates
+    #: every transition and `TTY.log` names the new screen at its *start*, so a
+    #: shot taken on the name change catches the animation: the first pass of
+    #: this photographed two menus mid-flight and neither was readable.
+    SCREEN_SETTLE = 3.0
+
+    def photograph(self, was_screen):
+        """One frame per distinct screen, for a caller writing a `--nav` plan."""
+        if self.screens_seen is None or was_screen in self.screens_seen:
+            return
+        self.screens_seen.add(was_screen)
+        time.sleep(self.SCREEN_SETTLE)
+        name = "".join(c if c.isalnum() else "-" for c in was_screen)
+        screenshot((self.shot_dir or self.log_dir) / ("screen-%s.png" % name),
+                   trim=True)
+
+    def navigate(self, plan):
+        """Presses buttons at named screens on the way into a race.
+
+        `plan` maps a screen name to a list of buttons, so
+        `{"Cell Selection": ["right", "right", "cross"]}` moves two cells
+        along before confirming. It exists because the default walk always
+        lands on the same circuit - every step is the highlighted row - and a
+        reference frame is only worth capturing for the circuit being
+        investigated.
+
+        The d-pad produces **no `TTY.log` line**: moving a highlight is not a
+        screen change. So a move cannot be confirmed the way a transition can,
+        and this settles for a fixed pause per press rather than pretending to
+        observe one.
+        """
+        for button in plan.get(current_screen(), []):
+            if button in ("cross", "circle"):
+                self.press_once(button)
+            else:
+                self.tap(button, settle=1.2)
+            print("    nav %-8s at %s" % (button, current_screen()), flush=True)
+
+    def walk_to_race(self, max_presses=12, plan=None):
         """Press cross until HD is in a race, or give up and say where it got to.
 
         Deliberately not a fixed count: HD runs at about 9 fps here and a press
@@ -293,6 +335,11 @@ class Session:
         for index in range(1, max_presses + 1):
             if current_screen() in RACE_ARRIVED:
                 break
+            if plan:
+                self.navigate(plan)
+                if current_screen() in RACE_ARRIVED:
+                    break
+            self.photograph(was_screen=current_screen())
             was, now = self.press_once("cross")
             print("  press %2d  %-22s -> %-22s%s"
                   % (index, was, now, "" if now != was else "   (dropped)"),
@@ -481,7 +528,17 @@ def cmd_capture(args):
                   % current_screen(), file=sys.stderr)
             return 1
         time.sleep(args.settle)
-        if session.walk_to_race() not in RACE_ARRIVED:
+        # One boot that photographs every screen is what makes a navigation
+        # plan writable at all: the menus are the disc's, nothing describes
+        # them, and `TTY.log` names a screen without saying what is on it.
+        if args.nav_shots:
+            session.screens_seen = set()
+            session.shot_dir = out
+        plan = {}
+        for item in args.nav:
+            screen, _, buttons = item.partition("=")
+            plan[screen] = [b.strip() for b in buttons.split(",") if b.strip()]
+        if session.walk_to_race(plan=plan) not in RACE_ARRIVED:
             print("ended on %r rather than in a race" % current_screen(),
                   file=sys.stderr)
             return 1
@@ -605,7 +662,17 @@ def cmd_record(args):
             return 1
         time.sleep(args.settle)
         print("walking the menus:", flush=True)
-        if session.walk_to_race() not in RACE_ARRIVED:
+        # One boot that photographs every screen is what makes a navigation
+        # plan writable at all: the menus are the disc's, nothing describes
+        # them, and `TTY.log` names a screen without saying what is on it.
+        if args.nav_shots:
+            session.screens_seen = set()
+            session.shot_dir = out
+        plan = {}
+        for item in args.nav:
+            screen, _, buttons = item.partition("=")
+            plan[screen] = [b.strip() for b in buttons.split(",") if b.strip()]
+        if session.walk_to_race(plan=plan) not in RACE_ARRIVED:
             print("ended on %r rather than in a race" % current_screen(),
                   file=sys.stderr)
             return 1
@@ -676,6 +743,16 @@ def main(argv=None):
                      help="addr:len to dump, or @addr:len to dereference "
                           "a pointer at addr first; repeatable. Defaults to "
                           "the EBOOT's data and BSS.")
+    cap.add_argument("--nav-shots", action="store_true",
+                     help="photograph every distinct screen on the way in, so "
+                          "a --nav plan can be written from what is actually "
+                          "on them")
+    cap.add_argument("--nav", action="append", default=[],
+                     metavar="SCREEN=BUTTONS",
+                     help="buttons to press at a named screen before "
+                          "continuing, e.g. \"Cell Selection=right,right\". "
+                          "Repeatable; this is how a capture reaches a circuit "
+                          "other than the one every default row leads to.")
     cap.add_argument("--keep-dumps", action="store_true",
                      help="also write the raw memory, which is game data and "
                           "stays under data/")
