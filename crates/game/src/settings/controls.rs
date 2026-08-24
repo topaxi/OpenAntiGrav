@@ -219,6 +219,20 @@ mod tests {
         );
     }
 
+    /// The two ends of this range and the two ends of
+    /// `oag_input::pad::CURVE_RANGE` are one bound written twice, and the
+    /// menus can never reach it - `OFFERED` stops at 200 and 50 - so only a
+    /// hand-edited file finds out whether they agree. If they drift, the
+    /// clamp one layer down silently overrules a value this type accepted.
+    #[test]
+    fn the_widest_sensitivity_is_the_widest_curve_the_pad_will_apply() {
+        let range = oag_input::pad::CURVE_RANGE;
+        let gentlest = TriggerSensitivity::try_from(*TriggerSensitivity::RANGE.start()).unwrap();
+        let sharpest = TriggerSensitivity::try_from(*TriggerSensitivity::RANGE.end()).unwrap();
+        assert_eq!(gentlest.exponent(), *range.end());
+        assert_eq!(sharpest.exponent(), *range.start());
+    }
+
     #[test]
     fn the_defaults_are_tokens_the_input_layer_knows() {
         let controls = Controls::default();
