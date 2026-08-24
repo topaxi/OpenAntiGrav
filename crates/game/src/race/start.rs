@@ -269,7 +269,7 @@ impl Race {
             autopilot: false,
             results: None,
             cues: Vec::new(),
-            contact_cue_cooldown: 0.0,
+            contact_cue_cooldown: [0.0; oag_gameplay::MAX_SHIPS],
             shield_was_up: false,
             // Every pad starts due for a real test. `Pad_Bind` zeroes the same
             // cache at load, so the first tick measures rather than trusting a

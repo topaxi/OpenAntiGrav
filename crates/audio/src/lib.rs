@@ -5,13 +5,16 @@
 //! `scripts/check-dependency-rules.py` fails the build if that is ever
 //! reversed. See `docs/architecture/workspace-layout.md`.
 //!
-//! The crate owns no window, no event loop and no clock. It is split in two,
-//! the way [`oag_render::sparks`] splits its particle state from its GPU
+//! The crate owns no window, no event loop and no clock. It is split by what
+//! each part needs to run, the way [`oag_render::sparks`] splits its particle state from its GPU
 //! pipeline:
 //!
 //! - [`mixer`] is plain data: a voice pool, two buses, and the sample loop.
 //!   Testable with no hardware, and identical under a real stream, the offline
 //!   dump and CI.
+//! - [`spatial`] is the positional law: what distance and direction do to a
+//!   cue's level and its place between the speakers, recovered from the
+//!   original's own emitter records. Pure arithmetic, no voice and no device.
 //! - [`output`] is the device: a `cpal` stream, or none at all.
 //! - [`wav`] writes rendered samples out, which is how a headless run is
 //!   checked at all.
@@ -32,7 +35,9 @@
 
 pub mod mixer;
 pub mod output;
+pub mod spatial;
 pub mod wav;
 
 pub use mixer::{Bus, Mixer, Play, Sound, VoiceId};
 pub use output::Output;
+pub use spatial::{Emitter, Listener, Placed};

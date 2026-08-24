@@ -140,14 +140,18 @@ impl Race {
                 // system - see pads.md's own "Not determined" entry, which this
                 // closes.
                 //
-                // **Slot 0 only, and that is a gap rather than a reading.** The
-                // original gives every craft a positional emitter and plays the
-                // cue on whichever crossed; nothing here can pan, so an
-                // opponent's pad is silent instead of arriving dry in the
-                // middle of the mix. See `crate::audio::sfx`.
-                if slot == 0 {
-                    self.cues.push(crate::audio::sfx::Cue::SpeedupPad);
-                }
+                // **Whichever craft crossed, and that is the original's own
+                // shape**: `ExhaustFlare_OnSpeedupPad` plays the cue off the
+                // craft's emitter (`craft+0x50`) rather than off a global, so a
+                // rival's pad arrives from where the rival is. This used to be
+                // gated to slot 0 because nothing here could pan; the audio
+                // layer decides how to place it now. See
+                // `crate::audio::sfx::Placement::CraftUnlessPlayer`, which
+                // carries the one hypothesis that split rides on.
+                self.cues.push(crate::audio::sfx::CueEvent::new(
+                    crate::audio::sfx::Cue::SpeedupPad,
+                    slot,
+                ));
             }
         }
 

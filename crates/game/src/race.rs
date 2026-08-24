@@ -808,14 +808,14 @@ pub struct Race {
     /// **A per-tick output, never state** - the shape ADR-0018 requires, and
     /// deliberately absent from [`Self::state_hash`]: a race that made no sound
     /// and one that made every sound must hash alike. See [`Self::drain_cues`].
-    cues: Vec<crate::audio::sfx::Cue>,
+    cues: Vec<crate::audio::sfx::CueEvent>,
     /// Seconds before a wall contact may raise a sound cue again.
     ///
     /// Its own timer rather than [`Self::sparks_cooldown`], because a shielded
     /// contact raises `ABSORB` and ignites no sparks - so that timer would
     /// never re-arm. Render-side state, and out of the hash for the same
     /// reason. See [`Self::tick`], where the two are set side by side.
-    contact_cue_cooldown: f32,
+    contact_cue_cooldown: [f32; oag_gameplay::MAX_SHIPS],
     /// Whether the player's shield was up on the previous tick.
     ///
     /// The latch behind `shieldactive`'s rising edge. Kept here rather than in

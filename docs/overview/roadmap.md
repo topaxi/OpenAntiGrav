@@ -651,9 +651,28 @@ seen from the authoring side.
       was blocked on per-opponent lap times and is not any more. Also still
       unread: the unit semantics of the original's thrust numbers, which needs a
       live read under PPSSPP rather than more decompilation.
-- [ ] Audio, including the **positional** classes a track authors:
+- [~] Audio, including the **positional** classes a track authors:
       `sound` `0x3e1`, `soundcone` `0x3e9` and `speaker` `0x3cc`. The banks and
-      waveforms decode already (M1); what is missing is placing them in the world.
+      waveforms decode already (M1).
+      **Craft are placed in the world now (2026-08-24)** and the classes above
+      are what is left. The law is recovered whole rather than approximated -
+      linear falloff to a `200`-unit radius with a hard gate past it, a flat
+      near field to a fifth of that, a `pow(v, 1/1.7)` volume curve over 256
+      steps, and an equal-power pan that the disc tabulates as 180 pairs of
+      `floor(16383 * cos/sin(i/2 degrees))`, matching that closed form on all
+      360 values in **four PSP executables and, byte-swapped, in HD's**. The
+      listener is the camera, which corroborated
+      [camera.md](../ghidra/functions/psp-pulse-usa/camera.md)'s transposition
+      finding from the other side. So all eight craft are audible from where
+      they are, each engine has its own note and its own emitter, and a rival
+      past its radius is *not started* rather than started quiet. See
+      [positional-audio.md](../ghidra/functions/psp-pulse-usa/positional-audio.md)
+      and `oag_audio::spatial`.
+      **What is still not placed**: the three `.vex` classes above - a track's
+      own authored sound sources, still unread - the emitter cone (recovered,
+      defaulted off, and nothing found turns it on), the doppler term
+      (`-(dd/dt) * scale * 1536`, read but in the unrecovered pitch unit), and
+      `shieldactive`, whose call site plays dry at full volume.
       **Music switching is in**: a race plays a cycling playlist through the
       sixteen soundtrack tracks in place of the menu's loop, its position kept
       in memory across races so leaving and re-entering one resumes rather than

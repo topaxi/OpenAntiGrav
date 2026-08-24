@@ -498,6 +498,16 @@ competing reading is ruled out by sign, and the eye distance cross-checks
 against an independent capture. `oag_trace::replay::camera_orientation_of` is
 the one place the transposition is undone.
 
+**Corroborated from the audio side, 2026-08-24, and the score moves 80 -> 88.**
+`SoundManager_Update` (`0x0893a2b0`) copies this same matrix off the camera
+object every frame to place the sound listener, and it assumes *both* halves of
+the reading above and nothing else: it takes `(m[0][0], m[1][0], m[2][0])` - the
+first **column** - as the world right axis to pan against, and it writes
+`-(camera+0x70)` as the listener's world position. A second subsystem, written
+against the same struct by different code, agreeing on the transposition *and*
+on the negated eye, is the independent check the 80 was short of. See
+[positional-audio.md](positional-audio.md).
+
 ## The fov unit is degrees, measured against the original's own frame
 
 The unrecovered fov unit (`crates/game/src/race/camera.rs` reads it as degrees and

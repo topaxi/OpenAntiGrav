@@ -317,3 +317,82 @@ fn a_non_divisible_sample_rate_averages_out_over_a_second() {
     );
     assert_eq!(out.len(), 44_100 * CHANNELS);
 }
+
+#[test]
+fn a_voice_with_no_pan_reaches_both_channels_unchanged() {
+    // The default, and the reason `Play::pan` is an `Option`: music and movie
+    // audio must not be pulled down 3 dB by a law that was never applied to
+    // them. A regression here is silent - everything just gets quieter.
+    let mut mixer = Mixer::new(8);
+    let sound = Arc::new(Sound::new(vec![i16::MAX; 4], 1, 8).unwrap());
+    mixer.play(Play::once(sound, Bus::Sfx)).unwrap();
+    let mut out = vec![0.0; 2 * CHANNELS];
+    mixer.render(&mut out);
+    assert!((out[0] - 1.0).abs() < 1e-3);
+    assert!((out[1] - 1.0).abs() < 1e-3);
+}
+
+#[test]
+fn panning_hard_left_empties_the_right_channel() {
+    let mut mixer = Mixer::new(8);
+    let sound = Arc::new(Sound::new(vec![i16::MAX; 4], 1, 8).unwrap());
+    mixer
+        .play(Play {
+            pan: Some(-1.0),
+            ..Play::once(sound, Bus::Sfx)
+        })
+        .unwrap();
+    let mut out = vec![0.0; 2 * CHANNELS];
+    mixer.render(&mut out);
+    assert!((out[0] - 1.0).abs() < 1e-3, "left was {}", out[0]);
+    assert!(out[1].abs() < 1e-6, "right was {}", out[1]);
+}
+
+#[test]
+fn a_centred_pan_is_quieter_than_no_pan_at_all() {
+    // Not a bug: the original's own table gives a centred source 0.7071 in each
+    // channel. This test exists so that "fixing" it to 1.0 fails loudly.
+    let mut mixer = Mixer::new(8);
+    let sound = Arc::new(Sound::new(vec![i16::MAX; 4], 1, 8).unwrap());
+    mixer
+        .play(Play {
+            pan: Some(0.0),
+            ..Play::once(sound, Bus::Sfx)
+        })
+        .unwrap();
+    let mut out = vec![0.0; 2 * CHANNELS];
+    mixer.render(&mut out);
+    assert!((out[0] - std::f32::consts::FRAC_1_SQRT_2).abs() < 1e-3);
+    assert!((out[1] - std::f32::consts::FRAC_1_SQRT_2).abs() < 1e-3);
+}
+
+#[test]
+fn a_live_voice_can_be_moved_across_the_field_and_back_to_none() {
+    // The per-tick half: the original recomputes an emitter's angle every frame
+    // and pushes it at the sounding instance, so an overtaking craft crosses
+    // rather than jumping at its next cue.
+    let mut mixer = Mixer::new(8);
+    let sound = Arc::new(Sound::new(vec![i16::MAX; 64], 1, 8).unwrap());
+    let id = mixer
+        .play(Play {
+            pan: Some(-1.0),
+            ..Play::looping(sound, Bus::Sfx)
+        })
+        .unwrap();
+    let mut out = vec![0.0; CHANNELS];
+    mixer.render(&mut out);
+    assert!(out[1].abs() < 1e-6);
+
+    mixer.set_pan(id, Some(1.0));
+    mixer.render(&mut out);
+    assert!(out[0].abs() < 1e-6, "left did not empty: {}", out[0]);
+    assert!((out[1] - 1.0).abs() < 1e-3);
+
+    mixer.set_pan(id, None);
+    mixer.render(&mut out);
+    assert!(
+        (out[0] - 1.0).abs() < 1e-3,
+        "taking the position away should \
+        restore both channels, not leave the last pan in place"
+    );
+}

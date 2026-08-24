@@ -546,3 +546,13 @@
 0x0885e1c0	function	ShipShield_Deactivate	84	shield-pickup.md
 0x0885eb54	function	ShipShield_InitColours	82	shield-pickup.md
 0x0886794c	function	Weapon_PostBlastImpulse	68	contact-response.md
+0x089391c4	function	SoundEmitter_Init	85	positional-audio.md
+0x08939720	function	SoundEmitter_Update	84	positional-audio.md
+0x08939c00	function	SoundEmitter_ComputeVolumeAndAngle	85	positional-audio.md
+0x08939e58	function	SoundInstance_UpdateSpatial	82	positional-audio.md
+0x0893a2b0	function	SoundManager_Update	84	positional-audio.md
+0x0893a5ec	function	SoundManager_LinkEmitter	85	positional-audio.md
+0x0893a7e8	function	SoundManager_BuildVolumeCurve	88	positional-audio.md
+0x0893a87c	function	SoundManager_VolumeCurve	88	positional-audio.md
+0x08995a9c	function	Scream_PanVolumePair	85	positional-audio.md
+0x08ac4a2c	data	g_scream_pan_table	94	positional-audio.md

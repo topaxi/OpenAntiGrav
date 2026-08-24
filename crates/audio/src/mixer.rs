@@ -162,6 +162,9 @@ struct Voice {
     position: f64,
     pitch: f32,
     gain: f32,
+    /// The recovered stereo position, or [`None`] for a voice that has none.
+    /// See [`Play::pan`].
+    pan: Option<f32>,
     looping: bool,
     generation: u32,
 }
@@ -183,6 +186,15 @@ pub struct Play {
     pub gain: f32,
     /// Playback rate multiplier, `1.0` being the source's own rate.
     pub pitch: f32,
+    /// Where between the speakers this sits: `-1.0` left, `+1.0` right.
+    ///
+    /// **[`None`] means "this voice has no position", not "centred".** The two
+    /// differ by 3 dB and the difference is deliberate: the original's pan
+    /// table gives a *centred* source `0.7071` in each channel
+    /// ([`crate::spatial::pan_gains`]), so a music stream or a movie run
+    /// through the panner at zero would come out quieter than it is meant to
+    /// be. A voice whose position was never recovered is left alone.
+    pub pan: Option<f32>,
     /// Whether to restart at the end instead of stopping.
     pub looping: bool,
 }
@@ -196,6 +208,7 @@ impl Play {
             bus,
             gain: 1.0,
             pitch: 1.0,
+            pan: None,
             looping: false,
         }
     }
@@ -313,6 +326,7 @@ impl Mixer {
             position: 0.0,
             pitch: play.pitch,
             gain: play.gain.max(0.0),
+            pan: play.pan,
             looping: play.looping,
             generation,
         };
@@ -357,6 +371,18 @@ impl Mixer {
     pub fn set_gain(&mut self, id: VoiceId, gain: f32) {
         if let Some(voice) = self.voice_mut(id) {
             voice.gain = gain.max(0.0);
+        }
+    }
+
+    /// Moves a live voice between the speakers, or takes its position away.
+    ///
+    /// The per-tick half of positional audio: the original recomputes an
+    /// emitter's angle every frame and pushes it at the sounding instance
+    /// (`SoundInstance_UpdateSpatial`), so a craft that overtakes the camera
+    /// crosses the stereo field rather than jumping at its next cue.
+    pub fn set_pan(&mut self, id: VoiceId, pan: Option<f32>) {
+        if let Some(voice) = self.voice_mut(id) {
+            voice.pan = pan;
         }
     }
 
@@ -456,6 +482,11 @@ impl Mixer {
                 continue;
             };
             let gain = voice.gain * bus_gain[bus.index()] * master;
+            // One pair for the whole buffer. The original moves a pan over a
+            // ramp inside SCREAM rather than per sample, and a tick is short
+            // enough that stepping it here would model an interpolator we have
+            // not read.
+            let channel_gain = voice.pan.map_or([1.0; CHANNELS], crate::spatial::pan_gains);
             let step = f64::from(sound.sample_rate()) / rate * f64::from(voice.pitch);
             let frames = sound.frames();
 
@@ -486,7 +517,7 @@ impl Mixer {
                     sound.frame(index + 1)
                 };
                 for (c, sample) in chunk.iter_mut().enumerate() {
-                    *sample += (a[c] + (b[c] - a[c]) * frac) * gain;
+                    *sample += (a[c] + (b[c] - a[c]) * frac) * gain * channel_gain[c];
                 }
                 voice.position += step;
             }

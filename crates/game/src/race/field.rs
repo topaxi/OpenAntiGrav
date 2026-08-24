@@ -259,6 +259,12 @@ impl Race {
                 &self.collision,
                 self.dt,
             );
+            // **An opponent's hull sounds too**, on its own 0.8-second re-arm
+            // and off its own emitter. `shielded` is `false` because nothing
+            // hands an opponent a Shield yet - the same gap the shell bulge
+            // below records - so `ABSORB`'s branch is unreachable here rather
+            // than suppressed.
+            self.raise_contact_cue(slot, evaluated.wall.impact, false);
             // The same shell bulge slot 0 gets in `tick`. Nothing hands an
             // opponent a Shield yet - the AI has no fire decision for one - so
             // this is unreachable today and is here because the alternative is a
