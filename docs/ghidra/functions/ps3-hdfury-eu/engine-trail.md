@@ -472,11 +472,17 @@ equivalent of the ten hull nodes the original parents to).
 `crates/game/src/race/tests/trail_hits.rs` pins all three.
 
 **All three were wrong on the first pass, and only looking settled them.**
-The third was caught by a player seeing the corrected effect and asking whether
-it was anchored right: the burst was spawning at the contact point *on the
-ribbon*, so it read as sparks on the trail. The original parents to a hull node
-and rides the craft, which is what the sighting that started this whole thread
-described - sparks on the ship. A player who could not trigger the effect in a race is what prompted
+The third took **two** goes and is the sharpest lesson here. A player looking at
+the corrected effect asked whether it was anchored right: the burst was spawning
+at the contact point *on the ribbon*, so it read as sparks on the trail, where
+the original parents to a hull node and rides the craft. The first fix clamped
+the placement to `min(|contact - centre|, reach)` - which is a **no-op exactly
+when it fires**, since the burst only fires when the craft is within `reach` of
+the ribbon, so the clamp always picked the distance and the burst stayed on the
+trail. The same player reported it unchanged. It is now `reach`
+unconditionally, and `hull_contact_point` is a free function with that property
+asserted directly, because a placement that looks right in the diff and is
+wrong on screen is what this got twice. A player who could not trigger the effect in a race is what prompted
 the measurement, and both faults hid behind the same symptom - nothing on
 screen.
 

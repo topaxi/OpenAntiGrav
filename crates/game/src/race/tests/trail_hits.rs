@@ -93,3 +93,29 @@ fn a_non_hd_race_tests_nothing() {
     place_and_step(&mut race, Vec3::new(-40.0, 0.0, 0.0));
     assert_eq!(race.trail_inside[0], 0);
 }
+
+/// **The burst sits on the hull, at `reach` from the centre - never on the
+/// ribbon.** Got wrong twice: first by spawning at the contact point outright,
+/// then by clamping to `min(distance, reach)`, which is the same thing whenever
+/// the burst actually fires. So the property is asserted directly.
+#[test]
+fn the_burst_sits_on_the_hull_facing_the_contact() {
+    use crate::race::effects::hull_contact_point;
+    let centre = Vec3::new(10.0, 0.0, 0.0);
+    // A contact *inside* the reach - the case every real firing is, and the one
+    // the clamp got wrong.
+    let inside = hull_contact_point(centre, Vec3::new(11.0, 0.0, 0.0), 4.0);
+    assert!(
+        ((inside - centre).length() - 4.0).abs() < 1e-5,
+        "{inside:?} is not on the hull sphere"
+    );
+    assert!(inside.x > centre.x, "and it faces the contact");
+    // A contact outside it lands on the same sphere, not at the contact.
+    let outside = hull_contact_point(centre, Vec3::new(10.0, 40.0, 0.0), 4.0);
+    assert!(
+        ((outside - centre).length() - 4.0).abs() < 1e-5,
+        "{outside:?}"
+    );
+    // Degenerate: a contact at the centre has no direction, so the centre it is.
+    assert_eq!(hull_contact_point(centre, centre, 4.0), centre);
+}

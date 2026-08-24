@@ -6,6 +6,26 @@
 
 use super::*;
 
+/// Where a trail-hit burst sits on a struck craft: on its hull, facing the
+/// contact.
+///
+/// The original parents the system to the nearest of ten attachment nodes at
+/// `craft + 0x79d0..+0x79f4`, so it rides the ship. This engine has no such
+/// nodes, so it puts the burst on the craft's own bounding sphere in the
+/// direction of the contact - where the nearest of those nodes would be - and
+/// re-spawns it every tick, which is what makes it follow.
+///
+/// **`reach` unconditionally, never the distance to the contact.** Clamping to
+/// `min(|contact - centre|, reach)` was the second wrong answer here, and it is
+/// a no-op precisely when it matters: the burst only fires when the craft is
+/// *within* reach of the ribbon, so the clamp always picked the distance and
+/// left the burst sitting on the trail - which is exactly how it looked.
+pub(super) fn hull_contact_point(centre: Vec3, contact: Vec3, reach: f32) -> Vec3 {
+    (contact - centre)
+        .try_normalize()
+        .map_or(centre, |direction| centre + direction * reach)
+}
+
 /// Every `Data\Psys` effect this race loads, and what triggers it.
 ///
 /// **The list is the trigger set, not the asset set.** There are 35 effects on
@@ -238,10 +258,21 @@ impl Race {
         if !self.trail_sparks {
             return;
         }
-        let Some(nozzle) = self.nozzle_of(0) else {
+        // The same gate the real path has: a craft with no nozzle locator has
+        // no trail either, so there is nothing to demonstrate.
+        if self.nozzle_of(0).is_none() {
             return;
-        };
-        let probe = nozzle + self.world.ships[0].physics.body.up() * 2.0;
+        }
+        // The real placement, with only the contact *direction* chosen: on the
+        // hull, facing straight up, so it is on screen and clear of the exhaust
+        // plume. What appears under the flag is therefore anchored exactly as a
+        // real hit is - see [`hull_contact_point`].
+        let body = self.world.ships[0].physics.body;
+        let probe = hull_contact_point(
+            body.position,
+            body.position + body.up() * 10.0,
+            self.hull_reach[0].max(1.0),
+        );
         let name = if self.hd_trail_red[0] > 0.5 {
             TRAIL_HITSHIP_RED_EFFECT
         } else {
