@@ -144,6 +144,13 @@ fn the_three_simple_weapons_are_authored_in_both_tables() {
                 simple.time > 0.0 && simple.absorb >= 0.0,
                 "{name}: {weapon:?} reads {simple:?}"
             );
+            // Printed rather than pinned: the numbers are the disc's and a
+            // committed copy of them here would be the hand-transcription
+            // `CLAUDE.md` forbids. `--no-capture` shows them.
+            println!(
+                "{name}: {weapon:?} time={} absorb={}",
+                simple.time, simple.absorb
+            );
         }
     }
 }

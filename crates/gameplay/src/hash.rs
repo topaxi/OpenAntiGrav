@@ -97,6 +97,7 @@ fn write_ship(hasher: &mut StateHasher, ship: &Ship) {
         pickup,
         driver,
         standing,
+        autopilot_timer,
         active,
     } = ship;
 
@@ -111,6 +112,11 @@ fn write_ship(hasher: &mut StateHasher, ship: &Ship) {
     write_held(hasher, pickup);
     write_driver(hasher, driver);
     write_standing(hasher, standing);
+    // Zero through every scenario the gate runs - none collects a pickup - so
+    // this contributes a fixed run of four bytes per ship per tick and nothing
+    // else. That is why adding it moved the committed hashes with no behaviour
+    // changing; see the history note in `tests/determinism.rs`.
+    hasher.write_f32(*autopilot_timer);
     hasher.write_u8(u8::from(*active));
 }
 
