@@ -54,6 +54,14 @@
 //! registers and arrive at the same pair. This renderer's clock is the race
 //! tick over 60, never the wall clock, so a replay of the same tick draws the
 //! same frame - the same clock the scenery's texture animation already rides.
+//!
+//! **Only a race binds it.** `mesh_render::Scene::off` - what the sky, the
+//! asset viewer and `model_probe` bind - carries a zero clock, so the flame
+//! stands still in those and scrolls in a race. That is deliberate: a viewer
+//! showing one surface has no race clock to ride, and a frozen phase is what a
+//! still comparison wants anyway. Measured on screen at
+//! `docs/ghidra/functions/ps3-hdfury-eu/engine-flare.md`: a race capture
+//! recurs exactly at 0.5 s, which is `1 / Speed`.
 
 use oag_formats::rcsmodel;
 

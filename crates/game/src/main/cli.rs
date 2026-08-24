@@ -201,13 +201,17 @@ pub(crate) struct Cli {
     /// Pin the animation clock, in seconds, instead of deriving it from the
     /// tick.
     ///
-    /// Both trackside animation mechanisms - the per-material texture transform
-    /// and the `Anim Transform` node motion - run off one clock, which a race
-    /// takes from the tick. This overrides it, for a comparison harness that
-    /// needs our phase matched to a still of the original rather than left where
-    /// the tick put it. Two runs at two values are also the headless way to show
-    /// that an animated surface moves at all. Same flag, same meaning as
-    /// `oag-view --anim-seconds`.
+    /// Three mechanisms run off one clock, which a race takes from the tick:
+    /// the two trackside ones - the per-material texture transform and the
+    /// `Anim Transform` node motion - and, since 2026-08-24, Wipeout HD's
+    /// engine-flame surface scroll, which the original drives from the same
+    /// kind of global clock (`time`, engine shader parameter slot 0). This
+    /// overrides it, for a comparison harness that needs our phase matched to a
+    /// still of the original rather than left where the tick put it. Two runs
+    /// at two values are also the headless way to show that an animated surface
+    /// moves at all - and two runs exactly one period apart are how the flame's
+    /// scroll rate was checked, since they must come back identical. Same flag,
+    /// same meaning as `oag-view --anim-seconds`.
     ///
     /// **This is deliberately not a settings-file option.** It was one -
     /// `[graphics] animated_textures`, a boolean - and it was a footgun: it

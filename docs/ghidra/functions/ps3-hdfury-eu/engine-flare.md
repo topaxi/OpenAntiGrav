@@ -239,12 +239,28 @@ authored number (2.0 on all fourteen craft and on all fourteen boost plumes -
 value splatted to four lanes - and `mesh.wgsl` takes both of the program's
 taps. This project's clock is the race tick over 60, the same one the trackside
 texture and node animation already ride, so `--anim-seconds` pins all three at
-once and a replay of a tick draws the same frame. On-screen check, headless:
-two captures of one tick at phases half a texture repeat apart differ only in
-the flame's own pixels (71 of 1,175,040 at tick 1050's dark section, 6 over a
-bright one where an additive surface cannot register) - which confirms the
-clock reaches the surface and nothing else moved, not that the rate matches the
-original. That comparison wants the matched-view harness and a recording.
+once and a replay of a tick draws the same frame.
+
+**The rate is confirmed on screen by its own period.** `Speed` 2.0 against a
+seconds clock predicts one whole texture repeat every `1 / 2.0` = 0.5 s, so a
+capture of one tick at `--anim-seconds 0.5` must come back *identical* to the
+same tick at 0.0 while intermediate phases must not. Four captures at tick
+1050, differing pixels against the 0.0 frame out of 1,175,040:
+
+| `--anim-seconds` | phase | differing pixels |
+| ---: | --- | ---: |
+| 0.125 | quarter repeat | 132 |
+| 0.25 | half repeat | 71 |
+| **0.50** | **one whole repeat** | **0** |
+
+Exact recurrence at 0.5 s and at no smaller value tested. The counts are small
+because the flame is a few hundred pixels behind the hull at chase distance -
+they are not a measure of the effect's strength, and the zero is the load-bearing
+row: an inert surface would read zero at *every* delta, and only a surface
+scrolling at exactly `Speed` repeats per second reads zero at 0.5 and not at
+0.25. What this does **not** settle is whether the original's clock ticks in the
+same units; that wants the matched-view harness and a recording, and the
+prediction above is what such a recording would falsify.
 
 ## Blocks #0 and #2, in one line each
 
