@@ -40,10 +40,12 @@ fn the_shipped_set_reads_back_as_shipped() {
         parameter(MIN1, 0.45),
         parameter(ALPHA_SCALE, 2.0),
         parameter(COLOUR_SCALE, 1.0),
+        parameter(SPEED, 2.0),
     ]))
     .expect("the full set reads");
     assert_eq!(flame.rim_power, 10.0);
     assert_eq!(flame.alpha_scale, 2.0);
+    assert_eq!(flame.scroll_speed, 2.0);
     // The range the shipped numbers imply, which is what the shader computes:
     // 1.1 face-on and 0.5 edge-on, before the vertex ramp.
     let term = |rim: f32| {

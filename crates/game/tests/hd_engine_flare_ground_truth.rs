@@ -235,6 +235,11 @@ fn every_flare_carries_the_flames_own_shader_parameters() {
             assert_eq!(flame.rim_min, 0.45, "{}", livery.team);
             assert_eq!(flame.alpha_scale, 2.0, "{}", livery.team);
             assert_eq!(flame.colour_scale, 1.0, "{}", livery.team);
+            // `Speed`, the sixth. It multiplies the engine's own seconds clock
+            // into the noise tap's `v`, so at 2.0 the surface advances two
+            // whole texture repeats a second - the rate a recording of the
+            // original falsifies if this chain is wrong.
+            assert_eq!(flame.scroll_speed, 2.0, "{}", livery.team);
         }
     }
 }

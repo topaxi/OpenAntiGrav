@@ -615,6 +615,130 @@ above ten uses and are listed by `ps3-sho.py census`; `0x1aaf7631`, the
 13,485-use attribute `rcsmodel.md` cannot name, appears in **no** block's
 attribute table.
 
+### The engine's own parameter table, read from its initialiser (2026-08-24)
+
+The preimage sweep above recovered 29 names from 780,000 candidates. **The
+executable hands over 81 of them for nothing**, in slot order, with their
+shapes - and it settles what a wordlist never could: *which* parameters the
+engine supplies and where their values come from.
+
+`Shader_InitEngineParams` (`0x003f1300`) runs once and does two things.
+First it hashes eight **technique** names - `ZAlphaOnly`, `Ambient`,
+`AmbientShadow`, `Static`, `StaticQuake`, `RigidBody`, `SunOcclusionLightmap`,
+`SunOcclusionVertex` - into eight bare `u32`s at `base + 0x4a20 .. 0x4a3c`.
+Then it initialises **81 parameter entries** at `base + 0x4000 + i * 0x20`,
+each through one call:
+
+```c
+Shader_InitParamEntry(base + i * 0x20, ~Crc32_HashString(name), 0xc000,
+                      name, 0, vec4_count);
+```
+
+and `Shader_InitParamEntry` (`0x005d4cf8`) is nine assignments:
+
+```text
++0x00  the ~crc32 hash        +0x10  0
++0x04  0xc000, the kind       +0x14  0
++0x08  the name string        +0x18  the value pointer, 0 until a frame fills it
++0x0c  0                      +0x1c  how many vec4s
+```
+
+**This is the `.rcsmodel` material record's own 0x20-byte parameter entry**
+([engine-flare.md](engine-flare.md)), built in memory with the name attached.
+The framing closes arithmetically: the entries run `0x4000` to `0x4a20`, which
+is `0xa20 / 0x20` = **exactly 81**, and `0x4a20` is where the eight technique
+hashes begin - no gap and no overlap.
+
+The kind `0xc000` has bit 15 set, which is the bit
+`Material_SetInstanceParamPointer` tests to skip samplers - so the per-instance
+binder never writes an engine entry, and the two sources cannot collide.
+
+| | | | |
+| --- | --- | --- | --- |
+| 0 `time` | 21 `pointLight0Falloff` | 42 `shadowMapTexSize` | 63 `zoneTexOuterNearest` |
+| 1 `viewProj` | 22 `textureSpot0PositionWorldSpace` | 43 `quakePointA` | 64 `zoneTexVis` |
+| 2 `view` | 23 `textureSpot0Proj` | 44 `quakePointB` | 65 `zoneAnisoPalette` |
+| 3 `world` | 24 `textureSpot0Tex` | 45 `quakeOffset` | 66 `zoneAnisoPaletteOuter` |
+| 4 `eyePositionWorldSpace` | 25 `textureSpot0ShadowTex` | 46 `quakeTrackUpNormal` | 67 `zoneAnisoPower` |
+| 5 `positionBias` | 26 `textureSpot0Colour` | 47 `distortion` | 68 `GradientColour` |
+| 6 `positionScale` | 27 `textureSpot0Falloff` | 48 `refractProject` | 69 `GradientColour1` |
+| 7 `fogColour` | 28 `textureSpot1PositionWorldSpace` | 49 `reflectProject` | 70 `GradientColour2` |
+| 8 `paraboloidReflectionTex` | 29 `textureSpot1Proj` | 50 `screenSpaceRefractionTex` | 71 `GradientColour3` |
+| 9 `paraboloidIblTex` | 30 `textureSpot1Tex` | 51 `screenSpaceReflectionTex` | 72 `iblScalePower` |
+| 10 `constantAmbientColour` | 31 `textureSpot1ShadowTex` | 52 `zoneColourTint` | 73 `ambientShadowMatrix` |
+| 11 `falseLightDirectionPower` | 32 `textureSpot1Colour` | 53 `zoneEffectInner` | 74 `ambientShadowBlendFactor` |
+| 12 `prelitScaleSpecular` | 33 `textureSpot1Falloff` | 54 `zoneEffectOuter` | 75 `ambientShadowTex` |
+| 13 `prelitBias` | 34 `textureSpot2PositionWorldSpace` | 55 `zoneBaseInner` | 76 `globalAlphaScaler` |
+| 14 `directionalLight0DirectionWorldSpace` | 35 `textureSpot2Proj` | 56 `zoneBaseOuter` | 77 `auroraBrightness` |
+| 15 `directionalLight0Colour` | 36 `textureSpot2Tex` | 57 `zoneBaseAltInner` | 78 `auroraOffset` |
+| 16 `directionalLight0Proj` | 37 `textureSpot2ShadowTex` | 58 `zoneBaseAltOuter` | 79 `auroraColour` |
+| 17 `directionalLight0ShadowTex` | 38 `textureSpot2Colour` | 59 `zoneOrigin` | 80 `engineTrail` |
+| 18 `directionalLight0LightmapTex` | 39 `textureSpot2Falloff` | 60 `zoneTexInner` | |
+| 19 `pointLight0PositionWorldSpace` | 40 `shadowMatrix` | 61 `zoneTexOuter` | |
+| 20 `pointLight0Colour` | 41 `shadowMapTex` | 62 `zoneTexInnerNearest` | |
+
+**Ghidra shows the wrong strings for every one of them.** `0x003f1300` is above
+the `0x32d5e0` TOC break [memory.md](memory.md) documents, so its decompilation
+names sound banks and `.vex` paths. The list above is
+[`scripts/ps3-toc.py`](../../../../scripts/ps3-toc.py) resolving the function's
+own `lwz rX,disp(r2)` against its own OPD TOC, and the order is instruction
+order.
+
+#### Nine cross-checks, from two other subsystems
+
+The slot order is not taken on trust. Two draw-state builders read on
+[engine-trail.md](engine-trail.md) - `Trail_BuildDrawState` (`0x002e30d8`) and
+its sibling at `0x002a51e8` - each write live values into this table by fixed
+offset, and both the offset *and* the vec4 count have to agree with the name:
+
+| Offset written | Slot | Name | vec4s written | vec4s the initialiser declares |
+| --- | ---: | --- | ---: | ---: |
+| `+0x18` | 0 | `time` | 1 | 1 |
+| `+0x38` | 1 | `viewProj` | 4 | 4 |
+| `+0x58` | 2 | `view` | 4 | 4 |
+| `+0x78` | 3 | `world` | 4 | 4 |
+| `+0x98` | 4 | `eyePositionWorldSpace` | 1 | 1 |
+| `+0xf8` | 7 | `fogColour` | 1 | 1 |
+| `+0x158` | 10 | `constantAmbientColour` | 1 | 1 |
+| `+0xa18` | 80 | `engineTrail` | 1 | 1 |
+
+Three matrices at four vec4s each and five scalars/colours at one, landing on
+the three matrix-shaped names and five scalar-shaped names, in order. The
+eighth row is the sharpest: **`~crc32("engineTrail")` is `0xbb48e390`**, which
+is the trail material's per-craft colour-mix parameter, recovered independently
+on [engine-trail.md](engine-trail.md) as the Fury-skin flag and previously
+carrying no preimage at all. A ninth check comes from the flame:
+`~crc32("globalAlphaScaler")` is `0x4c13d3af`, the `float2` engine-flare.md
+listed as unresolved, and it sits at slot 76.
+
+**Confidence 92.** The table is read out of its own initialiser rather than
+guessed; the framing closes on `0xa20 / 0x20`; and the slot order is confirmed
+from a different subsystem by eight offset-and-shape agreements plus two
+recovered preimages that were open questions on another page.
+
+#### What supplies a material's declared parameter
+
+A `.rcsmaterial` block declares parameters by hash and says nothing about where
+their values come from. Two sources answer, both bound into the same draw
+state - the model's own instance array at `+0xc4` and this table at `+0xd8` -
+and both are arrays of the identical 0x20-byte entry. Checking the partition
+against the two materials that are fully read:
+
+- `flame_test` block #1 declares seven parameters. Six (`power1`, `scale1`,
+  `min1`, `0x92fc84bf`, `0x17d9b3d3`, `Speed`) are in every craft's
+  `engineflare.rcsmodel`. The seventh is `time`, which **no** craft authors and
+  which is engine slot 0. No gap, no overlap.
+- `hd_enginetrail_bluered` declares three. `0xe296b1ed` and `TrailSpeed` are
+  model-authored; `engineTrail` is authored `0.0` by the model **and** is engine
+  slot 80, which `Trail_BuildDrawState` overwrites per craft. So the model
+  authors a default and the engine overrides by name.
+
+That a parameter resolves against this table **by hash** is the one link read
+from the shape of the data rather than from the resolving code: the entries
+carry the hash at `+0x00` in the same format the instance entries use, and both
+arrays are bound into the same draw state. Everything downstream of it is read.
+Confidence 85 on that link alone.
+
 ### What this says about fog, and what it does not
 
 `fogFactors` is `~crc32` `0xd04a156c`, **one `float4`, in 9 blocks, and all 9

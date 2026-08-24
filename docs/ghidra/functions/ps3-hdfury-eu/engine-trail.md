@@ -448,7 +448,11 @@ case-blind - one of **`chrome_c1`, `nitro`, `detonator`, `concept1`**
 (`0x00781e58..`). `Trail_BuildDrawState` turns that byte into the all-ones
 vec4 it patches over the material's `0xbb48e390` colour-mix parameter, and
 the fragment program lerps the blue texture's colour toward the red one's by
-it. On the disc the variants live in the `*_c1` (concept) and `*_n1` (nitro)
+it. **That hash has a preimage now: `engineTrail`**, entry 80 of the engine
+parameter table - so the patch is not a special case in the trail's draw path
+but the ordinary engine-parameter mechanism, and the model's authored `0.0` is
+the default it overrides. See
+[renderer.md](renderer.md#the-engines-own-parameter-table-read-from-its-initialiser-2026-08-24). On the disc the variants live in the `*_c1` (concept) and `*_n1` (nitro)
 ship directories; `chrome_c1` matches no shipped directory and reads as a
 leftover. Confirmed live: all eight craft of a Fury-campaign event carry
 `deref = "concept1"`, flag 1, and the reference frame's trail is orange-red.
@@ -491,11 +495,14 @@ Open, in rough order of visible cost:
 
 - The spike flicker and the afterburner blend (`Afterburner Chase Rate`
   0.03, `Afterburner Scale` 0.5) - both read, neither drawn.
-- The flame surface's `Speed * time` scroll: `time`'s provider is still
-  unread ([engine-flare.md](engine-flare.md)); the ribbon's phase at
-  `+0x1210` is a *different* accumulator and does not answer it. The seconds
-  clock at `*(*0x00936fd4)+0xc4` (see "the draw state's two non-material
-  constants") is now the natural candidate, at hypothesis strength only.
+- The flame surface's `Speed * time` scroll is **read** (2026-08-24) and not
+  yet drawn: `time` is entry 0 of the executable's own 81-name engine
+  parameter table, and the seconds clock at `*(*0x00936fd4)+0xc4` is what
+  every draw-state builder writes into it - the hypothesis this bullet used to
+  carry, now confirmed from the initialiser. See
+  [renderer.md](renderer.md#the-engines-own-parameter-table-read-from-its-initialiser-2026-08-24)
+  for the table and [engine-flare.md](engine-flare.md) for what the flame does
+  with it. The ribbon's phase at `+0x1210` is still a *different* accumulator.
 - The `Engine_Flare_Rich.gtf` sprite flare **draws now** with its authored
   radius (3, jittered by 0.5, floored at 2) and the `Slow Alpha Noise`
   opacity walk (0.5..0.8, chase 0.1, retarget every 10) - the flare's init
@@ -504,9 +511,11 @@ Open, in rough order of visible cost:
   original. Still unread and undrawn: its spin, chromatic dispersion,
   `Flare Fadeout Dist/Range` term and the occluder query - the shader pair
   (`engineflare_vp/fp`) resolves through no registry read so far.
-- Whether the splatted seconds clock at `*(*0x00936fd4)+0xc4` is the flame
-  surface's `Speed * time` provider - hypothesis strength only, no shader-side
-  confirmation. (The other half of this bullet, where the per-trail
+- (Closed 2026-08-24, both halves.) The splatted seconds clock **is** the
+  flame surface's `time`: it is written into engine parameter entry 0, which is
+  named `time` in the table `Shader_InitEngineParams` builds - see
+  [renderer.md](renderer.md#the-engines-own-parameter-table-read-from-its-initialiser-2026-08-24).
+  (And where the per-trail
   `TrailSpeed` value lives at draw time, is **closed at 94**: the constructor
   binds the material parameter to `&block[0x1210]` and the running game shows
   the four pointers - see "the scroll phase is bound by pointer". Nothing in

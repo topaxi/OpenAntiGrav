@@ -91,3 +91,5 @@
 0x005d4bb0	function	Material_SetInstanceParamPointer	78	engine-trail.md
 0x005d4d28	function	Material_CloneInstance	80	engine-trail.md
 0x007a2da8	data	Trail_SpeedParamName	95	engine-trail.md
+0x003f1300	function	Shader_InitEngineParams	90	renderer.md
+0x005d4cf8	function	Shader_InitParamEntry	88	renderer.md
