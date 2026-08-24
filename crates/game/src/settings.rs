@@ -240,6 +240,13 @@ pub struct Audio {
     /// PCM sample-for-sample and can be compared against it byte for byte; any
     /// other default would make the only evidence this project can gather about
     /// its own audio approximate. See [`crate::audio::DUMP_SAMPLE_RATE`].
+    ///
+    /// **[`Self::master_volume`] has to be 100 for that too**, and it did not
+    /// exist when the paragraph above was written. Both are read off the
+    /// player's own settings file on the dump path, so a byte-for-byte
+    /// comparison wants a pinned config rather than the machine's - the
+    /// command is on
+    /// [`audio-levels.md`](../../../docs/ghidra/functions/psp-pulse-usa/audio-levels.md).
     #[serde(default)]
     pub music_volume: crate::audio::Volume,
     /// How loud the effects bus is, as a percentage. Defaults to 100.
@@ -250,6 +257,38 @@ pub struct Audio {
     /// `docs/architecture/adr/0018-audio-mixer-architecture.md`.
     #[serde(default)]
     pub sfx_volume: crate::audio::Volume,
+    /// How loud voice lines are, as a percentage. Defaults to 100.
+    ///
+    /// **A third row the original's menu does not have, on a line the original
+    /// does draw**: a cue is a voice line when it lives in `speech.bnk` rather
+    /// than beside the effects, which is already how `oag_game::audio::sfx`
+    /// tells `shieldactive` from the `~SHIELD` loop it fires with. See
+    /// [`crate::audio::sfx::Cue::bus`] and
+    /// `docs/architecture/adr/0027-three-mix-buses.md`.
+    ///
+    /// **Two cues reach it today** - the shield callout and the Autopilot's
+    /// one-second warning - because those are the only voice lines whose
+    /// trigger has been recovered. Every other announcer line on the disc is
+    /// decoded and unwired, so this row will get quieter to a player who never
+    /// collects a pickup and louder to nobody. `HANDOVER.md` lists them.
+    #[serde(default)]
+    pub speech_volume: crate::audio::Volume,
+    /// How loud everything is, after the three above. Defaults to 100.
+    ///
+    /// **Ours, and it is a knob the original's menu does not have.** What it
+    /// does have is the *master itself*: `Audio_Init` (`0x089906e4`) opens
+    /// group `0x10` at `0x400` and `Audio_OutputThread` (`0x0898ca54`) hands
+    /// `master << 5` to the DAC, so this is the recovered stage of the chain
+    /// with a row attached rather than a gain invented for the port. See
+    /// [`audio-levels.md`](../../../docs/ghidra/functions/psp-pulse-usa/audio-levels.md).
+    ///
+    /// It is exposed because the mix has no headroom and the console's answer
+    /// to that is to saturate ([`oag_audio::Mixer::render`]): eight craft on
+    /// the grid sum past full scale on the effects bus alone, so a player who
+    /// wants the race not to distort needs one control that moves both buses
+    /// together rather than two they have to keep in step.
+    #[serde(default)]
+    pub master_volume: crate::audio::Volume,
     /// Which release's encode of the soundtrack plays: `auto`, `psp` or `ps2`.
     ///
     /// **`auto`, the booted disc, by default.** Only the sixteen soundtrack
@@ -832,6 +871,25 @@ pub fn menu_seeds(
         (
             "audio.music_volume",
             text(&settings.audio.music_volume.to_string()),
+        ),
+        // The second of the original's two volumes, and it was missing here
+        // until 2026-08-24 while its row sat on the AUDIO page: an unseeded
+        // `choice` opens on its list's *first* option, so SFX VOLUME read `0`
+        // whatever the file said, and the first press moved a player at 100
+        // straight to 25. `every_settings_row_is_one_the_game_seeds` only swept
+        // the `display` and `graphics` pages, which is why nothing caught it;
+        // it sweeps every page now.
+        (
+            "audio.sfx_volume",
+            text(&settings.audio.sfx_volume.to_string()),
+        ),
+        (
+            "audio.speech_volume",
+            text(&settings.audio.speech_volume.to_string()),
+        ),
+        (
+            "audio.master_volume",
+            text(&settings.audio.master_volume.to_string()),
         ),
         (
             "audio.music_source",

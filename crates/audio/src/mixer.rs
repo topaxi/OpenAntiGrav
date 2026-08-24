@@ -35,21 +35,35 @@ pub const CHANNELS: usize = 2;
 /// bug shows up here rather than only on hardware.
 pub const MAX_VOICES: usize = 32;
 
-/// A mix bus, one per volume the original's options menu exposes.
+/// A mix bus: one class of sound, with its own gain.
 ///
-/// The executable has two and only two: `"Music Volume"` at `0x08a78658` and
-/// `"SFX Volume"` at `0x08a78668`.
+/// **Not one per row of the original's options menu.** That menu has two and
+/// only two - `"Music Volume"` at `0x08a78658` and `"SFX Volume"` at
+/// `0x08a78668` - and this had two variants because of it. The original's own
+/// mixer is not built that way: `Audio_SetGroupVolume` (`0x089956d8`) carries
+/// **sixteen** group volumes plus a master, and `Audio_UpdateGroupVolumes`
+/// drives nine of them every frame, one of them through a duck. Classes below
+/// the menu rows are the original's structure, not a port-side invention. See
+/// [`audio-levels.md`](../../../../docs/ghidra/functions/psp-pulse-usa/audio-levels.md)
+/// and [ADR-0027](../../../../docs/architecture/adr/0027-three-mix-buses.md).
+///
+/// Three of those classes are exposed here. Which recovered *group index* each
+/// corresponds to is not known, so this is a port-side split along a line the
+/// original draws, not a transcription of its table.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Bus {
     /// Streamed music.
     Music,
-    /// Everything else: effects, speech, engine.
+    /// Effects: the engine, collisions, pads, weapons.
     Sfx,
+    /// Voice lines - the announcer, and anything else the original keeps in
+    /// `speech.bnk` rather than beside the effects.
+    Speech,
 }
 
 impl Bus {
     /// Number of buses, for array sizing.
-    pub const COUNT: usize = 2;
+    pub const COUNT: usize = 3;
 
     /// This bus's index into a `[_; Bus::COUNT]`.
     #[must_use]
@@ -57,6 +71,7 @@ impl Bus {
         match self {
             Self::Music => 0,
             Self::Sfx => 1,
+            Self::Speech => 2,
         }
     }
 }
@@ -235,6 +250,9 @@ pub struct Mixer {
     /// for tests. Silent starvation is the failure mode worth being able to
     /// see.
     starved: u64,
+    /// Output samples the sum drove past full scale, for the same reason
+    /// [`Self::starved`] is counted. See [`Self::render`].
+    clipped: u64,
     /// Sample-rate remainder carried between [`Self::render_tick`] calls.
     ///
     /// **Because `sample_rate / tick_hz` is not always a whole number.** 48,000
@@ -258,6 +276,7 @@ impl Mixer {
             sample_rate: sample_rate.max(1),
             generation: 0,
             starved: 0,
+            clipped: 0,
             tick_frame_remainder: 0,
         }
     }
@@ -294,6 +313,16 @@ impl Mixer {
     #[must_use]
     pub fn starved(&self) -> u64 {
         self.starved
+    }
+
+    /// How many output samples the voice sum has driven past full scale.
+    ///
+    /// Zero is a mix with headroom left. Anything else is the mix saturating -
+    /// see [`Self::render`] for why that is what the console does rather than
+    /// something to be fixed by turning a bus down.
+    #[must_use]
+    pub fn clipped(&self) -> u64 {
+        self.clipped
     }
 
     /// Starts a voice, returning a handle to steer it with.
@@ -468,6 +497,31 @@ impl Mixer {
     /// Overwrites `out` rather than adding to it, and always fills it whole -
     /// silence is a buffer of zeroes, never a short write, because a short
     /// write to an output callback is a click.
+    ///
+    /// # The sum saturates, and that is the console's own answer
+    ///
+    /// Eight craft on the grid hold eight `~ENGINE` voices inside the flare's
+    /// 50-unit radius at once, so the sum leaves full scale long before
+    /// anything unusual has happened. **Nothing in the original's chain
+    /// reserves headroom for that**: `Audio_Init_q` (`0x089906e4`) sets all
+    /// fifteen group volumes *and* the master to `0x400`, and
+    /// `Audio_OutputThread_q` (`0x0898ca54`) hands `master << 5` = `0x8000` -
+    /// `PSP_AUDIO_VOLUME_MAX` - to `sceAudioOutputPannedBlocking`. Unity end to
+    /// end, into a 16-bit buffer that clamps. See
+    /// [`audio-levels.md`](../../../../docs/ghidra/functions/psp-pulse-usa/audio-levels.md).
+    ///
+    /// So the clamp below is the port of a hardware behaviour, not a limiter
+    /// invented to make a loud mix comfortable - there is no evidenced
+    /// attenuation to apply, and picking one would be exactly the
+    /// plausible-looking stand-in `CLAUDE.md` forbids. What the clamp does buy
+    /// is that an `f32` device and an `i16` device now receive the same
+    /// samples, where before the mixer handed the host whatever the sum
+    /// reached and each backend saturated it in its own place.
+    ///
+    /// [`Self::clipped`] counts what it cost. **Nothing reads it yet** - it is
+    /// there for tests and for the perf overlay to pick up, the way
+    /// [`Self::starved`] is, so that a mix saturating for a whole race is a
+    /// number somebody can ask for rather than only a sound.
     pub fn render(&mut self, out: &mut [f32]) {
         out.fill(0.0);
         let master = self.master_gain;
@@ -524,6 +578,13 @@ impl Mixer {
 
             if finished {
                 *voice = Voice::default();
+            }
+        }
+
+        for sample in out.iter_mut() {
+            if *sample < -1.0 || *sample > 1.0 {
+                self.clipped += 1;
+                *sample = sample.clamp(-1.0, 1.0);
             }
         }
     }

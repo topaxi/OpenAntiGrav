@@ -184,10 +184,11 @@ impl Audio {
                 let Some((sound, looping)) = banks.pick(event.cue, &mut voices.rng) else {
                     continue;
                 };
+                let bus = event.cue.bus();
                 let play = if looping {
-                    Play::looping(sound, Bus::Sfx)
+                    Play::looping(sound, bus)
                 } else {
-                    Play::once(sound, Bus::Sfx)
+                    Play::once(sound, bus)
                 };
                 // The return is dropped deliberately: a one-shot is fired and
                 // forgotten, and a refused voice is already counted by
@@ -218,9 +219,9 @@ impl Audio {
                     // here would loop a one-shot on about half the draws.
                     if let Some((sound, looping)) = banks.pick(Cue::Shield, &mut voices.rng) {
                         voices.shield = if looping {
-                            mixer.play(Play::looping(sound, Bus::Sfx))
+                            mixer.play(Play::looping(sound, Cue::Shield.bus()))
                         } else {
-                            let _ = mixer.play(Play::once(sound, Bus::Sfx));
+                            let _ = mixer.play(Play::once(sound, Cue::Shield.bus()));
                             None
                         };
                     }
@@ -243,9 +244,9 @@ impl Audio {
                     voices.blowup_open = true;
                     if let Some((sound, looping)) = banks.pick(Cue::Blowup, &mut voices.rng) {
                         voices.blowup = if looping {
-                            mixer.play(Play::looping(sound, Bus::Sfx))
+                            mixer.play(Play::looping(sound, Cue::Blowup.bus()))
                         } else {
-                            let _ = mixer.play(Play::once(sound, Bus::Sfx));
+                            let _ = mixer.play(Play::once(sound, Cue::Blowup.bus()));
                             None
                         };
                     }
@@ -467,6 +468,28 @@ impl Cue {
             Self::Collision | Self::Engine => BankName::Ship,
             Self::Absorb | Self::Shield => BankName::Weapons,
             Self::ShieldActive | Self::Disengaging => BankName::Speech,
+        }
+    }
+
+    /// Which mix bus this cue's voice belongs on.
+    ///
+    /// **Read straight off [`Self::bank`], because the bank is where the
+    /// original draws the line.** `shieldactive` sits in `speech.bnk` and not
+    /// in `weapons.bnk` beside the `~SHIELD` loop it fires with, and that is
+    /// already this module's own reason for calling it a voice line rather
+    /// than an effect - see [`Self::ShieldActive`]. `Disengaging` agrees from
+    /// the other direction: `Autopilot_Update` plays it through the dry,
+    /// full-volume path instead of the craft's emitter, which is a line in the
+    /// player's ear rather than a thing happening in the world.
+    ///
+    /// So a cue moves bus by moving bank, and nothing here holds a second list
+    /// that can disagree with `bank()`. See
+    /// [ADR-0027](../../../../docs/architecture/adr/0027-three-mix-buses.md).
+    #[must_use]
+    pub fn bus(self) -> Bus {
+        match self.bank() {
+            BankName::Speech => Bus::Speech,
+            BankName::Hud | BankName::Ship | BankName::Weapons => Bus::Sfx,
         }
     }
 

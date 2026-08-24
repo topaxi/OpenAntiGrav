@@ -396,3 +396,95 @@ fn a_live_voice_can_be_moved_across_the_field_and_back_to_none() {
         restore both channels, not leave the last pan in place"
     );
 }
+
+#[test]
+fn a_sum_past_full_scale_saturates_and_is_counted() {
+    // Three voices of the same full-scale tone is the grid start in miniature:
+    // the original's chain is unity end to end and mixes into a 16-bit buffer,
+    // so the console saturates here too. What must not happen is the mixer
+    // handing the host a sample outside `-1.0..=1.0` and leaving each backend
+    // to deal with it somewhere else.
+    let mut mixer = Mixer::new(8);
+    let sound = Arc::new(Sound::new(vec![i16::MAX; 64], 1, 8).unwrap());
+    for _ in 0..3 {
+        mixer
+            .play(Play::looping(Arc::clone(&sound), Bus::Sfx))
+            .unwrap();
+    }
+    let mut out = vec![0.0; CHANNELS * 4];
+    mixer.render(&mut out);
+
+    assert!(
+        out.iter().all(|s| (-1.0..=1.0).contains(s)),
+        "the sum left full scale: {out:?}"
+    );
+    assert!(
+        (out[0] - 1.0).abs() < 1e-6,
+        "saturation should reach full scale, not fall short"
+    );
+    assert_eq!(mixer.clipped(), out.len() as u64);
+}
+
+#[test]
+fn a_mix_with_headroom_left_counts_no_clipping() {
+    let mut mixer = Mixer::new(8);
+    let sound = Arc::new(Sound::new(vec![i16::MAX; 64], 1, 8).unwrap());
+    mixer.play(Play::looping(sound, Bus::Sfx)).unwrap();
+    let mut out = vec![0.0; CHANNELS * 4];
+    mixer.render(&mut out);
+    assert_eq!(mixer.clipped(), 0);
+}
+
+#[test]
+fn every_bus_has_its_own_gain_slot() {
+    // `Bus::COUNT` is an array size and `Bus::index` is the only place the
+    // mapping is written, so a variant added without extending either would
+    // silently share somebody else's gain. See ADR-0027.
+    let mut seen = [false; Bus::COUNT];
+    for bus in [Bus::Music, Bus::Sfx, Bus::Speech] {
+        let at = bus.index();
+        assert!(at < Bus::COUNT, "{bus:?} indexes past Bus::COUNT");
+        assert!(!seen[at], "{bus:?} shares a gain slot with another bus");
+        seen[at] = true;
+    }
+    assert!(seen.iter().all(|&s| s), "a gain slot belongs to no bus");
+}
+
+#[test]
+fn a_voice_follows_its_own_bus_and_the_master() {
+    // The property the settings rows rely on: a gain applies at mix time, so a
+    // live voice follows the row the player is standing on rather than needing
+    // to be restarted.
+    let mut mixer = Mixer::new(8);
+    let sound = Arc::new(Sound::new(vec![i16::MAX; 64], 1, 8).unwrap());
+    mixer.play(Play::looping(sound, Bus::Speech)).unwrap();
+    let mut out = vec![0.0; CHANNELS];
+
+    mixer.render(&mut out);
+    assert!((out[0] - 1.0).abs() < 1e-3);
+
+    mixer.set_bus_gain(Bus::Speech, 0.5);
+    mixer.render(&mut out);
+    assert!(
+        (out[0] - 0.5).abs() < 1e-3,
+        "the speech bus did not move: {}",
+        out[0]
+    );
+
+    // And the other buses are untouched by it.
+    mixer.set_bus_gain(Bus::Sfx, 0.0);
+    mixer.render(&mut out);
+    assert!(
+        (out[0] - 0.5).abs() < 1e-3,
+        "SFX moved a speech voice: {}",
+        out[0]
+    );
+
+    mixer.set_master_gain(0.5);
+    mixer.render(&mut out);
+    assert!(
+        (out[0] - 0.25).abs() < 1e-3,
+        "the master is not after the bus: {}",
+        out[0]
+    );
+}

@@ -472,10 +472,10 @@ label = "BACK"
 id = "audio"
 title = "AUDIO"
 
-# Two volume rows, because the original's options menu has exactly two volumes
-# and no more: `"Music Volume"` at `0x08a78658` and `"SFX Volume"` at
-# `0x08a78668`. The second one earned its row when the sound banks started
-# decoding - see `oag_game::audio::sfx`.
+# Two bus rows, because the original's options menu has exactly two volumes and
+# no more: `"Music Volume"` at `0x08a78658` and `"SFX Volume"` at `0x08a78668`.
+# The second one earned its row when the sound banks started decoding - see
+# `oag_game::audio::sfx`.
 #
 # Applied on the next tick - the change goes straight onto the bus's gain, so it
 # is audible on the row the player is standing on rather than after a restart,
@@ -491,6 +491,37 @@ values = ["0", "25", "50", "75", "90", "100"]
 kind = "choice"
 label = "SFX VOLUME"
 setting = "audio.sfx_volume"
+values = ["0", "25", "50", "75", "90", "100"]
+
+# The announcer, on its own row because the original puts voice lines in their
+# own bank: `shieldactive` is in `speech.bnk` and not beside the `~SHIELD` loop
+# it fires with, which is already how `oag_game::audio::sfx` tells a callout
+# from an effect. See `docs/architecture/adr/0027-three-mix-buses.md`.
+#
+# **Two cues reach it today** - the shield callout and the Autopilot's
+# one-second warning - because those are the only voice lines whose trigger has
+# been recovered. Moving this row changes nothing in a race where the player
+# collects neither.
+[[page.entry]]
+kind = "choice"
+label = "ANNOUNCER VOLUME"
+setting = "audio.speech_volume"
+values = ["0", "25", "50", "75", "90", "100"]
+
+# The last is ours, and it is here because the mix has no headroom to give.
+# The original's chain runs unity end to end and lets the hardware saturate
+# (`docs/ghidra/functions/psp-pulse-usa/audio-levels.md`), and eight craft on
+# the grid clear full scale on the effects bus alone - so a player who wants
+# the race not to distort should be able to turn *everything* down at once
+# instead of keeping the two rows above in step. It moves the same master stage
+# the original has and does not expose: group `0x10`, which `Audio_Init` opens
+# at `0x400`.
+#
+# Below the two it scales, which is the order it applies in.
+[[page.entry]]
+kind = "choice"
+label = "MASTER VOLUME"
+setting = "audio.master_volume"
 values = ["0", "25", "50", "75", "90", "100"]
 
 # Which release's encode of the **soundtrack** plays. Only the sixteen

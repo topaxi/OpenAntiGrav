@@ -143,6 +143,32 @@ impl Session {
                     return;
                 }
             },
+            // The voice bus, which a cue reaches by living in `speech.bnk`
+            // rather than by being listed anywhere - see `sfx::Cue::bus`.
+            "audio.speech_volume" => match text.parse::<audio::Volume>() {
+                Ok(volume) => {
+                    self.settings.audio.speech_volume = volume;
+                    self.audio.apply(&self.settings.audio);
+                }
+                Err(e) => {
+                    warn!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
+            // The third row, and the one that is ours: it moves the mixer's
+            // master rather than a bus, so a player who finds the race
+            // distorting turns one thing down instead of keeping two in step.
+            // Same mechanism as the two above.
+            "audio.master_volume" => match text.parse::<audio::Volume>() {
+                Ok(volume) => {
+                    self.settings.audio.master_volume = volume;
+                    self.audio.apply(&self.settings.audio);
+                }
+                Err(e) => {
+                    warn!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
             // Applied on the spot, and **seeked rather than restarted**: the
             // two releases' encodes of a track agree in length to 11 ms, so
             // carrying the playhead across lands in the same bar. The first

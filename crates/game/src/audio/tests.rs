@@ -1,35 +1,19 @@
-//! What the audio policy in [`super`] is asserted to do: the volume and
-//! music-source settings, pairing the two discs' soundtracks by length,
-//! seeking rather than restarting when the source changes, the menu-to-race
-//! handover, and the headless dump's clock.
+//! What the audio policy in [`super`] is asserted to do: the music-source
+//! setting, pairing the two discs' soundtracks by length, seeking rather than
+//! restarting when the source changes, the menu-to-race handover, and the
+//! headless dump's clock.
 //!
 //! Its own file rather than a `#[cfg(test)]` block at the end of
-//! `audio.rs`: the tests are 946 lines, past the 200 an inline test
-//! module may hold. See `scripts/check-file-size.py`, which is the rule as a
-//! gate.
+//! `audio.rs`: the tests are past the 200 lines an inline test module may
+//! hold. See `scripts/check-file-size.py`, which is the rule as a gate.
+//!
+//! The volume and bus half lives in [`volumes`], split out when the four AUDIO
+//! rows of [ADR-0027](../../../../docs/architecture/adr/0027-three-mix-buses.md)
+//! took this file past 1,000 lines - the other rule the same script keeps.
 
 use super::*;
 
-#[test]
-fn a_volume_round_trips_through_its_own_text() {
-    for value in Volume::OFFERED {
-        assert_eq!(value.to_string().parse::<Volume>(), Ok(value));
-    }
-}
-
-#[test]
-fn a_volume_outside_the_range_is_refused() {
-    assert!("101".parse::<Volume>().is_err());
-    assert!("-1".parse::<Volume>().is_err());
-    assert_eq!("0".parse::<Volume>(), Ok(Volume(0)));
-}
-
-#[test]
-fn full_volume_is_unattenuated() {
-    assert_eq!(Volume::FULL.gain(), 1.0);
-    assert_eq!(Volume::default(), Volume::FULL);
-    assert_eq!(Volume(0).gain(), 0.0);
-}
+mod volumes;
 
 #[test]
 fn a_music_source_round_trips_through_its_own_text() {

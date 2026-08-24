@@ -5,7 +5,7 @@
 //! with its own random note and its own emitter.
 
 use log::warn;
-use oag_audio::{Bus, Mixer, Play, VoiceId};
+use oag_audio::{Mixer, Play, VoiceId};
 use oag_core::Rng;
 
 use super::{Banks, Cue};
@@ -229,7 +229,7 @@ impl Engine {
                     gain,
                     pitch,
                     pan,
-                    ..Play::looping(sound, Bus::Sfx)
+                    ..Play::looping(sound, Cue::Engine.bus())
                 });
             }
         }

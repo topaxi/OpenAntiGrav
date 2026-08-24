@@ -365,6 +365,13 @@
 0x08b893d0	data	g_sas_voices	85	sound.md
 0x0898bf4c	function	Sas_QueueSetVoice	92	sound.md
 0x08992304	function	Scream_FindSoundInBank	85	sound.md
+0x089956d8	function	Audio_SetGroupVolume	85	audio-levels.md
+0x089906e4	function	Audio_Init	82	audio-levels.md
+0x089909d0	function	Audio_Shutdown	82	audio-levels.md
+0x0898ca54	function	Audio_OutputThread	82	audio-levels.md
+0x08a2b590	function	Audio_OutputPannedBlocking	88	audio-levels.md
+0x08a2ac90	function	Sas_Init	88	audio-levels.md
+0x0893ac70	function	Audio_UpdateGroupVolumes	82	audio-levels.md
 0x08991b20	function	Scream_PlaySoundByName	85	sound.md
 0x08992264	function	Scream_FindBankByName	80	sound.md
 0x0898f864	function	Scream_StartSound	85	sound.md

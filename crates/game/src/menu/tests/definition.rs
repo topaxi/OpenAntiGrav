@@ -415,29 +415,36 @@ fn the_two_settings_pages_offer_only_values_that_parse() {
     );
 }
 
-/// Every row on the two settings pages has to be one `apply_setting`
-/// handles and `menu_seeds` fills in, or it is a row that moves and does
-/// nothing - which is the failure this whole file is arranged to prevent.
+/// Every row that edits a setting has to be one `apply_setting` handles and
+/// `menu_seeds` fills in, or it is a row that moves and does nothing - which
+/// is the failure this whole file is arranged to prevent.
 ///
 /// Checked against the seeds rather than against `main.rs`, which this
 /// crate's library half cannot see: a setting the seeds do not know would
 /// also open its row on the list's first option instead of the player's
 /// own value, so the two lists have to agree anyway.
+///
+/// **Every page, not two of them.** This swept `display` and `graphics` only
+/// until 2026-08-24, and `audio.sfx_volume` sat unseeded on the AUDIO page for
+/// as long as the row existed - reading `0` at every setting, because that is
+/// the head of its own value list. A guard that covers the pages somebody
+/// happened to be working on is a guard that lets the next page through.
 #[test]
 fn every_settings_row_is_one_the_game_seeds() {
     let definition = built_in();
-    let seeded: Vec<&str> = crate::settings::menu_seeds(
-        &crate::settings::Settings::default(),
-        oag_render::mesh_render::Anisotropy::default(),
-    )
-    .into_iter()
-    .map(|(setting, _)| setting)
-    .collect();
+    // With a language picked, because `menu_seeds` only offers that key once
+    // one has been - and the LANGUAGE row exists whether or not it has.
+    let settings = crate::settings::Settings {
+        language: Some("English".to_string()),
+        ..Default::default()
+    };
+    let seeded: Vec<&str> =
+        crate::settings::menu_seeds(&settings, oag_render::mesh_render::Anisotropy::default())
+            .into_iter()
+            .map(|(setting, _)| setting)
+            .collect();
 
     for page in &definition.pages {
-        if page.id != "display" && page.id != "graphics" {
-            continue;
-        }
         for entry in &page.entries {
             let Some(setting) = entry.setting() else {
                 continue;
@@ -450,9 +457,9 @@ fn every_settings_row_is_one_the_game_seeds() {
         }
     }
 
-    // And both pages exist, so a rename in the definition cannot make the
-    // loop above vacuous.
-    for id in ["display", "graphics"] {
+    // And the settings pages exist, so a rename in the definition cannot make
+    // the loop above vacuous.
+    for id in ["display", "graphics", "audio", "controls"] {
         assert!(
             definition.pages.iter().any(|page| page.id == id),
             "no {id} page"

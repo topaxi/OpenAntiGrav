@@ -656,6 +656,11 @@ impl Audio {
         self.output.with_mixer(|mixer| {
             mixer.set_bus_gain(Bus::Music, settings.music_volume.gain());
             mixer.set_bus_gain(Bus::Sfx, settings.sfx_volume.gain());
+            mixer.set_bus_gain(Bus::Speech, settings.speech_volume.gain());
+            // After both buses, which is the order the original's own chain
+            // has: a group volume, then the master the output thread scales
+            // by. See `settings::Audio::master_volume`.
+            mixer.set_master_gain(settings.master_volume.gain());
         });
     }
 

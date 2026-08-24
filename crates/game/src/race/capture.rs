@@ -245,6 +245,15 @@ pub fn capture(
             race.world.ships[0].pickup.weapon = Some(weapon);
         }
         race.tick(&snapshot);
+        // The race's own voices, on the tick that raised them - the same call
+        // the windowed loop makes immediately after `Race::tick` in
+        // `main::session::frame`. Without it a `--dump-audio` capture of a race
+        // carried the music and nothing else: no engines, no collisions, no
+        // speech, and the cues piled up undrained in the race. The dump is the
+        // only end-to-end evidence a headless run has that a sound was made at
+        // all, so a capture that silently held only half the mix is worse than
+        // no capture.
+        audio.race_tick(&mut race);
         // Inside the tick loop and not beside it, for the reason the exhaust
         // and the chase camera are advanced from inside `Race::tick`: what a
         // capture produces has to be a function of the tick count and nothing
