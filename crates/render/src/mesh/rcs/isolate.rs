@@ -10,6 +10,12 @@
 //! - `OAG_SKIP_MATERIAL=clouds,glass` drops every chunk whose material path
 //!   contains any of the comma-separated needles.
 //! - `OAG_ONLY_MATERIAL=road` keeps only those and drops everything else.
+//! - `OAG_ONLY_SLOT=331,341` keeps only those material **ordinals**, which is
+//!   the exact form of the same question: a circuit names one material path
+//!   in dozens of slots, and a tinted frame identifies a surface by ordinal,
+//!   so the needle that follows up on it has to be an ordinal too. Ordinals
+//!   are `oag_formats::rcsmodel::Mesh::material`, the same numbering
+//!   `crates/render/examples/hd_slot_list.rs` prints.
 //! - `OAG_OPAQUE_ONLY=1` drops every chunk the material asks to be blended,
 //!   which is the one-run answer to "is there anything solid behind all this
 //!   see-through geometry at this camera pose".
@@ -40,6 +46,7 @@ use std::sync::OnceLock;
 struct Filter {
     skip: Vec<String>,
     only: Vec<String>,
+    only_slots: Vec<u32>,
     opaque_only: bool,
 }
 
@@ -62,6 +69,10 @@ fn filter() -> &'static Filter {
     FILTER.get_or_init(|| Filter {
         skip: needles("OAG_SKIP_MATERIAL"),
         only: needles("OAG_ONLY_MATERIAL"),
+        only_slots: needles("OAG_ONLY_SLOT")
+            .iter()
+            .filter_map(|s| s.parse().ok())
+            .collect(),
         opaque_only: std::env::var_os("OAG_OPAQUE_ONLY").is_some(),
     })
 }
@@ -73,8 +84,15 @@ fn filter() -> &'static Filter {
 /// 1,000-line ceiling `scripts/check-file-size.py` enforces.
 pub(super) fn excludes(model: &rcsmodel::Model, mesh: &rcsmodel::Mesh) -> bool {
     let filter = filter();
-    if filter.skip.is_empty() && filter.only.is_empty() && !filter.opaque_only {
+    if filter.skip.is_empty()
+        && filter.only.is_empty()
+        && filter.only_slots.is_empty()
+        && !filter.opaque_only
+    {
         return false;
+    }
+    if !filter.only_slots.is_empty() && !filter.only_slots.contains(&mesh.material) {
+        return true;
     }
     let material = model.materials.get(mesh.material as usize);
     if filter.opaque_only && material.is_some_and(|m| m.blend() != rcsmodel::Blend::Opaque) {

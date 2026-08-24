@@ -76,7 +76,7 @@ fn main() -> anyhow::Result<()> {
             let Some(texture) = model.textures.get(slot).and_then(Option::as_ref) else {
                 continue;
             };
-            if !texture.label.contains(&want) {
+            if want != "*" && !texture.label.contains(&want) {
                 continue;
             }
             if let Ok(only) = std::env::var("OAG_SLOT") {
@@ -131,6 +131,7 @@ fn main() -> anyhow::Result<()> {
             let mut draw_albedo = 0.0f64;
             let mut uv = (f32::MAX, f32::MIN, f32::MAX, f32::MIN);
             let mut vsum = 0.0f64;
+            let mut seen_v: std::collections::BTreeSet<i32> = std::collections::BTreeSet::new();
             let indices = &model.indices[d.range.start as usize..d.range.end as usize];
             for tri in indices.chunks_exact(3) {
                 let vs: [_; 3] = std::array::from_fn(|k| &model.vertices[tri[k] as usize]);
@@ -183,6 +184,7 @@ fn main() -> anyhow::Result<()> {
                     uv.1 = uv.1.max(v.texcoord[0]);
                     uv.2 = uv.2.min(v.texcoord[1]);
                     uv.3 = uv.3.max(v.texcoord[1]);
+                    seen_v.insert((v.texcoord[1] * 1000.0).round() as i32);
                     vsum += w * f64::from(v.texcoord[1].rem_euclid(1.0));
                     draw_area += w;
                     draw_albedo += w * f64::from(luma([picture[0], picture[1], picture[2]]));
@@ -200,7 +202,7 @@ fn main() -> anyhow::Result<()> {
             }
             if std::env::var_os("OAG_PER_DRAW").is_some() && draw_area > 0.0 {
                 println!(
-                    "  draw at {:?} radius {:.0}: {:.0} sq units, albedo luma {:.1}/255, \
+                    "  slot {slot} draw at {:?} radius {:.0}: {:.0} sq units, albedo luma {:.1}/255, \
                      u {:.2}..{:.2} v {:.2}..{:.2} mean v {:.3}",
                     d.bounds.centre,
                     d.bounds.radius,
@@ -212,6 +214,10 @@ fn main() -> anyhow::Result<()> {
                     uv.3,
                     vsum / draw_area
                 );
+                if std::env::var_os("OAG_RAW_V").is_some() {
+                    let all: Vec<f32> = seen_v.iter().map(|&t| t as f32 / 1000.0).collect();
+                    println!("      raw v values ({}): {all:.3?}", all.len());
+                }
             }
         }
     }
