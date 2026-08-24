@@ -401,6 +401,27 @@ impl Material {
         (path.contains(LIGHTMAP_DIR) && path.ends_with(LIGHTMAP_SUFFIX)).then_some(path)
     }
 
+    /// The `.gtf` of the entry bound to the **`lightmap` sampler**, wherever
+    /// it sits in the table.
+    ///
+    /// **The declared answer, against [`Self::lightmap`]'s inferred one.**
+    /// That method reads a path pattern - `lmaps/` and `-lmap.gtf` - on the
+    /// *second* entry alone, which was the only entry this project could see
+    /// when it was written. The file says it outright and says it anywhere:
+    /// Talon's Junction names a lightmap on **118** of its 442 materials and
+    /// only 85 of them put it in entry 1, so a third of the circuit's baked
+    /// lighting sat in a slot nothing looked at - and a surface with no
+    /// lightmap and no vertex light of its own renders near black.
+    /// `track_wall`, `tunnel_fx_noalpha` and
+    /// `diffuse_emissive_with_specular_from_alpha` are the ones that showed.
+    #[must_use]
+    pub fn lightmap_entry(&self) -> Option<&str> {
+        self.samplers
+            .iter()
+            .find(|(hash, path)| *hash == crate::rcsmaterial::LIGHTMAP_SAMPLER && path.is_some())
+            .and_then(|(_, path)| path.as_deref())
+    }
+
     /// The blend equation this material asks for, **both factors**.
     ///
     /// This used to key on the destination alone and drop the source, on the

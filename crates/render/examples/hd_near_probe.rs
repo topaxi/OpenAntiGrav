@@ -86,6 +86,42 @@ fn main() -> anyhow::Result<()> {
         .ok_or_else(|| anyhow::anyhow!("{name}: not a PS3 model"))?;
     println!("{}", report.describe());
 
+    if std::env::var("OAG_BIGGEST").is_ok() {
+        // Draw calls by bounding radius. A circuit is hundreds of units
+        // across; a draw whose sphere is thousands is geometry that reaches
+        // somewhere it should not.
+        let mut rows: Vec<(f32, String, u32, [f32; 3])> = Vec::new();
+        let lists: [(&str, &Vec<mesh::DrawCall>); 3] = [
+            ("opaque", &model.draws),
+            ("cutout", &model.alpha_tested_draws),
+            ("blended", &model.transparent_draws),
+        ];
+        for (list, draws) in lists {
+            for d in draws {
+                let label = d
+                    .texture
+                    .and_then(|t| model.textures.get(t))
+                    .and_then(|t| t.as_ref())
+                    .map_or("<none>", |t| t.label.as_str());
+                rows.push((
+                    d.bounds.radius,
+                    format!("{list:8} {label}"),
+                    (d.range.end - d.range.start) / 3,
+                    d.bounds.centre,
+                ));
+            }
+        }
+        rows.sort_by(|a, b| b.0.total_cmp(&a.0));
+        println!("draw calls by bounding radius, largest first:");
+        for (r, label, tris, c) in rows.iter().take(20) {
+            println!(
+                "  radius {r:10.1}  {tris:6} tri(s)  centre [{:.0}, {:.0}, {:.0}]  {label}",
+                c[0], c[1], c[2]
+            );
+        }
+        return Ok(());
+    }
+
     if std::env::var("OAG_NEAREST").is_ok() {
         let point = Vec3::new(at[0], at[1], at[2]);
         // Nearest *vertex* per draw call, not the bounding sphere: a long thin

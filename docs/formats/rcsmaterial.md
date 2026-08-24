@@ -1120,6 +1120,41 @@ surface's own UV, so it reads as fixed bands welded to the road instead of a
 sheen that slides with the camera. That is the next thing to fix here, and
 unlike the rest of the family its combine is already traced.
 
+### The lightmap is bound wherever it sits, not only when it is entry 1 (2026-08-24)
+
+**A third of Talon's Junction's baked lighting was in a slot nothing looked
+at.** `Material::lightmap` reads a path pattern - `lmaps/` and `-lmap.gtf` -
+on the **second** entry alone, which was the only entry this project could see
+when it was written. The file says it outright, and says it anywhere: the
+`lightmap` sampler (`0x37b5db58`, a recovered preimage) is named by **275** of
+the circuit's 442 materials, and this renderer bound the atlas for **85**.
+
+`Material::lightmap_entry` finds it by hash, `skin::picks` gives it the second
+binding wherever it sits, and `roles` keys `SECOND_IS_LIGHTMAP` off the same
+answer. Talon's Junction goes 85 -> 275 lightmapped materials, amphiseum to
+359, `12_sol_2` to 309.
+
+**What it does to a frame, measured rather than asserted**, on the glass-floor
+pose: 1.1 % of pixels move; the fraction clipped to white falls **22.65 % ->
+21.57 %** and the fraction crushed to near-black rises **16.52 % -> 17.12 %**.
+Both directions are the reading working - the prelit term adds light where the
+atlas is bright, and `mask = baked.a * in.sun_mask` now takes the sun away
+where the atlas says shadow, on 190 materials that previously kept full sun
+because nothing was bound. Against a reference capture of the same circuit
+(17.4 % clipped, 7.1 % dark) the clipped end moves toward the original and the
+dark end away from it, which is the tone gap this page records elsewhere and
+not this change's to close.
+
+**It does not explain the black walls.** `track_wall` - 22 chunks, and the
+single largest dark area of that frame at 12,363 sampled pixels of mean
+luminance **12/255** - names a `lightmap` entry with **no path**, so nothing
+changes for it. Its own texture is an ordinary mid-grey (`ds_wall_cs.gtf`,
+channel means 89/99/112, 27 % of texels under 32), so the darkness is in the
+lighting and not the art. That is open, and it is the largest single thing
+between this renderer and the reference frame: the walls flanking the track
+read as flat black silhouettes where the original has grey concrete, which is
+what a report of "big structures missing" looks like from the player's seat.
+
 ### Three sampler roles identified by what they bind, and the glass floor stops painting a ramp
 
 **A hash with no preimage can still be identified, by the files it binds

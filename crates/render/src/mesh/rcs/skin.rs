@@ -95,7 +95,7 @@ pub(super) fn skin(
         // everything else by the material's own microcode. See
         // `oag_formats::rcsmodel::Material::lightmap` and [`roles`].
         let second = entry(pick.aux).map(|path| load(path, textures));
-        match (material.lightmap().is_some(), &second) {
+        match (material.lightmap_entry().is_some(), &second) {
             (true, Some(Some(_))) => report.lightmapped += 1,
             // Named and did not decode: counted apart, because a lightmap that
             // silently fails to load leaves the surface at full brightness,
@@ -216,8 +216,29 @@ pub(super) fn picks(
         .enumerate()
         .map(|(slot, material)| {
             let default = Pick::default();
-            if material.lightmap().is_some() {
-                return default;
+            // **The lightmap wins the second binding, wherever it sits.** It
+            // is the one role of that binding this project has identified,
+            // `mesh.wgsl` reads it as the prelit term and the sun mask, and
+            // the file names it outright - see `Material::lightmap_entry`.
+            // Binding it only when it happened to be entry 1 left a third of
+            // Talon's Junction's baked lighting unread and its track walls
+            // rendering near black.
+            if material.lightmap_entry().is_some() {
+                let at = material
+                    .samplers
+                    .iter()
+                    .position(|(hash, path)| {
+                        *hash == rcsmaterial::LIGHTMAP_SAMPLER && path.is_some()
+                    })
+                    .unwrap_or(1);
+                return Pick {
+                    albedo: material
+                        .samplers
+                        .iter()
+                        .position(|(hash, path)| path.is_some() && !NOT_A_PICTURE.contains(hash))
+                        .unwrap_or(default.albedo),
+                    aux: Some(at),
+                };
             }
             let Some(variant) = variants.get(slot).copied().flatten() else {
                 return default;
@@ -307,7 +328,7 @@ pub(super) fn roles(
     let mut out = Vec::with_capacity(model.materials.len());
     for (slot, material) in model.materials.iter().enumerate() {
         let mut packed = slots::DEFAULT;
-        if material.lightmap().is_some() {
+        if material.lightmap_entry().is_some() {
             packed |= slots::SECOND_IS_LIGHTMAP;
         }
         let variant = variants.get(slot).copied().flatten();
