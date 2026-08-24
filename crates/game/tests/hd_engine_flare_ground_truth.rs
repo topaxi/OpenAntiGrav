@@ -437,3 +437,38 @@ fn every_hd_hull_authors_the_spark_anchors_a_trail_hit_lands_on() {
         println!("slot {slot}: {} spark anchor(s)", anchors.len());
     }
 }
+
+/// **A craft driving into a trail sparks from its front, not its exhaust.**
+///
+/// The regression a player caught on Assegai: with the contact taken at the
+/// hull's centre, a craft already inside a ribbon is equidistant from it nose
+/// and tail, so the pick among the authored anchors was a coin toss and landed
+/// at the rear. The contact is taken at the leading edge now, and this asserts
+/// the consequence on the disc's own hulls rather than on a synthetic one.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn a_craft_inside_a_trail_sparks_from_its_leading_half() {
+    let Some(loaded) = load() else { return };
+    let mut race = race::Race::start(loaded.setup);
+    race.set_autopilot(true);
+    for _ in 0..300 {
+        race.tick(&oag_gameplay::InputSnapshot::default());
+    }
+    // Sit slot 1 squarely inside slot 0's ribbon, pointing the same way: the
+    // geometry the complaint was about.
+    let lead = race.world.ships[0].physics.body;
+    race.world.ships[1].physics.body.orientation = lead.orientation;
+    race.world.ships[1].physics.body.position = lead.position - lead.forward() * 12.0;
+
+    let craft = race.world.ships[1].physics.body;
+    let anchor = race
+        .spark_anchor_of(1, 0)
+        .expect("slot 1 authors spark anchors and slot 0 has a ribbon");
+    let ahead = (anchor - craft.position).dot(craft.forward());
+    println!("anchor {ahead:.2} units ahead of the hull centre");
+    assert!(
+        ahead > 0.0,
+        "the burst anchored {ahead:.2} units along forward - behind the centre \
+         is the exhaust end, which is the bug this pins"
+    );
+}

@@ -475,7 +475,16 @@ every HD craft, each hull authors **7 to 10** of them - and
 `craft + 0x79d0 .. +0x79f4`, testing each for null and stopping at the first
 one, which is what a hull authoring fewer than ten needs. The engine already
 read that set for collision sparks under the name the disc gives it, and it
-picks the nearest of them the same way. So the placement is the disc's data
+picks the nearest of them the same way.
+
+**The contact those anchors are measured against is the hull's leading edge**,
+and that part is derived rather than read - the original measures its ten nodes
+against a point the decompiler lost. Measuring from the craft's *centre* was
+tried and is degenerate: a craft already inside a ribbon has it running through
+end to end, so nose and tail are equidistant and the pick is a coin toss, which
+on Assegai landed at the exhaust. The nose is the mirror of the authored nozzle
+offset, and `a_craft_inside_a_trail_sparks_from_its_leading_half` pins the
+consequence on the disc's own hulls: **4.45 units ahead of the hull centre**. So the placement is the disc's data
 rather than this engine's arithmetic. Confidence 75 on the identification -
 the counts and the "nearest of" rule agree, but nothing has been read that ties
 `+0x79d0` to the locator loader.

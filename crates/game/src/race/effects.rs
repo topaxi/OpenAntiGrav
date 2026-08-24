@@ -223,7 +223,7 @@ impl Race {
                 // and re-spawns it every tick, which is what makes it follow.
                 let contact = self.hd_trail[owner].nearest(at).map_or(at, |(on, _)| on);
                 let point = self
-                    .spark_anchor_of(intruder, contact)
+                    .spark_anchor_of(intruder, owner)
                     .unwrap_or_else(|| hull_contact_point(at, contact, self.hull_reach[intruder]));
                 // Neutral severity, as the rocket blast uses: the scale the
                 // collision sparks derive from an impulse has no counterpart
@@ -271,7 +271,7 @@ impl Race {
         // craft's own topmost authored spark anchor, so the burst is on the
         // hull exactly as a real hit is and still clear of the exhaust plume.
         let above = body.position + body.up() * 10.0;
-        let probe = self.spark_anchor_of(0, above).unwrap_or_else(|| {
+        let probe = self.spark_anchor_of(0, 0).unwrap_or_else(|| {
             hull_contact_point(body.position, above, self.hull_reach[0].max(1.0))
         });
         let name = if self.hd_trail_red[0] > 0.5 {
@@ -288,12 +288,26 @@ impl Race {
     /// The craft's own authored hull spark anchor nearest `contact`, in world
     /// space, or `None` where the hull authors none.
     ///
-    /// **This is the disc's data doing the job an invented direction was
-    /// doing badly.** `Trail_HitShipEffect` parents the burst to the nearest of
-    /// ten nodes at `craft + 0x79d0..+0x79f4`; the `Ship Collision Fx` locators
-    /// are the same kind of thing - hull-mounted spark anchors the original
-    /// also picks the nearest of - so the trail hit picks among them by the
-    /// same rule. Two placements were tried before this and both were wrong on
+    /// **Nearest to the *ribbon*, not to a contact point derived from the
+    /// craft's centre.** `Trail_HitShipEffect` parents the burst to the nearest
+    /// of ten nodes at `craft + 0x79d0..+0x79f4`, measured against a point the
+    /// decompiler lost - so which point is unread. Measuring against
+    /// `Tube::nearest(craft centre)` was the third wrong placement here: when a
+    /// craft is *inside* a ribbon that point sits essentially at its own
+    /// centre, so the choice among anchors is near-arbitrary, and on Assegai it
+    /// landed at the tail. Asking each anchor how far *it* is from the ribbon
+    /// does not fix it either: a craft already inside a trail has the ribbon
+    /// running through it end to end, so every anchor's distance is just its
+    /// lateral offset and nose and tail score alike.
+    ///
+    /// **So the contact is taken at the hull's leading edge**, where a craft
+    /// driving forward meets a trail. That point is derived - the nose, as the
+    /// mirror of the authored nozzle offset in [`Race::hull_reach`] - because
+    /// the point the original measures its ten nodes against is one the
+    /// decompiler lost. Everything else is the disc's: the anchors, and the
+    /// nearest-of rule. The `Ship Collision Fx` locators are the
+    /// original's own hull spark anchors and very likely the same ten nodes -
+    /// see `docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md`. Two placements were tried before this and both were wrong on
     /// screen: the contact point itself put the sparks on the *trail*, and a
     /// point at [`Race::hull_reach`] along the direction of the contact put
     /// them anchored to the craft but floating clear of the hull, because that
@@ -301,9 +315,18 @@ impl Race {
     /// inside a ribbon, is a near-arbitrary perpendicular offset amplified to
     /// five units. An authored anchor has neither problem.
     #[must_use]
-    pub fn spark_anchor_of(&self, slot: usize, contact: Vec3) -> Option<Vec3> {
+    pub fn spark_anchor_of(&self, slot: usize, owner: usize) -> Option<Vec3> {
         let anchors = self.spark_anchors.get(slot)?;
         let matrix = model_matrix_of(&self.world.ships[slot]);
+        // Where the craft *drives into* the ribbon: the point on it nearest the
+        // hull's leading edge, not nearest the hull's centre. A craft already
+        // inside a trail has the ribbon running through it end to end, so a
+        // contact taken at the centre is equidistant from nose and tail and the
+        // pick among anchors is a coin toss - which is how Assegai ended up
+        // sparking from its own exhaust.
+        let body = self.world.ships[slot].physics.body;
+        let nose = body.position + body.forward() * self.hull_reach[slot];
+        let contact = self.hd_trail[owner].nearest(nose)?.0;
         anchors
             .iter()
             .map(|local| matrix.transform_point3(*local))
