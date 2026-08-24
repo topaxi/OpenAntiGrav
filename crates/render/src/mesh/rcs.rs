@@ -151,7 +151,64 @@ fn node_geometry(
     Some((order.u32(payload, 0x30), read3(0x10), read3(0x20)))
 }
 
-/// The chunk hashes the node pass consumes: `+0x30` of every `Mesh` node.
+/// Whether a `Mesh` node's chunk is baked in world space despite the node
+/// naming it: the node's own authored box, carried through its own `to_world`
+/// transform, lands within [`WORLD_BAKE_TOLERANCE`] of the chunk's own bias.
+///
+/// # The pad precedent, generalised
+///
+/// **Confidence 88.** A `Weapon Pad`/`Speedup Pad` node carries a chunk hash
+/// at the mesh payload's own `+0x30`, but the chunk it names is baked in
+/// world space anyway - `docs/formats/rcsmodel.md`, "The pads are second-pass
+/// geometry with a first-pass-shaped reference". The node pass only ever
+/// draws the `Mesh` class, so those chunks structurally never reach it and
+/// [`referenced`] excluding their hashes is enough on its own.
+///
+/// **The same pattern recurs on ordinary `Mesh` nodes, and there it is not
+/// enough to fix in `referenced` alone.** A `wohdtrack_*` node - and a
+/// handful of other names, `startscreenShape`, `sign_emissive_glow`'s
+/// billboards, `cf_startbeam_glow` among them - addresses a chunk baked the
+/// same way, but the node pass *does* iterate these (same class as every
+/// ordinary prop), so leaving [`build`]'s node loop unchanged risks drawing
+/// the chunk **twice** once [`referenced`] stops excluding its hash: once
+/// through the node transform, wherever `submesh_fits`'s loose tolerance
+/// happens to pass by coincidence on a small chunk, and once at identity
+/// through the world-space pass. Measured, not assumed:
+/// `crates/render/examples/hd_double_submit_check.rs` found the node path
+/// still succeeding on a real fraction of the excluded hashes across
+/// `12_sol_2`, `15_anulpha_pass`, `10_sebenco_climb`, `05_ubermall`,
+/// `01_vineta_k`, `02_track` and `03_track`. So this predicate is shared: the
+/// node loop in [`build`] skips a world-baked chunk before it ever reaches
+/// [`Mesh::solve_stride`] or `submesh_fits`, exactly where a pad's different
+/// class already keeps it out, and [`referenced`] excludes the same hash so
+/// the world-space pass in [`build_scene`] is where it draws instead.
+///
+/// **Structural, not tuned.** A chunk this applies to reads 0.01-0.02 world
+/// units away - quantisation noise on an exact match - and every ordinary
+/// node-local chunk measured is at least an order of magnitude further; on
+/// the census that found this (`crates/render/examples/hd_floor_census.rs`)
+/// the next-closest non-match was 2.5 units and most sit in the tens or
+/// hundreds. One world unit sits in the gap between the two clusters with
+/// room either side, not on either cluster's edge.
+fn is_world_baked(mesh: &rcsmodel::Mesh, min: [f32; 3], max: [f32; 3], to_world: Mat4) -> bool {
+    let centre = Vec3::new(
+        (min[0] + max[0]) / 2.0,
+        (min[1] + max[1]) / 2.0,
+        (min[2] + max[2]) / 2.0,
+    );
+    let world_centre = to_world.transform_point3(centre);
+    world_centre.distance(Vec3::from_array(mesh.bias)) < WORLD_BAKE_TOLERANCE
+}
+
+/// How close a `Mesh` node's own authored box, carried through its own
+/// transform chain into world space, must land to a chunk's own bias before
+/// [`is_world_baked`] treats the chunk as baked in world space rather than
+/// node-local. See [`is_world_baked`] for the evidence behind the number.
+const WORLD_BAKE_TOLERANCE: f32 = 1.0;
+
+/// The chunk hashes the node pass consumes: `+0x30` of every `Mesh` node -
+/// **except a chunk that is baked in world space despite the node naming it**,
+/// see [`is_world_baked`].
 ///
 /// **Only what [`build`] draws, and that reverses an earlier over-collection.**
 /// This used to scan every node's whole payload for anything shaped like a
@@ -164,13 +221,28 @@ fn node_geometry(
 /// its node's world translation, never at the origin and never doubled -
 /// so the world-space pass is the right place for them, and the way to hand
 /// them to it is to stop counting them here.
-fn referenced(data: &[u8], nodes: &[vex::Node], mesh_class: u32) -> Vec<u32> {
+fn referenced(
+    data: &[u8],
+    nodes: &[vex::Node],
+    mesh_class: u32,
+    model: &rcsmodel::Model,
+) -> Vec<u32> {
     let order = vex::byte_order(data);
+    let world = vex::world_transforms(data, nodes);
     nodes
         .iter()
-        .filter(|node| node.class_id == mesh_class)
-        .filter_map(|node| node_geometry(&data[node.payload()], order))
-        .map(|(hash, _, _)| hash)
+        .enumerate()
+        .filter(|(_, node)| node.class_id == mesh_class)
+        .filter_map(|(index, node)| {
+            let (hash, min, max) = node_geometry(&data[node.payload()], order)?;
+            if let Some(mesh) = model.mesh(hash) {
+                let to_world = Mat4::from_cols_array(&world[index]);
+                if is_world_baked(mesh, min, max, to_world) {
+                    return None;
+                }
+            }
+            Some(hash)
+        })
         .collect()
 }
 
@@ -209,7 +281,8 @@ pub fn build_scene(
     model_blob: &[u8],
     textures: Textures<'_>,
 ) -> Result<(Model, Report)> {
-    let (mut out, mut report) = build(label, data, model_blob, textures, |c| c.mesh)?;
+    let (mut out, mut report) =
+        build_with_options(label, data, model_blob, textures, |c| c.mesh, true)?;
 
     let model = rcsmodel::Model::parse(model_blob)
         .map_err(|e| anyhow::anyhow!("{label}: the .rcsmodel beside it: {e}"))?;
@@ -218,7 +291,7 @@ pub fn build_scene(
         .ok()
         .and_then(|c| c.mesh)
         .context("no mesh class id for this .vex version")?;
-    let placed = referenced(data, &nodes, mesh_class);
+    let placed = referenced(data, &nodes, mesh_class, &model);
 
     for mesh in &model.meshes {
         if placed.contains(&mesh.hash) {
@@ -569,12 +642,37 @@ fn emit(out: &mut Model, mesh: Geometry<'_>, to_world: Mat4, node: Option<u32>, 
 /// an error** - it is counted in the returned [`Report`], because on a circuit
 /// that is the ordinary case and failing the load over it would draw nothing at
 /// all.
+///
+/// **Never skips a world-baked node reference on its own** - see
+/// [`build_with_options`], which this calls with `world_space_fallback:
+/// false`. That is what every caller outside this module wants: a craft's
+/// `mesh::rcs::build` call (`oag_game::livery`, `livery::flare`) has no
+/// second pass to catch a wrongly-skipped part, so skipping here would draw
+/// nothing for it rather than draw it through the (harmless, if wrong-transform)
+/// node path - an invisible ship part being strictly worse than a
+/// coincidentally-placed one. Only [`build_scene`] - which *does* have a
+/// second, world-space pass right below it - is allowed to ask for the skip.
 pub fn build(
     label: &str,
     data: &[u8],
     model_blob: &[u8],
     textures: Textures<'_>,
     pick: fn(vex::classes::Classes) -> Option<u32>,
+) -> Result<(Model, Report)> {
+    build_with_options(label, data, model_blob, textures, pick, false)
+}
+
+/// [`build`], with the world-bake skip [`is_world_baked`] documents - on only
+/// when the caller has a world-space pass ready to draw the skipped chunk
+/// instead, which is why this is not `pub`: [`build_scene`] is the one caller
+/// that qualifies, and every other caller goes through [`build`] instead.
+fn build_with_options(
+    label: &str,
+    data: &[u8],
+    model_blob: &[u8],
+    textures: Textures<'_>,
+    pick: fn(vex::classes::Classes) -> Option<u32>,
+    world_space_fallback: bool,
 ) -> Result<(Model, Report)> {
     if !vex::has_magic(data) {
         bail!("{label} is not a .vex file (no VEXX magic)");
@@ -626,6 +724,18 @@ pub fn build(
         let Some(mesh) = model.mesh(hash) else {
             continue;
         };
+        // **Skip a chunk this node names but does not actually place.** See
+        // `is_world_baked`: drawing it through `to_world` below would test
+        // its already-world-space positions against this node's un-transformed
+        // local box, which cannot pass, and letting it fall through to
+        // `report.no_stride`/`strays` invites `referenced`'s exclusion (which
+        // hands the same hash to the world-space pass) to draw it twice
+        // wherever the loose `submesh_fits` tolerance happens to pass anyway.
+        let to_world = Mat4::from_cols_array(&world[index]);
+        if world_space_fallback && is_world_baked(mesh, min, max, to_world) {
+            report.world_baked += 1;
+            continue;
+        }
         report.addressed += 1;
         let tolerance = mesh.scale.iter().fold(0.0f32, |a, &b| a.max(b)) * TOLERANCE_STEPS;
         // **What the chunk declares, first.** The searches below fit a stride
@@ -642,7 +752,6 @@ pub fn build(
             continue;
         };
 
-        let to_world = Mat4::from_cols_array(&world[index]);
         let surface = surface(&model, mesh, &out.textures, &out.material_slots);
         report.see_through += usize::from(surface.blend.is_some());
         report.no_texcoord += usize::from(declares_no_texcoord(mesh));
@@ -806,6 +915,7 @@ mod tests {
         let report = Report {
             nodes: 126,
             addressed: 70,
+            world_baked: 5,
             drawn: 59,
             no_stride: 11,
             triangles: 4_000,
@@ -827,7 +937,11 @@ mod tests {
         };
         let line = report.describe();
         assert!(line.contains("59 of 126"), "{line}");
-        assert!(line.contains("56 addressed no chunk"), "{line}");
+        assert!(line.contains("51 addressed no chunk"), "{line}");
+        assert!(
+            line.contains("5 baked in world space despite a node naming them"),
+            "{line}"
+        );
         assert!(line.contains("257 chunk(s) drawn see-through"), "{line}");
         assert!(
             line.contains("40 of 42 drawn material(s) resolved"),

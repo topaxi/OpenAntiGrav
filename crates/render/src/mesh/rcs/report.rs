@@ -12,8 +12,17 @@
 pub struct Report {
     /// Mesh nodes of the wanted class in the `.vex`.
     pub nodes: usize,
-    /// Of those, the ones whose hash found a chunk in the `.rcsmodel`.
+    /// Of those, the ones whose hash found a chunk in the `.rcsmodel` **and**
+    /// which the node pass actually attempts - see [`Self::world_baked`] for
+    /// the third bucket a found hash can fall into.
     pub addressed: usize,
+    /// Of the nodes whose hash found a chunk, the ones baked in world space
+    /// despite the node naming them - `super::is_world_baked`. Left out of
+    /// [`Self::addressed`] deliberately: they are not a stride or a fitting
+    /// failure, they were never the node pass's chunk to draw, and folding
+    /// them into "addressed no chunk" would call a chunk missing that the
+    /// world-space pass draws one line down.
+    pub world_baked: usize,
     /// Of those, the ones whose vertex stride the authored box settled.
     pub drawn: usize,
     /// Of those, the ones no rule could settle a vertex stride for.
@@ -116,9 +125,12 @@ impl Report {
             self.drawn,
             self.nodes,
             self.triangles,
-            self.nodes - self.addressed,
+            self.nodes - self.addressed - self.world_baked,
             self.no_stride,
-        ) + &match self.strays {
+        ) + &match self.world_baked {
+            0 => String::new(),
+            n => format!(", {n} baked in world space despite a node naming them"),
+        } + &match self.strays {
             0 => String::new(),
             n => format!(", {n} submesh(es) dropped as strays"),
         } + &match self.unreferenced {
