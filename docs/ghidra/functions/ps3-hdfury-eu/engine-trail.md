@@ -69,6 +69,7 @@ rendered frame. The rest:
 | `+0x11d8` | **the trail's brightness** | written by `EngineFlare_Update` as `engine blend x speed ramp`; the dumped vertex alpha peak is exactly `brightness * (1 - 6/54)` |
 | `+0x11e4` | pointer to this trail's render-queue sort-key slot | the write is the last line of `Trail_BuildDrawState`'s per-craft loop: it reserves a 4-byte slot in the frame's command stream, writes the `depth << 20 \| 0x20000000`-shaped key into it, and stores the slot's address here. Dump-confirmed: eight values exactly `0x334` apart (one trail's full command packet), re-pointed every frame. An earlier reading called this "a dt-scaled per-frame global, equal across all eight" - both halves were the read-a-pointer-as-a-float trap again |
 | `+0x1208` / `+0x120c` | **this trail's material-instance array, and its length** | `Trail_InitManagerBuffers` allocates `count << 2` bytes and fills it with one instance per material of the loaded ribbon model; `Trail_BuildDrawState` binds the array into the draw state at `+0xc4`. An earlier dump of 0x600 bytes at the target, over four trails and two frames, found no copy of the trail's `+0x1210` phase in either RSX word order - **correct, and now explained**: the instances hold a *pointer* to the phase at `entry+0x18`, never its value (see "the scroll phase is bound by pointer" below) |
+| `+0x11e8` | how many craft contexts this frame holds | the last line of `Trail_WriteCraftContexts`' per-trail loop writes the running count into **every** trail's block, so each SPU job is told the length of the shared context array at `alloc + 0x116f0` as well as being handed it. Read live as `8` on all eight trails in six snapshots across three sessions. What the job does with the other seven craft is unread - see "does another craft disturb the ribbon" below, which rules out the obvious answer |
 | `+0x11ec` | **the head `u`** | `1 - 0.6 * speed01`; equals the head vertex's `u` to 4 decimals on three craft in two frames |
 | `+0x1210` | **the scroll phase** | `EngineFlare_PlaceShapes`' wrapping accumulator. Seeded to **1.0** - the ribbon model's own authored `TrailSpeed` - by `Trail_ResetCraftSlotState` (`0x002e2188`), which the constructor calls once per slot and which nothing else in the image calls at all. The material's `TrailSpeed` parameter is bound to this **address**, so it *is* the draw-time constant rather than being copied into one |
 | `+0x1204` | the craft | chases to the `EngineFlare` at `craft + 0x5f70` |
@@ -330,6 +331,63 @@ was not.** No constant moved for this finding, and none should: what changed
 is that the vertex law and the draw-time constant are now two measurements
 instead of one fused guess.
 
+## Does another craft disturb the ribbon? Measured, and no
+
+A plausible memory of the original - and a plausible reading of the code -
+is that flying through someone's exhaust pushes it aside. The code half is
+suggestive: `Trail_WriteCraftContexts` builds a **compacted** array of
+`0x60`-byte per-craft contexts at `alloc + 0x116f0` - a vec4 from
+`0x000d1e48`, the craft's 4x4 matrix, its craft index at `+0x50` and the
+Fury flag at `+0x54` - and writes the count into every trail's `+0x11e8`
+(above). `Trail_InitCraftSlot`'s DMA list hands that whole array to each
+trail's SPU job. So the job that extrudes **one** ribbon receives **every**
+craft's transform, and a per-craft vec4 that could be a bounding sphere is
+exactly the shape an intersection test would want.
+
+**The extruded vertices say it does not happen.** Read 2026-08-24 from a
+driven Fury race with all eight craft in a strung-out pack, two pauses ~1 s
+apart, dumping every trail's ring *and* its live output buffer
+(`scripts/rpcs3-trail-dump.py` with no flag, then the proximity split
+below). Each craft's current nozzle is its own ring's newest sample, so the
+positions and the geometry come from the same pause.
+
+The test is a **spatial correlation**, not a threshold: if a craft pushed the
+ribbon aside, the ribbon's departure from what its own ring predicts would
+have to spike at the rings nearest that craft and be flat elsewhere. So each
+trail's rings are split into those within 6 units of *another* craft and
+those beyond 20, and both buckets are measured the same way.
+
+- **The width never moves.** `|edge separation - 1.0|` is **0.0000** in every
+  bucket of every trail in both pauses - including the five trails with
+  another craft between **0.19 and 1.43 units** of the ribbon, which is
+  inside or touching a tube of half-width 0.5. A craft sits *within* the
+  ribbon and the ribbon is exactly as wide there as it is 70 units from
+  anything.
+- **The centre-line residual does not correlate with proximity.** Trail by
+  trail, near against far: 0.145/0.115, 0.193/0.066, 0.112/0.131,
+  0.169/0.190, 0.372/0.524, 0.028/**0.177**, and the two trails with no craft
+  within 12 units read 0.363 and 0.182 - the same range. It is as often
+  larger far away as near, and trail 7's *lowest* residual is at its closest
+  rings. The second pause repeats it with craft as close as 0.19 units.
+
+**That residual is this reconstruction's, not a deformation.** The fin
+midpoints do not sit exactly on the stored ring samples - they are off by up
+to ~0.5 units on a 50-unit ribbon, uniformly along it and with no craft
+anywhere near. Why is **unread**: the likeliest causes are that the job
+smooths or resamples the ring rather than extruding each stored sample where
+it lies, or that the head sample is placed at the live nozzle rather than the
+newest recorded one. `oag_render::exhaust::hd::Tube` extrudes each sample
+where it is stored, which is a stated approximation until that is read.
+
+**Confidence 88** on the negative: two pauses, eight trails, 864 rings, craft
+inside the tube, and the one quantity that a rigid displacement could not
+hide - the width - is bit-exact everywhere. What this does *not* establish is
+what the contexts are **for**, because the `Trails` SPU job's own code is
+still unread; the mundane reading is that a compacted array has to be
+searched by craft index, which is why its length has to travel with it, and
+that the vec4 feeds the frustum cull the block's own six planes already serve.
+Neither is read, and neither needs to be for the question above.
+
 ## The third sampler is the lightmap slot, empty
 
 `enginetrail_bluered_triangle.rcsmodel`'s material record names a third
@@ -521,6 +579,10 @@ Open, in rough order of visible cost:
   the four pointers - see "the scroll phase is bound by pointer". Nothing in
   the renderer changed for it; the scroll was already applied the right number
   of times, for a reason the comments had wrong.)
+- What the `Trails` SPU job does with the seven *other* craft contexts it is
+  handed every frame (`+0x11e8` carries the count). Deforming the ribbon is
+  ruled out by measurement above; searching a compacted array by craft index
+  and culling against the vec4 are the unread candidates.
 - What the original does to the ring across a **respawn** - the race start is
   read (born full, bunched, dark) but a respawn was never captured; this
   engine re-bunches at the new pose as a stated approximation.
@@ -533,6 +595,8 @@ Open, in rough order of visible cost:
 uv run --with evdev python3 scripts/rpcs3-trail-dump.py /tmp/hd-trail-dump
 uv run --with evdev python3 scripts/rpcs3-trail-dump.py /tmp/hd-trail-early --early
 uv run --with evdev python3 scripts/rpcs3-trail-dump.py /tmp/hd-trail-params --params
+# "does another craft disturb the ribbon": the default dump, then the split
+python3 scripts/hd-trail-wash-check.py /tmp/hd-trail-dump s0
 # the scroll chain, entirely offline - the ribbon's own two programs, the one
 # instruction in the image that reads 'TrailSpeed', and the hash both ends use:
 python3 scripts/psarc.py cat data/images/hdfury-ps3-eu-dec.iso:PS3_GAME/USRDIR/DATA06.PSARC \
