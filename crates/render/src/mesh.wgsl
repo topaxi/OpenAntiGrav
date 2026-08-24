@@ -365,6 +365,17 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // and this mask did not exist yet.
     let mask = baked.a * in.sun_mask;
     let sun_diffuse = scene.light.sun * (ndl * mask);
+    // **This ambient reaches materials the disc never feeds it to**, and
+    // `slots::NO_AMBIENT` says which - 251 of Anulpha Pass's 309 drawn
+    // materials, 922 of its 1,101 chunks. Gating on that bit alone was tried
+    // on 2026-08-24 and is a regression, not a fix: the materials without an
+    // ambient are three families, not one. Most declare `prelitBias`,
+    // `prelitScaleSpecular` and `directionalLight0*` and are lit by the
+    // lightmap and the sun; but `sign_emissive` and its kin declare only
+    // `fogColour` and are **emissive**, so multiplying them by an `authored`
+    // with the ambient removed turns them black. Anulpha traded a brown
+    // circuit for a black one. The branch this wants is the per-material
+    // lighting path HANDOVER has open, not one bit.
     let authored = scene.light.ambient + prelit + vertex_light + sun_diffuse;
 
     // **Which texture is the picture and which is the coverage, off the

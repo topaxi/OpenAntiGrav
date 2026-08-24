@@ -396,6 +396,15 @@ pub(super) fn roles(
         let declared = variant.zip(blob.as_deref()).and_then(|(variant, blob)| {
             rcsmaterial::Declared::parse(blob, variant.fragment.offset)
         });
+        // **The constant ambient is a declared input, not a global.** A
+        // program that is not fed `constantAmbientColour` must not receive it;
+        // see `slots::NO_AMBIENT` for what applying it to everything cost.
+        if declared
+            .as_ref()
+            .is_some_and(|d| !d.takes_constant_ambient())
+        {
+            packed |= slots::NO_AMBIENT;
+        }
         let (first_unit, second_unit) = units(
             declared.as_ref(),
             material,

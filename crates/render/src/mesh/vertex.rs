@@ -133,6 +133,34 @@ pub mod slots {
     /// that carries what a material's own microcode says.
     pub const FLIP_V: u32 = 1 << 5;
 
+    /// The material's fragment program is **not** fed
+    /// `constantAmbientColour`, so the circuit's constant ambient must not be
+    /// added to it.
+    ///
+    /// **Set only when the declaration was actually read** and does not name
+    /// the parameter. A material whose variant or `SHO` block this reader
+    /// could not follow keeps the ambient, which is the direction that leaves
+    /// a surface lit rather than black.
+    ///
+    /// **Read, and deliberately not acted on yet.** `mesh.wgsl` still adds
+    /// the ambient to everything, because gating on this bit alone was tried
+    /// and is a regression: the materials without an ambient are three
+    /// families, not one. Most declare `prelitBias`, `prelitScaleSpecular` and
+    /// `directionalLight0*` and are lit by the lightmap and the sun, but
+    /// `sign_emissive` and its kin declare only `fogColour` and are emissive -
+    /// so removing the ambient turns those black and trades a brown circuit
+    /// for a black one. This wants the per-material lighting branch, not one
+    /// bit.
+    ///
+    /// The renderer adds `Lighting.Constant ambient color` to every
+    /// surface, and the disc feeds it to a minority: **58 of Anulpha Pass's
+    /// 309 drawn materials, 179 of its 1,101 chunks**; 24 of 283 on Talon's
+    /// Junction. That is invisible where the authored ambient is neutral and
+    /// glaring where it is not - Anulpha authors `0.557 0.322 0.184`, a strong
+    /// orange, against a cyan sun, and the whole circuit came out brown where
+    /// the original is cyan and white.
+    pub const NO_AMBIENT: u32 = 1 << 6;
+
     /// Which channel of that texture the alpha is, in bits 3 and 4.
     #[must_use]
     pub const fn alpha_channel(channel: u32) -> u32 {
