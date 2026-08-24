@@ -41,6 +41,7 @@ pub(super) fn decode_texture(label: &str, blob: &[u8]) -> Option<ModelTexture> {
 /// so the texture has to be there for the role to mean anything.
 pub(super) fn skin(
     model: &rcsmodel::Model,
+    picks: &[Pick],
     textures: Textures<'_>,
     report: &mut Report,
 ) -> (Vec<Option<ModelTexture>>, Vec<Option<ModelTexture>>) {
@@ -61,26 +62,29 @@ pub(super) fn skin(
     };
     let mut skins = Vec::with_capacity(model.materials.len());
     let mut seconds = Vec::with_capacity(model.materials.len());
-    for material in &model.materials {
-        if material.texture.is_empty() {
-            report.untextured += 1;
-            skins.push(None);
-        } else {
-            let decoded = load(&material.texture, textures);
-            if decoded.is_none() {
+    for (slot, material) in model.materials.iter().enumerate() {
+        let pick = picks.get(slot).copied().unwrap_or_default();
+        let entry =
+            |index: Option<usize>| -> Option<&str> { material.samplers.get(index?)?.1.as_deref() };
+        match entry(Some(pick.albedo)) {
+            None => {
                 report.untextured += 1;
+                skins.push(None);
             }
-            skins.push(decoded);
+            Some(path) => {
+                let decoded = load(path, textures);
+                if decoded.is_none() {
+                    report.untextured += 1;
+                }
+                skins.push(decoded);
+            }
         }
         // The lightmap is still counted apart from every other use of the
         // slot, because the two are answered by different evidence: the
         // lightmap by `Material::lightmap`'s four-signal path reading, and
         // everything else by the material's own microcode. See
         // `oag_formats::rcsmodel::Material::lightmap` and [`roles`].
-        let second = material
-            .second_texture
-            .as_deref()
-            .map(|path| load(path, textures));
+        let second = entry(pick.aux).map(|path| load(path, textures));
         match (material.lightmap().is_some(), &second) {
             (true, Some(Some(_))) => report.lightmapped += 1,
             // Named and did not decode: counted apart, because a lightmap that
@@ -94,6 +98,114 @@ pub(super) fn skin(
         seconds.push(second.flatten());
     }
     (skins, seconds)
+}
+
+/// Which of a material's sampler entries this renderer binds, out of however
+/// many it has.
+///
+/// **The renderer used to bind entries 0 and 1 and call them "the texture" and
+/// "the second texture".** A material has as many entries as it likes - 1,291
+/// across Talon's Junction's 442 materials, up to seven on one - so those two
+/// names were a position, not a role. This is the role: the entry whose
+/// declared sampler the program's colour lane reaches, and the entry its alpha
+/// lane reaches.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct Pick {
+    /// The entry bound as the surface's picture.
+    pub albedo: usize,
+    /// The entry bound beside it - the coverage source, or the lightmap.
+    pub aux: Option<usize>,
+}
+
+impl Default for Pick {
+    /// Entries 0 and 1, which is what this renderer always bound and what a
+    /// material with no resolved variant still gets.
+    fn default() -> Self {
+        Self {
+            albedo: 0,
+            aux: Some(1),
+        }
+    }
+}
+
+/// Which entry each material's two bindings come from.
+///
+/// **Conservative by construction, and the measurement says how much that
+/// costs.** Of Talon's Junction's 302 drawn materials, the colour lane never
+/// resolves past entry 0 and the alpha lane resolves past entry 1 on **nine**;
+/// everything else either lands on an entry this renderer already bound or
+/// does not resolve at all (`crates/render/examples/hd_role_census.rs`). So
+/// this is plumbing rather than a new picture: it removes "first and second
+/// slot" as a concept from the renderer, and the roles that would change a
+/// frame - the specular map, the emissives, the facing ramp, all named and
+/// supplied in the same table - need their shading read out of the microcode
+/// before anything can bind them usefully.
+///
+/// **A lightmapped material keeps entry 1 regardless.** The lightmap is the
+/// one role of that binding this project has identified, `mesh.wgsl` reads it
+/// as the prelit term and the sun mask, and `Material::lightmap`'s four-signal
+/// path reading is what finds it - so an alpha trace never displaces it.
+pub(super) fn picks(
+    model: &rcsmodel::Model,
+    variants: &[Option<rcsmaterial::Variant>],
+    textures: Textures<'_>,
+) -> Vec<Pick> {
+    use rcsmaterial::fragment::{Program, Texel};
+
+    let mut cache: std::collections::HashMap<String, Option<Vec<u8>>> = Default::default();
+    model
+        .materials
+        .iter()
+        .enumerate()
+        .map(|(slot, material)| {
+            let default = Pick::default();
+            if material.lightmap().is_some() {
+                return default;
+            }
+            let Some(variant) = variants.get(slot).copied().flatten() else {
+                return default;
+            };
+            let Some(blob) = cache
+                .entry(material.name.clone())
+                .or_insert_with(|| textures(&format!("/{}", material.name)))
+                .clone()
+            else {
+                return default;
+            };
+            let (Some(declared), Some(program)) = (
+                rcsmaterial::Declared::parse(&blob, variant.fragment.offset),
+                Program::parse(&blob, variant.fragment.offset),
+            ) else {
+                return default;
+            };
+            // An entry only counts when it supplies a `.gtf`: an entry the
+            // material declares and leaves empty is the engine's to bind, and
+            // pointing a lane at it would sample `mesh_render::build`'s
+            // placeholder.
+            let index_of = |unit: u32| -> Option<usize> {
+                material.samplers.iter().position(|(hash, path)| {
+                    path.is_some()
+                        && declared
+                            .samplers
+                            .iter()
+                            .any(|&(h, u)| h == *hash && u == unit)
+                })
+            };
+            let texels = program.output_texels();
+            let colour = texels[0].merge(texels[1]).merge(texels[2]);
+            let albedo = colour
+                .unit()
+                .and_then(|u| index_of(u32::from(u)))
+                .unwrap_or(default.albedo);
+            let aux = match texels[3] {
+                Texel::Unit { unit, .. } => index_of(u32::from(unit)),
+                _ => None,
+            }
+            .filter(|&i| i != albedo)
+            .or(default.aux);
+            Pick { albedo, aux }
+        })
+        .collect()
 }
 
 /// What each material slot's own microcode says its two texture units are for,
@@ -119,6 +231,7 @@ pub(super) fn skin(
 pub(super) fn roles(
     model: &rcsmodel::Model,
     variants: &[Option<rcsmaterial::Variant>],
+    picks: &[Pick],
     seconds: &[Option<ModelTexture>],
     textures: Textures<'_>,
 ) -> Vec<u32> {
@@ -145,7 +258,11 @@ pub(super) fn roles(
         let declared = variant.zip(blob.as_deref()).and_then(|(variant, blob)| {
             rcsmaterial::Declared::parse(blob, variant.fragment.offset)
         });
-        let (first_unit, second_unit) = units(declared.as_ref(), material);
+        let (first_unit, second_unit) = units(
+            declared.as_ref(),
+            material,
+            picks.get(slot).copied().unwrap_or_default(),
+        );
         // **Only where there is a second texture to point at.** A program's
         // unit 1 and a `.rcsmodel` material's second slot are not the same
         // thing: 40 of the disc's materials sample two units while naming one
@@ -216,22 +333,31 @@ pub(super) fn roles(
 /// already draws correctly. The second showed up in a frame: replacing the
 /// ordinal moved 27 of Talon's Junction's 442 slots off
 /// `ALPHA_FROM_SECOND`, and the circuit's perforated trackside barrier - the
-/// one beside the blimp at tick 295 - lost its holes and washed out. So
-/// [`roles`] treats a unit as the second slot if *either* reading says so.
+/// one beside the blimp at tick 295 - lost its holes and washed out. That
+/// reading is retired: the pairing it rested on was off by one entry, and with
+/// the entries paired correctly the hash answers on its own.
 ///
 /// Where the variant declares no such sampler at all, this answers the
 /// ordinal, which is what the caller would have used anyway.
-fn units(declared: Option<&rcsmaterial::Declared>, material: &rcsmodel::Material) -> (u32, u32) {
-    let unit_of = |hash: Option<u32>| {
-        let (declared, hash) = (declared?, hash?);
+fn units(
+    declared: Option<&rcsmaterial::Declared>,
+    material: &rcsmodel::Material,
+    pick: Pick,
+) -> (u32, u32) {
+    // **The entries this renderer actually bound**, which [`picks`] chose and
+    // which are not necessarily 0 and 1 - asking the hashes of entries 0 and 1
+    // here would answer for textures no draw samples.
+    let unit_of = |index: Option<usize>| {
+        let (declared, (hash, path)) = (declared?, material.samplers.get(index?)?);
+        path.as_ref()?;
         declared
             .samplers
             .iter()
-            .find(|(h, _)| *h == hash)
+            .find(|(h, _)| h == hash)
             .map(|&(_, unit)| unit)
     };
-    let first = unit_of((!material.texture.is_empty()).then_some(material.texture_sampler));
-    let second = unit_of(material.second_texture_sampler);
+    let first = unit_of(Some(pick.albedo));
+    let second = unit_of(pick.aux);
     // A material whose two slots resolve to the same unit is a reading that
     // cannot be right, and taking it would paint the first texture through the
     // second's role. The ordinal answers for the second slot there.
@@ -340,6 +466,9 @@ mod tests {
     }
 
     fn material(first: u32, second: Option<u32>) -> rcsmodel::Material {
+        let samplers = std::iter::once((first, Some("a.gtf".to_string())))
+            .chain(second.map(|h| (h, Some("b.gtf".to_string()))))
+            .collect();
         rcsmodel::Material {
             name: "m.rcsmaterial".to_string(),
             state: 1,
@@ -349,7 +478,7 @@ mod tests {
             second_texture: second.map(|_| "b.gtf".to_string()),
             texture_sampler: first,
             second_texture_sampler: second,
-            samplers: Vec::new(),
+            samplers,
             parameters: Vec::new(),
         }
     }
@@ -361,7 +490,11 @@ mod tests {
     fn a_slots_sampler_hash_names_its_unit_and_the_ordinal_does_not() {
         let d = declared(&[(0x11cb_4f74, 0), (0x739a_786e, 1), (0x37b5_db58, 2)]);
         assert_eq!(
-            units(Some(&d), &material(0x739a_786e, Some(0x37b5_db58))),
+            units(
+                Some(&d),
+                &material(0x739a_786e, Some(0x37b5_db58)),
+                Pick::default()
+            ),
             (1, 2)
         );
     }
@@ -371,7 +504,11 @@ mod tests {
     #[test]
     fn with_nothing_declared_the_ordinal_answers() {
         assert_eq!(
-            units(None, &material(0x3bdc_0403, Some(0x37b5_db58))),
+            units(
+                None,
+                &material(0x3bdc_0403, Some(0x37b5_db58)),
+                Pick::default()
+            ),
             (0, 1)
         );
     }
@@ -383,7 +520,11 @@ mod tests {
     fn an_undeclared_second_slot_keeps_the_ordinal() {
         let d = declared(&[(0x515e_298e, 0), (0xfd66_9142, 1)]);
         assert_eq!(
-            units(Some(&d), &material(0x515e_298e, Some(0x37b5_db58))),
+            units(
+                Some(&d),
+                &material(0x515e_298e, Some(0x37b5_db58)),
+                Pick::default()
+            ),
             (0, 1)
         );
     }
@@ -394,7 +535,11 @@ mod tests {
     fn two_slots_on_one_unit_is_refused() {
         let d = declared(&[(0xaaaa_aaaa, 1)]);
         assert_eq!(
-            units(Some(&d), &material(0xaaaa_aaaa, Some(0xaaaa_aaaa))),
+            units(
+                Some(&d),
+                &material(0xaaaa_aaaa, Some(0xaaaa_aaaa)),
+                Pick::default()
+            ),
             (1, 0)
         );
     }

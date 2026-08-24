@@ -134,7 +134,7 @@ pub fn no_textures(_: &str) -> Option<Vec<u8>> {
 
 mod isolate;
 mod skin;
-use skin::{roles, skin, variants};
+use skin::{picks, roles, skin, variants};
 
 /// The bounding box and chunk hash a PS3 `Mesh` node's payload carries.
 ///
@@ -702,10 +702,15 @@ fn build_with_options(
 
     let mut out = Model::none(label);
     let mut report = Report::default();
-    let (skins, seconds) = skin(&model, textures, &mut report);
+    // **The variant first**, because which sampler entry each of this
+    // renderer's two bindings comes from is a property of the shader the
+    // lit-race key resolves to, not of the entry's position - see
+    // `skin::picks`.
     let material_variants = variants(&model, textures, &mut report);
+    let picks = picks(&model, &material_variants, textures);
+    let (skins, seconds) = skin(&model, &picks, textures, &mut report);
     // After the variants, because the roles are read off the resolved one.
-    let material_slots = roles(&model, &material_variants, &seconds, textures);
+    let material_slots = roles(&model, &material_variants, &picks, &seconds, textures);
     out.textures = skins;
     out.lightmaps = seconds;
     // Every vertex this module writes carries HD's baked per-vertex light in

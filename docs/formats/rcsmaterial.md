@@ -1063,6 +1063,49 @@ inferred from an `lmaps/` path on 85 of them.
 drawn. Which of them a shader wants is no longer a guess - it is the hash,
 against the resolved variant's own declaration.
 
+### The renderer binds by role now, not by entry position - and the census says what that is worth
+
+`mesh::rcs::skin::picks` chooses **which** of a material's sampler entries each
+of this renderer's two bindings comes from: the entry whose declared sampler
+the program's colour lane reaches, and the entry its alpha lane reaches.
+Entries 0 and 1 remain the answer where nothing resolves, and a lightmapped
+material keeps entry 1 regardless - the lightmap is the one role of that
+binding this project has identified, and an alpha trace must not displace it.
+
+**Measured before it was built, and the number is small on purpose to state**
+(`crates/render/examples/hd_role_census.rs`, Talon's Junction's 302 drawn
+materials): the colour lane never resolves past entry 0, and the alpha lane
+resolves past entry 1 on **nine** materials. Everything else lands on an entry
+this renderer already bound, or does not resolve at all. So this is plumbing:
+it removes "first and second slot" as a concept from the renderer and makes
+every later role reachable, and it is **not** what would change a frame.
+
+**What would change a frame is the roles this shader does not implement**, and
+they are all named and supplied in the same table: the specular map
+(`0x20c3e476`, a `*_spec.gtf` on all 63 of its uses), the emissives, and the
+facing ramp (`0x994bbcf1` / `0x35281c78`, always a `*facing*ramp*.gtf`). Each
+needs its operation read out of the microcode before anything binds it - the
+rule this project keeps: a role with no recovered shading stays unwired rather
+than guessed.
+
+**The clearest of those is Talon's Junction's glass floor, and its coordinate
+is already traced.** `etched_glass_tech`'s `dc_iridescent_gradient.gtf` binds
+`0x94b2b285` at unit 2, and block #7 samples it at a **scalar**:
+
+```text
+@0x01  op3B R2.xyz, f[TC3], R0     ; normalize(normal)
+@0x11  op3B R1.xyz, R1, R0.wwww    ; normalize(view)
+@0x12  DP3  R2.w, -R1, R2          ; dot(-V, N)
+@0x19  TEX  H2.xyz, -R2.wwww unit2 ; sampled at dot(V, N)
+```
+
+So the iridescence is a **view-angle sheen**, not a light projected onto the
+floor and not a pattern painted into it - which is what a 512x16 hue ramp is
+for. This renderer still binds that ramp as the albedo and samples it at the
+surface's own UV, so it reads as fixed bands welded to the road instead of a
+sheen that slides with the camera. That is the next thing to fix here, and
+unlike the rest of the family its combine is already traced.
+
 ### Five more sampler names, by preimage over the executable
 
 Sweeping `EBOOT.elf`'s 9,097 identifier-shaped strings the way `zoneTexInner`
