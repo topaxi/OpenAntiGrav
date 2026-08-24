@@ -99,10 +99,13 @@ pub enum CraftState {
     Racing,
     /// State 4. The explosion, which runs for [`DESTROYED_DURATION`].
     ///
-    /// `Ship_SetState`'s case 4 plays `_BLOWUP`, hides the HUD and puts the
-    /// camera in mode 5 - **none of which this engine does**, because it has no
-    /// explosion, no HUD hide and no camera mode. What it does have is the
-    /// timer, which is what the transition below needs.
+    /// `Ship_SetState`'s case 4 plays `~BLOWUP`, hides the HUD and puts the
+    /// camera in mode 5. **The sound is built** - `oag_game::audio::sfx` holds
+    /// it for exactly this state - and the other two are not: case 4's HUD and
+    /// camera work goes through four globals none of which is identified. The
+    /// addresses are on
+    /// [`zone-mode.md`](../../../docs/ghidra/functions/psp-pulse-usa/zone-mode.md)
+    /// so the next reader starts from them rather than from a summary.
     Destroyed,
     /// State 5. Out of the race.
     ///

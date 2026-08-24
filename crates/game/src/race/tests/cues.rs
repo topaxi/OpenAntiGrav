@@ -111,9 +111,9 @@ fn a_track_with_no_pads_raises_no_pad_cue() {
 #[test]
 fn every_cue_has_something_that_raises_it() {
     // A cue driven from the *level* rather than from an edge: the audio layer
-    // reads `Race::shield_is_up` and `Race::finished` directly, so these have
-    // no entry in the queue by design.
-    const BY_LEVEL: [Cue; 2] = [Cue::Engine, Cue::Shield];
+    // reads `Race::shield_is_up`, `Race::craft_is_exploding` and
+    // `Race::finished` directly, so these have no entry in the queue by design.
+    const BY_LEVEL: [Cue; 3] = [Cue::Engine, Cue::Shield, Cue::Blowup];
 
     // A pad the whole grid stands on *and* a wall to scrape, so one run
     // reaches every edge. The wall is `respawn.rs`'s proven fixture - a

@@ -115,6 +115,11 @@ pub(super) struct SfxVoices {
     /// and "this activation has been handled" are different facts and only the
     /// second one may gate the trigger.
     shield_open: bool,
+    /// `~BLOWUP`'s held voice, while the player's craft is mid-explosion.
+    blowup: Option<VoiceId>,
+    /// Whether this explosion has already been responded to, for the same
+    /// reason [`Self::shield_open`] exists: the level must arm the voice once.
+    blowup_open: bool,
     rng: Rng,
 }
 
@@ -150,6 +155,8 @@ impl Audio {
                 engines: std::array::from_fn(|_| Engine::new(&mut rng)),
                 shield: None,
                 shield_open: false,
+                blowup: None,
+                blowup_open: false,
                 rng: Rng::new(SFX_SEED),
             }
         });
@@ -158,6 +165,7 @@ impl Audio {
         let craft = craft_positions(race);
         let running = !race.finished();
         let shielded = race.shield_is_up();
+        let exploding = race.craft_is_exploding();
         self.output.with_mixer(|mixer| {
             for event in cues {
                 // A held cue is not a one-shot and must not be fired as one -
@@ -226,6 +234,31 @@ impl Audio {
                 _ => {}
             }
 
+            // The explosion, on the same level-and-latch shape the shield uses
+            // and for the same reason: case 4 opens a *handle*, so this is a
+            // voice's lifetime rather than a one-shot. Dry - it is the player's
+            // own craft and the original hands it to the no-emitter path.
+            match (exploding, voices.blowup_open) {
+                (true, false) => {
+                    voices.blowup_open = true;
+                    if let Some((sound, looping)) = banks.pick(Cue::Blowup, &mut voices.rng) {
+                        voices.blowup = if looping {
+                            mixer.play(Play::looping(sound, Bus::Sfx))
+                        } else {
+                            let _ = mixer.play(Play::once(sound, Bus::Sfx));
+                            None
+                        };
+                    }
+                }
+                (false, true) => {
+                    voices.blowup_open = false;
+                    if let Some(id) = voices.blowup.take() {
+                        mixer.stop(id);
+                    }
+                }
+                _ => {}
+            }
+
             // Every craft's engine, each off its own emitter. A craft with no
             // pose is one the race never spawned; it is skipped rather than
             // placed at the origin, which would put eight engines in a heap
@@ -267,6 +300,10 @@ impl Audio {
                     mixer.stop(id);
                 }
                 voices.shield_open = false;
+                if let Some(id) = voices.blowup.take() {
+                    mixer.stop(id);
+                }
+                voices.blowup_open = false;
             });
         }
         self.sfx = None;
@@ -392,11 +429,26 @@ pub enum Cue {
     /// starts, and `autopilot_eng` sits beside this one in `speech.bnk` with no
     /// call site at all. An effect whose trigger is not recovered stays silent.
     Disengaging,
+    /// The player's own craft blowing up.
+    ///
+    /// `Ship_SetState`'s case 4 (`0x0884430c`, reached through the nine-entry
+    /// jump table at `0x08a7bc18`) arms the `0.5 s` state timer and, in the
+    /// same breath, plays `~BLOWUP` through `FUN_0883e9b0` - the **dry,
+    /// no-emitter** path at volume `0x400` - keeping the handle at
+    /// `craft+0xcac`. It is therefore held, and it is the player's alone:
+    /// `FUN_0883e9b0` returns without playing when `craft+0x368` is non-zero.
+    /// See [`zone-mode.md`](../../../../docs/ghidra/functions/psp-pulse-usa/zone-mode.md),
+    /// confidence 85.
+    ///
+    /// **An opponent's destruction plays nothing here**, and that is the
+    /// reading rather than a gap in it - whatever an opponent's explosion
+    /// sounds like comes from somewhere this pass did not find.
+    Blowup,
 }
 
 impl Cue {
     /// Every cue this port fires, which is every one it knows how to load.
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 8] = [
         Self::SpeedupPad,
         Self::Collision,
         Self::Absorb,
@@ -404,13 +456,14 @@ impl Cue {
         Self::Shield,
         Self::ShieldActive,
         Self::Disengaging,
+        Self::Blowup,
     ];
 
     /// The bank the cue is looked up in.
     #[must_use]
     pub fn bank(self) -> BankName {
         match self {
-            Self::SpeedupPad => BankName::Hud,
+            Self::SpeedupPad | Self::Blowup => BankName::Hud,
             Self::Collision | Self::Engine => BankName::Ship,
             Self::Absorb | Self::Shield => BankName::Weapons,
             Self::ShieldActive | Self::Disengaging => BankName::Speech,
@@ -451,6 +504,7 @@ impl Cue {
             Self::Shield => "~SHIELD",
             Self::ShieldActive => "shieldactive",
             Self::Disengaging => "disengaging",
+            Self::Blowup => "~BLOWUP",
         }
     }
 
@@ -465,7 +519,7 @@ impl Cue {
     /// written here.
     #[must_use]
     pub fn held(self) -> bool {
-        matches!(self, Self::Engine | Self::Shield)
+        matches!(self, Self::Engine | Self::Shield | Self::Blowup)
     }
 
     /// Which emitter the original plays this cue on.
@@ -506,6 +560,9 @@ impl Cue {
             // read, and it is `FUN_0883e9b0` -> `FUN_0893a768`, the path that
             // takes no emitter at all.
             Self::ShieldActive | Self::Disengaging => Placement::Unplaced,
+            // Read, not assumed: case 4 hands it to the path that takes no
+            // emitter and a volume of `0x400`.
+            Self::Blowup => Placement::Unplaced,
         }
     }
 }
