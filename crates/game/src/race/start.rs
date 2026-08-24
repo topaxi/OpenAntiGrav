@@ -23,6 +23,7 @@ impl Race {
             mode,
             difficulty,
             opponents,
+            trail_sparks,
             seed,
             zone,
             spline,
@@ -46,7 +47,6 @@ impl Race {
             pose_override,
             camera_override,
             hd_trail,
-            hull_radius,
             ..
         } = setup;
 
@@ -256,7 +256,8 @@ impl Race {
             hd_trail: [exhaust::hd::Tube::new(); MAX_SHIPS],
             hd_trail_active: hd_trail.is_some(),
             hd_trail_red: hd_trail.unwrap_or([0.0; MAX_SHIPS]),
-            hull_radius,
+            hull_reach: [0.0; MAX_SHIPS],
+            trail_sparks,
             trail_inside: [0; MAX_SHIPS],
             hd_flame: [exhaust::hd::Flame::new(); MAX_SHIPS],
             hd_sprite: [exhaust::hd::Sprite::new(); MAX_SHIPS],

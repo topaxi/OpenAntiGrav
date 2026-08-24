@@ -947,6 +947,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             difficulty: options.difficulty,
             class: options.class,
             opponents: options.opponents,
+            trail_sparks: options.trail_sparks,
             seed: options.seed.unwrap_or(SEED),
             zone,
             ai,
@@ -954,9 +955,6 @@ pub fn load(options: &Options) -> Result<Loaded> {
             course,
             start_position,
             hd_trail: trail_shape.is_some().then_some(hd_trail_red),
-            hull_radius: std::array::from_fn(|slot| {
-                liveries.get(slot).map_or(0.0, |livery| livery.hull.radius)
-            }),
             collision,
             handling,
             airbrake_graphics,

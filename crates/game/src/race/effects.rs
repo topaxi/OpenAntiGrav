@@ -62,6 +62,7 @@ impl Race {
                 continue;
             }
             let ship = &self.world.ships[slot].physics;
+            let position = ship.body.position;
             let thrust = ship.thrust;
             let speed = ship.body.linear_velocity.length();
             let back = -ship.body.forward();
@@ -78,6 +79,12 @@ impl Race {
                 self.hd_sprite[slot].advance(|| rng.next_f32());
             }
             if let Some(nozzle) = self.nozzle_of(slot) {
+                // How far this hull reaches from its own origin, in world
+                // units: the trail-hit test's stand-in for the bounding sphere
+                // HD hands its SPU job. Taken here because the nozzle is
+                // already in hand and it is the one authored point on the hull
+                // this engine knows the world position of.
+                self.hull_reach[slot] = (nozzle - position).length();
                 self.exhaust[slot].push_trail(nozzle, back);
                 if self.hd_trail_active {
                     // HD's tube wants the craft's *up* (fin 0's axis) and the
@@ -107,17 +114,31 @@ impl Race {
     /// engine's**, named rather than buried:
     ///
     /// 1. **The test.** A craft counts as in a trail when its centre comes
-    ///    within its own hull radius plus the ribbon's measured half-width of
-    ///    that trail's centre line ([`exhaust::hd::Tube::nearest`]). Both
-    ///    terms are measured - the hull's from its own model, the ribbon's
+    ///    within its own [`Race::hull_reach`] plus the ribbon's measured
+    ///    half-width of that trail's centre line
+    ///    ([`exhaust::hd::Tube::nearest`]). Both terms are measured - the
+    ///    reach from the craft's own authored nozzle locator, the half-width
     ///    from the running game - but that a sphere against a centre line is
     ///    the original's test is an assumption, taken because the SPU job is
     ///    handed exactly one bounding-sphere-shaped vec4 per craft and nothing
-    ///    per fin.
-    /// 2. **The rate.** The original clears its flag every frame, and whether
-    ///    the job re-raises it while a craft stays inside is unread. Firing per
-    ///    tick would be 60 ignitions a second, so this fires on **entry** and
-    ///    re-arms on exit. A guess, and the one most likely to be wrong.
+    ///    per fin. **A reach in the wrong space is what this got wrong first**:
+    ///    `mesh::Model::radius` is a model-space AABB half-extent reading 69 to
+    ///    379 on HD's hulls, which put every craft inside every trail from tick
+    ///    0, fired 24 bursts on the grid and then never re-armed for the rest
+    ///    of the race.
+    /// 2. **The rate: every tick a craft is inside, not once on entry.** The
+    ///    asset settles this and a first pass got it wrong. `WO_TRAIL_HITSHIP`
+    ///    is authored as a **one-shot**: duration 1 tick, `looping` false,
+    ///    5 particles of 0.2..0.5 units whose size channel is down to a third
+    ///    by 17 % of its life. A system shaped like that is meant to be
+    ///    re-fired while the condition holds - fired once per entry it is five
+    ///    streaks and all but invisible, which is exactly how this first
+    ///    behaved. It also matches the original's own shape, where the flag is
+    ///    consumed *and cleared every frame*, so a craft that stays inside
+    ///    re-raises it. Against the emitter's 2,000 live cap, a continuous
+    ///    stream is a few hundred particles. What stays unread is whether the
+    ///    SPU job really does re-raise it every frame, which is why this is
+    ///    still listed as an approximation.
     /// 3. **The attachment point.** The original picks the nearest of ten hull
     ///    nodes at `craft + 0x79d0..+0x79f4`; this engine has no such nodes, so
     ///    the burst sits at the closest point on the ribbon to the craft -
@@ -138,6 +159,7 @@ impl Race {
         if !self.hd_trail_active {
             return;
         }
+        self.force_trail_sparks();
         for owner in 0..self.world.ship_count as usize {
             if !self.world.ships[owner].active || !self.hd_trail[owner].ready() {
                 continue;
@@ -147,18 +169,15 @@ impl Race {
                     continue;
                 }
                 let at = self.world.ships[intruder].physics.body.position;
-                let reach = self.hull_radius[intruder] + exhaust::hd::FIN_HALF_WIDTH;
+                let reach = self.hull_reach[intruder] + exhaust::hd::FIN_HALF_WIDTH;
                 let hit = self.hd_trail[owner]
                     .nearest(at)
                     .is_some_and(|(_, distance)| distance <= reach);
                 let bit = 1u8 << intruder;
-                let was = self.trail_inside[owner] & bit != 0;
                 if hit {
                     self.trail_inside[owner] |= bit;
                 } else {
                     self.trail_inside[owner] &= !bit;
-                }
-                if !hit || was {
                     continue;
                 }
                 let name = if self.hd_trail_red[intruder] > 0.5 {
@@ -177,6 +196,44 @@ impl Race {
                 self.stage.play(&effect, point, 1.0);
             }
         }
+    }
+
+    /// `--trail-sparks`: the burst, every tick, on the player's own ribbon.
+    ///
+    /// **A verification aid for the *drawing*, and the two failures it
+    /// separates are real ones this hit in order.** The trigger fires a handful
+    /// of times in a whole race and almost never in front of the camera, so
+    /// "I saw nothing" cannot tell a burst that never played from one that
+    /// played and drew nothing.
+    ///
+    /// Everything but the *placement* is the real path - the same effect, the
+    /// same rate, the same [`hd_trail_red`](Race::hd_trail_red) colour select.
+    /// The placement is the one thing chosen rather than derived: two units
+    /// above the player's nozzle, which is on screen and clear of the exhaust
+    /// plume. Three alternatives were measured and each looks like nothing or
+    /// like the plume - at the nozzle it lands inside the plume; eight units
+    /// back along the ribbon it sits at the camera's near plane; and letting
+    /// the real pairwise path through with the distance test bypassed spawns it
+    /// on whichever rival's ribbon is nearest, which when the player leads is a
+    /// hundred units behind. **So this placement is for looking at, and says
+    /// nothing about where a real hit lands.**
+    fn force_trail_sparks(&mut self) {
+        if !self.trail_sparks {
+            return;
+        }
+        let Some(nozzle) = self.nozzle_of(0) else {
+            return;
+        };
+        let probe = nozzle + self.world.ships[0].physics.body.up() * 2.0;
+        let name = if self.hd_trail_red[0] > 0.5 {
+            TRAIL_HITSHIP_RED_EFFECT
+        } else {
+            TRAIL_HITSHIP_EFFECT
+        };
+        let Some(effect) = self.effects.get(name).cloned() else {
+            return;
+        };
+        self.stage.play(&effect, probe, 1.0);
     }
 
     /// One craft's HD trail geometry this frame, empty unless this race's

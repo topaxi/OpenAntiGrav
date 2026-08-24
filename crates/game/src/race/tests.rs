@@ -128,7 +128,7 @@ fn setup(handling: Handling) -> Setup {
         start_position: None,
         // Not HD's tube: these tests drive the PSP ribbon and physics.
         hd_trail: None,
-        hull_radius: [0.0; oag_gameplay::MAX_SHIPS],
+        trail_sparks: false,
         collision: CollisionWorld::new(),
         handling,
         // Round numbers, chosen to make the geometry readable. None of these

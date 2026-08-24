@@ -100,6 +100,12 @@ pub struct Options {
     /// [`pose`]: Options::pose
     /// [`camera`]: Options::camera
     pub opponents: bool,
+    /// Play the trail-hit sparks on the player regardless of the trigger.
+    ///
+    /// A verification aid for the draw path alone - see the `--trail-sparks`
+    /// flag, which is the only thing that sets it, and
+    /// `Race::advance_trail_hits` for why the two need separating.
+    pub trail_sparks: bool,
     /// The world generator's seed, or `None` for [`SEED`].
     ///
     /// **A verification aid too**, and it exists because one already-recovered
@@ -194,6 +200,7 @@ impl Default for Options {
             collision: false,
             lod: mesh::Lod::Both,
             opponents: false,
+            trail_sparks: false,
             seed: None,
             pose: None,
             camera: None,
@@ -227,6 +234,8 @@ pub struct Setup {
     /// this crate implements; the field exists only so a verification build
     /// can override that decision.
     pub opponents: bool,
+    /// See [`Options::trail_sparks`] - a draw-path verification aid.
+    pub trail_sparks: bool,
     /// The world generator's seed, already resolved from [`Options::seed`].
     pub seed: u64,
     /// The decoded spline graph, as the file has it.
@@ -258,12 +267,6 @@ pub struct Setup {
     /// directory: `*_c1` is the concept skin, `*_n1` the nitro one. See
     /// `docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md`.
     pub hd_trail: Option<[f32; oag_gameplay::MAX_SHIPS]>,
-    /// Each slot's hull bounding radius, off the model it loaded.
-    ///
-    /// `oag_render::mesh::Model::radius`, the same number the loader already
-    /// reports beside every hull. Only the HD trail-hit test reads it, and it
-    /// is here rather than recomputed because a `Race` never sees the models.
-    pub hull_radius: [f32; oag_gameplay::MAX_SHIPS],
     /// Every collidable triangle of the track.
     pub collision: CollisionWorld,
     /// The force law's parameter set for one team in one speed class.

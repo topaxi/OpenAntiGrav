@@ -463,14 +463,43 @@ by `crates/game/tests/hd_engine_flare_ground_truth.rs` - and
 `oag_game::race::Race::advance_trail_hits` fires it. **Nothing about the effect
 is invented; only the moment it fires is.** Three things there are this
 engine's and are named in that method's own doc rather than buried: the
-geometric test (a craft's own hull radius plus the ribbon's measured half-width
-against the trail's centre line, `exhaust::hd::Tube::nearest`), the rate (on
-**entry**, re-arming on exit - the original clears its flag every frame and
-whether the job re-raises it while a craft stays inside is unread, and firing
-per tick would be 60 ignitions a second), and the attachment point (the closest
-point on the ribbon, since this engine has no equivalent of the ten hull
-nodes). `crates/game/src/race/tests/trail_hits.rs` pins all three, so an
-approximation cannot drift unnoticed.
+geometric test (the craft's own origin-to-nozzle distance plus the ribbon's
+measured half-width, against the trail's centre line -
+`exhaust::hd::Tube::nearest`), the rate (**every tick a craft is inside**), and
+the attachment point (the closest point on the ribbon, since this engine has no
+equivalent of the ten hull nodes).
+`crates/game/src/race/tests/trail_hits.rs` pins all three.
+
+**Two of the three were wrong on the first pass, and only looking settled
+them.** A player who could not trigger the effect in a race is what prompted
+the measurement, and both faults hid behind the same symptom - nothing on
+screen.
+
+- **The reach was in the wrong space.** `mesh::Model::radius` is a *model*-space
+  AABB half-extent and reads 69 to 379 across HD's hulls; as a world-space
+  reach that put every craft inside every trail from tick 0, fired 24 bursts on
+  the grid and then never re-armed for the rest of the race. The craft's own
+  origin-to-nozzle distance is the same quantity in the right space: **3.7 to
+  6.0 units**, about half a hull length, off a locator the disc authors.
+- **The rate was edge-triggered, and the asset says it should not be.**
+  `WO_TRAIL_HITSHIP` parses as a **one-shot**: duration 1 tick, `looping`
+  false, 5 particles of 0.2..0.5 units with a size channel down to a third by
+  17 % of its life, plus a 3-tick `CORE_IMPACT` child, both additive streaks
+  against a 2,000 live cap. A system shaped like that is authored to be
+  re-fired while its condition holds - and the original's own consumer *clears
+  the flag every frame*, so a craft that stays inside re-raises it. Measured on
+  screen at a dark section: **6 changed pixels** of 1,175,040 fired once per
+  entry, **7,592** fired per tick. What is still unread is whether the SPU job
+  really re-raises the flag each frame, which is why this stays an
+  approximation rather than a reading.
+
+**The player's own difficulty is itself a measurement**, and worth keeping: over
+2,400 ticks of an autopiloted eight-craft race, the craft the camera follows
+enters another's trail **three times**, twice in the first 1.5 seconds off the
+grid. The effect is common between rivals up the road and rare in front of the
+camera, which is why `--trail-sparks` exists - it forces the burst on the
+player every tick so the *drawing* can be judged without waiting for the
+*trigger*.
 
 **Which craft it lands on was settled by a sighting, not by the code.** The
 disassembly ties the node, the colour and the float all to the craft at

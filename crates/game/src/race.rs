@@ -578,11 +578,13 @@ pub struct Race {
     hd_trail: [exhaust::hd::Tube; MAX_SHIPS],
     hd_trail_active: bool,
     hd_trail_red: [f32; MAX_SHIPS],
-    /// Each craft's hull bounding radius, off the model it loaded - what the
-    /// trail-hit test adds to the ribbon's half-width.
-    hull_radius: [f32; MAX_SHIPS],
-    /// Which craft are inside which craft's trail, one bit per intruder, so
-    /// the effect fires on entry. [`Race::advance_trail_hits`] says why.
+    /// Each craft's origin-to-nozzle distance in **world** units, measured per
+    /// tick - the trail-hit test's reach. See [`Race::advance_trail_hits`].
+    hull_reach: [f32; MAX_SHIPS],
+    /// `--trail-sparks`: see [`Race::force_trail_sparks`].
+    trail_sparks: bool,
+    /// Which craft are inside which craft's trail, one bit per intruder. The
+    /// burst follows it every tick, not on its edge.
     trail_inside: [u8; MAX_SHIPS],
     hd_flame: [exhaust::hd::Flame; MAX_SHIPS],
     hd_sprite: [exhaust::hd::Sprite; MAX_SHIPS],

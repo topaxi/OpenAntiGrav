@@ -127,6 +127,7 @@ impl Pending {
             // and the default is used rather than failing the boot.
             difficulty: resolve_difficulty(&self.settings),
             opponents: self.cli.opponents,
+            trail_sparks: self.cli.trail_sparks,
             seed: self.cli.seed,
             pose: self.pose,
             camera: self.camera,

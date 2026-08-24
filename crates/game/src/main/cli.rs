@@ -428,6 +428,21 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) opponents: bool,
 
+    /// Play the trail-hit sparks on the player continuously, whatever the
+    /// trigger says.
+    ///
+    /// **A verification aid for the *drawing*, not for the trigger** - the two
+    /// fail differently and this separates them. `WO_TRAIL_HITSHIP` fires when
+    /// a craft flies into another's engine trail, which under `--autopilot`
+    /// happens a handful of times in a whole race and almost never in front of
+    /// the camera, so "I saw nothing" cannot tell a burst that never played
+    /// from one that played and drew nothing. With this on, a burst re-ignites
+    /// at the player's nozzle every half second: if the screen stays empty the
+    /// fault is in the draw path, and if it does not, the trigger is what to
+    /// look at. See `Race::advance_trail_hits`.
+    #[arg(long)]
+    pub(crate) trail_sparks: bool,
+
     /// Let an opponent's driver fly the player's craft.
     ///
     /// A verification aid - see `race::Race::set_autopilot` - and the only way

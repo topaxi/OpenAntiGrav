@@ -17,7 +17,7 @@ use super::*;
 fn race_with_a_trail() -> Race {
     let mut race = race_with_a_grid();
     race.hd_trail_active = true;
-    race.hull_radius = [2.0; oag_gameplay::MAX_SHIPS];
+    race.hull_reach = [2.0; oag_gameplay::MAX_SHIPS];
     for k in 0..oag_render::exhaust::hd::SAMPLES {
         race.hd_trail[0].push(Vec3::new(k as f32 * -4.0, 0.0, 0.0), Vec3::Y, 0.0);
     }
@@ -43,7 +43,7 @@ fn a_craft_inside_the_ribbon_is_marked_and_one_outside_is_not() {
 }
 
 #[test]
-fn the_reach_is_the_hull_radius_plus_the_measured_half_width() {
+fn the_reach_is_the_hull_reach_plus_the_measured_half_width() {
     let mut race = race_with_a_trail();
     let reach = 2.0 + oag_render::exhaust::hd::FIN_HALF_WIDTH;
     place_and_step(&mut race, Vec3::new(-40.0, reach - 0.01, 0.0));
@@ -52,21 +52,26 @@ fn the_reach_is_the_hull_radius_plus_the_measured_half_width() {
     assert_eq!(race.trail_inside[0] & 0b10, 0, "just outside");
 }
 
-/// **The rate approximation, pinned.** The original clears its flag every
-/// frame and whether the SPU job re-raises it while a craft stays inside is
-/// unread; firing per tick would be 60 ignitions a second. So this engine
-/// fires on entry and re-arms on exit, and the bit is what says so.
+/// **The rate, pinned.** The burst follows the mask every tick rather than its
+/// edge, which the asset is what settles: `WO_TRAIL_HITSHIP` is a one-shot -
+/// duration 1 tick, `looping` false, five 0.2..0.5-unit streaks whose size is
+/// down to a third by 17 % of its life. Fired once per entry that is all but
+/// invisible, and this engine did exactly that until it was measured: 6 changed
+/// pixels in a 1,175,040-pixel frame, against 7,592 once the rate was fixed.
+///
+/// So what this asserts is that the mask is *level*, not edge: set on every
+/// tick a craft is inside and cleared the tick it leaves.
 #[test]
-fn staying_inside_does_not_re_arm_but_leaving_does() {
+fn the_mask_tracks_presence_every_tick_rather_than_only_its_edge() {
     let mut race = race_with_a_trail();
     place_and_step(&mut race, Vec3::new(-40.0, 0.0, 0.0));
     assert_ne!(race.trail_inside[0] & 0b10, 0, "entered");
     place_and_step(&mut race, Vec3::new(-36.0, 0.0, 0.0));
-    assert_ne!(race.trail_inside[0] & 0b10, 0, "still inside, still marked");
+    assert_ne!(race.trail_inside[0] & 0b10, 0, "still inside, still set");
     place_and_step(&mut race, Vec3::new(-36.0, 50.0, 0.0));
-    assert_eq!(race.trail_inside[0] & 0b10, 0, "left, so re-armed");
+    assert_eq!(race.trail_inside[0] & 0b10, 0, "left, so cleared");
     place_and_step(&mut race, Vec3::new(-36.0, 0.0, 0.0));
-    assert_ne!(race.trail_inside[0] & 0b10, 0, "entered again");
+    assert_ne!(race.trail_inside[0] & 0b10, 0, "back inside");
 }
 
 /// A craft is never in its own trail, however close the ring is - its nozzle
