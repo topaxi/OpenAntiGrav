@@ -220,6 +220,7 @@ impl Race {
         // put back. The camera is snapped for the same reason, and only for the
         // player, who is the only craft one is flown from.
         self.exhaust[slot].clear_trail();
+        self.hd_trail[slot].clear();
 
         if self.respawns_in_a_row[slot] >= RESPAWN_GIVE_UP {
             self.respawn_disabled[slot] = true;

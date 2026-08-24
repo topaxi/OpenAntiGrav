@@ -60,8 +60,7 @@
 //! `Trail` is *also* authored twice on `shipwreck.vex` (`trail_con_left_wing`,
 //! `trail_con_right_wing`); the wreck is out of scope here.
 
-use oag_core::Rng;
-use oag_core::math::Vec3;
+use oag_core::{Rng, math::Vec3};
 
 use crate::mesh::GpuVertex;
 
@@ -1050,9 +1049,15 @@ const _: () = assert!(MAX_SPRITES >= MAX_TRAILS + (1 + 8 + 3) * 128);
 /// four-quad diamond tube.
 pub const TRAIL_VERTICES_PER_CRAFT: usize = LAYERS * (TRAIL_SAMPLES - 1) * TRAIL_FINS * 6;
 
-/// The ribbon's vertex budget: [`TRAIL_VERTICES_PER_CRAFT`] for every craft on
-/// the grid, since all eight trail at once and they share one buffer.
-pub const MAX_TRAIL_VERTICES: usize = MAX_TRAILS * TRAIL_VERTICES_PER_CRAFT;
+/// The ribbon's vertex budget: the larger of the PSP ribbon's
+/// [`TRAIL_VERTICES_PER_CRAFT`] and HD's [`hd::VERTICES_PER_CRAFT`], for every
+/// craft on the grid - all eight trail at once and they share one buffer.
+pub const MAX_TRAIL_VERTICES: usize = MAX_TRAILS
+    * if TRAIL_VERTICES_PER_CRAFT > hd::VERTICES_PER_CRAFT {
+        TRAIL_VERTICES_PER_CRAFT
+    } else {
+        hd::VERTICES_PER_CRAFT
+    };
 
 /// The flare's draw pipeline: the first blended, depth-tested pipeline in this
 /// crate.
@@ -1071,6 +1076,7 @@ pub const MAX_TRAIL_VERTICES: usize = MAX_TRAILS * TRAIL_VERTICES_PER_CRAFT;
 /// same target format, same [`crate::mesh_render::DEPTH_FORMAT`], sample count 1,
 /// and the same 128-byte uniform block so
 /// [`crate::mesh_render::UNIFORMS_SIZE`] describes both.
+pub mod hd;
 mod texture;
 pub use texture::FlareTexture;
 
@@ -1328,17 +1334,20 @@ impl Pipeline {
         &mut self,
         queue: &wgpu::Queue,
         view_projection: &[[f32; 4]; 4],
+        camera: Vec3,
         vertices: &[GpuVertex],
         trail: &[GpuVertex],
     ) {
-        // The vertex shader ignores `model`; the identity keeps the shared block
-        // well-defined rather than leaving half of it uninitialised.
+        // The vertex shader reads only `model`'s fourth column, which carries
+        // the camera's world position for the HD ribbon's facing fade - its
+        // program interpolates `eyePositionWorldSpace - position`. The rest of
+        // the matrix stays identity so the shared block is well-defined.
         let mut block = [[0.0f32; 4]; 8];
         block[..4].copy_from_slice(view_projection);
         block[4] = [1.0, 0.0, 0.0, 0.0];
         block[5] = [0.0, 1.0, 0.0, 0.0];
         block[6] = [0.0, 0.0, 1.0, 0.0];
-        block[7] = [0.0, 0.0, 0.0, 1.0];
+        block[7] = [camera.x, camera.y, camera.z, 1.0];
         queue.write_buffer(&self.uniforms, 0, bytemuck::cast_slice(&block));
 
         let n = vertices.len().min(MAX_VERTICES);
@@ -1384,47 +1393,9 @@ impl Pipeline {
     }
 }
 
-/// Six vertices - two triangles - for one camera-facing quad.
-///
-/// Wound as an explicit triangle list rather than a strip, matching how the
-/// rest of this module fills its buffers.
-///
-/// The colour's alpha carries the flicker, which the additive blend then
-/// weights by - `src.rgb * src.a + dst.rgb`, recovered from
-/// `ExhaustFlare_BuildDisplayList`.
-/// One camera-facing additive sprite at a world point, in the flare's own shape.
-///
-/// **Not part of the recovered exhaust.** It exists so a caller with something
-/// else to draw as a glowing dot - a projectile in flight, today - can reuse the
-/// flare's pipeline and texture instead of standing up a second one for a
-/// placeholder. `half_size` is in world units and `alpha` is the additive
-/// weight; the flare's own values come from [`Exhaust`] and are not what a
-/// caller here wants.
-///
-/// The billboard is built from the caller's `right` and `up`, which are read out
-/// of the view matrix the same way [`Exhaust::vertices`]' are - see its docs for
-/// why that is world-space rather than a post-projection sprite.
-#[must_use]
-pub fn sprite(centre: Vec3, right: Vec3, up: Vec3, half_size: f32, alpha: f32) -> [GpuVertex; 6] {
-    quad(centre, right * half_size, up * half_size, alpha)
-}
-
-fn quad(centre: Vec3, right: Vec3, up: Vec3, alpha: f32) -> [GpuVertex; 6] {
-    let corner = |sx: f32, sy: f32, u: f32, v: f32| GpuVertex {
-        position: (centre + right * sx + up * sy).to_array(),
-        // The flare is emissive: `lit = 0.0` keeps the mesh light rig off it.
-        normal: [0.0, 0.0, 1.0],
-        colour: [1.0, 1.0, 1.0, alpha],
-        texcoord: [u, v],
-        lit: 0.0,
-        ..bytemuck::Zeroable::zeroed()
-    };
-    let bl = corner(-1.0, -1.0, 0.0, 1.0);
-    let br = corner(1.0, -1.0, 1.0, 1.0);
-    let tl = corner(-1.0, 1.0, 0.0, 0.0);
-    let tr = corner(1.0, 1.0, 1.0, 0.0);
-    [bl, br, tl, br, tr, tl]
-}
+mod sprite;
+use sprite::quad;
+pub use sprite::sprite;
 
 #[cfg(test)]
 mod tests;

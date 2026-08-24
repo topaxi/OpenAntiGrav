@@ -307,8 +307,10 @@ fn the_ribbon_waits_for_a_full_ring() {
     );
     // And the shared buffer holds a full ring for every craft on the grid,
     // which is what makes the eighth craft's ribbon reach the screen rather
-    // than being clipped off by `Pipeline::upload`'s `min`.
-    assert_eq!(MAX_TRAIL_VERTICES, MAX_TRAILS * TRAIL_VERTICES_PER_CRAFT);
+    // than being clipped off by `Pipeline::upload`'s `min`. HD's tube is the
+    // larger of the two shapes today (954 against 648), so the budget is its.
+    const { assert!(MAX_TRAIL_VERTICES >= MAX_TRAILS * TRAIL_VERTICES_PER_CRAFT) };
+    assert_eq!(MAX_TRAIL_VERTICES, MAX_TRAILS * hd::VERTICES_PER_CRAFT);
 }
 
 /// A respawn must not leave a ribbon stretched across the track.

@@ -246,6 +246,18 @@ pub struct Setup {
     /// `Start Position` node, and a ship goes on the spline instead. Every PSP
     /// track has one, so on that path this is always `Some`.
     pub start_position: Option<StartPosition>,
+    /// Wipeout HD's trail: `Some` with the per-slot blue-to-red colour mix
+    /// when the title authors its ribbon as HD's two-texture template,
+    /// `None` on every other source, where the ribbon is the PSP preset.
+    ///
+    /// HD patches the ribbon material's mix parameter to 1.0 exactly when a
+    /// craft's model-variant name is `concept1`, `nitro`, `detonator` or
+    /// `chrome_c1` (`strcasecmp` in the flag setter writing `craft+0x7d2c`) -
+    /// the Fury skins - which is what turns those trails red where a classic
+    /// HD craft's is blue. The loader derives the flag from each slot's team
+    /// directory: `*_c1` is the concept skin, `*_n1` the nitro one. See
+    /// `docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md`.
+    pub hd_trail: Option<[f32; oag_gameplay::MAX_SHIPS]>,
     /// Every collidable triangle of the track.
     pub collision: CollisionWorld,
     /// The force law's parameter set for one team in one speed class.

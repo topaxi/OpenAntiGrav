@@ -129,22 +129,21 @@ pub(super) fn per_team(
                  is racing"
                     .to_string()
             } else {
-                // **The mechanism is read; what starts it is not.**
-                // `EngineFlare_Update` (`0x002a3100`) counts a timer down at
-                // `+0x12c`, and `EngineFlare_PlaceShapes` snaps a blend to 1.0
-                // while that timer is above a threshold and decays it
-                // exponentially otherwise - the same three parts as the
-                // *Pulse* gate this engine already runs on (`boost_timer`,
-                // `BOOST_GATE`, `BOOST_DECAY`). So reusing `plume_visible` is
-                // a matched mechanism rather than a guess off a node name.
-                // What writes the timer is outside the flare's own vtable and
-                // is unread, so how long HD's boost lasts is still ours.
-                // Confidence 88 - see
-                // docs/ghidra/functions/ps3-hdfury-eu/engine-flare.md.
-                "revealed on this engine's boost gate (Exhaust::plume_visible, \
-                 Pulse's recovered one). HD's own gate is the same shape - a \
-                 countdown, a snap, an exponential decay - but what starts its \
-                 timer is unread, so the duration is this project's"
+                // **The reveal is a scale, not a gate, and its threshold is
+                // Pulse's own.** `EngineFlare_PlaceShapes` scales this
+                // subtree's length by `blend * 2.0` with no visibility branch
+                // at all; the blend snaps to 1.0 while the timer at `+0x12c`
+                // is above `EngineFlare_BoostGate` = 0.2 - the PSP's
+                // `BOOST_GATE` value exactly - and decays `* 0.8` per 120 Hz
+                // substep after. `exhaust::hd::Flame` reproduces that; what
+                // *arms* the timer (pads, rolls, the start boost) is still
+                // unread, so the boost's duration is this project's.
+                // Confidence 92 - see
+                // docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md.
+                "grown out of the nozzle by the boost blend (exhaust::hd::Flame, \
+                 snap at the recovered 0.2 gate, x0.8-per-substep collapse) - \
+                 what arms the timer is unread, so the boost's duration is this \
+                 project's"
                     .to_string()
             }
         ));

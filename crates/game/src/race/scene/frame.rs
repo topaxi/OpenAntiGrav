@@ -277,7 +277,13 @@ impl Scene {
             if !race.ship_active(slot) {
                 continue;
             }
-            flare.write(queue, view_projection, race.ship_model_matrix_of(slot));
+            // HD breathes the flame with the craft: `EngineFlare_PlaceShapes`
+            // scales `EF_Main` by the smoothed throttle plus the boost blend,
+            // about the nozzle the model is baked at. Identity when the HD
+            // exhaust is not active - the flame then draws as authored, and
+            // the load report already carries what is missing.
+            let model = race.ship_model_matrix_of(slot) * hd_flame_transform(race, slot, false);
+            flare.write(queue, view_projection, model);
         }
         for (slot, boost) in self.boost.iter().enumerate().take(drawn) {
             // `None` is a slot whose *team* ships no plume, which is a
@@ -290,10 +296,21 @@ impl Scene {
             if !race.ship_active(slot) {
                 continue;
             }
-            if !race.exhaust_of(slot).plume_visible() {
+            // Two reveals, per source. HD's plume has **no** visibility gate:
+            // `EngineFlare_PlaceShapes` scales `EF_Boost`'s length by
+            // `blend * 2.0` unconditionally, so it grows out of the nozzle
+            // while the boost timer holds the blend at 1.0 and collapses back
+            // over ~10 ticks after - `hd::Flame` is that state machine. The
+            // PSP/PS2 plume keeps the recovered `plume_visible` reveal.
+            if race.hd_trail_active() {
+                if !race.hd_flame_of(slot).boost_visible() {
+                    continue;
+                }
+            } else if !race.exhaust_of(slot).plume_visible() {
                 continue;
             }
-            boost.write(queue, view_projection, race.ship_model_matrix_of(slot));
+            let model = race.ship_model_matrix_of(slot) * hd_flame_transform(race, slot, true);
+            boost.write(queue, view_projection, model);
             let (scale, offset) = match self.boost_uv_transforms.get(slot).and_then(Option::as_ref)
             {
                 Some(transform) => {
@@ -400,7 +417,14 @@ impl Scene {
             if !race.engine_flare_effect() {
                 vertices.extend(exhaust.vertices(nozzle, right, up));
             }
-            trail.extend(exhaust.trail_vertices(right, up));
+            // Wipeout HD draws its own measured tube - three fins over a
+            // 54-sample ring, extruded in the craft's frame rather than the
+            // camera's - and every other source the PSP preset's ribbon.
+            if race.hd_trail_active() {
+                trail.extend(race.hd_trail_vertices(slot));
+            } else {
+                trail.extend(exhaust.trail_vertices(right, up));
+            }
         }
         // Only the billboard *fallback* for a rocket whose model did not
         // load - the flare around one that did is an asset now, and goes
@@ -409,6 +433,7 @@ impl Scene {
         self.exhaust.borrow_mut().upload(
             queue,
             &view_projection.to_cols_array_2d(),
+            race.camera_position(),
             &vertices,
             &trail,
         );
@@ -707,4 +732,30 @@ fn shell_visible(race: &Race, slot: usize) -> bool {
 /// and the camera is inside the hull.
 fn cockpit_shield_visible(race: &Race) -> bool {
     !race.draws_own_ship() && race.shield_of(0).visible() && race.ship_active(0)
+}
+
+/// The scale HD's flame groups breathe with, about the nozzle the flare model
+/// is baked at - identity on every other source and where no locator exists.
+///
+/// `EF_Main` scales its cross-section and length from the smoothed throttle
+/// plus the boost blend; `EF_Boost` only its length, by `blend * 2.0`. The
+/// spikes' per-shape random flicker (`Spikes Random Scale Min/Max`, 0.65 to
+/// 0.85) needs a per-shape split this scene does not carry yet and is
+/// documented rather than drawn - see
+/// `docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md`.
+fn hd_flame_transform(race: &Race, slot: usize, boost: bool) -> Mat4 {
+    if !race.hd_trail_active() {
+        return Mat4::IDENTITY;
+    }
+    let Some(nozzle) = race.nozzle_local_of(slot) else {
+        return Mat4::IDENTITY;
+    };
+    let flame = race.hd_flame_of(slot);
+    let scale = if boost {
+        Vec3::new(1.0, 1.0, flame.boost_scale_z())
+    } else {
+        let (xy, z) = flame.main_scale();
+        Vec3::new(xy, xy, z)
+    };
+    Mat4::from_translation(nozzle) * Mat4::from_scale(scale) * Mat4::from_translation(-nozzle)
 }

@@ -35,10 +35,65 @@ impl Race {
             let speed = ship.body.linear_velocity.length();
             let back = -ship.body.forward();
             self.exhaust[slot].advance(self.dt, thrust, speed, &mut self.exhaust_rng[slot]);
+            if self.hd_trail_active {
+                // HD's flame blends: the boost side opens on the same 0.2
+                // gate the plume reveal reads - HD's own `DAT_008b2ff4` is
+                // the PSP's `BOOST_GATE` value exactly.
+                self.hd_flame[slot].advance(
+                    thrust > 0.0,
+                    self.exhaust[slot].boost_timer() > exhaust::BOOST_GATE,
+                );
+            }
             if let Some(nozzle) = self.nozzle_of(slot) {
                 self.exhaust[slot].push_trail(nozzle, back);
+                if self.hd_trail_active {
+                    // HD's tube wants the craft's *up* (fin 0's axis) and the
+                    // normalised speed its scroll and stretch ride on. The
+                    // throttle share of `speed01` is authored against a 0..1
+                    // throttle; this engine's thrust input is effectively
+                    // binary, so on/off is the whole of it here.
+                    let s01 = exhaust::hd::speed01(
+                        self.exhaust[slot].speed_kmh(),
+                        if thrust > 0.0 { 1.0 } else { 0.0 },
+                    );
+                    self.hd_trail[slot].push(nozzle, self.world.ships[slot].physics.body.up(), s01);
+                }
             }
         }
+    }
+
+    /// One craft's HD trail geometry this frame, empty unless this race's
+    /// ribbon is HD's own tube (and then until the ring fills).
+    ///
+    /// The brightness handed down is `intensity * speed_ramp` - the product
+    /// HD's `EngineFlare_Update` writes into the trail block every frame,
+    /// and both factors are the same quantities [`Exhaust`] already tracks
+    /// with HD's own constants (rise 0.25/s, fall 0.5/s; floor 100 km/h,
+    /// span 500).
+    #[must_use]
+    pub fn hd_trail_vertices(&self, slot: usize) -> Vec<oag_render::mesh::GpuVertex> {
+        if !self.hd_trail_active {
+            return Vec::new();
+        }
+        let exhaust = &self.exhaust[slot];
+        let brightness = exhaust.intensity() * exhaust.speed_ramp();
+        let s01 = exhaust::hd::speed01(
+            exhaust.speed_kmh(),
+            if exhaust.engine_on() { 1.0 } else { 0.0 },
+        );
+        self.hd_trail[slot].vertices(brightness, s01, self.hd_trail_red[slot])
+    }
+
+    /// Whether this race draws HD's trail tube instead of the PSP ribbon.
+    #[must_use]
+    pub fn hd_trail_active(&self) -> bool {
+        self.hd_trail_active
+    }
+
+    /// One craft's HD flame blends, for the flare model's group scales.
+    #[must_use]
+    pub fn hd_flame_of(&self, slot: usize) -> &exhaust::hd::Flame {
+        &self.hd_flame[slot]
     }
 
     /// Advances every craft's shield shell, and starts the fade on the tick its
@@ -221,6 +276,17 @@ impl Race {
             for k in (0..exhaust::TRAIL_SAMPLES).rev() {
                 let behind = back * (speed * self.dt * k as f32);
                 self.exhaust[0].push_trail(nozzle + behind, back);
+            }
+            // The HD tube on the same straight-line terms, when it is the
+            // ribbon this race draws.
+            if self.hd_trail_active {
+                let up = self.ship().physics.body.up();
+                let s01 = exhaust::hd::speed01(self.exhaust[0].speed_kmh(), 1.0);
+                self.hd_trail[0].clear();
+                for k in (0..exhaust::hd::SAMPLES).rev() {
+                    let behind = back * (speed * self.dt * k as f32);
+                    self.hd_trail[0].push(nozzle + behind, up, s01);
+                }
             }
         }
     }
@@ -439,8 +505,17 @@ impl Race {
     /// If `slot` is not a ship slot.
     #[must_use]
     pub fn nozzle_of(&self, slot: usize) -> Option<Vec3> {
-        let local = self.nozzles.get(slot).copied().flatten()?;
+        let local = self.nozzle_local_of(slot)?;
         Some(model_matrix_of(&self.world.ships[slot]).transform_point3(local))
+    }
+
+    /// The `engine_flare` locator in **model space** - the pivot a transform
+    /// composed with the craft's own matrix wants, where [`Self::nozzle_of`]
+    /// is the world-space point the trail is laid from. Mixing the two up
+    /// scales the flame about a point hundreds of units away.
+    #[must_use]
+    pub fn nozzle_local_of(&self, slot: usize) -> Option<Vec3> {
+        self.nozzles.get(slot).copied().flatten()
     }
 }
 

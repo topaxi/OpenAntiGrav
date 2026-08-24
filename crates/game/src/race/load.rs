@@ -478,6 +478,16 @@ pub fn load(options: &Options) -> Result<Loaded> {
         options.opponent_teams.clone()
     };
     let slot_teams = livery::teams_for_slots(&team, &available, oag_gameplay::MAX_SHIPS);
+    // HD's red-trail flag, from each slot's ship directory: the runtime sets
+    // it by the model-variant name (`concept1`/`nitro`/`detonator`/
+    // `chrome_c1`), and on the disc those variants live in `*_c1`, `*_n1` and
+    // `detonator` directories. See `Loaded::hd_trail_red`.
+    let hd_trail_red = std::array::from_fn(|slot| {
+        let fury = slot_teams.get(slot).is_some_and(|team| {
+            team.ends_with("_c1") || team.ends_with("_n1") || team == "detonator"
+        });
+        if fury { 1.0 } else { 0.0 }
+    });
     let liveries = livery::load(
         &mut archives,
         &slot_teams,
@@ -843,6 +853,22 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // `oag_title::exhaust::Exhaust` and `assets::trail_texture`.
     let (noise, trail_blend, trail_shape) =
         assets::trail_texture(&mut archives, title, &mut report);
+    if trail_shape.is_some() {
+        report.push(
+            "the ribbon's geometry is HD's own, measured from the running game: a 54-sample \
+             three-fin tube in the craft's frame, half-width 0.5, white-to-red vertex ramp, \
+             alpha = intensity x speed ramp, u stretched by speed and scrolled by the flare's \
+             wrapping phase (docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md)"
+                .into(),
+        );
+        report.push(
+            "read and not drawn on HD: the flame spikes' per-shape random flicker \
+             (0.65..0.85), the Fury afterburner's second boost blend, the flame surface's \
+             Speed*time scroll (the clock is still unread), and the Engine_Flare_Rich \
+             sprite flare"
+                .into(),
+        );
+    }
 
     // The flare is a title axis too, and a second one rather than a variant of
     // the ribbon's: Pulse and Pure name a sprite texture, HD authors a per-team
@@ -917,6 +943,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             spline,
             course,
             start_position,
+            hd_trail: trail_shape.is_some().then_some(hd_trail_red),
             collision,
             handling,
             airbrake_graphics,

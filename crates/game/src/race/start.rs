@@ -45,6 +45,7 @@ impl Race {
             class_gravity_scale,
             pose_override,
             camera_override,
+            hd_trail,
             ..
         } = setup;
 
@@ -249,6 +250,12 @@ impl Race {
             // the track from the origin to its grid slot on the opening ticks.
             exhaust: [Exhaust::new(); MAX_SHIPS],
             exhaust_rng: std::array::from_fn(|slot| Rng::new(exhaust_seed(slot))),
+            // Cold and empty for the same standing-start reason as `exhaust`
+            // above: `hd::Tube::ready` gates on a full ring too.
+            hd_trail: [exhaust::hd::Tube::new(); MAX_SHIPS],
+            hd_trail_active: hd_trail.is_some(),
+            hd_trail_red: hd_trail.unwrap_or([0.0; MAX_SHIPS]),
+            hd_flame: [exhaust::hd::Flame::new(); MAX_SHIPS],
             shield: [ShipShield::new(); MAX_SHIPS],
             nozzles,
             collision_fx,

@@ -53,6 +53,13 @@ struct VertexOutput {
     @builtin(position) clip: vec4<f32>,
     @location(0) colour: vec4<f32>,
     @location(1) texcoord: vec2<f32>,
+    // The three interpolants Wipeout HD's own ribbon program carries and the
+    // one-texture path ignores: the world normal (its `TC2`), the view vector
+    // (`TC1` = eyePositionWorldSpace - position), and the blue-to-red colour
+    // mix the engine patches per craft, riding the vertex `lit` slot.
+    @location(2) normal: vec3<f32>,
+    @location(3) view: vec3<f32>,
+    @location(4) red_mix: f32,
 };
 
 @vertex
@@ -61,6 +68,12 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     out.clip = uniforms.view_projection * vec4<f32>(in.position, 1.0);
     out.colour = in.colour;
     out.texcoord = in.texcoord;
+    out.normal = in.normal;
+    // `model` is otherwise unused by this pipeline; its fourth column carries
+    // the camera's world position so the ribbon's facing fade has an eye to
+    // face - see `Pipeline::upload`.
+    out.view = uniforms.model[3].xyz - in.position;
+    out.red_mix = in.lit;
     return out;
 }
 
@@ -98,22 +111,40 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     //
     // See `docs/ghidra/functions/ps3-hdfury-eu/engine-flare.md`.
     //
-    // **`TrailSpeed` is not added here.** The material authors 1.0, and adding
-    // a whole 1.0 to a coordinate this sampler repeats is the identity - so the
-    // engine must patch that slot per frame, and what it patches it with is
-    // unread. Adding a scroll of this project's own choosing would be the
-    // fitted coefficient this tree keeps out.
+    // **`TrailSpeed` is baked into the vertex `u`**, which is where the
+    // original applies it twice over: its vertex program adds the patched
+    // c[210] before the noise lookup and its fragment patch adds the same
+    // value before the colour one, so one CPU-side addition reproduces both.
+    // The value is `EngineFlare_PlaceShapes`' wrapping phase accumulator -
+    // `exhaust::hd::Tube` advances and bakes it. What used to sit here - "the
+    // engine patches that slot and what with is unread" - was read on
+    // 2026-08-24; see docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md.
     let displaced = vec2<f32>(in.texcoord.x + texel.a, in.texcoord.y);
     let authored = textureSample(trail_shape_texture, flare_sampler, displaced);
+    // HD's program reads the *red* texture's colour at the same displaced
+    // coordinate and lerps the blue one toward it by the per-craft mix the
+    // engine patches - 1.0 exactly when the craft wears a Fury skin
+    // (`concept1`, `nitro`, `detonator`, `chrome_c1`), which is what makes a
+    // Fury craft's trail red where a classic craft's is blue.
+    let red = textureSample(flare, flare_sampler, displaced);
     // `mix` rather than a branch, for the reason every other override in this
     // tree uses one: a pipeline built without it takes `texel` unchanged and
     // compiles to the picture it always drew.
     let picture = mix(texel, authored, trail_shape);
     let shape = picture.a;
-    let rgb = picture.rgb * in.colour.rgb;
+    // The two fades HD's fragment program applies and no other title's path
+    // computes: `saturate(clamp(dot(n, v), 0, 0.15) / 0.15)` kills a fin seen
+    // edge-on or from behind, and `saturate(window_z * 0.75)` fades the
+    // ribbon out as it nears the camera plane. Both collapse to 1.0 when
+    // `trail_shape` is 0.0.
+    let facing_dot = dot(normalize(in.normal), normalize(in.view));
+    let facing = saturate(clamp(facing_dot, 0.0, 0.15) / 0.15);
+    let depth_fade = saturate(in.clip.z * 0.75);
+    let hd_fade = mix(1.0, facing * depth_fade, trail_shape);
+    let rgb = mix(picture.rgb, red.rgb, in.red_mix * trail_shape) * in.colour.rgb;
     // On the linear float target the flare's gamma-authored colour is decoded
     // so the additive blend and the encode after it round-trip; on a gamma
     // target this is the identity.
     let out_rgb = mix(rgb, pow(rgb, vec3<f32>(2.2)), linear_out);
-    return vec4<f32>(out_rgb, shape * in.colour.a);
+    return vec4<f32>(out_rgb, shape * in.colour.a * hd_fade);
 }

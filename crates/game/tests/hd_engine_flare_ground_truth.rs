@@ -283,3 +283,49 @@ fn the_ribbons_noise_is_the_near_transparent_one_and_its_coverage_is_not() {
          round: noise {noise_alpha:.1}, coverage {shape_alpha:.1}"
     );
 }
+
+/// The trail and flame constants `oag_render::exhaust::hd` carries are the
+/// disc's own: `Data/ships/shipeffectstweaks.txt` names the runtime's whole
+/// tuning block, field for field, and this reads it rather than trusting the
+/// transcription.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn the_tube_constants_are_the_discs_own_tuning_file() {
+    let Some(image) = image() else {
+        return;
+    };
+    let spec = format!("{}:PS3_GAME/USRDIR/DATA02.PSARC", image.display());
+    let blob = oag_render::mesh::read_blob(&spec, "/data/ships/shipeffectstweaks.txt")
+        .expect("the tuning file HD ships");
+    let text = String::from_utf8(blob).expect("ascii");
+    let value = |key: &str| -> f32 {
+        let line = text
+            .lines()
+            .find(|line| line.contains(key))
+            .unwrap_or_else(|| panic!("no {key} in shipeffectstweaks.txt"));
+        line.split('=')
+            .nth(1)
+            .expect("=")
+            .trim()
+            .parse()
+            .expect("float")
+    };
+    use oag_render::exhaust::hd;
+    assert_eq!(value("Thrust Chase Rate"), hd::THRUST_CHASE_RATE);
+    assert_eq!(value("Thrust Min Scale XY"), hd::THRUST_SCALE_XY.0);
+    assert_eq!(value("Thrust Max Scale XY"), hd::THRUST_SCALE_XY.1);
+    assert_eq!(value("Thrust Min Scale Z"), hd::THRUST_SCALE_Z.0);
+    assert_eq!(value("Thrust Max Scale Z"), hd::THRUST_SCALE_Z.1);
+    assert_eq!(value("Thrust Extra Boost Scale XY"), hd::BOOST_EXTRA_XY);
+    assert_eq!(value("Thrust Extra Boost Scale Z"), hd::BOOST_EXTRA_Z);
+    assert_eq!(value("Tex Scroll Speed Delta Min"), hd::SCROLL_DELTA.0);
+    assert_eq!(value("Tex Scroll Speed Delta Max"), hd::SCROLL_DELTA.1);
+    assert_eq!(value("Tex Scroll Speed Ship Min"), 0.0);
+    assert_eq!(value("Tex Scroll Speed Ship Range"), hd::SPEED01_RANGE_KMH);
+    assert_eq!(
+        value("Tex Scroll Speed Thrust Contrib"),
+        hd::SPEED01_THRUST_CONTRIB
+    );
+    assert_eq!(value("Tex UScale Max"), hd::TEX_USCALE_MAX);
+    assert_eq!(value("Enable Engine Trails"), 1.0);
+}

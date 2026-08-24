@@ -125,6 +125,8 @@ fn setup(handling: Handling) -> Setup {
         // The synthetic track has no authored slot, which is the fallback
         // path: every assertion below is about a ship placed on the spline.
         start_position: None,
+        // Not HD's tube: these tests drive the PSP ribbon and physics.
+        hd_trail: None,
         collision: CollisionWorld::new(),
         handling,
         // Round numbers, chosen to make the geometry readable. None of these

@@ -77,3 +77,10 @@
 0x0079bf00	data	EngineFlare_BoostRightShapeName	90	engine-flare.md
 0x002e2da8	function	Trail_ConstructManager	85	engine-flare.md
 0x007a2d70	data	Trail_ModelPath	95	engine-flare.md
+0x002e21c0	function	Trail_InitCraftSlot	80	engine-trail.md
+0x002e2610	function	Trail_Enqueue	85	engine-trail.md
+0x002e30d8	function	Trail_BuildDrawState	75	engine-trail.md
+0x002e3bf8	function	Trail_WriteCraftContexts	75	engine-trail.md
+0x002e4748	function	Trail_RenderTick	80	engine-trail.md
+0x000d0b28	function	Ship_SetFuryTrailFlag	82	engine-trail.md
+0x008b2ff4	data	EngineFlare_BoostGate	85	engine-trail.md

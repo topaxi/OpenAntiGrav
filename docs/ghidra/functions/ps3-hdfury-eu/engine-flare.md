@@ -282,12 +282,16 @@ parts. Wiring `EF_Boost` to `Exhaust::plume_visible` is therefore a *matched
 mechanism* rather than a guess off a node name. **Confidence 88**, up from the
 80 this carried when only the name was evidence.
 
-**What still is not read is what *sets* `+0x12c`.** Nothing in the flare's own
-vtable writes it - slots 6 through 10 are lerp helpers
+**What *sets* `+0x12c` is narrowed but not closed** - the 2026-08-24 session
+([engine-trail.md](engine-trail.md)) read the snap threshold as
+`EngineFlare_BoostGate` = 0.2, the PSP's own gate value, watched live timers
+decay from at most 0.70 in multiples of 1/30, and found one writer
+(`0x00090d30`, mirroring a craft countdown at `craft+0x108`, gated on mode
+10) plus two offset-collision red herrings in HUD code. Nothing in the
+flare's own vtable writes it - slots 6 through 10 are lerp helpers
 (`0x002a3708` linear, `0x002a3730` inverse-lerp, `0x002a3788` a packed-colour
-lerp) - so the timer is written by the craft code that owns the flare. Until
-that is followed, *how long* a boost lasts on HD and *what* starts it remain
-this engine's numbers.
+lerp). What arms `craft+0x108` from pads, rolls and the start boost is still
+unread, so *how long* a boost lasts on HD remains this engine's number.
 
 ### A second flare path exists, and it is not what draws the model
 
@@ -364,17 +368,16 @@ and the two samplers resolve by hash against the model record's own entries:
 is what displaces the coordinate. Same for `alphaistrail` on unit 1, whose
 alpha is the output's coverage. Confidence 92.
 
-**Implemented**: the sample itself - the noise's alpha displaces the
-coordinate and the blue texture is read there for colour and alpha, which is
-`@0x06`, `@0x12`, `@0x1a` and `@0x1c` above. **Read and not implemented**: the
-`TrailSpeed` scroll (the authored 1.0 is the identity under a repeating
-sampler, so the engine patches that slot live and what with is unread), the
-colour mix
-(the identity on this disc anyway), the facing fade (it needs two interpolated
-vectors this ribbon does not carry), the `f[POS].z * 0.75` depth fade, and the
-per-vertex `f[TC4].x` the engine writes. Each is a term this project would have
-had to invent before; now each is a number waiting for the geometry to carry
-it.
+**All of it is implemented as of 2026-08-24, and every "unread" above is
+read** - the live patch values, the geometry that carries the two vectors,
+the depth fade and the per-vertex `f[TC4].x` are all on
+[engine-trail.md](engine-trail.md): `TrailSpeed`'s live value is the flare's
+wrapping phase accumulator (`Tex Scroll Speed Delta` 0.08..0.10 per frame by
+speed), the colour mix is the per-craft Fury-skin flag (1.0 turns the trail
+red), the facing fade's vectors are the fin normal and the view vector the
+tube's own geometry now carries, and `f[TC4].x` is the vertex alpha -
+`brightness x attack x tail falloff`, measured. `exhaust.wgsl`'s
+`trail_shape` path computes each term.
 
 **`Trail_ModelPath` is the `bluered` pair, not the `enginetrail_triangle` one**
 this renderer loaded until now, and the plain one is named nowhere in the

@@ -152,21 +152,25 @@ Every other title compiles the pipeline it always had - `trail_shape` is a
 pipeline constant set only where the material names two textures - and Pulse
 and Pure frames are byte-identical either side.
 
-**Two things this does not make right, and neither is a reason to tune.**
-HD draws **one** strip where `oag_render::exhaust` draws `LAYERS` = 3, so the
-coverage falloff is applied three times over and `LAYER_COLOUR`'s baked tint
-sits on top of it. And that falloff runs along **`v`**, the around-the-tube
-coordinate, which this ribbon *scrolls* (`LAYER_SCROLL_V`) under a repeating
-sampler - where HD's own program displaces `u` and never touches `v` at all.
-Two frames three ticks apart show no travelling band, so nothing visible turns
-on it today; it is recorded because the next person to change the scroll needs
-to know the coverage is riding it.
+**Two things this paragraph used to flag are gone the same day the geometry
+was read** (2026-08-24): HD no longer draws the PSP's three layers - it draws
+its own three-fin tube (`oag_render::exhaust::hd`), one coverage falloff, no
+baked `LAYER_COLOUR`, and a `v` that runs across the fin exactly as the
+program expects. See
+[engine-trail.md](../ghidra/functions/ps3-hdfury-eu/engine-trail.md).
 
-**Still PSP's, unchanged**: every geometry number. `TrailEffectManager`'s
-per-craft state is 0x1230 bytes with a 0x1200-byte buffer, eight of them, and
-what that buffer's stride and sample count are has not been read. `TrailSpeed`
-= 1.0 and `0xe296b1ed` = 0.15 are the only ribbon numbers the *data* authors,
-and neither has been placed in the geometry yet.
+**Superseded 2026-08-24: nothing about the geometry is PSP's any more.** The
+per-craft state was read out of the running game - the 0x1230 block is a
+54-sample ring of `{basis, position}` records, the SPU extrudes a three-fin
+tube of 324 vertices per craft, and the colour, alpha, `u` and scroll laws
+were all fitted exactly against the dumped buffers. The whole record, with
+the tuning file that names every constant, is
+[engine-trail.md](../ghidra/functions/ps3-hdfury-eu/engine-trail.md);
+`oag_render::exhaust::hd` implements it, and the facing fade, depth fade,
+`TrailSpeed` scroll and per-vertex alpha this page listed as "read and not
+implemented" all draw now. The `0xe296b1ed` = 0.15 facing band is placed
+(the shader's own clamp), and `TrailSpeed`'s live value is the flare's
+wrapping phase accumulator.
 
 ## HD/Fury author the whole thing, and it already decodes
 
