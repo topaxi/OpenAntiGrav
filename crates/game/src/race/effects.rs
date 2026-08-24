@@ -299,6 +299,42 @@ impl Race {
         &self.sparks
     }
 
+    /// Raises `ABSORB` or `.COLLISIONS` for one craft, on that craft's own
+    /// re-arm.
+    ///
+    /// **The timer is per craft**, because the original's gate is: the cooldown
+    /// lives on the effect the *craft* owns, so eight hulls scraping eight
+    /// walls make eight sounds rather than sharing one 0.8-second window.
+    ///
+    /// It cannot share [`Race::sparks_cooldown`] either: a shielded contact
+    /// never ignites, so that timer would sit at zero and `ABSORB` would fire
+    /// sixty times a second through a scrape.
+    ///
+    /// `ShipCollisionFx_Trigger` plays `"COLLISIONS"` once per call that gets
+    /// past its own 0.8-second gate, which is the same 0.8 seconds
+    /// `oag_render::sparks::COLLISION_COOLDOWN` carries - one constant in the
+    /// original, read twice here. `"ABSORB"` comes from `FUN_08840640`, which
+    /// **bypasses** that gate and staggers its own ten instances by 0.1 s; how
+    /// often the game calls it is not recovered, so it is re-armed on the same
+    /// 0.8 s and that is a stated approximation rather than a reading. See
+    /// `docs/.../contact-response.md`.
+    pub(super) fn raise_contact_cue(&mut self, slot: usize, impact: bool, shielded: bool) {
+        let Some(cooldown) = self.contact_cue_cooldown.get_mut(slot) else {
+            return;
+        };
+        *cooldown = (*cooldown - self.dt).max(0.0);
+        if !impact || *cooldown > 0.0 {
+            return;
+        }
+        *cooldown = oag_render::sparks::COLLISION_COOLDOWN;
+        let cue = if shielded {
+            crate::audio::sfx::Cue::Absorb
+        } else {
+            crate::audio::sfx::Cue::Collision
+        };
+        self.cues.push(crate::audio::sfx::CueEvent::new(cue, slot));
+    }
+
     /// Takes the one-shot sound cues this tick raised, leaving the queue empty.
     ///
     /// The seam ADR-0018 asks for: cues are a per-tick *output*, so the caller
@@ -310,13 +346,13 @@ impl Race {
     /// a race that is never drained grows it by at most a handful of entries a
     /// second, all of them fixed-size - but the composition root does drain it,
     /// and a headless test that does not is bounded by its own tick count.
-    pub fn drain_cues(&mut self) -> Vec<crate::audio::sfx::Cue> {
+    pub fn drain_cues(&mut self) -> Vec<crate::audio::sfx::CueEvent> {
         std::mem::take(&mut self.cues)
     }
 
     /// The cues raised so far and not yet drained, for tests.
     #[must_use]
-    pub fn pending_cues(&self) -> &[crate::audio::sfx::Cue] {
+    pub fn pending_cues(&self) -> &[crate::audio::sfx::CueEvent] {
         &self.cues
     }
 

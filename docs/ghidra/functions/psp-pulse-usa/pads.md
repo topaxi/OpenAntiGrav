@@ -487,6 +487,20 @@ uses, each separating one craft from the others, is a converging hypothesis that
 hypothesis at confidence **45**, which is below the naming threshold, so the
 field stays unnamed.
 
+**Two more uses, 2026-08-24, and the hypothesis moves 45 -> 60 - still below the
+naming threshold.** Reading positional audio settled what the *other* branch
+here actually is: `FUN_0883e9b0` reaches `FUN_0893a768`, a play path that takes
+**no emitter at all** and is handed volume `0x400` - the maximum - with pan
+zero. So the split is not "two emitters", it is *positional* against *dry and
+full*, which is exactly the shape of "the local player's own sound". The fifth
+use points the same way: `Exhaust_UpdateEngineSound` multiplies the engine's
+volume by `0.85` when `+0x368` is **set**, which is what a mix does to everybody
+except the listener. Five converging uses is more than three, and it is still
+not a reading - the field is never written anywhere this project has looked, so
+it stays unnamed. See [positional-audio.md](positional-audio.md), and
+`oag_game::audio::sfx::Placement::CraftUnlessPlayer`, which is the one line that
+moves if this turns out to mean something else.
+
 **`DAT_08b31048 != 2` is not the Zone check.** This project already identifies
 `DAT_08ab07e3 == 0 && DAT_08b31048 == 6` as the Zone-mode selector
 ([zone-mode.md](zone-mode.md)). Here the same pair is tested against **2**,
@@ -541,10 +555,13 @@ arrays, most likely by breakpointing `0x08849db4` in a live race.
   own doc comment.
 - ~~**The `"SPEEDUPPAD"` sound.**~~ **Played**, off `hud.bnk`, on exactly the
   edge this function arms the flare on - `oag_game::race::pads` raises the cue
-  beside the `exhaust[slot].boost(...)` call. What is *not* reproduced is the
-  two-emitter split: the original picks between them on `racer+0x368`, and this
-  port has no positional audio at all, so **only slot 0 is audible**. See
-  `oag_game::audio::sfx` and
+  beside the `exhaust[slot].boost(...)` call. ~~What is *not* reproduced is the
+  two-emitter split.~~ **The split is reproduced too, 2026-08-24**: every craft
+  raises its own cue carrying its own slot, the player's is played dry at full
+  volume and a rival's goes through its craft emitter at
+  `oag_audio::Emitter::CRAFT_RADIUS`. The branch rides the `+0x368` hypothesis
+  above and says so at the one line that implements it. See
+  [positional-audio.md](positional-audio.md), `oag_game::audio::sfx` and
   [psp-audio.md](../../../formats/psp-audio.md#a-cue-owns-a-run-of-the-command-table).
 - **`craft+0x318`'s curve.** See the open question above.
 - **Mode `8`.** Read as Eliminator by elimination, not confirmed independently

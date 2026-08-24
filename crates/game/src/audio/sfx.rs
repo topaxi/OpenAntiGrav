@@ -54,24 +54,34 @@
 //! invented here rather than one read off the disc - the same refusal this file
 //! already makes about `oag_render::sparks::severity`.
 //!
-//! # Positional audio does not exist yet
+//! # Positional audio
 //!
-//! The original gives every craft its own emitter with a world position and a
-//! radius (`Exhaust_UpdateEngineSound`'s `self+0x78` is a 0x70-byte record with
-//! `50.0` at `+0x38`). The mixer has no panner, so **only the player's craft is
-//! audible here**. An opponent crossing a pad is silent rather than played dry
-//! at full volume in the middle of the field, which would be a louder error.
+//! Every craft is audible, from where it is. The law - linear falloff to a
+//! `200`-unit radius, a hard gate past it, the gamma volume curve, and the
+//! equal-power pan the disc tabulates - is recovered and lives in
+//! [`oag_audio::spatial`]; the listener is the **camera**, which is what the
+//! original copies into its sound manager once a frame.
+//!
+//! What this module adds on top is only the wiring: which slot raised a cue
+//! ([`CueEvent`]), which emitter that cue belongs on ([`Cue::placement`]), and
+//! where each craft is this tick. Two things are deliberately *not* placed -
+//! [`Cue::ShieldActive`], whose call site plays at full volume with pan zero,
+//! and music, which has no emitter at all.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use log::{info, warn};
+use log::info;
 use oag_assets::source::Archives;
-use oag_audio::{Bus, Mixer, Play, Sound, VoiceId};
+use oag_audio::{Bus, Play, Sound, VoiceId};
 use oag_core::Rng;
+use oag_core::math::Vec3;
 use oag_formats::sblk;
 
 use super::{Audio, TICK_HZ};
+
+mod engine;
+pub use engine::Engine;
 
 /// The seed the effects generator starts from.
 ///
@@ -88,7 +98,14 @@ const SFX_SEED: u64 = 0x0aa9_5f10_0000_5f58;
 /// Split from [`Banks`], which is decoded data on the race, for the same reason
 /// `oag_render::sparks` splits its pipeline from its particle state.
 pub(super) struct SfxVoices {
-    engine: Engine,
+    /// One per grid slot, each with its own random note and its own emitter.
+    ///
+    /// The original builds one in every craft's `ExhaustFlare_Init`, and its
+    /// `base` is `rand(-127, 127) - 1143` - a per-craft spread that is audible
+    /// as eight engines rather than one played eight times. Drawn from the same
+    /// generator in slot order, so a `--dump-audio` capture of one race is the
+    /// same capture twice.
+    engines: [Engine; oag_gameplay::MAX_SHIPS],
     /// The shield's held voice, while one is up and the alternate drawn was a
     /// loop. See [`Cue::Shield`].
     shield: Option<VoiceId>,
@@ -127,25 +144,36 @@ impl Audio {
         if race.sounds().is_empty() {
             return;
         }
-        let voices = self.sfx.get_or_insert_with(|| SfxVoices {
-            engine: Engine::new(&mut Rng::new(SFX_SEED)),
-            shield: None,
-            shield_open: false,
-            rng: Rng::new(SFX_SEED),
+        let voices = self.sfx.get_or_insert_with(|| {
+            let mut rng = Rng::new(SFX_SEED);
+            SfxVoices {
+                engines: std::array::from_fn(|_| Engine::new(&mut rng)),
+                shield: None,
+                shield_open: false,
+                rng: Rng::new(SFX_SEED),
+            }
         });
         let banks = race.sounds();
-        let speed_kmh = race.telemetry().speed * oag_render::exhaust::SPEED_TO_KMH;
+        let listener = listener_of(race);
+        let craft = craft_positions(race);
         let running = !race.finished();
         let shielded = race.shield_is_up();
         self.output.with_mixer(|mixer| {
-            for cue in cues {
+            for event in cues {
                 // A held cue is not a one-shot and must not be fired as one -
                 // `~ENGINE` reaching here would start a second engine every
                 // time it was raised.
-                if cue.held() {
+                if event.cue.held() {
                     continue;
                 }
-                let Some((sound, looping)) = banks.pick(cue, &mut voices.rng) else {
+                let Some(pan) = place(event, &listener, &craft) else {
+                    // Out of range: the original's `Sound_Play` refuses to open
+                    // a voice on an emitter whose out-of-range bit is latched,
+                    // so a rival's scrape on the far side of the circuit is
+                    // *not started* rather than started silent.
+                    continue;
+                };
+                let Some((sound, looping)) = banks.pick(event.cue, &mut voices.rng) else {
                     continue;
                 };
                 let play = if looping {
@@ -156,7 +184,11 @@ impl Audio {
                 // The return is dropped deliberately: a one-shot is fired and
                 // forgotten, and a refused voice is already counted by
                 // `Mixer::starved`.
-                let _ = mixer.play(play);
+                let _ = mixer.play(Play {
+                    gain: pan.gain,
+                    pan: pan.pan,
+                    ..play
+                });
             }
 
             // `Shield_Activate` opens `~SHIELD` with a handle and the shield's
@@ -194,9 +226,27 @@ impl Audio {
                 _ => {}
             }
 
-            voices
-                .engine
-                .tick(mixer, banks, &mut voices.rng, speed_kmh, running, DT);
+            // Every craft's engine, each off its own emitter. A craft with no
+            // pose is one the race never spawned; it is skipped rather than
+            // placed at the origin, which would put eight engines in a heap
+            // under the start line.
+            for (slot, engine) in voices.engines.iter_mut().enumerate() {
+                let Some(&(position, speed)) = craft.get(slot).and_then(Option::as_ref) else {
+                    engine.stop(mixer);
+                    continue;
+                };
+                let placed = oag_audio::Emitter::engine(position.to_array()).place(&listener, 1.0);
+                engine.tick(
+                    mixer,
+                    banks,
+                    &mut voices.rng,
+                    speed * oag_render::exhaust::SPEED_TO_KMH,
+                    running,
+                    placed,
+                    slot != 0,
+                    DT,
+                );
+            }
         });
     }
 
@@ -210,7 +260,9 @@ impl Audio {
     pub fn stop_race_sfx(&mut self) {
         if let Some(voices) = &mut self.sfx {
             self.output.with_mixer(|mixer| {
-                voices.engine.stop(mixer);
+                for engine in &mut voices.engines {
+                    engine.stop(mixer);
+                }
                 if let Some(id) = voices.shield.take() {
                     mixer.stop(id);
                 }
@@ -399,6 +451,175 @@ impl Cue {
     pub fn held(self) -> bool {
         matches!(self, Self::Engine | Self::Shield)
     }
+
+    /// Which emitter the original plays this cue on.
+    ///
+    /// Read off each call site's first argument to `Sound_Play`, which is the
+    /// emitter record and nothing else - see
+    /// [`positional-audio.md`](../../../../docs/ghidra/functions/psp-pulse-usa/positional-audio.md).
+    /// A cue whose call site has not been read stays [`Placement::Unplaced`]
+    /// rather than being placed somewhere plausible.
+    #[must_use]
+    pub fn placement(self) -> Placement {
+        match self {
+            // `lw a0, 0x50(a0)` at `0x08924844`, inside
+            // `ShipCollisionFx_Trigger` - the craft's own emitter, with no
+            // branch, so the player's hull is positional too.
+            Self::Collision => Placement::Craft,
+            // `FUN_08840640` is the absorb effect and sits on the same craft;
+            // its emitter argument was not disassembled, so this rides
+            // `Collision`'s reading of the contact path rather than its own.
+            Self::Absorb => Placement::Craft,
+            // `Shield_Activate`'s own doc comment above: `Sound_PlayLooping(1.0,
+            // entity->0x50, ...)`, the same `+0x50` the collision path uses.
+            Self::Shield => Placement::Craft,
+            // Two branches, and which is taken splits on `racer+0x368` -
+            // `ExhaustFlare_OnSpeedupPad` (`0x08904f74`) plays positionally off
+            // `craft+0x50` on one side and dry at volume `0x400` through
+            // `FUN_0883e9b0` on the other. See [`Placement::CraftUnlessPlayer`].
+            Self::SpeedupPad => Placement::CraftUnlessPlayer,
+            // `ExhaustFlare_Init` gives the note its own emitter at a quarter
+            // of the craft radius, and [`Engine`] holds the voice, so this
+            // never reaches the one-shot path.
+            Self::Engine => Placement::Engine,
+            // Recorded as `Sound_Play(entity, ..., "shieldactive", 0x400, 0)` -
+            // full volume and pan zero, which is the shape of the *non*-emitter
+            // path. Left dry, which is also what this port has always done.
+            Self::ShieldActive => Placement::Unplaced,
+        }
+    }
+}
+
+/// The listener, off the camera the frame is actually drawn from.
+///
+/// `SoundManager_Update` (`0x0893a2b0`) copies the active camera's rotation
+/// rows and the negation of its `+0x70` into the sound manager once a frame.
+/// The negation is there because the camera stores a *negated* eye beside a
+/// world-to-camera rotation whose world axes are its columns - a split
+/// `docs/.../camera.md` measured from the rendering side and this reads back
+/// from the audio side. Inverting `Race::view` recovers both halves at once:
+/// the camera's world matrix, whose translation is the eye and whose first
+/// column is the right axis the pan projects onto.
+fn listener_of(race: &crate::race::Race) -> oag_audio::Listener {
+    let camera = race.view().inverse();
+    oag_audio::Listener {
+        position: camera.w_axis.truncate().to_array(),
+        right: camera.x_axis.truncate().normalize_or_zero().to_array(),
+    }
+}
+
+/// Every live craft's world position and speed, indexed by grid slot.
+///
+/// [`None`] for a slot the race did not field. Read once per tick rather than
+/// per cue, because eight cues from one craft must all agree on where it was.
+fn craft_positions(race: &crate::race::Race) -> [Option<(Vec3, f32)>; oag_gameplay::MAX_SHIPS] {
+    std::array::from_fn(|slot| {
+        let ship = race.world.ships.get(slot)?;
+        (slot < race.ship_count() as usize && ship.active).then(|| {
+            (
+                ship.physics.body.position,
+                ship.physics.body.linear_velocity.length(),
+            )
+        })
+    })
+}
+
+/// Where one cue is heard from, or [`None`] if it is out of range entirely.
+///
+/// The `Option<f32>` inside is the mixer's own "no position" - see
+/// [`oag_audio::mixer::Play::pan`]. So this returns three answers, not two:
+/// placed, placed-with-no-position, and refused.
+fn place(
+    event: CueEvent,
+    listener: &oag_audio::Listener,
+    craft: &[Option<(Vec3, f32)>],
+) -> Option<Placed> {
+    let dry = Placed {
+        gain: 1.0,
+        pan: None,
+    };
+    let emitter = match event.cue.placement() {
+        Placement::Unplaced => return Some(dry),
+        // The player's own branch, on a hypothesis the type documents.
+        Placement::CraftUnlessPlayer if event.is_player() => return Some(dry),
+        Placement::Craft | Placement::CraftUnlessPlayer => oag_audio::Emitter::craft,
+        Placement::Engine => oag_audio::Emitter::engine,
+    };
+    // A cue from a slot with no craft is not a cue: dropped rather than played
+    // dry, because the alternative is a rival's collision arriving at full
+    // volume out of nowhere the moment a slot is emptied.
+    let (position, _) = (*craft.get(usize::from(event.slot))?)?;
+    let placed = emitter(position.to_array()).place(listener, 1.0)?;
+    Some(Placed {
+        gain: placed.gain,
+        pan: Some(placed.pan),
+    })
+}
+
+/// A gain and an optional stereo position, in the shape [`Play`] wants.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Placed {
+    gain: f32,
+    pan: Option<f32>,
+}
+
+/// Which emitter a cue is heard from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Placement {
+    /// The craft's own emitter, [`oag_audio::Emitter::CRAFT_RADIUS`] wide.
+    ///
+    /// `Craft_Construct_q` allocates it, points it at the ship's scene node and
+    /// never overrides the default radius, so this is every craft on the grid
+    /// including the player's.
+    Craft,
+    /// The engine flare's emitter, a quarter as wide.
+    Engine,
+    /// The craft's emitter for an opponent; dry at full volume for the player.
+    ///
+    /// **This one rides a hypothesis and says so.** The original branches on
+    /// `racer+0x368`, a field
+    /// [`pads.md`](../../../../docs/ghidra/functions/psp-pulse-usa/pads.md)
+    /// records at confidence **45** as *probably* "is the local player" - below
+    /// the naming threshold, on three converging uses. Positional audio adds
+    /// two more: the non-positional branch plays at volume `0x400`, the
+    /// maximum, with pan zero, which is exactly what a player's own sound
+    /// wants; and `Exhaust_UpdateEngineSound` scales the engine by `0.85` when
+    /// the same field is *set*, which is what a mix does to everybody else. If
+    /// that field turns out to mean something else, this is the line that moves.
+    CraftUnlessPlayer,
+    /// No emitter has been read for this cue, so it is played dry.
+    Unplaced,
+}
+
+/// A cue and the craft that raised it.
+///
+/// **Which craft is not bookkeeping this port invented.** The original's
+/// `Sound_Play` takes an emitter as its first argument and every one of these
+/// cues passes the craft's own, so the slot is the part of the call this port
+/// used to be throwing away - which is why only the player was ever audible.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CueEvent {
+    /// What to play.
+    pub cue: Cue,
+    /// The grid slot whose emitter plays it. Slot 0 is the player.
+    pub slot: u8,
+}
+
+impl CueEvent {
+    /// A cue from `slot`.
+    #[must_use]
+    pub fn new(cue: Cue, slot: usize) -> Self {
+        Self {
+            cue,
+            slot: u8::try_from(slot).unwrap_or(u8::MAX),
+        }
+    }
+
+    /// Whether the player raised it.
+    #[must_use]
+    pub fn is_player(self) -> bool {
+        self.slot == 0
+    }
 }
 
 /// One cue's decoded audio: every waveform its command run binds.
@@ -552,205 +773,6 @@ fn load_cue(blob: &[u8], cue: Cue) -> anyhow::Result<(Loaded, usize)> {
         cue.name()
     );
     Ok((Loaded { waveforms }, skipped))
-}
-
-/// The engine voice, and the law that drives its pitch and volume.
-///
-/// `Exhaust_UpdateEngineSound` (`0x08904cf4`), confidence 80:
-///
-/// ```text
-/// base  = rand(-127, 127) - 1143                 per craft, once
-/// ON :  target = base + speed_kmh * 5.0
-///       lag   += (target - lag) * 0.01           substepped
-///       i     += dt * 0.25
-/// OFF:  if base <= pitch { pitch -= 48.0 }
-///       i     -= dt * 0.5
-/// clamp i to [0, 1]
-/// pitch  = lag
-/// volume = i * 0.6 + 0.4
-/// ```
-///
-/// # The unit of `pitch` is inferred, not recovered
-///
-/// The law is a direct read; what the number *means* is not. It is written to a
-/// SCREAM sound instance's `+0x04`, and at a standstill it is about **-1143**,
-/// which is 1143 below whatever unity is. Read as **cents** - 1200 to the
-/// octave, the near-universal convention - that is a playback ratio of
-/// `2^(-1143/1200)` = 0.52 at rest, unity at 228.6 km/h and about 1.23 at 300,
-/// which is the shape of an engine note. No other reading of a number near
-/// -1143 lands anywhere sensible. Recorded as a hypothesis at confidence
-/// **60**, and it is the one thing here a hardware capture would settle in a
-/// second.
-#[derive(Debug)]
-pub struct Engine {
-    /// The per-craft random offset, in the same unit as `lag`.
-    base: f32,
-    /// The lagged pitch the running engine chases its target with.
-    lag: f32,
-    /// What is actually written to the voice.
-    ///
-    /// Separate from [`Self::lag`] because the original's two branches move
-    /// different variables: running, `pitch = lag`; stopped, `pitch` itself
-    /// winds down by [`ENGINE_SPINDOWN`] a tick while `lag` is left where it
-    /// was. Folding them would make the engine spin *back up* from wherever the
-    /// chase had got to the moment it restarted.
-    pitch: f32,
-    /// The intensity the volume is derived from, and which the visual shares.
-    intensity: f32,
-    /// The held voice, while one is playing.
-    voice: Option<VoiceId>,
-    /// Whether the law has been stepped at least once, so the first tick snaps
-    /// rather than sweeping in - the original's rising-edge branch.
-    started: bool,
-    /// Set once the spin-down has released the voice, so it is never re-opened.
-    stopped: bool,
-    /// Latch on the not-looping complaint. See [`Engine::tick`].
-    warned: bool,
-}
-
-/// Cents to an octave, the unit `base` is read as. See [`Engine`].
-const CENTS_PER_OCTAVE: f32 = 1200.0;
-
-/// The centre of the per-craft random spread, `rand(-127, 127) - 1143`.
-const ENGINE_BASE: f32 = -1143.0;
-
-/// Half-width of that spread.
-const ENGINE_SPREAD: f32 = 127.0;
-
-/// How fast the lagged pitch chases its target, per substep.
-const ENGINE_LAG_RATE: f32 = 0.01;
-
-/// Pitch per km/h.
-const ENGINE_PITCH_PER_KMH: f32 = 5.0;
-
-/// How fast intensity rises with the engine on, per second.
-const ENGINE_RISE: f32 = 0.25;
-
-/// How fast it falls with the engine off, per second.
-const ENGINE_FALL: f32 = 0.5;
-
-/// How far the stopped engine's pitch winds down each tick, until it reaches
-/// [`Engine::base`].
-const ENGINE_SPINDOWN: f32 = 48.0;
-
-/// The volume law's floor and span: `intensity * 0.6 + 0.4`.
-const ENGINE_GAIN_FLOOR: f32 = 0.4;
-const ENGINE_GAIN_SPAN: f32 = 0.6;
-
-impl Engine {
-    /// A craft's engine, with its own note picked out of `rng`.
-    #[must_use]
-    pub fn new(rng: &mut Rng) -> Self {
-        let base = ENGINE_BASE + (rng.next_f32() * 2.0 - 1.0) * ENGINE_SPREAD;
-        Self {
-            base,
-            lag: base,
-            pitch: base,
-            intensity: 0.0,
-            voice: None,
-            started: false,
-            stopped: false,
-            warned: false,
-        }
-    }
-
-    /// Advances the law one tick and writes the result to the voice.
-    ///
-    /// `on` is the original's `engine_on`: this port maps it to "the race is
-    /// still running", which is the only engine-state edge the simulation has.
-    /// The original's is a craft flag, so a destroyed or respawning craft would
-    /// also fall silent there and does not here - recorded rather than guessed
-    /// at, because no page has read that flag.
-    ///
-    /// Starts the voice on the first tick the cue is available, and never
-    /// restarts it: `~ENGINE` is a held loop for the life of the craft, which
-    /// is what the `~` means.
-    pub fn tick(
-        &mut self,
-        mixer: &mut Mixer,
-        banks: &Banks,
-        rng: &mut Rng,
-        speed_kmh: f32,
-        on: bool,
-        dt: f32,
-    ) {
-        if on {
-            let target = self.base + speed_kmh * ENGINE_PITCH_PER_KMH;
-            if self.started {
-                self.lag += (target - self.lag) * ENGINE_LAG_RATE;
-            } else {
-                // The original's rising edge: snap, no sweep-in. Without this
-                // the note slides up over the first seconds of every race,
-                // which is audible and is not what the original does.
-                self.lag = target;
-                self.started = true;
-            }
-            self.pitch = self.lag;
-            self.intensity = (self.intensity + dt * ENGINE_RISE).clamp(0.0, 1.0);
-        } else {
-            // A spin-down rather than a cut: the note falls toward the craft's
-            // own base note and the volume follows it down twice as fast.
-            if self.base <= self.pitch {
-                self.pitch -= ENGINE_SPINDOWN;
-            }
-            self.intensity = (self.intensity - dt * ENGINE_FALL).clamp(0.0, 1.0);
-        }
-
-        // **The wound-down engine is released rather than left humming.** The
-        // recovered volume law floors at [`ENGINE_GAIN_FLOOR`], so intensity
-        // reaching zero is as quiet as the law ever gets - 40 %, which under a
-        // results table is a drone rather than a fade. The original does not
-        // have this problem because `ExhaustFlare_Destroy` (`0x08904540`) takes
-        // the voice with it when the craft's flare is torn down; *when* that
-        // happens is not recovered, so this port releases the voice at the
-        // bottom of the law instead and says so rather than inventing a fade.
-        if !on && self.intensity <= 0.0 {
-            self.stop(mixer);
-            return;
-        }
-
-        let pitch = (self.pitch / CENTS_PER_OCTAVE).exp2();
-        let gain = self.intensity * ENGINE_GAIN_SPAN + ENGINE_GAIN_FLOOR;
-
-        match self.voice {
-            Some(id) if mixer.is_playing(id) => {
-                mixer.set_pitch(id, pitch);
-                mixer.set_gain(id, gain);
-            }
-            // Never re-opened once the spin-down closed it: a finished race
-            // that kept calling this would otherwise restart the engine on the
-            // tick after it went quiet, for ever.
-            _ if self.stopped => {}
-            _ => {
-                let Some((sound, looping)) = banks.pick(Cue::Engine, rng) else {
-                    return;
-                };
-                if !looping {
-                    // The bank says this is not a loop, so holding it would be
-                    // a voice that stops and never comes back. Latched, or the
-                    // complaint is sixty lines a second for the whole race.
-                    if !self.warned {
-                        self.warned = true;
-                        warn!("sfx: ~ENGINE is not marked looping in this bank; not held");
-                    }
-                    return;
-                }
-                self.voice = mixer.play(Play {
-                    gain,
-                    pitch,
-                    ..Play::looping(sound, Bus::Sfx)
-                });
-            }
-        }
-    }
-
-    /// Releases the voice, which is what leaving a race does.
-    pub fn stop(&mut self, mixer: &mut Mixer) {
-        self.stopped = true;
-        if let Some(id) = self.voice.take() {
-            mixer.stop(id);
-        }
-    }
 }
 
 #[cfg(test)]

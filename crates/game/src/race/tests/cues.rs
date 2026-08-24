@@ -35,7 +35,7 @@ fn crossing_a_pad_raises_its_cue_on_the_tick_the_flare_is_armed() {
     // wrong however good the sound is.
     assert!(race.exhaust[0].boost_timer() > 0.0, "the flare did not arm");
     assert!(
-        race.pending_cues().contains(&Cue::SpeedupPad),
+        race.pending_cues().iter().any(|e| e.cue == Cue::SpeedupPad),
         "the flare armed and the cue did not: {:?}",
         race.pending_cues()
     );
@@ -45,12 +45,25 @@ fn crossing_a_pad_raises_its_cue_on_the_tick_the_flare_is_armed() {
 fn sitting_on_a_pad_raises_the_cue_once_and_not_every_tick() {
     let mut race = grid_on_a_speed_pad();
     race.tick(&InputSnapshot::default());
-    let first = race
+    let first: Vec<_> = race
         .drain_cues()
-        .iter()
-        .filter(|&&c| c == Cue::SpeedupPad)
-        .count();
-    assert_eq!(first, 1);
+        .into_iter()
+        .filter(|e| e.cue == Cue::SpeedupPad)
+        .collect();
+    // **One per craft, and the fixture's pad envelops the whole grid**, so a
+    // single race raises eight - each carrying its own slot, which is what the
+    // audio layer places it by. Before positional audio the seven opponents
+    // were dropped at the point of raising and this asserted `1`.
+    assert_eq!(first.len(), race.ship_count() as usize);
+    let mut slots: Vec<_> = first.iter().map(|e| e.slot).collect();
+    slots.sort_unstable();
+    slots.dedup();
+    assert_eq!(slots.len(), first.len(), "two cues came from one slot");
+    assert_eq!(
+        first.iter().filter(|e| e.is_player()).count(),
+        1,
+        "the player raised it more than once, or not at all"
+    );
 
     // The edge is "entered a *new* pad", not "is on one" - the same rule the
     // Zone score and the flare already follow. A pad held for a second would
@@ -59,7 +72,7 @@ fn sitting_on_a_pad_raises_the_cue_once_and_not_every_tick() {
         race.tick(&InputSnapshot::default());
     }
     assert!(
-        !race.drain_cues().contains(&Cue::SpeedupPad),
+        !race.drain_cues().iter().any(|e| e.cue == Cue::SpeedupPad),
         "the pad re-fired while the craft sat on it"
     );
 }
@@ -82,7 +95,7 @@ fn a_track_with_no_pads_raises_no_pad_cue() {
     let mut race = race_with_pads(Mode::SingleRace, Vec::new());
     for _ in 0..120 {
         race.tick(&InputSnapshot::default());
-        assert!(!race.drain_cues().contains(&Cue::SpeedupPad));
+        assert!(!race.drain_cues().iter().any(|e| e.cue == Cue::SpeedupPad));
     }
 }
 
@@ -128,7 +141,7 @@ fn every_cue_has_something_that_raises_it() {
         body.position = Vec3::new(20.0, -39.7, 0.0);
         body.linear_velocity = Vec3::new(0.0, -50.0, 0.0);
         saw_impact |= race.tick(&InputSnapshot::default()).wall.impact;
-        raised.extend(race.drain_cues());
+        raised.extend(race.drain_cues().into_iter().map(|e| e.cue));
     }
     assert!(
         saw_impact,
@@ -164,7 +177,7 @@ fn the_shield_announcer_fires_on_the_edge_and_not_on_the_level() {
         announcements += race
             .drain_cues()
             .iter()
-            .filter(|&&c| c == Cue::ShieldActive)
+            .filter(|e| e.cue == Cue::ShieldActive)
             .count();
     }
     // 150 ticks of shield, one announcement: `Shield_Activate` runs once per

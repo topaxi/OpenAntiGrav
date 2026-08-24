@@ -401,6 +401,88 @@ fn the_engine_sounds_while_a_race_runs_and_stops_when_it_finishes() {
     );
 }
 
+/// The whole grid sounds, and it does not all sound from the same place.
+///
+/// The end-to-end half of positional audio: unit tests check the law
+/// (`oag_audio::spatial`) and the wiring (`oag_game::audio::sfx`), and neither
+/// can see whether eight real `~ENGINE` waveforms out of a real bank actually
+/// reach eight voices with eight positions. Before this landed the answer was
+/// one voice, and every test still passed.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_whole_grid_is_audible_and_not_all_from_one_place() {
+    let Some(path) = image("pulse-psp-usa.chd") else {
+        return;
+    };
+    let loaded = race::load(&race::Options {
+        source: path.display().to_string(),
+        // The only mode that fields opponents, which is the whole point here.
+        mode: oag_race::Mode::SingleRace,
+        ..race::Options::default()
+    })
+    .expect("loading the race");
+    let mut race = race::Race::start(loaded.setup);
+    assert!(
+        race.ship_count() > 1,
+        "the fixture raced alone, so nothing below is testing anything"
+    );
+
+    let mut audio = oag_game::audio::Audio::open(
+        &oag_game::settings::Audio::default(),
+        Some(std::path::PathBuf::from("/dev/null")),
+    );
+    for _ in 0..120 {
+        race.tick(&oag_gameplay::InputSnapshot::default());
+        audio.race_tick(&mut race);
+        audio.tick();
+    }
+
+    let voices = audio.output().with_mixer(|mixer| mixer.active_voices());
+    assert_eq!(
+        voices,
+        race.ship_count() as usize,
+        "one engine per craft is what `ExhaustFlare_Init` builds; got {voices} \
+         for {} craft",
+        race.ship_count()
+    );
+
+    // **Rendered, not inspected.** A pan that is stored and never applied is
+    // exactly the bug this is here to catch, and the only way to see it is in
+    // the samples. Nothing but the effects bus is open - this test never starts
+    // the music - so any difference between the channels is the panner.
+    //
+    // **The craft is moved deliberately rather than raced into place.** Two
+    // seconds after the flag the AI has driven the field well past the engine
+    // emitter's 50-unit radius, so a grid left to itself renders the player's
+    // engine alone and centred - which is the recovered behaviour and tests
+    // nothing. Putting one rival ten units off the camera's own right axis is
+    // the same kind of fixture `race::tests::cues` uses for its wall.
+    let camera = race.view().inverse();
+    let right = camera.x_axis.truncate().normalize();
+    race.world.ships[1].physics.body.position = camera.w_axis.truncate() + right * 10.0;
+    audio.race_tick(&mut race);
+
+    let (left, right) = audio.output().with_mixer(|mixer| {
+        let mut out = vec![0.0f32; 2 * 4096];
+        mixer.render(&mut out);
+        out.as_chunks::<2>()
+            .0
+            .iter()
+            .fold((0.0f32, 0.0f32), |(l, r), f| {
+                (l + f[0] * f[0], r + f[1] * f[1])
+            })
+    });
+    assert!(
+        left > 0.0 && right > 0.0,
+        "the grid rendered silence: {left} / {right}"
+    );
+    assert!(
+        right > left * 1.5,
+        "a craft ten units off the camera's right axis came out at {left} \
+         left against {right} right - the pan is being computed and dropped"
+    );
+}
+
 /// The shield's two cues through the whole path, which nothing else covers.
 ///
 /// `~SHIELD` is driven by a *level* rather than by an edge - the audio layer

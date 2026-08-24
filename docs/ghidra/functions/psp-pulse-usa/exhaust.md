@@ -329,8 +329,14 @@ Sound_Play(1.0, self+0x78, ..., "~ENGINE", /* out */ self+0x7c);
   1143.0`, i.e. about **-1143** - a negative number that cannot be a length, and
   a per-instance random spread that makes each craft's engine note slightly
   different.
-- `self+0x78` is a 0x70-byte emitter with a world position at `+0x50` and `50.0`
-  at `+0x38`, the shape of a positional sound with a radius.
+- `self+0x78` is a 0x70-byte **positional emitter**, with `50.0` at `+0x38`.
+  **Correction (2026-08-24): `+0x50` is not a position, it is a pointer** - the
+  constructor stores the result of `FUN_08945254(self)` there, and the emitter's
+  own update reads that node's transform each frame instead. The position lives
+  at `+0x00`. The record is decoded in full, along with what `50.0` does, on
+  [positional-audio.md](positional-audio.md); the `50.0` is an override of a
+  `200.0` default that every *craft* emitter keeps, which is why the engine note
+  falls away so much faster than a collision.
 
 Behaviour:
 
