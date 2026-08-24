@@ -443,8 +443,13 @@ seen from the authoring side.
       numbers are read off the disc. **Zone now ends**: the pool empties, the
       craft blows up for half a second, and `Ship_SetState` case 5 sets the bit
       `Zone_UpdateRacing` watches - which is the bit that page recorded as set by
-      nothing findable. What is absent is the *presentation* of it, the explosion
-      and the camera hand-off. **The grid geometry is recovered and measured**
+      nothing findable. **The explosion is audible as of 2026-08-24**: case 4 is
+      read at instruction level past a jump table the decompiler cannot follow,
+      and `~BLOWUP` is held for the state's own half-second. What is still
+      absent is the rest of the presentation - the HUD hide and the camera
+      hand-off into mode 5 - and
+      [zone-mode.md](../ghidra/functions/psp-pulse-usa/zone-mode.md) now carries
+      case 4's own addresses for both rather than a summary of them. **The grid geometry is recovered and measured**
       ([grid.md](../ghidra/functions/psp-pulse-usa/grid.md)), but none of the
       three modes here spawns opponents onto it, because none of the three
       races with any in the original either - `AI DIFFICULTY` greys to `N/A`
