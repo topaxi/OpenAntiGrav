@@ -46,7 +46,9 @@ fn main() -> anyhow::Result<()> {
             let base = chunk + row * 0x10;
             let bytes = &geometry[base..base + 0x10];
             let words: Vec<String> = bytes
-                .chunks_exact(4)
+                .as_chunks::<4>()
+                .0
+                .iter()
                 .map(|w| {
                     let f = f32::from_be_bytes([w[0], w[1], w[2], w[3]]);
                     if f.is_finite() && f != 0.0 && f.abs() > 1e-6 && f.abs() < 1e6 {
@@ -91,7 +93,9 @@ fn main() -> anyhow::Result<()> {
                 let base = at + row * 0x10;
                 let bytes = &geometry[base..base + 0x10];
                 let words: Vec<String> = bytes
-                    .chunks_exact(4)
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
                     .map(|w| {
                         let f = f32::from_be_bytes([w[0], w[1], w[2], w[3]]);
                         if f.is_finite() && f != 0.0 && f.abs() > 1e-6 && f.abs() < 1e6 {

@@ -122,6 +122,17 @@ pub mod slots {
     pub const ALBEDO_FROM_SECOND: u32 = 1 << 1;
     /// The output alpha comes from the second texture rather than the first.
     pub const ALPHA_FROM_SECOND: u32 = 1 << 2;
+    /// The material's vertex program writes `1 - v` into the varying its
+    /// fragment program samples with, so the coordinate has to be flipped.
+    ///
+    /// **Read off the vertex microcode, per material** - see
+    /// `oag_formats::rcsmaterial::vertex` and `mesh::rcs::skin::flips`. Unlike
+    /// the three bits above it this one never reaches the shader: the build
+    /// applies it once per vertex, because it is a property of the material
+    /// and not of the pixel. It rides here because this is already the word
+    /// that carries what a material's own microcode says.
+    pub const FLIP_V: u32 = 1 << 5;
+
     /// Which channel of that texture the alpha is, in bits 3 and 4.
     #[must_use]
     pub const fn alpha_channel(channel: u32) -> u32 {

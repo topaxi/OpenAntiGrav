@@ -1293,6 +1293,51 @@ rather than eventually: an implementation of the binding either makes the
 reference's grid appear or it does not, and either answer settles the reading
 in one frame.
 
+## The vertex program says which way up a texture coordinate is (2026-08-24)
+
+**Confidence 92.** [`oag_formats::rcsmaterial::fragment`] traces what a program
+does with the texels it samples. Its sibling `vertex` traces the varying it
+samples *at*, and the one thing this project needed from it is that **HD's
+circuit shaders do not agree on the orientation of `v`.**
+
+`talons_junction/track_wall`'s lit race-pass variant opens
+
+```text
+ 4  ADD o[TC6].y, -v[3].yyyy, c[206].yyyy
+ 5  MOV o[TC6].x, v[3].xxxx
+```
+
+- `v[3]` is the attribute the block itself declares as `Uv1`
+  (`0x427214fc`), read from the vertex `SHO` block's attribute table.
+- `c[206].y` is 1.0: instruction 9 of the same block is
+  `MAD R0, v[2], c[206].xxxx, -c[206].yyyy` on the packed `tangent`, the
+  standard `t * 2 - 1` unpack, which fixes `c[206]` as `(2.0, 1.0, ...)`.
+
+So the coordinate reaching `f[TC6]` is `(Uv1.x, 1 - Uv1.y)`.
+
+**Per material, and the census is what makes that a reading rather than a
+guess.** Across Talon's Junction, `track_wall` flips in 18 of its 94 vertex
+blocks and `track_surface` in **0 of 64**; of the 283 variants the circuit's
+drawn slots resolve to, **exactly one** flips. `track_surface`'s coordinates
+were always right, and a global flip would have broken them to fix the walls.
+
+`Program::flips(hash)` answers it, and it is deliberately narrow: an
+instruction counts only when it negates the named attribute's input register
+**into an output texture coordinate**, using a source slot the opcode actually
+reads. A negate into a temporary, into `o[POS]`, or parked in a slot that
+`MUL` never looks at is not a flip - each is a test in
+`crates/formats/src/rcsmaterial/vertex/tests.rs`.
+
+The renderer applies it on the CPU, once per vertex at build time, through
+`mesh::slots::FLIP_V`. That bit rides in the same word as the texture-unit
+roles because it is the same kind of statement - what this material's own
+microcode says - but unlike the other bits it never reaches `mesh.wgsl`: the
+orientation is a property of the material, not of the pixel.
+
+What it moves is in [`rcsmodel.md`](rcsmodel.md#a-texture-coordinates-orientation-is-per-material-in-the-vertex-microcode),
+with the six explanations that were measured and died before the microcode was
+read.
+
 ## Open
 
 - **87 of the 125 sampler hashes**, including the three commonest

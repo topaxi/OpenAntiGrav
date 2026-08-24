@@ -79,10 +79,10 @@ fn main() -> anyhow::Result<()> {
             if want != "*" && !texture.label.contains(&want) {
                 continue;
             }
-            if let Ok(only) = std::env::var("OAG_SLOT") {
-                if only.parse::<usize>() != Ok(slot) {
-                    continue;
-                }
+            if let Ok(only) = std::env::var("OAG_SLOT")
+                && only.parse::<usize>() != Ok(slot)
+            {
+                continue;
             }
             if let Ok(near) = std::env::var("OAG_NEAR") {
                 let at: Vec<f32> = near
@@ -133,7 +133,7 @@ fn main() -> anyhow::Result<()> {
             let mut vsum = 0.0f64;
             let mut seen_v: std::collections::BTreeSet<i32> = std::collections::BTreeSet::new();
             let indices = &model.indices[d.range.start as usize..d.range.end as usize];
-            for tri in indices.chunks_exact(3) {
+            for tri in indices.as_chunks::<3>().0 {
                 let vs: [_; 3] = std::array::from_fn(|k| &model.vertices[tri[k] as usize]);
                 let e1: [f32; 3] = std::array::from_fn(|c| vs[1].position[c] - vs[0].position[c]);
                 let e2: [f32; 3] = std::array::from_fn(|c| vs[2].position[c] - vs[0].position[c]);

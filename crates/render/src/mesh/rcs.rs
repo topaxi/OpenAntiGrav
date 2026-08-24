@@ -134,7 +134,7 @@ pub fn no_textures(_: &str) -> Option<Vec<u8>> {
 
 mod isolate;
 mod skin;
-use skin::{picks, roles, skin, variants};
+use skin::{flips, picks, roles, skin, variants};
 
 /// The bounding box and chunk hash a PS3 `Mesh` node's payload carries.
 ///
@@ -540,6 +540,7 @@ fn emit(out: &mut Model, mesh: Geometry<'_>, to_world: Mat4, node: Option<u32>, 
         vertex_light,
         indices,
     } = mesh;
+    let flip_v = surface.roles & slots::FLIP_V != 0;
     let first_vertex = u32::try_from(out.vertices.len()).unwrap_or(u32::MAX);
     let first_index = u32::try_from(out.indices.len()).unwrap_or(u32::MAX);
     let mut centre = Vec3::ZERO;
@@ -581,9 +582,16 @@ fn emit(out: &mut Model, mesh: Geometry<'_>, to_world: Mat4, node: Option<u32>, 
                 .and_then(|t| t.get(k))
                 .map(|&[u, v]| [finite(u), finite(v)])
                 .unwrap_or([0.0, 0.0]),
+            // **`1 - v` where the material's own vertex program writes it**,
+            // which one of Talon's Junction's 283 resolved variants does. See
+            // `oag_formats::rcsmaterial::vertex` for the microcode and
+            // `skin::flips` for why this is per material rather than global.
             texcoord: texcoords
                 .and_then(|t| t.get(k))
-                .map(|&[u, v]| [finite(u), finite(v)])
+                .map(|&[u, v]| {
+                    let v = finite(v);
+                    [finite(u), if flip_v { 1.0 - v } else { v }]
+                })
                 .unwrap_or([0.0, 0.0]),
             // **Unlit under the tint diagnostic**, so the flat colour reaches
             // the frame as itself: `lit` 0.0 takes `mesh.wgsl`'s stand-in
@@ -719,7 +727,20 @@ fn build_with_options(
     let picks = picks(&model, &material_variants, textures);
     let (skins, seconds) = skin(&model, &picks, textures, &mut report);
     // After the variants, because the roles are read off the resolved one.
-    let material_slots = roles(&model, &material_variants, &picks, &seconds, textures);
+    let mut material_slots = roles(&model, &material_variants, &picks, &seconds, textures);
+    // **The coordinate's orientation, off the resolved *vertex* block** rather
+    // than the fragment one the roles come from, and folded into the same word
+    // because it is the same kind of statement: what this material's own
+    // microcode says. See `skin::flips`.
+    for (packed, flipped) in
+        material_slots
+            .iter_mut()
+            .zip(flips(&model, &material_variants, textures))
+    {
+        if flipped {
+            *packed |= slots::FLIP_V;
+        }
+    }
     out.textures = skins;
     out.lightmaps = seconds;
     // Every vertex this module writes carries HD's baked per-vertex light in

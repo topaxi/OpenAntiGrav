@@ -54,7 +54,10 @@ fn main() -> anyhow::Result<()> {
             let channel = ((bits >> 3) & 3) as usize;
             let row = rows.entry(slot).or_insert((0.0, 0.0, 0));
             row.2 += 1;
-            for tri in model.indices[d.range.start as usize..d.range.end as usize].chunks_exact(3) {
+            for tri in model.indices[d.range.start as usize..d.range.end as usize]
+                .as_chunks::<3>()
+                .0
+            {
                 let vs: [_; 3] = std::array::from_fn(|k| &model.vertices[tri[k] as usize]);
                 let e1: [f32; 3] = std::array::from_fn(|c| vs[1].position[c] - vs[0].position[c]);
                 let e2: [f32; 3] = std::array::from_fn(|c| vs[2].position[c] - vs[0].position[c]);

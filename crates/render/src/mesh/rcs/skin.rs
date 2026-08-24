@@ -314,6 +314,58 @@ pub(super) fn picks(
 /// and never take a working one away. The same rule covers a unit above 1: a
 /// `.rcsmodel` material names two textures and some programs sample four, so
 /// an alpha traced to unit 2 is recorded by the census and not acted on here.
+/// Which material slots write `1 - v` into the varying their fragment
+/// program samples with, read out of each resolved **vertex** block.
+///
+/// **Read per material, because the disc does not agree with itself.** One of
+/// Talon's Junction's 283 resolved variants flips - `track_wall` - and its 22
+/// chunks are exactly the surfaces that addressed a blank third of their own
+/// atlas and drew as flat black bands. Flipping every coordinate instead would
+/// trade those for every surface that is already right; see
+/// `oag_formats::rcsmaterial::vertex`.
+///
+/// The attribute asked about is the one the chunk's own declaration calls the
+/// diffuse coordinate, so a layout that names it something other than `Uv1`
+/// still answers.
+pub(super) fn flips(
+    model: &rcsmodel::Model,
+    variants: &[Option<rcsmaterial::Variant>],
+    textures: Textures<'_>,
+) -> Vec<bool> {
+    let mut decl_of: std::collections::HashMap<u32, Option<&rcsmodel::VertexDecl>> =
+        Default::default();
+    for mesh in &model.meshes {
+        decl_of.entry(mesh.material).or_insert(mesh.decl.as_ref());
+    }
+    let mut cache: std::collections::HashMap<String, Option<Vec<u8>>> = Default::default();
+    let mut out = Vec::with_capacity(model.materials.len());
+    for (slot, material) in model.materials.iter().enumerate() {
+        let ordinal = u32::try_from(slot).unwrap_or(u32::MAX);
+        let hash = decl_of
+            .get(&ordinal)
+            .copied()
+            .flatten()
+            .and_then(rcsmodel::VertexDecl::diffuse_texcoord)
+            .map(|a| a.name_hash);
+        let flipped = variants
+            .get(slot)
+            .copied()
+            .flatten()
+            .zip(hash)
+            .and_then(|(variant, hash)| {
+                let blob = cache
+                    .entry(material.name.clone())
+                    .or_insert_with(|| textures(&format!("/{}", material.name)))
+                    .clone()?;
+                let program = rcsmaterial::vertex::Program::of(&blob, variant.vertex)?;
+                Some(program.flips(hash))
+            })
+            .unwrap_or(false);
+        out.push(flipped);
+    }
+    out
+}
+
 pub(super) fn roles(
     model: &rcsmodel::Model,
     variants: &[Option<rcsmaterial::Variant>],

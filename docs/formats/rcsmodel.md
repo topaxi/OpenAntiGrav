@@ -1286,31 +1286,42 @@ Only 85 of the circuit's 442 materials name an `lmaps/*-lmap.gtf` second texture
 at all. What has changed is that the coordinate for it is now named rather than
 mistaken for the diffuse one.
 
-## `track_wall` addresses a blank third of its own atlas
+## A texture coordinate's orientation is per material, in the vertex microcode
 
-**Open. Recorded 2026-08-24, confidence 30 on any explanation, 95 on the
-measurements themselves.** The flat black bands flanking Talon's Junction -
-the fourth-largest surface in a race frame, 25,469 sampled pixels at mean
-luma 14.8/255 - are material slot 331, `track_wall`, drawn alone by
-`OAG_ONLY_SLOT=331` (see `crates/render/src/mesh/rcs/isolate.rs`). Every step
-below is measured; none of them explains the frame.
+**Recovered 2026-08-24, confidence 92.** Talon's Junction rendered flat black
+bands where the reference capture has light grey barrier walls - the
+fourth-largest surface in a race frame, 25,469 sampled pixels at mean luma
+14.8/255. The cause is not in this file at all: **the material's own vertex
+program flips `v`, and this renderer did not.**
 
-- **Not the light rig.** `OAG_ALBEDO_ONLY=1` draws every real picture with
-  `GpuVertex::lit` cleared, so `mesh.wgsl` takes its unlit path. Those pixels
-  come back `(5, 5, 6)`, byte-identical to the lit frame.
-- **The band it samples is blank.** `ds_wall_cs.gtf` is 2048x1024 `Dxt23`:
-  light concrete over v 0.0-0.7, and over **v 0.7-1.0** a region whose alpha
-  measures exactly `0.0` in every tenth and whose colour runs 0-40. Brightened
-  eight times the region is legible - a barrier's cross-section - so it is
-  authored art and not padding, but it is authored dark *and* fully
-  transparent.
-- **All 22 chunks address exactly that band.** Their `Uv1` carries two
-  distinct v values and no others: **0.724 and 1.000**.
-- **The coordinate is unambiguous.** `Uv1` is `2 x half` at `+0x0e` of a
-  stride-22 vertex, the chunk declares one texture coordinate set and no
-  `lightmapUV`, and the halves are exact.
+`track_wall`'s lit race-pass variant, vertex block `0x6e20`:
 
-Ruled out, each by a render or a measurement:
+```text
+ 4  ADD o[TC6].y, -v[3].yyyy, c[206].yyyy
+ 5  MOV o[TC6].x, v[3].xxxx
+```
+
+`v[3]` is the block's own declared `Uv1` and `c[206].y` is the 1.0 that
+instruction 9 uses as the `-1` of a `t * 2 - 1` tangent unpack, so what the
+fragment program samples with is `1 - Uv1.y`. The chunks store two distinct v
+values and no others, **0.724 and 1.000**; flipped they become 0.276 and 0.000,
+which is the pale concrete at the top of `ds_wall_cs.gtf` rather than the
+near-black, alpha-0 band at its bottom.
+
+**It is per material and not a convention.** 18 of `track_wall`'s 94 vertex
+blocks flip and **none** of `track_surface`'s 64 do; across the whole circuit
+exactly **one of 283 resolved variants** flips. Flipping unconditionally makes
+the walls right and every surface that was already right wrong, so
+`oag_formats::rcsmaterial::vertex::Program::flips` reads it out of the resolved
+block and `mesh::rcs::skin::flips` asks per slot.
+
+What the fix moves, measured on the repro frame: pixels crushed to near-black
+fall from **9.5 % to 0.3 %** against the reference capture's 1.1 %, and mean
+luminance rises from 164 to 178 against its 173. Clipping to white is unchanged
+at 21 % against 15 %, which is the separate and still-open exposure question.
+
+Six other explanations were measured and died first, and they are worth keeping
+because each is a check someone will otherwise repeat:
 
 | Explanation | How it died |
 | --- | --- |
@@ -1320,15 +1331,10 @@ Ruled out, each by a render or a measurement:
 | A per-submesh texture transform | The `0x80`-byte descriptor is zero past `+0x3e` on every wall chunk |
 | The decode truncates and zero-fills the tail | Only the final row of the 1024 is all-zero |
 | The mip chain darkens it | A sampler clamped to LOD 0 moves those pixels by at most one level |
-| It occludes the missing scenery | `OAG_SKIP_MATERIAL=ds_wall_cs` reveals only sky and the sky cube's city |
 
-So the file says the wall's face is the blank band, and a reference capture
-says that face is light grey concrete. One of those readings is wrong and this
-page cannot yet say which. **The material's own record asks for opaque
-(`src 0x0302 dst 0x0303 state 0x0000007c`) while the region it samples is
-alpha-0**, which is the one internal contradiction left: an alpha test hiding
-in that `state` word would discard exactly those texels, and what is behind
-them would then have to come from somewhere this project does not yet draw.
+Note that the first of those is *true* and still not the answer: the texture is
+stored the right way up, and the flip is in the shader. Checking the texture
+was what made the shader the only place left to look.
 
 ## See also
 
