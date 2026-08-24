@@ -75,6 +75,60 @@ The individual constructors are **not named**, for the reason
 so both members of its pair are unreferenced and indistinguishable. The table is
 the attribution; the renames would be a coin flip.
 
+## The mode enum: 22 ids, eleven of them named
+
+Found from the loading screen, which draws a different feature depending on what
+you are about to race - see
+[loading-screen.md](loading-screen.md). Its mode field turned out to be the one
+the executable itself names:
+
+```text
+BackendRoot has g_GameState.GetMode()==%d
+```
+
+That format string is printed with `*(int *)(*0x00936fe8 + 0xe0)`, so
+**`g_GameState` is the pointer at `0x00936fe8`** and `+0xe0` is its mode. Ten
+lines later the same expression is bounds-checked against `0x16` and used to
+index a 22-entry jump table at **`0x00032f44`** - `GameMode_BackendDispatchTable`
+- whose cases each allocate and construct one of the classes above. Matching each case's constructor call
+against [the table](#the-hierarchy) names the ids:
+
+| id | class | alloc |
+| ---: | --- | ---: |
+| 1 | `AIBatch` | `0x9c` |
+| 2 | `Demo` | `0xa8` |
+| 3, 9, 12 | `SPArcade` | `0x94` |
+| 4 | `SPTournament` | `0x2d0` |
+| 5, 10 | `SPTimeTrial` | `0x94` |
+| 8 | `SPElimination` | `0x94` |
+| 16, 18, 21 | `MPArcade` | `0x94` |
+| 17 | `MPTournament` | `0x16c` |
+| 19 | `MPTimeTrial` | `0x94` |
+| 20 | `MPElimination` | `0x94` |
+| 0, 6, 7, 11, 13, 14, 15 | *no ModeManager* | `0x94` |
+
+**The seven that share a case are not unused ids.** They take the table's
+default, which allocates the base size and constructs nothing from this list -
+and the loading screen distinguishes 6, 13 and 14 from each other, so they are
+real modes. The likely reading is that they are the ones with a `RaceManager`
+subclass and no `ModeManager` of their own: [race-manager.md](race-manager.md)
+counts fifteen concrete race modes against this file's ten, and Zone, Zone
+Battle and Detonator are the obvious candidates. Not established.
+
+**Why several ids share a class.** `SPArcade` at 3, 9 and 12, `MPArcade` at 16,
+18 and 21 - a single race, and presumably its variants (one-off, campaign cell,
+custom) reaching the same manager. Which is which is unread.
+
+Confidence **88** on the eleven: each is a constructor address matched against
+an attribution table built independently, and the alloc sizes agree with it -
+`MPTournament`'s `0x16c` and `SPTournament`'s `0x2d0` are the two that are not
+`0x94`, and they are the two classes that are not. **90** on `g_GameState` and
+the dispatch table, which the format string and the bounds check state outright.
+
+**One live corroboration.** A scripted RPCS3 run of a campaign cell logged
+`GetMode()==3`, and 3 is `SPArcade` - a single race, which is what a campaign
+cell is. See `docs/reverse-engineering/rpcs3-debugger.md`.
+
 ## Two ways this differs from RaceManager
 
 **There is no intermediate multiplayer base.** All five `MP*` mode managers call

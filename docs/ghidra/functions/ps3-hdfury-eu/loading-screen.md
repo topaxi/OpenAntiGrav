@@ -65,26 +65,36 @@ confidence 60.
 type*; both are logged with the two strings above, which is what ties the field
 offsets to the names.
 
-The type is `1` when a byte at `0x009384e1` is clear **and** a mode field
-(`*(int *)(*0x00936fe8 + 0xe0)`) is `0x11`, and `0` otherwise. Every observation
-so far - two independent runs - logged type `0`.
+The type is `1` when a byte at `0x009384e1` is clear **and** the mode
+(`g_GameState`'s, at `*(int *)(*0x00936fe8 + 0xe0)`) is `0x11`, which is
+`MPTournament`; `0` otherwise. Every observation so far - two independent runs -
+logged type `0`.
 
 The feature is drawn from a counter, `FUN_006762f8`, reduced modulo a range that
 the same mode field selects:
 
-| mode field | range |
-| --- | ---: |
-| `8`, `0x14` | `% 5` |
-| `0xd`, `0x15` | `% 3` |
-| `0xe` | fixed `1` |
-| `6` | `% 2` |
-| otherwise | `% 3` or `% 4`, on a byte at `*0x00b979fc + 1` |
+| mode | what it is | range |
+| --- | --- | ---: |
+| `8` | `SPElimination` | `% 5` |
+| `0x14` | `MPElimination` | `% 5` |
+| `0xd` | *no ModeManager* | `% 3` |
+| `0x15` | `MPArcade` | `% 3` |
+| `0xe` | *no ModeManager* | fixed `1` |
+| `6` | *no ModeManager* | `% 2` |
+| otherwise | e.g. `3` = `SPArcade` | `% 3` or `% 4`, on a byte at `*0x00b979fc + 1` |
 
 **So "which feature is up" is not a rotation and not a fixed choice: it is a
-draw, and the deck depends on what you are about to race.** That answers the
-question `hd-loading.md` had open, and opens two smaller ones: what the mode
-field's values mean, and whether `FUN_006762f8` is a random source or a frame
-counter.
+draw, and the deck depends on what you are about to race.** Eliminator gets all
+five; the two modes with no `ModeManager` of their own get three and one.
+
+The mode field is `g_GameState`'s, and eleven of its twenty-two ids are named -
+[mode-manager.md](mode-manager.md#the-mode-enum-22-ids-eleven-of-them-named),
+which this page's own question is what prompted. `0x11` - the id that makes this
+a *type 1* screen rather than type 0 - is `MPTournament`, so the second screen
+type is the online-tournament one.
+
+What is still open is whether `FUN_006762f8` is a random source or a frame
+counter, and what the seven unnamed ids are.
 
 Confidence **85** on the shape - the moduli and the branch structure are plain
 in the decompile, and this function is below the `0x32d5e0` TOC break so
@@ -98,8 +108,17 @@ a `% 5` draw and prove nothing about the range.
 source's own `FEGlobals`, so the reimplemented screen is tinted by the disc
 rather than by a scheme this project chose.
 
-The **draw is not** wired. This build loads one illustration at boot and shows
-it, because loading all five to pick between them per race is a change to the
-asset path rather than to a constant - and with the mode ids unread there is no
-honest range to draw from anyway. That is recorded as an open item rather than
-approximated.
+The **draw is not** wired, and what blocks it has moved. It is no longer the
+range: the moduli are read and eleven of the mode ids are named, so an
+Eliminator race draws from five and a single race from three or four. What
+blocks it now is two smaller things:
+
+- **The asset path.** This build loads one illustration at boot; drawing per
+  race means loading all five, which is a change to how `oag_game::loading`
+  reads rather than to a constant.
+- **The byte at `*0x00b979fc + 1`**, which decides whether the common
+  `SPArcade` case is `% 3` or `% 4`. Unread, so even the single-race deck is one
+  card wide of settled.
+
+Neither is a reason to approximate. The screen shows the feature both
+observations of the running game showed, and says so.

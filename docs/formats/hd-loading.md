@@ -102,12 +102,14 @@ Read out of the screen's own constructor —
 [loading-screen.md](../ghidra/functions/ps3-hdfury-eu/loading-screen.md), which
 is also where the four colours below come from. `Feature type == %i` reports
 `object+0x444`, and that field is a counter reduced modulo a range the race mode
-picks: `% 5` on two modes, `% 3` on two more, a fixed `1` on one, `% 2` on
-another, and `% 3` or `% 4` otherwise.
+picks: `% 5` on the two Eliminator modes, `% 3` on two more, a fixed `1` on one,
+`% 2` on another, and `% 3` or `% 4` otherwise.
 
 So it is neither a rotation nor a fixed choice, and this section's earlier claim
-that "what drives that number has not been read" is superseded. What is still
-unread is what the mode values mean.
+that "what drives that number has not been read" is superseded. The mode is
+`g_GameState`'s, and eleven of its twenty-two ids are now named too - see
+[mode-manager.md](../ghidra/functions/ps3-hdfury-eu/mode-manager.md#the-mode-enum-22-ids-eleven-of-them-named),
+which this screen's question is what prompted.
 
 **This build shows one feature and does not draw.** It loads a single
 illustration at boot; drawing per race means loading all five, which is a change
@@ -278,9 +280,9 @@ on a modal dialog.
 
 ## Still unread
 
-- **What the race-mode values mean**, which is what picks a feature's range.
-  The moduli are read; `8`, `0xd`, `0xe`, `6`, `0x11`, `0x14` and `0x15` are
-  not.
+- **Seven of the twenty-two mode ids** - `0`, `6`, `7`, `11`, `13`, `14`, `15`,
+  the ones with no `ModeManager` of their own. Three of them pick a feature
+  range, so they are real modes rather than gaps.
 - **Which of the four palette colours plays which role**, and whether
   `FUN_006762f8` is a random source or a frame counter.
 - **`LOADING SCREEN TYPE type == %i`**, observed only at 0. It sits with
