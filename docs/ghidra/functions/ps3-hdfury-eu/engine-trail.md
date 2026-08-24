@@ -466,9 +466,19 @@ engine's and are named in that method's own doc rather than buried: the
 geometric test (the craft's own origin-to-nozzle distance plus the ribbon's
 measured half-width, against the trail's centre line -
 `exhaust::hd::Tube::nearest`), the rate (**every tick a craft is inside**), and
-the attachment point (the point on the intruder's own bounding sphere facing
-the contact, re-spawned each tick so it rides the ship - this engine has no
-equivalent of the ten hull nodes the original parents to).
+the attachment point (**the intruder's own authored `Ship Collision Fx` locator
+nearest the contact**, re-spawned each tick so it rides the ship).
+
+**The ten nodes are almost certainly the collision-spark locators.** Loading
+every HD craft, each hull authors **7 to 10** of them - and
+`Trail_SpawnHitEffect` walks exactly ten node slots at
+`craft + 0x79d0 .. +0x79f4`, testing each for null and stopping at the first
+one, which is what a hull authoring fewer than ten needs. The engine already
+read that set for collision sparks under the name the disc gives it, and it
+picks the nearest of them the same way. So the placement is the disc's data
+rather than this engine's arithmetic. Confidence 75 on the identification -
+the counts and the "nearest of" rule agree, but nothing has been read that ties
+`+0x79d0` to the locator loader.
 `crates/game/src/race/tests/trail_hits.rs` pins all three.
 
 **All three were wrong on the first pass, and only looking settled them.**

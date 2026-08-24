@@ -304,6 +304,13 @@ pub struct Setup {
     /// models, so one team's locator carried onto another's craft puts the
     /// flare inside the fuselage.
     pub nozzles: Vec<Option<Vec3>>,
+    /// Each slot's `Ship Collision Fx` locators, in that hull's model space.
+    ///
+    /// The disc's own hull spark anchors - the set the original picks the
+    /// nearest of for a collision, and this engine's stand-in for the ten
+    /// nodes `Trail_HitShipEffect` parents a trail hit to. Per slot because
+    /// the hulls are different models.
+    pub spark_anchors: Vec<Vec<Vec3>>,
     /// The `Ship Collision Fx` locators, in the ship model's own space.
     ///
     /// The original attaches up to 10 and `Ship_DispatchCollisionFx`

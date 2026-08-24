@@ -412,3 +412,28 @@ fn the_trail_hit_effects_are_on_the_disc_and_load() {
         );
     }
 }
+
+/// **Every HD hull authors `Ship Collision Fx` locators**, which is what the
+/// trail-hit burst is anchored to.
+///
+/// Without them `Race::spark_anchor_of` answers `None` on every craft and the
+/// burst silently falls back to a derived point clear of the hull - the exact
+/// failure a player reported. So this asserts the data is there rather than
+/// trusting the fallback never to be reached.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn every_hd_hull_authors_the_spark_anchors_a_trail_hit_lands_on() {
+    let Some(loaded) = load() else { return };
+    assert!(
+        !loaded.setup.spark_anchors.is_empty(),
+        "no slots carry anchors at all"
+    );
+    for (slot, anchors) in loaded.setup.spark_anchors.iter().enumerate() {
+        assert!(
+            !anchors.is_empty(),
+            "slot {slot}: no Ship Collision Fx locators, so a trail hit would \
+             fall back to a derived point"
+        );
+        println!("slot {slot}: {} spark anchor(s)", anchors.len());
+    }
+}

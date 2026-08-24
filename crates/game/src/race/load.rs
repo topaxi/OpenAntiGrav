@@ -962,6 +962,10 @@ pub fn load(options: &Options) -> Result<Loaded> {
             chase_close,
             internal,
             nozzles: liveries.iter().map(|livery| livery.nozzle).collect(),
+            spark_anchors: liveries
+                .iter()
+                .map(|livery| livery.collision_fx.clone())
+                .collect(),
             collision_fx,
             effects,
             sounds,

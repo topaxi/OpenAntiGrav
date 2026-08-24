@@ -578,13 +578,11 @@ pub struct Race {
     hd_trail: [exhaust::hd::Tube; MAX_SHIPS],
     hd_trail_active: bool,
     hd_trail_red: [f32; MAX_SHIPS],
-    /// Each craft's origin-to-nozzle distance in **world** units, measured per
-    /// tick - the trail-hit test's reach. See [`Race::advance_trail_hits`].
+    /// Origin-to-nozzle distance per craft, world units - the trail-hit reach.
     hull_reach: [f32; MAX_SHIPS],
     /// `--trail-sparks`: see [`Race::force_trail_sparks`].
     trail_sparks: bool,
-    /// Which craft are inside which craft's trail, one bit per intruder. The
-    /// burst follows it every tick, not on its edge.
+    /// Who is inside whose trail, one bit per intruder; level, not edge.
     trail_inside: [u8; MAX_SHIPS],
     hd_flame: [exhaust::hd::Flame; MAX_SHIPS],
     hd_sprite: [exhaust::hd::Sprite; MAX_SHIPS],
@@ -603,6 +601,8 @@ pub struct Race {
     /// land, at which point the locator moves with the model rather than with the
     /// race.
     nozzles: Vec<Option<Vec3>>,
+    /// Authored hull spark anchors per slot, model space.
+    spark_anchors: Vec<Vec<Vec3>>,
     /// Collision sparks' particle pool, advanced on the simulation tick.
     ///
     /// Here rather than in `World`, for the same reason [`Self::exhaust`] is -

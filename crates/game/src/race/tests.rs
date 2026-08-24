@@ -129,6 +129,7 @@ fn setup(handling: Handling) -> Setup {
         // Not HD's tube: these tests drive the PSP ribbon and physics.
         hd_trail: None,
         trail_sparks: false,
+        spark_anchors: Vec::new(),
         collision: CollisionWorld::new(),
         handling,
         // Round numbers, chosen to make the geometry readable. None of these

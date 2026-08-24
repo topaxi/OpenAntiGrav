@@ -222,7 +222,9 @@ impl Race {
                 // contact - the place the nearest of ten hull nodes would be -
                 // and re-spawns it every tick, which is what makes it follow.
                 let contact = self.hd_trail[owner].nearest(at).map_or(at, |(on, _)| on);
-                let point = hull_contact_point(at, contact, self.hull_reach[intruder]);
+                let point = self
+                    .spark_anchor_of(intruder, contact)
+                    .unwrap_or_else(|| hull_contact_point(at, contact, self.hull_reach[intruder]));
                 // Neutral severity, as the rocket blast uses: the scale the
                 // collision sparks derive from an impulse has no counterpart
                 // here, and the float the original carries into the spawner
@@ -265,11 +267,13 @@ impl Race {
         // plume. What appears under the flag is therefore anchored exactly as a
         // real hit is - see [`hull_contact_point`].
         let body = self.world.ships[0].physics.body;
-        let probe = hull_contact_point(
-            body.position,
-            body.position + body.up() * 10.0,
-            self.hull_reach[0].max(1.0),
-        );
+        // The real placement with only the contact *direction* chosen: the
+        // craft's own topmost authored spark anchor, so the burst is on the
+        // hull exactly as a real hit is and still clear of the exhaust plume.
+        let above = body.position + body.up() * 10.0;
+        let probe = self.spark_anchor_of(0, above).unwrap_or_else(|| {
+            hull_contact_point(body.position, above, self.hull_reach[0].max(1.0))
+        });
         let name = if self.hd_trail_red[0] > 0.5 {
             TRAIL_HITSHIP_RED_EFFECT
         } else {
@@ -279,6 +283,35 @@ impl Race {
             return;
         };
         self.stage.play(&effect, probe, 1.0);
+    }
+
+    /// The craft's own authored hull spark anchor nearest `contact`, in world
+    /// space, or `None` where the hull authors none.
+    ///
+    /// **This is the disc's data doing the job an invented direction was
+    /// doing badly.** `Trail_HitShipEffect` parents the burst to the nearest of
+    /// ten nodes at `craft + 0x79d0..+0x79f4`; the `Ship Collision Fx` locators
+    /// are the same kind of thing - hull-mounted spark anchors the original
+    /// also picks the nearest of - so the trail hit picks among them by the
+    /// same rule. Two placements were tried before this and both were wrong on
+    /// screen: the contact point itself put the sparks on the *trail*, and a
+    /// point at [`Race::hull_reach`] along the direction of the contact put
+    /// them anchored to the craft but floating clear of the hull, because that
+    /// reach is about half a hull *length* and the direction, when a craft is
+    /// inside a ribbon, is a near-arbitrary perpendicular offset amplified to
+    /// five units. An authored anchor has neither problem.
+    #[must_use]
+    pub fn spark_anchor_of(&self, slot: usize, contact: Vec3) -> Option<Vec3> {
+        let anchors = self.spark_anchors.get(slot)?;
+        let matrix = model_matrix_of(&self.world.ships[slot]);
+        anchors
+            .iter()
+            .map(|local| matrix.transform_point3(*local))
+            .min_by(|a, b| {
+                (*a - contact)
+                    .length_squared()
+                    .total_cmp(&(*b - contact).length_squared())
+            })
     }
 
     /// One craft's HD trail geometry this frame, empty unless this race's
