@@ -65,6 +65,11 @@ fn main() -> anyhow::Result<()> {
                 faint += usize::from(a < 64);
                 n += 1;
             }
+            let c = d.bounds.centre;
+            println!(
+                "  centre [{:.1}, {:.1}, {:.1}] radius {:.1}",
+                c[0], c[1], c[2], d.bounds.radius
+            );
             println!(
                 "{list} draw {index}: {} tri(s)  {}\n  \
                  alpha channel {channel}: {lo}..{hi} mean {:.1}, {:.1}% under 8, {:.1}% under 64\n  \

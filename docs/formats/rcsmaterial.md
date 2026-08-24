@@ -847,9 +847,38 @@ claim is the capture above, where the bands and the gaps between them are
 visible directly. And the `v` span is immaterial - the ramp is constant down
 its 16 rows.
 
-**Confidence 85 that the coverage is authored**, and the survey that fixes it
-there rather than higher: this material ships **twenty** fragment blocks and
-they do not all end the same way.
+**A reference capture arrived the same day and refutes the conclusion this
+paragraph used to draw.** Everything measured above stands; what does not is
+the inference that our frame is therefore about right. A capture of the
+original at Talon's Junction's glass floor (`data/reference/hd-talons-glass/`,
+supplied 2026-08-24 - `data/` is gitignored, so the file is not in the
+repository and this is its only record) shows the drivable surface as a
+**continuous, patterned, translucent sheet**: a fine square grid with white
+boundary lines and chamfered hexagonal-mesh inset panels, laid in the plane of
+the floor and following its perspective, with the city visible through it. That
+pattern is `dds/glass_etched_tech.gtf` - the material's own **second** texture,
+1024x512, and no other material on the circuit names it. Our frame at the same
+kind of place is a thin iridescent sliver over empty sky
+(`--pose 76.9,-46,148` with `OAG_ONLY_MATERIAL=etched_glass_tech`, against a
+craft-to-surface distance of **1.19** units). So the picture is wrong, not
+merely uncoloured, and "the coverage is authored" is **not** established.
+
+**And the refutation lands on the microcode reading, not on the arithmetic.**
+Every one of this material's **30 variants** declares `Texture1`
+(`0x3bdc0403`) at unit 0, and across all 20 distinct fragment blocks the only
+sampler ever read at a plain surface coordinate is that unit 0 - the 512x16
+ramp. Unit 1 (`0x9edd3243`) is read at a reflection-vector coordinate
+(`R2.zw`, built from `N`, `V` and `N*(V.N)` over ten instructions), unit 2
+(`0x94b2b285`) at a scalar facing term, and the rest are projected screen-space
+lookups. **No variant of this material can paint a grid at the surface's own
+UV**, yet the original plainly does. Something in this project's chain from
+"the model names two `.gtf`" to "the shader samples unit N" is wrong, and the
+next section is where to look: the model record binds `glass_etched_tech.gtf`
+to sampler `lightmap`, which no variant of this material declares at all.
+
+The block survey below stands as recorded and is still the first thing to
+re-check if the variant key is the wrong link: this material ships **twenty**
+fragment blocks and they do not all end the same way.
 
 | final alpha write | blocks |
 | --- | --- |
@@ -858,31 +887,35 @@ they do not all end the same way.
 | the constant `1.0` | 3, 4 |
 
 So "this floor's alpha comes from a texture" is a property of the row the
-lit-race key resolves to, not of the material, and the six `1 - TXP` rows are
-the place to look first if that key ever turns out to be wrong for glass -
-`variants()`'s own doc calls the pass half of it "a single reading of an
-ordinary lit race". Nothing here suggests it is wrong: `0x730df9ee` is sampled
-through a projected screen coordinate on all six, which is a depth-fade or
-refraction buffer the engine supplies and not something an ordinary opaque race
-pass has. But it is the concrete alternative, named, rather than a general
-doubt.
+lit-race key resolves to, not of the material - `variants()`'s own doc calls
+the pass half of that key "a single reading of an ordinary lit race". The six
+`1 - TXP` rows are a poor candidate for the row we should have picked instead:
+`0x730df9ee` is sampled through a projected screen coordinate on all six, which
+is a depth-fade or refraction buffer the engine supplies rather than anything
+an ordinary opaque race pass has. **And swapping rows would not fix the
+picture anyway**, which is the useful part of having surveyed all twenty: not
+one of them samples a second texture at a surface UV, so no choice of variant
+produces the grid the reference shows. The wrong link is upstream of variant
+selection.
 
-**What is genuinely wrong here is the colour, and it is a stated absence.** The
-base colour is `TEX H2.xyz, -R2.wwww unit2` - sampler `0x94b2b285`, which no
-texture is bound to, because a `.rcsmodel` material names two `.gtf` and this
-program samples three units. `roles()` correctly leaves `ALBEDO_FROM_SECOND`
-clear (the colour merge is `Mixed`), so the albedo falls back to unit 0 - which
-is the **lookup ramp**, not a picture. The visible bands are therefore the ramp
-itself where the original would show tinted, etched glass. Nothing here fakes
-that; see "The glass family's second slot: traced, not solved" above, which
-reached the same conclusion for the same family from the other direction.
+**The colour is wrong too, and the reference says by how much.** The base
+colour in the resolved block is `TEX H2.xyz, -R2.wwww unit2` - sampler
+`0x94b2b285`, which no texture is bound to, because a `.rcsmodel` material
+names two `.gtf` and this program samples three units. `roles()` correctly
+leaves `ALBEDO_FROM_SECOND` clear (the colour merge is `Mixed`), so the albedo
+falls back to unit 0 - the **lookup ramp**, not a picture. The original paints
+`glass_etched_tech.gtf` there instead. Nothing here fakes that; see "The glass
+family's second slot: traced, not solved" above, which reached the same
+conclusion for the same family from the other direction.
 
-**Not measured, and it should be said plainly: there is no reference capture of
-this section.** `data/reference/` holds only `emu-rocket`. Whether the original
-draws this floor as transparently as the arithmetic above says is a judgment
-from the microcode, not a comparison against a frame. The way to close it is an
-RPCS3 capture of Talon's Junction at the same point, the way the glass-family
-section above was prompted by one.
+**The reference gap this section originally recorded is closed**, and closing
+it is what produced the refutation above: a capture of the original at this
+circuit's glass floor arrived on 2026-08-24 and sits at
+`data/reference/hd-talons-glass/talons-glass-floor.png`. `data/` is gitignored -
+no game content may be committed, see [legal](../overview/legal.md) - so that
+path is a note about a working copy, not a file a fresh checkout has. What it
+shows is described above; anyone reproducing this needs their own capture of
+the same place.
 
 ### The isolation harness this shipped
 
@@ -962,6 +995,18 @@ folded in quietly.
 harness land first. It is the direct route to the two absences this page
 records - the cloud plate's inversion, which stops being an inversion once the
 slot says which unit it is for, and `etched_glass_tech`'s unbound base colour.
+
+**It is also where the glass floor's contradiction has to be resolved.** The
+section above shows the original painting `glass_etched_tech.gtf` in the plane
+of the floor while no variant of that material samples any second texture at a
+surface UV. The model record binds that `.gtf` to sampler `lightmap`, which
+that material's variants never declare - so either this word is not the
+binding it appears to be, or the variant rows being resolved are not the ones
+the original runs. **That contradiction now has a picture to be tested
+against**, which it did not before, and it is the reason to do this work next
+rather than eventually: an implementation of the binding either makes the
+reference's grid appear or it does not, and either answer settles the reading
+in one frame.
 
 ## Open
 

@@ -55,6 +55,41 @@ fn main() -> anyhow::Result<()> {
                 )
             })
             .unwrap_or_else(|| "no resolved variant".into());
+        if std::env::var("OAG_VARIANTS").is_ok()
+            && let Ok(blob) = oag_assets::Container::open(&spec)
+                .and_then(|mut c| c.read_entry(&format!("/{}", material.name)))
+            && let Ok(parsed) = oag_formats::rcsmaterial::RcsMaterial::parse(&blob)
+        {
+            let picked = model
+                .material_variants
+                .get(slot)
+                .and_then(|v| v.as_ref())
+                .map(|v| v.fragment.offset);
+            for v in &parsed.variants {
+                let samplers = oag_formats::rcsmaterial::Declared::parse(&blob, v.fragment.offset)
+                    .map(|d| {
+                        let mut s: Vec<String> = d
+                            .samplers
+                            .iter()
+                            .map(|(h, u)| format!("{h:#010x}@{u}"))
+                            .collect();
+                        s.sort();
+                        s.join(" ")
+                    })
+                    .unwrap_or_default();
+                println!(
+                    "     variant class {:?} features {:#010x} fragment@{:#x}{}\n        {samplers}",
+                    v.class,
+                    v.feature_hash,
+                    v.fragment.offset,
+                    if picked == Some(v.fragment.offset) {
+                        "  <- RESOLVED"
+                    } else {
+                        ""
+                    },
+                );
+            }
+        }
         let blend = format!(
             "{:?} src {:#06x} dst {:#06x} state {:#010x}",
             material.blend(),
