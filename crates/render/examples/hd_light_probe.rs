@@ -202,8 +202,9 @@ fn main() -> anyhow::Result<()> {
             }
             if std::env::var_os("OAG_PER_DRAW").is_some() && draw_area > 0.0 {
                 println!(
-                    "  slot {slot} draw at {:?} radius {:.0}: {:.0} sq units, albedo luma {:.1}/255, \
+                    "  slot {slot} {}draw at {:?} radius {:.0}: {:.0} sq units, albedo luma {:.1}/255, \
                      u {:.2}..{:.2} v {:.2}..{:.2} mean v {:.3}",
+                    if d.moving { "moving " } else { "" },
                     d.bounds.centre,
                     d.bounds.radius,
                     draw_area,
