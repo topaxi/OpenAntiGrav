@@ -100,7 +100,7 @@ use crate::app::App;
 use crate::args::give_weapon;
 use crate::cli::Cli;
 use crate::headless::{run_race, run_windowless};
-use crate::pose::{parse_pose, pose_from_trace};
+use crate::pose::{parse_camera_pose, parse_pose, pose_from_trace};
 
 /// Installs the sink every `log` call in this workspace ends up in.
 ///
@@ -235,15 +235,27 @@ fn main() -> Result<()> {
                 pose_from_trace(path, cli.pose_tick, cli.no_camera, cli.camera_fov)?;
             (Some(pose), camera)
         }
+        // `--camera-pose` is a camera and nothing else, so it composes with
+        // `--pose` rather than replacing it: an RPCS3 capture gives the camera
+        // exactly and the craft only as whatever the frame shows.
         None => (
             cli.pose
                 .as_deref()
                 .map(parse_pose)
                 .transpose()?
                 .map(|(position, yaw)| race::PoseRequest::SplineAligned { position, yaw }),
-            None,
+            cli.camera_pose
+                .as_deref()
+                .map(parse_camera_pose)
+                .transpose()?,
         ),
     };
+    // Applied after either way in, because both can produce a camera and the
+    // flag means the same thing to each.
+    let camera = camera.map(|camera| race::CameraOverride {
+        fov_deg: cli.camera_fov.or(camera.fov_deg),
+        ..camera
+    });
 
     let leg = if cli.reel {
         frontend::Leg::DevPubReel

@@ -1,0 +1,283 @@
+"""Finding a camera in a PS3 memory dump, offline.
+
+Wipeout HD's shaders take their camera as two named engine parameters, both
+recovered by `~crc32` preimage over `EBOOT.elf`'s own string table at
+`0x008b7f08` (see `docs/reverse-engineering/rpcs3-capture.md`):
+
+    viewProj               0x2e7d5f33   float4 x4   the world -> clip matrix
+    eyePositionWorldSpace  0x3466fc0e   float3      the camera's position
+
+`viewProj` is the quantity worth capturing, because it is the one that decides
+the frame: position, orientation, field of view, aspect and near/far are all
+inside it, so a comparison against it cannot be spoiled by disagreeing about a
+convention or deriving a field of view wrongly.
+
+**Nothing in the executable points at the parameter table** - no `lis`/`addi`
+pair builds its address and the word never appears as a pointer - so the
+runtime address of the values is not reachable statically, and this module
+exists to find them in a dump instead.
+
+# The test that makes a candidate trustworthy
+
+Sixteen arbitrary floats are not a projection. For a world -> clip matrix in
+the row-vector convention this hardware uses (`clip = v * M`), the clip `w` of
+a world point is
+
+    w = x*m03 + y*m13 + z*m23 + m33
+
+and for a perspective projection that is exactly the signed distance from the
+camera plane, so **`(m03, m13, m23)` is a unit vector** - six digits of
+agreement that random data does not produce. The camera position follows from
+the same matrix: the frustum's side planes meet at the eye, and three of them
+solved simultaneously give it (Gribb-Hartmann plane extraction, then a 3x3
+solve).
+
+Both conventions are tried, because which one a title uses is not something to
+assume: the transpose is checked with the same test and reported as it is
+found.
+"""
+
+import math
+import struct
+
+#: `~crc32("viewProj")`, from `EBOOT.elf`'s parameter name table.
+VIEW_PROJ_HASH = 0x2E7D5F33
+#: `~crc32("eyePositionWorldSpace")`, likewise.
+EYE_POSITION_HASH = 0x3466FC0E
+
+#: How far from 1.0 the `w` row's length may be and still be a projection.
+#: Loose enough for a matrix built in `f32` and multiplied twice, tight enough
+#: that noise never passes: on a 900 KB dump the false-positive rate at 1e-3 is
+#: nil, and this is 30x looser than that.
+UNIT_TOLERANCE = 3e-2
+
+#: The largest world coordinate any circuit on the disc reaches, in the units
+#: `oag_formats::rcsmodel` decodes. The widest measured is Anulpha Pass at
+#: about 2,200 from the origin; this is an order of magnitude of headroom.
+WORLD_LIMIT = 50_000.0
+
+
+def _finite(values):
+    return all(math.isfinite(v) and abs(v) < 1e6 for v in values)
+
+
+def _solve3(rows):
+    """Solves a 3x3 system by Cramer's rule, or `None` if it is singular.
+
+    Cramer rather than elimination because the system is 3x3 and fixed: no
+    pivoting to get wrong, and a determinant that is already the singularity
+    test.
+    """
+    (a, b, c, p), (d, e, f, q), (g, h, i, r) = rows
+    det = a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g)
+    if abs(det) < 1e-12:
+        return None
+    x = (p * (e * i - f * h) - b * (q * i - f * r) + c * (q * h - e * r)) / det
+    y = (a * (q * i - f * r) - p * (d * i - f * g) + c * (d * r - q * g)) / det
+    z = (a * (e * r - q * h) - b * (d * r - q * g) + p * (d * h - e * g)) / det
+    return (x, y, z)
+
+
+def eye_of(m):
+    """The camera position a world -> clip matrix places the frustum apex at.
+
+    `m` is 16 floats in row-major order under the row-vector convention. The
+    four side planes are the Gribb-Hartmann combinations of the matrix's
+    columns; any three of them meet at the eye, and left/right/top is the
+    triple with no degenerate pair for an ordinary frustum.
+
+    Returns `None` when the three planes do not meet in a point, which is what
+    an orthographic matrix and most non-matrices do.
+    """
+    col = [[m[r * 4 + c] for r in range(4)] for c in range(4)]
+    left = [col[3][k] + col[0][k] for k in range(4)]
+    right = [col[3][k] - col[0][k] for k in range(4)]
+    top = [col[3][k] - col[1][k] for k in range(4)]
+    rows = [[p[0], p[1], p[2], -p[3]] for p in (left, right, top)]
+    return _solve3(rows)
+
+
+def score(m):
+    """How much like a perspective world -> clip matrix these 16 floats are.
+
+    Returns `(unit_error, eye)` or `None`. `unit_error` is how far the `w`
+    row's length is from 1.0 - see the module docstring for why that is the
+    test.
+    """
+    if not _finite(m):
+        return None
+    direction = (m[3], m[7], m[11])
+    length = math.sqrt(sum(v * v for v in direction))
+    error = abs(length - 1.0)
+    if error > UNIT_TOLERANCE:
+        return None
+    eye = eye_of(m)
+    if eye is None or not _finite(eye) or max(abs(v) for v in eye) > WORLD_LIMIT:
+        return None
+    return (error, eye)
+
+
+def decompose(m):
+    """A world -> clip matrix as the numbers a renderer is set up from.
+
+    In the row-vector convention (`clip = v * M`) with a symmetric perspective,
+    the matrix's first three columns are the view basis scaled by the
+    projection: `c0.xyz` is `right * f/aspect`, `c1.xyz` is `up * f`, and
+    `c3.xyz` is the unit forward. So the basis, the field of view and the
+    aspect all come out by inspection, and the eye from the frustum apex.
+
+    Returns a dict, or `None` if the matrix does not decompose - a degenerate
+    basis rather than a perspective.
+    """
+    col = [[m[r * 4 + c] for r in range(4)] for c in range(4)]
+
+    def norm(v):
+        length = math.sqrt(sum(c * c for c in v))
+        return None if length < 1e-9 else ([c / length for c in v], length)
+
+    right = norm(col[0][:3])
+    up = norm(col[1][:3])
+    forward = norm(col[3][:3])
+    eye = eye_of(m)
+    if not (right and up and forward and eye):
+        return None
+    focal = up[1]
+    return {
+        "eye": list(eye),
+        "forward": forward[0],
+        "up": up[0],
+        "right": right[0],
+        "fov_y_deg": math.degrees(2.0 * math.atan(1.0 / focal)),
+        "aspect": focal / right[1],
+    }
+
+
+def command_line(pose, track=None):
+    """The `oag-game` invocation that renders this project from that camera.
+
+    The harness is only half a comparison without it: `--camera-pose` takes the
+    nine numbers below and `--camera-fov` the tenth.
+    """
+    numbers = ",".join(
+        "%.6f" % v for v in list(pose["eye"]) + pose["forward"] + pose["up"])
+    parts = ["target/release/oag-game", "--race", "<image>"]
+    if track:
+        parts += ["--track", track]
+    parts += ["--camera-pose", numbers,
+              "--camera-fov", "%.4f" % pose["fov_y_deg"],
+              "--screenshot", "ours.png"]
+    return " ".join(parts)
+
+
+def transpose(m):
+    return [m[c * 4 + r] for r in range(4) for c in range(4)]
+
+
+def candidates(blob, base=0, stride=4):
+    """Every offset in `blob` whose 16 floats read as a perspective matrix.
+
+    Yields `(address, order, unit_error, eye, matrix)`, `order` being
+    `"row"` for the matrix as stored and `"col"` for its transpose - which one
+    a title writes is a fact to report, not to assume.
+    """
+    for at in range(0, len(blob) - 64 + 1, stride):
+        m = list(struct.unpack_from(">16f", blob, at))
+        for order, candidate in (("row", m), ("col", transpose(m))):
+            hit = score(candidate)
+            if hit:
+                yield (base + at, order, hit[0], hit[1], candidate)
+
+
+def perspective(fov_y, aspect, near, far):
+    """A right-handed perspective matrix, row-vector convention.
+
+    Here so the finder can be tested against a matrix whose camera is known
+    rather than only against a dump - see `self_test`.
+    """
+    f = 1.0 / math.tan(fov_y / 2.0)
+    return [
+        f / aspect, 0.0, 0.0, 0.0,
+        0.0, f, 0.0, 0.0,
+        0.0, 0.0, far / (far - near), 1.0,
+        0.0, 0.0, -near * far / (far - near), 0.0,
+    ]
+
+
+def look_at(eye, target, up=(0.0, 1.0, 0.0)):
+    """A world -> view matrix, row-vector convention."""
+    def sub(a, b):
+        return tuple(a[k] - b[k] for k in range(3))
+
+    def norm(v):
+        length = math.sqrt(sum(c * c for c in v))
+        return tuple(c / length for c in v)
+
+    def cross(a, b):
+        return (a[1] * b[2] - a[2] * b[1],
+                a[2] * b[0] - a[0] * b[2],
+                a[0] * b[1] - a[1] * b[0])
+
+    def dot(a, b):
+        return sum(a[k] * b[k] for k in range(3))
+
+    z = norm(sub(target, eye))
+    x = norm(cross(up, z))
+    y = cross(z, x)
+    return [
+        x[0], y[0], z[0], 0.0,
+        x[1], y[1], z[1], 0.0,
+        x[2], y[2], z[2], 0.0,
+        -dot(x, eye), -dot(y, eye), -dot(z, eye), 1.0,
+    ]
+
+
+def multiply(a, b):
+    return [sum(a[r * 4 + k] * b[k * 4 + c] for k in range(4))
+            for r in range(4) for c in range(4)]
+
+
+def self_test():
+    """Plants a known camera in noise and insists the finder recovers it."""
+    import random
+
+    random.seed(20260824)
+    eye = (327.2, -42.0, -158.2)
+    target = (0.0, -40.0, 0.0)
+    m = multiply(look_at(eye, target), perspective(math.radians(60), 16 / 9, 1.0, 8000.0))
+
+    noise = bytearray(random.randbytes(1 << 18))
+    at = 0x400
+    struct.pack_into(">16f", noise, at, *m)
+
+    found = [c for c in candidates(bytes(noise))]
+    planted = [c for c in found if c[0] == at]
+    assert planted, "the planted matrix was not found"
+    _, order, error, recovered, _ = planted[0]
+    assert order == "row", order
+    for k in range(3):
+        assert abs(recovered[k] - eye[k]) < 0.05, (recovered, eye)
+    print(f"self test: recovered eye {recovered} from {len(found)} candidate(s) "
+          f"in 256 KB of noise, unit error {error:.2e}")
+    others = [c for c in found if c[0] != at]
+    print(f"           {len(others)} false positive(s) in the noise")
+
+    pose = decompose(m)
+    assert pose, "the planted matrix did not decompose"
+    for k in range(3):
+        assert abs(pose["eye"][k] - eye[k]) < 0.05, pose["eye"]
+    assert abs(pose["fov_y_deg"] - 60.0) < 0.01, pose["fov_y_deg"]
+    assert abs(pose["aspect"] - 16 / 9) < 1e-4, pose["aspect"]
+    forward = [target[k] - eye[k] for k in range(3)]
+    length = math.sqrt(sum(v * v for v in forward))
+    for k in range(3):
+        assert abs(pose["forward"][k] - forward[k] / length) < 1e-4, pose["forward"]
+    print(f"           fov {pose['fov_y_deg']:.3f} deg, aspect {pose['aspect']:.4f}, "
+          f"forward {['%.3f' % v for v in pose['forward']]}")
+    print("           " + command_line(pose, "/data/environments/talons_junction/track.vex"))
+    return 0
+
+
+if __name__ == "__main__":
+    import sys
+
+    raise SystemExit(self_test() if "--self-test" in sys.argv else self_test())

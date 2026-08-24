@@ -563,8 +563,24 @@ pub(crate) struct Cli {
     /// original's speed-dependent widen. **Every matched-pose comparison needs
     /// this flag**, set to `60 + 0.075 * dot(fwd, vel)` for the captured tick.
     /// See `docs/rendering/projection-vs-the-original.md`.
-    #[arg(long, requires = "pose_from")]
+    #[arg(long)]
     pub(crate) camera_fov: Option<f32>,
+
+    /// Render from a camera given outright, as nine comma-separated numbers:
+    /// `eye_x,eye_y,eye_z,fwd_x,fwd_y,fwd_z,up_x,up_y,up_z`.
+    ///
+    /// **The consumer of an RPCS3 capture.** `scripts/rpcs3-drive.py capture`
+    /// pairs a screenshot with the `viewProj` the original's own shaders were
+    /// fed, and `scripts/ps3_pose.py` decomposes that matrix into exactly these
+    /// nine numbers plus a field of view. Passing them here puts this renderer
+    /// at the original's camera, so the two frames can be laid over each other
+    /// instead of eyeballed at approximately the same place.
+    ///
+    /// `--camera-fov` is what carries the tenth number, and a matched-pose
+    /// comparison wants both. Unlike the other pose flags this one needs no
+    /// `--pose-from`: a captured camera is a complete statement on its own.
+    #[arg(long, value_name = "EYE,FWD,UP", conflicts_with = "pose_from")]
+    pub(crate) camera_pose: Option<String>,
 
     /// With `--screenshot`: force the exhaust into the state it would hold this
     /// many seconds after entering a speed pad, at saturated intensity.

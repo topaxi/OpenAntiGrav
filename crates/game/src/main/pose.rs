@@ -1,4 +1,5 @@
-//! `--pose` and `--pose-from`: where a captured frame puts the craft.
+//! `--pose`, `--pose-from` and `--camera-pose`: where a captured frame puts
+//! the craft, and where it puts the camera.
 
 use anyhow::{Context, Result, ensure};
 use log::warn;
@@ -85,4 +86,52 @@ pub(crate) fn pose_from_trace(
         }),
     };
     Ok((pose, camera))
+}
+
+/// Parses `--camera-pose`: an eye, a look direction and an up vector.
+///
+/// The nine numbers `scripts/ps3_pose.py` decomposes a captured `viewProj`
+/// into. The basis is orthonormalised here rather than trusted: it arrives
+/// through a `f32` matrix that was itself a product of two, so `up` is
+/// reliably *almost* perpendicular to `fwd` and a [`Quat`] built from an
+/// almost-orthonormal basis is not a rotation.
+pub(crate) fn parse_camera_pose(text: &str) -> Result<race::CameraOverride> {
+    use oag_core::math::{Mat3, Quat, Vec3};
+
+    let parts: Vec<&str> = text.split(',').map(str::trim).collect();
+    ensure!(
+        parts.len() == 9,
+        "--camera-pose takes nine numbers (eye, forward, up), not {}",
+        parts.len()
+    );
+    let mut v = [0.0f32; 9];
+    for (slot, text) in v.iter_mut().zip(&parts) {
+        *slot = text
+            .parse()
+            .with_context(|| format!("--camera-pose component {text:?} is not a number"))?;
+    }
+    let eye = Vec3::new(v[0], v[1], v[2]);
+    let forward = Vec3::new(v[3], v[4], v[5]);
+    let up = Vec3::new(v[6], v[7], v[8]);
+    ensure!(
+        forward.length() > 1e-6 && up.length() > 1e-6,
+        "--camera-pose needs a non-zero forward and up"
+    );
+    let forward = forward.normalize();
+    let right = forward.cross(up);
+    ensure!(
+        right.length() > 1e-6,
+        "--camera-pose's forward and up are parallel, so there is no camera"
+    );
+    let right = right.normalize();
+    let up = right.cross(forward);
+    // `-Z` is the look direction in this project's camera convention, the same
+    // one `oag_trace::replay::camera_orientation_of` produces - see
+    // `race::CameraOverride::orientation`.
+    let basis = Mat3::from_cols(right, up, -forward);
+    Ok(race::CameraOverride {
+        eye,
+        orientation: Quat::from_mat3(&basis),
+        fov_deg: None,
+    })
 }

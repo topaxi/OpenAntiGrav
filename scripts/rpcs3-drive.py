@@ -53,6 +53,7 @@ Needs `evdev` for anything that presses a button; run those through
 """
 
 import argparse
+import json
 import glob
 import os
 import re
@@ -106,6 +107,10 @@ RACE_WALK = [
 # Waiting for `Launch Game` by name overshoots straight past `InGame` into
 # `HUD`, which is what the first version of this did.
 RACE_ARRIVED = {"InGame", "HUD"}
+
+# HD prints this on every track load, which is where a capture gets its
+# circuit from for free - the GDB stub is never asked.
+TRACK_LINE = re.compile(r"Loading track model (\S+)")
 
 
 def tty_text():
@@ -346,6 +351,154 @@ def cmd_race(args):
     return 0
 
 
+
+# The EBOOT's initialised data and the BSS behind it - where a statically
+# allocated render global lives. `readelf` puts segment 1 at 0x860000 with a
+# file size of 0xd6f80 and a memory size past it; this span covers both and is
+# 917,504 bytes, about a minute at the stub's 41 ms a packet.
+DATA_SEGMENT = (0x00860000, 0x000E0000)
+
+
+def parse_region(text):
+    """`addr:len`, or `@addr:len` to dereference a pointer first."""
+    follow = text.startswith("@")
+    body = text[1:] if follow else text
+    addr, _, size = body.partition(":")
+    return (follow, int(addr, 0), int(size, 0) if size else 0x10000)
+
+
+def cmd_capture(args):
+    """One boot, many poses: screenshot and camera, paired at the same instant.
+
+    The pairing is the point. `screenshot()` grabs the virtual root window, so
+    it shows the last frame RPCS3 presented and is unaffected by the target
+    being stopped - which means the stop can come *first*, and the memory read
+    describes the frame that is on screen rather than one a few frames later.
+
+    One debugger session per emulator launch is not a style choice - see
+    `rpcs3_debugger`'s trap list - so this loops inside a single connection
+    rather than booting per pose.
+    """
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import ps3_pose
+    from rpcs3_debugger import Rpcs3Debugger
+
+    out = Path(args.out).resolve()
+    out.mkdir(parents=True, exist_ok=True)
+    regions = [parse_region(r) for r in args.region] or [(False, *DATA_SEGMENT)]
+
+    with Session(args.image, args.log_dir) as session:
+        print("rpcs3 pid %d" % session.proc.pid, flush=True)
+        if not session.wait_for_screen("Main Menu", args.timeout):
+            print("never reached the Main Menu (last screen: %s)"
+                  % current_screen(), file=sys.stderr)
+            return 1
+        time.sleep(args.settle)
+        if session.walk_to_race() not in RACE_ARRIVED:
+            print("ended on %r rather than in a race" % current_screen(),
+                  file=sys.stderr)
+            return 1
+        print("in a race; waiting %g s for the track to load" % args.load,
+              flush=True)
+        time.sleep(args.load)
+
+        track = track_name()
+        print("track: %s" % (track or "<not logged>"), flush=True)
+
+        with Rpcs3Debugger() as gdb:
+            for n in range(args.shots):
+                session.pad.set("cross", True)
+                gdb.resume()
+                time.sleep(args.interval)
+                gdb.pause()
+                session.pad.set("cross", False)
+
+                stem = "%02d" % n
+                shot = screenshot(out / ("%s.png" % stem))
+                blobs = []
+                for follow, addr, size in regions:
+                    at = addr
+                    if follow:
+                        at = int.from_bytes(gdb.read(addr, 4), "big")
+                        print("  %#010x -> %#010x" % (addr, at), flush=True)
+                        if not at:
+                            continue
+                    print("  reading %#x bytes at %#010x" % (size, at),
+                          flush=True)
+                    blobs.append((at, gdb.read(at, size)))
+
+                pose = describe(blobs, track, shot)
+                (out / ("%s.json" % stem)).write_text(
+                    json.dumps(pose, indent=2) + "\n")
+                found = pose["camera"]
+                if found:
+                    print("  %s: eye %s fov %.2f deg" % (
+                        stem,
+                        ["%.1f" % v for v in found.get("eye", [])],
+                        found.get("fov_y_deg", float("nan"))), flush=True)
+                    if "render_with" in found:
+                        print("       " + found["render_with"], flush=True)
+                else:
+                    print("  %s: no camera in the regions read" % stem, flush=True)
+                if args.keep_dumps:
+                    for at, blob in blobs:
+                        (out / ("%s-%08x.bin" % (stem, at))).write_bytes(blob)
+            gdb.resume()
+
+    print("done; %d pose(s) in %s" % (args.shots, out), flush=True)
+    return 0
+
+
+def track_name():
+    """The circuit RPCS3's own TTY log says was loaded, or `None`.
+
+    Free: HD prints `Loading track model Data\\Environments\\...` on every
+    load, so the one thing the capture needs that is not in the camera costs no
+    packets at all.
+    """
+    hits = TRACK_LINE.findall(tty_text())
+    return hits[-1] if hits else None
+
+
+def describe(blobs, track, shot):
+    """The capture record: what a frame needs to be reproduced, and nothing more.
+
+    Deliberately not a memory dump. The raw bytes are game memory - extracted
+    executable data, which `just audit-leakage` refuses and CI's leakage job
+    would fail on - so they stay under `data/` and out of this file, which
+    carries only the numbers a renderer is set up from.
+    """
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import ps3_pose
+
+    best = None
+    for at, blob in blobs:
+        for hit in ps3_pose.candidates(blob, base=at):
+            address, order, error, eye, matrix = hit
+            if best is None or error < best[2]:
+                best = hit
+    camera = None
+    if best:
+        address, order, error, eye, matrix = best
+        pose = ps3_pose.decompose(matrix)
+        camera = {
+            "address": "%#010x" % address,
+            "order": order,
+            "unit_error": error,
+            "view_proj": matrix,
+        }
+        if pose:
+            camera.update(pose)
+            camera["render_with"] = ps3_pose.command_line(pose, track)
+        else:
+            camera["eye"] = list(eye)
+    return {
+        "track": track,
+        "screenshot": str(shot) if shot else None,
+        "camera": camera,
+    }
+
+
 def cmd_record(args):
     before = set(recordings())
     with Session(args.image, args.log_dir) as session:
@@ -410,6 +563,26 @@ def main(argv=None):
     race.add_argument("--shots", action="store_true",
                       help="capture the menu, the grid and the driven frame")
     race.set_defaults(run=cmd_race)
+
+    cap = sub.add_parser("capture",
+                         help="screenshot and camera, paired, many per boot")
+    cap.set_defaults(func=cmd_capture)
+    cap.add_argument("--timeout", type=float, default=180.0)
+    cap.add_argument("--settle", type=float, default=12.0)
+    cap.add_argument("--load", type=float, default=50.0)
+    cap.add_argument("--shots", type=int, default=3,
+                     help="how many poses to capture in this one boot")
+    cap.add_argument("--interval", type=float, default=6.0,
+                     help="seconds of thrust between poses")
+    cap.add_argument("--out", default="data/reference/hd-capture",
+                     help="where the frames and their poses are written")
+    cap.add_argument("--region", action="append", default=[],
+                     help="addr:len to dump, or @addr:len to dereference "
+                          "a pointer at addr first; repeatable. Defaults to "
+                          "the EBOOT's data and BSS.")
+    cap.add_argument("--keep-dumps", action="store_true",
+                     help="also write the raw memory, which is game data and "
+                          "stays under data/")
 
     rec = sub.add_parser("record")
     rec.add_argument("--timeout", type=float, default=180.0)
