@@ -19,6 +19,8 @@ fn material(parameters: Vec<Parameter>) -> rcsmodel::Material {
         dst_factor: 0x0001,
         texture: "flame_01.gtf".to_string(),
         second_texture: None,
+        texture_sampler: 0,
+        second_texture_sampler: None,
         parameters,
     }
 }

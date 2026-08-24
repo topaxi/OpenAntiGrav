@@ -133,6 +133,12 @@ the slot nothing samples. `mageffectloop` is the same pair the other way round.
 So "the glass draws a gradient" is not a colour bug, a wrong texture or a
 swizzle: it is the second slot, and closing it needs the variant selection.
 
+**Read further 2026-08-24**: the variant selection is closed now, and it says
+this material's picture is not in the second slot either - it is on a **third**
+sampler unit that a `.rcsmodel` material has no room to name. See "Talon's
+Junction's missing floor is a glass floor, and its coverage is the disc's own"
+below, which also measures what those six chunks actually cover.
+
 ## What selects a variant: the key is read (2026-08-20)
 
 **A variant is keyed by the two leading hashes of its own record, and both are
@@ -527,11 +533,24 @@ wrong on this material.
 
 1. **A see-through material whose first texture has uniform alpha is a
    contradiction, and it is measurable.** Six of Talon's Junction's 21
-   see-through materials are in that state - `clouds`, `tunnel_fx_glass`,
-   `dc_lightcone`, `etched_glass_tech`, `emissive_bloom` and `mageffectloop` -
-   each asking for a blend whose only alpha source is 1.0. Every one of them
-   currently paints an opaque sheet. That count is a ready-made ratchet for
-   whatever fixes this.
+   see-through materials looked to be in that state - `clouds`,
+   `tunnel_fx_glass`, `dc_lightcone`, `etched_glass_tech`, `emissive_bloom` and
+   `mageffectloop` - each apparently asking for a blend whose only alpha source
+   is 1.0, and every one of them painting an opaque sheet.
+
+   **Corrected 2026-08-24, and the count is no longer six.** That reading took
+   the *alpha channel* of each first texture; the microcode takes a channel of
+   its own choosing. `etched_glass_tech`'s output alpha is
+   `dc_iridescent_gradient.gtf`'s **red** - `0..214`, mean ~33, half of it under
+   8 - a real varying signal and the opposite of uniform, and it is now read
+   that way (`slots::alpha_channel(0)`). See "Talon's Junction's missing floor
+   is a glass floor" below, where that is measured end to end. `clouds` stays on
+   the list with its reason changed rather than removed: its alpha is also unit
+   0's red, and *that channel* is uniformly bright (`156..255`, 0 % under 128),
+   so the sheet is authored. The remaining four have not been re-measured
+   channel by channel, so the honest count today is **one confirmed authored
+   (`clouds`), one refuted (`etched_glass_tech`), four unmeasured** - and the
+   ratchet is that recount, not the original six.
 2. **This is the sixth role for the second slot**, after normal map, emissive
    map, coverage mask, lightmap and the glass family's facing ramp below - and
    the first one read end to end out of the microcode rather than inferred
@@ -716,6 +735,233 @@ already has (see above); and per-material work on the glass family, should it
 become worth wiring, has to be scoped like the sun-diffuse reading already
 is - `glass_texture_customr` and `etched_glass_tech` are two materials, not
 one reading.
+
+## Talon's Junction's missing floor is a glass floor, and its coverage is the disc's own (2026-08-24)
+
+**The report was "the floor is missing where the autopilot banks through the
+loop; the frame shows the cloud plate's mottled grey instead of a road".** It
+is neither missing geometry nor the cloud plate. The surface the craft rides on
+at that point is `etched_glass_tech.rcsmaterial`, and it is drawn as an
+iridescent stripe over a transparent gap because that is what the material's own
+arithmetic asks for. Three separate candidates were measured out first, each
+with the harness this change ships (`mesh::rcs::isolate`).
+
+**Repro**, and every number below is from it:
+
+```sh
+cargo build --release -p oag-game
+target/release/oag-game --race data/images/hdfury-ps3-eu-dec.iso \
+    --autopilot --team feisar_c1 --ticks 295 --screenshot /tmp/t295.png
+```
+
+### What it is not
+
+1. **Not the cloud plate.** `clouds_new.gtf`'s **red channel alone** - the
+   channel the plate's own microcode writes to output alpha, and the one the
+   combined `r`/`g`/`b` figure above does not answer for - is `156..255`, mean
+   `218.6`, **0 % of texels under 128**
+   (`crates/render/examples/hd_channel_stats.rs`). There is no silhouette in it,
+   so the near-opaque wisp this renderer draws is the disc's numbers read
+   correctly and there is no decode bug between
+   `mesh::rcs::skin::roles` and `mesh.wgsl` to find. Confidence **90**.
+2. **Not something the cloud plate hides.** `OAG_SKIP_MATERIAL=clouds` at that
+   tick leaves the region blown-out white rather than a road - unlike the
+   "cloud plate paints a solid sheet" case above, where dropping the plate
+   restored lane markings. That white is the **sky cube's own haze below the
+   horizon**: `OAG_ONLY_MATERIAL=__nothing__` renders exactly it, pixel for
+   pixel, with no track in the frame at all. Confidence **95**.
+3. **Not an over-bright road.** `OAG_OPAQUE_ONLY=1` - every chunk whose material
+   asks for a blend dropped - shows **no opaque floor at all** under the craft
+   at that pose. Nothing solid is being covered. Confidence **95**.
+
+### What it is
+
+Nearest draw call to the craft at tick 295 (`[327.2, -42.0, -158.2]`), measured
+**point-to-triangle** rather than by nearest vertex, which on a long sparsely
+tessellated ribbon reads very differently
+(`crates/render/examples/hd_near_probe.rs`, `OAG_NEAREST=1`):
+
+| distance | list | texture |
+| --- | --- | --- |
+| **3.35** | blended | `dds/dc_iridescent_gradient.gtf` (642 tri) |
+| 11.74 | opaque | `dds/track/ds_floor_cs.gtf`, `tunnel_fx_diffuse.gtf` |
+| 24.05 | opaque | `dds/track/ds_wall_cs.gtf` |
+
+The race's own telemetry puts the craft `3.28` above its ground on that tick, so
+the `3.35` chunk is the surface it is riding. Its material is Talon's Junction
+slot 417, `materials/etched_glass_tech.rcsmaterial`, blending
+`SrcAlpha`/`OneMinusSrcAlpha` - so an alpha of zero is a **vanished floor**, not
+an additive highlight that correctly contributes nothing.
+
+**The coverage is authored, traced end to end.** The lit-race key resolves this
+material to fragment block #7 at `0x5ef0`
+(`scripts/ps3-microcode.py fp-file etched_glass_tech.rcsmaterial 7`):
+
+```text
+@0x19  TEX H2.xyz, -R2.wwww   unit2   ; sampler 0x94b2b285 - the base colour
+@0x2b  TEX H6.x,   f[TC5].zwzz unit0  ; sampler 0x3bdc0403 = Texture1
+@0x2c  ADD H4.xyz, H6.xxxx, H4        ; unit 0's red is added to the colour
+@0x2f  TEX H7.xyz, R2.zwzz    unit1   ; sampler 0x9edd3243, a computed coord
+@0x3d  MAD H4.xyz, H5, H4.wwww, H4    ; unit 1's tint, weighted by H6.x
+@0x42  MOV H0.w,   H6.xxxx  END       ; the ALPHA is unit 0's red
+```
+
+Every step of that reaches this renderer intact:
+
+- `Texture1` is `Material::texture`, so unit 0 **is** `dc_iridescent_gradient.gtf`.
+- `f[TC5].zw` is `v[2].xy`, and the paired vertex program declares attribute
+  `0x427214fc` at slot 2. The chunk's own vertex declaration names exactly four
+  attributes - `position`, `normal`, **`Uv1` (`0x427214fc`)**, and the RGBE
+  colour set - and `VertexDecl::diffuse_texcoord` picks `Uv1`. So `in.texcoord`
+  in `mesh.wgsl` is the program's own coordinate, not an approximation.
+- `roles()` reads the alpha lane as unit 0 channel 0 and packs
+  `slots::alpha_channel(0)`; that is what the `MOV H0.w, H6.xxxx` says.
+
+So the coverage this renderer computes is the material's own texture, at the
+material's own coordinate, through the material's own channel. Sampled that way
+across all six of the circuit's `etched_glass_tech` draws
+(`crates/render/examples/hd_coverage_probe.rs`):
+
+```text
+alpha channel 0: 0..214 mean ~33, ~51 % of vertices under 8, ~80 % under 64
+u -3.58..5.66   v 0.13..1.00   on a 512x16 texture
+```
+
+`dc_iridescent_gradient.gtf` is a **512x16 hue ramp** - rainbow across the left
+~55 %, black across the right ~45 % - and the chunk's `u` tiles it about five
+times along its length. The floor therefore paints as iridescent bands with
+fully transparent gaps between them, which is what a top-down capture of just
+those six chunks shows:
+
+```sh
+OAG_ONLY_MATERIAL=etched_glass_tech cargo run --release -p oag-render \
+    --example model_probe -- \
+    data/images/hdfury-ps3-eu-dec.iso:PS3_GAME/USRDIR/DATA00.PSARC \
+    /data/environments/talons_junction/track.vex /tmp/glass_top.png
+```
+
+Two caveats on that histogram, because it is easy to over-read. It samples the
+ramp **at each vertex's own UV**, so it is a per-vertex sample of a tiling ramp
+and not an area-weighted coverage figure; what makes the conclusion an area
+claim is the capture above, where the bands and the gaps between them are
+visible directly. And the `v` span is immaterial - the ramp is constant down
+its 16 rows.
+
+**Confidence 85 that the coverage is authored**, and the survey that fixes it
+there rather than higher: this material ships **twenty** fragment blocks and
+they do not all end the same way.
+
+| final alpha write | blocks |
+| --- | --- |
+| from a `TEX ... unit0` result, as #7 does | 0, 1, 2, 5, 6, 7, 10, 11, 12, 15, 16, 17 |
+| `1 - TXP(f[TC0], 0x730df9ee)` - a **projected**, screen-space lookup | 8, 9, 13, 14, 18, 19 |
+| the constant `1.0` | 3, 4 |
+
+So "this floor's alpha comes from a texture" is a property of the row the
+lit-race key resolves to, not of the material, and the six `1 - TXP` rows are
+the place to look first if that key ever turns out to be wrong for glass -
+`variants()`'s own doc calls the pass half of it "a single reading of an
+ordinary lit race". Nothing here suggests it is wrong: `0x730df9ee` is sampled
+through a projected screen coordinate on all six, which is a depth-fade or
+refraction buffer the engine supplies and not something an ordinary opaque race
+pass has. But it is the concrete alternative, named, rather than a general
+doubt.
+
+**What is genuinely wrong here is the colour, and it is a stated absence.** The
+base colour is `TEX H2.xyz, -R2.wwww unit2` - sampler `0x94b2b285`, which no
+texture is bound to, because a `.rcsmodel` material names two `.gtf` and this
+program samples three units. `roles()` correctly leaves `ALBEDO_FROM_SECOND`
+clear (the colour merge is `Mixed`), so the albedo falls back to unit 0 - which
+is the **lookup ramp**, not a picture. The visible bands are therefore the ramp
+itself where the original would show tinted, etched glass. Nothing here fakes
+that; see "The glass family's second slot: traced, not solved" above, which
+reached the same conclusion for the same family from the other direction.
+
+**Not measured, and it should be said plainly: there is no reference capture of
+this section.** `data/reference/` holds only `emu-rocket`. Whether the original
+draws this floor as transparently as the arithmetic above says is a judgment
+from the microcode, not a comparison against a frame. The way to close it is an
+RPCS3 capture of Talon's Junction at the same point, the way the glass-family
+section above was prompted by one.
+
+### The isolation harness this shipped
+
+`mesh::rcs::isolate` is the technique the cloud-plate section used, kept rather
+than rebuilt each time. Three environment variables, all off by default, all
+matching a material's own path **or either `.gtf` path it names**, and all
+counted in `Report::isolated` so a mutilated frame says so in the loader report:
+
+| variable | effect |
+| --- | --- |
+| `OAG_SKIP_MATERIAL=clouds,glass` | drop the chunks that match |
+| `OAG_ONLY_MATERIAL=track_surface` | keep only the chunks that match |
+| `OAG_OPAQUE_ONLY=1` | drop every chunk the material asks to be blended |
+
+Matching the texture and not only the material is what makes it usable on a
+circuit: Talon's Junction names `track_surface.rcsmaterial` in fifteen slots
+with a different `.gtf` in each, and the texture is the only thing that tells
+those slots apart.
+
+## A texture slot names its sampler, and the slot's ordinal is not its unit (2026-08-24)
+
+**Found while asking why `etched_glass_tech`'s unit 1 and unit 2 are bound to
+nothing, and it is bigger than that material.** Each `.gtf` path in a
+`.rcsmodel` material record is followed eight bytes later by a **sampler name
+hash**, and that hash - not the slot's position - is what a resolved shader
+variant maps to a texture unit.
+
+```text
+material +0x58  u32  file offset of a .gtf path      +0x60  u32  its sampler hash
+material +0x78  u32  a second .gtf path              +0x80  u32  its sampler hash
+```
+
+Read on `oag_formats::rcsmodel::Material::texture_sampler` and
+`second_texture_sampler`. Three things make it a sampler hash rather than a word
+that happens to be there:
+
+1. The values are the sampler-name preimages this page already recovered:
+   `Texture1` (`0x3bdc0403`), `diffuse` (`0x515e298e`), `lightmap`
+   (`0x37b5db58`).
+2. **8,021 of the disc's 13,933 populated slots carry a hash the material's own
+   lit-race variant declares as a sampler**, with a unit
+   (`crates/render/examples/hd_sampler_bind.rs`, all 28 circuit models).
+3. **Only 776 of those 8,021 - 9.7 % - land on the slot's own ordinal.** The
+   first texture reaches unit 1 in 4,751 cases, unit 2 in 471, unit 3 in 36 and
+   unit 4 in 24; the second texture reaches unit 2 in 1,685.
+
+Talon's Junction's `track_surface` is the clearest single case: its first
+texture (`ds_floor_cs.gtf`) carries `0x739a786e`, which its resolved variant
+declares at **unit 1**, and its second (`ds_floor_n_rh.gtf`) carries `lightmap`,
+declared at **unit 2**. Neither is where "first texture is unit 0, second is
+unit 1" - the rule `mesh/rcs/skin.rs` and `mesh.wgsl` are both built on - would
+put them.
+
+**Confidence 80, and the counter-example is why it is not higher.** The cloud
+plate's second slot carries `lightmap` too, its resolved variant declares no
+`lightmap` sampler at all, and its microcode plainly samples `cloud mask.gtf` at
+unit 1 - so either the record's word is authoring-time metadata a shipped
+variant can override, or the variant resolution is matching the wrong row for
+that material. 5,912 slots disc-wide fall in the same "declared by no sampler of
+that variant" bucket, which is too many to wave through.
+
+**One consequence lands on a claim this project already acts on.** "The
+lightmap is identified" above rests on four signals, the third being that the
+*material* declares a `lightmap` sampler. This word would sharpen that from the
+material to the **slot**: it says which texture binds to it. The two do not
+agree today - Talon's Junction carries `lightmap` in **151** second slots
+against the **85** materials whose second texture is one of its
+`lmaps/*-lmap.gtf`, and `etched_glass_tech`'s `glass_etched_tech.gtf` is one of
+the extra 66. Signal 4's "no exceptions" is untouched (it pairs the `lmaps/`
+path with the `lightmapUV` attribute, and neither is this word), but a
+slot-level signal 3 would change answers, so it is named here rather than
+folded in quietly.
+
+**Nothing is rebound on this yet, on purpose.** Acting on it would move about
+90 % of the disc's material slots to a different texture unit at once, on an
+80-confidence reading with a live counter-example; the measurement and its
+harness land first. It is the direct route to the two absences this page
+records - the cloud plate's inversion, which stops being an inversion once the
+slot says which unit it is for, and `etched_glass_tech`'s unbound base colour.
 
 ## Open
 

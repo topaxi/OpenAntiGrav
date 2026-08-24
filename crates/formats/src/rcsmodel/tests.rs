@@ -192,6 +192,8 @@ fn both_factors_come_through_and_an_unknown_one_is_not_guessed_at() {
         dst_factor: dst,
         texture: String::new(),
         second_texture: None,
+        texture_sampler: 0,
+        second_texture_sampler: None,
         parameters: Vec::new(),
     };
     for (src, named) in [
@@ -237,6 +239,8 @@ fn the_unused_transparency_encoding_is_not_guessed_at() {
         dst_factor: 0x0303,
         texture: String::new(),
         second_texture: None,
+        texture_sampler: 0,
+        second_texture_sampler: None,
         parameters: Vec::new(),
     };
     assert_eq!(odd.transparency(), None);
@@ -552,4 +556,50 @@ fn a_box_nothing_explains_is_none() {
         None,
         "a box far larger than the geometry is filled by nothing"
     );
+}
+
+/// A texture slot's sampler name hash is read from the word eight bytes past
+/// its path pointer, and the second slot's is `None` when there is no second
+/// path to bind.
+///
+/// The offsets are the load-bearing part: `docs/formats/rcsmaterial.md`'s "A
+/// texture slot names its sampler" reads the disc through these two words, and
+/// a shift of four bytes would silently turn a sampler hash into a flag word
+/// that still looks like a number.
+#[test]
+fn a_texture_slot_carries_its_sampler_name_hash() {
+    const NAME: usize = 0x200;
+    const FIRST: usize = 0x220;
+    const SECOND: usize = 0x260;
+    let mut data = vec![0u8; 0x400];
+    let mut put = |at: usize, word: u32| data[at..at + 4].copy_from_slice(&word.to_be_bytes());
+    put(0x04, NAME as u32);
+    put(0x10, 1);
+    put(0x58, FIRST as u32);
+    put(0x60, 0x3bdc_0403);
+    put(0x78, SECOND as u32);
+    put(0x80, 0x37b5_db58);
+    for (at, text) in [(NAME, "m.rcsmaterial"), (FIRST, "a.gtf"), (SECOND, "b.gtf")] {
+        data[at..at + text.len()].copy_from_slice(text.as_bytes());
+    }
+
+    let material = material::Material::parse(&data, 0).unwrap();
+    assert_eq!(material.texture, "a.gtf");
+    assert_eq!(
+        material.texture_sampler, 0x3bdc_0403,
+        "~crc32(\"Texture1\")"
+    );
+    assert_eq!(material.second_texture.as_deref(), Some("b.gtf"));
+    assert_eq!(
+        material.second_texture_sampler,
+        Some(0x37b5_db58),
+        "~crc32(\"lightmap\")"
+    );
+
+    // No second path, so no second binding to report - rather than the word
+    // that happens to sit at `+0x80` of a record that ends before it.
+    data[0x78..0x7c].fill(0);
+    let material = material::Material::parse(&data, 0).unwrap();
+    assert_eq!(material.second_texture, None);
+    assert_eq!(material.second_texture_sampler, None);
 }

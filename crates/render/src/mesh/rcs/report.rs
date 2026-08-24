@@ -113,6 +113,14 @@ pub struct Report {
     pub variant_chunks: usize,
     /// Chunks drawn by a slot that ships no row for the key.
     pub variant_chunks_missed: usize,
+    /// Chunks a **diagnostic** environment filter took out of this build.
+    ///
+    /// Always zero in an ordinary run. Non-zero means `OAG_SKIP_MATERIAL` or
+    /// `OAG_ONLY_MATERIAL` is set and the frame is an isolation render, not a
+    /// picture of the game - see `super::isolate`. Counted, and said out loud
+    /// in [`Self::describe`], because a mutilated frame read as the real one
+    /// is exactly the mistake this diagnostic is meant to prevent.
+    pub isolated: usize,
 }
 
 impl Report {
@@ -174,6 +182,13 @@ impl Report {
         } + &match self.authored_normals {
             0 => ", lit off face normals computed from the triangles".to_string(),
             n => format!(", {n} authored vertex normal(s)"),
+        } + &match self.isolated {
+            0 => String::new(),
+            n => format!(
+                ". DIAGNOSTIC: an OAG_SKIP_MATERIAL/OAG_ONLY_MATERIAL filter took \
+                 {n} chunk(s) out of this build, so this frame is an isolation \
+                 render and not the picture"
+            ),
         }
     }
 }

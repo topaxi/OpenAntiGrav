@@ -963,8 +963,18 @@ and `TransparentPipelines::select` prefers `DrawCall::blend_state` over
 
 ```text
 material +0x58  u32   file offset of a `.gtf` path - the texture
+material +0x60  u32   that texture's sampler name hash
 material +0x78  u32   a second `.gtf` path, on the materials that carry one
+material +0x80  u32   that texture's sampler name hash
 ```
+
+**The two hash words were read 2026-08-24** and they change what a texture slot
+*means*: the hash, not the slot's ordinal, is what a resolved shader variant
+maps to a texture unit, and on 90 % of the disc's readable slots the two
+disagree. Nothing is rebound on it yet. The measurement, the counter-example and
+the confidence score are in
+[rcsmaterial.md](rcsmaterial.md), "A texture slot names its sampler, and the
+slot's ordinal is not its unit".
 
 Every material of both models names a first texture - 4 of 4 on Assegai, 442 of
 442 on Talon's Junction - and they are the right ones by inspection:

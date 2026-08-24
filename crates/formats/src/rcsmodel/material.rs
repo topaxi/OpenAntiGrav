@@ -168,6 +168,27 @@ pub struct Material {
     /// **nothing samples this** and a surface whose coverage lives here paints
     /// solid - the cloud plate above being the one that shows.
     pub second_texture: Option<String>,
+    /// The word eight bytes past [`Self::texture`]'s pointer, at `+0x60`: the
+    /// **sampler name hash** that texture binds to.
+    ///
+    /// See [`Self::second_texture_sampler`], which carries the evidence for
+    /// both. Zero on a record too short to hold it.
+    pub texture_sampler: u32,
+    /// The same word for [`Self::second_texture`], at `+0x80`.
+    ///
+    /// **This is what says which texture unit a slot reaches, and the answer
+    /// is not the slot's ordinal.** The value takes exactly the sampler-name
+    /// hashes `docs/formats/rcsmaterial.md` recovered preimages for -
+    /// `Texture1` (`0x3bdc0403`), `diffuse` (`0x515e298e`), `lightmap`
+    /// (`0x37b5db58`) - and a resolved shader variant's own declaration
+    /// (`crate::rcsmaterial::Declared::samplers`) maps that hash to a unit.
+    /// Talon's Junction's `track_surface` is the clearest case: its first
+    /// texture carries `0x739a786e`, which its lit-race variant declares at
+    /// **unit 1**, and its second carries `lightmap`, declared at unit 2 -
+    /// so "first texture is unit 0" is wrong on that material by two units.
+    ///
+    /// `None` where there is no second texture.
+    pub second_texture_sampler: Option<u32>,
     /// The named values this **instance** supplies to its shader - see
     /// [`parameters`].
     ///
@@ -297,6 +318,13 @@ impl Material {
                 && s.to_ascii_lowercase().ends_with(TEXTURE_SUFFIX);
             looks_like_one.then_some(s)
         };
+        let word = |off: usize| {
+            if at + off + 4 <= data.len() {
+                ByteOrder::Big.u32(data, at + off)
+            } else {
+                0
+            }
+        };
         Some(Self {
             name: cstr(data, ByteOrder::Big.u32(data, at + 0x04) as usize),
             state: ByteOrder::Big.u32(data, at + 0x10),
@@ -304,6 +332,12 @@ impl Material {
             dst_factor: ByteOrder::Big.u16(data, at + 0x16),
             texture: path(0x58).unwrap_or_default(),
             second_texture: path(0x78),
+            // Read unconditionally rather than gated on the path parsing: a
+            // record short enough to miss these reads zero, which is not a
+            // sampler hash any variant declares, so a caller cannot mistake
+            // the absence for a binding.
+            texture_sampler: word(0x60),
+            second_texture_sampler: path(0x78).map(|_| word(0x80)),
             parameters: parameters(data, at),
         })
     }
