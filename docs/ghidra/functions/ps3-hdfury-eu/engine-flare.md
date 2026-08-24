@@ -331,6 +331,43 @@ by name rather than by evidence:
 0x008b4484  'EngineTrail/TrailEffectManager.cpp'
 ```
 
+#### The ribbon's own vertex program, read 2026-08-24
+
+The fragment half below was read in 2026-08-23's pass; the vertex half was
+not, and the two together are what say where the scroll is applied. Eleven
+instructions, one block:
+
+```text
+ 0  MOV o[TC0].xyz, v[3].xyzx          <- VertexColour1.rgb
+ 1  ADD o[TC1].xyz, -v[0].xyzx, c[211] <- eyePositionWorldSpace - position
+ 2  MOV o[TC2].xyz, v[1].xyzx          <- normal
+ 3  MOV o[TC3].xyw, v[2].xyxy          <- TC3 = (u, v, _, v)
+ 4  ADD o[TC3].z,   v[2].xxxx, c[210]  <- TC3.z = u + TrailSpeed
+ 5  MOV o[TC4].yzw, v[0].xxyz
+ 6  MUL R0, v[0].yyyy, c[1]            \
+ 7  MAD R0, v[0].xxxx, c[0], R0         |  viewProj
+ 8  MAD R0, v[0].zzzz, c[2], R0         |
+ 9  MOV o[TC4].x, v[3].wwww            <- VertexColour1.a, the `f[TC4].x` below
+10  ADD o[POS], R0, c[3] | END         /
+```
+
+The block's parameter table places `TrailSpeed` (`0x07431a35`) at **`c466`**,
+`viewProj` at `c256` and `eyePositionWorldSpace` at `c467`; the code's `c[N]`
+numbering is the constant index less 256, so `c466` is `c[210]` and `c467` is
+`c[211]` - the same offset `flame_test`'s block confirms, where `viewProj`'s
+`c256` is `c[0]`.
+
+**`TrailSpeed` is added once per lookup path, not twice on one.** Instruction 3
+keeps the raw `u` in `TC3.x` and instruction 4 writes `u + TrailSpeed` beside it
+in `TC3.z`; the fragment program then samples the noise at `f[TC3].zw` - the
+scrolled coordinate - and its `@0x00 MOV R0.zw, f[TC3].xxxy` recovers the *raw*
+`u` from `TC3.x`, which is why `@0x02` has to add `TrailSpeed` again before the
+colour lookup. Both lookups end up with exactly one `TrailSpeed` in them. A
+reading of this page that had the two additions stacking on one coordinate - and
+`exhaust.wgsl` carried it in a comment - was wrong about the mechanism while
+right about the remedy. Confidence 90: the instructions are the program's own
+and the constant-index offset closes against a second material.
+
 #### The ribbon's own fragment program
 
 `hd_enginetrail_bluered.rcsmaterial` disassembles to 29 instructions, and its

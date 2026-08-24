@@ -141,7 +141,10 @@ fn u_stretches_with_speed_and_falls_off_at_four_over_fiftyfour() {
     let u_at = |v: &[GpuVertex], k: usize| v[per_fin + k * 6].texcoord[0];
     assert!((u_at(&at_rest, 0) - (1.0 + phase)).abs() < 1e-5);
     assert!((u_at(&at_speed, 0) - (0.4 + phase)).abs() < 1e-5);
-    // The measured law: u(k) = u_head * (1 - 4k/54) + phase.
+    // The measured law is `u(k) = u_head * (1 - 4k/54)` with no phase in it -
+    // the original leaves the scroll to the draw-time `TrailSpeed` constant.
+    // What this engine emits folds the two, which is why `+ phase` is here and
+    // not in the dumped buffers. See `Tube::phase`.
     let expect = 1.0 * (1.0 - 4.0 * 20.0 / 54.0) + phase;
     assert!((u_at(&at_rest, 20) - expect).abs() < 1e-4);
 }

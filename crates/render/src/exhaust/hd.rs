@@ -50,10 +50,12 @@ pub const FIN_STEP: f32 = std::f32::consts::PI / 3.0;
 
 /// `u` shrink per ring, as a fraction of the head's own `u`.
 ///
-/// The dumped vertex `u` runs `u_head * (1 - k * 4/54)` for ring `k` - a fit
-/// exact to four decimals on six buffers across three craft at three speeds.
-/// The head `u` itself carries the stretch (see [`u_head`]), so the noise
-/// streaks elongate as the craft speeds up.
+/// The dumped vertex `u` runs `u_head * (1 - k * 4/54)` for ring `k`, with no
+/// additive term of any kind: the residual over all 54 rings is 2e-6 on the
+/// snapshots that hold the block and its vertex buffer from one pause. The
+/// head `u` itself carries the stretch (see [`u_head`]), so the noise streaks
+/// elongate as the craft speeds up. The scroll is *not* here on the original -
+/// see [`Tube::phase`] for where it is and why this engine folds it in anyway.
 pub const U_FALLOFF_PER_RING: f32 = 4.0 / SAMPLES as f32;
 
 /// `Tex UScale Max` from `Data/ships/shipeffectstweaks.txt`.
@@ -115,10 +117,19 @@ pub struct Tube {
     len: usize,
     write: usize,
     /// The `TrailSpeed` phase - `EngineFlare_PlaceShapes`' wrapping
-    /// accumulator, patched into the material's `TrailSpeed` slot and added
-    /// to `u` by both texture lookups. Baked into the vertex `u` here, which
-    /// lands it in both lookups exactly as the original's vertex program
-    /// (`c[210]`) and fragment patch (slot 0x3) do.
+    /// accumulator, living at the trail block's `+0x1210`.
+    ///
+    /// **The original never puts it in the vertex.** Its SPU job writes
+    /// `u_head * (1 - k * 4/54)` and stops; the phase reaches the shader as
+    /// the material parameter `TrailSpeed`, whose value *pointer* the trail
+    /// manager's constructor binds to `&block[0x1210]` once, so the draw path
+    /// reads the live accumulator through it. The vertex program then adds it
+    /// to `u` for the noise lookup and the fragment program adds it to the raw
+    /// `u` again for the colour lookup - **once on each path, not twice on
+    /// one**. Baking it into the ring `u` here feeds both lookups the same
+    /// coordinates the original computes, with one addition instead of two.
+    /// Measured and read 2026-08-24;
+    /// `docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md`.
     phase: f32,
 }
 
@@ -296,7 +307,10 @@ impl Tube {
 /// Not a scroll - at a steady speed the head `u` is a constant and the
 /// pattern's apparent motion is all in the wrapping phase and the noise
 /// displacement. Measured equal (to four decimals) to the value HD's flare
-/// writes into the trail block at `+0x11ec` on three craft in two frames.
+/// writes into the trail block at `+0x11ec`, on three craft in two frames and
+/// again on seven race-start snapshots - where the head vertex's `u` is this
+/// value and *not* this value plus the phase, which is what says the original
+/// applies the scroll at draw time rather than in the extruded vertex.
 #[must_use]
 pub fn u_head(speed01: f32) -> f32 {
     1.0 - TEX_USCALE_MAX * speed01
