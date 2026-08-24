@@ -29,6 +29,63 @@ fn main() -> anyhow::Result<()> {
         circuits
     };
 
+    // `OAG_RAMPS=1`: what each sampler hash actually binds, with the texture's
+    // own dimensions, so a "ramp addressed by a scalar" can be told from a
+    // picture addressed by a UV.
+    if std::env::var("OAG_RAMPS").is_ok() {
+        let mut by_hash: std::collections::BTreeMap<u32, Vec<(String, u32, u32)>> =
+            Default::default();
+        for name in &circuits {
+            let Some((spec, data)) = ARCHIVES.iter().find_map(|archive| {
+                let spec = format!("{image}:{archive}");
+                mesh::read_blob(&spec, name).ok().map(|d| (spec, d))
+            }) else {
+                continue;
+            };
+            let Some(geometry) = mesh::rcs::sibling_geometry(&spec, name, &data) else {
+                continue;
+            };
+            let model = rcsmodel::Model::parse(&geometry)?;
+            let mut container = Container::open(&spec)?;
+            let mut size: std::collections::HashMap<String, Option<(u32, u32)>> =
+                Default::default();
+            for material in &model.materials {
+                for (hash, path) in &material.samplers {
+                    let Some(path) = path else { continue };
+                    let wh = size
+                        .entry(path.clone())
+                        .or_insert_with(|| {
+                            let blob = container.read_entry(path).ok()?;
+                            let parsed = oag_formats::gtf::Gtf::parse(&blob).ok()?;
+                            parsed.only().map(|t| t.level_size(0))
+                        })
+                        .to_owned();
+                    let Some((w, h)) = wh else { continue };
+                    let leaf = path.rsplit('/').next().unwrap_or(path).to_string();
+                    by_hash.entry(*hash).or_default().push((leaf, w, h));
+                }
+            }
+        }
+        for (hash, uses) in &by_hash {
+            let ramps = uses.iter().filter(|&&(_, w, h)| h <= 32 || w <= 32).count();
+            let mut leaves: Vec<&str> = uses.iter().map(|(l, _, _)| l.as_str()).collect();
+            leaves.sort_unstable();
+            leaves.dedup();
+            println!(
+                "{hash:#010x}  {:4} use(s), {ramps} of them <=32 in a dimension; {} distinct file(s): {}",
+                uses.len(),
+                leaves.len(),
+                leaves
+                    .iter()
+                    .take(4)
+                    .copied()
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+        }
+        return Ok(());
+    }
+
     // How the slot's own hash relates to the unit the variant gives it.
     let (mut at_unit, mut undeclared, mut no_variant, mut ordinal_agrees) = (0, 0, 0, 0);
     let mut units: std::collections::BTreeMap<(usize, u32), usize> = Default::default();

@@ -1106,6 +1106,61 @@ surface's own UV, so it reads as fixed bands welded to the road instead of a
 sheen that slides with the camera. That is the next thing to fix here, and
 unlike the rest of the family its combine is already traced.
 
+### Three sampler roles identified by what they bind, and the glass floor stops painting a ramp
+
+**A hash with no preimage can still be identified, by the files it binds
+across the disc.** Sweeping every HD circuit's materials and reading each
+bound `.gtf`'s own dimensions
+(`crates/render/examples/hd_sampler_bind.rs`, `OAG_RAMPS=1`):
+
+| Hash | Uses | Binds | Reading | Confidence |
+| --- | ---: | --- | --- | ---: |
+| `0x739a786e` | 20 | `ds_floor_n_rh`, `ds_pit_box_n`, `ds_wall_n` - nothing else | **normal map** | 88 |
+| `0x20c3e476` | 64 | `blue_metal_spec`, `tunnel_fx_spec`, `tunnel_fx_lights_spec`, `tunnel_02_posts` | **specular map** | 85 |
+| `0x35281c78` | 37 | `blue_metal_facing_ramp.gtf`, and nothing else | **facing ramp** | 88 |
+| `0x994bbcf1` | 27 | `blue_metal_facing_ramp.gtf`, `tunnel_fx_facingramp.gtf` | **facing ramp** | 88 |
+| `0x94b2b285` | 1 | `dc_iridescent_gradient.gtf` | **facing ramp** | 85 |
+| `0x11cb4f74` | 94 | 16 ordinary art files | diffuse | 80 |
+
+**Every** use of the three facing-ramp hashes binds a texture 32 texels or
+less in one dimension, which is what a lookup addressed by a scalar looks
+like and what a picture addressed by a UV does not. `0x739a786e` never binds
+anything but a `*_n*.gtf`, which is the same fact the pairing correction above
+rests on, reached from the other side. So **the `FacingRamp` input
+`HANDOVER.md` lists as absent is named, supplied and countable**, and so are
+the normal and specular maps.
+
+**Acted on, narrowly.** `mesh::rcs::skin::NOT_A_PICTURE` lists those hashes
+plus `lightmap`, and [`picks`] uses it for one thing only: where a material's
+colour lane does not resolve, the albedo fallback takes the first entry that
+is *not* one of these rather than entry 0 blindly. On `etched_glass_tech`
+entry 0 **is** the iridescence ramp, so Talon's Junction's glass floor was
+painting a 512x16 hue ramp at the road's own UV - the rainbow bands welded to
+the surface. It now binds `glass_etched_tech.gtf`, the etched grid, and the
+floor matches the reference capture: grid, white boundary lines, chamfered
+hex-mesh panels, structure visible through it.
+
+**Nothing samples these in their own role yet, and that is the rule rather
+than an omission.** The facing ramp wants `dot(V, N)`, the normal map wants a
+tangent frame, the specular map wants the exponent chain - and only the first
+of those has its coordinate traced. `etched_glass_tech`'s block #7 computes it
+outright:
+
+```text
+@0x01  op3B R2.xyz, f[TC3], R0     ; normalize(normal)
+@0x11  op3B R1.xyz, R1, R0.wwww    ; normalize(eye - position)
+@0x12  DP3  R2.w, -R1, R2          ; dot(-V, N)
+@0x19  TEX  H2.xyz, -R2.wwww unit2 ; sampled at dot(V, N)
+```
+
+so the iridescence is a **view-angle sheen**, not light projected onto the
+floor and not a pattern authored into it. Its combine is traced too -
+`vertexLight * (ramp + c) + ramp`, plus the grid's red as an additive term and
+a `paraboloidReflectionTex` tint weighted by that same red, with the grid's
+**RGB never sampled at all** and its red the output alpha. That is the next
+thing to implement here, and it is the only member of the glass family whose
+arithmetic is read end to end.
+
 ### Five more sampler names, by preimage over the executable
 
 Sweeping `EBOOT.elf`'s 9,097 identifier-shaped strings the way `zoneTexInner`

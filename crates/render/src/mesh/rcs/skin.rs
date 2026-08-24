@@ -100,6 +100,53 @@ pub(super) fn skin(
     (skins, seconds)
 }
 
+/// Sampler name hashes whose texture is **not a picture** - a lookup a shader
+/// addresses with something other than the surface's own coordinate.
+///
+/// # Why a list of hashes and not a guess about file names
+///
+/// Each is identified by what it binds across every HD circuit
+/// (`crates/render/examples/hd_sampler_bind.rs`, `OAG_RAMPS=1`), and the
+/// counts are the evidence:
+///
+/// | Hash | Uses | What it binds | Confidence |
+/// | --- | ---: | --- | ---: |
+/// | `0x35281c78` | 37 | `blue_metal_facing_ramp.gtf`, and nothing else | 88 |
+/// | `0x994bbcf1` | 27 | `blue_metal_facing_ramp.gtf`, `tunnel_fx_facingramp.gtf` | 88 |
+/// | `0x94b2b285` | 1 | `dc_iridescent_gradient.gtf` | 85 |
+/// | `0x739a786e` | 20 | `ds_floor_n_rh`, `ds_pit_box_n`, `ds_wall_n` | 88 |
+/// | `0x20c3e476` | 64 | `blue_metal_spec`, `tunnel_fx_spec`, `tunnel_fx_lights_spec` | 85 |
+///
+/// Every use of the first three is a texture 32 texels or less in one
+/// dimension - a ramp - and `0x94b2b285` is the one whose *coordinate* is
+/// traced outright: `etched_glass_tech`'s block #7 samples it at
+/// `dot(V, N)` (`DP3 R2.w, -R1, R2` then `TEX H2.xyz, -R2.wwww unit2`), the
+/// view-facing scalar. The last two never bind anything but a `*_n*.gtf` and
+/// a `*spec*.gtf` respectively.
+///
+/// # What this list is for, and what it is not
+///
+/// **It only stops a fallback, never drives one.** Where a material's colour
+/// lane does not resolve, [`picks`] used to bind entry 0 whatever it was -
+/// and on `etched_glass_tech` entry 0 is the iridescence ramp, so the glass
+/// floor painted a hue ramp at the road's own UV and read as rainbow bands
+/// welded to the surface. A ramp is not a picture; binding the entry that is
+/// one is closer to the file than binding the first entry blindly.
+///
+/// **Nothing here samples these textures in their own role yet.** The facing
+/// ramp wants `dot(V, N)`, the normal map wants a tangent frame, the specular
+/// map wants the exponent chain - none of which this shader implements, and
+/// `CLAUDE.md`'s rule is that a role with no recovered shading stays unwired
+/// rather than guessed.
+const NOT_A_PICTURE: &[u32] = &[
+    rcsmaterial::LIGHTMAP_SAMPLER,
+    0x3528_1c78,
+    0x994b_bcf1,
+    0x94b2_b285,
+    0x739a_786e,
+    0x20c3_e476,
+];
+
 /// Which of a material's sampler entries this renderer binds, out of however
 /// many it has.
 ///
@@ -191,12 +238,20 @@ pub(super) fn picks(
                             .any(|&(h, u)| h == *hash && u == unit)
                 })
             };
+            // The first entry that supplies a `.gtf` and is not a lookup - see
+            // [`NOT_A_PICTURE`]. Entry 0 where no entry qualifies, which is
+            // what this bound before any of it was read.
+            let picture = material
+                .samplers
+                .iter()
+                .position(|(hash, path)| path.is_some() && !NOT_A_PICTURE.contains(hash))
+                .unwrap_or(default.albedo);
             let texels = program.output_texels();
             let colour = texels[0].merge(texels[1]).merge(texels[2]);
             let albedo = colour
                 .unit()
                 .and_then(|u| index_of(u32::from(u)))
-                .unwrap_or(default.albedo);
+                .unwrap_or(picture);
             let aux = match texels[3] {
                 Texel::Unit { unit, .. } => index_of(u32::from(unit)),
                 _ => None,
