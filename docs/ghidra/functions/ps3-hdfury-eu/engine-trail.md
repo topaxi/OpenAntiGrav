@@ -466,12 +466,17 @@ engine's and are named in that method's own doc rather than buried: the
 geometric test (the craft's own origin-to-nozzle distance plus the ribbon's
 measured half-width, against the trail's centre line -
 `exhaust::hd::Tube::nearest`), the rate (**every tick a craft is inside**), and
-the attachment point (the closest point on the ribbon, since this engine has no
-equivalent of the ten hull nodes).
+the attachment point (the point on the intruder's own bounding sphere facing
+the contact, re-spawned each tick so it rides the ship - this engine has no
+equivalent of the ten hull nodes the original parents to).
 `crates/game/src/race/tests/trail_hits.rs` pins all three.
 
-**Two of the three were wrong on the first pass, and only looking settled
-them.** A player who could not trigger the effect in a race is what prompted
+**All three were wrong on the first pass, and only looking settled them.**
+The third was caught by a player seeing the corrected effect and asking whether
+it was anchored right: the burst was spawning at the contact point *on the
+ribbon*, so it read as sparks on the trail. The original parents to a hull node
+and rides the craft, which is what the sighting that started this whole thread
+described - sparks on the ship. A player who could not trigger the effect in a race is what prompted
 the measurement, and both faults hid behind the same symptom - nothing on
 screen.
 

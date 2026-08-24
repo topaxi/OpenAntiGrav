@@ -140,9 +140,13 @@ impl Race {
     ///    SPU job really does re-raise it every frame, which is why this is
     ///    still listed as an approximation.
     /// 3. **The attachment point.** The original picks the nearest of ten hull
-    ///    nodes at `craft + 0x79d0..+0x79f4`; this engine has no such nodes, so
-    ///    the burst sits at the closest point on the ribbon to the craft -
-    ///    which is where those nodes would cluster anyway.
+    ///    nodes at `craft + 0x79d0..+0x79f4` and *parents* the system to it, so
+    ///    the burst rides the ship. This engine has no such nodes, so it takes
+    ///    the point on the intruder's own bounding sphere facing the contact -
+    ///    where the nearest of ten hull nodes would be - and re-spawns it every
+    ///    tick, which is what makes it follow. **Spawning at the contact point
+    ///    on the ribbon was the first attempt and is wrong**: it reads as sparks
+    ///    on the trail rather than on the craft, which is how it was caught.
     ///
     /// **Which craft it lands on is settled by observation, not by the code.**
     /// The disassembly ties the attachment node, the colour and the float all
@@ -188,7 +192,20 @@ impl Race {
                 let Some(effect) = self.effects.get(name).cloned() else {
                     continue;
                 };
-                let point = self.hd_trail[owner].nearest(at).map_or(at, |(on, _)| on);
+                // **On the hull, not on the ribbon.** The original parents the
+                // system to the nearest of ten attachment nodes on the craft
+                // (`craft + 0x79d0..+0x79f4`), so it rides the ship; putting it
+                // at the contact point on the ribbon instead reads as sparks on
+                // the *trail*, which is what this did first and what a player
+                // spotted. This engine has no equivalent of those nodes, so it
+                // takes the point on the craft's own bounding sphere facing the
+                // contact - the place the nearest of ten hull nodes would be -
+                // and re-spawns it every tick, which is what makes it follow.
+                let contact = self.hd_trail[owner].nearest(at).map_or(at, |(on, _)| on);
+                let toward = contact - at;
+                let point = toward.try_normalize().map_or(at, |dir| {
+                    at + dir * toward.length().min(self.hull_reach[intruder])
+                });
                 // Neutral severity, as the rocket blast uses: the scale the
                 // collision sparks derive from an impulse has no counterpart
                 // here, and the float the original carries into the spawner
