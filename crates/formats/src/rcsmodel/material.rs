@@ -49,16 +49,10 @@
 use crate::ByteOrder;
 
 mod parameters;
-pub use parameters::{KIND_SAMPLER, Parameter, parameters};
+pub use parameters::{KIND_SAMPLER, Parameter, parameters, samplers};
 
 /// How many low bits of the state word select the transparency mode.
 const TRANSPARENCY_BITS: u32 = 0x3;
-
-/// What a texture path ends in, lowercased.
-///
-/// Used as a *check* on the two pointer fields rather than as a search key -
-/// see [`Material::parse`].
-const TEXTURE_SUFFIX: &str = ".gtf";
 
 /// The blend factor this module reads as "one", `GL_ONE`.
 ///
@@ -168,27 +162,46 @@ pub struct Material {
     /// **nothing samples this** and a surface whose coverage lives here paints
     /// solid - the cloud plate above being the one that shows.
     pub second_texture: Option<String>,
-    /// The word eight bytes past [`Self::texture`]'s pointer, at `+0x60`: the
-    /// **sampler name hash** that texture binds to.
+    /// The **sampler name hash** [`Self::texture`] binds to, at `+0x40`.
     ///
     /// See [`Self::second_texture_sampler`], which carries the evidence for
     /// both. Zero on a record too short to hold it.
     pub texture_sampler: u32,
-    /// The same word for [`Self::second_texture`], at `+0x80`.
+    /// The same for [`Self::second_texture`], at `+0x60`.
+    ///
+    /// # A texture record is `(hash, ..., path)`, and the path is `+0x18` in
     ///
     /// **This is what says which texture unit a slot reaches, and the answer
     /// is not the slot's ordinal.** The value takes exactly the sampler-name
     /// hashes `docs/formats/rcsmaterial.md` recovered preimages for -
     /// `Texture1` (`0x3bdc0403`), `diffuse` (`0x515e298e`), `lightmap`
-    /// (`0x37b5db58`) - and a resolved shader variant's own declaration
+    /// (`0x37b5db58`), `paraboloidReflectionTex` (`0x9edd3243`) - and a
+    /// resolved shader variant's own declaration
     /// (`crate::rcsmaterial::Declared::samplers`) maps that hash to a unit.
-    /// Talon's Junction's `track_surface` is the clearest case: its first
-    /// texture carries `0x739a786e`, which its lit-race variant declares at
-    /// **unit 1**, and its second carries `lightmap`, declared at unit 2 -
-    /// so "first texture is unit 0" is wrong on that material by two units.
+    ///
+    /// **The pairing is the part that was wrong for a day**, and it is worth
+    /// stating because the mistake is invisible: the records are `0x20` apart
+    /// from `+0x40` with the hash first and the path `0x18` further in, so
+    /// the hash sitting eight bytes *after* a path belongs to the **next**
+    /// record, not that one. Pairing them that way put every texture on its
+    /// neighbour's sampler. Talon's Junction's `track_surface` settles it
+    /// against the microcode: read correctly, `ds_floor_cs.gtf` binds
+    /// `0x11cb4f74` at unit 0 and `ds_floor_n_rh.gtf` binds `0x739a786e` at
+    /// unit 1 - and that variant's `TEX R4.xyz, R0 unit1` is followed by
+    /// `MAD R4.w, R4.yyyy, {2,-1}` twice, a normal-map decode. The other
+    /// pairing puts the *diffuse* through that decode, which is nonsense.
     ///
     /// `None` where there is no second texture.
     pub second_texture_sampler: Option<u32>,
+    /// **Every** sampler entry the material's own input table carries: the
+    /// name hash it binds to and the `.gtf` it supplies, in table order.
+    ///
+    /// **There is no fixed number of these** - see
+    /// [`parameters::samplers`], which carries the census. [`Self::texture`]
+    /// and [`Self::second_texture`] are entries 0 and 1 of this list and
+    /// nothing more; a material with five entries has three this renderer
+    /// does not bind, and `tunnel_fx_glass` has seven.
+    pub samplers: Vec<(u32, Option<String>)>,
     /// The named values this **instance** supplies to its shader - see
     /// [`parameters`].
     ///
@@ -304,40 +317,28 @@ impl Material {
         if at + 0x18 > data.len() {
             return None;
         }
-        // **Checked to be a texture path rather than assumed to be one.** These
-        // two words sit past the shortest record this reader tolerates, and
-        // `+0x78` is absent on 296 of Talon's Junction's 442 materials - where
-        // it is absent the word is not a pointer at all, so following it blindly
-        // would put arbitrary bytes in a `String`. A field that does not lead to
-        // a printable `.gtf` path is reported as no texture.
-        let path = |off: usize| {
-            let s = (at + off + 4 <= data.len())
-                .then(|| cstr(data, ByteOrder::Big.u32(data, at + off) as usize))?;
-            let looks_like_one = s.len() < 256
-                && s.bytes().all(|b| (0x20..0x7f).contains(&b))
-                && s.to_ascii_lowercase().ends_with(TEXTURE_SUFFIX);
-            looks_like_one.then_some(s)
-        };
-        let word = |off: usize| {
-            if at + off + 4 <= data.len() {
-                ByteOrder::Big.u32(data, at + off)
-            } else {
-                0
-            }
-        };
+        // **Entries 0 and 1 of the material's own input table**, which is what
+        // the `+0x58`/`+0x78` pair this used to read always was - see
+        // [`parameters::samplers`]. Derived rather than read at those offsets
+        // so a record whose table sits elsewhere is read correctly, and so
+        // a hash can never be paired with a neighbouring entry's path.
+        let entries = samplers(data, at);
         Some(Self {
             name: cstr(data, ByteOrder::Big.u32(data, at + 0x04) as usize),
             state: ByteOrder::Big.u32(data, at + 0x10),
             src_factor: ByteOrder::Big.u16(data, at + 0x14),
             dst_factor: ByteOrder::Big.u16(data, at + 0x16),
-            texture: path(0x58).unwrap_or_default(),
-            second_texture: path(0x78),
-            // Read unconditionally rather than gated on the path parsing: a
-            // record short enough to miss these reads zero, which is not a
-            // sampler hash any variant declares, so a caller cannot mistake
-            // the absence for a binding.
-            texture_sampler: word(0x60),
-            second_texture_sampler: path(0x78).map(|_| word(0x80)),
+            texture: entries
+                .first()
+                .and_then(|(_, p)| p.clone())
+                .unwrap_or_default(),
+            second_texture: entries.get(1).and_then(|(_, p)| p.clone()),
+            texture_sampler: entries.first().map_or(0, |&(h, _)| h),
+            // Tied to there being a path, because this answers "which unit
+            // does the second **texture** reach" and an entry with no `.gtf`
+            // binds nothing for a unit to receive.
+            second_texture_sampler: entries.get(1).and_then(|(h, p)| p.as_ref().map(|_| *h)),
+            samplers: entries,
             parameters: parameters(data, at),
         })
     }

@@ -992,6 +992,97 @@ path with the `lightmapUV` attribute, and neither is this word), but a
 slot-level signal 3 would change answers, so it is named here rather than
 folded in quietly.
 
+### Corrected hours later: the hash belongs to a different path, and there is no "second slot" at all
+
+**The pairing was off by one entry, and that single mistake is most of this
+page's confusion.** A material record's texture information is not two
+hardcoded slots at `+0x58` and `+0x78`. It is the material's own **input
+table** - the one `oag_formats::rcsmodel::material::parameters` has walked
+since the flame's numbers were read - whose entries are `0x20` apart and shaped
+
+```text
++0x00  u32  sampler or parameter name hash
++0x04  u32  kind: 0x8001 for a sampler, 0 for a parameter
++0x18  u32  the .gtf path (a sampler) or the value (a parameter)
+```
+
+So the hash sitting eight bytes *after* a path belongs to the **next** entry.
+Pairing them that way put every texture on its neighbour's sampler.
+
+**Three things settle the correct pairing, independently.**
+
+1. **A normal-map decode.** Read correctly, `track_surface`'s
+   `ds_floor_cs.gtf` binds `0x11cb4f74` at unit 0 and `ds_floor_n_rh.gtf`
+   binds `0x739a786e` at unit 1 - and that variant's `TEX R4.xyz, R0 unit1`
+   is followed twice by `MAD R4.w, R4.yyyy, {2,-1}`, which is a tangent-space
+   normal unpack. The other pairing puts the *diffuse* through that decode.
+2. **The reference frame.** `etched_glass_tech`'s `glass_etched_tech.gtf`
+   binds `Texture1` at unit 0, sampled at `f[TC5].zw` - an ordinary vertex UV -
+   so the etched grid paints in the plane of the floor, exactly as the capture
+   shows, and `dc_iridescent_gradient.gtf` binds `0x94b2b285` at unit 2,
+   sampled at the scalar `-R2.w`, which is what a 512x16 iridescence ramp is
+   for. Talon's Junction's glass floor draws from this change.
+3. **The cloud plate stops being an inversion.** `clouds_new.gtf` binds
+   `0xfd669142` at unit 1 and supplies the colour; `cloud mask.gtf` binds
+   `diffuse` at unit 0 and supplies the alpha from its red - `0..255`, mean
+   58, 60 % of texels under 32, a real silhouette. **"The roles are the
+   opposite of the slot names" above is therefore wrong**, and wrong for a
+   reason worth keeping: it was a correct microcode trace laid over an
+   off-by-one pairing. The mask is the mask and the diffuse is the diffuse.
+
+### And there is no fixed number of texture slots
+
+**Talon's Junction's 442 materials carry 1,291 sampler entries** - 1 material
+with one, 181 with two, 150 with three, 74 with four, 35 with five, and
+`tunnel_fx_glass` with **seven**. `Material::texture` and `second_texture` are
+entries 0 and 1 of that table and nothing more; everything past them was
+invisible to this project.
+
+That retires "one slot, at least four uses" outright. The roles are not
+overloaded - they are **separate entries whose hashes name them**, and
+`tunnel_fx_glass` reads in order:
+
+| hash | `.gtf` | role |
+| --- | --- | --- |
+| `0xeedee991` | `tunnel_fx_alpha.gtf` | coverage |
+| `0x11cb4f74` | `tunnel_fx_diffuse.gtf` | diffuse |
+| `0xfa79b1cd` | `tunnel_fx_emissive.gtf` | emissive |
+| `0x173fbce2` | `lightstrip_emissive.gtf` | a second emissive |
+| `0x20c3e476` | `tunnel_fx_spec.gtf` | specular |
+| `0x994bbcf1` | `tunnel_fx_facingramp.gtf` | the facing ramp |
+| `0x37b5db58` | (none supplied) | `lightmap` |
+
+`0x20c3e476` lands on a `*_spec.gtf` on all 63 of its uses and `0x994bbcf1`
+/ `0x35281c78` on a `*facing*ramp*.gtf` - so the **`FacingRamp` input
+`HANDOVER.md` lists as absent is named, supplied and sitting in the file**,
+and the lightmap is *declared* by 118 of the circuit's materials rather than
+inferred from an `lmaps/` path on 85 of them.
+
+**`oag_formats::rcsmodel::material::samplers` reads the whole list now**;
+`oag-render` still binds the first two, so the third onwards is read and not
+drawn. Which of them a shader wants is no longer a guess - it is the hash,
+against the resolved variant's own declaration.
+
+### Five more sampler names, by preimage over the executable
+
+Sweeping `EBOOT.elf`'s 9,097 identifier-shaped strings the way `zoneTexInner`
+was found:
+
+| Hash | Name |
+| --- | --- |
+| `0x9edd3243` | `paraboloidReflectionTex` |
+| `0x730df9ee` | `shadowMapTex` |
+| `0x9becc725` | `directionalLight0ShadowTex` |
+| `0xa51b8b14` | `directionalLight0LightmapTex` |
+| `0x52834137` / `0xcc090349` | `zoneTexOuterNearest` / `zoneTexOuter` |
+
+`paraboloidReflectionTex` confirms the glass family's unit 1 from the other
+side: the coordinate this page traced as "a scalar built from a clamped dot
+product, offset by a constant" - `(R1.w + 0.25, -R1.z * 0.5 + 0.5)` - is a
+**dual-paraboloid** reflection lookup, which is exactly that remap. It is an
+engine-supplied probe, not one of the material's own `.gtf`, which is why no
+`.rcsmodel` names it.
+
 ### Acted on 2026-08-24, additively, and it fixed the light cones
 
 **`mesh::rcs::skin::units` reads the hash and `roles` uses it - but only ever

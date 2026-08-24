@@ -228,6 +228,7 @@ fn every_factor_the_disc_uses_is_one_of_the_four_named_ones() {
             second_texture: None,
             texture_sampler: 0,
             second_texture_sampler: None,
+            samplers: Vec::new(),
             parameters: Vec::new(),
         };
         match material.blend() {

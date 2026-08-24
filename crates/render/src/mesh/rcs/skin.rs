@@ -157,17 +157,6 @@ pub(super) fn roles(
         if let (Some(program), true) = (program, bound) {
             let texels = program.output_texels();
             let colour = texels[0].merge(texels[1]).merge(texels[2]);
-            // **Either reading identifies the second slot, and that is
-            // deliberate.** `units` says which unit the slot's own sampler
-            // hash reaches; the ordinal says unit 1. Where they disagree,
-            // accepting only the hash *removes* bindings this renderer draws
-            // correctly today - measured, not feared: Talon's Junction's
-            // perforated trackside barrier beside the blimp loses its holes
-            // and washes out at tick 295, one of 27 slots that changed that
-            // way. So the hash may **add** a second-slot identification the
-            // ordinal would have missed and may never take one away, which
-            // keeps this function's own contract: the reading can only add
-            // correct surfaces.
             // **Never the lightmap.** When the second slot is the circuit's
             // baked atlas, its alpha is the sun-occlusion mask - `mesh.wgsl`
             // reads it as exactly that, `mask = baked.a * in.sun_mask` - and
@@ -178,7 +167,7 @@ pub(super) fn roles(
             // perforated trackside barrier beside the blimp lost its holes
             // and washed out at tick 295.
             let lightmapped = packed & slots::SECOND_IS_LIGHTMAP != 0;
-            let is_second = |unit: u32| !lightmapped && (unit == second_unit || unit == 1);
+            let is_second = |unit: u32| !lightmapped && unit == second_unit;
             if colour.unit().map(u32::from).is_some_and(is_second) {
                 packed |= slots::ALBEDO_FROM_SECOND;
             }
@@ -360,6 +349,7 @@ mod tests {
             second_texture: second.map(|_| "b.gtf".to_string()),
             texture_sampler: first,
             second_texture_sampler: second,
+            samplers: Vec::new(),
             parameters: Vec::new(),
         }
     }

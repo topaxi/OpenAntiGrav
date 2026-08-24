@@ -125,6 +125,64 @@ pub fn parameters(data: &[u8], at: usize) -> Vec<Parameter> {
         .collect()
 }
 
+/// Reads the **sampler** entries of the material record at `at`: the name hash
+/// each binds to, and the `.gtf` path it supplies, in table order.
+///
+/// The sibling of [`parameters`] over the same table, taking the entries that
+/// one skips.
+///
+/// # There is no fixed number of texture slots
+///
+/// **This project read two, at hardcoded offsets, and a material has as many
+/// as it likes.** Talon's Junction's 442 materials carry **1,291** sampler
+/// entries between them - 1 material with one, 181 with two, 150 with three,
+/// 74 with four, 35 with five and `tunnel_fx_glass` with seven - and the
+/// hardcoded `+0x58`/`+0x78` pair was simply entries 0 and 1 of this table.
+/// Everything past them was invisible, and with it the reason the second slot
+/// looked like "one slot, at least four uses": the roles are not overloaded,
+/// they are separate entries whose hashes name them.
+/// `tunnel_fx_glass` reads, in order, an alpha, a diffuse, an emissive, a
+/// second emissive, a specular, a facing ramp and the lightmap.
+///
+/// A `None` path is an entry the material declares and supplies no texture
+/// for, which is ordinary - it is how a material says "this shader input is
+/// left at whatever the engine binds".
+#[must_use]
+pub fn samplers(data: &[u8], at: usize) -> Vec<(u32, Option<String>)> {
+    let (Some(count), Some(table)) = (word(data, at + 0x30), word(data, at + 0x34)) else {
+        return Vec::new();
+    };
+    (0..count as usize)
+        .map_while(|index| {
+            let entry = table as usize + index * ENTRY_LEN;
+            Some((
+                word(data, entry)?,
+                word(data, entry + 0x04)?,
+                word(data, entry + 0x18)?,
+            ))
+        })
+        .filter(|&(_, kind, _)| kind == KIND_SAMPLER)
+        .map(|(hash, _, offset)| (hash, texture_path(data, offset as usize)))
+        .collect()
+}
+
+/// The `.gtf` path at `offset`, checked to be one.
+///
+/// **Checked rather than assumed**, for the reason `Material::parse` gives:
+/// an entry that leads nowhere printable is reported as no texture rather
+/// than putting arbitrary bytes in a `String`.
+fn texture_path(data: &[u8], offset: usize) -> Option<String> {
+    if offset == 0 || offset >= data.len() {
+        return None;
+    }
+    let end = data[offset..].iter().position(|&b| b == 0)? + offset;
+    let s = std::str::from_utf8(&data[offset..end]).ok()?;
+    let looks_like_one = s.len() < 256
+        && s.bytes().all(|b| (0x20..0x7f).contains(&b))
+        && s.to_ascii_lowercase().ends_with(".gtf");
+    looks_like_one.then(|| s.to_string())
+}
+
 /// A big-endian `u32`, or `None` where it would leave the file.
 fn word(data: &[u8], at: usize) -> Option<u32> {
     (at + 4 <= data.len()).then(|| ByteOrder::Big.u32(data, at))

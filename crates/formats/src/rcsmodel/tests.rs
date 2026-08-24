@@ -194,6 +194,7 @@ fn both_factors_come_through_and_an_unknown_one_is_not_guessed_at() {
         second_texture: None,
         texture_sampler: 0,
         second_texture_sampler: None,
+        samplers: Vec::new(),
         parameters: Vec::new(),
     };
     for (src, named) in [
@@ -241,6 +242,7 @@ fn the_unused_transparency_encoding_is_not_guessed_at() {
         second_texture: None,
         texture_sampler: 0,
         second_texture_sampler: None,
+        samplers: Vec::new(),
         parameters: Vec::new(),
     };
     assert_eq!(odd.transparency(), None);
@@ -558,48 +560,70 @@ fn a_box_nothing_explains_is_none() {
     );
 }
 
-/// A texture slot's sampler name hash is read from the word eight bytes past
-/// its path pointer, and the second slot's is `None` when there is no second
-/// path to bind.
+/// A texture slot's sampler name hash and its `.gtf` path come from the same
+/// entry of the material's own input table, and every sampler entry is read -
+/// not the first two at hardcoded offsets.
 ///
-/// The offsets are the load-bearing part: `docs/formats/rcsmaterial.md`'s "A
-/// texture slot names its sampler" reads the disc through these two words, and
-/// a shift of four bytes would silently turn a sampler hash into a flag word
-/// that still looks like a number.
+/// **The pairing is the load-bearing part.** An entry is `(hash, kind, ...,
+/// path)` at stride `0x20`, so the hash sitting eight bytes *after* a path
+/// belongs to the next entry; reading it that way put every texture on its
+/// neighbour's sampler. See `docs/formats/rcsmaterial.md`, "A texture slot
+/// names its sampler".
 #[test]
-fn a_texture_slot_carries_its_sampler_name_hash() {
-    const NAME: usize = 0x200;
-    const FIRST: usize = 0x220;
-    const SECOND: usize = 0x260;
+fn every_sampler_entry_is_read_and_paired_with_its_own_path() {
+    const TABLE: usize = 0x100;
+    const PATHS: [usize; 3] = [0x200, 0x220, 0x240];
+    const NAME: usize = 0x260;
     let mut data = vec![0u8; 0x400];
     let mut put = |at: usize, word: u32| data[at..at + 4].copy_from_slice(&word.to_be_bytes());
     put(0x04, NAME as u32);
     put(0x10, 1);
-    put(0x58, FIRST as u32);
-    put(0x60, 0x3bdc_0403);
-    put(0x78, SECOND as u32);
-    put(0x80, 0x37b5_db58);
-    for (at, text) in [(NAME, "m.rcsmaterial"), (FIRST, "a.gtf"), (SECOND, "b.gtf")] {
+    put(0x30, 4); // four entries, one of them a parameter
+    put(0x34, TABLE as u32);
+    for (i, (hash, path)) in [
+        (0x3bdc_0403u32, Some(PATHS[0])),
+        (0x37b5_db58, Some(PATHS[1])),
+        (0x9edd_3243, None),
+        (0x0000_0001, Some(PATHS[2])), // a parameter: skipped
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let entry = TABLE + i * 0x20;
+        put(entry, hash);
+        put(
+            entry + 0x04,
+            if i == 3 { 0 } else { material::KIND_SAMPLER },
+        );
+        put(entry + 0x18, path.unwrap_or(0) as u32);
+        put(entry + 0x1c, 1);
+    }
+    for (at, text) in [
+        (NAME, "m.rcsmaterial"),
+        (PATHS[0], "a.gtf"),
+        (PATHS[1], "lm.gtf"),
+        (PATHS[2], "not-a-sampler.gtf"),
+    ] {
         data[at..at + text.len()].copy_from_slice(text.as_bytes());
     }
 
     let material = material::Material::parse(&data, 0).unwrap();
-    assert_eq!(material.texture, "a.gtf");
+    assert_eq!(
+        material.samplers,
+        vec![
+            (0x3bdc_0403, Some("a.gtf".to_string())),
+            (0x37b5_db58, Some("lm.gtf".to_string())),
+            (0x9edd_3243, None),
+        ],
+        "three sampler entries, in table order, the parameter left out"
+    );
     assert_eq!(
         material.texture_sampler, 0x3bdc_0403,
         "~crc32(\"Texture1\")"
     );
-    assert_eq!(material.second_texture.as_deref(), Some("b.gtf"));
     assert_eq!(
         material.second_texture_sampler,
         Some(0x37b5_db58),
-        "~crc32(\"lightmap\")"
+        "~crc32(\"lightmap\") - the entry its own path sits in, not the next one"
     );
-
-    // No second path, so no second binding to report - rather than the word
-    // that happens to sit at `+0x80` of a record that ends before it.
-    data[0x78..0x7c].fill(0);
-    let material = material::Material::parse(&data, 0).unwrap();
-    assert_eq!(material.second_texture, None);
-    assert_eq!(material.second_texture_sampler, None);
 }
