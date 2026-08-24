@@ -26,6 +26,7 @@ mod respawn;
 mod scene;
 mod spawn;
 mod spline;
+mod trail_hits;
 mod weapons;
 
 /// A model declaring `slots` texture slots of which the first `decoded` filled.
@@ -127,6 +128,7 @@ fn setup(handling: Handling) -> Setup {
         start_position: None,
         // Not HD's tube: these tests drive the PSP ribbon and physics.
         hd_trail: None,
+        hull_radius: [0.0; oag_gameplay::MAX_SHIPS],
         collision: CollisionWorld::new(),
         handling,
         // Round numbers, chosen to make the geometry readable. None of these

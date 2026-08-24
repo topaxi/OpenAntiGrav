@@ -372,6 +372,99 @@ recovered trigger stays unwired rather than fired on a guess. Wiring either
 needs HD's executable read; the third of the family,
 `wo_ship_engineflare.pob`, is already wired and rides the nozzle.
 
+## The engine trail is one of four ribbons, and `WakeTrail` is a second manager
+
+Read 2026-08-24, prompted by a player's report of an effect under the craft
+that no page here had a name for. The executable's own string run puts the
+engine trail in a **family**:
+
+```text
+0079c1d0  'rockettrail_triangle'
+0079c1e8  'waketrail_triangle'
+0079c200  'leachbeam_triangle'
+0079c218  'RocketTrail_Shadow_triangle'
+0079c1c0  '%s%s.rcsmodel'          composed against 'Data\RibbonEffects\'
+```
+
+Four `*_triangle` ribbon models beside
+`enginetrail_bluered_triangle`, all composed through one `%s%s.rcsmodel`
+format against `Data\RibbonEffects\`. Only the engine trail has been read
+([engine-trail.md](../ghidra/functions/ps3-hdfury-eu/engine-trail.md)).
+
+### `WakeTrail` is structurally the engine trail's twin
+
+Its TOC block is the same block, field for field, as `TrailEffectManager`'s:
+
+| | `Trails` (engine trail) | `WakeTrail` |
+| --- | --- | --- |
+| job name | `'Trails'` `0x008b444c` | `'WakeTrail'` `0x008b3184` |
+| embedded SPU job | `0x00811680`, `0x4d40` bytes | `0x00816400`, **`0x1240` bytes** |
+| manager global | `0x00aed460` | `0x00ad81f0` |
+| technique | `StaticUncompressed` | `StaticUncompressed` |
+| attributes | `position` `normal` `Uv1` `VertexColour1` | the same four |
+| that `0.8` | `0x008b4450` | `0x008b31c8` |
+
+The job registration reads the name at `0x002a8678` and the draw state is
+built by `0x002a8f58` - which fills the same engine shader-parameter table
+`Trail_BuildDrawState` does
+([renderer.md](../ghidra/functions/ps3-hdfury-eu/renderer.md)). Its block also
+carries a constant run the engine trail's does not: `0.1`, `-1.0`, `1.0`,
+`0.5`, `0.125`, `10.0`, `50.0`. Unread.
+
+**Its SPU job is a fifth the size of the engine trail's** (`0x1240` against
+`0x4d40`), which fits a simpler ribbon - no three-fin extrusion, no per-craft
+intersection test.
+
+### What its material does, read
+
+`/data/ribboneffects/materials/hd_waketrail.rcsmaterial`, 896 bytes, one
+fragment block of 18 instructions. Two samplers and **one parameter**:
+
+| Hash | What | Where |
+| --- | --- | --- |
+| `0x3bdc0403` | `hd_waketrail.gtf` | unit 0 |
+| `0xd5d2652f` | `hd_waketrail_clouds.gtf` | unit 1 |
+| `0x906b67ba` | **`time`** | patch fslot `0x34` |
+
+```text
+@0x01  MUL R0.zw, uv.xy, {1, 0.2}       <- unit 1 sampled at v x 0.2
+@0x03  TEX R1.x, R0.zwzz unit1          <- the cloud texture
+@0x09  MAD R2.y, {time}, {0.1}, cloud*0.5  <- v scrolls with the engine clock
+@0x0d  TEX H0.w, f[TC3] unit0           <- coverage at the authored uv
+@0x0f  TEX H1.xyz, R2 unit0             <- colour at the displaced one
+@0x0b  MUL_SAT R1.w, f[POS].z, {0.75}   <- the same depth fade the trail has
+@0x11  MUL H0.w, H0, R1 END
+```
+
+So it is the engine trail's arrangement in miniature: a second texture
+displaces the first, the output fades by window depth with the **identical**
+`0.75`, and the scroll rides **engine shader parameter slot 0** - the same
+global seconds clock the flame surface uses, `time * 0.1` here against the
+flame's `time * 2.0`.
+
+### `MagstripWake` is a separate thing, or the same thing named twice
+
+`'MagstripWake'` (`0x00782f90`) and `'MagstripWake.cpp'` (`0x00782fa0`) sit in
+a different string run entirely, next to `'Transparency'` and
+`'arc_anchor_point'`. `ps3-toc.py attrib` puts two functions behind that
+`.cpp`: **`0x00109e40`** and **`0x0010a0c0`**. Neither has been read, and
+nothing yet connects them to the `WakeTrail` manager above.
+
+**A player reports an effect below the craft on the magstrip**, which is what
+`MagstripWake` reads as by name and is consistent with a ribbon laid on the
+track surface rather than trailing in the air. That is a sighting, recorded as
+one: it is not evidence about which of the two names draws it, and this page
+poses that as the question rather than answering it.
+
+### Not implemented, and what it would take
+
+Nothing here is drawn. The three steps, in order: read `0x00109e40` /
+`0x0010a0c0` and `0x002a8f58` to learn what the ribbon is anchored to and how
+many samples it keeps; dump the `WakeTrail` manager's own block live the way
+`scripts/rpcs3-trail-dump.py` does the engine trail's, since the SPU job's
+output buffer is readable at its RSX address; and only then extrude. The
+material and both textures are already decodable today.
+
 ## What follows for the code
 
 `oag_render::exhaust` holds Pulse-PSP's preset as `TRAIL_*` constants and every

@@ -258,6 +258,12 @@ pub struct Setup {
     /// directory: `*_c1` is the concept skin, `*_n1` the nitro one. See
     /// `docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md`.
     pub hd_trail: Option<[f32; oag_gameplay::MAX_SHIPS]>,
+    /// Each slot's hull bounding radius, off the model it loaded.
+    ///
+    /// `oag_render::mesh::Model::radius`, the same number the loader already
+    /// reports beside every hull. Only the HD trail-hit test reads it, and it
+    /// is here rather than recomputed because a `Race` never sees the models.
+    pub hull_radius: [f32; oag_gameplay::MAX_SHIPS],
     /// Every collidable triangle of the track.
     pub collision: CollisionWorld,
     /// The force law's parameter set for one team in one speed class.

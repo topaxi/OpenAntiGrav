@@ -457,11 +457,29 @@ itself (the `Trails` job's code), what `+0x11dc` and the two craft-state gates
 mean, and whether `+0x11f0` names the striking or the struck craft - the effect
 attaches to *that* craft's hull either way.
 
-**Not implemented.** `oag_render::psys` already plays any `Data\Psys\*.POB`
-by name, so the effect itself is a name away; the **trigger** is the part that
-needs the ribbon-versus-craft test this engine does not have, and per this
-repository's rule an effect with no recovered trigger stays unwired rather than
-fired on a guess.
+**Implemented 2026-08-24**, and the split is deliberate. `oag_render::psys`
+plays the disc's own `.POB` - both variants load from the HD archives, pinned
+by `crates/game/tests/hd_engine_flare_ground_truth.rs` - and
+`oag_game::race::Race::advance_trail_hits` fires it. **Nothing about the effect
+is invented; only the moment it fires is.** Three things there are this
+engine's and are named in that method's own doc rather than buried: the
+geometric test (a craft's own hull radius plus the ribbon's measured half-width
+against the trail's centre line, `exhaust::hd::Tube::nearest`), the rate (on
+**entry**, re-arming on exit - the original clears its flag every frame and
+whether the job re-raises it while a craft stays inside is unread, and firing
+per tick would be 60 ignitions a second), and the attachment point (the closest
+point on the ribbon, since this engine has no equivalent of the ten hull
+nodes). `crates/game/src/race/tests/trail_hits.rs` pins all three, so an
+approximation cannot drift unnoticed.
+
+**Which craft it lands on was settled by a sighting, not by the code.** The
+disassembly ties the node, the colour and the float all to the craft at
+`+0x11f0`, and nothing read says whether that is the trail's owner or the craft
+that flew through. Someone playing the original reported sparks on the *ship*,
+in the trail's colours - so it is the intruder, and the burst takes the
+intruder's own red flag. On a uniformly Fury or classic grid the two readings
+give the same picture, which is why the code could not distinguish them and an
+observation could.
 
 ## The third sampler is the lightmap slot, empty
 

@@ -385,3 +385,30 @@ fn the_sprite_flares_constants_are_the_discs_own() {
         .expect("Engine_Flare_Rich.gtf");
     assert!(blob.len() > 100_000, "{} bytes", blob.len());
 }
+
+/// **The two `WO_TRAIL_HITSHIP` systems are on the disc and load.**
+///
+/// What `Race::advance_trail_hits` plays when a craft flies into a trail. The
+/// loader reports one line per effect and says "will not be drawn" when a name
+/// is not in the mounted archives, so the report is the evidence - the same
+/// line a screenshot could not tell apart from "the effect never fired".
+///
+/// This is the half the unit tests cannot reach: they pin *when* the effect
+/// fires, and this pins that there is something to fire.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn the_trail_hit_effects_are_on_the_disc_and_load() {
+    let Some(loaded) = load() else { return };
+    for name in [race::TRAIL_HITSHIP_EFFECT, race::TRAIL_HITSHIP_RED_EFFECT] {
+        let line = loaded
+            .report
+            .iter()
+            .find(|line| line.contains(name))
+            .unwrap_or_else(|| panic!("{name}: the loader said nothing about it at all"));
+        assert!(!line.contains("will not be drawn"), "{name}: {line}");
+        assert!(
+            line.contains("emitter(s)"),
+            "{name}: loaded but reported no emitters - {line}"
+        );
+    }
+}

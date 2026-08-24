@@ -6,6 +6,37 @@
 
 use super::*;
 
+/// Every `Data\Psys` effect this race loads, and what triggers it.
+///
+/// **The list is the trigger set, not the asset set.** There are 35 effects on
+/// the PSP disc and 41 on the PS2 one; what decides whether one appears here is
+/// whether the *executable's* reason for playing it has been recovered, because
+/// an effect with no recovered trigger would just be this engine guessing when
+/// to fire it. `crates/game/tests/psys_inventory_ground_truth.rs` holds every
+/// effect on both discs against this list and fails if one is neither played
+/// nor explicitly recorded as having no recovered trigger.
+///
+/// **The two [`TRAIL_HITSHIP_EFFECT`] variants are the one exception**, and a
+/// narrow one: their consumer, spawner and colour select are all read, and
+/// only the geometric *test* - which runs in the `Trails` SPU job - is not.
+/// Nothing about the effect is invented, only the moment it fires, and
+/// [`Race::advance_trail_hits`] names each approximation. HD is also outside
+/// the inventory test's reach (it reads the PSP and PS2 discs only), so those
+/// two names are checked by nothing there - stated rather than relied on.
+///
+/// **It is a superset across sources, not a per-disc list.** An entry absent
+/// from the mounted archives is reported by the loader and skipped, so naming
+/// a PS2-only effect here costs a PSP race one report line and nothing else.
+pub const RACE_EFFECTS: [&str; 7] = [
+    sparks::DAMAGE_EFFECT,
+    ROCKET_FLARE_EFFECT,
+    TRACK_BLAST_EFFECT,
+    CRAFT_BLAST_EFFECT,
+    ENGINE_FLARE_EFFECT,
+    TRAIL_HITSHIP_EFFECT,
+    TRAIL_HITSHIP_RED_EFFECT,
+];
+
 impl Race {
     /// Advances every active craft's exhaust and lays down its trail sample.
     ///
@@ -60,6 +91,90 @@ impl Race {
                     );
                     self.hd_trail[slot].push(nozzle, self.world.ships[slot].physics.body.up(), s01);
                 }
+            }
+        }
+    }
+
+    /// Fires `WO_TRAIL_HITSHIP` on a craft that has flown into a trail.
+    ///
+    /// **The mechanism is read; the test is not.** Wipeout HD's `Trails` SPU
+    /// job raises a per-trail flag (bit 61 of the trail block's `+0x11d0`),
+    /// `Trail_SpawnHitEffect` consumes it once a frame and spawns the system
+    /// on the craft involved, and the red variant is chosen by the same
+    /// `craft + 0x7d2c` byte that reddens the ribbon. All of that is
+    /// decompiled (`docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md`).
+    /// What runs inside the SPU job is not, so **three things here are this
+    /// engine's**, named rather than buried:
+    ///
+    /// 1. **The test.** A craft counts as in a trail when its centre comes
+    ///    within its own hull radius plus the ribbon's measured half-width of
+    ///    that trail's centre line ([`exhaust::hd::Tube::nearest`]). Both
+    ///    terms are measured - the hull's from its own model, the ribbon's
+    ///    from the running game - but that a sphere against a centre line is
+    ///    the original's test is an assumption, taken because the SPU job is
+    ///    handed exactly one bounding-sphere-shaped vec4 per craft and nothing
+    ///    per fin.
+    /// 2. **The rate.** The original clears its flag every frame, and whether
+    ///    the job re-raises it while a craft stays inside is unread. Firing per
+    ///    tick would be 60 ignitions a second, so this fires on **entry** and
+    ///    re-arms on exit. A guess, and the one most likely to be wrong.
+    /// 3. **The attachment point.** The original picks the nearest of ten hull
+    ///    nodes at `craft + 0x79d0..+0x79f4`; this engine has no such nodes, so
+    ///    the burst sits at the closest point on the ribbon to the craft -
+    ///    which is where those nodes would cluster anyway.
+    ///
+    /// **Which craft it lands on is settled by observation, not by the code.**
+    /// The disassembly ties the attachment node, the colour and the float all
+    /// to the craft at `+0x11f0`, and nothing read says whether that is the
+    /// trail's owner or the craft that flew through it. A sighting in the
+    /// running original - sparks on the *ship*, in the trail's colours -
+    /// resolves it: the intruder. So the burst plays on the intruder and takes
+    /// the intruder's own red flag, which on a uniformly Fury or classic grid
+    /// is the same answer either way.
+    ///
+    /// A craft is never tested against its own trail: its nozzle *is* the head
+    /// sample, so it would be permanently inside it.
+    pub(super) fn advance_trail_hits(&mut self) {
+        if !self.hd_trail_active {
+            return;
+        }
+        for owner in 0..self.world.ship_count as usize {
+            if !self.world.ships[owner].active || !self.hd_trail[owner].ready() {
+                continue;
+            }
+            for intruder in 0..self.world.ship_count as usize {
+                if intruder == owner || !self.world.ships[intruder].active {
+                    continue;
+                }
+                let at = self.world.ships[intruder].physics.body.position;
+                let reach = self.hull_radius[intruder] + exhaust::hd::FIN_HALF_WIDTH;
+                let hit = self.hd_trail[owner]
+                    .nearest(at)
+                    .is_some_and(|(_, distance)| distance <= reach);
+                let bit = 1u8 << intruder;
+                let was = self.trail_inside[owner] & bit != 0;
+                if hit {
+                    self.trail_inside[owner] |= bit;
+                } else {
+                    self.trail_inside[owner] &= !bit;
+                }
+                if !hit || was {
+                    continue;
+                }
+                let name = if self.hd_trail_red[intruder] > 0.5 {
+                    TRAIL_HITSHIP_RED_EFFECT
+                } else {
+                    TRAIL_HITSHIP_EFFECT
+                };
+                let Some(effect) = self.effects.get(name).cloned() else {
+                    continue;
+                };
+                let point = self.hd_trail[owner].nearest(at).map_or(at, |(on, _)| on);
+                // Neutral severity, as the rocket blast uses: the scale the
+                // collision sparks derive from an impulse has no counterpart
+                // here, and the float the original carries into the spawner
+                // (`+0x11dc`) is unread.
+                self.stage.play(&effect, point, 1.0);
             }
         }
     }

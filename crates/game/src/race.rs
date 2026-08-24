@@ -382,26 +382,17 @@ pub const CRAFT_BLAST_DROP: f32 = 2.5;
 /// [`Race::engine_flare_effect`].
 pub const ENGINE_FLARE_EFFECT: &str = "WO_SHIP_ENGINEFLARE";
 
+/// The two systems HD plays on a craft that flies into an engine trail.
+///
+/// Re-exported from where the rest of HD's exhaust constants live, because
+/// that is what they are - see [`Race::advance_trail_hits`] for the trigger.
+pub use oag_render::exhaust::hd::{TRAIL_HITSHIP_EFFECT, TRAIL_HITSHIP_RED_EFFECT};
+
 /// Every `Data\Psys` effect this race loads, and what triggers it.
 ///
-/// **The list is the trigger set, not the asset set.** There are 35 effects on
-/// the PSP disc and 41 on the PS2 one; what decides whether one appears here is
-/// whether the *executable's* reason for playing it has been recovered, because
-/// an effect with no recovered trigger would just be this engine guessing when
-/// to fire it. `crates/game/tests/psys_inventory_ground_truth.rs` holds every
-/// effect on both discs against this list and fails if one is neither played
-/// nor explicitly recorded as having no recovered trigger.
-///
-/// **It is a superset across sources, not a per-disc list.** An entry absent
-/// from the mounted archives is reported by the loader and skipped, so naming
-/// a PS2-only effect here costs a PSP race one report line and nothing else.
-pub const RACE_EFFECTS: [&str; 5] = [
-    sparks::DAMAGE_EFFECT,
-    ROCKET_FLARE_EFFECT,
-    TRACK_BLAST_EFFECT,
-    CRAFT_BLAST_EFFECT,
-    ENGINE_FLARE_EFFECT,
-];
+/// Defined beside the triggers themselves in [`mod@effects`], and re-exported
+/// here because that is where callers have always found it.
+pub use effects::RACE_EFFECTS;
 
 /// How much faster a craft assumes a Turbo will make it, when deciding whether
 /// it can afford to fire one.
@@ -587,6 +578,12 @@ pub struct Race {
     hd_trail: [exhaust::hd::Tube; MAX_SHIPS],
     hd_trail_active: bool,
     hd_trail_red: [f32; MAX_SHIPS],
+    /// Each craft's hull bounding radius, off the model it loaded - what the
+    /// trail-hit test adds to the ribbon's half-width.
+    hull_radius: [f32; MAX_SHIPS],
+    /// Which craft are inside which craft's trail, one bit per intruder, so
+    /// the effect fires on entry. [`Race::advance_trail_hits`] says why.
+    trail_inside: [u8; MAX_SHIPS],
     hd_flame: [exhaust::hd::Flame; MAX_SHIPS],
     hd_sprite: [exhaust::hd::Sprite; MAX_SHIPS],
     /// Each craft's shield shell animation, when one is up.

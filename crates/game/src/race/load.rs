@@ -863,10 +863,19 @@ pub fn load(options: &Options) -> Result<Loaded> {
         );
         report.push(
             "read and not drawn on HD: the flame spikes' per-shape random flicker \
-             (0.65..0.85), the Fury afterburner's second boost blend, the flame surface's \
-             Speed*time scroll (the clock is still unread), and the sprite flare's spin, \
-             chromatic fringe, distance fade and occlusion query (its radius, alpha walk \
-             and texture do draw - exhaust::hd::Sprite)"
+             (0.65..0.85), the Fury afterburner's second boost blend, and the sprite \
+             flare's spin, chromatic fringe, distance fade and occlusion query (its \
+             radius, alpha walk and texture do draw - exhaust::hd::Sprite). The flame \
+             surface's Speed*time scroll draws now: time is engine shader parameter \
+             slot 0, a global seconds clock (renderer.md)"
+                .into(),
+        );
+        report.push(
+            "a craft flying into a trail sparks: WO_TRAIL_HITSHIP, red variant on a \
+             Fury skin, spawned on the intruder at the closest point of the ribbon. \
+             The consumer, spawner and colour select are read; the geometric test and \
+             the once-per-entry rate are this engine's - Race::advance_trail_hits \
+             names both"
                 .into(),
         );
     }
@@ -945,6 +954,9 @@ pub fn load(options: &Options) -> Result<Loaded> {
             course,
             start_position,
             hd_trail: trail_shape.is_some().then_some(hd_trail_red),
+            hull_radius: std::array::from_fn(|slot| {
+                liveries.get(slot).map_or(0.0, |livery| livery.hull.radius)
+            }),
             collision,
             handling,
             airbrake_graphics,
