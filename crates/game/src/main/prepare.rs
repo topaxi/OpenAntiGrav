@@ -200,7 +200,20 @@ impl Pending {
         // which are shipped content and only ever live in memory.
         let shell = Shell {
             definition: self.definition.clone(),
+            strings: boot_shell.strings.clone(),
             modes: menu::mode_choices(&boot_shell.strings),
+            // The disc's own names for its stylings, so the row offers what the
+            // source has rather than a list this build holds.
+            front_end_styles: boot_shell
+                .loading
+                .map(|loading| {
+                    loading
+                        .features
+                        .iter()
+                        .map(|style| menu::Choice::plain(style.name))
+                        .collect()
+                })
+                .unwrap_or_default(),
             teams: boot_shell
                 .teams
                 .iter()
@@ -246,7 +259,11 @@ impl Pending {
         // movies decode, so every windowed boot needs the tips and the glow
         // strip.
         let loading_assets = {
-            let assets = loading::Assets::load(source, &boot_shell.strings);
+            let assets = loading::Assets::load(
+                source,
+                &boot_shell.strings,
+                crate::args::style_of(&self.settings),
+            );
             for note in &assets.notes {
                 info!("{note}");
             }

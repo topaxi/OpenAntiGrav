@@ -2,7 +2,7 @@
 //! progress, and the handoff into a race.
 
 use anyhow::Result;
-use log::{info, warn};
+use log::{error, info, warn};
 
 use oag_game::frontend::{self};
 use oag_game::render::VideoFormat;
@@ -56,13 +56,17 @@ impl Session {
         self.music_discs = prepared.music_discs;
         self.shell = Some(prepared.shell);
         self.prefetch_pending = prepared.prefetch;
+        let assets = prepared.loading_assets;
         self.stage = Stage::loading(
             &self.gpu,
             prepared.boot_shell,
             Some(prepared.media),
-            &prepared.loading_assets,
+            &assets,
             self.trace,
         )?;
+        // Kept rather than dropped with the stage: the same screen goes up
+        // again for every race this run launches. See `Session::loading_assets`.
+        self.loading_assets = assets;
         Ok(())
     }
 
@@ -125,6 +129,13 @@ impl Session {
         let Stage::Loading(stage) = &self.stage else {
             return (loading::Phase::Prefetch, progress);
         };
+        // **Answered before the prefetch snapshot is consulted at all.** A race
+        // load happens long after the boot, so `--prefetch` has usually
+        // finished and its `finished: true` would fade this screen out over a
+        // circuit that is still being read.
+        if let Some(worker) = stage.race.as_ref() {
+            return (loading::Phase::Race, worker.progress());
+        }
         let Some(media) = stage.media.as_ref().filter(|m| !m.is_finished()) else {
             return (loading::Phase::Prefetch, progress);
         };
@@ -168,6 +179,12 @@ impl Session {
     /// `None` and does nothing, so a failed `Stage::frontend` cannot be retried
     /// once a frame for the rest of the run.
     pub(crate) fn finish_loading(&mut self) -> Result<()> {
+        // The race path first, and it returns rather than falling through: a
+        // race-loading stage carries no `Shell`, so the `None` below would send
+        // it back with the screen still up and the circuit already read.
+        if matches!(&self.stage, Stage::Loading(stage) if stage.race.is_some()) {
+            return self.finish_race_loading();
+        }
         let (shell, mut media, trace) = match &mut self.stage {
             Stage::Loading(stage) if stage.screen.is_done() => {
                 let Some(shell) = stage.shell.take() else {
@@ -264,24 +281,81 @@ impl Session {
         Ok(())
     }
 
-    /// Replaces whatever is on screen with the race the menus ask for.
+    /// Reads this source's loading-screen assets again, for the styling now
+    /// chosen.
     ///
-    /// The window, the device and the surface are the ones already open, so the
-    /// handoff costs a load and not a second window.
+    /// **The illustration is a decoded image**, so a styling that changed has to
+    /// be fetched rather than switched to - see
+    /// `oag_title::loading::FeatureStyle`, and `Session::apply_setting`, which
+    /// is the only caller. A run with no source yet keeps what it has, which is
+    /// the drawable default.
+    ///
+    /// Failures are already notes on the assets themselves and are printed the
+    /// same way the boot prints them, so this cannot fail: the worst outcome is
+    /// a screen with no illustration, which is what a title with no features
+    /// draws anyway.
+    pub(crate) fn reload_loading_assets(&mut self) {
+        let Some(source) = self
+            .race_options
+            .as_ref()
+            .map(|options| options.source.clone())
+        else {
+            return;
+        };
+        let Some(strings) = self.shell.as_ref().map(|shell| shell.strings.clone()) else {
+            return;
+        };
+        let assets =
+            loading::Assets::load(&source, &strings, crate::args::style_of(&self.settings));
+        for note in &assets.notes {
+            info!("{note}");
+        }
+        self.loading_assets = assets;
+    }
+
+    /// Puts the loading screen up and starts reading the circuit behind it.
+    ///
+    /// **This used to be the load itself**, on the frame thread: `self.stalled
+    /// = true; let loaded = race::load(options)?;`. That call is 1.5 to 5
+    /// seconds depending on the circuit and the disc, and for all of it the
+    /// event loop was not pumping - so the window stopped answering the
+    /// compositor and the last menu frame sat frozen on screen. The `stalled`
+    /// flag was the whole of the mitigation, and all it does is stop the frame
+    /// pacer counting the stall as a dropped frame.
+    ///
+    /// So the load goes to [`race::LoadWorker`] and the screen the original
+    /// itself puts up goes over it. The hand-off to the grid is
+    /// [`Self::finish_loading`], the same call that hands the boot's own screen
+    /// to the front end.
+    ///
+    /// The window, the device and the surface are the ones already open, so
+    /// this costs a thread and not a second window.
+    ///
     /// # Errors
     ///
-    /// The load itself, and - unreachably in practice - a run with no source
-    /// yet: only the menus fire this, and there are no menus before a boot.
+    /// Building the loading screen's own renderer, and - unreachably in
+    /// practice - a run with no source yet: only the menus fire this, and there
+    /// are no menus before a boot. **The circuit load's own failure is not
+    /// here** any more; it arrives at [`Self::finish_loading`], where the
+    /// player is put back in the menus rather than dropped out of the game.
     pub(crate) fn launch_race(&mut self) -> Result<()> {
         self.stalled = true;
         let options = self
             .race_options
-            .as_ref()
+            .clone()
             .ok_or_else(|| anyhow::anyhow!("no disc image has been chosen yet"))?;
-        let loaded = race::load(options)?;
-        for line in &loaded.report {
-            info!("{line}");
-        }
+        // The RACE page's own row for this circuit, which is the disc's
+        // localised name rather than the `PI_Track` id - see
+        // `oag_game::catalogue::label`. `None` on a run whose source offered
+        // no circuit at all, which draws no line rather than an id.
+        let label = self.shell.as_ref().and_then(|shell| {
+            let entry = options.track.as_deref()?;
+            shell
+                .tracks
+                .iter()
+                .find(|(track, _)| track.entry_name() == entry)
+                .map(|(_, name)| name.clone())
+        });
         // Taken out of the outgoing `MenuStage` before it is dropped below -
         // not the playhead, which `menu_playhead` restarts deliberately on the
         // way back, but the picture it was last drawing, so `escape` does not
@@ -294,6 +368,61 @@ impl Session {
                 .and_then(|backdrop| backdrop.held.take()),
             _ => None,
         };
+        let worker = race::LoadWorker::spawn(options, label);
+        let shell = self.shell.clone().ok_or_else(|| {
+            anyhow::anyhow!("this run has no menus, so it has no font to draw with")
+        })?;
+        self.stage = Stage::race_loading(
+            &self.gpu,
+            worker,
+            &shell.font,
+            &shell.sprites,
+            &self.loading_assets,
+            self.trace,
+        )?;
+        Ok(())
+    }
+
+    /// Swaps the loading screen for the grid, once the circuit has landed and
+    /// the fade has run out.
+    ///
+    /// The race counterpart of the front-end hand-off in [`Self::finish_loading`],
+    /// and called from it rather than beside it: both are "the loading screen is
+    /// done, hand the window to whatever it was covering", and having one caller
+    /// is what stops a future screen being handed on twice.
+    ///
+    /// # Errors
+    ///
+    /// **Not the circuit's own load.** That failed on the frame thread before
+    /// this existed, where `launch_race`'s caller reported it and left the menus
+    /// up; it fails on a worker thread now, and the recovery has to be here or a
+    /// bad circuit would take the window down through
+    /// [`Self::finish_loading`]'s caller. So a failed load is reported and the
+    /// menus are reopened, which is the same thing escaping a race does.
+    ///
+    /// What does propagate is reopening those menus, and building the race
+    /// stage - a GPU pipeline that will not build is not something to carry on
+    /// from.
+    fn finish_race_loading(&mut self) -> Result<()> {
+        let Some(mut worker) = (match &mut self.stage {
+            Stage::Loading(stage) if stage.screen.is_done() => stage.race.take(),
+            _ => None,
+        }) else {
+            return Ok(());
+        };
+        let loaded = match worker
+            .join()
+            .unwrap_or_else(|| Err(anyhow::anyhow!("the circuit's load thread would not start")))
+        {
+            Ok(loaded) => loaded,
+            Err(e) => {
+                error!("cannot start a race: {e:#}");
+                return self.open_menus();
+            }
+        };
+        for line in &loaded.report {
+            info!("{line}");
+        }
         self.stage = Stage::race(
             &self.gpu,
             loaded,
@@ -309,7 +438,7 @@ impl Session {
         // `SfxVoices` holds a `VoiceId` into a pool the new race is about to
         // reuse. See `Audio::stop_race_sfx`.
         self.audio.stop_race_sfx();
-        // After the stage swap succeeds, not before: both loads above can fail
+        // After the stage swap succeeds, not before: the load above can fail
         // with `?`, and a failed launch must leave the menu music playing
         // rather than having already silenced it. See `Audio::start_race_music`.
         self.audio.start_race_music(

@@ -98,8 +98,18 @@ impl Stage {
             gpu.config.format,
             None,
             shell.font.clone(),
-            &shell.sprites,
+            // **The feature illustration's own sheet where this title ships
+            // one**, not the front end's: `Draw::Sprite` addresses whichever
+            // sheet the renderer was built with, and the loading screen draws
+            // exactly one image. The front end's sheet is the right answer for a
+            // title with no features and is what this drew before either way.
+            assets.art.as_ref().map_or(&shell.sprites, |art| &art.sheet),
         )?;
+        // The face's own line height, taken before the shell is moved into the
+        // stage below: it is what the screen's own text scale is normalised
+        // against, so HD's much larger face draws at the size this layout was
+        // written for. See `loading::Screen::new`.
+        let line_height = shell.font.line_height;
         // Sample count 1, matching `upscale::Framebuffer`'s target, which is
         // what this draws into.
         let wave = oag_render::loading::Pipeline::new(
@@ -113,9 +123,60 @@ impl Stage {
             atlas: shell.font.clone(),
             renderer,
             wave,
-            screen: loading::Screen::new(assets.tips.clone()),
+            screen: loading::Screen::new(assets, line_height),
             shell: Some(shell),
             media,
+            race: None,
+            trace,
+        })))
+    }
+
+    /// The same screen again, over a circuit being read rather than the boot's
+    /// movies.
+    ///
+    /// **The screen the original also has**, which the two waits above are not:
+    /// a transcode and a prefetch are this build's own, and a race load is the
+    /// one every release covers with something. So this is where a title's own
+    /// loading presentation is drawn - Wipeout HD's full-screen still and its
+    /// `FE_LOADINGDOT` caption, Pulse's wave and one of its 26 tips.
+    ///
+    /// Takes the font and sheet rather than a `boot::Shell`, because by this
+    /// point there is no boot shell left: the running session has the menus'
+    /// own copies and the boot's was consumed when the front end was built.
+    pub(crate) fn race_loading(
+        gpu: &Gpu,
+        worker: race::LoadWorker,
+        font: &oag_game::font::Atlas,
+        sprites: &oag_game::sprite::Sheet,
+        assets: &loading::Assets,
+        trace: bool,
+    ) -> Result<Self> {
+        let renderer = Renderer::new(
+            &gpu.device,
+            &gpu.queue,
+            gpu.config.format,
+            None,
+            font.clone(),
+            // The illustration's own sheet where the title ships one; see
+            // `Stage::loading`, which chooses the same way and for the same
+            // reason.
+            assets.art.as_ref().map_or(sprites, |art| &art.sheet),
+        )?;
+        let wave = oag_render::loading::Pipeline::new(
+            &gpu.device,
+            &gpu.queue,
+            gpu.config.format,
+            &assets.strip,
+            1,
+        );
+        Ok(Self::Loading(Box::new(LoadingStage {
+            atlas: font.clone(),
+            renderer,
+            wave,
+            screen: loading::Screen::new(assets, font.line_height),
+            shell: None,
+            media: None,
+            race: Some(worker),
             trace,
         })))
     }

@@ -8,6 +8,22 @@
 //! gate.
 
 use super::*;
+use crate::language::StringTable;
+
+/// A screen carrying `tips` and nothing else this source authors.
+///
+/// Every test below predates the title axis and asks the same question of the
+/// screen - what does it draw for this progress - so they all want the default
+/// title-less assets with a tip list swapped in. See `Screen::new`.
+fn screen_with(tips: Vec<String>) -> Screen {
+    Screen::new(
+        &Assets {
+            tips,
+            ..Assets::default()
+        },
+        AUTHORED_LINE_HEIGHT,
+    )
+}
 
 fn progress(done: usize, total: usize) -> Progress {
     Progress {
@@ -143,7 +159,7 @@ fn a_label_that_already_fits_is_left_alone() {
 #[test]
 fn the_draw_list_states_the_counts_the_fraction_and_the_asset() {
     let atlas = Atlas::build();
-    let screen = Screen::new(vec!["a tip".to_string()]);
+    let screen = screen_with(vec!["a tip".to_string()]);
     let mut state = progress(37, 115);
     state.cached = 12;
     state.current = Some("Data.wad hash:71d3c1ec".to_string());
@@ -173,7 +189,7 @@ fn the_draw_list_states_the_counts_the_fraction_and_the_asset() {
 #[test]
 fn a_boot_with_nothing_to_convert_draws_no_bar_and_no_counts() {
     let atlas = Atlas::build();
-    let screen = Screen::new(vec!["a tip".to_string()]);
+    let screen = screen_with(vec!["a tip".to_string()]);
     // What `Session::prefetch_progress` reports on a run with no worker,
     // and what `MediaPlan::loads` counts for a plan that names nothing.
     let state = Progress {
@@ -215,7 +231,7 @@ fn a_boot_with_nothing_to_convert_draws_no_bar_and_no_counts() {
 #[test]
 fn the_media_phase_draws_the_bar_and_counts_its_own_loads() {
     let atlas = Atlas::build();
-    let screen = Screen::new(Vec::new());
+    let screen = screen_with(Vec::new());
     let state = Progress {
         total: 5,
         done: 2,
@@ -250,7 +266,7 @@ fn the_media_phase_draws_the_bar_and_counts_its_own_loads() {
 #[test]
 fn planning_reports_no_percentage_it_cannot_know() {
     let atlas = Atlas::build();
-    let screen = Screen::new(Vec::new());
+    let screen = screen_with(Vec::new());
     let state = Progress {
         planning: true,
         ..Progress::default()
@@ -268,7 +284,7 @@ fn planning_reports_no_percentage_it_cannot_know() {
 #[test]
 fn the_bar_is_the_fraction_wide() {
     let atlas = Atlas::build();
-    let screen = Screen::new(Vec::new());
+    let screen = screen_with(Vec::new());
     let fills: Vec<[f32; 4]> = screen
         .draw_list(Phase::Prefetch, &progress(1, 4), &atlas)
         .iter()
@@ -288,7 +304,7 @@ fn the_bar_is_the_fraction_wide() {
 #[test]
 fn a_transcode_is_headed_and_counted_apart_from_a_cache_hit() {
     let atlas = Atlas::build();
-    let screen = Screen::new(Vec::new());
+    let screen = screen_with(Vec::new());
     let state = Progress {
         total: 5,
         done: 2,
@@ -346,7 +362,7 @@ fn a_transcode_is_headed_and_counted_apart_from_a_cache_hit() {
 #[test]
 fn an_uncapped_transcode_counts_frames_without_claiming_a_total() {
     let atlas = Atlas::build();
-    let screen = Screen::new(Vec::new());
+    let screen = screen_with(Vec::new());
     let drawn = text_of(&screen.draw_list(
         Phase::Media(Some(crate::movie::Step::Transcoding {
             done: 91,
@@ -464,7 +480,7 @@ fn no_step_moves_the_bar_backwards_or_past_its_own_slice() {
 #[test]
 fn the_percentage_is_the_width_the_bar_was_drawn_at() {
     let atlas = Atlas::build();
-    let screen = Screen::new(Vec::new());
+    let screen = screen_with(Vec::new());
     let phase = Phase::Media(Some(crate::movie::Step::Transcoding {
         done: 600,
         total: Some(1200),
@@ -498,7 +514,7 @@ fn the_percentage_is_the_width_the_bar_was_drawn_at() {
 /// the original's `g_loading_finished` and this is the thing that sets it.
 #[test]
 fn finishing_freezes_the_wave_and_starts_the_fade() {
-    let mut screen = Screen::new(Vec::new());
+    let mut screen = screen_with(Vec::new());
     for _ in 0..5 {
         screen.advance(false);
     }
@@ -527,7 +543,7 @@ fn finishing_freezes_the_wave_and_starts_the_fade() {
 #[test]
 fn the_fade_dims_the_whole_list() {
     let atlas = Atlas::build();
-    let mut screen = Screen::new(Vec::new());
+    let mut screen = screen_with(Vec::new());
     for _ in 0..FADE_FRAMES / 2 {
         screen.advance(true);
     }
@@ -546,7 +562,7 @@ fn the_fade_dims_the_whole_list() {
 /// rather than dividing by zero.
 #[test]
 fn tips_rotate_and_wrap() {
-    let mut screen = Screen::new(vec!["one".to_string(), "two".to_string()]);
+    let mut screen = screen_with(vec!["one".to_string(), "two".to_string()]);
     assert_eq!(screen.tip(), Some("one"));
     for _ in 0..TIP_FRAMES {
         screen.advance(false);
@@ -557,14 +573,14 @@ fn tips_rotate_and_wrap() {
     }
     assert_eq!(screen.tip(), Some("one"));
 
-    assert_eq!(Screen::new(Vec::new()).tip(), None);
+    assert_eq!(screen_with(Vec::new()).tip(), None);
 }
 
 /// Every column of the wave is there, three bands deep, and two frames of a
 /// running wave differ - the walk is re-drawn rather than integrated.
 #[test]
 fn the_wave_produces_a_fresh_band_every_frame() {
-    let mut screen = Screen::new(Vec::new());
+    let mut screen = screen_with(Vec::new());
     for _ in 0..5 {
         screen.advance(false);
     }
@@ -575,4 +591,171 @@ fn the_wave_produces_a_fresh_band_every_frame() {
         oag_render::loading::COLUMNS * oag_render::loading::BANDS
     );
     assert_ne!(first, second);
+}
+
+/// A race load draws the disc's own word and no figures.
+///
+/// The two long waits this screen was written for count what they are doing,
+/// because a bar that has not moved is the difference between "slow" and
+/// "stuck" across ten minutes. A race load is seconds and the original covers
+/// it with a picture, so the screen is the disc's rather than this build's:
+/// `Phase::Race`'s own documentation carries the reasoning.
+#[test]
+fn a_race_load_draws_the_discs_caption_and_no_counts() {
+    let atlas = Atlas::build();
+    let screen = Screen::new(
+        &Assets {
+            // What `Assets::load` resolves `FE_LOADINGDOT` to off an English HD
+            // disc. The string is the disc's; this test supplies it directly rather
+            // than reading one.
+            caption: Some("LOADING...".to_string()),
+            wave: false,
+            ..Assets::default()
+        },
+        AUTHORED_LINE_HEIGHT,
+    );
+    let state = Progress {
+        current: Some("Talon's Junction".to_string()),
+        ..Progress::default()
+    };
+    let drawn = text_of(&screen.draw_list(Phase::Race, &state, &atlas));
+
+    // **One line, as the original writes it**: a running Fury race heads this
+    // screen `LOADING... VINETA K`. See `Screen::heading_text`.
+    assert!(
+        drawn
+            .iter()
+            .any(|line| line == "LOADING... Talon's Junction"),
+        "the disc's own caption and the circuit together: {drawn:?}"
+    );
+    assert!(
+        !drawn.iter().any(|line| line == "Talon's Junction"),
+        "and not a second time on its own: {drawn:?}"
+    );
+    assert!(
+        !drawn.iter().any(|line| line.contains('/')),
+        "nothing counted: {drawn:?}"
+    );
+}
+
+/// A title with no caption keeps this build's heading, which is what Pulse has
+/// always drawn.
+#[test]
+fn a_title_with_no_caption_keeps_the_heading() {
+    let atlas = Atlas::build();
+    let screen = screen_with(Vec::new());
+    let drawn = text_of(&screen.draw_list(Phase::Race, &Progress::default(), &atlas));
+
+    assert!(drawn.iter().any(|line| line == "LOADING"), "{drawn:?}");
+}
+
+/// A caption never replaces a heading that is counting something.
+///
+/// The disc's single string cannot say "TRANSCODING MOVIES", and the two long
+/// waits are exactly where that distinction is worth a word - see `heading`. So
+/// a title that has a caption still gets the counted heading on the phases that
+/// count.
+#[test]
+fn a_caption_does_not_replace_a_counted_heading() {
+    let atlas = Atlas::build();
+    let screen = Screen::new(
+        &Assets {
+            caption: Some("LOADING...".to_string()),
+            ..Assets::default()
+        },
+        AUTHORED_LINE_HEIGHT,
+    );
+    let state = progress(3, 9);
+    let drawn = text_of(&screen.draw_list(Phase::Prefetch, &state, &atlas));
+
+    assert!(
+        drawn.iter().any(|line| line == "CONVERTING ASSETS"),
+        "{drawn:?}"
+    );
+}
+
+/// A title that authors no wave draws no wave, rather than another title's.
+///
+/// The strip behind the pipeline is a stand-in on such a title, so drawing it
+/// would put a texture this build made up over a picture the disc did author.
+#[test]
+fn a_title_with_no_wave_draws_no_quads() {
+    let mut screen = Screen::new(
+        &Assets {
+            wave: false,
+            ..Assets::default()
+        },
+        AUTHORED_LINE_HEIGHT,
+    );
+    for _ in 0..10 {
+        assert!(screen.quads().is_empty());
+        screen.advance(false);
+    }
+    assert!(!screen.has_wave());
+
+    // And the default assets - what a run with no title in hand carries - still
+    // do, so this is a per-title answer rather than a switch that turned the
+    // wave off everywhere.
+    let mut pulse = screen_with(Vec::new());
+    assert!(!pulse.quads().is_empty());
+}
+
+/// A screen with an illustration, for the feature layout.
+fn feature_screen() -> Screen {
+    Screen::new(
+        &Assets {
+            caption: Some("LOADING...".to_string()),
+            wave: false,
+            art: Some(Art {
+                sheet: crate::sprite::Sheet::default(),
+                illustration: Some([0.0, 0.0, 64.0, 32.0]),
+                title_arrow: Some([0.0, 0.0, 8.0, 8.0]),
+                subtitle_arrow: Some([0.0, 0.0, 8.0, 8.0]),
+                rule: Some([0.0, 0.0, 8.0, 8.0]),
+                corner: Some([0.0, 0.0, 8.0, 8.0]),
+                dot: Some([0.0, 0.0, 8.0, 8.0]),
+            }),
+            feature: Some(Feature {
+                title: Some("PILOT ASSIST".to_string()),
+                description: "Pilot Assist can aid your navigation.".to_string(),
+            }),
+            ..Assets::default()
+        },
+        AUTHORED_LINE_HEIGHT,
+    )
+}
+
+/// The feature layout draws all four of its texts, and the heading is one of
+/// them.
+///
+/// The regression this pins is a *silent* one: the layout is a second branch
+/// through `draw_list`, and the first build of it dropped the heading while
+/// still drawing its marker - which reads as a screen that was always meant to
+/// start with a picture.
+#[test]
+fn the_feature_layout_draws_its_heading_its_title_and_its_prose() {
+    let atlas = Atlas::build();
+    let screen = feature_screen();
+    let state = Progress {
+        current: Some("Talon's Junction".to_string()),
+        ..Progress::default()
+    };
+    let drawn = text_of(&screen.draw_list(Phase::Race, &state, &atlas));
+
+    assert!(
+        drawn
+            .iter()
+            .any(|line| line == "LOADING... Talon's Junction"),
+        "the heading: {drawn:?}"
+    );
+    assert!(
+        drawn.iter().any(|line| line == "PILOT ASSIST"),
+        "the feature's name: {drawn:?}"
+    );
+    assert!(
+        drawn
+            .iter()
+            .any(|line| line.starts_with("Pilot Assist can")),
+        "its prose: {drawn:?}"
+    );
 }

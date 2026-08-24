@@ -168,9 +168,20 @@ pub(crate) struct Cli {
     #[arg(long, value_name = "DONE/TOTAL")]
     pub(crate) loading_screen: Option<String>,
 
-    /// With `--loading-screen`, draw the boot's own media phase at a stated
-    /// load step instead of the `--prefetch` phase: `cached`, `decoding`, or
-    /// `transcoding:DONE/TOTAL` (e.g. `transcoding:340/1200`).
+    /// With `--loading-screen`, draw a stated phase instead of `--prefetch`'s:
+    /// `race`, or the boot's own media phase at a load step - `cached`,
+    /// `decoding`, or `transcoding:DONE/TOTAL` (e.g. `transcoding:340/1200`).
+    ///
+    /// `race` is the screen between the menus and the grid, which is the
+    /// title's own rather than this build's: Wipeout HD's full-screen still and
+    /// its `FE_LOADINGDOT` caption, Pulse's wave and one of its tips. It counts
+    /// nothing, so the `DONE/TOTAL` given to `--loading-screen` is ignored and
+    /// `--track` supplies the circuit name instead.
+    ///
+    /// **Pair it with `--ticks 0`.** Any `DONE/TOTAL` where the two are equal
+    /// reads as finished, and a finished screen is fading - so a later tick
+    /// captures this phase part-way through its fade rather than at full
+    /// opacity.
     ///
     /// The counts above stay the loads - `2/5` is two of five movie loads done -
     /// and this is what the one in flight is doing. Stated for the same reason

@@ -257,6 +257,11 @@ impl App {
             launched: false,
             settings: self.settings.clone(),
             shell: self.shell.clone(),
+            // Moved rather than cloned: `Assets` owns a decoded glow strip and
+            // a full-screen backdrop, and `App` has no use for either once the
+            // window it opened has them. What is left behind is the drawable
+            // default, which is what a `--race` run has always carried.
+            loading_assets: std::mem::take(&mut self.loading_assets),
             quit: false,
             // Both filled by `finish_loading`, off the movies the boot's own
             // worker is still decoding as this window opens. `--race` never

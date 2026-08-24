@@ -55,6 +55,13 @@ pub const TITLE: &Title = &Title {
     // disc - see `oag_pulse`'s note for the literal it was read from.
     flare: &oag_title::flare::Flare::Sprite(r"Data\Tex\EngineFlare\grabbedEngineFlare128x64x8.mip"),
     plugin_definition: names::GAME_PLUGIN_DEFINITION,
+    // **`None`, and it is a measurement.** Neither
+    // `Data\Plugins\loading\Definition.xml` nor
+    // `Data\Defaults\Loading\LoadingPulseOverlay.mip` is in any of Pure's
+    // three archives, checked 2026-08-12 - so this title authors no loading
+    // screen of its own and the screen draws this build's own counts over a
+    // cleared frame. See `oag_title::Loading`.
+    loading: None,
     music: Some(MUSIC),
 };
 

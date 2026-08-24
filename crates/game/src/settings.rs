@@ -318,6 +318,21 @@ pub struct Display {
     /// `free`. See [`crate::display::Aspect`].
     #[serde(default)]
     pub aspect: crate::display::Aspect,
+    /// Which of a source's own front-end stylings to draw: `HD` or `FURY` on
+    /// Wipeout HD, which is the only title in hand that has two.
+    ///
+    /// **The disc's own axis, not this build's.** HD's `OPT_FE_STYLE` offers
+    /// exactly these two values and the disc ships every loading-screen
+    /// illustration twice, white-and-blue and black-and-red - see
+    /// `oag_hd::loading::FEATURES`. A `String` rather than an enum for the
+    /// reason `race.team` is one: which values exist is a property of the
+    /// source, and a value this source does not offer falls back to its first
+    /// with a note rather than failing the boot.
+    ///
+    /// Empty means "whatever the source leads with", which is every title
+    /// except HD and is HD's own base styling.
+    #[serde(default)]
+    pub front_end_style: String,
     /// How a finished frame reaches the display: `off`, `on` or `smooth`.
     ///
     /// **`off` by default**, because this is a racing game and vsync's cost is
@@ -863,6 +878,10 @@ pub fn menu_seeds(
         (
             "audio.music_source",
             text(&settings.audio.music_source.to_string()),
+        ),
+        (
+            "display.front_end_style",
+            text(&settings.display.front_end_style),
         ),
         ("race.mode", text(&settings.race.mode)),
         ("race.class", text(&settings.race.class)),

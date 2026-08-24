@@ -105,7 +105,12 @@ impl Session {
         // start meaning anything: `--prefetch` may not run until the boot's own
         // movies are done with the cache, so this is the frame that starts it.
         // A no-op on every frame but one, and on every run without the flag.
-        if matches!(&self.stage, Stage::Loading(stage) if stage.media_ready()) {
+        // `race.is_none()` because the race path puts the same stage up again
+        // long after the boot, and starting a conversion from *there* would put
+        // ten minutes of `ffmpeg` behind a two-second screen. `--prefetch` is
+        // the boot's, and the boot's screen is the one that waits for it.
+        if matches!(&self.stage, Stage::Loading(stage) if stage.media_ready() && stage.race.is_none())
+        {
             self.start_prefetch();
         }
 
@@ -198,7 +203,7 @@ impl Session {
                 Stage::Loading(stage) => {
                     stage
                         .screen
-                        .advance(progress.finished && stage.media_ready());
+                        .advance(progress.finished && stage.media_ready() && stage.race_ready());
                 }
                 Stage::Frontend(stage) => {
                     let events =

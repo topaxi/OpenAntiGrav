@@ -289,6 +289,12 @@ pub struct Shell {
     pub strings: StringTable,
     /// The raceable circuits, for the menus.
     pub tracks: Vec<crate::catalogue::Track>,
+    /// This title's own loading-screen table, carried for the same reason
+    /// [`Self::menu_skin`] is: it is a property of the source, settled while the
+    /// serial was in hand, and the menus need its style names to offer a row.
+    /// `None` on a title that authors no loading screen. See
+    /// [`oag_title::Loading`].
+    pub loading: Option<&'static oag_title::Loading>,
     /// What to call each of them, resolved beside them.
     ///
     /// Not folded into [`Self::strings`] because it may come out of a
@@ -623,6 +629,7 @@ pub fn load_shell(options: &Options) -> Result<(Shell, oag_assets::Archives)> {
     Ok((
         Shell {
             screens,
+            loading: title.loading,
             languages: offered,
             strings,
             tracks,
@@ -965,6 +972,7 @@ impl MediaWorker {
 pub fn assemble(shell: Shell, media: Media) -> Boot {
     let Shell {
         screens,
+        loading: _,
         languages,
         strings,
         tracks,

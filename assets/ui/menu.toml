@@ -214,6 +214,23 @@ label = "ASPECT RATIO"
 setting = "display.aspect"
 values = ["psp", "ps2", "free"]
 
+# Which of the source's own front-end stylings to draw. The values are the
+# *disc's*, not this build's: Wipeout HD's `OPT_FE_STYLE` offers `HD` and
+# `FURY`, and that disc ships every loading-screen illustration twice -
+# white-and-blue for the base game, black-and-red for Fury. Every other title in
+# hand offers one, so the row shows a single value and states the fact rather
+# than offering a choice that does nothing.
+#
+# Applies to the next loading screen, not to the one on screen - the
+# illustration is decoded when the setting changes, which is a disc read and so
+# happens in the menus rather than mid-load. See
+# `Session::reload_loading_assets`.
+[[page.entry]]
+kind = "choice"
+label = "FRONT END STYLE"
+setting = "display.front_end_style"
+values_from = "front_end_styles"
+
 # `off` never waits and tears; `on` is classic vsync, which never tears and
 # halves the rate when a frame misses a refresh; `smooth` is that miss handled
 # properly - the newest finished frame is presented and the rest discarded.

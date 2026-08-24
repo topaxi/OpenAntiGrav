@@ -78,6 +78,8 @@ const TITLE: &Title = &Title {
     // times: an archive is found by name, and what is inside one is nothing
     // this crate looks at.
     plugin_definition: r"Data\Plugins\PI000\Definition.xml",
+    // This crate opens archives; nothing here draws a loading screen.
+    loading: None,
     music: None,
 };
 

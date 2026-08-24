@@ -1,0 +1,134 @@
+//! [`LoadWorker`]: reading a circuit off the disc on a thread of its own, so
+//! the window keeps drawing while it happens.
+//!
+//! # Why this exists at all
+//!
+//! `Session::launch_race` used to be `self.stalled = true; race::load(options)?`
+//! on the frame thread. Measured across every circuit on all four discs in hand,
+//! that call is **1.5 to 5 seconds** - the PS3's circuits are the slow end - and
+//! for all of it the event loop is not pumping. A window that stops answering
+//! the compositor for four seconds is not a window that looks busy; on some it
+//! is greyed out and offered for killing.
+//!
+//! So the load moves to a thread and the loading screen goes up over it, which
+//! is the same shape [`crate::boot::MediaWorker`] already has for the boot's own
+//! movies - deliberately, because the two waits are the same problem and a
+//! second mechanism for it would be a second thing to keep in step with the
+//! frame loop.
+//!
+//! # What it does not do
+//!
+//! **No progress counting.** [`crate::loading::Phase::Race`]'s own
+//! documentation carries the reasoning: the other two waits this screen covers
+//! are a transcode and a prefetch, neither of which any release has, and the
+//! figures are what make them bearable. A race load is the wait the original
+//! *also* has, and what the original puts up for it is a still and a word or a
+//! wave and a tip - so a bar here would be this build decorating a screen the
+//! disc authors. The circuit's name goes up, and nothing else this build made
+//! up.
+//!
+//! **No cancellation.** [`crate::prefetch`]'s worker carries a stop flag because
+//! it runs for ten minutes and a player may quit inside one; this runs for
+//! seconds and its result is the thing being waited for. Dropping the handle
+//! detaches the thread, which finishes its read and drops a `Loaded` nobody
+//! wanted.
+
+use std::sync::{Arc, Mutex};
+
+use super::{Loaded, Options};
+
+/// A circuit being read, on a thread.
+///
+/// Holds no GPU and hands back none: [`super::load`] produces plain data -
+/// vertex and index buffers, handling blocks, a spline - and the device only
+/// enters at `Stage::race`, which runs on the frame thread with the result.
+/// That is what makes the split cheap rather than a rewrite; see
+/// [`super::Setup`]'s own "no GPU anywhere in sight".
+#[derive(Debug)]
+pub struct LoadWorker {
+    /// `None` once joined, which is what makes [`Self::join`] idempotent.
+    handle: Option<std::thread::JoinHandle<anyhow::Result<Loaded>>>,
+    /// What the screen puts on the line where the other phases put an entry
+    /// name. Shared rather than owned because the thread refines it: the
+    /// circuit a caller *asked* for may be `None`, and only the load knows
+    /// which one the title then defaulted to.
+    current: Arc<Mutex<Option<String>>>,
+}
+
+impl LoadWorker {
+    /// Starts the load in the background.
+    ///
+    /// `label` is what a player reads for this circuit - the RACE page's own
+    /// row, so it is the disc's localised name rather than the `PI_Track` id.
+    /// `None` where the caller has no name to give, which draws no line rather
+    /// than a made-up one.
+    #[must_use]
+    pub fn spawn(options: Options, label: Option<String>) -> Self {
+        let current = Arc::new(Mutex::new(label));
+        let handle = std::thread::Builder::new()
+            // Named for the same reason `boot-media` is: it should be obvious
+            // in a debugger and in `top` which thread the window is waiting on.
+            .name("race-load".to_string())
+            .spawn({
+                let options = options.clone();
+                move || super::load(&options)
+            })
+            .ok();
+        Self { handle, current }
+    }
+
+    /// Whether the load has returned.
+    ///
+    /// `true` for a worker whose thread failed to spawn at all, so a caller
+    /// polling this cannot wait forever on a thread that never started - the
+    /// error surfaces from [`Self::join`] instead, where it can be reported.
+    #[must_use]
+    pub fn is_finished(&self) -> bool {
+        self.handle
+            .as_ref()
+            .is_none_or(std::thread::JoinHandle::is_finished)
+    }
+
+    /// Takes the result, waiting if it is not in yet.
+    ///
+    /// **Never actually waits in the frame loop**, which only calls this once
+    /// [`Self::is_finished`] is true - the same contract
+    /// [`crate::boot::MediaWorker::join`] has. `None` on the second call, and
+    /// on a worker whose thread would not spawn.
+    pub fn join(&mut self) -> Option<anyhow::Result<Loaded>> {
+        let handle = self.handle.take()?;
+        Some(match handle.join() {
+            Ok(loaded) => loaded,
+            // A panic on the load thread is reported as a failed load rather
+            // than resumed here, which would take the window down with it. The
+            // caller's own error path puts the player back in the menus.
+            Err(_) => Err(anyhow::anyhow!("the circuit load panicked")),
+        })
+    }
+
+    /// What the screen should name as loading, right now.
+    #[must_use]
+    pub fn current(&self) -> Option<String> {
+        match self.current.lock() {
+            Ok(current) => current.clone(),
+            // A poisoned lock means the load thread panicked while holding it.
+            // The name is a caption; losing it is not worth a second panic, and
+            // `join` above is where that failure is actually reported.
+            Err(poisoned) => poisoned.into_inner().clone(),
+        }
+    }
+
+    /// The screen's own progress snapshot for this wait.
+    ///
+    /// Deliberately uncounted - `total` stays zero, so
+    /// [`crate::loading::Screen::draw_list`] draws no bar and no figures. See
+    /// this module's own documentation for why.
+    #[must_use]
+    pub fn progress(&self) -> crate::prefetch::Progress {
+        crate::prefetch::Progress {
+            current: self.current(),
+            finished: self.is_finished(),
+            ..crate::prefetch::Progress::default()
+        }
+    }
+}

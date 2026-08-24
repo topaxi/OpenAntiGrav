@@ -39,11 +39,13 @@ pub mod boot;
 pub mod exhaust;
 pub mod flare;
 pub mod hud;
+pub mod loading;
 pub mod menu;
 pub mod race;
 
 pub use boot::{BootProfile, BootStep, Provenance};
 pub use hud::HudLayouts;
+pub use loading::Loading;
 pub use menu::{MenuSkin, MenuStrip};
 pub use oag_disc::Platform;
 pub use race::{RaceDefaults, SoundBanks, ZoneCircuit, ZoneCraft};
@@ -125,6 +127,16 @@ pub struct Title {
     /// on a title whose music is unlocated and `tracks` is `None` on Pulse,
     /// so routing this through it could not answer for Pulse at all.
     pub plugin_definition: &'static str,
+    /// What this title puts on screen while it loads, or `None` when it puts up
+    /// nothing of its own.
+    ///
+    /// **`None` is a measurement here**, the same way [`Self::front_end`]'s is:
+    /// Pure ships neither the tips plugin nor the glow strip in any of its three
+    /// archives, checked 2026-08-12, so there is nothing of its own to draw and
+    /// the screen falls back to this build's own counts. See
+    /// [`loading::Loading`], whose module doc carries the three-way table this
+    /// axis exists for.
+    pub loading: Option<&'static loading::Loading>,
     /// Where this title keeps its music, or `None` when none of it has been
     /// located. See [`Music`].
     pub music: Option<&'static Music>,

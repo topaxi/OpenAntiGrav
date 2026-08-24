@@ -156,6 +156,17 @@ boot entry point. It is what `oag_hd::frontend` was filled in from, and it is
 also where the two things that are *not* recovered are named: which of the six
 skins the runtime loads, and therefore which logo reel plays.
 
+**[HD loading screen](hd-loading.md)** is the fourth, and the first checked
+against the game *running* rather than only against the disc. HD's executable
+still carries Pulse's whole loading plugin - `Data\Plugins\loading`,
+`PI_LoadingScreen` - and retail ships none of it, which the game says itself on
+every boot (`FileSystem::Open FAILED`). What replaced the tips is five
+illustrated features in two stylings, all ten `.gtf`s shipped, under a caption
+that is `FE_LOADINGDOT` plus the circuit's own name. It is also the page that
+records a *wrong* reading and how it fell: the `LSAD_*` advertising frames sit
+in the same run of strings and were taken for the screen itself, until RPCS3
+printed `AdServer Not Found` and drew the screen without them.
+
 **[HD HUD](hd-hud.md)** is the third page of that kind, and the first where a
 *Pulse* reader was pointed at HD's data and came back changed. All eighteen of
 HD's in-race layouts compose, into 2,320 widgets - and getting there corrected

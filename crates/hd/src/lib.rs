@@ -56,6 +56,7 @@ use oag_title::{ArchiveCandidates, ForeignSerial, Platform, Title};
 
 pub mod frontend;
 pub mod hud;
+pub mod loading;
 pub mod race;
 
 /// Wipeout HD / Fury, as the asset layer needs to know it.
@@ -108,6 +109,7 @@ pub const TITLE: &Title = &Title {
     // `PI_Track` nodes beside the `PI_Music` ones. See
     // [`names::FRONT_END_PLUGIN_DEFINITION`].
     plugin_definition: names::FRONT_END_PLUGIN_DEFINITION,
+    loading: Some(&loading::LOADING),
     music: Some(MUSIC),
 };
 

@@ -52,6 +52,7 @@ pub const TITLE: &Title = &Title {
     // differs from the noise map's; the WAD hash is case-insensitive.
     flare: &oag_title::flare::Flare::Sprite(r"Data\Tex\EngineFlare\grabbedEngineFlare128x64x8.mip"),
     plugin_definition: names::GAME_PLUGIN_DEFINITION,
+    loading: Some(&loading::LOADING),
     music: Some(MUSIC),
 };
 

@@ -18,6 +18,30 @@
 //! [ADR-0004]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0004-asset-pipeline.md
 //! [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
 
+/// Pulse's loading screen: the wave, and no backdrop.
+///
+/// **No backdrop is a measurement, not a gap.** The original's screen draws the
+/// wave over a cleared frame - `Loading_DrawWave` (`0x0890a8e4`) is the whole of
+/// what it puts on screen besides the tips - and the only asset it touches is
+/// [`GLOW_STRIP_ENTRY`], which is what makes it drawable before the thing being
+/// loaded exists. Nothing on the disc is a full-screen loading still.
+///
+/// No caption either: the word over the wave is this build's own heading, and
+/// no `<Text idstring=...>` on the original's screen has been located to
+/// replace it with. See [`oag_title::Loading::caption`].
+pub static LOADING: oag_title::Loading = oag_title::Loading {
+    wave: Some(oag_title::loading::Wave {
+        tips: TIPS_ENTRY,
+        glow_strip: GLOW_STRIP_ENTRY,
+    }),
+    // Pulse has no illustrated features and no caption id: its screen is the
+    // wave with a tip over it, and the word above them is this build's own
+    // heading. See `oag_title::Loading`.
+    features: &[],
+    chrome: &[],
+    caption: None,
+};
+
 /// The disc entry holding the **26** `<PI_LoadingScreen>` tips.
 ///
 /// `Data.wad` entry **1126** on the USA pressing and **1125** on the EU one -

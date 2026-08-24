@@ -130,6 +130,11 @@ impl Session {
             Vec::new()
         };
         model.supply(menu::ValueSource::MusicSources, &music_sources);
+        // The stylings this source ships art for, off its own title package.
+        // One row on every title but Wipeout HD, which ships two - and a row
+        // with one value draws the setting as the fact it is. Empty on a source
+        // whose title authors no loading screen at all, which greys it out.
+        model.supply(menu::ValueSource::FrontEndStyles, &shell.front_end_styles);
         self.seed_menu(&mut model);
         // What the row is set to comes from the settings file, above; what the
         // game is *drawing with* can only come from here, and the RENDERER row's

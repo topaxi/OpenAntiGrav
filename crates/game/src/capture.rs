@@ -842,17 +842,25 @@ pub struct LoadingOptions {
 ///
 /// # Errors
 ///
-/// Propagates the adapter, the device and the file. Also fails when the wave
-/// produced no geometry: [`oag_render::loading::Pipeline::draw`] draws nothing
-/// at all when nothing was uploaded, which would otherwise write a
-/// perfectly plausible text-on-black PNG with no error anywhere.
+/// Propagates the adapter, the device and the file. Also fails when a screen
+/// that **has** a wave produced no geometry for it:
+/// [`oag_render::loading::Pipeline::draw`] draws nothing at all when nothing
+/// was uploaded, which would otherwise write a perfectly plausible
+/// text-on-black PNG with no error anywhere.
+///
+/// **A title that authors no wave is not that failure**, and telling the two
+/// apart is why the check reads [`crate::loading::Screen::has_wave`] rather
+/// than the vertex count alone. Wipeout HD's screen is a full-screen still and
+/// a caption with no wave at all - see `docs/formats/hd-loading.md` - so an
+/// empty upload there is the correct picture rather than a missing one, and
+/// refusing it refused the very screen this capture exists to look at.
 pub fn loading(
     assets: &crate::loading::Assets,
     font: crate::font::Atlas,
     sprites: &crate::sprite::Sheet,
     options: &LoadingOptions,
 ) -> Result<()> {
-    let mut screen = crate::loading::Screen::new(assets.tips.clone());
+    let mut screen = crate::loading::Screen::new(assets, font.line_height);
     // Stepped rather than jumped to: the tip rotation counts frames, and the
     // wave draws from its own `Rng` on every one of them, so frame `n` is only
     // reachable by having drawn the `n - 1` before it.
@@ -863,7 +871,7 @@ pub fn loading(
     }
     let vertices = oag_render::loading::vertices(&quads);
     anyhow::ensure!(
-        !vertices.is_empty(),
+        !vertices.is_empty() || !screen.has_wave(),
         "the wave produced no geometry, so there would be nothing to draw"
     );
 
@@ -881,6 +889,12 @@ pub fn loading(
     // and eliding through the atlas that will draw it, and `Renderer` owns
     // rather than borrows one.
     let atlas = font.clone();
+    // The feature illustration's own sheet where the title ships one, exactly
+    // as `Stage::loading` and `Stage::race_loading` choose - `Draw::Sprite`
+    // addresses whichever sheet the renderer was built with, so a capture given
+    // the front end's would draw the loading screen's picture from the wrong
+    // atlas and silently miss it.
+    let sprites = assets.art.as_ref().map_or(sprites, |art| &art.sheet);
     let mut renderer = Renderer::new(&device, &queue, format, None, font, sprites)?;
     // Sample count 1, matching `upscale::Framebuffer`'s own target and this
     // capture's texture. The wave's pipeline bakes it in, so a mismatch here is
