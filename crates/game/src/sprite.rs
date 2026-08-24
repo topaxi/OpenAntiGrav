@@ -95,7 +95,27 @@ impl Image {
                 };
                 u8::try_from(texture.format.unit_len() * 8 / texels).unwrap_or(u8::MAX)
             },
-            rgba: rgba.into_iter().flatten().collect(),
+            // **Flipped, because a `.gtf`'s rows run bottom-up and a sheet is
+            // top-down.** Measured against a screenshot of the running game:
+            // `Pilot_Assist_fury.gtf` decoded straight into a sheet draws the
+            // craft inverted, and reversed it matches the original's own
+            // loading screen exactly. See `docs/formats/hd-loading.md`.
+            //
+            // **Here and not in [`oag_formats::gtf`]**, which is the part that
+            // took measuring. Every other consumer of that decoder is a *3D*
+            // one - `mesh::rcs::skin`, `mesh::sky_cube`,
+            // `race::assets`'s trail noise - and those are already right: the
+            // hull lettering on an HD craft reads the correct way up, which is
+            // the check `docs/formats/rcsmodel.md` used to confirm the texture
+            // coordinate in the first place. Their sampling convention and the
+            // file's row order already agree, so flipping the decoder would
+            // invert every one of them to fix one. The row order is a property
+            // of the file; which way up a consumer wants it is the consumer's.
+            rgba: rgba
+                .chunks_exact(usize::from(texture.width).max(1))
+                .rev()
+                .flat_map(|row| row.iter().flatten().copied())
+                .collect(),
         })
     }
 
@@ -242,6 +262,21 @@ impl Sheet {
             .iter()
             .find(|(name, _)| name == src)
             .map(|(_, placed)| *placed)
+    }
+
+    /// The one image this sheet holds, when it holds exactly one.
+    ///
+    /// For a sheet built to carry a single picture - the loading screen's
+    /// backdrop is the only one so far - where naming the entry again to look it
+    /// up would mean carrying the name beside the sheet for no other reason.
+    /// `None` for a sheet with none or several, so a caller cannot silently get
+    /// "the first of many". Mirrors `oag_formats::gtf::Gtf::only`.
+    #[must_use]
+    pub fn only(&self) -> Option<(&str, Placed)> {
+        match self.placed.as_slice() {
+            [(name, placed)] => Some((name.as_str(), *placed)),
+            _ => None,
+        }
     }
 
     /// How many images the sheet holds.
