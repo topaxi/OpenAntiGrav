@@ -21,6 +21,14 @@
 //! The mapping itself is [`map_button`] and [`resolve`], both free functions
 //! over plain values, so every case is testable with no pad attached - which
 //! is also why `just test` passes on a machine that has none.
+//!
+//! **And that is also the limit of what is verified here.** Every case is a
+//! unit test, so the numbers a thumb would judge - [`TRIGGER_DEADZONE`],
+//! [`TRIGGER_SATURATION`], and the spread
+//! `oag_game::settings::TriggerSensitivity::OFFERED` puts on the menu row -
+//! are asserted to be self-consistent and have never been felt. They are the
+//! first thing to change if the brake reads wrong on real hardware, and
+//! changing them breaks nothing but the tests that pin them to each other.
 
 use log::warn;
 use oag_gameplay::input::Button;
