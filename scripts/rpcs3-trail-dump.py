@@ -11,11 +11,25 @@ per-frame context), both double-buffered SPU-output vertex buffers, and the
 buffer show their movement.
 
     uv run --with evdev python3 scripts/rpcs3-trail-dump.py [out_dir]
+    uv run --with evdev python3 scripts/rpcs3-trail-dump.py [out_dir] --early
 
 Needs the decrypted image (`data/images/hdfury-ps3-eu-dec.iso`), the `oag`
 input profile and Xvfb :77 - `scripts/rpcs3-drive.py preflight` checks all
 three. One debugger session per emulator launch (rpcs3_debugger.py, trap 2),
 which is why this is one script rather than an interactive session.
+
+`--early` is the race-start mode (the 2026-08-24 e0..e4/r0/r1 evidence on
+engine-trail.md): it attaches while the race is still loading, polls for the
+manager, and snapshots the player's trail the moment it exists and again at
+1/2/4/8 s, then twice more once thrust is held - which is how "the ring is
+already full, bunched at the grid slot, every vertex alpha 0" was read. The
+default mode is the original at-speed dump of all eight craft.
+
+Both modes also read the frame singleton `**0x00936FD4` (the object
+`FUN_00018848`'s present loop hands to the render calls): its `+0xc0`/`+0xc4`
+carry a monotonic clock in seconds, which is what refuted the "the splatted
+draw-state constant is the TrailSpeed phase" hypothesis - one global value
+cannot equal eight diverging per-trail accumulators.
 
 Addresses, all from the Ghidra corpus (EBOOT.elf, BCES-00664):
 
@@ -53,10 +67,29 @@ IMAGE = ROOT / "data/images/hdfury-ps3-eu-dec.iso"
 MANAGER_SLOT = 0x00AED460 + 0x6C
 FLARE_VTABLE = 0x00869D30
 FLARE_OFFSET = 0x5F70
+# The pointer-to-pointer the present loop's TOC slot 0x008b44a0 resolves to;
+# Trail_BuildDrawState splats *(*(here) + 0xc4) into a draw-state constant.
+SINGLETON_PP = 0x00936FD4
 
 
 def u32(b, off=0):
     return struct.unpack_from(">I", b, off)[0]
+
+
+def f32(b, off=0):
+    return struct.unpack_from(">f", b, off)[0]
+
+
+def read_singleton(dbg):
+    """The frame singleton's +0xc0..0xcc, a monotonic seconds clock."""
+    try:
+        ptr = u32(dbg.read(SINGLETON_PP, 4))
+        if not ptr:
+            return {"ptr": 0}
+        blk = dbg.read(ptr + 0xC0, 0x10)
+        return {"ptr": "%08x" % ptr, "c0": f32(blk, 0), "c4": f32(blk, 4)}
+    except Exception as e:  # a mid-load read can race object construction
+        return {"error": str(e)[:80]}
 
 
 def dump(dbg, out, addr, size, path=None):
@@ -69,8 +102,76 @@ def dump(dbg, out, addr, size, path=None):
     return data
 
 
+def early_snapshot(dbg, out, alloc, tag):
+    """The player's trail block and both vertex buffers, nothing else -
+    small enough (~2 s of stub reads) to catch a loading race's state."""
+    base = alloc + 0x84A0
+    blk = dump(dbg, out, base, 0x1230, "%s_trail0.bin" % tag)
+    for name, off in (("A", 0x1214), ("B", 0x1218)):
+        addr = u32(blk, off)
+        if 0xC0000000 <= addr < 0xD0000000:
+            dump(dbg, out, addr, 0x2D90, "%s_vtx0%s.bin" % (tag, name))
+    return {
+        "wall": time.time(),
+        "singleton": read_singleton(dbg),
+        "phase_1210": f32(blk, 0x1210),
+        "bright_11d8": f32(blk, 0x11D8),
+        "p_11e4": "%08x" % u32(blk, 0x11E4),
+    }
+
+
+def run_early(session, out):
+    print("in race; attaching during the load", flush=True)
+    time.sleep(18.0)
+    dbg = Debugger()
+    metas = {}
+    try:
+        alloc = 0
+        deadline = time.time() + 90.0
+        while time.time() < deadline:
+            dbg.pause()
+            try:
+                manager = u32(dbg.read(MANAGER_SLOT, 4))
+                alloc = u32(dbg.read(manager + 0x40, 4)) if manager else 0
+            except Exception:
+                alloc = 0
+            if alloc:
+                break
+            dbg.resume()
+            time.sleep(2.0)
+        if not alloc:
+            print("no manager after 90 s", file=sys.stderr)
+            return 1
+        print("manager alloc %08x" % alloc, flush=True)
+        metas["e0"] = early_snapshot(dbg, out, alloc, "e0")
+        dbg.resume()
+        for tag, wait in (("e1", 1.0), ("e2", 2.0), ("e3", 4.0), ("e4", 8.0)):
+            time.sleep(wait)
+            dbg.pause()
+            metas[tag] = early_snapshot(dbg, out, alloc, tag)
+            dbg.resume()
+        session.pad.set("cross", True)
+        for tag, wait in (("r0", 3.0), ("r1", 8.0)):
+            time.sleep(wait)
+            dbg.pause()
+            metas[tag] = early_snapshot(dbg, out, alloc, tag)
+            dbg.resume()
+    finally:
+        try:
+            dbg.resume()
+        except Exception:
+            pass
+        dbg.close()
+    session.pad.set("cross", False)
+    (out / "meta.json").write_text(json.dumps(metas, indent=1))
+    drive.screenshot(out / "race.png")
+    print("done; artefacts in %s" % out, flush=True)
+    return 0
+
+
 def snapshot(dbg, out, alloc, tag):
-    meta = {"wall": time.time(), "trails": []}
+    meta = {"wall": time.time(), "singleton": read_singleton(dbg),
+            "trails": []}
     flares = []
     for i in range(8):
         base = alloc + 0x84A0 + i * 0x1230
@@ -80,6 +181,9 @@ def snapshot(dbg, out, alloc, tag):
             "craft": "%08x" % craft,
             "vA": "%08x" % u32(blk, 0x1214),
             "vB": "%08x" % u32(blk, 0x1218),
+            "phase_1210": f32(blk, 0x1210),
+            "p_1208": "%08x" % u32(blk, 0x1208),
+            "p_11e4": "%08x" % u32(blk, 0x11E4),
         })
         dump(dbg, out, u32(blk, 0x1214), 0x2D90, "%s_vtx%dA.bin" % (tag, i))
         dump(dbg, out, u32(blk, 0x1218), 0x2D90, "%s_vtx%dB.bin" % (tag, i))
@@ -99,7 +203,9 @@ def snapshot(dbg, out, alloc, tag):
 
 
 def main():
-    out = Path(sys.argv[1] if len(sys.argv) > 1 else "/tmp/hd-trail-dump")
+    args = [a for a in sys.argv[1:] if a != "--early"]
+    early = "--early" in sys.argv[1:]
+    out = Path(args[0] if args else "/tmp/hd-trail-dump")
     out.mkdir(parents=True, exist_ok=True)
     with drive.Session(str(IMAGE), str(out / "logs")) as session:
         print("rpcs3 pid %d" % session.proc.pid, flush=True)
@@ -110,6 +216,8 @@ def main():
         if session.walk_to_race() not in drive.RACE_ARRIVED:
             print("did not reach a race", file=sys.stderr)
             return 1
+        if early:
+            return run_early(session, out)
         print("in race; waiting for the load", flush=True)
         time.sleep(50.0)
         session.pad.set("cross", True)

@@ -84,3 +84,5 @@
 0x002e4748	function	Trail_RenderTick	80	engine-trail.md
 0x000d0b28	function	Ship_SetFuryTrailFlag	82	engine-trail.md
 0x008b2ff4	data	EngineFlare_BoostGate	85	engine-trail.md
+0x00018848	function	Game_PresentLoop	65	engine-trail.md
+0x00936fd4	data	Render_FrameContextPtr	55	engine-trail.md

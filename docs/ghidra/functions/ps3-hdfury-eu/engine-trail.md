@@ -61,7 +61,8 @@ rendered frame. The rest:
 | `+0x1140..0x1180` | the live head transform | equals the craft's current basis and nozzle |
 | `+0x11d4` | this frame's output buffer | flips between the two RSX addresses below |
 | `+0x11d8` | **the trail's brightness** | written by `EngineFlare_Update` as `engine blend x speed ramp`; the dumped vertex alpha peak is exactly `brightness * (1 - 6/54)` |
-| `+0x11e4` | a per-frame global (dt-scaled) | equal across all eight trails, varies per frame |
+| `+0x11e4` | pointer to this trail's render-queue sort-key slot | the write is the last line of `Trail_BuildDrawState`'s per-craft loop: it reserves a 4-byte slot in the frame's command stream, writes the `depth << 20 \| 0x20000000`-shaped key into it, and stores the slot's address here. Dump-confirmed: eight values exactly `0x334` apart (one trail's full command packet), re-pointed every frame. An earlier reading called this "a dt-scaled per-frame global, equal across all eight" - both halves were the read-a-pointer-as-a-float trap again |
+| `+0x1208` | a per-trail object pointer | stable across frames, bound into the draw state at `+0xc4` by `Trail_BuildDrawState`. Its target is an instance/node graph (self-pointers, `0xff808080` colours, ELF string pointers), **not** fragment microcode: dumped 0x600 bytes for four trails in two frames and none holds the trail's own `+0x1210` phase in either RSX word order |
 | `+0x11ec` | **the head `u`** | `1 - 0.6 * speed01`; equals the head vertex's `u` to 4 decimals on three craft in two frames |
 | `+0x1210` | **the scroll phase** | `EngineFlare_PlaceShapes`' wrapping accumulator, patched into the material's `TrailSpeed` |
 | `+0x1204` | the craft | chases to the `EngineFlare` at `craft + 0x5f70` |
@@ -110,6 +111,103 @@ two frames, speeds from near-rest to race pace):
 **Confidence 92** on all of the above: the numbers are the running game's
 own, cross-checked between sessions, and the fin arithmetic (`954`, `0x2d90`)
 closes twice over from independent constants.
+
+## The ring at a race start: born full, bunched, and dark
+
+Read live on 2026-08-24 (`scripts/rpcs3-trail-dump.py --early`): the debugger
+attached while the race was still loading and polled for the manager; at the
+**earliest frame the manager exists** the player's ring already holds 54 valid
+samples - colour `(1,1,1,1)` on every one - bunched within **0.2 world units**
+of the grid slot, and the SPU output buffer holds all 324 extruded vertices
+with **peak vertex alpha 0**, because the brightness at `+0x11d8` is 0.0 below
+the speed ramp's 100-unit floor. Five snapshots through the countdown (`e0`,
++1 s, +3 s, +7 s, +15 s) read the same; two more after thrust was held show
+the mechanism of the fade-in: at +8 s of driving the ring spans 37.7 units,
+brightness 0.151, peak alpha 32/255. **There is no fill gate anywhere** - no
+part-empty ring ever exists to gate on. The trail appears by the brightness
+ramp alone while the bunched ring stretches out behind the accelerating craft.
+
+`oag_render::exhaust::hd::Tube` now reproduces this: the first push after a
+construction or a clear seeds the whole ring with that sample, so the ring is
+always full from the first tick exactly as the live one is, and the PSP's
+0.9-second full-ring gate no longer applies to HD. What the original does to
+the ring across a **respawn** is still unread; re-bunching at the new pose is
+this engine's approximation, chosen because it is the same state the measured
+race start begins from. **Confidence 90** on the race-start reading (five
+independent snapshots, ring and vertex buffer agreeing), stated approximation
+on the respawn.
+
+## The draw state's two non-material constants, placed
+
+`Trail_BuildDrawState` reads two things this page used to leave dangling:
+
+- **The splatted vec4 is a clock, not the scroll.** Outside the per-craft
+  loop it reads `*(*(*0x00936fd4) + 0xc4)` (TOC slot `0x008b44a0`), splats it
+  to four lanes and binds it as a draw-state constant. `0x00936fd4` -
+  named `Render_FrameContextPtr` at confidence 55, so it wears a `_q` -
+  holds the object the present loop at `0x00018848` hands to the frame
+  render calls; that loop is `Game_PresentLoop` (confidence 65, `_q`): it
+  calls `cellSysutilCheckCallback` once per iteration - the call a PS3 title
+  must make once per frame - runs a mirrored two-pass draw sequence for the
+  stereo path, and loops until an exit flag. The context's `+0xc0`/`+0xc4`
+  carry the **same monotonically increasing seconds value** - read live at
+  nine pauses across one session it marched 48.97 to 119.37, advancing at
+  game-time rate, one global value while the eight trails' `+0x1210` phase
+  accumulators all diverged. So the "this splat is
+  the live `TrailSpeed` patch" hypothesis is **refuted**; a global seconds
+  clock bound to the trail material is instead the natural candidate for the
+  flame surface's unread `Speed * time` scroll clock
+  ([engine-flare.md](engine-flare.md)) - hypothesis only, confidence 40, no
+  shader-side confirmation yet.
+- Where the per-trail `TrailSpeed` patch physically lives at draw time
+  therefore **stays open**: the two obvious carriers are now both excluded
+  (the splat above is global; the `+0x1208` per-trail binding's target holds
+  no phase - see the table).
+
+## The third sampler is the lightmap slot, empty
+
+`enginetrail_bluered_triangle.rcsmodel`'s material record names a third
+sampler, hash `0x37b5db58` with a null path. That hash is already a recovered
+preimage: **`lightmap`** (`~crc32`, 1,669 uses disc-wide - see
+[rcsmaterial.md](../../../formats/rcsmaterial.md)). The trail material
+declares the standard lightmap sampler slot and binds nothing to it; it is
+inert, not a missing texture.
+
+## Matched-view comparison against the running original
+
+Done 2026-08-24, the first side-by-side at race speed: RPCS3 screenshots
+every 4 s through a driven Talon's Junction Fury race
+(`scripts/rpcs3-drive.py race --shots` route) against this engine's
+`oag-game --race data/images/hdfury-ps3-eu-dec.iso --autopilot
+--team feisar_c1 --ticks N --screenshot` at landmark-matched sections.
+Quantified as perpendicular profiles of warm excess (`R - (G+B)/2`) behind
+the nozzle at fractions of the on-screen ship width, on both sides. Note the
+comparison is *not* frame-rate-contaminated: RPCS3 runs slow in wall time but
+steps ~1/60 game-time per frame, so ring spacing in world units matches a
+60 fps run.
+
+- **Over comparable (dark-to-mid) background the tube matches.** Original,
+  dark tunnel mid-corner: warm excess 110/75/55/40 at 0.15/0.3/0.5/0.7 ship
+  widths. Ours, dark section: 79/78/43 at 0.15/0.3/0.4 (0.5 ran off-frame).
+  Same character - white-hot core at the nozzle, red fringe, streaks.
+- **The halo is not narrower.** Skirt widths normalised by ship width:
+  quarter-max 0.079..0.109 (original) against 0.062..0.145 (ours);
+  tenth-max 0.085..0.135 against 0.172..0.193 - our faint skirt is, if
+  anything, wider. No bloom-share deficit is measurable at these views, so
+  nothing here justifies touching `post::hd_bloom`'s recovered constants.
+- **Over bright sections ours vanishes and the original's does not - and
+  that is the scene, not the trail.** In our bright-section frames the
+  background behind the trail sits at luminance 187..255 with green already
+  saturated; a `SrcAlpha`/`One` additive tube physically cannot register
+  there. The original's same corners keep background luminance 77..186. This
+  is the known scene-wide brightness-calibration gap (its own work item),
+  and no trail constant was changed in response.
+- **The `v` orientation is confirmed, not flipped.** In three dumped buffers
+  across two sessions, every fin's `v` runs 0 at the `-fin_dir` edge to 1 at
+  the `+fin_dir` edge (fin directions at 0/60/120 degrees from up, rotating
+  toward `forward x up`) - exactly `hd.rs`'s `(edge + 1) * 0.5`. The blue
+  texture's near-transparent alpha row sits on the `-fin_dir` edge on both
+  sides.
 
 ## The tuning file is the parameter block
 
@@ -229,7 +327,9 @@ Open, in rough order of visible cost:
   0.03, `Afterburner Scale` 0.5) - both read, neither drawn.
 - The flame surface's `Speed * time` scroll: `time`'s provider is still
   unread ([engine-flare.md](engine-flare.md)); the ribbon's phase at
-  `+0x1210` is a *different* accumulator and does not answer it.
+  `+0x1210` is a *different* accumulator and does not answer it. The seconds
+  clock at `*(*0x00936fd4)+0xc4` (see "the draw state's two non-material
+  constants") is now the natural candidate, at hypothesis strength only.
 - The `Engine_Flare_Rich.gtf` sprite flare **draws now** with its authored
   radius (3, jittered by 0.5, floored at 2) and the `Slow Alpha Noise`
   opacity walk (0.5..0.8, chase 0.1, retarget every 10) - the flare's init
@@ -238,9 +338,12 @@ Open, in rough order of visible cost:
   original. Still unread and undrawn: its spin, chromatic dispersion,
   `Flare Fadeout Dist/Range` term and the occluder query - the shader pair
   (`engineflare_vp/fp`) resolves through no registry read so far.
-- What the SPU does with a part-empty ring at a race start; this engine
-  reuses the PSP's full-ring gate.
-- `+0x11e4`, the dt-scaled per-frame global every trail shares, unplaced.
+- Where the per-trail `TrailSpeed` patch value physically lives at draw time
+  (both obvious carriers excluded above), and whether the splatted seconds
+  clock is the flame surface's `Speed * time` provider.
+- What the original does to the ring across a **respawn** - the race start is
+  read (born full, bunched, dark) but a respawn was never captured; this
+  engine re-bunches at the new pose as a stated approximation.
 - Whether the white-to-red vertex ramp differs on a classic (blue) HD grid -
   every craft in the dumped sessions was a Fury `concept1`.
 
@@ -248,7 +351,11 @@ Open, in rough order of visible cost:
 
 ```sh
 uv run --with evdev python3 scripts/rpcs3-trail-dump.py /tmp/hd-trail-dump
+uv run --with evdev python3 scripts/rpcs3-trail-dump.py /tmp/hd-trail-early --early
 python3 scripts/psarc.py cat data/images/hdfury-ps3-eu-dec.iso:PS3_GAME/USRDIR/DATA02.PSARC \
     /data/ships/shipeffectstweaks.txt
 OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all hd_engine_flare
+# our side of the matched-view comparison, at a landmark-matched tick:
+target/release/oag-game --race data/images/hdfury-ps3-eu-dec.iso --autopilot \
+    --team feisar_c1 --ticks 1050 --screenshot /tmp/ours-t1050.png
 ```

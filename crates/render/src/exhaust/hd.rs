@@ -146,7 +146,20 @@ impl Tube {
     ///
     /// `speed01` is [`speed01`]'s value for this tick; the phase advances by
     /// `lerp(0.08, 0.1, speed01)` per call, as the original does per frame.
+    ///
+    /// **The first push after [`Self::new`] or [`Self::clear`] seeds the whole
+    /// ring with that sample.** Measured, not invented: at the earliest moment
+    /// the manager exists in a loading race the live ring already holds 54
+    /// valid samples bunched within 0.2 world units of the grid slot, and the
+    /// SPU extrudes all 324 vertices from it with every vertex alpha at 0 -
+    /// the brightness at `+0x11d8` is 0.0 below the speed ramp's floor. There
+    /// is no fill gate anywhere: the trail fades in through the brightness
+    /// ramp as the bunched ring stretches out (five snapshots, e0..e4 and
+    /// r0/r1, 2026-08-24 on engine-trail.md).
     pub fn push(&mut self, position: Vec3, up: Vec3, speed01: f32) {
+        if self.len == 0 {
+            self.ring = [Sample { position, up }; SAMPLES];
+        }
         self.ring[self.write] = Sample { position, up };
         self.write = (self.write + 1) % SAMPLES;
         self.len = (self.len + 1).min(SAMPLES);
@@ -154,22 +167,28 @@ impl Tube {
         self.phase = (self.phase + delta).rem_euclid(1.0);
     }
 
-    /// Clears the history for a race start or respawn, keeping the phase -
-    /// the original's accumulator lives on the flare and survives a respawn.
+    /// Forgets the history so the next push re-seeds the ring at the new pose,
+    /// keeping the phase - the original's accumulator lives on the flare and
+    /// survives a respawn.
+    ///
+    /// Without it a respawn's ribbon would span the teleport. What the
+    /// original does to the ring across a respawn is unread; re-bunching at
+    /// the new pose is this engine's approximation, chosen because it is the
+    /// same state the measured race start begins from.
     pub fn clear(&mut self) {
         self.len = 0;
         self.write = 0;
     }
 
-    /// Whether there is a full ring to extrude.
+    /// Whether the ring has been seeded at all.
     ///
-    /// The original's SPU job always runs; what it extrudes from a part-empty
-    /// ring at a race start has not been read, so this engine reuses the
-    /// PSP ribbon's own recovered gate - draw nothing until the ring fills -
-    /// rather than inventing a partial-trail look.
+    /// True from the first push on - the seeded ring is always full, which is
+    /// what the live game's own ring is from the earliest readable frame of a
+    /// race (see [`Self::push`]). False only for a tube nothing ever pushed
+    /// to, e.g. a craft whose model has no nozzle locator.
     #[must_use]
     pub fn ready(&self) -> bool {
-        self.len >= SAMPLES
+        self.len >= 1
     }
 
     /// The samples, newest first.

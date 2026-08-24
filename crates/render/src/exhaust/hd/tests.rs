@@ -9,16 +9,37 @@ fn full_tube(step: Vec3) -> Tube {
 }
 
 #[test]
-fn empty_until_the_ring_fills() {
+fn the_first_push_seeds_a_full_bunched_ring() {
+    // Measured at a live race load (engine-trail.md, e0..e4): the earliest
+    // readable ring is already full, every sample bunched at the grid slot,
+    // and the SPU extrudes all 324 vertices from it. No fill gate exists.
     let mut tube = Tube::new();
-    for k in 0..SAMPLES - 1 {
-        tube.push(Vec3::X * k as f32, Vec3::Y, 0.0);
-        assert!(!tube.ready());
-        assert!(tube.vertices(1.0, 0.0, 0.0).is_empty());
-    }
-    tube.push(Vec3::X * SAMPLES as f32, Vec3::Y, 0.0);
+    assert!(!tube.ready());
+    assert!(tube.vertices(1.0, 0.0, 0.0).is_empty());
+    tube.push(Vec3::X, Vec3::Y, 0.0);
     assert!(tube.ready());
-    assert_eq!(tube.vertices(1.0, 0.0, 0.0).len(), VERTICES_PER_CRAFT);
+    let vertices = tube.vertices(1.0, 0.0, 0.0);
+    assert_eq!(vertices.len(), VERTICES_PER_CRAFT);
+    // The seeded ring is a clump at the sample: every vertex within the fin
+    // half-width of it, exactly like the live grid-start buffers.
+    for v in &vertices {
+        let p = Vec3::from_array(v.position);
+        assert!((p - Vec3::X).length() <= FIN_HALF_WIDTH + 1e-6);
+    }
+}
+
+#[test]
+fn clear_forgets_the_pose_and_the_next_push_reseeds() {
+    let mut tube = full_tube(Vec3::X);
+    tube.clear();
+    assert!(!tube.ready());
+    assert!(tube.vertices(1.0, 0.0, 0.0).is_empty());
+    tube.push(Vec3::Z * 100.0, Vec3::Y, 0.0);
+    // Re-bunched at the new pose - nothing spans the teleport.
+    for v in &tube.vertices(1.0, 0.0, 0.0) {
+        let p = Vec3::from_array(v.position);
+        assert!((p - Vec3::Z * 100.0).length() <= FIN_HALF_WIDTH + 1e-6);
+    }
 }
 
 #[test]
