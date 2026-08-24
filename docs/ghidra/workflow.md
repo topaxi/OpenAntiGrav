@@ -88,6 +88,15 @@ references found", the import is bad no matter how complete it looks.
 Decompilations full of `bad instruction data` and `halt_baddata()` truncations
 are the same signal.
 
+#### Redoing a bad import: the delete needs the GUI
+
+`delete_file` through the bridge fails with `"BOOT.BIN is in use"` **after
+`close_program` has reported success**, so a folder that has to be thrown away
+and reimported cannot be removed over MCP - do the delete or rename in the
+Ghidra GUI. Learned redoing `/psp-pure-eu` on 2026-08-10, which had sat at 0
+functions for a session; it was reimported rather than diagnosed, which was the
+cheaper call.
+
 #### Known-imperfect, and why it does not block
 
 This procedure leaves **instruction bytes unrelocated** - `0x0898bab8` still

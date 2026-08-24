@@ -567,6 +567,22 @@ seen from the authoring side.
       for a hull, full damage inside the radius, and one rocket per fire are all
       this project's readings on top of the disc's numbers. `spread` argues for
       a volley and is recorded as an open question rather than dismissed.
+      **The Autopilot took the pool to five (2026-08-24)**, and unlike the
+      Rocket it is mostly *recovered*: `Autopilot_Fire` (`0x088613bc`) and
+      `Autopilot_Update` (`0x08861404`) give the duration's source
+      (`<Weapon type="Autopilot"><Stats time>`, 5 s on both shipped tables), the
+      running bit, the countdown, the announcer's `disengaging` on the tick the
+      remainder crosses one second, and the fact that **pressing fire cancels it
+      and fires nothing** while keeping the pickup. See
+      [autopilot.md](../ghidra/functions/psp-pulse-usa/autopilot.md). Three
+      parts stay ours and each says so where it is written: the takeover reuses
+      `oag_ai::Driver` because the original's control-source swap was not found;
+      an opponent absorbs one, which is the only thing it could do; and
+      `craft+0x144`, the original's copy of last tick's timer, is dropped
+      because a fixed timestep makes the previous value `timer + dt` exactly.
+      `~AUTOPILOT` and `autopilot_eng` decode and stay **unwired** - the handler
+      stops a held voice nothing located opens, and the second cue has no call
+      site at all.
       **The determinism gate widened to match**: `oag_gameplay::hash::hash_world`
       plus `Race::state_hash` now cover the inventory, the projectiles, the pad
       refresh timers and the generator's own position, which were the known hole
