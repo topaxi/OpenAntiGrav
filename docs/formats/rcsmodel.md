@@ -1142,12 +1142,73 @@ a later surface has its own bias and is not inside the node's authored box in
 the first place, so testing it there would drop it as a stray for being exactly
 where it belongs.
 
-**Related, and still open**: byte `+0x07` of a chunk - the `kk` that
-[`LAYOUT_DESCRIBED`](../../crates/formats/src/rcsmodel.rs) records as taking
-`01` and `02` "for a reason nothing here has distinguished" - **is
-distinguished by the engine**, which branches on
-`*(char *)(chunk + 7) == '\x02'`. On Talon's Junction it is `1` on 913 chunks
-and `2` on 70. What the branch does is unread.
+## Byte `+0x07` says which space a chunk's positions are in
+
+**The `kk` of the `00 nn LL kk` word at `+0x04`**, which this page carried for
+months as "takes the values `01` and `02` for a reason nothing here has
+distinguished". The engine branches on it (`*(char *)(chunk + 7) == '\x02'`,
+found in the same read that turned up the surface table), and the disc says
+what the two values mean:
+
+- **`1` - world-baked.** 33,088 chunks. Positions are already in world space
+  and no node transform applies.
+- **`2` - node-local.** 8,773 chunks. Positions are in the chunk's own space
+  and a `.vex` node places it.
+
+Nothing on the disc carries a third value. Read as `rcsmodel::Space`.
+
+### Three independent lines, because no one of them settles it
+
+**The categories.** Every chunk of `data/ships` (2,163) and `data/fe` (1,136)
+is node-local; every chunk of `data/pvsblocker` (75) is world-baked. Within
+`data/environments` the split is 32,955 world-baked against 4,703 node-local -
+the road and the scenery against the props.
+
+**Node addressing.** 8,769 of the 8,773 node-local chunks are addressed by a
+`.vex` `Mesh` node, four are not. World-baked chunks mostly are not (30,407 of
+33,088), and the 2,681 that *are* named by a node are the population the
+paragraph below is about.
+
+**The bias, which is independent of the byte.** A world-baked chunk's bias is
+its world position; a node-local one's is near the origin. Over
+`data/environments`: world-baked `|bias|` has a median of **552.9** with
+**one** of 32,955 under a unit; node-local a median of **2.7** with 35 % under
+a unit.
+
+Pinned by `the_space_byte_separates_world_baked_geometry_from_node_local` in
+`crates/formats/tests/rcsmodel_surface_ground_truth.rs`.
+
+### It replaces a heuristic this project invented, and the heuristic was wrong
+
+`oag_render::mesh::rcs::is_world_baked` decided the same question by carrying a
+node's authored box through its transform and asking whether it landed within
+**one world unit** of the chunk's bias - a tolerance chosen here, documented at
+confidence 88, with a long note attached about the cluster gap that justified
+it.
+
+Over all 11,450 `Mesh` nodes on the disc whose chunk is in their own model, and
+judged by the bias:
+
+| | agrees with the bias |
+| --- | --- |
+| the `+0x07` byte | **94.4 %** |
+| the geometric heuristic | 43.2 % |
+
+And on **both** directions of disagreement the bias sides with the byte: of the
+5,724 chunks the byte calls node-local and the heuristic called world-baked,
+5,345 have a bias under 50 units and the median is **1.2**; of the 775 the
+other way, only 27 are under 50 units and the median is **544.3**.
+
+So `is_world_baked` now reads the byte and keeps the geometric test only for a
+value that is neither 1 nor 2, which nothing on this disc has. The effect is
+small and targeted, which is what a correction to a mostly-right heuristic
+should look like: Talon's Junction goes from 60 to 70 node-drawn chunks with
+**zero** now misfiled as world-baked, and its start-line frame is
+byte-identical; Anulpha Pass goes from 101 to 113 and 0.52 % of its frame
+changes.
+
+**What the byte's own branch in the executable does is still unread.** This is
+the meaning the data supports, at confidence 88, not a decompiled one.
 
 ## What is still open
 

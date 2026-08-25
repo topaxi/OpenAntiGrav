@@ -8,8 +8,9 @@
 use crate::ByteOrder;
 
 use super::{
-    Error, LAYOUT_DESCRIBED, LAYOUT_INLINE, Layout, Mesh, Result, SUBMESH_BASE, SUBMESH_LEN,
-    SURFACE_BASE, SURFACE_COUNT, SURFACE_LEN, SURFACE_TABLE, SubMesh, VertexDecl,
+    Error, LAYOUT_DESCRIBED, LAYOUT_INLINE, Layout, Mesh, Result, SPACE_BYTE, SUBMESH_BASE,
+    SUBMESH_LEN, SURFACE_BASE, SURFACE_COUNT, SURFACE_LEN, SURFACE_TABLE, Space, SubMesh,
+    VertexDecl,
 };
 
 impl Mesh {
@@ -36,7 +37,8 @@ impl Mesh {
             other => return Err(Error::UnknownChunkLayout { got: other, at }),
         };
         let hash = ByteOrder::Big.u32(data, at);
-        let mut mesh = Self::parse_surface(data, at + SURFACE_BASE, layout, hash)?;
+        let space = Space::of(data[at + SPACE_BYTE]);
+        let mut mesh = Self::parse_surface(data, at + SURFACE_BASE, layout, space, hash)?;
 
         // **A surface that will not read is skipped, not fatal.** The first one
         // is the chunk itself and its failure is a real error, handled above;
@@ -50,7 +52,7 @@ impl Mesh {
                 break;
             }
             let record = ByteOrder::Big.u32(data, entry) as usize;
-            if let Ok(surface) = Self::parse_surface(data, record, layout, hash) {
+            if let Ok(surface) = Self::parse_surface(data, record, layout, space, hash) {
                 mesh.extra_surfaces.push(surface);
             }
         }
@@ -61,7 +63,13 @@ impl Mesh {
     ///
     /// `at` is the record, not the chunk: `chunk + SURFACE_BASE` for the first
     /// and an entry of the chunk's surface table for the rest.
-    fn parse_surface(data: &[u8], at: usize, layout: Layout, hash: u32) -> Result<Self> {
+    fn parse_surface(
+        data: &[u8],
+        at: usize,
+        layout: Layout,
+        space: Space,
+        hash: u32,
+    ) -> Result<Self> {
         let end = at + SURFACE_LEN;
         if end > data.len() {
             return Err(Error::OutOfBounds {
@@ -129,6 +137,7 @@ impl Mesh {
             scale: f3(0x20),
             material: ByteOrder::Big.u32(data, at),
             layout,
+            space,
             submeshes,
             decl,
             extra_surfaces: Vec::new(),

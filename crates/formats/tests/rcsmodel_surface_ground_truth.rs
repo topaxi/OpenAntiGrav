@@ -173,3 +173,102 @@ fn the_surfaces_past_the_first_carry_forty_percent_more_geometry() {
     assert_eq!(t.triangles_first, 17_505_484);
     assert_eq!(t.triangles_rest, 7_111_578);
 }
+
+/// **A chunk's `+0x07` byte says which space its positions are in.**
+///
+/// The field `rcsmodel` carried for months as "takes the values `01` and `02`
+/// for a reason nothing here has distinguished", and which
+/// `oag_render::mesh::rcs::is_world_baked` used to guess with an invented
+/// one-unit tolerance. Three independent things are asserted here, because no
+/// one of them would settle it alone:
+///
+/// - **the counts**, and that nothing on the disc carries a third value;
+/// - **the categories**: every chunk of `data/ships` and `data/fe` is
+///   node-local and every chunk of `data/pvsblocker` is world-baked, which is
+///   what those directories mean;
+/// - **the bias**, which is independent of the byte: a world-baked chunk's
+///   bias is a world position and a node-local one's is near zero.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn the_space_byte_separates_world_baked_geometry_from_node_local() {
+    if image().is_none() {
+        return;
+    }
+    let image = image().expect("checked above");
+    let (mut world, mut node, mut unknown) = (0usize, 0usize, 0usize);
+    // Chunks of `data/environments` whose bias is under a unit, by space.
+    let (mut world_at_origin, mut node_at_origin) = (0usize, 0usize);
+    let (mut world_env, mut node_env) = (0usize, 0usize);
+    for archive in ARCHIVES {
+        let spec = format!("{}:PS3_GAME/USRDIR/{archive}.PSARC", image.display());
+        let mut open = oag_assets::psarc::Archive::open(&spec).expect("the archive opens");
+        let paths: Vec<String> = open
+            .paths()
+            .iter()
+            .filter(|p| p.ends_with(".rcsmodel"))
+            .cloned()
+            .collect();
+        for path in paths {
+            let Ok(blob) = open.read_path(&path) else {
+                continue;
+            };
+            let Ok(model) = rcsmodel::Model::parse(&blob) else {
+                continue;
+            };
+            for chunk in &model.meshes {
+                match chunk.space {
+                    rcsmodel::Space::World => world += 1,
+                    rcsmodel::Space::Node => node += 1,
+                    rcsmodel::Space::Unknown(_) => unknown += 1,
+                }
+                // What a directory means, asserted rather than assumed.
+                if path.starts_with("/data/ships/") || path.starts_with("/data/fe/") {
+                    assert_eq!(
+                        chunk.space,
+                        rcsmodel::Space::Node,
+                        "{path}: a craft or front-end chunk is authored in its own space",
+                    );
+                }
+                if path.starts_with("/data/pvsblocker/") {
+                    assert_eq!(
+                        chunk.space,
+                        rcsmodel::Space::World,
+                        "{path}: an occlusion blocker is world geometry",
+                    );
+                }
+                if !path.starts_with("/data/environments/") {
+                    continue;
+                }
+                let at_origin =
+                    (chunk.bias[0].powi(2) + chunk.bias[1].powi(2) + chunk.bias[2].powi(2)).sqrt()
+                        < 1.0;
+                match chunk.space {
+                    rcsmodel::Space::World => {
+                        world_env += 1;
+                        world_at_origin += usize::from(at_origin);
+                    }
+                    rcsmodel::Space::Node => {
+                        node_env += 1;
+                        node_at_origin += usize::from(at_origin);
+                    }
+                    rcsmodel::Space::Unknown(_) => {}
+                }
+            }
+        }
+    }
+    assert_eq!((world, node, unknown), (33_088, 8_773, 0));
+
+    // The separation, which is what makes the reading a reading rather than a
+    // correlation: world-baked chunks essentially never sit at the origin, and
+    // a third of node-local ones do.
+    let world_share = world_at_origin as f64 / world_env as f64;
+    let node_share = node_at_origin as f64 / node_env as f64;
+    assert!(
+        world_share < 0.001,
+        "{world_at_origin} of {world_env} world-baked circuit chunk(s) have a bias under a unit",
+    );
+    assert!(
+        node_share > 0.25,
+        "only {node_at_origin} of {node_env} node-local circuit chunk(s) have a bias under a unit",
+    );
+}

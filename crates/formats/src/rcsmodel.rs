@@ -118,6 +118,14 @@ const SUBMESH_LEN: usize = 0x80;
 /// the *surface* rather than to the chunk. See [`SURFACE_BASE`].
 const SUBMESH_BASE: usize = 0x60;
 
+/// The byte that says which space a chunk's positions are in.
+///
+/// **The `kk` of the `00 nn LL kk` word at `+0x04`**, which this module carried
+/// for months as "takes the values `01` and `02` for a reason nothing here has
+/// distinguished". The engine branches on it, and the disc says what it means:
+/// see [`Space`].
+const SPACE_BYTE: usize = 0x07;
+
 /// Where a chunk's first surface record starts, relative to the chunk.
 ///
 /// **A chunk header is 0x20 bytes and then a surface record**, and this is the
@@ -484,12 +492,68 @@ pub struct Mesh {
     /// and the offset of each attribute, both of which this module used to
     /// solve for.
     pub decl: Option<VertexDecl>,
+    /// Which space this chunk's positions are in, out of its [`SPACE_BYTE`].
+    ///
+    /// Shared by every surface of a chunk, like [`Self::layout`] - the byte is
+    /// in the chunk header, outside the surface record.
+    pub space: Space,
     /// The chunk's surfaces past this one, each a `Mesh` in its own right.
     ///
     /// Empty on the 76 % of chunks that declare a single surface, and on every
     /// element of this list itself - a surface has no surfaces. Walk it through
     /// [`Self::surfaces`] rather than directly, so the first one is not missed.
     pub extra_surfaces: Vec<Mesh>,
+}
+
+/// Which space a chunk's dequantised positions are in, out of its
+/// [`SPACE_BYTE`].
+///
+/// **The disc states this, and this project used to guess it.**
+/// `oag_render::mesh::rcs::is_world_baked` decided the same question by
+/// carrying a `.vex` node's authored box through its transform and asking
+/// whether it landed within one world unit of the chunk's bias - a tolerance
+/// invented here, with an essay attached. Measured over every `Mesh` node on
+/// the disc whose chunk is in its own model, 11,450 of them, and judged by the
+/// **bias**, which is independent of both readings (a world-baked chunk's bias
+/// is a world position, a node-local one's is near zero):
+///
+/// - the byte agrees with the bias on **94.4 %**;
+/// - the heuristic agrees with the byte on **43.2 %**, and on both directions
+///   of disagreement the bias sides with the byte: of 5,724 chunks the byte
+///   calls node-local and the heuristic called baked, 5,345 have a bias under
+///   50 units and the median is **1.2**; of 775 the other way, only 27 are
+///   under 50 units and the median is **544.3**.
+///
+/// Within `data/environments` the split is unambiguous: [`Self::World`]
+/// chunks' `|bias|` has a median of 552.9 with **one** of 32,955 under a unit,
+/// [`Self::Node`] chunks' a median of 2.7 with 35 % under a unit. Across the
+/// disc every chunk of `data/ships` and `data/fe` is [`Self::Node`] and every
+/// chunk of `data/pvsblocker` is [`Self::World`], and 8,769 of 8,773
+/// [`Self::Node`] chunks are addressed by a `.vex` node.
+///
+/// Confidence 88. What the executable's branch on this byte actually *does* is
+/// unread; this is the meaning the data supports, not a decompiled one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Space {
+    /// `1`: positions are already in world space, and no node transform
+    /// applies. 33,088 chunks.
+    World,
+    /// `2`: positions are in the chunk's own space, and a `.vex` node places
+    /// it. 8,773 chunks.
+    Node,
+    /// Neither value. None on this disc; kept so a future title's file is
+    /// reported rather than silently read as one of the two.
+    Unknown(u8),
+}
+
+impl Space {
+    fn of(byte: u8) -> Self {
+        match byte {
+            1 => Self::World,
+            2 => Self::Node,
+            other => Self::Unknown(other),
+        }
+    }
 }
 
 /// Which of the two shapes a chunk's header takes, out of its `+0x06` byte.

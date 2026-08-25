@@ -192,6 +192,18 @@ fn node_geometry(
 /// hundreds. One world unit sits in the gap between the two clusters with
 /// room either side, not on either cluster's edge.
 fn is_world_baked(mesh: &rcsmodel::Mesh, min: [f32; 3], max: [f32; 3], to_world: Mat4) -> bool {
+    // **The disc answers this outright, and the geometry below was a guess at
+    // it.** A chunk's `+0x07` byte says which space its positions are in - see
+    // `rcsmodel::Space`, which carries the measurement. Where the two differ,
+    // the chunk's own bias sides with the byte: on 5,724 chunks the byte calls
+    // node-local and this test called baked, the median bias is 1.2 units, and
+    // on the 775 the other way it is 544.3. The test stays for a value neither
+    // 1 nor 2, which nothing on this disc has.
+    match mesh.space {
+        rcsmodel::Space::World => return true,
+        rcsmodel::Space::Node => return false,
+        rcsmodel::Space::Unknown(_) => {}
+    }
     let centre = Vec3::new(
         (min[0] + max[0]) / 2.0,
         (min[1] + max[1]) / 2.0,

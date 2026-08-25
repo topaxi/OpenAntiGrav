@@ -498,6 +498,7 @@ fn packed(counts: &[usize], stride: usize) -> Mesh {
         layout: Layout::Described,
         submeshes,
         decl: None,
+        space: Space::World,
         extra_surfaces: Vec::new(),
     }
 }
