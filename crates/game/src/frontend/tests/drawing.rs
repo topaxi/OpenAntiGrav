@@ -93,6 +93,107 @@ fn a_widthlimited_text_carries_its_wrap_width_into_the_draw_list() {
     assert_eq!(legal, Some(400.0));
 }
 
+/// Two widgets sharing one texture at different `U`/`V` sub-rects, the shape
+/// Pure's `Title Screen->Press start button` and its neighbours author on the
+/// real disc: without `U`/`V` reaching the draw list, both would sample the
+/// same patch - the texture's own top-left corner - rather than their own.
+/// See `handover/pures-title-screen-is-missing-its-own-logo.md`.
+#[test]
+fn two_images_sharing_a_texture_sample_their_own_sub_rects() {
+    let screens = Screens::from_xml(
+        r#"
+<Screen>
+  <Screen name="Loose">
+    <Image name="First"><Values x="10" y="20" width="23" height="11" U="0" V="15" TxtrWidth="23" TxtrHeight="12" src="Data\FE\Images\FETextures_startscreen.mip"></Values></Image>
+    <Image name="Second"><Values x="200" y="240" width="16" height="9" U="26" V="15" TxtrWidth="16" TxtrHeight="9" src="Data\FE\Images\FETextures_startscreen.mip"></Values></Image>
+  </Screen>
+</Screen>
+"#,
+    );
+    let placements = vec![(
+        r"Data\FE\Images\FETextures_startscreen.mip".to_string(),
+        crate::sprite::Placed {
+            x: 100,
+            y: 50,
+            width: 128,
+            height: 64,
+        },
+    )];
+    let frontend = Frontend::new(
+        screens,
+        StringTable::default(),
+        Vec::new(),
+        placements,
+        0,
+        false,
+    );
+    let draws = frontend.draw_screen("Loose");
+    let sprites: Vec<_> = draws
+        .iter()
+        .filter_map(|d| match d {
+            Draw::Sprite { rect, uv, .. } => Some((*rect, *uv)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(sprites.len(), 2, "both images must reach the draw list");
+    // The atlas offset (100, 50) plus each widget's own `U`/`V`, and its own
+    // `TxtrWidth`/`TxtrHeight` rather than the whole placed texture.
+    assert_eq!(
+        sprites[0],
+        ([10.0, 20.0, 23.0, 11.0], [100.0, 65.0, 23.0, 12.0])
+    );
+    assert_eq!(
+        sprites[1],
+        ([200.0, 240.0, 16.0, 9.0], [126.0, 65.0, 16.0, 9.0])
+    );
+}
+
+/// A colour-only `Image` with its own `width`/`height` draws at its own
+/// rect, not across the whole screen - `Demo_Definition.xml`'s own shape,
+/// shared by both Pulse's and Pure's disc: a decorative underline, not a
+/// backdrop. One with neither still falls back to the whole screen, which is
+/// what every colour-only `Image` measured without one actually is (`Title
+/// Screen`'s and `Show Logo`'s own white/black background). See
+/// `handover/pures-title-screen-is-missing-its-own-logo.md`.
+#[test]
+fn a_colour_only_image_draws_its_own_rect_and_falls_back_to_the_whole_screen() {
+    let screens = Screens::from_xml(
+        r#"
+<Screen>
+  <Screen name="Loose">
+    <Image name="Line"><Values x="133" y="262" width="347" height="1" color="0xff3abcf2"></Values></Image>
+    <Image name="Backdrop"><Values color="0xff000000"></Values></Image>
+  </Screen>
+</Screen>
+"#,
+    );
+    let frontend = Frontend::new(
+        screens,
+        StringTable::default(),
+        Vec::new(),
+        Vec::new(),
+        0,
+        false,
+    );
+    let draws = frontend.draw_screen("Loose");
+    // `draw_screen`'s own base black clear comes first, ahead of anything
+    // `Loose` itself authors - not this screen's own fills.
+    let fills: Vec<_> = draws[1..]
+        .iter()
+        .filter_map(|d| match d {
+            Draw::Fill { rect, color } => Some((*rect, *color)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        fills,
+        vec![
+            ([133.0, 262.0, 347.0, 1.0], argb_to_rgba(0xff3a_bcf2)),
+            ([0.0, 0.0, SCREEN.0, SCREEN.1], argb_to_rgba(0xff00_0000)),
+        ]
+    );
+}
+
 #[test]
 fn circle_does_not_select() {
     let mut frontend = frontend(300);

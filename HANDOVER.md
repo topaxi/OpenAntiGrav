@@ -491,7 +491,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [Where Pulse's language picker belongs is unevidenced](handover/where-pulses-language-picker-belongs-is-unevidenced.md)
 - [Pure's string tables are not read, and its front-end font is absent](handover/pures-string-tables-are-not-read-and-its.md)
 - [`boot.rs` still applies five Pulse literals to every source](handover/boot-rs-still-applies-five-pulse-literals-to.md)
-- [Pure's `Title Screen` is missing its own logo wordmark and most of its frame-line decoration - not chased further](handover/pures-title-screen-is-missing-its-own-logo.md)
+- [Pure's `Title Screen` is missing its own logo wordmark - not chased further](handover/pures-title-screen-is-missing-its-own-logo.md)
 - [A *slot-resolved* record's own field layout](handover/a-slot-resolved-records-own-field-layout.md)
 - [The `.vex` class-ID table's extent](handover/the-vex-class-id-tables-extent.md)
 - [One team's `Ship.vex` does not resolve by name](handover/one-teams-ship-vex-does-not-resolve-by.md)

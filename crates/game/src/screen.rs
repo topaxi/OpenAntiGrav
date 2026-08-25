@@ -156,7 +156,7 @@ pub struct Redirect {
 
 /// An `Image` widget that names a texture.
 ///
-/// The solid-colour kind, which has a `color` and no `src`, is a backdrop and
+/// The solid-colour kind, which has a `color` and no `src`, is a [`Fill`] and
 /// goes to [`Screen::fills`] instead.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Image {
@@ -175,12 +175,64 @@ pub struct Image {
     /// Modulating colour as ARGB. White when unstated, which leaves the
     /// texture's own colours alone.
     pub color: u32,
+    /// The `U` attribute: left edge of the sub-rect this widget samples out
+    /// of `src`, in the texture's own pixels. `None` when the XML gives none,
+    /// which means the whole texture.
+    ///
+    /// **Several widgets share one texture this way on the real discs.**
+    /// `ArrowSelect` samples `FETextures.mip` at `U="53" V="0"`; Pure's
+    /// `Title Screen->Press start button` samples `FETextures_startscreen.mip`
+    /// at `U="0" V="15"`, and two more widgets on that same screen sample
+    /// different rects of the same file (`U="0" V="0"` and `U="26" V="15"`) -
+    /// without this, every one of them would draw the file's own top-left
+    /// corner instead of its own patch. See
+    /// `handover/pures-title-screen-is-missing-its-own-logo.md`.
+    pub u: Option<f32>,
+    /// The `V` attribute, likewise.
+    pub v: Option<f32>,
+    /// The `TxtrWidth` attribute: width of the sampled sub-rect. `None` falls
+    /// back to the placed texture's own width at draw time - every `U`/`V`
+    /// measured on the real discs is paired with a `TxtrWidth`/`TxtrHeight`
+    /// beside it, so nothing has been observed to need a different default.
+    pub texture_width: Option<f32>,
+    /// The `TxtrHeight` attribute, likewise.
+    pub texture_height: Option<f32>,
     /// The `AutoLoad` attribute.
     ///
     /// Recorded but not acted on: this build loads every referenced texture up
     /// front, so there is nothing yet for a load-on-demand flag to change. It is
     /// parsed rather than dropped because the attribute is real.
     pub auto_load: bool,
+}
+
+/// A solid-colour `Image` widget: no `src`, so nothing to sample.
+///
+/// **Carries its own rect since 2026-08-25** - it used to be a bare ARGB
+/// value on [`Screen::fills`], because every one measured until then was a
+/// genuine full-screen backdrop (`Title Screen`'s and `Show Logo`'s own
+/// white/black background, both authored at exactly `480x272`), so
+/// `draw_backdrops` drawing every fill across the whole screen cost nothing.
+/// That stopped being free the moment `<Animation>` started being recursed
+/// into: `Demo_Definition.xml`, shared verbatim by both Pulse's and Pure's
+/// disc, wraps two colour-only `Image`s at `width="347" height="1"` and
+/// `width="151" height="1"` - a decorative underline, not a backdrop. See
+/// `handover/pures-title-screen-is-missing-its-own-logo.md`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Fill {
+    /// Left edge. Absent in the XML means zero, as it does for [`Image`].
+    pub x: f32,
+    /// Top edge.
+    pub y: f32,
+    /// Authored width, when the XML gives one. Absent means the whole
+    /// screen, since every colour-only `Image` that omits it is a
+    /// full-screen backdrop on the discs measured - the same reading
+    /// [`Image::width`] gives a `src` widget with none.
+    pub width: Option<f32>,
+    /// Authored height, likewise.
+    pub height: Option<f32>,
+    /// ARGB, resolved through `FEGlobals->` the same as every other colour
+    /// this format authors.
+    pub color: u32,
 }
 
 /// A `Menu` widget: a named, selectable list, and where/how its rows draw.
@@ -217,8 +269,8 @@ pub struct Screen {
     pub kind: Option<String>,
     /// Full `Parent->Child` path, matching the state machine's naming.
     pub path: String,
-    /// Solid-colour `Image` backdrops, as ARGB.
-    pub fills: Vec<u32>,
+    /// Solid-colour `Image` widgets, each with its own rect.
+    pub fills: Vec<Fill>,
     /// `Image` widgets that name a texture, in document order.
     pub images: Vec<Image>,
     /// `Movie` widgets in document order.
@@ -381,7 +433,8 @@ impl Screens {
     }
 
     /// A screen's own widgets, one node at a time - and, unlike [`Self::collect`],
-    /// recursing straight through a `Viewport` rather than stopping at it.
+    /// recursing straight through a `Viewport` or an `Animation` rather than
+    /// stopping at either.
     ///
     /// **No offset applied.** A `Viewport` carries its own `x`/`y`/`width`/
     /// `height` (see `Values` on the element itself), which on the one measured
@@ -402,16 +455,39 @@ impl Screens {
     /// against, so `viewport_width` carries the nearest enclosing
     /// `Viewport`'s own `width` down for [`Self::text_from_node`] to read.
     /// `None` outside any `Viewport`. See [`Text::wrap_width`].
+    ///
+    /// **`Animation`'s own `Key` timeline is discarded, not modelled.** An
+    /// `<Animation><Key Time="0" TextureWidth="-1"/><Key Time="0.1"
+    /// TextureWidth="0"/><Image>...</Image></Animation>` is a reveal - Pure's
+    /// `Title Screen` wraps every one of its frame-line decorations this way -
+    /// and what `TextureWidth` on a `Key` means is unread (it is not the same
+    /// attribute `hud.rs`'s own `<Animation><Key>` reading covers: that one is
+    /// `x`/`y` as a travel, this is a texture-space size on a widget that
+    /// carries its own `TxtrWidth` already). Recursing into `Animation` at all
+    /// used to drop its widgets outright - nothing drew rather than something
+    /// drawing at the wrong time - and dropping the timeline while keeping the
+    /// widget is the same trade this front end already makes for every other
+    /// widget's `delay`/`transition` attribute, neither of which is read
+    /// anywhere in this crate either. `<Key>` itself is inert here: it has no
+    /// case of its own, so it falls through the same as any other tag this
+    /// function does not recognise.
+    ///
+    /// **A colour-only `Image` inside an `Animation` is collected exactly
+    /// like a top-level one.** It was not always: recursing into `Animation`
+    /// used to risk turning `Demo_Definition.xml`'s two underlines into
+    /// full-screen washes, back when [`Fill`] was a bare ARGB value with no
+    /// rect of its own. Now that it carries one, an `Animation`-wrapped
+    /// colour-only `Image` draws at its own authored position the same as any
+    /// other widget - which is the point: `Title Screen`'s own frame lines are
+    /// authored exactly this way.
     fn collect_widgets(&self, screen: &mut Screen, child: &Node, viewport_width: Option<f32>) {
         match child.name.to_ascii_lowercase().as_str() {
             "image" => match child.value("src") {
-                // A `src` names a texture; a bare colour is a backdrop.
+                // A `src` names a texture; a bare colour is a [`Fill`].
                 Some(src) => screen.images.push(self.image_from_node(child, src)),
                 None => {
-                    if let Some(color) = child.value("color")
-                        && let Some(argb) = parse_argb(color)
-                    {
-                        screen.fills.push(argb);
+                    if let Some(fill) = self.fill_from_node(child) {
+                        screen.fills.push(fill);
                     }
                 }
             },
@@ -440,8 +516,28 @@ impl Screens {
                     self.collect_widgets(screen, grandchild, width);
                 }
             }
+            "animation" => {
+                // No `width` of its own to carry down - whatever the
+                // enclosing `Viewport` gave keeps applying inside.
+                for grandchild in &child.children {
+                    self.collect_widgets(screen, grandchild, viewport_width);
+                }
+            }
             _ => {}
         }
+    }
+
+    fn fill_from_node(&self, node: &Node) -> Option<Fill> {
+        let color = self
+            .resolve(node.value("color").unwrap_or_default())
+            .and_then(parse_argb)?;
+        Some(Fill {
+            x: self.number(node.value("x")).unwrap_or(0.0),
+            y: self.number(node.value("y")).unwrap_or(0.0),
+            width: self.number(node.value("width")),
+            height: self.number(node.value("height")),
+            color,
+        })
     }
 
     fn image_from_node(&self, node: &Node, src: &str) -> Image {
@@ -456,6 +552,10 @@ impl Screens {
                 .resolve(node.value("color").unwrap_or_default())
                 .and_then(parse_argb)
                 .unwrap_or(0xffff_ffff),
+            u: self.number(node.value("U")),
+            v: self.number(node.value("V")),
+            texture_width: self.number(node.value("TxtrWidth")),
+            texture_height: self.number(node.value("TxtrHeight")),
             auto_load: node.flag("AutoLoad").unwrap_or(false),
         }
     }
