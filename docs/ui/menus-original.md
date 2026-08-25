@@ -1,6 +1,7 @@
 # The original's menus
 
-**Status: main-menu layout measured, transition measured, chrome unbuilt.**
+**Status: main-menu layout measured, transition measured, top bar and footer
+strips built - their own ticker text and button prompts still unbuilt.**
 Implemented in [`oag_title::menu`](../../crates/title/src/menu.rs),
 [`oag_game::menu`](../../crates/game/src/menu.rs) and
 [`oag_game::anim`](../../crates/game/src/anim.rs).
@@ -173,13 +174,49 @@ a set of constants: `oag_title::MenuSkin`, filled in by `oag-pulse` and
 `oag-pure` separately, with a test asserting the two never come to match. What
 Pure has not been measured for is left empty rather than filled in from Pulse.
 
+## The top bar and the footer's two strips - built 2026-08-25
+
+**Not `topbarleft`/`topbarcenter`/`topbarright`.** That was a guess made
+before `Skin.xml` was actually read; on the disc the top bar is **one**
+`<Image>`, `x="20" y="0" width="224" height="24"`, and it and the footer's two
+strips (`x="12" y="236"` and `x="12" y="249"`, both `width="454" height="14"`)
+are three patches of one shared `Data\FE\Images\pulse_assets.mip` - the
+footer pair sampling their own sub-rect (`U="5" V="27"` and `U="5" V="52"`)
+of it. All three sit on `Top FE Screen->FE Screen`, the screen every menu
+nests inside, three levels of anonymous (unnamed) `<Screen>` down from it.
+
+**That nesting is why they were missing rather than wrong.** `Screens`'
+widget collection recursed into a `<Viewport>` and an `<Animation>` but not
+into a bare `<Screen>` used purely to group - so three anonymous wrappers
+were enough to lose all three images with no error and no picture, just
+silence. `collect_widgets` now recurses through an anonymous `Screen` the
+same way it already did the other two, closing that gap for every title
+`oag_game` reads, not only Pulse's. See `crates/game/src/screen.rs`'s own
+`collect_widgets` doc, and `crates/game/tests/pulse_frame_ground_truth.rs`,
+which pins all three widgets' coordinates and sub-rects against the disc.
+
+Wired through `oag_pulse::FRONT_END::menu_frame` (`oag_title::FrontEnd`'s
+already-generic "the screen names its own frame" mechanism - see
+`crates/game/src/menu/frame.rs` - the same one Wipeout HD's frame already
+used, so nothing new needed building to draw Pulse's). The authored black
+`TitleColor` draws now too: `oag_game::menu::skin::Skin::title_color` used to
+have only two answers, this build's own substitute or (for a title with a
+frame) the frame's own ink - and Pulse's marks carry no tint of their own, so
+that would have put white text on the bar instead. It now checks the disc's
+own declared colour first, which for both titles that have ever reached this
+code (HD and now Pulse) is also the only branch either reaches in practice.
+
+**The footer's own ticker text and button-prompt line are still unbuilt.**
+The two strips are backdrop art; the moving/localised parts on top of them -
+`<TextInfo>` (the tag and the scrolling news text) and the
+`<NavigationController>`'s button prompts - are elements nothing in
+`oag_game::screen` recognises yet, the same gap `crate::menu::frame`'s own
+module doc already names for Wipeout HD's trial-build text and button
+prompts.
+
 ## Not built
 
-- **The top bar** (`topbarleft`, `topbarcenter`, `topbarright`, and their
-  arrows) and **the footer** (a tag block, a scrolling ticker, a button-prompt
-  line). Until the bar exists, the authored black `TitleColor` would be black
-  text on a dark backdrop, so this build substitutes its own title colour - the
-  same substitution the language picker already makes.
+- **The footer's ticker text and button-prompt line** - see above.
 - **The highlight's pulse**, for want of a period and a depth.
 - **Pure's menus**, beyond the six globals its `Skin.xml` states. Its
   definitions have not been read for row geometry.
