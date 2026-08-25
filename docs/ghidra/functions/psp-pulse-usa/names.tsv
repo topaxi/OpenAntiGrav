@@ -565,3 +565,4 @@
 0x08ac4a2c	data	g_scream_pan_table	94	positional-audio.md
 0x088613bc	function	Autopilot_Fire	88	autopilot.md
 0x08861404	function	Autopilot_Update	85	autopilot.md
+0x0892c684	function	WeatherPos_RegisterClass	90	weatherpos.md
