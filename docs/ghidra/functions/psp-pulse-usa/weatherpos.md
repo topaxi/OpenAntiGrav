@@ -1,4 +1,4 @@
-# `weatherPos`'s registration is found, and its surviving handler is a dead end
+# `weatherPos`'s registration is found, and so is a runtime constructor nothing statically calls
 
 Found while working [the open thread on unrecovered particle triggers](../../../../handover/the-particle-effects-are-played-from-the-disc.md):
 the four environmental effects (`WO_RAIN`, `WO_SNOW`, `WO_MODESTO_STEAM_A`,
@@ -6,8 +6,18 @@ the four environmental effects (`WO_RAIN`, `WO_SNOW`, `WO_MODESTO_STEAM_A`,
 `weatherPos` `0x3da` ([`vex.md`](../../../formats/vex.md#node-types)) is the
 scene-node class shaped to carry that - `skycube.md` already flagged it as
 "1 to 21 per track, zero-length payload, undecoded". This page is the
-registration-site half of closing that; the placement-and-selection half is
-still open below.
+registration-site half of closing that, plus a class-identity mechanism and a
+runtime constructor found while reading it; the placement-and-selection half
+is still open below.
+
+**Revision note (same session):** an earlier version of this page called the
+value at the registered descriptor's `+4` "a trivial self-address-returning
+thunk" and treated it as a dead end, the same framing `pob.md` uses for
+`ParticleSystem`'s slot. That was wrong in kind, not just in detail - see
+["The `+4` field is a class-identity tag, not a dead handler"](#the-4-field-is-a-class-identity-tag-not-a-dead-handler)
+below. `pob.md`'s equivalent claim for `ParticleSystem` was not re-verified
+this session and may carry the same error; noted in the parent handover
+thread rather than changed here.
 
 ## `WeatherPos_RegisterClass` (`0x0892c684`)
 
@@ -34,12 +44,12 @@ function.
 void WeatherPos_RegisterClass(void)
 {
     Vex_RegisterClass(0x8c298, 0x3da);
-    *(void**)(0x8c2d0) = "..."; // string A
-    *(void**)(0x8c2c0) = "..."; // string B, shared
-    *(void**)(0x8c29c) = SomeThunk_A();   // 0x08a6ba64
-    *(void**)(0x8c2d0) = "..."; // string A', overwrites the first
-    *(void**)(0x8c2c0) = "..."; // string B, same value written again
-    *(void**)(0x8c29c) = SomeThunk_B();   // 0x08a7255c
+    *(void**)(0x8c2d0) = &SOME_BLOCK_A;   // +0x38, not a string - see below
+    *(void**)(0x8c2c0) = &STR_file;       // +0x28, the literal 4 bytes "file"
+    *(void**)(0x8c29c) = WeatherposTag(); // +0x4,  0x08a6ba64
+    *(void**)(0x8c2d0) = &SOME_BLOCK_B;   // +0x38, overwrites the first
+    *(void**)(0x8c2c0) = &STR_file;       // +0x28, same value written again
+    *(void**)(0x8c29c) = WeatherposTag(); // +0x4,  0x08a7255c, this one survives
     FinalizeClass(0x2bc120);
 }
 ```
@@ -50,35 +60,103 @@ Two things worth recording exactly as read, not smoothed over:
   survives.** The raw disassembly (not just the decompiler's rendering)
   confirms it: `sw a0, 0x38(s0)` / `sw s1, 0x28(s0)` / `sw v0, 0x4(s0)` each
   fire twice against the *same* `s0`, which is loaded once at function entry
-  and never changed. The field at `+0x28` gets the identical value both times;
-  `+0x38` and `+0x4` each get overwritten with a second, different value. This
-  does not match the `update`/`submit`/`draw`/`init` slot layout `vex.md` and
-  `exhaust.md` document at `+0x24`/`+0x34`/`+0x44`/`+0x7c` - those are filled
-  generically at instantiation time by the base-node constructor
-  (`LodGroup`'s finding in `vex.md`), not by `Vex_RegisterClass`'s own
-  initialiser, so there is no conflict, just a different, narrower field set
-  being written here. Why the write happens twice rather than once is not
-  explained by anything in this function; it costs nothing at runtime (dead
-  store) so it reads like two near-identical source statements the compiler
-  did not fold, not a bug worth chasing further.
-- **The surviving handler, at `0x08a7255c`, is a trivial self-address-returning
-  thunk** - `lui v0, 0x27; jr ra; addiu v0, v0, -0x1aa4` returns exactly its
-  own address and touches nothing else. This is the same dead end
-  [`pob.md`](../../../formats/pob.md) already found for `ParticleSystem`'s
-  registered handler (`0x08a6bd18`, "a trivial self-address-returning
-  thunk"). The discarded first-write handler at `0x08a6ba64` is one of *six*
-  consecutive, identical eight-byte thunks starting there
-  (`0x08a7255c`..`0x08a725a0`), each just returning a different constant a few
-  bytes apart - a small table of interchangeable placeholder returns, not
-  per-class logic.
+  and never changed. `+0x28` gets the identical value both times - the address
+  of the four bytes `"file\0"` (`0x08a88a38`), repeated several times in
+  memory around there, which reads like a generic allocator category tag
+  rather than anything `weatherPos`-specific. `+0x38` gets two *different*
+  pointers, neither a string: each points at a small block that itself holds
+  more truncated pointers (the same "unrelocated address constant" shape as
+  everything else in this region), not decoded further. This does not match
+  the `update`/`submit`/`draw`/`init` slot layout `vex.md` and `exhaust.md`
+  document at `+0x24`/`+0x34`/`+0x44`/`+0x7c` - those are filled generically at
+  instantiation time by the base-node constructor (`LodGroup`'s finding in
+  `vex.md`), not by `Vex_RegisterClass`'s own initialiser, so there is no
+  conflict, just a different, narrower field set being written here. Why the
+  write happens twice rather than once is not explained by anything in this
+  function; it costs nothing at runtime (dead store) so it reads like two
+  near-identical source statements the compiler did not fold.
 
-**So the registration call site answers "is `weatherPos` handled at all" (yes,
-alphabetically among the 46, same as every other environment class) but not
-"how" - the field that would carry real behaviour holds a thunk, exactly the
-pattern that already closed off `ParticleSystem` as a lead.** Class dispatch
-being by descriptor lookup rather than an immediate compare
-([`vex.md`](../../../formats/vex.md#node-types)) means there is no `li 0x3da`
-to search for either.
+### The `+4` field is a class-identity tag, not a dead handler
+
+**The value written to `+4` is not a "handler" at all - it is `weatherPos`'s
+identity tag, and the mechanism that reads it is live.** `+0x08a7255c` -
+`lui v0, 0x27; jr ra; addiu v0, v0, -0x1aa4` - returns exactly its own
+address and touches nothing else, which is what the previous version of this
+page called a dead-end thunk. Three independent call sites say otherwise:
+
+- `FUN_08a71364`, the generic tree-walker `vex.md` already documents gathering
+  every `Mesh` for `Vex_LoadModel`, does not compare a class id at all - it
+  compares `*(node + 4) == *(filter + 4)`. A node's own `+4` is stamped from
+  its class's registered descriptor at construction time, so this is a
+  pointer-identity check against exactly the value `Vex_RegisterClass`
+  installs.
+- `Vex_LoadModel` builds that `filter` locally, once per node type it wants,
+  by *calling* the corresponding tag-getter and storing the result at the
+  filter struct's `+4` - `local_28c = func_0x00267d48(); ...
+  func_0x0026d364(param_1, local_33dc, 2000, &local_254, auStack_290);` is the
+  `Mesh` gather (cap 2000, matching `vex.md`'s reading of `FUN_08a71364`), and
+  two further gathers in the same function use the same shape with different
+  tag-getters and caps (1000, 0x40). `func_0x00267d48` is a thunk of the exact
+  same self-address-returning form as `weatherPos`'s.
+- `FUN_0892c404` (below), a runtime object constructor, stamps a freshly
+  allocated instance's `+4` with the *same* thunk `weatherPos`'s registration
+  ends on (`0x0026e55c`, i.e. `0x08a7255c`) - tagging the new object as a
+  `weatherPos` instance for exactly the comparison above to recognise later.
+
+So the six-thunk cluster at `0x08a7255c`..`0x08a725a0` (each returning its own
+address, a few bytes apart) is not "a small table of interchangeable
+placeholder returns" - it is six classes' identity tags, sitting where their
+translation units happened to link. `weatherPos`'s is the one at `0x08a7255c`;
+the discarded first-write tag at `0x08a6ba64` is presumably some other,
+unidentified class's, briefly written to this same descriptor before the
+second write replaced it with `weatherPos`'s own.
+
+**This means `pob.md`'s identical framing for `ParticleSystem`'s slot
+(`FUN_08a6bd18`, called there "a trivial self-address-returning thunk", "the
+same dead end") is now suspect too** - it was not re-checked this session
+against `FUN_08a71364`'s callers, and the mechanism above says a thunk of this
+exact shape is very unlikely to be inert. Flagged in the parent handover
+thread; `pob.md` itself is left as it stood pending that check.
+
+Class dispatch being by descriptor lookup rather than an immediate compare
+([`vex.md`](../../../formats/vex.md#node-types)) still means there is no
+`li 0x3da` to search for.
+
+## A runtime constructor exists, and nothing in this binary statically reaches it
+
+`FUN_0892c404(param_1, param_2, param_3)`, a few hundred bytes past
+`WeatherPos_RegisterClass` in the same region, allocates a fresh `0xa0`-byte
+object (`func_0x00142e40(0xa0, &STR_file, 0x21a)`, the same generic `"file"`
+tag and a `0x21a` category constant), splices it into `param_2`'s child list
+when `param_2` is non-null (`func_0x00140bd4`, the same sibling-linkage
+primitive `vex.md` records for `LodGroup`'s constructor), then calls
+`FUN_0892c340(new_object)` - confirmed from the raw disassembly, not just the
+decompiler's rendering, since `a0` is `move`d from the new object's own
+register right before the `jal` - which in turn stamps `+0x38`/`+0x28`
+generically and `+4` with `weatherPos`'s own tag (`0x0026e55c`, `0x08a7255c`).
+`FUN_0892c404` then stamps `+4` with the same tag again itself, redundant with
+what `FUN_0892c340` already wrote - the same harmless double-write pattern as
+`WeatherPos_RegisterClass`'s own descriptor above.
+
+**`FUN_0892c340` has exactly one caller in this binary: `FUN_0892c404`.** Not
+proven shared boilerplate, despite writing a generic-looking `"file"` tag -
+just not ruled out either.
+
+**`FUN_0892c404` itself has no caller found by any of three independent
+searches**: `get_xrefs_to` and `get_function_callers` return nothing (as
+expected in this wart-affected region), and `search_instructions` for its
+address in *both* valid `lui`/`addiu` encodings (`0x00128404` as `lui 0x13` +
+`addiu -0x7bfc`, and as `lui 0x12` + `addiu 0x8404`) also returns nothing -
+unlike `Vex_RegisterClass` and `FUN_08a71364`, which this same technique found
+dozens of call sites for. So this is not the earlier session's search-encoding
+mistake repeating; it is a genuine negative result. Either something calls it
+through a function-pointer slot this session did not locate (a class-table
+`+0x7c` `init` field is the obvious candidate, per `LodGroup`'s documented
+layout, but nothing here confirms `FUN_0892c404` sits in `weatherPos`'s own
+table at that offset), or - matching the pattern `vex.md` already documents
+for `LodGroup`'s tier switch and for `engine_fire`/`exitglow`/`gate`'s
+missing registrations - this retail binary authors a `weatherPos` constructor
+it never statically exercises.
 
 ## Placement: no in-file signal, confirmed on one track
 
@@ -104,19 +182,21 @@ already reads) was checked too - its full attribute set (`type`,
 
 ## Open
 
-- **The trigger is still not recovered.** The registered handler is a dead end
-  and no authored data (`.vex` names, `Definition.xml`) says which effect a
-  `weatherPos` instance plays or picks between the four candidates. What is
-  now ruled out: a per-class handler function, and a data-authored name or
-  flag anywhere this project reads.
-- **What has not been tried**: the generic tree-walker that collects nodes by
-  class for runtime use (the same shape as `FUN_08a71364`, which
-  `vex.md`/`Vex_LoadModel` uses to gather every `Mesh`) has not been located
-  for class `0x3da`. If one exists, its caller is the next lead - it is the
-  only place left that could hold a per-track or per-name dispatch (a string
-  compare against the track's own name, for instance) deciding which `.pob`
-  plays. Searching from `Vex_LoadModel`'s own callers outward, rather than
-  from the class table inward, is untried.
+- **The trigger is still not recovered**, and no authored data (`.vex` names,
+  `Definition.xml`) says which effect a `weatherPos` instance plays or picks
+  between the four candidates. What is now ruled out: a data-authored name or
+  flag anywhere this project reads. What is **not** ruled out any more: a
+  per-class runtime path exists (`FUN_0892c404`) - it just is not statically
+  reached, so either its caller has not been found yet or the retail binary
+  authors it without exercising it.
+- **`FUN_0892c404`'s caller is the concrete next probe.** Candidates not yet
+  tried: reading `weatherPos`'s own class table (`0x8c298` +imagebase
+  `0x08890298`) for a non-generic `+0x7c` to confirm or refute it sits there
+  as the `init` slot; a live emulator with a breakpoint on `0x0892c404` during
+  a race on a track with `weatherPos` instances (Talon's Junction has 14);
+  or a broader sweep of `Vex_LoadModel`'s three per-node-type gathers (`Mesh`,
+  and two more at caps 1000 and `0x40`, none yet identified) in case one of
+  them is what ends up invoking it.
 - **`WO_MODESTO_STEAM_A` may not even be a Pulse-authored trigger.** `modesto_heights`
   matches **Pure**'s `03_Modesto_Heights`
   ([`hd-status.md`](../../../formats/hd-status.md#the-circuits-are-the-psps)),

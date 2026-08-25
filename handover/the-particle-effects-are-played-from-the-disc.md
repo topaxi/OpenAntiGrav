@@ -7,23 +7,29 @@
 - Most of the 35 disc particle systems have a parsed asset but no recovered trigger, so they stay deliberately unwired.
 - The interpreter does not yet implement sprite atlases/textures, billboard roll, emitter extent, the emission-scale channel, or the animated-attribute array.
 - The two instance-level scales (`instance[+0x40]` alpha, `instance[+0x34]` size) are read but unmodelled; the alpha factor is not fed by anything here.
-- **The environmental four are narrower than they looked, and still open.** `weatherPos`
-  `0x3da`'s registration is now found (`WeatherPos_RegisterClass`,
-  `0x0892c684`) and its surviving handler is a dead-end thunk, the same shape
-  `pob.md` already found for `ParticleSystem`. No node payload, Maya name, or
-  `PI_Track` attribute says which of `WO_RAIN`/`WO_SNOW`/`WO_MODESTO_STEAM_A`/
-  `WO_BLUE_WELDER` a `weatherPos` instance plays - checked on Talon's Junction's
-  14 instances and the front end's `Definition.xml`, both empty of a signal.
-  Detail in
+- **The environmental four are narrower than they looked, and still open.**
+  `weatherPos` `0x3da`'s registration is found (`WeatherPos_RegisterClass`,
+  `0x0892c684`), and so is a genuine runtime constructor for it
+  (`FUN_0892c404`, allocates and tags a real instance) - but no static call
+  site anywhere in this binary reaches that constructor, checked three
+  independent ways. No node payload, Maya name, or `PI_Track` attribute says
+  which of `WO_RAIN`/`WO_SNOW`/`WO_MODESTO_STEAM_A`/`WO_BLUE_WELDER` a
+  `weatherPos` instance plays - checked on Talon's Junction's 14 instances and
+  the front end's `Definition.xml`, both empty of a signal. Detail, including
+  the class-identity-tag mechanism this pass found, in
   [`docs/ghidra/functions/psp-pulse-usa/weatherpos.md`](../docs/ghidra/functions/psp-pulse-usa/weatherpos.md).
-  Untried: the generic per-class tree-walker (the `Mesh`-gathering shape) for
-  `0x3da`, which nothing has looked for yet and is the only place left a
-  per-track dispatch could live. Separately, `WO_MODESTO_STEAM_A` may not even
-  be a Pulse trigger at all - `modesto_heights` matches a **Pure** circuit, not
-  a Pulse one.
+  Separately, `WO_MODESTO_STEAM_A` may not even be a Pulse trigger at all -
+  `modesto_heights` matches a **Pure** circuit, not a Pulse one.
+- **`pob.md`'s "dead end" reading of `ParticleSystem`'s registered slot
+  (`FUN_08a6bd18`) may be the same mistake `weatherpos.md` made and then
+  corrected.** Not re-checked this session - `weatherpos.md` found that the
+  identical-shaped value for `weatherPos` is a live class-identity tag, read
+  by `Vex_LoadModel`'s per-class node gather, not inert. Worth the same check
+  before trusting `pob.md`'s framing on `ParticleSystem`.
 
 ## Next Steps
 
-- Recover triggers for the unwired effects - weapon ones need the weapon itself built first. For the four environmental ones, the class-handler route is now a dead end (see above); the next untried route is the generic class-`0x3da` tree-walker, searched for from `Vex_LoadModel`'s own callers outward.
+- Recover triggers for the unwired effects - weapon ones need the weapon itself built first. For the four environmental ones, find what calls `weatherPos`'s runtime constructor (`FUN_0892c404`, `psp-pulse-usa/weatherpos.md` has three untried leads) or confirm nothing in the retail binary does.
+- Re-check `pob.md`'s `ParticleSystem` "dead end" claim against the class-identity-tag mechanism `weatherpos.md` found, before relying on it.
 - Implement the missing interpreter features (atlases/textures, billboard roll, emitter extent, emission-scale channel, animated-attribute array).
 - Do not fire any effect on a guess - follow the do-not-invent rule in `CLAUDE.md`.
