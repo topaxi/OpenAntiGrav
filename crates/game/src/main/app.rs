@@ -50,6 +50,8 @@ pub(crate) struct App {
     /// `--anim-seconds`: pins the trackside animation clock. See
     /// `Session::anim_seconds`.
     pub(crate) anim_seconds: Option<f32>,
+    /// `--pvs`, carried to the session. See `Session::pvs_culling`.
+    pub(crate) pvs_culling: Option<bool>,
     /// A race loaded before the window opened, which is what `--race` does.
     pub(crate) race: Option<race::Loaded>,
     /// What a race started from `Launch Game` is flown on.
@@ -252,6 +254,7 @@ impl App {
             give: self.give,
             autopilot: self.autopilot,
             anim_seconds: self.anim_seconds,
+            pvs_culling: self.pvs_culling,
             scheme: self.scheme,
             anisotropy: self.anisotropy,
             launched: false,

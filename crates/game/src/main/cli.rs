@@ -498,6 +498,19 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) lod: Option<oag_render::mesh::Lod>,
 
+    /// Whether the track's authored visibility set culls this run: `true` or
+    /// `false`.
+    ///
+    /// Overrides `[graphics] pvs_culling` in the settings file
+    /// (`settings::path`) for this run only; the file on disk is not changed.
+    /// Here for the same reason `--lod` is, and for one more: **when geometry
+    /// goes missing, the first question is whether the PVS took it**, and two
+    /// captures differing only by this flag answer it without editing a
+    /// settings file between them - which is how a comparison ends up
+    /// differing by something else as well.
+    #[arg(long)]
+    pub(crate) pvs: Option<bool>,
+
     /// Which resampler carries the frame onto the surface: bilinear or fsr1.
     ///
     /// Overrides `[graphics] upscaler` in the settings file (`settings::path`)

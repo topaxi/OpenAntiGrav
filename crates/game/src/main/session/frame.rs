@@ -383,6 +383,8 @@ impl Session {
         let size = self.framebuffer.size();
         let inside = (0.0, 0.0, size.0 as f32, size.1 as f32);
         let target = self.framebuffer.view();
+        // Read before the match, which borrows `self.stage` mutably.
+        let pvs_culling = self.pvs_culling();
         let (scene_stats, video_label) = match &mut self.stage {
             Stage::Launcher(stage) => {
                 stage.render(&self.gpu, &mut encoder, target, inside);
@@ -424,7 +426,7 @@ impl Session {
                     inside,
                     self.settings.graphics.fov,
                     self.settings.graphics.frustum_culling,
-                    self.settings.graphics.pvs_culling,
+                    pvs_culling,
                     self.anim_seconds,
                 )),
                 None,

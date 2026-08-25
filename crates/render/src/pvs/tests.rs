@@ -383,7 +383,7 @@ fn the_mask_decides_before_the_frustum_is_consulted() {
 /// A `.pvs` fixture: `cells` cells at the given positions over `chunks`
 /// chunks, each cell seeing exactly the chunks `sees` names for it.
 fn hd_pvs(positions: &[[f32; 3]], chunks: usize, sees: impl Fn(usize) -> Vec<usize>) -> Vec<u8> {
-    let width = chunks.div_ceil(8);
+    let width = chunks / 8 + 1;
     let mut out = Vec::new();
     for word in [positions.len() as u32, chunks as u32, 0x10, 0] {
         out.extend_from_slice(&word.to_be_bytes());

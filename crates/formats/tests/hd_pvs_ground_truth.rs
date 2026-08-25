@@ -132,8 +132,8 @@ fn no_bitmap_sets_a_bit_past_its_own_chunk_count() {
 /// **The file is at least its own declared table, and any surplus is
 /// reported.**
 ///
-/// 14 of the 28 are exactly the table; the other 14 carry between 477 and
-/// 78,900 further bytes of a section this parser deliberately does not read.
+/// 16 of the 28 are exactly the table; the other 12 carry a further section
+/// the retail loader provably never reaches.
 /// Asserted so the split is a measured fact in the suite rather than a
 /// sentence in a doc comment.
 #[test]
@@ -145,11 +145,18 @@ fn the_trailing_section_is_reported_rather_than_parsed() {
     let shipped = every_pvs();
     let exact = shipped.iter().filter(|f| f.pvs.trailing() == 0).count();
     assert_eq!(
-        exact, 14,
-        "half of the disc's {SHIPPED} .pvs files are exactly their own table"
+        exact, 16,
+        "16 of the disc's {SHIPPED} .pvs files are exactly their own table"
     );
+    let mut trailing: Vec<usize> = shipped
+        .iter()
+        .map(|f| f.pvs.trailing())
+        .filter(|n| *n > 0)
+        .collect();
+    trailing.sort_unstable();
+    println!("trailing byte counts: {trailing:?}");
     for file in &shipped {
-        let table = 0x10 + file.pvs.cells() * 16 + file.pvs.cells() * file.pvs.chunks().div_ceil(8);
+        let table = 0x10 + file.pvs.cells() * 16 + file.pvs.cells() * file.pvs.bitmap_bytes();
         assert_eq!(
             file.blob.len(),
             table + file.pvs.trailing(),

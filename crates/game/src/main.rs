@@ -443,6 +443,7 @@ fn main() -> Result<()> {
     event_loop.set_control_flow(ControlFlow::Poll);
 
     let mut app = App {
+        pvs_culling: cli.pvs,
         boot_shell,
         media,
         boot_overlay,

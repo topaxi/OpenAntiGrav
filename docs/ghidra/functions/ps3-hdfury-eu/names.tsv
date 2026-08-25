@@ -87,3 +87,15 @@
 0x00018848	function	Game_PresentLoop	65	engine-trail.md
 0x00936fd4	data	Render_FrameContextPtr	55	engine-trail.md
 0x008b7f08	data	g_ShaderParameterNames	95	renderer.md
+0x003f5550	function	Pvs_LoadForTrack	84	visibility.md
+0x003c6f20	function	Pvs_Load	84	visibility.md
+0x006d1548	function	Pvs_BuildCellTree	80	visibility.md
+0x003c7980	function	Pvs_NearestCell	82	visibility.md
+0x003f2e68	function	Pvs_NearestCellCached	78	visibility.md
+0x003c5b50	function	Pvs_CellBitmap	82	visibility.md
+0x003c5b48	function	Pvs_BitmapBytes	82	visibility.md
+0x003c5af8	function	Pvs_IsUsable	82	visibility.md
+0x003fa120	function	Visibility_ShowAllChunks	80	visibility.md
+0x003fa0f8	function	Visibility_HideChunk	82	visibility.md
+0x003fad70	function	Visibility_CopyCellMask	80	visibility.md
+0x00d44f80	data	g_ChunkVisibilityMask	80	visibility.md

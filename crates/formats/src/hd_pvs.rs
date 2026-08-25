@@ -21,10 +21,18 @@
 //! +0x04  u32  chunks          - the sibling .rcsmodel's chunk count, exactly
 //! +0x08  u32  16              - constant across all 28 files on the disc
 //! +0x0c  u32  ?               - differs per file; not read
-//! +0x10       cells x 4 f32   - one record per cell (see `Cell`)
-//! ...         cells x ceil(chunks / 8) bytes - one bitmap per cell, LSB first
+//! +0x10       cells x 4 f32   - one record per cell: x, y, z, and a repeat of z
+//! ...         cells x (chunks / 8 + 1) bytes - one bitmap per cell, LSB first
 //! ...         optional trailing bytes, see `Pvs::trailing`
 //! ```
+//!
+//! **`cells` and the bitmap width are what the loader at `0x003c6f20` reads;
+//! the other three header words it reads and throws away.** Word 1 lands in
+//! the object and is then overwritten with a chunk count the *caller* passes
+//! from the model, and words 2 and 3 land in stack slots nothing reads again -
+//! they are consumed to advance the stream and nothing else. So the engine
+//! trusts the model for the bitmap width, not the file. See
+//! `docs/ghidra/functions/ps3-hdfury-eu/visibility.md`.
 //!
 //! # How each field was settled
 //!
@@ -33,14 +41,26 @@
 //! for Anulpha Pass, 1,902 for Modesto Heights, and so on for every other
 //! circuit and every `_reversed` variant. Confidence 97.
 //!
-//! **The bitmap is `ceil(chunks / 8)` bytes.** Every cell's last byte carries
-//! only the bits `chunks` leaves valid, on all 28 files: Talon's 983 bits end
-//! seven into byte 123 and no block's last byte reaches `0x80`; Anulpha's
-//! 1,125 end five into byte 141 and none reaches `0x20`. 621 bytes all below
-//! `0x80` by chance is `2^-621`. Confidence 96.
+//! **The bitmap is `chunks / 8 + 1` bytes.** The loader computes exactly
+//! `(chunks >> 3) + 1`, so a chunk count that is a multiple of eight gets a
+//! **whole spare byte** rather than a tight fit - `ceil(chunks / 8)` agrees on
+//! every other count and is wrong on those. Confidence 84 from the
+//! instruction pair; independently, every cell's last byte carries only the
+//! bits `chunks` leaves valid, on all 28 files - Talon's 983 bits end seven
+//! into byte 123 and no block's last byte reaches `0x80`, Anulpha's 1,125 end
+//! five into byte 141 and none reaches `0x20`. 621 bytes all below `0x80` by
+//! chance is `2^-621`.
 //!
-//! **Bit `k` is chunk `k` in `.rcsmodel` file order, LSB first.** Measured
-//! spatially: for each sampled cell, take the 50 chunks whose bounding spheres
+//! **This is why some files looked like they had a trailing section and do
+//! not.** A `ceil` reader under-counts the table by exactly `cells` bytes on
+//! every file whose chunk count divides by eight, and four of the disc's
+//! twenty-eight do.
+//!
+//! **Bit `k` is chunk `k` in `.rcsmodel` file order, LSB first.** The
+//! executable settles the bit order outright: the routine that clears one
+//! chunk from the frame mask (`0x003fa0f8`) is `mask[i >> 3] &= ~(1 << (i &
+//! 7))`. Confidence 84. That the index is the chunk's own file position is
+//! measured spatially: for each sampled cell, take the 50 chunks whose bounding spheres
 //! are nearest the cell and the 50 that are furthest, and count how many are
 //! set. At offset zero, **84% of the nearest are visible and 10% of the
 //! furthest** on Talon's Junction (90% / 11% on Anulpha Pass). Shifting the
@@ -156,7 +176,7 @@ impl Pvs {
                 chunks: chunks as u32,
             });
         }
-        let width = chunks.div_ceil(8);
+        let width = chunks / 8 + 1;
         let bits_at = CELLS_AT + cells * CELL_SIZE;
         let need = bits_at + cells * width;
         if data.len() < need {
@@ -195,7 +215,11 @@ impl Pvs {
 
     /// Bytes after the bitmap table that this parser does not read.
     ///
-    /// Zero on 14 of the disc's 28 files. See the module docs.
+    /// **The loader cannot reach them.** `0x003c6f20` has six read sites - four
+    /// header words, the cell records, and the per-cell bitmaps - and no seek,
+    /// and it destroys the stream immediately afterwards. So whatever this
+    /// region is, the retail executable never looks at it. Zero on 18 of the
+    /// disc's 28 files. See the module docs.
     #[must_use]
     pub fn trailing(&self) -> usize {
         self.trailing
@@ -230,6 +254,12 @@ impl Pvs {
     pub fn cell_bits(&self, cell: usize) -> Option<&[u8]> {
         let at = cell.checked_mul(self.width)?;
         self.bits.get(at..at + self.width)
+    }
+
+    /// The width of one cell's bitmap in bytes, as the loader computes it.
+    #[must_use]
+    pub fn bitmap_bytes(&self) -> usize {
+        self.width
     }
 
     /// Whether `chunk` may be drawn from `cell`.

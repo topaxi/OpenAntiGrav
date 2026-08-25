@@ -158,6 +158,7 @@ pub(crate) fn run_windowless(
                 settings: settings::Settings {
                     graphics: settings::Graphics {
                         camera_view: cli.camera_view.unwrap_or(settings.graphics.camera_view),
+                        pvs_culling: cli.pvs.unwrap_or(settings.graphics.pvs_culling),
                         ..settings.graphics.clone()
                     },
                     ..settings.clone()
@@ -381,7 +382,7 @@ pub(crate) fn run_race(
                 renderer: settings.graphics.renderer.clone(),
                 fov: settings.graphics.fov,
                 frustum_culling: settings.graphics.frustum_culling,
-                pvs_culling: settings.graphics.pvs_culling,
+                pvs_culling: cli.pvs.unwrap_or(settings.graphics.pvs_culling),
                 anim_seconds: cli.anim_seconds,
                 bloom: settings.graphics.bloom,
                 boost_fov_kick: settings.graphics.boost_fov_kick,
@@ -414,6 +415,7 @@ pub(crate) fn run_race(
     // Poll rather than Wait: the simulation runs whether or not input arrives.
     event_loop.set_control_flow(ControlFlow::Poll);
     let mut app = App {
+        pvs_culling: cli.pvs,
         boot_shell: None,
         media: None,
         boot_overlay: false,

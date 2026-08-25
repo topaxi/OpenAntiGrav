@@ -9,7 +9,7 @@ fn build(
     set: impl Fn(usize, usize) -> bool,
     trailing: usize,
 ) -> Vec<u8> {
-    let width = chunks.div_ceil(8);
+    let width = chunks / 8 + 1;
     let mut out = Vec::new();
     for word in [cells as u32, chunks as u32, CELLS_AT as u32, 0xdead_beef] {
         out.extend_from_slice(&word.to_be_bytes());
@@ -47,16 +47,20 @@ fn a_bit_is_read_lsb_first_over_chunk_index() {
 }
 
 #[test]
-fn the_bitmap_is_ceil_chunks_over_eight_bytes_wide() {
-    // 20 chunks is three bytes: a reader using two or four would run the
-    // cells into each other, which is what the disc's padding-bit test rules
-    // out.
-    let blob = build(3, 20, &[[0.0; 3]; 3], |cell, chunk| chunk == cell, 0);
-    let pvs = Pvs::parse(&blob).unwrap();
-    assert_eq!(pvs.cell_bits(0).unwrap().len(), 3);
-    for cell in 0..3 {
-        assert!(pvs.visible(cell, cell));
-        assert_eq!(pvs.visible_count(cell), 1);
+fn the_bitmap_is_chunks_over_eight_plus_one_bytes_wide() {
+    // 20 chunks is three bytes, and 16 would be three as well: the loader
+    // computes `(chunks >> 3) + 1`, so a count that divides by eight gets a
+    // whole spare byte. A reader that used `ceil` would run the cells into
+    // each other on exactly those counts.
+    for (chunks, want) in [(20usize, 3usize), (16, 3), (8, 2), (7, 1)] {
+        let blob = build(3, chunks, &[[0.0; 3]; 3], |cell, chunk| chunk == cell, 0);
+        let pvs = Pvs::parse(&blob).unwrap();
+        assert_eq!(pvs.bitmap_bytes(), want, "{chunks} chunk(s)");
+        assert_eq!(pvs.cell_bits(0).unwrap().len(), want);
+        for cell in 0..3 {
+            assert!(pvs.visible(cell, cell));
+            assert_eq!(pvs.visible_count(cell), 1);
+        }
     }
 }
 

@@ -115,6 +115,14 @@ pub(crate) struct Session {
     /// which is how a value written before the default flipped went on
     /// freezing circuits long after the animation stopped being a guess.
     pub(crate) anim_seconds: Option<f32>,
+    /// `--pvs`: overrides `[graphics] pvs_culling` for this run.
+    ///
+    /// **Not in [`Self::settings`], on purpose**, for the reason
+    /// [`Self::anim_seconds`] is not: it is a harness knob for answering "did
+    /// the visibility set take that geometry, or something else?", and a value
+    /// persisted into a settings file would keep answering it long after the
+    /// question was closed.
+    pub(crate) pvs_culling: Option<bool>,
     /// Where every stage draws, before it is stretched onto the surface.
     ///
     /// On the session rather than on a stage because it outlives them: a race
@@ -356,5 +364,14 @@ impl Session {
         if self.next_frame < now || self.next_frame > now + period {
             self.next_frame = now + period;
         }
+    }
+}
+
+impl Session {
+    /// Whether the authored visibility set culls this frame: `--pvs` when it
+    /// was given, `[graphics] pvs_culling` otherwise.
+    pub(crate) fn pvs_culling(&self) -> bool {
+        self.pvs_culling
+            .unwrap_or(self.settings.graphics.pvs_culling)
     }
 }
