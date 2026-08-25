@@ -43,15 +43,32 @@
 //! *not* give is the transform - it says a slot number means a place, not
 //! where the place is.
 //!
-//! # What is deliberately not done here
+//! # What the executable does with a slot, and what it still doesn't say
 //!
-//! **Nothing is placed.** An advert's chunks are node-local with a bias near
-//! the origin, so the circuit must supply a transform, and **where that comes
-//! from is unrecovered**: HD's circuits use 30 node classes and
+//! [`docs/ghidra/functions/ps3-hdfury-eu/billboards.md`](../../../docs/ghidra/functions/ps3-hdfury-eu/billboards.md)
+//! reads `TrackStartup_Load` and settles two things this module used to leave
+//! open: `num` indexes a plain 9-entry array (`0` wasted, `1`-`8` real, no
+//! name lookup - the two stray `Billboard<digits>` nodes are artist debris),
+//! and a slot is **instantiated** rather than merely texturing geometry
+//! already on screen. It also finds that the engine reads `Colour` (the UK
+//! spelling, merged with `Color`) and a numeric `Glow`, and does *not* read
+//! `type` at all - all four checked against the real 16 manifests, where
+//! `Colour`/`Glow` never appear, so this reader is right to skip them. And it
+//! finds a live surprise: slot 7 - authored `fx350.vex` on every circuit - is
+//! silently replaced by a mode-specific gate model at runtime, regardless of
+//! what the manifest says; slot 8 is not special-cased and keeps its own
+//! `321Go_StartFinish.vex` as authored.
+//!
+//! **Nothing is placed here still.** An advert's chunks are node-local with a
+//! bias near the origin, so the circuit must supply a transform, and **where
+//! that comes from is unrecovered**: HD's circuits use 30 node classes and
 //! `oag_formats::vex` already names all 30, so there is no dedicated slot
 //! class; and searching every circuit for a node named exactly
 //! `Billboard<digits>` finds one on `02_track` and one on `05_ubermall` and
 //! nothing anywhere else, so the artists' names are not the convention either.
+//! `GetBillboardMeshIdFromName`, on the same docs page, is the next lead: a
+//! name-hash lookup against a per-track billboard list that resets a 4x4
+//! matrix on every (re)bind - read, not yet chased.
 //!
 //! Per `CLAUDE.md`, an asset whose **trigger** is unrecovered stays unwired
 //! rather than placed on a guess: a hoarding put somewhere plausible is exactly

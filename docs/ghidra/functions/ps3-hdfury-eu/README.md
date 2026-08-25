@@ -71,6 +71,10 @@ Two structural facts to expect, both different from every other binary here:
   the finding that HD keeps Pulse's one-translation-unit-per-`.vex`-class
   importer layout. Also the **out-of-Ghidra** way around the TOC defect,
   [`scripts/ps3-toc.py`](../../../../scripts/ps3-toc.py).
+- [billboards.md](billboards.md) - `TrackStartup_Load`: how a `<Billboard>`
+  becomes a 9-entry slot array indexed by its own `Num`, that it instantiates
+  rather than textures existing geometry, and the one slot the engine
+  overrides regardless of what its manifest authored.
 
 Add a row to [`names.tsv`](names.tsv) and the page it cites in the same change:
 `scripts/apply-ghidra-names.py` refuses a row whose address and name do not
