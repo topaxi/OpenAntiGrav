@@ -172,28 +172,83 @@ four addresses, only observed to sit near them in the same data region.
 Slot 8 is not special-cased anywhere in this function; its `321Go_StartFinish`
 content is used exactly as authored.
 
+## `GetBillboardMeshIdFromName` has no found caller - but its write recurs in a function that does
+
+`GetBillboardMeshIdFromName`'s only xref Ghidra reports is a **data**
+reference from `0x0088b6d0`, not a call. That address is inside the module's
+`.opd` section (Ghidra's own naming gives it away: neighbouring entries import
+as `.opd.FUN_003a4650` etc.) - checked by reading 64 bytes on both sides of
+it, and the same `{entry, 0x008bd3c4}` eight-byte pattern continues in both
+directions well past any plausible billboard-sized table, so this is the
+ordinary PPC64 function-descriptor section, not a billboard-specific dispatch
+table. **What actually calls `GetBillboardMeshIdFromName` is still unread**,
+and the caveat this page opened with applies directly here: `0x003a4b70` is
+above `0x0032d5e0`, where Ghidra's own TOC is wrong (see "The trap" above), so
+an indirect call through a mis-resolved pointer cannot be ruled out by a
+single `get_function_xrefs` call. `scripts/ps3-toc.py`'s `resolve`/`toc`
+commands were not run against candidate indirect-call sites to check for one;
+that is the next step, not a conclusion reached here.
+
+Separately, `0x003a4da0` (unnamed, confidence held below 50 for the reason
+below - do not rename) **is** reached by a real, traced call:
+`Billboard_ConstructResource_q` calls it at `0x0029adb4` as
+`FUN_006791d8((int)param_4, param_2, param_1, uVar23)`, i.e. `(num,
+location_ptr, the billboard object, the just-allocated .vex mesh resource)`.
+`FUN_006791d8` is a pure TOC-fixup trampoline (`std r2,0x28(r1)`; recompute
+r2; `b 0x003a4da0`, no register touched), so those four arguments pass
+through unchanged; Ghidra's decompile shows a fifth parameter on
+`0x003a4da0` with no value supplied at this call site, so it is either read
+from a stale register or genuinely unused on this path - not resolved either
+way.
+
+`0x003a4da0` is 4.5 KB, mixing resource-database path building (`%s` around
+`TimeTrial_HUD.xml`-shaped strings) with logic this session did not work
+through. But its tail loop **inlines `GetBillboardMeshIdFromName`'s exact
+write**, against a lookup of the same stride and offset:
+`*(int*)(PTR_s_WIP3OUT_008a704c + index*0x100 + 0x10)`, where
+`GetBillboardMeshIdFromName` uses `param_3` unadjusted and `0x003a4da0` uses
+`num-1`. **This is now a narrowed disjunction, not an open discrepancy**:
+`Billboard_CreateFromLocation_q`'s own decompile confirms the raw, 1-based
+`Num` (the same value that indexes the manager's occupancy array) is what
+reaches `0x003a4da0`'s `param_1` unchanged, which then 0-based-adjusts it
+before indexing `PTR_s_WIP3OUT_008a704c`. Either `GetBillboardMeshIdFromName`'s
+still-unread caller already passes a 0-based slot index rather than the
+1-based `Num` every other function on this page takes, **or** the
+`PTR_s_WIP3OUT_008a704c` region wastes index 0 the way the manager array
+does, in which case `0x003a4da0`'s `-1` is the odd one out instead. The
+discriminator is untaken: read that region's own constructor/destructor
+zeroing width, the same way the manager's nine words settled the analogous
+question above. On a hash match both write the same four 16-byte vectors at
+`+0x00`/`+0x10`/`+0x20`/`+0x30` plus a resource pointer at `+0x70`. That
+confirms the write is a repeated **bind idiom** - reset four vectors, stamp a
+resource - not a one-off, and not evidence of placement either way: this call
+chain passes no position, only `num`, a location string and two pointers.
+`0x003a4da0`'s low confidence is about its *surrounding* resource-database
+logic, not about this shared write, which is confirmed by direct control-flow
+tracing the same way the rest of this page is.
+
+**Why `0x003a4da0` stays unnamed**: it is reached correctly from a billboard
+call site, but path-building code referencing HUD XML strings suggests it may
+be a generic per-resource loader shared across subsystems rather than
+billboard-specific - below the 70 needed to commit to either reading.
+
 ## What is still open
 
-- **The transform.** Nothing in `TrackStartup_Load` or its two constructors
-  reads a position, rotation or scale - confirming the format page's own
-  "nothing is placed" stance was right to hold the line.
-- **`GetBillboardMeshIdFromName`** (`0x003a4b70`) is the likeliest place to
-  find it. It looks up a per-track table of billboard instances by a hashed
-  name (`param_1`), and on a hit writes a resource id into the matched object
-  at `+0x70` - confirmed at 90, but only for the **name**: it is the
-  function's own debug string. **The behaviour is a separate, lower-confidence
-  claim, capped around 60**: after the `+0x70` write it stores four 16-byte
-  vectors at the object's `+0x00`/`+0x10`/`+0x20`/`+0x30`, built from a
-  `ZEXT416(1)` splat run through permutes and
-  `vectorConvertFromSignedFixedPointWord`. That shape is consistent with
-  writing an identity matrix but was not confirmed as one - the operand
-  permutation was not worked through - so read it as "resets four vectors at
-  the object's base on a (re)bind", not as a settled identity-matrix claim.
-  `0x003a4da0` was found referencing the same debug strings and may be a
-  second entry point or an unrelated caller; neither was opened. What builds
-  the hash, what calls `GetBillboardMeshIdFromName`, and what those four
-  vectors actually encode are all unread. This is next session's first move,
-  not this one's.
+- **The transform.** Nothing in `TrackStartup_Load`, its two constructors, or
+  either traced write into the per-slot table reads a position, rotation or
+  scale - confirming the format page's own "nothing is placed" stance twice
+  over now, not once.
+- **What calls `GetBillboardMeshIdFromName`.** Ghidra's static xrefs show
+  none, but that check is exactly the shape this page's TOC trap breaks; an
+  indirect-call sweep with `ps3-toc.py` was not run. Narrowed to a
+  disjunction, not settled: either its caller passes a 0-based slot index
+  against a 1-based `Num` everywhere else, or `PTR_s_WIP3OUT_008a704c` wastes
+  index 0 like the manager array and `0x003a4da0`'s `-1` is the anomaly - the
+  region's own zeroing width, unread, is the discriminator.
+- **`0x003a4da0`'s own purpose** - generic resource loader or billboard-only -
+  its fifth parameter, and the four vectors' exact values (still not
+  confirmed as identity; the operand permutation was not worked through, on
+  either copy of the write).
 - **`mode_descriptor`'s shape**, and whether the four `321Go_*.vex` names
   really are what `field_0x4c + 0xf0` resolves to.
 - **`type`'s consumer**, if it has one - unread by this function despite being
