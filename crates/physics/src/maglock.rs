@@ -77,12 +77,18 @@
 //!   the frame rate is. Transcribed as read; see
 //!   `docs/architecture/adr/0007-fixed-timestep-vs-original.md` for why a
 //!   frame-counted constant is kept frame-counted here.
-//! - **`oag-trace` does not exercise any of this yet.** Its replay takes one
-//!   [`Environment`] for a whole run, and the samples change every tick, so the
-//!   signature would have to grow a locator before a lap replay could reach a
-//!   magstrip. Until it does, a replay's blend stays at zero by construction and
-//!   the tool measures the force law alone. The measurement that *does* exercise
-//!   it is `crates/game/tests/maglock_ground_truth.rs`, one tick at a time.
+//! - **`oag-trace` gained a locator (Task #33, `handover/task-33-oag-trace-cannot-exercise-the-mag.md`),
+//!   but nothing has driven it far enough to prove a lap reaches a magstrip
+//!   yet.** `replay`/`drive`/`drive_with` and `plan::to_gate` all take an
+//!   `Option<&[oag_formats::track::Sample]>` now, located fresh every tick
+//!   the same way `oag_game::race::Race::tick` locates the player - see
+//!   `crate::replay::locate` and its own doc comment for why the resampling is
+//!   duplicated here rather than shared. `crates/trace/src/replay/tests.rs`
+//!   pins the mechanism itself with a synthetic magstrip fixture (with and
+//!   without a locator); a real lap capture through Talon's Junction's
+//!   inverted section, the one measured stretch, is still unexercised. The
+//!   measurement that *does* exercise the real section is
+//!   `crates/game/tests/maglock_ground_truth.rs`, one tick at a time.
 //! - **`vrcp.s` is an approximation and this is not.** The original normalises
 //!   through the VFPU reciprocal; every normalisation here is an exact `f32`
 //!   divide. The project does not claim bit-identity with the hardware - see
