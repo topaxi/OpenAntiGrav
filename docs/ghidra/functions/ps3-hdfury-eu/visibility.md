@@ -216,15 +216,76 @@ measurement on [hd-pvs.md](../../../formats/hd-pvs.md). Ghidra renders it as a
 Note the asymmetry: the no-PVS path fills all `0x1000` bytes, while the PVS
 path copies only `stride` of them, leaving the tail at whatever it held.
 
+## Who reads the mask: three consumers, one list, no gate
+
+All three are workers in the task table at `0x0086c9xx`, reached through their
+`.opd` descriptors - which is why Ghidra shows them with no callers.
+
+| Address | What it does with the mask |
+| --- | --- |
+| `0x003fab50` | the **draw submit**: skips any item whose bit is clear |
+| `0x003fdae8` loop A | `dot3` distance per **visible** item, then a sort |
+| `0x003fdae8` loop B | up to two lights per **visible** item |
+
+The submit loop:
+
+```c
+count = scene->0x1c;
+do {
+  if ((1 << (i & 7) & mask[(i >> 3) + 0x100]) != 0) {
+    item = scene->0x20[i];
+    ... submit every draw call of item ...
+  }
+  i++;
+} while (i != count);
+```
+
+**`i` is the loop counter and nothing else**, indexing the flat pointer array at
+`scene+0x20`. So bit `i` means "slot `i` of the scene's item list" - not a draw
+list, not an instance table, not a tree walk. And **`scene->0x1c` is exactly the
+number handed to `Pvs_Load`**: `0x003fa010` returns it, `Pvs_LoadForTrack` passes
+it, and it becomes `(chunks >> 3) + 1`. The bitmap's width and the list it
+indexes are the same field of the same object. Confidence 82.
+
+**The test is not gated.** In all three loops the bit is the sole condition -
+no flag on the item, no render-layer or pass id, no distance short-circuit, no
+always-draw escape. An item whose bit is clear is not submitted, given no
+distance, and given no lights.
+
+**And a fourth pass only ever takes bits away.** `FUN_003fada8`, the next task
+in the same table, walks a sub-range testing only what is still visible and
+clearing on a bounds test - `mask[b] &= ~bit` or `&= 0xff`, never setting.
+Confidence 80.
+
+So the pipeline is `memcpy` one cell's bitmap, **narrow further**, submit: the
+original's visible set is a *subset* of the cell's, and nothing anywhere adds a
+bit back. A reimplementation that gates every chunk on the cell's bitmap and
+stops there draws **more** than the original, not less.
+
+## `Visibility_HideChunk` belongs to the fallback, not the PVS
+
+Its single caller is `0x003aa888`, inside the **non-PVS branch only** - the arm
+that begins with `Visibility_ShowAllChunks` and then clears bits for items whose
+own flag word says so:
+
+```c
+Visibility_ShowAllChunks();
+for (i = 0; i < scene->0x1c; i++) {
+  flags = *(u32 *)(scene->0x20[i] + 4);
+  if (hide_bit(flags)) Visibility_HideChunk(i);
+}
+```
+
+It never runs while the PVS is live. So there is no data-driven mechanism that
+removes a chunk a cell declared visible - this is the *replacement* for the PVS,
+and there is nothing here to port. Confidence 80.
+
 ## Open
 
-- **Who reads the mask, and over what list.** Nothing on this page establishes
-  that every drawn chunk is gated by it. If some category of geometry bypasses
-  the mask, a renderer that gates everything over-culls - which is the standing
-  suspicion behind geometry disappearing at close range.
-- **Who calls `Visibility_HideChunk`**, and why a frame would remove a chunk its
-  cell said was visible. A second mechanism this project does not model.
-- Whether `r31+0x100` is the craft or the camera (55).
+- Whether `r31+0x100` is the craft or the camera (55). One new data point for
+  camera: `0x003fdae8` uses a vec4 at `taskCtx+0x40` as the reference for a
+  front-to-back sort, which is a camera-space operation - but that is a
+  different parameter, so it is suggestive rather than evidence.
 - The five other callers of `Pvs_NearestCellCached`: `0x003e63c0`, `0x003e9660`,
   `0x00401ba8`, `0x00402a88`, `0x004053e0`.
 - The `.probes` loader at `0x003c4d78`, unexamined.

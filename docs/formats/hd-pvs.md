@@ -114,6 +114,35 @@ next at 63%, 79%, 74% and 74%. A reader that skipped or merged a chunk would
 peak at `+0` early and at some other offset later. It does not, and our parsed
 `meshes.len()` equals the file's declared count on all 28 files.
 
+### The mapping survives a per-chunk test, and the surprise is authored
+
+The near/far average above is a blunt instrument: it cannot separate a correct
+mapping from one permuted *locally*, because a locally-permuted bit still lands
+on a chunk in roughly the same place. The sharp version asks, per chunk, for the
+one signature a permutation must leave - **a chunk drawn only from far away**.
+
+Take each chunk's twenty nearest cells. If none of them draws it, find where it
+*is* drawn from:
+
+| | Talon's Junction | Anulpha Pass |
+| --- | --- | --- |
+| chunks read | 983 | 1,125 |
+| drawn by **all twenty** nearest cells | 696 (71%) | 879 (78%) |
+| drawn by none of the twenty | 62 | 52 |
+| ...of those, drawn by **no cell at all** | 29 | 24 |
+| ...of those, drawn **only from beyond 300 units** | **26 (2.6%)** | **4 (0.4%)** |
+
+Pinned by `a_chunk_is_never_visible_only_from_far_away`.
+
+**The second surprise in that table is the important one for anyone reading a
+frame.** The chunks that are hidden up close are not broken - they have an
+ordinary profile. Anulpha Pass's chunk 335 is drawn by 285 cells at a median
+957 units and by none of the twenty beside it: it is a landmark you can see
+across the circuit and cannot see when you are standing under it. So **"that
+wall was there and then I got closer and it vanished" is authored behaviour on
+these circuits**, not a symptom. It is the first thing a reader will suspect,
+which is why it is measured here rather than argued about.
+
 ### A cell's first three floats are a position - confidence 90
 
 They march along the racing line in even steps: the median gap between

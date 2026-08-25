@@ -191,3 +191,127 @@ fn a_cell_sees_a_fraction_of_the_circuit() {
         );
     }
 }
+
+/// **A cell's set is spatially coherent with the chunk index, per chunk.**
+///
+/// The near/far average that first settled the index mapping is a blunt
+/// instrument: it cannot tell a correct mapping from one permuted *locally*,
+/// because a locally-permuted bit still lands on a chunk in roughly the same
+/// place. This is the sharp version, and it looks for the one signature a
+/// permutation must leave - **a chunk visible only from far away**.
+///
+/// For each chunk, take the 20 cells nearest it. If none of them sees it, ask
+/// where it *is* seen from. A mis-mapped bit shows up as a chunk drawn only by
+/// cells hundreds of units away while every cell beside it hides it. Measured:
+/// **26 of Talon's Junction's 983 chunks and 4 of Anulpha Pass's 1,125**, so
+/// 2.6% and 0.4%.
+///
+/// **What this test also records is that the disc genuinely hides large
+/// scenery up close.** 71% and 78% of chunks are seen by all twenty of their
+/// nearest cells, but the remainder are not, and following them shows an
+/// ordinary profile rather than a broken one: a landmark visible from 285
+/// cells at a median 957 units and from none of the twenty beside it is a
+/// building you are standing under. So **"it was there and then I got closer
+/// and it went"** is authored behaviour on this circuit, not evidence of a
+/// bug - which is worth pinning, because it is the first thing a reader will
+/// suspect.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn a_chunk_is_never_visible_only_from_far_away() {
+    if image().is_none() {
+        return;
+    }
+    // Chunk centres cost a full geometry walk, so this runs on the two
+    // circuits the mapping was settled against rather than all 28.
+    for want in [
+        "/data/environments/talons_junction/track.pvs",
+        "/data/environments/15_anulpha_pass/track.pvs",
+    ] {
+        let file = every_pvs()
+            .into_iter()
+            .find(|f| f.path == want)
+            .unwrap_or_else(|| panic!("{want} is on the disc"));
+        let centres = chunk_centres(&file);
+        let cells: Vec<[f32; 3]> = (0..file.pvs.cells())
+            .filter_map(|c| file.pvs.position(c))
+            .collect();
+        let mut far_only = 0usize;
+        let mut readable = 0usize;
+        for (chunk, centre) in centres.iter().enumerate() {
+            let Some(centre) = centre else { continue };
+            readable += 1;
+            let mut order: Vec<usize> = (0..cells.len()).collect();
+            order.sort_by(|&a, &b| {
+                distance(cells[a], *centre)
+                    .partial_cmp(&distance(cells[b], *centre))
+                    .unwrap()
+            });
+            if order.iter().take(20).any(|&c| file.pvs.visible(c, chunk)) {
+                continue;
+            }
+            let nearest_seeing = (0..cells.len())
+                .filter(|&c| file.pvs.visible(c, chunk))
+                .map(|c| distance(cells[c], *centre))
+                .fold(f32::INFINITY, f32::min);
+            // Infinite means no cell draws it at all - interior or dead
+            // geometry, which is a different thing and not counted here.
+            if nearest_seeing.is_finite() && nearest_seeing > 300.0 {
+                far_only += 1;
+            }
+        }
+        let share = far_only as f64 / readable as f64;
+        let percent = share * 100.0;
+        assert!(
+            share < 0.05,
+            "{want}: {far_only} of {readable} chunk(s) ({percent:.2}%) are drawn only from \
+             beyond 300 units while every cell beside them hides them - the signature of a \
+             chunk index that does not mean what this parser thinks it means"
+        );
+    }
+}
+
+fn distance(a: [f32; 3], b: [f32; 3]) -> f32 {
+    ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2) + (a[2] - b[2]).powi(2)).sqrt()
+}
+
+/// Each chunk's own bounding-box centre, or `None` for one whose vertex stride
+/// cannot be recovered.
+fn chunk_centres(file: &Shipped) -> Vec<Option<[f32; 3]>> {
+    let image = image().expect("checked by the caller");
+    let archive = ARCHIVES
+        .iter()
+        .find(|a| {
+            let spec = format!("{}:PS3_GAME/USRDIR/{a}.PSARC", image.display());
+            oag_assets::psarc::Archive::open(&spec)
+                .map(|p| p.paths().contains(&file.path))
+                .unwrap_or(false)
+        })
+        .expect("the archive holding it");
+    let spec = format!("{}:PS3_GAME/USRDIR/{archive}.PSARC", image.display());
+    let mut open = oag_assets::psarc::Archive::open(&spec).expect("the archive opens");
+    let blob = open
+        .read_path(&file.path.replace(".pvs", ".rcsmodel"))
+        .expect("the sibling model reads");
+    let model = rcsmodel::Model::parse(&blob).expect("it parses");
+    model
+        .meshes
+        .iter()
+        .map(|chunk| {
+            let stride = chunk
+                .declared_stride()
+                .or_else(|| chunk.solve_stride_without_a_box(&blob))?;
+            let (mut min, mut max) = ([f32::MAX; 3], [f32::MIN; 3]);
+            for submesh in &chunk.submeshes {
+                if let Ok(points) = chunk.positions(&blob, submesh, stride) {
+                    for p in points {
+                        for i in 0..3 {
+                            min[i] = min[i].min(p[i]);
+                            max[i] = max[i].max(p[i]);
+                        }
+                    }
+                }
+            }
+            (min[0] <= max[0]).then(|| std::array::from_fn(|i| (min[i] + max[i]) / 2.0))
+        })
+        .collect()
+}
