@@ -47,10 +47,11 @@
 use std::num::NonZeroUsize;
 
 use oag_core::math::{Mat3, Quat, Vec3};
+use oag_formats::track;
 use oag_gameplay::input::{Button, Input};
 use oag_gameplay::{ControlScheme, InputSnapshot, Ship, World, ship_controls};
 use oag_physics::controls::CONTROL_RANGE;
-use oag_physics::{Environment, Handling, Raycaster, ShipState};
+use oag_physics::{Environment, Handling, Raycaster, ShipState, TrackSample};
 
 use crate::trace::{AngularReading, Frame, Trace};
 
@@ -345,6 +346,69 @@ pub fn camera_orientation_of(frame: &Frame) -> Option<Quat> {
     Some(Quat::from_mat3(&Mat3::from_cols(x, y, z)).normalize())
 }
 
+/// Table order's nearest sample to `position`, and the sample after it.
+///
+/// The same "where am I and what is next" pair `oag_game::race::Race::tick`
+/// reads for the player every tick - the nearest table entry and its table-order
+/// successor - at this crate's own resolution. Resampled independently by
+/// [`crate::main`]'s `resample` rather than shared: `oag-trace` cannot depend on
+/// `oag-game`, the composition root that owns `Spline` (rule 2,
+/// `scripts/check-dependency-rules.py`), so the resampling is duplicated crate to
+/// crate on purpose, the same way `oag_render::track` duplicates it a third time.
+///
+/// `None` when `samples` is empty. The successor is `None` past the end of the
+/// table, exactly as the player's own locator leaves it - [`maglock::Hold`]
+/// already treats a missing second sample as "use the first alone".
+#[must_use]
+fn locate(samples: &[track::Sample], position: Vec3) -> (Option<TrackSample>, Option<TrackSample>) {
+    let index = samples
+        .iter()
+        .enumerate()
+        .min_by(|(_, a), (_, b)| {
+            let da = Vec3::from_array(a.pos).distance_squared(position);
+            let db = Vec3::from_array(b.pos).distance_squared(position);
+            da.total_cmp(&db)
+        })
+        .map(|(index, _)| index);
+    let track_sample = index.map(|i| track_sample_of(&samples[i]));
+    let track_sample_next = index.and_then(|i| samples.get(i + 1)).map(track_sample_of);
+    (track_sample, track_sample_next)
+}
+
+/// The conversion `oag_game::race::Spline::track_sample` makes, restated here for
+/// the reason [`locate`] gives: the disc's sample is the *unlifted* surface
+/// point, and the hold wants it lifted back to where the running game holds it,
+/// with `down` passed raw for the probe direction.
+#[must_use]
+fn track_sample_of(sample: &track::Sample) -> TrackSample {
+    let down = Vec3::from_array(sample.down);
+    TrackSample {
+        position: Vec3::from_array(sample.pos) - down * track::HOVER_LIFT,
+        down,
+    }
+}
+
+/// Rebuilds `base` with this tick's `track_sample`/`track_sample_next`, from
+/// `track` located at `position` - `base` unchanged when `track` is `None`, so a
+/// caller with no spline (a `run` with no `--source`, `--no-collision` aside)
+/// loses nothing it did not already lack.
+#[must_use]
+fn located_environment(
+    base: &Environment,
+    track: Option<&[track::Sample]>,
+    position: Vec3,
+) -> Environment {
+    let (track_sample, track_sample_next) = match track {
+        Some(samples) => locate(samples, position),
+        None => (None, None),
+    };
+    Environment {
+        track_sample,
+        track_sample_next,
+        ..*base
+    }
+}
+
 /// Runs our simulation over a recording's scenario and returns a trace of it.
 ///
 /// One ship in slot 0 of a [`World`], stepped through
@@ -354,6 +418,12 @@ pub fn camera_orientation_of(frame: &Frame) -> Option<Quat> {
 ///
 /// The returned trace has one row per row of the input, in the same columns, and
 /// its tick numbers continue the recording's.
+///
+/// `track` is this tick's locator: the track's spline, resampled, so the
+/// magstrip hold in [`oag_physics::maglock`] has a section to read. `None` runs
+/// exactly as before - the hold's blend stays at zero for the whole run, since
+/// [`oag_physics::maglock::probe`] has nothing to build a ray direction from
+/// without a sample.
 #[must_use]
 pub fn replay<R: Raycaster + ?Sized>(
     trace: &Trace,
@@ -361,6 +431,7 @@ pub fn replay<R: Raycaster + ?Sized>(
     environment: &Environment,
     raycaster: &R,
     options: &Options,
+    track: Option<&[track::Sample]>,
 ) -> Trace {
     let Some(first) = trace.frames.first() else {
         return Trace::default();
@@ -431,12 +502,14 @@ pub fn replay<R: Raycaster + ?Sized>(
 
         let snapshot = snapshot_for(recorded, &mut buttons, &options.inputs, index);
         let controls = ship_controls(&snapshot, options.scheme);
+        let position = world.ships[0].physics.body.position;
+        let env = located_environment(environment, track, position);
         let ship = &mut world.ships[0];
         oag_physics::step(
             &mut ship.physics,
             &controls,
             &ship.handling,
-            environment,
+            &env,
             raycaster,
             dt,
         );
@@ -500,6 +573,8 @@ impl Default for DriveOptions {
 /// honest signature: what a ship starts with includes its mass, its inertia and
 /// which way its suspension is loaded, and a function that took a position and
 /// invented the rest would be hiding the interesting half.
+///
+/// `track` is [`replay`]'s own locator - see its doc comment.
 #[must_use]
 pub fn drive<R: Raycaster + ?Sized>(
     initial: ShipState,
@@ -508,6 +583,7 @@ pub fn drive<R: Raycaster + ?Sized>(
     raycaster: &R,
     script: &[Held],
     options: &DriveOptions,
+    track: Option<&[track::Sample]>,
 ) -> Trace {
     let script = script.to_vec();
     drive_with(
@@ -516,6 +592,7 @@ pub fn drive<R: Raycaster + ?Sized>(
         environment,
         raycaster,
         options,
+        track,
         |tick, _| {
             // A script shorter than the run holds its last state; `Script::at` argues why.
             Some(
@@ -547,6 +624,8 @@ pub fn drive<R: Raycaster + ?Sized>(
 /// Returning `None` from the closure ends the run. The frame for that tick has
 /// already been recorded, so the trace's last frame is the state the controller
 /// stopped on, and the recorded input is one shorter than the trace.
+///
+/// `track` is [`replay`]'s own locator - see its doc comment.
 #[must_use]
 pub fn drive_with<R, F>(
     initial: ShipState,
@@ -554,6 +633,7 @@ pub fn drive_with<R, F>(
     environment: &Environment,
     raycaster: &R,
     options: &DriveOptions,
+    track: Option<&[track::Sample]>,
     mut controller: F,
 ) -> (Trace, Vec<Held>)
 where
@@ -625,12 +705,14 @@ where
             index,
         );
         let controls = ship_controls(&snapshot, options.scheme);
+        let position = world.ships[0].physics.body.position;
+        let env = located_environment(environment, track, position);
         let ship = &mut world.ships[0];
         oag_physics::step(
             &mut ship.physics,
             &controls,
             &ship.handling,
-            environment,
+            &env,
             raycaster,
             options.dt,
         );
