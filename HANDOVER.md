@@ -386,6 +386,7 @@ player's own legitimate pressing gets hard-rejected.
 
 Each is a real, named next step, one file per thread under [`handover/`](handover/). Task numbers in a title are the ones the agent passes used, kept because commits and docs cite them. **When a thread's work lands, delete its file and this line** - the same rule this file always followed for a row, now for a file.
 
+- [Streaming decode for audio would break seek, and nothing forces the change yet](handover/streaming-decode-for-audio-would-break-seek-and.md)
 - [A circuit's billboard slots are a 9-entry array on the engine side, and slot 7 is not what it says it is](handover/a-circuits-billboard-slots-are-a-9-entry.md)
 - [A parser cannot fail on a field it does not know about, so coverage is now measured](handover/a-parser-cannot-fail-on-a-field-it.md)
 - [A chunk header is 0x20 bytes and then a *surface* record, and the byte after the layout says which space it is in](handover/a-chunk-header-is-0x20-bytes-and-then.md)
