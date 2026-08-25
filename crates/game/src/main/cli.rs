@@ -562,6 +562,15 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) render_scale: Option<u32>,
 
+    /// Anti-aliasing mode: off, fxaa, smaa or msaa4x.
+    ///
+    /// Overrides `[graphics] anti_aliasing` in the settings file
+    /// (`settings::path`) for this run only; the file on disk is not changed.
+    /// Here for the same reason `--upscaler` is: two `--presented` captures
+    /// differing only by this flag are how the modes get compared.
+    #[arg(long)]
+    pub(crate) anti_aliasing: Option<crate::display::AntiAliasing>,
+
     /// Start the craft at this world position instead of on its grid slot:
     /// `x,y,z` or `x,y,z,yaw`, `yaw` in degrees off the track's own direction
     /// there.

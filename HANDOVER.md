@@ -485,7 +485,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [MONITOR has only ever run on a one-screen machine](handover/monitor-has-only-ever-run-on-a-one.md)
 - [Do the game's capture paths need encode-on-write?](handover/do-the-games-capture-paths-need-encode-on.md)
 - [FSR 1's default is open](handover/fsr-1s-default-is-open.md)
-- [Two anti-aliasing residuals](handover/two-anti-aliasing-residuals.md)
+- [The 200% render-scale case has no live warning; `--anti-aliasing` is landed](handover/two-anti-aliasing-residuals.md)
 - [Front-end gaps behind `Image`](handover/front-end-gaps-behind-image.md)
 - [Pure's dev/pub hold duration, and how the original picks a regional cut](handover/pures-dev-pub-hold-duration-and-how-the.md)
 - [`Movie::entry_name` hardcodes `_US`, so a European Pure disc shows the American card](handover/movie-entry-name-hardcodes-us-so-a-european.md)

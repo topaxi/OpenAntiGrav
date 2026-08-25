@@ -166,6 +166,7 @@ fn main() -> Result<()> {
         graphics: settings::Graphics {
             upscaler: cli.upscaler.unwrap_or(settings.graphics.upscaler),
             render_scale,
+            anti_aliasing: cli.anti_aliasing.unwrap_or(settings.graphics.anti_aliasing),
             ..settings.graphics
         },
         ..settings
