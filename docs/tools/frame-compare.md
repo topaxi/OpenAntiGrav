@@ -53,6 +53,26 @@ there from any screen). Captures and shots are derived game data: they live
 under `data/traces/` and `data/shots/`, both gitignored, and are never
 committed.
 
+**`place` and the capture that reads its speed must be one shell invocation.**
+Nothing keeps the CPU paused between `psp-drive.py place` exiting and the next
+command connecting - it free-runs with no throttle held in between, and this
+game decelerates hard with no thrust (150 -> 104 units/s over the 30-tick
+settle alone). A gap of a few seconds of wall-clock tool-call overhead between
+the two commands is enough to coast a `--speed 150` placement down to a
+standstill (measured: 150 -> 0.017 units/s) before the capture ever starts,
+which reads exactly like a low-speed capture rather than a botched one. Chain
+`place` and `psp-trace.py`/`just trace` with `&&` in one call.
+
+**A raw Xvfb shot is the virtual screen's own resolution, not the PSP's.**
+`import -window root` under `OAG_SHOT_DISPLAY` (see
+[ppsspp-debugger.md](../reverse-engineering/ppsspp-debugger.md#running-without-a-real-display-xvfb-works-no-compositor-needed))
+grabs whatever size the `Xvfb` invocation declared - 1280x720 in the
+documented recipe - not 480x272. `just frame-compare` already resizes
+`theirs` before comparing (`magick -resize '480x272!'`); any ad-hoc pixel
+comparison against a raw shot must do the same or it is comparing two
+different coordinate spaces and every region will look wrong for reasons that
+have nothing to do with the game.
+
 ## What to trust, and how far
 
 - **Geometry and framing: trust at rest, and only at rest.** From a captured
@@ -91,8 +111,38 @@ committed.
 
 ## Open ends
 
-- The shot-vs-row phase could be pinned exactly by a fast-moving per-tick
-  capture; nothing has needed it.
+- **A fast-moving per-tick capture was tried (2026-08-25) and did not pin the
+  shot-vs-row phase to one number - it narrowed the question instead of
+  closing it.** Setup: `place --speed 150` on a pad approach (settles to
+  ~100-120 units/s) followed in the same invocation by
+  `psp-trace.py --camera --shot-every 1`, under Xvfb (no compositor
+  available). **The instrument itself is sound**: a render-vs-render control
+  - candidate rows scored against row 10's own render as the reference,
+  instead of against a shot - peaks cleanly and correctly at the self-match
+  (NCC 1.000) and falls off smoothly either side (0.529, 0.583, **1.000**,
+  0.710, 0.630 for rows 8-12), confirming `frame-register.py`'s masked
+  gradient-NCC resolves one tick of camera motion at this speed. **Scored
+  against the actual emulator shots, only one of three sampled ticks gave a
+  clean, high-margin peak**: tick 10 picks row 9 over every neighbour by
+  0.10+ NCC (phase -1, i.e. the shot reflects the state one tick before the
+  breakpoint pause). The other two (ticks 15, 18) gave weak, non-monotonic
+  peaks whose registration shift moved with the search window's width -
+  exactly what a scene with periodic structure (this capture sat in a tunnel
+  with repeating wall panels) looks like when the search is absorbing the
+  inter-tick motion instead of measuring it, not what a real signal looks
+  like. **Suspect the screenshot path itself, not a non-constant phase**:
+  this session had no compositor, so it captured through Xvfb's
+  `import -window root` (`OAG_SHOT_DISPLAY`), never through the niri
+  clipboard path the existing ~2-tick bound was originally measured with -
+  the two have never been shown to share a lag, and an inconsistent one would
+  produce exactly this pattern (one clean reading, two noisy ones, same
+  capture, same speed, same box). Full numbers in
+  [the handover thread](../../handover/frame-comparison-three-residuals.md).
+  **Next**: repeat under a real or niri-emulated compositor to see whether
+  the inconsistency goes with it, or drive a yawing section instead of a
+  straight corridor so the phase reads off `dx` as a linear ramp across
+  candidate rows rather than off a peak height - a ramp does not need the
+  shift search tightened against a periodic scene to stay honest.
 - The fov measurement is one ship, one view, one track section. A second team
   (different authored fov) and the internal view would turn confidence 85 into
   a closed question.
