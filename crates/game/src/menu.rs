@@ -1907,9 +1907,8 @@ impl Default for Transition {
 ///
 /// `backdrop` is the same arrangement one step further out: a frame and a
 /// rectangle, already decided, rather than a movie this module would then have
-/// to know how to play. `None` draws the rows on whatever the frame and
-/// [`Skin::background`] already put down - black, for want of anything else,
-/// only when neither did - see [`Backdrop`].
+/// to know how to play. `None` draws the rows on whatever the frame put down,
+/// or black if it put down nothing - see [`Backdrop`].
 ///
 /// # Two idioms, and the disc picks
 ///
@@ -1929,23 +1928,12 @@ pub fn draw_list(
     let page = menu.page();
     let (title_x, title_y, title_scale) = skin.title_at();
 
-    // The frame's clear, then the movie, then the frame's marks. Both halves of
-    // the frame are the disc's own widgets off one screen - see [`frame`] - and
-    // the movie goes between them because a clear is what a screen starts from
-    // and a rule is drawn on top of what the screen holds. No title carries both
-    // a frame and a movie, so the interleaving is arranged and not observed.
-    //
-    // `skin.background()` only ever supplies one when `frame.clear` does not:
-    // a title whose frame authors its own `<ScreenClear>` or opening fill
-    // never reaches it, and one with no frame at all has no widget for
-    // `oag_title::MenuSkin::background` to be measured off. See that field's
-    // own doc - Pure is the one title this exists for.
-    let mut backdrops: Vec<Draw> = frame
-        .clear
-        .clone()
-        .or_else(|| skin.background())
-        .into_iter()
-        .collect();
+    // The frame's clear or, absent one, `skin.background()` - see
+    // [`oag_title::MenuSkin::background`] - then the movie, then the frame's
+    // marks. No title carries both a frame and a movie, so the interleaving
+    // is arranged and not observed.
+    let clear = frame.clear.clone().or(skin.background());
+    let mut backdrops: Vec<Draw> = clear.into_iter().collect();
     backdrops.extend(backdrop.map(|backdrop| Draw::Video {
         rect: backdrop.rect,
         frame: backdrop.frame,
