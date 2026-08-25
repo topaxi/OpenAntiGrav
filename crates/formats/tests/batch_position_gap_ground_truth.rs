@@ -1,0 +1,237 @@
+//! What batch `+0x14` is not, censused over the whole disc.
+//!
+//! **`#[ignore]`d and never run in CI.** Needs game content, which this
+//! project does not ship. See `docs/architecture/adr/0006-no-copyrighted-content.md`.
+//!
+//! ```sh
+//! just test-data
+//! ```
+//!
+//! # What this is for
+//!
+//! [`vex.md`](../../../docs/formats/vex.md) lists the 4 bytes at batch
+//! `+0x14` (between the position scale at `+0x10` and the s16 bounding box at
+//! `+0x18`) as undetermined. That leaves the field's most basic property
+//! unchecked: whether it carries data at all, or is padding nobody wrote
+//! anything meaningful into. This is the check, not the decode - no
+//! consuming instruction has been found for it, so nothing here is claimed
+//! as a name.
+
+use std::path::{Path, PathBuf};
+
+use oag_disc::DiscImage;
+use oag_formats::vex;
+use oag_formats::wad::{self, Compression, Directory};
+
+const PSP_DATA: &str = "PSP_GAME/USRDIR/Data.wad";
+
+/// Same convention `vex::mesh_batches` uses to decode the s16 bounding box.
+const POSITION_DIVISOR: f32 = 32768.0;
+
+fn image() -> Option<PathBuf> {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("data/images/pulse-psp-usa.chd");
+    if path.exists() {
+        return Some(path);
+    }
+    assert!(
+        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
+        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
+        path.display()
+    );
+    println!("skipping: {} not present", path.display());
+    None
+}
+
+/// Every version-6 `.vex` blob in `Data.wad`, decompressed. Same walk as
+/// `vex_layer_ground_truth.rs`.
+fn psp_vex_blobs(disc: &mut DiscImage) -> Vec<Vec<u8>> {
+    let archive = disc
+        .entries()
+        .expect("entries")
+        .iter()
+        .find(|e| e.path == PSP_DATA)
+        .unwrap_or_else(|| panic!("{PSP_DATA} present"))
+        .clone();
+
+    let header = disc
+        .read_entry_range(&archive, 0, wad::HEADER_LEN as u64)
+        .expect("header");
+    let count = Directory::peek_entry_count(&header).expect("entry count");
+    let dir_bytes = disc
+        .read_entry_range(&archive, 0, Directory::directory_len(count))
+        .expect("directory");
+    let dir = Directory::parse(&dir_bytes, Some(archive.size)).expect("parse directory");
+
+    let mut out = Vec::new();
+    for entry in &dir.entries {
+        if entry.size == 0 {
+            continue;
+        }
+        let raw = disc
+            .read_entry_range(&archive, u64::from(entry.offset), u64::from(entry.size))
+            .expect("blob");
+        let bytes = match entry.compression {
+            Compression::None => raw,
+            Compression::Lzss => {
+                oag_formats::lzss::decompress(&raw, entry.size_uncompressed as usize).expect("lzss")
+            }
+            Compression::Zlib => continue,
+        };
+        if !vex::has_magic(&bytes) || vex::version(&bytes) != Ok(6) {
+            continue;
+        }
+        out.push(bytes);
+    }
+    out
+}
+
+/// One batch's `+0x14` field alongside enough context to test candidate
+/// readings against: the position scale it sits next to, and the batch's own
+/// bounding-box size in the same (scaled) units the vertices decode to.
+struct Row {
+    /// The raw 4 bytes at `+0x14`, read as an `f32` - a choice, not a finding.
+    /// Nothing here establishes the field is one `f32` rather than, say, two
+    /// packed `s16` halves the way the texture-transform block's tracks are;
+    /// `f32` is what this test evaluates because it is what the position
+    /// scale next to it already is.
+    gap_as_f32: f32,
+    scale: f32,
+    half_diagonal: f32,
+}
+
+/// Re-walks a batch list the way `vex::mesh_batches` does internally, keeping
+/// `+0x14` instead of discarding it. VIF (PS2-shaped) batches are skipped -
+/// their layout puts the bounding box somewhere else entirely.
+fn walk(payload: &[u8], batch_list: u8, out: &mut Vec<Row>) {
+    let u16_at = |p: &[u8], o: usize| u16::from_le_bytes([p[o], p[o + 1]]);
+    let u32_at = |p: &[u8], o: usize| u32::from_le_bytes([p[o], p[o + 1], p[o + 2], p[o + 3]]);
+    let f32_at = |p: &[u8], o: usize| f32::from_bits(u32_at(p, o));
+
+    let list_offset = u32_at(payload, if batch_list == 0 { 4 } else { 8 }) as usize;
+    let terminator: u16 = if batch_list == 0 { 1 } else { 2 };
+    let mut at = list_offset;
+    while at + 0x40 <= payload.len() {
+        let pass_mask = u16_at(payload, at);
+        if pass_mask & terminator == 0 {
+            break;
+        }
+        let flags = payload[at + 3];
+        let header_size = if flags & 0x40 != 0 { 0x80 } else { 0x40 };
+        let vertex_type = u16_at(payload, at + 0x0a);
+        let payload_size = usize::from(u16_at(payload, at + 0x0c));
+        let scale = f32_at(payload, at + 0x10);
+
+        if vex::is_vif_batch(vertex_type) {
+            break;
+        }
+
+        let corner = |off: usize| -> [f32; 3] {
+            let mut v = [0.0f32; 3];
+            for (i, c) in v.iter_mut().enumerate() {
+                let raw =
+                    i16::from_le_bytes([payload[at + off + i * 2], payload[at + off + i * 2 + 1]]);
+                *c = f32::from(raw) / POSITION_DIVISOR * scale;
+            }
+            v
+        };
+        let min = corner(0x18);
+        let max = corner(0x20);
+        let diag = [max[0] - min[0], max[1] - min[1], max[2] - min[2]];
+        let half_diagonal =
+            0.5 * (diag[0] * diag[0] + diag[1] * diag[1] + diag[2] * diag[2]).sqrt();
+
+        out.push(Row {
+            gap_as_f32: f32_at(payload, at + 0x14),
+            scale,
+            half_diagonal,
+        });
+
+        at += header_size + payload_size;
+    }
+}
+
+fn percentile(v: &mut [f32], p: f64) -> f32 {
+    v.sort_by(|a, b| a.partial_cmp(b).expect("no NaN"));
+    v[((v.len() - 1) as f64 * p).round() as usize]
+}
+
+/// **`+0x14` is not padding.** It is nonzero, finite and positive on every
+/// batch surveyed - the signature of a field something wrote a real value
+/// into, not of an unused gap. Whether that value is an `f32` at all, and
+/// what it means, are both still open; see `vex.md`.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn batch_plus_0x14_is_never_zero_or_negative() {
+    let Some(path) = image() else {
+        return;
+    };
+    let mut disc = DiscImage::open(&path).expect("open");
+    let blobs = psp_vex_blobs(&mut disc);
+
+    let mut rows = Vec::new();
+    for bytes in &blobs {
+        let Ok(nodes) = vex::nodes(bytes) else {
+            continue;
+        };
+        for node in nodes.iter().filter(|n| n.class_id == vex::CLASS_MESH) {
+            let range = node.payload();
+            if range.end > bytes.len() {
+                continue;
+            }
+            let payload = &bytes[range];
+            for list in [0u8, 1] {
+                walk(payload, list, &mut rows);
+            }
+        }
+    }
+
+    const MIN_BATCHES: usize = 40_000;
+    assert!(
+        rows.len() >= MIN_BATCHES,
+        "{} batches is too few to census; the walk is broken",
+        rows.len()
+    );
+
+    let zero = rows.iter().filter(|r| r.gap_as_f32 == 0.0).count();
+    let negative = rows.iter().filter(|r| r.gap_as_f32 < 0.0).count();
+    let non_finite = rows.iter().filter(|r| !r.gap_as_f32.is_finite()).count();
+    println!(
+        "{} batches: {zero} zero, {negative} negative, {non_finite} non-finite at +0x14",
+        rows.len()
+    );
+    assert_eq!(
+        zero, 0,
+        "+0x14 is zero on some batches - it is not universally populated"
+    );
+    assert_eq!(negative, 0, "+0x14 reads negative as f32 on some batches");
+    assert_eq!(non_finite, 0, "+0x14 is not finite as f32 on some batches");
+
+    // Not asserted - the ratio bands are a lead, not an invariant this test
+    // pins. Printed so `--nocapture` shows the measurement `vex.md` cites.
+    let mut ratio_scale: Vec<f32> = rows
+        .iter()
+        .filter(|r| r.scale != 0.0)
+        .map(|r| r.gap_as_f32 / r.scale)
+        .collect();
+    let mut ratio_half_diag: Vec<f32> = rows
+        .iter()
+        .filter(|r| r.half_diagonal != 0.0)
+        .map(|r| r.gap_as_f32 / r.half_diagonal)
+        .collect();
+    println!(
+        "gap/scale: p0={:.4} p50={:.4} p100={:.4}",
+        percentile(&mut ratio_scale.clone(), 0.0),
+        percentile(&mut ratio_scale.clone(), 0.5),
+        percentile(&mut ratio_scale, 1.0),
+    );
+    println!(
+        "gap/half_diagonal: p0={:.4} p10={:.4} p50={:.4} p90={:.4} p100={:.4}",
+        percentile(&mut ratio_half_diag.clone(), 0.0),
+        percentile(&mut ratio_half_diag.clone(), 0.1),
+        percentile(&mut ratio_half_diag.clone(), 0.5),
+        percentile(&mut ratio_half_diag.clone(), 0.9),
+        percentile(&mut ratio_half_diag, 1.0),
+    );
+}

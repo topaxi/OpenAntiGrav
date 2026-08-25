@@ -762,3 +762,61 @@ fn psp_magstrip_texture_coordinates_are_the_floor_of_the_ps2_masters() {
          distinguish floor from round-to-nearest any more"
     );
 }
+
+/// **The magstrip does not animate.** Neither its material carries the
+/// texture-transform gate (`flags & 0x10`, see
+/// [`vex::mesh_materials`]) nor does either magstrip material have a
+/// keyframe block at all - both come back `None` from
+/// [`vex::mesh_tex_transforms`]. Closes the handover thread's "magstrip's own
+/// animation, if any" question as a negative result: the mechanism exists in
+/// the engine and elsewhere on this disc (`docs/formats/vex.md`'s
+/// texture-transform keyframe block, already implemented as
+/// `oag_render::mesh_render::TexAnims`), the magstrip's own two materials
+/// just do not use it.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn the_magstrip_material_carries_no_texture_transform() {
+    let Some(psp) = image("pulse-psp-usa.chd") else {
+        return;
+    };
+    let mut archives = open(&psp);
+    let (blob, model) = track(&mut archives, MOA_THERMA).expect("reading PSP Moa Therma");
+    let nodes = vex::nodes(&blob).expect("decoding nodes");
+
+    let mut checked = 0usize;
+    for node in nodes.iter().filter(|n| n.class_id == 0x125) {
+        let payload = &blob[node.payload()];
+        let materials = vex::mesh_materials(payload);
+        let transforms = vex::mesh_tex_transforms(payload);
+        for list in [0u8, 1u8] {
+            for batch in vex::mesh_batches(payload, list).expect("decoding batches") {
+                let mat_index = usize::from(batch.material_index);
+                let material = materials.get(mat_index).copied().flatten();
+                let texture = material.map(|m| m.texture as usize);
+                if !is_magstrip(&model, texture) {
+                    continue;
+                }
+                checked += 1;
+                let flags = material.map_or(0, |m| m.flags);
+                assert_eq!(
+                    flags & 0x10,
+                    0,
+                    "magstrip material {mat_index} (pass_mask {:#06x}) now carries the \
+                     texture-transform flag - re-check whether it animates",
+                    batch.pass_mask
+                );
+                assert!(
+                    transforms.get(mat_index).cloned().flatten().is_none(),
+                    "magstrip material {mat_index} (pass_mask {:#06x}) now has keyframe \
+                     data despite lacking the flag",
+                    batch.pass_mask
+                );
+            }
+        }
+    }
+    assert!(
+        checked >= 2,
+        "only {checked} magstrip batch(es) checked - both the base strip and the \
+         far-LOD overlay should be here"
+    );
+}

@@ -77,7 +77,7 @@ Ascending order, so **lower layer draws first**:
 | `0x30000000` | the camera | `Camera_SubmitScene` |
 | `0x31000000` | mesh payload `+0x0c & 0x8` | [`vex::mesh_layer`] |
 | `0x40000000` | an extra batch set, **distance-gated** | `Mesh_BuildLayerBatchSets` |
-| `0x45000000` | mesh flags `& 0x1000`, narrowly | [`vex::mesh_layer`] |
+| `0x45000000` | batch `pass_mask & 0x1000`, narrowly | [`vex::mesh_layer`] |
 | `0x4a000000` | every other mesh - the default | [`vex::mesh_layer`] |
 | `0x4d000000` \| depth | the exhaust flare | `ExhaustFlare_Submit` |
 
