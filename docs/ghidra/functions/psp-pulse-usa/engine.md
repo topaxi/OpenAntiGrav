@@ -1888,14 +1888,41 @@ is extruded from it in the original and was not here. Fixed 2026-08-12; neither
 determinism reference moved, because no probe in either scenario is ever inside
 a wall.
 
-**One divergence remains and it is deliberate.** The original also gates the
-escape on `craft+0x208 == 1`. That field is written at `0x08816e14` by
+**What `craft+0x208` holds is now recovered, 2026-08-25 (previously "not
+recovered" here).** That field is written at `0x08816e14` by
 `Collision_RaycastWorld` from a stack local (`sp+0x68`), alongside the collider
-index at `+0x20` and a float at `+0x24`; the hit record is `0x30` bytes and this
-is its last identified-by-offset-only member. **Its meaning is not recovered**,
-so nothing here reproduces the gate, which makes ours escape in cases the
-original may not. Confidence **80** on the mechanism, and the missing gate is
-the reason it is not higher.
+index at `+0x20` and a float at `+0x24`; the hit record is `0x30` bytes and
+this was its last identified-by-offset-only member. **It is not a copy of the
+surface-type value read off the collider** - it is a fixed constant each of the
+two narrowphase raycasts writes about *itself*, regardless of what it hit:
+`Collision_RaycastMesh` always writes `1`, `Collision_RaycastBox` always writes
+`3`, and no other value ever reaches this field from this call site. Which of
+the two narrowphase functions runs for a given collider is gated by a
+`collider+0x78` virtual read - the same accessor `Collision_DispatchPair`
+switches on for its own pairing, confirmed byte-for-byte identical and cross-read
+against `Collision_BoxAgainstMesh`'s own field accesses: `1` is a mesh-shaped
+collider, `3` a box-shaped one, the same numbering both call sites use (an
+earlier draft of this note guessed it might be the reverse; it is not). It is
+still a shape classifier, not a copy of the already-recovered `Surface` enum -
+see [collision.md](collision.md#raycasts) for the full derivation.
+
+That leaves the specific claim `crates/physics/src/hover.rs`'s own doc comment
+already makes - "`1` is the **`Floor` class**" - exactly as well-founded as it
+was before this pass: correct enough that the implementation built on it has
+not needed correcting, sourced from an earlier, independent read this pass
+neither confirms nor refutes at the identity level (this pass read what gets
+*written* at `+0x28`, not what the upstream classifier that selects between the
+two writers actually denotes). **The gate itself is not missing** -
+`hover.rs::probe_from_hit` already reproduces it, as
+`hit.surface == Surface::Floor` guarding the escape translation, landed before
+this pass and using the crate's own already-recovered `Surface` enum rather
+than mirroring `craft+0x208` bit-for-bit. No code change follows from this
+pass; what changes is that the field's own mechanism - which function wrote it,
+and that it is a literal rather than anything read off the collider - is no
+longer an open question. Confidence **90** on the mechanism (up from 80, the
+missing-gate deduction that lowered it no longer applies); the `1 = Floor`
+identity itself keeps whatever confidence the pass that first asserted it
+carries, unchanged by this one.
 
 ### Resolved: neither reading was refuted, the load was
 

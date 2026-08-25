@@ -143,13 +143,65 @@ the three, and expands set bits into an index array.
 
 `Collision_RaycastWorld` (`0x08816ac0`) splits the segment into
 `floor(len * 0.01) + 1` sub-segments, queries the world broadphase, skips self
-and skips Reset colliders unless explicitly requested, then runs the mesh
-narrowphase: AABB clip, two slab rejects, per-mesh sweep and prune, then a
-segment-triangle test using a plane sign change on both endpoints plus three
-edge half-space tests.
+and skips Reset colliders unless explicitly requested, then for each remaining
+candidate runs a **fresh virtual dispatch** - `(*collider+0x78)+0xc`, called
+with `collider + *(short*)(collider+0x78+0x8)` - and branches on its return
+value: exactly `1` (and only when `param_7` bit 0 is clear) calls
+`Collision_RaycastMesh`; exactly `3` (and only when `param_7` bit 1 is clear)
+calls `Collision_RaycastBox`; every other return value (`0`, `2`, and `4` and
+up) skips the candidate with no raycast at all. **This is a different read from
+the `collider+0x6c` surface type** (`Wall`/`Floor`/`Reset`/`MagFloor`, already
+recovered above) already used two lines earlier in the same function to decide
+the Reset skip - `collider+0x78` is not yet in this page's collider layout
+table. **It is a shape classifier, not the surface-type enum, and it is the
+same accessor `Collision_DispatchPair` reads for its own dispatch below**
+(identical `(*collider+0x78)+0xc` call, confirmed byte-for-byte 2026-08-25):
+`1` is a mesh-shaped collider, `3` is a box-shaped one, settled by cross-reading
+`Collision_BoxAgainstMesh`'s own field accesses against each side's classified
+value - see [the corrected paragraph there](#collision_stepnarrowphase-0x088159c0-builds-the-pair-list)
+for the derivation. So `1`/`3` here and `1`/`3` there are the *same* numbering,
+not reversed; do not, however, assume it lines up 1:1 with `Surface`
+(`Wall`/`Floor`/`Reset`/`MagFloor`) - a shape classifier and a surface-material
+tag are different axes in principle, and nothing yet ties this one's raw
+values back to specific node types beyond "whatever shape `Floor`/`Wall`/etc.
+colliders are actually built as." Every box collider's own classifier is now
+confirmed directly rather than by inference - see
+[the narrowphase-pairing section below](#collision_stepnarrowphase-0x088159c0-builds-the-pair-list)
+for the two-instruction stub that settles it at confidence 92.
 
-The hit result is 0x2c bytes: point, normal, collider index, the averaged
-per-vertex scalar, and a hit flag. Confidence **90**.
+`Collision_RaycastMesh` (`0x0881646c`) does the AABB clip, two slab rejects,
+per-mesh sweep and prune, then a segment-triangle test using a plane sign
+change on both endpoints plus three edge half-space tests.
+`Collision_RaycastBox` (`0x08817b1c`, renamed 2026-08-25 from `FUN_08817b1c`)
+instead separating-axis-rejects the segment against the collider's own three
+box axes (the same `+0x1d0`/`+0x1d4`/`+0x1d8` dimensions
+`Collider_BoxSamplePoints` reads), then builds the box's 12 triangles (two per
+face) and runs the same segment-triangle test against each - a raycast against
+a procedural box rather than an authored mesh. Confidence **85** on
+`Collision_RaycastBox` itself: read from the decompiler this pass, with the
+shared box-dimension field and the 12-triangle loop count both matching the box
+collider layout `Collider_SetBoxDimensions` already established.
+
+The hit result is 0x2c bytes: point (`+0x00`), normal (`+0x10`), collider
+index (`+0x20`), the averaged per-vertex scalar (`+0x24`), and, at `+0x28`,
+**which of the two narrowphase raycasts produced the hit** - `Collision_RaycastMesh`
+always writes the constant `1` there, `Collision_RaycastBox` always writes the
+constant `3`, both as raw denormal-float bit patterns for the integer
+(`1.4013e-45`/`4.2039e-45` in the decompiler's own float rendering), and never
+any other value from this call site. It is not a boolean "did anything hit"
+flag - that is a separate byte (`Collision_RaycastWorld`'s own `local_6d0[0]`)
+tested by the outer loop before this field is ever read back, and it is not a
+raw copy of `collider+0x6c` either, for the same reason the dispatch above is
+not: both narrowphase functions write a fixed literal, not anything read off
+the collider. Read 2026-08-25 by decompiling all three functions and
+cross-checking the offset arithmetic three ways: the caller's own copy into its
+output param (`local_38[10]`, byte `0x28`), the callee's write through the same
+pointer (`param_4[0x12]`, byte `0x48` from a shared struct base two calls up
+the stack), and the constant each callee writes matching its own branch
+condition in the caller. This is
+[`craft+0x208`](engine.md#the-probes-depenetrate-as-well-as-push)'s field - see
+that page for what this settles about the hover probe's escape gate.
+Confidence **90**.
 
 ## Contact generation
 
@@ -194,11 +246,86 @@ instructions and is the only reader.
 `Sap_Update` for every proxy (descending index), a flush, then `Sap_QueryAabb`
 per proxy into a scratch list of `(self, other)` pairs, skipping self-pairs.
 Each pair goes to `Collision_DispatchPair` (`0x08816eac`), which switches on
-each side's shape kind from the vtable: kind 1 (box) against kind 1 is
-`0x08815ccc`, kind 1 against kind 3 (mesh) is `Collision_BoxAgainstMesh` with
-the **mesh passed first** whichever order the pair arrived in, and mesh against
-mesh is `0x0881702c` gated on a world flag at `world+0x5464`. Confidence **85**;
-`0x08815ccc` and `0x0881702c` are unread.
+each side's shape kind through the same `collider+0x78` virtual read the
+[raycast dispatch](#raycasts) uses: kind 1 against kind 1 is `0x08815ccc`, kind
+1 against kind 3 is `Collision_BoxAgainstMesh` with the **kind-1 side passed
+first** whichever order the pair arrived in, and kind 3 against kind 3 is
+`Collision_BoxAgainstBox` (`0x0881702c`) gated on a world flag at
+`world+0x5464`.
+
+**Corrected 2026-08-25: kind 1 is `mesh`, kind 3 is `box` - the reverse of
+what this paragraph said before.** The previous labels (`kind 1 (box)`,
+`kind 3 (mesh)`, "mesh passed first") were inferred from branch order alone,
+with `0x08815ccc` and `Collision_BoxAgainstBox` (`0x0881702c`) left unread;
+decompiling
+`Collision_BoxAgainstMesh` this pass shows its own two collider arguments used
+unevenly - the one classified kind 1 supplies mesh vertices/indices at
+`+0x84`/`+0x8c`, the one classified kind 3 goes through `func_0x00014a00`, the
+same box-corner helper `Collision_RaycastBox` calls on its own box collider -
+so kind 1 is the mesh side and kind 3 is the box side, and it is passed
+*first* into `Collision_BoxAgainstMesh` regardless of which side of the pair
+it arrived as (both call sites in `Collision_DispatchPair` reorder to put the
+kind-1/mesh collider in the earlier argument). That makes this the *same*
+numbering the raycast dispatch above uses (`Collision_RaycastMesh` at `1`,
+`Collision_RaycastBox` at `3`), not the reverse of it - the two accessors were
+never in conflict, only this page's gloss on one of them was backwards.
+
+**The classifier itself is now read directly, not just inferred from field
+usage.** Every box collider's `collider+0x78` descriptor is written by
+`Collider_InitBox` (`0x088188a0`), the box-collider field/vtable initialiser
+called from every place a box collider is allocated (`Collision_AddBoxCollider`,
+`0x0881585c`) - it hardcodes the descriptor pointer to a fixed static object
+(offset `0x2c3bc0` from the same base the `jal`-target relocation trap applies
+to; `docs/reverse-engineering/methodology.md`'s image-base-add trick also
+applies to `.data` words carrying code/data pointers here, not only to `jal`
+operands, which is new information worth carrying past this page) whose own
+`+0xc` slot is `Collider_BoxShapeKind` (`0x0881894c`), a **two-instruction
+stub**: `jr ra; li v0, 0x3` - every box collider classifies as exactly `3`,
+unconditionally, with no branch of any kind. Confidence **92** on the
+classifier identity: this is no longer an inference from which fields a caller
+happens to read, it is the constant the classifier function itself returns,
+read straight off its two instructions.
+
+**And `Collision_BoxAgainstBox` (`0x0881702c`) is not a stub - it is a full,
+working oriented-box-against-oriented-box narrowphase**, decompiled in full
+this pass.
+Fifteen-axis separating-axis theorem (three face axes each side, nine
+edge-edge cross products - the standard OBB-OBB SAT, not GJK or anything
+custom), reading each collider's basis rows and half-dimensions from the same
+`+0x80`/`+0x90`/`+0xa0`/`+0x1d0..0x1d8` fields the box raycast and
+`Collider_BoxSamplePoints` already established. On overlap it writes a real
+contact into the shared array at `world+0x2450`-counted, `+0x40`-stride slots -
+the same array `Collision_AddContact`/`Collision_GetContact` already
+documented - with normal, midpoint, penetration depth, both collider indices,
+both owner ids (`+0x60`), and a friction term read from each collider's own
+`+0x64`-equivalent field. **Two gates stand between this code existing and it
+ever running for a pair of craft**, neither yet settled: `Collision_DispatchPair`
+only reaches it when `world+0x5464` is nonzero, and the function itself
+additionally requires both colliders' own `+0x68` byte to be nonzero (a
+box-collider field, not the same struct as the mesh collider's layout table
+above, and not yet in it). `world+0x5464` is written `1` unconditionally by
+what reads as the collision world's own constructor (`FUN_088151bc` - sets up
+the same `+0x5454` object-count field, `+0x5458` ready flag and `+0x440`
+broadphase pointer `Collision_RaycastWorld` itself reads, and stores its
+pointer to two global world-instance slots) and written `0` by an unrelated,
+much larger setup routine (`FUN_08822dd8`) whose own allocation pattern reads
+like a different subsystem (menu or front-end, not race setup) reaching into
+the world through one of those same globals to disable it. **That is a
+plausible "on during a race, off outside one" story, not a confirmed one** -
+neither function is named, and nothing here was checked against a live race.
+Confidence **75** on "box-box narrowphase collision exists and is not
+categorically dead code," specifically *not* extended to "it runs during a
+race," which needs a live read of `world+0x5464` to settle.
+
+**This reopens a claim believed closed.** `contact-response.md` and
+`crates/physics/src/pair.rs`'s own doc comment both say craft-to-craft
+detection "never comes out of Pulse's narrowphase" on the strength of
+`0x08815ccc` being a stub - but `0x08815ccc` is the kind-1-vs-kind-1 (mesh vs
+mesh) dispatch, and craft, being box colliders, are kind 3: their pairs never
+reach `0x08815ccc` at all. Whether they reach `Collision_BoxAgainstBox` instead
+is exactly the two gates above. See
+[handover/craft-to-craft-collision-is-implemented-the-stun.md](../../../../handover/craft-to-craft-collision-is-implemented-the-stun.md)
+for the open item this leaves.
 
 ### `Collision_BoxAgainstMesh` (`0x08815cd4`) is a ten-ray star from the box centre
 
@@ -375,12 +502,17 @@ respawn. Confidence **86**.
 | `0x08818bdc` | `Collision_SegmentTriangle` | 90 |
 | `0x08816ac0` | `Collision_RaycastWorld` | 88 |
 | `0x0881646c` | `Collision_RaycastMesh` | 88 |
+| `0x08817b1c` | `Collision_RaycastBox` | 85 |
 | `0x088304d4` | `Sap_QueryAabb` | 88 |
 | `0x08816864` | `Collision_AddContact` | 86 |
 | `0x08815c1c` | `Collision_GetContact` | 90 |
 | `0x08818a00` | `Collider_BoxSamplePoints` | 90 |
 | `0x08818964` | `Collider_SetBoxTransform` | 90 |
 | `0x08815cd4` | `Collision_BoxAgainstMesh` | 88 |
+| `0x0881702c` | `Collision_BoxAgainstBox` | 75 |
+| `0x0881894c` | `Collider_BoxShapeKind` | 92 |
+| `0x088188a0` | `Collider_InitBox` | 80 |
+| `0x0881585c` | `Collision_AddBoxCollider` | 80 |
 | `0x08818d58` | `Collision_SegmentHitsTriangle` | 88 |
 | `0x088159c0` | `Collision_StepNarrowphase` | 85 |
 | `0x08816eac` | `Collision_DispatchPair` | 85 |

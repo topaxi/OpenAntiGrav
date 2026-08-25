@@ -53,21 +53,31 @@ pub struct PairContact {
 
 /// Whether two craft are touching, and where.
 ///
-/// # The detection is ours. The original's is a stub.
+/// # Corrected 2026-08-25: the original's is not a stub, and whether it runs is unconfirmed
 ///
-/// `Collision_DispatchPair` (`0x08816eac`) sends a box proxy against a box proxy
-/// to `0x08815ccc`, and `0x08815ccc` is **two instructions - `jr ra; nop`**. It
-/// reports nothing. Craft are box proxies, so **craft-to-craft contact never
-/// comes out of Pulse's narrowphase**; whatever reaches
-/// `Body_ResolveContactPair` for a pair of craft is somewhere else and has not
-/// been found. See
-/// `docs/ghidra/functions/psp-pulse-usa/contact-response.md`.
+/// `Collision_DispatchPair` (`0x08816eac`) sends a box proxy against a box
+/// proxy to `Collision_BoxAgainstBox` (`0x0881702c`), not `0x08815ccc` as this
+/// note used to say - that was a mislabelled shape-kind reading, corrected in
+/// `docs/ghidra/functions/psp-pulse-usa/collision.md`. `0x08815ccc` really is a
+/// two-instruction stub (`jr ra; nop`), but it is the *mesh*-against-mesh
+/// dispatch; craft never reach it. `Collision_BoxAgainstBox` is a genuine
+/// fifteen-axis oriented-box SAT that writes a real contact on overlap, gated
+/// on `world+0x5464` and each collider's own `+0x68` byte - neither confirmed
+/// set during a live race yet. See
+/// `docs/ghidra/functions/psp-pulse-usa/contact-response.md` and
+/// `handover/craft-to-craft-collision-is-implemented-the-stun.md`.
 ///
-/// So this is not an approximation of a recovered test - there is nothing to
-/// approximate. It is an **oriented box against an oriented box**, by the
-/// separating-axis theorem over the usual fifteen axes, using the hull's own
-/// `<Misc width height length>`. A box is what the shape kind says a craft is,
-/// which is the whole of the argument for it.
+/// So this **may** be an approximation of a recovered test after all, not
+/// definitely an invention with nothing to approximate -
+/// `Collision_BoxAgainstBox` is unread against this function in comparison
+/// detail (axis tie-break order,
+/// contact count and shape, friction handling). Until that comparison and the
+/// two gates above are checked live, treat this as **ours, provisionally** -
+/// oriented box against oriented box, by the separating-axis theorem over the
+/// usual fifteen axes, using the hull's own `<Misc width height length>`. A
+/// box is what the shape kind says a craft is, which is still the whole of the
+/// argument for the box's *shape* - it is the "nothing to recover" framing
+/// that no longer holds.
 ///
 /// It replaced a sphere of half the hull's diagonal, which was **far too big**:
 /// on a 4 x 2 x 8 hull that sphere reaches 4.58 units where the flank is 2 away,
