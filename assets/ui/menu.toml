@@ -430,27 +430,17 @@ warn_when = [
 ]
 
 # A strength, not a boolean - each value is a shutter fraction of one
-# simulation tick, and the technique underneath (camera reprojection today,
-# `docs/rendering/motion-blur.md`'s per-object velocity buffer later) can
-# improve without this row or anyone's settings file moving. Applies live:
-# `Scene::render` reads it fresh each frame, so no `restart_required`.
-#
-# Warned rather than greyed against MSAA, the row above's own precedent: the
-# blur reads the scene's depth buffer, which under `msaa4x` is multisampled
-# and unreadable to it - see `race::Scene::motion_blur`. A player can still
-# hold the combination (choosing the blur for the *next* race they set AA
-# back down for), the row just says why nothing is happening now.
+# simulation tick, and the technique underneath can improve without this row
+# or anyone's settings file moving; it already has once, camera reprojection
+# to `docs/rendering/motion-blur.md`'s per-object velocity buffer, with no
+# migration. Applies live: `Scene::render` reads it fresh each frame, so no
+# `restart_required`. No MSAA warning any more - the blur's prepare stage
+# reads sample 0 of the multisampled attachments, so the combination works.
 [[page.entry]]
 kind = "choice"
 label = "MOTION BLUR"
 setting = "graphics.motion_blur"
 values = ["off", "low", "medium", "high"]
-warn_when = [
-    { message = "UNAVAILABLE UNDER MSAA 4X, WHOSE DEPTH BUFFER THE BLUR CANNOT READ", all = [
-        { setting = "graphics.motion_blur", values = ["low", "medium", "high"] },
-        { setting = "graphics.anti_aliasing", value = "msaa4x" },
-    ] },
-]
 
 # Applies to the next race built rather than immediately: the sampler is made
 # when a race's pipelines are.

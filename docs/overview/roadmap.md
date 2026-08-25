@@ -1144,14 +1144,17 @@ recipe and its three traps.
       [modern features](modern-features.md). **Spatial upscaling (FSR 1) is
       done**; FSR 3.1 is a WGSL port per
       [ADR-0012](../architecture/adr/0012-wgsl-upscalers-not-native-fidelityfx.md)
-      and still wants per-draw motion vectors, camera jitter and
-      a scene with no UI in it. **The readable depth buffer it also wanted is
-      done**, delivered by [motion blur](../rendering/motion-blur.md)'s
-      camera-reprojection tier, built 2026-08-25 behind a live
-      `[graphics] motion_blur` strength row
-      ([ADR-0028](../architecture/adr/0028-camera-motion-blur-first.md));
-      the per-object velocity tier that would deliver the motion vectors stays
-      designed and costed at about a week and a half but **not built**.
+      and still wants camera jitter and a scene with no UI in it. **The
+      readable depth buffer and the per-draw motion vectors it also wanted
+      are both done**, delivered by
+      [motion blur](../rendering/motion-blur.md)'s two tiers - camera
+      reprojection first as the stepping stone, then the designed per-object
+      velocity buffer and reconstruction filter, both built 2026-08-25
+      behind one live `[graphics] motion_blur` strength row
+      ([ADR-0028](../architecture/adr/0028-camera-motion-blur-first.md),
+      [ADR-0030](../architecture/adr/0030-velocity-buffer-motion-blur.md)).
+      The velocity attachment is always written in a race, deliberately, so
+      FSR 3.1 can rely on it.
       **FSR4 is not a plan**: it ships as signed DLLs
       and its driver upgrade path does not reach a native Linux build
 

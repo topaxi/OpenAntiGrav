@@ -574,12 +574,11 @@ pub struct Graphics {
     /// `docs/rendering/motion-blur.md` and ADR-0028.
     ///
     /// A strength rather than a boolean, per that design: the value names a
-    /// shutter fraction, and the technique underneath (camera reprojection
-    /// today, the design's per-object velocity buffer later) can improve
-    /// without a settings migration. Read fresh every frame, so the row
-    /// applies live - except under `anti_aliasing = "msaa4x"`, whose
-    /// multisampled depth buffer the pass cannot read; the menu row carries
-    /// the warning and `race::Scene` logs it once.
+    /// shutter fraction, and the technique underneath can improve without a
+    /// settings migration - it already has once, camera reprojection to the
+    /// design's per-object velocity buffer, with nobody's file moving. Read
+    /// fresh every frame, so the row applies live, MSAA included: the
+    /// blur's prepare stage reads sample 0 of the multisampled attachments.
     #[serde(default)]
     pub motion_blur: crate::display::MotionBlur,
     /// How much crossing a speed pad widens the field of view for a moment.

@@ -24,6 +24,13 @@ pub(super) struct Uniforms {
     _pad0: f32,
     _pad1: f32,
     _pad2: f32,
+    /// The previous simulation tick's `view_projection * model`,
+    /// premultiplied: what the velocity target measures screen motion
+    /// against. See `mesh.wgsl`'s own mirror for why this is one matrix
+    /// rather than a second `view_projection`/`model` pair - fog and
+    /// lighting need world position, velocity needs only clip position, and
+    /// a split pair here would add 64 bytes to every draw for nothing.
+    prev_mvp: [[f32; 4]; 4],
 }
 
 /// Builds the camera and model matrices for a given orbit angle.
@@ -39,14 +46,21 @@ pub(super) struct Uniforms {
 /// panning slides across the model rather than aiming past it.
 fn matrices(model: &Model, aspect: f32, orbit: Orbit) -> Uniforms {
     let centre = Vec3::from_array(model.centre);
+    let view_projection = view_projection(model, aspect, orbit);
+    let model_matrix = Mat4::from_translation(-centre);
 
     Uniforms {
-        view_projection: view_projection(model, aspect, orbit).to_cols_array_2d(),
-        model: Mat4::from_translation(-centre).to_cols_array_2d(),
+        view_projection: view_projection.to_cols_array_2d(),
+        model: model_matrix.to_cols_array_2d(),
         _unused: 0.0,
         _pad0: 0.0,
         _pad1: 0.0,
         _pad2: 0.0,
+        // The viewer has no previous tick; previous equals current, which is
+        // zero velocity. Its pipelines are built `Velocity::None` and never
+        // read this, but a zeroed matrix would still be the wrong value to
+        // leave lying in a mirrored layout.
+        prev_mvp: (view_projection * model_matrix).to_cols_array_2d(),
     }
 }
 

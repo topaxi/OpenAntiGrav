@@ -1595,7 +1595,12 @@ impl Pipeline {
     /// `sample_count` must match its multisample state - see
     /// `mesh_render::build`.
     #[must_use]
-    pub fn new(device: &wgpu::Device, format: wgpu::TextureFormat, sample_count: u32) -> Self {
+    pub fn new(
+        device: &wgpu::Device,
+        format: wgpu::TextureFormat,
+        sample_count: u32,
+        velocity: crate::mesh_render::Velocity,
+    ) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("psys"),
             source: wgpu::ShaderSource::Wgsl(include_str!("psys.wgsl").into()),
@@ -1641,14 +1646,24 @@ impl Pipeline {
                 fragment: Some(wgpu::FragmentState {
                     module: &shader,
                     entry_point: Some("fs_main"),
-                    targets: &[Some(wgpu::ColorTargetState {
-                        format,
-                        blend: Some(blend),
-                        // Colour only - the original's particle draw path
-                        // (`FUN_08915fd0`) calls `Bloom_SetPixelMask(g_bloom, 0)`,
-                        // protecting the glow mask. See `crate::post::bloom`.
-                        write_mask: wgpu::ColorWrites::COLOR,
-                    })],
+                    // The velocity target, when the race adds one, rides
+                    // along **write-masked empty** for the reason the
+                    // exhaust's does: a particle quad is rebuilt from scratch
+                    // every draw and writes no depth, so the velocity at its
+                    // pixels stays the surface's behind it. See
+                    // `mesh_render::Velocity`.
+                    targets: &{
+                        let mut targets = vec![Some(wgpu::ColorTargetState {
+                            format,
+                            blend: Some(blend),
+                            // Colour only - the original's particle draw path
+                            // (`FUN_08915fd0`) calls `Bloom_SetPixelMask(g_bloom, 0)`,
+                            // protecting the glow mask. See `crate::post::bloom`.
+                            write_mask: wgpu::ColorWrites::COLOR,
+                        })];
+                        targets.extend(velocity.target(true));
+                        targets
+                    },
                     compilation_options: crate::mesh_render::fragment_options(format),
                 }),
                 primitive: wgpu::PrimitiveState {

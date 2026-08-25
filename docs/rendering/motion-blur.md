@@ -1,16 +1,22 @@
 # Motion blur
 
-> **Status, 2026-08-25: the cheap tier is built; the tier this page chose is
-> not.** Camera reprojection ships as `oag_render::post::motion_blur`, under
-> exactly the strength row this page specified and at the placement it chose
-> (after bloom, before the HUD, inside `race::Scene::render`) - the "shipped
-> first as a stepping stone" path the *Decisions* section explicitly left
-> open. [ADR-0028](../architecture/adr/0028-camera-motion-blur-first.md)
-> records that step and its costs. **Everything below about the per-object
-> velocity buffer, the reconstruction filter and the extra attachments is
-> still design, not implementation** - and it remains the plan of record: the
-> ghosting-on-rivals failure this page describes for camera reprojection is
-> now the shipped behaviour, not a hypothetical.
+> **Status, 2026-08-25: the tier this page chose is built.** The per-object
+> velocity buffer, the `prev_mvp` uniform, the tile-max / neighbour-max /
+> reconstruction chain and the always-on buffer are implemented as designed
+> - `oag_render::post::motion_blur`, `mesh.wgsl`'s `velocity_of`,
+> `mesh_render::Velocity` - under exactly the strength row and at the
+> placement this page specified. It happened in the two steps the page
+> sanctioned: camera reprojection shipped first as the stepping stone
+> ([ADR-0028](../architecture/adr/0028-camera-motion-blur-first.md), plus
+> [ADR-0029](../architecture/adr/0029-primer-capture-and-craft-focus-mask.md)'s
+> live-feedback patches), and the velocity tier replaced it under the same
+> row with no settings migration
+> ([ADR-0030](../architecture/adr/0030-velocity-buffer-motion-blur.md) - the
+> ADR this page said the tier owes). The predicted ghosting-on-rivals was
+> observed live in the interim, which is as validated as a design prediction
+> gets. What remains below as design rather than implementation: the
+> airbrake flaps' own swing velocity, and this page's read on what the
+> buffer deliberately does not solve.
 
 **This is an invented feature, not a recovered one.** Wipeout Pulse has no
 motion blur; nothing on this page came out of a disassembler, and nothing on it
@@ -307,16 +313,15 @@ Worth adding a fifth: draw one moving quad, read the velocity target back and
 assert the sign and rough magnitude. A y-flip in the velocity encoding is the
 most likely single bug and it is invisible in the final image.
 
-## The owed ADR is written - for the tier that shipped
+## The owed ADRs are written
 
 This section used to say "ADR-0024 is owed" (four ADRs landed in between).
-[ADR-0028](../architecture/adr/0028-camera-motion-blur-first.md) is that
-record for what is actually built: the camera tier under this page's own
-strength row, the tick-keyed previous camera, the after-bloom placement, the
-skip-under-MSAA gate, and the capture path's honest `Off`.
-
-**The velocity tier still owes its own ADR when it lands**, for the decisions
-ADR-0028 deliberately does not make: the always-on velocity buffer, the
-sample-0 MSAA reads, and the `Rg16Float` question above - which could still
-change that design, and an ADR recording a decision that then changes is worse
-than one written a week later.
+Three now exist:
+[ADR-0028](../architecture/adr/0028-camera-motion-blur-first.md) for the
+stepping-stone camera tier,
+[ADR-0029](../architecture/adr/0029-primer-capture-and-craft-focus-mask.md)
+for the primer capture and the interim focus mask, and
+[ADR-0030](../architecture/adr/0030-velocity-buffer-motion-blur.md) for this
+page's own tier - the always-on buffer, the sample-0 MSAA reads, the settled
+`Rg16Float` question (multisample-renderable at 4x, pinned by a live test
+with `Rgba16Float` as the fallback), and both unsolved cases above.

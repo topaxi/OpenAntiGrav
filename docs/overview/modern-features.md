@@ -63,7 +63,7 @@ section has always listed, now with their status:
 | --- | --- |
 | Render resolution decoupled from presentation | **Done** - the render scale, and the offscreen target it draws into |
 | A depth buffer the upscaler can consume | **Done** - `StoreOp::Store` and `TEXTURE_BINDING`, read every frame by the motion blur pass ([ADR-0028](../architecture/adr/0028-camera-motion-blur-first.md)) |
-| Per-pixel motion vectors from every draw | **Absent** - the previous-frame *camera* is now stored and reprojected (`oag_render::post::motion_blur`), which is camera-only velocity; nothing per draw |
+| Per-pixel motion vectors from every draw | **Done** - the race writes an always-on `Rg16Float` velocity attachment from every draw's premultiplied previous-tick matrices ([ADR-0030](../architecture/adr/0030-velocity-buffer-motion-blur.md)); motion blur is its first consumer |
 | Camera jitter, sub-pixel per frame | **Absent** - and it must not perturb the culling frustum, which shares the matrix |
 | A scene without UI in it | **Absent** - the HUD and the perf overlay draw into the same target, at the render scale |
 
@@ -72,19 +72,19 @@ it only becomes visible once something downstream needs a scene it can reason
 about. FSR must consume a frame with no UI in it, and the UI must then be
 composited at presentation resolution.
 
-**Row two is cleared, and row three has a design.**
-[Motion blur](../rendering/motion-blur.md) wants exactly the same readable depth
-buffer and the same per-draw velocity target. Its cheap tier - camera
-reprojection - is now **built**
-([ADR-0028](../architecture/adr/0028-camera-motion-blur-first.md)), which is
-what cleared the depth row and put previous-frame camera matrices in the tree.
-The per-object velocity tier that would clear row three stays specified and
-costed at about a week and a half, and not built; the ghosting its design
-predicted for camera reprojection on rivals holding station is now shipped,
-visible behaviour arguing for it. Either tier touches the last row only
-partly: the blur chain runs before the HUD is drawn, so a UI-free scene
+**Rows two and three are cleared, both by
+[motion blur](../rendering/motion-blur.md)** - its camera-reprojection
+stepping stone cleared the depth row
+([ADR-0028](../architecture/adr/0028-camera-motion-blur-first.md)), and its
+per-object velocity tier, now built as designed
+([ADR-0030](../architecture/adr/0030-velocity-buffer-motion-blur.md)),
+cleared the motion-vector row: every race draw writes an always-on
+`Rg16Float` velocity attachment, deliberately independent of the blur
+setting so FSR 3.1 can rely on it. The blur touches the last row only
+partly: its chain runs before the HUD is drawn, so a UI-free scene
 demonstrably exists at that point in the frame without being handed
-downstream.
+downstream. What FSR 3.1 still lacks outright: sub-pixel camera jitter, and
+that UI-free scene as a consumable artefact.
 
 ## Steam Input
 

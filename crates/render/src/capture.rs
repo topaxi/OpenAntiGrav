@@ -13,7 +13,7 @@ use crate::camera::orbit::Orbit;
 use crate::mesh::Model;
 use crate::mesh_render::{
     Anisotropy, Built, DEPTH_FORMAT, Depth, GlowMask, NodeAnims, TRANSPARENT_BLEND, TexAnims,
-    UNIFORMS_SIZE, build, write_uniforms,
+    UNIFORMS_SIZE, Velocity, build, write_uniforms,
 };
 
 /// Makes every pixel opaque, in place, before a frame is encoded as a PNG.
@@ -157,8 +157,10 @@ pub fn capture_pixels_from(
         1,
         Depth::Scene,
         TRANSPARENT_BLEND,
-        // The offscreen helper has no bloom behind it, so the mask is moot.
+        // The offscreen helper has no bloom behind it, so the mask is moot,
+        // and it draws alone into one target, so there is no velocity buffer.
         GlowMask::Protected,
+        Velocity::None,
     )?;
 
     let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {

@@ -38,8 +38,9 @@ out to be wrong.
 | [0025](0025-a-boot-chain-carries-its-provenance.md) | A boot chain carries its provenance: measured, or only declared | Accepted; narrows [ADR-0023](0023-boot-sequence-as-title-data.md) |
 | [0026](0026-hd-authored-lighting-is-linear.md) | Wipeout HD's authored lighting is computed in linear light | Accepted; narrows [ADR-0020](0020-gamma-authoritative-colour-space.md) |
 | [0027](0027-three-mix-buses.md) | Three mix buses and a master row, split on the original's own lines | Accepted; supersedes [ADR-0018](0018-audio-mixer-architecture.md)'s two-bus item |
-| [0028](0028-camera-motion-blur-first.md) | Ship camera-reprojection motion blur first, under the strength row the full design specified | Accepted; capture-stays-off, stretch-cap and rival-blur items superseded by [ADR-0029](0029-primer-capture-and-craft-focus-mask.md) |
-| [0029](0029-primer-capture-and-craft-focus-mask.md) | A capture renders a primer frame, and the craft are masked out of the camera blur | Accepted; supersedes three [ADR-0028](0028-camera-motion-blur-first.md) items |
+| [0028](0028-camera-motion-blur-first.md) | Ship camera-reprojection motion blur first, under the strength row the full design specified | Accepted as the stepping stone; technique superseded by [ADR-0030](0030-velocity-buffer-motion-blur.md) |
+| [0029](0029-primer-capture-and-craft-focus-mask.md) | A capture renders a primer frame, and the craft are masked out of the camera blur | Accepted; the focus mask superseded by [ADR-0030](0030-velocity-buffer-motion-blur.md), the primer capture and cap stand |
+| [0030](0030-velocity-buffer-motion-blur.md) | The velocity buffer lands - measured per-draw motion replaces camera reprojection and the focus mask | Accepted; supersedes [ADR-0028](0028-camera-motion-blur-first.md)'s technique and [ADR-0029](0029-primer-capture-and-craft-focus-mask.md)'s mask |
 
 ## Format
 

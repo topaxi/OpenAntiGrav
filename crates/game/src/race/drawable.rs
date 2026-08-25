@@ -101,6 +101,12 @@ impl Drawable {
             depth,
             blend,
             glow,
+            // Everything a race draws writes the velocity buffer (or, for
+            // its blended pipelines, carries the masked second target) -
+            // the buffer is always on in the game path, whatever the
+            // motion blur setting says. See `mesh_render::Velocity` and
+            // `race::Scene::velocity`.
+            mesh_render::Velocity::Write,
         )?;
 
         let uniforms = device.create_buffer(&wgpu::BufferDescriptor {
@@ -139,7 +145,19 @@ impl Drawable {
         })
     }
 
-    pub(super) fn write(&self, queue: &wgpu::Queue, view_projection: Mat4, model: Mat4) {
+    /// `prev_mvp` is the previous simulation tick's `view_projection * model`,
+    /// premultiplied - what the velocity target measures this drawable's
+    /// screen motion against. A drawable with no previous pose (a scene's
+    /// first frame, a rocket that just spawned) passes this frame's product,
+    /// which is zero object velocity rather than a smear from stale state.
+    /// See `race::scene::frame::MotionState`.
+    pub(super) fn write(
+        &self,
+        queue: &wgpu::Queue,
+        view_projection: Mat4,
+        model: Mat4,
+        prev_mvp: Mat4,
+    ) {
         let uniforms = Uniforms {
             view_projection: view_projection.to_cols_array_2d(),
             model: model.to_cols_array_2d(),
@@ -147,6 +165,7 @@ impl Drawable {
             _pad0: 0.0,
             _pad1: 0.0,
             _pad2: 0.0,
+            prev_mvp: prev_mvp.to_cols_array_2d(),
         };
         queue.write_buffer(&self.uniforms, 0, bytemuck::bytes_of(&uniforms));
     }
@@ -562,6 +581,10 @@ pub(crate) struct Uniforms {
     _pad0: f32,
     _pad1: f32,
     _pad2: f32,
+    /// The previous tick's `view_projection * model`, premultiplied - one
+    /// matrix rather than a second pair, per `mesh.wgsl`'s own mirror: fog
+    /// and lighting need world position, velocity needs only clip position.
+    prev_mvp: [[f32; 4]; 4],
 }
 
 /// A craft's model matrix, which is the only correct way to place its mesh.

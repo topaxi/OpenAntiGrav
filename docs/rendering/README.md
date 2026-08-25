@@ -71,18 +71,18 @@
   [the HUD](../ui/hud.md). Its `<Mode3D>` layer is not
 - Post-processing, and the series' distinctive look. Bloom is **done** and
   **recovered**; FXAA, SMAA, MSAA 4x and FSR 1 are built as modern additions.
-  [Motion blur](motion-blur.md) is **built at its cheap tier** - camera
-  reprojection, behind a live `[graphics] motion_blur` strength row, per
-  [ADR-0028](../architecture/adr/0028-camera-motion-blur-first.md) - an
-  invented feature rather than a recovered one. Its designed per-object
-  velocity tier is still not built, and it is what would move the ships from
-  camera-only blur to true per-draw motion
+  [Motion blur](motion-blur.md) is **built at its designed per-object
+  velocity tier** - every race draw writes measured screen motion, gathered
+  by a McGuire-style reconstruction filter behind a live
+  `[graphics] motion_blur` strength row
+  ([ADR-0030](../architecture/adr/0030-velocity-buffer-motion-blur.md)) - an
+  invented feature rather than a recovered one
 - Modern display features: ultrawide, HDR, VRR, dynamic resolution, and
   FSR-class upscaling - see [modern features](../overview/modern-features.md)
-  for the licensing picture and the pipeline prerequisites (motion vectors,
-  depth, camera jitter) to design in from the start. Depth is now readable -
-  the camera-tier blur reads it every frame - and per-draw motion vectors
-  still wait on [motion blur](motion-blur.md)'s velocity tier
+  for the licensing picture and the pipeline prerequisites to design in from
+  the start. Readable depth and per-draw motion vectors are both done, by
+  [motion blur](motion-blur.md)'s two tiers; sub-pixel camera jitter and a
+  UI-free scene artefact remain
 
 ## The art is raster, and that has a consequence
 

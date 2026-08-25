@@ -1120,6 +1120,7 @@ impl Pipeline {
         trail_shape: Option<&FlareTexture>,
         trail_blend: wgpu::BlendState,
         sample_count: u32,
+        velocity: crate::mesh_render::Velocity,
     ) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("exhaust"),
@@ -1210,11 +1211,23 @@ impl Pipeline {
                 fragment: Some(wgpu::FragmentState {
                     module: &shader,
                     entry_point: Some("fs_main"),
-                    targets: &[Some(wgpu::ColorTargetState {
-                        format,
-                        blend: Some(blend),
-                        write_mask,
-                    })],
+                    // The velocity target, when the race adds one, rides
+                    // along **write-masked empty**: a flare or ribbon quad is
+                    // rebuilt from scratch every draw with no frame-to-frame
+                    // vertex correspondence, so there is no previous position
+                    // to compute a velocity from, and these draws write no
+                    // depth either - the velocity at their pixels stays the
+                    // surface's behind them. See `mesh_render::Velocity` and
+                    // `docs/rendering/motion-blur.md`.
+                    targets: &{
+                        let mut targets = vec![Some(wgpu::ColorTargetState {
+                            format,
+                            blend: Some(blend),
+                            write_mask,
+                        })];
+                        targets.extend(velocity.target(true));
+                        targets
+                    },
                     compilation_options: wgpu::PipelineCompilationOptions {
                         constants,
                         ..Default::default()

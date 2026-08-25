@@ -13,7 +13,10 @@ mod uniforms;
 
 pub use blend::{ADDITIVE_BLEND, TRANSPARENT_BLEND, TransparentPipelines};
 use uniforms::Uniforms;
+mod velocity;
 pub use uniforms::{DEPTH_FORMAT, Fog, Light, SCENE_SIZE, Scene, UNIFORMS_SIZE, write_uniforms};
+pub(crate) use velocity::velocity_targets;
+pub use velocity::{VELOCITY_FORMAT, Velocity};
 
 /// The texture-transform table `mesh.wgsl` reads from bind group 3: one
 /// `(scale, offset)` pair per entry of [`Model::anim_tracks`], already sampled
@@ -284,6 +287,7 @@ pub fn build(
     depth: Depth,
     blend: wgpu::BlendState,
     glow: GlowMask,
+    velocity: Velocity,
 ) -> Result<Built> {
     // The blended pipeline never writes depth whichever role this is; the rest
     // is what [`Depth`] chooses between.
@@ -504,13 +508,18 @@ pub fn build(
         },
         fragment: Some(wgpu::FragmentState {
             module: &shader,
-            entry_point: Some("fs_main"),
-            // Alpha is the bloom's glow mask - see [`GlowMask`].
-            targets: &[Some(wgpu::ColorTargetState {
-                format,
-                blend: None,
-                write_mask: glow.writes(),
-            })],
+            entry_point: Some(velocity.entry("fs_main", "fs_main_velocity")),
+            // Alpha is the bloom's glow mask - see [`GlowMask`]. The second
+            // target, when [`Velocity::Write`] adds one, takes this surface's
+            // real screen motion - this pipeline writes depth.
+            targets: &velocity_targets(
+                wgpu::ColorTargetState {
+                    format,
+                    blend: None,
+                    write_mask: glow.writes(),
+                },
+                velocity.target(false),
+            ),
             compilation_options: wgpu::PipelineCompilationOptions {
                 constants,
                 ..Default::default()
@@ -562,13 +571,18 @@ pub fn build(
         },
         fragment: Some(wgpu::FragmentState {
             module: &shader,
-            entry_point: Some("fs_main_alpha_test"),
-            // Alpha is the bloom's glow mask - see [`GlowMask`].
-            targets: &[Some(wgpu::ColorTargetState {
-                format,
-                blend: None,
-                write_mask: glow.writes(),
-            })],
+            entry_point: Some(velocity.entry("fs_main_alpha_test", "fs_main_alpha_test_velocity")),
+            // Alpha is the bloom's glow mask - see [`GlowMask`]. A cutout
+            // writes depth like the opaque pipeline, so it writes real
+            // velocity too.
+            targets: &velocity_targets(
+                wgpu::ColorTargetState {
+                    format,
+                    blend: None,
+                    write_mask: glow.writes(),
+                },
+                velocity.target(false),
+            ),
             compilation_options: wgpu::PipelineCompilationOptions {
                 constants,
                 ..Default::default()
@@ -640,13 +654,20 @@ pub fn build(
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: Some("fs_main_blend"),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format,
-                    blend,
-                    // Alpha is the bloom's glow mask - see [`GlowMask`] for
-                    // which draw paths are allowed to write it and why.
-                    write_mask: glow.writes(),
-                })],
+                // The second target rides along **write-masked empty** when
+                // [`Velocity::Write`] adds one: a blended draw writes no
+                // depth, so the velocity at its pixels stays the surface's
+                // behind it - see [`Velocity`].
+                targets: &velocity_targets(
+                    wgpu::ColorTargetState {
+                        format,
+                        blend,
+                        // Alpha is the bloom's glow mask - see [`GlowMask`] for
+                        // which draw paths are allowed to write it and why.
+                        write_mask: glow.writes(),
+                    },
+                    velocity.target(true),
+                ),
                 compilation_options: wgpu::PipelineCompilationOptions {
                     constants,
                     ..Default::default()

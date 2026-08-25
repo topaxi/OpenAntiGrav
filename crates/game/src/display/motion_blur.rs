@@ -13,11 +13,13 @@ use serde::{Deserialize, Serialize};
 /// [`docs/rendering/motion-blur.md`](../../../../docs/rendering/motion-blur.md)
 /// settled before anything was built: each live tier is a shutter fraction of
 /// one simulation tick, and the technique underneath is free to improve
-/// without a settings migration. Today that technique is camera
-/// reprojection, exact for everything static and over-blurring a rival
-/// holding station; the design's per-object velocity buffer is the recorded
-/// successor. See
-/// [ADR-0028](../../../../docs/architecture/adr/0028-camera-motion-blur-first.md).
+/// without a settings migration. It already has, once: camera reprojection
+/// shipped first
+/// ([ADR-0028](../../../../docs/architecture/adr/0028-camera-motion-blur-first.md))
+/// and the design's per-object velocity buffer replaced it under this same
+/// row ([ADR-0030](../../../../docs/architecture/adr/0030-velocity-buffer-motion-blur.md)).
+/// Every draw now writes its measured screen motion, so a rival holding
+/// station stays sharp because it *is* sharp, not because a mask says so.
 ///
 /// An enhancement of this project's, not a recovery: neither PSP build
 /// renders motion blur, so `Off` is the default and the comparison setting.
