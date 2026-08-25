@@ -523,6 +523,25 @@ impl Screens {
                     self.collect_widgets(screen, grandchild, viewport_width);
                 }
             }
+            // An anonymous `Screen` is a grouping container, not a navigable
+            // screen - [`Self::collect`] already says so and walks straight
+            // through one to find the named screens nested inside. This is
+            // that same rule applied to widgets: an anonymous `Screen`'s own
+            // `Image`/`Text`/etc. children belong to whichever named screen
+            // encloses it, exactly as if the wrapper were not there. Before
+            // this arm existed they were silently dropped - neither an error
+            // nor a picture, just gone - because nothing else in this match
+            // recurses into a `Screen` tag. Pulse's own top bar is the case
+            // that found it: its `<Image>` sits three anonymous `Screen`
+            // levels under `Top FE Screen->FE Screen`. A *named* child is
+            // left alone here - it collects its own widgets separately, the
+            // next time [`Self::collect`] reaches it, and counting them twice
+            // would draw a menu's own chrome on its parent's frame too.
+            "screen" if child.attr("name").is_none() => {
+                for grandchild in &child.children {
+                    self.collect_widgets(screen, grandchild, viewport_width);
+                }
+            }
             _ => {}
         }
     }
