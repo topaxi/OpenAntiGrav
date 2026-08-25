@@ -266,4 +266,11 @@ thread under [`handover/`](handover/), each with `## Open` and `## Next Steps`;
 its index line together once the work lands, the same rule this file always applied to a
 row.
 
+**A `docs/` page must never link into `handover/`.** A thread file gets deleted the
+moment its work lands, so a link from a permanent doc into one is a dead link waiting to
+happen with nothing to catch it - `just check-docs` only proves links resolve today. The
+reverse direction is normal and expected: a `handover/` thread citing a `docs/` page as
+its evidence is how every thread is written. When a finding grew out of a thread, cite
+the evidence (the doc page, the test, the address) instead of the thread file.
+
 ADRs are immutable; a changed decision gets a new ADR that supersedes the old one, not an edit.
