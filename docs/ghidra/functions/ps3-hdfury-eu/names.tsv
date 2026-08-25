@@ -123,3 +123,5 @@
 0x0029af88	function	Billboard_CreateFromColour	62	billboards.md
 0x0029a6a8	function	Billboard_ConstructResource	62	billboards.md
 0x003a4b70	function	GetBillboardMeshIdFromName	90	billboards.md
+0x00135328	function	DetonatorBomb_Construct	80	detonator-bomb.md
+0x00134b48	function	DetonatorBomb_ConstructComplete	80	detonator-bomb.md

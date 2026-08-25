@@ -73,30 +73,42 @@ entry guessed. No render call site instantiating a bare `SortRoot` was
 found either, on either constructor pair. The renderer's actual draw-order
 logic - if `SortRoot` is even part of it - is still unlocated.
 
+**Chased one level further and it lands in weapon code, confirming the
+above.** The six callers are three classes, not six (each pairs up by
+identical decompiled bodies, same as `SortRoot.cpp` itself - detail on
+`renderer.md`). One of the three is owned, as a plain member, by
+`DetonatorBomb.cpp` - now named
+([`DetonatorBomb_Construct`/`DetonatorBomb_ConstructComplete`](../docs/ghidra/functions/ps3-hdfury-eu/detonator-bomb.md),
+confidence 80, found by the same `__FILE__`-at-offset-`0x30` string
+attribution `RaceManager_Construct` uses). `SortRoot`'s only located use is
+now two hops deep in a bomb weapon's own constructor, tied to
+`RaceManager_GetInstance()` - about as far from "render draw-order root" as
+gameplay code gets. That table entry should be treated as refuted pending a
+render-side counter-example, not merely unconfirmed.
+
 ## Open
 
 - Transparent draws are not depth-sorted anywhere (list order only); the
-  `SortRoot.cpp` lead has been chased and narrowed (see 2026-08-25 note
-  above), not resolved - the render layer's own draw-order call site is
-  still unfound
+  `SortRoot.cpp` lead is now spent - it resolves to gameplay/weapon code, not
+  a render mechanism - so the render layer's own draw-order call site (if
+  any) needs a different search entirely
 - `Transparency::Mode2` is not routed to the cutout pass; `material.rs`
   already refutes alpha-test for it, so what it should route to instead is
   unread
 - Whether Pulse's own transparent draws should be depth-sorted is unmeasured
   (the question above was scoped to HD only)
-- Whether `SortRoot` has anything to do with render draw order at all is now
-  in question - its one located call site is non-render
 
 ## Next Steps
 
-- Read the six `0x002dbe50` callers' own callers (`0x00137690`, `0x00151ad8`,
-  `0x00154cf0`, `0x00137e88`, `0x001525f8`, `0x00155088` - none named, none
-  in `names.tsv`) to identify what subsystem at `0x00130000`-`0x00156000`
-  they belong to; that tells us what `SortRoot` is actually for before
-  spending more time assuming it is render-specific
-- Separately, search for the renderer's *own* draw-order mechanism by RSX
-  method constants or state-sort call sites, per renderer.md's existing "the
-  draw path" open item - do not assume `SortRoot` is it until a render call
-  site is found
-- If either turns up a real sort key, read it before implementing anything -
-  do not add a distance-based sort speculatively
+- Search for the renderer's *own* draw-order mechanism by RSX method
+  constants or state-sort call sites in the render layer's own address range
+  (`0x00279xxx`-`0x002ecxxx`), per renderer.md's existing "the draw path"
+  open item - `SortRoot` is spent as a lead, per the 2026-08-25 note above,
+  so do not chase it further on this question
+- If that search turns up a real sort key, read it before implementing
+  anything - do not add a distance-based sort speculatively
+- Separately, and not blocking the above: `renderer.md`'s `SortRoot` note now
+  names two of its three unnamed derived classes' shared shape (a
+  pooled-allocator-plus-hash-property-lookup pattern) without naming the
+  classes themselves - low-priority, since it has no bearing on render draw
+  order, but worth closing if someone is already in that address range

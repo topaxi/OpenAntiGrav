@@ -1631,6 +1631,31 @@ The whole table, in file order:
   transparent-draw ordering uses this class at all is still open - below 50,
   so per [ADR-0005](../../../architecture/adr/0005-ghidra-conventions.md)
   the hypothesis is written here and nothing is renamed.
+
+  **2026-08-25, continued: the six callers are three classes, not six.**
+  They pair up by identical decompiled bodies exactly like `SortRoot.cpp`
+  itself does: `0x00137690`/`0x00137e88` (class "X"), `0x00151ad8`/`0x001525f8`
+  ("Y"), `0x00154cf0`/`0x00155088` ("Z") - each pair sharing one vtable
+  address (`0x008aa838`, `0x008ab114`, `0x008ab27c`) and tail-calling one
+  shared per-class finisher (`0x00135b90`, `0x0014fa08`, `0x00154858`).
+  All three share one shape: each allocates N identical 0x2080-byte
+  sub-objects through a debug-tracked pooled allocator that cites
+  `LinkObj.h:542` (N = 4 for X, up to 11 for Y, 1 for Z), configures floats
+  on them by hash-keyed property lookup (`FUN_00677008`/`FUN_00677018`,
+  the same "look up by name, apply if found" shape the `SHO` parameter
+  binder uses, unconnected to it otherwise), and builds reciprocal-of-delta
+  interpolation tables over some of those fields - the arithmetic shape of a
+  piecewise curve's per-segment slope, not anything render-specific.
+  Followed one dead end here: each class also carries a second vtable
+  (`0x00864230`/`0x00864ab8`/`0x00864b38`) sharing all but three entries
+  across the three classes - a second interface with three type-specific
+  overrides, not the class-name string a first read of the layout suggested;
+  no string was found there. **None of the three is named** - the pooled
+  N-instance-plus-curves shape reads as an emitter or spawn-point framework
+  of some kind, but that is a shape, not a name, and below 50 per ADR-0005.
+  The productive next move is identifying *that* framework (the pooled
+  allocator and the two helper functions it shares across all three classes
+  are likely reused well beyond these three), not chasing `SortRoot` further.
 - **Post-processing has no `.cpp` of its own**, and that turned out to be the
   wrong place to look: it is a set of named shader programs, not a class. See
   [the shader section](#shaders-are-in-exactly-two-places-and-neither-is-a-file-type-on-the-disc).
