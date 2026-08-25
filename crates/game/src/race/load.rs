@@ -729,6 +729,40 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // The authored PVS. Skipped for a ribbon build, whose geometry is generated
     // from the spline rather than authored, so the section boxes have nothing
     // to say about it.
+    // **What the circuit asks to be loaded with it, and what of that this
+    // project does.** `trackstartup.xml` names up to eight billboard slots and
+    // a sound bank; every model it names is on the disc, and **nothing places
+    // them** - where a slot's transform comes from is unrecovered, so they stay
+    // unwired rather than put somewhere plausible. Reported so that is a line
+    // rather than a silence. See `oag_formats::trackstartup`.
+    if ps3_geometry.is_some()
+        && let Some(name) = track
+            .rfind('/')
+            .map(|at| format!("{}/trackstartup.xml", &track[..at]))
+    {
+        match archives.read_name(&name) {
+            Err(_) => {}
+            Ok(blob) => {
+                let manifest =
+                    oag_formats::trackstartup::TrackStartup::parse(&String::from_utf8_lossy(&blob));
+                let models = manifest
+                    .billboards
+                    .iter()
+                    .filter(|b| b.location().is_some())
+                    .count();
+                report.push(format!(
+                    "{name}: {} billboard slot(s), {models} naming a model and {} a colour - \
+                     none placed, because what a slot attaches to is unrecovered{}",
+                    manifest.billboards.len(),
+                    manifest.billboards.len() - models,
+                    match &manifest.sound_bank {
+                        Some(bank) => format!("; sound bank {bank}"),
+                        None => String::new(),
+                    },
+                ));
+            }
+        }
+    }
     let visibility = if vex_geometry {
         TrackVisibility::build(&track_model, &track_blob, &ai)
     } else if ps3_geometry.is_some() {

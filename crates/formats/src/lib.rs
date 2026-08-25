@@ -59,6 +59,7 @@ pub mod sblk;
 pub mod signature;
 pub mod texture;
 pub mod track;
+pub mod trackstartup;
 pub mod vex;
 pub mod vif;
 pub mod wad;
