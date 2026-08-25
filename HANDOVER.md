@@ -723,6 +723,51 @@ error: in module-B functions Ghidra renders TOC-loaded *floats* as string
 pointers, so arithmetic decompiles as `(float)PTR_s_Emp__d_008a754c` and reads
 like a nonsense variable name rather than a wrong base.
 
+**The same defect has a second failure mode, and this one doesn't look
+wrong.** 2026-08-25. Hunting for where HD's HUD resolves a texture reference's
+extension to `.gtf` (see
+[the HUD thread](handover/wipeout-hd-furys-hud-reads-and-the-reader.md)),
+`get_xrefs_to` on the literal string `SrcRel` reported a real-looking hit:
+`FUN_00550eb4`, decompiling (under Ghidra's one global TOC) as a function
+that opens with a call site literally named `PTR_s_LoadXML_Item_cpp_...` and
+checks `strncmp(param_2, "Values", 0xb)` - a thematically perfect match for
+the LoadXML fragment loader this thread was chasing. `scripts/ps3-toc.py toc
+0x00550eb4` says its real TOC is `0x008bd3c4`, not the global
+`0x008ad4d8` - so every one of those names is Ghidra decompiling module-B
+code against module-A's table, and it happened to land on another *real,
+coherent* table (LoadXML_Item's actual attribute-name strings live a few
+words further into the same data region) rather than garbage. The `0xb`
+in that `strncmp` is the tell once you know to look: `"Values"` is 6
+characters, but `"Set-Cookie:"` is exactly 11 - the function is
+`CCookie.cpp`, confirmed by reading its real TOC's neighbouring strings
+(`Set-Cookie:`, `expires`, `domain`, `path`, `secure`) directly with
+`inspect_memory_content` rather than trusting Ghidra's resolution. **The
+general lesson: `get_xrefs_to` and decompiled symbol names for any
+TOC-relative load are only as trustworthy as the target function's TOC
+matches the global one** - check first with `scripts/ps3-toc.py toc <addr>`
+(`0x008ad4d8` means trust it, anything else means don't), and prefer
+`scripts/ps3-toc.py map` (grep the `.cpp` list) plus raw
+`inspect_memory_content` reads over `search_strings`/`get_xrefs_to` when
+hunting a specific mechanism in a function whose TOC hasn't been checked.
+This is binary-wide, not specific to this one string or this one function.
+
+**A related but separate trap, hit later the same session: proximity to a
+known-good table is not evidence of relatedness, TOC issue or not.** The
+same HUD-thread session chased `get_xrefs_to` hits clustered around
+`008ad9e0`, one word away from `LoadXML_Item`'s real attribute-name pointer
+table at `008ad9f0` - a dozen-plus hits, in the right file's address range,
+looked like exactly the read-the-table code being searched for. It wasn't:
+`008ad9e0` is a generic pooled-object free-list head that many unrelated
+classes' destructors happen to share, and every one of those "hits" was a
+destructor releasing an unrelated smart-pointer field. **Read the actual data at the address in question** - the `.rodata` string
+run itself (`0078bf00`, holding the real literal names) rather than the
+nearby pointer table that references it (`008ad9f0`, one word from the
+free-list head that produced the false lead) - rather than trusting that a
+cluster of xrefs near a landmark means the landmark. This one doesn't need a
+TOC check to avoid: both addresses were module-A/global-TOC and the xrefs
+were technically real; the inference "near my table, therefore about my
+table" was simply wrong.
+
 **Deferred from the 2026-08-18 renderer sweep**, so nobody re-derives that these
 are open: the **draw path** (inline command-buffer writes on PS3, so no import
 census or call graph finds it - it needs a search for RSX method constants);
