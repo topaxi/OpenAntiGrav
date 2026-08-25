@@ -412,6 +412,12 @@ impl Session {
     /// already `Some`, and a no-op entirely on the boot path or off the
     /// loading stage, where there is no worker to poll.
     pub(crate) fn advance_race_build(&mut self) {
+        // Read before the `Stage::Loading` borrow below, the same reason
+        // `Session::frame` reads it before its own `match &mut self.stage`:
+        // `pvs_culling` takes `&self` as a whole, and the borrow that pattern
+        // takes out on `self.stage` alone would conflict with a whole-`self`
+        // call made while it is still live.
+        let pvs_culling = self.pvs_culling();
         let Stage::Loading(stage) = &mut self.stage else {
             return;
         };
@@ -443,7 +449,7 @@ impl Session {
                 // before the fade rather than after - see this method's own
                 // documentation.
                 let start = std::time::Instant::now();
-                let stage = Stage::build_race_stage(
+                let mut built = Stage::build_race_stage(
                     &self.gpu,
                     loaded,
                     self.framebuffer.size(),
@@ -453,7 +459,30 @@ impl Session {
                     self.autopilot,
                 );
                 info!("race scene built in {:.0?}", start.elapsed());
-                stage.map_err(RaceBuildError::Gpu)
+                // **Building the pipeline objects above is not the same as the
+                // driver having compiled them.** Several backends defer that to
+                // the first real draw call, which is why the eager build alone
+                // did not close the gap: the compile just moved to the first
+                // race frame, held behind the loading screen's own last
+                // presented frame - opacity zero - for however long it took.
+                // Warming up here, before the scene is marked ready, pays that
+                // cost while the loading screen is still animating instead. See
+                // `RaceStage::warm_up`.
+                if let Ok(race_stage) = &mut built {
+                    let warm_up_start = std::time::Instant::now();
+                    let size = self.framebuffer.size();
+                    race_stage.warm_up(
+                        &self.gpu,
+                        self.framebuffer.view(),
+                        (0.0, 0.0, size.0 as f32, size.1 as f32),
+                        self.settings.graphics.fov,
+                        self.settings.graphics.frustum_culling,
+                        pvs_culling,
+                        self.anim_seconds,
+                    );
+                    info!("race scene warmed up in {:.0?}", warm_up_start.elapsed());
+                }
+                built.map_err(RaceBuildError::Gpu)
             }
             Err(e) => Err(RaceBuildError::Load(e)),
         };
