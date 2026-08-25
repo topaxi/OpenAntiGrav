@@ -342,7 +342,16 @@ impl Audio {
         let Some(index) = self.race_index else {
             return;
         };
-        self.race_voice = None;
+        // Stopped explicitly rather than assumed already silent: `Audio::tick`'s
+        // own call only ever reaches here once the voice has already ended on
+        // its own, but nothing about this method's name or signature says a
+        // caller may not reach it with one still sounding - a skip control
+        // would - and `mixer.stop` on an id whose voice already finished is a
+        // no-op (voice ids carry a generation), so this costs nothing on the
+        // path that exists today.
+        if let Some(id) = self.race_voice.take() {
+            self.output.with_mixer(|mixer| mixer.stop(id));
+        }
         let next = next_race_index(index, Self::booted_soundtrack_len(&discs));
         self.race_index = Some(next);
 
