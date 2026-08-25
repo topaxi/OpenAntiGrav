@@ -126,8 +126,10 @@ fn boot_legal_wraps_to_two_lines_that_clear_the_screen() {
     // scaled, so the second line's own ink bottoms out at 271.7 and clears
     // the screen by three tenths of a pixel. So the fix needed no bottom
     // anchor or shrink-to-fit - top-anchored, growing downward, is right for
-    // this string on this screen, and this assertion is what would catch a
-    // future language whose copyright line does not clear it.
+    // this string on this screen. `load_strings` above pins English
+    // (`preferred: None` falls through to it, see `chosen_language`), so this
+    // only measures English's copyright line - it would need looping
+    // `LANGUAGE_PLUGINS` to say the same for the other four.
     let tallest_glyph = text
         .chars()
         .filter_map(|c| atlas.cell(c))
