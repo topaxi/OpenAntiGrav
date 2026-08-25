@@ -19,36 +19,43 @@ buffer that is now `StoreOp::Store` + `TEXTURE_BINDING`. Still absent for a
 `Taa` row, per ADR-0013: per-draw motion vectors, sub-pixel jitter, a history
 buffer.
 
-Verified: 8 unit/device tests in `crates/render/src/post/motion_blur/tests.rs`
-including a real-GPU test pinning that a purely horizontal camera shift smears
-horizontally, spends energy, and leaks nothing vertically. **Not verified: the
-effect in a real race** - the capture path honestly cannot show it (one
-render), and this environment opens no windows.
+Verified: 9 unit/device tests in `crates/render/src/post/motion_blur/tests.rs`
+- the real-GPU test pins that a horizontal camera shift smears horizontally,
+spends energy, leaks nothing vertically, and leaves a focus-masked block
+untouched - **and real-track captures now exist**, taken through the primer
+capture below (`--race --autopilot --ticks 900 --motion-blur off|medium|high
+--screenshot ...`: identical telemetry, only the smear differs).
+
+The first live session confirmed the design page's predicted artifacts and
+[ADR-0029](../docs/architecture/adr/0029-primer-capture-and-craft-focus-mask.md)
+records the responses: `race::capture` defers its last tick and renders a
+discarded primer frame so a screenshot shows the real smear (`--motion-blur`
+overrides the settings file for one run); every drawn craft is masked out of
+the gather as a depth-tested focus sphere (the craft are what camera
+reprojection is wrong about, and their bounds are already on the CPU); and
+the stretch cap rose to 8 % with 13 taps, because 5 % was truncating the
+near-field streaks that read as speed.
 
 ## Open
 
-- **No picture of the effect on a real track exists yet.** `just play --race
-  ... --screenshot` goes through `race::capture`, which ticks N times and
-  renders once - no previous camera, identity blur, and that is why the
-  capture passes `Off` explicitly.
 - A camera cut (view switch, respawn) is not signalled to the pass; it costs
-  one frame of smear bounded by the 5%-of-viewport-height cap.
+  one frame of smear bounded by the 8%-of-viewport-height cap.
   `MotionBlur::reset` exists and nothing calls it.
 - MSAA 4x excludes the blur (multisampled depth); the menu row `warn_when`s
   and the scene logs once.
 - The gather averages in perceptual space like every `post` pass (ADR-0020);
   a linear-light gather was deliberately not smuggled in.
+- The focus mask is a sphere: a side-on craft sharpens a disc wider than its
+  hull, read as focus falloff through the soft ring. Weapons and debris are
+  not masked. Both are accepted until the velocity tier measures real
+  motion.
 
 ## Next Steps
 
-- **The two-render capture**: teach `race::capture` to pose and render the
-  tick-before-last camera into the target first, then the final tick - then
-  wire `CaptureOptions.motion_blur` through and take the first real
-  screenshot of the effect (fast section of any track, `medium`). This is
-  also the verification tool a tier comparison needs.
 - Wire `MotionBlur::reset` to the camera-cut events: `Session`'s view cycle
   (`graphics.camera_view` apply arm and the SELECT handler) and the respawn.
 - The velocity-buffer tier, when its week-and-a-half is worth spending -
   [docs/rendering/motion-blur.md](../docs/rendering/motion-blur.md) is the
   plan of record, its `Rg16Float`-at-4x probe still the first step, and it
   owes its own ADR (ADR-0028's Alternatives says which decisions are left).
+  It replaces the focus mask with measured per-draw motion.

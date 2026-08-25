@@ -405,6 +405,7 @@ pub(crate) fn run_race(
                 boost_fov_kick: settings.graphics.boost_fov_kick,
                 camera_view: cli.camera_view.unwrap_or(settings.graphics.camera_view),
                 anti_aliasing: settings.graphics.anti_aliasing,
+                motion_blur: settings.graphics.motion_blur,
                 pose_boost: cli.pose_boost,
                 pose_intensity: cli.pose_intensity,
                 pose_speed: cli.pose_speed,

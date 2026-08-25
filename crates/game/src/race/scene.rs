@@ -183,6 +183,12 @@ pub struct Scene {
     /// Whether the "motion blur is skipped under MSAA" line has been logged,
     /// so a player who set both gets one line rather than one per frame.
     msaa_blur_warned: std::cell::Cell<bool>,
+    /// Each slot's hull bounding radius, for the motion blur's focus spheres:
+    /// the craft are the moving objects camera reprojection is wrong about,
+    /// and these are the bounds the blur masks them out with. Read off the
+    /// same livery models the drawables were built from, so the sphere is the
+    /// mesh's own and not a guess.
+    ship_radii: Vec<f32>,
     depth: wgpu::Texture,
     /// The colour attachment every pipeline here actually draws into, and its
     /// sample count.
@@ -313,8 +319,10 @@ impl Scene {
         // returns one per slot, so that is a defensive floor and not a path
         // any caller takes.
         let mut ships = Vec::with_capacity(GRID_SLOTS as usize);
+        let mut ship_radii = Vec::with_capacity(GRID_SLOTS as usize);
         for slot in 0..GRID_SLOTS as usize {
             let livery = &liveries[slot.min(liveries.len().saturating_sub(1))];
+            ship_radii.push(livery.hull.radius);
             ships.push(Drawable::new(
                 device,
                 queue,
@@ -723,6 +731,7 @@ impl Scene {
             hd,
             motion_blur,
             msaa_blur_warned: std::cell::Cell::new(false),
+            ship_radii,
             track,
             visibility,
             ships,

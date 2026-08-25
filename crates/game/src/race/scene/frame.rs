@@ -37,7 +37,11 @@ impl Scene {
         motion_blur: crate::display::MotionBlur,
     ) -> SceneStats {
         let aspect = viewport.2.max(1.0) / viewport.3.max(1.0);
-        let view_projection = race.projection(aspect, self.far, fov) * race.view();
+        // The projection kept separate from the product: the motion blur's
+        // focus spheres need its y scale and its depth mapping on their own,
+        // and rebuilding it there would be a second place for `fov` to drift.
+        let projection = race.projection(aspect, self.far, fov);
+        let view_projection = projection * race.view();
         let frustum = cull.then(|| Frustum::from_view_projection(view_projection));
         // Tier one, built once a frame. Both sections come from the authored
         // spline rather than from the section boxes: a control point's
@@ -720,6 +724,14 @@ impl Scene {
         match &self.motion_blur {
             Some(pass) => {
                 let size = self.depth.size();
+                let focus = focus_spheres(
+                    race,
+                    &self.ship_radii,
+                    drawn,
+                    projection,
+                    view_projection,
+                    viewport,
+                );
                 pass.borrow_mut().render(
                     device,
                     queue,
@@ -736,6 +748,7 @@ impl Scene {
                         // smear.
                         stamp: race.world.tick,
                         strength: motion_blur.shutter(),
+                        focus: &focus,
                     },
                 );
             }
@@ -755,6 +768,61 @@ impl Scene {
         }
         stats
     }
+}
+
+/// The motion blur's focus spheres: every active, drawn craft projected into
+/// the viewport as `[centre u, centre v, radius in pixels, far-side NDC
+/// depth]` - see `oag_render::post::motion_blur::Frame::focus` for what the
+/// pass does with them, and why the craft are masked at all.
+///
+/// The player's is skipped in the cockpit view for the same reason its hull
+/// is not drawn there; a craft behind the eye plane, or projecting well
+/// outside the viewport, has no pixels to mask.
+fn focus_spheres(
+    race: &Race,
+    radii: &[f32],
+    drawn: usize,
+    projection: Mat4,
+    view_projection: Mat4,
+    viewport: (f32, f32, f32, f32),
+) -> Vec<[f32; 4]> {
+    let mut spheres = Vec::new();
+    for slot in 0..drawn {
+        if !race.ship_active(slot) || (slot == 0 && !race.draws_own_ship()) {
+            continue;
+        }
+        let Some(&radius) = radii.get(slot) else {
+            break;
+        };
+        // A little past the mesh, so the mask's soft edge starts outside the
+        // hull rather than across it.
+        let radius = radius * 1.15;
+        let position = race.ship_model_matrix_of(slot).w_axis.truncate();
+        let clip = view_projection * position.extend(1.0);
+        // Behind (or on) the eye plane: for this DirectX-style projection,
+        // `w` is the view-space distance, so nothing is on screen to mask.
+        if clip.w <= 0.0 {
+            continue;
+        }
+        let ndc = clip.truncate() / clip.w;
+        let centre = [ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5];
+        // The sphere's screen radius: the projection's y scale spreads a
+        // world unit at distance `w` over `y_axis.y / w` of NDC's two-unit
+        // height - half that in uv, times the viewport height in pixels.
+        let radius_px = projection.y_axis.y * radius / clip.w * viewport.3 * 0.5;
+        let off_screen =
+            centre[0] < -0.25 || centre[0] > 1.25 || centre[1] < -0.25 || centre[1] > 1.25;
+        // Under a pixel it masks nothing a tap could resolve, and the slots
+        // are better spent on craft that are actually near.
+        if radius_px < 1.0 || off_screen {
+            continue;
+        }
+        // Where the sphere's far side lands in the depth buffer, through the
+        // same projection the scene wrote it with.
+        let far = projection * oag_core::math::Vec4::new(0.0, 0.0, -(clip.w + radius), 1.0);
+        spheres.push([centre[0], centre[1], radius_px, far.z / far.w]);
+    }
+    spheres
 }
 
 pub(super) fn depth_texture(

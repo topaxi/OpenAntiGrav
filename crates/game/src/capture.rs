@@ -500,6 +500,7 @@ pub fn run(
                 boost_fov_kick: options.settings.graphics.boost_fov_kick,
                 camera_view: options.settings.graphics.camera_view,
                 anti_aliasing: options.settings.graphics.anti_aliasing,
+                motion_blur: options.settings.graphics.motion_blur,
                 // The front-end capture path never poses a ship, so there is
                 // nothing for a forced boost state to be aged relative to.
                 pose_boost: None,

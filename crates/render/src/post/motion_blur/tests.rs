@@ -11,10 +11,11 @@ use super::*;
 use oag_core::math::{Vec3, vec3};
 
 #[test]
-fn the_uniform_is_160_bytes_with_no_implicit_padding() {
-    // Two mat4s, then three vec2s and two floats: WGSL and `repr(C)` agree on
-    // this layout exactly, which is what the assertion pins.
-    assert_eq!(std::mem::size_of::<Constants>(), 160);
+fn the_uniform_is_304_bytes_with_no_implicit_padding() {
+    // Two mat4s, three vec2s and two floats, a count padded to a row, and
+    // eight focus spheres: WGSL and `repr(C)` agree on this layout exactly,
+    // which is what the assertion pins.
+    assert_eq!(std::mem::size_of::<Constants>(), 304);
 }
 
 #[test]
@@ -26,12 +27,30 @@ fn the_viewport_rectangle_is_mapped_into_uv_of_the_target() {
         (40.0, 0.0, 120.0, 100.0),
         (200, 100),
         0.5,
+        &[[0.5, 0.5, 8.0, 0.6]],
     );
     assert_eq!(c.rect_offset, [0.2, 0.0]);
     assert_eq!(c.rect_size, [0.6, 1.0]);
     assert_eq!(c.rect_pixels, [120.0, 100.0]);
     assert_eq!(c.strength, 0.5);
     assert_eq!(c.max_stretch, MAX_STRETCH);
+    assert_eq!(c.focus_count, 1);
+    assert_eq!(c.focus[0], [0.5, 0.5, 8.0, 0.6]);
+    assert_eq!(c.focus[1], [0.0; 4], "unused slots stay zeroed");
+}
+
+#[test]
+fn focus_spheres_past_the_uniforms_capacity_are_dropped_not_wrapped() {
+    let spheres = vec![[0.1, 0.2, 3.0, 0.4]; MAX_FOCUS + 3];
+    let c = Constants::new(
+        Mat4::IDENTITY,
+        Mat4::IDENTITY,
+        (0.0, 0.0, 64.0, 64.0),
+        (64, 64),
+        0.5,
+        &spheres,
+    );
+    assert_eq!(c.focus_count as usize, MAX_FOCUS);
 }
 
 #[test]
@@ -42,6 +61,7 @@ fn a_degenerate_size_cannot_divide_by_zero() {
         (0.0, 0.0, 0.0, 0.0),
         (0, 0),
         0.5,
+        &[],
     );
     for value in c
         .rect_offset
@@ -144,9 +164,11 @@ fn the_gather_smears_along_the_camera_travel_and_not_across_it() {
             | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
     });
+    // Two 2x2 white blocks: one free at the centre, one at x=16 that the
+    // focus sphere below covers - a stand-in craft.
     let mut pixels = vec![0u8; (SIZE * SIZE * 4) as usize];
     for y in 31..33 {
-        for x in 31..33 {
+        for x in [31u32, 32, 16, 17] {
             let at = ((y * SIZE + x) * 4) as usize;
             pixels[at..at + 4].copy_from_slice(&[255, 255, 255, 255]);
         }
@@ -199,6 +221,10 @@ fn the_gather_smears_along_the_camera_travel_and_not_across_it() {
     // direction, and a bounded smear is exactly what it promises.
     let current = Mat4::IDENTITY;
     let previous = Mat4::from_translation(Vec3::new(0.8, 0.0, 0.0));
+    // A focus sphere over the block at x=16: centre in viewport uv, a 6 px
+    // radius, and a depth bound past the flat 0.5 plane so the whole disc
+    // counts as "the craft".
+    let focus = [[17.0 / SIZE as f32, 32.0 / SIZE as f32, 6.0, 0.6]];
     let frame = |view_projection, stamp| Frame {
         scene: &scene_view,
         depth: &depth_view,
@@ -207,6 +233,7 @@ fn the_gather_smears_along_the_camera_travel_and_not_across_it() {
         view_projection,
         stamp,
         strength: 0.5,
+        focus: &focus,
     };
 
     let mut encoder = device.create_command_encoder(&Default::default());
@@ -261,4 +288,10 @@ fn the_gather_smears_along_the_camera_travel_and_not_across_it() {
     // Across the travel, nothing: three rows up is past any vertical reach.
     assert_eq!(red_at(31, 28), 0, "the smear leaked vertically");
     assert_eq!(red_at(31, 36), 0, "the smear leaked vertically");
+    // The focused block is the stand-in craft: sharp, undimmed, and smearing
+    // into nothing - the pixels beside it inside the sphere gather nothing
+    // either, so they stay the background they were.
+    assert_eq!(red_at(16, 31), 255, "the focused block was dimmed");
+    assert_eq!(red_at(14, 31), 0, "the focused block smeared left");
+    assert_eq!(red_at(19, 31), 0, "the focused block smeared right");
 }

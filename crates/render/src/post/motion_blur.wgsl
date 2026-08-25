@@ -38,6 +38,23 @@ struct Constants {
     // The cap on how far the gather may reach, as a fraction of the viewport
     // height - the bound that keeps a camera cut from smearing the whole frame.
     max_stretch: f32,
+    // How many entries of `focus` are live.
+    focus_count: u32,
+    // Three scalars, not a vec3: a vec3 aligns to 16 and would push the
+    // array to offset 192, disagreeing with the Rust side's packed 304.
+    _pad0: f32,
+    _pad1: f32,
+    _pad2: f32,
+    // The craft, as screen-space spheres the blur keeps sharp: xy the centre
+    // in viewport-relative uv, z the radius in pixels, w the NDC depth of the
+    // sphere's far side. Camera reprojection is exact for the static world
+    // and *wrong* for anything moving through it - a craft near the player
+    // holds nearly still on screen while the camera computes it a large
+    // velocity - and the craft are the one class of moving object whose
+    // bounds the CPU already knows. The depth test is what keeps the road a
+    // craft is flying over blurring right up to its silhouette: pixels
+    // inside the circle but beyond the sphere are the world, not the craft.
+    focus: array<vec4<f32>, 8>,
 }
 
 @group(0) @binding(0) var scene_tex: texture_2d<f32>;
@@ -64,7 +81,10 @@ fn vs_main(@builtin(vertex_index) index: u32) -> VertexOutput {
 // An odd count so one tap lands exactly on the pixel itself, centred so the
 // smear reaches half a shutter backwards and half forwards - a one-sided
 // gather visibly drags the picture behind the camera instead of blurring it.
-const TAPS: i32 = 9;
+// Thirteen rather than nine because the stretch cap allows ~22 px of reach
+// at the PSP's own 272-line height: nine taps left visible stepping in
+// exactly the near-field streaks that carry the sense of speed.
+const TAPS: i32 = 13;
 
 @fragment
 fn fs_blur(in: VertexOutput) -> @location(0) vec4<f32> {
@@ -108,9 +128,25 @@ fn fs_blur(in: VertexOutput) -> @location(0) vec4<f32> {
     if speed_px > max_px {
         travel *= max_px / speed_px;
     }
-    if speed_px < 0.5 {
-        // Under half a pixel of travel the gather is nine reads of the same
-        // texel - the still-camera case, and most pixels of a gentle pan.
+    // The craft stay sharp. `keep` falls to zero inside any focus sphere,
+    // with a soft ring so the silhouette does not cut a hard edge into the
+    // smear around it. Applied to the travel rather than as a colour mix, so
+    // a masked pixel simply gathers nothing rather than blending a blurred
+    // and a sharp frame.
+    var keep = 1.0;
+    for (var i = 0u; i < constants.focus_count; i += 1u) {
+        let f = constants.focus[i];
+        if depth <= f.w {
+            let d = length((local - f.xy) * constants.rect_pixels);
+            keep = min(keep, smoothstep(f.z, f.z * 1.3, d));
+        }
+    }
+    travel *= keep;
+
+    if speed_px * keep < 0.5 {
+        // Under half a pixel of travel the gather is thirteen reads of the
+        // same texel - the still-camera case, most pixels of a gentle pan,
+        // and the inside of a focus sphere.
         return center;
     }
 

@@ -571,6 +571,17 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) anti_aliasing: Option<crate::display::AntiAliasing>,
 
+    /// Motion blur strength: off, low, medium or high.
+    ///
+    /// Overrides `[graphics] motion_blur` in the settings file
+    /// (`settings::path`) for this run only; the file on disk is not changed.
+    /// Here for the reason `--anti-aliasing` is: two captures differing only
+    /// by this flag are how the blur gets compared against itself off, and a
+    /// capture honours it by rendering a primer frame at the tick-before-last
+    /// camera first - see `race::CaptureOptions::motion_blur`.
+    #[arg(long)]
+    pub(crate) motion_blur: Option<crate::display::MotionBlur>,
+
     /// Start the craft at this world position instead of on its grid slot:
     /// `x,y,z` or `x,y,z,yaw`, `yaw` in degrees off the track's own direction
     /// there.

@@ -37,10 +37,19 @@ use oag_core::math::Mat4;
 /// The bound that keeps a camera cut - a view switch, a respawn - from
 /// smearing across the whole frame: one frame of arbitrarily large velocity
 /// becomes one frame of at most this much stretch.
-pub const MAX_STRETCH: f32 = 0.05;
+///
+/// Raised from `0.05` on the first real-race feedback: at racing speed the
+/// near ground and walls - the streaks that carry the sense of speed - were
+/// hitting the cap and coming out uniformly short, which read as "the track
+/// barely blurs". Eight per cent still bounds a cut to a fraction of the
+/// frame while leaving the legitimate near-field motion visible.
+pub const MAX_STRETCH: f32 = 0.08;
 
-/// The shader's uniform. `repr(C)`; two matrices then four rows of packed
-/// vec2/scalars, 160 bytes with no implicit padding.
+/// How many focus spheres [`Frame::focus`] can carry - one per grid slot.
+pub const MAX_FOCUS: usize = 8;
+
+/// The shader's uniform. `repr(C)`; two matrices, four rows of packed
+/// vec2/scalars, and the focus spheres - 304 bytes with no implicit padding.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
 struct Constants {
@@ -51,6 +60,9 @@ struct Constants {
     rect_pixels: [f32; 2],
     strength: f32,
     max_stretch: f32,
+    focus_count: u32,
+    _pad: [f32; 3],
+    focus: [[f32; 4]; MAX_FOCUS],
 }
 
 impl Constants {
@@ -64,8 +76,12 @@ impl Constants {
         viewport: (f32, f32, f32, f32),
         size: (u32, u32),
         strength: f32,
+        focus: &[[f32; 4]],
     ) -> Self {
         let (w, h) = (size.0.max(1) as f32, size.1.max(1) as f32);
+        let count = focus.len().min(MAX_FOCUS);
+        let mut spheres = [[0.0; 4]; MAX_FOCUS];
+        spheres[..count].copy_from_slice(&focus[..count]);
         Self {
             inv_view_proj: view_projection.inverse().to_cols_array_2d(),
             prev_view_proj: previous.to_cols_array_2d(),
@@ -74,6 +90,9 @@ impl Constants {
             rect_pixels: [viewport.2.max(1.0), viewport.3.max(1.0)],
             strength,
             max_stretch: MAX_STRETCH,
+            focus_count: count as u32,
+            _pad: [0.0; 3],
+            focus: spheres,
         }
     }
 }
@@ -162,6 +181,16 @@ pub struct Frame<'a> {
     /// pass does nothing at all, which is how "off" reaches it: the caller's
     /// setting is a strength, read fresh every frame.
     pub strength: f32,
+    /// Screen-space spheres the blur keeps sharp - the craft. Each is
+    /// `[centre u, centre v, radius in pixels, NDC depth of the far side]`,
+    /// centre in viewport-relative uv; entries past [`MAX_FOCUS`] are
+    /// dropped. Camera reprojection computes the *world's* velocity at every
+    /// pixel, which is exactly wrong for a craft holding station near the
+    /// camera - the reference object a player's eye rests on - so the caller
+    /// hands over the bounds it already knows and those pixels gather
+    /// nothing. The depth component keeps the road right behind a craft
+    /// blurring up to its silhouette.
+    pub focus: &'a [[f32; 4]],
 }
 
 /// The gather and copy pipelines, the scratch target, and the camera pair.
@@ -334,6 +363,7 @@ impl MotionBlur {
             frame.viewport,
             frame.size,
             frame.strength,
+            frame.focus,
         );
         if self.written != Some(wanted) {
             queue.write_buffer(&self.constants, 0, bytemuck::bytes_of(&wanted));

@@ -197,14 +197,19 @@ pair; a field on `Graphics`; a tuple in `menu_seeds`; a `kind = "choice"` row in
 `anim_seconds`; and a field on `race::CaptureOptions` so `--screenshot`
 reflects it, the way `bloom` and `anti_aliasing` already do.
 
-> All of that exists now (`display::MotionBlur`), **except the
-> `CaptureOptions` field**: the capture renders exactly one frame, so there is
-> no previous camera and the pass could only ever produce the identity -
-> `race::capture` passes `Off` explicitly rather than a setting it cannot
-> honour. A capture that *shows* the blur needs the capture to render the
-> previous tick's camera first and the final frame second; that two-render
-> capture is the missing verification tool, and it is what would make a
-> screenshot comparison of the tiers possible at all.
+> All of that exists now (`display::MotionBlur`), the `CaptureOptions` field
+> included: `race::capture` holds the last tick back, renders a discarded
+> **primer** frame at the tick-before-last camera, then the real one - so a
+> `--screenshot --motion-blur medium` shows the same smear a player sees,
+> and the tier comparison this page wants has its tool. `--motion-blur`
+> overrides the settings file for one run, like `--anti-aliasing`. See
+> [ADR-0029](../architecture/adr/0029-primer-capture-and-craft-focus-mask.md),
+> which also records the shipped tier's **craft focus mask**: the first
+> real-race session confirmed this page's prediction that camera
+> reprojection smears the craft (the player's own included), and the cheap
+> counter is to project every drawn craft's bounding sphere and have the
+> gather skip those pixels, depth-tested so the road still blurs up to each
+> silhouette. The velocity tier replaces the mask with measurement.
 
 ## What the velocity buffer does not solve
 
