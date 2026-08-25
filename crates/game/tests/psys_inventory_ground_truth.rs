@@ -344,3 +344,134 @@ fn the_ps2_port_s_own_effects_are_accounted_for_too() {
         PS2_WIRED,
     );
 }
+
+/// Wipeout HD/Fury, and deliberately **not** the three-bucket sweep above.
+///
+/// HD authors 82 distinct particle systems and only 7 are wired - the weapon
+/// table alone (Detonator, Nitro, per-damage-tier hull states) is mostly
+/// unbuilt in this engine, and writing a `NO_TRIGGER_RECOVERED`-style reason
+/// for each of the other 75 on the strength of "that weapon isn't built"
+/// would be exactly the plausibility-over-evidence shortcut this file's own
+/// doc comment forbids for the two discs it already covers. That bucketing is
+/// still owed; see `handover/hds-engine-trail-is-one-of-four-ribbons.md`.
+///
+/// What *is* checkable without inventing a reason for anything: that every
+/// [`RACE_EFFECTS`] name this engine already fires is really on the disc (so
+/// a wired trigger can never fire into silence), and the disc's own archive
+/// membership for the two-colour `WO_TRAIL_HITSHIP` pair - which independently
+/// corroborates `engine-trail.md`'s "red variant on a Fury skin" reading:
+/// the archive that carries only Fury/team content is the only one that
+/// carries the red variant at all.
+mod hd {
+    use std::collections::BTreeMap;
+    use std::path::{Path, PathBuf};
+
+    use oag_formats::pob::ParticleSystem;
+    use oag_game::race::RACE_EFFECTS;
+
+    /// Distinct system names across all seven archives.
+    ///
+    /// **Not the same number as `crates/assets/tests/pob_ground_truth.rs`'s
+    /// `HD_SYSTEMS = 88`** - that counts every `.pob` blob, one per archive
+    /// entry, and six names are duplicated across archives (`WO_TRAIL_HITSHIP`
+    /// is in three, a handful of others in two); this counts each name once.
+    /// The two numbers checking different things and disagreeing by exactly
+    /// the duplicate count is the corroboration, not a bug to reconcile away.
+    const SYSTEMS: usize = 82;
+
+    fn image() -> Option<PathBuf> {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .join("data/images/hdfury-ps3-eu-dec.iso");
+        if path.exists() {
+            return Some(path);
+        }
+        assert!(
+            std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
+            "OAG_REQUIRE_GAME_DATA is set but {} is missing",
+            path.display()
+        );
+        println!("skipping: {} not present", path.display());
+        None
+    }
+
+    /// Every particle system's name across all seven archives, mapped to
+    /// which archive(s) carry it - **not deduplicated**, because which
+    /// archive(s) hold a name is exactly what the red-variant assertion below
+    /// needs.
+    fn scan(image: &Path) -> BTreeMap<String, Vec<&'static str>> {
+        let mut found: BTreeMap<String, Vec<&'static str>> = BTreeMap::new();
+        for archive_path in oag_hd::archives::ALL {
+            let spec = format!("{}:{archive_path}", image.display());
+            let mut archive = oag_assets::psarc::Archive::open(&spec).expect("the archive opens");
+            let paths: Vec<String> = archive
+                .paths()
+                .iter()
+                .filter(|p| p.to_ascii_lowercase().ends_with(".pob"))
+                .cloned()
+                .collect();
+            for path in paths {
+                let blob = archive.read_path(&path).expect("the entry reads");
+                let system = ParticleSystem::parse(&blob).expect("parse");
+                found.entry(system.name).or_default().push(archive_path);
+            }
+        }
+        found
+    }
+
+    /// **A wired name absent from the disc would fire into silence.**
+    ///
+    /// All seven of [`RACE_EFFECTS`] are on this disc - a superset of the
+    /// PSP's four and the PS2's five, per `oag_game::race::RACE_EFFECTS`'s
+    /// own doc comment.
+    #[test]
+    #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+    fn every_wired_effect_is_on_the_disc() {
+        let Some(image) = image() else { return };
+        let found = scan(&image);
+        assert_eq!(
+            found.len(),
+            SYSTEMS,
+            "hd: found {} distinct particle system(s), expected {SYSTEMS} - a new or \
+             renamed one needs bucketing (see this test's doc comment) before this \
+             number moves",
+            found.len()
+        );
+        for name in RACE_EFFECTS {
+            assert!(
+                found.contains_key(name),
+                "{name}: wired but not on this disc"
+            );
+        }
+        println!(
+            "hd: {} distinct particle system(s) across 7 archives, all {} wired \
+             names present",
+            found.len(),
+            RACE_EFFECTS.len()
+        );
+    }
+
+    /// **The red hit-spark variant is Fury-only on the disc itself**, not
+    /// just by the executable's variant-select instruction.
+    ///
+    /// `DATA00`-`DATA02` and `DATA04`-`DATA05` carry the base game; `DATA03`
+    /// and `DATA06` are the four-team and Fury/campaign archives per
+    /// `oag_hd::archives`. `WO_TRAIL_HITSHIP` (no colour) is in the base set
+    /// and duplicated into both team archives; `WO_TRAIL_HITSHIP_RED` is
+    /// authored nowhere else. See "the sparks are red exactly when the ribbon
+    /// is" in `engine-trail.md`.
+    #[test]
+    #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+    fn the_red_hit_spark_variant_is_only_in_the_fury_archive() {
+        let Some(image) = image() else { return };
+        let found = scan(&image);
+        let holders = found
+            .get("WO_TRAIL_HITSHIP_RED")
+            .unwrap_or_else(|| panic!("WO_TRAIL_HITSHIP_RED: not found in any archive"));
+        assert_eq!(
+            holders,
+            &[oag_hd::archives::DATA06],
+            "WO_TRAIL_HITSHIP_RED: expected only in DATA06, found in {holders:?}"
+        );
+    }
+}
