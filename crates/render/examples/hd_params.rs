@@ -22,7 +22,12 @@ fn main() -> anyhow::Result<()> {
         if !want.is_empty() && !material.name.contains(&want) && want != slot.to_string() {
             continue;
         }
-        println!("slot {slot} {}", material.name);
+        println!(
+            "slot {slot} {} state={:#010x} bit7={}",
+            material.name,
+            material.state,
+            material.state & 0x80 != 0
+        );
         for (hash, path) in &material.samplers {
             println!("  sampler {hash:#010x} -> {path:?}");
         }
