@@ -722,6 +722,34 @@ error: in module-B functions Ghidra renders TOC-loaded *floats* as string
 pointers, so arithmetic decompiles as `(float)PTR_s_Emp__d_008a754c` and reads
 like a nonsense variable name rather than a wrong base.
 
+**The same defect has a second failure mode, and this one doesn't look
+wrong.** 2026-08-25. Hunting for where HD's HUD resolves a texture reference's
+extension to `.gtf` (see
+[the HUD thread](handover/wipeout-hd-furys-hud-reads-and-the-reader.md)),
+`get_xrefs_to` on the literal string `SrcRel` reported a real-looking hit:
+`FUN_00550eb4`, decompiling (under Ghidra's one global TOC) as a function
+that opens with a call site literally named `PTR_s_LoadXML_Item_cpp_...` and
+checks `strncmp(param_2, "Values", 0xb)` - a thematically perfect match for
+the LoadXML fragment loader this thread was chasing. `scripts/ps3-toc.py toc
+0x00550eb4` says its real TOC is `0x008bd3c4`, not the global
+`0x008ad4d8` - so every one of those names is Ghidra decompiling module-B
+code against module-A's table, and it happened to land on another *real,
+coherent* table (LoadXML_Item's actual attribute-name strings live a few
+words further into the same data region) rather than garbage. The `0xb`
+in that `strncmp` is the tell once you know to look: `"Values"` is 6
+characters, but `"Set-Cookie:"` is exactly 11 - the function is
+`CCookie.cpp`, confirmed by reading its real TOC's neighbouring strings
+(`Set-Cookie:`, `expires`, `domain`, `path`, `secure`) directly with
+`inspect_memory_content` rather than trusting Ghidra's resolution. **The
+general lesson: `get_xrefs_to` and decompiled symbol names for any
+TOC-relative load are only as trustworthy as the target function's TOC
+matches the global one** - check first with `scripts/ps3-toc.py toc <addr>`
+(`0x008ad4d8` means trust it, anything else means don't), and prefer
+`scripts/ps3-toc.py map` (grep the `.cpp` list) plus raw
+`inspect_memory_content` reads over `search_strings`/`get_xrefs_to` when
+hunting a specific mechanism in a function whose TOC hasn't been checked.
+This is binary-wide, not specific to this one string or this one function.
+
 **Deferred from the 2026-08-18 renderer sweep**, so nobody re-derives that these
 are open: the **draw path** (inline command-buffer writes on PS3, so no import
 census or call graph finds it - it needs a search for RSX method constants);
