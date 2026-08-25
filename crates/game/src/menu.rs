@@ -1955,6 +1955,7 @@ pub fn draw_list(
         border: None,
         align: Align::Left,
         text: page.title.clone(),
+        wrap_width: None,
     });
 
     // Which idiom a page is drawn in is the *title's* answer first and this

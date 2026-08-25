@@ -545,13 +545,19 @@ logo's dominant teal is `(36, 147, 153)` in the texture and came out
 solid fills never showed it, because they write their colour straight through with
 no sRGB source.
 
-**`Viewport` is still not implemented, and it is not the scissor rect that is in
-the way.** `Show Logo`'s `BOOT_LEGAL` text sits inside one, and
-[`screen.rs`](../../crates/game/src/screen.rs) only reads a screen's direct
-children, so that line is absent from the render - asserted by
-`a_text_inside_a_viewport_is_not_collected`, so the gap is a guarded fact rather
-than a silent one. Extracting the element settles what closing it would actually
-take, and it is more than clipping:
+**`Viewport` recursion and `BOOT_LEGAL` wrapping are both implemented now
+(2026-08-25).** They used to be one open gap; they turned out to be two, found
+in the wrong order. [`screen.rs`](../../crates/game/src/screen.rs) already
+recurses `collect_widgets` straight through a `Viewport` rather than stopping
+at it (`a_text_inside_a_viewport_is_collected_alongside_its_siblings`), so
+`BOOT_LEGAL` was never actually missing from the parsed `Screen` - checked
+directly against `pulse-psp-usa.chd` before touching anything, since the
+premise here had gone stale once already. What *was* still true: `draw_screen`
+pushed the collected `Draw::Text` unwrapped, at `font="small" scale="0.7"`,
+118 UTF-8 bytes / **114 characters** (`©` is one codepoint, two bytes) wide -
+comfortably over both the 400-pixel `Viewport` and the 480-pixel screen. So the
+line drew, just wrong: one row running off both edges, which is worse than an
+absence and harder to notice as a bug.
 
 ```xml
 <Viewport><Values x="40" y="0" height="480" width="400"></Values>
@@ -561,23 +567,30 @@ take, and it is more than clipping:
 </Viewport>
 ```
 
-- **The clip itself would do nothing here.** The rect is 400 wide and *480* tall
-  on a screen that is 480x272, so vertically it does not clip at all, and the one
-  widget inside it starts at the rect's own left edge. A scissor rect added for
-  this screen would be dead code on this screen.
-- **`widthlimited="true"` is the real requirement.** `BOOT_LEGAL` is a
-  118-character copyright line at `font="small"` and `scale="0.7"`, which is
-  comfortably wider than both the 400-pixel viewport and the 480-pixel screen, so
-  the attribute has to mean wrapping, and the wrap width has to come from the
-  enclosing `Viewport`. `Draw::Text` has no width and no wrap, so this is a text
-  *layout* feature, not a rectangle.
+- **The clip itself does nothing here.** The rect is 400 wide and *480* tall on
+  a screen that is 480x272, so vertically it does not clip at all, and the one
+  widget inside it starts at the rect's own left edge. A scissor rect for this
+  screen would be dead code.
+- **`widthlimited="true"` means wrap, and the width is the enclosing
+  `Viewport`'s own `width`.** `Text::wrap_width` carries it down through
+  `collect_widgets`, `Draw::Text` gained the same field, and `crate::render`'s
+  `push_wrapped_text` breaks the string at word boundaries with
+  [`wrap`](../../crates/game/src/loading.rs) - the same function `loading.rs`
+  already used for a tip of the day, reused rather than reimplemented - and
+  stacks the lines downward by the atlas's own line height at `scale`.
+- **Measured against the real `Small` face** (`Data\FE\Fonts\Pulse_14.fnt`,
+  line height 17): the string wraps to exactly two lines, both under 400px, the
+  second starting at `y=261.9`. By the nominal line-height box that is 1.8px
+  past the 272-tall screen; by the string's own tallest glyph ink (14px cell,
+  9.8 scaled) it clears the bottom edge by 0.3px. So top-anchored, growing
+  downward from the widget's own `y`, is right for this string on this screen
+  with no bottom-anchor question to resolve - asserted directly against the
+  disc in `crates/game/tests/boot_legal_wrap_ground_truth.rs`.
 
-Drawing it unwrapped would run a single line off both edges of the screen, which
-is worse than the current absence, so it stays absent. **This affects the USA
-disc only**: the EU disc drops the `Viewport` and the line with it, and moves
-`BOOT_PRESS_START` from `y="220"` to `y="230"` to fill the gap. The other two
-`Viewport`s in the file hold `Animation` and `TextInfo` widgets this build does
-not model at all, so nothing else is waiting on it either.
+**This affects the USA disc only**: the EU disc drops the `Viewport` and the
+line with it, and moves `BOOT_PRESS_START` from `y="220"` to `y="230"` to fill
+the gap. The other two `Viewport`s in the file hold `Animation` and `TextInfo`
+widgets this build does not model at all, so nothing else was waiting on this.
 
 ### What the disc actually does at boot
 

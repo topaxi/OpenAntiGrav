@@ -462,6 +462,7 @@ impl Screen {
             // replaces the *counted* headings, which say something the disc's
             // single string cannot - see `heading`.
             text: self.heading_text(phase, progress),
+            wrap_width: None,
         });
 
         // **The original's own arrangement**, where a title has the art for
@@ -545,6 +546,7 @@ impl Screen {
                 border,
                 align: Align::Left,
                 text: title.to_string(),
+                wrap_width: None,
             });
         }
 
@@ -605,6 +607,7 @@ impl Screen {
                     border,
                     align,
                     text: line,
+                    wrap_width: None,
                 });
             }
         }
@@ -660,6 +663,7 @@ impl Screen {
                 border,
                 align: Align::Left,
                 text: counts(phase, progress),
+                wrap_width: None,
             });
             out.push(Draw::Text {
                 x: rows_x + rows_width,
@@ -669,6 +673,7 @@ impl Screen {
                 border,
                 align: Align::Right,
                 text: percentage(phase, progress),
+                wrap_width: None,
             });
         }
 
@@ -685,6 +690,7 @@ impl Screen {
                 border,
                 align: Align::Left,
                 text: elide(atlas, current, self.text(CURRENT_SCALE), rows_width),
+                wrap_width: None,
             });
         }
 
@@ -701,6 +707,7 @@ impl Screen {
                 border,
                 align: Align::Left,
                 text: step,
+                wrap_width: None,
             });
         }
 

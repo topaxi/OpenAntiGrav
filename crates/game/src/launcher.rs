@@ -361,6 +361,7 @@ fn text(x: f32, y: f32, scale: f32, color: [f32; 4], body: &str) -> Draw {
         border: None,
         align: Align::Left,
         text: body.to_string(),
+        wrap_width: None,
     }
 }
 

@@ -308,6 +308,38 @@ fn the_press_start_widget_keeps_its_own_layout() {
     assert_eq!(text.align, "right");
     assert_eq!(text.color, 0x7fff_ffff);
     assert_eq!(text.font, "Menu");
+    assert_eq!(
+        text.wrap_width, None,
+        "no widthlimited attribute, so nothing to wrap against"
+    );
+}
+
+/// `BOOT_LEGAL`'s `widthlimited="true"` resolves to its enclosing
+/// `Viewport`'s own `width` - the number [`crate::render`] wraps against, not
+/// a scissor rect. See `docs/architecture/frontend-boot.md`.
+#[test]
+fn a_widthlimited_text_wraps_against_its_viewports_width() {
+    let screens = Screens::from_xml(SAMPLE);
+    let legal = &screens.by_name("Show Logo").unwrap().texts[1];
+    assert_eq!(legal.idstring.as_deref(), Some("BOOT_LEGAL"));
+    assert_eq!(legal.wrap_width, Some(400.0));
+}
+
+/// `widthlimited="true"` with no enclosing `Viewport` has nothing to wrap
+/// against, so it stays `None` rather than wrapping at some invented default.
+#[test]
+fn widthlimited_outside_a_viewport_has_no_wrap_width() {
+    let screens = Screens::from_xml(
+        r#"
+<Screen>
+  <Screen name="Loose">
+    <Text><Values idstring="LOOSE" font="small" widthlimited="true"></Values></Text>
+  </Screen>
+</Screen>
+"#,
+    );
+    let text = &screens.by_name("Loose").unwrap().texts[0];
+    assert_eq!(text.wrap_width, None);
 }
 
 #[test]

@@ -223,6 +223,7 @@ pub fn draw_list(board: &Board, line_height: f32) -> Vec<Draw> {
         border: Some(BORDER),
         align,
         text,
+        wrap_width: None,
     };
 
     out.push(text(

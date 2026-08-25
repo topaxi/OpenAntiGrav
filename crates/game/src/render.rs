@@ -17,6 +17,8 @@ use anyhow::{Context, Result};
 use crate::font::{self, Atlas};
 use crate::frontend::{Align, Draw, SCREEN, Space};
 
+mod text;
+
 /// Shared with both shaders.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -530,6 +532,7 @@ impl Renderer {
                     border,
                     align,
                     text,
+                    wrap_width,
                 } => {
                     // Transparent is a no-op for the menu/built-in fonts' constant
                     // mask, and the picked default for the HUD fonts. See
@@ -537,7 +540,20 @@ impl Renderer {
                     let border = border.unwrap_or(TRANSPARENT);
                     // By index, not `y` - a label shares its row's `y`.
                     let bounds = clip.filter(|(at, ..)| *at == index).map(|(_, l, r)| (l, r));
-                    self.push_text(*x, *y, *scale, *color, border, *align, text, bounds);
+                    match wrap_width {
+                        // No caller combines the two: a wrapped block is a
+                        // multi-line paragraph and `clip` is the marquee's
+                        // single-line scrolling window, so `bounds` is dropped
+                        // rather than threaded through every line.
+                        Some(width) => {
+                            self.push_wrapped_text(
+                                *x, *y, *scale, *color, border, *align, text, *width,
+                            );
+                        }
+                        None => {
+                            self.push_text(*x, *y, *scale, *color, border, *align, text, bounds)
+                        }
+                    }
                 }
             }
         }
@@ -639,69 +655,6 @@ impl Renderer {
             border: color,
             mode: MODE_ATLAS,
         });
-    }
-
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "a line of text is this many independent properties"
-    )]
-    fn push_text(
-        &mut self,
-        x: f32,
-        y: f32,
-        scale: f32,
-        color: [f32; 4],
-        border: [f32; 4],
-        align: Align,
-        text: &str,
-        clip: Option<(f32, f32)>, // a value marquee's window; see `crate::marquee`
-    ) {
-        let width = font::measure(&self.atlas, text) * scale;
-        let mut pen = match align {
-            Align::Left => x,
-            Align::Centre => x - width / 2.0,
-            Align::Right => x - width,
-        };
-
-        for ch in text.chars() {
-            let Some(cell) = self.atlas.cell(ch) else {
-                continue;
-            };
-            // Size and advance come from the cell rather than a constant: the
-            // disc's fonts are proportional, and the built-in set fills the
-            // same fields in with its fixed 5x7 box.
-            let (w, h) = (cell.width as f32 * scale, cell.height as f32 * scale);
-            let mut rect = [pen, y, w, h];
-            let mut uv = [
-                cell.x as f32,
-                cell.y as f32,
-                cell.width as f32,
-                cell.height as f32,
-            ];
-            if let Some((left, right)) = clip {
-                let (glyph_left, glyph_right) = (rect[0], rect[0] + rect[2]);
-                if glyph_right <= left || glyph_left >= right {
-                    pen += cell.advance * scale;
-                    continue;
-                }
-                // `rect` and `uv` trimmed together, so a half-visible glyph
-                // samples half its own ink rather than stretching the rest.
-                let (cl, cr) = (glyph_left.max(left), glyph_right.min(right));
-                let (from, to) = ((cl - glyph_left) / rect[2], (cr - glyph_left) / rect[2]);
-                uv[0] += from * uv[2];
-                uv[2] *= to - from;
-                rect[0] = cl;
-                rect[2] = cr - cl;
-            }
-            self.quads.push(Quad {
-                rect,
-                uv,
-                color,
-                border,
-                mode: MODE_ATLAS,
-            });
-            pen += cell.advance * scale;
-        }
     }
 }
 
