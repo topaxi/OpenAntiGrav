@@ -208,6 +208,24 @@ pub struct MenuSkin {
     /// Pulse's is `0xFF000000`, black, because its title sits on a light top
     /// bar this build does not draw yet. `None` where undeclared.
     pub title: Option<Argb>,
+    /// What a menu clears to when its own frame screen carries neither a
+    /// `<ScreenClear>` nor a full-screen fill of its own. **Measured, and
+    /// only ever needed once**: Wipeout HD authors `<ScreenClear
+    /// Colour="FEGlobals->HD_BG">` on `FE Screen` and Pulse's own `FE Screen`
+    /// opens with a full-screen black `<Image>`, so [`super::Frame::clear`]
+    /// already carries this for both and this field stays `None`. Pure names
+    /// a widget for exactly this job - `BackgroundController`'s own
+    /// `BackgroundImage`, sized to the full screen - and then leaves it
+    /// without a `src`, so [`super::Frame::clear`] comes back `None` too, on
+    /// a screen this build used to clear to black for want of anything else.
+    /// A captured `Main Menu` (`pure-psp-usa.chd`, PPSSPP 1.20.4, 2026-08-25)
+    /// shows solid white behind the row list, so `0xFFFFFFFF` is what stands
+    /// in - the same "engine carries a compiled-in default this project has
+    /// not found" gap `oag_pure::frontend::FALLBACK_GLOBALS` already
+    /// documents for `TitleColor`/`DesignColor`/`TextColor`/`FrameLineColor`,
+    /// measured the same way. `None` for a title whose frame already
+    /// supplies its own clear, or that draws no frame at all.
+    pub background: Option<Argb>,
     /// The selected row. **Measured on Pulse; authored on Wipeout HD.**
     ///
     /// The two routes are worth telling apart, and the field cannot say which
@@ -284,6 +302,7 @@ mod tests {
         menu_font: Some("menu"),
         text: Some(0xFF33_A6B9),
         title: Some(0xFF00_0000),
+        background: None,
         selected: Some(0xFF9D_FFFF),
         transition_secs: 0.5,
         // Pulse's own answer: its discs author no `<HorizMenu>` at all.

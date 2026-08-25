@@ -607,7 +607,18 @@ What it does **not** have matters as much, and is why `oag-pure`'s
   geometry: 19 of the 33 `<Menu>` widgets across them say `y="45"` and no other
   value reaches four, so `MenuSkin::first_row_y` is `Some(45.0)` at confidence
   80. Row *pitch* is still `None` - one authored `gap` is not a measurement, and
-  no capture of a Pure menu exists.
+  the capture below never put a cursor two rows apart to measure one off.
+- **`background` and `selected`, filled in 2026-08-25.** A capture of `Main
+  Menu` itself (`pure-psp-usa.chd`, PPSSPP 1.20.4) found two things this build
+  drew wrong rather than merely incompletely: the screen is solid white, not
+  the black this build cleared to for want of anything else, and the selected
+  row is a *darker*, more saturated ink than the others - the opposite
+  direction from Pulse's "brightening toward white". Both are measured, not
+  authored: `FE Screen`'s own `BackgroundController->BackgroundImage` names no
+  `src`, the same "engine carries a compiled-in default" gap as
+  `TitleColor`/`DesignColor`/`TextColor`/`FrameLineColor`. See
+  `oag_pure::frontend::MENU_SKIN`'s own `background`/`selected` field
+  comments.
 - **No `LeftLayer` element anywhere.** Its `transition` durations are authored
   (0, 0.25, 0.3, 0.5, against Pulse's 0, 0.2, 0.5, 0.7) but what they attach to
   is unread.

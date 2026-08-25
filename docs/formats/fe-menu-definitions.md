@@ -41,6 +41,14 @@ halves are true of *a* screen and neither is true of the main menu: the hex grid
 is `CellMode_Definition.xml`'s `Grid Selection`, reached from `RACE CAMPAIGN`
 via `TournamentLoad`. **The main menu is a plain left-aligned vertical list.**
 
+## `Top FE Screen->FE Screen` is the one exception
+
+Every menu screen's frame - light angled top bar, two footer strips - is
+authored on `Skin.xml`'s own `Top FE Screen->FE Screen`, not in a `LoadXML`
+include, so it needed no following to reach. Unlike the rest of this page it
+**is** built: see [the original's menus](../ui/menus-original.md)'s own
+section on it.
+
 ## Elements this reading relied on
 
 Not an exhaustive schema - only what was needed, and named because

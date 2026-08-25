@@ -116,6 +116,9 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     // palette instead, whose `HD_Grey` is declared to the same value - so the
     // two agree today and could diverge. See `hd-frontend.md`.
     title: Some(0xFF64_6464),
+    // `FE Screen` authors its own `<ScreenClear Colour="FEGlobals->HD_BG">`,
+    // so `Frame::clear` already carries this and the field stays unneeded.
+    background: None,
     // **`None`, and the reason changed while this was being filled in.** It was
     // "a measured field and nothing measured", which was true and incomplete.
     //

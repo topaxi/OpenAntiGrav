@@ -439,7 +439,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [DLC packs are mounted; two things inside them are not read](handover/dlc-packs-are-mounted-two-things-inside-them.md)
 - [Two recovered chase-camera behaviours are ported; `headtilt` is not](handover/two-recovered-chase-camera-behaviours-are-ported-headtilt.md)
 - [The original's fov widens with speed, and `Race::projection` does not](handover/the-originals-fov-widens-with-speed-and-race.md)
-- [The menus draw the disc's layout; the chrome around them is unbuilt](handover/the-menus-draw-the-discs-layout-the-chrome.md)
+- [The menus draw the disc's layout; the footer's ticker and prompts are still unbuilt](handover/the-menus-draw-the-discs-layout-the-chrome.md)
 - [Task #7: PRESS START does not fade in or throb](handover/task-7-press-start-does-not-fade-in.md)
 - [PS2 front-end layout is hardcoded to 480x272](handover/ps2-front-end-layout-is-hardcoded-to-480x272.md)
 - [The HUD layout ground truth is PSP-only, and the PS2 layouts are unchecked](handover/the-hud-layout-ground-truth-is-psp-only.md)

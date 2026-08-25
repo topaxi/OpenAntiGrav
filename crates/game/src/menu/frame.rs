@@ -105,14 +105,23 @@ pub fn read(screens: &Screens, sprites: &Sheet, space: Space, name: Option<&str>
         } else {
             image.x
         };
+        // `U`/`V`/`TxtrWidth`/`TxtrHeight` name a sub-rect of `src`'s own
+        // texture, exactly as `crate::frontend::draw`'s own screen drawing
+        // reads them - see [`crate::screen::Image::u`]. HD's three marks never
+        // needed this, each being its own whole texture; Pulse's frame is the
+        // case that does, its top bar and its two footer strips all three
+        // patches of one shared `pulse_assets.mip`. Without it every mark
+        // would draw that sheet's own top-left corner instead of its own
+        // patch, same failure `frontend::draw` had before it read these.
+        let uv = [
+            placed.x as f32 + image.u.unwrap_or(0.0),
+            placed.y as f32 + image.v.unwrap_or(0.0),
+            image.texture_width.unwrap_or(placed.width as f32),
+            image.texture_height.unwrap_or(placed.height as f32),
+        ];
         marks.push(Draw::Sprite {
             rect: [x, image.y, width, height],
-            uv: [
-                placed.x as f32,
-                placed.y as f32,
-                placed.width as f32,
-                placed.height as f32,
-            ],
+            uv,
             // The widget's tint, which on HD is `FEGlobals->HD_Grey` for all
             // three: the textures themselves are white and the colour is what
             // makes a rule grey.

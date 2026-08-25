@@ -270,14 +270,16 @@ pub struct FrontEnd {
     /// per image into this crate is the hand-transcribed-table failure that rule
     /// exists to prevent, and it would not survive the disc being re-read.
     ///
-    /// `None` for a title whose frame has not been read, which is both PSP
-    /// titles today. **That is a gap and not a measurement**, and the difference
-    /// matters here: Pulse's own `FE Screen` carries the light angled top bar
-    /// (`topbarleft`/`topbarcenter`/`topbarright`) that
-    /// `oag_game::menu::Skin::title_color` substitutes a colour for precisely
-    /// because nothing draws it yet. Filling this in for Pulse is a change with
-    /// a visible consequence for a screen this build already draws, so it wants
-    /// its own before-and-after rather than being carried along by HD's.
+    /// `None` for a title whose frame has not been read, which is Pure today.
+    /// **That is a gap and not a measurement.** Pulse's own `Top FE
+    /// Screen->FE Screen` carries its light angled top bar and the two bars
+    /// framing the footer's news ticker - one `<Image>` apiece, all three
+    /// patches of one shared `Data\FE\Images\pulse_assets.mip`, nested three
+    /// anonymous `<Screen>` levels down (an XML grouping idiom this build's
+    /// widget collection now walks through - see `oag_game::screen`'s own
+    /// `collect_widgets`). Not `topbarleft`/`topbarcenter`/`topbarright`: that
+    /// was a guess made before the XML was actually read: on the disc it is
+    /// one bar image, not three.
     pub menu_frame: Option<&'static str>,
 }
 

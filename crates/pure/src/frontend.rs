@@ -121,6 +121,22 @@ pub mod states {
     /// placeholder `Item` and that one `Redirect` - so `draw_screen` on it
     /// alone is an honest blank frame, not a bug standing in for the movie.
     pub const FMV_INTRO: &str = "FMV Intro";
+
+    /// The screen every menu is nested inside, and the one that carries
+    /// Pure's own frame: `Skin.xml`'s own comment calls it "all FE screens are
+    /// inside another screen so that online screens can have no background
+    /// but still have music". What it authors: rule lines top and bottom, a
+    /// scroll arrow pair, a squiggle-text date/version strip, `ArrowSelect`
+    /// (`FETextures.mip`) - and one `<BackgroundController>` wrapping a
+    /// `BackgroundImage` and a `BackgroundTopRightImage`, **neither naming a
+    /// `src`**. Both are drawn nothing rather than a guess: `Skin.xml`
+    /// declares no default-background global for either, so whatever texture
+    /// the real menu shows is assigned by the executable at runtime, not
+    /// authored here - the same class of gap as `Title Screen`'s own missing
+    /// wordmark texture, `TitleFrame`, still open on
+    /// `handover/pures-title-screen-is-missing-its-own-logo.md`. See
+    /// [`super::FRONT_END`]'s own `menu_frame`.
+    pub const FE_SCREEN: &str = "FE Screen";
 }
 
 /// `FEGlobals` colours Pure's own screens reference
@@ -246,8 +262,27 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     // the source - see that constant's own docs.
     text: Some(0xFF88_D6E8),
     title: Some(0xFFED_4896),
-    // No capture of a Pure menu with a cursor on it exists.
-    selected: None,
+    // `BackgroundController`'s own `BackgroundImage` is the widget for this,
+    // sized to the full screen and never given a `src` - see
+    // `states::FE_SCREEN`'s own doc for what that widget is. A captured
+    // `Main Menu` (`pure-psp-usa.chd`, PPSSPP 1.20.4, 2026-08-25, driven
+    // Language Selection -> Developer Publisher Screen -> MemoryStickWarning
+    // -> FMV Intro -> Title Screen -> Profile -> New -> Set Name -> Main
+    // Menu) shows solid white behind the row list - not the black this build
+    // cleared to for want of anything else. Confidence 70: one capture, one
+    // fresh profile, no second session or theme choice checked against it.
+    background: Some(0xFFFF_FFFF),
+    // Measured off the same `Main Menu` capture `background` is - and the
+    // opposite direction from Pulse's own "brightening toward white":
+    // sampling `SINGLE PLAYER` (selected) against `MULTIPLAYER`/`PROFILE`/
+    // `DOWNLOAD` (not) gives a *darker*, more saturated ink for the selected
+    // row - `#16AED1` (22,174,209) against `TextColor`'s own `#88D6E8`
+    // (136,214,232), which the unselected rows' own sampled pixels confirm
+    // to the digit. Not `OUR_SELECTED`'s white: white was invisible here
+    // the moment `background` started drawing a white screen under it, which
+    // is what caught this. Confidence 65, the same basis as this file's other
+    // pixel measurements - one capture, effect rather than source.
+    selected: Some(0xFF16_AED1),
     // Authored, but as one of four values this disc uses (0, 0.25, 0.3, 0.5)
     // rather than the single dominant one Pulse has. 0.5 is the most common of
     // them in the five definition files read; which value a *menu* page change

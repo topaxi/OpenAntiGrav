@@ -1907,8 +1907,8 @@ impl Default for Transition {
 ///
 /// `backdrop` is the same arrangement one step further out: a frame and a
 /// rectangle, already decided, rather than a movie this module would then have
-/// to know how to play. `None` draws the rows on whatever the pass cleared to,
-/// which is black - see [`Backdrop`].
+/// to know how to play. `None` draws the rows on whatever the frame put down,
+/// or black if it put down nothing - see [`Backdrop`].
 ///
 /// # Two idioms, and the disc picks
 ///
@@ -1928,12 +1928,12 @@ pub fn draw_list(
     let page = menu.page();
     let (title_x, title_y, title_scale) = skin.title_at();
 
-    // The frame's clear, then the movie, then the frame's marks. Both halves of
-    // the frame are the disc's own widgets off one screen - see [`frame`] - and
-    // the movie goes between them because a clear is what a screen starts from
-    // and a rule is drawn on top of what the screen holds. No title carries both
-    // a frame and a movie, so the interleaving is arranged and not observed.
-    let mut backdrops: Vec<Draw> = frame.clear.clone().into_iter().collect();
+    // The frame's clear or, absent one, `skin.background()` - see
+    // [`oag_title::MenuSkin::background`] - then the movie, then the frame's
+    // marks. No title carries both a frame and a movie, so the interleaving
+    // is arranged and not observed.
+    let clear = frame.clear.clone().or(skin.background());
+    let mut backdrops: Vec<Draw> = clear.into_iter().collect();
     backdrops.extend(backdrop.map(|backdrop| Draw::Video {
         rect: backdrop.rect,
         frame: backdrop.frame,
@@ -1953,9 +1953,9 @@ pub fn draw_list(
         x: title_x,
         y: title_y,
         scale: title_scale,
-        // The frame's own ink where there is a frame, this build's substitute where
-        // there is not - see `Skin::title_color`, argued for the frame, not the colour.
-        color: frame.ink.unwrap_or_else(|| skin.title_color()),
+        // The disc's own declared colour, the frame's own ink, or this
+        // build's substitute - see `Skin::title_color` for the order and why.
+        color: skin.title_color(frame.ink),
         border: None,
         align: Align::Left,
         text: page.title.clone(),

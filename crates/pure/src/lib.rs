@@ -107,11 +107,14 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     language_plugins: &["PI008", "PI009", "PI010", "PI011", "PI012"],
     menu: frontend::MENU_SKIN,
     boot: frontend::BOOT_PROFILE,
-    // **A gap, not a measurement**, on the same terms as Pulse's: nothing has
-    // read what Pure's menu screens are framed by. Its `Skin.xml` declares six
-    // layout globals to Pulse's dozens, so what there is to find here may be
-    // less - but "may be less" is not "was looked at".
-    menu_frame: None,
+    // Pure authors a frame on `FE Screen` too - rule lines, scroll arrows, a
+    // squiggle-text date strip - the same idiom as Pulse's and HD's, once
+    // `oag_game::screen`'s widget collection recurses into
+    // `<BackgroundController>` the way it does `<Viewport>`/`<Animation>`. Its
+    // own background image is not part of that win: `BackgroundImage` and
+    // `BackgroundTopRightImage` name no `src` on either pressing, so they
+    // still draw nothing - see `frontend::states::FE_SCREEN`'s own doc.
+    menu_frame: Some(frontend::states::FE_SCREEN),
 };
 
 pub mod frontend;

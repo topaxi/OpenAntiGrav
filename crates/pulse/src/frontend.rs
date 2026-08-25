@@ -60,6 +60,15 @@ pub mod states {
     pub const LANGUAGE_SELECTION: &str = "Language Selection";
     /// Where picking a language goes, and where a race starts.
     pub const LAUNCH_GAME: &str = "Launch Game";
+    /// The screen every menu is nested inside, and the one that carries
+    /// Pulse's own frame: a light angled top bar and two bars framing the
+    /// footer's news ticker, all three patches of one shared
+    /// `Data\FE\Images\pulse_assets.mip`. Spelled bare rather than as
+    /// `Top FE Screen->FE Screen`: `oag_game::screen::Screens::by_name`
+    /// matches a screen's own `name`, not its path, the same as
+    /// [`SHOW_LOGO`] already is for the same reason. See
+    /// [`super::FRONT_END`]'s own `menu_frame`.
+    pub const FE_SCREEN: &str = "FE Screen";
 }
 
 /// Pulse's boot sequence, cold-boot measured.
@@ -148,6 +157,10 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     menu_font: Some("menu"),
     text: Some(0xFF33_A6B9),
     title: Some(0xFF00_0000),
+    // `FE Screen` opens with its own full-screen black `<Image>`, so
+    // `Frame::marks` already paints over every pixel and the field stays
+    // unneeded.
+    background: None,
     // Measured. The XML states no selected colour at all.
     selected: Some(0xFF9D_FFFF),
     transition_secs: 0.5,

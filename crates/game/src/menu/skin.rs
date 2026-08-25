@@ -264,6 +264,21 @@ impl Skin {
         self.skin.selected.map_or(OUR_SELECTED, argb)
     }
 
+    /// A full-screen fill for a frame whose own screen carries neither a
+    /// `<ScreenClear>` nor a fill of its own. `None` for every title but
+    /// Pure - see [`oag_title::MenuSkin::background`]'s own doc for why: a
+    /// title reaching this is a title whose frame authored a background
+    /// widget and then left it with no way to resolve one.
+    #[must_use]
+    pub(super) fn background(&self) -> Option<crate::frontend::Draw> {
+        self.skin
+            .background
+            .map(|color| crate::frontend::Draw::Fill {
+                rect: [0.0, 0.0, self.space.size.0, self.space.size.1],
+                color: argb(color),
+            })
+    }
+
     /// How long a page change takes. `transition=`.
     #[must_use]
     pub fn transition_secs(&self) -> f32 {
@@ -283,24 +298,37 @@ impl Skin {
         )
     }
 
-    /// The screen title's colour, for a title that draws no frame.
+    /// The screen title's colour.
     ///
-    /// **Not the disc's, deliberately.** Pulse authors `TitleColor` black,
-    /// because on hardware the title sits on a light angled top bar
-    /// (`topbarleft`/`topbarcenter`/`topbarright`) that this build does not
-    /// draw yet. Using the authored colour before the bar exists paints black
-    /// text on a dark backdrop - invisible, and wrong in a way that would look
-    /// like a bug rather than like a missing feature. The same substitution the
-    /// language picker already makes for the same reason.
+    /// **The disc's own declared `TitleColor` first.** A title whose skin
+    /// names one is trusted: it authored that colour to sit on its own chrome,
+    /// and this build's job is to draw the chrome, not to second-guess the
+    /// colour once it does. Both titles that declare a frame today also
+    /// declare `TitleColor` - HD's `0xFF646464` and Pulse's `0xFF000000` - so
+    /// in practice this is the only branch either one reaches.
     ///
-    /// A title whose frame this build *does* draw does not come through here at
-    /// all: [`super::draw_list`] takes [`super::Frame::ink`] instead, which is
-    /// the colour that screen draws its own chrome in and resolves per archive.
-    /// The substitution was always about the missing frame rather than about the
-    /// colour.
+    /// **`frame_ink` second** - [`super::Frame::ink`], the colour the frame's
+    /// own marks actually draw in - for a title that draws a frame but leaves
+    /// `TitleColor` undeclared. No title measured so far is that case: HD's
+    /// `TitleColor` and its `HD_Grey`-tinted marks agree today (worth
+    /// stating rather than assuming, since they are two separate globals
+    /// that could diverge - see `oag_hd::frontend::MENU_SKIN`'s own field
+    /// doc), and Pulse's marks carry no tint of their own at all, so a
+    /// title reaching this branch would be a first.
+    ///
+    /// **This build's own substitute last**, for a title with neither: no
+    /// declared colour, and no frame. Pure is that title, and so was Pulse
+    /// before its own top bar was read - it authored `TitleColor` black but
+    /// drew on no bar, so this build's own contrast (`OUR_SELECTED`) stood in
+    /// rather than painting black on nothing. Now that
+    /// `oag_pulse::FRONT_END::menu_frame` names its own frame, the
+    /// substitution's premise - nothing draws the bar - is gone, and the
+    /// declared black wins as it would for any other title.
     #[must_use]
-    pub(super) fn title_color(&self) -> [f32; 4] {
-        OUR_SELECTED
+    pub(super) fn title_color(&self, frame_ink: Option<[f32; 4]>) -> [f32; 4] {
+        self.skin
+            .title
+            .map_or_else(|| frame_ink.unwrap_or(OUR_SELECTED), argb)
     }
 }
 
