@@ -115,7 +115,7 @@ around `0x006bxxxx`:
 | `Mesh_Importer.ps3.cpp` | `0x002bebb0` | **the one platform-suffixed importer** |
 | `Pen.cpp` | `0x002cdbe8` | 2D drawing primitive |
 | `RenderManager.cpp` | `0x002d5710` | the renderer |
-| `SortRoot.cpp` | `0x002dbe08` | draw-order root |
+| `SortRoot.cpp` | `0x002dbe08` | sorted-list base, guessed as draw-order root - [not render-confirmed](#what-was-deliberately-not-read) |
 | `EngineTrail/TrailEffectManager.cpp` | `0x002e2da8` | engine trails |
 | `FxLensflare.cpp` | `0x00637f70` | lens flare, module B |
 
@@ -1598,11 +1598,64 @@ The whole table, in file order:
   Below 50; the hypothesis is recorded and the function is left unnamed.
 - **`SortRoot.cpp`'s four functions** (`0x002dbe08`, `0x002dbe50`,
   `0x002dbe98`, `0x002dbf40`). All four are constructors writing the same two
-  vtables and the `__FILE__` at `+0x30`; two of them additionally tail-call
-  `0x00327500`. **None has a caller**, so base cannot be separated from
-  complete and the pairs cannot be named - below 50, so per
-  [ADR-0005](../../../architecture/adr/0005-ghidra-conventions.md) the
-  hypothesis is written here and nothing is renamed.
+  vtables and the `__FILE__` at `+0x30`. They decompile as two identical
+  pairs: `0x002dbe08`/`0x002dbe50` are byte-for-byte identical to each other,
+  as are `0x002dbe98`/`0x002dbf40`, which additionally tail-call
+  `0x00327500`. **"None has a caller" (recorded 2026-08-18) is wrong for one
+  of the four**, corrected 2026-08-25: `0x002dbe50` has six real
+  `UNCONDITIONAL_CALL` xrefs (`0x00137690`, `0x00151ad8`, `0x00154cf0`,
+  `0x00137e88`, `0x001525f8`, `0x00155088`), each calling it as the first
+  operation of its own constructor, before setting its own vtable - the
+  textbook base-subobject-constructor call shape
+  [mode-manager.md](mode-manager.md) resolves by call site elsewhere on this
+  page. That separates the `0x002dbe08`/`0x002dbe50` pair: `0x002dbe50` is
+  the base (C2) constructor, `0x002dbe08` the complete (C1) - still below 50
+  for an actual class *name*, so nothing is renamed, but the base-versus-
+  complete split itself is now evidenced rather than blocked. The
+  `0x002dbe98`/`0x002dbf40` pair remains genuinely callerless on both halves
+  (`get_xrefs_to` on each returns only its own `.opd` self-entry at
+  `0x00883050`/`0x00883058`) - re-verified 2026-08-25, unchanged.
+
+  **The six callers argue against "draw-order root" being SortRoot's
+  confirmed use, not for it.** All six sit at `0x00130000`-`0x00156000`,
+  outside this page's own render-layer span (`0x00279xxx`-`0x002ecxxx`); one
+  (`0x00137690`) cites `../../../Code/System/System\LinkObj.h` in a pooled-
+  allocator call, consistent with `SortRoot` being a generic sorted
+  intrusive-list container descended from a near-universal object base
+  (`0x00328d48`, itself called from 60+ sites spanning both this address
+  range and the render layer proper, including `MeshImporter_Construct`) -
+  not evidence tying it to render draw order specifically. Neither of
+  `0x002dbe08`'s or `0x002dbe98`'s/`0x002dbf40`'s complete-object forms has
+  any caller either, direct or indirect, so no render call site instantiates
+  a bare `SortRoot` that this scan can find. Whether the renderer's own
+  transparent-draw ordering uses this class at all is still open - below 50,
+  so per [ADR-0005](../../../architecture/adr/0005-ghidra-conventions.md)
+  the hypothesis is written here and nothing is renamed.
+
+  **2026-08-25, continued: the six callers are three classes, not six.**
+  They pair up by identical decompiled bodies exactly like `SortRoot.cpp`
+  itself does: `0x00137690`/`0x00137e88` (class "X"), `0x00151ad8`/`0x001525f8`
+  ("Y"), `0x00154cf0`/`0x00155088` ("Z") - each pair sharing one vtable
+  address (`0x008aa838`, `0x008ab114`, `0x008ab27c`) and tail-calling one
+  shared per-class finisher (`0x00135b90`, `0x0014fa08`, `0x00154858`).
+  All three share one shape: each allocates N identical 0x2080-byte
+  sub-objects through a debug-tracked pooled allocator that cites
+  `LinkObj.h:542` (N = 4 for X, up to 11 for Y, 1 for Z), configures floats
+  on them by hash-keyed property lookup (`FUN_00677008`/`FUN_00677018`,
+  the same "look up by name, apply if found" shape the `SHO` parameter
+  binder uses, unconnected to it otherwise), and builds reciprocal-of-delta
+  interpolation tables over some of those fields - the arithmetic shape of a
+  piecewise curve's per-segment slope, not anything render-specific.
+  Followed one dead end here: each class also carries a second vtable
+  (`0x00864230`/`0x00864ab8`/`0x00864b38`) sharing all but three entries
+  across the three classes - a second interface with three type-specific
+  overrides, not the class-name string a first read of the layout suggested;
+  no string was found there. **None of the three is named** - the pooled
+  N-instance-plus-curves shape reads as an emitter or spawn-point framework
+  of some kind, but that is a shape, not a name, and below 50 per ADR-0005.
+  The productive next move is identifying *that* framework (the pooled
+  allocator and the two helper functions it shares across all three classes
+  are likely reused well beyond these three), not chasing `SortRoot` further.
 - **Post-processing has no `.cpp` of its own**, and that turned out to be the
   wrong place to look: it is a set of named shader programs, not a class. See
   [the shader section](#shaders-are-in-exactly-two-places-and-neither-is-a-file-type-on-the-disc).

@@ -409,7 +409,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [HD's `.bnk` sound banks read, and HD makes five of the six sounds](handover/hds-bnk-sound-banks-read-and-hd-makes.md)
 - [HD/Fury's particle effects parse, and a "field that disagrees" turned out to be a wrong check](handover/hd-furys-particle-effects-parse-and-a-field.md)
 - [Pulse's draw order is recovered, and it is a layer sort rather than a depth sort](handover/pulses-draw-order-is-recovered-and-it-is.md)
-- [HD's see-through surfaces draw with the file's own blend equation; the texture-coordinate residue is diagnosed but not fixed](handover/hds-see-through-surfaces-draw-with-the-files.md)
+- [HD's see-through surfaces: the blend-equation fix landed, and the texture-coordinate/second-texture residue this file tracked is now resolved elsewhere](handover/hds-see-through-surfaces-draw-with-the-files.md)
 - [Talon's Junction's "missing floor" is a glass floor drawn with the wrong texture: rendered, not absent](handover/talons-junctions-missing-floor-is-a-glass-floor.md)
 - [An RPCS3 capture harness: a reference frame paired with the camera that drew it](handover/an-rpcs3-capture-harness-a-reference-frame-paired.md)
 - [A texture coordinate's orientation is per material, and it is in the vertex microcode](handover/a-texture-coordinates-orientation-is-per-material-and.md)
@@ -726,8 +726,19 @@ like a nonsense variable name rather than a wrong base.
 are open: the **draw path** (inline command-buffer writes on PS3, so no import
 census or call graph finds it - it needs a search for RSX method constants);
 **`SortRoot.cpp`'s four constructors** (`0x002dbe08`, `0x002dbe50`, `0x002dbe98`,
-`0x002dbf40`, none with a caller, so base cannot be told from complete and none
-is named); and - **now closed** - where the engine-owned shader
+`0x002dbf40`) - **spent as a render lead, 2026-08-25**: `0x002dbe50` turned out
+to have six real callers after all (base cannot be told from complete *and
+none is named* was true only for the other three), and chasing them one level
+further landed in `DetonatorBomb.cpp` - a bomb weapon's constructor, now named
+([`detonator-bomb.md`](docs/ghidra/functions/ps3-hdfury-eu/detonator-bomb.md)) -
+tied to `RaceManager_GetInstance()`. `SortRoot`'s only located use is gameplay
+code two hops from the render layer, not the "draw-order root" the table entry
+guessed; treat that guess as refuted, not merely unconfirmed. See
+[renderer.md](docs/ghidra/functions/ps3-hdfury-eu/renderer.md#what-was-deliberately-not-read)
+and [the handover thread](handover/hds-see-through-surfaces-draw-with-the-files.md) -
+the render draw-order question needs a fresh lead (RSX method constants in
+the render layer's own address range), not more of this one; and -
+**now closed** - where the engine-owned shader
 programs' microcode lives: 124 `SHO` blocks linked into `EBOOT.elf` against
 exactly 124 registered names, same container as a `.rcsmaterial`. Two things
 stay open there and are on the page. **Only 62 of the 124 name-to-blob pairings
