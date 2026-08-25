@@ -264,6 +264,21 @@ impl Skin {
         self.skin.selected.map_or(OUR_SELECTED, argb)
     }
 
+    /// A full-screen fill for a frame whose own screen carries neither a
+    /// `<ScreenClear>` nor a fill of its own. `None` for every title but
+    /// Pure - see [`oag_title::MenuSkin::background`]'s own doc for why: a
+    /// title reaching this is a title whose frame authored a background
+    /// widget and then left it with no way to resolve one.
+    #[must_use]
+    pub(super) fn background(&self) -> Option<crate::frontend::Draw> {
+        self.skin
+            .background
+            .map(|color| crate::frontend::Draw::Fill {
+                rect: [0.0, 0.0, self.space.size.0, self.space.size.1],
+                color: argb(color),
+            })
+    }
+
     /// How long a page change takes. `transition=`.
     #[must_use]
     pub fn transition_secs(&self) -> f32 {

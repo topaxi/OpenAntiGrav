@@ -157,6 +157,10 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     menu_font: Some("menu"),
     text: Some(0xFF33_A6B9),
     title: Some(0xFF00_0000),
+    // `FE Screen` opens with its own full-screen black `<Image>`, so
+    // `Frame::marks` already paints over every pixel and the field stays
+    // unneeded.
+    background: None,
     // Measured. The XML states no selected colour at all.
     selected: Some(0xFF9D_FFFF),
     transition_secs: 0.5,

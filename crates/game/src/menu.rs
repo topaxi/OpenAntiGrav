@@ -1907,8 +1907,9 @@ impl Default for Transition {
 ///
 /// `backdrop` is the same arrangement one step further out: a frame and a
 /// rectangle, already decided, rather than a movie this module would then have
-/// to know how to play. `None` draws the rows on whatever the pass cleared to,
-/// which is black - see [`Backdrop`].
+/// to know how to play. `None` draws the rows on whatever the frame and
+/// [`Skin::background`] already put down - black, for want of anything else,
+/// only when neither did - see [`Backdrop`].
 ///
 /// # Two idioms, and the disc picks
 ///
@@ -1933,7 +1934,18 @@ pub fn draw_list(
     // the movie goes between them because a clear is what a screen starts from
     // and a rule is drawn on top of what the screen holds. No title carries both
     // a frame and a movie, so the interleaving is arranged and not observed.
-    let mut backdrops: Vec<Draw> = frame.clear.clone().into_iter().collect();
+    //
+    // `skin.background()` only ever supplies one when `frame.clear` does not:
+    // a title whose frame authors its own `<ScreenClear>` or opening fill
+    // never reaches it, and one with no frame at all has no widget for
+    // `oag_title::MenuSkin::background` to be measured off. See that field's
+    // own doc - Pure is the one title this exists for.
+    let mut backdrops: Vec<Draw> = frame
+        .clear
+        .clone()
+        .or_else(|| skin.background())
+        .into_iter()
+        .collect();
     backdrops.extend(backdrop.map(|backdrop| Draw::Video {
         rect: backdrop.rect,
         frame: backdrop.frame,
