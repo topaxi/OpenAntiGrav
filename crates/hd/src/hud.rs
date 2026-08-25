@@ -229,14 +229,30 @@ pub const ROOTS: &[&str] = &[
 /// they are dangling references and 192 of the HUD's 1,029 sprites have no
 /// texture - which is exactly how it looked before this was measured.
 ///
-/// # Confidence 85
+/// # Confidence 90
 ///
 /// Twelve of twelve resolve, and the two that need the rule need it for 192
-/// sprites, so this is not a coincidence of one file. It is 85 rather than
-/// higher because **no code path in the executable has been read** for it: the
-/// rule is inferred from the file set agreeing with it, and an engine that
-/// instead tries the literal name, fails, and falls back would be
-/// indistinguishable from here.
+/// sprites, so this is not a coincidence of one file. 2026-08-25: widened past
+/// the HUD's own twelve references to **every** `Src`/`ImageSrc`-shaped image
+/// reference across all of HD's XML (133 distinct values, all eighteen HUD
+/// layouts plus front end, ships, skins) - **129 of 133 (97%) resolve under
+/// this exact rule**, `hdHUD.mip` and `detonator_hud2.tga` both among them. The
+/// four that do not (`teaser_firedup.mip`, `teaser_medievil.mip`,
+/// `teaser_wipeout.mip`, `default_texture.mip`) do not exist on the disc under
+/// *any* name or extension - cut content and an unbacked fallback name, not
+/// counter-examples. Not 94 (the arithmetic-invariant ceiling) because those
+/// four are absences rather than confirmations, and because **the literal HUD
+/// code path is still unread** - the ceiling below still applies. What moved
+/// it off 85: a hardcoded instance of the *identical* convention was found in
+/// `EBOOT.elf` while chasing this rule through the executable
+/// (`handover/wipeout-hd-furys-hud-reads-and-the-reader.md`) - a ship-thumbnail
+/// loader builds `%s\fe\miniBW.gtf` from a bare directory, ignoring entirely
+/// that the XML authors the same asset as `Data\Ships\<Ship>\fe\miniBW.tga`.
+/// The engine hardcoding `.gtf` and discarding the source extension, observed
+/// directly in code for one asset kind, is what a blind string-replace with no
+/// fallback attempt looks like from the executable side - not proof this
+/// exact function does it for HUD sprites too, but no longer inferred from the
+/// file set alone either.
 ///
 /// A second spelling exists on this disc and is **not** what the HUD uses:
 /// `/data/environments/02_track/hd_textures/and_thinsteps.tga.gtf` *appends*

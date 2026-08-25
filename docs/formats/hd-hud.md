@@ -234,10 +234,26 @@ to a shipped entry rather than ten of twelve. Read literally, 192 of the HUD's
 1,029 sprites have no texture, which is exactly how it looked before this was
 measured.
 
-**Confidence 85** on the rule: twelve of twelve resolve and the two exceptions
-carry 192 sprites, so it is not a coincidence of one file - but no code path in
-the executable has been read for it, and an engine that tries the literal name,
-fails, and falls back would be indistinguishable from here. A second spelling
+**Confidence 90** on the rule: twelve of twelve resolve and the two exceptions
+carry 192 sprites, so it is not a coincidence of one file. 2026-08-25: widened
+past the HUD's own twelve references to every `Src`/`ImageSrc`-shaped image
+reference across all of HD's XML - 133 distinct values spanning all eighteen
+layouts, the front end, ships and skins - and **129 of 133 (97%) resolve
+under this same rule**. The four that do not (`teaser_firedup.mip`,
+`teaser_medievil.mip`, `teaser_wipeout.mip`, `default_texture.mip`) do not
+exist on the disc under any name or extension at all - cut content and an
+unbacked fallback name, not counter-examples. Still short of the
+arithmetic-invariant ceiling (94) for that reason, and because **the literal
+HUD code path is still unread**; an engine that tries the literal name, fails,
+and falls back would be indistinguishable from here. What raised it off 85:
+chasing this rule through the executable
+([the handover thread](../../handover/wipeout-hd-furys-hud-reads-and-the-reader.md))
+found a hardcoded instance of the identical convention - a ship-thumbnail
+loader builds `%s\fe\miniBW.gtf` from a bare directory, discarding entirely
+that the XML authors the same asset as `Data\Ships\<Ship>\fe\miniBW.tga`. That
+is what a blind extension-replace with no fallback looks like from inside the
+executable, for one asset kind - not a trace of the HUD's own code path, but
+no longer an inference from the file set alone either. A second spelling
 exists on this disc and is *not* what the HUD uses:
 `/data/environments/02_track/hd_textures/and_thinsteps.tga.gtf` **appends**.
 

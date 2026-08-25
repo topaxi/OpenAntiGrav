@@ -58,6 +58,17 @@ constructors, so the choice is made by *which call runs*, not by composing a
 directory name at runtime - which means the selection logic is in the
 constructor's control flow and is readable, just unread.
 
+**The user recalls HD offering a menu option to pick a retro HUD skin**
+(2026-08-25, from memory of playing the original rather than a fresh capture -
+so this is testimony to record and corroborate later, not a measurement). That
+fits the three-way split above: a **settings choice** rather than a
+per-mode/per-circuit rule would explain why every mode that has a skin variant
+at all has exactly the same three (`Data\XML\`, `wo3_HUD\`, `2097_HUD\`), and
+why `Elimination_HUD.xml`, `MPTag_HUD.xml` and `Duel_HUD\Duel_HUD.xml` have
+none - a global setting applies uniformly, a per-mode rule would need a reason
+those three are exempt. Worth checking against a settings/options XML's own
+key names before chasing the constructor control flow by hand.
+
 ## What `SPZone_RaceManager` actually adds
 
 `0x00076940` chains to `RaceManager_Construct` at `0x00076984`, installs its own
