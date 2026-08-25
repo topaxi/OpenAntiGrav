@@ -12,13 +12,15 @@ Separately: `ArrowSelect` (`U="53" V="0"` on `FETextures.mip`, present on both P
 
 `LoadXML` includes (`Demo_Definition.xml` among them, whose own two `Animation`-wrapped colour-only `Image`s were the evidence that `Fill` needed a rect before it got one) are collected into `Screens::load_xml` and counted in the boot report, but nothing in `crates/game` actually loads or merges them - already its own thread, [`hds-loadxml-includes-are-collected-and-never-followed.md`](hds-loadxml-includes-are-collected-and-never-followed.md).
 
+**2026-08-25: a second `src`-less "set programmatically" widget found, on `Main Menu` rather than `Title Screen` - `FE Screen`'s own `BackgroundController->BackgroundImage`.** A player-reported bug ("Pure's menu has no background"), not this thread's own next step, is what found it: `Screens::collect_widgets` did not recurse into `<BackgroundController>` at all, so the whole of `FE Screen`'s frame - rule lines, scroll arrows, `ArrowSelect`, the squiggle-text strip, and `BackgroundImage` itself - was silently dropped along with `Main Menu`'s backdrop. Fixed (`crates/game/src/screen.rs`), and `oag_pure::FRONT_END::menu_frame` now names `FE Screen`, closing this thread's own `ArrowSelect` open item along the way: it is drawn now, at `U="53" V="0"` on `FETextures.mip`, tinted `MenuHighLightArrowColor`. `BackgroundImage` itself stays the same class of gap `TitleFrame` is - no `src`, so nothing here invents a texture - but its *colour* is now measured off a real `Main Menu` capture (solid white) and recorded as `oag_title::MenuSkin::background`. See `docs/ui/menus-original.md`'s own section on it.
+
 ## Open
 
 - `TitleFrame`'s logo texture has no `src` in `Skin.xml` - it is set programmatically on the original. Now has a reference frame to check candidates against (orange "WipEout" over a white-outlined "pure"), which the guessed `Data\FE\Images\Logo.mip` still fails on size alone
-- `ArrowSelect` is not drawn by anything in this build yet, on either Pulse or Pure, so its `U`/`V` fix (now in place) has no picture to confirm against
+- `BackgroundImage` (`FE Screen`, `Main Menu`'s own backdrop) is the same kind of gap: no `src`, colour measured (white) but the texture itself unfound. Whether it is static or varies by mode/theme is unread - one capture, one fresh profile, is all this session checked.
 - Whether an `<Animation>`'s `<Key Time="..." TextureWidth="...">` timeline is a reveal to model, or safe to discard and draw a widget's final state statically (what this build now does), is unread
 
 ## Next Steps
 
-- Find the logo texture via Ghidra (where `TitleFrame`'s texture is assigned) or a full image-content scan of `Data.wad`/`FE.wad`, checked against the reference frame above
+- Find the logo texture via Ghidra (where `TitleFrame`'s texture is assigned) or a full image-content scan of `Data.wad`/`FE.wad`, checked against the reference frame above - the same approach would settle `BackgroundImage`'s
 - Before wiring the reveal itself: read what `<Key Time="..." TextureWidth="...">` means on a widget that already draws elsewhere (`hud.rs`'s own `<Animation><Key>` reading is `x`/`y` as travel, a different attribute, so it does not settle this one) - Ghidra or a captured real-hardware/PPSSPP frame of `Title Screen` mid-reveal would

@@ -1,7 +1,9 @@
 # The original's menus
 
-**Status: main-menu layout measured, transition measured, top bar and footer
-strips built - their own ticker text and button prompts still unbuilt.**
+**Status: main-menu layout measured, transition measured. Both PSP titles'
+own frames are built - Pulse's top bar and footer strips, Pure's rule lines
+and background - and each has one open piece: Pulse's footer ticker/button
+prompts, Pure's background texture itself.**
 Implemented in [`oag_title::menu`](../../crates/title/src/menu.rs),
 [`oag_game::menu`](../../crates/game/src/menu.rs) and
 [`oag_game::anim`](../../crates/game/src/anim.rs).
@@ -214,12 +216,54 @@ The two strips are backdrop art; the moving/localised parts on top of them -
 module doc already names for Wipeout HD's trial-build text and button
 prompts.
 
+## Pure's own frame, and its white background - built 2026-08-25
+
+**A player-reported bug, not a handover thread**: Pure's menus drew on black.
+`FE Screen` authors its own frame too - rule lines top and bottom, a scroll
+arrow pair, `ArrowSelect`, a squiggle-text date/version strip, a barcode and a
+world logo - wrapped one container deeper than Pulse's: `<BackgroundController>`,
+which `Screens::collect_widgets` did not recurse into any more than it did the
+anonymous `<Screen>` above, so all of it was silently dropped along with
+`Main Menu`'s whole backdrop. Fixed the same way, and wired through
+`oag_pure::FRONT_END::menu_frame` naming `FE Screen`.
+
+**The background image itself stays unauthored, and is the one place this
+build now states a measurement the disc's `Skin.xml` does not.**
+`BackgroundController`'s own `BackgroundImage` - sized to the full screen -
+names no `src`, the same "the engine carries a compiled-in default this
+project has not found" gap already on file for `TitleColor`/`DesignColor`/
+`TextColor`/`FrameLineColor`. A capture of `Main Menu` itself (`pure-psp-usa.chd`,
+PPSSPP 1.20.4, 2026-08-25) shows solid white, not the black this build
+cleared to for want of anything else - recorded as `oag_title::MenuSkin::background`,
+`Some(0xFFFFFFFF)`, confidence 70.
+
+**The same capture found the selected row drawn wrong too, and this is the
+one that made the bug visible rather than merely incomplete.** Nothing had
+ever measured Pure's own selected colour, so `selected: None` fell through to
+this build's own substitute - white, the same colour Pulse's own capture
+happened to need. Once the background above started drawing white, that
+substitute became a white row on a white screen. The real colour is not
+white at all: sampling `SINGLE PLAYER` (selected) against `MULTIPLAYER`/
+`PROFILE`/`DOWNLOAD` (not) gives a *darker*, more saturated ink -
+`#16AED1` (22,174,209) against `TextColor`'s own `#88D6E8` (136,214,232) -
+the opposite direction from Pulse's brightening. `Some(0xFF16AED1)`,
+confidence 65: one capture, effect rather than source, same basis as this
+title's other pixel measurements.
+
+See `crates/game/tests/pure_frame_ground_truth.rs` for the frame's own
+widgets pinned against the disc, and `crates/game/tests/menu_skin.rs`'s
+`pures_main_menu_capture_measured_its_background_and_its_selected_row` for
+the two colours.
+
 ## Not built
 
 - **The footer's ticker text and button-prompt line** - see above.
-- **The highlight's pulse**, for want of a period and a depth.
-- **Pure's menus**, beyond the six globals its `Skin.xml` states. Its
-  definitions have not been read for row geometry.
+- **The highlight's pulse**, for want of a period and a depth - on Pulse; on
+  Pure, whether the selected row pulses at all is unmeasured.
+- **`BackgroundImage`'s own texture on Pure.** Its colour is measured (see
+  above); what the disc's engine actually assigns there - whether it is
+  static or changes with the chosen mode/theme - needs Ghidra, not a second
+  screenshot.
 - **Cursor motion between rows.** There is nothing positional to move -
   selection is a colour - and no capture shows the brightness changing over
   anything but an instant.
