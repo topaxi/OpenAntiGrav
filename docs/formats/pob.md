@@ -141,17 +141,75 @@ until the "loading the race" step, where four loaded consecutively -
 `WO_SHIP_COLL_SPARK_NODAMAGE`, `WO_SHIP_DEATH_SPARKS` - at path-string
 addresses `0x08a886f8`, `0x08a88720`, `0x08a88750`, `0x08a8877c`, each
 0x28-0x30 bytes apart. That spacing is consistent with a fixed-size array of
-preload entries baked into the executable, which is a better lead for
-finding the still-unlocated indirect call site than the function address
-itself: searching for xrefs to *that array* (or to the four path-string
-addresses above) is untried and more promising than re-searching
-`FUN_089156a0`'s own address, which both `get_function_callers` and
-`get_xrefs_to` already returned nothing for.
+preload entries baked into the executable.
+
+**The xref lead this page used to call "untried" has since been tried, and
+is a clean static dead end (2026-08-25).** Every mechanism `ghidra-mcp`
+exposes for "what points at this address" came back empty against all four
+path-string addresses and their short-name neighbours (`0x08a887b4`-
+`0x08a887f0`): `get_xrefs_to` per address, `find_undocumented_by_string` per
+address, `search_byte_patterns` for the raw little-endian pointer value
+(also tried against the same strings' overlay-space mirrors at
+`0x28a886f8`/`0x38b886f8`, in case the xref engine only indexes one address
+space), and a whole-program `search_instructions` sweep with no mnemonic
+filter for a `lui`/`_lui` building the address's rounded-up high half
+(`0x8a9`, `524719` instructions scanned, zero hits). `FUN_089156a0`'s own
+address is confirmed still callerless the same way - `get_function_callers`
+and `get_xrefs_to` both re-run against it, both still empty. None of this
+proves no caller exists - it
+proves the reference, if one exists, is not a static absolute-address
+construction Ghidra's default analysis or a full mnemonic-blind instruction
+sweep can see. The next static idea worth trying, not yet tried: several
+functions in this binary (`FUN_089156a0` itself among them, see
+`lui s3,0x2b` / `lw a0,-0x1db8(s3)` early in its body) load a per-function
+base pointer into a saved register and address data through it with small
+negative offsets, a PSP relocatable-module pattern distinct from both a
+literal absolute load and MIPS `$gp`-relative small-data addressing. A
+sibling trap elsewhere in this executable found a global (`DAT_08b32428`,
+read/written all through the weapon code per the decompiler) with **zero**
+`search_instructions` hits for its low-half displacement `0x2428` - the
+signature of `$gp`-relative addressing, where the offset shown is relative
+to `$gp`'s value, not to the global's own address, so a raw-hex sweep looks
+empty on a global that is read constantly. Checked here and *not* present:
+`search_instructions` with no mnemonic filter finds zero operands
+containing the substring `gp` anywhere in this ~525k-instruction program,
+so whatever mechanism produced that other global's access, this binary does
+not expose it as a register literally named `gp` in Ghidra's disassembly -
+either this program doesn't use `$gp`-relative addressing at all, or
+Ghidra's Allegrex processor module names register 28 something else here.
+Unresolved which. Whether the preload table is reached through one of these
+per-function pool pointers, rather than a fresh `lui`/`addiu` pair, is
+unexamined. Short of that: a live capture that steps forward from a
+resolved `WO_SHIP_COLL_SPARK_DAMAGE` target rather than from the loader
+(`scripts/ppsspp_debugger.py`, breakpoint on `FUN_088f8e38`'s entry during
+the "loading the race" step per the trace above, then walk the return
+address stack) is the honest next avenue once static search is exhausted.
 
 Separately notable: only 4 of the 5 `WO_SHIP_COLL_SPARK*` files preloaded for
 this ship+track combination - not `WO_SHIP_COLL_SPARK` (no suffix) or
 `WO_SHIP_COLL_SPARK_TRAIL`/`_SMOKE`. Whether those three load for a different
 ship, load some other way, or are unused in this build is not established.
+
+### A second, larger preload-style table exists for weapon effects, previously unrecorded
+
+`0x08a7c3e4`-`0x08a7c6ac` holds 24 more `Data\Psys\WO_*.POB` full path
+strings back to back, the same packed-string shape as the four-entry ship
+table above (`WO_MISSILE_HEAD`, `WO_MISSILE_BOUNCE`, `WO_MISSILE_EXPLO`,
+`WO_ROCKET_FLARE`, `WO_ROCKET_EXPLO`, `WO_CANNON_SPARKS`, `WO_PLASMA_HEAD`,
+`WO_PLASMA_FLASH`, `WO_QUAKE`, `WO_REPULSER`, `WO_REPULSER_BLAST`,
+`WO_LEACHBEAM_ENERGY`, `WO_LEACHBEAM_CHARGING`, `WO_SHURIKEN_HEAD`,
+`WO_SHURIKEN_TRAIL`, `WO_SHURIKEN_BOUNCE`, `WO_SHURIKEN_EXPIRE`,
+`WO_ROCKET_EXPLO_TRACK`, `WO_WEAPON_ABSORB`, `WO_BOMB_SMOKERING`,
+`WO_SHIP_FXNODE_EXPLO`, `WO_MINE_EXPLO`, `WO_SHIP_EXPLOSION`, plus the format
+string `Data\Psys\%s.POB` itself at `0x08a884dc` immediately after). Found
+while chasing the xref dead end above via `search_strings`, not previously
+recorded in this document. It carries the same negative xref result as the
+ship table (`get_xrefs_to` and `search_byte_patterns` on `0x08a7c3e4` both
+empty) and every name in it
+is already among the ones this document's corpus table names - it adds no
+new effect, only a second static enumeration of which ones the executable
+addresses by full path, and a second data point that this shape of table is
+reached by something other than a plain absolute-address load.
 
 ## Many resolved targets are readable developer strings
 
