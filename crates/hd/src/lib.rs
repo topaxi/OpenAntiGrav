@@ -73,6 +73,7 @@ pub const TITLE: &Title = &Title {
     // difference.
     front_end: Some(frontend::FRONT_END),
     hud: hud::LAYOUTS,
+    hud_art: hud::ART,
     race: race::DEFAULTS,
     // **HD authors its ribbon rather than naming a texture.** The template is
     // one triangle; its material names the colour texture, the noise texture

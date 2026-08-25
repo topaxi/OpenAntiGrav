@@ -1712,22 +1712,11 @@ fn the_players_place_reaches_the_hud() {
 
     // Both halves together or neither: a lone `8` beside the `POS` caption was
     // what this HUD drew before the place was wired up.
-    let layout = loaded
+    let context = loaded
         .hud
-        .layout
-        .as_ref()
+        .context()
         .expect("Arcade_HUD.xml parses; the widget-count test pins it");
-    let frame = oag_game::hud::draw_list(
-        &oag_game::hud::Context {
-            default_border: layout.default_border(),
-            layout,
-            strings: &loaded.hud.strings,
-            atlas_origin: loaded.hud.atlas_origin(),
-            hud_line_height: loaded.hud.font.line_height,
-            small_line_height: loaded.hud.small_font.line_height,
-        },
-        &readout,
-    );
+    let frame = oag_game::hud::draw_list(&context, &readout);
     let drawn: Vec<&str> = frame
         .hud_text
         .iter()

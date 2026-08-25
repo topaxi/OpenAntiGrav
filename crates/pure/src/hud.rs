@@ -41,6 +41,32 @@ pub const LAYOUTS: &oag_title::HudLayouts = &oag_title::HudLayouts {
     zone: layouts::ZONE,
 };
 
+/// How Pure's HUD sprites reach the screen, as [`oag_title::Title::hud_art`]
+/// carries it.
+///
+/// **There is nothing for it to reach, and that is the measurement.** Composed
+/// off `pure-psp-eu.chd` on 2026-08-25, Pure's three layouts hold **37, 32 and
+/// 18 `<Text>` widgets and not one `<Image>`** - no sprites and no fills at all,
+/// which is the same finding the "no atlas" section above states from the other
+/// end. So [`ALWAYS_ON`] is empty rather than Pulse's seven names copied over:
+/// there is no widget of that name here to be always on.
+pub const ART: &oag_title::HudArt = &oag_title::HudArt {
+    // Moot on a disc whose layouts name no texture, and `None` on the same
+    // terms as Pulse's: this is a PSP disc, and its own XML asks for `.mip`.
+    texture_extension: None,
+    always_on: ALWAYS_ON,
+    // Moot for the same reason - this disc authors no `PickupBackground` - and
+    // recorded as Pulse's answer rather than as `None`, because `None` here
+    // would read as the measured "drawn as authored" that HD carries.
+    pickup_backdrop_colour: Some("HudBGColour"),
+};
+
+/// The sprite widgets Pure draws whenever its HUD is up: **none**.
+///
+/// See [`ART`]. Empty because this disc's HUD layouts carry no `<Image>`
+/// element of any kind, not because nothing has been looked for.
+pub const ALWAYS_ON: &[&str] = &[];
+
 /// The three layouts this disc ships, by race mode.
 pub mod layouts {
     /// Single race.

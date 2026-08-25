@@ -41,6 +41,7 @@ pub const TITLE: &Title = &Title {
     foreign_serials: FOREIGN_SERIALS,
     front_end: Some(FRONT_END),
     hud: hud::LAYOUTS,
+    hud_art: hud::ART,
     race: race::DEFAULTS,
     // `Data\Tex\engineFlare\Engine_noise.mip`, a literal string in both the
     // PSP and PS2 executables, so an exact archive hit rather than a mined

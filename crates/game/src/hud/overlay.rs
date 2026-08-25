@@ -25,7 +25,11 @@ use super::{Assets, Context, Layout, Readout, draw_list};
 pub struct Overlay {
     layout: Layout,
     strings: crate::language::StringTable,
-    atlas_origin: (f32, f32),
+    /// Every texture the layout names, packed into one sheet. Held rather than
+    /// reduced to one origin, because a layout may name six - see
+    /// [`Assets::sheet`].
+    sheet: crate::sprite::Sheet,
+    art: &'static oag_title::HudArt,
     hud_line_height: f32,
     small_line_height: f32,
     /// Draws the values, in `PulseHud.fnt`.
@@ -39,7 +43,7 @@ impl std::fmt::Debug for Overlay {
         f.debug_struct("Overlay")
             .field("widgets", &self.layout.widget_count())
             .field("strings", &self.strings.len())
-            .field("atlas_origin", &self.atlas_origin)
+            .field("textures", &self.sheet.len())
             .finish()
     }
 }
@@ -88,7 +92,8 @@ impl Overlay {
         Ok(Some(Self {
             hud_line_height: assets.font.line_height,
             small_line_height: assets.small_font.line_height,
-            atlas_origin: assets.atlas_origin(),
+            sheet: assets.sheet.clone(),
+            art: assets.art,
             strings: assets.strings.clone(),
             layout,
             values,
@@ -102,7 +107,8 @@ impl Overlay {
         Context {
             layout: &self.layout,
             strings: &self.strings,
-            atlas_origin: self.atlas_origin,
+            sheet: &self.sheet,
+            art: self.art,
             hud_line_height: self.hud_line_height,
             small_line_height: self.small_line_height,
             default_border: self.layout.default_border(),

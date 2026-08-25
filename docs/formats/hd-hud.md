@@ -12,9 +12,9 @@ Pinned by `crates/game/tests/hd_hud_ground_truth.rs`; the entry names are
 [`oag_game::hud::compose`](../../crates/game/src/hud/compose.rs). Measured
 2026-08-17 on `hdfury-ps3-eu-dec.iso`, serial `BCES-00664`.
 
-90 rather than higher because **nothing here has reached a shader and no
-executable path has been read**: every number is static reading plus exact
-agreement with shipped data, and the two rules recovered below ([offset
+90 rather than higher because **no executable path has been read**: every number
+is static reading plus exact agreement with shipped data, and the two rules
+recovered below ([offset
 composition](#the-rule-offsetxoffsety-translate-xy-place) and the [texture
 extension](#the-layouts-name-source-art)) are inferred from the data agreeing
 with them rather than from code that implements them. See the [confidence
@@ -22,6 +22,13 @@ rubric](../reverse-engineering/confidence-rubric.md). The textures themselves
 **do** decode - [gtf](gtf.md), landed the same day - and every sprite's source
 rectangle is checked against them, which is what a score of 90 rests on rather
 than the layout arithmetic alone.
+
+**Since 2026-08-25 it also reaches a shader**, and has been compared against a
+frame of the running original for the first time - see [the HUD draws, and each
+sprite out of its own
+texture](#the-hud-draws-and-each-sprite-out-of-its-own-texture) for what that
+turned up and [what is not done](#what-is-not-done) for the four things the
+frame shows that this build still does not.
 
 ```sh
 OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
@@ -300,34 +307,92 @@ report:
 The default skin only, because which skin a race picks is still unread - see
 below.
 
+## The HUD draws, and each sprite out of its own texture
+
+**Since 2026-08-25 an HD race draws its HUD**, checked against a frame of the
+running original rather than against the layout alone. Three things were wrong
+at once, and they were one mistake repeated: `oag_game::hud` held Pulse's answer
+as a `const` and served it to every title. All three are now
+[`HudArt`](../../crates/title/src/hud.rs) rows, which the title packages fill in.
+
+| | Pulse / Pure | HD / Fury |
+| --- | --- | --- |
+| `texture_extension` | `None` - the layouts name shipped entries | `.gtf` |
+| `always_on` | seven widget names | fifteen |
+| `pickup_backdrop_colour` | `HudBGColour` | `None` - drawn as authored |
+
+**A sprite is offset by its own texture's placement.** `Layout::atlas()` returned
+*the* texture a layout samples - true of all nine Pulse and Pure layouts, still
+pinned by `the_layouts_name_at_most_one_texture`, and false here. The sheet held
+that one texture and every sprite took its origin, so on the arcade HUD the 45
+sprites naming one of the other five sampled `HUD_Components.gtf` at coordinates
+meant for a different image: the right rectangle out of the wrong picture, which
+reads as art rather than as an error. The pickup icon came out as a grey box, in
+the right place, at the right size. `Layout::textures()` now names all six, the
+loader builds one sheet from them, and `sprite_draw` looks a sprite's own `src`
+up in it - drawing **nothing** for a texture the sheet does not hold, rather than
+falling back to `(0, 0)`.
+
+`a_drawn_sprite_lands_inside_the_texture_its_own_layout_names` checks the
+*composed* uv of all 1,029 sprites against its own texture's placement in the
+sheet. The older check on the authored rectangle passes either way, which is
+exactly how this hid.
+
+**The extension rule reaches the loader.** `oag_hd::hud::texture_entry` was read
+by the ground-truth test and by nothing on the load path, which read the declared
+name only. `hdHUD.mip` and `detonator_hud2.tga` carry 192 sprites between them
+and are not on the disc under those names.
+
+**Fifteen widgets are drawn whenever the HUD is up**, listed with the frame each
+was identified in on [`oag_hd::hud::ALWAYS_ON`](../../crates/hd/src/hud.rs). The
+discriminator is *visible in a capture of the original*, so what a single frame
+cannot separate - "always on" from "on in this state" - is left out and named
+there rather than guessed at.
+
+Two smaller ones, both the same shape of mistake:
+
+- **The pickup backdrop is not retinted.** Pulse's is a filled white hexagon
+  under a white icon and needs the substitution `oag_pulse::hud::PICKUP_BACKDROP_COLOUR`
+  records; HD's is a hexagon **outline**, and Pulse's quarter-alpha black turned
+  it into a smudge.
+- **The speed value drops its unit when the layout spells the unit out.** HD
+  authors `SpeedBarText`'s placeholder as `string="0 kmh"` - inherited XML - and
+  then a `SpeedBarTextKMH` beside it at `idstring="RC_KMH"`, so taking the
+  placeholder at its word put `0 kmh KM/H` on screen. Confidence 75; the frame
+  crops the speed readout off its right edge, so the recovered text has not been
+  read back off the original.
+
 ## What is not done
 
-- **The pixels exist and nothing draws them.** [`.gtf` is read](gtf.md) as of
-  2026-08-17, so all twelve of the HUD's textures decode and every one of the
-  **1,029 sprites' source rectangles has been checked against the dimensions of
-  the texture it names** - a check that tests both readings at once, and one that
-  turned up the disc's own single overhang (`VoiceCom0`-`VoiceCom7` sampling a
-  62x64 patch from `V="1"` of a 64x64 image, 32 of 56 copies). Per `CLAUDE.md`'s
-  "never invent what the assets already author", no stand-in atlas exists and
-  none should.
-- **One atlas per layout, and HD has six.** This is the blocker on drawing an HD
-  HUD, and it is in `oag_game::hud` rather than in the renderer.
-  `Layout::atlas()` returns *the* texture a layout samples, and
-  `the_layouts_name_at_most_one_texture` measured that as true of all nine Pulse
-  and Pure layouts. HD names **twelve across eighteen layouts, up to six in
-  one**, so `Assets::atlas_origin`, `sprite_draw`'s single origin and `Overlay`
-  all inherit an assumption that does not hold. A sprite has to carry which
-  texture it samples through to the draw call. `oag_render` also has no `.gtf`
-  upload path, but that is the second problem, not the first.
-- **No draw list.** `oag_game::hud::draw_list` selects widgets by Pulse's own
-  names (`SpeedBar`, `Lap`, `PosTag0`). HD's names differ and nothing has
-  checked which are live when. The geometry is read; what drives it is not.
+- **Two runtime tints are unrecovered**, and both are visible in the frame:
+  - `DamageBarBg`'s striped hexagon is **saturated blue** on the original and
+    pale blue-grey in the atlas, with no layout constant matching. Its sibling
+    `DamageBar` carries the **same rect and the same source rectangle** and
+    differs only in colour (red), which is this dialect's own "at most one of
+    these is live" idiom - so it is a second *state* of the shield readout, not
+    a bar over a background, and cropping it the way Pulse's `ShieldBar` is
+    cropped would be an invention. Neither is drawn.
+  - `LapBar0`-`LapBar6` and `PosBar0`-`PosBar7`, the progress arcs around the
+    two panels, are white in the layout and yellow in the frame.
+- **`ShieldBarText` shows `100%` where the original shows `100`**, in the red the
+  layout authors where the original shows grey. Both halves are Pulse's answer
+  applied here and neither has a data-side signal to key off: **both discs
+  author the placeholder as `string="+0"`**, so the `%` is an engine-side
+  measurement off a Pulse reference frame, and the red is HD's own authored
+  colour with the runtime override unread. Recorded rather than fixed on a
+  guess.
+- **`Lap1Image`-`Lap4Image`**, the per-lap time rows, appear as laps are set -
+  their labels are authored as empty strings - and nothing drives them.
 - **No skin selection.** Three skins ship; which one a race picks is a branch in
   a race-manager constructor and is unread.
 - **The split-screen family**, above.
 - **`SDOffsetX`/`SDOffsetY`**, and what the SD presentation is.
-- **No emulator check.** Nothing on this page has been compared against the
-  running original, which is the ceiling on every score here.
+- **Label outlines.** 54 widgets carry a `BorderColor` and the renderer has no
+  outline pass.
+- **The emulator check is one frame of one mode.** `just rpcs3-race` on speed
+  lap, Talon's Junction, craft stationary on the grid, no pickup held, no assist
+  and no warning up. Everything above rests on that single state, which is why
+  the always-on set is deliberately short.
 
 ## See also
 

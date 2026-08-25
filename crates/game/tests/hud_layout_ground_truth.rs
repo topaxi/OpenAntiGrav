@@ -345,7 +345,10 @@ fn no_two_live_widgets_share_an_anchor_on_any_shipped_layout() {
                 default_border: layout.default_border(),
                 layout: &layout,
                 strings: &strings,
-                atlas_origin: (0.0, 0.0),
+                // Empty: this test reads only the label passes, and no sprite
+                // reaches a draw without a texture to sample.
+                sheet: &oag_game::sprite::Sheet::default(),
+                art: oag_pulse::hud::ART,
                 // The real line heights of `PulseHud.fnt` and `small.fnt`. They
                 // only move the anchors vertically and together, so the exact
                 // values do not decide this test - but a wrong one could hide a

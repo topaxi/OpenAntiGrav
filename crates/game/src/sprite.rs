@@ -290,6 +290,22 @@ impl Sheet {
     pub fn is_empty(&self) -> bool {
         self.placed.is_empty()
     }
+
+    /// A sheet with these placements and no pixels, for a test about geometry.
+    ///
+    /// The alternative is fabricating a `.mip` per entry to make the packer put
+    /// an image somewhere known, which is a lot of bytes to say "this one is 200
+    /// rows down".
+    #[cfg(test)]
+    pub(crate) fn placed_at(entries: &[(&str, Placed)]) -> Self {
+        Self {
+            placed: entries
+                .iter()
+                .map(|(name, placed)| ((*name).to_string(), *placed))
+                .collect(),
+            ..Self::default()
+        }
+    }
 }
 
 #[cfg(test)]

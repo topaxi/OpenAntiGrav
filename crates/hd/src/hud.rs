@@ -62,6 +62,91 @@ pub const LAYOUTS: &oag_title::HudLayouts = &oag_title::HudLayouts {
     zone: layouts::ZONE,
 };
 
+/// How HD's HUD sprites reach the screen, as [`oag_title::Title::hud_art`]
+/// carries it.
+///
+/// All three rows disagree with both PSP titles', which is why
+/// [`oag_title::HudArt`] is an axis rather than a constant in the engine.
+pub const ART: &oag_title::HudArt = &oag_title::HudArt {
+    // The layouts name the exporter's input; the disc ships the conversion.
+    // See `texture_entry`, which is this row spelled out with its evidence.
+    texture_extension: Some(TEXTURE_EXTENSION),
+    always_on: ALWAYS_ON,
+    // **Not Pulse's substitution.** HD's `PickupBackground` is a hexagon
+    // *outline* rather than a filled white one, so the icon on it is visible in
+    // the colour the layout authors. See [`ALWAYS_ON`] for the frame.
+    pickup_backdrop_colour: None,
+};
+
+/// The sprite widgets HD draws whenever its HUD is up.
+///
+/// # Read off a frame of the running original
+///
+/// The fifteen below are the widgets visible in a race capture taken through
+/// [`rpcs3-debugger.md`]'s harness (`just rpcs3-race`, 2026-08-24,
+/// `hdfury-ps3-eu-dec.iso`, speed lap on Talon's Junction) with the craft
+/// stationary on the grid, no pickup held, no assist and no warning up. Each
+/// one is identified by matching its authored source rectangle against the
+/// decoded atlas and the shape against the frame:
+///
+/// | Widget | In the frame |
+/// | --- | --- |
+/// | `LapPanel`, `PositionPanel` | the hexagonal panel top left |
+/// | `TimeIcon`, `TimeIconVertBar`, `ClockIcon`, `BestLapImage` | the lap-time cluster bottom left |
+/// | `SpeedBarBG`, `ThrustBarBG`, `SpeedBarOverlay` | the speed bar bottom right |
+/// | `PickupFarBackground`, `PickupAbsorbBG`, `PickupDamageBG`, `PickupBackground` | the pickup bar and its hexagon, top centre |
+/// | `DamageBarBg` | the striped hexagon around it |
+/// | `TotalTimeBG` | the panel at the right edge |
+///
+/// `PositionPanel` is the one not in that frame: the capture is speed lap,
+/// which has no place, and the arcade layout authors `PositionPanel` where this
+/// one authors `TotalTimeBG` - a background of the same kind at the same
+/// corner. Confidence 70 against 90 for the rest, and it is here rather than
+/// left out because the alternative is an arcade HUD whose position readout
+/// floats on nothing.
+///
+/// # What is deliberately left out
+///
+/// **A single frame cannot tell "always on" from "on in this state"**, and the
+/// widgets below are all in a state this capture does not vary:
+///
+/// - `LapBar0`-`LapBar6` and `PosBar0`-`PosBar7`, the progress arcs around the
+///   two panels. They are lit per lap and per place and the tint that lights
+///   them is not authored - every one is white in the layout and yellow in the
+///   frame - so what drives them is unread.
+/// - `DamageBar`, which carries **the same rect and the same source rectangle**
+///   as `DamageBarBg` and differs only in colour. That is this dialect's own
+///   "at most one of these is live" idiom, the one `oag_game::hud` records for
+///   `TotalTime`/`Position` and the thirteen weapon icons - so it is a second
+///   *state* of the shield readout, not a bar over a background, and cropping
+///   it the way Pulse's `ShieldBar` is cropped would be an invention.
+/// - `Lap1Image`-`Lap4Image`, the per-lap time rows, which appear as laps are
+///   set - their labels are authored as empty strings.
+/// - `FrameLeft`/`Middle`/`Right` and their four numbered copies, the info-text
+///   frames; `WrongWayFrame*`; the forward and rear warning icons; `VoiceCom0`-
+///   `VoiceCom7`; `Prox0`-`Prox4`; `AssistIndicator*`; `MissileSight*` and
+///   `LeachBeamSight*`; `ReverseShipPos*`; and Zone's `ZoneBG`,
+///   `CurrentZonePanel` and `ZonePlusLight0`-`ZonePlusLight10`.
+///
+/// [`rpcs3-debugger.md`]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/reverse-engineering/rpcs3-debugger.md
+pub const ALWAYS_ON: &[&str] = &[
+    "LapPanel",
+    "PositionPanel",
+    "TotalTimeBG",
+    "PickupFarBackground",
+    "PickupAbsorbBG",
+    "PickupDamageBG",
+    "DamageBarBg",
+    "PickupBackground",
+    "TimeIcon",
+    "TimeIconVertBar",
+    "ClockIcon",
+    "BestLapImage",
+    "SpeedBarBG",
+    "ThrustBarBG",
+    "SpeedBarOverlay",
+];
+
 /// The eighteen root layouts, by mode and skin.
 ///
 /// **Read off the manifests rather than off the executable**, and the two do not
@@ -159,16 +244,18 @@ pub const ROOTS: &[&str] = &[
 ///
 /// Separators and case are left alone - [`oag_assets::psarc::Archive::read_path`]
 /// folds both.
+///
+/// The rewriting itself is [`oag_title::hud::replace_extension`] and the
+/// extension is [`ART`]'s own row, so the engine applies this rule to HD
+/// without knowing it is HD. This function is that pair spelled out, and is
+/// where the evidence above lives.
 #[must_use]
 pub fn texture_entry(reference: &str) -> String {
-    let cut = reference.rfind('.');
-    let stem = match cut {
-        // Only a *file* extension: a dot in a directory name is not one.
-        Some(at) if !reference[at..].contains(['/', '\\']) => &reference[..at],
-        _ => reference,
-    };
-    format!("{stem}.gtf")
+    oag_title::hud::replace_extension(reference, TEXTURE_EXTENSION)
 }
+
+/// What [`texture_entry`] replaces a reference's extension with.
+pub const TEXTURE_EXTENSION: &str = ".gtf";
 
 /// The twelve textures the eighteen composed layouts sample, as the layouts
 /// spell them.

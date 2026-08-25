@@ -44,7 +44,7 @@ pub mod menu;
 pub mod race;
 
 pub use boot::{BootProfile, BootStep, Provenance};
-pub use hud::HudLayouts;
+pub use hud::{HudArt, HudLayouts};
 pub use loading::Loading;
 pub use menu::{MenuSkin, MenuStrip};
 pub use oag_disc::Platform;
@@ -80,6 +80,10 @@ pub struct Title {
     /// Which layout this title's in-race HUD is read from, per mode. See
     /// [`hud::HudLayouts`].
     pub hud: &'static hud::HudLayouts,
+    /// How this title's HUD sprites reach the screen: their textures, which of
+    /// them are always up, and the one colour this build substitutes. See
+    /// [`hud::HudArt`].
+    pub hud_art: &'static hud::HudArt,
     /// What a race falls back to when the caller names no circuit or team. See
     /// [`race::RaceDefaults`].
     ///
