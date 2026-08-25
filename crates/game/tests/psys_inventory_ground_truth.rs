@@ -373,10 +373,18 @@ mod hd {
     ///
     /// **Not the same number as `crates/assets/tests/pob_ground_truth.rs`'s
     /// `HD_SYSTEMS = 88`** - that counts every `.pob` blob, one per archive
-    /// entry, and six names are duplicated across archives (`WO_TRAIL_HITSHIP`
-    /// is in three, a handful of others in two); this counts each name once.
-    /// The two numbers checking different things and disagreeing by exactly
-    /// the duplicate count is the corroboration, not a bug to reconcile away.
+    /// entry; this counts each name once. `the_inventory_count_is_pinned`
+    /// prints which five names those six extra blobs belong to: three are the
+    /// expected kind, the same effect stored in more than one archive
+    /// (`WO_TRAIL_HITSHIP` in three, `WO_DAMAGE_MILD` and `WO_DEBRIS_SPARKS`
+    /// in two), but two are a different thing entirely - `WO_SHIP_EXPLOSION`
+    /// and `WO_SHIP_COLL_SPARK_DAMAGE` each have a *second* file **inside
+    /// `DATA02` alone** whose internal name field was never changed off the
+    /// original it was copied from: `wo_ship_explosion_lightshafts.pob` still
+    /// names itself `WO_SHIP_EXPLOSION`, and `stesparkstest.pob` - a name that
+    /// reads as a developer test asset - still names itself
+    /// `WO_SHIP_COLL_SPARK_DAMAGE`. The two numbers disagreeing by exactly the
+    /// duplicate count is the corroboration, not a bug to reconcile away.
     const SYSTEMS: usize = 82;
 
     fn image() -> Option<PathBuf> {
@@ -423,20 +431,14 @@ mod hd {
     ///
     /// All seven of [`RACE_EFFECTS`] are on this disc - a superset of the
     /// PSP's four and the PS2's five, per `oag_game::race::RACE_EFFECTS`'s
-    /// own doc comment.
+    /// own doc comment. Kept separate from [`SYSTEMS`]'s tripwire below so a
+    /// changed inventory count fails *that* test rather than masking this
+    /// more serious one under the same red.
     #[test]
     #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
     fn every_wired_effect_is_on_the_disc() {
         let Some(image) = image() else { return };
         let found = scan(&image);
-        assert_eq!(
-            found.len(),
-            SYSTEMS,
-            "hd: found {} distinct particle system(s), expected {SYSTEMS} - a new or \
-             renamed one needs bucketing (see this test's doc comment) before this \
-             number moves",
-            found.len()
-        );
         for name in RACE_EFFECTS {
             assert!(
                 found.contains_key(name),
@@ -444,10 +446,35 @@ mod hd {
             );
         }
         println!(
-            "hd: {} distinct particle system(s) across 7 archives, all {} wired \
-             names present",
+            "hd: all {} wired names present across {} distinct particle system(s)",
+            RACE_EFFECTS.len(),
+            found.len()
+        );
+    }
+
+    /// The tripwire the PSP and PS2 discs get too: a newly mounted archive or
+    /// a renamed effect changes this number and fails here rather than
+    /// passing unnoticed.
+    #[test]
+    #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+    fn the_inventory_count_is_pinned() {
+        let Some(image) = image() else { return };
+        let found = scan(&image);
+        let duplicated: Vec<(&String, &Vec<&str>)> = found
+            .iter()
+            .filter(|(_, archives)| archives.len() > 1)
+            .collect();
+        println!(
+            "hd: {} name(s) stored in more than one archive: {duplicated:?}",
+            duplicated.len()
+        );
+        assert_eq!(
             found.len(),
-            RACE_EFFECTS.len()
+            SYSTEMS,
+            "hd: found {} distinct particle system(s), expected {SYSTEMS} - a new or \
+             renamed one needs bucketing (see this test's doc comment) before this \
+             number moves",
+            found.len()
         );
     }
 

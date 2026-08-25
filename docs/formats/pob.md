@@ -392,11 +392,17 @@ WO_ROCKET_EXPLO
 | PS2 `WADS2.WAD` | 41 | 90 | `WO_ROCKET_EXPLO`, 7 |
 | HD's 7 PSARC archives | 88 | 249 | `WO_SHIP_EXPLOSION`, 12 |
 
-HD's 88 is every `.pob` blob across all seven archives, not deduplicated -
-six names are stored more than once (`WO_TRAIL_HITSHIP` in three), so the
-distinct count is 82. `crates/game/tests/psys_inventory_ground_truth.rs`'s
-`mod hd` checks that number against the disc as its own tripwire, separately
-from this corpus check.
+HD's 88 is every `.pob` blob across all seven archives, not deduplicated - the
+distinct count is 82. Five names account for the six extra blobs: three are
+the same effect shipped in more than one archive (`WO_TRAIL_HITSHIP` in
+three, `WO_DAMAGE_MILD` and `WO_DEBRIS_SPARKS` in two), but two are a second
+file **inside `DATA02` alone** whose internal name was never changed off the
+one it was copied from - `wo_ship_explosion_lightshafts.pob` still names
+itself `WO_SHIP_EXPLOSION`, and `stesparkstest.pob` still names itself
+`WO_SHIP_COLL_SPARK_DAMAGE`. `crates/game/tests/psys_inventory_ground_truth.rs`'s
+`mod hd` checks the distinct count against the disc as its own tripwire,
+separately from this corpus check, and prints which names those extra blobs
+belong to.
 
 Every one of those 166 records passes the same invariants: the root's name
 is the resource's own; the render-mode index lands inside the eight-entry

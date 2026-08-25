@@ -35,8 +35,16 @@
   wired) into "no trigger recovered, with why" or a genuinely new trigger,
   one name at a time against the executable - not by inference from an
   already-established "that weapon/mode isn't built" fact, which is not the
-  same as reading *that name's own* trigger. `numbers.pob`, `stesparkstest.pob`
-  and `test_bombspikes.pob` look like disc-authored debug/test assets rather
-  than shipped effects and are a reasonable place to start, since confirming
-  that is a small, bounded Ghidra string search rather than a weapon-system
-  read.
+  same as reading *that name's own* trigger. `numbers.pob` and
+  `test_bombspikes.pob` look like disc-authored debug/test assets rather than
+  shipped effects and are a reasonable place to start, since confirming that
+  is a small, bounded Ghidra string search rather than a weapon-system read.
+  `stesparkstest.pob` is confirmed already, incidentally, while measuring the
+  inventory count above: its internal `SYSP` name field is not `STESPARKSTEST`
+  at all but `WO_SHIP_COLL_SPARK_DAMAGE` - a leftover copy of the wired
+  collision spark under a test filename, not a fourth debug name to chase.
+  `DATA02` carries a second such leftover, `wo_ship_explosion_lightshafts.pob`
+  internally named `WO_SHIP_EXPLOSION`, which is a `NO_TRIGGER_RECOVERED`-style
+  entry in its own right once someone's ready to write one (it is already
+  known to be the same name as the wired-but-unbuilt `WO_SHIP_EXPLOSION`
+  reason, just a second file, not a second effect).
