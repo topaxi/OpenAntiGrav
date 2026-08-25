@@ -486,6 +486,7 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
             border: Some(label.border.unwrap_or(cx.default_border)),
             align: label.align,
             text,
+            wrap_width: None,
         };
         if small {
             frame.small_text.push(draw);

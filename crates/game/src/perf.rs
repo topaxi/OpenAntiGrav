@@ -627,6 +627,7 @@ pub fn draw_list(
             border: None,
             align: Align::Right,
             text,
+            wrap_width: None,
         });
     }
 

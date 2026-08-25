@@ -125,6 +125,19 @@ pub struct Text {
     pub align: String,
     /// Whether the widget starts hidden.
     pub start_enabled: bool,
+    /// The pixel width to wrap at, when `widthlimited="true"` is set.
+    ///
+    /// Taken from the nearest enclosing `Viewport`'s own `width` - the only
+    /// number the XML gives a `widthlimited` text to wrap against. `None`
+    /// when `widthlimited` is absent or false, and also when it is true but
+    /// nothing wraps the widget in a `Viewport` (nothing to wrap against).
+    /// `Show Logo`'s `USLegalText`/`BOOT_LEGAL` is the one measured case:
+    /// `Viewport` gives `width="400"`, `x="40"` matching the text's own `x`,
+    /// so viewport-width and width-minus-inset agree and cannot be told
+    /// apart from this one sample. Confidence 60 on "viewport width, not
+    /// inset" as the general rule; 95 that it is right for this screen. See
+    /// `docs/architecture/frontend-boot.md`.
+    pub wrap_width: Option<f32>,
 }
 
 /// One `Redirect`: a button, and the screen it goes to.
@@ -357,7 +370,7 @@ impl Screens {
         };
 
         for child in &node.children {
-            self.collect_widgets(&mut screen, child);
+            self.collect_widgets(&mut screen, child, None);
         }
 
         self.screens.push(screen);
@@ -383,7 +396,13 @@ impl Screens {
     /// gap costs nothing on the one case this build actually draws through it.
     /// Confidence **60** on "no offset" as the right answer generally; **95**
     /// that it is a correct no-op for that specific screen.
-    fn collect_widgets(&self, screen: &mut Screen, child: &Node) {
+    ///
+    /// **`width` is not a no-op**, though: it is the one number a
+    /// `widthlimited="true"` text inside the `Viewport` needs to wrap
+    /// against, so `viewport_width` carries the nearest enclosing
+    /// `Viewport`'s own `width` down for [`Self::text_from_node`] to read.
+    /// `None` outside any `Viewport`. See [`Text::wrap_width`].
+    fn collect_widgets(&self, screen: &mut Screen, child: &Node, viewport_width: Option<f32>) {
         match child.name.to_ascii_lowercase().as_str() {
             "image" => match child.value("src") {
                 // A `src` names a texture; a bare colour is a backdrop.
@@ -409,13 +428,16 @@ impl Screens {
                 }
             }
             "movie" => screen.movies.push(Movie::from_node(child)),
-            "text" => screen.texts.push(self.text_from_node(child)),
+            "text" => screen
+                .texts
+                .push(self.text_from_node(child, viewport_width)),
             "redirect" => screen.redirects.push(redirect_from_node(child)),
             "displaylanguages" => screen.display_languages = true,
             "menu" => screen.menu = Some(self.menu_from_node(child)),
             "viewport" => {
+                let width = self.number(child.value("width"));
                 for grandchild in &child.children {
-                    self.collect_widgets(screen, grandchild);
+                    self.collect_widgets(screen, grandchild, width);
                 }
             }
             _ => {}
@@ -453,7 +475,7 @@ impl Screens {
         }
     }
 
-    fn text_from_node(&self, node: &Node) -> Text {
+    fn text_from_node(&self, node: &Node, viewport_width: Option<f32>) -> Text {
         Text {
             name: node.attr("name").map(str::to_string),
             idstring: node.value("idstring").map(str::to_string),
@@ -468,6 +490,11 @@ impl Screens {
                 .unwrap_or(0xffff_ffff),
             align: node.value("align").unwrap_or("left").to_string(),
             start_enabled: node.flag("StartEnabled").unwrap_or(true),
+            wrap_width: node
+                .flag("widthlimited")
+                .unwrap_or(false)
+                .then_some(viewport_width)
+                .flatten(),
         }
     }
 

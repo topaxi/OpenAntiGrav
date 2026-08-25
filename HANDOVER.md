@@ -588,6 +588,22 @@ writers in it at the same time:
   `git add <paths> && git-commit` silently sweeps whatever another writer staged
   in between; it has happened twice. Check `git diff --cached --name-only`
   immediately before every commit.
+- **`git stash push -- <pathspec>` has the same failure, one level earlier:
+  it captures a listed file's *entire* working-tree diff, not the hunks one
+  writer actually made.** 2026-08-25. A session isolating its own edits into a
+  worktree via `git stash push -u -- <its files>` named `menu.rs` among them;
+  another session was concurrently mid-refactor in that same file, uncommitted.
+  The stash swept both diffs off disk in one move, and popping it in the
+  worktree, then discarding the mixed result down to just the first session's
+  own hunk, left the second session's work recoverable only from the stash
+  commit's blob (`git show <sha>:<path>`) - not restored on disk anywhere, and
+  the main checkout was left with that file's *other* uncommitted edits
+  (test/data files referencing the now-stashed API) pointing at a version of
+  it that no longer matched. **Before stashing a file by pathspec while
+  another session might be touching it, diff it first** (`git diff -- <path>`)
+  and check whether the whole diff is actually yours; if not, this needs a
+  worktree isolating *that session's* edits instead, or a message to them
+  before touching the file at all - not a stash-and-hope.
 - **Do not run `just` or `cargo fmt --all` while anything else is editing.** A
   gate run taken mid-edit reports failures that do not exist, and `cargo fmt
   --all` rewrites files another writer holds open. Scope to `-p <crate>`.

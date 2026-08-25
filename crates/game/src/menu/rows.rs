@@ -83,6 +83,7 @@ pub(super) fn draw(
                 border: None,
                 align: Align::Left,
                 text: "!".to_string(),
+                wrap_width: None,
             });
         }
         out.push(Draw::Text {
@@ -99,6 +100,7 @@ pub(super) fn draw(
             border: None,
             align: Align::Left,
             text: entry.label().to_string(),
+            wrap_width: None,
         });
 
         // The right-hand column: a setting's value, or what a button is bound
@@ -128,6 +130,7 @@ pub(super) fn draw(
                 border: None,
                 align: Align::Right,
                 text,
+                wrap_width: None,
             });
         }
     }
@@ -144,6 +147,7 @@ pub(super) fn draw(
             border: None,
             align: Align::Left,
             text: format!("! {message}"),
+            wrap_width: None,
         });
     }
 

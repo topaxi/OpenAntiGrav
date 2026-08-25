@@ -310,8 +310,7 @@ pub enum Draw {
         /// Which frame of the movie to show, counting from zero.
         ///
         /// Wraps on a movie that loops, so this is what a caller holding the
-        /// whole movie - a headless capture reading a
-        /// [`crate::movie::FrameStore`] - asks for.
+        /// whole movie - a headless capture reading a [`crate::movie::FrameStore`] - asks for.
         frame: usize,
         /// How far playback has got, counting every loop.
         ///
@@ -351,14 +350,15 @@ pub enum Draw {
         /// before the two HUD fonts turned up: those two bake an outline into their
         /// atlas and distinguish it only by grey level, so drawing them without a
         /// separate border colour fills the whole silhouette and a digit becomes a
-        /// box. The three menu fonts and the built-in glyphs carry a constant mask,
-        /// so this changes nothing for them whatever it is set to. See
-        /// [`crate::font::Atlas::luma`].
+        /// box. The three menu fonts and the built-in glyphs carry a constant mask, so
+        /// this changes nothing for them whatever it is set to. See [`crate::font::Atlas::luma`].
         border: Option<[f32; 4]>,
         /// Alignment about `x`.
         align: Align,
         /// The text.
         text: String,
+        /// Wrap width from `widthlimited="true"`; `None` is one line, however wide.
+        wrap_width: Option<f32>,
     },
 }
 

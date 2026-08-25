@@ -172,6 +172,7 @@ impl Frontend {
                 border: None,
                 align: Align::Centre,
                 text: states::LAUNCH_GAME.to_ascii_uppercase(),
+                wrap_width: None,
             });
         }
         out
@@ -252,6 +253,7 @@ impl Frontend {
                 border: None,
                 align: Align::Left,
                 text: (*line).to_string(),
+                wrap_width: None,
             });
         }
         out.push(Draw::Text {
@@ -262,6 +264,7 @@ impl Frontend {
             border: None,
             align: Align::Left,
             text: "PRESS X TO CONTINUE".to_string(),
+            wrap_width: None,
         });
     }
 
@@ -289,6 +292,7 @@ impl Frontend {
                 self.player.frames(),
                 if has_picture { "" } else { " (NO PICTURE)" }
             ),
+            wrap_width: None,
         });
     }
 
@@ -379,6 +383,7 @@ impl Frontend {
                 border: None,
                 align: Align::parse(&text.align),
                 text: self.strings.get_or_id(id).to_string(),
+                wrap_width: text.wrap_width,
             });
         }
         out
@@ -515,6 +520,7 @@ impl Frontend {
                 border: None,
                 align: Align::parse(&text.align),
                 text: body.to_string(),
+                wrap_width: text.wrap_width,
             });
         }
 
@@ -553,6 +559,7 @@ impl Frontend {
                 border: None,
                 align,
                 text: language.native_name.clone(),
+                wrap_width: None,
             });
         }
     }

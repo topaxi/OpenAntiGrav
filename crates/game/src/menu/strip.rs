@@ -103,6 +103,7 @@ pub(super) fn draw(
             border: None,
             align: Align::Left,
             text: label.to_string(),
+            wrap_width: None,
         });
         x += measure(label) * scale + gap;
     }

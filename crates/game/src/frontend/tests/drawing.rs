@@ -47,6 +47,52 @@ fn show_logo_draws_the_pulse_logo_and_its_press_start_line() {
     assert!(!draws.iter().any(|d| matches!(d, Draw::Video { .. })));
 }
 
+/// `BOOT_LEGAL`'s `Viewport`-derived `wrap_width` survives `draw_screen`
+/// unwrapped - the actual line-splitting is `crate::render`'s job, since only
+/// it holds the font metrics to split correctly. This is its own fixture
+/// rather than [`XML`]'s, which deliberately omits the `Viewport` (see its own
+/// comment) to keep the shared boot-sequence tests free of it.
+#[test]
+fn a_widthlimited_text_carries_its_wrap_width_into_the_draw_list() {
+    let screens = Screens::from_xml(
+        r#"
+<Screen>
+  <Screen type="FEMain" name="Top FE Screen">
+    <Screen name="FE Screen">
+      <Screen name="Show Logo">
+        <Viewport>
+          <Values x="40" y="0" height="480" width="400"></Values>
+          <Text name="USLegalText" delay="0" transition="0">
+            <Values align="left" idstring="BOOT_LEGAL" font="small" scale="0.7" x="40" y="250" widthlimited="true" color="0x7FFFFFFF"></Values>
+          </Text>
+        </Viewport>
+      </Screen>
+    </Screen>
+  </Screen>
+</Screen>
+"#,
+    );
+    let frontend = Frontend::new(
+        screens,
+        StringTable::default(),
+        Vec::new(),
+        Vec::new(),
+        0,
+        false,
+    );
+    let draws = frontend.draw_screen("Show Logo");
+    let legal = draws
+        .iter()
+        .find_map(|d| match d {
+            Draw::Text {
+                text, wrap_width, ..
+            } if text == "BOOT_LEGAL" => Some(*wrap_width),
+            _ => None,
+        })
+        .expect("Show Logo draws BOOT_LEGAL");
+    assert_eq!(legal, Some(400.0));
+}
+
 #[test]
 fn circle_does_not_select() {
     let mut frontend = frontend(300);
