@@ -1408,7 +1408,12 @@ Applied, from
 - **Collision mesh representation**: see
   [collision](../ghidra/functions/psp-pulse-usa/collision.md), now decoded.
 - Exact `pass_mask` bit meanings. Partial: `0x800` means the batch has its own
-  display list, `0xc0` relates to alpha, `0x2000` to an extra pass.
+  display list, `0xc0` relates to alpha, `0x2000` to an extra pass. `0x1000` is
+  now decoded - it is the mesh-layer discriminator between draw keys
+  `0x45000000` and `0x4a000000` (only consulted when the mesh's own key is
+  already `0x45000000`), confirmed live in `Mesh_CompileBatchSet` (`0x0892f35c`)
+  - see [draw-order.md](../rendering/draw-order.md) and
+  [mesh-draw.md](../ghidra/functions/psp-pulse-usa/mesh-draw.md#the-layer-derivation-and-what-it-is-worth).
 - Whether the 16-byte file header carries anything beyond the version.
 - The `.dat` format paired with ships.
 - ~~**PS2 mesh batches use a vertex type this decoder does not recognise.**~~ -

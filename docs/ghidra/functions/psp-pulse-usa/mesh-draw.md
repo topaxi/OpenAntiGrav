@@ -993,7 +993,11 @@ replays **list A**, which is correct on both paths. `0x1232` is **not** a fully
 decoded value: `& 0x0200` is what classifies these transparent, `& 0x0020` is
 set - which by this page's own `if ((*batch & 0x20) == 0) Gu_Enable(5); else
 Gu_Disable(5)` means **`GU_CULL_FACE` is disabled and the plume is drawn
-two-sided** - and `& 0x1000` is undecoded here. Read off
+two-sided**. `& 0x1000` was undecoded when this paragraph was written
+(2026-08-09); it no longer is - see "The layer derivation, and what it is
+worth" further down this page, decoded 2026-08-18. It is the plume's draw-layer
+bit, set here as on every batch whose mesh-level key already resolves to
+`0x45000000`. Read off
 `data/images/pulse-psp-usa.chd` through `oag_formats::vex::mesh_batches`. The
 same dump shows the authored normals are already unit to within the 8-bit
 quantisation (`|n|` in `[0.9923, 1.0000]` across all 32 batches), so the
@@ -1998,3 +2002,37 @@ branch never firing on this disc. Of 5,610 transparent batches, 63.7 % / 36.3 %.
 So the rule separates a real two-thirds/one-third split rather than naming a
 field nothing distinguishes by - which is the check that was run before any of
 it reached the renderer.
+
+**Independently confirmed 2026-08-25, and pinned to the batch rather than the
+mesh.** `Mesh_CompileBatchSet` (`0x0892f35c`) carries the identical four-test
+rule a second time, decompiled directly rather than inferred from
+`Mesh_InitFromPayload`'s side:
+
+```c
+if ((mesh+0x4c & 0xfff00000) == 0x45000000) {   // only when the mesh's own key already says so
+    if ((batch_flags_byte & 8) == 0) {
+        if ((batch->pass_mask & 0x80) == 0) {
+            if ((batch->pass_mask & 0x2000) == 0 || (batch->pass_mask & 0x40) == 0) {
+                layer = (batch->pass_mask & 0x1000) ? 0x45000000 : 0x4a000000;
+            } else { layer = 0x4a000000; }
+        } else { layer = 0x4a000000; }
+    } else { layer = 0x31000000; }
+}
+```
+
+Confirms the tests read `batch->pass_mask`, the same `+0x00` field
+[`vex.md`](../../../formats/vex.md) documents, not a mesh-level flags word -
+this is where a mesh whose own key is the ambiguous `0x45000000` gets split
+batch by batch between the two real layers. This retires this page's own
+"`& 0x1000` is undecoded here" note in the plume section above, and answers
+what the bit means on Moa Therma's magstrip:
+`crates/render/tests/magstrip_ground_truth.rs`'s `OVERLAY_PASS = 0x0021` (no
+`0x1000`, the far-LOD copy) versus the base strip's `0x1021`/`0x1001` (`0x1000`
+set) is exactly this bit, and it means the two copies are enqueued on
+*different* layers - base strip on `0x45000000`, overlay on the default
+`0x4a000000` - not just drawn in file order. It changes nothing about the fixed
+artifact: the original never has both visible at once (the overlay's own PVS
+section keeps it out of the racing view), so the layer split was never what
+resolved the z-fight - authored-section placement was, already landed. The
+bit's role elsewhere (splitting a real 66.4/33.6 mesh population) stands
+independently of what it happens to do for this one asset.
