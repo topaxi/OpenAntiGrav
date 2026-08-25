@@ -224,9 +224,18 @@ that would be needed to fix it; recorded rather than silently accepted.
   parameters are re-interpolated every frame from where the camera sits in the fog
   volume. A linear ramp is correct and must not be "fixed" into a curve. See
   [`fog.md`](../ghidra/functions/psp-pulse-usa/fog.md).
-- **`cloudCube` `0x3d8`, `cloudGroup` `0x3d9`, `weatherPos` `0x3da`.** Present in
-  the census - `05_Track` alone authors 5 clouds and 3 cloud groups, and
-  `weatherPos` runs 1 to 21 per track with a zero-length payload - and undecoded.
+- **`cloudCube` `0x3d8`, `cloudGroup` `0x3d9` are undecoded.** Present in the
+  census - `05_Track` alone authors 5 clouds and 3 cloud groups.
+- **`weatherPos` `0x3da`'s registration is found, and it is a dead end.**
+  `WeatherPos_RegisterClass` (`0x0892c684`) registers class `0x3da` like every
+  other environment class, but the handler that survives its own
+  double-written descriptor is a trivial self-address-returning thunk - the
+  same dead end already found for `ParticleSystem`'s slot. No node payload,
+  Maya name, or `PI_Track` attribute says which of `WO_RAIN`/`WO_SNOW`/
+  `WO_MODESTO_STEAM_A`/`WO_BLUE_WELDER` a given instance plays, or whether a
+  track's 1 to 21 zero-length-payload instances share one effect or several
+  do - still open, detail in
+  [`weatherpos.md`](../ghidra/functions/psp-pulse-usa/weatherpos.md).
 - **PS2 parity.** Not checked. Pulse's class IDs do not carry to Pure, and the
   PS2 build's numbering is unconfirmed.
 
