@@ -93,6 +93,7 @@ use crate::ByteOrder;
 
 pub mod material;
 mod stride;
+mod surface;
 pub mod vertex_decl;
 
 pub use material::{Blend, Factor, Material, Transparency};
@@ -112,7 +113,35 @@ const HEADER_LEN: usize = 0x40;
 const SUBMESH_LEN: usize = 0x80;
 
 /// First submesh descriptor, relative to its chunk.
+///
+/// Which is `SURFACE_BASE + SURFACE_LEN`, because the descriptors belong to
+/// the *surface* rather than to the chunk. See [`SURFACE_BASE`].
 const SUBMESH_BASE: usize = 0x60;
+
+/// Where a chunk's first surface record starts, relative to the chunk.
+///
+/// **A chunk header is 0x20 bytes and then a surface record**, and this is the
+/// finding that turned a quarter of the disc's geometry from missing into
+/// drawn. Every field this module used to call a chunk field - the material at
+/// `+0x20`, the bias at `+0x30`, the scale at `+0x40`, the submesh count at
+/// `+0x50`, the vertex declaration at `+0x58` and the descriptors at `+0x60` -
+/// is at `+0x00`, `+0x10`, `+0x20`, `+0x30`, `+0x38` and `+0x40` of a record
+/// that recurs elsewhere in the file for every surface past the first.
+/// Confirmed structurally: the first entry of every chunk's surface table
+/// points at `chunk + 0x20` on **all 41,861 chunks on the disc**.
+///
+/// See `docs/formats/rcsmodel.md`, "A chunk names one material here and the
+/// engine reads several".
+const SURFACE_BASE: usize = 0x20;
+
+/// Bytes of one surface record, before its own submesh descriptors.
+const SURFACE_LEN: usize = 0x40;
+
+/// A chunk's surface count, relative to the chunk. A `u16`.
+const SURFACE_COUNT: usize = 0x10;
+
+/// A chunk's table of surface-record offsets, relative to the chunk.
+const SURFACE_TABLE: usize = 0x18;
 
 /// Bytes of a material record this module reads.
 ///
@@ -455,6 +484,12 @@ pub struct Mesh {
     /// and the offset of each attribute, both of which this module used to
     /// solve for.
     pub decl: Option<VertexDecl>,
+    /// The chunk's surfaces past this one, each a `Mesh` in its own right.
+    ///
+    /// Empty on the 76 % of chunks that declare a single surface, and on every
+    /// element of this list itself - a surface has no surfaces. Walk it through
+    /// [`Self::surfaces`] rather than directly, so the first one is not missed.
+    pub extra_surfaces: Vec<Mesh>,
 }
 
 /// Which of the two shapes a chunk's header takes, out of its `+0x06` byte.
@@ -591,85 +626,6 @@ impl Model {
 }
 
 impl Mesh {
-    /// Reads one chunk header and its submesh descriptors.
-    fn parse(data: &[u8], at: usize) -> Result<Self> {
-        let end = at + SUBMESH_BASE;
-        if end > data.len() {
-            return Err(Error::OutOfBounds {
-                what: "a mesh chunk header",
-                end,
-                len: data.len(),
-            });
-        }
-        let f3 = |off: usize| {
-            [
-                ByteOrder::Big.f32(data, at + off),
-                ByteOrder::Big.f32(data, at + off + 4),
-                ByteOrder::Big.f32(data, at + off + 8),
-            ]
-        };
-        let layout = match data[at + 0x06] {
-            LAYOUT_DESCRIBED => Layout::Described,
-            LAYOUT_INLINE => Layout::Inline,
-            other => return Err(Error::UnknownChunkLayout { got: other, at }),
-        };
-        let submeshes = match layout {
-            Layout::Described => {
-                let count = ByteOrder::Big.u32(data, at + 0x50) as usize;
-                let last = at + SUBMESH_BASE + count * SUBMESH_LEN;
-                if last > data.len() {
-                    return Err(Error::OutOfBounds {
-                        what: "the submesh descriptors",
-                        end: last,
-                        len: data.len(),
-                    });
-                }
-                (0..count)
-                    .map(|i| {
-                        let b = at + SUBMESH_BASE + i * SUBMESH_LEN;
-                        SubMesh {
-                            format: std::array::from_fn(|k| data[b + k]),
-                            vertex_count: ByteOrder::Big.u16(data, b + 0x08) as usize,
-                            vertex_offset: ByteOrder::Big.u32(data, b + 0x18) as usize,
-                            index_count: ByteOrder::Big.u16(data, b + 0x0a) as usize,
-                            index_offset: ByteOrder::Big.u32(data, b + 0x10) as usize,
-                        }
-                    })
-                    .collect()
-            }
-            Layout::Inline => {
-                if at + 0x6e > data.len() {
-                    return Err(Error::OutOfBounds {
-                        what: "an inline chunk's buffer fields",
-                        end: at + 0x6e,
-                        len: data.len(),
-                    });
-                }
-                vec![SubMesh {
-                    format: std::array::from_fn(|k| data[at + SUBMESH_BASE + k]),
-                    vertex_count: ByteOrder::Big.u16(data, at + 0x6c) as usize,
-                    vertex_offset: ByteOrder::Big.u32(data, at + 0x54) as usize,
-                    index_count: ByteOrder::Big.u32(data, at + 0x58) as usize,
-                    index_offset: ByteOrder::Big.u32(data, at + 0x5c) as usize,
-                }]
-            }
-        };
-
-        let decl = (layout == Layout::Described)
-            .then(|| VertexDecl::parse(data, ByteOrder::Big.u32(data, at + 0x58) as usize))
-            .flatten();
-
-        Ok(Self {
-            hash: ByteOrder::Big.u32(data, at),
-            bias: f3(0x30),
-            scale: f3(0x40),
-            material: ByteOrder::Big.u32(data, at + 0x20),
-            layout,
-            submeshes,
-            decl,
-        })
-    }
-
     /// Dequantises one submesh's positions at a given stride.
     ///
     /// The positions are in the `.vex` node's own space, so a caller still

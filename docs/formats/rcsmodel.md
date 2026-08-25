@@ -1066,51 +1066,88 @@ picture. `.gtf` closed it; the stopgap is gone.
    leaving it opaque, and `Report::untextured` counts it so a partly-textured
    circuit cannot read as a working one.
 
-## A chunk names ONE material here and the engine reads SEVERAL
+## A chunk header is 0x20 bytes and then a SURFACE record
 
-**This is the largest known gap between what this parser reads and what the
-game draws, found 2026-08-25 and not yet acted on.**
+**This closed the largest known gap between what this parser read and what the
+game drew, on 2026-08-25.** Before it, `Mesh::material` was one index per chunk
+and the whole chunk was painted with it; a quarter of the disc's chunks name
+several materials, and the geometry belonging to the others was drawn by
+nothing at all.
 
-`Mesh::material` is the index at a chunk's `+0x20`, one per chunk, and the
-whole chunk is painted with it. The engine does not do that. It also walks a
-**per-chunk surface table**, and indexes the material table per *surface*:
+The engine walks a **per-chunk surface table** and indexes the material table
+per *surface* - `0x003faf00` and `0x003fb330` both do
+`materialTable[*(int *)surface]`, and the record it points at has the same
+shape as the tail of a chunk header:
 
 ```text
-chunk +0x10  u16   surface count
-chunk +0x18  u32   surface offset table
-surface +0x00  u32  material index
+chunk   +0x06  u8    layout, shared by every surface
+chunk   +0x10  u16   surface count
+chunk   +0x18  u32   surface offset table
+chunk   +0x20        SURFACE RECORD 0, 0x40 bytes:
+surface  +0x00  u32   material index
+surface  +0x10  f32x3 bias
+surface  +0x20  f32x3 scale
+surface  +0x30  u32   submesh count      (Described)
+surface  +0x34  u32   -> its own descriptors, always +0x40
+surface  +0x38  u32   -> vertex declaration
+surface  +0x40        its 0x80-byte submesh descriptors
 ```
 
-Both `0x003faf00` and `0x003fb330` use it as `materialTable[*(int *)surface]`,
-and every one of the disc's 1,813 surface records read so far has a first word
-below its file's material count.
+So every field this module used to call a chunk field - the material at
+`+0x20`, the bias at `+0x30`, the scale at `+0x40`, the count at `+0x50`, the
+declaration at `+0x58`, the descriptors at `+0x60` - is `+0x00`, `+0x10`,
+`+0x20`, `+0x30`, `+0x38` and `+0x40` of a record that recurs elsewhere in the
+file for every surface past the first.
 
-**Measured over all 615 models and 41,861 chunks on the disc**
-(`crates/render/examples/hd_surfaces.rs`):
+**A surface is therefore a `Mesh`.** `rcsmodel::Mesh::extra_surfaces` holds the
+rest and `Mesh::surfaces` walks all of them, so every reader written against a
+chunk works on a surface unchanged - which is what let 213 call sites stay as
+they were.
 
-- **9,891 chunks - 24% - declare more than one surface.**
-- **All 9,891 name more than one material between their surfaces**, and in
-  every case the chunk's own `+0x20` is the *first* surface's material.
-- So a quarter of the disc's geometry is being painted with the first of
-  several authored materials.
+### What the disc says
+
+Pinned by `crates/formats/tests/rcsmodel_surface_ground_truth.rs`, over all 643
+models and 41,861 chunks:
+
+| | |
+| --- | --- |
+| chunks whose surface table opens at `chunk + 0x20` | **41,861 of 41,861** |
+| chunks declaring more than one surface | **9,891 (24%)** |
+| ...of those, naming a material other than their first's | **9,891, all of them** |
+| submeshes on first surfaces / on the rest | 50,873 / **25,972** |
+| triangles on first surfaces / on the rest | 17,505,484 / **7,111,578 (+40.6%)** |
+| extra surfaces naming a material outside the table | **0** |
 
 Amphiseum's chunk 9 declares eleven surfaces naming materials
-`[6, 7, 626, 633, 10, 635, 12, 13, 14, 15, 16]`; this reader paints all of it
-with 6.
+`[6, 7, 626, 633, 10, 635, 12, 13, 14, 15, 16]`.
 
-**The obvious fix does not work, and that is the open part.** A surface is not
-a submesh: of those 9,891 chunks, only **503** have one submesh per surface and
-9,388 do not. So the surface record must carry its own geometry range, and
-which of its remaining words that is has not been decoded. That is the next
-step, and it is a decode job on the surface record rather than a change to how
-materials are looked up.
+**Drawing them is what the renderer now does**, in both of
+`oag_render::mesh::rcs`' passes. On Talon's Junction that took the scene from
+471,024 triangles to **809,247** and 871 draw calls to 1,792; on Anulpha Pass
+44% of the start-line frame changed, and the barrier hex panelling and the
+silver structure on the right of the reference frame appeared for the first
+time.
 
-**Related, and from the same pass**: byte `+0x07` of a chunk - the `kk` that
+**A surface is not a submesh**, which is why the first attempt at this - assume
+one submesh per surface and reassign materials - would have been wrong: only
+503 of the 9,891 multi-surface chunks have equal counts. Each surface carries
+its own descriptors, and that is what makes them geometry rather than a
+relabelling.
+
+**Two guards worth keeping.** A surface that will not read is skipped rather
+than failing its chunk: the first one is the chunk itself and its failure is a
+real error, but a later one failing costs that surface alone. And the node
+pass's `submesh_fits` box test is applied **only to the chunk's own surface** -
+a later surface has its own bias and is not inside the node's authored box in
+the first place, so testing it there would drop it as a stray for being exactly
+where it belongs.
+
+**Related, and still open**: byte `+0x07` of a chunk - the `kk` that
 [`LAYOUT_DESCRIBED`](../../crates/formats/src/rcsmodel.rs) records as taking
 `01` and `02` "for a reason nothing here has distinguished" - **is
 distinguished by the engine**, which branches on
 `*(char *)(chunk + 7) == '\x02'`. On Talon's Junction it is `1` on 913 chunks
-and `2` on 70.
+and `2` on 70. What the branch does is unread.
 
 ## What is still open
 

@@ -1,12 +1,8 @@
-//! Scratch probe: the per-chunk surface table at `+0x10`/`+0x18` that
-//! `oag_formats::rcsmodel` does not read, and whether a chunk's surfaces ever
-//! name more than one material.
+//! Scratch probe: how much of the disc's geometry lives in a chunk's surfaces
+//! past the first, and how often those name a different material.
 //!
-//! `Mesh::material` is one index per chunk, taken from `+0x20`. The engine also
-//! walks a surface table and indexes the material table per *surface*
-//! (`0x003faf00`, `0x003fb330`). If a chunk's surfaces always agree with its
-//! `+0x20`, nothing is lost; if they disagree, part of that chunk is being
-//! painted with the wrong material.
+//! See `docs/formats/rcsmodel.md`, "A chunk names one material here and the
+//! engine reads several".
 
 use oag_formats::rcsmodel;
 
@@ -14,13 +10,10 @@ fn main() -> anyhow::Result<()> {
     let image = std::env::args()
         .nth(1)
         .unwrap_or_else(|| "data/images/hdfury-ps3-eu-dec.iso".into());
-    let mut chunks_total = 0usize;
-    let mut multi = 0usize;
-    let mut disagree = 0usize;
-    let mut mixed = 0usize;
-    let mut models = 0usize;
-    let mut worst: Vec<(usize, String, u32, Vec<u32>)> = Vec::new();
-    let (mut aligned, mut misaligned) = (0usize, 0usize);
+    let only = std::env::args().nth(2).unwrap_or_default();
+    let (mut models, mut chunks, mut multi, mut mixed) = (0usize, 0usize, 0usize, 0usize);
+    let (mut tri_first, mut tri_extra) = (0u64, 0u64);
+    let (mut sub_first, mut sub_extra) = (0usize, 0usize);
     for archive_index in 0..7 {
         let spec = format!("{image}:PS3_GAME/USRDIR/DATA{archive_index:02}.PSARC");
         let Ok(mut psarc) = oag_assets::psarc::Archive::open(&spec) else {
@@ -29,83 +22,51 @@ fn main() -> anyhow::Result<()> {
         let paths: Vec<String> = psarc
             .paths()
             .iter()
-            .filter(|p| p.ends_with(".rcsmodel"))
+            .filter(|p| p.ends_with(".rcsmodel") && p.contains(&only))
             .cloned()
             .collect();
         for path in paths {
-            let Ok(b) = psarc.read_path(&path) else {
+            let Ok(blob) = psarc.read_path(&path) else {
                 continue;
             };
-            let be32 = |at: usize| -> Option<u32> {
-                b.get(at..at + 4)
-                    .map(|s| u32::from_be_bytes(s.try_into().unwrap()))
-            };
-            let be16 = |at: usize| -> Option<u16> {
-                b.get(at..at + 2)
-                    .map(|s| u16::from_be_bytes(s.try_into().unwrap()))
-            };
-            let (Some(count), Some(table), Some(materials)) = (be32(0x1c), be32(0x20), be32(0x2c))
-            else {
+            let Ok(model) = rcsmodel::Model::parse(&blob) else {
                 continue;
             };
-            if count == 0 || count > 100_000 {
-                continue;
-            }
             models += 1;
-            let parsed = rcsmodel::Model::parse(&b).ok();
-            for i in 0..count as usize {
-                let Some(at) = be32(table as usize + i * 4) else {
-                    continue;
+            for chunk in &model.meshes {
+                chunks += 1;
+                let triangles = |m: &rcsmodel::Mesh| -> u64 {
+                    m.submeshes.iter().map(|s| (s.index_count / 3) as u64).sum()
                 };
-                let at = at as usize;
-                let (Some(surfaces), Some(surface_table), Some(material)) =
-                    (be16(at + 0x10), be32(at + 0x18), be32(at + 0x20))
-                else {
-                    continue;
-                };
-                chunks_total += 1;
-                if surfaces <= 1 {
+                tri_first += triangles(chunk);
+                sub_first += chunk.submeshes.len();
+                if chunk.extra_surfaces.is_empty() {
                     continue;
                 }
                 multi += 1;
-                let named: Vec<u32> = (0..surfaces as usize)
-                    .filter_map(|s| be32(surface_table as usize + s * 4))
-                    .filter_map(|off| be32(off as usize))
-                    .filter(|m| *m < materials)
-                    .collect();
-                if named.len() != surfaces as usize {
-                    continue;
+                for extra in &chunk.extra_surfaces {
+                    tri_extra += triangles(extra);
+                    sub_extra += extra.submeshes.len();
                 }
-                if named.iter().any(|m| *m != material) {
-                    disagree += 1;
-                }
-                if named.windows(2).any(|w| w[0] != w[1]) {
+                if chunk
+                    .extra_surfaces
+                    .iter()
+                    .any(|e| e.material != chunk.material)
+                {
                     mixed += 1;
-                    let submeshes = parsed
-                        .as_ref()
-                        .and_then(|m| m.meshes.get(i))
-                        .map_or(0, |m| m.submeshes.len());
-                    if submeshes == surfaces as usize {
-                        aligned += 1;
-                    } else {
-                        misaligned += 1;
-                        if worst.len() < 10 {
-                            worst.push((i, path.clone(), material, named.clone()));
-                        }
-                    }
-                    let _ = submeshes;
                 }
             }
         }
     }
-    println!("{models} model(s), {chunks_total} chunk(s)");
-    println!("  {multi} chunk(s) declare more than one surface");
-    println!("  {disagree} have a surface naming a material other than the chunk's own +0x20");
-    println!("  {mixed} have surfaces naming more than one material between them");
-    println!("  of those, {aligned} have exactly one submesh per surface and {misaligned} do not");
-    println!("  the first few that do not:");
-    for (i, path, material, named) in &worst {
-        println!("    {path} chunk {i}: +0x20 = {material}, surfaces {named:?}");
-    }
+    println!("{models} model(s), {chunks} chunk(s)");
+    println!("  {multi} declare a surface past the first; {mixed} of those name another material");
+    println!(
+        "  {sub_first} submesh(es) on first surfaces, {sub_extra} on the rest ({:.1}% more)",
+        sub_extra as f64 / sub_first as f64 * 100.0,
+    );
+    println!(
+        "  {tri_first} triangle(s) on first surfaces, {tri_extra} on the rest ({:.1}% more)",
+        tri_extra as f64 / tri_first as f64 * 100.0,
+    );
     Ok(())
 }

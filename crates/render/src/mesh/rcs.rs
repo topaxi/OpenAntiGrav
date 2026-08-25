@@ -294,61 +294,67 @@ pub fn build_scene(
         .context("no mesh class id for this .vex version")?;
     let placed = referenced(data, &nodes, mesh_class, &model);
 
-    for (chunk_index, mesh) in model.meshes.iter().enumerate() {
-        if placed.contains(&mesh.hash) {
+    for (chunk_index, chunk) in model.meshes.iter().enumerate() {
+        if placed.contains(&chunk.hash) {
             continue;
         }
-        if isolate::excludes(&model, mesh) {
-            report.isolated += 1;
-            continue;
-        }
-        // **What the chunk declares, first**, which is what turned these on:
-        // 3,382 of the disc's chunks declare a stride the search below cannot
-        // fit, and every one of them used to be skipped silently here. See
-        // `rcsmodel::vertex_decl`.
-        let Some(stride) = mesh
-            .declared_stride()
-            .or_else(|| mesh.solve_stride_without_a_box(model_blob))
-        else {
-            report.no_stride += 1;
-            continue;
-        };
-        let surface = surface(&model, mesh, &out.textures, &out.material_slots);
-        report.see_through += usize::from(surface.blend.is_some());
-        report.no_texcoord += usize::from(declares_no_texcoord(mesh));
         let mut emitted = false;
-        for submesh in &mesh.submeshes {
-            if submesh.vertex_count == 0 || submesh.index_count == 0 {
+        // **Every surface, not just the chunk's own.** A quarter of the disc's
+        // chunks declare more than one, each with its own material, bias and
+        // descriptors, and they are 40 % more geometry than the first surfaces
+        // carry between them. See `rcsmodel::Mesh::surfaces`.
+        for mesh in chunk.surfaces() {
+            if isolate::excludes(&model, mesh) {
+                report.isolated += 1;
                 continue;
             }
-            let (Ok(points), Ok(indices)) = (
-                mesh.positions(model_blob, submesh, stride),
-                mesh.indices(model_blob, submesh),
-            ) else {
+            // **What the chunk declares, first**, which is what turned these on:
+            // 3,382 of the disc's chunks declare a stride the search below cannot
+            // fit, and every one of them used to be skipped silently here. See
+            // `rcsmodel::vertex_decl`.
+            let Some(stride) = mesh
+                .declared_stride()
+                .or_else(|| mesh.solve_stride_without_a_box(model_blob))
+            else {
+                report.no_stride += 1;
                 continue;
             };
-            let normals = mesh.normals(model_blob, submesh, stride).ok();
-            let texcoords = mesh.texcoords(model_blob, submesh, stride).ok();
-            let lightmap_texcoords = mesh.lightmap_texcoords(model_blob, submesh, stride).ok();
-            let vertex_light = mesh.vertex_light(model_blob, submesh, stride).ok();
-            report.authored_normals += normals.as_deref().map_or(0, authored);
-            emit(
-                &mut out,
-                Geometry {
-                    points: &points,
-                    normals: normals.as_deref(),
-                    texcoords: texcoords.as_deref(),
-                    lightmap_texcoords: lightmap_texcoords.as_deref(),
-                    vertex_light: vertex_light.as_deref(),
-                    indices: &indices,
-                    chunk: u32::try_from(chunk_index).ok(),
-                },
-                Mat4::IDENTITY,
-                None,
-                surface,
-            );
-            report.triangles += indices.len() / 3;
-            emitted = true;
+            let surface = surface(&model, mesh, &out.textures, &out.material_slots);
+            report.see_through += usize::from(surface.blend.is_some());
+            report.no_texcoord += usize::from(declares_no_texcoord(mesh));
+            for submesh in &mesh.submeshes {
+                if submesh.vertex_count == 0 || submesh.index_count == 0 {
+                    continue;
+                }
+                let (Ok(points), Ok(indices)) = (
+                    mesh.positions(model_blob, submesh, stride),
+                    mesh.indices(model_blob, submesh),
+                ) else {
+                    continue;
+                };
+                let normals = mesh.normals(model_blob, submesh, stride).ok();
+                let texcoords = mesh.texcoords(model_blob, submesh, stride).ok();
+                let lightmap_texcoords = mesh.lightmap_texcoords(model_blob, submesh, stride).ok();
+                let vertex_light = mesh.vertex_light(model_blob, submesh, stride).ok();
+                report.authored_normals += normals.as_deref().map_or(0, authored);
+                emit(
+                    &mut out,
+                    Geometry {
+                        points: &points,
+                        normals: normals.as_deref(),
+                        texcoords: texcoords.as_deref(),
+                        lightmap_texcoords: lightmap_texcoords.as_deref(),
+                        vertex_light: vertex_light.as_deref(),
+                        indices: &indices,
+                        chunk: u32::try_from(chunk_index).ok(),
+                    },
+                    Mat4::IDENTITY,
+                    None,
+                    surface,
+                );
+                report.triangles += indices.len() / 3;
+                emitted = true;
+            }
         }
         if emitted {
             report.unreferenced += 1;
@@ -770,9 +776,10 @@ fn build_with_options(
         let Some((hash, min, max)) = node_geometry(&data[node.payload()], order) else {
             continue;
         };
-        let (Some(chunk_index), Some(mesh)) = (model.mesh_index(hash), model.mesh(hash)) else {
+        let (Some(chunk_index), Some(chunk)) = (model.mesh_index(hash), model.mesh(hash)) else {
             continue;
         };
+        let mesh = chunk;
         // **Skip a chunk this node names but does not actually place.** See
         // `is_world_baked`: drawing it through `to_world` below would test
         // its already-world-space positions against this node's un-transformed
@@ -790,66 +797,76 @@ fn build_with_options(
             continue;
         }
         report.addressed += 1;
-        let tolerance = mesh.scale.iter().fold(0.0f32, |a, &b| a.max(b)) * TOLERANCE_STEPS;
-        // **What the chunk declares, first.** The searches below fit a stride
-        // to the authored box and to buffer layout, and they exist because this
-        // field had not been read; see `rcsmodel::vertex_decl`. They stay for
-        // an inline chunk, which declares nothing.
-        let Some(stride) = mesh
-            .declared_stride()
-            .or_else(|| mesh.solve_stride(model_blob, (min, max), tolerance))
-            .or_else(|| mesh.solve_stride_by_layout())
-            .or_else(|| mesh.solve_stride_by_normals(model_blob))
-        else {
-            report.no_stride += 1;
-            continue;
-        };
-
-        let surface = surface(&model, mesh, &out.textures, &out.material_slots);
-        report.see_through += usize::from(surface.blend.is_some());
-        report.no_texcoord += usize::from(declares_no_texcoord(mesh));
         let mut emitted = false;
-        for submesh in &mesh.submeshes {
-            if submesh.vertex_count == 0 || submesh.index_count == 0 {
-                continue;
-            }
-            // **The stride is the mesh's, and one submesh may not share it.**
-            // `solve_stride` tolerates that; drawing must not, or the odd
-            // submesh's attribute bytes are read as positions and scatter over
-            // the world. See `rcsmodel::Mesh::submesh_fits`.
-            if !mesh.submesh_fits(model_blob, submesh, stride, (min, max)) {
-                report.strays += 1;
-                continue;
-            }
-            let (Ok(points), Ok(indices)) = (
-                mesh.positions(model_blob, submesh, stride),
-                mesh.indices(model_blob, submesh),
-            ) else {
+        // Every surface, as the world-space pass does - `Mesh::surfaces`.
+        for mesh in chunk.surfaces() {
+            let tolerance = mesh.scale.iter().fold(0.0f32, |a, &b| a.max(b)) * TOLERANCE_STEPS;
+            // **What the chunk declares, first.** The searches below fit a stride
+            // to the authored box and to buffer layout, and they exist because this
+            // field had not been read; see `rcsmodel::vertex_decl`. They stay for
+            // an inline chunk, which declares nothing.
+            let Some(stride) = mesh
+                .declared_stride()
+                .or_else(|| mesh.solve_stride(model_blob, (min, max), tolerance))
+                .or_else(|| mesh.solve_stride_by_layout())
+                .or_else(|| mesh.solve_stride_by_normals(model_blob))
+            else {
+                report.no_stride += 1;
                 continue;
             };
 
-            let normals = mesh.normals(model_blob, submesh, stride).ok();
-            let texcoords = mesh.texcoords(model_blob, submesh, stride).ok();
-            let lightmap_texcoords = mesh.lightmap_texcoords(model_blob, submesh, stride).ok();
-            let vertex_light = mesh.vertex_light(model_blob, submesh, stride).ok();
-            report.authored_normals += normals.as_deref().map_or(0, authored);
-            emit(
-                &mut out,
-                Geometry {
-                    points: &points,
-                    normals: normals.as_deref(),
-                    texcoords: texcoords.as_deref(),
-                    lightmap_texcoords: lightmap_texcoords.as_deref(),
-                    vertex_light: vertex_light.as_deref(),
-                    indices: &indices,
-                    chunk: u32::try_from(chunk_index).ok(),
-                },
-                to_world,
-                u32::try_from(index).ok(),
-                surface,
-            );
-            report.triangles += indices.len() / 3;
-            emitted = true;
+            let surface = surface(&model, mesh, &out.textures, &out.material_slots);
+            report.see_through += usize::from(surface.blend.is_some());
+            report.no_texcoord += usize::from(declares_no_texcoord(mesh));
+            for submesh in &mesh.submeshes {
+                if submesh.vertex_count == 0 || submesh.index_count == 0 {
+                    continue;
+                }
+                // **The stride is the mesh's, and one submesh may not share it.**
+                // `solve_stride` tolerates that; drawing must not, or the odd
+                // submesh's attribute bytes are read as positions and scatter over
+                // the world. See `rcsmodel::Mesh::submesh_fits`.
+                //
+                // **The node's box describes the chunk, so only the chunk's own
+                // surface is judged against it.** A later surface has its own bias
+                // and is not inside that box in the first place; testing it there
+                // would drop it as a stray for being exactly where it belongs.
+                if std::ptr::eq(mesh, chunk)
+                    && !mesh.submesh_fits(model_blob, submesh, stride, (min, max))
+                {
+                    report.strays += 1;
+                    continue;
+                }
+                let (Ok(points), Ok(indices)) = (
+                    mesh.positions(model_blob, submesh, stride),
+                    mesh.indices(model_blob, submesh),
+                ) else {
+                    continue;
+                };
+
+                let normals = mesh.normals(model_blob, submesh, stride).ok();
+                let texcoords = mesh.texcoords(model_blob, submesh, stride).ok();
+                let lightmap_texcoords = mesh.lightmap_texcoords(model_blob, submesh, stride).ok();
+                let vertex_light = mesh.vertex_light(model_blob, submesh, stride).ok();
+                report.authored_normals += normals.as_deref().map_or(0, authored);
+                emit(
+                    &mut out,
+                    Geometry {
+                        points: &points,
+                        normals: normals.as_deref(),
+                        texcoords: texcoords.as_deref(),
+                        lightmap_texcoords: lightmap_texcoords.as_deref(),
+                        vertex_light: vertex_light.as_deref(),
+                        indices: &indices,
+                        chunk: u32::try_from(chunk_index).ok(),
+                    },
+                    to_world,
+                    u32::try_from(index).ok(),
+                    surface,
+                );
+                report.triangles += indices.len() / 3;
+                emitted = true;
+            }
         }
         if emitted {
             report.drawn += 1;
