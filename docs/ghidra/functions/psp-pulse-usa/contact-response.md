@@ -668,9 +668,13 @@ unread; a craft against track geometry takes the single-body path.
 - ~~**What posts the pending impulse at `entity->0x4c + 0x110`.**~~ **Read
   2026-08-19** - a write breakpoint at the live address caught two writers.
   See [the section below](#two-writers-found-at-a-live-write-breakpoint-2026-08-19).
-- **`0x08815ccc`** (box against box) and **`0x0881702c`** (mesh against mesh,
+- ~~**`0x08815ccc`** (mesh against mesh) and **`0x0881702c`** (box against box,
   gated on `world+0x5464`), the two narrowphase pairs `Collision_DispatchPair`
-  can reach that a craft against track geometry does not.
+  can reach that a craft against track geometry does not.~~ **Both read
+  2026-08-25** (the kind labels here were also backwards - corrected) - see
+  [the section below](#0x08815ccc-is-a-stub-but-it-is-not-what-a-pair-of-craft-dispatches-to).
+  `0x08815ccc` is still a stub; `Collision_BoxAgainstBox` is not, and whether
+  it fires for a pair of craft is now the open question in that section.
 
 ## `Body_ResolveContactPair` (`0x0884ef30`): the two-body path
 
@@ -1532,36 +1536,72 @@ trusting a watchpoint to report absence) are the concrete next steps.
   and `apply_pending_impulse` stays a correct, tested, but fully inert no-op
   end to end.
 
-### `0x08815ccc` is a stub, so craft-to-craft contact does not come from the narrowphase
+### `0x08815ccc` is a stub, but it is not what a pair of craft dispatches to
 
-**Read 2026-08-11, and it changes the picture.** `Collision_DispatchPair`
-(`0x08816eac`) sends a box proxy against a box proxy to `0x08815ccc`, and
-`0x08815ccc` is **two instructions**:
+**Read 2026-08-11 as "box proxy against box proxy is a stub, so craft-to-craft
+contact does not come from the narrowphase"; corrected 2026-08-25 - the
+kind/shape labels behind that reading were backwards.** `0x08815ccc` itself is
+still exactly what it was read as:
 
 ```
 08815ccc  jr    ra
 08815cd0  _nop
 ```
 
-It reports nothing, ever. Ghidra does not even claim it as a function - there is
-nothing there to claim. Confidence **90**: four bytes of `0x03e00008` need no
-interpretation, and `collision.md`'s dispatch reading, which the table above
-rests on, is independently at 85.
+Two instructions, reports nothing, ever, Ghidra does not even claim it as a
+function. Confidence **90** on that fact alone stands.
 
-Craft are box proxies. So **no pair of craft can produce a contact through
-`Collision_StepNarrowphase`**, and whatever reaches `Body_ResolveContactPair`
-with two craft in it is somewhere this project has not found. That is consistent
-with, and sharpens, the open item about the pending impulse at
-`entity->0x4c + 0x110`: the note that its writer "is somewhere in the weapon or
-rival-contact code" now has the narrowphase positively excluded rather than
-merely unexamined.
+**What changed is which pair reaches it.** `collision.md`'s own dispatch
+reading has been corrected: `Collision_DispatchPair`'s shape-kind values are
+`1 = mesh`, `3 = box`, not the reverse this section relied on, and the box
+collider's classifier is now read directly - a two-instruction stub of its own
+(`jr ra; li v0, 0x3`, confidence 92) wired into every box collider
+unconditionally. So `0x08815ccc` is kind-1-vs-kind-1, **mesh against mesh**
+(static track geometry against static track geometry, which has no reason to
+need pairwise detection), not box against box. **Craft, being box proxies,
+never reach `0x08815ccc` at all.**
 
-**The consequence for `oag_physics::pair`**: its detection is not an
-approximation of a recovered test, because there is no recovered test to
-approximate. It uses an oriented box against an oriented box over the hull's own
-`<Misc width height length>`, and says so.
+What a pair of craft actually dispatches to is `Collision_BoxAgainstBox`
+(`0x0881702c`, kind 3 vs kind 3), gated on `world+0x5464` - and that function
+is **not a stub**. Decompiled in full this pass: a genuine fifteen-axis
+oriented-box-against-oriented-box SAT test that, on overlap, writes a real
+contact (normal, midpoint, penetration depth, both collider indices, both
+owner ids, a friction term) into the same `world+0x2450`-counted, `+0x40`-stride
+contact array `Collision_AddContact` already documented. Full account on
+[collision.md](collision.md#collision_stepnarrowphase-0x088159c0-builds-the-pair-list).
+
+**This reopens rather than closes the question this section used to answer.**
+Two gates stand between that code existing and it firing for two real craft in
+a race - `world+0x5464` nonzero, and both colliders' own `+0x68` byte nonzero -
+and neither is confirmed live. `world+0x5464` is written `1` by what reads as
+the collision world's own constructor and `0` by an apparently unrelated setup
+routine, which is consistent with "on during a race" but not a live-verified
+claim. **The pending-impulse open item's narrowphase exclusion no longer
+holds**: "whatever reaches `Body_ResolveContactPair` with two craft in it is
+somewhere this project has not found" assumed the narrowphase was positively
+ruled out, and it is not - it may or may not be where that pair comes from,
+which is now itself the open question. See
+[handover/craft-to-craft-collision-is-implemented-the-stun.md](../../../../handover/craft-to-craft-collision-is-implemented-the-stun.md).
+
+**The consequence for `oag_physics::pair`**: its own doc comment claims "there
+is no recovered test to approximate" - also no longer accurate. There is now a
+recovered test (`Collision_BoxAgainstBox`), unread in comparison detail against
+`pair::overlap`'s own fifteen-axis SAT (which independently arrived at the same
+standard axis count - three faces each side, nine edge-edge crosses - since
+that is the ordinary structure of OBB-OBB SAT, not evidence the two algorithms
+match beyond that). Whether `pair::overlap`'s specific choices - its
+axis-preference tie-break, its one-contact-per-pair shape, its friction
+handling - match the original's is not yet compared.
 
 ### Still not determined
 
-- **What feeds `Body_ResolveContactPair` a pair of craft**, given the above.
-- **`0x0881702c`** (mesh against mesh, gated on `world+0x5464`).
+- **Whether `world+0x5464` and each collider's `+0x68` byte are actually set
+  during a live race**, which decides whether `Collision_BoxAgainstBox` ever
+  runs for a pair of craft. Not yet checked against a running game.
+- **What feeds `Body_ResolveContactPair` a pair of craft** -
+  `Collision_BoxAgainstBox` is now the leading candidate rather than positively
+  excluded, but this is still not traced end to end.
+- **Whether `pair::overlap`'s algorithm matches `Collision_BoxAgainstBox`'s**
+  beyond both
+  being fifteen-axis OBB-OBB SAT: axis tie-break order, contact count and
+  shape, and friction combination are all unread against the original.
