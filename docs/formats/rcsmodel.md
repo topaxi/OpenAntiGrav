@@ -894,6 +894,62 @@ and the equation cannot tell the two apart either since 211 of the 212 carry the
 same alpha-over pair as the blended mode. Below 70, so the name is not written -
 see the [confidence rubric](../reverse-engineering/confidence-rubric.md).
 
+### Bit 7 tracks the texture, not the material name - confidence 84
+
+**A census over the same 12 circuits (2026-08-25) found bit 7 of the state word
+carried by exactly eight material names disc-wide**: `animating_traffic`,
+`cf_tree`, `jd_alphalambert`, `lambert`, `lambert_alpha_02`, `scanlinetext`,
+`uv_anim_diffuse_alpha` and `uv_anim_diffuse_alpha_emissive`. That reads like a
+per-material-name flag, and it is not one: `cf_tree` on `amphiseum` resolves to
+ten separate material records, and the one of the ten sampling a plain bark
+texture (`ol_treemonzabrownshowbark_c.gtf`) is also the one record whose state
+word does not carry bit 7 - the other nine, all sampling a texture named with
+the disc's own `_atoc` suffix (`ol_tree_birch_1_atoc.gtf` and its siblings),
+all do. **The bit follows the texture assignment within a single material
+name, not the name itself.**
+
+Disc-wide, across all 16 circuits, the same split holds in both directions:
+
+| | Carries bit 7 | Does not |
+| --- | ---: | ---: |
+| Samples an `_atoc.`-suffixed texture | 113 | 2 |
+| Does not | 32 | (the remaining opaque bulk) |
+
+The two exceptions in the top row are both `wes_billboardholographicscanlines`
+(`amphiseum`, `modesto_heights`), which sample an `_atoc` texture without the
+bit set. All 32 exceptions in the bottom row are `lambert` - the disc's most
+overloaded material name, reused on five circuits for gridwork, rail, grate,
+window and distant-crowd geometry (`wes_and_crowd.gtf`) that carries the bit
+without an `_atoc` texture to go with it. Measured with a purpose-built sweep,
+`hd_atoc_check` (`crates/render/examples/hd_atoc_check.rs`), alongside
+`hd_state_census`'s existing per-name tabulation - both walk the same 16
+circuits' `track.vex` siblings that `hd_state_census` already reads.
+
+**This is the same evidence class the low-two-bits reading above was scored
+at**: an exact split holding across many real files, with the handful of
+exceptions concentrated in one over-reused name rather than scattered noise.
+It is capped at 84 rather than reaching that reading's 88 because the split is
+not perfect (113/145 and 113/115, not all of either) and the `lambert`
+exceptions are unexplained rather than merely unmeasured.
+
+**What the bit actually selects is a separate, weaker claim - confidence 55.**
+Every `_atoc`-suffixed texture on the disc is foliage, a distant-crowd
+silhouette, a traffic sprite or on-screen text/signage
+(`leveltext_atoc.gtf`, `air_traffic_test_a_atoc.gtf`,
+see [rcsmaterial.md](rcsmaterial.md)) - exactly the content classes real-time
+renderers use alpha-to-coverage for, to cut out detail without depth-sorting
+transparency. That is a reasonable inference from the content, not a reading
+of the executable: no RSX register write has been tied to this bit, and the
+name `_atoc` itself is an artist convention that could mean anything from
+"alpha test" to "alpha-to-coverage" to a project-local shorthand nobody wrote
+down. **Neither this bit nor `Transparency::Mode2` above is wired into
+`oag_render`.** Wiring alpha-to-coverage specifically depends on HD's render
+path already running multisampled: `mesh_render::build`'s `sample_count` is 1
+outside a race and the `[graphics] anti_aliasing` MSAA count inside one, so
+the feature is a conditional no-op rather than definitionally unwireable -
+`wgpu::MultisampleState::alpha_to_coverage_enabled` takes effect only when
+`count` is greater than 1.
+
 ### The factor values, and which are mapped
 
 **Confidence 70 on the enum itself.** The four values the disc uses are
@@ -1356,8 +1412,13 @@ Named explicitly, with what each would take.
 8. **The `.pvs` mapping**, which is what would let a renderer draw a section at
    a time rather than all 913 chunks at once.
 9. **What separates transparency mode 2 from mode 1**, and what the other 15
-   bits of the state word select - 17 distinct combinations disc-wide, none of
-   them decoded. **One thing about the split is now measured** (2026-08-20):
+   bits of the state word select - 13 distinct state words disc-wide (measured
+   2026-08-25, over 7,241 material records; the "17 distinct combinations"
+   this bullet used to say was never re-measured after the sweep it
+   describes). **One of the 15 bits is now measured**: bit 7 tracks the
+   texture a material samples, not its name - see
+   [above](#bit-7-tracks-the-texture-not-the-material-name---confidence-84).
+   **The mode 1/2 split is now measured too** (2026-08-20):
    censused over all 12 circuits in both directions - 8,052 opaque, 2,151
    mode-1 and 537 mode-2 chunks - **mode 2 is carried by exactly 6 distinct
    material names and mode 1 by 52, and no name is ever both.** The partition

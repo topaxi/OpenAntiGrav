@@ -413,7 +413,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [HD's see-through surfaces: the blend-equation fix landed, and the texture-coordinate/second-texture residue this file tracked is now resolved elsewhere](handover/hds-see-through-surfaces-draw-with-the-files.md)
 - [Talon's Junction's "missing floor" is a glass floor drawn with the wrong texture: rendered, not absent](handover/talons-junctions-missing-floor-is-a-glass-floor.md)
 - [An RPCS3 capture harness: a reference frame paired with the camera that drew it](handover/an-rpcs3-capture-harness-a-reference-frame-paired.md)
-- [A texture coordinate's orientation is per material, and it is in the vertex microcode](handover/a-texture-coordinates-orientation-is-per-material-and.md)
+- [`Material::state`'s upper bits: bit 7 is measured, mode 2 is not, and neither is wired](handover/material-states-upper-bits-bit-7-is-measured-mode.md)
 - [Wipeout HD's front end boots, off a chain that says it is only declared](handover/wipeout-hds-front-end-boots-off-a-chain.md)
 - [HD's main menu is horizontal, and it is drawn that way](handover/hds-main-menu-is-horizontal-and-it-is.md)
 - [HD's menus are drawn inside its own frame, and the `HD_*` palette turned out to be the FE style](handover/hds-menus-are-drawn-inside-its-own-frame.md)

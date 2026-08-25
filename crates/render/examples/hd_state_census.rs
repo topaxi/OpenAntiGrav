@@ -41,6 +41,7 @@ fn main() -> anyhow::Result<()> {
 
     let mut by_state: BTreeMap<u32, (usize, Vec<String>)> = BTreeMap::new();
     let mut by_bit: BTreeMap<u32, Vec<String>> = BTreeMap::new();
+    let mut bit7_names: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
     let mut total = 0usize;
 
     for archive in ["DATA00", "DATA01", "DATA02"] {
@@ -75,6 +76,9 @@ fn main() -> anyhow::Result<()> {
                         if names.len() < 8 && !names.contains(&stem) {
                             names.push(stem.clone());
                         }
+                        if bit == 7 {
+                            bit7_names.insert(stem.clone());
+                        }
                     }
                 }
             }
@@ -97,6 +101,13 @@ fn main() -> anyhow::Result<()> {
             1u32 << bit,
             names.join(", ")
         );
+    }
+    println!(
+        "\nbit 7, every distinct material name carrying it ({}):",
+        bit7_names.len()
+    );
+    for name in &bit7_names {
+        println!("  {name}");
     }
     if !want.is_empty() {
         println!("\nstate words of materials matching {want:?}: see hd_slot_check");
