@@ -5,7 +5,8 @@ container, the slot table (including the pointer fixup it drives at load
 time, confirmed live), the name field, and **the emitter tree** are all
 decoded, implemented in
 [`oag-formats::pob`](../../crates/formats/src/pob.rs) and validated against
-all 35 `.pob` files on the PSP disc and all 41 on the PS2 disc. What is
+all 35 `.pob` files on the PSP disc, all 41 on the PS2 disc and all 88 across
+HD's seven PSARC archives. What is
 **not** decoded is the record layout at a *slot-resolved* target: 43% of
 them are readable developer strings (texture paths, layer names), and the
 rest are floats whose field boundaries are still unread.
@@ -389,6 +390,19 @@ WO_ROCKET_EXPLO
 | --- | --- | --- | --- |
 | PSP `Data.wad` | 35 | 76 | `WO_ROCKET_EXPLO`, 7 |
 | PS2 `WADS2.WAD` | 41 | 90 | `WO_ROCKET_EXPLO`, 7 |
+| HD's 7 PSARC archives | 88 | 249 | `WO_SHIP_EXPLOSION`, 12 |
+
+HD's 88 is every `.pob` blob across all seven archives, not deduplicated - the
+distinct count is 82. Five names account for the six extra blobs: three are
+the same effect shipped in more than one archive (`WO_TRAIL_HITSHIP` in
+three, `WO_DAMAGE_MILD` and `WO_DEBRIS_SPARKS` in two), but two are a second
+file **inside `DATA02` alone** whose internal name was never changed off the
+one it was copied from - `wo_ship_explosion_lightshafts.pob` still names
+itself `WO_SHIP_EXPLOSION`, and `stesparkstest.pob` still names itself
+`WO_SHIP_COLL_SPARK_DAMAGE`. `crates/game/tests/psys_inventory_ground_truth.rs`'s
+`mod hd` checks the distinct count against the disc as its own tripwire,
+separately from this corpus check, and prints which names those extra blobs
+belong to.
 
 Every one of those 166 records passes the same invariants: the root's name
 is the resource's own; the render-mode index lands inside the eight-entry
