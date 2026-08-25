@@ -409,7 +409,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [HD's `.bnk` sound banks read, and HD makes five of the six sounds](handover/hds-bnk-sound-banks-read-and-hd-makes.md)
 - [HD/Fury's particle effects parse, and a "field that disagrees" turned out to be a wrong check](handover/hd-furys-particle-effects-parse-and-a-field.md)
 - [Pulse's draw order is recovered, and it is a layer sort rather than a depth sort](handover/pulses-draw-order-is-recovered-and-it-is.md)
-- [HD's see-through surfaces draw with the file's own blend equation; the texture-coordinate residue is diagnosed but not fixed](handover/hds-see-through-surfaces-draw-with-the-files.md)
+- [HD's see-through surfaces: the blend-equation fix landed, and the texture-coordinate/second-texture residue this file tracked is now resolved elsewhere](handover/hds-see-through-surfaces-draw-with-the-files.md)
 - [Talon's Junction's "missing floor" is a glass floor drawn with the wrong texture: rendered, not absent](handover/talons-junctions-missing-floor-is-a-glass-floor.md)
 - [An RPCS3 capture harness: a reference frame paired with the camera that drew it](handover/an-rpcs3-capture-harness-a-reference-frame-paired.md)
 - [A texture coordinate's orientation is per material, and it is in the vertex microcode](handover/a-texture-coordinates-orientation-is-per-material-and.md)
