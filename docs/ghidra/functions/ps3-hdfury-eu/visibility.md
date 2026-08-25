@@ -247,6 +247,37 @@ number handed to `Pvs_Load`**: `0x003fa010` returns it, `Pvs_LoadForTrack` passe
 it, and it becomes `(chunks >> 3) + 1`. The bitmap's width and the list it
 indexes are the same field of the same object. Confidence 82.
 
+### And the scene object *is* the `.rcsmodel`
+
+**There is no list builder.** Nothing in the image sorts, filters, buckets or
+tree-walks the items, and nothing writes `scene+0x1c` or `scene+0x20` at all.
+The object comes straight back from the generic RCS resource loader
+(`0x005da6b8` -> `0x005d98b8`), which allocates a buffer, reads the file into it
+and relocates its header offsets to pointers - so the scene's fields are the
+file's own header, one for one:
+
+| scene field | `.rcsmodel` header |
+| --- | --- |
+| `+0x1c` item count | mesh count |
+| `+0x20` item pointer array | mesh **offset table** |
+| `+0x24` per-item vec4 | bounds block |
+| `+0x2c` / `+0x30` | material count / material offset table |
+
+Checked against the disc for `talons_junction/track.rcsmodel`: 983 chunks, and
+`0x40 + 983 * 16 = 0x3db0` is exactly the material-table offset - one `vec4` per
+chunk, no gap, same order. Every consumer indexes by plain `i * 4`.
+
+**So PVS bit `i` is `.rcsmodel` mesh `i`, in file order.** Confidence 90. That
+is the executable-side reason for what
+[hd-pvs.md](../../../formats/hd-pvs.md) already holds at 92 from spatial
+measurement, and it settles that the mapping is not where a rendering
+difference lives.
+
+**A trap from the same pass, worth more than the confirmation: a `.vex` node
+finds its chunk by HASH, not by index.** `0x003eeb08` linear-scans the chunk
+table comparing `chunk[0]` against the node's `*(*(node + 0xdc) + 0x30)` and
+yields 0 on no match. So bit `i` is chunk `i`, and node `i` is *not*.
+
 **The test is not gated.** In all three loops the bit is the sole condition -
 no flag on the item, no render-layer or pass id, no distance short-circuit, no
 always-draw escape. An item whose bit is clear is not submitted, given no
@@ -258,9 +289,27 @@ clearing on a bounds test - `mask[b] &= ~bit` or `&= 0xff`, never setting.
 Confidence 80.
 
 So the pipeline is `memcpy` one cell's bitmap, **narrow further**, submit: the
-original's visible set is a *subset* of the cell's, and nothing anywhere adds a
-bit back. A reimplementation that gates every chunk on the cell's bitmap and
-stops there draws **more** than the original, not less.
+main view's visible set is a *subset* of the cell's. A reimplementation that
+gates every chunk on the cell's bitmap and stops there draws **more** than the
+original, not less.
+
+### A second bit array exists, and it is not this one
+
+`FUN_003faf00` ORs bits into an array whose effective base is `r26 + 0xC180`
+(`stb r0, -0x3e80(r9)` with `r29 = r26 + 0x10000`), **not** the frame mask at
+`g + 0x100`, whose base resolves through `-0x5160(r2)` to `0x00d44e80`. It is
+built once at track load - `Pvs_LoadForTrack` calls it at `0x003f55d0`, before
+the `.pvs` is even opened - for every item whose `flags & 1` is set. Its only
+readers are `0x00401ba8`, `0x00402a88` and `0x004053e0`, and **all three are
+also callers of `Pvs_NearestCellCached`**: three further passes that each
+resolve their own cell and consult this static array, almost certainly
+secondary views (shadow, reflection, mirror), unconfirmed.
+
+This does not weaken the section above - `0x003fab50` and `0x003fdae8` never
+read `g + 0xC180`, and nothing writes bits into `g + 0x100` per frame except
+the `memcpy`. It is a correction to the broader claim that nothing anywhere
+adds a bit back. Confidence 75; the `r26 = g` identification is inferred from
+the shared `-0x3e80` bias across all thirteen sites rather than traced.
 
 ## `Visibility_HideChunk` belongs to the fallback, not the PVS
 

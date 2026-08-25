@@ -1066,6 +1066,52 @@ picture. `.gtf` closed it; the stopgap is gone.
    leaving it opaque, and `Report::untextured` counts it so a partly-textured
    circuit cannot read as a working one.
 
+## A chunk names ONE material here and the engine reads SEVERAL
+
+**This is the largest known gap between what this parser reads and what the
+game draws, found 2026-08-25 and not yet acted on.**
+
+`Mesh::material` is the index at a chunk's `+0x20`, one per chunk, and the
+whole chunk is painted with it. The engine does not do that. It also walks a
+**per-chunk surface table**, and indexes the material table per *surface*:
+
+```text
+chunk +0x10  u16   surface count
+chunk +0x18  u32   surface offset table
+surface +0x00  u32  material index
+```
+
+Both `0x003faf00` and `0x003fb330` use it as `materialTable[*(int *)surface]`,
+and every one of the disc's 1,813 surface records read so far has a first word
+below its file's material count.
+
+**Measured over all 615 models and 41,861 chunks on the disc**
+(`crates/render/examples/hd_surfaces.rs`):
+
+- **9,891 chunks - 24% - declare more than one surface.**
+- **All 9,891 name more than one material between their surfaces**, and in
+  every case the chunk's own `+0x20` is the *first* surface's material.
+- So a quarter of the disc's geometry is being painted with the first of
+  several authored materials.
+
+Amphiseum's chunk 9 declares eleven surfaces naming materials
+`[6, 7, 626, 633, 10, 635, 12, 13, 14, 15, 16]`; this reader paints all of it
+with 6.
+
+**The obvious fix does not work, and that is the open part.** A surface is not
+a submesh: of those 9,891 chunks, only **503** have one submesh per surface and
+9,388 do not. So the surface record must carry its own geometry range, and
+which of its remaining words that is has not been decoded. That is the next
+step, and it is a decode job on the surface record rather than a change to how
+materials are looked up.
+
+**Related, and from the same pass**: byte `+0x07` of a chunk - the `kk` that
+[`LAYOUT_DESCRIBED`](../../crates/formats/src/rcsmodel.rs) records as taking
+`01` and `02` "for a reason nothing here has distinguished" - **is
+distinguished by the engine**, which branches on
+`*(char *)(chunk + 7) == '\x02'`. On Talon's Junction it is `1` on 913 chunks
+and `2` on 70.
+
 ## What is still open
 
 Named explicitly, with what each would take.

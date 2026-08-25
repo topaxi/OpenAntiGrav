@@ -85,6 +85,14 @@ bits there. Asserted over all 28 files by
 
 ### Bit `k` is chunk `k` in file order, LSB first - confidence 92
 
+**Corroborated from the executable at 90.** The scene object the engine indexes
+with this bit *is* the `.rcsmodel` file image - there is no list builder in the
+whole binary, and its item count and item table are the file's own mesh count
+and mesh offset table. See
+[visibility.md](../ghidra/functions/ps3-hdfury-eu/visibility.md), "And the
+scene object *is* the `.rcsmodel`". The measurements below stand on their own
+and were made first.
+
 **The bit order is settled by the executable**, not inferred from the file's
 big-endian words: the routine that clears one chunk from the frame mask is
 `mask[i >> 3] &= ~(1 << (i & 7))`, LSB first, confidence 84.
