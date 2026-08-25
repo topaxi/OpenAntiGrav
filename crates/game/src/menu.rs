@@ -484,9 +484,9 @@ pub enum Entry {
         current: usize,
         /// What makes this row inert. See [`Menu::is_disabled`].
         disabled_by: Option<Condition>,
-        /// What makes this row's setting stored but ineffective. See
-        /// [`Menu::warning`].
-        warning: Option<Warning>,
+        /// What makes this row's setting stored but ineffective, one entry
+        /// per independently-triggered combination. See [`Menu::warning`].
+        warnings: Vec<Warning>,
         /// What this row says when it has been moved off the value the game is
         /// running on. See [`Menu::restart_note`].
         restart: Option<Restart>,
@@ -501,9 +501,8 @@ pub enum Entry {
         on: bool,
         /// What makes this row inert. See [`Menu::is_disabled`].
         disabled_by: Option<Condition>,
-        /// What makes this row's setting stored but ineffective. See
-        /// [`Menu::warning`].
-        warning: Option<Warning>,
+        /// What makes this row's setting stored but ineffective. See [`Menu::warning`].
+        warnings: Vec<Warning>,
         /// What this row says when it has been moved off the value the game is
         /// running on. See [`Menu::restart_note`].
         restart: Option<Restart>,
@@ -589,12 +588,12 @@ impl Entry {
         matches!(self, Self::Choice { .. } | Self::Toggle { .. })
     }
 
-    /// This row's warning, if it has one.
+    /// This row's declared warnings; [`Menu::warning`] says which applies.
     #[must_use]
-    pub fn warning(&self) -> Option<&Warning> {
+    pub fn warnings(&self) -> &[Warning] {
         match self {
-            Self::Choice { warning, .. } | Self::Toggle { warning, .. } => warning.as_ref(),
-            _ => None,
+            Self::Choice { warnings, .. } | Self::Toggle { warnings, .. } => warnings,
+            _ => &[],
         }
     }
 
@@ -758,10 +757,8 @@ mod raw {
         /// `{ setting = "...", value = ... }`: what makes this row inert. Only
         /// `choice` and `toggle` rows may carry it.
         pub disabled_by: Option<Condition>,
-        /// `{ setting = "...", values = [...], message = "..." }`: when this
-        /// row's setting is stored but has no effect. Only `choice` and
-        /// `toggle` rows may carry it.
-        pub warn_when: Option<Warning>,
+        /// `[{ setting = "...", values = [...], message = "..." }, ...]`, refused if empty.
+        pub warn_when: Option<Vec<Warning>>,
         /// `restart_required = "..."`: what to say once this row has been moved
         /// off the value the game is running on. The message rather than a
         /// `true`, for the reason a `warn_when` carries one - a marker with
@@ -918,7 +915,7 @@ impl Definition {
                 for condition in entry
                     .disabled_by()
                     .into_iter()
-                    .chain(entry.warning().into_iter().flat_map(|w| w.all.iter()))
+                    .chain(entry.warnings().iter().flat_map(|w| w.all.iter()))
                 {
                     self.check_condition(condition, &context)?;
                 }
@@ -986,11 +983,19 @@ fn resolve(
         .as_ref()
         .map(|condition| condition_from(condition, context))
         .transpose()?;
-    let warning = entry
+    // `warn_when = []` is refused, the same shape as `restart_required = ""` below.
+    if entry.warn_when.as_deref().is_some_and(<[_]>::is_empty) {
+        return Err(Error::BadEntry {
+            context: context.to_string(),
+            problem: "a warn_when needs at least one warning".to_string(),
+        });
+    }
+    let warnings = entry
         .warn_when
-        .as_ref()
+        .iter()
+        .flatten()
         .map(|warning| warning_from(warning, context))
-        .transpose()?;
+        .collect::<Result<Vec<_>, _>>()?;
     // An empty message is the `restart_required = true` this field deliberately
     // is not: a marker with nothing under it says something is wrong and does
     // not say what to do about it.
@@ -1060,7 +1065,7 @@ fn resolve(
                 source,
                 current: 0,
                 disabled_by,
-                warning,
+                warnings,
                 restart,
             })
         }
@@ -1071,7 +1076,7 @@ fn resolve(
                 setting: setting.clone(),
                 on: false,
                 disabled_by,
-                warning,
+                warnings,
                 restart,
             })
         }
@@ -1556,14 +1561,14 @@ impl Menu {
             .is_some_and(|condition| condition.matches(self.held(&condition.setting).as_ref()))
     }
 
-    /// This row's warning, if it has one and it currently applies.
+    /// This row's warning: the first declared one that applies. See [`Entry::warnings`].
     ///
     /// A warned row is drawn normally and marked, not greyed: its setting *is*
     /// stored and *will* take effect the moment the row it conflicts with
     /// moves. Greying would say "you cannot change this", which is false.
     #[must_use]
     pub fn warning<'a>(&self, entry: &'a Entry) -> Option<&'a Warning> {
-        entry.warning().filter(|warning| {
+        entry.warnings().iter().find(|warning| {
             warning
                 .all
                 .iter()
