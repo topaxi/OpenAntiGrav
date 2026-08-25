@@ -47,17 +47,19 @@ fn for_each(suffix: &str, mut each: impl FnMut(&str, &[u8])) {
     }
 }
 
-/// **The `.rcsmodel` reader reaches 96% of the disc, and must not reach less.**
+/// **The `.rcsmodel` reader reaches 97.7% of the disc, and must not reach less.**
 ///
 /// A floor rather than an equality, because coverage rising is the direction
-/// this is for. What is left is string pools, the variable-length tail of a
-/// material record - this crate reads the first `0x18` bytes of one that runs
-/// to 768 - and alignment slack.
+/// this is for - and it already has. The sweep's first run read 96.06%, and
+/// following its largest gap found that `rcsmodel::STRIDES` listed three of
+/// the seven widths the disc declares, so a chunk of one of the other four
+/// with no declaration could not be solved by any search. Widening it to the
+/// declared set took the disc to **97.69%** and the surfaces no rule can
+/// decode from 371 to 115. See `rcsmodel_stride_ground_truth.rs`.
 ///
-/// **The number that matters more is the second one.** A circuit's own
-/// `track.rcsmodel` is 98% read; the files dragging the average down are the
-/// front-end track previews under `fe/`, and those are a lead this test
-/// records rather than a defect it asserts against.
+/// What is left is string pools, alignment slack, and the variable-length tail
+/// of a material record: this crate reads the first `0x18` bytes of one that
+/// runs to 768.
 #[test]
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
 fn the_rcsmodel_reader_reaches_nearly_all_of_every_file() {
@@ -89,8 +91,8 @@ fn the_rcsmodel_reader_reaches_nearly_all_of_every_file() {
         worst,
     );
     assert!(
-        overall >= 0.955,
-        "the reader now reaches {:.2}% of the disc's .rcsmodel bytes, down from 96.06%",
+        overall >= 0.972,
+        "the reader now reaches {:.2}% of the disc's .rcsmodel bytes, down from 97.69%",
         overall * 100.0,
     );
     let named = named.expect("Talon's Junction is on the disc");

@@ -9,9 +9,76 @@ use crate::ByteOrder;
 
 use super::{
     Error, LAYOUT_DESCRIBED, LAYOUT_INLINE, Layout, Mesh, Result, SPACE_BYTE, SUBMESH_BASE,
-    SUBMESH_LEN, SURFACE_BASE, SURFACE_COUNT, SURFACE_LEN, SURFACE_TABLE, Space, SubMesh,
-    VertexDecl,
+    SUBMESH_LEN, SURFACE_BASE, SURFACE_COUNT, SURFACE_LEN, SURFACE_TABLE, SubMesh, VertexDecl,
 };
+
+/// Which space a chunk's dequantised positions are in, out of its
+/// [`SPACE_BYTE`].
+///
+/// **The disc states this, and this project used to guess it.**
+/// `oag_render::mesh::rcs::is_world_baked` decided the same question by
+/// carrying a `.vex` node's authored box through its transform and asking
+/// whether it landed within one world unit of the chunk's bias - a tolerance
+/// invented here, with an essay attached. Measured over every `Mesh` node on
+/// the disc whose chunk is in its own model, 11,450 of them, and judged by the
+/// **bias**, which is independent of both readings (a world-baked chunk's bias
+/// is a world position, a node-local one's is near zero):
+///
+/// - the byte agrees with the bias on **94.4 %**;
+/// - the heuristic agrees with the byte on **43.2 %**, and on both directions
+///   of disagreement the bias sides with the byte: of 5,724 chunks the byte
+///   calls node-local and the heuristic called baked, 5,345 have a bias under
+///   50 units and the median is **1.2**; of 775 the other way, only 27 are
+///   under 50 units and the median is **544.3**.
+///
+/// Within `data/environments` the split is unambiguous: [`Self::World`]
+/// chunks' `|bias|` has a median of 552.9 with **one** of 32,955 under a unit,
+/// [`Self::Node`] chunks' a median of 2.7 with 35 % under a unit. Across the
+/// disc every chunk of `data/ships` and `data/fe` is [`Self::Node`] and every
+/// chunk of `data/pvsblocker` is [`Self::World`], and 8,769 of 8,773
+/// [`Self::Node`] chunks are addressed by a `.vex` node.
+///
+/// Confidence 88 from the data. **The executable then confirmed the
+/// mechanism**: `Scene_RefreshNodeMatrices` (`0x003fb330`) walks every chunk
+/// and, *only* where this byte is `2`, follows the chunk's runtime block to a
+/// linked scene node, refreshes it if its dirty bit is set, and copies four
+/// 16-byte rows - a 4x4 matrix - into the head of the block. A `1` chunk is
+/// skipped entirely. So the byte says **whether this chunk's world transform
+/// is re-read from a node every frame**, which is the runtime face of the
+/// same link `.vex` nodes make by hash. See
+/// `docs/ghidra/functions/ps3-hdfury-eu/visibility.md`, "The chunk kind byte".
+///
+/// **It is genuinely three-way, which is why [`Self::Unknown`] exists rather
+/// than a boolean**: the load-time switch tests `1`, then `2`, then falls
+/// through to a third path. No chunk on this disc takes it.
+///
+/// **What it is not**: no arm of either switch reads the vertex declaration,
+/// the index buffer, the stride, the surface count or anything under the
+/// surface record - both only store command words into an emission cursor. So
+/// it cannot be a triangle-list-versus-strip, an index-width or an
+/// attribute-set selector, and none of this module's geometry decoding turns
+/// on it. Confidence 82 for that negative.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Space {
+    /// `1`: positions are already in world space, and no node transform
+    /// applies. 33,088 chunks.
+    World,
+    /// `2`: positions are in the chunk's own space, and a `.vex` node places
+    /// it. 8,773 chunks.
+    Node,
+    /// Neither value. None on this disc; kept so a future title's file is
+    /// reported rather than silently read as one of the two.
+    Unknown(u8),
+}
+impl Space {
+    fn of(byte: u8) -> Self {
+        match byte {
+            1 => Self::World,
+            2 => Self::Node,
+            other => Self::Unknown(other),
+        }
+    }
+}
 
 impl Mesh {
     /// Reads one chunk: its hash and layout, then every surface it declares.

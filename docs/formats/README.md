@@ -39,11 +39,30 @@ number.
 
 | Format | Bytes reached | Shape of the residual |
 | --- | --- | --- |
-| `.rcsmodel` | **96.06 %** of 719 MB; a circuit's own `track.rcsmodel` **98.08 %** | string pools, the variable-length tail of a material record (this crate reads `0x18` of one that runs to 768), alignment slack. The outliers are the `fe/` track previews at ~29 % - a **standing lead**, and the runs there are vertex-shaped. |
+| `.rcsmodel` | **97.69 %** of 719 MB; a circuit's own `track.rcsmodel` **98.08 %** | string pools, the variable-length tail of a material record (this crate reads `0x18` of one that runs to 768), alignment slack. |
 | `.vex` | **100.00 %** of all 742 files | none. The header declares a tree length and a texture length, and those two plus the header are the whole file. |
 
 `crates/formats/tests/coverage_ground_truth.rs` holds both as a **ratchet**:
 `.rcsmodel` must not fall below the floors, `.vex` must stay exact.
+
+**It found something on its first run.** `.rcsmodel` read 96.06%, and the
+largest unread runs were vertex-shaped. Following them:
+[`STRIDES`](../../crates/formats/src/rcsmodel.rs), the list of widths the three
+stride searches are allowed to answer, was `[14, 18, 22]` - and the disc's own
+vertex declarations carry **seven**: 18 on 38,060 chunks, 14 on 12,616, 22 on
+9,423, 10 on 941, 26 on 755, 38 on 208, 34 on 23. A chunk of one of the missing
+four *with no declaration of its own* could not be solved by any search,
+because the answer was not on the ballot. The three came from the widths an
+authored bounding box had settled on back when no declaration was read; when
+`vertex_decl` was decoded the constant was never revisited.
+
+Widening it to the declared set - measured, not guessed - took the disc to
+**97.69 %**, the surfaces no rule can decode from **371 to 115**, and the
+searches' disagreements with the declaration from 7 to 6 while solving 1,387
+more chunks. Talon's Junction renders byte-identically, because every chunk it
+has was already solved. Pinned by `rcsmodel_stride_ground_truth.rs`, which
+asserts the invariant that broke: **every width the disc declares must be a
+width the searches may answer**.
 
 **A gap is a lead, not a bug, and the first thing to check is whether the
 format's own header already accounts for it.** This instrument's first `.vex`

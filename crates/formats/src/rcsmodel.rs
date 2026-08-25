@@ -97,6 +97,7 @@ mod stride;
 mod surface;
 
 pub use coverage::coverage;
+pub use surface::Space;
 pub mod vertex_decl;
 
 pub use material::{Blend, Factor, Material, Transparency};
@@ -202,19 +203,30 @@ const LAYOUT_INLINE: u8 = 0x01;
 
 /// The strides the searches will consider, in bytes.
 ///
-/// **These three and nothing else, and that is a measurement rather than an
-/// optimisation.** They are 6 bytes of position plus 8, 12 or 16 of attributes,
-/// and they are the only widths an authored bounding box has ever settled on -
-/// across all 89 meshes of Assegai, its LOD1 and Talon's Junction.
+/// **The set the disc's own vertex declarations carry, and nothing else.** A
+/// declaration states the stride outright (`vertex_decl`), so it is the oracle
+/// rather than a guess: over all 643 models the declarations carry exactly
+/// seven widths - 18 on 38,060 chunks, 14 on 12,616, 22 on 9,423, 10 on 941,
+/// 26 on 755, 38 on 208 and 34 on 23.
+///
+/// **This was `[14, 18, 22]`, which is three of the seven.** Those came from
+/// the widths an authored bounding box had settled on back when no declaration
+/// was read; when `vertex_decl` was decoded it showed four more and this
+/// constant was not revisited. The cost was structural - a chunk of one of the
+/// missing four *with no declaration of its own* could not be solved by any
+/// search, because the answer was not on the ballot. Widening it took the
+/// surfaces no rule can decode from 371 to 115 and the disc's read coverage
+/// from 96.06% to 97.69%.
 ///
 /// Searching every even width from 6 to 64 instead, as this did first, is
-/// strictly worse on a circuit: 814 of `talons_junction`'s 983 chunks still
-/// choose one of these three, and the other 169 choose a width no measurement
-/// supports and decode to spikes radiating out of the level. A width outside
-/// this set is not evidence of a fourth format; it is the search finding
-/// nothing and picking the least bad noise. Skipping the chunk and saying so is
-/// the honest answer, and it is what the callers do.
-pub const STRIDES: &[usize] = &[14, 18, 22];
+/// still strictly worse: 814 of `talons_junction`'s 983 chunks choose one of
+/// the original three anyway, and the rest choose a width no measurement
+/// supports and decode to spikes radiating out of the level. **The rule is not
+/// "search wider", it is "search exactly what the data declares".**
+///
+/// Pinned by `crates/formats/tests/rcsmodel_stride_ground_truth.rs`, which
+/// asserts that every declared width is one the searches may answer.
+pub const STRIDES: &[usize] = &[10, 14, 18, 22, 26, 34, 38];
 
 /// How much of a chunk must decode to a unit normal for a stride to win.
 ///
@@ -508,75 +520,6 @@ pub struct Mesh {
     /// element of this list itself - a surface has no surfaces. Walk it through
     /// [`Self::surfaces`] rather than directly, so the first one is not missed.
     pub extra_surfaces: Vec<Mesh>,
-}
-
-/// Which space a chunk's dequantised positions are in, out of its
-/// [`SPACE_BYTE`].
-///
-/// **The disc states this, and this project used to guess it.**
-/// `oag_render::mesh::rcs::is_world_baked` decided the same question by
-/// carrying a `.vex` node's authored box through its transform and asking
-/// whether it landed within one world unit of the chunk's bias - a tolerance
-/// invented here, with an essay attached. Measured over every `Mesh` node on
-/// the disc whose chunk is in its own model, 11,450 of them, and judged by the
-/// **bias**, which is independent of both readings (a world-baked chunk's bias
-/// is a world position, a node-local one's is near zero):
-///
-/// - the byte agrees with the bias on **94.4 %**;
-/// - the heuristic agrees with the byte on **43.2 %**, and on both directions
-///   of disagreement the bias sides with the byte: of 5,724 chunks the byte
-///   calls node-local and the heuristic called baked, 5,345 have a bias under
-///   50 units and the median is **1.2**; of 775 the other way, only 27 are
-///   under 50 units and the median is **544.3**.
-///
-/// Within `data/environments` the split is unambiguous: [`Self::World`]
-/// chunks' `|bias|` has a median of 552.9 with **one** of 32,955 under a unit,
-/// [`Self::Node`] chunks' a median of 2.7 with 35 % under a unit. Across the
-/// disc every chunk of `data/ships` and `data/fe` is [`Self::Node`] and every
-/// chunk of `data/pvsblocker` is [`Self::World`], and 8,769 of 8,773
-/// [`Self::Node`] chunks are addressed by a `.vex` node.
-///
-/// Confidence 88 from the data. **The executable then confirmed the
-/// mechanism**: `Scene_RefreshNodeMatrices` (`0x003fb330`) walks every chunk
-/// and, *only* where this byte is `2`, follows the chunk's runtime block to a
-/// linked scene node, refreshes it if its dirty bit is set, and copies four
-/// 16-byte rows - a 4x4 matrix - into the head of the block. A `1` chunk is
-/// skipped entirely. So the byte says **whether this chunk's world transform
-/// is re-read from a node every frame**, which is the runtime face of the
-/// same link `.vex` nodes make by hash. See
-/// `docs/ghidra/functions/ps3-hdfury-eu/visibility.md`, "The chunk kind byte".
-///
-/// **It is genuinely three-way, which is why [`Self::Unknown`] exists rather
-/// than a boolean**: the load-time switch tests `1`, then `2`, then falls
-/// through to a third path. No chunk on this disc takes it.
-///
-/// **What it is not**: no arm of either switch reads the vertex declaration,
-/// the index buffer, the stride, the surface count or anything under the
-/// surface record - both only store command words into an emission cursor. So
-/// it cannot be a triangle-list-versus-strip, an index-width or an
-/// attribute-set selector, and none of this module's geometry decoding turns
-/// on it. Confidence 82 for that negative.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Space {
-    /// `1`: positions are already in world space, and no node transform
-    /// applies. 33,088 chunks.
-    World,
-    /// `2`: positions are in the chunk's own space, and a `.vex` node places
-    /// it. 8,773 chunks.
-    Node,
-    /// Neither value. None on this disc; kept so a future title's file is
-    /// reported rather than silently read as one of the two.
-    Unknown(u8),
-}
-
-impl Space {
-    fn of(byte: u8) -> Self {
-        match byte {
-            1 => Self::World,
-            2 => Self::Node,
-            other => Self::Unknown(other),
-        }
-    }
 }
 
 /// Which of the two shapes a chunk's header takes, out of its `+0x06` byte.
