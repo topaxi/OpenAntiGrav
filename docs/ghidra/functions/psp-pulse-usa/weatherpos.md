@@ -103,13 +103,29 @@ page called a dead-end thunk. Three independent call sites say otherwise:
   ends on (`0x0026e55c`, i.e. `0x08a7255c`) - tagging the new object as a
   `weatherPos` instance for exactly the comparison above to recognise later.
 
-So the six-thunk cluster at `0x08a7255c`..`0x08a725a0` (each returning its own
-address, a few bytes apart) is not "a small table of interchangeable
-placeholder returns" - it is six classes' identity tags, sitting where their
-translation units happened to link. `weatherPos`'s is the one at `0x08a7255c`;
-the discarded first-write tag at `0x08a6ba64` is presumably some other,
-unidentified class's, briefly written to this same descriptor before the
-second write replaced it with `weatherPos`'s own.
+So the six-thunk cluster at `0x08a7255c`..`0x08a725a0` (each 12 bytes -
+`lui`/`jr`/`addiu`, one per class, not 8) is not "a small table of
+interchangeable placeholder returns" - it is six classes' identity tags,
+sitting where their translation units happened to link. `weatherPos`'s is the
+one at `0x08a7255c`.
+
+**The discarded first-write tag, `0x08a6ba64`, is not another class's tag at
+all - it is a generic, widely shared one.** It sits in a second, larger
+cluster of the same shape (at least ten consecutive 12-byte thunks read at
+`0x08a6ba34`..`0x08a6baa4`, run not confirmed to end there, each still
+returning exactly its own address), but unlike `weatherPos`'s real tag
+(exactly 3 callers, all identified above), `search_instructions` finds
+**25 separate functions** calling `0x08a6ba64` specifically, spanning
+addresses from `0x0890xxxx` to `0x08a7xxxx` - clearly unrelated classes'
+registration or construction code, not a coincidence at that count. That
+confirms the hypothesis: `0x08a6ba64` is a shared "generic base node" tag
+that many classes' registration/construction code stamps as a first pass,
+`weatherPos`'s own registration among them, before some (not all -
+`weatherPos` is one of the ones that do) overwrite it with a real per-class
+tag. (One of the 25, `FUN_0890bd80`, was checked against `vex.md`'s cited
+address for `LodGroup`'s own `init` slot and did not resolve to it cleanly
+through this session's arithmetic - not asserted as a match, just noted as
+tried and inconclusive.)
 
 **This means `pob.md`'s identical framing for `ParticleSystem`'s slot
 (`FUN_08a6bd18`, called there "a trivial self-address-returning thunk", "the
@@ -142,21 +158,38 @@ what `FUN_0892c340` already wrote - the same harmless double-write pattern as
 proven shared boilerplate, despite writing a generic-looking `"file"` tag -
 just not ruled out either.
 
-**`FUN_0892c404` itself has no caller found by any of three independent
+**`FUN_0892c404` itself has no caller found by any of four independent
 searches**: `get_xrefs_to` and `get_function_callers` return nothing (as
-expected in this wart-affected region), and `search_instructions` for its
-address in *both* valid `lui`/`addiu` encodings (`0x00128404` as `lui 0x13` +
+expected in this wart-affected region); `search_instructions` for its address
+in *both* valid `lui`/`addiu` encodings (`0x00128404` as `lui 0x13` +
 `addiu -0x7bfc`, and as `lui 0x12` + `addiu 0x8404`) also returns nothing -
 unlike `Vex_RegisterClass` and `FUN_08a71364`, which this same technique found
-dozens of call sites for. So this is not the earlier session's search-encoding
-mistake repeating; it is a genuine negative result. Either something calls it
-through a function-pointer slot this session did not locate (a class-table
-`+0x7c` `init` field is the obvious candidate, per `LodGroup`'s documented
-layout, but nothing here confirms `FUN_0892c404` sits in `weatherPos`'s own
-table at that offset), or - matching the pattern `vex.md` already documents
-for `LodGroup`'s tier switch and for `engine_fire`/`exitglow`/`gate`'s
-missing registrations - this retail binary authors a `weatherPos` constructor
-it never statically exercises.
+dozens of call sites for; and `search_byte_patterns` for its raw little-endian
+address (`04 C4 92 08`) anywhere in the program - code or data - also finds
+nothing, which rules out it being stashed in a function-pointer *table*
+(a per-class jump table, say) rather than reached by a fixed instruction. So
+this is not the earlier session's search-encoding mistake repeating; it is a
+consistent negative result across every static search this session tried.
+
+`weatherPos`'s own class table's `+0x7c` (`0x08890314`, from `WeatherPos_RegisterClass`'s
+own `0x8c298` argument + image base) reads as four zero bytes in the shipped
+image. `vex.md` reports `LodGroup`'s equivalent slot as a real,
+`LodGroup`-specific pointer (confidence 88) - this session tried to
+re-confirm that by the same method and could not get a coherent result from
+`LodGroup`'s own registration site, which resolves through the same
+unrelocated-address wart and did not reproduce `vex.md`'s cited table address;
+left as `vex.md`'s existing finding rather than re-derived here. Taken at
+face value it says `weatherPos`'s `+0x7c` being zero is meaningful, not
+generic filler - but it is not proof either way: `vex.md`'s own reading of
+`LodGroup` shows this slot can also be filled generically at *instantiation*
+time rather than at registration time, which a static read of an
+unconstructed class's table cannot distinguish from "never gets one". Either
+something calls
+`FUN_0892c404` through a function-pointer slot this session did not locate,
+or - matching the pattern `vex.md` already documents for `LodGroup`'s tier
+switch and for `engine_fire`/`exitglow`/`gate`'s missing registrations - this
+retail binary authors a `weatherPos` constructor it never statically
+exercises.
 
 ## Placement: no in-file signal, confirmed on one track
 
@@ -189,14 +222,19 @@ already reads) was checked too - its full attribute set (`type`,
   per-class runtime path exists (`FUN_0892c404`) - it just is not statically
   reached, so either its caller has not been found yet or the retail binary
   authors it without exercising it.
-- **`FUN_0892c404`'s caller is the concrete next probe.** Candidates not yet
-  tried: reading `weatherPos`'s own class table (`0x8c298` +imagebase
-  `0x08890298`) for a non-generic `+0x7c` to confirm or refute it sits there
-  as the `init` slot; a live emulator with a breakpoint on `0x0892c404` during
-  a race on a track with `weatherPos` instances (Talon's Junction has 14);
-  or a broader sweep of `Vex_LoadModel`'s three per-node-type gathers (`Mesh`,
-  and two more at caps 1000 and `0x40`, none yet identified) in case one of
-  them is what ends up invoking it.
+- **`FUN_0892c404`'s caller is the concrete next probe.** Ruled out this
+  session: `Vex_LoadModel`'s other two per-node-type gathers. The cap-1000
+  gather's tag-getter (`0x08a6b9bc`) has 35 callers including
+  `Texture_LoadEngineFlare`, `Texture_LoadEffectSurfaces` and
+  `Texture_LoadEngineNoise` by name - it gathers `Texture` nodes, not
+  `weatherPos`. The cap-`0x40` gather's tag-getter (`0x08a6ba4c`) has 7
+  callers, none `weatherPos`-related. So neither gather is the path in.
+  `weatherPos`'s own class table's `+0x7c` reads zero statically (above),
+  consistent with no wiring but not proof of it. Untried: a live emulator with
+  a breakpoint on `0x0892c404` during a race on a track with `weatherPos`
+  instances (Talon's Junction has 14) - the only way left to tell "never
+  wired" from "wired at instantiation time, which a static read of an
+  unconstructed table can't see" apart.
 - **`WO_MODESTO_STEAM_A` may not even be a Pulse-authored trigger.** `modesto_heights`
   matches **Pure**'s `03_Modesto_Heights`
   ([`hd-status.md`](../../../formats/hd-status.md#the-circuits-are-the-psps)),
