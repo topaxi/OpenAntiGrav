@@ -874,6 +874,8 @@ fn build_class(
                         blend_state: None,
                         layer,
                         node: Some(index as u32),
+                        // Not a `.rcsmodel` chunk - see `DrawCall::chunk`.
+                        chunk: None,
                     });
                 }
             }

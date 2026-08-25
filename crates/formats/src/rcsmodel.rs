@@ -578,6 +578,16 @@ impl Model {
     pub fn mesh(&self, hash: u32) -> Option<&Mesh> {
         self.meshes.iter().find(|mesh| mesh.hash == hash)
     }
+
+    /// Where the chunk with this hash sits in [`Self::meshes`].
+    ///
+    /// File order is the index `track.pvs` addresses a chunk by - see
+    /// [`crate::hd_pvs`] - so a caller that has a hash and needs a PVS bit
+    /// needs this rather than the chunk itself.
+    #[must_use]
+    pub fn mesh_index(&self, hash: u32) -> Option<usize> {
+        self.meshes.iter().position(|mesh| mesh.hash == hash)
+    }
 }
 
 impl Mesh {

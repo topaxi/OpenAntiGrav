@@ -99,4 +99,15 @@ pub struct DrawCall {
     /// to one file; [`merge`] keeps the per-source values, which are ambiguous
     /// across sources.
     pub node: Option<u32>,
+    /// Index of the `.rcsmodel` chunk this draw call came from, in file order,
+    /// or `None` for anything that is not PS3 chunk geometry.
+    ///
+    /// **The join key for Wipeout HD's authored PVS.** `track.pvs` carries one
+    /// bit per chunk per cell, addressed by exactly this index - see
+    /// [`oag_formats::hd_pvs`] and `docs/formats/hd-pvs.md`. It is the PS3
+    /// counterpart of [`Self::node`]: the same idea that a draw call should be
+    /// culled by the association the artists authored rather than by one
+    /// guessed from its world-space bounds, which `crate::pvs`' module docs
+    /// argue at length for the PSP.
+    pub chunk: Option<u32>,
 }

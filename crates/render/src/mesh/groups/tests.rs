@@ -69,6 +69,7 @@ fn model_with_nodes(nodes: &[u32]) -> Model {
         model.indices.extend(start..start + 3);
         model.draws.push(DrawCall {
             moving: false,
+            chunk: None,
             range: start..start + 3,
             texture: None,
             bounds: Bounds {

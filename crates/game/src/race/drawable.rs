@@ -369,6 +369,7 @@ impl Drawable {
         pass: &mut wgpu::RenderPass<'_>,
         sections: Option<&DrawSections>,
         set: Option<&VisibleSet>,
+        chunks: Option<&ChunkSet>,
         frustum: Option<&Frustum>,
     ) -> SceneStats {
         let mut stats = SceneStats::default();
@@ -394,7 +395,7 @@ impl Drawable {
         pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint32);
         // Slot 0 is the white fallback, so a texture index of n binds slot n + 1.
         for (index, draw) in self.model.draws.iter().enumerate() {
-            if !visible(draw, DrawSections::at(opaque, index), set, frustum) {
+            if !visible(draw, DrawSections::at(opaque, index), set, chunks, frustum) {
                 stats.draws_culled += 1;
                 continue;
             }
@@ -409,7 +410,13 @@ impl Drawable {
         // `mesh_render::Built::alpha_test_pipeline`.
         pass.set_pipeline(&self.alpha_test_pipeline);
         for (index, draw) in self.model.alpha_tested_draws.iter().enumerate() {
-            if !visible(draw, DrawSections::at(alpha_tested, index), set, frustum) {
+            if !visible(
+                draw,
+                DrawSections::at(alpha_tested, index),
+                set,
+                chunks,
+                frustum,
+            ) {
                 stats.draws_culled += 1;
                 continue;
             }
@@ -441,7 +448,13 @@ impl Drawable {
         };
         let mut current: Option<&wgpu::RenderPipeline> = None;
         for (index, draw) in self.model.transparent_draws.iter().enumerate() {
-            if !visible(draw, DrawSections::at(transparent, index), set, frustum) {
+            if !visible(
+                draw,
+                DrawSections::at(transparent, index),
+                set,
+                chunks,
+                frustum,
+            ) {
                 stats.draws_culled += 1;
                 continue;
             }

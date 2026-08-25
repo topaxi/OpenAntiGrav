@@ -484,6 +484,110 @@ impl SectionPadding {
     }
 }
 
+/// How far either viewpoint's neighbourhood is unioned into a PS3 chunk set,
+/// in world units.
+///
+/// **Two median cell spacings.** Every circuit's `track.pvs` places its cells
+/// 12.0 units apart along the racing line (median over Talon's Junction's 621
+/// and Anulpha Pass's 763, measured identically on both), so this reaches the
+/// two cells either side of the one a point lands in. That covers the boundary
+/// a craft crosses between two frames, which is the same thing
+/// [`SectionPadding::HOPS`] buys on the PSP - and the reason it is needed here
+/// too is that the original looks the *craft* up in its own partition each
+/// frame and never culls to a camera, so nothing on the disc pads for a chase
+/// spring that trails the craft.
+pub const CHUNK_PAD: f32 = 24.0;
+
+/// How far a viewpoint may be from the nearest cell and still be located.
+///
+/// Beyond this the set degrades to drawing everything, on the same rule as
+/// [`UNPLACED`]: a craft that has fallen off the circuit or been knocked into
+/// scenery is somewhere the partition was not authored around, and culling to
+/// a stale cell exactly then is the most visible way this could go wrong. 64
+/// units is five cell spacings and comfortably wider than any circuit's track
+/// half-width, so it cannot trip during ordinary racing.
+pub const CHUNK_TRUST_RADIUS: f32 = 64.0;
+
+/// Which of a PS3 circuit's chunks this frame may draw - the HD counterpart of
+/// [`VisibleSet`].
+///
+/// **A bitmap rather than a mask, because HD partitions by chunk and not by
+/// section.** `track.pvs` carries one bit per `.rcsmodel` chunk per cell (see
+/// [`oag_formats::hd_pvs`]), which is 983 to 1,902 bits rather than the PSP's
+/// 64, so there is no mask to `and` against and the per-draw test is a byte
+/// load and a shift instead. Everything else about the two tiers is the same,
+/// including that this one runs first.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ChunkSet {
+    bits: Vec<u8>,
+}
+
+impl ChunkSet {
+    /// The union of what the craft's cell and the camera's cell can see, each
+    /// padded by [`CHUNK_PAD`].
+    ///
+    /// `None` when neither viewpoint is within [`CHUNK_TRUST_RADIUS`] of any
+    /// cell, which the caller turns into no first tier at all - draw
+    /// everything. The union is a plain `or` with no equivalent of
+    /// [`SwapConflicts`]: nothing here has been measured to encode a LOD swap
+    /// by mutual exclusion the way Moa Therma's sections do, so subtracting
+    /// anything would be a rule invented rather than found.
+    #[must_use]
+    pub fn around(pvs: &oag_formats::hd_pvs::Pvs, craft: Vec3, camera: Vec3) -> Option<Self> {
+        let mut bits: Option<Vec<u8>> = None;
+        for point in [craft, camera] {
+            let Some(nearest) = pvs.nearest_cell(point.to_array()) else {
+                continue;
+            };
+            let Some(at) = pvs.position(nearest) else {
+                continue;
+            };
+            if Vec3::from_array(at).distance(point) > CHUNK_TRUST_RADIUS {
+                continue;
+            }
+            for cell in 0..pvs.cells() {
+                let Some(p) = pvs.position(cell) else {
+                    continue;
+                };
+                if cell != nearest && Vec3::from_array(p).distance(point) > CHUNK_PAD {
+                    continue;
+                }
+                let Some(cell_bits) = pvs.cell_bits(cell) else {
+                    continue;
+                };
+                match &mut bits {
+                    None => bits = Some(cell_bits.to_vec()),
+                    Some(acc) => {
+                        for (a, b) in acc.iter_mut().zip(cell_bits) {
+                            *a |= b;
+                        }
+                    }
+                }
+            }
+        }
+        bits.map(|bits| Self { bits })
+    }
+
+    /// Whether this frame may draw `draw`.
+    ///
+    /// A draw call with no chunk index is always allowed, which is the same
+    /// direction of error [`ALWAYS`] points in: an unplaced batch costs a
+    /// frustum test, a wrongly-excluded one disappears from the shot.
+    #[must_use]
+    pub fn allows(&self, draw: &DrawCall) -> bool {
+        match draw.chunk {
+            None => true,
+            Some(chunk) => oag_formats::hd_pvs::allows(&self.bits, chunk as usize),
+        }
+    }
+
+    /// How many chunks this set draws, for the load report and the overlay.
+    #[must_use]
+    pub fn chunk_count(&self) -> u32 {
+        self.bits.iter().map(|b| b.count_ones()).sum()
+    }
+}
+
 /// The two-tier test, in the order that makes it worth doing.
 ///
 /// **PVS first, frustum second**, and the ordering is the point rather than a
@@ -502,6 +606,7 @@ pub fn visible(
     draw: &DrawCall,
     sections: u64,
     visible_set: Option<&VisibleSet>,
+    chunks: Option<&ChunkSet>,
     frustum: Option<&Frustum>,
 ) -> bool {
     // A draw the shader moves has bounds that describe where it was at time
@@ -512,6 +617,14 @@ pub fn visible(
     }
     if let Some(set) = visible_set
         && !set.allows(sections)
+    {
+        return false;
+    }
+    // The PS3's first tier, and mutually exclusive with the one above in
+    // practice: a Pulse track has sections and no chunk indices, an HD one has
+    // chunk indices and no sections.
+    if let Some(set) = chunks
+        && !set.allows(draw)
     {
         return false;
     }

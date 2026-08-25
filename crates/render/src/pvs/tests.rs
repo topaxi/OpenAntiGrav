@@ -32,6 +32,7 @@ fn draw_at(centre: [f32; 3], radius: f32) -> DrawCall {
         texture: None,
         bounds: Bounds { centre, radius },
         node: None,
+        chunk: None,
     }
 }
 
@@ -69,6 +70,7 @@ fn pvs(boxes: &[(u8, [f32; 3], [f32; 3])]) -> TrackPvs {
 fn draw_of_node(node: Option<u32>) -> DrawCall {
     DrawCall {
         moving: false,
+        chunk: None,
         blend: None,
         blend_state: None,
         layer: oag_formats::vex::LAYER_DEFAULT,
@@ -366,14 +368,115 @@ fn pvs_with_masks(sections: &[(u8, u64)]) -> TrackPvs {
 fn the_mask_decides_before_the_frustum_is_consulted() {
     let draw = draw_at([0.0, 0.0, 0.0], 1.0);
     let hides_section_2 = VisibleSet { mask: !(1u64 << 2) };
-    assert!(!visible(&draw, 1 << 2, Some(&hides_section_2), None));
-    assert!(visible(&draw, 1 << 3, Some(&hides_section_2), None));
+    assert!(!visible(&draw, 1 << 2, Some(&hides_section_2), None, None));
+    assert!(visible(&draw, 1 << 3, Some(&hides_section_2), None, None));
     assert!(
-        visible(&draw, 1 << 2, None, None),
+        visible(&draw, 1 << 2, None, None, None),
         "PVS off draws everything"
     );
     assert!(
-        visible(&draw, ALWAYS, Some(&hides_section_2), None),
+        visible(&draw, ALWAYS, Some(&hides_section_2), None, None),
         "unplaced geometry is never excluded"
     );
+}
+
+/// A `.pvs` fixture: `cells` cells at the given positions over `chunks`
+/// chunks, each cell seeing exactly the chunks `sees` names for it.
+fn hd_pvs(positions: &[[f32; 3]], chunks: usize, sees: impl Fn(usize) -> Vec<usize>) -> Vec<u8> {
+    let width = chunks.div_ceil(8);
+    let mut out = Vec::new();
+    for word in [positions.len() as u32, chunks as u32, 0x10, 0] {
+        out.extend_from_slice(&word.to_be_bytes());
+    }
+    for p in positions {
+        for axis in p {
+            out.extend_from_slice(&axis.to_be_bytes());
+        }
+        out.extend_from_slice(&p[2].to_be_bytes());
+    }
+    for cell in 0..positions.len() {
+        let mut map = vec![0u8; width];
+        for chunk in sees(cell) {
+            map[chunk >> 3] |= 1 << (chunk & 7);
+        }
+        out.extend_from_slice(&map);
+    }
+    out
+}
+
+fn chunk_draw(chunk: Option<u32>) -> DrawCall {
+    DrawCall {
+        chunk,
+        ..draw_of_node(None)
+    }
+}
+
+/// The PS3 tier decides on the chunk index, and a draw with no chunk index is
+/// never the one it excludes.
+#[test]
+fn a_chunk_outside_the_cells_set_is_not_drawn() {
+    let blob = hd_pvs(&[[0.0; 3], [1000.0, 0.0, 0.0]], 16, |cell| match cell {
+        0 => vec![0, 1],
+        _ => vec![15],
+    });
+    let pvs = oag_formats::hd_pvs::Pvs::parse(&blob).unwrap();
+    let set = ChunkSet::around(&pvs, Vec3::ZERO, Vec3::ZERO).expect("located");
+    assert!(set.allows(&chunk_draw(Some(0))));
+    assert!(set.allows(&chunk_draw(Some(1))));
+    assert!(!set.allows(&chunk_draw(Some(15))));
+    assert!(
+        set.allows(&chunk_draw(None)),
+        "a draw with no chunk index is unplaced, and unplaced always draws"
+    );
+    assert_eq!(set.chunk_count(), 2);
+}
+
+/// Both viewpoints contribute, which is what covers a chase camera that has
+/// not reached the cell the craft is already in.
+#[test]
+fn the_craft_and_the_camera_are_unioned() {
+    let far = [1000.0, 0.0, 0.0];
+    let blob = hd_pvs(&[[0.0; 3], far], 16, |cell| match cell {
+        0 => vec![0],
+        _ => vec![9],
+    });
+    let pvs = oag_formats::hd_pvs::Pvs::parse(&blob).unwrap();
+    let together = ChunkSet::around(&pvs, Vec3::ZERO, Vec3::from_array(far)).expect("located");
+    assert!(together.allows(&chunk_draw(Some(0))));
+    assert!(together.allows(&chunk_draw(Some(9))));
+
+    let craft_only = ChunkSet::around(&pvs, Vec3::ZERO, Vec3::ZERO).expect("located");
+    assert!(!craft_only.allows(&chunk_draw(Some(9))));
+}
+
+/// The conservative fallback: a viewpoint nowhere near the authored partition
+/// gets no first tier at all rather than a confidently wrong cell.
+#[test]
+fn a_viewpoint_off_the_partition_draws_everything() {
+    let blob = hd_pvs(&[[0.0; 3]], 16, |_| vec![0]);
+    let pvs = oag_formats::hd_pvs::Pvs::parse(&blob).unwrap();
+    let stray = Vec3::new(CHUNK_TRUST_RADIUS * 10.0, 0.0, 0.0);
+    assert!(
+        ChunkSet::around(&pvs, stray, stray).is_none(),
+        "beyond CHUNK_TRUST_RADIUS the set is not built"
+    );
+    assert!(ChunkSet::around(&pvs, Vec3::ZERO, stray).is_some());
+}
+
+/// The neighbourhood padding, which covers a cell boundary crossed between two
+/// frames the way `SectionPadding::HOPS` does on the PSP.
+#[test]
+fn a_neighbouring_cell_within_the_padding_is_unioned_in() {
+    let inside = CHUNK_PAD * 0.5;
+    let outside = CHUNK_PAD * 4.0;
+    let blob = hd_pvs(
+        &[[0.0; 3], [inside, 0.0, 0.0], [outside, 0.0, 0.0]],
+        16,
+        |cell| vec![cell],
+    );
+    let pvs = oag_formats::hd_pvs::Pvs::parse(&blob).unwrap();
+    let set = ChunkSet::around(&pvs, Vec3::ZERO, Vec3::ZERO).expect("located");
+    assert!(set.allows(&chunk_draw(Some(0))));
+    assert!(set.allows(&chunk_draw(Some(1))), "within CHUNK_PAD");
+    assert!(!set.allows(&chunk_draw(Some(2))), "beyond CHUNK_PAD");
 }

@@ -109,7 +109,7 @@ use oag_render::mesh::{DrawCall, Model};
 use oag_render::mesh_render::Anisotropy;
 use oag_render::psys;
 use oag_render::pvs::{
-    DrawSections, PlacementStats, SectionPadding, SwapConflicts, UNPLACED, VisibleSet,
+    ChunkSet, DrawSections, PlacementStats, SectionPadding, SwapConflicts, UNPLACED, VisibleSet,
 };
 use oag_render::sparks;
 use oag_render::{mesh, mesh_render, shield::ShipShield, track as track_render};

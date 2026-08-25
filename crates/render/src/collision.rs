@@ -269,6 +269,7 @@ pub fn build_model(
             radius: bounds_radius,
         },
         node: None,
+        chunk: None,
     }];
     Model {
         airbrakes: [None, None],

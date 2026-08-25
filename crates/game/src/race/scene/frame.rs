@@ -44,9 +44,27 @@ impl Scene {
             .visibility
             .as_ref()
             .filter(|_| pvs_cull)
+            .filter(|visibility| visibility.has_sections())
             .map(|visibility| {
                 let (craft, camera) = race.visibility_sections();
                 visibility.set(craft, camera)
+            });
+        // Tier one on a PS3 circuit, which partitions by chunk rather than by
+        // section - see `oag_render::pvs::ChunkSet`. Located from world
+        // positions rather than from spline sample ids because `track.pvs`
+        // carries its own cell positions and is not indexed by the `.vex`
+        // spline at all.
+        let chunk_set = self
+            .visibility
+            .as_ref()
+            .filter(|_| pvs_cull)
+            .and_then(|visibility| visibility.chunks())
+            .and_then(|pvs| {
+                ChunkSet::around(
+                    pvs,
+                    race.ship().physics.body.position,
+                    race.camera_position(),
+                )
             });
         // The animation clock, in seconds, from the tick and never the wall
         // clock - so a replay of the same tick draws the same frame. The
@@ -527,12 +545,13 @@ impl Scene {
         // ADR-0011's and the roadmap's PVS effectiveness figures are quoted
         // against - a silently moved percentage nobody would think to question.
         if let Some(sky) = &self.sky {
-            let _ = sky.draw(&mut pass, None, None, None);
+            let _ = sky.draw(&mut pass, None, None, None, None);
         }
         let mut stats = self.track.draw(
             &mut pass,
             self.visibility.as_ref().map(|v| &v.sections),
             visible_set.as_ref(),
+            chunk_set.as_ref(),
             frustum.as_ref(),
         );
         // After the track, so a pad sitting flush on the surface wins the depth
@@ -541,10 +560,10 @@ impl Scene {
         // `section` id to look up - the same exemption the sky takes, for a
         // different reason.
         if let Some(pads) = &self.pads {
-            stats.add(pads.draw(&mut pass, None, None, frustum.as_ref()));
+            stats.add(pads.draw(&mut pass, None, None, None, frustum.as_ref()));
         }
         if let Some(pads) = &self.weapon_pads {
-            stats.add(pads.draw(&mut pass, None, None, frustum.as_ref()));
+            stats.add(pads.draw(&mut pass, None, None, None, frustum.as_ref()));
         }
         // Skipped outright in the cockpit view rather than moved or scaled away:
         // the original sets one flag on the craft and draws no hull, and a draw
@@ -556,14 +575,14 @@ impl Scene {
             if index == 0 && !race.draws_own_ship() {
                 continue;
             }
-            stats.add(drawable.draw(&mut pass, None, None, None));
+            stats.add(drawable.draw(&mut pass, None, None, None, None));
         }
         // Rockets, with the hulls: an opaque painted model that occludes and is
         // occluded, not an effect. Bounded by how many matrices were written
         // this frame, for the same reason the plumes are - a drawable whose
         // uniform buffer went unwritten would draw at last frame's pose.
         for drawable in self.rockets.iter().take(rocket_matrices.len()) {
-            stats.add(drawable.draw(&mut pass, None, None, None));
+            stats.add(drawable.draw(&mut pass, None, None, None, None));
         }
         // After the ships, so the hulls' depth is already in the buffer: a
         // plume's own blend pipeline writes no depth, the same reasoning as
@@ -592,7 +611,7 @@ impl Scene {
             // carries its material's own factor pair, so the ordinary path
             // routes it through the authored pipeline. The override the plume
             // needs is for a model that authors none.
-            stats.add(flare.draw(&mut pass, None, None, None));
+            stats.add(flare.draw(&mut pass, None, None, None, None));
         }
         for (slot, boost) in self.boost.iter().enumerate().take(drawn) {
             let Some(boost) = boost else {
@@ -624,15 +643,15 @@ impl Scene {
             if !race.ship_active(slot) || !shell_visible(race, slot) {
                 continue;
             }
-            stats.add(shell.draw(&mut pass, None, None, None));
+            stats.add(shell.draw(&mut pass, None, None, None, None));
         }
         if let Some(sphere) = &self.shield_cockpit
             && cockpit_shield_visible(race)
         {
-            stats.add(sphere.draw(&mut pass, None, None, None));
+            stats.add(sphere.draw(&mut pass, None, None, None, None));
         }
         if let Some(collision) = &self.collision {
-            stats.add(collision.draw(&mut pass, None, None, None));
+            stats.add(collision.draw(&mut pass, None, None, None, None));
         }
         // Last, and that ordering is load-bearing: the flare tests depth but does
         // not write it, so the hull's depth has to already be in the buffer for the

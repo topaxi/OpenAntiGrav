@@ -39,6 +39,7 @@ pub mod fnt;
 pub mod fog;
 pub mod gtf;
 pub mod handling;
+pub mod hd_pvs;
 pub mod ipf;
 pub mod ivf;
 pub mod lighting;

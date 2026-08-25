@@ -88,6 +88,7 @@ fn triangle_model() -> Model {
                 radius: 1.5,
             },
             node: None,
+            chunk: None,
         }],
         alpha_tested_draws: Vec::new(),
         transparent_draws: Vec::new(),

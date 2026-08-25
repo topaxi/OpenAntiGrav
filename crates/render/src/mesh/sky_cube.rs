@@ -142,6 +142,7 @@ pub fn build(label: &str, blob: &[u8], rotation_degrees: f32) -> Result<Model> {
             blend_state: None,
             layer: vex::LAYER_DEFAULT,
             node: None,
+            chunk: None,
         });
     }
 

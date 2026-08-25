@@ -149,6 +149,7 @@ pub fn build_model(label: &str, ai: &AiTrack) -> Model {
                 .sqrt(),
         },
         node: None,
+        chunk: None,
     }];
 
     Model {

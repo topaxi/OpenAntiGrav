@@ -101,6 +101,9 @@ pub fn merge(label: &str, models: Vec<Model>) -> Model {
             texture: d.texture.map(|t| t + texture_base),
             bounds: d.bounds,
             node: d.node,
+            // Kept per source, and ambiguous across them for the same reason
+            // `node` is: two merged models index their own chunk tables.
+            chunk: d.chunk,
             blend: d.blend,
             blend_state: d.blend_state,
             layer: d.layer,
@@ -168,6 +171,7 @@ mod merge_tests {
             indices: (0..vertices as u32).collect(),
             draws: vec![DrawCall {
                 moving: false,
+                chunk: None,
                 blend: None,
                 blend_state: None,
                 layer: oag_formats::vex::LAYER_DEFAULT,

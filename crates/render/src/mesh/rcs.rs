@@ -294,7 +294,7 @@ pub fn build_scene(
         .context("no mesh class id for this .vex version")?;
     let placed = referenced(data, &nodes, mesh_class, &model);
 
-    for mesh in &model.meshes {
+    for (chunk_index, mesh) in model.meshes.iter().enumerate() {
         if placed.contains(&mesh.hash) {
             continue;
         }
@@ -341,6 +341,7 @@ pub fn build_scene(
                     lightmap_texcoords: lightmap_texcoords.as_deref(),
                     vertex_light: vertex_light.as_deref(),
                     indices: &indices,
+                    chunk: u32::try_from(chunk_index).ok(),
                 },
                 Mat4::IDENTITY,
                 None,
@@ -479,6 +480,12 @@ struct Geometry<'a> {
     /// both.
     vertex_light: Option<&'a [[f32; 4]]>,
     indices: &'a [u16],
+    /// Which chunk of the `.rcsmodel` this geometry is, in file order.
+    ///
+    /// The join key for `track.pvs`, whose per-cell bitmaps are indexed by
+    /// exactly this number - see [`oag_formats::hd_pvs`]. `None` for geometry
+    /// that is not a chunk of the model the PVS was authored against.
+    chunk: Option<u32>,
 }
 
 /// What [`surface`] decided, carried into [`emit`].
@@ -539,6 +546,7 @@ fn emit(out: &mut Model, mesh: Geometry<'_>, to_world: Mat4, node: Option<u32>, 
         lightmap_texcoords,
         vertex_light,
         indices,
+        chunk,
     } = mesh;
     let flip_v = surface.roles & slots::FLIP_V != 0;
     let first_vertex = u32::try_from(out.vertices.len()).unwrap_or(u32::MAX);
@@ -651,6 +659,7 @@ fn emit(out: &mut Model, mesh: Geometry<'_>, to_world: Mat4, node: Option<u32>, 
         // uniform value leaves `Model::sort_by_layer` holding chunk order.
         layer: vex::LAYER_DEFAULT,
         node,
+        chunk,
     });
 }
 
@@ -761,7 +770,7 @@ fn build_with_options(
         let Some((hash, min, max)) = node_geometry(&data[node.payload()], order) else {
             continue;
         };
-        let Some(mesh) = model.mesh(hash) else {
+        let (Some(chunk_index), Some(mesh)) = (model.mesh_index(hash), model.mesh(hash)) else {
             continue;
         };
         // **Skip a chunk this node names but does not actually place.** See
@@ -833,6 +842,7 @@ fn build_with_options(
                     lightmap_texcoords: lightmap_texcoords.as_deref(),
                     vertex_light: vertex_light.as_deref(),
                     indices: &indices,
+                    chunk: u32::try_from(chunk_index).ok(),
                 },
                 to_world,
                 u32::try_from(index).ok(),

@@ -43,6 +43,18 @@ pub struct TrackVisibility {
     swaps: SwapConflicts,
     /// What the association rule managed, for the load report.
     pub placement: PlacementStats,
+    /// Wipeout HD's partition, which is a different mechanism rather than the
+    /// same one in another file.
+    ///
+    /// A PSP track authors up to 64 `section` nodes and a 64-bit mask per
+    /// section; an HD circuit authors hundreds of cells along its own racing
+    /// line and **one bit per `.rcsmodel` chunk** per cell. The two never
+    /// coexist - a `.vex` with `section` nodes has no chunks and a PS3
+    /// circuit has no `section` nodes - so this sits beside the PSP fields
+    /// rather than in an enum with them, and whichever is populated is the
+    /// tier that runs. See [`oag_formats::hd_pvs`] and
+    /// `docs/formats/hd-pvs.md`.
+    chunks: Option<oag_formats::hd_pvs::Pvs>,
 }
 
 impl TrackVisibility {
@@ -71,7 +83,72 @@ impl TrackVisibility {
             sections,
             swaps,
             placement,
+            chunks: None,
         })
+    }
+
+    /// The Wipeout HD partition, read from the `track.pvs` beside the circuit's
+    /// `.vex`.
+    ///
+    /// A separate constructor rather than a branch inside [`Self::build`],
+    /// because the two share nothing: this one has no `section` nodes to walk,
+    /// no draw-call placement to derive and no swap relation to recover - the
+    /// association it needs is the chunk index each draw call already carries
+    /// out of `oag_render::mesh::rcs`.
+    ///
+    /// **A circuit with no readable `.pvs` draws every chunk**, which is what
+    /// this project did before the file was decoded: slower, and showing
+    /// scenery the artists hid, but never missing anything. Both outcomes are
+    /// pushed onto `report` so a race says which one it got.
+    pub fn from_hd_pvs(
+        archives: &mut oag_assets::Archives,
+        track: &str,
+        report: &mut Vec<String>,
+    ) -> Option<Self> {
+        let name = pvs_name(track);
+        let blob = match archives.read_name(&name) {
+            Ok(blob) => blob,
+            Err(_) => {
+                report.push(format!("{name}: not in this source - drawing every chunk"));
+                return None;
+            }
+        };
+        let pvs = match oag_formats::hd_pvs::Pvs::parse(&blob) {
+            Ok(pvs) => pvs,
+            Err(e) => {
+                report.push(format!("{name}: {e} - drawing every chunk"));
+                return None;
+            }
+        };
+        report.push(format!(
+            "{name}: {} visibility cell(s) over {} chunk(s){}",
+            pvs.cells(),
+            pvs.chunks(),
+            match pvs.trailing() {
+                0 => String::new(),
+                n => format!(", plus {n} trailing byte(s) this parser does not read"),
+            },
+        ));
+        Some(Self {
+            pvs: oag_formats::pvs::TrackPvs::empty(),
+            padding: SectionPadding::default(),
+            sections: DrawSections::default(),
+            swaps: SwapConflicts::none(),
+            placement: PlacementStats::default(),
+            chunks: Some(pvs),
+        })
+    }
+
+    /// The circuit's chunk partition, when it has one.
+    #[must_use]
+    pub fn chunks(&self) -> Option<&oag_formats::hd_pvs::Pvs> {
+        self.chunks.as_ref()
+    }
+
+    /// Whether the PSP's section tier has anything to say.
+    #[must_use]
+    pub fn has_sections(&self) -> bool {
+        !self.pvs.is_empty()
     }
 
     /// How many authored LOD-swap pairs the track carries, for the load
@@ -125,12 +202,27 @@ pub(super) const CAMERA_SEARCH_SAMPLES: usize = 96;
 /// call site.
 ///
 /// `set` is `None` when `[graphics] pvs_culling` is off or the track has no
-/// sections; `frustum` is `None` per [`Drawable::draw`].
+/// sections; `chunks` is `None` for anything that is not a PS3 circuit, or
+/// when neither viewpoint could be located in the circuit's `track.pvs`;
+/// `frustum` is `None` per [`Drawable::draw`].
 pub(super) fn visible(
     draw: &DrawCall,
     sections: u64,
     set: Option<&VisibleSet>,
+    chunks: Option<&ChunkSet>,
     frustum: Option<&Frustum>,
 ) -> bool {
-    oag_render::pvs::visible(draw, sections, set, frustum)
+    oag_render::pvs::visible(draw, sections, set, chunks, frustum)
+}
+
+/// The `track.pvs` entry name beside a `track.vex` one.
+///
+/// A path rewrite, the way `oag_render::mesh::rcs::sibling_name` finds the
+/// `.rcsmodel`: the disc pairs the two by name in one directory, and
+/// `track_reversed.vex` has a `track_reversed.pvs` of its own.
+fn pvs_name(vex_name: &str) -> String {
+    match vex_name.rsplit_once('.') {
+        Some((stem, _)) => format!("{stem}.pvs"),
+        None => format!("{vex_name}.pvs"),
+    }
 }

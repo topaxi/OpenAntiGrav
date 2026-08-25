@@ -774,12 +774,15 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // The authored PVS. Skipped for a ribbon build, whose geometry is generated
     // from the spline rather than authored, so the section boxes have nothing
     // to say about it.
-    let visibility = if !vex_geometry {
-        None
-    } else {
+    let visibility = if vex_geometry {
         TrackVisibility::build(&track_model, &track_blob, &ai)
+    } else if ps3_geometry.is_some() {
+        TrackVisibility::from_hd_pvs(&mut archives, &track, &mut report)
+    } else {
+        None
     };
     match &visibility {
+        Some(visibility) if visibility.chunks().is_some() => {}
         Some(visibility) => report.push(format!(
             "{} authored visibility section(s); {} of {} draw call(s) governed by one \
              ({:.1}%), the rest always drawn; {} LOD-swap pair(s)",
