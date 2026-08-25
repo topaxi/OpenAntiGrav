@@ -12,15 +12,25 @@ const LIMIT: u32 = 8192;
 
 /// Blits a flat colour with and without FSR 1 and returns both results.
 ///
-/// The offscreen target is **sRGB**, as it is in the game, which is what
-/// makes this worth doing at all: it is the only configuration where the
-/// perceptual view differs from the ordinary one, and so the only one that
-/// exercises the whole colour-space arrangement rather than an accidental
-/// identity. The surface is `Rgba8Unorm` so the readback is the shader's
-/// own linear output with no second curve on top.
+/// Takes `format` rather than fixing it, and both callers below run it at
+/// **both** `Rgba8UnormSrgb` and `Rgba8Unorm` - the former is the only
+/// configuration where the perceptual view differs from the ordinary one and
+/// so exercises the whole colour-space arrangement rather than an accidental
+/// identity, but the latter is what `Framebuffer::new` is actually built with
+/// everywhere in the game since
+/// [ADR-0020](../../../../docs/architecture/adr/0020-gamma-authoritative-colour-space.md)
+/// forced the window surface and every capture target non-sRGB. A version of
+/// this test that only ever built the sRGB case would stay green forever
+/// against a `decode` flag that fires on "a pass ran" instead of "the source
+/// is sRGB" - which is exactly the bug this pins down. The readback surface
+/// reuses the same `format` as the offscreen target, exactly as the game's
+/// own surface and `Framebuffer` do: whatever encode-on-write that costs at
+/// the sRGB `format` is paid identically by both iterations of the loop
+/// below, so it cancels out of the comparison rather than needing to be
+/// avoided.
 ///
 /// Returns `None` with no adapter, so the caller skips.
-fn both_paths(input: [f64; 3]) -> Option<([u8; 4], [u8; 4])> {
+fn both_paths(format: wgpu::TextureFormat, input: [f64; 3]) -> Option<([u8; 4], [u8; 4])> {
     let instance = wgpu::Instance::default();
     let adapter = pollster::block_on(instance.request_adapter(&Default::default())).ok()?;
     let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
@@ -29,10 +39,6 @@ fn both_paths(input: [f64; 3]) -> Option<([u8; 4], [u8; 4])> {
     }))
     .ok()?;
 
-    // One format for the offscreen target, the blit's pipeline and the
-    // surface, exactly as the game has it: `Framebuffer::new` takes the
-    // surface format and builds both against it.
-    let format = wgpu::TextureFormat::Rgba8UnormSrgb;
     let mut fsr = oag_render::post::fsr1::Fsr1::new(&device, format).expect("the fsr pipelines");
     let mut out = Vec::new();
     for upscaling in [false, true] {
@@ -99,11 +105,15 @@ fn both_paths(input: [f64; 3]) -> Option<([u8; 4], [u8; 4])> {
             );
             framebuffer.source(&device, fsr.output().expect("an fsr output"))
         });
+        // Mirrors `resolve`'s own gate exactly, rather than `source.is_some()`
+        // alone: at `Rgba8Unorm` this is always `false`, which is the
+        // configuration the bug lived in - `source.is_some()` alone would
+        // have decoded an already-linear-in-name value here too.
         framebuffer.set_grade(
             &queue,
             Brightness::NEUTRAL,
             Gamma::NEUTRAL,
-            source.is_some(),
+            source.is_some() && format.is_srgb(),
         );
         framebuffer.present(
             &mut encoder,
@@ -161,36 +171,52 @@ fn an_upscaler_only_runs_when_it_is_actually_upscaling() {
     assert!(magnifies((720, 816), (1440, 816)));
 }
 
-/// Turning the upscaler on must not move a flat colour.
+/// Turning the upscaler on must not move a flat colour, at either format
+/// `Framebuffer` is actually built with.
 ///
 /// This is the whole colour-space arrangement in one assertion, and it is
 /// the cheapest way to catch the mistake most likely to be made here.
 /// A flat picture is a fixed point of both EASU and RCAS, so the only thing
-/// that can differ between the two paths is the transfer function: the
-/// bilinear path lets the sampler decode an sRGB view, the FSR path reads a
-/// non-sRGB view and decodes in the shader. If those two disagree - if the
-/// decode were `pow(c, 2.2)` standing in for the real curve, or if the
-/// non-sRGB view were not actually reaching the shader - a flat grey would
-/// come out at two different values and this fails.
+/// that can differ between the two paths is the transfer function.
+///
+/// At `Rgba8UnormSrgb`, the bilinear path lets the sampler decode an sRGB
+/// view and the FSR path reads a non-sRGB view and decodes in the shader; if
+/// those two disagree, whether the decode were `pow(c, 2.2)` standing in for
+/// the real curve or the non-sRGB view were not actually reaching the shader,
+/// a flat grey would come out at two different values and this fails.
+///
+/// At `Rgba8Unorm`, **neither** path holds sRGB-encoded values, so neither
+/// should decode - and that is what `Framebuffer::new` is actually built
+/// with everywhere in the game, per
+/// [ADR-0020](../../../../docs/architecture/adr/0020-gamma-authoritative-colour-space.md).
+/// This is the case that caught the real bug: `decode` used to fire on "a
+/// post-process ran" rather than "the format is sRGB", so the FSR path
+/// decoded a value that was never encoded and came out measurably darker than
+/// the bilinear path even though nothing here is sRGB at all.
 ///
 /// **Skips with no adapter**, so a green CI run is not evidence it ran.
 #[test]
 fn turning_the_upscaler_on_does_not_shift_a_flat_colour() {
     // Three levels, because the sRGB curve's two pieces meet in the darks
     // and an approximation goes wrong there first.
-    for level in [0.02, 0.25, 0.5] {
-        let Some((bilinear, fsr)) = both_paths([level, level, level]) else {
-            eprintln!("no GPU adapter: skipping");
-            return;
-        };
-        for channel in 0..3 {
-            let drift = i32::from(bilinear[channel]).abs_diff(i32::from(fsr[channel]));
-            assert!(
-                drift <= 2,
-                "at {level}, channel {channel}: bilinear gave {bilinear:?} and fsr gave \
-                 {fsr:?}, a drift of {drift}/255 - the two paths disagree about the \
-                 transfer function"
-            );
+    for format in [
+        wgpu::TextureFormat::Rgba8UnormSrgb,
+        wgpu::TextureFormat::Rgba8Unorm,
+    ] {
+        for level in [0.02, 0.25, 0.5] {
+            let Some((bilinear, fsr)) = both_paths(format, [level, level, level]) else {
+                eprintln!("no GPU adapter: skipping");
+                return;
+            };
+            for channel in 0..3 {
+                let drift = i32::from(bilinear[channel]).abs_diff(i32::from(fsr[channel]));
+                assert!(
+                    drift <= 2,
+                    "at {format:?} level {level}, channel {channel}: bilinear gave \
+                     {bilinear:?} and fsr gave {fsr:?}, a drift of {drift}/255 - the two \
+                     paths disagree about the transfer function"
+                );
+            }
         }
     }
 }

@@ -81,11 +81,16 @@ struct Grade {
     /// Whether the blit's source holds sRGB-encoded values the shader has to
     /// decode itself, as `1.0` or `0.0`.
     ///
-    /// Zero when the source is the offscreen target, which is bound through an
-    /// sRGB view and so arrives already decoded by the sampler. One when it is
-    /// an upscaler's output, which is deliberately *not* sRGB-formatted because
-    /// the upscaler works in perceptual space and a decode on every internal
-    /// read would be both wrong and paid twice. See `oag_render::post`.
+    /// One only when `self.format.is_srgb()` - the offscreen target is bound
+    /// through an sRGB view and arrives already decoded by the sampler, while
+    /// an upscaler's or FXAA/SMAA's output is deliberately read through the
+    /// *non*-sRGB twin because that pass works in perceptual space and a
+    /// decode on every internal read would be both wrong and paid twice. See
+    /// `oag_render::post`. Since [ADR-0020](../../../docs/architecture/adr/0020-gamma-authoritative-colour-space.md)
+    /// forced every real `format` here non-sRGB, `twin == format` and this is
+    /// always zero in production - "a post-process ran" is not the same fact
+    /// as "the source needs decoding", and treating them as one is the bug
+    /// that made FXAA, SMAA and a magnifying FSR 1 darken the picture.
     decode: f32,
     padding: f32,
 }
@@ -265,8 +270,10 @@ impl Framebuffer {
     /// loop and a capture that wants to see what the window sees cannot drift
     /// apart - which they would, because the ordering here has two traps in it.
     /// The grade's `decode` flag has to describe the source that is *actually*
-    /// bound rather than the setting that asked for it, and the upscaler has to
-    /// run after every stage has finished drawing but before the blit.
+    /// bound rather than the setting that asked for it, **and** whether that
+    /// source is genuinely sRGB-encoded rather than merely "produced by a
+    /// pass" - see the field's own doc - and the upscaler has to run after
+    /// every stage has finished drawing but before the blit.
     ///
     /// **An upscaler only runs when it is actually upscaling** - see
     /// [`magnifies`].
@@ -383,11 +390,22 @@ impl Framebuffer {
                     .map(|view| bind(device, &self.layout, &self.sampler, &self.grade, view))
             });
 
+        // `source.is_some()` alone says a post-process bound a view in the
+        // *non-sRGB* twin format, not that a decode is owed for it: since
+        // ADR-0020, `self.format` is never sRGB in any real call site (the
+        // window surface and every capture target are forced non-sRGB), so
+        // the twin and the ordinary view hold identical bytes and there is
+        // nothing to decode. Gating on `self.format.is_srgb()` too is what
+        // keeps this flag tracking the format's actual encoding rather than
+        // "did a pass run" - the two agreed by accident before that ADR and
+        // silently stopped afterwards, which is what made FXAA, SMAA and a
+        // magnifying FSR 1 decode already-linear-in-name gamma values as if
+        // they were sRGB-encoded, crushing the shadows and midtones.
         self.set_grade(
             queue,
             presentation.brightness,
             presentation.gamma,
-            source.is_some(),
+            source.is_some() && self.format.is_srgb(),
         );
         self.present(encoder, surface, rect, source.as_ref());
     }
