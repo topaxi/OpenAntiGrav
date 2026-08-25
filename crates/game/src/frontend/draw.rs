@@ -192,12 +192,25 @@ impl Frontend {
         else {
             return;
         };
-        for &fill in &parent.fills {
+        for fill in &parent.fills {
             out.push(Draw::Fill {
-                rect: [0.0, 0.0, self.space.size.0, self.space.size.1],
-                color: argb_to_rgba(fill),
+                rect: self.fill_rect(fill),
+                color: argb_to_rgba(fill.color),
             });
         }
+    }
+
+    /// A [`crate::screen::Fill`]'s own rect, falling its `width`/`height`
+    /// back to the whole screen when the widget omits them - the reading
+    /// every colour-only `Image` measured without one actually wants. See
+    /// [`crate::screen::Fill::width`].
+    fn fill_rect(&self, fill: &crate::screen::Fill) -> [f32; 4] {
+        [
+            fill.x,
+            fill.y,
+            fill.width.unwrap_or(self.space.size.0),
+            fill.height.unwrap_or(self.space.size.1),
+        ]
     }
 
     /// This build's own storage warning, at the disc's own geometry.
@@ -391,10 +404,10 @@ impl Frontend {
 
     /// A screen's solid backdrops and its images, in that order.
     fn draw_backdrops(&self, screen: &Screen, out: &mut Vec<Draw>) {
-        for &fill in &screen.fills {
+        for fill in &screen.fills {
             out.push(Draw::Fill {
-                rect: [0.0, 0.0, self.space.size.0, self.space.size.1],
-                color: argb_to_rgba(fill),
+                rect: self.fill_rect(fill),
+                color: argb_to_rgba(fill.color),
             });
         }
 
@@ -431,14 +444,23 @@ impl Frontend {
                 image.x
             };
 
+            // `U`/`V`/`TxtrWidth`/`TxtrHeight` name a sub-rect of `src`'s own
+            // texture, in that texture's own pixels - not the whole thing,
+            // which is what every image drew before this existed. Several
+            // widgets sharing one texture (`ArrowSelect`, and three widgets on
+            // Pure's `Title Screen`) need their own patch of it rather than
+            // all drawing its top-left corner. Absent means the whole placed
+            // texture, exactly as it did before. See [`crate::screen::Image::u`].
+            let uv = [
+                placed.x as f32 + image.u.unwrap_or(0.0),
+                placed.y as f32 + image.v.unwrap_or(0.0),
+                image.texture_width.unwrap_or(placed.width as f32),
+                image.texture_height.unwrap_or(placed.height as f32),
+            ];
+
             out.push(Draw::Sprite {
                 rect: [x, image.y, w, h],
-                uv: [
-                    placed.x as f32,
-                    placed.y as f32,
-                    placed.width as f32,
-                    placed.height as f32,
-                ],
+                uv,
                 color: argb_to_rgba(image.color),
             });
         }

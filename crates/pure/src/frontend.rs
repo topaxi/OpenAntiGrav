@@ -124,17 +124,20 @@ pub mod states {
 }
 
 /// `FEGlobals` colours Pure's own screens reference
-/// (`FEGlobals->TitleColor`, `FEGlobals->DesignColor`, `FEGlobals->TextColor`)
-/// that `Data\Plugins\PI001\GUI\Skin.xml` never declares - the disc's own
-/// copy authors exactly nine globals (`TitleScale`, `TitleXOffset`,
-/// `TitleYOffset`, `MenuScale`, `MenuXOffset`, `MSWarningScale`,
-/// `MSWarningColour1`, `MSWarningColour2`, `FMVFrameCount`), confirmed by
-/// reading the file directly. `TextColor` is the same gap `HANDOVER.md`
-/// already had on file, now with a measured value rather than only a
-/// citation; `TitleColor`/`DesignColor` are `Title Screen`'s own. Either an
-/// unmerged `LoadXML` base skin defines all three, or the original engine
-/// carries a compiled-in default table this project has not found. Neither
-/// is resolved; this is a **measured stand-in**, not a derivation.
+/// (`FEGlobals->TitleColor`, `FEGlobals->DesignColor`, `FEGlobals->TextColor`,
+/// `FEGlobals->FrameLineColor`) that `Data\Plugins\PI001\GUI\Skin.xml` never
+/// declares - the disc's own copy authors exactly nine globals (`TitleScale`,
+/// `TitleXOffset`, `TitleYOffset`, `MenuScale`, `MenuXOffset`,
+/// `MSWarningScale`, `MSWarningColour1`, `MSWarningColour2`,
+/// `FMVFrameCount`), confirmed by reading the file directly - zero of
+/// `FrameLineColor`'s own seventeen usages on `Title Screen` are backed by a
+/// declaration either, checked the same way. `TextColor` is the same gap
+/// `HANDOVER.md` already had on file, now with a measured value rather than
+/// only a citation; `TitleColor`/`DesignColor`/`FrameLineColor` are `Title
+/// Screen`'s own. Either an unmerged `LoadXML` base skin defines all four, or
+/// the original engine carries a compiled-in default table this project has
+/// not found. Neither is resolved; this is a **measured stand-in**, not a
+/// derivation.
 ///
 /// **Measured by sampling pixels**, not read from any XML: driving
 /// `pure-psp-usa.chd` under PPSSPP (the same session `states::TITLE_SCREEN`
@@ -154,12 +157,25 @@ pub mod states {
 /// antialiasing and video compression left in a captured frame, and the
 /// mechanism that is supposed to supply it is still unknown.
 ///
+/// **`FrameLineColor` is measured the same way, off `Title Screen`'s own
+/// corner-bracket lines around the `START` button, at confidence 60 rather
+/// than 65.** A screenshot at native `2x` resolution (`--xres 960 --yres
+/// 544`, eliminating the fractional-scale blending a windowed capture
+/// otherwise has) still shows every line as two rows, not one - `RGB(179,
+/// 215, 226)` and a lighter `RGB(229, 241, 245)` in equal counts across the
+/// whole visible line, which reads as the renderer's own sub-pixel placement
+/// rather than a scaling artefact, since exact `2x` has nothing left to blend
+/// with. The darker row is taken as the widget's own colour and the lighter
+/// as a partial-coverage edge; that split, not just the usual antialiasing
+/// margin, is the extra point of uncertainty the lower confidence covers.
+///
 /// Consulted by `oag_game::boot::load`, merged in only for keys Pure's own
 /// `Skin.xml` left undeclared - a real declaration always wins.
 pub const FALLBACK_GLOBALS: &[(&str, &str)] = &[
     ("TitleColor", "0xFFED4896"),
     ("DesignColor", "0xFF64DCF6"),
     ("TextColor", "0xFF88D6E8"),
+    ("FrameLineColor", "0xFFB3D7E2"),
 ];
 
 /// How Pure lays its menus out, as far as its own disc states it.

@@ -351,12 +351,176 @@ fn the_logo_image_has_a_y_and_no_x() {
     assert_eq!(image.y, 72.0);
     assert_eq!(image.x, 0.0);
     assert!(image.auto_load);
+    // No `U`/`V` on this widget, so nothing to sample but the whole texture.
+    assert_eq!(image.u, None);
+    assert_eq!(image.v, None);
+    assert_eq!(image.texture_width, None);
+    assert_eq!(image.texture_height, None);
+}
+
+#[test]
+fn an_image_with_u_v_captures_its_own_sub_rect() {
+    // `ArrowSelect`'s own attributes, off `pure-psp-usa.chd`'s `Skin.xml`:
+    // one widget sampling one corner of a texture several other widgets
+    // share. See `handover/pures-title-screen-is-missing-its-own-logo.md`.
+    let screens = Screens::from_xml(
+        r#"
+<Screen>
+  <Screen name="Loose">
+    <Image name="ArrowSelect">
+      <Values x="0" y="0" width="6" height="11" U="53" V="0" TxtrWidth="6" TxtrHeight="11" Color="0xFFFFFFFF" src="Data\FE\Images\FETextures.mip"></Values>
+    </Image>
+  </Screen>
+</Screen>
+"#,
+    );
+    let image = &screens.by_name("Loose").unwrap().images[0];
+    assert_eq!(image.u, Some(53.0));
+    assert_eq!(image.v, Some(0.0));
+    assert_eq!(image.texture_width, Some(6.0));
+    assert_eq!(image.texture_height, Some(11.0));
+}
+
+#[test]
+fn an_image_wrapped_in_an_animation_is_still_collected() {
+    // `TitleAnim1`'s own shape, off `pure-psp-usa.chd`'s `Skin.xml`: a
+    // `<Key>` reveal timeline wrapping the one widget it reveals. The
+    // timeline is not modelled - only the widget has to survive. See
+    // `handover/pures-title-screen-is-missing-its-own-logo.md`.
+    let screens = Screens::from_xml(
+        r#"
+<Screen>
+  <Screen name="Loose">
+    <Animation name="TitleAnim1" focus="true">
+      <Values Incbutton="none" Decbutton="none" Loop="false"></Values>
+      <Key Time="0" TextureWidth="-1"></Key>
+      <Key Time="0.1" TextureWidth="0"></Key>
+      <Image>
+        <Values x="14" y="240" width="1" height="16" TxtrWidth="1" TxtrHeight="16" Color="0xFFFFFFFF" src="Data\FE\Images\FETextures_startscreen.mip"></Values>
+      </Image>
+    </Animation>
+  </Screen>
+</Screen>
+"#,
+    );
+    let images = &screens.by_name("Loose").unwrap().images;
+    assert_eq!(
+        images.len(),
+        1,
+        "the `Key` elements must not become widgets"
+    );
+    assert_eq!(images[0].x, 14.0);
+    assert_eq!(images[0].y, 240.0);
+}
+
+#[test]
+fn a_colour_only_image_inside_an_animation_keeps_its_own_rect() {
+    // `Demo_Definition.xml`'s own shape, shared by both Pulse's and Pure's
+    // disc: a decorative underline, not a backdrop - `width="347" height="1"`
+    // at `x="133" y="262"`. `Fill` carries its own rect precisely so this
+    // draws as a thin line rather than washing the whole screen in its
+    // colour. See `handover/pures-title-screen-is-missing-its-own-logo.md`.
+    let screens = Screens::from_xml(
+        r#"
+<Screen>
+  <Screen name="Loose">
+    <Animation name="Anim">
+      <Values></Values>
+      <Key Time="0" TextureWidth="-347"></Key>
+      <Key Time="0.5" TextureWidth="0"></Key>
+      <Image>
+        <Values x="133" y="262" width="347" height="1" color="0xff3abcf2"></Values>
+      </Image>
+    </Animation>
+  </Screen>
+</Screen>
+"#,
+    );
+    let screen = screens.by_name("Loose").unwrap();
+    assert_eq!(
+        screen.fills,
+        vec![Fill {
+            x: 133.0,
+            y: 262.0,
+            width: Some(347.0),
+            height: Some(1.0),
+            color: 0xff3a_bcf2,
+        }]
+    );
+    assert!(
+        screen.images.is_empty(),
+        "a colour-only widget is not a textured one either"
+    );
+}
+
+#[test]
+fn an_animation_wrapped_fill_resolves_a_feglobals_colour() {
+    // `Title Screen`'s own frame lines author `Color="FEGlobals->
+    // FrameLineColor"`, unlike `Demo_Definition.xml`'s literal one - the
+    // fill branch has to resolve the indirection the same way `image_from_node`
+    // and `screenclear` already do, or these stay invisible even with a rect.
+    let screens = Screens::from_xml(
+        r#"
+<Screen>
+  <Variable global="FrameLineColor"><Values String="0xFFFFFFFF"></Values></Variable>
+  <Screen name="Loose">
+    <Animation name="Anim">
+      <Values></Values>
+      <Image>
+        <Values x="14" y="240" width="1" height="16" Color="FEGlobals->FrameLineColor"></Values>
+      </Image>
+    </Animation>
+  </Screen>
+</Screen>
+"#,
+    );
+    let screen = screens.by_name("Loose").unwrap();
+    assert_eq!(
+        screen.fills,
+        vec![Fill {
+            x: 14.0,
+            y: 240.0,
+            width: Some(1.0),
+            height: Some(16.0),
+            color: 0xffff_ffff,
+        }]
+    );
+}
+
+#[test]
+fn an_animation_inside_a_viewport_still_carries_the_wrap_width_down() {
+    let screens = Screens::from_xml(
+        r#"
+<Screen>
+  <Screen name="Loose">
+    <Viewport>
+      <Values width="400"></Values>
+      <Animation name="Anim">
+        <Values></Values>
+        <Text><Values idstring="X" widthlimited="true"></Values></Text>
+      </Animation>
+    </Viewport>
+  </Screen>
+</Screen>
+"#,
+    );
+    let text = &screens.by_name("Loose").unwrap().texts[0];
+    assert_eq!(text.wrap_width, Some(400.0));
 }
 
 #[test]
 fn collects_solid_colour_backdrops() {
     let screens = Screens::from_xml(SAMPLE);
-    assert_eq!(screens.by_name("LogoFMV").unwrap().fills, vec![0xff00_0000]);
+    assert_eq!(
+        screens.by_name("LogoFMV").unwrap().fills,
+        vec![Fill {
+            x: 0.0,
+            y: 0.0,
+            width: Some(480.0),
+            height: Some(272.0),
+            color: 0xff00_0000,
+        }]
+    );
 }
 
 #[test]

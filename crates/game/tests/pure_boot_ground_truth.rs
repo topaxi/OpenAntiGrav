@@ -456,3 +456,126 @@ fn pures_own_globals_are_merged_only_where_the_disc_leaves_them_out() {
         }
     }
 }
+
+/// `MemoryStickWarning`'s two `Image`s carry `x`/`y`/`width`/`height` and a
+/// `Color="FEGlobals->MSWarningColour1"` indirection - not full-screen, and
+/// not a literal colour. Both have to hold for the screen to draw a warning
+/// stripe rather than a full-screen wash or nothing at all. See
+/// `handover/pures-title-screen-is-missing-its-own-logo.md`.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_memory_stick_warnings_two_stripes_keep_their_own_rects() {
+    for (label, image) in images() {
+        let loaded = load(&image);
+        let screen = loaded
+            .frontend
+            .screens()
+            .by_name("MemoryStickWarning")
+            .unwrap_or_else(|| panic!("{label}: MemoryStickWarning"));
+        let color = loaded
+            .frontend
+            .screens()
+            .globals
+            .get("MSWarningColour1")
+            .and_then(|v| oag_game::screen::parse_argb(v))
+            .unwrap_or_else(|| panic!("{label}: MSWarningColour1 must resolve to a real colour"));
+        assert_eq!(
+            screen.fills,
+            vec![
+                oag_game::screen::Fill {
+                    x: 0.0,
+                    y: 10.0,
+                    width: Some(480.0),
+                    height: Some(1.0),
+                    color,
+                },
+                oag_game::screen::Fill {
+                    x: 0.0,
+                    y: 240.0,
+                    width: Some(480.0),
+                    height: Some(1.0),
+                    color,
+                },
+            ],
+            "{label}: two thin stripes, not a 480x272 wash"
+        );
+    }
+}
+
+/// `Title Screen`'s seventeen frame-line and corner-bracket widgets, every one
+/// `Color="FEGlobals->FrameLineColor"` and none of them full-screen - the
+/// widget this thread's own `Animation`/`Fill` work was for. `FrameLineColor`
+/// itself is undeclared on the disc (see `oag_pure::frontend::FALLBACK_GLOBALS`),
+/// so this also pins the measured fallback colour against what actually draws.
+/// Rects read off `pure-psp-usa.chd`'s own `Skin.xml`, in document order,
+/// behind the white background `Fill` `Show Logo`-style backdrops already
+/// cover. See `handover/pures-title-screen-is-missing-its-own-logo.md`.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn title_screens_frame_lines_keep_their_own_rects_and_share_one_colour() {
+    for (label, image) in images() {
+        let loaded = load(&image);
+        let screen = loaded
+            .frontend
+            .screens()
+            .by_name("Title Screen")
+            .unwrap_or_else(|| panic!("{label}: Title Screen"));
+        let color = loaded
+            .frontend
+            .screens()
+            .globals
+            .get("FrameLineColor")
+            .and_then(|v| oag_game::screen::parse_argb(v))
+            .unwrap_or_else(|| panic!("{label}: FrameLineColor must resolve to a real colour"));
+        assert_eq!(
+            color,
+            oag_game::screen::parse_argb(
+                oag_pure::frontend::FALLBACK_GLOBALS
+                    .iter()
+                    .find(|(name, _)| *name == "FrameLineColor")
+                    .expect("FrameLineColor is in the fallback table")
+                    .1
+            )
+            .unwrap(),
+            "{label}: the disc leaves FrameLineColor undeclared, so this is the measured fallback"
+        );
+        let rect = |x: f32, y: f32, width: f32, height: f32| oag_game::screen::Fill {
+            x,
+            y,
+            width: Some(width),
+            height: Some(height),
+            color,
+        };
+        let white_background = oag_game::screen::Fill {
+            x: 0.0,
+            y: 0.0,
+            width: Some(480.0),
+            height: Some(272.0),
+            color: 0xffff_ffff,
+        };
+        assert_eq!(
+            screen.fills,
+            vec![
+                white_background,
+                rect(14.0, 240.0, 1.0, 16.0),
+                rect(14.0, 240.0, 235.0, 1.0),
+                rect(184.0, 240.0, 1.0, 8.0),
+                rect(241.0, 240.0, 1.0, 11.0),
+                rect(249.0, 232.0, 3.0, 1.0),
+                rect(249.0, 232.0, 1.0, 3.0),
+                rect(249.0, 250.0, 3.0, 1.0),
+                rect(249.0, 247.0, 1.0, 3.0),
+                rect(249.0, 237.0, 1.0, 8.0),
+                rect(283.0, 237.0, 1.0, 8.0),
+                rect(280.0, 232.0, 3.0, 1.0),
+                rect(283.0, 232.0, 1.0, 3.0),
+                rect(280.0, 250.0, 4.0, 1.0),
+                rect(283.0, 247.0, 1.0, 3.0),
+                rect(419.0, 240.0, 1.0, 10.0),
+                rect(283.0, 240.0, 136.0, 1.0),
+                rect(286.0, 250.0, 133.0, 1.0),
+            ],
+            "{label}: every frame line at its own rect, none of them a wash"
+        );
+    }
+}

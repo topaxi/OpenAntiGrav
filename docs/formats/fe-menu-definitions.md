@@ -95,7 +95,13 @@ And a palette Pure declares none of: `TextColor` `0xFF33A6B9`, `TitleColor`
 `0xFF000000`, `DesignColor` `0xFF5FDBF6`, `DesignColor2` `0xFF99D9E8`,
 `MenuHighLightArrowColor` `0xFFED4796`, `MenuScrollArrowColor` `0xFF37CAEB`,
 `InternalLineColor` `0xFF0FC3FF`, `FrameLineColor` `0xFE99C9D8`,
-`CrosshatchColor` `0xFFD9E3E4`, plus medal, tab, stat and record colours.
+`CrosshatchColor` `0xFFD9E3E4`, plus medal, tab, stat and record colours. These
+are Pulse's own values - **Pure's copies are not the same constants**, where
+measured: `TitleColor` is `0xFFED4896` on Pure against black here, so nothing
+in this table should be borrowed as a Pure default without checking.
+`crates/pure/src/frontend.rs`'s `FALLBACK_GLOBALS` carries Pure's own measured
+stand-ins for `TitleColor`, `DesignColor`, `TextColor` and `FrameLineColor` -
+each sampled off a real PPSSPP capture, not derived from this table.
 
 The mechanism that reads these is
 [fe-globals](../ghidra/functions/ps2-pulse-eu/fe-globals.md), including the trap
