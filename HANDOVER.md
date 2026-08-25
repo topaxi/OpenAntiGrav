@@ -726,8 +726,14 @@ like a nonsense variable name rather than a wrong base.
 are open: the **draw path** (inline command-buffer writes on PS3, so no import
 census or call graph finds it - it needs a search for RSX method constants);
 **`SortRoot.cpp`'s four constructors** (`0x002dbe08`, `0x002dbe50`, `0x002dbe98`,
-`0x002dbf40`, none with a caller, so base cannot be told from complete and none
-is named); and - **now closed** - where the engine-owned shader
+`0x002dbf40`) - **narrowed 2026-08-25**: `0x002dbe50` turned out to have six
+real callers after all (base cannot be told from complete *and none is
+named* was true only for the other three), but all six sit outside the
+render layer and one traces to a generic `LinkObj.h`-descended container -
+evidence against, not for, the "draw-order root" guess. See
+[renderer.md](docs/ghidra/functions/ps3-hdfury-eu/renderer.md#what-was-deliberately-not-read)
+and [the handover thread](handover/hds-see-through-surfaces-draw-with-the-files.md);
+and - **now closed** - where the engine-owned shader
 programs' microcode lives: 124 `SHO` blocks linked into `EBOOT.elf` against
 exactly 124 registered names, same container as a `.rcsmaterial`. Two things
 stay open there and are on the page. **Only 62 of the 124 name-to-blob pairings
