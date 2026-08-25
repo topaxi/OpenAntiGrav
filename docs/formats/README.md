@@ -20,6 +20,43 @@ column carried five values the legend never defined, which is a legend that has
 stopped being read. Three of them named real distinctions and are legend rows
 now; the other two were `understood` and `partial` under different names.
 
+## Coverage: which bytes a parser actually reads
+
+**A hand-written parser cannot fail on a field it does not know about.** That
+is not a hypothetical: `rcsmodel` read the surface record embedded in a chunk
+header and stopped, so the count at `+0x10` and the offset table at `+0x18`
+naming the *other* surface records went unread and a quarter of Wipeout HD's
+chunks silently lost their remaining geometry - 25,972 submeshes and 7.1
+million triangles, 40% of the render geometry, drawn by nothing and reported by
+nothing. Every diagnostic the project had compared what it drew against what it
+decided to draw, which cannot surface an absence.
+
+[`oag_formats::coverage`](../../crates/formats/src/coverage.rs) is the
+instrument that can. A parser claims every range it reads, and the leftover
+runs are listed with what sits either side of them - "384 bytes between a chunk
+header and its submesh descriptors" is a lead; "384 bytes at 0x11e5e0" is a
+number.
+
+| Format | Bytes reached | Shape of the residual |
+| --- | --- | --- |
+| `.rcsmodel` | **96.06 %** of 719 MB; a circuit's own `track.rcsmodel` **98.08 %** | string pools, the variable-length tail of a material record (this crate reads `0x18` of one that runs to 768), alignment slack. The outliers are the `fe/` track previews at ~29 % - a **standing lead**, and the runs there are vertex-shaped. |
+| `.vex` | **100.00 %** of all 742 files | none. The header declares a tree length and a texture length, and those two plus the header are the whole file. |
+
+`crates/formats/tests/coverage_ground_truth.rs` holds both as a **ratchet**:
+`.rcsmodel` must not fall below the floors, `.vex` must stay exact.
+
+**A gap is a lead, not a bug, and the first thing to check is whether the
+format's own header already accounts for it.** This instrument's first `.vex`
+run reported 3.0 MB across 666 files as unreachable; that was the embedded
+texture block named at `+0x08`, which a different entry point reads. The claims
+were incomplete, not the parser.
+
+**Where it is worth adding next.** The risk is highest in a format that is a
+*container of tables reached by offsets*, because that is where a table can go
+unreferenced - `.rcsmodel` was exactly that. It is lowest where every record is
+enumerated by construction: [`psarc`](psarc.md) and [`wad`](wad.md) walk their
+whole directory, so an unread entry is not possible in the same way.
+
 ## Wipeout formats
 
 These are the project's actual work.

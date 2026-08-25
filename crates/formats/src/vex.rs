@@ -1711,3 +1711,44 @@ fn emit_vif_chunk(
 
 #[cfg(test)]
 mod tests;
+
+/// Which bytes of a `.vex` the node walk reaches.
+///
+/// **A different question from [`crate::rcsmodel::coverage`]'s, and a narrower
+/// one.** That one asks whether a *field* went unread, because that is how a
+/// quarter of Wipeout HD's chunks lost their surfaces. This asks whether a
+/// *region* goes unvisited: the node tree is walked whole, so a run of bytes no
+/// node covers is a section the walk never reaches at all.
+///
+/// It deliberately does not descend into a payload. Most `.vex` node classes
+/// are undecoded on purpose - the format table in `docs/formats/vex.md` says
+/// which - so claiming a payload whole is the honest statement of what the walk
+/// reaches, and per-class coverage would report a deliberate decision as a
+/// defect on every file.
+#[must_use]
+pub fn coverage(data: &[u8]) -> crate::coverage::Coverage {
+    let mut seen = crate::coverage::Coverage::new(data.len());
+    seen.claim(0, FILE_HEADER_LEN, "the file header");
+    let Ok(nodes) = nodes(data) else {
+        return seen;
+    };
+    for node in &nodes {
+        seen.claim(node.offset, node.header_size, "a node header");
+        let payload = node.payload();
+        seen.claim(payload.start, payload.len(), "a node payload");
+    }
+    // **The file header declares this, so it is reached even though the node
+    // walk stops before it.** Leaving it out was this instrument's own first
+    // false alarm: 3.0 MB across 666 files reported as unreachable, which is
+    // the embedded texture block that `texture_len` names at `+0x08` and
+    // `crate::texture` decodes. A gap is a lead, and the first thing to check
+    // about one is whether the format's own header already accounts for it.
+    if let (Ok(tree), Ok(textures)) = (tree_len(data), texture_len(data)) {
+        seen.claim(
+            FILE_HEADER_LEN + tree,
+            textures,
+            "the embedded texture block",
+        );
+    }
+    seen
+}

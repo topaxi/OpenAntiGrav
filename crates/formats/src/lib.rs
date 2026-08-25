@@ -32,6 +32,7 @@ pub mod av1;
 pub mod bik;
 pub mod byte_order;
 pub mod collision;
+pub mod coverage;
 pub mod entropy;
 pub mod envsettings;
 pub mod fexml;

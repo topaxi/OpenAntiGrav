@@ -14,6 +14,10 @@ fn main() -> anyhow::Result<()> {
     let (mut models, mut chunks, mut multi, mut mixed) = (0usize, 0usize, 0usize, 0usize);
     let (mut tri_first, mut tri_extra) = (0u64, 0u64);
     let (mut sub_first, mut sub_extra) = (0usize, 0usize);
+    // Declared against parsed: a surface the parser could not read is skipped
+    // silently, which is the failure mode this whole exercise is about.
+    let (mut declared, mut parsed, mut worst): (u64, u64, Vec<(usize, String)>) =
+        (0, 0, Vec::new());
     for archive_index in 0..7 {
         let spec = format!("{image}:PS3_GAME/USRDIR/DATA{archive_index:02}.PSARC");
         let Ok(mut psarc) = oag_assets::psarc::Archive::open(&spec) else {
@@ -33,7 +37,23 @@ fn main() -> anyhow::Result<()> {
                 continue;
             };
             models += 1;
-            for chunk in &model.meshes {
+            let be32 = |at: usize| -> u32 {
+                blob.get(at..at + 4)
+                    .map_or(0, |s| u32::from_be_bytes(s.try_into().unwrap()))
+            };
+            let be16 = |at: usize| -> u16 {
+                blob.get(at..at + 2)
+                    .map_or(0, |s| u16::from_be_bytes(s.try_into().unwrap()))
+            };
+            let chunk_table = be32(0x20) as usize;
+            let mut missed = 0usize;
+            for (index, chunk) in model.meshes.iter().enumerate() {
+                let at = be32(chunk_table + index * 4) as usize;
+                let want = usize::from(be16(at + 0x10)).max(1);
+                let got = 1 + chunk.extra_surfaces.len();
+                declared += want as u64;
+                parsed += got as u64;
+                missed += want.saturating_sub(got);
                 chunks += 1;
                 let triangles = |m: &rcsmodel::Mesh| -> u64 {
                     m.submeshes.iter().map(|s| (s.index_count / 3) as u64).sum()
@@ -56,9 +76,21 @@ fn main() -> anyhow::Result<()> {
                     mixed += 1;
                 }
             }
+            if missed > 0 {
+                worst.push((missed, path.clone()));
+            }
         }
     }
     println!("{models} model(s), {chunks} chunk(s)");
+    println!(
+        "  {declared} surface(s) declared, {parsed} parsed, {} skipped ({:.2}%)",
+        declared - parsed,
+        (declared - parsed) as f64 / declared as f64 * 100.0,
+    );
+    worst.sort_by_key(|(n, _)| std::cmp::Reverse(*n));
+    for (n, path) in worst.iter().take(6) {
+        println!("    {n:>7} skipped in {path}");
+    }
     println!("  {multi} declare a surface past the first; {mixed} of those name another material");
     println!(
         "  {sub_first} submesh(es) on first surfaces, {sub_extra} on the rest ({:.1}% more)",

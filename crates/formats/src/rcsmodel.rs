@@ -91,9 +91,12 @@
 
 use crate::ByteOrder;
 
+mod coverage;
 pub mod material;
 mod stride;
 mod surface;
+
+pub use coverage::coverage;
 pub mod vertex_decl;
 
 pub use material::{Blend, Factor, Material, Transparency};
