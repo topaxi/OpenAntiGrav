@@ -1,0 +1,13 @@
+# An RPCS3 capture harness: a reference frame paired with the camera that drew it
+
+2026-08-24, branch `worktree-hd-glass-floors`. Written up in [rpcs3-capture.md](../docs/reverse-engineering/rpcs3-capture.md); this row is what is not there. **Working end to end except the camera.** `scripts/rpcs3-drive.py capture` boots HD headless, walks into a race, and loops poses in **one** debugger connection (one per launch is a hard constraint). It stops the target *before* grabbing the frame - `screenshot()` takes the virtual root window, so the read describes the frame on screen, not a later one - and trims to the emulator's rectangle. `data/reference/hd-capture/talons/` holds real Talon's Junction frames from the original, one of which independently confirms the flip fix below: its barrier walls are light grey concrete where this project drew black. `oag-game --camera-pose` consumes the nine numbers `ps3_pose.decompose` gives, verified end to end. `EBOOT.elf` names every shader parameter at `0x008b7f08`, so `viewProj` (`0x2e7d5f33`) and `eyePositionWorldSpace` (`0x3466fc0e`) are read rather than guessed. **`viewProj` is not located yet and four places are ruled out**, each a boot nobody need repeat: the EBOOT data and BSS, the `RenderManager`, `Render_FrameContextPtr`'s target, and 1 MB of heap at `0x30000000` diffed across two frames. Every matrix in all four is a static 90-degree 1:1 cube face. The hypothesis is **no CPU-side copy is kept**: the matrix goes straight into the pushbuffer, where it is exactly findable as a `NV4097_SET_TRANSFORM_CONSTANT_LOAD` operand. `g_GcmContext` holds `0x013be314`; next: `--region "0x008c0854@:0x20"`. **Three traps cost a boot each and are fixed**: `r2` from an arbitrary thread is zero, so the TOC comes from `e_entry`'s descriptor (`0x008ad4d8`); a chain's null test must be on what a pointer *held*, since null plus `+0x14` is the readable-looking `0x14`; and an unreadable region is skipped, not raised. **A degenerate matrix passes every algebraic test** - a zeroed region has a unit `w` row by accident, apex at the origin - so `ps3_pose.score` also demands an orthonormal basis, a plausible fov and aspect, and an eye off the origin.
+
+## Open
+
+- `viewProj` is not located yet; four places are ruled out (EBOOT data/BSS, `RenderManager`, `Render_FrameContextPtr`'s target, 1 MB of heap at `0x30000000`).
+- The camera is the one piece not working end to end in the capture harness.
+- The hypothesis that the matrix goes straight into the pushbuffer (`NV4097_SET_TRANSFORM_CONSTANT_LOAD`) with no CPU-side copy is untested.
+
+## Next Steps
+
+- Run `--region "0x008c0854@:0x20"` off `g_GcmContext` (`0x013be314`) to look for `viewProj`.

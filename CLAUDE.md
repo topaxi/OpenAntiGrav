@@ -258,8 +258,12 @@ Start at [`docs/README.md`](docs/README.md) for the full reading order and tree 
 Key entry points: [goals](docs/overview/goals.md), [roadmap](docs/overview/roadmap.md),
 [glossary](docs/overview/glossary.md), [ADR index](docs/architecture/adr/README.md),
 [format status table](docs/formats/README.md). [`HANDOVER.md`](HANDOVER.md) tracks what
-isn't in the docs tree itself: work in flight, what was deliberately deferred, which
-findings are independently verified versus single-source, and traps that cost time -
-read it before starting non-trivial work, and update it when handing off.
+isn't in the docs tree itself: what was deliberately deferred, which findings are
+independently verified versus single-source, and traps that cost time - read it before
+starting non-trivial work, and update it when handing off. Work in flight is one file per
+thread under [`handover/`](handover/), each with `## Open` and `## Next Steps`;
+`HANDOVER.md`'s own "Open threads" section is just the index - delete a thread's file and
+its index line together once the work lands, the same rule this file always applied to a
+row.
 
 ADRs are immutable; a changed decision gets a new ADR that supersedes the old one, not an edit.
