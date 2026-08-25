@@ -20,7 +20,10 @@
   generic per-class spawner (`FUN_08908f98`) resolving `weatherPos`'s own
   `+0x7c` `init` slot at runtime - invisible to every static search because
   the call is indirect, through a value only ever loaded into a register, not
-  written anywhere as an immediate. So the class *is* exercised; what still
+  written anywhere as an immediate. **Confirmed it really is `weatherPos`**,
+  not just "landed at the right address": the live descriptor the call runs
+  against matches `weatherPos`'s own registration on four separate fields
+  (class id, identity tag, and two more). So the class *is* exercised; what still
   isn't recovered is which of `WO_RAIN`/`WO_SNOW`/`WO_MODESTO_STEAM_A`/
   `WO_BLUE_WELDER` an instance carries, or whether Talon's Junction's 14 all
   carry the same one - no node payload, Maya name, or `PI_Track` attribute has
@@ -40,7 +43,7 @@
 
 ## Next Steps
 
-- Recover triggers for the unwired effects - weapon ones need the weapon itself built first. For the four environmental ones, the constructor's call chain is confirmed live; what's left is reading which effect a `weatherPos` instance selects - `param_3`/`+0x4c` and `FUN_08908f98`'s per-record class-resolution cursor are the concrete leads, per `psp-pulse-usa/weatherpos.md`'s Open section.
+- Recover triggers for the unwired effects - weapon ones need the weapon itself built first. For the four environmental ones, the constructor's call chain is confirmed live; what's left is reading which effect a `weatherPos` instance selects - `param_3`/`+0x4c` is the concrete lead. `FUN_08908f98`'s per-record cursor was tried and did not land on a data record (see `psp-pulse-usa/weatherpos.md`'s Open section) - re-reading that function's decompile more carefully is the next step there, not repeating the same read.
 - Re-check `pob.md`'s `ParticleSystem` "dead end" claim against the class-identity-tag mechanism `weatherpos.md` found, before relying on it.
 - Implement the missing interpreter features (atlases/textures, billboard roll, emitter extent, emission-scale channel, animated-attribute array).
 - Do not fire any effect on a guess - follow the do-not-invent rule in `CLAUDE.md`.

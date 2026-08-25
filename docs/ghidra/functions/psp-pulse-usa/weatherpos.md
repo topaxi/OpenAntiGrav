@@ -205,12 +205,39 @@ cpu.status: stepping=True, pc=0x0892c404
 
 `cpu.getAllRegs` at that exact stop:
 
-| Register | Value | Role (per the static reading above) |
+| Register | Value | Role |
 | --- | --- | --- |
-| `a0` (`param_1`) | `0x08b65a30` | passed straight through from the caller |
+| `a0` (`param_1`) | `0x08b65a30` | **`weatherPos`'s own live descriptor** - see below, not a pass-through |
 | `a1` (`param_2`) | `0x08fddba0` | the node `func_0x00140bd4` links the new instance under |
 | `a2` (`param_3`) | `0x45000000` → as `f32`: `2048.0` | stored into the new instance's `+0x4c`, meaning unknown |
 | `ra` | `0x0890901c` | **the call site** |
+
+**`a0` is not a pass-through, and it is the decisive confirmation.** Reading
+`0x08b65a30` directly finds `weatherPos`'s own descriptor fields, live and in
+memory, at exactly the offsets `WeatherPos_RegisterClass` writes: `+0x44 =
+0x000003da` (994, `weatherPos`'s own class id, confirming the static reading
+of `vex.md`'s table), `+0x4 = 0x08a7255c` (the surviving identity tag from
+above, exact match), `+0x38 = 0x08ad2474` (the surviving block pointer, exact
+match), `+0x28 = 0x08a88a38` (the `"file"` tag, exact match). So this is not
+merely "execution happens to be at `FUN_0892c404`'s address" - the live
+memory it is running against *is* `weatherPos`'s own descriptor, corroborated
+on four independent fields. (Mechanically: `a0` at the `+0x7c` call site is
+`inst + offset`, the *result* of `FUN_08908f98`'s first indirect call
+through `+0x74`, not its own `param_1` re-passed - a correction to how that
+call reads, worth recording since it is easy to misattribute from the
+decompiler's argument order alone.)
+
+**`a1`'s own class-identity tag is the shared "generic base" one**
+(`0x08a6ba64`, the 25-caller tag from above), read directly at `a1 + 4` -
+consistent with the parent a `weatherPos` instance links under being an
+ordinary, untyped scene node rather than anything `weatherPos`-specific
+itself. Attempting to go one step further and read "the resolved record"
+`FUN_08908f98`'s decompile implies lives at `param_2 + 4` **did not work**:
+that address holds the same `0x08a6ba64`, which is code (the tag thunk
+itself), not a data record - reading past it returns raw instruction bytes,
+not a class id or a track-side value. So either that decompiled field isn't
+the record cursor this reading assumed, or the record lives somewhere this
+pass didn't correctly reach; left open rather than guessed at further.
 
 `get_function_by_address(0x0890901c)` resolves to `FUN_08908f98`
 (`08908f98`-`0890906b`), decompiled:
@@ -240,13 +267,9 @@ slot [the earlier static section above](#the-4-field-is-a-class-identity-tag-not
 found reads zero in `weatherPos`'s *shipped, static* image. Both readings
 were right: the slot is empty in `.data` and filled at runtime, exactly as
 `vex.md`'s account of `LodGroup`'s own `init` predicted a static read could
-not tell apart. **`FUN_0892c404` is that filled-in `+0x7c` method, for
-whichever class this call resolved to being `weatherPos`.** The class isn't
-visible in these registers - `func_0x00104b68`'s argument (the resolved
-record) lives one indirection deeper, inside `param_2`'s own cursor state,
-not captured here - but the landing address is unambiguous: execution is
-*at* `FUN_0892c404`'s first instruction, with the disassembly-confirmed
-address from the breakpoint arm above.
+not tell apart. **`FUN_0892c404` is that filled-in `+0x7c` method, and this
+call resolved to `weatherPos`** - not inferred from the landing address
+alone, but read directly out of `a0`'s own live descriptor content above.
 
 **Resumed and hit again immediately**, same `a0`/`a1`/`a2`/`ra`, differing
 only in caller-saved scratch registers (`v1`, `t0`, `t1`) and the emulated
@@ -291,20 +314,25 @@ already reads) was checked too - its full attribute set (`type`,
 ## Open
 
 - **The trigger's *selection* is still not recovered - which of the four
-  effects, and where exactly - even though the constructor's call chain now
-  is.** `weatherPos` instances are real, constructed objects at race-load
-  time, not dead code; nothing here says which of `WO_RAIN`/`WO_SNOW`/
-  `WO_MODESTO_STEAM_A`/`WO_BLUE_WELDER` a given one carries, or whether
-  Talon's Junction's 14 all carry the same one. No authored data (`.vex`
-  names, `Definition.xml`) has a signal, so the answer is runtime state this
-  session did not chase down: `param_3` (`2048.0` as `f32`, stored at the new
-  instance's `+0x4c`) is the strongest concrete lead - a per-record value
-  read straight out of the group's own array, plausibly a range, a scale, or
-  literally which of the four effects. Reading `param_2`'s cursor state (its
-  own `+4`, the address `puVar3` inside `FUN_08908f98`'s loop) at the next
-  breakpoint hit would show the actual record `func_0x00104b68` resolved a
-  class from, closing the "which class did this loop iteration actually
-  handle" gap this pass left register-only.
+  effects, and where exactly - even though the constructor's call chain, and
+  that it really is `weatherPos`, are now both confirmed live.** `weatherPos`
+  instances are real, constructed objects at race-load time, corroborated on
+  four fields of their own live descriptor, not dead code. Nothing here says
+  which of `WO_RAIN`/`WO_SNOW`/`WO_MODESTO_STEAM_A`/`WO_BLUE_WELDER` a given
+  one carries, or whether Talon's Junction's 14 all carry the same one. No
+  authored data (`.vex` names, `Definition.xml`) has a signal, so the answer
+  is runtime state this session did not chase down: `param_3` (`2048.0` as
+  `f32`, stored at the new instance's `+0x4c`) is the strongest concrete lead
+  - a per-record value, plausibly a range, a scale, or literally which of the
+  four effects.
+- **`FUN_08908f98`'s "record" this pass expected at `param_2 + 4` is not
+  there - reading it lands on code, not data.** That address holds
+  `0x08a6ba64` itself (the shared identity-tag thunk, confirmed by
+  disassembling it, not by inference), so either the decompiled `param_2[1]`
+  field isn't the per-record cursor this reading assumed, or the real record
+  lives at an address this pass didn't reach. Worth re-reading
+  `FUN_08908f98`'s decompile more carefully, or single-stepping through one
+  full loop iteration in a live capture, before trying this again.
 - **`FUN_08908f98` (`0x08908f98`-`0890906b`) is a generic per-class-group
   spawner, not `weatherPos`-specific**, so it is not renamed this session -
   its exact intended name (what `param_1`'s `+0x48` structure and `+0x4c`
