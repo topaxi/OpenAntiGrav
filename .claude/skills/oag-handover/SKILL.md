@@ -9,13 +9,44 @@ Autonomously start one unit of work from this repo's open-thread backlog. Stop a
 report back the moment real progress needs something only the user or maintainer can
 supply — do not guess past a blocker.
 
+## 0. Hard rule: no file mutation before `EnterWorktree`
+
+**Everything before step 4 is read-only.** No `Edit`, no `Write`, no `rm`/`mv`/`sed -i`,
+no fixing a typo you happen to notice — not even in the main checkout, and not even if
+it looks like a one-line fix. This bit a real session: uncommitted work was found
+sitting in the main checkout, read (per step 1 below) as "a previous session's
+leftovers", and edited directly — only to discover mid-edit that a *second, still
+running* session was live in that same directory, not a past one, and the edits
+collided with its in-flight changes. "The tree is dirty" alone doesn't tell you which
+case you're in; only checking does.
+
+If `git status` in step 1 shows uncommitted changes in the main checkout, investigate
+read-only (`git diff`, `git log`, `Read`) — don't edit, fix, or revert anything yet —
+and check whether the main checkout is actually claimed by a live session right now:
+
+```sh
+ls -la .claude/worktrees/          # threads already claimed by a dedicated worktree
+for p in $(pgrep -f '/opt/claude-code/bin/claude'); do
+  echo "$p: $(readlink /proc/$p/cwd 2>/dev/null)"
+done                                # any PID besides this session's own with cwd == main checkout?
+```
+
+A PID other than this session's own with `cwd` equal to the main checkout means a live
+session is working there directly, right now, outside any worktree — revert any edit
+you already made there, leave the rest of that checkout untouched, and take it purely
+as a reminder to obey step 4 yourself, not as something to fix on that session's behalf.
+Otherwise, the uncommitted state really is a past session's leftovers — still don't
+edit it from the main checkout; either pick it up properly by entering a worktree
+first, or leave it alone and pick a different thread.
+
 ## 1. Orient before picking
 
-Read, in this order:
+Read, in this order — read-only, per the rule above:
 
 - `HANDOVER.md`'s **Read this first** section — the disc-image/`.gitignore` traps and
   current gate status live there and are wrong to rediscover the hard way.
-- `git status` — a previous session's work may already be sitting uncommitted.
+- `git status` — a previous session's work may already be sitting uncommitted, or a
+  concurrent session may be live in the main checkout right now; see step 0.
 - `/bin/ls -la data/images/` — confirms whether disc-backed work is even exercisable
   this session (see CLAUDE.md's sandbox note; `rg`/`fd` under `data/` silently return
   nothing regardless, so don't use them to check).
@@ -55,12 +86,13 @@ Tell the user, briefly, before starting: which thread, which next step, one line
 the plan. This is the point where a fresh set of eyes could redirect you cheaply —
 don't skip it and don't over-explain it.
 
-## 4. Branch into a worktree
+## 4. Branch into a worktree — before your first file mutation, no exceptions
 
-Before touching any files, call `EnterWorktree` to isolate this session's work from
-the main checkout — that's what lets several handover sessions run at once without
-colliding. Name it after the thread so it's identifiable in `git worktree list`, e.g.
-the file stem trimmed to something short:
+This is the gate step 0 exists to enforce: the *first* `Edit`/`Write`/mutating `Bash`
+call of the session happens after this step, never before it. Call `EnterWorktree` to
+isolate this session's work from the main checkout — that's what lets several handover
+sessions run at once without colliding. Name it after the thread so it's identifiable
+in `git worktree list`, e.g. the file stem trimmed to something short:
 
 ```
 EnterWorktree({ name: "handover-<thread-slug>" })
