@@ -472,7 +472,6 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [The field drove in single file, and the fix is a per-craft personality off the disc's own AI corridor](handover/the-field-drove-in-single-file-and-the.md)
 - [`psp-pulse-usa`'s import carries unrelocated address constants, at least around `0x08835830`](handover/psp-pulse-usas-import-carries-unrelocated-address-constants.md)
 - [Nothing airborne has ever been captured](handover/nothing-airborne-has-ever-been-captured.md)
-- [Task #33: `oag-trace` cannot exercise the mag-lock hold](handover/task-33-oag-trace-cannot-exercise-the-mag.md)
 - [The hover probe takes only the deepest hit](handover/the-hover-probe-takes-only-the-deepest-hit.md)
 - [Is there a fifth handling class?](handover/is-there-a-fifth-handling-class.md)
 - [The lap capture's own "the HUD said `Lap 2 of 3`" claim is now in tension with the finding that closed this row, and nobody has reconciled them](handover/the-lap-captures-own-the-hud-said-lap.md)
