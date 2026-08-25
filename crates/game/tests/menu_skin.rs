@@ -37,11 +37,10 @@ fn the_two_titles_disagree_on_every_number_they_both_state() {
 /// Pure states less, and the gaps are `None` rather than filled in.
 ///
 /// `docs/formats/pure-status.md` holds `oag-pure` to what has actually been
-/// measured. Two of these three stayed `None` after its GUI tree was read, and
-/// for different reasons - see `oag_pure::frontend::MENU_SKIN`'s own comments:
-/// nothing has ever captured a Pure menu, so there is no row pitch and no
-/// cursor colour; and the menus turned out to name no font role of their own,
-/// so there is none to state rather than one still unread.
+/// measured. Both of these stayed `None` for different reasons - see
+/// `oag_pure::frontend::MENU_SKIN`'s own comments: nothing has ever captured a
+/// Pure menu's row pitch; and the menus turned out to name no font role of
+/// their own, so there is none to state rather than one still unread.
 #[test]
 fn pure_leaves_unread_fields_empty_rather_than_borrowing_pulses() {
     assert!(pure().row_extra_leading.is_none(), "never captured");
@@ -50,7 +49,27 @@ fn pure_leaves_unread_fields_empty_rather_than_borrowing_pulses() {
         "Pure's menus draw in the default face - its language plugins declare no \
          Menu slot at all"
     );
-    assert!(pure().selected.is_none(), "never captured");
+}
+
+/// Pure's `Main Menu` capture (2026-08-25) filled in two fields a single
+/// earlier `Title Screen` capture never reached - `background`, off
+/// `BackgroundController`'s own `src`-less `BackgroundImage`, and `selected`,
+/// off `SINGLE PLAYER` against its unselected siblings. Pinned here because a
+/// title with no measured `selected` used to mean a real, visible bug on
+/// Pure specifically: this build's own substitute is white, and once
+/// `background` started drawing a white screen under it, `selected: None`
+/// was a white row on white.
+#[test]
+fn pures_main_menu_capture_measured_its_background_and_its_selected_row() {
+    assert_eq!(pure().background, Some(0xFFFF_FFFF));
+    assert!(pure().selected.is_some(), "measured off SINGLE PLAYER");
+    assert_ne!(
+        pure().selected,
+        Some(0xFFFF_FFFF),
+        "this build's own OUR_SELECTED substitute is white too - a title whose \
+         measured selected happened to equal it would pass by coincidence \
+         rather than by having been measured at all"
+    );
 }
 
 /// Pure's first row is its own measurement, not Pulse's number.
