@@ -722,6 +722,19 @@ material's `+0x0c..0x14` really is zero everywhere - the animation is just
 not stored on the material. "Rules out the file as a source of animation
 data" was the wrong conclusion from a correct scan, and is withdrawn.
 
+**Moa Therma's magstrip is a checked negative instance, not an unexamined
+one.** Neither its base-strip nor its far-LOD-overlay material carries the
+`0x10` flag, and `mesh_tex_transforms` returns `None` for both -
+`crates/render/tests/magstrip_ground_truth.rs`'s
+`the_magstrip_material_carries_no_texture_transform`. The magstrip does not
+animate; the mechanism exists and is played elsewhere on the same disc, this
+surface simply does not use it. Separately: the magstrip's own texture name,
+`_magsurface3_1verb.tga` (and a `Dmagsurface3_1verb.tga` variant on the "Dark"
+track set), is the **only** place `"verb"` appears in any of 5,017 texture
+names across all 307 version-6 `.vex` files - not a naming convention, so
+there is nothing more general to decode from it. Left unexplained as an
+authoring idiosyncrasy.
+
 ### List B is real, distinct geometry, not a second pass over list A
 
 **Confidence: 90.** `oag_render::mesh` used to read list A only, on the theory
@@ -1404,7 +1417,21 @@ Applied, from
   `sceGuDrawArray`. Observed 3 (triangles) and 4 (strip) in real models. A strip
   needs degenerate triangles to join, since the GE has no primitive restart.
 - Whether the alternate vertex block overlaps or follows the primary one.
-- Batch `+0x14`, and the `.x`/`.z` components of the s16 bounding box.
+- Batch `+0x14`'s exact meaning, and the `.x`/`.z` components of the s16
+  bounding box. **Ruled out, 2026-08-25: it is not padding.** Censused across
+  all 65,279 non-VIF PSP batches on `Data.wad`
+  (`crates/formats/tests/batch_position_gap_ground_truth.rs`): read as an
+  `f32`, it is nonzero, positive and finite on every one of them - the
+  signature of a real value, not an unused gap. Its magnitude does not track
+  the batch's own `scale` (the ratio to `scale` spans 0.0004 to 2.0 with no
+  central tendency), but sits closer to a fixed band against half the batch's
+  own bounding-box diagonal (ratio 1.10-2.65 at the 10th-90th percentile,
+  median 1.46) - consistent with, but not proof of, some kind of per-batch
+  bounding radius. No consuming instruction has been found for it in
+  `psp-pulse-usa/BOOT.BIN`, and whether it is even one `f32` rather than two
+  packed sub-fields (the way the texture-transform block's tracks are) was not
+  tested either. Below the confidence this project renames anything at -
+  recorded as a lead, not a decode.
 - **Collision mesh representation**: see
   [collision](../ghidra/functions/psp-pulse-usa/collision.md), now decoded.
 - Exact `pass_mask` bit meanings. Partial: `0x800` means the batch has its own
