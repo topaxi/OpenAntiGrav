@@ -226,17 +226,21 @@ that would be needed to fix it; recorded rather than silently accepted.
   [`fog.md`](../ghidra/functions/psp-pulse-usa/fog.md).
 - **`cloudCube` `0x3d8`, `cloudGroup` `0x3d9` are undecoded.** Present in the
   census - `05_Track` alone authors 5 clouds and 3 cloud groups.
-- **`weatherPos` `0x3da`'s registration is found, plus a runtime constructor
-  nothing statically calls.** `WeatherPos_RegisterClass` (`0x0892c684`)
-  registers class `0x3da` like every other environment class; the value it
-  installs at the descriptor's `+4` is not a handler but a class-identity tag
-  (the mechanism `FUN_08a71364`'s per-class node gather actually reads), and a
-  separate function, `FUN_0892c404`, allocates and tags a real `weatherPos`
-  instance at runtime - but no static call site in this binary reaches it. No
-  node payload, Maya name, or `PI_Track` attribute says which of `WO_RAIN`/
-  `WO_SNOW`/`WO_MODESTO_STEAM_A`/`WO_BLUE_WELDER` a given instance plays, or
-  whether a track's 1 to 21 zero-length-payload instances share one effect or
-  several do - still open, detail in
+- **`weatherPos` `0x3da`'s registration is found, and a live PPSSPP capture
+  confirms its runtime constructor actually runs, loading a real race.**
+  `WeatherPos_RegisterClass` (`0x0892c684`) registers class `0x3da` like every
+  other environment class; the value it installs at the descriptor's `+4` is
+  not a handler but a class-identity tag (the mechanism `FUN_08a71364`'s
+  per-class node gather actually reads). `FUN_0892c404`, which allocates and
+  tags a real `weatherPos` instance, has no static call site anywhere in the
+  binary - and a breakpoint on it fires anyway, during Talon's Junction's
+  race load, called through a generic per-class spawner
+  (`FUN_08908f98`) resolving `weatherPos`'s own `+0x7c` `init` slot at
+  runtime, the same layout `exhaust.md` documents for other classes. So the
+  class is genuinely constructed, not dead code. What none of that says: which
+  of `WO_RAIN`/`WO_SNOW`/`WO_MODESTO_STEAM_A`/`WO_BLUE_WELDER` a given
+  instance carries, or whether a track's 1 to 21 zero-length-payload
+  instances share one effect or several do - still open, detail in
   [`weatherpos.md`](../ghidra/functions/psp-pulse-usa/weatherpos.md).
 - **PS2 parity.** Not checked. Pulse's class IDs do not carry to Pure, and the
   PS2 build's numbering is unconfirmed.

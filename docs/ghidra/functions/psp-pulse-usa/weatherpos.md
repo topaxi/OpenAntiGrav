@@ -1,4 +1,4 @@
-# `weatherPos`'s registration is found, and so is a runtime constructor nothing statically calls
+# `weatherPos`'s registration is found, and its runtime constructor fires on a real race
 
 Found while working [the open thread on unrecovered particle triggers](../../../../handover/the-particle-effects-are-played-from-the-disc.md):
 the four environmental effects (`WO_RAIN`, `WO_SNOW`, `WO_MODESTO_STEAM_A`,
@@ -6,18 +6,29 @@ the four environmental effects (`WO_RAIN`, `WO_SNOW`, `WO_MODESTO_STEAM_A`,
 `weatherPos` `0x3da` ([`vex.md`](../../../formats/vex.md#node-types)) is the
 scene-node class shaped to carry that - `skycube.md` already flagged it as
 "1 to 21 per track, zero-length payload, undecoded". This page is the
-registration-site half of closing that, plus a class-identity mechanism and a
-runtime constructor found while reading it; the placement-and-selection half
+registration-site half of closing that, plus a class-identity mechanism, a
+runtime constructor, and now **the constructor's own caller, confirmed live**
+- the placement-and-selection half (which of four effects, and where exactly)
 is still open below.
 
-**Revision note (same session):** an earlier version of this page called the
-value at the registered descriptor's `+4` "a trivial self-address-returning
-thunk" and treated it as a dead end, the same framing `pob.md` uses for
-`ParticleSystem`'s slot. That was wrong in kind, not just in detail - see
-["The `+4` field is a class-identity tag, not a dead handler"](#the-4-field-is-a-class-identity-tag-not-a-dead-handler)
-below. `pob.md`'s equivalent claim for `ParticleSystem` was not re-verified
-this session and may carry the same error; noted in the parent handover
-thread rather than changed here.
+**Revision notes (same session, in order):**
+
+1. An earlier version of this page called the value at the registered
+   descriptor's `+4` "a trivial self-address-returning thunk" and treated it
+   as a dead end, the same framing `pob.md` uses for `ParticleSystem`'s slot.
+   That was wrong in kind, not just in detail - see
+   ["The `+4` field is a class-identity tag, not a dead handler"](#the-4-field-is-a-class-identity-tag-not-a-dead-handler)
+   below. `pob.md`'s equivalent claim for `ParticleSystem` was not
+   re-verified this session and may carry the same error; noted in the
+   parent handover thread rather than changed here.
+2. A later version of this page then exhausted every *static* lead on the
+   runtime constructor's caller and reported it as genuinely unreached in
+   this binary. **That conclusion is superseded - a live PPSSPP capture found
+   the caller in minutes.** The static search wasn't wrong about what it
+   found (nothing, by every method tried); it was wrong to treat "no static
+   caller" as evidence of "never called" strongly enough to stop there. See
+   ["Confirmed live: the constructor is called, repeatedly, loading a real race"](#confirmed-live-the-constructor-is-called-repeatedly-loading-a-real-race)
+   below.
 
 ## `WeatherPos_RegisterClass` (`0x0892c684`)
 
@@ -138,58 +149,122 @@ Class dispatch being by descriptor lookup rather than an immediate compare
 ([`vex.md`](../../../formats/vex.md#node-types)) still means there is no
 `li 0x3da` to search for.
 
-## A runtime constructor exists, and nothing in this binary statically reaches it
+## The runtime constructor, statically
 
 `FUN_0892c404(param_1, param_2, param_3)`, a few hundred bytes past
 `WeatherPos_RegisterClass` in the same region, allocates a fresh `0xa0`-byte
 object (`func_0x00142e40(0xa0, &STR_file, 0x21a)`, the same generic `"file"`
-tag and a `0x21a` category constant), splices it into `param_2`'s child list
-when `param_2` is non-null (`func_0x00140bd4`, the same sibling-linkage
-primitive `vex.md` records for `LodGroup`'s constructor), then calls
-`FUN_0892c340(new_object)` - confirmed from the raw disassembly, not just the
-decompiler's rendering, since `a0` is `move`d from the new object's own
-register right before the `jal` - which in turn stamps `+0x38`/`+0x28`
-generically and `+4` with `weatherPos`'s own tag (`0x0026e55c`, `0x08a7255c`).
-`FUN_0892c404` then stamps `+4` with the same tag again itself, redundant with
-what `FUN_0892c340` already wrote - the same harmless double-write pattern as
-`WeatherPos_RegisterClass`'s own descriptor above.
+tag and a `0x21a` category constant), links it (`func_0x00140bd4`, the same
+sibling-linkage primitive `vex.md` records for `LodGroup`'s constructor) when
+`param_2` is non-null, then calls `FUN_0892c340(new_object)` - confirmed from
+the raw disassembly, not just the decompiler's rendering, since `a0` is
+`move`d from the new object's own register right before the `jal` - which in
+turn stamps `+0x38`/`+0x28` generically and `+4` with `weatherPos`'s own tag
+(`0x0026e55c`, `0x08a7255c`). `FUN_0892c404` then stamps `+4` with the same
+tag again itself, redundant with what `FUN_0892c340` already wrote - the same
+harmless double-write pattern as `WeatherPos_RegisterClass`'s own descriptor
+above. `FUN_0892c340` has exactly one caller in this binary: `FUN_0892c404`.
 
-**`FUN_0892c340` has exactly one caller in this binary: `FUN_0892c404`.** Not
-proven shared boilerplate, despite writing a generic-looking `"file"` tag -
-just not ruled out either.
-
-**`FUN_0892c404` itself has no caller found by any of four independent
-searches**: `get_xrefs_to` and `get_function_callers` return nothing (as
+**Every static search for `FUN_0892c404`'s own caller came back empty, by
+four independent methods**: `get_xrefs_to` and `get_function_callers` (as
 expected in this wart-affected region); `search_instructions` for its address
-in *both* valid `lui`/`addiu` encodings (`0x00128404` as `lui 0x13` +
-`addiu -0x7bfc`, and as `lui 0x12` + `addiu 0x8404`) also returns nothing -
-unlike `Vex_RegisterClass` and `FUN_08a71364`, which this same technique found
-dozens of call sites for; and `search_byte_patterns` for its raw little-endian
-address (`04 C4 92 08`) anywhere in the program - code or data - also finds
-nothing, which rules out it being stashed in a function-pointer *table*
-(a per-class jump table, say) rather than reached by a fixed instruction. So
-this is not the earlier session's search-encoding mistake repeating; it is a
-consistent negative result across every static search this session tried.
+in *both* valid `lui`/`addiu` encodings; and `search_byte_patterns` for its
+raw little-endian address anywhere in the program, code or data. That result
+stood in an earlier version of this page as "genuinely unreached in this
+binary" - **wrong**, corrected below. The static search wasn't lying; the
+caller is reached through an indirect call this project's addressing
+workaround for the unrelocated-address wart cannot make visible (below), so a
+search for the callee's address as an immediate was always going to come back
+empty regardless of whether it is called.
 
-`weatherPos`'s own class table's `+0x7c` (`0x08890314`, from `WeatherPos_RegisterClass`'s
-own `0x8c298` argument + image base) reads as four zero bytes in the shipped
-image. `vex.md` reports `LodGroup`'s equivalent slot as a real,
-`LodGroup`-specific pointer (confidence 88) - this session tried to
-re-confirm that by the same method and could not get a coherent result from
-`LodGroup`'s own registration site, which resolves through the same
-unrelocated-address wart and did not reproduce `vex.md`'s cited table address;
-left as `vex.md`'s existing finding rather than re-derived here. Taken at
-face value it says `weatherPos`'s `+0x7c` being zero is meaningful, not
-generic filler - but it is not proof either way: `vex.md`'s own reading of
-`LodGroup` shows this slot can also be filled generically at *instantiation*
-time rather than at registration time, which a static read of an
-unconstructed class's table cannot distinguish from "never gets one". Either
-something calls
-`FUN_0892c404` through a function-pointer slot this session did not locate,
-or - matching the pattern `vex.md` already documents for `LodGroup`'s tier
-switch and for `engine_fire`/`exitglow`/`gate`'s missing registrations - this
-retail binary authors a `weatherPos` constructor it never statically
-exercises.
+## Confirmed live: the constructor is called, repeatedly, loading a real race
+
+**Confidence 95** for "`FUN_0892c404` executes during a real race's load,
+called from `FUN_08908f98`" - a live breakpoint hit is the strongest evidence
+class this project uses, on par with the shield and camera pages' own live
+captures. Not full data-agreement territory (100) because only Talon's
+Junction and only two hits were observed, per the caveats in Open below.
+
+2026-08-25, PPSSPP v1.20.4 (SDL build, Xvfb, no window visible to anyone),
+websocket debugger on port 47810, `pulse-psp-usa.chd`. Method, in full, per
+[`ppsspp-debugger.md`](../../../reverse-engineering/ppsspp-debugger.md):
+connected while the CPU was stepping, armed an execution breakpoint at
+`0x0892c404` (`cpu.breakpoint.list` echoed it back disassembled as
+`addiu sp,sp,-0x20` - `FUN_0892c404`'s own first instruction, confirming the
+address before a single instruction had run), then drove `scripts/psp-drive.py
+menu` into a Time Trial on Talon's Junction (`16_Track`, the same file the
+"no in-file signal" section below reads statically).
+
+**It hit.** The walk's own log stops at `"loading the race"` - the moment
+`settle_into_race`'s next command (`input.buttons.press`) times out, because
+the CPU is no longer running to answer it. A fresh connection confirms why:
+
+```
+cpu.status: stepping=True, pc=0x0892c404
+```
+
+`cpu.getAllRegs` at that exact stop:
+
+| Register | Value | Role (per the static reading above) |
+| --- | --- | --- |
+| `a0` (`param_1`) | `0x08b65a30` | passed straight through from the caller |
+| `a1` (`param_2`) | `0x08fddba0` | the node `func_0x00140bd4` links the new instance under |
+| `a2` (`param_3`) | `0x45000000` → as `f32`: `2048.0` | stored into the new instance's `+0x4c`, meaning unknown |
+| `ra` | `0x0890901c` | **the call site** |
+
+`get_function_by_address(0x0890901c)` resolves to `FUN_08908f98`
+(`08908f98`-`0890906b`), decompiled:
+
+```c
+void FUN_08908f98(int param_1, int *param_2)
+{
+    uint index = 0;
+    if (*(short *)(*(int *)(param_1 + 0x48) + 0xc) != 0) {
+        do {
+            /* advance param_2's own array cursor to the next 16-byte-aligned record */
+            ...
+            int handle = func_0x00104b68(*record);            // resolve a class by id
+            int inst = (**(code **)(*(int *)(handle + 0x38) + 0x74))
+                           (..., param_1, *(undefined4 *)(param_1 + 0x4c));
+            (**(code **)(*(int *)(inst + 0x38) + 0x7c))(..., param_2);  // the +0x7c init call
+            index += 1;
+        } while (index < *(ushort *)(*(int *)(param_1 + 0x48) + 0xc));
+    }
+}
+```
+
+This is a **generic per-class-group spawner**: read a count, and for that
+many records, resolve a class descriptor and call its `+0x7c` slot - the
+exact `init` layout `vex.md` and `exhaust.md` already document, and the same
+slot [the earlier static section above](#the-4-field-is-a-class-identity-tag-not-a-dead-handler)
+found reads zero in `weatherPos`'s *shipped, static* image. Both readings
+were right: the slot is empty in `.data` and filled at runtime, exactly as
+`vex.md`'s account of `LodGroup`'s own `init` predicted a static read could
+not tell apart. **`FUN_0892c404` is that filled-in `+0x7c` method, for
+whichever class this call resolved to being `weatherPos`.** The class isn't
+visible in these registers - `func_0x00104b68`'s argument (the resolved
+record) lives one indirection deeper, inside `param_2`'s own cursor state,
+not captured here - but the landing address is unambiguous: execution is
+*at* `FUN_0892c404`'s first instruction, with the disassembly-confirmed
+address from the breakpoint arm above.
+
+**Resumed and hit again immediately**, same `a0`/`a1`/`a2`/`ra`, differing
+only in caller-saved scratch registers (`v1`, `t0`, `t1`) and the emulated
+tick count - consistent with `FUN_08908f98`'s loop calling through the same
+site once per record in its group, `weatherPos`'s among them. Not counted
+further this session (see Open).
+
+**Why the static searches were always going to fail**: the call is
+`(**(code **)(...))(...)`, an indirect call through a value loaded from
+memory at runtime - there is no `jal 0x0892c404` anywhere to find, in either
+`lui`/`addiu` encoding or as a raw address in `.data`, because the CPU never
+loads that literal address as an immediate at all. It loads `weatherPos`'s
+class-table pointer (itself reached only after `func_0x00104b68` resolves a
+class id at runtime) and calls through `+0x7c` of *that*. Every search this
+session ran was sound; none of them could see through a jump that only
+exists as a computed value in a register. The lesson for future work in this
+region: a class's real behaviour is only found by driving the class handler,
+not by searching for its address.
 
 ## Placement: no in-file signal, confirmed on one track
 
@@ -215,26 +290,32 @@ already reads) was checked too - its full attribute set (`type`,
 
 ## Open
 
-- **The trigger is still not recovered**, and no authored data (`.vex` names,
-  `Definition.xml`) says which effect a `weatherPos` instance plays or picks
-  between the four candidates. What is now ruled out: a data-authored name or
-  flag anywhere this project reads. What is **not** ruled out any more: a
-  per-class runtime path exists (`FUN_0892c404`) - it just is not statically
-  reached, so either its caller has not been found yet or the retail binary
-  authors it without exercising it.
-- **`FUN_0892c404`'s caller is the concrete next probe.** Ruled out this
-  session: `Vex_LoadModel`'s other two per-node-type gathers. The cap-1000
-  gather's tag-getter (`0x08a6b9bc`) has 35 callers including
-  `Texture_LoadEngineFlare`, `Texture_LoadEffectSurfaces` and
-  `Texture_LoadEngineNoise` by name - it gathers `Texture` nodes, not
-  `weatherPos`. The cap-`0x40` gather's tag-getter (`0x08a6ba4c`) has 7
-  callers, none `weatherPos`-related. So neither gather is the path in.
-  `weatherPos`'s own class table's `+0x7c` reads zero statically (above),
-  consistent with no wiring but not proof of it. Untried: a live emulator with
-  a breakpoint on `0x0892c404` during a race on a track with `weatherPos`
-  instances (Talon's Junction has 14) - the only way left to tell "never
-  wired" from "wired at instantiation time, which a static read of an
-  unconstructed table can't see" apart.
+- **The trigger's *selection* is still not recovered - which of the four
+  effects, and where exactly - even though the constructor's call chain now
+  is.** `weatherPos` instances are real, constructed objects at race-load
+  time, not dead code; nothing here says which of `WO_RAIN`/`WO_SNOW`/
+  `WO_MODESTO_STEAM_A`/`WO_BLUE_WELDER` a given one carries, or whether
+  Talon's Junction's 14 all carry the same one. No authored data (`.vex`
+  names, `Definition.xml`) has a signal, so the answer is runtime state this
+  session did not chase down: `param_3` (`2048.0` as `f32`, stored at the new
+  instance's `+0x4c`) is the strongest concrete lead - a per-record value
+  read straight out of the group's own array, plausibly a range, a scale, or
+  literally which of the four effects. Reading `param_2`'s cursor state (its
+  own `+4`, the address `puVar3` inside `FUN_08908f98`'s loop) at the next
+  breakpoint hit would show the actual record `func_0x00104b68` resolved a
+  class from, closing the "which class did this loop iteration actually
+  handle" gap this pass left register-only.
+- **`FUN_08908f98` (`0x08908f98`-`0890906b`) is a generic per-class-group
+  spawner, not `weatherPos`-specific**, so it is not renamed this session -
+  its exact intended name (what `param_1`'s `+0x48` structure and `+0x4c`
+  field are) is not pinned enough for `Subsystem_VerbNoun`. Worth a proper
+  read and a name once someone is in this area for another class.
+- **How many `weatherPos` instances actually construct, and whether every
+  one reaches `FUN_0892c404` or only some, is not counted.** Two hits were
+  observed with identical `a0`/`a1`/`a2` before this pass stopped
+  (deliberately, to keep the session bounded) - consistent with, but short
+  of confirming, all 14 of Talon's Junction's instances going through the
+  same call site.
 - **`WO_MODESTO_STEAM_A` may not even be a Pulse-authored trigger.** `modesto_heights`
   matches **Pure**'s `03_Modesto_Heights`
   ([`hd-status.md`](../../../formats/hd-status.md#the-circuits-are-the-psps)),

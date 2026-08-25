@@ -7,27 +7,30 @@
 - Most of the 35 disc particle systems have a parsed asset but no recovered trigger, so they stay deliberately unwired.
 - The interpreter does not yet implement sprite atlases/textures, billboard roll, emitter extent, the emission-scale channel, or the animated-attribute array.
 - The two instance-level scales (`instance[+0x40]` alpha, `instance[+0x34]` size) are read but unmodelled; the alpha factor is not fed by anything here.
-- **The environmental four are narrower than they looked, and still open.**
-  `weatherPos` `0x3da`'s registration is found (`WeatherPos_RegisterClass`,
-  `0x0892c684`), and so is a genuine runtime constructor for it
-  (`FUN_0892c404`, allocates and tags a real instance) - but no static call
-  site anywhere in this binary reaches that constructor, checked four
-  independent ways including a raw byte-pattern scan for its address as
-  data. `Vex_LoadModel`'s other two per-class node gathers are ruled out as
-  the path in (one gathers `Texture`, the other something else, neither
-  `weatherPos`); `weatherPos`'s own class table reads no `init` function
-  wired in statically, consistent with (but not proof of) a constructor
-  the retail binary authors and never calls. No node payload, Maya name, or
-  `PI_Track` attribute says which of `WO_RAIN`/`WO_SNOW`/`WO_MODESTO_STEAM_A`/
-  `WO_BLUE_WELDER` a `weatherPos` instance plays - checked on Talon's
-  Junction's 14 instances and the front end's `Definition.xml`, both empty of
-  a signal. Detail, including the class-identity-tag mechanism this pass
-  found, in
+- **The environmental four are narrower than they looked, and the class is now
+  confirmed live rather than dead code - only the effect *selection* is still
+  open.** `weatherPos` `0x3da`'s registration is found
+  (`WeatherPos_RegisterClass`, `0x0892c684`), and so is a genuine runtime
+  constructor for it (`FUN_0892c404`, allocates and tags a real instance).
+  Every static search for its caller came back empty, by four independent
+  methods including a raw byte-pattern scan for its address as data - and
+  that result was reported as "genuinely unreached" until a **live PPSSPP
+  capture found the caller in minutes**: a breakpoint on `0x0892c404` fires
+  while loading a real Time Trial on Talon's Junction, called through a
+  generic per-class spawner (`FUN_08908f98`) resolving `weatherPos`'s own
+  `+0x7c` `init` slot at runtime - invisible to every static search because
+  the call is indirect, through a value only ever loaded into a register, not
+  written anywhere as an immediate. So the class *is* exercised; what still
+  isn't recovered is which of `WO_RAIN`/`WO_SNOW`/`WO_MODESTO_STEAM_A`/
+  `WO_BLUE_WELDER` an instance carries, or whether Talon's Junction's 14 all
+  carry the same one - no node payload, Maya name, or `PI_Track` attribute has
+  a signal, and the live capture's own `param_3` (`2048.0` as `f32`, stored at
+  the new instance's `+0x4c`) is the strongest untraced lead. Detail,
+  including the class-identity-tag mechanism and the full live-capture method,
+  in
   [`docs/ghidra/functions/psp-pulse-usa/weatherpos.md`](../docs/ghidra/functions/psp-pulse-usa/weatherpos.md).
-  Only lead left untried: a live emulator with a breakpoint on the
-  constructor during a race. Separately, `WO_MODESTO_STEAM_A` may not even be
-  a Pulse trigger at all - `modesto_heights` matches a **Pure** circuit, not
-  a Pulse one.
+  Separately, `WO_MODESTO_STEAM_A` may not even be a Pulse trigger at all -
+  `modesto_heights` matches a **Pure** circuit, not a Pulse one.
 - **`pob.md`'s "dead end" reading of `ParticleSystem`'s registered slot
   (`FUN_08a6bd18`) may be the same mistake `weatherpos.md` made and then
   corrected.** Not re-checked this session - `weatherpos.md` found that the
@@ -37,7 +40,7 @@
 
 ## Next Steps
 
-- Recover triggers for the unwired effects - weapon ones need the weapon itself built first. For the four environmental ones, every static lead on `weatherPos`'s runtime constructor (`FUN_0892c404`) is exhausted; the one thing left untried is a live emulator with a breakpoint on it during a race, per `psp-pulse-usa/weatherpos.md`.
+- Recover triggers for the unwired effects - weapon ones need the weapon itself built first. For the four environmental ones, the constructor's call chain is confirmed live; what's left is reading which effect a `weatherPos` instance selects - `param_3`/`+0x4c` and `FUN_08908f98`'s per-record class-resolution cursor are the concrete leads, per `psp-pulse-usa/weatherpos.md`'s Open section.
 - Re-check `pob.md`'s `ParticleSystem` "dead end" claim against the class-identity-tag mechanism `weatherpos.md` found, before relying on it.
 - Implement the missing interpreter features (atlases/textures, billboard roll, emitter extent, emission-scale channel, animated-attribute array).
 - Do not fire any effect on a guess - follow the do-not-invent rule in `CLAUDE.md`.
