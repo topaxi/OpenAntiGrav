@@ -516,9 +516,13 @@ impl Screens {
                     self.collect_widgets(screen, grandchild, width);
                 }
             }
-            "animation" => {
-                // No `width` of its own to carry down - whatever the
-                // enclosing `Viewport` gave keeps applying inside.
+            // Neither carries a `width` of its own to pass down - whatever the
+            // enclosing `Viewport` gave keeps applying inside. `BackgroundController`
+            // is Pure's own case: its `Skin.xml` wraps `FE Screen`'s background art
+            // in one (`<BackgroundController><Image name="BackgroundImage">...`),
+            // and before this arm existed nothing walked through it either - the
+            // same silent drop `Screen` below has, just one container earlier.
+            "animation" | "backgroundcontroller" => {
                 for grandchild in &child.children {
                     self.collect_widgets(screen, grandchild, viewport_width);
                 }
