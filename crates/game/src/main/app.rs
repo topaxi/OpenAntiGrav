@@ -280,6 +280,7 @@ impl App {
             prefetch_pending: self.prefetch.take(),
             boot_overlay: self.boot_overlay,
             pick_language: self.pick_language,
+            race_ready_at: None,
         }))
     }
 

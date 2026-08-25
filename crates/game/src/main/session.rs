@@ -205,6 +205,18 @@ pub(crate) struct Session {
     pub(crate) boot_overlay: bool,
     /// `--pick-language`, read at the same moment.
     pub(crate) pick_language: bool,
+    /// When the race scene finished building, kept until the first race frame
+    /// is presented.
+    ///
+    /// Diagnostic only - it exists to answer "where did the wait actually go"
+    /// with a timestamp rather than a guess, while the fade-to-race hand-off
+    /// is still being tuned. See [`Session::advance_race_build`],
+    /// [`Session::finish_race_loading`] and [`Session::frame`], which log the
+    /// three points a stall could be hiding in: the build itself, the hand-off,
+    /// and the first frame drawn with the new scene - the last of which is
+    /// where a driver that defers pipeline compilation to first use would show
+    /// up, since building the pipeline object earlier does not force that.
+    pub(crate) race_ready_at: Option<std::time::Instant>,
 }
 
 /// What the menus need to know about the backdrop besides its pixels.

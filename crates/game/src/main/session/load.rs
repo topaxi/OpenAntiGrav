@@ -461,6 +461,9 @@ impl Session {
         // read above - the same shape `Session::frame`'s own field accesses
         // rely on elsewhere in this module.
         stage.built_race = Some(built);
+        // The reference point the other two diagnostic timestamps are read
+        // against - see `Session::race_ready_at`.
+        self.race_ready_at = Some(std::time::Instant::now());
     }
 
     /// Swaps the loading screen for the grid, once the circuit has landed and
@@ -503,6 +506,15 @@ impl Session {
             }
             Err(RaceBuildError::Gpu(e)) => return Err(e),
         };
+        // The second diagnostic timestamp - see `Session::race_ready_at`. Not
+        // taken: `Session::frame` reads it again once the first race frame
+        // presents.
+        if let Some(ready_at) = self.race_ready_at {
+            info!(
+                "race hand-off: {:.0?} since the scene was ready",
+                ready_at.elapsed()
+            );
+        }
         self.stage = Stage::Race(race_stage);
         // The outgoing race's held voices, if this is a relaunch rather than a
         // first start. The back-out path does this too, but a race launched

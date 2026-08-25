@@ -508,6 +508,17 @@ impl Session {
         );
         self.gpu.queue.submit(Some(encoder.finish()));
         self.gpu.queue.present(frame);
+        // The third and last diagnostic timestamp - see `Session::race_ready_at`.
+        // Taken rather than read, so this fires once: the first frame drawn
+        // with the new scene, not every frame after it.
+        if matches!(self.stage, Stage::Race(_))
+            && let Some(ready_at) = self.race_ready_at.take()
+        {
+            info!(
+                "first race frame presented: {:.0?} since the scene was ready",
+                ready_at.elapsed()
+            );
+        }
         Ok(())
     }
 }
