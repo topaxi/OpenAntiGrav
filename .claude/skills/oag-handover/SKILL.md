@@ -120,6 +120,17 @@ Follow this repo's normal rules — nothing about this skill changes them:
 - Non-trivial work gets a task list, checked off as it lands, per the global
   instructions.
 
+Commit as you go, in the worktree — don't let one giant diff accumulate for step 7 to
+squash at the end. The worktree exists precisely so this is safe: commit each landed,
+buildable increment on its own (a doc page written, a rename plus its `names.tsv` row,
+one passing test, one implementation slice) as soon as it's true, rather than batching
+unrelated changes into one commit. Granular commits are what make a blocked or
+interrupted session's partial progress reviewable — a maintainer picking the thread
+back up sees exactly which increments landed and which didn't, instead of one opaque
+blob or, worse, uncommitted work that a crash or context loss can still lose even
+though the worktree itself persists. Small commit messages are fine; they don't need
+the full PR-body treatment step 7's final state does.
+
 ## 6. If you get stuck, stop — don't push through on a guess
 
 Blocked means: the next step needs a Ghidra project that isn't open, a disc image
@@ -138,12 +149,18 @@ resolved. Report back:
   an observation from playing the game, etc.)
 
 Leave the thread file as-is if nothing publishable resulted; add findings to its
-`## Open`/`## Next Steps` if you narrowed the problem even without finishing it.
+`## Open`/`## Next Steps` if you narrowed the problem even without finishing it. If
+step 5's granular commits already cover everything real that landed, there's nothing
+further to commit — don't invent a wrap-up commit just to have one; an uncommitted
+scratch note about the blocker is fine to leave sitting in the worktree.
 
 ## 7. If you finish clean
 
 Update docs with evidence and confidence per the RE workflow, update the thread
 file's `## Open`/`## Next Steps` to reflect what's left (or, if nothing is left,
 delete the file and its `HANDOVER.md` index line together — the project's own rule
-for closing a thread). Run `just` before calling it done — that's the gate every
-commit must pass. Report what now works in concrete terms, not "should work".
+for closing a thread). Commit that update on its own — it's one more granular step,
+not a tail to fold into the last implementation commit. Run `just` before calling it
+done — that's the gate every commit must pass — and confirm `git status` is clean
+before reporting: nothing from this thread should be left sitting uncommitted in the
+worktree. Report what now works in concrete terms, not "should work".
