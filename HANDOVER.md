@@ -750,6 +750,23 @@ matches the global one** - check first with `scripts/ps3-toc.py toc <addr>`
 hunting a specific mechanism in a function whose TOC hasn't been checked.
 This is binary-wide, not specific to this one string or this one function.
 
+**A related but separate trap, hit later the same session: proximity to a
+known-good table is not evidence of relatedness, TOC issue or not.** The
+same HUD-thread session chased `get_xrefs_to` hits clustered around
+`008ad9e0`, one word away from `LoadXML_Item`'s real attribute-name pointer
+table at `008ad9f0` - a dozen-plus hits, in the right file's address range,
+looked like exactly the read-the-table code being searched for. It wasn't:
+`008ad9e0` is a generic pooled-object free-list head that many unrelated
+classes' destructors happen to share, and every one of those "hits" was a
+destructor releasing an unrelated smart-pointer field. **Read the actual data at the address in question** - the `.rodata` string
+run itself (`0078bf00`, holding the real literal names) rather than the
+nearby pointer table that references it (`008ad9f0`, one word from the
+free-list head that produced the false lead) - rather than trusting that a
+cluster of xrefs near a landmark means the landmark. This one doesn't need a
+TOC check to avoid: both addresses were module-A/global-TOC and the xrefs
+were technically real; the inference "near my table, therefore about my
+table" was simply wrong.
+
 **Deferred from the 2026-08-18 renderer sweep**, so nobody re-derives that these
 are open: the **draw path** (inline command-buffer writes on PS3, so no import
 census or call graph finds it - it needs a search for RSX method constants);
