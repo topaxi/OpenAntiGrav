@@ -100,6 +100,12 @@ pub struct Options {
     /// [`pose`]: Options::pose
     /// [`camera`]: Options::camera
     pub opponents: bool,
+    /// Play the trail-hit sparks on the player regardless of the trigger.
+    ///
+    /// A verification aid for the draw path alone - see the `--trail-sparks`
+    /// flag, which is the only thing that sets it, and
+    /// `Race::advance_trail_hits` for why the two need separating.
+    pub trail_sparks: bool,
     /// The world generator's seed, or `None` for [`SEED`].
     ///
     /// **A verification aid too**, and it exists because one already-recovered
@@ -194,6 +200,7 @@ impl Default for Options {
             collision: false,
             lod: mesh::Lod::Both,
             opponents: false,
+            trail_sparks: false,
             seed: None,
             pose: None,
             camera: None,
@@ -227,6 +234,8 @@ pub struct Setup {
     /// this crate implements; the field exists only so a verification build
     /// can override that decision.
     pub opponents: bool,
+    /// See [`Options::trail_sparks`] - a draw-path verification aid.
+    pub trail_sparks: bool,
     /// The world generator's seed, already resolved from [`Options::seed`].
     pub seed: u64,
     /// The decoded spline graph, as the file has it.
@@ -295,6 +304,13 @@ pub struct Setup {
     /// models, so one team's locator carried onto another's craft puts the
     /// flare inside the fuselage.
     pub nozzles: Vec<Option<Vec3>>,
+    /// Each slot's `Ship Collision Fx` locators, in that hull's model space.
+    ///
+    /// The disc's own hull spark anchors - the set the original picks the
+    /// nearest of for a collision, and this engine's stand-in for the ten
+    /// nodes `Trail_HitShipEffect` parents a trail hit to. Per slot because
+    /// the hulls are different models.
+    pub spark_anchors: Vec<Vec<Vec3>>,
     /// The `Ship Collision Fx` locators, in the ship model's own space.
     ///
     /// The original attaches up to 10 and `Ship_DispatchCollisionFx`

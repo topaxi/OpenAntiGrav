@@ -626,6 +626,69 @@ Every claim in this section is asserted in
 `crates/formats/tests/track_ground_truth.rs` and
 `crates/game/tests/race_ground_truth.rs`, against the disc rather than in prose.
 
+### The heading is authored, and on Wipeout HD it is sometimes stale
+
+The slot's heading is the value to prefer — where a craft points on the grid is
+authored deliberately, where a spline tangent is this project's own resampling
+of a curve. That holds on the PSP and does not always hold on the PS3.
+
+Every shipped circuit file on all four discs in hand was measured: the authored
+forward against the tangent of the nearest resampled point to the slot.
+
+| source | files | agree | stale |
+| --- | ---: | ---: | ---: |
+| `pulse-psp-eu.chd` | 24 | 24 (`+0.925` to `+1.000`) | 0 |
+| `pure-psp-eu.chd` | 8 | 8 (`+0.988` to `+1.000`) | 0 |
+| `pulse-ps2-eu.chd` | 32 | 31 (`+0.920` to `+1.000`) | **1** (`-0.441`) |
+| `hdfury-ps3-eu-dec.iso` | 28 | 19 (`+0.999` to `+1.000`) | **9** (`-1.000`, one `0.000`) |
+
+HD's nine are `01_vineta_k`, `04_chenghou_project`, `05_ubermall`,
+`10_sebenco_climb`, `12_sol_2` and `15_anulpha_pass` reversed,
+`modesto_heights` reversed, `tech_de_ra` reversed, and **`zone_3` forward** — so
+it is stale authoring rather than a rule about reversed circuits. On eight of
+them the node's rotation rows are byte-identical to the forward file's and only
+the position row moved: the slot was dragged to the other end of the track and
+never turned round. `tech_de_ra` reversed carries a bare identity matrix, which
+is a slot nobody authored at all.
+
+A craft on one of those faces backwards down its own circuit, and so does the
+whole field: the grid is walked along the spline in the base slot's forward
+direction, so a reversed base lays the field out ahead of pole instead of behind
+it.
+
+### The PS2's one stale slot is what corroborates the correction
+
+`09_Track` is the same circuit on the PSP and PS2 pressings, and its slot has a
+**byte-identical position** on both — `(-506.0834, 2.1623526, 242.45824)`. The
+rotation is not identical: the PSP's forward row runs straight down the track
+and the PS2's is 116 degrees off it. One slot exported twice, one rotation
+maintained and one not, on a disc four years older than HD's — so this is a
+property of the pipeline rather than of the HD era.
+
+It is also the only case where the right answer exists in another pressing, and
+that makes it checkable: the heading the correction substitutes on the PS2 file
+agrees with the PSP file's **authored** one to within **0.08 degrees**. Nothing
+about that comparison went into deriving the rule.
+
+### The rule
+
+`oag_game::race::spawn` takes the heading from the spline **only where the two
+disagree** — `dot <= 0.5`, a threshold across an empty band: all 92 slots
+measured either agree at `+0.920` or better, or disagree at `0.000` or worse.
+The tangent rather than the negated slot, because the slot is not "backwards"
+but *unmaintained*, and nothing says the next unmaintained one is exactly 180
+degrees out. The substituted tangent is **levelled** first, because the bind
+forces the up row to world `(0, 1, 0)` and so every authored heading is exactly
+horizontal; taking a raw tangent would put those craft in a frame the bind
+cannot produce. Position, height and the grid's own layout are untouched, and
+no track on either PSP disc reaches the branch — so no Pulse trace, hash or
+capture comparison moves by it.
+
+Asserted against all four discs in
+`crates/game/tests/spawn_heading_ground_truth.rs`, which pins the outcome, the
+census of which files needed the correction, the levelness, and the PSP/PS2
+cross-check above.
+
 ## Pads
 
 **Moved to [`pads.md`](pads.md)**, which now carries the layout, the census

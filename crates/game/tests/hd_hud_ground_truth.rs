@@ -432,6 +432,157 @@ fn every_sprite_s_source_rectangle_fits_inside_the_texture_it_names() {
     assert_eq!(overhanging.len(), 32);
 }
 
+/// **Every sprite that reaches a draw samples its own texture, not a
+/// neighbour's.**
+///
+/// The check the multi-atlas change is worth having. A layout's textures go
+/// into one sheet stacked vertically, so a sprite offset by the wrong one's
+/// placement lands in a *different image* at a plausible-looking rectangle - the
+/// right patch of the wrong picture, which reads as art rather than as an error
+/// and cannot be seen in a screenshot without knowing what to look for. Before
+/// 2026-08-25 every sprite in a layout took the first texture's placement, so
+/// 45 of the arcade HUD's 138 were wrong that way.
+///
+/// This is deliberately about the **composed uv**, after `sprite_draw` has
+/// offset it, rather than about the authored rectangle -
+/// [`every_sprite_s_source_rectangle_fits_inside_the_texture_it_names`] already
+/// covers that half, and passing it is exactly what let the bug hide.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_drawn_sprite_lands_inside_the_texture_its_own_layout_names() {
+    let Some(mut archives) = open() else {
+        return;
+    };
+    let mut checked = 0usize;
+
+    for &(root, ..) in EXPECTED {
+        let layout = composed(&mut archives, root).layout;
+        let references = layout.textures();
+        if references.is_empty() {
+            continue;
+        }
+
+        // The same read the race loader performs: declared name first, then the
+        // title's own extension rule.
+        let blobs: Vec<(String, Vec<u8>)> = references
+            .iter()
+            .map(|reference| {
+                let entry = oag_hd::hud::texture_entry(reference);
+                let blob = archives
+                    .read_name(&entry)
+                    .unwrap_or_else(|e| panic!("{root}: {reference} -> {entry}: {e}"));
+                ((*reference).to_string(), blob)
+            })
+            .collect();
+        let mut notes = Vec::new();
+        let sheet = oag_game::sprite::Sheet::build(&blobs, &mut notes);
+        assert_eq!(
+            sheet.len(),
+            references.len(),
+            "{root}: {} of {} textures decoded: {notes:?}",
+            sheet.len(),
+            references.len()
+        );
+
+        for sprite in &layout.sprites {
+            let Some(oag_game::frontend::Draw::Sprite { uv, .. }) =
+                hud::sprite_draw(sprite, &sheet)
+            else {
+                panic!("{root}: {} draws nothing", sprite.name);
+            };
+            let placed = sheet.get(&sprite.src).expect("just built");
+            // A negative width or height is a mirror - 26 of HD's sprites author
+            // one - so the patch runs backwards from `uv.xy` and the edges are
+            // whichever way round they came out.
+            let (left, right) = order(uv[0], uv[0] + uv[2]);
+            let (top, bottom) = order(uv[1], uv[1] + uv[3]);
+            let inside = left >= placed.x as f32
+                && top >= placed.y as f32
+                && right <= (placed.x + placed.width) as f32
+                // One row of slack for the disc's own `VoiceCom` overhang, which
+                // the test above pins at exactly one texel on 32 sprites.
+                && bottom <= (placed.y + placed.height + 1) as f32;
+            assert!(
+                inside,
+                "{root}: {} samples {left},{top}..{right},{bottom}, outside {:?} - the \
+                 placement of {}",
+                sprite.name, placed, sprite.src
+            );
+            checked += 1;
+        }
+    }
+
+    println!("{checked} composed sprite uv(s) checked");
+    assert_eq!(checked, 1029);
+}
+
+fn order(a: f32, b: f32) -> (f32, f32) {
+    if a <= b { (a, b) } else { (b, a) }
+}
+
+/// **Every widget HD's title package calls always-on is a widget HD authors.**
+///
+/// `oag_hd::hud::ALWAYS_ON` is an allow-list matched by name, so a misspelling
+/// costs that widget silently: the HUD simply draws one thing fewer, which
+/// looks exactly like a layout that does not carry it. Each name has to be in at
+/// least one of the eighteen.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn every_always_on_widget_is_authored_by_at_least_one_layout() {
+    let Some(mut archives) = open() else {
+        return;
+    };
+    let mut authored: BTreeSet<String> = BTreeSet::new();
+    for &(root, ..) in EXPECTED {
+        for sprite in composed(&mut archives, root).layout.sprites {
+            authored.insert(sprite.name);
+        }
+    }
+    let missing: Vec<&&str> = oag_hd::hud::ALWAYS_ON
+        .iter()
+        .filter(|name| !authored.contains(**name))
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "not authored by any layout: {missing:?}"
+    );
+}
+
+/// **One name, one widget - and the one layout where that is false.**
+///
+/// `oag_game::hud::draw_list` matches the always-on set by name and draws the
+/// *first* sprite carrying each, which is a rule worth exactly as much as its
+/// exception list. Across all eighteen composed layouts, `BestLapImage` in the
+/// two speed-lap ones is the only always-on name authored more than once - the
+/// second copy is the ghost's lap-time row, and this build loads no ghost. Any
+/// other duplicate appearing here means a widget silently stopped being drawn.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn an_always_on_name_is_authored_once_bar_the_one_that_is_not() {
+    let Some(mut archives) = open() else {
+        return;
+    };
+    let mut duplicated: Vec<(&str, String, usize)> = Vec::new();
+    for &(root, ..) in EXPECTED {
+        let mut seen: BTreeMap<String, usize> = BTreeMap::new();
+        for sprite in composed(&mut archives, root).layout.sprites {
+            if oag_hd::hud::ALWAYS_ON.contains(&sprite.name.as_str()) {
+                *seen.entry(sprite.name).or_default() += 1;
+            }
+        }
+        duplicated.extend(
+            seen.into_iter()
+                .filter(|&(_, n)| n > 1)
+                .map(|(name, n)| (root, name, n)),
+        );
+    }
+    assert_eq!(
+        duplicated,
+        vec![("/data/xml/speedlap_hud.xml", "BestLapImage".to_string(), 2)],
+        "always-on names authored more than once"
+    );
+}
+
 /// A second reading of the same include graph, deliberately naive.
 ///
 /// Counts `<Image>` and `<Text>` elements at any depth, following `SrcRel` by

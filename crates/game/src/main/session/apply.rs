@@ -178,6 +178,15 @@ impl Session {
             // for the PS2's 36 MiB of PCM and 0.4 s for the PSP's cached
             // decode - and every move after that is instant, because the sound
             // is held. See `audio::Audio::set_music_source`.
+            // **Re-read rather than remembered.** The illustration is a decoded
+            // image off the disc, so changing the styling means opening the
+            // source again - cheap, and done here in the menus rather than at
+            // the front of a load where it would sit between a press and a
+            // race.
+            "display.front_end_style" => {
+                self.settings.display.front_end_style = text.to_string();
+                self.reload_loading_assets();
+            }
             "audio.music_source" => match text.parse::<audio::MusicSource>() {
                 Ok(source) => {
                     self.settings.audio.music_source = source;

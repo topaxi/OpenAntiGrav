@@ -489,21 +489,39 @@ fn all_sixteen_languages_load_including_the_latin_1_one() {
     assert_eq!(native("Japanese").as_deref(), Some("Svenska"));
 }
 
-/// A circuit shows its id, because no string table on this disc can name it.
+/// A circuit is named off the copy of the string table that agrees with the
+/// circuit list, not off the copy that happens to be mounted first.
 ///
-/// **The regression this guards is a name, not a blank.** `Data\Plugins\
-/// Frontend\definition.xml` in `DATA00` declares 28 circuits and keys them
-/// `NN_Track`; every `entries.xml` reachable here keys circuit names `NN_TRACK`
-/// *in a different numbering*. Folding the case resolves sixteen and gets eight
-/// wrong - `17_Track` loads `Talons_Junction` and `17_TRACK` reads
-/// `SEBENCO CLIMB REVERSE`. `DATA06` is the only table that agrees with
-/// `DATA00`'s list and it is a different archive, so no copy pairs the two.
+/// **This test used to assert the opposite**, and the fact it pinned is still
+/// true: `Data\Plugins\Frontend\definition.xml` in `DATA00` declares 28
+/// circuits keyed `NN_Track`, and the *served* `entries.xml` - `DATA02`'s -
+/// keys their names `NN_TRACK` in a different numbering, so folding the case
+/// against that copy puts `SEBENCO CLIMB REVERSE` on the circuit that loads
+/// `Talons_Junction`. What was missing was the count: HD ships this file five
+/// times, four copies carry 24 `NN_TRACK` keys and `DATA06`'s carries 28, and
+/// the four the others lack are exactly the Zone circuits `DATA00` declares.
+/// So one copy names the whole list, and it is chosen on that.
 ///
-/// Until which copy the runtime serves is settled, an id on screen is an honest
-/// absence and a name is not. See `oag_game::language::StringTable::get`.
+/// Three assertions, because the selection is only right if all three hold:
+///
+/// 1. **The pairing.** `17_Track` loads `Talons_Junction` and now reads
+///    `TALON'S JUNCTION` - the answer the served copy got wrong.
+/// 2. **The coverage.** Every one of the 28 resolves, which is the property the
+///    copy was chosen for; a drift back to `DATA02`'s copy fails here even if
+///    `17_Track` happened to survive.
+/// 3. **The corroboration.** Every circuit sharing an environment with another
+///    reads the same name as it. That is what makes the chosen copy the *right*
+///    one rather than merely the fullest, and it is not the selector: it is
+///    false by design on Pulse, where `16_Track` and `32_Track` share an
+///    environment and are named separately.
+///
+/// The served table is left alone and still holds the old numbering, asserted
+/// below so this fails rather than passes if the whole table is ever swapped:
+/// that would be a much larger change than this one, and it should not happen
+/// quietly. See `oag_game::language::CircuitNames`.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn a_circuit_shows_its_id_rather_than_a_name_from_the_wrong_numbering() {
+fn a_circuit_is_named_off_the_copy_that_agrees_with_the_circuit_list() {
     let Some(image) = image() else { return };
     let (shell, _) = shell(&image);
 
@@ -518,16 +536,47 @@ fn a_circuit_shows_its_id_rather_than_a_name_from_the_wrong_numbering() {
         seventeen.location
     );
     assert_eq!(
-        shell.strings.get_or_id(&seventeen.id),
-        "17_Track",
-        "the string table's own 17 names a different circuit; showing it would \
-         put a confident wrong name on screen"
+        shell.circuit_names.get(&seventeen.id),
+        Some("TALON'S JUNCTION"),
+        "the chosen copy names the circuit its own geometry is"
     );
-    // And the table really does hold that wrong answer, so this test fails the
-    // day a matching copy is served rather than passing for having found none.
+
+    let unnamed: Vec<&str> = shell
+        .tracks
+        .iter()
+        .filter(|track| shell.circuit_names.get(&track.id).is_none())
+        .map(|track| track.id.as_str())
+        .collect();
+    assert!(
+        unnamed.is_empty(),
+        "the copy was chosen for naming every circuit; these have no name: {unnamed:?}"
+    );
+
+    // Corroboration: one environment, one name. Twelve of HD's environments
+    // are declared twice, once each way round.
+    let mut pairs = 0;
+    for track in &shell.tracks {
+        for other in &shell.tracks {
+            if other.id <= track.id || other.location != track.location {
+                continue;
+            }
+            pairs += 1;
+            assert_eq!(
+                shell.circuit_names.get(&track.id),
+                shell.circuit_names.get(&other.id),
+                "{} and {} are one piece of track and must read as one name",
+                track.id,
+                other.id
+            );
+        }
+    }
+    assert_eq!(pairs, 12, "twelve of HD's circuits are driven both ways");
+
+    // And the served table still holds the numbering that made this necessary,
+    // so this test fails rather than quietly passing if that copy is swapped.
     assert_eq!(
         shell.strings.get("17_TRACK"),
         Some("SEBENCO CLIMB REVERSE"),
-        "the numbering mismatch is still what it was measured to be"
+        "the served copy is untouched and still disagrees"
     );
 }

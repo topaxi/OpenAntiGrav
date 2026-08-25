@@ -94,41 +94,7 @@ pub(super) fn load_hud(
         }
     };
 
-    // One texture in the sheet, which is what `Sheet::build` is for. Going
-    // through the sheet rather than binding the atlas directly means the HUD
-    // shares the renderer every other screen uses, `Draw::Sprite` and all.
-    let mut sheet = crate::sprite::Sheet::default();
-    // **The layout names its own texture**; this used to name it instead. See
-    // `crate::hud::Layout::atlas` for why that mattered - Pure's HUDs name none
-    // at all, so a constant sent a Pure race looking for a Pulse file.
-    match layout.as_ref().and_then(crate::hud::Layout::atlas) {
-        None => report.push(format!(
-            "HUD {entry} names no texture; its sprites are drawn from <Model> \
-             geometry rather than an atlas"
-        )),
-        // `read_image`, not `read_name`: the PS2 keeps its atlas under the
-        // declared name with the extension rewritten to `.pct` (see
-        // `oag_pulse::ps2_texture_name`). The declared name is tried first, so
-        // any other source takes exactly the path it took before, and a name
-        // under neither spelling still fails naming the one that was asked for.
-        Some(atlas) => match oag_pulse::read_image(archives, atlas) {
-            Ok(blob) => {
-                let mut notes = Vec::new();
-                let built = crate::sprite::Sheet::build(&[(atlas.to_string(), blob)], &mut notes);
-                report.extend(notes);
-                if built.get(atlas).is_some() {
-                    report.push(format!(
-                        "HUD atlas {atlas}: {}x{} sheet",
-                        built.width, built.height
-                    ));
-                    sheet = built;
-                } else {
-                    report.push(format!("HUD atlas {atlas} did not decode"));
-                }
-            }
-            Err(why) => report.push(format!("HUD atlas {atlas} unavailable ({why})")),
-        },
-    }
+    let sheet = load_atlases(archives, title, layout.as_ref(), entry, report);
 
     // The HUD's captions are `idstring` keys - `IG_HUD_LAP`, `IG_HUD_BEST` - and
     // without a table `StringTable::get_or_id` falls back to the key itself, which
@@ -160,6 +126,109 @@ pub(super) fn load_hud(
         // quarter of the way into the picture. Same call `boot::load_shell`
         // makes for the front end.
         space: crate::frontend::Space::of(archives.layout.platform),
+        art: title.hud_art,
+    }
+}
+
+/// Every texture this layout's sprites name, decoded into one sheet.
+///
+/// **Every, not the first**, and that is the whole of the difference between an
+/// HD HUD that draws and one that draws the right patch of the wrong picture.
+/// Pulse's and Pure's nine layouts name at most one texture each - measured,
+/// and still pinned by `the_layouts_name_at_most_one_texture` - so on those this
+/// builds the same one-image sheet it always did. HD's eighteen name twelve
+/// between them, up to six in one layout: 45 of the arcade HUD's 138 sprites
+/// name something other than `HUD_Components.gtf`, and until 2026-08-25 all 45
+/// were offset by `HUD_Components`'s placement and sampled it at coordinates
+/// meant for a different texture.
+///
+/// Keyed by the reference the layout spells, which is what
+/// [`crate::hud::sprite_draw`] looks up. Which entry that reference resolves to
+/// is this function's business: the declared name first, then the title's own
+/// rewrite of it - `oag_title::HudArt::texture_extension`, which is `None` on
+/// both PSP titles and `.gtf` on HD, where a `src` names the exporter's input
+/// rather than the shipped file.
+///
+/// A texture that will not resolve or will not decode costs its own sprites and
+/// nothing else: they are reported here and skipped at draw time rather than
+/// drawn out of a neighbour's pixels.
+fn load_atlases(
+    archives: &mut oag_assets::Archives,
+    title: &'static oag_title::Title,
+    layout: Option<&crate::hud::Layout>,
+    entry: &str,
+    report: &mut Vec<String>,
+) -> crate::sprite::Sheet {
+    let references = layout.map(crate::hud::Layout::textures).unwrap_or_default();
+    if references.is_empty() {
+        report.push(format!(
+            "HUD {entry} names no texture; its sprites are drawn from <Model> \
+             geometry rather than an atlas"
+        ));
+        return crate::sprite::Sheet::default();
+    }
+
+    let mut blobs: Vec<(String, Vec<u8>)> = Vec::new();
+    for reference in &references {
+        match read_hud_texture(archives, title, reference) {
+            Ok(blob) => blobs.push(((*reference).to_string(), blob)),
+            Err(why) => report.push(format!("HUD atlas {reference} unavailable ({why})")),
+        }
+    }
+
+    let mut notes = Vec::new();
+    let sheet = crate::sprite::Sheet::build(&blobs, &mut notes);
+    report.extend(notes);
+    report.push(format!(
+        "HUD {entry}: {} of {} texture(s) in a {}x{} sheet",
+        sheet.len(),
+        references.len(),
+        sheet.width,
+        sheet.height
+    ));
+    for reference in &references {
+        if sheet.get(reference).is_none() {
+            report.push(format!(
+                "HUD atlas {reference} did not decode; its sprites draw nothing"
+            ));
+        }
+    }
+    sheet
+}
+
+/// Reads one HUD texture, by the name the layout declares and then by the name
+/// this title rewrites it to.
+///
+/// Two rewrites stack here and they answer different questions.
+/// [`oag_pulse::read_image`] answers "which *pressing* keeps this where" - the
+/// PS2 build's `.pct` - and every source goes through it.
+/// `HudArt::texture_extension` answers "does this title's XML name the shipped
+/// file at all", which is HD's `.gtf`. The declared name is tried first in both,
+/// so a title needing neither takes exactly the path it took before.
+///
+/// # Errors
+///
+/// The error naming the entry the layout asked for, never the rewritten one: a
+/// message about `hdhud.gtf` sends a reader looking for a name their XML does
+/// not contain.
+fn read_hud_texture(
+    archives: &mut oag_assets::Archives,
+    title: &'static oag_title::Title,
+    reference: &str,
+) -> oag_assets::Result<Vec<u8>> {
+    let declared = oag_pulse::read_image(archives, reference);
+    let Some(extension) = title.hud_art.texture_extension else {
+        return declared;
+    };
+    match declared {
+        Ok(blob) => Ok(blob),
+        Err(original) => {
+            let rewritten = oag_title::hud::replace_extension(reference, extension);
+            if rewritten == reference {
+                return Err(original);
+            }
+            oag_pulse::read_image(archives, &rewritten).map_err(|_| original)
+        }
     }
 }
 

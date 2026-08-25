@@ -235,6 +235,11 @@ fn every_flare_carries_the_flames_own_shader_parameters() {
             assert_eq!(flame.rim_min, 0.45, "{}", livery.team);
             assert_eq!(flame.alpha_scale, 2.0, "{}", livery.team);
             assert_eq!(flame.colour_scale, 1.0, "{}", livery.team);
+            // `Speed`, the sixth. It multiplies the engine's own seconds clock
+            // into the noise tap's `v`, so at 2.0 the surface advances two
+            // whole texture repeats a second - the rate a recording of the
+            // original falsifies if this chain is wrong.
+            assert_eq!(flame.scroll_speed, 2.0, "{}", livery.team);
         }
     }
 }
@@ -379,4 +384,128 @@ fn the_sprite_flares_constants_are_the_discs_own() {
     let blob = oag_render::mesh::read_blob(&spec, "/data/tex/engineflare/engine_flare_rich.gtf")
         .expect("Engine_Flare_Rich.gtf");
     assert!(blob.len() > 100_000, "{} bytes", blob.len());
+}
+
+/// **The two `WO_TRAIL_HITSHIP` systems are on the disc and load.**
+///
+/// What `Race::advance_trail_hits` plays when a craft flies into a trail. The
+/// loader reports one line per effect and says "will not be drawn" when a name
+/// is not in the mounted archives, so the report is the evidence - the same
+/// line a screenshot could not tell apart from "the effect never fired".
+///
+/// This is the half the unit tests cannot reach: they pin *when* the effect
+/// fires, and this pins that there is something to fire.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn the_trail_hit_effects_are_on_the_disc_and_load() {
+    let Some(loaded) = load() else { return };
+    for name in [race::TRAIL_HITSHIP_EFFECT, race::TRAIL_HITSHIP_RED_EFFECT] {
+        let line = loaded
+            .report
+            .iter()
+            .find(|line| line.contains(name))
+            .unwrap_or_else(|| panic!("{name}: the loader said nothing about it at all"));
+        assert!(!line.contains("will not be drawn"), "{name}: {line}");
+        assert!(
+            line.contains("emitter(s)"),
+            "{name}: loaded but reported no emitters - {line}"
+        );
+    }
+}
+
+/// **Every HD hull authors `Ship Collision Fx` locators**, which is what the
+/// trail-hit burst is anchored to.
+///
+/// Without them `Race::spark_anchor_of` answers `None` on every craft and the
+/// burst silently falls back to a derived point clear of the hull - the exact
+/// failure a player reported. So this asserts the data is there rather than
+/// trusting the fallback never to be reached.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn every_hd_hull_authors_the_spark_anchors_a_trail_hit_lands_on() {
+    let Some(loaded) = load() else { return };
+    assert!(
+        !loaded.setup.spark_anchors.is_empty(),
+        "no slots carry anchors at all"
+    );
+    for (slot, anchors) in loaded.setup.spark_anchors.iter().enumerate() {
+        assert!(
+            !anchors.is_empty(),
+            "slot {slot}: no Ship Collision Fx locators, so a trail hit would \
+             fall back to a derived point"
+        );
+        println!("slot {slot}: {} spark anchor(s)", anchors.len());
+    }
+}
+
+/// **A craft driving into a trail sparks from its front, not its exhaust.**
+///
+/// The regression a player caught on Assegai: with the contact taken at the
+/// hull's centre, a craft already inside a ribbon is equidistant from it nose
+/// and tail, so the pick among the authored anchors was a coin toss and landed
+/// at the rear. The contact is taken at the leading edge now, and this asserts
+/// the consequence on the disc's own hulls rather than on a synthetic one.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn a_craft_inside_a_trail_sparks_from_its_leading_half() {
+    let Some(loaded) = load() else { return };
+    let mut race = race::Race::start(loaded.setup);
+    race.set_autopilot(true);
+    for _ in 0..300 {
+        race.tick(&oag_gameplay::InputSnapshot::default());
+    }
+    // Sit slot 1 squarely inside slot 0's ribbon, pointing the same way: the
+    // geometry the complaint was about.
+    let lead = race.world.ships[0].physics.body;
+    race.world.ships[1].physics.body.orientation = lead.orientation;
+    race.world.ships[1].physics.body.position = lead.position - lead.forward() * 12.0;
+
+    let craft = race.world.ships[1].physics.body;
+    let anchor = race
+        .spark_anchor_of(1, 0)
+        .expect("slot 1 authors spark anchors and slot 0 has a ribbon");
+    let ahead = (anchor - craft.position).dot(craft.forward());
+    println!("anchor {ahead:.2} units ahead of the hull centre");
+    assert!(
+        ahead > 0.0,
+        "the burst anchored {ahead:.2} units along forward - behind the centre \
+         is the exhaust end, which is the bug this pins"
+    );
+}
+
+/// **How much tighter the anchor test is than the sphere it replaced.**
+///
+/// A player reported the sparks firing before the craft touched the trail. The
+/// sphere was `hull_reach` - the origin-to-nozzle distance, about half a hull
+/// length - around the craft's centre, which on a hull far narrower than it is
+/// long reaches well past its side. This walks a craft sideways out of another's
+/// ribbon and reports the centre distance at which each test stops firing.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn the_anchor_test_fires_later_than_the_sphere_it_replaced() {
+    let Some(loaded) = load() else { return };
+    let mut race = race::Race::start(loaded.setup);
+    race.set_autopilot(true);
+    for _ in 0..300 {
+        race.tick(&oag_gameplay::InputSnapshot::default());
+    }
+    let lead = race.world.ships[0].physics.body;
+    race.world.ships[1].physics.body.orientation = lead.orientation;
+
+    let mut anchor_edge = 0.0_f32;
+    for step in 0..200 {
+        let across = step as f32 * 0.1;
+        race.world.ships[1].physics.body.position =
+            lead.position - lead.forward() * 12.0 + lead.up() * across;
+        if race.spark_anchor_of(1, 0).is_some() && race.trail_touches_for_tests(1, 0) {
+            anchor_edge = across;
+        }
+    }
+    let sphere_edge = race.hull_reach_for_tests(1) + oag_render::exhaust::hd::FIN_HALF_WIDTH;
+    println!("anchor test stops firing at {anchor_edge:.2} units off the ribbon");
+    println!("the sphere it replaced fired out to {sphere_edge:.2}");
+    assert!(
+        anchor_edge < sphere_edge,
+        "the anchor test ({anchor_edge:.2}) is not tighter than the sphere ({sphere_edge:.2})"
+    );
 }

@@ -81,13 +81,24 @@ fn main() -> anyhow::Result<()> {
         {
             let range = draw.range.start as usize..draw.range.end as usize;
             let (mut low, mut high) = (f32::INFINITY, f32::NEG_INFINITY);
+            // The `Uv1` span decides whether the program's doubled lookup
+            // (`2u`, `2v + noise`) covers the texture once or wraps it twice -
+            // asset-side evidence for a shader-side reading. See
+            // engine-flare.md, "the surface scroll".
+            let (mut u0, mut u1) = (f32::INFINITY, f32::NEG_INFINITY);
+            let (mut v0, mut v1) = (f32::INFINITY, f32::NEG_INFINITY);
             for &index in &built.indices[range] {
                 let vertex = &built.vertices[index as usize];
                 low = low.min(vertex.sun_mask);
                 high = high.max(vertex.sun_mask);
+                u0 = u0.min(vertex.texcoord[0]);
+                u1 = u1.max(vertex.texcoord[0]);
+                v0 = v0.min(vertex.texcoord[1]);
+                v1 = v1.max(vertex.texcoord[1]);
             }
             println!(
-                "  node {:?}: {} triangle(s), VertexColour1.w spans {low:.3} to {high:.3}",
+                "  node {:?}: {} triangle(s), VertexColour1.w spans {low:.3} to {high:.3}, \
+                 Uv1.x {u0:.3}..{u1:.3}, Uv1.y {v0:.3}..{v1:.3}",
                 draw.node,
                 (draw.range.end - draw.range.start) / 3
             );

@@ -21,7 +21,13 @@ stores itself in the global at `0x00AED460 + 0x6c` (TOC slot `0x008b4434`),
 allocates `0x11b00` bytes into `this + 0x40`, and initialises eight per-craft
 slots via `Trail_InitCraftSlot` (`0x002e21c0`) - each `0x1230` bytes at
 `alloc + 0x84a0 + slot * 0x1230`, matching the eight teardown calls in the
-destructor at `0x002e4888`. Vtable (`0x0086a940`), the slots that matter:
+destructor at `0x002e4888`. **Two different per-slot initialisers run, and
+telling them apart matters below**: `Trail_InitCraftSlot` is the SPU job's
+setup (the DMA lists that hand the slot's `0x1200` bytes to the `Trails` job),
+called eight times from each ctor directly, while the buffers, the shared
+index list and the material bindings come from one shared body,
+`Trail_InitManagerBuffers` (`0x006b6870`), which both ctors also call and which
+runs `Trail_ResetCraftSlotState` (`0x002e2188`) per slot. Vtable (`0x0086a940`), the slots that matter:
 
 | Slot | Function | What it does |
 | --- | --- | --- |
@@ -62,9 +68,10 @@ rendered frame. The rest:
 | `+0x11d4` | this frame's output buffer | flips between the two RSX addresses below |
 | `+0x11d8` | **the trail's brightness** | written by `EngineFlare_Update` as `engine blend x speed ramp`; the dumped vertex alpha peak is exactly `brightness * (1 - 6/54)` |
 | `+0x11e4` | pointer to this trail's render-queue sort-key slot | the write is the last line of `Trail_BuildDrawState`'s per-craft loop: it reserves a 4-byte slot in the frame's command stream, writes the `depth << 20 \| 0x20000000`-shaped key into it, and stores the slot's address here. Dump-confirmed: eight values exactly `0x334` apart (one trail's full command packet), re-pointed every frame. An earlier reading called this "a dt-scaled per-frame global, equal across all eight" - both halves were the read-a-pointer-as-a-float trap again |
-| `+0x1208` | a per-trail object pointer | stable across frames, bound into the draw state at `+0xc4` by `Trail_BuildDrawState`. Its target is an instance/node graph (self-pointers, `0xff808080` colours, ELF string pointers), **not** fragment microcode: dumped 0x600 bytes for four trails in two frames and none holds the trail's own `+0x1210` phase in either RSX word order |
+| `+0x1208` / `+0x120c` | **this trail's material-instance array, and its length** | `Trail_InitManagerBuffers` allocates `count << 2` bytes and fills it with one instance per material of the loaded ribbon model; `Trail_BuildDrawState` binds the array into the draw state at `+0xc4`. An earlier dump of 0x600 bytes at the target, over four trails and two frames, found no copy of the trail's `+0x1210` phase in either RSX word order - **correct, and now explained**: the instances hold a *pointer* to the phase at `entry+0x18`, never its value (see "the scroll phase is bound by pointer" below) |
+| `+0x11e8` | how many craft contexts this frame holds | the last line of `Trail_WriteCraftContexts`' per-trail loop writes the running count into **every** trail's block, so each SPU job is told the length of the shared context array at `alloc + 0x116f0` as well as being handed it. Read live as `8` on all eight trails in six snapshots across three sessions. What the job does with the other seven craft is unread - see "does another craft disturb the ribbon" below, which rules out the obvious answer |
 | `+0x11ec` | **the head `u`** | `1 - 0.6 * speed01`; equals the head vertex's `u` to 4 decimals on three craft in two frames |
-| `+0x1210` | **the scroll phase** | `EngineFlare_PlaceShapes`' wrapping accumulator, patched into the material's `TrailSpeed` |
+| `+0x1210` | **the scroll phase** | `EngineFlare_PlaceShapes`' wrapping accumulator. Seeded to **1.0** - the ribbon model's own authored `TrailSpeed` - by `Trail_ResetCraftSlotState` (`0x002e2188`), which the constructor calls once per slot and which nothing else in the image calls at all. The material's `TrailSpeed` parameter is bound to this **address**, so it *is* the draw-time constant rather than being copied into one |
 | `+0x1204` | the craft | chases to the `EngineFlare` at `craft + 0x5f70` |
 | `+0x1214/+0x1218` | the double-buffered SPU output | `0xC2B21800`-style RSX addresses; `+0x121c/+0x1220` the same as IO offsets |
 
@@ -97,10 +104,21 @@ then fin 2's.
 Per-ring vertex attributes, fitted exactly against six buffers (three craft,
 two frames, speeds from near-rest to race pace):
 
-- **`u(k) = u_head * (1 - k * 4/54) + phase`** - the constant `4/54` fits at
-  `0.0741` on all six buffers; `u_head` is the `+0x11ec` value
-  (`1 - 0.6 * speed01`), so the streaks stretch with speed; `phase` is
-  `+0x1210`. `v` runs 0 to 1 across each fin.
+- **`u(k) = u_head * (1 - k * 4/54)`, and the scroll is not in it** - the
+  constant `4/54` fits at `0.0741` on all six buffers, and `u_head` is the
+  `+0x11ec` value (`1 - 0.6 * speed01`), so the streaks stretch with speed.
+  `v` runs 0 to 1 across each fin. **The 2026-08-24 revision is the missing
+  `+ phase`**: an earlier fit of this line carried one, which conflicted with
+  the `+0x11ec` row above ("equals the head vertex's `u`") and could not be
+  true at the same time. Re-measured against the seven `--early` snapshots,
+  which keep the block and its vertex buffer from the *same* pause:
+  `max |u(k) - u(0) * (1 - k * 4/54)|` over all 54 rings is **2e-6** at `e0`
+  and **1e-6** at `r1`, while the same residual against `+ phase` is the
+  phase itself (0.881 and 0.155). `r1` is the discriminating one, because its
+  `u_head` of 0.613 is far enough from 1.0 to rule out a mod-1 coincidence:
+  head vertex `u` 0.61510, `+0x11ec` 0.61336, `+0x1210` 0.15526. **The SPU
+  writes no scroll into the vertex.** Where the phase does enter is the next
+  section.
 - **colour: white to red over the first 27 rings** - green and blue fall
   linearly `255 -> 0` at ring 27 and stay 0; red never moves.
 - **alpha = brightness x attack x falloff** with `attack = min(k * 10/54, 1)`
@@ -159,10 +177,378 @@ on the respawn.
   flame surface's unread `Speed * time` scroll clock
   ([engine-flare.md](engine-flare.md)) - hypothesis only, confidence 40, no
   shader-side confirmation yet.
-- Where the per-trail `TrailSpeed` patch physically lives at draw time
-  therefore **stays open**: the two obvious carriers are now both excluded
-  (the splat above is global; the `+0x1208` per-trail binding's target holds
-  no phase - see the table).
+- Where the per-trail `TrailSpeed` value physically lives at draw time is
+  **not** here either - both obvious carriers are excluded (the splat above is
+  global; the `+0x1208` per-trail binding's target holds no phase *value*).
+  The next section is where it turned out to be, and the reason both searches
+  missed it is that nothing copies the phase anywhere: it is bound by address.
+
+## The scroll phase is bound by pointer, once, at construction
+
+This is the last open link in the scroll chain, and it closes in the
+constructor rather than in any per-frame path - which is why two sessions of
+frame dumps could not find it.
+
+`Trail_ConstructManager` (`0x002e2da8`) and the second ctor (`0x002e2f40`)
+both call one shared body, `Trail_InitManagerBuffers` (`0x006b6870`): it
+allocates the two SPU output buffers per trail, builds the shared index buffer
+as 3 fins x 53 segments of `{k, k+1, k+2, k+1, k+3, k+2}` - 954 indices, the
+draw call's own count, arrived at here from the loop bounds rather than from
+the packet - and then, per trail, does this:
+
+```c
+/* Trail_InitManagerBuffers, the per-trail tail of the loop */
+instances = Alloc(materials * 4);
+for (i = 0; i < materials; i++)
+    instances[i] = Material_CloneInstance(model_materials[i], -1, 0);
+block[0x120c] = materials;
+block[0x1208] = instances;
+
+if (!hash_done) { hash = ~Crc32_HashString(Trail_SpeedParamName); hash_done = 1; }
+Material_SetInstanceParamPointer(instances, materials, 0, hash,
+                                 &block[0x1210]);
+```
+
+`Material_CloneInstance` (`0x005d4d28`) is why each trail gets a slot of its
+own to bind: with both flag bits set - and `-1` sets them - it copies the
+record's 0x40-byte header, then its `count * 0x20` parameter entries to
+`clone + 0x40`, then the value blob at `+0x38`/`+0x3c` behind those, and
+**relocates every non-sampler entry's `+0x18` into the copy**. So the file's
+value *offset* is an absolute pointer by the time anything draws, and
+overwriting one touches that trail alone.
+
+`Material_SetInstanceParamPointer` (`0x005d4bb0`) is then six lines of the
+material record's own layout, the one [engine-flare.md](engine-flare.md)
+validated disc-wide:
+
+```c
+for each instance:                       /* class filter is 0, so: all */
+    for each 0x20-byte entry at inst[+0x34], inst[+0x30] of them:
+        if (!(entry[+0x04] & 0x8000) && entry[+0x00] == hash)
+            entry[+0x18] = value;        /* the value pointer */
+```
+
+Three things fall out, in order of how much they change:
+
+- **`TrailSpeed`'s draw-time value is the live `+0x1210` phase**, read through
+  a pointer the constructor wrote once. Nothing patches it per frame, which is
+  why `Trail_BuildDrawState` (read line by line) never mentions it and why the
+  0x334 command packet was the wrong place to look.
+- **The string is read exactly once in the whole executable.** The TOC slot
+  `0x008b4478` -> `0x007a2da8` `'TrailSpeed'` - `Trail_SpeedParamName` - is
+  loaded by one instruction, `0x006b6cc8`, inside that body - found with
+  [`scripts/ps3-toc.py`](../../../../scripts/ps3-toc.py)'s `scan_toc_loads`,
+  because Ghidra resolves no `lwz rX,disp(r2)` here. `~crc32("TrailSpeed")` is
+  `0x07431a35`, which is the hash the ribbon material declares
+  (`ps3-sho.py hash TrailSpeed`), so the two ends of the lookup meet.
+- **The accumulator starts at the authored value.** `Trail_ResetCraftSlotState`
+  (`0x002e2188`), called eight times from this body and from nowhere else in
+  the image, writes `+0x1210 = 1.0f` and clears `+0x1208`/`+0x120c`. It is not
+  `Trail_InitCraftSlot`, which the ctors call separately for the SPU job. `1.0`
+  is exactly what `enginetrail_bluered_triangle.rcsmodel` authors for
+  `TrailSpeed`, and it is a no-op on a `REPEAT`-wrapped sampler. **The wrap
+  state itself is unread** - the same gap this page already records for the
+  sampler's sRGB remap - but `REPEAT` is the only consistent reading: the
+  shader's `u + TrailSpeed` exceeds 1.0 for most of the ring at rest, the
+  accumulator is kept in `[0, 1)` by its own wrap on every live read, and the
+  trail streaks rather than clamping to an edge texel. `oag_render::exhaust::hd::Tube` starts its phase at
+  `0.0` instead, which is the same thing after the first wrap and every live
+  phase read on this page is in `[0, 1)`; the difference is not observable and
+  is not worth a constant.
+
+The material record on the disc agrees field for field: parsed straight out of
+`/data/ribboneffects/enginetrail_bluered_triangle.rcsmodel`, its record at file
+offset `0x60` declares `+0x30 = 6` entries at `+0x34 = 0xa0` - three samplers
+(`0x2743292b`, `0xcc5bb827`, and the null `0x37b5db58` lightmap) and three
+parameters, `0xe296b1ed = 0.15`, **`0x07431a35 = 1.0`** and
+`0xbb48e390 = 0.0`. Those are exactly [engine-flare.md](engine-flare.md)'s
+three patch values, now read from the model rather than inferred from the
+material, and the `1.0` is the value `Trail_ResetCraftSlotState` seeds the
+accumulator with.
+
+### And the running game says the same, in one pause
+
+`scripts/rpcs3-trail-dump.py --params` follows exactly that hop live: block ->
+`+0x1208` -> the instance -> its parameter table -> the `0x07431a35` entry's
+`+0x18`. Two pauses 0.75 s apart in a driven Fury race, trails 0..3:
+
+| Slot | trail block | `TrailSpeed` value pointer | `block + 0x1210` | phase, pause 1 -> 2 |
+| --- | --- | --- | --- | --- |
+| 0 | `3357b7a0` | `3357c9b0` | `3357c9b0` | 0.194 -> 0.399 |
+| 1 | `3357c9d0` | `3357dbe0` | `3357dbe0` | 0.308 -> 0.522 |
+| 2 | `3357dc00` | `3357ee10` | `3357ee10` | 0.339 -> 0.555 |
+| 3 | `3357ee30` | `33580040` | `33580040` | 0.264 -> 0.445 |
+
+Four discriminators, none of which a coincidence survives: the four pointers
+are **`0x1230` apart**, the trail-block stride; each equals its *own* trail's
+phase address and no other's; all four are **byte-identical across the two
+pauses while the floats they point at move**, which is what a live pointer
+looks like and a stale copy does not; and each instance's table reads back as
+the disc's own six hashes in the disc's own order - `0x2743292b`,
+`0xcc5bb827`, `0x37b5db58`, `0xe296b1ed`, `0x07431a35`, `0xbb48e390` - with the
+hit at entry 4 and its value pointer at instance `+0xd8`, exactly
+`0x40 + 4 * 0x20 + 0x18` of `Material_CloneInstance`'s layout - and the scan
+for that hash across each instance's first `0x200` bytes returns `0xc0` **and
+`0x1f0`** on the two slots whose neighbours are adjacent, `0x130` apart, which
+is `0x40 + 6 * 0x20 + 0x30` read back out of the live heap. The clone's size
+closes from the disc and from memory independently. The same pause
+read the head vertices: `u` `0.57444` against `+0x11ec` `0.574396` with the
+phase at `0.194` - the vertex law again, with no scroll in it.
+
+**Confidence 94.** Every function is fully decompiled, the entry layout is the
+disc-validated one, the hash closes from both sides, the authored `1.0` closes
+against the constructor's seed, and the whole hop is confirmed in the running
+game on four trails in two frames. What is read at one call site only is
+`Material_SetInstanceParamPointer`'s generality, which is what holds its own
+`names.tsv` row below 90 rather than the mechanism.
+
+**One trap this cost a run, worth the line.** The instance pointers live at
+`0x40cbfbd0`-style addresses while the array pointing at them lives at
+`0x3058....`; a heap-range guard that stopped at `0x40000000` rejected all four
+and reported an empty hit list - which reads exactly like "the binding is not
+there". That is the third variant of this page's recurring trap: **a plausible
+range test can hide a pointer as thoroughly as a plausible float can.** The
+probe now reports every field it looked at, misses included.
+
+### What this settles about the scroll, end to end
+
+With [engine-flare.md](engine-flare.md)'s reading of the ribbon's **vertex**
+program (new the same day) the whole chain is now closed, and it says the
+phase is applied exactly **once** to each of the two texture lookups:
+
+| | coordinate | where the phase enters |
+| --- | --- | --- |
+| noise (`unit 0` alpha) | `f[TC3].zw` | the vertex program's `ADD o[TC3].z, u, c[210]` |
+| colour (`unit 0`/`unit 1`) | `R2.zw` | the fragment program's `@0x02`, on the raw `u` its `@0x00` kept in `R0.z` |
+
+Both constants are the same `c466`/fslot-`0x4c` `TrailSpeed`, and the SPU's
+vertex `u` carries none of it. So the original's coordinates are
+`(u0 + phase)` and `(u0 + phase + noise)` - which is what
+`oag_render::exhaust::hd::Tube::vertices` produces by adding the phase to the
+ring `u` once on the CPU and letting `exhaust.wgsl`'s `trail_shape` branch
+displace from there. **The implementation was already right; its stated reason
+was not.** No constant moved for this finding, and none should: what changed
+is that the vertex law and the draw-time constant are now two measurements
+instead of one fused guess.
+
+## Does another craft disturb the ribbon? The geometry, no - but a craft flying through one **does** spark
+
+A plausible memory of the original - and a plausible reading of the code -
+is that flying through someone's exhaust pushes it aside. The code half is
+suggestive: `Trail_WriteCraftContexts` builds a **compacted** array of
+`0x60`-byte per-craft contexts at `alloc + 0x116f0` - a vec4 from
+`0x000d1e48`, the craft's 4x4 matrix, its craft index at `+0x50` and the
+Fury flag at `+0x54` - and writes the count into every trail's `+0x11e8`
+(above). `Trail_InitCraftSlot`'s DMA list hands that whole array to each
+trail's SPU job. So the job that extrudes **one** ribbon receives **every**
+craft's transform, and a per-craft vec4 that could be a bounding sphere is
+exactly the shape an intersection test would want.
+
+**The extruded vertices say it does not happen.** Read 2026-08-24 from a
+driven Fury race with all eight craft in a strung-out pack, two pauses ~1 s
+apart, dumping every trail's ring *and* its live output buffer
+(`scripts/rpcs3-trail-dump.py` with no flag, then the proximity split
+below). Each craft's current nozzle is its own ring's newest sample, so the
+positions and the geometry come from the same pause.
+
+The test is a **spatial correlation**, not a threshold: if a craft pushed the
+ribbon aside, the ribbon's departure from what its own ring predicts would
+have to spike at the rings nearest that craft and be flat elsewhere. So each
+trail's rings are split into those within 6 units of *another* craft and
+those beyond 20, and both buckets are measured the same way.
+
+- **The width never moves.** `|edge separation - 1.0|` is **0.0000** in every
+  bucket of every trail in both pauses - including the five trails with
+  another craft between **0.19 and 1.43 units** of the ribbon, which is
+  inside or touching a tube of half-width 0.5. A craft sits *within* the
+  ribbon and the ribbon is exactly as wide there as it is 70 units from
+  anything.
+- **The centre-line residual does not correlate with proximity.** Trail by
+  trail, near against far: 0.145/0.115, 0.193/0.066, 0.112/0.131,
+  0.169/0.190, 0.372/0.524, 0.028/**0.177**, and the two trails with no craft
+  within 12 units read 0.363 and 0.182 - the same range. It is as often
+  larger far away as near, and trail 7's *lowest* residual is at its closest
+  rings. The second pause repeats it with craft as close as 0.19 units.
+
+**That residual is this reconstruction's, not a deformation.** The fin
+midpoints do not sit exactly on the stored ring samples - they are off by up
+to ~0.5 units on a 50-unit ribbon, uniformly along it and with no craft
+anywhere near. Why is **unread**: the likeliest causes are that the job
+smooths or resamples the ring rather than extruding each stored sample where
+it lies, or that the head sample is placed at the live nozzle rather than the
+newest recorded one. `oag_render::exhaust::hd::Tube` extrudes each sample
+where it is stored, which is a stated approximation until that is read.
+
+**Confidence 88** on the negative: two pauses, eight trails, 864 rings, craft
+inside the tube, and the one quantity that a rigid displacement could not
+hide - the width - is bit-exact everywhere.
+
+
+### But the craft sparks, and the disc names the effect for it
+
+**A first pass of this page stopped at the negative above and was too narrow.**
+The ribbon's *geometry* is untouched, which is what the vertex dump measures -
+and the reaction happens somewhere the vertex dump cannot see: a particle
+system on the struck **hull**. The disc names it, in two colours:
+
+```text
+007a1ac0  'Data\Psys\WO_TRAIL_HITSHIP_RED.POB'
+007a1ae8  'Data\Psys\WO_TRAIL_HITSHIP.POB'
+0x007a1cc8  'WO_TRAIL_HITSHIP_RED'    <- Trail_HitShipEffectNameRed
+0x007a1ce0  'WO_TRAIL_HITSHIP'        <- Trail_HitShipEffectName
+```
+
+The last two are the bare names `Trail_HitShipEffect` looks the systems up by;
+the first two are the paths `0x002d9270` preloads.
+
+They sit in the ship-effect run **between**
+`WO_SHIP_SPARK_DAMAGE_WEAPON.POB` and `WO_NITRO_DEBRIS_SPARKS.POB`, and
+`0x002d9270` preloads them per craft in the same block as
+`WO_SHIP_COLL_SPARK_DAMAGE.POB` / `..._NODAMAGE.POB` - so they are literally
+authored as a sibling of the collision sparks.
+
+The chain, read end to end:
+
+1. **The SPU job raises a flag.** Bit 61 of the trail block's `+0x11d0`
+   (`0x2000000000000000`) means "this trail hit a ship this frame";
+   `+0x11f0` holds the trail slot of the craft involved and `+0x11dc` a float
+   the spawner takes in `f1`. **Nothing on the PPU sets that bit** - a scan of
+   every `ld`/`std`/`lwz`/`stw` in the image at displacement `0x11d0` finds 26
+   accesses, all in the trail manager, and each one either sets the slot index
+   (bits 55-58), bit 60, bit 63, or *clears* bit 61 after reading it. The whole
+   field sits inside the `0x1200` bytes `Trail_InitCraftSlot` DMAs to and from
+   the job. **So the `Trails` job does the intersection test** - which is what
+   the per-craft contexts and the `+0x11e8` count are for, the question the
+   section above had to leave open.
+2. **`Trail_SpawnHitEffect` (`0x002e3858`, with an identical twin at
+   `0x002e2678`) consumes it**, once a frame, over all eight slots. For a slot
+   with the flag set it walks **ten attachment nodes on the craft**,
+   `craft + 0x79d0` through `+0x79f4`, keeps the one nearest the contact point
+   (sentinel distance `100000.0` at `0x008b443c`), gates on the craft being in
+   neither of two states (`+0x5ed8`, `+0x5f42` - unread) or on a global mode
+   flag, spawns, and clears bit 61.
+3. **`Trail_HitShipEffect` (`0x002d9ec0`) spawns it**, parented to that node,
+   under a four-character tag - `'TRLI'` for the blue variant and `'TRLR'` for
+   the red.
+
+**The colour follows the ribbon, from one instruction.** The call site is
+unambiguous:
+
+```text
+002e3b78  lfs  f1, 0x11dc(r30)     <- the float the block carried
+002e3b88  lwz  r11, 0x1204(r30)    <- the craft
+002e3b90  lbz  r5, 0x7d2c(r11)     <- its Fury-skin byte, as the variant select
+002e3b94  lwz  r3, 0x0(r9)         <- the nearest attachment node
+002e3b98  bl   0x002d9ec0
+```
+
+`craft + 0x7d2c` is **the same byte** `Ship_SetFuryTrailFlag` writes and
+`Trail_BuildDrawState` turns into the `engineTrail` colour-mix vec4 that makes
+the ribbon red. So the sparks are red exactly when the ribbon is. In practice a
+grid is uniformly Fury or classic (every craft of a Fury event derefs to
+`concept1`), so the two always agree on screen.
+
+**Confidence 88** on the chain: every function is decompiled, the two `.pob`
+names resolve from the executable's own strings through
+[`scripts/ps3-toc.py`](../../../../scripts/ps3-toc.py), the variant select is
+read off the instruction, and the SPU's role is established by elimination over
+every access to the flag word in the image. What is **not** read: the test
+itself (the `Trails` job's code), what `+0x11dc` and the two craft-state gates
+mean, and whether `+0x11f0` names the striking or the struck craft - the effect
+attaches to *that* craft's hull either way.
+
+**Implemented 2026-08-24**, and the split is deliberate. `oag_render::psys`
+plays the disc's own `.POB` - both variants load from the HD archives, pinned
+by `crates/game/tests/hd_engine_flare_ground_truth.rs` - and
+`oag_game::race::Race::advance_trail_hits` fires it. **Nothing about the effect
+is invented; only the moment it fires is.** Three things there are this
+engine's and are named in that method's own doc rather than buried: the
+geometric test (**any of the craft's own authored `Ship Collision Fx` locators
+within the ribbon's measured half-width of its centre line** -
+`exhaust::hd::Tube::nearest`), the rate (**every tick a craft is inside**), and
+the attachment point (**the intruder's own authored `Ship Collision Fx` locator
+nearest the contact**, re-spawned each tick so it rides the ship).
+
+**The ten nodes are almost certainly the collision-spark locators.** Loading
+every HD craft, each hull authors **7 to 10** of them - and
+`Trail_SpawnHitEffect` walks exactly ten node slots at
+`craft + 0x79d0 .. +0x79f4`, testing each for null and stopping at the first
+one, which is what a hull authoring fewer than ten needs. The engine already
+read that set for collision sparks under the name the disc gives it, and it
+picks the nearest of them the same way.
+
+**The contact those anchors are measured against is the hull's leading edge**,
+and that part is derived rather than read - the original measures its ten nodes
+against a point the decompiler lost. Measuring from the craft's *centre* was
+tried and is degenerate: a craft already inside a ribbon has it running through
+end to end, so nose and tail are equidistant and the pick is a coin toss, which
+on Assegai landed at the exhaust. The nose is the mirror of the authored nozzle
+offset, and `a_craft_inside_a_trail_sparks_from_its_leading_half` pins the
+consequence on the disc's own hulls: **4.45 units ahead of the hull centre**. So the placement is the disc's data
+rather than this engine's arithmetic. Confidence 75 on the identification -
+the counts and the "nearest of" rule agree, but nothing has been read that ties
+`+0x79d0` to the locator loader.
+`crates/game/src/race/tests/trail_hits.rs` pins all three.
+
+**All three were wrong on the first pass, and only looking settled them.**
+The third took **two** goes and is the sharpest lesson here. A player looking at
+the corrected effect asked whether it was anchored right: the burst was spawning
+at the contact point *on the ribbon*, so it read as sparks on the trail, where
+the original parents to a hull node and rides the craft. The first fix clamped
+the placement to `min(|contact - centre|, reach)` - which is a **no-op exactly
+when it fires**, since the burst only fires when the craft is within `reach` of
+the ribbon, so the clamp always picked the distance and the burst stayed on the
+trail. The same player reported it unchanged. It is now `reach`
+unconditionally, and `hull_contact_point` is a free function with that property
+asserted directly, because a placement that looks right in the diff and is
+wrong on screen is what this got twice. A player who could not trigger the effect in a race is what prompted
+the measurement, and both faults hid behind the same symptom - nothing on
+screen.
+
+- **The reach was in the wrong space.** `mesh::Model::radius` is a *model*-space
+  AABB half-extent and reads 69 to 379 across HD's hulls; as a world-space
+  reach that put every craft inside every trail from tick 0, fired 24 bursts on
+  the grid and then never re-armed for the rest of the race. The craft's own
+  origin-to-nozzle distance is the same quantity in the right space: **3.7 to
+  6.0 units**, about half a hull length, off a locator the disc authors.
+- **The test was a sphere, and a hull is not one.** It first asked whether the
+  craft's *centre* was within `hull_reach + 0.5` of the ribbon, and
+  `hull_reach` is the origin-to-nozzle distance - about half a hull **length** -
+  so as a radius it reaches far past a hull that is much narrower than it is
+  long. A player reported the sparks firing before the craft touched the trail.
+  Testing the hull's own authored anchors instead is both tighter and made of
+  the disc's data: walked sideways out of a ribbon on a real HD hull, the
+  anchor test stops firing at **0.50 units** off the centre line where the
+  sphere fired out to **4.20**.
+  `the_anchor_test_fires_later_than_the_sphere_it_replaced` measures it.
+- **The rate was edge-triggered, and the asset says it should not be.**
+  `WO_TRAIL_HITSHIP` parses as a **one-shot**: duration 1 tick, `looping`
+  false, 5 particles of 0.2..0.5 units with a size channel down to a third by
+  17 % of its life, plus a 3-tick `CORE_IMPACT` child, both additive streaks
+  against a 2,000 live cap. A system shaped like that is authored to be
+  re-fired while its condition holds - and the original's own consumer *clears
+  the flag every frame*, so a craft that stays inside re-raises it. Measured on
+  screen at a dark section: **6 changed pixels** of 1,175,040 fired once per
+  entry, **7,592** fired per tick. What is still unread is whether the SPU job
+  really re-raises the flag each frame, which is why this stays an
+  approximation rather than a reading.
+
+**The player's own difficulty is itself a measurement**, and worth keeping: over
+2,400 ticks of an autopiloted eight-craft race, the craft the camera follows
+enters another's trail **three times**, twice in the first 1.5 seconds off the
+grid. The effect is common between rivals up the road and rare in front of the
+camera, which is why `--trail-sparks` exists - it forces the burst on the
+player every tick so the *drawing* can be judged without waiting for the
+*trigger*.
+
+**Which craft it lands on was settled by a sighting, not by the code.** The
+disassembly ties the node, the colour and the float all to the craft at
+`+0x11f0`, and nothing read says whether that is the trail's owner or the craft
+that flew through. Someone playing the original reported sparks on the *ship*,
+in the trail's colours - so it is the intruder, and the burst takes the
+intruder's own red flag. On a uniformly Fury or classic grid the two readings
+give the same picture, which is why the code could not distinguish them and an
+observation could.
 
 ## The third sampler is the lightmap slot, empty
 
@@ -282,7 +668,11 @@ case-blind - one of **`chrome_c1`, `nitro`, `detonator`, `concept1`**
 (`0x00781e58..`). `Trail_BuildDrawState` turns that byte into the all-ones
 vec4 it patches over the material's `0xbb48e390` colour-mix parameter, and
 the fragment program lerps the blue texture's colour toward the red one's by
-it. On the disc the variants live in the `*_c1` (concept) and `*_n1` (nitro)
+it. **That hash has a preimage now: `engineTrail`**, entry 80 of the engine
+parameter table - so the patch is not a special case in the trail's draw path
+but the ordinary engine-parameter mechanism, and the model's authored `0.0` is
+the default it overrides. See
+[renderer.md](renderer.md#the-engines-own-parameter-table-read-from-its-initialiser-2026-08-24). On the disc the variants live in the `*_c1` (concept) and `*_n1` (nitro)
 ship directories; `chrome_c1` matches no shipped directory and reads as a
 leftover. Confirmed live: all eight craft of a Fury-campaign event carry
 `deref = "concept1"`, flag 1, and the reference frame's trail is orange-red.
@@ -325,11 +715,14 @@ Open, in rough order of visible cost:
 
 - The spike flicker and the afterburner blend (`Afterburner Chase Rate`
   0.03, `Afterburner Scale` 0.5) - both read, neither drawn.
-- The flame surface's `Speed * time` scroll: `time`'s provider is still
-  unread ([engine-flare.md](engine-flare.md)); the ribbon's phase at
-  `+0x1210` is a *different* accumulator and does not answer it. The seconds
-  clock at `*(*0x00936fd4)+0xc4` (see "the draw state's two non-material
-  constants") is now the natural candidate, at hypothesis strength only.
+- The flame surface's `Speed * time` scroll is **read** (2026-08-24) and not
+  yet drawn: `time` is entry 0 of the executable's own 81-name engine
+  parameter table, and the seconds clock at `*(*0x00936fd4)+0xc4` is what
+  every draw-state builder writes into it - the hypothesis this bullet used to
+  carry, now confirmed from the initialiser. See
+  [renderer.md](renderer.md#the-engines-own-parameter-table-read-from-its-initialiser-2026-08-24)
+  for the table and [engine-flare.md](engine-flare.md) for what the flame does
+  with it. The ribbon's phase at `+0x1210` is still a *different* accumulator.
 - The `Engine_Flare_Rich.gtf` sprite flare **draws now** with its authored
   radius (3, jittered by 0.5, floored at 2) and the `Slow Alpha Noise`
   opacity walk (0.5..0.8, chase 0.1, retarget every 10) - the flare's init
@@ -338,9 +731,23 @@ Open, in rough order of visible cost:
   original. Still unread and undrawn: its spin, chromatic dispersion,
   `Flare Fadeout Dist/Range` term and the occluder query - the shader pair
   (`engineflare_vp/fp`) resolves through no registry read so far.
-- Where the per-trail `TrailSpeed` patch value physically lives at draw time
-  (both obvious carriers excluded above), and whether the splatted seconds
-  clock is the flame surface's `Speed * time` provider.
+- (Closed 2026-08-24, both halves.) The splatted seconds clock **is** the
+  flame surface's `time`: it is written into engine parameter entry 0, which is
+  named `time` in the table `Shader_InitEngineParams` builds - see
+  [renderer.md](renderer.md#the-engines-own-parameter-table-read-from-its-initialiser-2026-08-24).
+  (And where the per-trail
+  `TrailSpeed` value lives at draw time, is **closed at 94**: the constructor
+  binds the material parameter to `&block[0x1210]` and the running game shows
+  the four pointers - see "the scroll phase is bound by pointer". Nothing in
+  the renderer changed for it; the scroll was already applied the right number
+  of times, for a reason the comments had wrong.)
+- `WO_TRAIL_HITSHIP` / `WO_TRAIL_HITSHIP_RED` - **read and not drawn.** The
+  trigger is the `Trails` SPU job's own ribbon-versus-craft test, which this
+  engine has no equivalent of; the effect plays through `oag_render::psys`
+  the moment one exists. See "the craft sparks" above.
+- What `+0x11dc` carries into the spawner's `f1`, what the two craft-state
+  gates at `+0x5ed8`/`+0x5f42` mean, and whether `+0x11f0` names the striking
+  or the struck craft.
 - What the original does to the ring across a **respawn** - the race start is
   read (born full, bunched, dark) but a respawn was never captured; this
   engine re-bunches at the new pose as a stated approximation.
@@ -352,6 +759,16 @@ Open, in rough order of visible cost:
 ```sh
 uv run --with evdev python3 scripts/rpcs3-trail-dump.py /tmp/hd-trail-dump
 uv run --with evdev python3 scripts/rpcs3-trail-dump.py /tmp/hd-trail-early --early
+uv run --with evdev python3 scripts/rpcs3-trail-dump.py /tmp/hd-trail-params --params
+# "does another craft disturb the ribbon": the default dump, then the split
+python3 scripts/hd-trail-wash-check.py /tmp/hd-trail-dump s0
+# the scroll chain, entirely offline - the ribbon's own two programs, the one
+# instruction in the image that reads 'TrailSpeed', and the hash both ends use:
+python3 scripts/psarc.py cat data/images/hdfury-ps3-eu-dec.iso:PS3_GAME/USRDIR/DATA06.PSARC \
+    /data/ribboneffects/materials/hd_enginetrail_bluered.rcsmaterial > /tmp/trail.rcsmaterial
+python3 scripts/ps3-microcode.py vp-file /tmp/trail.rcsmaterial 0
+python3 scripts/ps3-microcode.py fp-file /tmp/trail.rcsmaterial
+python3 scripts/ps3-sho.py hash TrailSpeed
 python3 scripts/psarc.py cat data/images/hdfury-ps3-eu-dec.iso:PS3_GAME/USRDIR/DATA02.PSARC \
     /data/ships/shipeffectstweaks.txt
 OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all hd_engine_flare

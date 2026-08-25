@@ -141,7 +141,10 @@ fn u_stretches_with_speed_and_falls_off_at_four_over_fiftyfour() {
     let u_at = |v: &[GpuVertex], k: usize| v[per_fin + k * 6].texcoord[0];
     assert!((u_at(&at_rest, 0) - (1.0 + phase)).abs() < 1e-5);
     assert!((u_at(&at_speed, 0) - (0.4 + phase)).abs() < 1e-5);
-    // The measured law: u(k) = u_head * (1 - 4k/54) + phase.
+    // The measured law is `u(k) = u_head * (1 - 4k/54)` with no phase in it -
+    // the original leaves the scroll to the draw-time `TrailSpeed` constant.
+    // What this engine emits folds the two, which is why `+ phase` is here and
+    // not in the dumped buffers. See `Tube::phase`.
     let expect = 1.0 * (1.0 - 4.0 * 20.0 / 54.0) + phase;
     assert!((u_at(&at_rest, 20) - expect).abs() < 1e-4);
 }
@@ -178,4 +181,48 @@ fn the_brightness_ramp_saturates_where_hd_races() {
     assert!((speed_ramp(456.0 / 1.5) - 0.7117).abs() < 1e-3);
     assert!((speed_ramp(248.0 / 1.5) - 0.2959).abs() < 1e-2);
     assert_eq!(speed_ramp(400.0), 1.0);
+}
+
+/// The centre-line query the trail-hit test rides on.
+///
+/// The mechanism it serves is measured (`Trail_SpawnHitEffect` spawns
+/// `WO_TRAIL_HITSHIP` on a craft inside a trail); this is only the geometry,
+/// so what it asserts is the geometry alone.
+#[test]
+fn nearest_projects_onto_a_segment_rather_than_snapping_to_a_sample() {
+    let tube = full_tube(Vec3::X * 10.0);
+    // A point beside the ribbon, halfway between two stored samples 10 units
+    // apart. Snapping to the nearest sample would answer 5-ish; projecting
+    // onto the segment answers the perpendicular distance.
+    let (on, distance) = tube
+        .nearest(Vec3::new(25.0, 3.0, 0.0))
+        .expect("a full ring");
+    assert!((distance - 3.0).abs() < 1e-4, "{distance}");
+    assert!((on - Vec3::new(25.0, 0.0, 0.0)).length() < 1e-4, "{on:?}");
+    // Past the head, the answer clamps to the end of the line rather than
+    // running off it.
+    let (on, _) = tube
+        .nearest(Vec3::new(-100.0, 0.0, 0.0))
+        .expect("a full ring");
+    assert!(on.x >= -1e-4, "{on:?}");
+}
+
+/// A tube nothing pushed to has no centre line, and says so.
+#[test]
+fn nearest_answers_none_before_the_first_push() {
+    assert!(Tube::new().nearest(Vec3::ZERO).is_none());
+}
+
+/// A bunched ring - which is every ring at a race start - collapses each
+/// segment to a point rather than dividing by its own zero length.
+#[test]
+fn nearest_survives_the_degenerate_ring_a_race_starts_with() {
+    let mut tube = Tube::new();
+    tube.push(Vec3::new(4.0, 0.0, 0.0), Vec3::Y, 0.0);
+    let (on, distance) = tube.nearest(Vec3::new(4.0, 2.0, 0.0)).expect("seeded");
+    assert!(
+        distance.is_finite() && (distance - 2.0).abs() < 1e-4,
+        "{distance}"
+    );
+    assert!((on - Vec3::new(4.0, 0.0, 0.0)).length() < 1e-4, "{on:?}");
 }

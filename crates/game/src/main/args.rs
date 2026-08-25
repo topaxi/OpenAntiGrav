@@ -82,10 +82,18 @@ pub(crate) fn parse_step(spec: Option<&str>) -> Result<loading::Phase> {
     };
     let bad = || {
         anyhow::anyhow!(
-            "{spec:?} is not a load step; write it as cached, decoding, \
+            "{spec:?} is not a load step; write it as race, cached, decoding, \
              or transcoding:DONE/TOTAL (TOTAL may be omitted)"
         )
     };
+    // **A phase rather than a step**, and the only value here that is: the
+    // other three describe what one movie load is doing, and this is the wait
+    // between the menus and the grid. It is spelled here anyway because this
+    // flag is the only way to look at that screen without a window - a race
+    // load is seconds long, so there is no timing a capture to it.
+    if spec == "race" {
+        return Ok(loading::Phase::Race);
+    }
     Ok(loading::Phase::Media(Some(match spec {
         "cached" => movie::Step::Cached,
         "decoding" => movie::Step::Decoding,
@@ -104,6 +112,18 @@ pub(crate) fn parse_step(spec: Option<&str>) -> Result<loading::Phase> {
             movie::Step::Transcoding { done, total }
         }
     })))
+}
+
+/// The saved front-end styling, as a name a title can match, or `None` for
+/// "whatever this source leads with".
+///
+/// An empty setting is `None` rather than `Some("")`: the key is always in the
+/// file (see [`settings::Display::front_end_style`]) and empty is what it holds
+/// until somebody chooses, which must not be matched against a real style name.
+#[must_use]
+pub(crate) fn style_of(settings: &settings::Settings) -> Option<&str> {
+    let name = settings.display.front_end_style.trim();
+    (!name.is_empty()).then_some(name)
 }
 
 /// Turns a comma-separated list of abstract button names into a mask.

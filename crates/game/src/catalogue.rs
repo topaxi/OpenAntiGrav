@@ -335,5 +335,80 @@ fn read_track(node: &Node, wanted: &str) -> Option<Track> {
     })
 }
 
+/// The `FE_REVERSE` key: the front end's own word for a circuit driven the
+/// other way.
+///
+/// A key rather than a word, so what is appended below is the disc's own text
+/// in the player's own language - `REVERSE` in english, `RÜCKWÄRTS` in german.
+/// Present in all five of Wipeout HD's copies of the string table.
+const REVERSE_KEY: &str = "FE_REVERSE";
+
+/// What the RACE page shows for one circuit.
+///
+/// The name out of [`crate::language::CircuitNames`], falling back to the
+/// string table and then to the id - so a circuit whose name nothing on the
+/// source resolves shows the id, which is a visible absence rather than a blank
+/// row.
+///
+/// # The one thing this composes, and why it is not an invention
+///
+/// **Wipeout HD names a circuit and its reverse identically.** `01_Track` and
+/// `09_Track` are Vineta K forward and backward, and the copy of the string
+/// table that pairs with HD's circuit list reads `VINETA K` for both - eight
+/// such pairs among the numbered circuits and four more among the Fury ones.
+/// The older copies carried a suffix (`13_TRACK_OLD` is `VINETA K REVERSE`) and
+/// the newer numbering dropped it, which is the renumbering saying so in the
+/// data: the original draws the direction beside the name rather than inside
+/// it, and ships [`REVERSE_KEY`] to draw it with.
+///
+/// This build's RACE page has one column, so twelve pairs of identical rows
+/// would be a menu a player cannot use. So where a reversed circuit resolves to
+/// **the same name as the circuit it shares an environment with**, that key's
+/// own string is appended. Where the names already differ - which is every
+/// circuit on both PSP titles, whose tables name `32_Track` separately from
+/// `16_Track` - nothing is appended and this is the name unchanged.
+///
+/// Two of the disc's own strings joined by this build, then, rather than a word
+/// this build made up, and only where the data itself is ambiguous. See
+/// `docs/formats/hd-frontend.md`.
+#[must_use]
+pub fn label(
+    track: &Track,
+    names: &crate::language::CircuitNames,
+    strings: &crate::language::StringTable,
+    every: &[Track],
+) -> String {
+    let name = names
+        .get(&track.id)
+        .unwrap_or_else(|| strings.get_or_id(&track.id));
+
+    if !track.reversed || !shares_a_name_with_its_forward_twin(track, name, names, strings, every) {
+        return name.to_string();
+    }
+    match strings.get(REVERSE_KEY) {
+        Some(reverse) => format!("{name} {reverse}"),
+        None => name.to_string(),
+    }
+}
+
+/// Whether the circuit this one reverses is named the same thing.
+fn shares_a_name_with_its_forward_twin(
+    track: &Track,
+    name: &str,
+    names: &crate::language::CircuitNames,
+    strings: &crate::language::StringTable,
+    every: &[Track],
+) -> bool {
+    every
+        .iter()
+        .filter(|other| !other.reversed && other.location == track.location)
+        .any(|other| {
+            names
+                .get(&other.id)
+                .unwrap_or_else(|| strings.get_or_id(&other.id))
+                == name
+        })
+}
+
 #[cfg(test)]
 mod tests;

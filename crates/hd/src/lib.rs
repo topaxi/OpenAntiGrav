@@ -56,6 +56,7 @@ use oag_title::{ArchiveCandidates, ForeignSerial, Platform, Title};
 
 pub mod frontend;
 pub mod hud;
+pub mod loading;
 pub mod race;
 
 /// Wipeout HD / Fury, as the asset layer needs to know it.
@@ -72,6 +73,7 @@ pub const TITLE: &Title = &Title {
     // difference.
     front_end: Some(frontend::FRONT_END),
     hud: hud::LAYOUTS,
+    hud_art: hud::ART,
     race: race::DEFAULTS,
     // **HD authors its ribbon rather than naming a texture.** The template is
     // one triangle; its material names the colour texture, the noise texture
@@ -108,6 +110,7 @@ pub const TITLE: &Title = &Title {
     // `PI_Track` nodes beside the `PI_Music` ones. See
     // [`names::FRONT_END_PLUGIN_DEFINITION`].
     plugin_definition: names::FRONT_END_PLUGIN_DEFINITION,
+    loading: Some(&loading::LOADING),
     music: Some(MUSIC),
 };
 
@@ -240,6 +243,17 @@ pub mod names {
     /// Confidence **85**: every copy is read off the disc and every team it
     /// declares resolves to a `ship.vex`, a `ship.rcsmodel`, a `locators.vex`
     /// and a `handlingstats.xml`, but nothing has been watched running.
+    ///
+    /// # The names of what it declares are in a *different* archive
+    ///
+    /// The asymmetry is the recovered fact and it is easy to walk into: the
+    /// circuit **list** comes from `DATA00`'s copy of this file, and the only
+    /// string table that names all 28 of them is `DATA06`'s `entries.xml` -
+    /// `DATA00` ships none at all, and the other four copies stop at 24 keys,
+    /// lacking exactly the four Zone circuits. Taking the list and the names
+    /// from whichever archive precedence happens to serve puts a confident
+    /// wrong name on eight circuits. See `oag_game::language::CircuitNames` and
+    /// `docs/formats/hd-frontend.md`.
     pub const FRONT_END_PLUGIN_DEFINITION: &str = r"Data\Plugins\frontend\definition.xml";
 
     /// The file a `PI_Music` location holds, joined onto that location to

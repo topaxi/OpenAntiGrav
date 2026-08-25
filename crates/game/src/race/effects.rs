@@ -6,6 +6,57 @@
 
 use super::*;
 
+/// Where a trail-hit burst sits on a struck craft: on its hull, facing the
+/// contact.
+///
+/// The original parents the system to the nearest of ten attachment nodes at
+/// `craft + 0x79d0..+0x79f4`, so it rides the ship. This engine has no such
+/// nodes, so it puts the burst on the craft's own bounding sphere in the
+/// direction of the contact - where the nearest of those nodes would be - and
+/// re-spawns it every tick, which is what makes it follow.
+///
+/// **`reach` unconditionally, never the distance to the contact.** Clamping to
+/// `min(|contact - centre|, reach)` was the second wrong answer here, and it is
+/// a no-op precisely when it matters: the burst only fires when the craft is
+/// *within* reach of the ribbon, so the clamp always picked the distance and
+/// left the burst sitting on the trail - which is exactly how it looked.
+pub(super) fn hull_contact_point(centre: Vec3, contact: Vec3, reach: f32) -> Vec3 {
+    (contact - centre)
+        .try_normalize()
+        .map_or(centre, |direction| centre + direction * reach)
+}
+
+/// Every `Data\Psys` effect this race loads, and what triggers it.
+///
+/// **The list is the trigger set, not the asset set.** There are 35 effects on
+/// the PSP disc and 41 on the PS2 one; what decides whether one appears here is
+/// whether the *executable's* reason for playing it has been recovered, because
+/// an effect with no recovered trigger would just be this engine guessing when
+/// to fire it. `crates/game/tests/psys_inventory_ground_truth.rs` holds every
+/// effect on both discs against this list and fails if one is neither played
+/// nor explicitly recorded as having no recovered trigger.
+///
+/// **The two [`TRAIL_HITSHIP_EFFECT`] variants are the one exception**, and a
+/// narrow one: their consumer, spawner and colour select are all read, and
+/// only the geometric *test* - which runs in the `Trails` SPU job - is not.
+/// Nothing about the effect is invented, only the moment it fires, and
+/// [`Race::advance_trail_hits`] names each approximation. HD is also outside
+/// the inventory test's reach (it reads the PSP and PS2 discs only), so those
+/// two names are checked by nothing there - stated rather than relied on.
+///
+/// **It is a superset across sources, not a per-disc list.** An entry absent
+/// from the mounted archives is reported by the loader and skipped, so naming
+/// a PS2-only effect here costs a PSP race one report line and nothing else.
+pub const RACE_EFFECTS: [&str; 7] = [
+    sparks::DAMAGE_EFFECT,
+    ROCKET_FLARE_EFFECT,
+    TRACK_BLAST_EFFECT,
+    CRAFT_BLAST_EFFECT,
+    ENGINE_FLARE_EFFECT,
+    TRAIL_HITSHIP_EFFECT,
+    TRAIL_HITSHIP_RED_EFFECT,
+];
+
 impl Race {
     /// Advances every active craft's exhaust and lays down its trail sample.
     ///
@@ -31,6 +82,7 @@ impl Race {
                 continue;
             }
             let ship = &self.world.ships[slot].physics;
+            let position = ship.body.position;
             let thrust = ship.thrust;
             let speed = ship.body.linear_velocity.length();
             let back = -ship.body.forward();
@@ -47,6 +99,12 @@ impl Race {
                 self.hd_sprite[slot].advance(|| rng.next_f32());
             }
             if let Some(nozzle) = self.nozzle_of(slot) {
+                // How far this hull reaches from its own origin, in world
+                // units: the trail-hit test's stand-in for the bounding sphere
+                // HD hands its SPU job. Taken here because the nozzle is
+                // already in hand and it is the one authored point on the hull
+                // this engine knows the world position of.
+                self.hull_reach[slot] = (nozzle - position).length();
                 self.exhaust[slot].push_trail(nozzle, back);
                 if self.hd_trail_active {
                     // HD's tube wants the craft's *up* (fin 0's axis) and the
@@ -62,6 +120,260 @@ impl Race {
                 }
             }
         }
+    }
+
+    /// Fires `WO_TRAIL_HITSHIP` on a craft that has flown into a trail.
+    ///
+    /// **The mechanism is read; the test is not.** Wipeout HD's `Trails` SPU
+    /// job raises a per-trail flag (bit 61 of the trail block's `+0x11d0`),
+    /// `Trail_SpawnHitEffect` consumes it once a frame and spawns the system
+    /// on the craft involved, and the red variant is chosen by the same
+    /// `craft + 0x7d2c` byte that reddens the ribbon. All of that is
+    /// decompiled (`docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md`).
+    /// What runs inside the SPU job is not, so **three things here are this
+    /// engine's**, named rather than buried:
+    ///
+    /// 1. **The test.** A craft counts as in a trail when its centre comes
+    ///    within its own [`Race::hull_reach`] plus the ribbon's measured
+    ///    half-width of that trail's centre line
+    ///    ([`exhaust::hd::Tube::nearest`]). Both terms are measured - the
+    ///    reach from the craft's own authored nozzle locator, the half-width
+    ///    from the running game - but that a sphere against a centre line is
+    ///    the original's test is an assumption, taken because the SPU job is
+    ///    handed exactly one bounding-sphere-shaped vec4 per craft and nothing
+    ///    per fin. **A reach in the wrong space is what this got wrong first**:
+    ///    `mesh::Model::radius` is a model-space AABB half-extent reading 69 to
+    ///    379 on HD's hulls, which put every craft inside every trail from tick
+    ///    0, fired 24 bursts on the grid and then never re-armed for the rest
+    ///    of the race.
+    /// 2. **The rate: every tick a craft is inside, not once on entry.** The
+    ///    asset settles this and a first pass got it wrong. `WO_TRAIL_HITSHIP`
+    ///    is authored as a **one-shot**: duration 1 tick, `looping` false,
+    ///    5 particles of 0.2..0.5 units whose size channel is down to a third
+    ///    by 17 % of its life. A system shaped like that is meant to be
+    ///    re-fired while the condition holds - fired once per entry it is five
+    ///    streaks and all but invisible, which is exactly how this first
+    ///    behaved. It also matches the original's own shape, where the flag is
+    ///    consumed *and cleared every frame*, so a craft that stays inside
+    ///    re-raises it. Against the emitter's 2,000 live cap, a continuous
+    ///    stream is a few hundred particles. What stays unread is whether the
+    ///    SPU job really does re-raise it every frame, which is why this is
+    ///    still listed as an approximation.
+    /// 3. **The attachment point.** The original picks the nearest of ten hull
+    ///    nodes at `craft + 0x79d0..+0x79f4` and *parents* the system to it, so
+    ///    the burst rides the ship. This engine has no such nodes, so it takes
+    ///    the point on the intruder's own bounding sphere facing the contact -
+    ///    where the nearest of ten hull nodes would be - and re-spawns it every
+    ///    tick, which is what makes it follow. **Spawning at the contact point
+    ///    on the ribbon was the first attempt and is wrong**: it reads as sparks
+    ///    on the trail rather than on the craft, which is how it was caught.
+    ///
+    /// **Which craft it lands on is settled by observation, not by the code.**
+    /// The disassembly ties the attachment node, the colour and the float all
+    /// to the craft at `+0x11f0`, and nothing read says whether that is the
+    /// trail's owner or the craft that flew through it. A sighting in the
+    /// running original - sparks on the *ship*, in the trail's colours -
+    /// resolves it: the intruder. So the burst plays on the intruder and takes
+    /// the intruder's own red flag, which on a uniformly Fury or classic grid
+    /// is the same answer either way.
+    ///
+    /// A craft is never tested against its own trail: its nozzle *is* the head
+    /// sample, so it would be permanently inside it.
+    pub(super) fn advance_trail_hits(&mut self) {
+        if !self.hd_trail_active {
+            return;
+        }
+        self.force_trail_sparks();
+        for owner in 0..self.world.ship_count as usize {
+            if !self.world.ships[owner].active || !self.hd_trail[owner].ready() {
+                continue;
+            }
+            for intruder in 0..self.world.ship_count as usize {
+                if intruder == owner || !self.world.ships[intruder].active {
+                    continue;
+                }
+                let at = self.world.ships[intruder].physics.body.position;
+                let hit = self.trail_touches(intruder, owner);
+                let bit = 1u8 << intruder;
+                if hit {
+                    self.trail_inside[owner] |= bit;
+                } else {
+                    self.trail_inside[owner] &= !bit;
+                    continue;
+                }
+                let name = if self.hd_trail_red[intruder] > 0.5 {
+                    TRAIL_HITSHIP_RED_EFFECT
+                } else {
+                    TRAIL_HITSHIP_EFFECT
+                };
+                let Some(effect) = self.effects.get(name).cloned() else {
+                    continue;
+                };
+                // **On the hull, not on the ribbon.** The original parents the
+                // system to the nearest of ten attachment nodes on the craft
+                // (`craft + 0x79d0..+0x79f4`), so it rides the ship; putting it
+                // at the contact point on the ribbon instead reads as sparks on
+                // the *trail*, which is what this did first and what a player
+                // spotted. This engine has no equivalent of those nodes, so it
+                // takes the point on the craft's own bounding sphere facing the
+                // contact - the place the nearest of ten hull nodes would be -
+                // and re-spawns it every tick, which is what makes it follow.
+                let contact = self.hd_trail[owner].nearest(at).map_or(at, |(on, _)| on);
+                let point = self
+                    .spark_anchor_of(intruder, owner)
+                    .unwrap_or_else(|| hull_contact_point(at, contact, self.hull_reach[intruder]));
+                // Neutral severity, as the rocket blast uses: the scale the
+                // collision sparks derive from an impulse has no counterpart
+                // here, and the float the original carries into the spawner
+                // (`+0x11dc`) is unread.
+                self.stage.play(&effect, point, 1.0);
+            }
+        }
+    }
+
+    /// `--trail-sparks`: the burst, every tick, on the player's own ribbon.
+    ///
+    /// **A verification aid for the *drawing*, and the two failures it
+    /// separates are real ones this hit in order.** The trigger fires a handful
+    /// of times in a whole race and almost never in front of the camera, so
+    /// "I saw nothing" cannot tell a burst that never played from one that
+    /// played and drew nothing.
+    ///
+    /// Everything but the *placement* is the real path - the same effect, the
+    /// same rate, the same [`hd_trail_red`](Race::hd_trail_red) colour select.
+    /// The placement is the one thing chosen rather than derived: two units
+    /// above the player's nozzle, which is on screen and clear of the exhaust
+    /// plume. Three alternatives were measured and each looks like nothing or
+    /// like the plume - at the nozzle it lands inside the plume; eight units
+    /// back along the ribbon it sits at the camera's near plane; and letting
+    /// the real pairwise path through with the distance test bypassed spawns it
+    /// on whichever rival's ribbon is nearest, which when the player leads is a
+    /// hundred units behind. **So this placement is for looking at, and says
+    /// nothing about where a real hit lands.**
+    fn force_trail_sparks(&mut self) {
+        if !self.trail_sparks {
+            return;
+        }
+        // The same gate the real path has: a craft with no nozzle locator has
+        // no trail either, so there is nothing to demonstrate.
+        if self.nozzle_of(0).is_none() {
+            return;
+        }
+        // The real placement, with only the contact *direction* chosen: on the
+        // hull, facing straight up, so it is on screen and clear of the exhaust
+        // plume. What appears under the flag is therefore anchored exactly as a
+        // real hit is - see [`hull_contact_point`].
+        let body = self.world.ships[0].physics.body;
+        // The real placement with only the contact *direction* chosen: the
+        // craft's own topmost authored spark anchor, so the burst is on the
+        // hull exactly as a real hit is and still clear of the exhaust plume.
+        let above = body.position + body.up() * 10.0;
+        let probe = self.spark_anchor_of(0, 0).unwrap_or_else(|| {
+            hull_contact_point(body.position, above, self.hull_reach[0].max(1.0))
+        });
+        let name = if self.hd_trail_red[0] > 0.5 {
+            TRAIL_HITSHIP_RED_EFFECT
+        } else {
+            TRAIL_HITSHIP_EFFECT
+        };
+        let Some(effect) = self.effects.get(name).cloned() else {
+            return;
+        };
+        self.stage.play(&effect, probe, 1.0);
+    }
+
+    /// Whether any of the craft's own authored hull points is inside the
+    /// ribbon - the trail-hit test.
+    ///
+    /// **The hull's own points, not a sphere around it.** This first tested the
+    /// craft's centre against the ribbon within
+    /// [`Race::hull_reach`] + [`FIN_HALF_WIDTH`](exhaust::hd::FIN_HALF_WIDTH),
+    /// and a player reported the sparks firing before the craft touched the
+    /// trail: that reach is the origin-to-nozzle distance, about half a hull
+    /// *length*, so as a radius it reaches well past a hull that is far
+    /// narrower than it is long. The `Ship Collision Fx` locators are points on
+    /// the hull itself, so asking whether one of *them* is within the ribbon's
+    /// measured half-width is both tighter and made of authored data. A hull
+    /// that authors none falls back to the sphere.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn trail_touches_for_tests(&self, slot: usize, owner: usize) -> bool {
+        self.trail_touches(slot, owner)
+    }
+
+    /// [`Self::hull_reach`] for one slot, for the test that measures how much
+    /// tighter the anchor test is than the sphere it replaced.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn hull_reach_for_tests(&self, slot: usize) -> f32 {
+        self.hull_reach[slot]
+    }
+
+    fn trail_touches(&self, slot: usize, owner: usize) -> bool {
+        let tube = &self.hd_trail[owner];
+        let at = self.world.ships[slot].physics.body.position;
+        let Some(anchors) = self.spark_anchors.get(slot).filter(|a| !a.is_empty()) else {
+            let reach = self.hull_reach[slot] + exhaust::hd::FIN_HALF_WIDTH;
+            return tube.nearest(at).is_some_and(|(_, away)| away <= reach);
+        };
+        let matrix = model_matrix_of(&self.world.ships[slot]);
+        anchors.iter().any(|local| {
+            let world = matrix.transform_point3(*local);
+            tube.nearest(world)
+                .is_some_and(|(_, away)| away <= exhaust::hd::FIN_HALF_WIDTH)
+        })
+    }
+
+    /// The craft's own authored hull spark anchor nearest `contact`, in world
+    /// space, or `None` where the hull authors none.
+    ///
+    /// **Nearest to the *ribbon*, not to a contact point derived from the
+    /// craft's centre.** `Trail_HitShipEffect` parents the burst to the nearest
+    /// of ten nodes at `craft + 0x79d0..+0x79f4`, measured against a point the
+    /// decompiler lost - so which point is unread. Measuring against
+    /// `Tube::nearest(craft centre)` was the third wrong placement here: when a
+    /// craft is *inside* a ribbon that point sits essentially at its own
+    /// centre, so the choice among anchors is near-arbitrary, and on Assegai it
+    /// landed at the tail. Asking each anchor how far *it* is from the ribbon
+    /// does not fix it either: a craft already inside a trail has the ribbon
+    /// running through it end to end, so every anchor's distance is just its
+    /// lateral offset and nose and tail score alike.
+    ///
+    /// **So the contact is taken at the hull's leading edge**, where a craft
+    /// driving forward meets a trail. That point is derived - the nose, as the
+    /// mirror of the authored nozzle offset in [`Race::hull_reach`] - because
+    /// the point the original measures its ten nodes against is one the
+    /// decompiler lost. Everything else is the disc's: the anchors, and the
+    /// nearest-of rule. The `Ship Collision Fx` locators are the
+    /// original's own hull spark anchors and very likely the same ten nodes -
+    /// see `docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md`. Two placements were tried before this and both were wrong on
+    /// screen: the contact point itself put the sparks on the *trail*, and a
+    /// point at [`Race::hull_reach`] along the direction of the contact put
+    /// them anchored to the craft but floating clear of the hull, because that
+    /// reach is about half a hull *length* and the direction, when a craft is
+    /// inside a ribbon, is a near-arbitrary perpendicular offset amplified to
+    /// five units. An authored anchor has neither problem.
+    #[must_use]
+    pub fn spark_anchor_of(&self, slot: usize, owner: usize) -> Option<Vec3> {
+        let anchors = self.spark_anchors.get(slot)?;
+        let matrix = model_matrix_of(&self.world.ships[slot]);
+        // Where the craft *drives into* the ribbon: the point on it nearest the
+        // hull's leading edge, not nearest the hull's centre. A craft already
+        // inside a trail has the ribbon running through it end to end, so a
+        // contact taken at the centre is equidistant from nose and tail and the
+        // pick among anchors is a coin toss - which is how Assegai ended up
+        // sparking from its own exhaust.
+        let body = self.world.ships[slot].physics.body;
+        let nose = body.position + body.forward() * self.hull_reach[slot];
+        let contact = self.hd_trail[owner].nearest(nose)?.0;
+        anchors
+            .iter()
+            .map(|local| matrix.transform_point3(*local))
+            .min_by(|a, b| {
+                (*a - contact)
+                    .length_squared()
+                    .total_cmp(&(*b - contact).length_squared())
+            })
     }
 
     /// One craft's HD trail geometry this frame, empty unless this race's

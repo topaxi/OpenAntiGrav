@@ -103,3 +103,18 @@
 0x003fdae8	function	Scene_SortAndLightVisibleChunks	78	visibility.md
 0x003fb330	function	Scene_RefreshNodeMatrices	80	visibility.md
 0x003faf00	function	Scene_BuildStaticChunkMask	75	visibility.md
+
+0x006b6870	function	Trail_InitManagerBuffers	85	engine-trail.md
+0x002e2188	function	Trail_ResetCraftSlotState	85	engine-trail.md
+0x005d4bb0	function	Material_SetInstanceParamPointer	78	engine-trail.md
+0x005d4d28	function	Material_CloneInstance	80	engine-trail.md
+0x002e3858	function	Trail_SpawnHitEffect	85	engine-trail.md
+0x002d9ec0	function	Trail_HitShipEffect	85	engine-trail.md
+0x007a1ce0	data	Trail_HitShipEffectName	92	engine-trail.md
+0x007a1cc8	data	Trail_HitShipEffectNameRed	92	engine-trail.md
+0x007a2da8	data	Trail_SpeedParamName	95	engine-trail.md
+0x003f1300	function	Shader_InitEngineParams	90	renderer.md
+0x005d4cf8	function	Shader_InitParamEntry	88	renderer.md
+0x002b3bb0	function	LoadingScreen_Construct	85	loading-screen.md
+0x00936fe8	data	g_GameState	90	mode-manager.md
+0x00032f44	data	GameMode_BackendDispatchTable	90	mode-manager.md

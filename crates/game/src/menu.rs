@@ -167,6 +167,15 @@ pub enum ValueSource {
     /// cannot reach it, which is the same argument [`Menu::is_disabled`] makes
     /// for greying a row rather than removing it.
     MusicSources,
+    /// The front-end stylings this source ships art for.
+    ///
+    /// Supplied rather than spelled for the reason [`Self::Tracks`] is: the
+    /// values are the *disc's* own - Wipeout HD's `OPT_FE_STYLE` offers `HD`
+    /// and `FURY` and ships every loading-screen illustration twice - and no
+    /// other title in hand offers more than one. A source with a single styling
+    /// supplies one row, which draws the setting as the fact it is rather than
+    /// as a choice that does nothing.
+    FrontEndStyles,
     /// The teams this source offers, from its own plugin definition and from
     /// any [downloadable content](crate::dlc) mounted behind it.
     ///
@@ -193,6 +202,7 @@ impl ValueSource {
             Self::Renderers => "renderers",
             Self::RaceModes => "race_modes",
             Self::MusicSources => "music_sources",
+            Self::FrontEndStyles => "front_end_styles",
             Self::Teams => "teams",
         }
     }
@@ -207,6 +217,7 @@ impl ValueSource {
             "renderers" => Some(Self::Renderers),
             "race_modes" => Some(Self::RaceModes),
             "music_sources" => Some(Self::MusicSources),
+            "front_end_styles" => Some(Self::FrontEndStyles),
             "teams" => Some(Self::Teams),
             _ => None,
         }

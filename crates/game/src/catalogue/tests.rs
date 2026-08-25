@@ -212,3 +212,82 @@ fn an_entry_with_nothing_to_load_is_skipped() {
     );
     assert!(tracks.is_empty());
 }
+
+/// One environment named twice gets the disc's own reverse marker on the
+/// second row, because otherwise the RACE page shows the same word twice.
+///
+/// The shape Wipeout HD's own tables are in: `01_Track` and `09_Track` are one
+/// piece of track each way round and the copy that pairs with its circuit list
+/// reads `VINETA K` for both.
+#[test]
+fn a_reversed_circuit_named_the_same_as_its_twin_gets_the_discs_reverse_marker() {
+    let tracks = tracks(DEFINITION);
+    let strings = crate::language::StringTable::from_xml(
+        r#"<StringTable>
+             <Entry ID="16_Track" String="VINETA K"/>
+             <Entry ID="32_Track" String="VINETA K"/>
+             <Entry ID="FE_REVERSE" String="RÜCKWÄRTS"/>
+           </StringTable>"#,
+    );
+    let names = crate::language::CircuitNames::default();
+
+    assert_eq!(label(&tracks[0], &names, &strings, &tracks), "VINETA K");
+    assert_eq!(
+        label(&tracks[1], &names, &strings, &tracks),
+        "VINETA K RÜCKWÄRTS"
+    );
+}
+
+/// Where the table names the two directions separately, nothing is appended.
+///
+/// Which is every circuit on both PSP titles, and the reason the marker keys on
+/// the names colliding rather than on `Reversed="True"`.
+#[test]
+fn a_reversed_circuit_with_a_name_of_its_own_is_left_alone() {
+    let tracks = tracks(DEFINITION);
+    let strings = crate::language::StringTable::from_xml(
+        r#"<StringTable>
+             <Entry ID="16_Track" String="Talon's Junction White"/>
+             <Entry ID="32_Track" String="Talon's Junction Black"/>
+             <Entry ID="FE_REVERSE" String="REVERSE"/>
+           </StringTable>"#,
+    );
+    let names = crate::language::CircuitNames::default();
+
+    assert_eq!(
+        label(&tracks[1], &names, &strings, &tracks),
+        "Talon's Junction Black"
+    );
+}
+
+/// A circuit nothing names shows its id, and never a marker on its own.
+#[test]
+fn an_unnamed_circuit_shows_its_id() {
+    let tracks = tracks(DEFINITION);
+    let strings = crate::language::StringTable::default();
+    let names = crate::language::CircuitNames::default();
+
+    assert_eq!(label(&tracks[0], &names, &strings, &tracks), "16_Track");
+    // The two ids differ, so the twin check does not fire - and even if it did,
+    // there is no `FE_REVERSE` to append.
+    assert_eq!(label(&tracks[1], &names, &strings, &tracks), "32_Track");
+}
+
+/// The chosen copy wins over the served one, which is the whole point of
+/// resolving circuits separately.
+#[test]
+fn a_chosen_copy_beats_the_served_table() {
+    let tracks = tracks(DEFINITION);
+    let served = crate::language::StringTable::from_xml(
+        r#"<StringTable><Entry ID="16_Track" String="THE WRONG ONE"/></StringTable>"#,
+    );
+    let chosen = crate::language::StringTable::from_xml(
+        r#"<StringTable><entry id="16_TRACK" string="VINETA K"/>
+                        <entry id="32_TRACK" string="VINETA K"/></StringTable>"#,
+    );
+    let ids: Vec<String> = tracks.iter().map(|track| track.id.clone()).collect();
+    let names = crate::language::CircuitNames::choose(&[("DATA06".to_string(), chosen)], &ids)
+        .expect("that copy names both circuits, case folded");
+
+    assert_eq!(label(&tracks[0], &names, &served, &tracks), "VINETA K");
+}

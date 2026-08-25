@@ -46,9 +46,14 @@ each an exact hash match on a plain-English identifier:
 | `0x31182e0d` | `Speed` | fragment parameter |
 | `0x906b67ba` | `time` | fragment parameter |
 
-Four are still unresolved: `0x92fc84bf` and `0x17d9b3d3` (both `float1`),
-`0x4c13d3af` (`float2`) and `0x3fbddeab` (the sampler on unit 0). Confidence
-90 on the resolved names - a CRC-32 preimage on a short readable identifier is
+Four were unresolved: `0x92fc84bf` and `0x17d9b3d3` (both `float1`),
+`0x4c13d3af` (`float2`) and `0x3fbddeab` (the sampler on unit 0). **One of them
+is recovered**: `0x4c13d3af` is `globalAlphaScaler`, engine parameter slot 76 -
+not from a wordlist but from the engine's own parameter table
+([renderer.md](renderer.md#the-engines-own-parameter-table-read-from-its-initialiser-2026-08-24)),
+which is also where `time` and the ribbon's `engineTrail` come from. The other
+three are not engine parameters, so they are model-authored and their names are
+not in the executable at all. Confidence 90 on the resolved names - a CRC-32 preimage on a short readable identifier is
 not a coincidence, and the four that stay open are what a wordlist misses
 rather than what the method gets wrong.
 
@@ -139,14 +144,38 @@ six parameters above:
 **All fourteen craft author the same six**, which is a measurement rather than
 a reason to share one - `oag_render::mesh::Flame` reads them per craft.
 
-So the whole program, with nothing left unrecovered but the clock:
+So the whole program, with nothing left unrecovered - the clock included, as of
+2026-08-24:
 
 ```text
 rim   = saturate(1 - dot(normalize(V), normalize(N)))
 f     = pow(rim, 10) * 0.3 + 0.45
 alpha = 2.0 * (1 - f) * VertexColour1.w        -> 1.1 face-on, 0.5 edge-on
-rgb   = texture(uv + scroll).rgb * 1.0
+noise = texture(u, v + Speed * time).a         <- Speed 2.0, time engine-supplied
+rgb   = texture(2*u, 2*v + noise).rgb * 1.0
 ```
+
+**Two corrections to the line this replaces** (`rgb = texture(uv + scroll).rgb`),
+both re-derived instruction by instruction and then confirmed against block #2,
+which schedules the same arithmetic through entirely different registers:
+
+- **The clock moves the *noise* sample only, in `v`.** `@0x0a` computes
+  `R0.y = Speed * time + R0.w` with `R0.w = Uv1.y`, and `@0x11` samples `unit0`
+  at `(Uv1.x, that)` taking its **alpha**. `time` never reaches the colour
+  lookup; it reaches it only through the noise the colour lookup is displaced
+  by. Block #2's `@0x0d`/`@0x13` do the identical thing out of `TC3.yz`.
+- **The colour lookup is at *doubled* coordinates.** `@0x10` puts `Uv1.x` in
+  `R1.x` and `@0x13` puts `Uv1.y` in `R1.y`; `@0x0e` puts `Uv1.x` in `R2.z` and
+  `@0x12` puts `Uv1.y + noise` in `R2.w`; `@0x1e ADD R1.xy, R1, R2.zwzz` sums
+  them to `(2*Uv1.x, 2*Uv1.y + noise)`. Block #2 reaches the same pair at
+  `@0x1d ADD R0.xy, R0.yzxx, R1.zwzz`. Two independent schedules, same result,
+  so the doubling is the program's and not a swizzle misread.
+
+The models' authored `Uv1` is neither `0..1` nor `0..0.5` - Feisar's ten flare
+nodes span roughly `0.19..0.81` in `u` and `0.37..0.86` in `v`, with one node
+running `-0.91..2.26` - so the doubling is a deliberate difference of scale
+between the noise and colour taps rather than an asset authored to be halved.
+`cargo run -p oag-render --example hd_flare_probe` prints those spans.
 
 **The face-on 1.1 survives a race and clamps everywhere else.** A race draws
 into `post::hd_bloom::SCENE_FORMAT`, a linear float target, where a fragment
@@ -178,13 +207,60 @@ parameters are identified by the slot they patch rather than by a name.
   hull's lit strips.
 - **`0xab31c2b1`** is 0.2 on the paint and 0.3 on the glass, with no preimage.
 
-### What is read and not implemented
+### The scroll's clock is read: engine parameter slot 0
 
-The **scroll**. `Speed` is 2.0 and authored; `time` is engine-supplied and is
-*not* in the material record, which is what says it is a clock rather than a
-constant. The first `TEX` samples the texture at a row that advances with it and
-the result offsets the colour lookup, so the flame's surface moves. This
-renderer samples the authored coordinate and says so in the load report.
+`time` is **not** in any craft's material record, which is what said it is
+engine-supplied. What supplies it is now read, on
+[renderer.md](renderer.md#the-engines-own-parameter-table-read-from-its-initialiser-2026-08-24):
+the executable initialises **81 named engine shader parameters** in
+`Shader_InitEngineParams` (`0x003f1300`), each a 0x20-byte entry in the same
+format the `.rcsmodel` material record uses, and **`time` is entry 0**. Every
+draw-state builder read so far - `Trail_BuildDrawState` (`0x002e30d8`) and its
+sibling `0x002a51e8` - splats the frame context's `+0xc4` into four lanes and
+writes that address into entry 0's value pointer with a vec4 count of 1. That
+field is the **global seconds clock** engine-trail.md read live at nine pauses
+marching 48.97 to 119.37 at game-time rate: one value, shared by everything
+drawn that frame.
+
+So the flame's surface scroll is `Speed * time` = **`2.0 * seconds`** in `v` on
+the noise tap - two full texture repeats per second. That is a falsifiable
+prediction and it needs no emulator: if HD's flame does not visibly churn at
+about that rate in any recording, something in this chain is wrong, and the
+likeliest wrong thing is the clock's units rather than the arithmetic.
+
+Neither of the two draw-state builders read so far is the one that draws the
+flame *model*; the claim is that entry 0 holds a live clock every frame, which
+both of them establish, not that the flare's own builder supplies it.
+
+**Drawn as of 2026-08-24.** `oag_render::mesh::Flame` reads `Speed` as a sixth
+authored number (2.0 on all fourteen craft and on all fourteen boost plumes -
+`crates/game/tests/hd_engine_flare_ground_truth.rs` pins it against the disc),
+`mesh_render::Scene` carries the clock the way the original binds it - one
+value splatted to four lanes - and `mesh.wgsl` takes both of the program's
+taps. This project's clock is the race tick over 60, the same one the trackside
+texture and node animation already ride, so `--anim-seconds` pins all three at
+once and a replay of a tick draws the same frame.
+
+**The rate is confirmed on screen by its own period.** `Speed` 2.0 against a
+seconds clock predicts one whole texture repeat every `1 / 2.0` = 0.5 s, so a
+capture of one tick at `--anim-seconds 0.5` must come back *identical* to the
+same tick at 0.0 while intermediate phases must not. Four captures at tick
+1050, differing pixels against the 0.0 frame out of 1,175,040:
+
+| `--anim-seconds` | phase | differing pixels |
+| ---: | --- | ---: |
+| 0.125 | quarter repeat | 132 |
+| 0.25 | half repeat | 71 |
+| **0.50** | **one whole repeat** | **0** |
+
+Exact recurrence at 0.5 s and at no smaller value tested. The counts are small
+because the flame is a few hundred pixels behind the hull at chase distance -
+they are not a measure of the effect's strength, and the zero is the load-bearing
+row: an inert surface would read zero at *every* delta, and only a surface
+scrolling at exactly `Speed` repeats per second reads zero at 0.5 and not at
+0.25. What this does **not** settle is whether the original's clock ticks in the
+same units; that wants the matched-view harness and a recording, and the
+prediction above is what such a recording would falsify.
 
 ## Blocks #0 and #2, in one line each
 
@@ -330,6 +406,43 @@ by name rather than by evidence:
 0x008b4478  'TrailSpeed'
 0x008b4484  'EngineTrail/TrailEffectManager.cpp'
 ```
+
+#### The ribbon's own vertex program, read 2026-08-24
+
+The fragment half below was read in 2026-08-23's pass; the vertex half was
+not, and the two together are what say where the scroll is applied. Eleven
+instructions, one block:
+
+```text
+ 0  MOV o[TC0].xyz, v[3].xyzx          <- VertexColour1.rgb
+ 1  ADD o[TC1].xyz, -v[0].xyzx, c[211] <- eyePositionWorldSpace - position
+ 2  MOV o[TC2].xyz, v[1].xyzx          <- normal
+ 3  MOV o[TC3].xyw, v[2].xyxy          <- TC3 = (u, v, _, v)
+ 4  ADD o[TC3].z,   v[2].xxxx, c[210]  <- TC3.z = u + TrailSpeed
+ 5  MOV o[TC4].yzw, v[0].xxyz
+ 6  MUL R0, v[0].yyyy, c[1]            \
+ 7  MAD R0, v[0].xxxx, c[0], R0         |  viewProj
+ 8  MAD R0, v[0].zzzz, c[2], R0         |
+ 9  MOV o[TC4].x, v[3].wwww            <- VertexColour1.a, the `f[TC4].x` below
+10  ADD o[POS], R0, c[3] | END         /
+```
+
+The block's parameter table places `TrailSpeed` (`0x07431a35`) at **`c466`**,
+`viewProj` at `c256` and `eyePositionWorldSpace` at `c467`; the code's `c[N]`
+numbering is the constant index less 256, so `c466` is `c[210]` and `c467` is
+`c[211]` - the same offset `flame_test`'s block confirms, where `viewProj`'s
+`c256` is `c[0]`.
+
+**`TrailSpeed` is added once per lookup path, not twice on one.** Instruction 3
+keeps the raw `u` in `TC3.x` and instruction 4 writes `u + TrailSpeed` beside it
+in `TC3.z`; the fragment program then samples the noise at `f[TC3].zw` - the
+scrolled coordinate - and its `@0x00 MOV R0.zw, f[TC3].xxxy` recovers the *raw*
+`u` from `TC3.x`, which is why `@0x02` has to add `TrailSpeed` again before the
+colour lookup. Both lookups end up with exactly one `TrailSpeed` in them. A
+reading of this page that had the two additions stacking on one coordinate - and
+`exhaust.wgsl` carried it in a comment - was wrong about the mechanism while
+right about the remedy. Confidence 90: the instructions are the program's own
+and the constant-index offset closes against a second material.
 
 #### The ribbon's own fragment program
 

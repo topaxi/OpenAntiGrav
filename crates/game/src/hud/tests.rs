@@ -8,6 +8,10 @@
 //! gate.
 
 use super::*;
+// The draw list moved to `super::draw` when `hud.rs` was split; its decisions
+// are `pub(super)`, so this reaches them by name rather than through the
+// parent's own imports.
+use super::draw::*;
 
 /// The shape of the real `TimeTrial_HUD.xml`, cut to what this module reads.
 /// Every attribute spelling, the `FEConst->` indirection, the `<Item>`
@@ -211,6 +215,7 @@ fn the_total_time_yields_its_anchor_to_the_place() {
                     readout,
                     &strings,
                     place_owns_the_anchor(&layout, readout),
+                    true,
                 )
                 .is_some()
             })
@@ -317,16 +322,16 @@ fn the_pickup_widgets_are_drawn_only_for_what_is_held() {
     use oag_formats::weapons::Weapon;
     let layout = Layout::from_xml(SAMPLE);
 
-    let empty = pickup_sprites(&layout, Weapon::Turbo);
+    let empty = pickup_sprites(&layout, Weapon::Turbo, oag_pulse::hud::ART);
     assert_eq!(empty.len(), 2, "the fixture must author both widgets");
 
-    let names: Vec<String> = pickup_sprites(&layout, Weapon::Turbo)
+    let names: Vec<String> = pickup_sprites(&layout, Weapon::Turbo, oag_pulse::hud::ART)
         .iter()
         .map(|s| s.name.clone())
         .collect();
     assert_eq!(names, ["PickupBackground", "TurboIcon"]);
 
-    let rocket: Vec<String> = pickup_sprites(&layout, Weapon::Rocket)
+    let rocket: Vec<String> = pickup_sprites(&layout, Weapon::Rocket, oag_pulse::hud::ART)
         .iter()
         .map(|s| s.name.clone())
         .collect();
@@ -335,13 +340,13 @@ fn the_pickup_widgets_are_drawn_only_for_what_is_held() {
     // A weapon whose icon this layout does not author draws the backdrop and
     // no icon, rather than nothing or a panic: a layout carrying one and not
     // the other is the case that would otherwise crash a race.
-    let absent = pickup_sprites(&layout, Weapon::Quake);
+    let absent = pickup_sprites(&layout, Weapon::Quake, oag_pulse::hud::ART);
     assert_eq!(absent.len(), 1);
     assert_eq!(absent[0].name, "PickupBackground");
 }
 
 /// **The backdrop is retinted and the icon is not**, which is the whole
-/// reason a held pickup is legible - see [`PICKUP_BACKDROP_COLOUR`]. Both
+/// reason a held pickup is legible - see [`oag_pulse::hud::PICKUP_BACKDROP_COLOUR`]. Both
 /// widgets are authored `HudColour1`, which is opaque white, and the art
 /// behind them is a solid white hexagon and a white glyph, so drawing them
 /// as authored is an opaque hexagon with nothing visible on it.
@@ -365,7 +370,7 @@ fn the_pickup_backdrop_is_retinted_and_the_icon_keeps_its_authored_colour() {
         "and that colour is white"
     );
 
-    let drawn = pickup_sprites(&layout, Weapon::Turbo);
+    let drawn = pickup_sprites(&layout, Weapon::Turbo, oag_pulse::hud::ART);
     assert_ne!(
         drawn[0].color, authored.color,
         "the backdrop must not keep the authored white"
@@ -506,20 +511,46 @@ fn a_nameless_widget_keeps_its_geometry_and_gets_no_name() {
     assert!(layout.skipped.is_empty());
 }
 
+/// **A sprite is offset by its own texture's placement, not by the frame's.**
+///
+/// The bug this pins is what an HD race drew until 2026-08-25: a layout naming
+/// six textures had one origin for all of them, so a sprite naming the second
+/// sampled the first at coordinates meant for the second - the right rectangle
+/// out of the wrong picture, which reads as art rather than as an error.
 #[test]
-fn the_atlas_offset_is_added_to_the_source_rectangle() {
-    let sprite = Sprite {
+fn a_sprite_is_offset_by_its_own_texture() {
+    let placed = |y| crate::sprite::Placed {
+        x: 0,
+        y,
+        width: 64,
+        height: 64,
+    };
+    let sheet =
+        crate::sprite::Sheet::placed_at(&[("first.mip", placed(0)), ("second.mip", placed(200))]);
+    let sprite = |src: &str| Sprite {
         name: "X".to_string(),
         rect: [1.0, 2.0, 3.0, 4.0],
         uv: [10.0, 20.0, 30.0, 40.0],
         color: [1.0; 4],
-        src: oag_pulse::hud::ATLAS.to_string(),
+        src: src.to_string(),
     };
-    let Draw::Sprite { rect, uv, .. } = sprite_draw(&sprite, (100.0, 200.0)) else {
+
+    let Some(Draw::Sprite { rect, uv, .. }) = sprite_draw(&sprite("second.mip"), &sheet) else {
         panic!("expected a sprite draw");
     };
     assert_eq!(rect, [1.0, 2.0, 3.0, 4.0], "the destination must not move");
-    assert_eq!(uv, [110.0, 220.0, 30.0, 40.0]);
+    assert_eq!(uv, [10.0, 220.0, 30.0, 40.0]);
+
+    // The first texture is at the sheet's own origin, so its sprites are
+    // unmoved - which is every Pulse and Pure sprite there is.
+    let Some(Draw::Sprite { uv, .. }) = sprite_draw(&sprite("first.mip"), &sheet) else {
+        panic!("expected a sprite draw");
+    };
+    assert_eq!(uv, [10.0, 20.0, 30.0, 40.0]);
+
+    // A texture the sheet does not hold draws nothing at all, rather than
+    // sampling whichever one the packer put first.
+    assert!(sprite_draw(&sprite("absent.mip"), &sheet).is_none());
 }
 
 #[test]
@@ -533,12 +564,32 @@ fn strings() -> crate::language::StringTable {
     crate::language::StringTable::default()
 }
 
+/// The sheet [`SAMPLE`] would be drawn against: Pulse's atlas at the sheet's
+/// own origin, which is where a one-texture sheet always puts it.
+///
+/// A `'static` because [`context`] hands out a borrow of it, and a real
+/// placement rather than an empty sheet because [`sprite_draw`] draws nothing
+/// for a texture the sheet does not hold - which is the point of it, and would
+/// otherwise silently empty every sprite assertion below.
+static SAMPLE_SHEET: std::sync::LazyLock<crate::sprite::Sheet> = std::sync::LazyLock::new(|| {
+    crate::sprite::Sheet::placed_at(&[(
+        oag_pulse::hud::ATLAS,
+        crate::sprite::Placed {
+            x: 0,
+            y: 0,
+            width: 256,
+            height: 256,
+        },
+    )])
+});
+
 fn context<'a>(layout: &'a Layout, strings: &'a crate::language::StringTable) -> Context<'a> {
     Context {
         default_border: layout.default_border(),
         layout,
         strings,
-        atlas_origin: (0.0, 0.0),
+        sheet: &SAMPLE_SHEET,
+        art: oag_pulse::hud::ART,
         hud_line_height: 25.0,
         small_line_height: 10.0,
     }

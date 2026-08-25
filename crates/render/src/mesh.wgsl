@@ -89,6 +89,10 @@ struct Light {
 struct Scene {
     fog: Fog,
     light: Light,
+    // Engine parameter slot 0, `time`: a global clock in seconds, splatted to
+    // four lanes exactly as Wipeout HD's draw-state builders bind it. Only the
+    // flame path below reads it. See `mesh_render::Scene::time`.
+    time: vec4<f32>,
 };
 
 // 1.0 when the render target holds linear light - Wipeout HD's float scene
@@ -118,6 +122,9 @@ override flame_rim_scale: f32 = 0.0;
 override flame_rim_min: f32 = 0.0;
 override flame_alpha_scale: f32 = 0.0;
 override flame_colour_scale: f32 = 0.0;
+// `Speed`, the sixth number the material authors: what multiplies `scene.time`
+// into the noise tap's `v`. 2.0 on all fourteen craft.
+override flame_speed: f32 = 0.0;
 
 
 // **Whether `in.colour` is a baked light rather than a tint** - 1.0 only for a
@@ -506,7 +513,33 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     let rim = clamp(1.0 - dot(to_eye, n), 0.0, 1.0);
     let flame_alpha = flame_alpha_scale
         * (1.0 - (pow(rim, flame_rim_power) * flame_rim_scale + flame_rim_min));
-    let flame_rgb = texel.rgb * flame_colour_scale;
+    // **The program's two taps, both of them.** It samples `unit0` twice from
+    // one texture: a *noise* tap whose `v` scrolls with the engine clock, and
+    // a *colour* tap at doubled coordinates displaced by the noise the first
+    // returned. Neither is this file's invention - block #1 and block #2 of
+    // `flame_test.rcsmaterial` schedule the identical pair through different
+    // registers, and `time`'s provider is engine parameter slot 0. See
+    // `oag_render::mesh::Flame` and
+    // docs/ghidra/functions/ps3-hdfury-eu/engine-flare.md.
+    //
+    //     @0x0a  MAD R0.y, {Speed}, {time}, Uv1.y   <- the scrolled row
+    //     @0x11  TEX R2.w, R0 unit0                 <- its ALPHA is the noise
+    //     @0x1e  ADD R1.xy, R1, R2.zwzz             <- (2u, 2v + noise)
+    //     @0x1f  TEX H0.xyz, R1 unit0               <- the colour
+    //
+    // The doubling stays a plain multiply rather than a fract: the sampler
+    // repeats, and the authored `Uv1` runs outside 0..1 on one node already.
+    let flame_noise = textureSample(
+        albedo,
+        albedo_sampler,
+        vec2<f32>(in.texcoord.x, in.texcoord.y + flame_speed * scene.time.x),
+    ).a;
+    let flame_texel = textureSample(
+        albedo,
+        albedo_sampler,
+        vec2<f32>(in.texcoord.x * 2.0, in.texcoord.y * 2.0 + flame_noise),
+    );
+    let flame_rgb = flame_texel.rgb * flame_colour_scale;
     // **Not decoded on the linear target, on purpose - and this is a change
     // of mind recorded in place.** The decode used to sit here on the "what a
     // sampler hands back is authored-space" argument, but the flame's own

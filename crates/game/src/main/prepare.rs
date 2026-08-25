@@ -20,7 +20,7 @@ use anyhow::{Context, Result};
 use log::info;
 
 use oag_game::frontend;
-use oag_game::{audio, boot, loading, menu, movie, prefetch, race, settings};
+use oag_game::{audio, boot, catalogue, loading, menu, movie, prefetch, race, settings};
 use oag_physics::SpeedClass;
 
 use crate::args::{resolve_difficulty, resolve_scheme};
@@ -127,6 +127,7 @@ impl Pending {
             // and the default is used rather than failing the boot.
             difficulty: resolve_difficulty(&self.settings),
             opponents: self.cli.opponents,
+            trail_sparks: self.cli.trail_sparks,
             seed: self.cli.seed,
             pose: self.pose,
             camera: self.camera,
@@ -199,7 +200,21 @@ impl Pending {
         // which are shipped content and only ever live in memory.
         let shell = Shell {
             definition: self.definition.clone(),
+            strings: boot_shell.strings.clone(),
+            entries: boot_shell.entries.clone(),
             modes: menu::mode_choices(&boot_shell.strings),
+            // The disc's own names for its stylings, so the row offers what the
+            // source has rather than a list this build holds.
+            front_end_styles: boot_shell
+                .loading
+                .map(|loading| {
+                    loading
+                        .features
+                        .iter()
+                        .map(|style| menu::Choice::plain(style.name))
+                        .collect()
+                })
+                .unwrap_or_default(),
             teams: boot_shell
                 .teams
                 .iter()
@@ -213,7 +228,12 @@ impl Pending {
                 .map(|track| {
                     (
                         track.clone(),
-                        boot_shell.strings.get_or_id(&track.id).to_string(),
+                        catalogue::label(
+                            track,
+                            &boot_shell.circuit_names,
+                            &boot_shell.strings,
+                            &boot_shell.tracks,
+                        ),
                     )
                 })
                 .collect(),
@@ -240,7 +260,12 @@ impl Pending {
         // movies decode, so every windowed boot needs the tips and the glow
         // strip.
         let loading_assets = {
-            let assets = loading::Assets::load(source, &boot_shell.strings);
+            let assets = loading::Assets::load(
+                source,
+                &boot_shell.strings,
+                boot_shell.entries.as_deref(),
+                crate::args::style_of(&self.settings),
+            );
             for note in &assets.notes {
                 info!("{note}");
             }

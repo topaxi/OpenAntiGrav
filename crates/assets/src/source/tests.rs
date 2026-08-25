@@ -74,10 +74,19 @@ const TITLE: &Title = &Title {
         speed_lap: r"Data\XML\Nothing_HUD.xml",
         zone: r"Data\XML\Nothing_HUD.xml",
     },
+    // And unread on the same terms: which widgets a HUD keeps up, and out of
+    // which texture, is decided long after an archive has been found.
+    hud_art: &oag_title::HudArt {
+        texture_extension: None,
+        always_on: &[],
+        pickup_backdrop_colour: None,
+    },
     // Unread here for the fourth and fifth time, and the same reason both
     // times: an archive is found by name, and what is inside one is nothing
     // this crate looks at.
     plugin_definition: r"Data\Plugins\PI000\Definition.xml",
+    // This crate opens archives; nothing here draws a loading screen.
+    loading: None,
     music: None,
 };
 

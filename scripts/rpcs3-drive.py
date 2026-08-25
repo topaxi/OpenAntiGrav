@@ -165,6 +165,35 @@ def recordings(title_id="BCES00664"):
     return sorted(glob.glob(pattern), key=os.path.getmtime)
 
 
+def clear_stale_lock():
+    """Remove RPCS3's instance lock when no RPCS3 is running.
+
+    **`__exit__` terminates the emulator, and a terminated RPCS3 does not clean
+    up after itself.** It leaves `~/.cache/rpcs3/RPCS3.buf`, and the next launch
+    sees it and refuses - so one scripted run poisons every run after it until
+    somebody deletes a file nothing told them about.
+
+    How that refusal presents has changed and the new form is worse. This file's
+    own docs record it as "the new process is gone within seconds"; on build
+    0.0.42-19777 it is a **modal dialog** on the virtual display instead
+    ("Another instance of RPCS3 is running"), so the process stays up, writes
+    nothing to `TTY.log`, and every wait here times out against what looks
+    exactly like a game that booted and stalled. Two runs were lost to it.
+
+    Guarded on there being no live process, so this cannot pull the lock out
+    from under a real one - a second instance is genuinely not supported.
+    """
+    if subprocess.run(["pgrep", "-x", "rpcs3"], capture_output=True).returncode == 0:
+        return False
+    lock = Path(os.environ.get("XDG_CACHE_HOME")
+                or os.path.expanduser("~/.cache")) / "rpcs3" / "RPCS3.buf"
+    if not lock.exists():
+        return False
+    lock.unlink()
+    print("removed a stale %s left by a terminated run" % lock, flush=True)
+    return True
+
+
 def emulator_env():
     env = dict(os.environ)
     env["DISPLAY"] = DISPLAY
@@ -218,6 +247,7 @@ class Session:
         self.proc = None
 
     def __enter__(self):
+        clear_stale_lock()
         start_display()
         # The pad has to exist before RPCS3 does: it binds pads when it
         # enumerates devices and does not rescan.
@@ -397,7 +427,21 @@ def cmd_race(args):
             return 1
         print("%s; waiting %g s for the track to load"
               % (current_screen(), args.load), flush=True)
-        time.sleep(args.load)
+        # **A burst rather than one shot at the end, because the loading screen
+        # is transient.** The grid shot below is taken once the load is over, so
+        # nothing here used to see the screen that covers it - and the load is
+        # the only place that screen is ever up. HD runs at about 9 fps here and
+        # the load takes tens of seconds, so an even sweep across the window
+        # catches it several times over; which frames are the loading screen is
+        # read off the pictures afterwards rather than predicted.
+        if args.shots and args.load_shots > 0:
+            step = args.load / args.load_shots
+            for index in range(args.load_shots):
+                time.sleep(step)
+                screenshot(session.log_dir
+                           / ("01b-loading-%02d.png" % (index + 1)))
+        else:
+            time.sleep(args.load)
         if args.shots:
             screenshot(session.log_dir / "02-grid.png")
         if args.drive:
@@ -723,6 +767,11 @@ def main(argv=None):
                       help="pause after 'InGame' for the track to load")
     race.add_argument("--drive", type=float, default=0.0,
                       help="seconds to hold thrust once the race is up")
+    race.add_argument("--load-shots", type=int, default=0,
+                      help="with --shots, this many evenly spaced screenshots "
+                           "across the load window - the only way to catch the "
+                           "loading screen, which is up for none of the run "
+                           "either side of it")
     race.add_argument("--shots", action="store_true",
                       help="capture the menu, the grid and the driven frame")
     race.set_defaults(run=cmd_race)

@@ -167,40 +167,42 @@ impl StringTable {
         }
     }
 
-    /// Looks up an id, **exactly**.
+    /// Looks up an id, **exactly**: what this copy of the table literally says.
     ///
-    /// # Why this is not case-insensitive, having briefly been
+    /// # Exact, and why the circuits go through [`CircuitNames`] instead
     ///
-    /// Wipeout HD's front-end plugin declares `PI_Track name="01_Track"` and its
-    /// string table keys the circuit `01_TRACK`, so every circuit on the RACE
-    /// page draws as its own id. Folding the case resolves sixteen of the
-    /// twenty-eight and **puts a confidently wrong name on eight of them**, which
-    /// is worse than the id: `17_Track` loads `Data\Environments\Talons_Junction`
-    /// and `17_TRACK` reads `SEBENCO CLIMB REVERSE`.
+    /// Wipeout HD keys its circuits `NN_TRACK` where the front-end plugin
+    /// declares `PI_Track name="NN_Track"`, so nothing on the RACE page resolved
+    /// here and every circuit drew as its own id. This used to argue that the
+    /// case was the *only* thing wrong and folding it was still refused, because
+    /// folding resolved sixteen of the twenty-eight and put a **confidently
+    /// wrong** name on eight: `17_Track` loads `Data\Environments\Talons_Junction`
+    /// and the served table's `17_TRACK` read `SEBENCO CLIMB REVERSE`.
     ///
-    /// The case is not the fault. **The two files come from different archives
-    /// and were numbered at different times.** Measured on `hdfury-ps3-eu-dec.iso`:
+    /// That was right about the fold and wrong about the conclusion, and the
+    /// missing measurement was **which copy**. HD ships this file in five
+    /// archives and they disagree; the served one is `DATA02`'s, which numbers
+    /// the circuits the way the base game did. Read off `hdfury-ps3-eu-dec.iso`:
     ///
-    /// | Archive | `PI_Track` nodes | `17_TRACK` |
+    /// | Archive | `NN_TRACK` keys | `17_TRACK` reads |
     /// | --- | ---: | --- |
-    /// | `DATA00` | 28 | *no `entries.xml` at all* |
-    /// | `DATA02` | 8 | `SEBENCO CLIMB REVERSE` |
-    /// | `DATA03`, `DATA05` | 16 | `SEBENCO CLIMB REVERSE` |
-    /// | `DATA06` | 16 | `TALON'S JUNCTION` |
+    /// | `DATA00` | *no `entries.xml` at all* | - |
+    /// | `DATA02`, `DATA03`, `DATA04`, `DATA05` | 24 | `SEBENCO CLIMB REVERSE` |
+    /// | `DATA06` | 28 | `TALON'S JUNCTION` |
     ///
-    /// `DATA00` supplies the 28 circuits this build offers and `DATA06` is the
-    /// only table whose numbering agrees with them - and the two are different
-    /// archives, so no copy on the disc pairs the list with its own names. The
-    /// same table also keeps a parallel `NN_TRACK_OLD` set (`09_TRACK_OLD` is
-    /// `TALON'S JUNCTION`), which is the renumbering saying so in the data.
+    /// `DATA00` supplies the 28 circuits this build offers, and `DATA06` is the
+    /// only copy that names all 28 - the other four stop at 24 and have no key
+    /// at all for the four Zone circuits. So the copy is chosen on coverage and
+    /// the fold applies to that copy alone; see [`CircuitNames`], which also
+    /// records what corroborates the choice.
     ///
-    /// Until which copy the runtime serves is settled - the open question
-    /// `docs/formats/hd-frontend.md` already carries about `skin.xml`'s six
-    /// copies - a miss here shows the id. That is an honest, visible absence;
-    /// a name this build cannot vouch for is not. See
-    /// [ADR-0006](../../../docs/architecture/adr/0006-no-copyrighted-content.md)'s
-    /// neighbour rule in `CLAUDE.md`: never invent what the assets already
-    /// author, and draw nothing rather than a legible stand-in.
+    /// **The fold is unavoidable, not a shortcut.** No exact spelling works for
+    /// all 28 in any copy: `DATA06` writes `01_TRACK` upper and `25_Track`
+    /// mixed, against a plugin that writes `NN_Track` throughout.
+    ///
+    /// This accessor stays exact so "what does this table say for this key" has
+    /// an answer that is not a search, and so the mismatch above stays
+    /// measurable rather than papered over.
     #[must_use]
     pub fn get(&self, id: &str) -> Option<&str> {
         self.entries.get(id).map(String::as_str)
@@ -217,6 +219,28 @@ impl StringTable {
         self.get(id).unwrap_or(id)
     }
 
+    /// Looks up an id with the case folded, walking the table.
+    ///
+    /// **Deliberately not the general accessor**, and not a shortcut past
+    /// [`Self::get`]'s reasoning: folding is only ever right once a caller has
+    /// established which copy of the table it is folding, which is a per-key
+    /// question rather than a per-table one. [`CircuitNames`] is the one caller
+    /// that has established it, and it tries [`Self::get`] first so an exact
+    /// key always wins.
+    ///
+    /// **A tie would resolve arbitrarily** - this walks a `HashMap` - so it is
+    /// worth knowing that none exists to resolve: all five of HD's copies were
+    /// counted key by key with the case folded and none holds two keys that
+    /// differ only in case. Nothing here feeds simulation state; a label is not
+    /// a tick.
+    #[must_use]
+    pub fn find_ignoring_case(&self, id: &str) -> Option<&str> {
+        self.entries
+            .iter()
+            .find(|(key, _)| key.eq_ignore_ascii_case(id))
+            .map(|(_, value)| value.as_str())
+    }
+
     /// How many entries the table holds.
     #[must_use]
     pub fn len(&self) -> usize {
@@ -228,6 +252,129 @@ impl StringTable {
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
+}
+
+/// What a circuit is called, out of the copy of the string table that names
+/// every circuit the source offers.
+///
+/// # Why the circuits need their own table when nothing else does
+///
+/// A `PI_Track`'s `name` is an **id** - the folder a setting stores - and the
+/// name a player reads is that id looked up in the language's `entries.xml`.
+/// On both PSP titles the two files are the same age and the lookup is exact,
+/// which is why every other label on the front end goes straight through
+/// [`StringTable::get_or_id`].
+///
+/// Wipeout HD breaks that in two ways at once, and fixing either alone gives a
+/// wrong answer:
+///
+/// 1. **The copies disagree.** `entries.xml` is in five of the seven archives.
+///    `oag_assets::Archives` serves `DATA02`'s, whose circuit numbering is the
+///    base game's; the circuit *list* comes out of `DATA00`'s
+///    `definition.xml`, whose numbering is Fury's. Fold the case with `DATA02`
+///    served and eight circuits get a confident wrong name - `17_Track` loads
+///    `Talons_Junction` and `DATA02` reads its `17_TRACK` as `SEBENCO CLIMB
+///    REVERSE`.
+/// 2. **The spelling differs.** The plugin writes `NN_Track`; every table
+///    writes `NN_TRACK`, except `DATA06`'s four Zone keys, which are
+///    `25_Track`..`28_Track`. **No exact spelling resolves all 28 in any
+///    copy**, so the fold is required once the right copy is in hand.
+///
+/// So this picks the copy first and folds second.
+///
+/// # How the copy is chosen, and what corroborates it
+///
+/// **Coverage: the copy that has a key for every circuit the source offers.**
+/// Measured on `hdfury-ps3-eu-dec.iso` over **all sixteen languages in all five
+/// archives**, with no exception: `DATA02`, `DATA03`, `DATA04` and `DATA05`
+/// carry 24 `NN_TRACK` keys and `DATA06` carries 28. The four missing everywhere else
+/// are the Zone circuits - `DATA00`'s `25_Track`..`28_Track`, which load
+/// `Data\Environments\Zone_1`..`Zone_4`. One copy qualifies and it is not the
+/// served one.
+///
+/// **What corroborates it is the geometry**, and it is checked rather than
+/// assumed: twelve of HD's environments are declared twice, once each way
+/// round, and on the chosen copy every such pair reads the same name -
+/// `17_Track` and `18_Track` both load `Talons_Junction` and both read
+/// `TALON'S JUNCTION`. On the served copy they read `SEBENCO CLIMB REVERSE`
+/// and `SOL 2 REVERSE`: two names for one piece of track, which is the
+/// mismatch stating itself. That agreement is **not** the selector, because it
+/// is false by design on Pulse, where `16_Track` and `32_Track` share an
+/// environment and are named separately; it is asserted in
+/// `crates/game/tests/hd_boot_ground_truth.rs`.
+///
+/// A source with one copy - which is every PSP title - selects that copy, folds
+/// a spelling that already matched, and comes out exactly where
+/// [`StringTable::get_or_id`] left it.
+#[derive(Debug, Clone, Default)]
+pub struct CircuitNames {
+    /// Lowercased id to name.
+    by_id: HashMap<String, String>,
+    /// The archive the chosen copy came from, for the boot report.
+    source: String,
+}
+
+impl CircuitNames {
+    /// Picks the copy of the table that names every id in `ids`.
+    ///
+    /// `copies` is `(archive label, table)` in mount order, so a tie - every
+    /// copy covering the list, which is what a single-copy source looks like -
+    /// keeps the copy [`oag_assets::Archives::read_name`] would have served.
+    ///
+    /// `None` when no copy covers the list. That leaves every circuit showing
+    /// its id, which is what this build did before the copies were counted: an
+    /// honest, visible absence rather than a name it cannot vouch for.
+    #[must_use]
+    pub fn choose(copies: &[(String, StringTable)], ids: &[String]) -> Option<Self> {
+        let (source, table) = copies
+            .iter()
+            .find(|(_, table)| ids.iter().all(|id| folded(table, id).is_some()))?;
+        Some(Self {
+            by_id: ids
+                .iter()
+                .filter_map(|id| {
+                    folded(table, id).map(|name| (id.to_lowercase(), name.to_string()))
+                })
+                .collect(),
+            source: source.clone(),
+        })
+    }
+
+    /// This circuit's name, or `None` when no copy named it.
+    #[must_use]
+    pub fn get(&self, id: &str) -> Option<&str> {
+        self.by_id.get(&id.to_lowercase()).map(String::as_str)
+    }
+
+    /// The archive the chosen copy came from.
+    #[must_use]
+    pub fn source(&self) -> &str {
+        &self.source
+    }
+
+    /// How many circuits it names.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.by_id.len()
+    }
+
+    /// Whether it names none, which is what an unchosen copy leaves behind.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.by_id.is_empty()
+    }
+}
+
+/// One id looked up with the case folded, for [`CircuitNames`] alone.
+///
+/// A linear walk rather than a second map: a string table is read once at boot
+/// and this runs over at most 28 ids, so the cost is invisible and the
+/// alternative is a second copy of every key in memory for the rest of the run.
+fn folded<'a>(table: &'a StringTable, id: &str) -> Option<&'a str> {
+    table
+        .get(id)
+        .or_else(|| table.find_ignoring_case(id))
+        .filter(|name| !name.is_empty())
 }
 
 /// The first `Language` attribute anywhere in the tree.

@@ -41,6 +41,7 @@ pub const TITLE: &Title = &Title {
     foreign_serials: FOREIGN_SERIALS,
     front_end: Some(FRONT_END),
     hud: hud::LAYOUTS,
+    hud_art: hud::ART,
     race: race::DEFAULTS,
     // `Data\Tex\engineFlare\Engine_noise.mip`, a literal string in both the
     // PSP and PS2 executables, so an exact archive hit rather than a mined
@@ -52,6 +53,7 @@ pub const TITLE: &Title = &Title {
     // differs from the noise map's; the WAD hash is case-insensitive.
     flare: &oag_title::flare::Flare::Sprite(r"Data\Tex\EngineFlare\grabbedEngineFlare128x64x8.mip"),
     plugin_definition: names::GAME_PLUGIN_DEFINITION,
+    loading: Some(&loading::LOADING),
     music: Some(MUSIC),
 };
 

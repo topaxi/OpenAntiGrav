@@ -20,10 +20,16 @@ pub struct Assets {
     /// A HUD invented on the spot would be a worse failure than none, because it
     /// would look like a working HUD in the wrong place.
     pub layout: Option<Layout>,
-    /// The layout's own atlas, packed into a sheet with its placement known.
+    /// **Every** texture the layout names, packed into one sheet, keyed by the
+    /// reference the layout spells rather than by the entry that was read.
     ///
-    /// Empty for a layout that names none - Pure's HUDs are `<Model>` geometry
-    /// and name no texture at all. See [`Layout::atlas`].
+    /// One entry for Pulse, up to six for HD - see [`Layout::atlas`] for the
+    /// measurement and for what assuming one cost. Empty for a layout that
+    /// names none: Pure's HUDs carry no `<Image>` at all.
+    ///
+    /// Keyed by the *reference* so [`super::sprite_draw`] can look a sprite's
+    /// own `src` up directly. Which entry a reference resolves to is the
+    /// loader's business and `oag_title::HudArt::texture_extension`'s rule.
     pub sheet: crate::sprite::Sheet,
     /// The `HUD` font, or the built-in 5x7 set when the disc's is unreadable.
     pub font: crate::font::Atlas,
@@ -42,21 +48,35 @@ pub struct Assets {
     /// top-left corner - a yellow slab that reads as scenery rather than as a
     /// digit. See [`crate::frontend::Space`].
     pub space: crate::frontend::Space,
+    /// How this title's HUD sprites reach the screen: which of them are up
+    /// whenever the HUD is, and the one colour this build substitutes.
+    ///
+    /// Off [`oag_title::Title::hud_art`] rather than a `const` in this module,
+    /// because all three of its rows are per-title measurements that disagree -
+    /// see [`oag_title::HudArt`]. The texture row is spent by the time this
+    /// exists: [`Self::sheet`] is already built.
+    pub art: &'static oag_title::HudArt,
 }
 
 impl Assets {
-    /// Where this layout's own atlas sits in [`Self::sheet`], in sheet pixels.
+    /// The context [`super::draw_list`] takes, or `None` with no layout to draw.
     ///
-    /// `(0, 0)` when there is no layout, when the layout names no texture, or
-    /// when the named one is not in the sheet. All three pair with nothing being
-    /// drawn, so the value never reaches a shader - see [`Layout::atlas`].
+    /// The same seven fields [`super::Overlay::context`] assembles, off a
+    /// loaded [`Assets`] rather than off a built renderer - so a test can ask
+    /// what a real race's HUD draws without a GPU, which is the whole reason
+    /// the draw list is separated from the pass in the first place.
     #[must_use]
-    pub fn atlas_origin(&self) -> (f32, f32) {
-        self.layout
-            .as_ref()
-            .and_then(Layout::atlas)
-            .and_then(|atlas| self.sheet.get(atlas))
-            .map_or((0.0, 0.0), |placed| (placed.x as f32, placed.y as f32))
+    pub fn context(&self) -> Option<super::Context<'_>> {
+        let layout = self.layout.as_ref()?;
+        Some(super::Context {
+            default_border: layout.default_border(),
+            layout,
+            strings: &self.strings,
+            sheet: &self.sheet,
+            art: self.art,
+            hud_line_height: self.font.line_height,
+            small_line_height: self.small_font.line_height,
+        })
     }
 }
 
@@ -74,31 +94,50 @@ impl Layout {
     /// `None` for a layout whose sprites name no texture, which covers both that
     /// case and Pulse's own `MPTag_HUD.xml`.
     ///
-    /// **One name rather than a set**, and that is measured rather than assumed:
-    /// every one of the nine layouts shipped across the two titles names at most
-    /// one distinct `.mip`, checked 2026-08-12. `the_layouts_name_at_most_one_texture`
-    /// in `crates/game/tests/hud_layout_ground_truth.rs` fails the day one does
-    /// not, rather than silently drawing eight sprites from the wrong sheet.
+    /// **The first of however many**, and no longer the one a frame samples.
+    /// Every one of the nine layouts shipped across the two PSP titles names at
+    /// most one distinct texture, checked 2026-08-12 and still pinned by
+    /// `the_layouts_name_at_most_one_texture` in
+    /// `crates/game/tests/hud_layout_ground_truth.rs`; HD's eighteen composed
+    /// layouts name **twelve between them, up to six in one**. So this is a
+    /// convenience for a caller that wants the layout's own first reference -
+    /// a report line, a test - and nothing on the draw path reads it.
     ///
-    /// # And it is false for HD/Fury
+    /// It used to be the draw path. Until 2026-08-25 the sheet held this
+    /// texture alone and every sprite was offset by its placement, so on HD the
+    /// 45 arcade sprites naming one of the other five sampled `HUD_Components`
+    /// at their own texture's coordinates: the pickup icon came out as a grey
+    /// box, in the right place, at the right size. See [`Assets::sheet`] and
+    /// [`textures`], which is what replaced it.
     ///
-    /// That invariant is Pulse's and Pure's, not the dialect's. HD's eighteen
-    /// composed layouts name **twelve** distinct textures between them, **up to
-    /// six in one layout** - see `docs/formats/hd-hud.md`. So this returns the
-    /// first of six there, and everything downstream that assumes one sheet -
-    /// [`Assets::atlas_origin`], the single `atlas_origin` [`sprite_draw`]
-    /// takes, [`Overlay`] - assumes it wrongly.
-    ///
-    /// **That is the blocker on drawing an HD HUD**, not the missing `.gtf`
-    /// upload: `oag_formats::gtf` decodes all twelve as of 2026-08-17. What is
-    /// needed is a sprite carrying *which* texture it samples through to the
-    /// draw call. Nothing asserts anything about HD's count today, because the
-    /// test above walks Pulse's five.
+    /// [`textures`]: Layout::textures
     #[must_use]
     pub fn atlas(&self) -> Option<&str> {
         self.sprites
             .iter()
             .map(|sprite| sprite.src.as_str())
             .find(|src| !src.is_empty())
+    }
+
+    /// Every distinct texture this layout's sprites name, in the order they are
+    /// first named.
+    ///
+    /// The order is the layouts' own document order, so a sheet built from it
+    /// is byte-identical from one run to the next - which is what makes a
+    /// screenshot comparable. See [`crate::sprite::Sheet`].
+    #[must_use]
+    pub fn textures(&self) -> Vec<&str> {
+        let mut out: Vec<&str> = Vec::new();
+        for src in self
+            .sprites
+            .iter()
+            .map(|sprite| sprite.src.as_str())
+            .filter(|src| !src.is_empty())
+        {
+            if !out.contains(&src) {
+                out.push(src);
+            }
+        }
+        out
     }
 }

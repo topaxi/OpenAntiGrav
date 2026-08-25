@@ -12,11 +12,23 @@ buffer show their movement.
 
     uv run --with evdev python3 scripts/rpcs3-trail-dump.py [out_dir]
     uv run --with evdev python3 scripts/rpcs3-trail-dump.py [out_dir] --early
+    uv run --with evdev python3 scripts/rpcs3-trail-dump.py [out_dir] --params
 
 Needs the decrypted image (`data/images/hdfury-ps3-eu-dec.iso`), the `oag`
 input profile and Xvfb :77 - `scripts/rpcs3-drive.py preflight` checks all
 three. One debugger session per emulator launch (rpcs3_debugger.py, trap 2),
 which is why this is one script rather than an interactive session.
+
+`--params` is the scroll-phase mode. `Trail_InitManagerBuffers`
+(`0x006b6870`) binds the material parameter `TrailSpeed` - `~crc32` hash
+`0x07431a35` - to the **address** of each trail's phase accumulator, so the
+question "what is `TrailSpeed` at draw time" is a pointer-identity check, not
+a float hunt: for trails 0..3 it follows `+0x1208`'s instance array, finds
+that hash in each instance's parameter table, and reports the value pointer
+the binder wrote. A hit is four pointers exactly `0x1230` apart, each equal to
+its own trail's `block + 0x1210`, unchanged across two pauses while the float
+they point at moves. It also reads the head vertices, which is what says the
+SPU's `u` carries no phase of its own.
 
 `--early` is the race-start mode (the 2026-08-24 e0..e4/r0/r1 evidence on
 engine-trail.md): it attaches while the race is still loading, polls for the
@@ -70,6 +82,25 @@ FLARE_OFFSET = 0x5F70
 # The pointer-to-pointer the present loop's TOC slot 0x008b44a0 resolves to;
 # Trail_BuildDrawState splats *(*(here) + 0xc4) into a draw-state constant.
 SINGLETON_PP = 0x00936FD4
+# `~crc32("TrailSpeed")`, the form the material tables key parameters by -
+# `ps3-sho.py hash TrailSpeed` prints it and `Trail_InitManagerBuffers`
+# computes it with `Crc32_HashString` on the string at 0x007a2da8.
+TRAIL_SPEED_HASH = 0x07431A35
+# A trail's material-instance array (`+0x1208`) and its length (`+0x120c`),
+# and inside one instance the parameter table `Material_SetInstanceParamPointer`
+# walks: count at `+0x30`, entries at `+0x34`, 0x20 bytes each, `+0x00` the
+# name hash, `+0x04` the kind (bit 15 marks a sampler), `+0x18` the value
+# pointer the binder overwrites, `+0x1c` the vec4 count.
+PARAM_ENTRY = 0x20
+# Main memory, wide enough for both allocators involved: the instance *array*
+# lands around `0x3058....` and the instances it points at around `0x40cb....`.
+# A first run of this stopped at 0x40000000 and rejected every instance as "not
+# a heap pointer" - the same shape of miss as reading a pointer for a float,
+# and the reason `0x40...` is called out as stub-readable in the first place.
+HEAP_LO, HEAP_HI = 0x10000000, 0x50000000
+# A guard, not a measurement: an instance array longer than this is a sign the
+# block was misread, and scanning it would burn the pause.
+MAX_INSTANCES = 64
 
 
 def u32(b, off=0):
@@ -143,6 +174,7 @@ def run_early(session, out):
             print("no manager after 90 s", file=sys.stderr)
             return 1
         print("manager alloc %08x" % alloc, flush=True)
+        metas["alloc"] = "%08x" % alloc
         metas["e0"] = early_snapshot(dbg, out, alloc, "e0")
         dbg.resume()
         for tag, wait in (("e1", 1.0), ("e2", 2.0), ("e3", 4.0), ("e4", 8.0)):
@@ -169,8 +201,136 @@ def run_early(session, out):
     return 0
 
 
-def snapshot(dbg, out, alloc, tag):
+def trail_speed_bindings(dbg, out, tag, slot, arr, count, expect):
+    """Every `TrailSpeed` parameter entry in one trail's instance array.
+
+    Returns the value pointer the binder wrote into each match, which is the
+    whole point: the draw path reads the scroll phase *through* it.
+
+    Everything it looked at is reported, including the misses. A silent
+    `continue` past an out-of-range field is how the first run of this came
+    back as an empty list that read like "the binding is not there" when it
+    only meant "these offsets were guessed"; `raw` is the instance's own bytes
+    so a wrong guess is fixable from the artefacts instead of another race.
+    """
+    report = {"array": "%08x" % arr, "count": count, "instances": []}
+    if not arr or not count or count > MAX_INSTANCES:
+        report["error"] = "array/count out of range"
+        return report
+    handles = dbg.read(arr, count * 4)
+    for i in range(count):
+        inst = u32(handles, i * 4)
+        row = {"instance": "%08x" % inst, "hits": []}
+        report["instances"].append(row)
+        if not HEAP_LO <= inst < HEAP_HI:
+            row["skipped"] = "not a heap pointer"
+            continue
+        raw = dump(dbg, out, inst, 0x200, "%s_inst%d_%d.bin" % (tag, slot, i))
+        entries, table = u32(raw, 0x30), u32(raw, 0x34)
+        row["count_30"] = entries
+        row["table_34"] = "%08x" % table
+        # The offsets the binder uses, tried first.
+        if table and HEAP_LO <= table < HEAP_HI and 0 < entries <= 64:
+            blob = dump(dbg, out, table, entries * PARAM_ENTRY,
+                        "%s_params%d_%d.bin" % (tag, slot, i))
+            for e in range(entries):
+                off = e * PARAM_ENTRY
+                row.setdefault("hashes", []).append("%08x" % u32(blob, off))
+                if u32(blob, off) != TRAIL_SPEED_HASH:
+                    continue
+                if u32(blob, off + 4) & 0x8000:  # a sampler; the binder skips
+                    continue
+                row["hits"].append({
+                    "entry": e,
+                    "value_ptr": "%08x" % u32(blob, off + 0x18),
+                    "vec4s": u32(blob, off + 0x1C),
+                    "matches_phase_addr": "%08x" % u32(blob, off + 0x18) == expect,
+                })
+        else:
+            row["skipped"] = "count/table at +0x30/+0x34 out of range"
+        # Independent of the offsets above: where the hash and the expected
+        # pointer actually sit in the instance's own bytes.
+        row["hash_at"] = ["0x%x" % o for o in range(0, 0x200, 4)
+                          if u32(raw, o) == TRAIL_SPEED_HASH]
+        row["phase_ptr_at"] = ["0x%x" % o for o in range(0, 0x200, 4)
+                               if "%08x" % u32(raw, o) == expect]
+    return report
+
+
+def params_snapshot(dbg, out, alloc, tag):
+    """Trails 0..3: the block, the `TrailSpeed` bindings, the head vertices.
+
+    One pause, one hop through `+0x1208`. The pointers are what settles where
+    the draw-time `TrailSpeed` comes from; the head vertices settle whether
+    the SPU already put the phase in `u`.
+    """
+    rows = []
+    for i in range(4):
+        base = alloc + 0x84A0 + i * 0x1230
+        blk = dump(dbg, out, base, 0x1230, "%s_trail%d.bin" % (tag, i))
+        bindings = trail_speed_bindings(
+            dbg, out, tag, i, u32(blk, 0x1208), u32(blk, 0x120C),
+            "%08x" % (base + 0x1210))
+        row = {
+            "slot": i,
+            "block": "%08x" % base,
+            "phase_1210": f32(blk, 0x1210),
+            "phase_addr": "%08x" % (base + 0x1210),
+            "uhead_11ec": f32(blk, 0x11EC),
+            "bright_11d8": f32(blk, 0x11D8),
+            "p_1208": "%08x" % u32(blk, 0x1208),
+            "n_120c": u32(blk, 0x120C),
+            "trail_speed": bindings,
+        }
+        live = u32(blk, 0x11D4)
+        row["live_11d4"] = "%08x" % live
+        if 0xC0000000 <= live < 0xD0000000:
+            # 0x200 bytes is the first 14 vertices - rings 0..6 of fin 0,
+            # which is all the `u` law needs.
+            head = dump(dbg, out, live, 0x200, "%s_vtxhead%d.bin" % (tag, i))
+            row["vertex_u"] = [f32(head, v * 0x24 + 0x18) for v in range(6)]
+        rows.append(row)
+    return {"wall": time.time(), "singleton": read_singleton(dbg),
+            "alloc": "%08x" % alloc, "trails": rows}
+
+
+def run_params(session, out):
+    print("in race; waiting for the load", flush=True)
+    time.sleep(50.0)
+    session.pad.set("cross", True)
+    time.sleep(16.0)
+    dbg = Debugger()
+    metas = {}
+    try:
+        dbg.pause()
+        manager = u32(dbg.read(MANAGER_SLOT, 4))
+        alloc = u32(dbg.read(manager + 0x40, 4))
+        print("manager %08x alloc %08x" % (manager, alloc), flush=True)
+        metas["p0"] = params_snapshot(dbg, out, alloc, "p0")
+        dbg.resume()
+        time.sleep(1.2)
+        dbg.pause()
+        metas["p1"] = params_snapshot(dbg, out, alloc, "p1")
+        dbg.resume()
+    finally:
+        try:
+            dbg.resume()
+        except Exception:
+            pass
+        dbg.close()
+    session.pad.set("cross", False)
+    (out / "meta.json").write_text(json.dumps(metas, indent=1))
+    drive.screenshot(out / "race.png")
+    print("done; artefacts in %s" % out, flush=True)
+    return 0
+
+
+def snapshot(dbg, out, alloc, tag, manager=0):
+    # `alloc` is recorded because without it a dumped pointer cannot be told
+    # apart from any other heap address - which is exactly what made an
+    # earlier session's `+0x1208` dumps uninterpretable after the fact.
     meta = {"wall": time.time(), "singleton": read_singleton(dbg),
+            "manager": "%08x" % manager, "alloc": "%08x" % alloc,
             "trails": []}
     flares = []
     for i in range(8):
@@ -203,8 +363,10 @@ def snapshot(dbg, out, alloc, tag):
 
 
 def main():
-    args = [a for a in sys.argv[1:] if a != "--early"]
+    flags = {"--early", "--params"}
+    args = [a for a in sys.argv[1:] if a not in flags]
     early = "--early" in sys.argv[1:]
+    params = "--params" in sys.argv[1:]
     out = Path(args[0] if args else "/tmp/hd-trail-dump")
     out.mkdir(parents=True, exist_ok=True)
     with drive.Session(str(IMAGE), str(out / "logs")) as session:
@@ -218,6 +380,8 @@ def main():
             return 1
         if early:
             return run_early(session, out)
+        if params:
+            return run_params(session, out)
         print("in race; waiting for the load", flush=True)
         time.sleep(50.0)
         session.pad.set("cross", True)
@@ -230,11 +394,11 @@ def main():
             manager = u32(dbg.read(MANAGER_SLOT, 4))
             alloc = u32(dbg.read(manager + 0x40, 4))
             print("manager %08x alloc %08x" % (manager, alloc), flush=True)
-            metas.append(snapshot(dbg, out, alloc, "s0"))
+            metas.append(snapshot(dbg, out, alloc, "s0", manager))
             dbg.resume()
             time.sleep(1.2)
             dbg.pause()
-            metas.append(snapshot(dbg, out, alloc, "s1"))
+            metas.append(snapshot(dbg, out, alloc, "s1", manager))
             dbg.resume()
         finally:
             try:

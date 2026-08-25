@@ -38,12 +38,30 @@
 //!   world space, from the world normal and the real camera, which is the same
 //!   number under a rigid transform.
 //!
-//! **What is read and deliberately not implemented**: the surface scroll. The
-//! program takes a `Speed` (2.0, authored) and a `time` (engine-supplied, and
-//! absent from the material record), samples the texture once at
-//! `(Uv1.x, Speed * time + ...)`, and offsets the *colour* lookup by what comes
-//! back. Nothing here animates, so the flame samples its authored coordinate.
-//! Said in the loader report rather than left to be discovered.
+//! **The surface scroll is drawn as of 2026-08-24**, now that `time`'s provider
+//! is read: it is entry 0 of the executable's own 81-name engine shader
+//! parameter table, and every draw-state builder writes the frame context's
+//! global seconds clock into it - `renderer.md`, "the engine's own parameter
+//! table". So the program's two taps are both known and both drawn:
+//!
+//! ```text
+//! noise = texture(u, v + Speed * time).a      <- Speed 2.0, authored
+//! rgb   = texture(2u, 2v + noise).rgb * colour_scale
+//! ```
+//!
+//! The doubling on the colour tap is the program's, not a misread: block #1 and
+//! block #2 of `flame_test.rcsmaterial` schedule it through entirely different
+//! registers and arrive at the same pair. This renderer's clock is the race
+//! tick over 60, never the wall clock, so a replay of the same tick draws the
+//! same frame - the same clock the scenery's texture animation already rides.
+//!
+//! **Only a race binds it.** `mesh_render::Scene::off` - what the sky, the
+//! asset viewer and `model_probe` bind - carries a zero clock, so the flame
+//! stands still in those and scrolls in a race. That is deliberate: a viewer
+//! showing one surface has no race clock to ride, and a frozen phase is what a
+//! still comparison wants anyway. Measured on screen at
+//! `docs/ghidra/functions/ps3-hdfury-eu/engine-flare.md`: a race capture
+//! recurs exactly at 0.5 s, which is `1 / Speed`.
 
 use oag_formats::rcsmodel;
 
@@ -67,6 +85,12 @@ pub const ALPHA_SCALE: u32 = 0x92fc_84bf;
 /// No preimage either; see [`ALPHA_SCALE`].
 pub const COLOUR_SCALE: u32 = 0x17d9_b3d3;
 
+/// `!crc32("Speed")` - what the surface scroll's clock is multiplied by.
+///
+/// 2.0 on all fourteen craft, so the noise tap advances two whole texture
+/// repeats a second against the engine's own seconds clock.
+pub const SPEED: u32 = 0x3118_2e0d;
+
 /// What one craft's flare material says its flame looks like.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Flame {
@@ -80,6 +104,9 @@ pub struct Flame {
     pub alpha_scale: f32,
     /// [`COLOUR_SCALE`]: 1.0 on the disc.
     pub colour_scale: f32,
+    /// [`SPEED`]: 2.0 on the disc. Multiplies `time` - engine parameter slot
+    /// 0, a global seconds clock - into the noise tap's `v`.
+    pub scroll_speed: f32,
 }
 
 impl Flame {
@@ -106,6 +133,7 @@ impl Flame {
             rim_min: value(MIN1)?,
             alpha_scale: value(ALPHA_SCALE)?,
             colour_scale: value(COLOUR_SCALE)?,
+            scroll_speed: value(SPEED)?,
         })
     }
 
@@ -115,8 +143,14 @@ impl Flame {
         format!(
             "flame shading off the material's own parameters: alpha = {:.2} * (1 - \
              (rim^{:.0} * {:.2} + {:.2})) * the vertex ramp, colour = texture x {:.2}, \
-             sampled alpha unused - the program's own arithmetic, no fitted term",
-            self.alpha_scale, self.rim_power, self.rim_scale, self.rim_min, self.colour_scale
+             sampled alpha unused, noise tap scrolling at {:.2} x the engine clock \
+             - the program's own arithmetic, no fitted term",
+            self.alpha_scale,
+            self.rim_power,
+            self.rim_scale,
+            self.rim_min,
+            self.colour_scale,
+            self.scroll_speed
         )
     }
 }

@@ -98,9 +98,26 @@ pub(crate) fn run_windowless(
     // rather than a variation on that one: it runs no state machine, opens no
     // movie and reaches the GPU through `capture::loading`.
     if let (Some(path), Some(spec)) = (&cli.screenshot, &cli.loading_screen) {
-        let progress = parse_progress(spec)?;
+        let mut progress = parse_progress(spec)?;
         let phase = parse_step(cli.loading_step.as_deref())?;
-        let assets = loading::Assets::load(&options.source, &loaded.strings);
+        // A race load counts nothing and names the circuit, which is a shape
+        // `--loading-screen DONE/TOTAL` cannot express - see
+        // `loading::Phase::Race`. So the counts are dropped and the line the
+        // other phases put an entry name on takes `--track`'s, which is a real
+        // name off the command line rather than one invented here. Without
+        // `--track` the line is simply absent, as it is on a run whose caller
+        // had no name to give.
+        if phase == loading::Phase::Race {
+            progress.total = 0;
+            progress.done = 0;
+            progress.current = cli.track.clone();
+        }
+        let assets = loading::Assets::load(
+            &options.source,
+            &loaded.strings,
+            loaded.entries.as_deref(),
+            crate::args::style_of(settings),
+        );
         for note in &assets.notes {
             info!("{note}");
         }

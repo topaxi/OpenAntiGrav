@@ -326,6 +326,7 @@ pub fn build(
             ("flame_rim_min", f64::from(flame.rim_min)),
             ("flame_alpha_scale", f64::from(flame.alpha_scale)),
             ("flame_colour_scale", f64::from(flame.colour_scale)),
+            ("flame_speed", f64::from(flame.scroll_speed)),
         ]);
     }
     let constants = constants.as_slice();

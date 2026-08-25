@@ -63,6 +63,9 @@ pub struct Boot {
     /// The text atlas: the disc's own font when it decodes, ours when it does
     /// not.
     pub font: crate::font::Atlas,
+    /// The chosen language's string-table entry, carried through from
+    /// [`Shell::entries`] for the one caller that needs the other copies of it.
+    pub entries: Option<String>,
     /// Every language this source offers, for the menus' own language row.
     ///
     /// The picker inside [`Self::frontend`] has the same list; this is the copy
@@ -289,6 +292,26 @@ pub struct Shell {
     pub strings: StringTable,
     /// The raceable circuits, for the menus.
     pub tracks: Vec<crate::catalogue::Track>,
+    /// The chosen language's string-table entry, when it names one.
+    ///
+    /// Carried because the loading screen needs the *other copies* of it: two
+    /// of Wipeout HD's five feature descriptions are only in the copy that also
+    /// carries all 28 circuit names, and picking that copy needs the path. See
+    /// `crate::loading::Assets::load`.
+    pub entries: Option<String>,
+    /// This title's own loading-screen table, carried for the same reason
+    /// [`Self::menu_skin`] is: it is a property of the source, settled while the
+    /// serial was in hand, and the menus need its style names to offer a row.
+    /// `None` on a title that authors no loading screen. See
+    /// [`oag_title::Loading`].
+    pub loading: Option<&'static oag_title::Loading>,
+    /// What to call each of them, resolved beside them.
+    ///
+    /// Not folded into [`Self::strings`] because it may come out of a
+    /// **different copy** of the string table than the rest of the front end
+    /// does; see [`crate::language::CircuitNames`]. Empty on a source where no
+    /// copy names every circuit, which shows each one its id.
+    pub circuit_names: crate::language::CircuitNames,
     /// The raceable teams, for the menus.
     pub teams: Vec<crate::catalogue::Team>,
     /// The text atlas.
@@ -495,6 +518,15 @@ pub fn load_shell(options: &Options) -> Result<(Shell, oag_assets::Archives)> {
     let documents = definitions(&mut archives, definition, &mut report);
     let tracks = load_tracks(&mut archives, definition, &documents, &mut report);
     let teams = load_teams(&mut archives, definition, &documents, &mut report);
+    // After the circuits, because which copy of the string table names them all
+    // is a question about the list this just produced.
+    let circuit_names = load_circuit_names(
+        &mut archives,
+        chosen_language(&languages, options.language.as_deref()),
+        &strings,
+        &tracks,
+        &mut report,
+    );
     steps.lap("catalogue");
     let sprites = load_sprites(&mut archives, &screens, &mut report);
     steps.lap("sprites");
@@ -607,9 +639,13 @@ pub fn load_shell(options: &Options) -> Result<(Shell, oag_assets::Archives)> {
     Ok((
         Shell {
             screens,
+            entries: chosen_language(&languages, options.language.as_deref())
+                .and_then(|language| language.entries.clone()),
+            loading: title.loading,
             languages: offered,
             strings,
             tracks,
+            circuit_names,
             teams,
             font,
             sprites,
@@ -948,9 +984,12 @@ impl MediaWorker {
 pub fn assemble(shell: Shell, media: Media) -> Boot {
     let Shell {
         screens,
+        entries,
+        loading: _,
         languages,
         strings,
         tracks,
+        circuit_names: _,
         teams,
         font,
         sprites,
@@ -1131,6 +1170,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
     }
 
     Boot {
+        entries,
         menu_skin,
         frame,
         menu_font,
@@ -1555,6 +1595,29 @@ pub fn load_languages(
     out
 }
 
+/// Which language a boot reads its text in.
+///
+/// The saved language first, then English, then whatever comes first. The
+/// fallback chain used to end at English with a note that there was nothing
+/// saved to prefer; there is now. A saved name this source does not carry falls
+/// through rather than failing - the same rule the picker's own preselection
+/// follows, and for the same reason: a settings file written against the EU
+/// disc must not stop the USA one booting.
+///
+/// Its own function so that [`load_strings`] and
+/// [`roster::load_circuit_names`] cannot answer it differently and put half the
+/// front end in one language and the circuit list in another.
+#[must_use]
+pub fn chosen_language<'a>(
+    languages: &'a [Language],
+    preferred: Option<&str>,
+) -> Option<&'a Language> {
+    preferred
+        .and_then(|name| languages.iter().find(|l| l.name.eq_ignore_ascii_case(name)))
+        .or_else(|| languages.iter().find(|l| l.name == "English"))
+        .or_else(|| languages.first())
+}
+
 /// The chosen language's string table.
 ///
 /// Public for the same reason [`load_languages`] is: the HUD resolves `IG_HUD_*`
@@ -1565,18 +1628,7 @@ pub fn load_strings(
     preferred: Option<&str>,
     report: &mut Vec<String>,
 ) -> StringTable {
-    // The saved language first, then English, then whatever comes first. The
-    // fallback chain used to end at English with a note that there was nothing
-    // saved to prefer; there is now. A saved name this source does not carry
-    // falls through rather than failing - the same rule the picker's own
-    // preselection follows, and for the same reason: a settings file written
-    // against the EU disc must not stop the USA one booting.
-    let chosen = preferred
-        .and_then(|name| languages.iter().find(|l| l.name.eq_ignore_ascii_case(name)))
-        .or_else(|| languages.iter().find(|l| l.name == "English"))
-        .or_else(|| languages.first());
-
-    let Some(language) = chosen else {
+    let Some(language) = chosen_language(languages, preferred) else {
         return StringTable::default();
     };
     let Some(entries) = language.entries.as_deref() else {
@@ -1642,12 +1694,12 @@ pub const DEVPUB_REEL: &str = pulse::names::DEVPUB_REEL;
 mod fonts;
 mod movies;
 mod roster;
-mod xml;
+pub(crate) mod xml;
 
 use fonts::{load_font, load_menu_font};
 pub use movies::EntryRef;
 use movies::load_movie;
-use roster::{definitions, load_teams, load_tracks};
+use roster::{definitions, load_circuit_names, load_teams, load_tracks};
 use xml::expand;
 
 /// The default movie cache directory: `data/cache/movies` in a repository

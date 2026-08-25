@@ -1,7 +1,13 @@
-//! The loading screen, shown while the boot's movies finish decoding.
+//! The loading screen: shown while the boot's movies finish decoding, and
+//! again between the menus and a race while the circuit is read off the disc.
+//!
+//! One stage for both because it is one screen, and which wait it is covering
+//! is the difference between two of its fields being `Some`. See
+//! [`oag_game::loading::Phase`], which is the same distinction on the drawing
+//! side.
 
 use oag_game::render::Renderer;
-use oag_game::{boot, capture, loading, prefetch};
+use oag_game::{boot, capture, loading, prefetch, race};
 
 use crate::gpu::Gpu;
 
@@ -27,6 +33,15 @@ pub(crate) struct LoadingStage {
     /// The movies, still decoding. **What this screen is actually waiting for**
     /// on an ordinary boot - `--prefetch`, when it is on, is waited for as well.
     pub(crate) media: Option<boot::MediaWorker>,
+    /// The circuit, still being read. `Some` on the race path and `None` on the
+    /// boot one, which is the whole of what tells the two apart.
+    ///
+    /// Exclusive with [`Self::shell`] in practice and not by type: the boot path
+    /// carries a shell and no worker, the race path a worker and no shell. An
+    /// enum would say so, and would also mean every field above it appearing
+    /// twice - see [`Session::finish_loading`], which branches on exactly this
+    /// pair and is the only reader that has to care.
+    pub(crate) race: Option<race::LoadWorker>,
     pub(crate) trace: bool,
 }
 
@@ -36,6 +51,15 @@ impl LoadingStage {
         self.media
             .as_ref()
             .is_none_or(boot::MediaWorker::is_finished)
+    }
+
+    /// Whether the circuit has landed, on a screen that is waiting for one.
+    ///
+    /// `true` on the boot path, which waits for no circuit - so a caller can
+    /// require both this and [`Self::media_ready`] without asking which path it
+    /// is on.
+    pub(crate) fn race_ready(&self) -> bool {
+        self.race.as_ref().is_none_or(race::LoadWorker::is_finished)
     }
 }
 

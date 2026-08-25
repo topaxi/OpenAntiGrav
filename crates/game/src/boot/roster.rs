@@ -6,9 +6,10 @@
 //! one this split accompanied - the definition's entry name is the title's now
 //! rather than Pulse's. See [`oag_title::Title::plugin_definition`].
 //!
-//! The three functions run in order and each is fed the one above it:
+//! The functions run in order and each is fed the one above it:
 //! [`definitions`] reads the documents, [`load_tracks`] and [`load_teams`] read
-//! the two catalogues out of them.
+//! the two catalogues out of them, and [`load_circuit_names`] puts a name on
+//! what [`load_tracks`] found.
 
 use super::expand;
 
@@ -166,4 +167,101 @@ fn raceable(archives: &oag_assets::Archives, id: &str) -> bool {
         && archives
             .locate(&oag_formats::handling::entry_name(id))
             .is_some()
+}
+
+/// What each circuit is called, out of whichever copy of the string table names
+/// them all.
+///
+/// **Separate from [`super::load_strings`] on purpose**: that resolves one
+/// table for the whole front end and this resolves one *column* of it, because
+/// on Wipeout HD the copy that names the circuits and the copy the front end is
+/// otherwise served are different files. The rest of the menus keep the served
+/// table - the two copies differ on 42 shared keys in english and 72 in german,
+/// and none of those differences is about a circuit - so this changes the RACE
+/// page and nothing else. [`crate::language::CircuitNames`] carries the
+/// measurement and the reasoning.
+///
+/// `language` is the same one [`super::load_strings`] chose, passed in rather
+/// than re-derived so the circuit names and the rest of the front end cannot
+/// end up in two different languages. `strings` is that language's served
+/// table, for the fallback and for the reverse marker - see
+/// [`crate::catalogue::label`].
+pub(super) fn load_circuit_names(
+    archives: &mut oag_assets::Archives,
+    language: Option<&crate::language::Language>,
+    strings: &crate::language::StringTable,
+    tracks: &[crate::catalogue::Track],
+    report: &mut Vec<String>,
+) -> crate::language::CircuitNames {
+    let names = choose_circuit_names(archives, language, tracks, report);
+    if tracks.is_empty() {
+        return names;
+    }
+    // The rows themselves, once, and unconditionally - a source that resolved
+    // none of them is exactly the source whose list is worth seeing. The count
+    // above says how many resolved; this is what a reader checks it against, and
+    // on a source carrying several copies of the table it is the only place the
+    // chosen copy can be seen to have been the right one.
+    report.push(format!(
+        "circuits: {}",
+        tracks
+            .iter()
+            .map(|track| format!(
+                "{} ({})",
+                crate::catalogue::label(track, &names, strings, tracks),
+                track.id
+            ))
+            .collect::<Vec<_>>()
+            .join(", ")
+    ));
+    names
+}
+
+/// Which copy of the table names them all, and what it says.
+fn choose_circuit_names(
+    archives: &mut oag_assets::Archives,
+    language: Option<&crate::language::Language>,
+    tracks: &[crate::catalogue::Track],
+    report: &mut Vec<String>,
+) -> crate::language::CircuitNames {
+    use crate::language::{CircuitNames, StringTable};
+
+    let Some(entries) = language.and_then(|l| l.entries.as_deref()) else {
+        return CircuitNames::default();
+    };
+    if tracks.is_empty() {
+        return CircuitNames::default();
+    }
+
+    let copies: Vec<(String, StringTable)> = archives
+        .read_every_name(entries)
+        .into_iter()
+        .filter_map(|(label, blob)| {
+            let xml = expand(&blob).ok()?;
+            Some((label, StringTable::from_xml(&xml)))
+        })
+        .collect();
+
+    let ids: Vec<String> = tracks.iter().map(|track| track.id.clone()).collect();
+    let Some(names) = CircuitNames::choose(&copies, &ids) else {
+        // Said out loud rather than left to look like the table simply had no
+        // entry: with several copies on the source, "none of them names all of
+        // them" is a different fact from "this one does not", and the circuits
+        // fall back to their ids either way.
+        report.push(format!(
+            "{entries}: none of the {} copy/copies names all {} circuit(s); \
+             each one shows its id",
+            copies.len(),
+            ids.len()
+        ));
+        return CircuitNames::default();
+    };
+
+    report.push(format!(
+        "{entries}: {} circuit name(s) from {}, of {} copy/copies on this source",
+        names.len(),
+        names.source(),
+        copies.len()
+    ));
+    names
 }

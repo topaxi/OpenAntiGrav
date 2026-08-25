@@ -428,6 +428,17 @@ pub struct Scene {
     pub fog: Fog,
     /// The circuit's authored light rig, or [`Light::stand_in`].
     pub light: Light,
+    /// **Engine parameter slot 0, `time`** - a global clock in seconds, which
+    /// Wipeout HD's own draw-state builders splat into four lanes and bind for
+    /// every surface drawn that frame
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/renderer.md`, "the engine's own
+    /// parameter table"). Four lanes here for the same reason: it is what the
+    /// original binds, and a scalar field would need its own padding anyway.
+    ///
+    /// Only the flame surface reads it so far. This project's clock is the
+    /// race tick over 60 rather than the wall clock, so it is deterministic;
+    /// the original's epoch is unread and does not matter to a scroll.
+    pub time: [f32; 4],
 }
 
 impl Scene {
@@ -438,6 +449,7 @@ impl Scene {
         Self {
             fog: Fog::off(),
             light: Light::stand_in(),
+            time: [0.0; 4],
         }
     }
 }

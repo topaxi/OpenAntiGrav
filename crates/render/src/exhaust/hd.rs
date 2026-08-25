@@ -50,11 +50,30 @@ pub const FIN_STEP: f32 = std::f32::consts::PI / 3.0;
 
 /// `u` shrink per ring, as a fraction of the head's own `u`.
 ///
-/// The dumped vertex `u` runs `u_head * (1 - k * 4/54)` for ring `k` - a fit
-/// exact to four decimals on six buffers across three craft at three speeds.
-/// The head `u` itself carries the stretch (see [`u_head`]), so the noise
-/// streaks elongate as the craft speeds up.
+/// The dumped vertex `u` runs `u_head * (1 - k * 4/54)` for ring `k`, with no
+/// additive term of any kind: the residual over all 54 rings is 2e-6 on the
+/// snapshots that hold the block and its vertex buffer from one pause. The
+/// head `u` itself carries the stretch (see [`u_head`]), so the noise streaks
+/// elongate as the craft speeds up. The scroll is *not* here on the original -
+/// see [`Tube::phase`] for where it is and why this engine folds it in anyway.
 pub const U_FALLOFF_PER_RING: f32 = 4.0 / SAMPLES as f32;
+
+/// What Wipeout HD plays on a craft that flies through an engine trail.
+///
+/// `Trail_SpawnHitEffect` (`0x002e3858`) consumes a per-trail "hit a ship"
+/// flag the `Trails` SPU job raises, and `Trail_HitShipEffect` (`0x002d9ec0`)
+/// spawns this system parented to the nearest of ten hull attachment nodes on
+/// the craft involved. `docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md`.
+pub const TRAIL_HITSHIP_EFFECT: &str = "WO_TRAIL_HITSHIP";
+
+/// The Fury-skinned variant of [`TRAIL_HITSHIP_EFFECT`], chosen by the same
+/// byte that turns the ribbon red.
+///
+/// The call site reads `lbz r5, 0x7d2c(r11)` straight into the variant
+/// argument, and `craft + 0x7d2c` is what `Ship_SetFuryTrailFlag` writes and
+/// `Trail_BuildDrawState` turns into the `engineTrail` colour mix - so the
+/// sparks are red exactly when the ribbon is.
+pub const TRAIL_HITSHIP_RED_EFFECT: &str = "WO_TRAIL_HITSHIP_RED";
 
 /// `Tex UScale Max` from `Data/ships/shipeffectstweaks.txt`.
 ///
@@ -115,10 +134,19 @@ pub struct Tube {
     len: usize,
     write: usize,
     /// The `TrailSpeed` phase - `EngineFlare_PlaceShapes`' wrapping
-    /// accumulator, patched into the material's `TrailSpeed` slot and added
-    /// to `u` by both texture lookups. Baked into the vertex `u` here, which
-    /// lands it in both lookups exactly as the original's vertex program
-    /// (`c[210]`) and fragment patch (slot 0x3) do.
+    /// accumulator, living at the trail block's `+0x1210`.
+    ///
+    /// **The original never puts it in the vertex.** Its SPU job writes
+    /// `u_head * (1 - k * 4/54)` and stops; the phase reaches the shader as
+    /// the material parameter `TrailSpeed`, whose value *pointer* the trail
+    /// manager's constructor binds to `&block[0x1210]` once, so the draw path
+    /// reads the live accumulator through it. The vertex program then adds it
+    /// to `u` for the noise lookup and the fragment program adds it to the raw
+    /// `u` again for the colour lookup - **once on each path, not twice on
+    /// one**. Baking it into the ring `u` here feeds both lookups the same
+    /// coordinates the original computes, with one addition instead of two.
+    /// Measured and read 2026-08-24;
+    /// `docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md`.
     phase: f32,
 }
 
@@ -199,6 +227,48 @@ impl Tube {
             *slot = self.ring[i];
         }
         out
+    }
+
+    /// The closest point on this trail's centre line to `point`, and how far
+    /// it is - the query a craft-versus-ribbon test needs.
+    ///
+    /// **The centre line, not the extruded surface.** The three fins all pass
+    /// through it and the ribbon reaches [`FIN_HALF_WIDTH`] either side, so a
+    /// caller asking "is this craft in the trail" adds that to its own radius
+    /// rather than intersecting 954 triangles - which is also the shape the
+    /// original's own test has, since the `Trails` SPU job is handed one
+    /// bounding-sphere-shaped vec4 per craft and nothing per fin
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md`).
+    ///
+    /// Segment-wise rather than sample-wise: at race pace the ring spans 50
+    /// world units over 54 samples, so testing the stored points alone would
+    /// miss a craft sitting between two of them.
+    #[must_use]
+    pub fn nearest(&self, point: Vec3) -> Option<(Vec3, f32)> {
+        if !self.ready() {
+            return None;
+        }
+        let samples = self.samples();
+        let mut best: Option<(Vec3, f32)> = None;
+        for pair in samples.windows(2) {
+            let (a, b) = (pair[0].position, pair[1].position);
+            let span = b - a;
+            let length_squared = span.length_squared();
+            // A degenerate segment - which every one of them is at a race
+            // start, where the whole ring sits inside 0.2 units - collapses to
+            // its own endpoint rather than dividing by zero.
+            let t = if length_squared > 1e-12 {
+                ((point - a).dot(span) / length_squared).clamp(0.0, 1.0)
+            } else {
+                0.0
+            };
+            let on = a + span * t;
+            let distance = (point - on).length();
+            if best.is_none_or(|(_, d)| distance < d) {
+                best = Some((on, distance));
+            }
+        }
+        best
     }
 
     /// Extrudes the tube: 53 segments x 3 fins x 6 vertices = 954, the
@@ -296,7 +366,10 @@ impl Tube {
 /// Not a scroll - at a steady speed the head `u` is a constant and the
 /// pattern's apparent motion is all in the wrapping phase and the noise
 /// displacement. Measured equal (to four decimals) to the value HD's flare
-/// writes into the trail block at `+0x11ec` on three craft in two frames.
+/// writes into the trail block at `+0x11ec`, on three craft in two frames and
+/// again on seven race-start snapshots - where the head vertex's `u` is this
+/// value and *not* this value plus the phase, which is what says the original
+/// applies the scroll at draw time rather than in the extruded vertex.
 #[must_use]
 pub fn u_head(speed01: f32) -> f32 {
     1.0 - TEX_USCALE_MAX * speed01

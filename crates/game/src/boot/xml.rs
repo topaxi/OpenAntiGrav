@@ -26,7 +26,7 @@ use oag_formats::fexml;
 /// all, and because on the bytes at issue it agrees with CP1252, the other
 /// candidate. What it cannot do is tell a Latin-1 file from a corrupt UTF-8 one;
 /// the alternative was losing the file outright.
-pub(super) fn expand(blob: &[u8]) -> Result<String> {
+pub(crate) fn expand(blob: &[u8]) -> Result<String> {
     if fexml::is_fexml(blob) {
         return fexml::expand(blob).map_err(|e| anyhow::anyhow!("{e}"));
     }

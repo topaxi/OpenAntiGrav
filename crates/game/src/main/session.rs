@@ -8,7 +8,7 @@
 use oag_core::TickClock;
 
 use oag_game::render::Renderer;
-use oag_game::{audio, catalogue, menu, movie, perf, prefetch, race, settings, upscale};
+use oag_game::{audio, catalogue, loading, menu, movie, perf, prefetch, race, settings, upscale};
 use oag_gameplay::ControlScheme;
 use oag_input::Controls;
 use oag_render::mesh_render::Anisotropy;
@@ -130,10 +130,26 @@ pub(crate) struct Session {
     /// should be is a property of the window and the settings rather than of
     /// what happens to be on screen.
     pub(crate) framebuffer: upscale::Framebuffer,
+    /// How many races this run has launched, which is what varies the loading
+    /// screen's feature draw.
+    ///
+    /// **A counter rather than a clock**, so a run is reproducible: the seed a
+    /// screen draws with is this, and two runs that launch the same races in
+    /// the same order see the same features. See `loading::Screen::new`.
+    pub(crate) races_launched: u64,
     /// Set when a menu asks to quit, read by the event loop.
     pub(crate) quit: bool,
     /// What the menus need, when this run has menus at all.
     pub(crate) shell: Option<Shell>,
+    /// What the loading screen draws, kept for the *second* time it goes up.
+    ///
+    /// The boot's own screen used to consume these on the way past, which was
+    /// enough while the only wait they covered was the one before the front
+    /// end. A race load puts the same screen up again, and the title's own
+    /// backdrop, tips and caption were read once with the archives open - so
+    /// they are held here rather than read again with a menu on screen. See
+    /// `Session::launch_race`.
+    pub(crate) loading_assets: loading::Assets,
     /// The looping picture the menus are drawn on, when this source has one.
     ///
     /// On the session and not in [`Shell`], which is `Clone`d into every stage
@@ -225,6 +241,22 @@ pub(crate) struct Shell {
     /// Every language this source offers, valued by its English name and
     /// labelled in itself.
     pub(crate) languages: Vec<menu::Choice>,
+    /// The chosen language's table, kept for the one thing that re-reads the
+    /// disc after boot: swapping the loading screen's styling needs the
+    /// feature's strings again, and they were resolved once with the archives
+    /// open. See `Session::reload_loading_assets`.
+    pub(crate) strings: oag_game::language::StringTable,
+    /// The chosen language's table entry, for the same reload. See
+    /// `boot::Shell::entries`.
+    pub(crate) entries: Option<String>,
+    /// The front-end stylings this source ships art for, valued and labelled by
+    /// the disc's own names for them.
+    ///
+    /// One row on every title but Wipeout HD, which ships two - see
+    /// `oag_title::loading::FeatureStyle`. Resolved once at boot for the reason
+    /// the circuits are: it is a property of the source and does not change
+    /// while the game runs.
+    pub(crate) front_end_styles: Vec<menu::Choice>,
     /// The race modes, valued by their token and labelled off the disc.
     ///
     /// Resolved once here rather than each time the menus open, the same way the

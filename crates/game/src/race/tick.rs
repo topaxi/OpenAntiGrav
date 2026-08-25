@@ -276,6 +276,9 @@ impl Race {
         // produce the same flare at the same tick count as the window does, and
         // it is the same reason the chase camera is advanced from here.
         self.advance_exhausts();
+        // After the trails have taken this tick's sample, so a craft is tested
+        // against the ribbon as it stands now rather than one tick stale.
+        self.advance_trail_hits();
         // Same argument, and after `step`/`step_opponents` so a shell that lost
         // its last tick of protection this frame starts fading this frame.
         self.advance_shields();

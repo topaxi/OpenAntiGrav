@@ -7,6 +7,7 @@
 
 use super::*;
 
+mod cameras;
 mod environment;
 use environment::{envsettings_fog, envsettings_light, hd_sky_model};
 
@@ -374,54 +375,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
         // Only worth saying on a mode that would otherwise hand something out.
         report.push("weapon pads hand nothing out this run".to_string());
     }
-    let far = stats.external_camera_far;
-    let chase = chase_params(far);
-    // The other two views the player can cycle to, read from the same document
-    // and through the same conversion - so the sign convention is reconciled in
-    // exactly one place for both external blocks, which is what
-    // `chase_pos_length` exists for.
-    let chase_close = chase_params(stats.external_camera_close);
-    let internal = InternalParams {
-        fov: stats.internal_camera.fov,
-        headtilt: stats.internal_camera.headtilt,
-        height: stats.internal_camera.height,
-        length: stats.internal_camera.length,
-        pitch: stats.internal_camera.pitch,
-    };
-    report.push(format!(
-        "{stats_name}: team {:?}, {:?} class, mass {}, ride_height {}",
-        stats.team, options.class, handling.physical.mass, handling.antigrav.ride_height
-    ));
-    report.extend(assets::zone_handling_note(options.mode, &team));
-    // The eye offsets are reported **after** `craft_scale`, because that is
-    // where the eye actually ends up, and the two differ now that the scale is a
-    // rig parameter rather than a factor folded into the four offsets. Reporting
-    // the authored numbers under the word "eye" would be a report that lies -
-    // "eye 4 up" for a rig whose eye is 3 up.
-    let eye_offsets = |chase: &ChaseParams| {
-        (
-            chase.pos_height * chase.craft_scale,
-            chase.pos_length * chase.craft_scale,
-        )
-    };
-    let (far_up, far_back) = eye_offsets(&chase);
-    let (close_up, close_back) = eye_offsets(&chase_close);
-    report.push(format!(
-        "<ExternalCameraFar>: fov {} as vertical degrees (confirmed against the \
-         original's own frame), pos_length {} on disc -> eye {far_up} up and \
-         {far_back} back (authored offsets times the craft's {} scale)",
-        chase.fov, far.pos_length, chase.craft_scale
-    ));
-    report.push(format!(
-        "<ExternalCameraClose>: fov {}, eye {close_up} up and {close_back} back; \
-         <InternalCamera>: fov {}, eye {} up and {} forward, pitch {} over {} units",
-        chase_close.fov,
-        internal.fov,
-        internal.height,
-        internal.length,
-        internal.pitch,
-        oag_render::camera::internal::AIM_DISTANCE,
-    ));
+    let (chase, chase_close, internal) =
+        cameras::resolve(&stats, &stats_name, options, &handling, &team, &mut report);
 
     // One hull, plume and nozzle per grid slot, each off its own team's
     // directory - see `crate::livery`, which also records what is recovered
@@ -781,21 +736,22 @@ pub fn load(options: &Options) -> Result<Loaded> {
     } else {
         None
     };
+    // A PS3 circuit reports its own line from `from_hd_pvs`, so only the
+    // section partition and its absence are described here.
     match &visibility {
-        Some(visibility) if visibility.chunks().is_some() => {}
-        Some(visibility) => report.push(format!(
+        Some(v) if v.chunks().is_none() => report.push(format!(
             "{} authored visibility section(s); {} of {} draw call(s) governed by one \
              ({:.1}%), the rest always drawn; {} LOD-swap pair(s)",
-            visibility.pvs.len(),
-            visibility.placement.placed,
-            visibility.placement.total(),
-            visibility.placement.placed_fraction() * 100.0,
-            visibility.swap_pairs(),
+            v.pvs.len(),
+            v.placement.placed,
+            v.placement.total(),
+            v.placement.placed_fraction() * 100.0,
+            v.swap_pairs(),
         )),
-        None if !vex_geometry => {}
-        None => report.push(
+        None if vex_geometry => report.push(
             "no authored visibility sections: PVS culling is unavailable on this track".to_string(),
         ),
+        _ => {}
     }
 
     let spline = Spline::from_track(&ai);
@@ -866,10 +822,19 @@ pub fn load(options: &Options) -> Result<Loaded> {
         );
         report.push(
             "read and not drawn on HD: the flame spikes' per-shape random flicker \
-             (0.65..0.85), the Fury afterburner's second boost blend, the flame surface's \
-             Speed*time scroll (the clock is still unread), and the sprite flare's spin, \
-             chromatic fringe, distance fade and occlusion query (its radius, alpha walk \
-             and texture do draw - exhaust::hd::Sprite)"
+             (0.65..0.85), the Fury afterburner's second boost blend, and the sprite \
+             flare's spin, chromatic fringe, distance fade and occlusion query (its \
+             radius, alpha walk and texture do draw - exhaust::hd::Sprite). The flame \
+             surface's Speed*time scroll draws now: time is engine shader parameter \
+             slot 0, a global seconds clock (renderer.md)"
+                .into(),
+        );
+        report.push(
+            "a craft flying into a trail sparks: WO_TRAIL_HITSHIP, red variant on a \
+             Fury skin, spawned on the intruder at the closest point of the ribbon. \
+             The consumer, spawner and colour select are read; the geometric test and \
+             the once-per-entry rate are this engine's - Race::advance_trail_hits \
+             names both"
                 .into(),
         );
     }
@@ -941,6 +906,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             difficulty: options.difficulty,
             class: options.class,
             opponents: options.opponents,
+            trail_sparks: options.trail_sparks,
             seed: options.seed.unwrap_or(SEED),
             zone,
             ai,
@@ -955,6 +921,10 @@ pub fn load(options: &Options) -> Result<Loaded> {
             chase_close,
             internal,
             nozzles: liveries.iter().map(|livery| livery.nozzle).collect(),
+            spark_anchors: liveries
+                .iter()
+                .map(|livery| livery.collision_fx.clone())
+                .collect(),
             collision_fx,
             effects,
             sounds,

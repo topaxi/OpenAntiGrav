@@ -238,12 +238,14 @@ already made for the front end - and `Overlay::new` sets it on both renderers.
 `crate::frontend::Space` for why the grid and the display aspect are two
 numbers.
 
-**What it does not fix.** HD's sprites still come from up to six atlases in one
-layout against the one sheet everything downstream binds
-(`oag_game::hud::Layout::atlas`), so the lap panel behind that digit is still
-not drawn - the digit now sits in the right place with no hexagon around it.
-And the PS2's own lap panel is absent for a reason not yet chased. The
-placement is what moved.
+**What it did not fix, and what did.** HD's sprites came from up to six atlases
+in one layout against the one sheet everything downstream bound, so the lap
+panel behind that digit was not drawn - the digit sat in the right place with no
+hexagon around it. That closed on 2026-08-25: the sheet holds every texture a
+layout names, `sprite_draw` offsets each sprite by its own texture's placement,
+and which widgets are up is a per-title table rather than Pulse's names. See
+[hd-hud](../formats/hd-hud.md#the-hud-draws-and-each-sprite-out-of-its-own-texture).
+The PS2's own lap panel is still absent for a reason not yet chased.
 
 ## The HUD fonts are pre-outlined, and that cost a renderer change
 

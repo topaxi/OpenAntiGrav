@@ -168,9 +168,20 @@ pub(crate) struct Cli {
     #[arg(long, value_name = "DONE/TOTAL")]
     pub(crate) loading_screen: Option<String>,
 
-    /// With `--loading-screen`, draw the boot's own media phase at a stated
-    /// load step instead of the `--prefetch` phase: `cached`, `decoding`, or
-    /// `transcoding:DONE/TOTAL` (e.g. `transcoding:340/1200`).
+    /// With `--loading-screen`, draw a stated phase instead of `--prefetch`'s:
+    /// `race`, or the boot's own media phase at a load step - `cached`,
+    /// `decoding`, or `transcoding:DONE/TOTAL` (e.g. `transcoding:340/1200`).
+    ///
+    /// `race` is the screen between the menus and the grid, which is the
+    /// title's own rather than this build's: Wipeout HD's full-screen still and
+    /// its `FE_LOADINGDOT` caption, Pulse's wave and one of its tips. It counts
+    /// nothing, so the `DONE/TOTAL` given to `--loading-screen` is ignored and
+    /// `--track` supplies the circuit name instead.
+    ///
+    /// **Pair it with `--ticks 0`.** Any `DONE/TOTAL` where the two are equal
+    /// reads as finished, and a finished screen is fading - so a later tick
+    /// captures this phase part-way through its fade rather than at full
+    /// opacity.
     ///
     /// The counts above stay the loads - `2/5` is two of five movie loads done -
     /// and this is what the one in flight is doing. Stated for the same reason
@@ -201,13 +212,17 @@ pub(crate) struct Cli {
     /// Pin the animation clock, in seconds, instead of deriving it from the
     /// tick.
     ///
-    /// Both trackside animation mechanisms - the per-material texture transform
-    /// and the `Anim Transform` node motion - run off one clock, which a race
-    /// takes from the tick. This overrides it, for a comparison harness that
-    /// needs our phase matched to a still of the original rather than left where
-    /// the tick put it. Two runs at two values are also the headless way to show
-    /// that an animated surface moves at all. Same flag, same meaning as
-    /// `oag-view --anim-seconds`.
+    /// Three mechanisms run off one clock, which a race takes from the tick:
+    /// the two trackside ones - the per-material texture transform and the
+    /// `Anim Transform` node motion - and, since 2026-08-24, Wipeout HD's
+    /// engine-flame surface scroll, which the original drives from the same
+    /// kind of global clock (`time`, engine shader parameter slot 0). This
+    /// overrides it, for a comparison harness that needs our phase matched to a
+    /// still of the original rather than left where the tick put it. Two runs
+    /// at two values are also the headless way to show that an animated surface
+    /// moves at all - and two runs exactly one period apart are how the flame's
+    /// scroll rate was checked, since they must come back identical. Same flag,
+    /// same meaning as `oag-view --anim-seconds`.
     ///
     /// **This is deliberately not a settings-file option.** It was one -
     /// `[graphics] animated_textures`, a boolean - and it was a footgun: it
@@ -423,6 +438,21 @@ pub(crate) struct Cli {
     /// despite that rather than because of it.
     #[arg(long)]
     pub(crate) opponents: bool,
+
+    /// Play the trail-hit sparks on the player continuously, whatever the
+    /// trigger says.
+    ///
+    /// **A verification aid for the *drawing*, not for the trigger** - the two
+    /// fail differently and this separates them. `WO_TRAIL_HITSHIP` fires when
+    /// a craft flies into another's engine trail, which under `--autopilot`
+    /// happens a handful of times in a whole race and almost never in front of
+    /// the camera, so "I saw nothing" cannot tell a burst that never played
+    /// from one that played and drew nothing. With this on, a burst re-ignites
+    /// at the player's nozzle every half second: if the screen stays empty the
+    /// fault is in the draw path, and if it does not, the trigger is what to
+    /// look at. See `Race::advance_trail_hits`.
+    #[arg(long)]
+    pub(crate) trail_sparks: bool,
 
     /// Let an opponent's driver fly the player's craft.
     ///

@@ -111,14 +111,19 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     //
     // See `docs/ghidra/functions/ps3-hdfury-eu/engine-flare.md`.
     //
-    // **`TrailSpeed` is baked into the vertex `u`**, which is where the
-    // original applies it twice over: its vertex program adds the patched
-    // c[210] before the noise lookup and its fragment patch adds the same
-    // value before the colour one, so one CPU-side addition reproduces both.
-    // The value is `EngineFlare_PlaceShapes`' wrapping phase accumulator -
-    // `exhaust::hd::Tube` advances and bakes it. What used to sit here - "the
-    // engine patches that slot and what with is unread" - was read on
-    // 2026-08-24; see docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md.
+    // **`TrailSpeed` is already in `in.texcoord.x`**, baked there by
+    // `exhaust::hd::Tube`. The original keeps it out of the vertex entirely -
+    // its SPU job writes `u_head * (1 - k * 4/54)` and nothing else - and
+    // applies it **once on each of the two lookup paths**: the vertex program
+    // writes `u + c[210]` into `TC3.z` for the noise sample, and the fragment
+    // program's `@0x00` keeps the *raw* `u` in `R0.z` so `@0x02` can add the
+    // same constant again before the colour sample. One CPU-side addition
+    // therefore reproduces both coordinates exactly, not because the original
+    // adds it twice but because it adds it once per path to two coordinates
+    // that differ only by the noise. The value is
+    // `EngineFlare_PlaceShapes`' wrapping phase accumulator, which the trail
+    // manager's constructor binds to the material parameter by address.
+    // Read 2026-08-24; docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md.
     let displaced = vec2<f32>(in.texcoord.x + texel.a, in.texcoord.y);
     let authored = textureSample(trail_shape_texture, flare_sampler, displaced);
     // HD's program reads the *red* texture's colour at the same displaced
