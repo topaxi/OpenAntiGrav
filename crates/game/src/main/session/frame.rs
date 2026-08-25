@@ -74,6 +74,18 @@ impl Session {
             }
         }
 
+        // As soon as the circuit's own load lands, not only once the fade that
+        // covers it has run out - see `Session::advance_race_build`, which is
+        // the fix for the gap that otherwise opens up behind the black screen.
+        // A no-op on every frame but the one the worker actually finishes on.
+        //
+        // Before the timing block below and not after it, same as
+        // `finish_loading` above: the scene build it does is itself a load,
+        // `advance_race_build` sets `self.stalled` for exactly that reason, and
+        // a call on the other side of `elapsed` would land the stall in the
+        // *next* frame's measurement instead, past the point that flag is read.
+        self.advance_race_build();
+
         // Fixed timestep, per ADR-0007: the simulation steps at exactly 1/60
         // whatever the window is doing. The clock's own catch-up cap is what keeps
         // the race load above from being paid back as a burst of ticks.
@@ -373,13 +385,31 @@ impl Session {
         );
         if self.framebuffer.resize(&self.gpu.device, wanted) {
             // A depth attachment whose size does not match the colour one is a
-            // validation error, so the race's has to follow.
-            if let Stage::Race(stage) = &mut self.stage {
-                stage.scene.resize(
-                    &self.gpu.device,
-                    self.gpu.config.format,
-                    self.framebuffer.size(),
-                );
+            // validation error, so the race's has to follow - and now that is
+            // true of a scene sitting in `LoadingStage::built_race` as well:
+            // `Session::advance_race_build` builds it against this size while
+            // the loading screen is still up, and it can wait out a whole fade
+            // there before `finish_loading` ever swaps it in. A resize that
+            // lands during that wait has to reach it in place, or the swap
+            // hands over a scene sized for a framebuffer that no longer exists.
+            match &mut self.stage {
+                Stage::Race(stage) => {
+                    stage.scene.resize(
+                        &self.gpu.device,
+                        self.gpu.config.format,
+                        self.framebuffer.size(),
+                    );
+                }
+                Stage::Loading(stage) => {
+                    if let Some(Ok(built)) = stage.built_race.as_mut() {
+                        built.scene.resize(
+                            &self.gpu.device,
+                            self.gpu.config.format,
+                            self.framebuffer.size(),
+                        );
+                    }
+                }
+                _ => {}
             }
         }
 
@@ -390,6 +420,13 @@ impl Session {
         let target = self.framebuffer.view();
         // Read before the match, which borrows `self.stage` mutably.
         let pvs_culling = self.pvs_culling();
+        // Diagnostic only, and read before the match for the same reason
+        // `pvs_culling` is: whether this is the frame `race_ready_at` is still
+        // waiting on. Splits `Session::race_ready_at`'s single "since the scene
+        // was ready" number into where inside this one frame it actually goes -
+        // see the timers below and in `Session::finish_race_loading`.
+        let timing_first_race_frame =
+            self.race_ready_at.is_some() && matches!(self.stage, Stage::Race(_));
         let (scene_stats, video_label) = match &mut self.stage {
             Stage::Launcher(stage) => {
                 stage.render(&self.gpu, &mut encoder, target, inside);
@@ -423,8 +460,9 @@ impl Session {
                 )?;
                 (None, self.backdrop.as_ref().map(movie::Feed::decoder_label))
             }
-            Stage::Race(stage) => (
-                Some(stage.render(
+            Stage::Race(stage) => {
+                let start = timing_first_race_frame.then(std::time::Instant::now);
+                let stats = stage.render(
                     &self.gpu,
                     &mut encoder,
                     target,
@@ -433,9 +471,12 @@ impl Session {
                     self.settings.graphics.frustum_culling,
                     pvs_culling,
                     self.anim_seconds,
-                )),
-                None,
-            ),
+                );
+                if let Some(start) = start {
+                    info!("first race frame: encoded in {:?}", start.elapsed());
+                }
+                (Some(stats), None)
+            }
         };
 
         // Over the stage and inside the offscreen target, so the overlay is
@@ -476,8 +517,27 @@ impl Session {
                 gamma: self.settings.display.gamma,
             },
         );
+        let submit_start = timing_first_race_frame.then(std::time::Instant::now);
         self.gpu.queue.submit(Some(encoder.finish()));
+        if let Some(start) = submit_start {
+            info!("first race frame: submitted in {:?}", start.elapsed());
+        }
+        let present_start = timing_first_race_frame.then(std::time::Instant::now);
         self.gpu.queue.present(frame);
+        if let Some(start) = present_start {
+            info!("first race frame: presented in {:?}", start.elapsed());
+        }
+        // The third and last diagnostic timestamp - see `Session::race_ready_at`.
+        // Taken rather than read, so this fires once: the first frame drawn
+        // with the new scene, not every frame after it.
+        if matches!(self.stage, Stage::Race(_))
+            && let Some(ready_at) = self.race_ready_at.take()
+        {
+            info!(
+                "first race frame presented: {:?} since the scene was ready",
+                ready_at.elapsed()
+            );
+        }
         Ok(())
     }
 }

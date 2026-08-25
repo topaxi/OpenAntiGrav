@@ -7,9 +7,10 @@
 //! side.
 
 use oag_game::render::Renderer;
-use oag_game::{boot, capture, loading, prefetch, race};
+use oag_game::{audio, boot, capture, loading, prefetch, race};
 
 use crate::gpu::Gpu;
+use crate::race_stage::RaceStage;
 
 /// The loading screen: two passes, and the front end waiting behind it.
 ///
@@ -42,7 +43,56 @@ pub(crate) struct LoadingStage {
     /// twice - see [`Session::finish_loading`], which branches on exactly this
     /// pair and is the only reader that has to care.
     pub(crate) race: Option<race::LoadWorker>,
+    /// The race stage, built and waiting, once [`Self::race`]'s data has landed.
+    ///
+    /// **This is what the fade actually waits on, not [`Self::race`] alone.**
+    /// Building `RaceStage` uploads meshes and builds pipelines - not instant -
+    /// and that used to happen only at the hand-off, after the fade had already
+    /// run to black: the screen told the player the wait was over and then made
+    /// them sit through a second, silent one anyway. Building it as soon as the
+    /// worker lands - see `Session::advance_race_build` - means the fade does
+    /// not start until there is nothing left to build, so black-screen and
+    /// ready-to-draw are the same moment. `Ok` or `Err`, this is the frame the
+    /// scene was attempted; a failed build still counts as landed, and
+    /// `Session::finish_race_loading` is where that failure is reported.
+    ///
+    /// Always `None` on the boot path, which builds
+    /// [`oag_game::boot::assemble`]'s front end lazily at the hand-off instead -
+    /// that one spawns a decode thread nothing should start until it is read
+    /// from, so there is no earlier moment to build it at.
+    pub(crate) built_race: Option<Result<Box<RaceStage>, RaceBuildError>>,
+    /// The race's music, being located and decoded alongside the circuit -
+    /// see [`audio::RaceMusicWorker`], spawned next to [`Self::race`] in
+    /// `Session::launch_race`. `Some` on the race path, `None` on the boot
+    /// one, the same split [`Self::race`] itself carries.
+    ///
+    /// Polled the same way [`Self::race`] used to be polled before
+    /// [`Self::built_race`] existed: there is no "warm" step for a decoded
+    /// track the way there is for a GPU scene, so landed is ready.
+    /// `Session::finish_race_loading` takes it at the hand-off and hands it
+    /// to [`oag_game::audio::Audio::finish_race_music`], which is where the
+    /// mixer is actually touched - never here, and never before the fade
+    /// runs out, or the race music would start audibly under the loading
+    /// screen.
+    pub(crate) music: Option<audio::RaceMusicWorker>,
     pub(crate) trace: bool,
+}
+
+/// Why [`LoadingStage::built_race`] is an `Err`.
+///
+/// Kept apart from a plain `anyhow::Error` because
+/// [`Session::finish_race_loading`] handles the two very differently: one is
+/// the circuit itself, which the player has survived before - the same
+/// recovery `launch_race`'s own doc comment describes - and the other is a
+/// pipeline that will not build, which was fatal before this build moved the
+/// work earlier and still is.
+pub(crate) enum RaceBuildError {
+    /// The circuit would not read. Recoverable: reported, and the player goes
+    /// back to the menus rather than the window going down.
+    Load(anyhow::Error),
+    /// The circuit read fine and its GPU scene would not build. Fatal, same as
+    /// it always was.
+    Gpu(anyhow::Error),
 }
 
 impl LoadingStage {
@@ -53,13 +103,23 @@ impl LoadingStage {
             .is_none_or(boot::MediaWorker::is_finished)
     }
 
-    /// Whether the circuit has landed, on a screen that is waiting for one.
+    /// Whether the circuit has landed **and its scene is ready to draw**, on a
+    /// screen that is waiting for one.
     ///
     /// `true` on the boot path, which waits for no circuit - so a caller can
     /// require both this and [`Self::media_ready`] without asking which path it
-    /// is on.
+    /// is on. On the race path this is answered by [`Self::built_race`] rather
+    /// than by [`Self::race`] directly: the worker landing is not the point,
+    /// the scene being buildable from what it landed is. The music has to
+    /// have landed too - see [`Self::music`] - or the fade would run out
+    /// while `Session::finish_race_loading` is still waiting on a decode.
     pub(crate) fn race_ready(&self) -> bool {
-        self.race.as_ref().is_none_or(race::LoadWorker::is_finished)
+        self.race.is_none()
+            || (self.built_race.is_some()
+                && self
+                    .music
+                    .as_ref()
+                    .is_none_or(audio::RaceMusicWorker::is_finished))
     }
 }
 

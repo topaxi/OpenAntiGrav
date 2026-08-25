@@ -38,6 +38,10 @@ use crate::display::percentage;
 
 pub mod sfx;
 
+mod race_music;
+pub use race_music::RaceMusicWorker;
+use race_music::locate;
+
 /// A bus volume, as a percentage of unattenuated.
 ///
 /// Zero is off and 100 is the samples as they were stored. Unlike
@@ -536,6 +540,32 @@ pub struct Audio {
     /// for the sake of one internal fetch would be a wider signature change
     /// than the feature needs. `None` outside a race.
     race_context: Option<(MusicDiscs, MusicSource, PathBuf)>,
+    /// The **next** race track, being fetched ahead of the current one ending
+    /// - the track index it targets, alongside the worker fetching it.
+    ///
+    /// **This is what keeps a track boundary - or a future skip control -
+    /// from hitching**, the same way [`RaceMusicWorker`] keeps the race
+    /// launch itself from hitching: [`Self::advance_race_track`] used to
+    /// call [`Self::play_race_track`] synchronously the moment the current
+    /// track ended, decoding the next one - 0.4 to 2.8 s by this module's own
+    /// measurements - inside the fixed-timestep loop every time the playlist
+    /// moved on. Started as soon as the current track is playing instead, by
+    /// [`Self::maybe_prefetch_next_race_track`] from [`Self::tick`] - see its
+    /// own doc for why "immediately" and not "a few seconds before the end" -
+    /// so by the time anything ends the current track early, natural or not,
+    /// the fetch has almost always already landed and
+    /// [`Self::advance_race_track`] only ever joins it rather than starting
+    /// it from nothing.
+    ///
+    /// The index is carried alongside the worker, not inferred from
+    /// [`Self::race_index`] at the point of use: [`MusicSource`] can move the
+    /// race voice mid-track, which changes what "the next track" means
+    /// without touching the index, and a prefetch answering the wrong
+    /// question would be worse than none - [`Self::advance_race_track`]
+    /// checks the two still agree before trusting it, and
+    /// [`Self::set_race_music_source`] drops a stale one outright rather than
+    /// let it survive a source change it was not fetched for.
+    race_prefetch: Option<(usize, RaceMusicWorker)>,
 }
 
 /// A music track that has been read and decoded, before a voice is started on
@@ -545,7 +575,13 @@ pub struct Audio {
 /// rather than a tuple: it carries whether what was loaded is one of the
 /// sixteen soundtrack tracks, which is what decides whether MUSIC SOURCE may
 /// ever move it. See [`MusicSource`].
-struct Loaded {
+///
+/// `pub` - not its fields - so [`RaceMusicWorker::join`] can hand one back
+/// across the crate's own lib/bin boundary, the way [`crate::race::Loaded`]
+/// already does for the circuit's own worker. Nothing outside this module
+/// needs to read a field; it only ever moves one straight into
+/// [`Audio::finish_race_music`].
+pub struct Loaded {
     /// Which release it came off, or `None` for music with no counterpart -
     /// the PSP front end's own. Becomes [`Audio::music_from`].
     from: Option<Platform>,
@@ -600,6 +636,10 @@ impl std::fmt::Debug for Audio {
             .field("race_cache", &self.race_cache.is_some())
             .field("menu_sound", &self.menu_sound.is_some())
             .field("race_context", &self.race_context.is_some())
+            .field(
+                "race_prefetch",
+                &self.race_prefetch.as_ref().map(|(i, _)| i),
+            )
             .finish()
     }
 }
@@ -641,6 +681,7 @@ impl Audio {
             race_cache: None,
             menu_sound: None,
             race_context: None,
+            race_prefetch: None,
             sfx: None,
         };
         audio.apply(settings);
@@ -768,10 +809,7 @@ impl Audio {
             self.output.with_mixer(|mixer| mixer.stop(id));
         }
 
-        if self.race_index.is_none() {
-            self.race_index = Some(Self::initial_race_index(&self.music_from, discs));
-        }
-        let index = self.race_index.expect("set immediately above");
+        let index = self.reserve_race_music_index(discs);
         let seek = (self.race_position > 0.0).then_some(self.race_position);
         self.race_context = Some((discs.clone(), choice, cache_dir.to_path_buf()));
         self.play_race_track(discs, choice, cache_dir, index, seek);
@@ -830,47 +868,6 @@ impl Audio {
             .ok()
             .flatten()
             .map_or(0, |soundtrack| soundtrack.tracks.len())
-    }
-
-    /// Loads and plays one race-playlist track, reporting what happened.
-    ///
-    /// Shared by [`Self::start_race_music`] and the advance-on-finish check in
-    /// [`Self::tick`], which is the only other place `race_index` moves.
-    /// `seek` is `Some` for a resume and `None` for a fresh start (index 0 of
-    /// the track, which is also where a freshly-advanced track begins).
-    fn play_race_track(
-        &mut self,
-        discs: &MusicDiscs,
-        choice: MusicSource,
-        cache_dir: &Path,
-        index: usize,
-        seek: Option<f64>,
-    ) {
-        match self.fetch_indexed(discs, choice, cache_dir, index) {
-            Ok(Some(loaded)) => {
-                let seconds = loaded.sound.seconds();
-                self.race_cache = loaded
-                    .from
-                    .map(|platform| (platform, index, Arc::clone(&loaded.sound)));
-                self.race_voice = self.output.with_mixer(|mixer| {
-                    let id = mixer.play(Play::once(loaded.sound, Bus::Music))?;
-                    if let Some(seek) = seek {
-                        mixer.seek(id, seek);
-                    }
-                    Some(id)
-                });
-                self.race_from = self.race_voice.and(loaded.from);
-                match seek {
-                    Some(seek) => info!(
-                        "audio: race music {}, {seconds:.1} s, resuming from {seek:.1} s",
-                        loaded.what
-                    ),
-                    None => info!("audio: race music {}, {seconds:.1} s", loaded.what),
-                }
-            }
-            Ok(None) => info!("audio: this source carries no race music this can play"),
-            Err(error) => warn!("audio: no race music ({error:#})"),
-        }
     }
 
     /// Stops the race playlist where it stands and resumes the menu voice.
@@ -1026,6 +1023,14 @@ impl Audio {
                     *cached_discs = discs.clone();
                     *cached_choice = choice;
                 }
+                // Dropped rather than kept: a prefetch in flight was started
+                // for the release this row just left, and a track fetched
+                // from the wrong release is exactly the kind of wrong
+                // `Self::advance_race_track` cannot detect by index alone.
+                // `Self::maybe_prefetch_next_race_track` starts a correct one
+                // on the very next tick - the detaching thread's own result,
+                // if it lands late, is simply nobody's.
+                self.race_prefetch = None;
                 info!("audio: race music {}, from {at:.1} s", loaded.what);
             }
             Ok(None) => {
@@ -1080,7 +1085,7 @@ impl Audio {
         // carry no pairable soundtrack. It would be a *different recording*,
         // and the row's whole claim is that its three values are one recording
         // encoded twice - see [`MusicSource`]. The caller reports the absence.
-        let Some(track) = self.locate(discs, platform, source, MUSIC_TRACK)? else {
+        let Some(track) = locate(discs, platform, source, MUSIC_TRACK)? else {
             return Ok(None);
         };
 
@@ -1127,7 +1132,7 @@ impl Audio {
             }));
         }
 
-        let Some(track) = self.locate(discs, platform, source, index)? else {
+        let Some(track) = locate(discs, platform, source, index)? else {
             return Ok(None);
         };
 
@@ -1140,51 +1145,6 @@ impl Audio {
                 track.seconds
             ),
         }))
-    }
-
-    /// Which track of `platform`'s soundtrack `index` means, `index` being an
-    /// entry in the **booted** disc's own order.
-    ///
-    /// On the booted release that is simply its own entry `index`. On the
-    /// other one it is whichever track is the same length, which is what
-    /// makes the two selections the same recording rather than two unrelated
-    /// pieces of music.
-    ///
-    /// **The index is not stable across boots**, and it is worth being plain
-    /// about that: an index means "entry N of whichever disc booted", and the
-    /// two archives are not in the same order. Entry 0 happens to name the
-    /// same recording on both - the PS2's first track is also the first of
-    /// the PSP's sixteen in `Data.wad` order - but that is coincidence, and at
-    /// index 1 the two boots start on different music. [`MUSIC_TRACK`] gets
-    /// away with never noticing because it is a constant; [`Self::race_index`]
-    /// is not, and this is exactly why it is kept and read in the booted
-    /// disc's own order rather than in whichever platform happens to be
-    /// playing at the time - a future circuit-to-track map has to be built the
-    /// same way.
-    fn locate(
-        &self,
-        discs: &MusicDiscs,
-        platform: Platform,
-        source: &str,
-        index: usize,
-    ) -> Result<Option<Track>> {
-        let Some(soundtrack) = Soundtrack::read(source, platform)? else {
-            return Ok(None);
-        };
-        if discs.booted() == Some(platform) {
-            return Ok(soundtrack.tracks.get(index).copied());
-        }
-
-        let Some((booted_source, booted_platform)) = discs.pick(MusicSource::Auto) else {
-            return Ok(soundtrack.tracks.get(index).copied());
-        };
-        let Some(booted) = Soundtrack::read(booted_source, booted_platform)? else {
-            return Ok(soundtrack.tracks.get(index).copied());
-        };
-        let Some(wanted) = booted.tracks.get(index) else {
-            return Ok(None);
-        };
-        Ok(soundtrack.nearest(wanted.seconds))
     }
 
     /// Starts one of the boot sequence's movie sounds, reporting what happened.
@@ -1298,36 +1258,17 @@ impl Audio {
             && !self.output.with_mixer(|mixer| mixer.is_playing(id))
         {
             self.advance_race_track();
+        } else {
+            // Only worth checking on the tick the voice is still the one
+            // playing: the moment it changes - a track boundary, a `MUSIC
+            // SOURCE` toggle - is exactly when a prefetch for what used to be
+            // "next" stops meaning anything, and the branch above or
+            // `Self::set_race_music_source` is where that gets sorted out.
+            self.maybe_prefetch_next_race_track();
         }
         if let Some(dump) = &mut self.dump {
             self.output.render_tick(TICK_HZ, &mut dump.samples);
         }
-    }
-
-    /// Moves the race playlist on to the next track once the current one has
-    /// finished naturally - race tracks play [`Play::once`], never looping,
-    /// which is what makes "no longer playing" mean "reached its end" rather
-    /// than "was stopped".
-    ///
-    /// **The fetch this can trigger is a disc read and, on the PSP, a
-    /// possible `ffmpeg` decode - 0.4-2.0 s by [`Self::held`]'s own
-    /// measurement - paid inside the fixed-timestep loop.** Accepted for this
-    /// pass: a race is minutes long and a track boundary is comparatively
-    /// rare, so the hitch is occasional rather than routine. Threaded
-    /// prefetch - starting the next track's decode a few seconds before the
-    /// current one ends - is the natural follow-up if the hitch turns out to
-    /// be noticeable, and is not built here.
-    fn advance_race_track(&mut self) {
-        let Some((discs, choice, cache_dir)) = self.race_context.clone() else {
-            return;
-        };
-        let Some(index) = self.race_index else {
-            return;
-        };
-        self.race_voice = None;
-        let next = next_race_index(index, Self::booted_soundtrack_len(&discs));
-        self.race_index = Some(next);
-        self.play_race_track(&discs, choice, &cache_dir, next, None);
     }
 
     /// Writes the dump, if there is one.

@@ -6,9 +6,10 @@ use log::{error, info, warn};
 
 use oag_game::frontend::{self};
 use oag_game::render::VideoFormat;
-use oag_game::{boot, loading, movie, prefetch, race};
+use oag_game::{audio, boot, loading, movie, prefetch, race};
 
 use crate::hints::RACE_TITLE;
+use crate::loading_stage::RaceBuildError;
 use crate::stage::Stage;
 
 use super::{BackdropShape, Session};
@@ -377,12 +378,28 @@ impl Session {
         // with 1 rather than with the same seed a capture uses.
         self.races_launched = self.races_launched.saturating_add(1);
         let worker = race::LoadWorker::spawn(options, label);
+        // Spawned alongside the circuit read, for the same reason: fetching
+        // this synchronously at the hand-off used to decode a full track on
+        // the frame thread, measured at 2.83s for a cold PS2 one - the whole
+        // of the gap that used to open up behind the loading screen's fade.
+        // `reserve_race_music_index` settles which track before the worker
+        // starts, so it and `Audio::finish_race_music` (called once this
+        // stage's fade runs out) agree on one without either asking `discs`
+        // twice. See `LoadingStage::music` and `audio::RaceMusicWorker`.
+        let music_index = self.audio.reserve_race_music_index(&self.music_discs);
+        let music = audio::RaceMusicWorker::spawn(
+            self.music_discs.clone(),
+            self.settings.audio.music_source,
+            boot::default_audio_cache_dir(),
+            music_index,
+        );
         let shell = self.shell.clone().ok_or_else(|| {
             anyhow::anyhow!("this run has no menus, so it has no font to draw with")
         })?;
         self.stage = Stage::race_loading(
             &self.gpu,
             worker,
+            music,
             &shell.font,
             &shell.sprites,
             &self.loading_assets,
@@ -390,6 +407,108 @@ impl Session {
             self.trace,
         )?;
         Ok(())
+    }
+
+    /// Builds the race scene as soon as the circuit's own load lands, rather
+    /// than waiting for [`Self::finish_race_loading`] to do it at the fade's
+    /// end.
+    ///
+    /// **This is the fix for the gap that used to sit behind the black
+    /// screen.** `LoadingStage::race_ready` used to mean only "the disc read
+    /// is done", and the fade started on that alone - so it ran to zero
+    /// opacity while `Stage::race` (meshes, pipelines) was still unbuilt, and
+    /// only then did [`Self::finish_race_loading`] build it, on an already-black
+    /// screen. Now the build happens here, the moment the worker lands, and
+    /// `race_ready` waits on the result - see
+    /// [`LoadingStage::built_race`] - so the fade cannot start until there is
+    /// nothing left to build.
+    ///
+    /// A no-op on every frame but the one the worker finishes on: idempotent
+    /// because it returns immediately once [`LoadingStage::built_race`] is
+    /// already `Some`, and a no-op entirely on the boot path or off the
+    /// loading stage, where there is no worker to poll.
+    pub(crate) fn advance_race_build(&mut self) {
+        // Read before the `Stage::Loading` borrow below, the same reason
+        // `Session::frame` reads it before its own `match &mut self.stage`:
+        // `pvs_culling` takes `&self` as a whole, and the borrow that pattern
+        // takes out on `self.stage` alone would conflict with a whole-`self`
+        // call made while it is still live.
+        let pvs_culling = self.pvs_culling();
+        let Stage::Loading(stage) = &mut self.stage else {
+            return;
+        };
+        if stage.built_race.is_some() {
+            return;
+        }
+        let Some(worker) = stage.race.as_mut() else {
+            return;
+        };
+        if !worker.is_finished() {
+            return;
+        }
+        // The same flag every other load in this file sets, and for the same
+        // reason: building the scene below is itself a stall, and recording it
+        // as a frame time would put one dropped-frame-sized column across the
+        // performance graph for the load nobody asked to see measured.
+        self.stalled = true;
+        let loaded = worker
+            .join()
+            .unwrap_or_else(|| Err(anyhow::anyhow!("the circuit's load thread would not start")));
+        let built = match loaded {
+            Ok(loaded) => {
+                for line in &loaded.report {
+                    info!("{line}");
+                }
+                // Timed rather than left to be inferred from the frame that
+                // carries it: this is the wait this whole change moved earlier,
+                // and a log that names it is what lets a run confirm it landed
+                // before the fade rather than after - see this method's own
+                // documentation.
+                let start = std::time::Instant::now();
+                let mut built = Stage::build_race_stage(
+                    &self.gpu,
+                    loaded,
+                    self.framebuffer.size(),
+                    self.anisotropy,
+                    &self.settings,
+                    self.scheme,
+                    self.autopilot,
+                );
+                info!("race scene built in {:?}", start.elapsed());
+                // **Building the pipeline objects above is not the same as the
+                // driver having compiled them.** Several backends defer that to
+                // the first real draw call, which is why the eager build alone
+                // did not close the gap: the compile just moved to the first
+                // race frame, held behind the loading screen's own last
+                // presented frame - opacity zero - for however long it took.
+                // Warming up here, before the scene is marked ready, pays that
+                // cost while the loading screen is still animating instead. See
+                // `RaceStage::warm_up`.
+                if let Ok(race_stage) = &mut built {
+                    let warm_up_start = std::time::Instant::now();
+                    let size = self.framebuffer.size();
+                    race_stage.warm_up(
+                        &self.gpu,
+                        self.framebuffer.view(),
+                        (0.0, 0.0, size.0 as f32, size.1 as f32),
+                        self.settings.graphics.fov,
+                        self.settings.graphics.frustum_culling,
+                        pvs_culling,
+                        self.anim_seconds,
+                    );
+                    info!("race scene warmed up in {:?}", warm_up_start.elapsed());
+                }
+                built.map_err(RaceBuildError::Gpu)
+            }
+            Err(e) => Err(RaceBuildError::Load(e)),
+        };
+        // `stage` still borrows only `self.stage`, disjoint from the fields
+        // read above - the same shape `Session::frame`'s own field accesses
+        // rely on elsewhere in this module.
+        stage.built_race = Some(built);
+        // The reference point the other two diagnostic timestamps are read
+        // against - see `Session::race_ready_at`.
+        self.race_ready_at = Some(std::time::Instant::now());
     }
 
     /// Swaps the loading screen for the grid, once the circuit has landed and
@@ -400,6 +519,11 @@ impl Session {
     /// done, hand the window to whatever it was covering", and having one caller
     /// is what stops a future screen being handed on twice.
     ///
+    /// **The heavy work is already done by now.** [`Self::advance_race_build`]
+    /// built the scene as soon as the circuit landed, long before the fade
+    /// finished counting down - see [`LoadingStage::built_race`] - so this is
+    /// just the swap and the same audio hand-off it always was.
+    ///
     /// # Errors
     ///
     /// **Not the circuit's own load.** That failed on the frame thread before
@@ -409,52 +533,72 @@ impl Session {
     /// [`Self::finish_loading`]'s caller. So a failed load is reported and the
     /// menus are reopened, which is the same thing escaping a race does.
     ///
-    /// What does propagate is reopening those menus, and building the race
-    /// stage - a GPU pipeline that will not build is not something to carry on
-    /// from.
+    /// What does propagate is reopening those menus, and a GPU pipeline that
+    /// would not build - not something to carry on from, exactly as before
+    /// this moved to [`Self::advance_race_build`].
     fn finish_race_loading(&mut self) -> Result<()> {
-        let Some(mut worker) = (match &mut self.stage {
-            Stage::Loading(stage) if stage.screen.is_done() => stage.race.take(),
+        let Some((built, music)) = (match &mut self.stage {
+            Stage::Loading(stage) if stage.screen.is_done() => stage
+                .built_race
+                .take()
+                .map(|built| (built, stage.music.take())),
             _ => None,
         }) else {
             return Ok(());
         };
-        let loaded = match worker
-            .join()
-            .unwrap_or_else(|| Err(anyhow::anyhow!("the circuit's load thread would not start")))
-        {
-            Ok(loaded) => loaded,
-            Err(e) => {
+        let race_stage = match built {
+            Ok(race_stage) => race_stage,
+            Err(RaceBuildError::Load(e)) => {
                 error!("cannot start a race: {e:#}");
                 return self.open_menus();
             }
+            Err(RaceBuildError::Gpu(e)) => return Err(e),
         };
-        for line in &loaded.report {
-            info!("{line}");
+        // The second diagnostic timestamp - see `Session::race_ready_at`. Not
+        // taken: `Session::frame` reads it again once the first race frame
+        // presents.
+        if let Some(ready_at) = self.race_ready_at {
+            info!(
+                "race hand-off: {:?} since the scene was ready",
+                ready_at.elapsed()
+            );
         }
-        self.stage = Stage::race(
-            &self.gpu,
-            loaded,
-            self.framebuffer.size(),
-            self.anisotropy,
-            &self.settings,
-            self.scheme,
-            self.autopilot,
-        )?;
+        self.stage = Stage::Race(race_stage);
         // The outgoing race's held voices, if this is a relaunch rather than a
         // first start. The back-out path does this too, but a race launched
         // straight from a race never passes through it - and a carried-over
         // `SfxVoices` holds a `VoiceId` into a pool the new race is about to
         // reuse. See `Audio::stop_race_sfx`.
         self.audio.stop_race_sfx();
-        // After the stage swap succeeds, not before: the load above can fail
-        // with `?`, and a failed launch must leave the menu music playing
-        // rather than having already silenced it. See `Audio::start_race_music`.
-        self.audio.start_race_music(
-            &self.music_discs,
-            self.settings.audio.music_source,
-            &boot::default_audio_cache_dir(),
-        );
+        // After the stage swap succeeds, not before: a failed launch must
+        // leave the menu music playing rather than having already silenced
+        // it. See `Audio::finish_race_music`.
+        //
+        // Timed as a diagnostic, kept from the round that found the decode
+        // running here: `Audio::finish_race_music` only ever joins an
+        // already-finished `RaceMusicWorker` (see `LoadingStage::race_ready`),
+        // so this should now read near-instant rather than the 2.83s a cold
+        // PS2 track measured before the worker existed.
+        let music_start = std::time::Instant::now();
+        match music {
+            Some(worker) => self.audio.finish_race_music(
+                worker,
+                &self.music_discs,
+                self.settings.audio.music_source,
+                &boot::default_audio_cache_dir(),
+            ),
+            // Defensive rather than load-bearing: `Session::launch_race`
+            // always spawns one for the path this function only runs on
+            // (`Stage::race_loading`). Falls back to the old synchronous
+            // fetch rather than silently leaving the race without music if
+            // that invariant is ever violated.
+            None => self.audio.start_race_music(
+                &self.music_discs,
+                self.settings.audio.music_source,
+                &boot::default_audio_cache_dir(),
+            ),
+        }
+        info!("race music started in {:?}", music_start.elapsed());
         self.gpu.window.set_title(RACE_TITLE);
         Ok(())
     }
