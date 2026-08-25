@@ -74,6 +74,18 @@ impl Session {
             }
         }
 
+        // As soon as the circuit's own load lands, not only once the fade that
+        // covers it has run out - see `Session::advance_race_build`, which is
+        // the fix for the gap that otherwise opens up behind the black screen.
+        // A no-op on every frame but the one the worker actually finishes on.
+        //
+        // Before the timing block below and not after it, same as
+        // `finish_loading` above: the scene build it does is itself a load,
+        // `advance_race_build` sets `self.stalled` for exactly that reason, and
+        // a call on the other side of `elapsed` would land the stall in the
+        // *next* frame's measurement instead, past the point that flag is read.
+        self.advance_race_build();
+
         // Fixed timestep, per ADR-0007: the simulation steps at exactly 1/60
         // whatever the window is doing. The clock's own catch-up cap is what keeps
         // the race load above from being paid back as a burst of ticks.
@@ -373,13 +385,31 @@ impl Session {
         );
         if self.framebuffer.resize(&self.gpu.device, wanted) {
             // A depth attachment whose size does not match the colour one is a
-            // validation error, so the race's has to follow.
-            if let Stage::Race(stage) = &mut self.stage {
-                stage.scene.resize(
-                    &self.gpu.device,
-                    self.gpu.config.format,
-                    self.framebuffer.size(),
-                );
+            // validation error, so the race's has to follow - and now that is
+            // true of a scene sitting in `LoadingStage::built_race` as well:
+            // `Session::advance_race_build` builds it against this size while
+            // the loading screen is still up, and it can wait out a whole fade
+            // there before `finish_loading` ever swaps it in. A resize that
+            // lands during that wait has to reach it in place, or the swap
+            // hands over a scene sized for a framebuffer that no longer exists.
+            match &mut self.stage {
+                Stage::Race(stage) => {
+                    stage.scene.resize(
+                        &self.gpu.device,
+                        self.gpu.config.format,
+                        self.framebuffer.size(),
+                    );
+                }
+                Stage::Loading(stage) => {
+                    if let Some(Ok(built)) = stage.built_race.as_mut() {
+                        built.scene.resize(
+                            &self.gpu.device,
+                            self.gpu.config.format,
+                            self.framebuffer.size(),
+                        );
+                    }
+                }
+                _ => {}
             }
         }
 

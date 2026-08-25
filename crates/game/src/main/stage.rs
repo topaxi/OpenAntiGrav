@@ -129,6 +129,7 @@ impl Stage {
             shell: Some(shell),
             media,
             race: None,
+            built_race: None,
             trace,
         })))
     }
@@ -180,6 +181,7 @@ impl Stage {
             shell: None,
             media: None,
             race: Some(worker),
+            built_race: None,
             trace,
         })))
     }
@@ -282,6 +284,35 @@ impl Stage {
         loaded: race::Loaded,
         size: (u32, u32),
         anisotropy: Anisotropy,
+        settings: &settings::Settings,
+        scheme: ControlScheme,
+        autopilot: bool,
+    ) -> Result<Self> {
+        Ok(Self::Race(Self::build_race_stage(
+            gpu, loaded, size, anisotropy, settings, scheme, autopilot,
+        )?))
+    }
+
+    /// The scene-building half of [`Self::race`], split out so it can be run
+    /// eagerly rather than only at the loading screen's hand-off.
+    ///
+    /// **This is the part that used to hide behind the fade.** Uploading
+    /// meshes and building pipelines is itself a stall, and running it only
+    /// once `LoadingStage::screen` had already reached zero opacity is what put
+    /// a second, silent wait behind a screen that had already gone black. See
+    /// [`Session::advance_race_build`], which calls this as soon as the
+    /// circuit's own load lands, and [`LoadingStage::built_race`], which is
+    /// where the result waits until the fade actually runs out.
+    ///
+    /// Returns the boxed [`RaceStage`] rather than a whole [`Stage`]: what is
+    /// built ahead of time is the scene, not "being on screen", and
+    /// [`LoadingStage::built_race`] holds exactly that distinction.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn build_race_stage(
+        gpu: &Gpu,
+        loaded: race::Loaded,
+        size: (u32, u32),
+        anisotropy: Anisotropy,
         // The whole settings block rather than the three values a race reads out
         // of it. Three separate parameters is what this used to be, and each new
         // display preference added a fourth: the values travel together, they all
@@ -294,7 +325,7 @@ impl Stage {
         // it is a run flag rather than a stored preference, and nothing in the
         // settings file has any business turning it on.
         autopilot: bool,
-    ) -> Result<Self> {
+    ) -> Result<Box<RaceStage>> {
         let race::Loaded {
             setup,
             hud,
@@ -368,11 +399,11 @@ impl Stage {
         if autopilot {
             info!("--autopilot: the player's craft is being flown for them");
         }
-        Ok(Self::Race(Box::new(RaceStage {
+        Ok(Box::new(RaceStage {
             scene,
             race,
             hud: overlay,
             scoreboard,
-        })))
+        }))
     }
 }
