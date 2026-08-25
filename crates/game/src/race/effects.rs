@@ -29,20 +29,25 @@ pub(super) fn hull_contact_point(centre: Vec3, contact: Vec3, reach: f32) -> Vec
 /// Every `Data\Psys` effect this race loads, and what triggers it.
 ///
 /// **The list is the trigger set, not the asset set.** There are 35 effects on
-/// the PSP disc and 41 on the PS2 one; what decides whether one appears here is
-/// whether the *executable's* reason for playing it has been recovered, because
-/// an effect with no recovered trigger would just be this engine guessing when
-/// to fire it. `crates/game/tests/psys_inventory_ground_truth.rs` holds every
-/// effect on both discs against this list and fails if one is neither played
-/// nor explicitly recorded as having no recovered trigger.
+/// the PSP disc, 41 on the PS2 one and 82 on HD's; what decides whether one
+/// appears here is whether the *executable's* reason for playing it has been
+/// recovered, because an effect with no recovered trigger would just be this
+/// engine guessing when to fire it. `crates/game/tests/psys_inventory_ground_truth.rs`
+/// holds every effect on the PSP and PS2 discs against this list and fails if
+/// one is neither played nor explicitly recorded as having no recovered
+/// trigger; on HD it only checks that every name here is really on the disc -
+/// see that test's `mod hd` doc comment for why the fuller three-bucket sweep
+/// does not run there yet.
 ///
 /// **The two [`TRAIL_HITSHIP_EFFECT`] variants are the one exception**, and a
 /// narrow one: their consumer, spawner and colour select are all read, and
 /// only the geometric *test* - which runs in the `Trails` SPU job - is not.
 /// Nothing about the effect is invented, only the moment it fires, and
-/// [`Race::advance_trail_hits`] names each approximation. HD is also outside
-/// the inventory test's reach (it reads the PSP and PS2 discs only), so those
-/// two names are checked by nothing there - stated rather than relied on.
+/// [`Race::advance_trail_hits`] names each approximation. The red variant is
+/// authored only in HD's Fury archive (`DATA06`) - the inventory test's
+/// `hd::the_red_hit_spark_variant_is_only_in_the_fury_archive` pins the disc's
+/// own archive membership, independent of the executable's variant-select
+/// instruction engine-trail.md reads.
 ///
 /// **It is a superset across sources, not a per-disc list.** An entry absent
 /// from the mounted archives is reported by the loader and skipped, so naming

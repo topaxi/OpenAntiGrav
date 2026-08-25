@@ -5,7 +5,8 @@ container, the slot table (including the pointer fixup it drives at load
 time, confirmed live), the name field, and **the emitter tree** are all
 decoded, implemented in
 [`oag-formats::pob`](../../crates/formats/src/pob.rs) and validated against
-all 35 `.pob` files on the PSP disc and all 41 on the PS2 disc. What is
+all 35 `.pob` files on the PSP disc, all 41 on the PS2 disc and all 88 across
+HD's seven PSARC archives. What is
 **not** decoded is the record layout at a *slot-resolved* target: 43% of
 them are readable developer strings (texture paths, layer names), and the
 rest are floats whose field boundaries are still unread.
@@ -389,6 +390,13 @@ WO_ROCKET_EXPLO
 | --- | --- | --- | --- |
 | PSP `Data.wad` | 35 | 76 | `WO_ROCKET_EXPLO`, 7 |
 | PS2 `WADS2.WAD` | 41 | 90 | `WO_ROCKET_EXPLO`, 7 |
+| HD's 7 PSARC archives | 88 | 249 | `WO_SHIP_EXPLOSION`, 12 |
+
+HD's 88 is every `.pob` blob across all seven archives, not deduplicated -
+six names are stored more than once (`WO_TRAIL_HITSHIP` in three), so the
+distinct count is 82. `crates/game/tests/psys_inventory_ground_truth.rs`'s
+`mod hd` checks that number against the disc as its own tripwire, separately
+from this corpus check.
 
 Every one of those 166 records passes the same invariants: the root's name
 is the resource's own; the render-mode index lands inside the eight-entry
