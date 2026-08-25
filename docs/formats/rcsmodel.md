@@ -1207,8 +1207,36 @@ should look like: Talon's Junction goes from 60 to 70 node-drawn chunks with
 byte-identical; Anulpha Pass goes from 101 to 113 and 0.52 % of its frame
 changes.
 
-**What the byte's own branch in the executable does is still unread.** This is
-the meaning the data supports, at confidence 88, not a decompiled one.
+### The executable confirms the mechanism
+
+`Scene_RefreshNodeMatrices` (`0x003fb330`) walks every chunk of the scene and,
+**only where this byte is `2`**, follows the chunk's runtime block to a linked
+scene node, refreshes that node if its dirty bit is set, and copies four
+16-byte rows - a 4x4 matrix - into the head of the block. A `1` chunk is
+skipped entirely; the loop body never runs for it.
+
+So the byte says **whether a chunk's world transform is re-read from a node
+every frame**, which is the runtime face of the by-hash link a `.vex` node
+makes. Confidence 82. See
+[visibility.md](../ghidra/functions/ps3-hdfury-eu/visibility.md), "The chunk
+kind byte".
+
+**It is genuinely three-way**, which is why `Space::Unknown` exists rather than
+a boolean: the load-time switch tests `1`, then `2`, then falls through to a
+third path that no chunk on this disc takes.
+
+**And a clean negative about what it is not.** Across both switch sites, no arm
+reads the vertex declaration, the index buffer, the stride, the surface count
+or anything under the surface record - all they do is store command words into
+an emission cursor. So the byte cannot be a triangle-list-versus-strip, an
+index-width or an attribute-set selector, and none of this format's geometry
+decoding turns on it. Confidence 82.
+
+**Byte `+0x05` - the `nn` of the same word - is read by nothing.** The single
+instruction in the geometry path that loads it is an unrolled byte-by-byte
+block copy carrying `+0x04` through `+0x08` alike, which is not a semantic
+read. That closes the old note that it "counts chunks (and is `0xff` on many)"
+as a clean negative, confidence 85.
 
 ## What is still open
 

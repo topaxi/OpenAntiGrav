@@ -35,6 +35,10 @@ uses each function's own TOC.
 | `0x003fa0f8` | function | `Visibility_HideChunk` | 82 |
 | `0x003fad70` | function | `Visibility_CopyCellMask` | 80 |
 | `0x00d44f80` | data | `g_ChunkVisibilityMask` | 80 |
+| `0x003fab50` | function | `Scene_SubmitVisibleChunks` | 82 |
+| `0x003fdae8` | function | `Scene_SortAndLightVisibleChunks` | 78 |
+| `0x003fb330` | function | `Scene_RefreshNodeMatrices` | 80 |
+| `0x003faf00` | function | `Scene_BuildStaticChunkMask` | 75 |
 
 ## The strings, and what names them
 
@@ -329,8 +333,64 @@ It never runs while the PVS is live. So there is no data-driven mechanism that
 removes a chunk a cell declared visible - this is the *replacement* for the PVS,
 and there is nothing here to port. Confidence 80.
 
+## The chunk kind byte, and where it reaches the submit
+
+A chunk's `+0x07` is a **three-way kind tag**; what it selects is the chunk's
+world transform, not its geometry. The format side is on
+[rcsmodel.md](../../../formats/rcsmodel.md), "Byte `+0x07` says which space a
+chunk's positions are in". What belongs here is the executable's own shape.
+
+**`Scene_RefreshNodeMatrices` (`0x003fb330`)** walks the scene's chunk list and
+runs its body for `+0x07 == 2` only:
+
+```c
+block = **(uint **)(chunk + 8);            // the chunk's runtime block
+node  = *(int *)(block + 0x70);
+if (node != 0) {
+    if ((*(uint *)(node + 0x34) & 0x1000) != 0) refresh(node);
+    // four 16-byte rows from node->0x38 into block +0x00/+0x10/+0x20/+0x30
+}
+```
+
+64 bytes as four rows is a 4x4 matrix. A kind-1 chunk is skipped entirely, so
+`2` means **"this chunk's world transform is re-read from its scene node every
+frame"** and `1` means it is not. Confidence 82.
+
+**The load-time switch is three-way, and verified to rejoin.** At `0x003efda0`
+inside `0x003eeb08`: test `1`, branch; test `2`, branch; otherwise fall through
+to `lhz r11, 0x10(r8)`, the surface count. Arm 1 (`0x003eff2c`) emits opcode
+`0x12` with the value at `sp+0x1d0` behind a redundancy check; arm 2
+(`0x003eff68`) emits `0x12` with a *different* value, then `0x16`, then `0x03`.
+Both arms end in a `b 0x003efdb4` back to the common path - checked, not
+assumed. A second, structurally identical switch on the same byte sits at
+`0x003ef77c` in the same function, over a different loop. **The opcodes are not
+identified and are not guessed at**; what is established is that arm 2 emits
+strictly more transform state than arm 1.
+
+**The negative that matters for the format reader**: across both switch sites,
+no arm reads the vertex declaration, the index buffer, the stride, the surface
+count, or anything under the surface record - every one of them only stores
+command words into the emission cursor. The byte cannot be a
+list-versus-strip, an index-width or an attribute-set selector. Confidence 82.
+
+**Six sites read it, and every one tests `== 2`**; none distinguishes `1` from
+the fall-through. `Scene_SubmitVisibleChunks` folds it into a draw record's
+sort key (`key.lo = (chunk[7] == 2)`), and `Scene_SortAndLightVisibleChunks`
+guards two of its five draw buckets with `((key & 1) == 0) && (((key >> 1) & 4)
+== 0)`, **excluding kind-2 chunks from that pair** - the `g+0x491f4` and
+`g+0x4f1f8` lists. Confidence 78. This project's renderer does not model those
+buckets.
+
+**`+0x05` is read by nothing.** The one `lbz` of it in the geometry path,
+`0x003f01e0`, sits inside an unrolled byte-by-byte block copy that carries
+`+0x04` through `+0x08` alike - `+0x07` included, so even that site is not
+reading a field. Confidence 85, and it closes `rcsmodel`'s old note that the
+byte counts chunks.
+
 ## Open
 
+- **What opcodes `0x12`, `0x16` and `0x03` are**, and what the third
+  (neither-1-nor-2) chunk kind would do. No chunk on the disc takes it.
 - Whether `r31+0x100` is the craft or the camera (55). One new data point for
   camera: `0x003fdae8` uses a vec4 at `taskCtx+0x40` as the reference for a
   front-to-back sort, which is a camera-space operation - but that is a

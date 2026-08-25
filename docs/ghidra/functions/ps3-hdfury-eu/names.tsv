@@ -99,3 +99,7 @@
 0x003fa0f8	function	Visibility_HideChunk	82	visibility.md
 0x003fad70	function	Visibility_CopyCellMask	80	visibility.md
 0x00d44f80	data	g_ChunkVisibilityMask	80	visibility.md
+0x003fab50	function	Scene_SubmitVisibleChunks	82	visibility.md
+0x003fdae8	function	Scene_SortAndLightVisibleChunks	78	visibility.md
+0x003fb330	function	Scene_RefreshNodeMatrices	80	visibility.md
+0x003faf00	function	Scene_BuildStaticChunkMask	75	visibility.md

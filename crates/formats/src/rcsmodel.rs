@@ -169,10 +169,12 @@ const TEXCOORD_LEN: usize = 4;
 
 /// A chunk whose submeshes are a table of `0x80`-byte descriptors at `+0x60`.
 ///
-/// **Byte `+0x06` of a chunk.** The `u32` it sits in reads `00 nn LL kk`: `nn`
-/// counts chunks (and is `0xff` on many), `LL` is this, and `kk` takes the
-/// values `01` and `02` for a reason nothing here has distinguished. See
-/// [`LAYOUT_INLINE`].
+/// **Byte `+0x06` of a chunk.** The `u32` it sits in reads `00 nn LL kk`: `LL`
+/// is this and `kk` is [`Space`]. **`nn` is read by nothing**: the one
+/// instruction in the whole geometry path that loads `+0x05` is an unrolled
+/// byte-by-byte block copy that carries `+0x04` through `+0x08` alike, so it
+/// is not a semantic read - which closes the old guess that it counts chunks,
+/// as a clean negative at confidence 85. See [`LAYOUT_INLINE`].
 const LAYOUT_DESCRIBED: u8 = 0x05;
 
 /// A chunk that names one buffer pair in its own header and has no descriptor
@@ -531,8 +533,26 @@ pub struct Mesh {
 /// chunk of `data/pvsblocker` is [`Self::World`], and 8,769 of 8,773
 /// [`Self::Node`] chunks are addressed by a `.vex` node.
 ///
-/// Confidence 88. What the executable's branch on this byte actually *does* is
-/// unread; this is the meaning the data supports, not a decompiled one.
+/// Confidence 88 from the data. **The executable then confirmed the
+/// mechanism**: `Scene_RefreshNodeMatrices` (`0x003fb330`) walks every chunk
+/// and, *only* where this byte is `2`, follows the chunk's runtime block to a
+/// linked scene node, refreshes it if its dirty bit is set, and copies four
+/// 16-byte rows - a 4x4 matrix - into the head of the block. A `1` chunk is
+/// skipped entirely. So the byte says **whether this chunk's world transform
+/// is re-read from a node every frame**, which is the runtime face of the
+/// same link `.vex` nodes make by hash. See
+/// `docs/ghidra/functions/ps3-hdfury-eu/visibility.md`, "The chunk kind byte".
+///
+/// **It is genuinely three-way, which is why [`Self::Unknown`] exists rather
+/// than a boolean**: the load-time switch tests `1`, then `2`, then falls
+/// through to a third path. No chunk on this disc takes it.
+///
+/// **What it is not**: no arm of either switch reads the vertex declaration,
+/// the index buffer, the stride, the surface count or anything under the
+/// surface record - both only store command words into an emission cursor. So
+/// it cannot be a triangle-list-versus-strip, an index-width or an
+/// attribute-set selector, and none of this module's geometry decoding turns
+/// on it. Confidence 82 for that negative.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Space {
     /// `1`: positions are already in world space, and no node transform
