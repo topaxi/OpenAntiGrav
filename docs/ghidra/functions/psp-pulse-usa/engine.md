@@ -1897,12 +1897,14 @@ surface-type value read off the collider** - it is a fixed constant each of the
 two narrowphase raycasts writes about *itself*, regardless of what it hit:
 `Collision_RaycastMesh` always writes `1`, `Collision_RaycastBox` always writes
 `3`, and no other value ever reaches this field from this call site. Which of
-the two narrowphase functions runs for a given collider is gated by a fresh
-virtual read (`collider+0x78`) this pass does not identify - see
-[collision.md](collision.md#raycasts) for the full derivation and why it is
-kept separate from both the already-recovered `Surface` enum and
-`Collision_DispatchPair`'s own `1`/`3` shape-kind values, which are each
-distinct numberings that happen to share these two digits.
+the two narrowphase functions runs for a given collider is gated by a
+`collider+0x78` virtual read - the same accessor `Collision_DispatchPair`
+switches on for its own pairing, confirmed byte-for-byte identical and cross-read
+against `Collision_BoxAgainstMesh`'s own field accesses: `1` is a mesh-shaped
+collider, `3` a box-shaped one, the same numbering both call sites use (an
+earlier draft of this note guessed it might be the reverse; it is not). It is
+still a shape classifier, not a copy of the already-recovered `Surface` enum -
+see [collision.md](collision.md#raycasts) for the full derivation.
 
 That leaves the specific claim `crates/physics/src/hover.rs`'s own doc comment
 already makes - "`1` is the **`Floor` class**" - exactly as well-founded as it

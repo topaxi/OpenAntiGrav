@@ -153,13 +153,18 @@ up) skips the candidate with no raycast at all. **This is a different read from
 the `collider+0x6c` surface type** (`Wall`/`Floor`/`Reset`/`MagFloor`, already
 recovered above) already used two lines earlier in the same function to decide
 the Reset skip - `collider+0x78` is not yet in this page's collider layout
-table, and what its virtual call actually returns is not independently
-confirmed by this pass. It might be the same surface-type enum under another
-name, or a distinct "raycastable shape" classifier; **do not assume it lines up
-1:1 with `Surface`,** and do not conflate it with `Collision_DispatchPair`'s own
-shape-kind values below (`box = 1`, `mesh = 3`) - that is a separate call site
-with its own vtable slot, and if the two do turn out to be the same accessor
-the numbering there is the *reverse* of this one's `mesh = 1`/`box = 3`.
+table. **It is a shape classifier, not the surface-type enum, and it is the
+same accessor `Collision_DispatchPair` reads for its own dispatch below**
+(identical `(*collider+0x78)+0xc` call, confirmed byte-for-byte 2026-08-25):
+`1` is a mesh-shaped collider, `3` is a box-shaped one, settled by cross-reading
+`Collision_BoxAgainstMesh`'s own field accesses against each side's classified
+value - see [the corrected paragraph there](#collision_stepnarrowphase-0x088159c0-builds-the-pair-list)
+for the derivation. So `1`/`3` here and `1`/`3` there are the *same* numbering,
+not reversed; do not, however, assume it lines up 1:1 with `Surface`
+(`Wall`/`Floor`/`Reset`/`MagFloor`) - a shape classifier and a surface-material
+tag are different axes in principle, and nothing yet ties this one's raw
+values back to specific node types beyond "whatever shape `Floor`/`Wall`/etc.
+colliders are actually built as."
 
 `Collision_RaycastMesh` (`0x0881646c`) does the AABB clip, two slab rejects,
 per-mesh sweep and prune, then a segment-triangle test using a plane sign
@@ -238,11 +243,30 @@ instructions and is the only reader.
 `Sap_Update` for every proxy (descending index), a flush, then `Sap_QueryAabb`
 per proxy into a scratch list of `(self, other)` pairs, skipping self-pairs.
 Each pair goes to `Collision_DispatchPair` (`0x08816eac`), which switches on
-each side's shape kind from the vtable: kind 1 (box) against kind 1 is
-`0x08815ccc`, kind 1 against kind 3 (mesh) is `Collision_BoxAgainstMesh` with
-the **mesh passed first** whichever order the pair arrived in, and mesh against
-mesh is `0x0881702c` gated on a world flag at `world+0x5464`. Confidence **85**;
-`0x08815ccc` and `0x0881702c` are unread.
+each side's shape kind through the same `collider+0x78` virtual read the
+[raycast dispatch](#raycasts) uses: kind 1 against kind 1 is `0x08815ccc`, kind
+1 against kind 3 is `Collision_BoxAgainstMesh` with the **kind-1 side passed
+first** whichever order the pair arrived in, and kind 3 against kind 3 is
+`0x0881702c` gated on a world flag at `world+0x5464`.
+
+**Corrected 2026-08-25: kind 1 is `mesh`, kind 3 is `box` - the reverse of
+what this paragraph said before.** The previous labels (`kind 1 (box)`,
+`kind 3 (mesh)`, "mesh passed first") were inferred from branch order alone,
+with `0x08815ccc` and `0x0881702c` left unread; decompiling
+`Collision_BoxAgainstMesh` this pass shows its own two collider arguments used
+unevenly - the one classified kind 1 supplies mesh vertices/indices at
+`+0x84`/`+0x8c`, the one classified kind 3 goes through `func_0x00014a00`, the
+same box-corner helper `Collision_RaycastBox` calls on its own box collider -
+so kind 1 is the mesh side and kind 3 is the box side, and it is passed
+*first* into `Collision_BoxAgainstMesh` regardless of which side of the pair
+it arrived as (both call sites in `Collision_DispatchPair` reorder to put the
+kind-1/mesh collider in the earlier argument). That makes this the *same*
+numbering the raycast dispatch above uses (`Collision_RaycastMesh` at `1`,
+`Collision_RaycastBox` at `3`), not the reverse of it - the two accessors were
+never in conflict, only this page's gloss on one of them was backwards.
+Confidence **88**: the kind/shape identity is now settled by direct field
+reads, not just branch order, though `0x08815ccc` (mesh-mesh) and `0x0881702c`
+(box-box) remain unread themselves.
 
 ### `Collision_BoxAgainstMesh` (`0x08815cd4`) is a ten-ray star from the box centre
 
