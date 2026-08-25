@@ -429,6 +429,13 @@ pub fn capture(
         options.frustum_culling,
         options.pvs_culling,
         options.anim_seconds,
+        // Off, and honestly rather than as a limitation: the pass blurs
+        // between two *distinct* cameras, and this capture renders exactly
+        // one frame - whatever the setting says, there is no previous camera
+        // for it to reproject against, so it could only ever be the
+        // identity. A capture that shows the blur needs a two-render
+        // capture, which `docs/rendering/motion-blur.md` still owes.
+        crate::display::MotionBlur::Off,
     );
 
     // The HUD, into the same target. Without this a race screenshot would show

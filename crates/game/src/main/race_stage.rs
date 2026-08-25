@@ -39,6 +39,7 @@ impl RaceStage {
         cull: bool,
         pvs_cull: bool,
         anim_seconds: Option<f32>,
+        motion_blur: display::MotionBlur,
     ) -> race::SceneStats {
         let stats = self.scene.render(
             &gpu.device,
@@ -51,6 +52,7 @@ impl RaceStage {
             cull,
             pvs_cull,
             anim_seconds,
+            motion_blur,
         );
 
         // Over the scene and inside the same target, so the HUD is drawn at the
@@ -123,6 +125,10 @@ impl RaceStage {
             cull,
             pvs_cull,
             anim_seconds,
+            // Off: a warmup draws one frame of the grid pose, so there is no
+            // previous camera and nothing the blur pipelines add to warm -
+            // they are fullscreen passes with no per-scene variants.
+            display::MotionBlur::Off,
         );
         gpu.queue.submit(Some(encoder.finish()));
         if let Err(e) = gpu.device.poll(wgpu::PollType::wait_indefinitely()) {

@@ -253,6 +253,17 @@ impl Session {
                     return;
                 }
             },
+            // Applied by the next frame the race draws, which hands the
+            // strength to `Scene::render` fresh each time - the pass itself
+            // is built with every race, whatever this says. See
+            // `race::Scene::motion_blur`.
+            "graphics.motion_blur" => match text.parse::<display::MotionBlur>() {
+                Ok(strength) => self.settings.graphics.motion_blur = strength,
+                Err(e) => {
+                    warn!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
             "graphics.fov" => match text.parse::<display::Fov>() {
                 // Applied by the next frame the race draws, which builds its
                 // projection from this every time. Nothing else uses it: the

@@ -562,6 +562,26 @@ pub struct Graphics {
     /// a known-wrong picture to make a recovered subsystem visible.
     #[serde(default = "default_bloom")]
     pub bloom: bool,
+    /// How hard the finished frame is smeared along the camera's own motion:
+    /// `off`, `low`, `medium` or `high`.
+    ///
+    /// **An enhancement of this project's, off by default.** Neither PSP
+    /// build renders motion blur, so on is a divergence a player opts into -
+    /// the same footing as FSR 1 and SMAA, unlike the recovered bloom above
+    /// whose default is about calibration. It is also the first consumer of
+    /// the reprojection infrastructure temporal anti-aliasing needs, which is
+    /// most of why it exists - see `oag_render::post::motion_blur`,
+    /// `docs/rendering/motion-blur.md` and ADR-0028.
+    ///
+    /// A strength rather than a boolean, per that design: the value names a
+    /// shutter fraction, and the technique underneath (camera reprojection
+    /// today, the design's per-object velocity buffer later) can improve
+    /// without a settings migration. Read fresh every frame, so the row
+    /// applies live - except under `anti_aliasing = "msaa4x"`, whose
+    /// multisampled depth buffer the pass cannot read; the menu row carries
+    /// the warning and `race::Scene` logs it once.
+    #[serde(default)]
+    pub motion_blur: crate::display::MotionBlur,
     /// How much crossing a speed pad widens the field of view for a moment.
     ///
     /// **[`crate::display::BoostFovKick::DEFAULT`] by default, and an authored
@@ -636,6 +656,7 @@ impl Default for Graphics {
             pvs_culling: default_pvs_culling(),
             lod: Lod::default(),
             bloom: default_bloom(),
+            motion_blur: crate::display::MotionBlur::default(),
             boost_fov_kick: default_boost_fov_kick(),
             camera_view: default_camera_view(),
         }
@@ -836,6 +857,10 @@ pub fn menu_seeds(
         (
             "graphics.anti_aliasing",
             text(&settings.graphics.anti_aliasing.to_string()),
+        ),
+        (
+            "graphics.motion_blur",
+            text(&settings.graphics.motion_blur.to_string()),
         ),
         ("graphics.anisotropy", text(&anisotropy.to_string())),
         ("graphics.fov", text(&settings.graphics.fov.to_string())),

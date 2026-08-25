@@ -5,6 +5,8 @@
 //! `scripts/check-file-size.py`; a move, with no behaviour change. Its tests are
 //! `race/tests/scene.rs`.
 
+use log::warn;
+
 use super::super::*;
 use super::Scene;
 
@@ -32,6 +34,7 @@ impl Scene {
         cull: bool,
         pvs_cull: bool,
         anim_seconds: Option<f32>,
+        motion_blur: crate::display::MotionBlur,
     ) -> SceneStats {
         let aspect = viewport.2.max(1.0) / viewport.3.max(1.0);
         let view_projection = race.projection(aspect, self.far, fov) * race.view();
@@ -544,7 +547,13 @@ impl Scene {
                 view: &depth_view,
                 depth_ops: Some(wgpu::Operations {
                     load: wgpu::LoadOp::Clear(1.0),
-                    store: wgpu::StoreOp::Discard,
+                    // `Store`, not `Discard`: the motion blur pass reads this
+                    // depth after the pass closes to reproject each pixel
+                    // against the previous camera, and a discarded attachment
+                    // is undefined memory by then. This is also the depth
+                    // half of `docs/overview/modern-features.md`'s FSR 3.1
+                    // prerequisite table.
+                    store: wgpu::StoreOp::Store,
                 }),
                 stencil_ops: None,
             }),
@@ -692,15 +701,57 @@ impl Scene {
         // `oag_render::post::hd_bloom`.
         if let Some(hd) = &self.hd {
             hd.run(encoder, view);
-            return stats;
-        }
-        // The recovered post-process, reading the alpha channel the ribbon and
-        // the flare stamped and adding a blurred copy of the masked colour back
-        // over the frame. `view` is the resolved image in both the MSAA and the
-        // single-sample case, which is why this runs on it rather than on
-        // `attachment_view`. See `oag_render::post::bloom`.
-        if let Some(bloom) = &self.bloom {
+        } else if let Some(bloom) = &self.bloom {
+            // The recovered post-process, reading the alpha channel the ribbon
+            // and the flare stamped and adding a blurred copy of the masked
+            // colour back over the frame. `view` is the resolved image in both
+            // the MSAA and the single-sample case, which is why this runs on
+            // it rather than on `attachment_view`. See
+            // `oag_render::post::bloom`.
             bloom.render(device, encoder, view);
+        }
+        // Camera motion blur, last: it smears the finished frame - glow
+        // included, which is what a bright thing sweeping past a lens does -
+        // and it runs before the caller composites the HUD over `view`, so
+        // the readouts stay sharp however the camera moves. `motion_blur` is
+        // the strength read fresh off the settings this frame, so the row
+        // applies live; at `off` the pass drops its camera pair and encodes
+        // nothing.
+        match &self.motion_blur {
+            Some(pass) => {
+                let size = self.depth.size();
+                pass.borrow_mut().render(
+                    device,
+                    queue,
+                    encoder,
+                    &oag_render::post::motion_blur::Frame {
+                        scene: view,
+                        depth: &depth_view,
+                        size: (size.width, size.height),
+                        viewport,
+                        view_projection,
+                        // The tick, so the pass can tell a frame outrunning
+                        // the simulation from a camera that genuinely held
+                        // still - a paused race must not keep last movement's
+                        // smear.
+                        stamp: race.world.tick,
+                        strength: motion_blur.shutter(),
+                    },
+                );
+            }
+            // The MSAA case - see `Scene::motion_blur` for why the pass does
+            // not exist there. Logged once, and only if the setting actually
+            // asks for blur; the menu row carries the same warning.
+            None => {
+                if motion_blur != crate::display::MotionBlur::Off
+                    && !self.msaa_blur_warned.replace(true)
+                {
+                    warn!(
+                        "motion blur is skipped under MSAA: the depth buffer is \
+                         multisampled and the pass cannot read it"
+                    );
+                }
+            }
         }
         stats
     }
@@ -722,7 +773,13 @@ pub(super) fn depth_texture(
         sample_count,
         dimension: wgpu::TextureDimension::D2,
         format: mesh_render::DEPTH_FORMAT,
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+        // `TEXTURE_BINDING` because the motion blur pass reads the depth the
+        // scene just wrote to reproject each pixel against the previous
+        // camera - see `oag_render::post::motion_blur`. Declared even at MSAA
+        // sample counts, where that pass does not run: the flag costs
+        // nothing, and a conditional usage would be one more thing the two
+        // call sites could disagree about.
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
         view_formats: &[],
     })
 }

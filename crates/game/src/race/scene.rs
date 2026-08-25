@@ -163,6 +163,26 @@ pub struct Scene {
     /// scene draws straight into the caller's target as it always has. See
     /// `oag_render::post::hd_bloom` and [`Scene::render`].
     hd: Option<oag_render::post::hd_bloom::Chain>,
+    /// Camera motion blur, run last over the finished frame - an enhancement
+    /// of this project's, not a reading of the original. Built with the
+    /// scene whatever `[graphics] motion_blur` says, because that setting is
+    /// a *strength* [`Scene::render`] reads fresh every frame - the row
+    /// applies live, per `docs/rendering/motion-blur.md`'s design - and at
+    /// `off` the pass simply never encodes anything. `RefCell` for the
+    /// reason [`Self::exhaust`] is: it carries the previous frame's camera,
+    /// which is per-frame state `render`'s `&self` has to move.
+    ///
+    /// **`None` under MSAA**, where the setting can ask all it likes: the
+    /// pass reads the scene's depth attachment, and a multisampled depth
+    /// buffer cannot bind as `texture_depth_2d`. Reading sample 0 instead is
+    /// the design's answer for the per-object tier and belongs to that
+    /// build-out; here the pass is skipped, the menu row warns, and
+    /// [`Self::msaa_blur_warned`] logs it once. See
+    /// `oag_render::post::motion_blur` and ADR-0028.
+    motion_blur: Option<std::cell::RefCell<oag_render::post::motion_blur::MotionBlur>>,
+    /// Whether the "motion blur is skipped under MSAA" line has been logged,
+    /// so a player who set both gets one line rather than one per frame.
+    msaa_blur_warned: std::cell::Cell<bool>,
     depth: wgpu::Texture,
     /// The colour attachment every pipeline here actually draws into, and its
     /// sample count.
@@ -250,6 +270,10 @@ impl Scene {
         // in place every pipeline below is built against the linear float
         // target and switches itself to linear output - see
         // `mesh_render::is_linear_target`.
+        // The caller's own format survives the shadowing for the one pass
+        // that runs after every chain has already encoded into the caller's
+        // view - see `motion_blur` below.
+        let caller_format = format;
         let format = if hd.is_some() {
             oag_render::post::hd_bloom::SCENE_FORMAT
         } else {
@@ -676,9 +700,29 @@ impl Scene {
             }
         };
 
+        // Built against the caller's own format: whichever chain runs, the
+        // frame this pass reads is the one already encoded into the caller's
+        // view - after the HD chain's encode, after the PSP bloom's
+        // composite. A failure is reported and dropped the way the bloom's
+        // is: a race without motion blur is a sharper race, not a broken one.
+        // See `Self::motion_blur` for why this is not gated on the setting,
+        // and for the MSAA gate that it *is* under.
+        let motion_blur = match (sample_count == 1)
+            .then(|| oag_render::post::motion_blur::MotionBlur::new(device, caller_format))
+            .transpose()
+        {
+            Ok(pass) => pass.map(std::cell::RefCell::new),
+            Err(e) => {
+                warn!("motion blur unavailable ({e}) - the frame draws without it");
+                None
+            }
+        };
+
         Ok(Self {
             bloom,
             hd,
+            motion_blur,
+            msaa_blur_warned: std::cell::Cell::new(false),
             track,
             visibility,
             ships,

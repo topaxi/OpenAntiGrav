@@ -1,9 +1,16 @@
 # Motion blur
 
-> **This is a design, not an implementation.** Nothing described here is built.
-> The page exists so the work is costed and specified before anyone starts, and
-> so the three or four wrong first answers found while designing it are not
-> found again.
+> **Status, 2026-08-25: the cheap tier is built; the tier this page chose is
+> not.** Camera reprojection ships as `oag_render::post::motion_blur`, under
+> exactly the strength row this page specified and at the placement it chose
+> (after bloom, before the HUD, inside `race::Scene::render`) - the "shipped
+> first as a stepping stone" path the *Decisions* section explicitly left
+> open. [ADR-0028](../architecture/adr/0028-camera-motion-blur-first.md)
+> records that step and its costs. **Everything below about the per-object
+> velocity buffer, the reconstruction filter and the extra attachments is
+> still design, not implementation** - and it remains the plan of record: the
+> ghosting-on-rivals failure this page describes for camera reprojection is
+> now the shipped behaviour, not a hypothetical.
 
 **This is an invented feature, not a recovered one.** Wipeout Pulse has no
 motion blur; nothing on this page came out of a disassembler, and nothing on it
@@ -133,9 +140,9 @@ sets and the way FXAA was already done.
 
 ## Implementation sketch
 
-**Attachments**, in `oag_game::race`. The depth texture gains `TEXTURE_BINDING`
-and the pass's `depth_ops.store` becomes `StoreOp::Store` - today it is
-`Discard`, which is why the FSR 3.1 table calls the depth buffer unusable. Add
+**Attachments**, in `oag_game::race`. ~~The depth texture gains
+`TEXTURE_BINDING` and the pass's `depth_ops.store` becomes `StoreOp::Store`~~ -
+**done**, by the camera tier, which reads that depth every frame. Add
 an `Rg16Float` velocity target at the scene's sample count, `RENDER_ATTACHMENT |
 TEXTURE_BINDING`, resized alongside depth, cleared to zero each frame with no
 `resolve_target`. The race pass gains a second colour attachment.
@@ -189,6 +196,15 @@ pair; a field on `Graphics`; a tuple in `menu_seeds`; a `kind = "choice"` row in
 `Session::apply_setting`; a per-frame argument on `Scene::render` next to
 `anim_seconds`; and a field on `race::CaptureOptions` so `--screenshot`
 reflects it, the way `bloom` and `anti_aliasing` already do.
+
+> All of that exists now (`display::MotionBlur`), **except the
+> `CaptureOptions` field**: the capture renders exactly one frame, so there is
+> no previous camera and the pass could only ever produce the identity -
+> `race::capture` passes `Off` explicitly rather than a setting it cannot
+> honour. A capture that *shows* the blur needs the capture to render the
+> previous tick's camera first and the final frame second; that two-render
+> capture is the missing verification tool, and it is what would make a
+> screenshot comparison of the tiers possible at all.
 
 ## What the velocity buffer does not solve
 
@@ -286,18 +302,16 @@ Worth adding a fifth: draw one moving quad, read the velocity target back and
 assert the sign and rough magnitude. A y-flip in the velocity encoding is the
 most likely single bug and it is invisible in the final image.
 
-## ADR-0024 is owed
+## The owed ADR is written - for the tier that shipped
 
-This page is a design, so it deliberately stops short of being a decision
-record. Whoever implements it owes an ADR, because
-[ADR-0013](../architecture/adr/0013-anti-aliasing-architecture.md) currently
-commits the project to *not* shipping rows that depend on temporal
-infrastructure, and this reverses that for one row. The ADR should record the
-choice of tier, the always-on velocity buffer, the tick-keyed previous
-transform, the after-bloom placement, the sample-0 MSAA decision, and both
-unsolved cases above. ADRs here are immutable, so it is a sibling to 0013 rather
-than an edit to it.
+This section used to say "ADR-0024 is owed" (four ADRs landed in between).
+[ADR-0028](../architecture/adr/0028-camera-motion-blur-first.md) is that
+record for what is actually built: the camera tier under this page's own
+strength row, the tick-keyed previous camera, the after-bloom placement, the
+skip-under-MSAA gate, and the capture path's honest `Off`.
 
-It is deliberately not written yet: the `Rg16Float` question above could still
-change the design, and an ADR recording a decision that then changes is worse
+**The velocity tier still owes its own ADR when it lands**, for the decisions
+ADR-0028 deliberately does not make: the always-on velocity buffer, the
+sample-0 MSAA reads, and the `Rg16Float` question above - which could still
+change that design, and an ADR recording a decision that then changes is worse
 than one written a week later.

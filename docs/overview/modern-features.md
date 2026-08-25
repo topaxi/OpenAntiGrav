@@ -62,8 +62,8 @@ section has always listed, now with their status:
 | Prerequisite | State |
 | --- | --- |
 | Render resolution decoupled from presentation | **Done** - the render scale, and the offscreen target it draws into |
-| A depth buffer the upscaler can consume | Exists, but written `StoreOp::Discard` into a texture without `TEXTURE_BINDING` |
-| Per-pixel motion vectors from every draw | **Absent** - no previous-frame matrices are stored anywhere |
+| A depth buffer the upscaler can consume | **Done** - `StoreOp::Store` and `TEXTURE_BINDING`, read every frame by the motion blur pass ([ADR-0028](../architecture/adr/0028-camera-motion-blur-first.md)) |
+| Per-pixel motion vectors from every draw | **Absent** - the previous-frame *camera* is now stored and reprojected (`oag_render::post::motion_blur`), which is camera-only velocity; nothing per draw |
 | Camera jitter, sub-pixel per frame | **Absent** - and it must not perturb the culling frustum, which shares the matrix |
 | A scene without UI in it | **Absent** - the HUD and the perf overlay draw into the same target, at the render scale |
 
@@ -72,15 +72,19 @@ it only becomes visible once something downstream needs a scene it can reason
 about. FSR must consume a frame with no UI in it, and the UI must then be
 composited at presentation resolution.
 
-**Rows two and three now have a design.**
+**Row two is cleared, and row three has a design.**
 [Motion blur](../rendering/motion-blur.md) wants exactly the same readable depth
-buffer and the same per-draw velocity target, so building it would clear both as
-a side effect - which is most of why the expensive per-object tier was chosen
-over cheap camera reprojection, the latter clearing only the depth row. It is
-specified and costed at about a week and a half, and not built. It touches the
-last row too, but only partly: its chain runs before the HUD is drawn, so it
-demonstrates that a UI-free scene exists at that point in the frame without
-handing one downstream.
+buffer and the same per-draw velocity target. Its cheap tier - camera
+reprojection - is now **built**
+([ADR-0028](../architecture/adr/0028-camera-motion-blur-first.md)), which is
+what cleared the depth row and put previous-frame camera matrices in the tree.
+The per-object velocity tier that would clear row three stays specified and
+costed at about a week and a half, and not built; the ghosting its design
+predicted for camera reprojection on rivals holding station is now shipped,
+visible behaviour arguing for it. Either tier touches the last row only
+partly: the blur chain runs before the HUD is drawn, so a UI-free scene
+demonstrably exists at that point in the frame without being handed
+downstream.
 
 ## Steam Input
 
