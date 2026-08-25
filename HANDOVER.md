@@ -454,7 +454,6 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [Magstrip leftovers, none load-bearing](handover/magstrip-leftovers-none-load-bearing.md)
 - [Frame comparison: three residuals](handover/frame-comparison-three-residuals.md)
 - [Weapons: four of thirteen are built, and the fourth is the first one that is *recovered* rather than half-invented](handover/weapons-four-of-thirteen-are-built-and-the.md)
-- [The Ghidra DB addresses everything image-base-relative, and it silences every xref tool](handover/the-ghidra-db-addresses-everything-image-base-relative.md)
 - [Projectiles follow the floor, and the km/h fix - both now landed](handover/projectiles-follow-the-floor-and-the-km-h.md)
 - [A weapon identified by "it fires more than one" is not identified](handover/a-weapon-identified-by-it-fires-more-than.md)
 - [The shield path's last unmeasured field: `entity + 0x368`](handover/the-shield-paths-last-unmeasured-field-entity-0x368.md)
@@ -893,6 +892,29 @@ clean as of 2026-08-19); `psp-pulse-eu`/`psp-pure-usa`/`psp-pure-eu` still have
 no way to apply their `names.tsv` live until the bridge can disambiguate
 same-named programs, or until each is loaded in a Ghidra project without a
 `BOOT.BIN` name collision.
+
+**`psp-pulse-usa`'s Ghidra DB stores `jal` targets pre-relocation, so
+`get_xrefs_to`/`get_function_callers` return "none" for almost everything.**
+Found 2026-08-11, re-derived independently 2026-08-19, and it cost most of a
+session before the mechanism was understood. Ghidra's *static* disassembly
+bytes for a `jal` hold the unrelocated `R_MIPS_26` field - decoding them with
+the ordinary MIPS rule lands on a small, bogus sub-`0x08000000` address, not
+the real target; the *running* program's bytes at the same address are
+already relocation-patched and decode correctly. The fix: add this program's
+own image base (`0x08804000`, from `get_current_program_info`) to the
+low-26-bits-shifted-left-2 value read from Ghidra's static bytes -
+`target = image_base + ((word & 0x03FFFFFF) << 2)`, no `(addr+4) &
+0xF0000000` term. Confirmed on every `jal` checked so far, including all six
+inside `Body_ResolveContactPair`. **Practical consequence**: when an xref
+tool says "no callers", it is not evidence of that - search
+`search_instructions` on the zero-padded *relative* operand
+(`jal 0x000645cc`, not `jal 0x0886a5cc`) instead of trusting the "none"
+result. Full derivation, and confirmation this is not database corruption:
+[contact-response.md](docs/ghidra/functions/psp-pulse-usa/contact-response.md#its-call-target-needed-the-image-base-added-by-hand---ghidras-own-bytes-are-pre-relocation).
+Whether this is a general PSP-ELF-relocation trait or specific to how this
+project's importer handled `BOOT.BIN`, and whether it is related to the
+decompiler failing on several functions in the same file, are both still
+open - no evidence ties either to the mechanism above.
 
 ## Verification status: what to lean on
 

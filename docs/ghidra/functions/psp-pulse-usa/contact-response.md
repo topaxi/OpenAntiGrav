@@ -1009,6 +1009,89 @@ same image-base-relative search as `Weapon_PostBlastImpulse_q`'s caller
 above. Left for whoever picks the loop bound, the list identity, and these two
 callers apart.
 
+#### `FUN_08868a10` and `FUN_088690fc`, `FUN_08868ea4`'s two callers, read 2026-08-25
+
+Both decompile cleanly (unlike everything above on this page); read from that
+output rather than disassembly. Both call sites resolve the same way the rest
+of this page's `jal` targets do: `func_0x00064ea4`'s relative operand plus
+this program's `0x08804000` image base is `0x08868ea4`, i.e.
+`FUN_08868ea4` itself - the same check `search_instructions` on the
+relative operand already used to find these two functions as callers in the
+first place.
+
+**`FUN_08868a10(craftArray, impulse)`**, `0x08868a10`-`0x08868b0b`: a fixed
+`0x30` (48)-iteration loop over a pointer array based at `craftArray+0x68`
+(`entity = *(craftArray + 0x68 + i*4)`, `i` from `0` to `47`) - a **third**
+parallel entity-pointer array on `craftArray`, distinct from the `+0x64` one
+`FUN_08867b50` sweeps and the `+0x48` one `FUN_088690fc` sweeps below; this
+page has still not settled whether the three are independent lists or views
+into the same one at different strides. For each `entity`, a gate
+(`func_0x0005abdc(impulse, entity)`, unread, real address `0x0885abdc`)
+decides whether this entry is hit at all. When it is: `impulse+0x8`, compared
+against the sentinel `-1`, picks between two branches that both end up
+building the same `local_30`/`local_2c`/`local_28` 12-byte vector from
+`impulse+0xc`/`+0x10`/`+0x14` (so `impulse` itself is a small struct - a
+target index or `-1` "no specific target" sentinel at `+0x8`, an xyz vector
+at `+0xc..+0x18`) and both set a flag on `entity+0x3c` (`|= 0x4` on the `-1`
+path, `|= 0x24` otherwise) - the same bit `Weapon_PostBlastImpulse_q` and
+`FUN_08867b50` set on their own "this connected" flag, corroborating that
+`entity+0x3c` is a shared flags word across all of this page's contact
+paths, not a per-function coincidence. The non-`-1` branch additionally calls
+`func_0x00065054(craftArray, *(impulse+0x8), i)` (unread, real address
+`0x08869054`) before setting its flag - `FUN_088690fc` below calls the same
+function at the equivalent point, so whatever it does is common to both
+callers, not specific to either. Both branches then call
+`func_0x00064d50(craftArray, &local_30)` (unread, real address
+`0x08868d50`) and finally `FUN_08868ea4(craftArray, &local_30,
+*(entity+0x4c))` - `entity+0x4c` is the same "gives a pointer" field
+`Ship_ApplyCollisionImpulse` reads as the body pointer, so this caller hands
+`FUN_08868ea4` a body, not an entity, as its third argument.
+
+**`FUN_088690fc(craftArray, sourceIndex)`**, `0x088690fc`-`0x0886951b`: reads
+`source = *(craftArray + sourceIndex*4 + 0x68)` (the same `+0x68` array
+`FUN_08868a10` walks, this time indexed directly rather than swept), gates on
+a validity check (`func_0x0005ed4c`, the same unread validity function
+`FUN_08867b50` calls at its own step 1) applied to `*(craftArray +
+*(source+0x40)*4 + 0x48)` - the **`+0x48`** array, a fourth entity-pointer
+list. Reads two vectors off `source` (`func_0x0005601c`, unread, real address
+`0x0885a01c`) and builds a normalised direction between them (the
+zero-guarded normalise idiom: substitute `1.0` before reciprocal when the
+length compares equal to zero, rather than dividing by it - the same shape
+`FUN_08868ea4`'s own body was read as using, per the note above). Then
+sweeps `0..*(0x00577f8)` - a *dynamic* global count, not `FUN_08868a10`'s
+fixed `0x30` - over the `+0x48` array, **skipping `i == *(source+0x40)`**:
+`source+0x40` read here as "this entity's own index, so the sweep does not
+test itself against its own line" corroborates `FUN_08867b50`'s identical
+`entity+0x40` field, read there as a per-entity counter/index compared
+against its own loop variable the same way. For each candidate that is not
+`source` itself: two dot-product bounds checks against the direction vector
+(`<= 1.0` and `>= -1.0` - a unit-length slab test along the swept segment
+between `source`'s two read vectors), then a cross product against the same
+direction, normalised again, and a third dot product bounded to `(-6.0,
+6.0)` - read together, this is a swept-capsule proximity test: "is this
+candidate within one unit along the segment `source` moved through this
+tick, and within six units of the segment itself" is the shape, not
+confirmed against a live trace. A passing candidate gets `*(source+0x3c) |=
+0x24` (the same combined flag `FUN_08868a10`'s non`-1` branch sets, this
+time on `source` rather than the candidate), then the identical pair
+`func_0x00065054(craftArray, i, sourceIndex)` and `FUN_08868ea4(craftArray,
+&<direction-endpoint vector>, *(source+0x40))` that `FUN_08868a10` calls -
+except this caller's third argument to `FUN_08868ea4` is `*(source+0x40)`,
+an index, not `entity+0x4c`, a pointer; `FUN_08868ea4`'s own parameter is
+therefore not consistently typed across its two callers on the evidence
+read so far, which is itself worth flagging rather than silently reconciling.
+
+Confidence on both functions' shape: **60** (the flag bits, the shared
+`FUN_08868ea4`/`func_0x00065054` call pair, and the `+0x40` self-index
+corroboration are read off two independent decompiles and agree with each
+other and with `FUN_08867b50`'s established fields); **under 50** on what
+either function is *for* semantically (a name like
+`ShipContact_ApplyImpulseSweep` is a guess about the swept-capsule reading,
+not a measurement), so neither is renamed. `func_0x0005abdc`,
+`func_0x00065054`, `func_0x00064d50` and `func_0x0005601c` are all still
+unread past what this pass needed to trace the vector/flag flow through
+them.
+
 ### `Ship_ApplyCollisionImpulse` (`0x0883f274`), read at instruction level, 2026-08-19
 
 `engine.md` already carried this function's behaviour as a confidence-85
