@@ -361,10 +361,12 @@ kind = "choice"
 label = "UPSCALER"
 setting = "graphics.upscaler"
 values = ["off", "fsr1"]
-warn_when = { message = "NO EFFECT AT RENDER SCALE 100 OR ABOVE", all = [
-    { setting = "graphics.upscaler", value = "fsr1" },
-    { setting = "graphics.render_scale", values = ["100", "125", "150", "200"] },
-] }
+warn_when = [
+    { message = "NO EFFECT AT RENDER SCALE 100 OR ABOVE", all = [
+        { setting = "graphics.upscaler", value = "fsr1" },
+        { setting = "graphics.render_scale", values = ["100", "125", "150", "200"] },
+    ] },
+]
 
 # How hard FSR 1's RCAS pass sharpens, in **stops**: 0 is maximum and each whole
 # step halves it, which is upstream FidelityFX's own scale and runs the opposite
@@ -401,17 +403,31 @@ disabled_by = { setting = "graphics.upscaler", value = "off" }
 # `the_upscaler_warns_at_exactly_the_scales_it_does_nothing_at` for the
 # equivalent pinning on the row above. MSAA is not named here: it resolves
 # before any of this runs and composes with FSR 1 rather than fighting it.
+#
+# A second, independently-triggered warning for the render scale's *top* end:
+# at 200% render scale is enough oversampling on its own that a spatial pass
+# on top reads as redundant work, not a broken combination - real product
+# policy per `docs/architecture/adr/0013-anti-aliasing-architecture.md`'s
+# "What the render-scale tiers mean for FXAA/SMAA" section. Only "200" is
+# named because it is the only value RENDER SCALE offers at or above it - see
+# `Scale::OFFERED`.
 [[page.entry]]
 kind = "choice"
 label = "ANTI-ALIASING"
 setting = "graphics.anti_aliasing"
 values = ["off", "fxaa", "smaa", "msaa4x"]
 restart_required = "TAKES EFFECT THE NEXT TIME A RACE STARTS"
-warn_when = { message = "FIGHTS THE UPSCALER'S EDGE-ADAPTIVE RESAMPLE BELOW RENDER SCALE 100", all = [
-    { setting = "graphics.anti_aliasing", values = ["fxaa", "smaa"] },
-    { setting = "graphics.upscaler", value = "fsr1" },
-    { setting = "graphics.render_scale", values = ["50", "75"] },
-] }
+warn_when = [
+    { message = "FIGHTS THE UPSCALER'S EDGE-ADAPTIVE RESAMPLE BELOW RENDER SCALE 100", all = [
+        { setting = "graphics.anti_aliasing", values = ["fxaa", "smaa"] },
+        { setting = "graphics.upscaler", value = "fsr1" },
+        { setting = "graphics.render_scale", values = ["50", "75"] },
+    ] },
+    { message = "REDUNDANT ON TOP OF 200% RENDER SCALE SUPERSAMPLING", all = [
+        { setting = "graphics.anti_aliasing", values = ["fxaa", "smaa"] },
+        { setting = "graphics.render_scale", value = "200" },
+    ] },
+]
 
 # Applies to the next race built rather than immediately: the sampler is made
 # when a race's pipelines are.

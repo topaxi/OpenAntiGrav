@@ -414,6 +414,55 @@ fn a_restart_note_is_drawn_in_the_margin_and_under_the_rows() {
     assert!(drawn[1].to_uppercase().contains("RESTART"), "{drawn:?}");
 }
 
+/// `Menu::warning` picks between the anti-aliasing row's two declared
+/// warnings rather than assuming there is only one - the runtime half of
+/// `Entry::warnings` being a list. Their conditions are disjoint by
+/// construction (one fires below render scale 100, the other only at 200),
+/// so exactly one, or neither, ever applies at a time.
+#[test]
+fn the_anti_aliasing_row_shows_whichever_of_its_two_warnings_currently_applies() {
+    let mut menu = Menu::new(built_in());
+    assert!(menu.open("graphics"));
+    let row = |menu: &Menu| {
+        menu.page()
+            .entries
+            .iter()
+            .find(|entry| entry.setting() == Some("graphics.anti_aliasing"))
+            .expect("anti-aliasing is on the graphics page")
+            .clone()
+    };
+    menu.seed("graphics.anti_aliasing", &Value::Text("fxaa".to_string()));
+
+    menu.seed("graphics.upscaler", &Value::Text("off".to_string()));
+    menu.seed("graphics.render_scale", &Value::Text("100".to_string()));
+    assert!(
+        menu.warning(&row(&menu)).is_none(),
+        "neither warning applies at 100% with the upscaler off"
+    );
+
+    menu.seed("graphics.upscaler", &Value::Text("fsr1".to_string()));
+    menu.seed("graphics.render_scale", &Value::Text("50".to_string()));
+    let entry = row(&menu);
+    let warning = menu
+        .warning(&entry)
+        .expect("fxaa below render scale 100 with fsr1 selected fights the upscaler");
+    assert!(
+        warning.message.to_uppercase().contains("UPSCALER"),
+        "{warning:?}"
+    );
+
+    menu.seed("graphics.upscaler", &Value::Text("off".to_string()));
+    menu.seed("graphics.render_scale", &Value::Text("200".to_string()));
+    let entry = row(&menu);
+    let warning = menu
+        .warning(&entry)
+        .expect("fxaa at 200% render scale is redundant on its own");
+    assert!(
+        warning.message.to_uppercase().contains("REDUNDANT"),
+        "{warning:?}"
+    );
+}
+
 /// A row nothing supplies is silent, which is the one way this mechanism
 /// can fail invisibly - so `in_effect` reports whether anybody took it, and
 /// the composition root says so on stderr.

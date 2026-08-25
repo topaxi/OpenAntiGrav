@@ -558,7 +558,11 @@ fn the_upscaler_warns_at_exactly_the_scales_it_does_nothing_at() {
         .flat_map(|page| page.entries.iter())
         .find(|entry| entry.setting() == Some("graphics.upscaler"))
         .expect("nothing edits graphics.upscaler");
-    let warning = entry.warning().expect("the upscaler warns");
+    let warning = entry
+        .warnings()
+        .iter()
+        .find(|w| w.all.iter().any(|c| c.setting == "graphics.upscaler"))
+        .expect("the upscaler warns");
     // One condition names this row's own offending value, the other the
     // scales. Without the first, the warning fires with the upscaler off.
     let own = warning
@@ -611,7 +615,20 @@ fn anti_aliasing_warns_against_the_upscaler_at_exactly_the_scales_it_fights_it_a
         .flat_map(|page| page.entries.iter())
         .find(|entry| entry.setting() == Some("graphics.anti_aliasing"))
         .expect("nothing edits graphics.anti_aliasing");
-    let warning = entry.warning().expect("anti-aliasing warns");
+    assert_eq!(
+        entry.warnings().len(),
+        2,
+        "exactly the upscaler-conflict and 200%-redundancy warnings; a third \
+         would go unnoticed by the rest of this test"
+    );
+    // Picked out by the condition this test is actually about: the row also
+    // carries the 200%-redundancy warning below, and that one names no
+    // `graphics.upscaler` condition at all.
+    let warning = entry
+        .warnings()
+        .iter()
+        .find(|w| w.all.iter().any(|c| c.setting == "graphics.upscaler"))
+        .expect("anti-aliasing warns against the upscaler");
 
     let own = warning
         .all
@@ -664,6 +681,70 @@ fn anti_aliasing_warns_against_the_upscaler_at_exactly_the_scales_it_fights_it_a
             "{scale}: the guard and the anti-aliasing warning disagree"
         );
     }
+}
+
+/// A second, independently-triggered warning on the same row: 200% render
+/// scale oversamples enough on its own that FXAA/SMAA on top of it is
+/// redundant work, not a broken combination - real product policy per
+/// ADR-0013's "What the render-scale tiers mean for FXAA/SMAA" section. This
+/// is what `Entry::warnings` being a list is for: the test above already
+/// pins one warning about the *bottom* of the render-scale range, and this
+/// is an unrelated combination at the *top* of it, on the same row.
+#[test]
+fn anti_aliasing_also_warns_that_it_is_redundant_on_top_of_the_ceiling_render_scale() {
+    let definition = built_in();
+    let entry = definition
+        .pages
+        .iter()
+        .flat_map(|page| page.entries.iter())
+        .find(|entry| entry.setting() == Some("graphics.anti_aliasing"))
+        .expect("nothing edits graphics.anti_aliasing");
+    // Picked out by the condition that actually distinguishes it from the
+    // upscaler-conflict warning above: this one names no upscaler at all,
+    // because supersampling is redundant with a spatial pass whatever the
+    // upscaler is set to.
+    let warning = entry
+        .warnings()
+        .iter()
+        .find(|w| !w.all.iter().any(|c| c.setting == "graphics.upscaler"))
+        .expect("anti-aliasing warns about the ceiling render scale too");
+    assert_eq!(
+        warning.all.len(),
+        2,
+        "the redundancy warning should need nothing beyond the row's own mode and the render scale"
+    );
+
+    let own = warning
+        .all
+        .iter()
+        .find(|c| c.setting == "graphics.anti_aliasing")
+        .expect("the warning must name anti-aliasing's own offending values");
+    let warned_modes: Vec<crate::display::AntiAliasing> = own
+        .values
+        .iter()
+        .map(|value| value.to_string().parse().unwrap_or_else(|e| panic!("{e}")))
+        .collect();
+    for mode in crate::display::AntiAliasing::ALL {
+        assert_eq!(
+            mode.is_spatial_post_process(),
+            warned_modes.contains(&mode),
+            "{mode}: the redundancy warning and `is_spatial_post_process` disagree"
+        );
+    }
+
+    let scales = warning
+        .all
+        .iter()
+        .find(|c| c.setting == "graphics.render_scale")
+        .expect("the warning must name the redundant render scale");
+    let top = *crate::display::Scale::OFFERED
+        .last()
+        .expect("render scale offers at least one value");
+    assert_eq!(
+        scales.values,
+        vec![Value::Text(top.to_string())],
+        "the redundancy warning must name exactly the ceiling render scale, not a hardcoded 200"
+    );
 }
 
 #[test]
