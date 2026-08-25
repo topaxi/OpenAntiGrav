@@ -8,7 +8,7 @@
 
 use super::*;
 use crate::compare::{Field, Tolerances, compare};
-use oag_physics::CollisionWorld;
+use oag_physics::{CollisionWorld, Surface, TriangleSoup};
 
 /// How heavy a test ship is, and why.
 ///
@@ -168,6 +168,7 @@ fn a_replay_starts_exactly_where_the_recording_starts() {
         &Environment::default(),
         &CollisionWorld::new(),
         &Options::default(),
+        None,
     );
     assert_eq!(simulated.len(), recorded.len());
     assert_eq!(simulated.frames[0].position, recorded.frames[0].position);
@@ -188,6 +189,7 @@ fn a_coasting_ship_tracks_a_straight_line_recording() {
         &Environment::default(),
         &CollisionWorld::new(),
         &Options::default(),
+        None,
     );
     let comparison = compare(&recorded, &simulated, &Tolerances::default());
     assert!(!comparison.diverged(), "{comparison}");
@@ -219,6 +221,7 @@ fn speed_cached_is_the_forward_projection_and_not_the_magnitude() {
         &Environment::default(),
         &CollisionWorld::new(),
         &Options::default(),
+        None,
     );
     // Tick 0 is seeded from the recording, so the first tick the replay
     // computes for itself is tick 1.
@@ -244,6 +247,7 @@ fn a_replay_is_reproducible() {
             &Environment::default(),
             &CollisionWorld::new(),
             &Options::default(),
+            None,
         )
     };
     assert_eq!(run(), run());
@@ -262,6 +266,7 @@ fn rows_are_sampled_before_the_step_not_after() {
         &Environment::default(),
         &CollisionWorld::new(),
         &Options::default(),
+        None,
     );
     // Row 1 must hold one tick of travel, not two and not none.
     let travelled = simulated.frames[1].position - simulated.frames[0].position;
@@ -284,6 +289,7 @@ fn a_held_input_ignores_what_the_recording_says_the_controls_were() {
         &Environment::default(),
         &CollisionWorld::new(),
         &options,
+        None,
     );
     // Tick 0 is the seeded initial condition, so the recording's throttle is
     // still there; from tick 1 the held input - nothing - is what drives it.
@@ -303,6 +309,7 @@ fn a_trace_derived_input_carries_the_recorded_throttle_through() {
         &Environment::default(),
         &CollisionWorld::new(),
         &Options::default(),
+        None,
     );
     assert!(simulated.frames.iter().all(|f| f.throttle == 100.0));
 }
@@ -328,6 +335,7 @@ fn a_scripted_input_changes_on_the_tick_the_script_says() {
         &Environment::default(),
         &CollisionWorld::new(),
         &options,
+        None,
     );
     // Tick 0 is the seeded initial condition, so it still carries the
     // recording's throttle; ticks 1 and 2 are the script's `none`, and the
@@ -379,6 +387,7 @@ fn a_short_script_holds_its_last_state_for_the_rest_of_the_run() {
         &Environment::default(),
         &CollisionWorld::new(),
         &options,
+        None,
     );
     assert!(simulated.frames[7].throttle > 0.0);
 }
@@ -399,6 +408,7 @@ fn a_one_state_script_is_the_same_run_as_the_equivalent_held_input() {
                 inputs,
                 ..Options::default()
             },
+            None,
         )
     };
     assert_eq!(
@@ -435,6 +445,7 @@ fn a_recorded_rotation_survives_tick_zero_under_every_reading() {
                 angular,
                 ..Options::default()
             },
+            None,
         );
         let written = simulated.frames[0]
             .angular_velocity
@@ -495,6 +506,7 @@ fn a_seeded_rotation_actually_turns_the_ship() {
             &Environment::default(),
             &CollisionWorld::new(),
             &Options::default(),
+            None,
         )
     };
     let (turned, from_momentum, stayed) = (run(&by_rate), run(&by_momentum), run(&still));
@@ -533,6 +545,7 @@ fn a_replay_carries_the_stun_timer_and_not_the_gate_it_does_not_model() {
         &Environment::default(),
         &CollisionWorld::new(),
         &Options::default(),
+        None,
     );
     assert_eq!(simulated.frames[0].stun_timer, Some(0.0));
     assert_eq!(simulated.frames[0].timer_2e0, None);
@@ -557,6 +570,7 @@ fn a_driven_run_is_as_long_as_it_was_asked_for_and_starts_where_it_was_put() {
             ticks: 40,
             ..DriveOptions::default()
         },
+        None,
     );
     assert_eq!(run.len(), 40);
     assert_eq!(run.frames[0].position, Vec3::new(1.0, 2.0, 3.0));
@@ -582,6 +596,7 @@ fn a_driven_run_holds_a_short_script_s_last_state() {
             ticks: 20,
             ..DriveOptions::default()
         },
+        None,
     );
     assert_eq!(run.frames[1].throttle, 0.0);
     assert!(run.frames[19].throttle > 0.0, "the last state is held");
@@ -608,6 +623,7 @@ fn a_driven_run_is_reproducible() {
                 ticks: 20,
                 ..DriveOptions::default()
             },
+            None,
         )
     };
     assert_eq!(run(), run());
@@ -633,6 +649,7 @@ fn driving_and_replaying_the_same_scenario_agree() {
             dt: DeltaSource::Fixed(dt),
             ..Options::default()
         },
+        None,
     );
     let driven = drive(
         initial_state(
@@ -650,6 +667,7 @@ fn driving_and_replaying_the_same_scenario_agree() {
             dt,
             ..DriveOptions::default()
         },
+        None,
     );
     assert_eq!(driven.len(), replayed.len());
     for (a, b) in driven.frames.iter().zip(replayed.frames.iter()) {
@@ -667,6 +685,7 @@ fn an_empty_recording_replays_to_an_empty_trace() {
         &Environment::default(),
         &CollisionWorld::new(),
         &Options::default(),
+        None,
     );
     assert!(simulated.is_empty());
 }
@@ -686,6 +705,7 @@ fn a_physics_difference_shows_up_as_a_dated_divergence() {
         &Environment::default(),
         &CollisionWorld::new(),
         &Options::default(),
+        None,
     );
     let comparison = compare(&recorded, &simulated, &Tolerances::default());
     let divergence = comparison
@@ -726,6 +746,7 @@ fn a_run_is_seeded_once_unless_asked_otherwise() {
         &Environment::default(),
         &CollisionWorld::new(),
         &Options::default(),
+        None,
     );
     let explicit = replay(
         &recorded,
@@ -736,6 +757,7 @@ fn a_run_is_seeded_once_unless_asked_otherwise() {
             reseed: None,
             ..Options::default()
         },
+        None,
     );
     assert_eq!(once.to_csv(), explicit.to_csv());
 }
@@ -761,6 +783,7 @@ fn reseeding_bounds_the_error_by_the_window_rather_than_the_run() {
         &Environment::default(),
         &CollisionWorld::new(),
         &Options::default(),
+        None,
     );
     let reseeded = replay(
         &recorded,
@@ -768,6 +791,7 @@ fn reseeding_bounds_the_error_by_the_window_rather_than_the_run() {
         &Environment::default(),
         &CollisionWorld::new(),
         &reseeding(20),
+        None,
     );
 
     let once = compare(&recorded, &seeded_once, &Tolerances::default());
@@ -801,6 +825,7 @@ fn every_window_starts_exactly_on_the_recording() {
         &Environment::default(),
         &CollisionWorld::new(),
         &reseeding(25),
+        None,
     );
 
     for tick in [0, 25, 50, 75] {
@@ -813,4 +838,109 @@ fn every_window_starts_exactly_on_the_recording() {
         simulated.frames[24].position, recorded.frames[24].position,
         "the tick before a seed is a measurement and must be free to diverge"
     );
+}
+
+/// A single flat track sample at the origin, `down` along `-y` - the section
+/// [`oag_physics::maglock::probe`] needs a locator to build a ray from.
+fn flat_section() -> track::Sample {
+    track::Sample {
+        pos: [0.0, 0.0, 0.0],
+        tangent: [0.0, 0.0, 1.0],
+        down: [0.0, -1.0, 0.0],
+        lateral: [1.0, 0.0, 0.0],
+        half_width_left: 10.0,
+        half_width_right: 10.0,
+        ai_bound_left: -8.0,
+        ai_bound_right: 8.0,
+        racing_line: 0.0,
+        section_id: 0,
+        flags: 0,
+    }
+}
+
+/// A flat triangle at `y = 0`, tagged the magstrip material - the same fixture
+/// shape `oag_physics::maglock::tests::strip` uses.
+fn mag_floor() -> CollisionWorld {
+    let mut world = CollisionWorld::new();
+    world.push(TriangleSoup::new(
+        vec![
+            [-500.0, 0.0, -500.0],
+            [-500.0, 0.0, 500.0],
+            [500.0, 0.0, 0.0],
+        ],
+        vec![[0, 1, 2]],
+        Vec::new(),
+        Surface::MagFloor,
+        0,
+    ));
+    world
+}
+
+/// The point of Task #33 (`handover/task-33-oag-trace-cannot-exercise-the-mag.md`):
+/// without a locator, [`oag_physics::maglock::probe`] has no track sample to
+/// build a ray direction from, so the hold's blend can never leave zero however
+/// the collision mesh underneath is tagged. Handing `drive_with` a one-sample
+/// track over a magstrip floor must let the ramp actually move.
+#[test]
+fn a_locator_lets_a_driven_run_reach_the_magstrip_hold() {
+    let samples = [flat_section()];
+    let mut initial = ShipState::default();
+    initial.body.mass = TEST_MASS;
+    initial.body.position = Vec3::new(0.0, oag_physics::maglock::SPLINE_LIFT, 0.0);
+
+    let mut blends = Vec::new();
+    let _ = drive_with(
+        initial,
+        &inert_handling(),
+        &Environment::default(),
+        &mag_floor(),
+        &DriveOptions {
+            ticks: 6,
+            ..DriveOptions::default()
+        },
+        Some(&samples),
+        |_, state| {
+            blends.push(state.mag_lock_blend);
+            Some(Held::default())
+        },
+    );
+
+    assert_eq!(
+        blends[0], 0.0,
+        "the blend starts at zero, like every fresh ship"
+    );
+    assert!(
+        *blends.last().unwrap() > 0.0,
+        "never ramped - the probe found nothing, so `track` did not reach it: {blends:?}"
+    );
+}
+
+/// With no locator at all, `drive_with` keeps exactly the pre-Task-#33 shape:
+/// the probe has no track sample to build a ray from, so the blend cannot move
+/// no matter what the collision mesh underneath says. Pins the "off" side of
+/// the fix the way the previous test pins the "on" side.
+#[test]
+fn no_locator_leaves_the_hold_at_zero_even_over_a_magstrip() {
+    let mut initial = ShipState::default();
+    initial.body.mass = TEST_MASS;
+    initial.body.position = Vec3::new(0.0, oag_physics::maglock::SPLINE_LIFT, 0.0);
+
+    let mut blends = Vec::new();
+    let _ = drive_with(
+        initial,
+        &inert_handling(),
+        &Environment::default(),
+        &mag_floor(),
+        &DriveOptions {
+            ticks: 6,
+            ..DriveOptions::default()
+        },
+        None,
+        |_, state| {
+            blends.push(state.mag_lock_blend);
+            Some(Held::default())
+        },
+    );
+
+    assert!(blends.iter().all(|&b| b == 0.0), "{blends:?}");
 }

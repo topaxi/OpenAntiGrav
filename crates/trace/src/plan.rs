@@ -288,6 +288,13 @@ impl Default for PlanOptions {
 /// All that is added is the decision: aim a lookahead distance along `path`,
 /// resolve the direction to it onto the craft's own right axis, and hold the
 /// d-pad that reduces it.
+///
+/// `track` is [`crate::replay::drive_with`]'s own locator, forwarded unchanged -
+/// see its doc comment - so a plan through a magstrip section exercises the hold
+/// the same way a `drive` of the finished script would.
+// One more than a wrapper struct would justify: `environment` and `track` are
+// each one fact `drive_with` already needs, not a grouping this call invents.
+#[allow(clippy::too_many_arguments)]
 #[must_use]
 pub fn to_gate<R: Raycaster + ?Sized>(
     initial: ShipState,
@@ -297,6 +304,7 @@ pub fn to_gate<R: Raycaster + ?Sized>(
     path: &Path,
     gate: &Gate,
     options: &PlanOptions,
+    track: Option<&[Sample]>,
 ) -> Plan {
     let mut index = 0usize;
     let mut previous: Option<(Vec3, f32)> = None;
@@ -310,6 +318,7 @@ pub fn to_gate<R: Raycaster + ?Sized>(
         environment,
         raycaster,
         &options.drive,
+        track,
         |tick, state| {
             let position = state.body.position;
             if let Some(volume) = &options.volume

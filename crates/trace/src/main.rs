@@ -16,6 +16,7 @@
 //! Traces are derived game data and live under `data/traces/`, which is
 //! gitignored; nothing here can run in CI.
 
+mod locator;
 mod logging;
 
 use std::num::NonZeroUsize;
@@ -702,13 +703,7 @@ fn drive_scenario(args: DriveArgs) -> Result<()> {
     let class = SpeedClass::from_name(&args.class)
         .with_context(|| format!("{:?} is not a speed class", args.class))?;
     let (handling, collision) = load(&args.source, &args.track, &args.team, class)?;
-    let samples: Vec<track::Sample> = resample(
-        &load_ai(&args.source, &args.track)?,
-        Course::STEPS_PER_SEGMENT,
-    )
-    .into_iter()
-    .map(|(_, sample)| sample)
-    .collect();
+    let samples = locator::load_samples(Some(&args.source), &args.track)?;
     let start_position = load_start_position(&args.source, &args.track)?;
     let start = samples
         .first()
@@ -803,6 +798,7 @@ fn drive_scenario(args: DriveArgs) -> Result<()> {
         &collision,
         &script.states,
         &options,
+        Some(&samples),
     );
 
     report(&run, &samples, args.every);
@@ -990,6 +986,7 @@ fn plan_scenario(args: PlanArgs) -> Result<()> {
         &path,
         &gate,
         &options,
+        Some(&samples),
     );
     report(&planned.trace, &samples, args.every);
     println!();
@@ -1181,7 +1178,7 @@ fn ai_of(blob: &[u8], name: &str) -> Result<track::AiTrack> {
     Ok(ai)
 }
 
-fn load_ai(source: &str, name: &str) -> Result<track::AiTrack> {
+pub(crate) fn load_ai(source: &str, name: &str) -> Result<track::AiTrack> {
     ai_of(&read_track_blob(source, name)?, name)
 }
 
@@ -1190,7 +1187,7 @@ fn load_ai(source: &str, name: &str) -> Result<track::AiTrack> {
 /// The same `Course::STEPS_PER_SEGMENT` and the same order `oag_game::race::Spline` and
 /// `oag_render::track` use, so a dumped line, a drawn line and the line a
 /// scenario run starts on are one set of points.
-fn resample(ai: &track::AiTrack, steps: usize) -> Vec<(usize, track::Sample)> {
+pub(crate) fn resample(ai: &track::AiTrack, steps: usize) -> Vec<(usize, track::Sample)> {
     let mut samples = Vec::new();
     for (index, path) in ai.paths.iter().enumerate() {
         for segment in 0..path.points.len() {
@@ -1419,6 +1416,7 @@ fn run(args: RunArgs) -> Result<()> {
             (handling, CollisionWorld::new())
         }
     };
+    let samples = locator::load_samples(args.source.as_deref(), &args.track)?;
     let collision = if args.no_collision {
         info!("--no-collision, so the hover probes see nothing");
         CollisionWorld::new()
@@ -1454,6 +1452,7 @@ fn run(args: RunArgs) -> Result<()> {
         &Environment::default(),
         &collision,
         &options,
+        Some(&samples),
     );
     if let Some(path) = &args.out {
         // The reseed interval rides along in the file itself. A reseeded run's

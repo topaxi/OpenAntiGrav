@@ -77,12 +77,28 @@
 //!   the frame rate is. Transcribed as read; see
 //!   `docs/architecture/adr/0007-fixed-timestep-vs-original.md` for why a
 //!   frame-counted constant is kept frame-counted here.
-//! - **`oag-trace` does not exercise any of this yet.** Its replay takes one
-//!   [`Environment`] for a whole run, and the samples change every tick, so the
-//!   signature would have to grow a locator before a lap replay could reach a
-//!   magstrip. Until it does, a replay's blend stays at zero by construction and
-//!   the tool measures the force law alone. The measurement that *does* exercise
-//!   it is `crates/game/tests/maglock_ground_truth.rs`, one tick at a time.
+//! - **`oag-trace` gained a locator, and a real lap now measures it (Task
+//!   #33, closed).** `replay`/`drive`/`drive_with` and `plan::to_gate` all
+//!   take an `Option<&[oag_formats::track::Sample]>` now, located fresh
+//!   every tick the same way `oag_game::race::Race::tick` locates the
+//!   player; see `crate::replay::locate` and its own doc comment for why
+//!   the resampling is duplicated here rather than shared.
+//!   `crates/trace/src/replay/tests.rs` pins the mechanism with a synthetic
+//!   magstrip fixture; a freshly-flown, freshly-captured lap of Talon's
+//!   Junction (its script is committed,
+//!   `verification/scenarios/talons-junction-inverted-section.inputs`) then
+//!   measured it for real - reseeded near the inverted section, position
+//!   error against the capture is roughly half with the locator attached
+//!   versus without, and 298 of 3,020 probe raycasts over the lap hit
+//!   `Surface::MagFloor` rather than `Floor`. **Resample density is not the
+//!   residual's source**: sweeping the locator's own resample from 1 to 4 to
+//!   32 samples per segment on that same lap shows the harness is sensitive
+//!   to density at all (1 to 4 measurably improves tracking) but saturated
+//!   by 4 - going 8x denser to 32 changes nothing outside noise. The per-tick
+//!   measurement that predates this, `crates/game/tests/maglock_ground_truth.rs`,
+//!   still carries the 49.5 % residual figure - the two are complementary,
+//!   not duplicates: one measures the hold's contribution to a rotation
+//!   identity, the other its effect on a trajectory.
 //! - **`vrcp.s` is an approximation and this is not.** The original normalises
 //!   through the VFPU reciprocal; every normalisation here is an exact `f32`
 //!   divide. The project does not claim bit-identity with the hardware - see
