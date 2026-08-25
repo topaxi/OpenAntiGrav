@@ -164,3 +164,16 @@ not a tail to fold into the last implementation commit. Run `just` before callin
 done — that's the gate every commit must pass — and confirm `git status` is clean
 before reporting: nothing from this thread should be left sitting uncommitted in the
 worktree. Report what now works in concrete terms, not "should work".
+
+**A step that was pure RE — a name recovered, a format decoded, a hypothesis
+confirmed, evidence documented — usually isn't "nothing left".** It unblocks an
+implementation task that this session probably shouldn't also attempt in the same
+sitting: the RE half and the implementation half are different kinds of work, and
+bundling them back-to-back in one pass is how the "verify → document" step gets
+skipped in practice. Default to writing a **new** `handover/*.md` thread for the
+implementation, with the RE thread's findings as its evidence, its own `## Open`/
+`## Next Steps`, and an index line in `HANDOVER.md`; then close out the original RE
+thread per the paragraph above (trim its `## Next Steps` to reflect it's done, or
+delete it if truly nothing else is open on it). Only implement in the same session
+when the remaining work is trivial and obviously in-scope for the next step you
+already committed to in step 3 — not as the default path.
