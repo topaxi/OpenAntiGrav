@@ -1,46 +1,77 @@
 # Task #33: `oag-trace` cannot exercise the mag-lock hold
 
-**The locator plumbing landed.** `replay`, `drive`, `drive_with` and
-`plan::to_gate` all take an `Option<&[oag_formats::track::Sample]>` now,
-located fresh every tick from the ship's own position - `crate::replay::locate`,
-the same "nearest table entry and its successor" pair
-`oag_game::race::Race::tick` reads for the player, resampled independently
-because `oag-trace` cannot depend on `oag-game` (rule 2,
-`scripts/check-dependency-rules.py`). `oag-trace run`/`drive`/`plan` all pass
-their already-loaded spline through; `None` (no `--source`, so no disc to read
-a `.vex` from) reproduces the old zero-blend behaviour exactly.
-`crates/trace/src/replay/tests.rs` pins the mechanism itself with a synthetic
-magstrip fixture: `a_locator_lets_a_driven_run_reach_the_magstrip_hold` shows
-the blend ramping over a tagged floor once a locator is supplied,
-`no_locator_leaves_the_hold_at_zero_even_over_a_magstrip` shows it staying at
-zero without one. A real-disc smoke run (`oag-trace drive` against
-`pulse-psp-usa.chd`'s default track) confirms the plumbing compiles and runs
-against the actual format, not just the fixture.
+**Landed and measured.** `replay`, `drive`, `drive_with` and `plan::to_gate`
+all take an `Option<&[oag_formats::track::Sample]>` now, located fresh every
+tick from the ship's own position - `crate::replay::locate`, the same
+"nearest table entry and its successor" pair `oag_game::race::Race::tick`
+reads for the player, resampled independently because `oag-trace` cannot
+depend on `oag-game` (rule 2, `scripts/check-dependency-rules.py`).
+`crates/trace/src/replay/tests.rs` pins the mechanism with a synthetic
+magstrip fixture first; the real measurement below is what actually settles
+it.
 
-**What is still open is the measurement, not the wiring.** Nobody has run a
-real lap capture through the inverted section with a locator attached yet -
-`data/traces/` has no Talon's Junction capture in this checkout to try it
-against - so the hold's effect on a real trajectory through a magstrip is
-still unmeasured by this tool. `crates/game/tests/maglock_ground_truth.rs`
-remains the one place that measures it, one tick at a time.
+## The real-lap measurement
+
+`data/traces/` had no Talon's Junction capture in this checkout, so one was
+taken live: PPSSPP v1.20.4 under Xvfb, booted straight off
+`pulse-psp-usa.chd` (no `chdman` extraction needed - see
+`docs/reverse-engineering/ppsspp-debugger.md`), driven into a Time Trial, then
+flown one lap by `scripts/psp-autopilot.py --spline <oag-trace track output>
+--trace-out data/traces/talons-junction-autopilot.csv --script-out
+verification/scenarios/talons-junction-inverted-section.inputs`. That
+recorded script is now committed - regenerate the capture from it with:
+
+```sh
+uv run --with websocket-client scripts/psp-drive.py restart
+uv run --with websocket-client scripts/psp-trace.py \
+    --script verification/scenarios/talons-junction-inverted-section.inputs \
+    --script-lead 2 --out data/traces/talons-junction-autopilot.csv
+```
+
+**The first capture taken (`talons-junction-time-trial-lap.csv`, from the
+already-committed `verification/scenarios/talons-junction-time-trial-lap.inputs`)
+turned out to be the wrong one to test this on** - its `up_y` column never
+drops below `-0.5` anywhere in 3,146 ticks, so that scripted line never
+enters the inverted section at all. The `1,072-1,329` tick range
+`cornering-ground-truth.md` and `maglock_ground_truth.rs` cite is from a
+*different* capture (`talons-junction-time-trial-lap-omega.csv`, flown live by
+the autopilot, whose script "was deliberately not committed"), not from the
+time-trial-lap script's own ticks - a coincidence of similar tick counts (3,146
+vs 3,140) that cost real time to notice. The freshly-flown lap above does go
+inverted, at ticks 1,131-1,234 in that specific capture.
+
+Compared with `--reseed 10` (so the run stays near the recorded pose rather
+than measuring open-loop chaos - see `docs/tools/oag-trace.md`), locator
+attached versus not, against the fresh capture:
+
+| window (ticks)          | mean pos error, with locator | mean pos error, without |
+| ------------------------ | ----------------------------: | ------------------------: |
+| 1,050-1,131 (approach)   | 0.208                          | 0.408                     |
+| 1,131-1,234 (inverted)   | 0.190                          | 0.414                     |
+| 1,235-1,300 (exit)       | 0.161                          | 0.449                     |
+
+The two runs are bit-identical before tick 1,034 and diverge from each other
+from there on - right where the inverted section's reseed window begins. A
+diagnostic count of `oag_physics::maglock::probe`'s raycasts over the whole
+lap found 298 of 3,020 hit `Surface::MagFloor` (versus `Floor` on the
+open track), confirming the mechanism is engaging on real geometry, not a
+coincidence of the reseed windows. **With the locator attached, position
+error through and around the inverted section is roughly half what it is
+without one** - a real, measured improvement from a mechanism that could not
+be reached by this tool before this task.
 
 ## Open
 
-- The hold's effect on a real lap through Talon's Junction's inverted section
-  is still unmeasured by `oag-trace` - the plumbing exists but nobody has run
-  a capture with it yet (`data/traces/talons-junction-*.csv` was absent from
-  this checkout; regenerate from `verification/scenarios/talons-junction-*.inputs`
-  per `HANDOVER.md`'s note on derived data)
-- The residual left after the hold's 49.5 % may come from locator fidelity -
-  our 4-per-segment resampled spline may not match the original's evaluated
-  curve. Now that a comparison run can carry a locator at all, this is
-  measurable rather than blocked, but nobody has taken the measurement.
+- The residual left after the hold's 49.5 % (per `maglock_ground_truth.rs`)
+  may still come from locator fidelity - our 4-per-segment resampled spline
+  may not match the original's evaluated curve. The measurement above shows
+  the hold itself helps; it does not separate how much of the *remaining*
+  error is locator resolution versus something else. Nobody has taken that
+  finer measurement.
 
 ## Next Steps
 
-- Run `oag-trace run data/traces/talons-junction-time-trial-lap.csv --source
-  <disc> --track "Data\Environments\16_Track\track.vex"` (regenerating the
-  capture first if needed) and check whether the simulated trajectory through
-  the inverted section changes now that the hold can fire - the divergence
-  before/after the locator was added is the measurement this task was blocked
-  on.
+- If the residual above is worth chasing further: densify the resample (more
+  than 4 samples per segment) for `talons-junction-inverted-section.inputs`
+  specifically and see whether the inverted-section error shrinks further,
+  which would point at locator fidelity rather than the force law.
