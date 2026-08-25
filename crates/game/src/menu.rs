@@ -1953,9 +1953,9 @@ pub fn draw_list(
         x: title_x,
         y: title_y,
         scale: title_scale,
-        // The frame's own ink where there is a frame, this build's substitute where
-        // there is not - see `Skin::title_color`, argued for the frame, not the colour.
-        color: frame.ink.unwrap_or_else(|| skin.title_color()),
+        // The disc's own declared colour, the frame's own ink, or this
+        // build's substitute - see `Skin::title_color` for the order and why.
+        color: skin.title_color(frame.ink),
         border: None,
         align: Align::Left,
         text: page.title.clone(),
