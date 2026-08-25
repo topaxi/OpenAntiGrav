@@ -130,6 +130,7 @@ impl Stage {
             media,
             race: None,
             built_race: None,
+            music: None,
             trace,
         })))
     }
@@ -146,9 +147,11 @@ impl Stage {
     /// Takes the font and sheet rather than a `boot::Shell`, because by this
     /// point there is no boot shell left: the running session has the menus'
     /// own copies and the boot's was consumed when the front end was built.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn race_loading(
         gpu: &Gpu,
         worker: race::LoadWorker,
+        music: audio::RaceMusicWorker,
         font: &oag_game::font::Atlas,
         sprites: &oag_game::sprite::Sheet,
         assets: &loading::Assets,
@@ -182,6 +185,7 @@ impl Stage {
             media: None,
             race: Some(worker),
             built_race: None,
+            music: Some(music),
             trace,
         })))
     }

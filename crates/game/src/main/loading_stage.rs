@@ -7,7 +7,7 @@
 //! side.
 
 use oag_game::render::Renderer;
-use oag_game::{boot, capture, loading, prefetch, race};
+use oag_game::{audio, boot, capture, loading, prefetch, race};
 
 use crate::gpu::Gpu;
 use crate::race_stage::RaceStage;
@@ -61,6 +61,20 @@ pub(crate) struct LoadingStage {
     /// that one spawns a decode thread nothing should start until it is read
     /// from, so there is no earlier moment to build it at.
     pub(crate) built_race: Option<Result<Box<RaceStage>, RaceBuildError>>,
+    /// The race's music, being located and decoded alongside the circuit -
+    /// see [`audio::RaceMusicWorker`], spawned next to [`Self::race`] in
+    /// `Session::launch_race`. `Some` on the race path, `None` on the boot
+    /// one, the same split [`Self::race`] itself carries.
+    ///
+    /// Polled the same way [`Self::race`] used to be polled before
+    /// [`Self::built_race`] existed: there is no "warm" step for a decoded
+    /// track the way there is for a GPU scene, so landed is ready.
+    /// `Session::finish_race_loading` takes it at the hand-off and hands it
+    /// to [`oag_game::audio::Audio::finish_race_music`], which is where the
+    /// mixer is actually touched - never here, and never before the fade
+    /// runs out, or the race music would start audibly under the loading
+    /// screen.
+    pub(crate) music: Option<audio::RaceMusicWorker>,
     pub(crate) trace: bool,
 }
 
@@ -96,9 +110,16 @@ impl LoadingStage {
     /// require both this and [`Self::media_ready`] without asking which path it
     /// is on. On the race path this is answered by [`Self::built_race`] rather
     /// than by [`Self::race`] directly: the worker landing is not the point,
-    /// the scene being buildable from what it landed is.
+    /// the scene being buildable from what it landed is. The music has to
+    /// have landed too - see [`Self::music`] - or the fade would run out
+    /// while `Session::finish_race_loading` is still waiting on a decode.
     pub(crate) fn race_ready(&self) -> bool {
-        self.race.is_none() || self.built_race.is_some()
+        self.race.is_none()
+            || (self.built_race.is_some()
+                && self
+                    .music
+                    .as_ref()
+                    .is_none_or(audio::RaceMusicWorker::is_finished))
     }
 }
 

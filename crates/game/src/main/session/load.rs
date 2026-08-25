@@ -6,7 +6,7 @@ use log::{error, info, warn};
 
 use oag_game::frontend::{self};
 use oag_game::render::VideoFormat;
-use oag_game::{boot, loading, movie, prefetch, race};
+use oag_game::{audio, boot, loading, movie, prefetch, race};
 
 use crate::hints::RACE_TITLE;
 use crate::loading_stage::RaceBuildError;
@@ -378,12 +378,28 @@ impl Session {
         // with 1 rather than with the same seed a capture uses.
         self.races_launched = self.races_launched.saturating_add(1);
         let worker = race::LoadWorker::spawn(options, label);
+        // Spawned alongside the circuit read, for the same reason: fetching
+        // this synchronously at the hand-off used to decode a full track on
+        // the frame thread, measured at 2.83s for a cold PS2 one - the whole
+        // of the gap that used to open up behind the loading screen's fade.
+        // `reserve_race_music_index` settles which track before the worker
+        // starts, so it and `Audio::finish_race_music` (called once this
+        // stage's fade runs out) agree on one without either asking `discs`
+        // twice. See `LoadingStage::music` and `audio::RaceMusicWorker`.
+        let music_index = self.audio.reserve_race_music_index(&self.music_discs);
+        let music = audio::RaceMusicWorker::spawn(
+            self.music_discs.clone(),
+            self.settings.audio.music_source,
+            boot::default_audio_cache_dir(),
+            music_index,
+        );
         let shell = self.shell.clone().ok_or_else(|| {
             anyhow::anyhow!("this run has no menus, so it has no font to draw with")
         })?;
         self.stage = Stage::race_loading(
             &self.gpu,
             worker,
+            music,
             &shell.font,
             &shell.sprites,
             &self.loading_assets,
@@ -521,8 +537,11 @@ impl Session {
     /// would not build - not something to carry on from, exactly as before
     /// this moved to [`Self::advance_race_build`].
     fn finish_race_loading(&mut self) -> Result<()> {
-        let Some(built) = (match &mut self.stage {
-            Stage::Loading(stage) if stage.screen.is_done() => stage.built_race.take(),
+        let Some((built, music)) = (match &mut self.stage {
+            Stage::Loading(stage) if stage.screen.is_done() => stage
+                .built_race
+                .take()
+                .map(|built| (built, stage.music.take())),
             _ => None,
         }) else {
             return Ok(());
@@ -553,18 +572,32 @@ impl Session {
         self.audio.stop_race_sfx();
         // After the stage swap succeeds, not before: a failed launch must
         // leave the menu music playing rather than having already silenced
-        // it. See `Audio::start_race_music`.
+        // it. See `Audio::finish_race_music`.
         //
-        // Timed as a diagnostic: this call is synchronous and, on a cold
-        // cache, decodes the whole track before returning - a candidate for
-        // the black gap between the fade and the first race frame, alongside
-        // the render timers in `Session::frame`. See `Session::race_ready_at`.
+        // Timed as a diagnostic, kept from the round that found the decode
+        // running here: `Audio::finish_race_music` only ever joins an
+        // already-finished `RaceMusicWorker` (see `LoadingStage::race_ready`),
+        // so this should now read near-instant rather than the 2.83s a cold
+        // PS2 track measured before the worker existed.
         let music_start = std::time::Instant::now();
-        self.audio.start_race_music(
-            &self.music_discs,
-            self.settings.audio.music_source,
-            &boot::default_audio_cache_dir(),
-        );
+        match music {
+            Some(worker) => self.audio.finish_race_music(
+                worker,
+                &self.music_discs,
+                self.settings.audio.music_source,
+                &boot::default_audio_cache_dir(),
+            ),
+            // Defensive rather than load-bearing: `Session::launch_race`
+            // always spawns one for the path this function only runs on
+            // (`Stage::race_loading`). Falls back to the old synchronous
+            // fetch rather than silently leaving the race without music if
+            // that invariant is ever violated.
+            None => self.audio.start_race_music(
+                &self.music_discs,
+                self.settings.audio.music_source,
+                &boot::default_audio_cache_dir(),
+            ),
+        }
         info!("race music started in {:?}", music_start.elapsed());
         self.gpu.window.set_title(RACE_TITLE);
         Ok(())

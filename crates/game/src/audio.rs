@@ -38,6 +38,10 @@ use crate::display::percentage;
 
 pub mod sfx;
 
+mod race_music;
+pub use race_music::RaceMusicWorker;
+use race_music::locate;
+
 /// A bus volume, as a percentage of unattenuated.
 ///
 /// Zero is off and 100 is the samples as they were stored. Unlike
@@ -545,7 +549,13 @@ pub struct Audio {
 /// rather than a tuple: it carries whether what was loaded is one of the
 /// sixteen soundtrack tracks, which is what decides whether MUSIC SOURCE may
 /// ever move it. See [`MusicSource`].
-struct Loaded {
+///
+/// `pub` - not its fields - so [`RaceMusicWorker::join`] can hand one back
+/// across the crate's own lib/bin boundary, the way [`crate::race::Loaded`]
+/// already does for the circuit's own worker. Nothing outside this module
+/// needs to read a field; it only ever moves one straight into
+/// [`Audio::finish_race_music`].
+pub struct Loaded {
     /// Which release it came off, or `None` for music with no counterpart -
     /// the PSP front end's own. Becomes [`Audio::music_from`].
     from: Option<Platform>,
@@ -768,10 +778,7 @@ impl Audio {
             self.output.with_mixer(|mixer| mixer.stop(id));
         }
 
-        if self.race_index.is_none() {
-            self.race_index = Some(Self::initial_race_index(&self.music_from, discs));
-        }
-        let index = self.race_index.expect("set immediately above");
+        let index = self.reserve_race_music_index(discs);
         let seek = (self.race_position > 0.0).then_some(self.race_position);
         self.race_context = Some((discs.clone(), choice, cache_dir.to_path_buf()));
         self.play_race_track(discs, choice, cache_dir, index, seek);
@@ -782,6 +789,76 @@ impl Audio {
         if self.race_voice.is_some() {
             self.race_position = 0.0;
         }
+    }
+
+    /// The race-launch counterpart of [`Self::start_race_music`]: applies a
+    /// track that a [`RaceMusicWorker`], spawned earlier, has already located
+    /// and decoded - so nothing here reads off the disc, and this never
+    /// blocks the caller the way [`Self::start_race_music`] can on a cold
+    /// cache.
+    ///
+    /// This is the fix for the gap that otherwise opens up between the
+    /// loading screen's fade and the first race frame: decoding a full track
+    /// synchronously, at the hand-off, measured at 2.83 seconds for a cold PS2
+    /// track - all of it spent before this method ever existed, on the frame
+    /// thread, with the fade already faded out.
+    ///
+    /// `index` was reserved by [`Self::reserve_race_music_index`] before
+    /// `worker` was spawned - see `Session::launch_race` - so this reads
+    /// [`Self::race_index`] back rather than taking it as a parameter: the
+    /// two are guaranteed to agree without asking `discs` a second time.
+    pub fn finish_race_music(
+        &mut self,
+        mut worker: RaceMusicWorker,
+        discs: &MusicDiscs,
+        choice: MusicSource,
+        cache_dir: &Path,
+    ) {
+        if let Some(id) = self.music.take() {
+            self.output.with_mixer(|mixer| mixer.stop(id));
+        }
+        // Defensive rather than load-bearing, the same as the identical guard
+        // in `start_race_music`: nothing calls this while a race voice is
+        // already sounding, but a wrong assumption here would otherwise leak
+        // a voice rather than fail loudly.
+        if let Some(id) = self.race_voice.take() {
+            self.output.with_mixer(|mixer| mixer.stop(id));
+        }
+        let index = self.race_index.expect(
+            "Session::launch_race reserves this via reserve_race_music_index before spawning \
+             the worker this method takes",
+        );
+        let seek = (self.race_position > 0.0).then_some(self.race_position);
+        self.race_context = Some((discs.clone(), choice, cache_dir.to_path_buf()));
+        // Never actually waits: this is only called once the loading screen's
+        // own `race_ready` has seen `worker.is_finished()` true - see
+        // `LoadingStage::race_ready`.
+        let fetched = worker.join().unwrap_or_else(|| {
+            Err(anyhow::anyhow!(
+                "the race music fetch thread would not start"
+            ))
+        });
+        self.apply_fetched_race_track(index, fetched, seek);
+        if self.race_voice.is_some() {
+            self.race_position = 0.0;
+        }
+    }
+
+    /// Reserves which track index the next race's music means, without
+    /// fetching it.
+    ///
+    /// The split that lets a caller spawn a [`RaceMusicWorker`] for that index
+    /// before the mixer - or the disc - is touched at all:
+    /// [`Self::start_race_music`] used to do this reservation and the fetch in
+    /// the same breath, which was fine when both were synchronous and cheap
+    /// enough to not notice; spawning a worker for the fetch half needs the
+    /// index settled first, so `Session::launch_race` can hand it to
+    /// [`RaceMusicWorker::spawn`] before the loading screen even goes up.
+    pub fn reserve_race_music_index(&mut self, discs: &MusicDiscs) -> usize {
+        if self.race_index.is_none() {
+            self.race_index = Some(Self::initial_race_index(&self.music_from, discs));
+        }
+        self.race_index.expect("set immediately above")
     }
 
     /// Where the race playlist should start the first time it is asked for.
@@ -846,7 +923,22 @@ impl Audio {
         index: usize,
         seek: Option<f64>,
     ) {
-        match self.fetch_indexed(discs, choice, cache_dir, index) {
+        let fetched = self.fetch_indexed(discs, choice, cache_dir, index);
+        self.apply_fetched_race_track(index, fetched, seek);
+    }
+
+    /// The "start a voice on what was fetched" half of [`Self::play_race_track`],
+    /// split out so [`Self::finish_race_music`] can share it over a track
+    /// [`RaceMusicWorker`] fetched instead of [`Self::fetch_indexed`]. Neither
+    /// caller does anything to the disc from here on - this only ever touches
+    /// the mixer and this struct's own race-playlist state.
+    fn apply_fetched_race_track(
+        &mut self,
+        index: usize,
+        fetched: Result<Option<Loaded>>,
+        seek: Option<f64>,
+    ) {
+        match fetched {
             Ok(Some(loaded)) => {
                 let seconds = loaded.sound.seconds();
                 self.race_cache = loaded
@@ -1080,7 +1172,7 @@ impl Audio {
         // carry no pairable soundtrack. It would be a *different recording*,
         // and the row's whole claim is that its three values are one recording
         // encoded twice - see [`MusicSource`]. The caller reports the absence.
-        let Some(track) = self.locate(discs, platform, source, MUSIC_TRACK)? else {
+        let Some(track) = locate(discs, platform, source, MUSIC_TRACK)? else {
             return Ok(None);
         };
 
@@ -1127,7 +1219,7 @@ impl Audio {
             }));
         }
 
-        let Some(track) = self.locate(discs, platform, source, index)? else {
+        let Some(track) = locate(discs, platform, source, index)? else {
             return Ok(None);
         };
 
@@ -1140,51 +1232,6 @@ impl Audio {
                 track.seconds
             ),
         }))
-    }
-
-    /// Which track of `platform`'s soundtrack `index` means, `index` being an
-    /// entry in the **booted** disc's own order.
-    ///
-    /// On the booted release that is simply its own entry `index`. On the
-    /// other one it is whichever track is the same length, which is what
-    /// makes the two selections the same recording rather than two unrelated
-    /// pieces of music.
-    ///
-    /// **The index is not stable across boots**, and it is worth being plain
-    /// about that: an index means "entry N of whichever disc booted", and the
-    /// two archives are not in the same order. Entry 0 happens to name the
-    /// same recording on both - the PS2's first track is also the first of
-    /// the PSP's sixteen in `Data.wad` order - but that is coincidence, and at
-    /// index 1 the two boots start on different music. [`MUSIC_TRACK`] gets
-    /// away with never noticing because it is a constant; [`Self::race_index`]
-    /// is not, and this is exactly why it is kept and read in the booted
-    /// disc's own order rather than in whichever platform happens to be
-    /// playing at the time - a future circuit-to-track map has to be built the
-    /// same way.
-    fn locate(
-        &self,
-        discs: &MusicDiscs,
-        platform: Platform,
-        source: &str,
-        index: usize,
-    ) -> Result<Option<Track>> {
-        let Some(soundtrack) = Soundtrack::read(source, platform)? else {
-            return Ok(None);
-        };
-        if discs.booted() == Some(platform) {
-            return Ok(soundtrack.tracks.get(index).copied());
-        }
-
-        let Some((booted_source, booted_platform)) = discs.pick(MusicSource::Auto) else {
-            return Ok(soundtrack.tracks.get(index).copied());
-        };
-        let Some(booted) = Soundtrack::read(booted_source, booted_platform)? else {
-            return Ok(soundtrack.tracks.get(index).copied());
-        };
-        let Some(wanted) = booted.tracks.get(index) else {
-            return Ok(None);
-        };
-        Ok(soundtrack.nearest(wanted.seconds))
     }
 
     /// Starts one of the boot sequence's movie sounds, reporting what happened.
