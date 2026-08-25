@@ -209,7 +209,7 @@ cpu.status: stepping=True, pc=0x0892c404
 | --- | --- | --- |
 | `a0` (`param_1`) | `0x08b65a30` | **`weatherPos`'s own live descriptor** - see below, not a pass-through |
 | `a1` (`param_2`) | `0x08fddba0` | the node `func_0x00140bd4` links the new instance under |
-| `a2` (`param_3`) | `0x45000000` → as `f32`: `2048.0` | stored into the new instance's `+0x4c`, meaning unknown |
+| `a2` (`param_3`) | `0x45000000` → as `f32`: `2048.0` | stored into the new instance's `+0x4c` - likely a generic default, see below |
 | `ra` | `0x0890901c` | **the call site** |
 
 **`a0` is not a pass-through, and it is the decisive confirmation.** Reading
@@ -227,17 +227,47 @@ through `+0x74`, not its own `param_1` re-passed - a correction to how that
 call reads, worth recording since it is easy to misattribute from the
 decompiler's argument order alone.)
 
-**`a1`'s own class-identity tag is the shared "generic base" one**
-(`0x08a6ba64`, the 25-caller tag from above), read directly at `a1 + 4` -
-consistent with the parent a `weatherPos` instance links under being an
-ordinary, untyped scene node rather than anything `weatherPos`-specific
-itself. Attempting to go one step further and read "the resolved record"
-`FUN_08908f98`'s decompile implies lives at `param_2 + 4` **did not work**:
-that address holds the same `0x08a6ba64`, which is code (the tag thunk
-itself), not a data record - reading past it returns raw instruction bytes,
-not a class id or a track-side value. So either that decompiled field isn't
-the record cursor this reading assumed, or the record lives somewhere this
-pass didn't correctly reach; left open rather than guessed at further.
+**`a1` is confirmed live to be a `Transform` node** (`+0x44 = 0x0000006e`,
+`Transform`'s own class id in `vex.md`'s table - the same offset weatherPos's
+own class id sits at, read directly, not inferred), tying this straight back
+to the static reading below: Talon's Junction's `weatherPos` instances each
+sit under an unnamed `Transform` in the `.vex` tree, and this is that
+`Transform`, live. Its own class-identity tag at `+4` is the shared "generic
+base" one (`0x08a6ba64`, the 25-caller tag from above) rather than a
+`Transform`-specific tag - consistent with `Transform` being common enough
+that nothing bothered giving it its own.
+
+**A second live read reproduced the exact same call** (identical `a0`/`a1`/
+`a2`/`ra` to the first session's capture, confirming this call site is
+deterministic across runs) and dumped `a1`'s fuller structure. Two things in
+it: `+0x4c = 0x45000000` (`2048.0`) **on the parent `Transform` too** - the
+same value `a2`/`param_3` carries and the new `weatherPos` instance's own
+`+0x4c` gets stamped with. A value shared between parent and child rather
+than authored per-instance reads like a generic default (a range or LOD
+cutoff inherited from the base-node constructor) more than a per-instance
+weather selector - **softening the "strongest concrete lead" claim from the
+first pass**, not confirming it. Bytes past `+0x60` look like unrelated
+neighbouring heap data (`0xfeadfead`, a classic freed-memory poison pattern,
+among them) rather than more of this struct - not read further.
+
+**A second attempt at `FUN_08908f98`'s per-record data, this time breaking
+at the resolve call itself (`0x08908ff4`) rather than deep inside
+`FUN_0892c404`, found what the record actually is - a raw numeric class id**,
+not a tag pointer: observed values `0x125` (`Mesh`), `0x3c1` (`Texture`),
+`0x3c0` (`Anim Transform`) and `0x3c5` (`Airbrake`), all exact matches to
+`vex.md`'s own class table, while driving through ship/track loading. That
+settles what "the record" is - `func_0x00104b68(class_id)` genuinely resolves
+a class by its numeric id, the reading the code always suggested and the
+first pass's `param_2 + 4` read had obscured (that address holds `a1`'s own
+*tag*, not an array cursor - a different field entirely, now that `a1` is
+understood to be `param_2` itself, a real node, not an iteration-state
+struct). **This resolve call fires constantly** - once per `Mesh`/`Texture`/
+etc. spawned anywhere, including during ordinary front-end navigation - so
+isolating specifically `weatherPos`'s own hit (`0x3da`) among the noise was
+not achieved this session: interleaving discrete button presses with a
+breakpoint that fires many times per screen transition proved too fragile to
+land reliably in the time available. Removing this breakpoint and keeping
+only `weatherPos`'s own (`0x0892c404`) is what let the walk complete.
 
 `get_function_by_address(0x0890901c)` resolves to `FUN_08908f98`
 (`08908f98`-`0890906b`), decompiled:
@@ -317,22 +347,28 @@ already reads) was checked too - its full attribute set (`type`,
   effects, and where exactly - even though the constructor's call chain, and
   that it really is `weatherPos`, are now both confirmed live.** `weatherPos`
   instances are real, constructed objects at race-load time, corroborated on
-  four fields of their own live descriptor, not dead code. Nothing here says
-  which of `WO_RAIN`/`WO_SNOW`/`WO_MODESTO_STEAM_A`/`WO_BLUE_WELDER` a given
-  one carries, or whether Talon's Junction's 14 all carry the same one. No
-  authored data (`.vex` names, `Definition.xml`) has a signal, so the answer
-  is runtime state this session did not chase down: `param_3` (`2048.0` as
-  `f32`, stored at the new instance's `+0x4c`) is the strongest concrete lead
-  - a per-record value, plausibly a range, a scale, or literally which of the
-  four effects.
-- **`FUN_08908f98`'s "record" this pass expected at `param_2 + 4` is not
-  there - reading it lands on code, not data.** That address holds
-  `0x08a6ba64` itself (the shared identity-tag thunk, confirmed by
-  disassembling it, not by inference), so either the decompiled `param_2[1]`
-  field isn't the per-record cursor this reading assumed, or the real record
-  lives at an address this pass didn't reach. Worth re-reading
-  `FUN_08908f98`'s decompile more carefully, or single-stepping through one
-  full loop iteration in a live capture, before trying this again.
+  four fields of their own live descriptor, not dead code, spliced under a
+  live-confirmed `Transform` parent. Nothing here says which of `WO_RAIN`/
+  `WO_SNOW`/`WO_MODESTO_STEAM_A`/`WO_BLUE_WELDER` a given one carries, or
+  whether Talon's Junction's 14 all carry the same one. No authored data
+  (`.vex` names, `Definition.xml`) has a signal. `param_3` (`2048.0`) is
+  **downgraded** from "strongest concrete lead" - it turns out to be shared
+  with the parent `Transform`'s own `+0x4c`, which reads like a generic
+  default (a range or LOD cutoff) rather than a per-instance selector.
+- **`FUN_08908f98`'s per-record data format is now known - a raw numeric
+  class id, not a tag pointer** - confirmed by breaking at the resolve call
+  itself (`0x08908ff4`) rather than reading `param_2 + 4` deep inside
+  `FUN_0892c404` (which was reading `a1`'s own identity tag, a different
+  field, now that `a1` is confirmed to be a real node rather than a bare
+  iteration struct). What is *not* recovered: `weatherPos`'s own resolve
+  call, `0x3da`, specifically - the breakpoint fires on every `Mesh`/
+  `Texture`/`Anim Transform`/`Airbrake` spawn program-wide (all four observed
+  this session, matching `vex.md`'s table), so it is too noisy to isolate by
+  interleaving discrete input with it. The likely path in: filter on the
+  value at the delay-slot's dereferenced address equalling `0x3da` specifically
+  while free-running (no input needed once past the menu, since `weatherPos`
+  loads automatically with the track) rather than trying to drive the front
+  end with this breakpoint armed at all.
 - **`FUN_08908f98` (`0x08908f98`-`0890906b`) is a generic per-class-group
   spawner, not `weatherPos`-specific**, so it is not renamed this session -
   its exact intended name (what `param_1`'s `+0x48` structure and `+0x4c`

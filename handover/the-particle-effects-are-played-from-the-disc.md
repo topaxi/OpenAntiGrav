@@ -27,10 +27,17 @@
   isn't recovered is which of `WO_RAIN`/`WO_SNOW`/`WO_MODESTO_STEAM_A`/
   `WO_BLUE_WELDER` an instance carries, or whether Talon's Junction's 14 all
   carry the same one - no node payload, Maya name, or `PI_Track` attribute has
-  a signal, and the live capture's own `param_3` (`2048.0` as `f32`, stored at
-  the new instance's `+0x4c`) is the strongest untraced lead. Detail,
-  including the class-identity-tag mechanism and the full live-capture method,
-  in
+  a signal. `param_3` (`2048.0` as `f32`, stored at the new instance's
+  `+0x4c`) turned out, on a second live read, to be **shared with the parent
+  `Transform`'s own `+0x4c`** - a generic default rather than a per-instance
+  selector, downgrading it from the earlier "strongest lead". A second live
+  pass also settled what `FUN_08908f98`'s per-record data format is (a raw
+  numeric class id, confirmed against real `Mesh`/`Texture` spawns matching
+  `vex.md`'s table exactly) but could not isolate `weatherPos`'s own record
+  specifically - that breakpoint fires on every node spawn program-wide, too
+  often to interleave with driving the front end in the time available.
+  Detail, including the class-identity-tag mechanism and the full
+  live-capture method, in
   [`docs/ghidra/functions/psp-pulse-usa/weatherpos.md`](../docs/ghidra/functions/psp-pulse-usa/weatherpos.md).
   Separately, `WO_MODESTO_STEAM_A` may not even be a Pulse trigger at all -
   `modesto_heights` matches a **Pure** circuit, not a Pulse one.
@@ -43,7 +50,7 @@
 
 ## Next Steps
 
-- Recover triggers for the unwired effects - weapon ones need the weapon itself built first. For the four environmental ones, the constructor's call chain is confirmed live; what's left is reading which effect a `weatherPos` instance selects - `param_3`/`+0x4c` is the concrete lead. `FUN_08908f98`'s per-record cursor was tried and did not land on a data record (see `psp-pulse-usa/weatherpos.md`'s Open section) - re-reading that function's decompile more carefully is the next step there, not repeating the same read.
+- Recover triggers for the unwired effects - weapon ones need the weapon itself built first. For the four environmental ones, the constructor's call chain is confirmed live; `param_3`/`+0x4c` is ruled out as the effect selector (shared with the parent, a generic default). The record format (`FUN_08908f98`'s per-node class id) is now known; what's missing is isolating `weatherPos`'s own `0x3da` record among the noise of every other class spawning through the same call - a free-running capture that filters on the resolved id rather than trying to interleave menu input with the breakpoint is the likely way in, per `psp-pulse-usa/weatherpos.md`'s Open section.
 - Re-check `pob.md`'s `ParticleSystem` "dead end" claim against the class-identity-tag mechanism `weatherpos.md` found, before relying on it.
 - Implement the missing interpreter features (atlases/textures, billboard roll, emitter extent, emission-scale channel, animated-attribute array).
 - Do not fire any effect on a guess - follow the do-not-invent rule in `CLAUDE.md`.
