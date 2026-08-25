@@ -1953,9 +1953,8 @@ pub fn draw_list(
         x: title_x,
         y: title_y,
         scale: title_scale,
-        // The frame's own ink where there is a frame, this build's substitute
-        // where there is not - see `Skin::title_color`, whose whole argument was
-        // about the missing frame rather than about the colour.
+        // The frame's own ink where there is a frame, this build's substitute where
+        // there is not - see `Skin::title_color`, argued for the frame, not the colour.
         color: frame.ink.unwrap_or_else(|| skin.title_color()),
         border: None,
         align: Align::Left,
