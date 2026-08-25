@@ -287,6 +287,7 @@
 0x0891e35c	function	Gfx_Enqueue	92	mesh-draw.md
 0x0883d850	function	Ship_ThrustInput	55	exhaust.md
 0x089246b4	function	ShipCollisionFx_Trigger	85	contact-response.md
+0x08924550	function	ShipCollisionFx_Preload	85	../../../formats/pob.md
 0x0883de90	function	Ship_DispatchCollisionFx	80	contact-response.md
 0x088f4910	function	ParticleSystem_DeriveScaledParams	90	particle-system.md
 0x088f5b9c	function	ParticleSystem_Update	85	particle-system.md

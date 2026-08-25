@@ -143,47 +143,86 @@ addresses `0x08a886f8`, `0x08a88720`, `0x08a88750`, `0x08a8877c`, each
 0x28-0x30 bytes apart. That spacing is consistent with a fixed-size array of
 preload entries baked into the executable.
 
-**The xref lead this page used to call "untried" has since been tried, and
-is a clean static dead end (2026-08-25).** Every mechanism `ghidra-mcp`
-exposes for "what points at this address" came back empty against all four
-path-string addresses and their short-name neighbours (`0x08a887b4`-
-`0x08a887f0`): `get_xrefs_to` per address, `find_undocumented_by_string` per
-address, `search_byte_patterns` for the raw little-endian pointer value
-(also tried against the same strings' overlay-space mirrors at
-`0x28a886f8`/`0x38b886f8`, in case the xref engine only indexes one address
-space), and a whole-program `search_instructions` sweep with no mnemonic
-filter for a `lui`/`_lui` building the address's rounded-up high half
-(`0x8a9`, `524719` instructions scanned, zero hits). `FUN_089156a0`'s own
-address is confirmed still callerless the same way - `get_function_callers`
-and `get_xrefs_to` both re-run against it, both still empty. None of this
-proves no caller exists - it
-proves the reference, if one exists, is not a static absolute-address
-construction Ghidra's default analysis or a full mnemonic-blind instruction
-sweep can see. The next static idea worth trying, not yet tried: several
-functions in this binary (`FUN_089156a0` itself among them, see
-`lui s3,0x2b` / `lw a0,-0x1db8(s3)` early in its body) load a per-function
-base pointer into a saved register and address data through it with small
-negative offsets, a PSP relocatable-module pattern distinct from both a
-literal absolute load and MIPS `$gp`-relative small-data addressing. A
-sibling trap elsewhere in this executable found a global (`DAT_08b32428`,
-read/written all through the weapon code per the decompiler) with **zero**
-`search_instructions` hits for its low-half displacement `0x2428` - the
-signature of `$gp`-relative addressing, where the offset shown is relative
-to `$gp`'s value, not to the global's own address, so a raw-hex sweep looks
-empty on a global that is read constantly. Checked here and *not* present:
-`search_instructions` with no mnemonic filter finds zero operands
-containing the substring `gp` anywhere in this ~525k-instruction program,
-so whatever mechanism produced that other global's access, this binary does
-not expose it as a register literally named `gp` in Ghidra's disassembly -
-either this program doesn't use `$gp`-relative addressing at all, or
-Ghidra's Allegrex processor module names register 28 something else here.
-Unresolved which. Whether the preload table is reached through one of these
-per-function pool pointers, rather than a fresh `lui`/`addiu` pair, is
-unexamined. Short of that: a live capture that steps forward from a
-resolved `WO_SHIP_COLL_SPARK_DAMAGE` target rather than from the loader
-(`scripts/ppsspp_debugger.py`, breakpoint on `FUN_088f8e38`'s entry during
-the "loading the race" step per the trace above, then walk the return
-address stack) is the honest next avenue once static search is exhausted.
+**The xref lead this page used to call "untried" was tried and was a clean
+static dead end - every `ghidra-mcp` xref mechanism, plus a whole-program
+`lui`/`_lui` sweep for the address's absolute high half, came back empty
+against all four path-string addresses (2026-08-25 first pass).** That
+dead end was real but not the final answer: absence of a `lui`/`addiu` pair
+is exactly what a PIC-style, per-function base-pointer addressing mode
+produces, and this binary uses one (`FUN_089156a0` itself has
+`lui s3,0x2b` / `lw a0,-0x1db8(s3)` in its own prologue). A sibling `$gp`
+trap was checked and ruled out (no register named `gp`, no matching
+displacement, anywhere in this program's disassembly) - it's a different
+mechanism, not that one.
+
+**The caller is found (2026-08-25, live, PPSSPP v1.20.4 under Xvfb) and
+named `ShipCollisionFx_Preload` (`0x08924550`-`0x089246ab`).** It decompiles
+to four straight-line calls into `func_0x000ef540` (rebased:
+`0x08804000 + 0x000ef540 = 0x088f3540`, i.e. `FUN_088f3540`, the generic
+resource loader this page already names) each with the pool-pointer argument
+`_DAT_002ae248` and a **decompiler-printed literal that reads as
+unrelocated**: `0x2846f8`, `0x284720`, `0x284750`, `0x28477c`. This binary
+is known to print pre-relocation literals in some regions of its decompiled
+output rather than the runtime address (a "looks like `0x276c70`, is
+actually `0x08a7ac70`" pattern documented elsewhere on a different string in
+the same import) - add the `0x08804000` image base back and all four
+resolve **exactly** to the four path-string addresses above, in the same
+order (`0x2846f8 + 0x08804000 = 0x08a886f8`, and so on through
+`0x28477c → 0x08a8877c`).
+
+Confirmed live, not just by decompiling: a breakpoint at
+`ShipCollisionFx_Preload`'s own entry never fired (ruling it out as its own
+caller, and closing that specific guess), but a breakpoint at
+`FUN_088f3540`'s entry fired eight times during one "loading the race"
+step, with `a0` (the pool pointer) identical across all eight hits and `ra`
+(the return address, i.e. the actual call site) cycling through exactly
+four values sixteen bytes apart - `0x08924580, 0x08924590, 0x089245a0,
+0x089245b0` - twice each. Those four addresses land inside
+`ShipCollisionFx_Preload`, right after its four `jal`s, matching the
+decompile exactly. The repeat (eight hits, not four) is consistent with
+`ShipCollisionFx_Preload` itself being invoked twice for two grid entities
+and `FUN_088f3540`'s own load-by-name cache (see "registers the cache
+entry" above) absorbing the second round without new disk I/O - only the
+mechanism this page already documented, encountered a second time.
+
+**`ShipCollisionFx_Preload`'s own caller is found too, and it's generic
+vtable dispatch, not a name-driven loader at all.** A breakpoint at
+`ShipCollisionFx_Preload`'s own entry fired twice with a single `ra`
+(`0x08909038`, inside `FUN_08908f98`) and two `a0` values `0x80` bytes
+apart - one call per grid entity. `FUN_08908f98` decompiles to a bare `for`
+loop over `*(param_1+0x48)+0xc` entities, each one dispatched through two
+vtable calls read off `+0x38` on the entity itself
+(`(**(code**)(*(int*)(iVar1+0x38)+0x74))(...)` then `+0x7c`). Nothing about
+this loop is `.pob`-specific or ship-collision-specific.
+`ShipCollisionFx_Preload` sits **immediately before** the already-named
+`ShipCollisionFx_Trigger` (`0x089246b4`, confidence 85, from
+[contact-response.md](../ghidra/functions/psp-pulse-usa/contact-response.md#shipcollisionfx_trigger-0x089246b4-is-the-actual-spark-spawn-function))
+with no other function between them, and being reached only through a
+generic per-entity construction vtable rather than by name makes it read as
+that same class's own constructor. `FUN_08908f98` is itself still
+callerless by static search - the same xref-blind pattern as everything
+else on this page, and not chased further.
+
+**What this settles, and what it doesn't.** It closes "the preload's own
+caller is unfound" cleanly, with both a decompile and a live capture
+agreeing. It does **not** answer the thread's actual question - what a
+*slot-resolved* record's bytes mean - because this whole chain is a
+hardcoded four-file preload with no slot resolution in it at all; the lead
+was already flagged stale for that reason before this pass confirmed it.
+It also demonstrates, for future sessions in this executable: a callerless
+function with a decompiled literal that looks suspiciously round (like
+`0x2846f8`) is worth rebasing by `0x08804000` before concluding it is
+unreachable, and a live breakpoint at the *callee's* entry - reading `ra`
+at the hit, not searching for the call site's address - sidesteps this
+whole class of PIC-addressing xref blindness entirely.
+
+Confidence **85** for `ShipCollisionFx_Preload`'s name and its four preload
+calls - a decompile and a live capture agreeing on the addresses and the
+call count/pattern, plus direct adjacency to the same-confidence
+`ShipCollisionFx_Trigger`; **60** for reading it specifically as that
+class's *construction-time* vtable method rather than some other
+per-entity lifecycle call - the vtable-dispatch shape and the one-per-entity
+call count are measured, the "construction" framing is inferred.
 
 Separately notable: only 4 of the 5 `WO_SHIP_COLL_SPARK*` files preloaded for
 this ship+track combination - not `WO_SHIP_COLL_SPARK` (no suffix) or
