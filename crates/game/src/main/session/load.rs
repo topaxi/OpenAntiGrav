@@ -458,7 +458,7 @@ impl Session {
                     self.scheme,
                     self.autopilot,
                 );
-                info!("race scene built in {:.0?}", start.elapsed());
+                info!("race scene built in {:?}", start.elapsed());
                 // **Building the pipeline objects above is not the same as the
                 // driver having compiled them.** Several backends defer that to
                 // the first real draw call, which is why the eager build alone
@@ -480,7 +480,7 @@ impl Session {
                         pvs_culling,
                         self.anim_seconds,
                     );
-                    info!("race scene warmed up in {:.0?}", warm_up_start.elapsed());
+                    info!("race scene warmed up in {:?}", warm_up_start.elapsed());
                 }
                 built.map_err(RaceBuildError::Gpu)
             }
@@ -540,7 +540,7 @@ impl Session {
         // presents.
         if let Some(ready_at) = self.race_ready_at {
             info!(
-                "race hand-off: {:.0?} since the scene was ready",
+                "race hand-off: {:?} since the scene was ready",
                 ready_at.elapsed()
             );
         }
@@ -554,11 +554,18 @@ impl Session {
         // After the stage swap succeeds, not before: a failed launch must
         // leave the menu music playing rather than having already silenced
         // it. See `Audio::start_race_music`.
+        //
+        // Timed as a diagnostic: this call is synchronous and, on a cold
+        // cache, decodes the whole track before returning - a candidate for
+        // the black gap between the fade and the first race frame, alongside
+        // the render timers in `Session::frame`. See `Session::race_ready_at`.
+        let music_start = std::time::Instant::now();
         self.audio.start_race_music(
             &self.music_discs,
             self.settings.audio.music_source,
             &boot::default_audio_cache_dir(),
         );
+        info!("race music started in {:?}", music_start.elapsed());
         self.gpu.window.set_title(RACE_TITLE);
         Ok(())
     }

@@ -420,6 +420,13 @@ impl Session {
         let target = self.framebuffer.view();
         // Read before the match, which borrows `self.stage` mutably.
         let pvs_culling = self.pvs_culling();
+        // Diagnostic only, and read before the match for the same reason
+        // `pvs_culling` is: whether this is the frame `race_ready_at` is still
+        // waiting on. Splits `Session::race_ready_at`'s single "since the scene
+        // was ready" number into where inside this one frame it actually goes -
+        // see the timers below and in `Session::finish_race_loading`.
+        let timing_first_race_frame =
+            self.race_ready_at.is_some() && matches!(self.stage, Stage::Race(_));
         let (scene_stats, video_label) = match &mut self.stage {
             Stage::Launcher(stage) => {
                 stage.render(&self.gpu, &mut encoder, target, inside);
@@ -453,8 +460,9 @@ impl Session {
                 )?;
                 (None, self.backdrop.as_ref().map(movie::Feed::decoder_label))
             }
-            Stage::Race(stage) => (
-                Some(stage.render(
+            Stage::Race(stage) => {
+                let start = timing_first_race_frame.then(std::time::Instant::now);
+                let stats = stage.render(
                     &self.gpu,
                     &mut encoder,
                     target,
@@ -463,9 +471,12 @@ impl Session {
                     self.settings.graphics.frustum_culling,
                     pvs_culling,
                     self.anim_seconds,
-                )),
-                None,
-            ),
+                );
+                if let Some(start) = start {
+                    info!("first race frame: encoded in {:?}", start.elapsed());
+                }
+                (Some(stats), None)
+            }
         };
 
         // Over the stage and inside the offscreen target, so the overlay is
@@ -506,8 +517,16 @@ impl Session {
                 gamma: self.settings.display.gamma,
             },
         );
+        let submit_start = timing_first_race_frame.then(std::time::Instant::now);
         self.gpu.queue.submit(Some(encoder.finish()));
+        if let Some(start) = submit_start {
+            info!("first race frame: submitted in {:?}", start.elapsed());
+        }
+        let present_start = timing_first_race_frame.then(std::time::Instant::now);
         self.gpu.queue.present(frame);
+        if let Some(start) = present_start {
+            info!("first race frame: presented in {:?}", start.elapsed());
+        }
         // The third and last diagnostic timestamp - see `Session::race_ready_at`.
         // Taken rather than read, so this fires once: the first frame drawn
         // with the new scene, not every frame after it.
@@ -515,7 +534,7 @@ impl Session {
             && let Some(ready_at) = self.race_ready_at.take()
         {
             info!(
-                "first race frame presented: {:.0?} since the scene was ready",
+                "first race frame presented: {:?} since the scene was ready",
                 ready_at.elapsed()
             );
         }
