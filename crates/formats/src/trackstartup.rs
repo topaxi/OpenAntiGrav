@@ -27,6 +27,22 @@
 //! So reading the manifest turns "we do not draw the hoardings" from a silence
 //! into a line in the load report that names the eight files it wanted.
 //!
+//! # The slot numbers are not arbitrary
+//!
+//! **Slots 7 and 8 are reserved, and slot 8 is the start/finish line.** Over
+//! all 16 circuits, slot 8 is `321Go_StartFinish.vex` on every one and that
+//! model is in no other slot; slot 7 is `fx350.vex` on every one, likewise
+//! exclusive. Slots 1 to 6 are the artist's - nine circuits share one default
+//! six, the other seven customise, and four of those fill some with a colour
+//! rather than a model.
+//!
+//! **A player's observation is what prompted the check and agrees with it**:
+//! driving HD, slot 8's hoarding is consistently at the start/finish while the
+//! rest are scattered through the circuit. The model's own name says the same,
+//! and the two together are much stronger than either alone. What that does
+//! *not* give is the transform - it says a slot number means a place, not
+//! where the place is.
+//!
 //! # What is deliberately not done here
 //!
 //! **Nothing is placed.** An advert's chunks are node-local with a bias near

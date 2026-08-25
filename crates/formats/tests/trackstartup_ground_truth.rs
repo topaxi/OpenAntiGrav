@@ -138,3 +138,63 @@ fn the_slot_numbers_are_unique_and_every_entry_is_landscape() {
         BTreeSet::from(["landscape".to_string(), "portrait".to_string()]),
     );
 }
+
+/// **Slots 7 and 8 are reserved, and slot 8 is the start/finish line.**
+///
+/// The structure that turns `num` from an opaque index into something with
+/// meaning. Over all 16 circuits:
+///
+/// - **slot 8 is `321Go_StartFinish.vex` on every one of them**, and that model
+///   appears in no other slot;
+/// - **slot 7 is `fx350.vex` on every one**, likewise exclusive;
+/// - slots 1 to 6 vary - nine circuits share one default six, the other seven
+///   customise, and four of those use colour slots instead of models.
+///
+/// **A player's observation is what prompted the check**, and it agrees:
+/// driving HD, slot 8's hoarding is consistently at the start/finish line while
+/// the others are scattered through the circuit. The model's own name says the
+/// same thing, and the two together are much stronger than either alone -
+/// neither is geometry this project has recovered, and where a slot's transform
+/// comes from is still unknown.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn slots_seven_and_eight_carry_the_same_model_on_every_circuit() {
+    if image().is_none() {
+        return;
+    }
+    let disc = sweep();
+    let leaf = |num: u32, m: &TrackStartup| -> Option<String> {
+        Some(
+            m.billboard(num)?
+                .location()?
+                .rsplit('/')
+                .next()?
+                .to_ascii_lowercase(),
+        )
+    };
+    for (num, want) in [(7u32, "fx350.vex"), (8, "321go_startfinish.vex")] {
+        for (path, manifest) in &disc.manifests {
+            assert_eq!(
+                leaf(num, manifest).as_deref(),
+                Some(want),
+                "{path}: slot {num}",
+            );
+        }
+        // And exclusively: the reserved models never appear anywhere else.
+        for (path, manifest) in &disc.manifests {
+            for billboard in &manifest.billboards {
+                if billboard.num == num {
+                    continue;
+                }
+                let Some(location) = billboard.location() else {
+                    continue;
+                };
+                assert!(
+                    !location.to_ascii_lowercase().ends_with(want),
+                    "{path}: slot {} also carries {want}",
+                    billboard.num,
+                );
+            }
+        }
+    }
+}
