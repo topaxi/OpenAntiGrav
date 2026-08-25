@@ -143,13 +143,57 @@ the three, and expands set bits into an index array.
 
 `Collision_RaycastWorld` (`0x08816ac0`) splits the segment into
 `floor(len * 0.01) + 1` sub-segments, queries the world broadphase, skips self
-and skips Reset colliders unless explicitly requested, then runs the mesh
-narrowphase: AABB clip, two slab rejects, per-mesh sweep and prune, then a
-segment-triangle test using a plane sign change on both endpoints plus three
-edge half-space tests.
+and skips Reset colliders unless explicitly requested, then for each remaining
+candidate runs a **fresh virtual dispatch** - `(*collider+0x78)+0xc`, called
+with `collider + *(short*)(collider+0x78+0x8)` - and branches on its return
+value: exactly `1` (and only when `param_7` bit 0 is clear) calls
+`Collision_RaycastMesh`; exactly `3` (and only when `param_7` bit 1 is clear)
+calls `Collision_RaycastBox`; every other return value (`0`, `2`, and `4` and
+up) skips the candidate with no raycast at all. **This is a different read from
+the `collider+0x6c` surface type** (`Wall`/`Floor`/`Reset`/`MagFloor`, already
+recovered above) already used two lines earlier in the same function to decide
+the Reset skip - `collider+0x78` is not yet in this page's collider layout
+table, and what its virtual call actually returns is not independently
+confirmed by this pass. It might be the same surface-type enum under another
+name, or a distinct "raycastable shape" classifier; **do not assume it lines up
+1:1 with `Surface`,** and do not conflate it with `Collision_DispatchPair`'s own
+shape-kind values below (`box = 1`, `mesh = 3`) - that is a separate call site
+with its own vtable slot, and if the two do turn out to be the same accessor
+the numbering there is the *reverse* of this one's `mesh = 1`/`box = 3`.
 
-The hit result is 0x2c bytes: point, normal, collider index, the averaged
-per-vertex scalar, and a hit flag. Confidence **90**.
+`Collision_RaycastMesh` (`0x0881646c`) does the AABB clip, two slab rejects,
+per-mesh sweep and prune, then a segment-triangle test using a plane sign
+change on both endpoints plus three edge half-space tests.
+`Collision_RaycastBox` (`0x08817b1c`, renamed 2026-08-25 from `FUN_08817b1c`)
+instead separating-axis-rejects the segment against the collider's own three
+box axes (the same `+0x1d0`/`+0x1d4`/`+0x1d8` dimensions
+`Collider_BoxSamplePoints` reads), then builds the box's 12 triangles (two per
+face) and runs the same segment-triangle test against each - a raycast against
+a procedural box rather than an authored mesh. Confidence **85** on
+`Collision_RaycastBox` itself: read from the decompiler this pass, with the
+shared box-dimension field and the 12-triangle loop count both matching the box
+collider layout `Collider_SetBoxDimensions` already established.
+
+The hit result is 0x2c bytes: point (`+0x00`), normal (`+0x10`), collider
+index (`+0x20`), the averaged per-vertex scalar (`+0x24`), and, at `+0x28`,
+**which of the two narrowphase raycasts produced the hit** - `Collision_RaycastMesh`
+always writes the constant `1` there, `Collision_RaycastBox` always writes the
+constant `3`, both as raw denormal-float bit patterns for the integer
+(`1.4013e-45`/`4.2039e-45` in the decompiler's own float rendering), and never
+any other value from this call site. It is not a boolean "did anything hit"
+flag - that is a separate byte (`Collision_RaycastWorld`'s own `local_6d0[0]`)
+tested by the outer loop before this field is ever read back, and it is not a
+raw copy of `collider+0x6c` either, for the same reason the dispatch above is
+not: both narrowphase functions write a fixed literal, not anything read off
+the collider. Read 2026-08-25 by decompiling all three functions and
+cross-checking the offset arithmetic three ways: the caller's own copy into its
+output param (`local_38[10]`, byte `0x28`), the callee's write through the same
+pointer (`param_4[0x12]`, byte `0x48` from a shared struct base two calls up
+the stack), and the constant each callee writes matching its own branch
+condition in the caller. This is
+[`craft+0x208`](engine.md#the-probes-depenetrate-as-well-as-push)'s field - see
+that page for what this settles about the hover probe's escape gate.
+Confidence **90**.
 
 ## Contact generation
 
@@ -375,6 +419,7 @@ respawn. Confidence **86**.
 | `0x08818bdc` | `Collision_SegmentTriangle` | 90 |
 | `0x08816ac0` | `Collision_RaycastWorld` | 88 |
 | `0x0881646c` | `Collision_RaycastMesh` | 88 |
+| `0x08817b1c` | `Collision_RaycastBox` | 85 |
 | `0x088304d4` | `Sap_QueryAabb` | 88 |
 | `0x08816864` | `Collision_AddContact` | 86 |
 | `0x08815c1c` | `Collision_GetContact` | 90 |
