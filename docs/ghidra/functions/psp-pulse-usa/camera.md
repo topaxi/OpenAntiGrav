@@ -1126,6 +1126,15 @@ object is not established. `Tripod_LookAt_q` is named from its three call sites 
 passing `(tripod, &eye, &look, up)` and never from its body, which was not opened;
 that it *is* a look-at matrix build is inference from the arguments.
 
+**2026-08-25 update**: one of those arguments is now partly read. The second
+argument is stored verbatim at `entity + 0x368`, drives the constructor's own
+craft-naming branches and an "is_ai"-shaped flag at `entity + 0x48`, and
+`Ship_Damage` treats it as a controller/ownership-kind selector rather than a
+count - see
+[shield.md](shield.md#entity--0x368-is-craft_construct_qs-own-second-argument)
+for the read and what is still unconfirmed (no static caller of
+`Craft_Construct_q` exists to check the actual values against).
+
 Deliberately **not** renamed: `FUN_088455ec` (the internal rig's update - it also
 writes the fov shake term, a smoothed look-around offset and a view roll, so
 "update the internal camera rig" describes less than half of it, and the rest was

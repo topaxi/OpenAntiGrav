@@ -2,12 +2,16 @@
 
 **Binary:** `pulse-psp` `BOOT.BIN`, image base `0x08804000`.
 **Status:** the pool, its maximum, its one initialiser and its one damage
-entry point are read end to end, and **every claim except one now has a
-runtime leg** (2026-08-10, PPSSPP). Confidence **94** for where the pool and
-its maximum live, for the damage coefficient and for the one-call-per-contact
-loop; **92** for the two race-option globals and the regeneration branch;
-**90** for the weapons-off halving; **60** for the entity field that gates
-the whole path.
+entry point are read end to end, and **every claim now has a runtime leg**
+(2026-08-10, PPSSPP, extended 2026-08-25). Confidence **94** for where the
+pool and its maximum live, for the damage coefficient, for the
+one-call-per-contact loop and for `entity + 0x368` being `0` on the local
+human's craft and `2` on every AI opponent's in a single-player Single Race;
+**92** for the two race-option globals and the regeneration branch; **90**
+for the weapons-off halving; **80** for `entity + 0x368` being
+`Craft_Construct_q`'s own second argument (decompilation only); **60** still
+for what values `1` and `3` mean, since neither was ever produced in this
+pass's single-player race and multiplayer was not reached.
 
 What is measured and what is not is set out under
 [the runtime leg](#the-runtime-leg-and-what-it-did-not-reach); the
@@ -376,16 +380,114 @@ attempt**: the entity is in **`a0`** and the float amount in **`f12`** - the
 leading float does not reserve `a0`. Reading the entity from `a1` gives a zero
 and an "Invalid address" from the debugger, which at least fails loudly.
 
+## `entity + 0x368` is `Craft_Construct_q`'s own second argument
+
+**2026-08-25.** A program-wide search for every `sw <reg>, 0x368(<reg>)`
+found nine matches; six are unrelated (three write a stack slot, not an
+entity, and three land in a different, network-message-shaped structure
+around `0x089ee000`/`0x08a74000` that is never the ship entity `Ship_Damage`
+walks). The seventh is the one that matters:
+`Craft_Construct_q` (`0x08840c74`), at `0x08840fec`:
+
+```
+08840d48: move s2, a1        ; s2 = the constructor's own 2nd argument
+...
+08840fec: sw s2, 0x368(s0)   ; entity->0x368 = s2, unmodified
+```
+
+`s2` is never written between those two instructions, so this is a verbatim
+parameter store, not a computed value - the cleanest kind of writer a static
+read can produce. **This closes the "find the writer" step**, but not what
+the value *means*: no static caller of `Craft_Construct_q` exists anywhere in
+the binary to read off - no `jal` targets it and no data reference holds its
+address, so it is reached only through an indirect dispatch (a class
+descriptor or vtable-style table) this pass could not resolve. Confidence
+**80**: unambiguous decompilation and register tracing, but no call site to
+cross-check against and no runtime trace, so it stays in the "probable" band
+rather than "confident" per the
+[rubric](../../../reverse-engineering/confidence-rubric.md).
+
+The same parameter drives two more things in `Craft_Construct_q` itself,
+both keyed on its numeric value:
+
+- **Naming.** `-1` gets no name at all (skipped outright); `0` gets a fixed
+  string with no format argument; `1` gets a string formatted with the
+  constructor's third argument; `2` and `3` get a *different* string, also
+  formatted with the third argument; `4` and above do nothing.
+- **`entity + 0x48`**, set in the same branches: `0` for values `0`/`1`,
+  `1` for values `2`/`3`. That byte is read immediately afterward and passed
+  into a network-controller-binding call (`func_0x0003a4bc`), but only when
+  the game mode is a multiplayer one (`>= 0xe`) - it plays no part in
+  single-player construction otherwise.
+
+**This refutes "local human player slot"** more directly than the previous
+reading could: rereading `Ship_Damage` in full this pass shows its pool-math
+branch treats `0` and `2` identically (`if (iVar2 == 0 || iVar2 == 2)`
+reaches the real `Ship_SetShield` subtraction), while `1` takes a separate
+branch that does **not** touch the pool at all - it only increments a
+telemetry counter - and `3` reaches neither branch, so nothing in
+`Ship_Damage` acts on it. A slot count would not group `0` and `2` together
+while excluding `1`. The shape instead fits a controller/ownership-kind
+selector: `0` is the only value that also gets a HUD update and detailed
+telemetry, i.e. the local human; `2` is simulated fully (it takes real
+damage) but silently, which fits an AI opponent; `1` skips the local pool
+subtraction entirely, consistent with a remote network player whose
+authoritative shield value is not this machine's to change; `3` is untouched
+by `Ship_Damage` altogether, so it is not a value produced for anything that
+takes contact damage in single-player.
+
+### Confirmed live: `0` is the human, `2` is every AI craft, in a Single Race
+
+**2026-08-25, PPSSPP v1.20.4, SDL build under Xvfb, `pulse-psp-usa.chd`,
+SINGLE RACE / VENOM, a full eight-craft grid on Talon's Junction.** Rather
+than catch `Craft_Construct_q` itself - it has no static caller, so nothing
+says *when* to arm a breakpoint for it - this reads the field the settled
+way: break at `Ship_UpdateCraft` (fires once per craft per tick, a different
+craft in `a0` each time), collect all eight distinct craft addresses, then
+for each one read `craft + 0x2b8` (throttle), walk `craft + 0x1c4` to the
+entity, and read `entity + 0x368`
+(`scripts/psp-watch-controller-kind.py`):
+
+```
+craft        throttle entity         entity+0x368
+0x09b774b0     0.00 0x09b764f0              0
+0x09b48160    61.30 0x09b471a0              2
+0x09b12ee0    57.32 0x09b11f20              2
+0x09ae3e20    34.60 0x09ae2e60              2
+0x09aaf6a0    34.60 0x09aae6e0              2
+0x09a82e70    42.21 0x09a81eb0              2
+0x09a518c0    34.60 0x09a50900              2
+0x09a0dfd0    48.87 0x09a0d010              2
+```
+
+One craft reads a flat, digital `0.00` throttle while the other seven read
+continuously fractional values (`34.60` to `61.30`) - exactly the human/AI
+split `ppsspp-debugger.md` already measured independently ("the player's
+craft is the one whose throttle is 0 or 100 ... the AI's is fractional").
+**That one craft is also the only one with `entity + 0x368 == 0`; all seven
+fractional-throttle craft read `2`.** Holding `cross` for 1.5 s and reading
+again confirms it rather than leaving it as a one-shot coincidence: the same
+craft (`0x09b774b0`, entity `0x09b764f0`) jumps to a digital `100.00` while
+every AI craft's throttle moves to a *different* fractional value (AI
+control is continuous, not fixed) - and `entity + 0x368` stays `0` for the
+human and `2` for all seven AI craft, unchanged, across both reads.
+
+This is a runtime trace, not an inference: confidence **94** (the rubric's
+ceiling until a second binary corroborates it) for `0` = local human and `2`
+= AI in single-player. **`1` and `3` were never produced in this pass** - a
+Single Race has no network player and, per the naming/`+0x48` reading above,
+those two values only matter when the game mode (`DAT_08b31048`) is `>= 0xe`
+(multiplayer), which this pass never entered. They stay at confidence **60**,
+unverified hypothesis, until someone reaches a multiplayer mode with the
+debugger attached.
+
 ## What is not verified
 
-- **`entity + 0x368` is not identified**, and it gates the entire shield path:
-  `Ship_Damage` touches the pool only when it is 0 or 2, `Ship_AddShield`
-  counts telemetry only when it is 0, and several sites test `< 0`
-  explicitly, so `-1` is a real value. "Local human player slot" fits every
-  site read so far and would imply AI craft take no damage through this
-  function, which is almost certainly wrong - so the reading is **60** and
-  the field keeps its offset rather than a name. Whoever finds the writer
-  closes it.
+- **Whether `1` means "network human" and `3` is genuinely unused** is still
+  an inference from `Ship_Damage`'s branching, not a read of an enum -
+  confidence 60. Closing it wants the same probe
+  (`scripts/psp-watch-controller-kind.py`) run against a multiplayer session
+  (ad hoc or infrastructure), which nothing in this project currently reaches.
 - **`weapon_kind`'s nine cases are unmapped.** They select telemetry buckets
   and nothing else here; naming them wants the weapon table, which is
   unstarted.
@@ -393,6 +495,19 @@ and an "Invalid address" from the debugger, which at least fails loudly.
 
 ## History
 
+- 2026-08-25, live pass: `entity + 0x368` read off all eight craft in a
+  breakpoint-driven Single Race, twice (idle, then holding thrust). `0` on
+  the one craft with a digital throttle (the human), `2` on all seven
+  fractional-throttle craft (AI), unchanged across both reads - 60 -> 94 for
+  that mapping in single-player. `1` and `3` were not produced (no
+  multiplayer session reached) and stay at 60.
+- 2026-08-25: **the writer of `entity + 0x368` found**: `Craft_Construct_q`
+  (`0x08840c74`) stores its own second argument there verbatim, 60 -> 80 for
+  the writer. No static caller of `Craft_Construct_q` exists (no `jal`
+  xref, no data reference to its address), so which value each real craft
+  gets is still unread; "local human player slot" is refuted by `Ship_Damage`
+  treating `0` and `2` identically while excluding `1` and `3`, replaced with
+  an unverified controller-kind hypothesis, confidence 60.
 - 2026-08-10, second pass: `Race_ReadSetupOptions`'s `g_weapons_enabled` switch
   spelled out in full (three groups, not two: locked-off, locked-on, and
   overridable) and checked against a live menu walk of all seven RACE TYPE
