@@ -2,13 +2,16 @@
 
 **Binary:** `pulse-psp` `BOOT.BIN`, image base `0x08804000`.
 **Status:** the pool, its maximum, its one initialiser and its one damage
-entry point are read end to end, and **every claim except one now has a
-runtime leg** (2026-08-10, PPSSPP). Confidence **94** for where the pool and
-its maximum live, for the damage coefficient and for the one-call-per-contact
-loop; **92** for the two race-option globals and the regeneration branch;
-**90** for the weapons-off halving; **80** for `entity + 0x368` being
-`Craft_Construct_q`'s own second argument (2026-08-25, decompilation only -
-see below), still **60** for what its specific values mean.
+entry point are read end to end, and **every claim now has a runtime leg**
+(2026-08-10, PPSSPP, extended 2026-08-25). Confidence **94** for where the
+pool and its maximum live, for the damage coefficient, for the
+one-call-per-contact loop and for `entity + 0x368` being `0` on the local
+human's craft and `2` on every AI opponent's in a single-player Single Race;
+**92** for the two race-option globals and the regeneration branch; **90**
+for the weapons-off halving; **80** for `entity + 0x368` being
+`Craft_Construct_q`'s own second argument (decompilation only); **60** still
+for what values `1` and `3` mean, since neither was ever produced in this
+pass's single-player race and multiplayer was not reached.
 
 What is measured and what is not is set out under
 [the runtime leg](#the-runtime-leg-and-what-it-did-not-reach); the
@@ -431,18 +434,60 @@ damage) but silently, which fits an AI opponent; `1` skips the local pool
 subtraction entirely, consistent with a remote network player whose
 authoritative shield value is not this machine's to change; `3` is untouched
 by `Ship_Damage` altogether, so it is not a value produced for anything that
-takes contact damage in single-player. **This mapping is inference from
-behaviour, not a read of an enum, and is not runtime-verified - confidence
-stays at 60 for it specifically**, distinct from the 80 above for the writer
-itself.
+takes contact damage in single-player.
+
+### Confirmed live: `0` is the human, `2` is every AI craft, in a Single Race
+
+**2026-08-25, PPSSPP v1.20.4, SDL build under Xvfb, `pulse-psp-usa.chd`,
+SINGLE RACE / VENOM, a full eight-craft grid on Talon's Junction.** Rather
+than catch `Craft_Construct_q` itself - it has no static caller, so nothing
+says *when* to arm a breakpoint for it - this reads the field the settled
+way: break at `Ship_UpdateCraft` (fires once per craft per tick, a different
+craft in `a0` each time), collect all eight distinct craft addresses, then
+for each one read `craft + 0x2b8` (throttle), walk `craft + 0x1c4` to the
+entity, and read `entity + 0x368`
+(`scripts/psp-watch-controller-kind.py`):
+
+```
+craft        throttle entity         entity+0x368
+0x09b774b0     0.00 0x09b764f0              0
+0x09b48160    61.30 0x09b471a0              2
+0x09b12ee0    57.32 0x09b11f20              2
+0x09ae3e20    34.60 0x09ae2e60              2
+0x09aaf6a0    34.60 0x09aae6e0              2
+0x09a82e70    42.21 0x09a81eb0              2
+0x09a518c0    34.60 0x09a50900              2
+0x09a0dfd0    48.87 0x09a0d010              2
+```
+
+One craft reads a flat, digital `0.00` throttle while the other seven read
+continuously fractional values (`34.60` to `61.30`) - exactly the human/AI
+split `ppsspp-debugger.md` already measured independently ("the player's
+craft is the one whose throttle is 0 or 100 ... the AI's is fractional").
+**That one craft is also the only one with `entity + 0x368 == 0`; all seven
+fractional-throttle craft read `2`.** Holding `cross` for 1.5 s and reading
+again confirms it rather than leaving it as a one-shot coincidence: the same
+craft (`0x09b774b0`, entity `0x09b764f0`) jumps to a digital `100.00` while
+every AI craft's throttle moves to a *different* fractional value (AI
+control is continuous, not fixed) - and `entity + 0x368` stays `0` for the
+human and `2` for all seven AI craft, unchanged, across both reads.
+
+This is a runtime trace, not an inference: confidence **94** (the rubric's
+ceiling until a second binary corroborates it) for `0` = local human and `2`
+= AI in single-player. **`1` and `3` were never produced in this pass** - a
+Single Race has no network player and, per the naming/`+0x48` reading above,
+those two values only matter when the game mode (`DAT_08b31048`) is `>= 0xe`
+(multiplayer), which this pass never entered. They stay at confidence **60**,
+unverified hypothesis, until someone reaches a multiplayer mode with the
+debugger attached.
 
 ## What is not verified
 
-- **Which numeric value `Craft_Construct_q`'s second argument gets at each
-  real call site is unmeasured** - no static caller exists to read it off.
-  Closing this wants a breakpoint at `0x08840fec` (or the function's entry)
-  during a race with a known mix of local human and AI craft, reading `a1`/
-  `s2` per call and matching it to which craft it constructed.
+- **Whether `1` means "network human" and `3` is genuinely unused** is still
+  an inference from `Ship_Damage`'s branching, not a read of an enum -
+  confidence 60. Closing it wants the same probe
+  (`scripts/psp-watch-controller-kind.py`) run against a multiplayer session
+  (ad hoc or infrastructure), which nothing in this project currently reaches.
 - **`weapon_kind`'s nine cases are unmapped.** They select telemetry buckets
   and nothing else here; naming them wants the weapon table, which is
   unstarted.
@@ -450,6 +495,12 @@ itself.
 
 ## History
 
+- 2026-08-25, live pass: `entity + 0x368` read off all eight craft in a
+  breakpoint-driven Single Race, twice (idle, then holding thrust). `0` on
+  the one craft with a digital throttle (the human), `2` on all seven
+  fractional-throttle craft (AI), unchanged across both reads - 60 -> 94 for
+  that mapping in single-player. `1` and `3` were not produced (no
+  multiplayer session reached) and stay at 60.
 - 2026-08-25: **the writer of `entity + 0x368` found**: `Craft_Construct_q`
   (`0x08840c74`) stores its own second argument there verbatim, 60 -> 80 for
   the writer. No static caller of `Craft_Construct_q` exists (no `jal`
