@@ -181,13 +181,35 @@ as `.opd.FUN_003a4650` etc.) - checked by reading 64 bytes on both sides of
 it, and the same `{entry, 0x008bd3c4}` eight-byte pattern continues in both
 directions well past any plausible billboard-sized table, so this is the
 ordinary PPC64 function-descriptor section, not a billboard-specific dispatch
-table. **What actually calls `GetBillboardMeshIdFromName` is still unread**,
-and the caveat this page opened with applies directly here: `0x003a4b70` is
-above `0x0032d5e0`, where Ghidra's own TOC is wrong (see "The trap" above), so
-an indirect call through a mis-resolved pointer cannot be ruled out by a
-single `get_function_xrefs` call. `scripts/ps3-toc.py`'s `resolve`/`toc`
-commands were not run against candidate indirect-call sites to check for one;
-that is the next step, not a conclusion reached here.
+table.
+
+**The load-bearing fact is that Ghidra shows no direct `bl` caller either,
+and that check is reliable here.** A `bl` target is a relative displacement
+encoded directly in the instruction - no TOC involved - so this page's TOC
+trap (which breaks `lwz`-based data resolution, not call encoding) does not
+apply to it, and the xref tool is demonstrably not silent when a direct call
+exists: the identical query against `0x003a4da0` returns
+`From 006791e4 in FUN_006791d8 [UNCONDITIONAL_CALL]` (below). For
+`0x003a4b70` it returns nothing.
+
+That leaves the indirect route: is this function's address ever stored
+somewhere to be called through, the way a callback or vtable slot would?
+`scripts/ps3-toc.py`'s `word_addresses` finds every aligned word in the whole
+image, code or data, equal to a given value, independent of Ghidra's TOC.
+Run against `0x0088b6f0` (the function's own OPD descriptor address - the
+value a stored "function pointer" actually holds on this ABI, not the bare
+code address) it found **zero** words. On its own that is unremarkable: the
+same query against 20 neighbouring `.opd` entries found only **one** stored
+anywhere - `0x0088b6d8` (`0x003a46e8`, the distance-comparator read above,
+confirmed as a real callback: its descriptor sits at data slot `0x008b6f98`
+and is loaded by `0x003a5f68` and `0x003a6950`) - so most functions in this
+binary are never referenced as data at all, direct-`bl` being the norm, and
+a zero here mainly rules out the callback route rather than adding a second
+independent vote for deadness. **Together**: no direct call, and no stored
+pointer to call through - no invocation path is known, which is different
+from, and weaker than, "confirmed unreachable." Not checked: a function
+pointer built with an absolute `lis`/`addis`+`ori` pair instead of a plain
+stored word.
 
 Separately, `0x003a4da0` (unnamed, confidence held below 50 for the reason
 below - do not rename) **is** reached by a real, traced call:
@@ -207,18 +229,25 @@ through. But its tail loop **inlines `GetBillboardMeshIdFromName`'s exact
 write**, against a lookup of the same stride and offset:
 `*(int*)(PTR_s_WIP3OUT_008a704c + index*0x100 + 0x10)`, where
 `GetBillboardMeshIdFromName` uses `param_3` unadjusted and `0x003a4da0` uses
-`num-1`. **This is now a narrowed disjunction, not an open discrepancy**:
+`num-1`. **This is now settled, not an open discrepancy - conditional on
+`0x003a4da0` itself indexing correctly**, which the rest of this page cannot
+guarantee: it already documents dead code and unexercised arms elsewhere in
+this same subsystem.
 `Billboard_CreateFromLocation_q`'s own decompile confirms the raw, 1-based
 `Num` (the same value that indexes the manager's occupancy array) is what
 reaches `0x003a4da0`'s `param_1` unchanged, which then 0-based-adjusts it
-before indexing `PTR_s_WIP3OUT_008a704c`. Either `GetBillboardMeshIdFromName`'s
-still-unread caller already passes a 0-based slot index rather than the
-1-based `Num` every other function on this page takes, **or** the
-`PTR_s_WIP3OUT_008a704c` region wastes index 0 the way the manager array
-does, in which case `0x003a4da0`'s `-1` is the odd one out instead. The
-discriminator is untaken: read that region's own constructor/destructor
-zeroing width, the same way the manager's nine words settled the analogous
-question above. On a hash match both write the same four 16-byte vectors at
+before indexing `PTR_s_WIP3OUT_008a704c`. **`PTR_s_WIP3OUT_008a704c` does not
+waste index 0 the way the manager array does**: `0x003a4da0`'s own
+`iVar38 = param_1 - 1` is unguarded down to 0, and `Num == 1` (`iVar38 == 0`)
+takes the identical write branch as any other slot whenever `HUD_Style` is
+empty (`*PTR_s_HUD_Style_008a7048 == '\0'`, the gate is on that flag or on
+`iVar38 == 7`, never on the index itself) - so index 0 is a real, used slot
+from this function's own control flow, not a wasted one. Taking that at face
+value leaves one branch of the disjunction standing: **if** a caller for
+`GetBillboardMeshIdFromName` exists (see above - increasingly not settled
+that one does), it must already be passing a 0-based slot index, not the
+1-based `Num` every other function on this page takes. On a hash match both
+functions write the same four 16-byte vectors at
 `+0x00`/`+0x10`/`+0x20`/`+0x30` plus a resource pointer at `+0x70`. That
 confirms the write is a repeated **bind idiom** - reset four vectors, stamp a
 resource - not a one-off, and not evidence of placement either way: this call
@@ -238,13 +267,13 @@ billboard-specific - below the 70 needed to commit to either reading.
   either traced write into the per-slot table reads a position, rotation or
   scale - confirming the format page's own "nothing is placed" stance twice
   over now, not once.
-- **What calls `GetBillboardMeshIdFromName`.** Ghidra's static xrefs show
-  none, but that check is exactly the shape this page's TOC trap breaks; an
-  indirect-call sweep with `ps3-toc.py` was not run. Narrowed to a
-  disjunction, not settled: either its caller passes a 0-based slot index
-  against a 1-based `Num` everywhere else, or `PTR_s_WIP3OUT_008a704c` wastes
-  index 0 like the manager array and `0x003a4da0`'s `-1` is the anomaly - the
-  region's own zeroing width, unread, is the discriminator.
+- **What calls `GetBillboardMeshIdFromName`, if anything does.** No direct
+  `bl` caller (reliable, unlike Ghidra's TOC) and no stored function pointer
+  to call through (validated against a positive control) - no known
+  invocation path, not confirmed dead. Not checked: an absolute
+  `lis`/`addis`+`ori`-built pointer. If a caller exists it must pass a
+  0-based slot index, not the 1-based `Num` every other function on this page
+  takes - true if `0x003a4da0` indexes correctly, per above.
 - **`0x003a4da0`'s own purpose** - generic resource loader or billboard-only -
   its fifth parameter, and the four vectors' exact values (still not
   confirmed as identity; the operand permutation was not worked through, on
