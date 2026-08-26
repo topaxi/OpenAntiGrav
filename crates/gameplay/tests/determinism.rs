@@ -352,6 +352,25 @@ fn run(ticks: u32) -> (u64, u64) {
 ///   `0x92e8_8d29_f718_d061` at 600 - are exactly what `probe::hash_state`'s
 ///   own isolation check reproduced bit for bit with the new write removed.
 ///
+/// - **Moved 2026-08-26**, when `oag_gameplay::pickup::Held` gained `dropping`
+///   and `drop_reload`, the two counters a Mine cluster comes out on. **The
+///   move is the hash stream and nothing else.** Both are zero through every
+///   scenario here - neither collects a pickup, so neither ever starts a drop -
+///   so the addition contributes a fixed five bytes per ship per tick, exactly
+///   as `autopilot_timer` did two days earlier. The isolation was run the way
+///   this paragraph below requires: with only the two new writes in
+///   `hash_world`'s `write_held` removed, the constants this commit replaces -
+///   `0x9c5d_3b4c_b229_2baa` / `0x0d31_b55a_669c_4254` at 60 ticks and
+///   `0xfc00_1ad4_d9ef_7f57` / `0x0e7b_e5cd_c260_ab11` at 600 - reproduced bit
+///   for bit.
+///
+///   **The Mine also joined `pickup::IMPLEMENTED` in the same change**, which
+///   *would* be a behaviour move if either scenario drew a pickup. Neither
+///   does, which is what makes the isolation above sufficient rather than
+///   merely suggestive: a run that changed both the draw pool and the hash
+///   stream and then reproduced the old constants with one of them reverted has
+///   shown the other one was inert.
+///
 /// **Never edit these to make the test pass**, the same rule
 /// `crates/physics/tests/determinism.rs` states at length: a movement here is a
 /// change to what a race *does*, and the change is the thing to find. When a
@@ -359,8 +378,8 @@ fn run(ticks: u32) -> (u64, u64) {
 /// beneath this comment and isolate the cause first, by removing the new field's
 /// own write and checking that the previous constants reproduce bit for bit.
 const REFERENCE: &[(u32, u64, u64)] = &[
-    (60, 0x9c5d_3b4c_b229_2baa, 0x0d31_b55a_669c_4254),
-    (600, 0xfc00_1ad4_d9ef_7f57, 0x0e7b_e5cd_c260_ab11),
+    (60, 0x3b00_aaf7_5fa6_012e, 0x8190_a8a4_a597_de7c),
+    (600, 0x9014_04ca_b696_5f8f, 0xea4f_cef3_68eb_a4b9),
 ];
 
 /// The volley scenario: a craft at an angle fires a real fanned Rocket volley
@@ -463,11 +482,17 @@ fn run_volley(ticks: u32) -> (u64, u64) {
 ///   `0x8c79_4b77_720c_7444` / `0xf356_fa51_5a78_b1a0` at 60 ticks and
 ///   `0xfa19_77ff_52da_9377` / `0x6357_39ef_ff80_8956` at 600.
 ///
+/// - **Moved 2026-08-26**, the same `Held::dropping` / `Held::drop_reload`
+///   addition [`REFERENCE`]'s own history records, inherited through the same
+///   `hash_world` call and isolated there rather than twice. Replaces
+///   `0x87aa_86d6_9f6b_73e8` / `0x525b_5a02_6095_f7a0` at 60 ticks and
+///   `0x5cab_0e84_dfbe_0a9b` / `0xce16_0eaa_37a7_9f16` at 600.
+///
 /// **Never edit these to make the test pass**, for the same reason
 /// [`REFERENCE`] says at length.
 const REFERENCE_VOLLEY: &[(u32, u64, u64)] = &[
-    (60, 0x87aa_86d6_9f6b_73e8, 0x525b_5a02_6095_f7a0),
-    (600, 0x5cab_0e84_dfbe_0a9b, 0xce16_0eaa_37a7_9f16),
+    (60, 0x2d4d_2f6e_a306_041c, 0x9b66_0ce3_df4f_59f4),
+    (600, 0x10cd_79fd_a58d_243b, 0x8ab3_7516_6ae2_aa42),
 ];
 
 #[test]

@@ -597,6 +597,7 @@ fn every_implemented_weapon_has_a_fire_arm_on_both_paths() {
         Weapon::Rocket,
         Weapon::Missile,
         Weapon::Autopilot,
+        Weapon::Mine,
     ];
 
     assert_eq!(

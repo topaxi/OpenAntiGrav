@@ -225,6 +225,19 @@ const WEAPON_MIN_RANGE: f32 = 20.0;
 /// had. About twenty degrees.
 const WEAPON_CONE: f32 = 0.94;
 
+/// How close a rival behind has to be before laying mines is worth it.
+///
+/// **Ours, and it is the mirror of [`WEAPON_RANGE`] rather than a second
+/// judgement.** A mine is not aimed, so none of the forward weapon's other
+/// gates - the cone, the curvature, the minimum range - transfer: a mine laid
+/// with somebody right on your tail is a mine that works, which is the opposite
+/// of a rocket fired at point-blank.
+///
+/// Shorter than the forward range because a cluster covers about sixty units of
+/// track and stays where it is put: a rival two hundred units back has time to
+/// see it and go round, and the pickup is better spent later.
+const MINE_RANGE: f32 = 120.0;
+
 /// How bent the road between here and the target may be before a shot is not
 /// worth taking.
 const WEAPON_CURVATURE: f32 = 1.0 / 400.0;
@@ -509,6 +522,48 @@ impl Driver {
             return None;
         }
         Some(target.slot)
+    }
+
+    /// Whether this driver wants to lay a cluster of mines right now.
+    ///
+    /// **Nothing about *when* an opponent drops mines is recovered**, the same
+    /// way nothing about when one fires a rocket is: `WeaponAi_Update` decides
+    /// it in the original and only its *table* has been read (`ai-stats.md`).
+    /// So this is the forward weapon's rule with the parts that do not apply
+    /// taken out, rather than a second invented policy:
+    ///
+    /// 1. There is somebody **behind**, noticed rather than merely present -
+    ///    the same [`Reflex`] channel [`Self::wants_to_fire`] uses for its own
+    ///    direction, so a driver cannot react to a rival it has not seen yet.
+    /// 2. That rival is inside [`MINE_RANGE`].
+    /// 3. The trigger roll, off the same [`WEAPON_STREAM`] and the same
+    ///    [`TRIGGER_RATE`], scaled by the same personality and provocation.
+    ///
+    /// **No cone, no curvature and no minimum range**, and each absence is the
+    /// point rather than an omission: a mine is dropped rather than aimed, a
+    /// corner between here and the rival is a *reason* to lay them, and a rival
+    /// close enough to touch is the best moment there is. A driver that has just
+    /// been passed drops more readily, which `provoked` already does for
+    /// shooting.
+    ///
+    /// Returns the rival's slot, the way [`Self::wants_to_fire`] does, even
+    /// though a mine has no target - a caller wanting to log or draw the
+    /// decision has the same thing in hand for both weapons.
+    #[must_use]
+    pub fn wants_to_drop(&self, ctx: &Context<'_>) -> Option<u8> {
+        let personality = self.personality(ctx.pilot);
+        if personality.trigger <= 0.0 {
+            return None;
+        }
+        let rival = self.reflex.filter(ctx.field).behind?;
+        if rival.range > MINE_RANGE {
+            return None;
+        }
+        let appetite = personality.trigger * (1.0 + self.provoked());
+        if roll(self.seed, self.phase, WEAPON_STREAM) >= appetite * TRIGGER_RATE {
+            return None;
+        }
+        Some(rival.slot)
     }
 
     /// Decides whether this driver is about to miss a braking point, and

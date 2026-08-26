@@ -243,13 +243,27 @@ fn write_standing(hasher: &mut StateHasher, standing: &oag_race::Standing) {
 }
 
 fn write_held(hasher: &mut StateHasher, held: &Held) {
-    let Held { weapon, last } = held;
+    let Held {
+        weapon,
+        last,
+        dropping,
+        drop_reload,
+    } = held;
     write_weapon(hasher, *weapon);
     // **The previous grant is state, not a convenience.** The draw refuses to
     // hand out the same weapon twice running, so two runs whose craft carry the
     // same thing but remember different last grants are about to be handed
     // different pickups. See `crate::pickup::draw`.
     write_weapon(hasher, *last);
+    // **A drop in progress is state too, and it is the first pickup state that
+    // spans ticks.** Two worlds carrying the same Mine differ if one has three
+    // of its cluster still to lay and the other has one - they are about to put
+    // a different number of mines on the track, in different places. The reload
+    // goes in for the same reason at finer grain: it decides *which* tick the
+    // next one leaves on, and a mine's position is where the craft was on that
+    // tick. See `crate::pickup::Held::advance_drop`.
+    hasher.write_u8(*dropping);
+    hasher.write_f32(*drop_reload);
 }
 
 /// A weapon slot as a discriminant byte, with `0` reserved for "nothing".

@@ -106,6 +106,7 @@ fn over_empty_space_a_projectile_keeps_its_heading_and_falls() {
             &world,
             &ships(&[]),
             None,
+            None,
             oag_formats::handling::SpeedClass::Venom,
         );
         assert!(impacts.iter().all(Option::is_none), "nothing to hit");
@@ -145,6 +146,7 @@ fn a_projectile_over_a_floor_rides_it_rather_than_detonating() {
             dt,
             &world,
             &ships(&[]),
+            None,
             None,
             oag_formats::handling::SpeedClass::Venom,
         );
@@ -189,6 +191,7 @@ fn a_rocket_hits_a_wall_it_would_tunnel_through_in_one_tick() {
             &world,
             &ships(&[]),
             None,
+            None,
             oag_formats::handling::SpeedClass::Venom,
         );
         if let Some(hit) = impacts.into_iter().flatten().next() {
@@ -222,6 +225,7 @@ fn a_rocket_strikes_a_craft_that_is_not_its_owner() {
                 &world,
                 &grid,
                 None,
+                None,
                 oag_formats::handling::SpeedClass::Venom,
             )
             .into_iter()
@@ -252,6 +256,7 @@ fn an_inactive_slot_is_not_a_target() {
             &world,
             &grid,
             None,
+            None,
             oag_formats::handling::SpeedClass::Venom,
         );
         assert!(
@@ -277,6 +282,7 @@ fn geometry_in_front_of_a_craft_stops_the_rocket_first() {
                 1.0 / 60.0,
                 &world,
                 &grid,
+                None,
                 None,
                 oag_formats::handling::SpeedClass::Venom,
             )
@@ -312,6 +318,7 @@ fn a_rocket_that_hits_nothing_is_reaped_without_detonating() {
             dt,
             &world,
             &ships(&[]),
+            None,
             None,
             oag_formats::handling::SpeedClass::Venom,
         );
@@ -706,7 +713,7 @@ fn a_missile_mirrors_off_a_wall_where_a_rocket_detonates() {
         if live.kind.is_some() {
             before = live.velocity.length();
         }
-        projectiles.advance(1.0 / 60.0, &world, &ships, Some(&stats), class);
+        projectiles.advance(1.0 / 60.0, &world, &ships, Some(&stats), None, class);
         let after = projectiles.slots[0];
         if after.kind.is_some() && after.bounces > 0 {
             bounced = Some((before, after));
@@ -734,7 +741,7 @@ fn a_missile_mirrors_off_a_wall_where_a_rocket_detonates() {
     let mut rockets = Projectiles::new();
     rockets.spawn(Weapon::Rocket, Vec3::ZERO, Vec3::Z * 200.0, 0);
     for _ in 0..40 {
-        rockets.advance(1.0 / 60.0, &world, &ships, Some(&stats), class);
+        rockets.advance(1.0 / 60.0, &world, &ships, Some(&stats), None, class);
     }
     assert_eq!(
         rockets.live(),
@@ -788,7 +795,7 @@ fn a_missile_gives_up_after_its_bounce_budget() {
     projectiles.spawn_guided(Weapon::Missile, Vec3::ZERO, Vec3::Z * 200.0, 0, None, 600.0);
     let mut highest = 0;
     for _ in 0..600 {
-        projectiles.advance(1.0 / 60.0, &world, &ships, Some(&stats), class);
+        projectiles.advance(1.0 / 60.0, &world, &ships, Some(&stats), None, class);
         highest = highest.max(projectiles.slots[0].bounces);
         if projectiles.live() == 0 {
             break;

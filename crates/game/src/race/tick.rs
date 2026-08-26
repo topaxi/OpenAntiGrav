@@ -33,6 +33,11 @@ impl Race {
         // than a tick less, and so the cancel-on-fire branch inside
         // `spend_pickup` is not immediately undone by a decrement.
         self.tick_autopilot();
+        // Immediately after both, so the first mine of a cluster is laid on the
+        // tick the button was pressed and from where the craft was when it was
+        // pressed. A mine never moves again, so this is the only tick that can
+        // place it correctly.
+        self.lay_mines();
 
         // The two spline samples the magstrip hold reads. In the original these are
         // `AiTrack_LocatePosition`'s two output records on the ship entity; here

@@ -664,9 +664,14 @@ impl Race {
     ///   is named here rather than left to fall through the default below,
     ///   because "no effect by design" and "no arm written yet" must not look
     ///   the same in this file.
+    /// - **A Mine is dropped when somebody is close behind**, on
+    ///   `oag_ai::Driver::wants_to_drop`, and the pickup is **not** spent on the
+    ///   tick it is taken: a cluster comes out over half a second and the craft
+    ///   holds the weapon until the last one is laid. This is the one arm that
+    ///   returns rather than falling to the bottom of the function.
     /// - **Everything else is absorbed**, which pays energy into the pool and is
     ///   a real effect rather than a discard. It is also what a cautious human
-    ///   does with a weapon they cannot aim, and the remaining eight cannot be
+    ///   does with a weapon they cannot aim, and the remaining seven cannot be
     ///   aimed: they need a lock, a beam or a mechanic nothing has read.
     pub(super) fn spend_opponent_pickup(
         &mut self,
@@ -765,6 +770,14 @@ impl Race {
             // added to `pickup::IMPLEMENTED` without an arm reaches a player as a
             // pickup that quietly turns into energy. `oag_gameplay`'s
             // `IMPLEMENTED` and this chain have to grow together.
+        } else if weapon == oag_formats::weapons::Weapon::Mine
+            && self.drop_opponent_mines(slot, field)
+        {
+            // **The one arm here that does not spend the pickup**, and it must
+            // not: a drop takes half a second to come out and the craft holds
+            // the Mine until the last one is laid. The `return` inside
+            // `drop_opponent_mines`' caller does that - see below.
+            return;
         } else {
             let Some(amount) = absorb else {
                 return;
@@ -773,6 +786,50 @@ impl Race {
             oag_physics::damage::add(&mut self.world.ships[slot].physics, &dimensions, amount);
         }
         self.world.ships[slot].pickup.weapon = None;
+    }
+}
+
+impl Race {
+    /// Starts an opponent's mine drop, if its driver wants one now.
+    ///
+    /// Returns whether a drop began, so the caller can leave the pickup in the
+    /// craft's hands - unlike every other opponent arm, this one is not finished
+    /// on the tick it is taken. `Race::lay_mines` runs the rest of it and clears
+    /// the slot when the cluster is out.
+    ///
+    /// # An opponent uses the *behind* gate, and the player uses none
+    ///
+    /// The asymmetry is the same one the Rocket and the Missile already have and
+    /// it is not a policy about the weapon: a human decides when to drop by
+    /// pressing the button, and `oag_ai::Driver::wants_to_drop` is what stands in
+    /// for that decision. What it is *not* is a rule about mines that the player
+    /// is being let off - see that function, whose gates are the forward
+    /// weapon's with the aiming taken out.
+    fn drop_opponent_mines(&mut self, slot: usize, field: &oag_ai::Field) -> bool {
+        if self.weapons.as_ref().and_then(|w| w.mine()).is_none() {
+            // No authored Mine, so nothing to lay. Falls through to absorb,
+            // which is the right answer for a pickup that cannot be spent.
+            return false;
+        }
+        let ship = &self.world.ships[slot];
+        let context = oag_ai::Context {
+            line: &self.racing_line,
+            tuning: &self.ai_tuning,
+            pilot: &self.ai_pilots[slot],
+            field,
+        };
+        if ship.driver.wants_to_drop(&context).is_none() {
+            // Nobody behind worth laying them for, or the trigger did not roll.
+            // **Keep the pickup rather than absorb it** - the same rule the
+            // Rocket and the Missile follow when they decline a shot, and the
+            // reason this returns `false` into an `&&` whose right-hand side is
+            // the whole action.
+            return false;
+        }
+        self.world.ships[slot]
+            .pickup
+            .begin_drop(oag_gameplay::projectile::mine::CLUSTER);
+        true
     }
 }
 
