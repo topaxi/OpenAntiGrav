@@ -1367,15 +1367,34 @@ Named explicitly, with what each would take.
    resolves a node against another circuit's file at runtime", which was
    this page's original framing and which the evidence never actually
    distinguished from "these are dead references to an asset this circuit's
-   cook chose not to bake". **The mechanism question is narrower now, and
-   still open:** does the shipped executable ever hold a second circuit's
-   `.rcsmodel` open while a level is resident? A negative there is what would
-   turn "nothing is wired" into a documented negative rather than a
-   plausibility argument; the RPCS3 GDB harness (`HANDOVER.md`, "A PS3 title
-   now boots, drives and screenshots from a script") is the route that would
-   answer it, and nothing has yet asked it the question. Until it does: a prop
-   drawn because this project found its geometry somewhere is still a picture
-   nobody can check, and nothing is wired.
+   cook chose not to bake". **The mechanism question is answered now, and it
+   is the second reading: the original never resolves these either**
+   (2026-08-26, `rpcs3-drive.py race`, two independent boots into Talon's
+   Junction). `TTY.log` names its own lookup: `GetMeshIdFromName: Couldn't
+   find name %x` at `0x007b3d98` (the function itself is not located - no
+   Ghidra reference resolves to either debug string, the same computed/split
+   addressing that has defeated string xrefs elsewhere on this binary - so
+   this is the shipped binary's own black-box behaviour, not a code reading).
+   Both boots print the **identical** set of 74 failing hashes, and **all 56
+   of this page's documented unresolved `Mesh` nodes are in that set exactly**
+   (`hd_unaddressed.rs`'s hash list against `TTY.log`'s, allowing for the
+   `%x` format dropping a leading zero three of the fifty-six hashes happen to
+   have - `0x09a6aab8` prints as `9a6aab8`, not a fourth mismatch). The
+   original engine hits the identical wall this project's parser does: it
+   looks the node up by hash in *the track's own* `.rcsmodel` and does not
+   find it, and says so on the console, rather than reaching into another
+   circuit's file. **`Loading track model %s` fires exactly once per boot in
+   both runs, naming only `Talons_Junction\track.rcsmodel`** - no second
+   circuit's model is ever opened either. Between the single load line and
+   the matching lookup failures, a prop drawn because this project found its
+   geometry somewhere is now a documented negative rather than a plausibility
+   argument: **the shipped executable does not hold a second circuit's
+   `.rcsmodel` open, and does not resolve these 56 nodes at all - it fails
+   exactly where this project's reading says it should.** One thing this
+   leaves unexplained rather than answers: 18 of the 74 failing hashes are
+   *not* among the 56 documented `Mesh` nodes, so `GetMeshIdFromName` is
+   evidently consulted for something beyond the node table `hd_unaddressed.rs`
+   walks - which other class calls it is unidentified.
 
    **And none of the 56 is a building** (2026-08-20), which is worth stating
    because a frame comparison read them as one. Listed with their names and

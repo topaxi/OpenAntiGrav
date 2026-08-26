@@ -5,7 +5,7 @@
 ## Open
 
 - Whether our drawn *frame* matches the original's, camera-for-camera, is unverified
-- Talon's 56 unaddressed prop nodes (hashes only in *amphiseum* and *tech_de_ra*) remain unaddressed, though confirmed not a PVS problem
+- Talon's 56 unaddressed prop nodes (hashes only in *amphiseum* and *tech_de_ra*) remain unaddressed, though confirmed not a PVS problem. **2026-08-26**: also confirmed not a runtime cross-file lookup - the shipped executable fails to resolve the identical 56 hashes at load time and never opens a second circuit's `.rcsmodel`; see [rcsmodel.md](../docs/formats/rcsmodel.md) item 6.
 
 ## Next Steps
 

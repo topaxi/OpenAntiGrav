@@ -421,7 +421,6 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [Wipeout HD's video decodes, and the logo reel is the Studio Liverpool ident](handover/wipeout-hds-video-decodes-and-the-logo-reel.md)
 - [Wipeout HD's soundtrack plays; finding it fixed a disc-wide PSARC bug](handover/wipeout-hds-soundtrack-plays-finding-it-fixed-a.md)
 - [Pure's soundtrack plays, and both titles' track names are recovered - Pulse's are deliberately unwired](handover/pures-soundtrack-plays-and-both-titles-track-names.md)
-- [Wipeout HD / Fury: a circuit drives, textured and blended, off the PS3 disc](handover/wipeout-hd-fury-a-circuit-drives-textured-and.md)
 - [HD/Fury's HUD draws, and three of Pulse's constants applied to every title were why it did not](handover/hd-furys-hud-draws-and-three-of-pulses.md)
 - [Wipeout HD / Fury's HUD reads, and the reader it shares with Pulse was wrong in three ways Pulse's own data could never have shown](handover/wipeout-hd-furys-hud-reads-and-the-reader.md)
 - [`.gtf` reads, so HD's textures are pixels](handover/gtf-reads-so-hds-textures-are-pixels.md)
