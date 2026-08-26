@@ -611,14 +611,23 @@ fn every_implemented_weapon_has_a_fire_arm_on_both_paths() {
     );
 }
 
-/// A missile fired at nothing is not fired at all, and the pickup survives.
+/// A missile with nothing to lock is fired anyway, unguided, and the pickup goes.
 ///
-/// The player's arm returns early when `Race::fire_missile` finds no lock, which
-/// is the one place a fire press legitimately does nothing and keeps the pickup.
-/// Built on an empty grid so there is provably nothing to lock.
+/// **This test used to assert the opposite**, and the opposite was ours:
+/// `Ship_FireHeldWeapon` (`0x08844ae8`) calls `Weapon_RequestFire` on both arms
+/// of its lock test - with the target's address when there is one and with a
+/// null and an index of `-1` when there is not - and `Weapon_FireMissile`
+/// (`0x088685cc`) empties the held-weapon slot before it so much as checks
+/// whether the pool has room. See
+/// `oag_gameplay::projectile::missile::lock`'s "`None` is not a refusal to fire".
+///
+/// Built on an empty grid so there is provably nothing to lock, and on a table
+/// that authors a Missile so the arm cannot pass for the *other* reason it
+/// returns early.
 #[test]
-fn a_missile_with_nothing_to_lock_is_not_spent() {
-    let mut race = race_with_weapon_pads(Mode::SingleRace, enveloping_pad(), 1.0);
+fn a_missile_with_nothing_to_lock_is_fired_unguided_and_spent() {
+    let mut race =
+        race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_missile_table());
     race.tick(&InputSnapshot::default());
     race.world.ships[0].pickup.weapon = Some(oag_formats::weapons::Weapon::Missile);
 
@@ -628,13 +637,71 @@ fn a_missile_with_nothing_to_lock_is_not_spent() {
 
     assert_eq!(
         race.world.projectiles.live(),
-        0,
-        "a missile left the rail with nobody to chase"
+        1,
+        "the press with no lock put nothing in the air"
+    );
+    let missile = race
+        .world
+        .projectiles
+        .slots
+        .iter()
+        .find(|p| p.kind == Some(oag_formats::weapons::Weapon::Missile))
+        .copied()
+        .expect("a missile is in the air");
+    assert_eq!(
+        missile.target, None,
+        "an empty grid handed the missile a target to chase"
     );
     assert_eq!(
         race.ship_pickup(),
-        Some(oag_formats::weapons::Weapon::Missile),
-        "the pickup was spent on a shot that never happened"
+        None,
+        "the pickup survived a shot that did leave the rail"
+    );
+}
+
+/// An unguided missile fired through the button path ends itself on time.
+///
+/// **The timer only**, and deliberately: that the detonation spends no blast is
+/// a rule of `oag_gameplay::projectile` and is asserted there, by
+/// `a_self_detonating_missile_damages_nobody_standing_in_it`. What this adds is
+/// that a missile fired the way a player fires one - a pad's pickup, a `SQUARE`
+/// press, `Race::tick` driving the pool - reaches the same end.
+///
+/// Recovered from `MissilePool_Update` (`0x08869588`), whose second pass tests
+/// `3.0 < age` on every live slot.
+#[test]
+fn an_unguided_missile_fired_by_hand_ends_itself_on_time() {
+    use oag_gameplay::projectile::missile::SELF_DETONATE_SECONDS;
+
+    let mut race =
+        race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_missile_table());
+    race.tick(&InputSnapshot::default());
+    race.world.ships[0].pickup.weapon = Some(oag_formats::weapons::Weapon::Missile);
+
+    let mut buttons = Buttons::new();
+    buttons.tick(0);
+    race.tick(&buttons.tick(SQUARE));
+    assert_eq!(race.world.projectiles.live(), 1, "nothing left the rail");
+
+    // Flown until it goes off, and the tick it goes off on is the assertion.
+    // Counted rather than sampled either side of a chosen instant: the age is
+    // derived from `MAX_FLIGHT_SECONDS - lifetime` and accumulates a tick's
+    // worth of rounding over three seconds, so an exact-tick assertion would be
+    // a test of `f32` addition rather than of the rule.
+    let mut ticks = 1_usize; // the firing tick already flew it once
+    while race.world.projectiles.live() > 0 {
+        race.tick(&InputSnapshot::default());
+        ticks += 1;
+        assert!(
+            ticks < 600,
+            "the missile outlived the recovered self-detonate timer"
+        );
+    }
+
+    let flown = ticks as f32 / 60.0;
+    assert!(
+        (flown - SELF_DETONATE_SECONDS).abs() <= 2.0 / 60.0,
+        "the missile flew {flown}s, not the recovered {SELF_DETONATE_SECONDS}s"
     );
 }
 

@@ -502,7 +502,6 @@
 0x08861814	function	Weapons_DispatchFire	80	weapon-fire.md
 0x0886e104	function	Weapon_FireRocket	88	weapon-fire.md
 0x088675cc	function	Weapon_UpdateBurstFire_q	72	weapon-fire.md
-0x08869588	function	Projectiles_Update_q	75	weapon-fire.md
 
 0x0885cc24	function	Rocket_Ctor	85	rocket-visuals.md
 0x0885cdb8	function	Rocket_Init	85	rocket-visuals.md
@@ -524,6 +523,13 @@
 0x08861d20	function	WeaponPickup_Grant	80	missile.md
 0x0886e0f8	function	WeaponPickup_ArmRocket	80	missile.md
 0x0880e93c	function	WeaponStats_ParsePickupOdds	92	missile.md
+0x08869588	function	MissilePool_Update	88	missile.md
+0x08868d50	function	Missile_SpawnExplosion	85	missile.md
+0x08868ea4	function	Missile_ApplyBlastForce	88	missile.md
+0x088690fc	function	MissilePool_TestCraftHits	85	missile.md
+0x088687c0	function	MissilePool_SpawnRemote	78	missile.md
+0x08868a10	function	MissilePool_DestroyRemote	78	missile.md
+0x0886de60	function	RocketPool_Update	82	missile.md
 0x08851d88	function	WeaponAiStats_Load	90	ai-stats.md
 0x08852178	function	WeaponAiStats_ParseWeapon	90	ai-stats.md
 0x08851d3c	function	WeaponAiStats_Reset	90	ai-stats.md

@@ -212,13 +212,18 @@ impl Race {
                         // As the Rocket: nothing to put in the air.
                         return;
                     };
-                    if !self.fire_missile(0, &stats) {
-                        // No slot, or nothing worth locking. Keep the pickup -
-                        // firing a missile at nobody is spending it on nothing,
-                        // and unlike a rocket it cannot usefully be thrown
-                        // downrange on the off chance.
-                        return;
-                    }
+                    // **Fired whether or not anything is lockable**, and the
+                    // pickup is spent either way. `Ship_FireHeldWeapon`
+                    // (`0x08844ae8`) branches on the lock and calls
+                    // `Weapon_RequestFire` on both arms - a null target and an
+                    // index of `-1` when there is none - and
+                    // `Weapon_FireMissile` (`0x088685cc`) clears the held slot
+                    // *before* it checks whether the pool has room. So even the
+                    // full-pool case costs the player the pickup. The old
+                    // "keep it, a missile at nobody is nothing" rule was ours
+                    // and was wrong twice over: an unlocked missile flies
+                    // ballistically and goes off on its own timer.
+                    self.fire_missile(0, &stats);
                 }
                 // The other nine have no effect to run. Deliberately *not* spent:
                 // a pickup that vanishes when fired and does nothing is worse
@@ -248,11 +253,15 @@ impl Race {
         self.world.ships[0].pickup.weapon = None;
     }
 
-    /// Locks a target and puts one missile in the air for `slot`.
+    /// Locks a target if there is one and puts one missile in the air for `slot`.
     ///
-    /// Returns whether anything left the rail, so a caller can decline to spend
-    /// the pickup - `false` means either that nothing was worth locking or that
-    /// the array was full.
+    /// Returns whether anything left the rail. **`false` now means the array was
+    /// full and nothing else** - a missing lock is no longer a refusal, for the
+    /// reason `oag_gameplay::projectile::missile::lock` records at length:
+    /// `Ship_FireHeldWeapon` (`0x08844ae8`) fires on both arms of its lock test
+    /// and passes a null target on the unlocked one. An unguided missile rides
+    /// the floor, glances off walls and detonates on the recovered
+    /// `SELF_DETONATE_SECONDS` timer.
     ///
     /// # The player and an opponent use the same rule, on purpose
     ///
@@ -296,20 +305,15 @@ impl Race {
             stats,
             self.course.as_ref().map(oag_race::Course::length),
         );
-        // **No lock, no launch.** A missile with no target flies straight and is
-        // simply a worse rocket, and the original does not fire one: its handler
-        // takes the target from the craft and `Ship_FireHeldWeapon` passes a null
-        // when the lock flag is clear. Keeping the pickup is ours - what the
-        // original does with an unlocked press has not been read.
-        let Some(target) = target else {
-            return false;
-        };
+        // `target` is passed through as it comes, `None` included: that is the
+        // original's null pointer, and `Missile_Update` skips its whole guidance
+        // block on it rather than treating it as an error.
         self.world.projectiles.spawn_guided(
             oag_formats::weapons::Weapon::Missile,
             position,
             velocity,
             slot as u8,
-            Some(target),
+            target,
             launch_kmh,
         )
     }

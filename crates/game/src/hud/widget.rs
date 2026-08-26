@@ -172,10 +172,19 @@ pub struct Fill {
 
 /// One `<Mode3D><Model>`: a `.vex` model drawn in the 3D overlay layer.
 ///
-/// Recorded and **not drawn**. The five referenced models are the countdown
-/// (`Pulse_Ready_Go`, `Cockpit_321GO`) and the weapon sights
-/// (`missile_sight_inner`/`_outer`, `leachbeam_sight`), all of which need a
-/// second pass with a projection of their own. See `docs/ui/hud.md`.
+/// Recorded and **not drawn**. The referenced models are the countdown
+/// (`Pulse_Ready_Go`, `Cockpit_321GO`) and the weapon sights, all of which need
+/// a second pass with a projection of their own. See `docs/ui/hud.md`.
+///
+/// **The sights are nine widgets and this comment used to name two of them
+/// wrongly.** `BOOT.BIN` holds one contiguous run of them at `0x08a79cd4` -
+/// `missile_sight_1` … `missile_sight_4`, `missile_sight_inner`, then
+/// `leachbeam_sight_1` … `leachbeam_sight_4` - and there is **no**
+/// `missile_sight_outer` string anywhere in the executable. Four brackets and a
+/// centre is the shape of a lock-on reticle rather than of an inner/outer pair,
+/// which changes what drawing them means: they are anchored on the *locked
+/// craft*, not on the screen. That is the missing lock-on indicator; see the
+/// handover thread.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Model {
     /// The `name` attribute.

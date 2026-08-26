@@ -40,7 +40,7 @@ This subsystem is unusually mixed, so the split comes before anything else.
 | `spread` is that fan's half-angle, in radians | **recovered** | 82 |
 | **That a fired Shield refuses damage, and refuses it outright** | **ours** | - |
 | **That a rocket flies straight at a constant speed** | **ours** | - |
-| **A sphere for a hull, and full damage inside `blastradius` with no falloff** | **ours** | - |
+| **A sphere for a hull, and full damage inside `blastradius` with no falloff** | **ours**, and the falloff half is now measured to be wrong | [missile.md](../ghidra/functions/psp-pulse-usa/missile.md) |
 | **The launch offset, the flight speed being class + `launchSpeed`, the lifetime cap** | **ours** | - |
 | `<Missile>`: `damage`, `blastforce`, `blastradius`, `launchSpeed`, a speed per class, **and its two lock distances** | **recovered** | 90 |
 | **A Missile press puts exactly one in the air**, where a Rocket puts three | **recovered** | 90 |
@@ -378,7 +378,11 @@ flight update has been found anywhere in the executable:
   can register as a hit, which favours the shooter and is the generous reading
   rather than the conservative one;
 - **full damage everywhere inside `blastradius`, with no falloff**, and the
-  firing craft not excluded from its own blast;
+  firing craft not excluded from its own blast - the falloff half of which is
+  now known to be wrong and is not yet fixed: `FUN_08868ea4` adds
+  `direction * (1 - distance/blastradius) * blastforce`, a **linear** falloff on
+  the impulse, and reaches no damage at all (see
+  [missile.md](../ghidra/functions/psp-pulse-usa/missile.md#the-blast-and-what-does-not-reach-it));
 - `blastforce` applied as an impulse rather than a force held over a duration;
 - a ten-second lifetime cap, so a rocket that leaves the world through a gap in
   the collision soup cannot hold its slot for the race.
