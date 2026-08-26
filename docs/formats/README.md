@@ -207,6 +207,26 @@ soup, the pad volumes and the `section` visibility mask all read, corpus-wide;
 and **ten of HD's sixteen environments are a Pulse or Pure circuit's spline in
 the same world coordinates**, Talon's Junction among them.
 
+**[2048 rcsmodel](2048-rcsmodel.md)** is the last of the three formats that
+changed underneath 2048: the same extension as Wipeout HD's render container and
+a wholly different file - a linker-style image with relocation tables, read
+little-endian. Positions and triangles are read, which is what lets a 2048
+circuit and a 2048 craft draw at all.
+
+**[2048 collision](2048-collision.md)** is the one format of the three that
+changed underneath 2048 and is now read: a `track_col.col` beside every
+`track.vex`, holding a k-d tree over one triangle soup with a surface byte per
+triangle. Six of its nine surface values are read out of the executable's own
+class-ID switch, and the same six fall out independently from matching 170,744
+collision triangles against Wipeout HD's named classes.
+
+**[2048 status](2048-status.md)** is the probe run a third title on, and the
+first that is not a disc at all - *Wipeout 2048* ships as a Vita `.pkg`. Its
+PSARC, its `.vex` class table and its handling XML all read unchanged; three
+binary formats changed underneath them, and the `WO Track` control point is the
+one now recovered - off a **pairing against Wipeout HD**, which re-ships twelve
+of the same circuits with identical control-point counts.
+
 **[HD front end](hd-frontend.md)** is the same reading applied to
 `/data/plugins/frontend/gui/skin.xml` - HD ships six copies of it and they agree
 on every layout global - plus a read-only sweep of the PS3 executable for the

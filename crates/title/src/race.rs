@@ -59,6 +59,32 @@
 //! [ADR-0009]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0009-multi-game-fanout.md
 //! [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
 
+/// The ship directory Pulse, Pure and Wipeout HD all spell identically.
+///
+/// Not a default so much as the value three of the four titles hold; Wipeout
+/// 2048 is the one that does not. See [`RaceDefaults::ship_dir`].
+///
+/// **Restated in `oag_formats::handling`**, which cannot see this crate - a
+/// format reader must not know which title it is reading, so the constant sits
+/// on both sides of that boundary rather than being threaded across it. The
+/// axis is this field; that one is the spelling its three-title convenience
+/// wrapper uses.
+pub const SHIP_DIR: &str = r"Data\Ships";
+
+/// Where one title keeps the models a craft is made of.
+///
+/// The two fields travel together everywhere - a hull path is
+/// `dir\<team>\<stem>.vex` and [`ZoneCraft`] is what decides the team and the
+/// stem on a Zone run - so they are one value rather than two parameters
+/// threaded side by side through six functions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ShipPaths {
+    /// See [`RaceDefaults::ship_dir`].
+    pub dir: &'static str,
+    /// See [`RaceDefaults::zone_craft`].
+    pub zone: ZoneCraft,
+}
+
 /// The circuit and team a race falls back to on one title.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RaceDefaults {
@@ -70,9 +96,39 @@ pub struct RaceDefaults {
     pub track: &'static str,
     /// The team id a race uses when the caller names none.
     ///
-    /// An **id** - the folder under `Data\Ships\` - and not the name a player
-    /// reads, which comes from the string table. See `oag_game::catalogue`.
+    /// An **id** - the folder under [`Self::ship_dir`] - and not the name a
+    /// player reads, which comes from the string table. See
+    /// `oag_game::catalogue`.
     pub team: &'static str,
+    /// The archive directory a team's hull, plume, shield and handling stats
+    /// all sit under, one subdirectory per team id.
+    ///
+    /// **An axis because a third title disagreed**, which is the bar
+    /// [ADR-0022] sets. This module's own docs argued at length that
+    /// `Data\Ships\<Team>\` was shared vocabulary rather than a title fact,
+    /// and for Pulse, Pure and Wipeout HD it is - all three spell it
+    /// identically. Wipeout 2048 does not: its HD-derived roster lives at
+    /// `Data\art\published\hdships\<Team>\`, confirmed against the
+    /// manifest, and its own five-team roster somewhere else again.
+    ///
+    /// Carried here rather than in `oag-formats` because a format crate must
+    /// not know which title it is reading; the directory is passed *in* to
+    /// [`oag_formats::handling::entry_name_in`] and its siblings.
+    ///
+    /// [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
+    pub ship_dir: &'static str,
+    /// The archive directory a team's `handlingstats.xml` sits under, one
+    /// subdirectory per team id.
+    ///
+    /// **Equal to [`Self::ship_dir`] on three of the four titles, and on one of
+    /// Wipeout 2048's two rosters** - which is exactly why it is a separate
+    /// field rather than the same one. 2048's HD-derived craft keep their
+    /// models and their tuning together under
+    /// `Data\art\published\hdships\<Team>\`; **its own five teams do not**,
+    /// keeping models at `Data\art\published\Ships\<team>\<1..4>\` and
+    /// tuning at `Data\HandlingStats\<team>\<1..4>\`. One string cannot
+    /// address both trees, and folding them would mean picking a roster.
+    pub handling_dir: &'static str,
     /// How this title names the circuit a Zone race runs on. See
     /// [`ZoneCircuit`].
     pub zone: ZoneCircuit,
@@ -81,6 +137,17 @@ pub struct RaceDefaults {
     /// Which `.bnk` each of this title's race cues is looked up in. See
     /// [`SoundBanks`].
     pub sounds: &'static SoundBanks,
+}
+
+impl RaceDefaults {
+    /// Where this title keeps the models a craft is made of, as one value.
+    #[must_use]
+    pub fn ships(&self) -> ShipPaths {
+        ShipPaths {
+            dir: self.ship_dir,
+            zone: self.zone_craft,
+        }
+    }
 }
 
 /// Which sound bank a title keeps each race cue in.

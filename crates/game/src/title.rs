@@ -30,7 +30,7 @@ pub struct Opened {
     pub title: &'static Title,
 }
 
-/// Opens `source` as whichever title it identifies as, Pulse or Pure.
+/// Opens `source` as whichever title it identifies as.
 ///
 /// Tries Wipeout Pulse first - the title every other call site in this crate
 /// already assumes - and falls back to Wipeout Pure only when Pulse's own
@@ -55,6 +55,21 @@ pub fn open_source(source: &str, packs: Vec<Pack>) -> Result<Opened> {
     // deny-list to catch and the question is simply whether this source carries
     // a `.PSARC`. Asking that first costs a Pulse open on an HD disc and keeps
     // the Pulse/Pure pair exactly as it was.
+    // **Tried before HD, on the same rule and for the same reason.** Wipeout
+    // 2048 shares no archive name with any of the other three - its bulk is
+    // `PSP2/data.psarc` and nothing else in the lineage ships that - so the
+    // question is again simply whether this source carries the one archive
+    // this title names. Ahead of HD because 2048's package is a directory and
+    // HD's candidates are `PS3_GAME/USRDIR/DATA0*.PSARC`, so neither can match
+    // the other's source and the order between them is free; putting the
+    // cheapest-to-refuse first is the only thing that decides it.
+    if let Ok(archives) = oag_2048::open(source) {
+        return Ok(Opened {
+            archives,
+            title: oag_2048::TITLE,
+        });
+    }
+
     if let Ok(archives) = oag_hd::open(source) {
         return Ok(Opened {
             archives,

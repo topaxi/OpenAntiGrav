@@ -522,21 +522,21 @@ fn hd_keeps_four_zone_environments_of_its_own() {
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn every_titles_zone_craft_resolves_and_is_not_the_race_hull() {
-    let cases: [(&str, &str, oag_title::ZoneCraft); 3] = [
+    let cases: [(&str, &str, oag_title::race::ShipPaths); 3] = [
         (
             "data/images/pulse-psp-usa.chd",
             oag_pulse::race::DEFAULT_TEAM,
-            oag_pulse::race::DEFAULTS.zone_craft,
+            oag_pulse::race::DEFAULTS.ships(),
         ),
         (
             "data/images/pure-psp-eu.chd",
             oag_pure::race::DEFAULT_TEAM,
-            oag_pure::race::DEFAULTS.zone_craft,
+            oag_pure::race::DEFAULTS.ships(),
         ),
         (
             "data/images/hdfury-ps3-eu-dec.iso",
             oag_hd::race::DEFAULT_TEAM,
-            oag_hd::race::DEFAULTS.zone_craft,
+            oag_hd::race::DEFAULTS.ships(),
         ),
     ];
 
@@ -546,8 +546,8 @@ fn every_titles_zone_craft_resolves_and_is_not_the_race_hull() {
         let archives =
             oag_game::title::open_source(&source, Vec::new()).expect("opening the source");
 
-        let racing = race::ship_entry_name(team, oag_race::Mode::TimeTrial, craft);
-        let zoning = race::ship_entry_name(team, oag_race::Mode::Zone, craft);
+        let racing = race::ship_entry_name(craft, team, oag_race::Mode::TimeTrial);
+        let zoning = race::ship_entry_name(craft, team, oag_race::Mode::Zone);
         assert_ne!(
             racing, zoning,
             "{name}: a zone race should not fly the same hull a race does"
@@ -559,7 +559,7 @@ fn every_titles_zone_craft_resolves_and_is_not_the_race_hull() {
 
         // Which half of the enum this title is, asserted against the *name* so a
         // title silently changing shape fails here rather than somewhere subtle.
-        match craft {
+        match craft.zone {
             oag_title::ZoneCraft::ModelsInTeam { .. } => assert!(
                 zoning.contains(team),
                 "{name}: this title keeps the zone hull in the player's own team, \

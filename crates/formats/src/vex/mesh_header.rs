@@ -165,6 +165,33 @@ pub fn mesh_layer(payload: &[u8], model_layer: u32) -> Option<u32> {
     Some(LAYER_DEFAULT)
 }
 
+/// The GU vertex type of a mesh payload's first batch, in either list.
+///
+/// **`Some(0)` is the answer that matters**: a batch declaring no vertex format
+/// at all is a batch whose vertices are not in this file. Wipeout HD and
+/// Wipeout 2048 both export that way, having moved their geometry into a
+/// `.rcsmodel` beside the `.vex` and left the batch headers behind. See
+/// `oag_render::mesh::geometry_is_external`.
+///
+/// `None` when the payload is too short to hold a batch list, or when neither
+/// list has a batch in it - which says nothing either way and is deliberately
+/// not folded into `Some(0)`.
+#[must_use]
+pub fn mesh_first_vertex_type(payload: &[u8]) -> Option<u16> {
+    if payload.len() < 0x30 {
+        return None;
+    }
+    for batch_list in [0u8, 1u8] {
+        let at = u32_at(payload, if batch_list == 0 { 4 } else { 8 }) as usize;
+        let terminator = if batch_list == 0 { 1u16 } else { 2 };
+        if at + 0x40 > payload.len() || u16_at(payload, at) & terminator == 0 {
+            continue;
+        }
+        return Some(u16_at(payload, at + 0x0a));
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

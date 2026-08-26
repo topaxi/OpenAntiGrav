@@ -133,6 +133,7 @@ pub fn no_textures(_: &str) -> Option<Vec<u8>> {
 }
 
 mod isolate;
+pub mod psp2;
 mod skin;
 use skin::{flips, picks, roles, skin, variants};
 
@@ -907,7 +908,7 @@ fn build_with_options(
 /// It will differ from the authored normals wherever the artists split or
 /// smoothed them by hand, so a model lit this way is a shape check and not a
 /// match against the original. Reading the real ones supersedes it.
-fn face_normals(model: &mut Model) {
+pub(crate) fn face_normals(model: &mut Model) {
     // **Only where the file gave none.** A zero normal is `emit`'s signal that
     // `rcsmodel::Mesh::normals` had nothing for that vertex; an authored one is
     // better than anything derivable here, because it carries the hard edges the

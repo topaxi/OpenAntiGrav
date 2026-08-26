@@ -517,7 +517,13 @@ pub fn load_shell(options: &Options) -> Result<(Shell, oag_assets::Archives)> {
     let definition = title.plugin_definition;
     let documents = definitions(&mut archives, definition, &mut report);
     let tracks = load_tracks(&mut archives, definition, &documents, &mut report);
-    let teams = load_teams(&mut archives, definition, &documents, &mut report);
+    let teams = load_teams(
+        &mut archives,
+        (title.race.ship_dir, title.race.handling_dir),
+        definition,
+        &documents,
+        &mut report,
+    );
     // After the circuits, because which copy of the string table names them all
     // is a question about the list this just produced.
     let circuit_names = load_circuit_names(

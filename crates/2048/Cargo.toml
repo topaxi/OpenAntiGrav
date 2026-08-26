@@ -1,0 +1,20 @@
+[package]
+name = "oag-2048"
+description = "What Wipeout 2048 ships: its Vita PSARC packages and the paths inside them"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+# A title package is tables, and this is the thinnest of the four: it holds what
+# `docs/formats/2048-status.md` measured off the decrypted EU package and
+# nothing else. In particular it restates no `.vex` class ids - 2048's track
+# files declare version 6, the same word Pulse's and HD's do, and `oag-formats`
+# keys the table off that word rather than off the release.
+[dependencies]
+oag-assets.workspace = true
+oag-title.workspace = true
+
+[lints]
+workspace = true

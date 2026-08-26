@@ -91,9 +91,9 @@ use anyhow::{Context, Result};
 use oag_core::math::frustum::Frustum;
 use oag_core::math::{Mat4, Quat, Vec3};
 use oag_core::{Rng, TickClock, TickRate};
+use oag_formats::handling;
 use oag_formats::track::{AiTrack, Sample, StartPosition};
 use oag_formats::vex;
-use oag_formats::{collision, handling};
 use oag_gameplay::{
     ControlScheme, GRID_SLOTS, InputSnapshot, MAX_SHIPS, Pose, Ship, World, collision_world,
     handling_for, ship_controls, to_format_class,

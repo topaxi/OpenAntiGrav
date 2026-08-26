@@ -429,7 +429,12 @@ pub(super) fn untextured_note(model: &Model) -> Option<String> {
     ))
 }
 
-/// The archive entry name of a team's `.vex` model.
+/// The archive entry name of a team's `.vex` model, under the ship directory
+/// this title keeps its roster in.
+///
+/// `paths` is [`oag_title::RaceDefaults::ships`]; see
+/// [`oag_title::RaceDefaults::ship_dir`] for the third-title disagreement its
+/// directory exists for.
 ///
 /// Assembled the way the loader assembles it, with backslashes, which is what the
 /// name hash needs.
@@ -449,11 +454,15 @@ pub(super) fn untextured_note(model: &Model) -> Option<String> {
 /// itself is shared there - only the livery painted on it still varies by team.
 /// On the other two there is no per-team Zone hull to share.
 #[must_use]
-pub fn ship_entry_name(team: &str, mode: Mode, zone: oag_title::ZoneCraft) -> String {
+pub fn ship_entry_name(paths: oag_title::race::ShipPaths, team: &str, mode: Mode) -> String {
     if mode != Mode::Zone {
-        return ships::entry_name(team, ships::HULL);
+        return ships::entry_name_in(paths.dir, team, ships::HULL);
     }
-    ships::entry_name(zone.directory(team), zone.hull().unwrap_or(ships::HULL))
+    ships::entry_name_in(
+        paths.dir,
+        paths.zone.directory(team),
+        paths.zone.hull().unwrap_or(ships::HULL),
+    )
 }
 
 /// The boost plume that goes with [`ship_entry_name`]'s hull.
@@ -471,11 +480,15 @@ pub fn ship_entry_name(team: &str, mode: Mode, zone: oag_title::ZoneCraft) -> St
 /// the caller's missing-entry path already handles a set that does not carry
 /// one.
 #[must_use]
-pub fn boost_entry_name(team: &str, mode: Mode, zone: oag_title::ZoneCraft) -> String {
+pub fn boost_entry_name(paths: oag_title::race::ShipPaths, team: &str, mode: Mode) -> String {
     if mode != Mode::Zone {
-        return ships::entry_name(team, ships::BOOST);
+        return ships::entry_name_in(paths.dir, team, ships::BOOST);
     }
-    ships::entry_name(zone.directory(team), zone.boost().unwrap_or(ships::BOOST))
+    ships::entry_name_in(
+        paths.dir,
+        paths.zone.directory(team),
+        paths.zone.boost().unwrap_or(ships::BOOST),
+    )
 }
 
 /// The shield shells a craft can draw, best first.
@@ -500,9 +513,9 @@ pub fn boost_entry_name(team: &str, mode: Mode, zone: oag_title::ZoneCraft) -> S
 /// config key rather than from the game mode. See
 /// `docs/ghidra/functions/psp-pulse-usa/shield-pickup.md`.
 #[must_use]
-pub fn shield_entry_names(team: &str) -> [String; 2] {
+pub fn shield_entry_names(ship_dir: &str, team: &str) -> [String; 2] {
     [
-        ships::entry_name(team, ships::SHIELD),
+        ships::entry_name_in(ship_dir, team, ships::SHIELD),
         oag_pulse::race::SHARED_SHIELD.to_string(),
     ]
 }

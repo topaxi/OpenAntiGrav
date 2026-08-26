@@ -151,8 +151,8 @@ pub fn teams_for_slots(player: &str, available: &[String], slots: usize) -> Vec<
 pub fn load(
     archives: &mut oag_assets::Archives,
     teams: &[String],
+    ships: oag_title::race::ShipPaths,
     mode: Mode,
-    zone: oag_title::ZoneCraft,
     flare: &oag_title::flare::Flare,
     lod: mesh::Lod,
     report: &mut Vec<String>,
@@ -181,7 +181,7 @@ pub fn load(
             continue;
         }
 
-        match one(archives, team, mode, zone, flare, lod, report) {
+        match one(archives, team, ships, mode, flare, lod, report) {
             Ok(livery) => out.push(livery),
             Err(error) if slot == 0 => return Err(error),
             Err(error) => {
@@ -211,13 +211,13 @@ pub fn load(
 fn one(
     archives: &mut oag_assets::Archives,
     team: &str,
+    ships: oag_title::race::ShipPaths,
     mode: Mode,
-    zone: oag_title::ZoneCraft,
     flare: &oag_title::flare::Flare,
     lod: mesh::Lod,
     report: &mut Vec<String>,
 ) -> Result<Livery> {
-    let hull_name = ship_entry_name(team, mode, zone);
+    let hull_name = ship_entry_name(ships, team, mode);
     let blob = archives
         .read_name(&hull_name)
         .with_context(|| format!("reading {hull_name}"))?;
@@ -229,36 +229,58 @@ fn one(
     if mesh::geometry_is_external(&blob) {
         let sibling = mesh::rcs::sibling_name(&hull_name);
         let geometry = sibling.as_deref().and_then(|s| archives.read_name(s).ok());
-        let Some(geometry) = geometry else {
-            report.push(format!(
-                "{hull_name}: a PS3 .vex with no .rcsmodel beside it - nothing draws \
-                 for this craft, and the race still runs"
-            ));
-            return Ok(Livery {
-                team: team.to_string(),
-                hull: mesh::Model::none(&hull_name),
-                nozzle: None,
-                collision_fx: Vec::new(),
-                boost: None,
-                boost_uv: None,
-                flare: None,
-                shield: None,
-            });
+        // **A sibling that will not decode is the same outcome as no sibling**,
+        // and it is Wipeout 2048 that made the distinction matter: it ships a
+        // `.rcsmodel` for every craft and the container is not HD's, so this
+        // used to be a hard error that stopped the race rather than a craft
+        // that does not draw. Which of the two happened is in the report,
+        // because they need different work to fix.
+        let built = match geometry {
+            None => Err(format!(
+                "{hull_name}: a .vex with external geometry and no .rcsmodel beside it"
+            )),
+            // 2048's container is a different file under the same extension
+            // and needs no `.vex` at all - see `oag_render::mesh::rcs::psp2`.
+            Some(geometry) if mesh::rcs::psp2::is_psp2(&geometry) => {
+                mesh::rcs::psp2::build(&hull_name, &geometry)
+                    .map(|(model, built)| (model, built.describe()))
+                    .map_err(|error| format!("{hull_name}: {error:#}"))
+            }
+            Some(geometry) => mesh::rcs::build(
+                &hull_name,
+                &blob,
+                &geometry,
+                &mut |path| archives.read_name(path).ok(),
+                |c| c.mesh,
+            )
+            .map(|(model, built)| (model, built.describe()))
+            .map_err(|error| format!("{hull_name}: {error:#}")),
         };
-        let (hull, built) = mesh::rcs::build(
-            &hull_name,
-            &blob,
-            &geometry,
-            &mut |path| archives.read_name(path).ok(),
-            |c| c.mesh,
-        )?;
-        report.push(format!("{hull_name}: {}", built.describe()));
+        let (hull, built) = match built {
+            Ok(pair) => pair,
+            Err(why) => {
+                report.push(format!(
+                    "{why} - nothing draws for this craft, and the race still runs"
+                ));
+                return Ok(Livery {
+                    team: team.to_string(),
+                    hull: mesh::Model::none(&hull_name),
+                    nozzle: None,
+                    collision_fx: Vec::new(),
+                    boost: None,
+                    boost_uv: None,
+                    flare: None,
+                    shield: None,
+                });
+            }
+        };
+        report.push(format!("{hull_name}: {built}"));
         let (nozzle, collision_fx) = locators(archives, &hull_name, &blob, report);
         // **The plume comes from here too on this title.** HD ships no
         // `shipboost.vex`; `EF_Boost` inside the flare model is what a speed
         // pad reveals, so both halves come out of one load. See
         // `flare::per_team`.
-        let lit = authored_flare(archives, team, flare, nozzle, report);
+        let lit = authored_flare(archives, team, ships.dir, flare, nozzle, report);
         return Ok(Livery {
             team: team.to_string(),
             nozzle,
@@ -272,7 +294,7 @@ fn one(
             // beside it, under the same stem Pulse uses, for all eight teams and
             // Zone. `shell` takes the same external-geometry branch this hull
             // just took. See `crate::race::shield_entry_names`.
-            shield: shell(archives, team, lod, report),
+            shield: shell(archives, team, ships.dir, lod, report),
         });
     }
     let mut hull = mesh::build_with_textures(&hull_name, &blob, None, lod)?;
@@ -294,13 +316,13 @@ fn one(
 
     let (nozzle, collision_fx) = locators(archives, &hull_name, &blob, report);
 
-    let (boost, boost_uv) = plume(archives, team, mode, zone, lod, report);
-    let shield = shell(archives, team, lod, report);
+    let (boost, boost_uv) = plume(archives, team, ships, mode, lod, report);
+    let shield = shell(archives, team, ships.dir, lod, report);
     // Nothing on a title whose flare is a sprite, which is every source that
     // reaches this branch today - the match is here rather than at the PS3
     // branch alone so a fourth source is answered by its own axis and not by
     // which decoder its hull happened to take.
-    let lit = authored_flare(archives, team, flare, nozzle, report);
+    let lit = authored_flare(archives, team, ships.dir, flare, nozzle, report);
     Ok(Livery {
         team: team.to_string(),
         hull,
@@ -322,13 +344,14 @@ fn one(
 fn authored_flare(
     archives: &mut oag_assets::Archives,
     team: &str,
+    ship_dir: &str,
     flare: &oag_title::flare::Flare,
     nozzle: Option<Vec3>,
     report: &mut Vec<String>,
 ) -> flare::Flare {
     match flare {
         oag_title::flare::Flare::PerTeam(authored) => {
-            flare::per_team(archives, team, authored, nozzle, report)
+            flare::per_team(archives, team, ship_dir, authored, nozzle, report)
         }
         oag_title::flare::Flare::Sprite(_) | oag_title::flare::Flare::Unread => {
             flare::Flare::default()
@@ -586,10 +609,11 @@ fn shield_model(
 fn shell(
     archives: &mut oag_assets::Archives,
     team: &str,
+    ship_dir: &str,
     lod: mesh::Lod,
     report: &mut Vec<String>,
 ) -> Option<Model> {
-    let names = crate::race::shield_entry_names(team);
+    let names = crate::race::shield_entry_names(ship_dir, team);
     for (index, name) in names.iter().enumerate() {
         let provenance = if index == 0 {
             "the team's own"
@@ -645,12 +669,12 @@ pub(crate) fn cockpit_shield(
 fn plume(
     archives: &mut oag_assets::Archives,
     team: &str,
+    ships: oag_title::race::ShipPaths,
     mode: Mode,
-    zone: oag_title::ZoneCraft,
     lod: mesh::Lod,
     report: &mut Vec<String>,
 ) -> (Option<Model>, Option<vex::TexTransform>) {
-    let boost_name = boost_entry_name(team, mode, zone);
+    let boost_name = boost_entry_name(ships, team, mode);
     let Ok(blob) = archives.read_name(&boost_name) else {
         report.push(format!(
             "{boost_name}: not in the archive set - no boost plume for this team"

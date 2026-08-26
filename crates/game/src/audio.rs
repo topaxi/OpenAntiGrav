@@ -285,7 +285,11 @@ impl MusicDiscs {
                 discs.ps3 = Some(booted.to_string());
                 return discs;
             }
-            Platform::Unknown => return discs,
+            // **The same "recorded and then done with" as PS3's, one step
+            // earlier**: Wipeout 2048's music is unlocated, so there is not
+            // even a soundtrack to pair, and there is no second release of it
+            // to pair against either.
+            Platform::Vita | Platform::Unknown => return discs,
         }
 
         // The booted disc's own soundtrack is what a candidate has to match,
@@ -349,7 +353,7 @@ impl MusicDiscs {
             Platform::Psp => self.psp.as_deref().map(|at| (at, Platform::Psp)),
             Platform::Ps2 => self.ps2.as_deref().map(|at| (at, Platform::Ps2)),
             Platform::Ps3 => self.ps3.as_deref().map(|at| (at, Platform::Ps3)),
-            Platform::Unknown => None,
+            Platform::Vita | Platform::Unknown => None,
         })
     }
 }
@@ -1426,7 +1430,9 @@ impl Soundtrack {
         let tracks = match platform {
             Platform::Ps2 => ps2_soundtrack(source)?,
             Platform::Psp | Platform::Ps3 => archived_soundtrack(source)?,
-            Platform::Unknown => None,
+            // Wipeout 2048's music is unlocated - `oag_2048::TITLE` carries
+            // `music: None` - so there is nothing here to read yet.
+            Platform::Vita | Platform::Unknown => None,
         };
         Ok(tracks.map(|tracks| Self { tracks }))
     }

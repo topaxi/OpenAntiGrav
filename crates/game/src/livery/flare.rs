@@ -47,11 +47,12 @@ pub(super) struct Flare {
 pub(super) fn per_team(
     archives: &mut oag_assets::Archives,
     team: &str,
+    ship_dir: &str,
     authored: &oag_title::flare::Authored,
     nozzle: Option<Vec3>,
     report: &mut Vec<String>,
 ) -> Flare {
-    let name = ship_entry_name_for(team, authored.stem);
+    let name = ship_entry_name_for(ship_dir, team, authored.stem);
     let Ok(blob) = archives.read_name(&name) else {
         report.push(format!(
             "{name}: not in the archive set - no engine flare model for this team"
@@ -249,8 +250,8 @@ fn translate(model: &mut Model, offset: Vec3) {
     model.centre = (Vec3::from_array(model.centre) + offset).to_array();
 }
 
-/// `Data\Ships\<Team>\<stem>.vex`, the way every other per-team model is
+/// `<ship_dir>\<Team>\<stem>.vex`, the way every other per-team model is
 /// composed - see [`crate::race::ship_entry_name`].
-fn ship_entry_name_for(team: &str, stem: &str) -> String {
-    oag_pulse::race::ships::entry_name(team, stem)
+fn ship_entry_name_for(ship_dir: &str, team: &str, stem: &str) -> String {
+    oag_pulse::race::ships::entry_name_in(ship_dir, team, stem)
 }

@@ -93,6 +93,7 @@ use crate::ByteOrder;
 
 mod coverage;
 pub mod material;
+pub mod psp2;
 mod stride;
 mod surface;
 

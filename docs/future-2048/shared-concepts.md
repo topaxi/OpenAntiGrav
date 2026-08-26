@@ -15,7 +15,7 @@ entries get promoted to real documentation as evidence arrives.
 | Wipeout Pulse | PSP | 2007 | Primary target |
 | Wipeout Pulse | PS2 | 2009 | Cross-validation, image available |
 | Wipeout HD / Fury | PS3 | 2008/09 | Not yet examined |
-| Wipeout 2048 | Vita | 2012 | Long-term goal, package available |
+| Wipeout 2048 | Vita | 2012 | Package examined; PSARC, HD's asset-extension family and its whole team roster carry over. Craft/track spawn not yet wired. |
 | Omega Collection | PS4 | 2017 | If feasible |
 
 ## Confirmed shared
@@ -37,9 +37,12 @@ Confidence: **85** that the format is genuinely shared. The header shape and
 entry counts match across all three; the record layout has been validated
 against Pulse PSP only.
 
-**Worth checking next:** whether HD and 2048 use it too. 2048 is a Vita title
-from a different studio generation, so probably not, but the check is cheap and
-the answer shapes how much of the asset pipeline is reusable.
+**HD does, and so does 2048.** 2048's `data.psarc` (1.6 GiB, EU base package)
+opens with `oag_assets::psarc::Archive::open` unmodified: version 1.4, flags 1,
+against HD's version 1.3, flags 3 - neither value is asserted by the reader, so
+both open the same way. Confidence **90**: measured directly against a real
+package, on the same terms as the WAD finding above, not yet corroborated by a
+second 2048 archive (the patch's own `data1.psarc`/`data2.psarc` are unread).
 
 ### Directory naming
 
@@ -85,14 +88,30 @@ Three rules follow, and all three cost nothing now but a lot later:
 
 ## Wipeout 2048 notes
 
-Not yet examined. Available as a Vita package in `~/Downloads`, base plus v1.04
-patch, for both EUR and USA.
+Examined 2026-08-26, against the EU base package's `data.psarc` (1.6 GiB,
+18,430 entries). Developed by Studio Liverpool for Vita launch; the last title
+before the studio closed.
 
-Known at a distance: developed by Studio Liverpool for Vita launch; uses the
-same team and track lineage; the last title before the studio closed. Whether
-any code or format DNA survives from the PSP era is entirely unknown, and is the
-single most valuable open question for the project's long-term premise.
+**The lineage question this section used to call "entirely unknown" has an
+answer, and it is HD/Fury, not the PSP/PS2 pair.** The asset tree is HD's, not
+Pulse's: `.rcsmodel`/`.rcsmaterial`/`.rcsskeleton`/`.rcsanimclip`, `.pob`,
+`.pvs`/`.probes`, `.envsettings`, `.bnk` are all present, and 2048 ships all
+fourteen HD teams verbatim under `data/art/published/hdships/<Team>/`
+(`Ship.vex`, `handlingstats.xml`, the `_c1`/`_n1` Fury variants and all)
+alongside its own five-team native roster (`AG Systems`, `Auricom`, `Feisar`,
+`Piranha`, `Qirex`) and ten native circuits. Confidence **85**: strong,
+convergent evidence from the shipped file tree and naming, not yet corroborated
+by reading any code.
 
-Examining it is an M8 task. Doing it earlier would be a distraction, but the
-answer would materially change how much abstraction is worth building now, so it
-may be worth a cheap look sooner rather than later.
+**Not everything carries over unchanged, though - two of 2048's own binary
+formats have diverged from HD's**, each confirmed against the real package:
+the track spline's per-point record shrank from 112 to 96 bytes (confirmed
+exactly against all fourteen shipped tracks), and the external track-geometry
+container is not HD's `.rcsmodel` version at all (a different, unrecovered
+header). Neither has its own format page yet - one is owed once a decoder
+exists for either.
+
+Handling-stats XML, the engine-wide `<Global>` block and the PSARC container
+itself are all unchanged from HD, so the "second title cheaper" premise holds
+for those three outright; the two divergent formats are exactly the kind of
+finding this page exists to track, not a reason to doubt it.

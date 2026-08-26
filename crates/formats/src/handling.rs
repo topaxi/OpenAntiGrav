@@ -99,15 +99,6 @@ pub const TEAMS: [&str; 8] = [
     "Triakis",
 ];
 
-/// The archive entry name for a team's handling stats.
-///
-/// Assembled the way the loader assembles it, with backslashes, which is what
-/// [`wad::hash_name`](crate::wad::hash_name) needs to find the entry.
-#[must_use]
-pub fn entry_name(team: &str) -> String {
-    format!(r"Data\Ships\{team}\handlingstats.xml")
-}
-
 /// The four speed classes, in the order the XML lists them.
 ///
 /// A separate type from `oag_physics::SpeedClass` for the same reason the
@@ -258,8 +249,10 @@ impl From<fexml::Error> for Error {
 pub type Result<T> = std::result::Result<T, Error>;
 
 mod cameras;
+mod names;
 
 pub use cameras::{AirbrakeGraphics, BonnetCamera, Camera, ExternalCamera};
+pub use names::{SHIP_DIR, entry_name, entry_name_in};
 
 /// Hull dimensions and the shield pool. `<Misc/>`.
 ///

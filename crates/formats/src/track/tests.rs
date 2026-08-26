@@ -35,7 +35,8 @@ fn build_in(version: u32, counts: &[usize], order: ByteOrder) -> Vec<u8> {
     let points_at = junctions_at + counts.len() * JUNCTION_LEN;
     let total: usize = counts.iter().sum();
 
-    let mut out = vec![0u8; points_at + total * POINT_LEN];
+    let stride = point_len(version);
+    let mut out = vec![0u8; points_at + total * stride];
     out[0..4].copy_from_slice(&w32(MAGIC));
     out[4..8].copy_from_slice(&w32(version));
     out[8..12].copy_from_slice(&w32(counts.len() as u32));
@@ -73,9 +74,14 @@ fn build_in(version: u32, counts: &[usize], order: ByteOrder) -> Vec<u8> {
             out[at + 0x4c..at + 0x50].copy_from_slice(&wf32(-9.0));
             out[at + 0x50..at + 0x54].copy_from_slice(&wf32(9.0));
             out[at + 0x54..at + 0x58].copy_from_slice(&wf32(0.5));
-            out[at + 0x60] = k as u8;
-            out[at + 0x61] = 1 << i;
-            at += POINT_LEN;
+            let tail = if version >= SHORT_POINT_VERSION {
+                0x5c
+            } else {
+                0x60
+            };
+            out[at + tail] = k as u8;
+            out[at + tail + 1] = 1 << i;
+            at += stride;
         }
     }
     out
@@ -442,4 +448,44 @@ fn a_payload_whose_magic_is_neither_spelling_is_still_refused() {
     assert_eq!(byte_order(&payload), None);
     assert!(!has_magic(&payload));
     assert!(matches!(parse(&payload), Err(Error::BadMagic { .. })));
+}
+
+/// Wipeout 2048's version `0x107` shortens the control point to 96 bytes and
+/// moves `section_id`/`flags` with it; everything up to `racing_line` stays put.
+///
+/// The offsets themselves are measured, not invented: see
+/// `docs/formats/track.md`.
+#[test]
+fn version_0x107_shortens_the_control_point() {
+    assert_eq!(point_len(0x106), POINT_LEN);
+    assert_eq!(point_len(SHORT_POINT_VERSION), POINT_LEN_SHORT);
+
+    let payload = build(SHORT_POINT_VERSION, &[4, 3]);
+    let track = parse(&payload).expect("a 0x107 payload parses");
+    assert_eq!(track.version, SHORT_POINT_VERSION);
+    assert_eq!(track.encoded_len(), payload.len());
+    assert_eq!(track.paths[0].points.len(), 4);
+    assert_eq!(track.paths[1].points.len(), 3);
+}
+
+/// The same authored values decode identically either side of the version
+/// boundary - which is the whole claim the short record makes.
+#[test]
+fn the_short_record_decodes_the_same_values_as_the_long_one() {
+    let long = parse(&build(0x106, &[4, 3])).expect("0x106 parses");
+    let short = parse(&build(SHORT_POINT_VERSION, &[4, 3])).expect("0x107 parses");
+    for (a, b) in long.paths.iter().zip(&short.paths) {
+        assert_eq!(a.points, b.points);
+    }
+    assert!(short.encoded_len() < long.encoded_len());
+}
+
+/// A 0x107 payload read at the old 112-byte stride runs off the end - the
+/// failure that blocked a 2048 track from loading at all.
+#[test]
+fn the_old_stride_does_not_fit_a_0x107_payload() {
+    let payload = build(SHORT_POINT_VERSION, &[4, 3]);
+    let fixed = HEADER_LEN + RESERVED_LEN + 2 * PATH_LEN + 2 * JUNCTION_LEN;
+    assert_eq!(payload.len(), fixed + 7 * POINT_LEN_SHORT);
+    assert!(fixed + 7 * POINT_LEN > payload.len());
 }
