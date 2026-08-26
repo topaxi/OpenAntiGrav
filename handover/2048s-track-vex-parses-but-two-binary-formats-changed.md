@@ -99,16 +99,21 @@ named this session, confidence 85 - see
 [track-and-collision-loaders.md](../docs/ghidra/functions/vita-2048-eu-v104/track-and-collision-loaders.md))
 is `Live::Rcs::Model`'s own loader, named off its allocator tags
 (`"PSP2/Psp2.RcsModelLoader.cpp"`) and two error strings that name the class
-directly. It reads a fixed `0x60`-byte prefix, then loads two more sections
-sized from fields inside it: a "main memory" (CPU-resident) block and a GPU
-block, each read whole and then walked for a relocation table twice. Checked
-against the real file: `size(+0x0c) + size(+0x24) + size(+0x44)` equals the
-file's own length exactly (`189824 + 682966 + 16573144 = 17445934`) - the same
-"does the arithmetic close on the real bytes" bar the `WO Track` stride
-cleared. **What is still unrecovered**: the interior of all three sections -
-what fields fill the rest of that `0x60`-byte prefix, and the chunk/relocation
-shape inside the two loaded blocks. That is genuinely more RE, not a quick
-follow-up.
+directly. It peeks the first 32 bytes to learn a size at `+0x0c`, allocates
+and reads exactly that many bytes as one block ("section A"), then reads two
+more fields *out of that just-loaded block* (`+0x24`, `+0x44`) and uses each
+as the size of a further block it allocates and reads in turn - a "main
+memory" (CPU-resident) block and a GPU block - before walking section A's own
+relocation table twice. Checked at the instruction level, not just decompiled:
+`812f160a` reads the allocation size from the 32-byte peek's own `+0xc`, and
+`812f1658`/`812f1664` read the other two sizes out of the *loaded* section A,
+not the raw file. Checked against the real file: `size(+0x0c) + size(+0x24)
++ size(+0x44)` equals the file's own length exactly (`189824 + 682966 +
+16573144 = 17445934`) - the same "does the arithmetic close on the real
+bytes" bar the `WO Track` stride cleared. **What is still unrecovered**: the
+interior of all three sections - what the rest of section A's own fields are,
+and the chunk/relocation shape inside the two loaded blocks. That is
+genuinely more RE, not a quick follow-up.
 
 **The `WO Track` (AI spline) payload is version `0x107`, one above every
 previously-seen version (Pulse ships `0x105`), and its per-point record shrank
@@ -176,15 +181,20 @@ with no node instances, checked in the code before it settles for empty rather
 than erroring). The 1,068,082-byte `track_col.col` beside `track.vex` is a
 *new*, wholly separate top-level file, and `KdTree_Load` (`0x8118d134`,
 confidence 87, same evidence page) is its loader - named off its own format
-string (`sscanf`-style, literally `"kdtr%04x"`) and two allocator tags
-(`"Backend/General/Collision/KdTree.cpp"`, with a companion string naming a
-`KdTreeMeshShape.cpp` for the part this session did not reach). Reading the
-real file against what the decompiled control flow predicts, every tag and
-count landed exactly where expected:
+string (`sscanf`-style, literally `"kdtr%04x"`, required to parse to `1`) and
+two allocator tags (`"Backend/General/Collision/KdTree.cpp"`, with a
+companion string naming a `KdTreeMeshShape.cpp` for the part this session did
+not reach). That the branch checks the *parsed version* rather than the
+`sscanf`-style call's own return value is confirmed by disassembly, not
+assumed: the compared stack slot is explicitly zeroed before the call and
+reloaded from the same slot afterward, never from the return register - the
+shape of an out-parameter, not a field-count return. Reading the real file
+against what the decompiled control flow predicts, every tag and count landed
+exactly where expected:
 
 ```text
 +0x00  char[4]  "kdtr"
-+0x04  char[4]  ASCII version, "0001" on every file seen
++0x04  char[4]  ASCII version, required to parse as 1 - "0001" on every file seen
 +0x08  char[4]  section tag, literal "----", repeated before each section below
 +0x0c  u32      node stride - 24 bytes, this file
 +0x10  u32      node count N - 27,199, this file
@@ -232,10 +242,11 @@ parser change yet - see What's New above and Next Steps below.
 
 ## Open
 
-- The `.rcsmodel` container's three sections' own interiors - the rest of the
-  `0x60`-byte prefix past the two size fields, and the chunk/relocation shape
-  inside the "main memory" and "GPU" blocks `RcsModel_Load` reads whole. Only
-  where the three sections start and end is known.
+- The `.rcsmodel` container's three sections' own interiors - what fills the
+  rest of section A past its own `+0x0c`/`+0x24`/`+0x44` size fields, and the
+  chunk/relocation shape inside the "main memory" and "GPU" blocks
+  `RcsModel_Load` reads whole. Only where the three sections start and end is
+  known.
 - The `WO Track` tail's exact field offsets past `pos`/`tangent`/`down`/`lateral`
   (see above) - two plausible half-width candidates, two unexplained
   monotonic fields, and 8 tail bytes seen constant across too small a sample
