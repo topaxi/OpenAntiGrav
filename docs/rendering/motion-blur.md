@@ -249,6 +249,19 @@ weighting exists to prevent. This is accepted rather than fixed: the geometry is
 additive, low contrast and already bloomed, so it should be imperceptible. It is
 listed below as a thing to check, not to assume.
 
+**Camera cuts.** A view switch or a respawn moves the camera further in one
+tick than any surface really travelled, and every pixel measures that jump.
+The reach cap bounds it to one frame of at most [`MAX_STRETCH`] of the
+viewport height, which is why nothing has had to be wired yet - but nothing
+*is* wired, and the pass no longer holds the state a reset would clear.
+[ADR-0028](../architecture/adr/0028-camera-motion-blur-first.md) left a
+`MotionBlur::reset` for whoever wired those events; the velocity tier is
+stateless across frames, so that method is gone and the cache to invalidate
+is `race::scene::frame::MotionState` instead. Whoever wires a cut clears the
+snapshot there, and the frame after it measures zero.
+
+[`MAX_STRETCH`]: ../../crates/render/src/post/motion_blur.rs
+
 ## Settle these before writing any shader
 
 **Is `Rg16Float` multisample-renderable at 4x here?** Reading sample 0 avoids

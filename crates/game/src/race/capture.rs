@@ -160,17 +160,17 @@ pub struct CaptureOptions {
     /// between resamplers has to use. It is also, necessarily, an sRGB pipeline
     /// throughout, exactly as a window is.
     pub presented: Option<Presented>,
-    /// How hard the frame is smeared along the camera's motion.
+    /// How hard the frame is smeared along each surface's own motion.
     ///
     /// Honoured the way `anti_aliasing` and the culling tiers are - a capture
     /// is how a graphics setting gets compared against itself off - but this
-    /// one changes the *shape* of the run to do it: the blur is the delta
-    /// between two distinct cameras, so a one-render capture can only ever
-    /// produce the identity. With this on, the capture holds the last tick
-    /// back, renders a **primer** frame at the tick-before-last pose (drawn
-    /// and discarded - its only product is the pass observing that camera),
-    /// runs the final tick, and renders the frame that is written out. See
-    /// `oag_render::post::motion_blur` and
+    /// one changes the *shape* of the run to do it: every velocity is a delta
+    /// against the previous simulation tick, so a one-render capture has no
+    /// previous tick and measures zero everywhere. With this on, the capture
+    /// holds the last tick back, renders a **primer** frame at the
+    /// tick-before-last pose (drawn and discarded - its only product is the
+    /// previous-transform cache it seeds), runs the final tick, and renders
+    /// the frame that is written out. See `oag_render::post::motion_blur` and
     /// `docs/rendering/motion-blur.md`.
     pub motion_blur: crate::display::MotionBlur,
 }
@@ -244,8 +244,8 @@ pub fn capture(
     race.set_autopilot(options.autopilot);
 
     let mut held = HeldButtons::new(options.held);
-    // A motion blur capture holds the **last** tick back: the blur is the
-    // delta between two distinct cameras, so the primer frame below has to be
+    // A motion blur capture holds the **last** tick back: every velocity is a
+    // delta against the previous tick, so the primer frame below has to be
     // rendered at the tick-before-last pose before that tick runs. Every
     // other capture drives all its ticks here, exactly as before.
     let deferred_tick = (options.motion_blur != crate::display::MotionBlur::Off
@@ -403,13 +403,19 @@ pub fn capture(
 
     // The primer frame a motion blur capture needs: the scene at the
     // tick-before-last pose, drawn into the same target and then entirely
-    // overwritten by the real frame's clear. Camera motion blur carries no
-    // pixels across frames - its only cross-frame state is the camera pair -
-    // so everything this render produces is discarded except the pass having
-    // *observed* that camera. Its own encoder, submitted before the final
-    // frame's, because two renders in one submission would interleave their
-    // `write_buffer` uploads: a queue write lands before the submission's
-    // commands, so the final frame's uniforms would reach both passes.
+    // overwritten by the real frame's clear. Every pixel it produces is
+    // discarded; its whole product is CPU-side, `Scene::render` folding this
+    // pose into `race::scene::frame::MotionState` so the real frame has a
+    // previous tick to measure its `prev_mvp` velocities against. Without it
+    // a one-render capture measures against itself and the velocity buffer
+    // comes out zero everywhere.
+    //
+    // Its own encoder, submitted before the final frame's, because two
+    // renders in one submission would interleave their `write_buffer`
+    // uploads: a queue write lands before the submission's commands, so the
+    // final frame's uniforms would reach both passes. That was already true
+    // of the camera tier's one uniform buffer and is more so now - every
+    // drawable's `prev_mvp` goes through the same queue.
     //
     // Then the held-back tick runs, so the frame written out is the state at
     // exactly `--ticks`, the same as a capture with the blur off.
