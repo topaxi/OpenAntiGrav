@@ -56,6 +56,51 @@ reaches it, and the id is the spelling that does not. That also settles half of
 the design question below: `Team::location`'s leaf is known to be the right path
 component, and what is left open is only what the *id* is for.
 
+## What the string table says, and why Pure could not answer it
+
+The open question this thread was written with - which spelling Pure keys the
+display name under - **cannot be answered on Pure at all today, and the reason
+is a second thread.** `load_strings` finds no entries for Pure's language
+plugins, so its table is measurably empty and *every* lookup misses whatever it
+is keyed on:
+
+```
+pure-psp-usa.chd  string table:    0 entries
+pure-psp-eu.chd   string table:    0 entries
+pulse-psp-usa.chd string table: 1621 entries
+```
+
+Every one of Pure's ten teams returns `None` for the id, `None` for the location
+leaf and authors no `helpText` at all - which looks like an answer and is not
+one. See `handover/pures-string-tables-are-not-read-and-its.md`; until that
+lands, nothing here can be measured on Pure.
+
+**Pulse answers it from the other side, and that evidence is independent of
+Pure's empty table.** Pulse declares `PI_Team name="AG_Systems"` - the
+underscore - and its string table maps that id to the display string
+`"AG Systems"`, with the space:
+
+```
+pulse-psp-usa: id=AG_Systems -> "AG Systems"  help=MSC_TEAMDES_AGS -> "A resurgent AG Systems ..."
+pulse-psp-usa: id=Goteki     -> "Goteki 45"
+pulse-psp-usa: id=EGX        -> "EG-X"
+```
+
+So the string Pure puts in its `name` attribute is **exactly the display string
+Pulse resolves to**, not the key Pulse resolves it from - and Pulse is
+independently shown to keep display names out of ids, since `Goteki` reads
+`Goteki 45` and `EGX` reads `EG-X`. The reading that fits both discs is that
+Pure authors the *label* in `name` and keeps the id in `location`, where Pulse
+authors the id in `name` and puts the label in the table. Confidence 80: it
+turns on the one team of ten whose two spellings differ, which is the
+discriminating case but is still a single team.
+
+**That makes the fix cheaper than this thread first assumed.** The id is a
+string-table key only where a string table exists, and on Pure none does - so
+changing what Pure composes its paths from cannot break a lookup that already
+misses. The risk the open question was guarding against is vacuous today and
+becomes live only when Pure's string tables are read.
+
 **Not the `Van_Uber` case.** That thread is about a Pure team whose `Ship.vex`
 does not resolve by name at all; `Van_Uber` is not among the ten `PI_Team` nodes
 Pure's definition declares, so it never reaches this filter. The ten are
@@ -64,17 +109,21 @@ Pure's definition declares, so it never reaches this filter. The ten are
 
 ## Open
 
-- Which spelling Pure's string table keys the `AG Systems` display name under.
-  Until that is read, deriving the id from the location leaf may fix the path
-  and break the label.
-- Whether the id and the path should be separated instead - `raceable` and
-  `race::load` composing from `Team::location`, the id staying the declared
-  name. `load_teams`' own doc comment claims the filter and the loader "cannot
-  disagree about how a path is spelled" because both compose from the same
-  functions; that stays true either way, but both would have to move together.
-  This is the likelier shape of the two now that the location leaf is confirmed
-  to resolve, since it leaves the id - and so the settings file and `--team` -
-  spelled as the disc declares.
+- **Answered for now, re-open when Pure's strings are read:** which spelling
+  Pure keys the display name under is unmeasurable while its table is empty, and
+  Pulse's own table says the `name` attribute holds the label on Pure and the id
+  on Pulse (confidence 80, one discriminating team). If
+  `handover/pures-string-tables-are-not-read-and-its.md` lands and Pure turns
+  out to key teams at all, check which spelling before trusting the label.
+- Whether `Team::id` should keep the declared `name` (a label on Pure, an id on
+  Pulse) or become the location leaf on every title. The path question is
+  settled - the leaf is what resolves - but the id is also what `--team` accepts
+  and what `settings.rs` stores, and those want a stable, typeable string rather
+  than one with a space in it. The two titles disagree about what `name` *is*,
+  which is an ADR-0022 axis question rather than a bug fix.
+- `load_teams`' doc comment claims the filter and the loader "cannot disagree
+  about how a path is spelled" because both compose from the same functions.
+  True either way, but `raceable` and `race::load` have to move together.
 - `raceable` reaches for `oag_pulse::race::ships::entry_name` on every source -
   a fourth Pulse constant applied to all three titles, in the same function the
   roster stand-in was just removed from. HD keeps all twelve teams through it,
@@ -85,11 +134,14 @@ Pure's definition declares, so it never reaches this filter. The ten are
 
 ## Next Steps
 
-- Read Pure's string table for both spellings of the `AG Systems` key
-  (`oag_game::boot::load_strings` resolves the table; the ids are what
-  `strings.get_or_id` is called with in `main/prepare.rs`).
-- Then decide id-from-location versus path-from-location, and change `raceable`
-  and `race::load` together.
+- Compose the ship and handling-stats paths from `Team::location` rather than
+  `Team::id`, in `boot::roster::raceable` and in `race::load` together. That is
+  the whole fix for the dropped team, it needs no further measurement, and it
+  leaves the id question below untouched: on Pulse the leaf equals the id, so
+  nothing changes there, and on Pure the leaf is what already resolves.
+- Leave `Team::id` alone in the same change. What the id *is* differs between
+  the titles and wants deciding on its own evidence, not as a side effect of
+  fixing a path.
 - `roster_declared_ground_truth::only_pure_loses_a_declared_team_and_it_loses_one`
   pins the current nine-of-ten and fails loudly when the drop stops happening -
   update its docs and its count to ten rather than deleting it.
