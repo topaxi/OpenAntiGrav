@@ -518,7 +518,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [The chase camera's 3/4 factor](handover/the-chase-cameras-3-4-factor.md)
 - [The loading screen has no caller](handover/the-loading-screen-has-no-caller.md)
 - [`Anim Transform` `0x3c0` is read and played, and closing it fixed a placement defect](handover/anim-transform-0x3c0-is-read-and-played-and.md)
-- [The PS3 Ghidra path works; two improvements to it are still open](handover/the-ps3-ghidra-path-works-two-improvements-to.md)
+- [The PS3 Ghidra path works; the cspec-only fork is done, `lvlx` is what's left](handover/the-ps3-ghidra-path-works-two-improvements-to.md)
 - [Wipeout HD Fury's executable is 26,100 functions with 26 of them named, and no gameplay behaviour yet](handover/wipeout-hd-furys-executable-is-26100-functions-with.md)
 - [The alpha-test cutout reference is recovered as three values, not one, and the per-batch selector is not](handover/the-alpha-test-cutout-reference-is-recovered-as.md)
 
