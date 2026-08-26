@@ -251,19 +251,49 @@ runs the simulation. What landed to get there:
   nothing, both reported. Two hard errors before this: `mesh::rcs::build_scene`
   and `mesh::rcs::build` were both `?`, so 2048's container stopped the race.
 
-## What is between this and an actual race
+## The collision is in, and the craft flies
 
-**The craft falls through the floor**, and there is exactly one reason:
-`collision::from_vex` returns zero colliders (2048 authors none in the `.vex`)
-and `track_col.col` is not decoded, so there is no ground at all. Every tick
-reports `grounded 0.0` and the craft descends. **Decoding `KdTreeMeshShape.cpp`'s
-trailer is the whole of the remaining work for a flyable race** - the k-d tree's
-outer shape is already read and verified against the real file, so this starts
-from a confirmed container rather than cold.
+`track_col.col` is decoded whole - `oag_formats::kdcol`, validated over **all 26
+shipped files** with every byte accounted for. `just play 2048 --race` now
+reports `4 collision node(s) -> 4 collider(s), 15986 triangle(s)` on Altima and
+the craft accelerates to 125 units/s down the circuit, `grounded 1.0` every
+tick. Full evidence in [2048-collision.md](../docs/formats/2048-collision.md);
+the three functions it was read from are on
+[track-and-collision-loaders.md](../docs/ghidra/functions/vita-2048-eu-v104/track-and-collision-loaders.md).
 
-Everything else the run reports is a known absence rather than a bug: no
-authored surface (`.rcsmodel`), no HUD art (`.gxt` atlases under names 2048 does
-not use), no music, no front end.
+Two things are worth carrying forward from how it was recovered:
+
+- **The `.col` was expected to be the hard part and the surface byte was.** The
+  container fell out of `SimpleMesh_Load` (`0x8118fac8`) in one read. What the
+  per-triangle byte *meant* took two independent recoveries that agree exactly:
+  `TrackCollision_MeshFromNode` (`0x8126f800`) switches on this project's own
+  already-recovered `.vex` collision class IDs to pick it, and matching 2048's
+  triangles against Wipeout HD's named collision classes over the twelve ported
+  circuits gives 170,744 pairs with no disagreement on any of the six values.
+- **Three values (10, 11, 12) come from the offline exporter and no class
+  produces them.** They are placed as drivable floor on measurement - see the
+  coverage table on the format page, whose control row is the part that makes it
+  evidence. `12` is the weak one at confidence 50 and is flagged as such rather
+  than folded into the other two's 85.
+
+**The bounds correction is the trap worth naming.** Both bounding boxes in this
+container are a **centre and a half-extent**, and the first pass recorded them
+as a min and a max - which is exactly as plausible and puts the "max" corner
+inside the geometry. It reads as a subtly wrong struct rather than a wrong
+offset, the same shape as the `WO Track` reserved-block trap.
+
+## What is left
+
+Everything the run still reports is a known absence rather than a bug, and the
+biggest one is now the only one that costs a picture:
+
+- **No craft and no authored track surface.** Both are `.rcsmodel`, whose
+  container 2048 changed and which is still unread past its three-section outer
+  shape. The circuit draws the derived ribbon and the craft draws nothing.
+  **This is the next piece of format work**, and unlike the collision it is not
+  blocking a race - it is blocking seeing one.
+- No HUD art (2048's `.gxt` atlases sit under names this build does not ask
+  for), no music, no front end.
 
 ## Why nothing was wired up before that
 
@@ -299,13 +329,15 @@ parser change yet - see What's New above and Next Steps below.
   `cathedral`'s section id of 9 against 6 `section` nodes. The `WO Track`
   point reader in the eboot is still unnamed and unlocated - the layout was
   recovered from the HD pairing without it.
-- The k-d tree node's own trailing 16 bytes (past the two child indices) and
-  the entire `KdTreeMeshShape.cpp` trailer (228,692 bytes on `altima`) - the
-  actual triangle geometry the tree indexes lives there, unread.
-- Whether the `.rcsmodel` and k-d tree containers are shared verbatim by every
-  2048 track, or `RcsModel_Load`/`KdTree_Load`'s section-size arithmetic was
-  only checked on `altima` - unlike `WO Track`'s stride, neither has a
-  corpus-wide check yet.
+- The k-d node's `+0x12` half-word, `0x000b` on every node of every one of the
+  26 files, so nothing distinguishes a field from a constant.
+- What surface bytes `10`, `11` and `12` *are*, as opposed to how they behave.
+  They are placed as drivable floor on measurement and no `.vex` class produces
+  them, so the offline exporter is the only thing that knows.
+- Whether the `.rcsmodel` container is shared verbatim by every 2048 track -
+  `RcsModel_Load`'s section-size arithmetic was only checked on `altima`. The
+  k-d tree half of this is now closed: all 26 files decode with every byte
+  accounted for.
 - The native roster's numbered subdirectories (`ag_systems2048/1..4`) and their
   relationship to speed class or ship variant.
 - Whether the patch PSARCs (`data1.psarc`/`data2.psarc`) touch any of `altima`,
@@ -318,10 +350,17 @@ parser change yet - see What's New above and Next Steps below.
    the planned statistical sweep outright: a sweep could only have said "this
    offset is track-width-shaped", where the pairing gives per-field ground
    truth per point.
-2. Decode `RcsModel_Load`'s three sections' interiors and `KdTree_Load`'s node
-   tail plus its `KdTreeMeshShape.cpp` trailer - both now have a confirmed
-   outer shape ([track-and-collision-loaders.md](../docs/ghidra/functions/vita-2048-eu-v104/track-and-collision-loaders.md))
-   to build the rest of the decode against, rather than starting cold.
+2. ~~`KdTree_Load`'s node tail and its mesh trailer~~ - done, see above.
+   **`RcsModel_Load`'s three sections' interiors are what is left**, and they
+   are now the only unread format on this title: section A's own fields past
+   its three size words, and the chunk/relocation shape inside the "main
+   memory" and GPU blocks. The outer shape is confirmed
+   ([track-and-collision-loaders.md](../docs/ghidra/functions/vita-2048-eu-v104/track-and-collision-loaders.md)),
+   so this starts warm. Worth trying the same two-source approach the surface
+   byte needed: 2048's DLC re-ships twelve circuits and fourteen craft that
+   Wipeout HD also ships, and HD's `.rcsmodel` is **already decoded**
+   ([rcsmodel.md](../docs/formats/rcsmodel.md)) - so a chunk of 2048 geometry
+   can be checked against HD's own vertices rather than guessed at.
 3. ~~The `ship_dir` axis~~ - done, see above. It reaches the hull, the plume,
    the shield, the flare and the handling stats, and the roster filter in
    `boot::roster` goes through the same spelling, so the filter cannot disagree

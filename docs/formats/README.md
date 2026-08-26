@@ -207,6 +207,13 @@ soup, the pad volumes and the `section` visibility mask all read, corpus-wide;
 and **ten of HD's sixteen environments are a Pulse or Pure circuit's spline in
 the same world coordinates**, Talon's Junction among them.
 
+**[2048 collision](2048-collision.md)** is the one format of the three that
+changed underneath 2048 and is now read: a `track_col.col` beside every
+`track.vex`, holding a k-d tree over one triangle soup with a surface byte per
+triangle. Six of its nine surface values are read out of the executable's own
+class-ID switch, and the same six fall out independently from matching 170,744
+collision triangles against Wipeout HD's named classes.
+
 **[2048 status](2048-status.md)** is the probe run a third title on, and the
 first that is not a disc at all - *Wipeout 2048* ships as a Vita `.pkg`. Its
 PSARC, its `.vex` class table and its handling XML all read unchanged; three

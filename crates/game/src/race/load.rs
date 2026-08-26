@@ -9,6 +9,7 @@ use super::*;
 
 mod cameras;
 mod environment;
+mod surfaces;
 use environment::{envsettings_fog, envsettings_light, hd_sky_model};
 
 /// Loads a track, a ship and its handling out of a disc image.
@@ -133,7 +134,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         )),
         None => report.push("no Start Position node: spawning on the spline instead".to_string()),
     }
-    let nodes = collision::from_vex(&track_blob).map_err(|e| anyhow::anyhow!("{}: {e}", track))?;
+    let nodes = surfaces::of_track(&mut archives, &track, &track_blob, &mut report)?;
     let collision = collision_world(&nodes);
     report.push(format!(
         "{} collision node(s) -> {} collider(s), {} triangle(s)",

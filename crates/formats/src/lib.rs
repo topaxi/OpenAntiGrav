@@ -43,6 +43,7 @@ pub mod handling;
 pub mod hd_pvs;
 pub mod ipf;
 pub mod ivf;
+pub mod kdcol;
 pub mod lighting;
 pub mod lzss;
 pub mod pads;

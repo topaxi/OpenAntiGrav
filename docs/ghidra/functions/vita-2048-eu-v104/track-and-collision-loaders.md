@@ -139,8 +139,119 @@ trailing ~229 KiB (the actual triangle geometry `KdTreeMeshShape.cpp` owns) is
 completely unread**, and a k-d tree's own interior 16 bytes past the two child
 indices are a hypothesis, not a measurement.
 
+## `SimpleMesh_Load` - `0x8118fac8`
+
+**Confidence: 92**
+
+Reads the triangle soup the k-d tree indexes - the section `KdTree_Load` hands
+off to, and the last one in the file. Called with the collision object and the
+open stream, and reads, in order:
+
+```text
+        u16      vertex count V
+        f32[3V]  positions, in chunks of at most 8,192 vertices
+        u32      bytes per triangle
+        u16      triangle count T
+        …        T * that many bytes of triangle indices
+        u16      surface byte count
+        u8[…]    the surface bytes
+        f32[6]   the soup's bounds: centre, then half-extent
+```
+
+Evidence:
+
+- Every allocation it makes is tagged
+  `"Backend/General/Collision/SimpleMesh.cpp"`, at four line numbers
+  (`0x39`/57 for the vertex array, `0x3d`/61 for the staging buffer, `0x68`/104
+  for the indices, `0x75`/117 for the surface bytes) - a source path naming the
+  class, the same strength of evidence `RcsModel_Load` rests on.
+- **The staging buffer's size is the arithmetic that fixes the vertex stride.**
+  It allocates `0x18000` bytes once and then reads at most `0x2000` vertices
+  into it per pass at `count * 0xc` bytes: `8192 * 12 = 98304 = 0x18000`
+  exactly. So a vertex is 12 bytes on disc and 16 in memory, which is why the
+  loop that follows widens each one.
+- **The index buffer is allocated at `6 * T` and read at `stride * T`**, so any
+  stride but 6 is a heap overflow in the real game rather than a layout the
+  format permits. `oag_formats::kdcol` refuses one for that reason.
+- **The surface array is allocated at exactly `T` bytes**, one per triangle -
+  and `SimpleMesh_Construct` (`0x8118f9bc`) allocates the same three arrays at
+  `V << 4`, `T * 6` and `T` from its own two count arguments, which is the same
+  statement made twice.
+- A sibling string, `"Built track collision mesh (SimpleMesh): %d verts, %d
+  triangles, %d bytes\n"` (`FUN_811901fa`), prints the object's `+0x04` and
+  `+0x0c` as the vertex and triangle counts - independently confirming which
+  field each `u16` lands in.
+- Checked against all 26 shipped `track_col.col` files, not one: every one of
+  them ends **exactly** on its final `"----"` under this layout, with the
+  surface-byte count equal to the triangle count on every file. See
+  `crates/formats/tests/kdcol_ground_truth.rs`.
+
+## `SimpleMesh_Construct` - `0x8118f9bc`
+
+**Confidence: 88**
+
+Constructs an empty `SimpleMesh` for a stated vertex and triangle count,
+allocating the three arrays `SimpleMesh_Load` fills. Named off the same
+allocator tag at lines `0x1b`/27, `0x1f`/31 and `0x20`/32, and off the array
+sizes: `vertices << 4`, `triangles * 6`, `triangles * 1`. It is the constructor
+`KdTree_Load` calls through before reading anything.
+
+## `TrackCollision_MeshFromNode` - `0x8126f800`
+
+**Confidence: 88**
+
+**The function that names the surface bytes.** Walks a `.vex` node's collision
+payload - the same chunk format `oag_formats::collision::parse_chunks` reads,
+recognisable by its three chunk types (`1` vertices at 12 bytes, `2` triangles
+at 6, `3` scalars at 4) - and hands the geometry to the mesh builder with one
+byte chosen from the node's own class ID:
+
+| `.vex` class ID | this project's constant | byte |
+| --- | --- | ---: |
+| `0x3b9` | `CLASS_FLOOR_COLLISION` | 2 |
+| `0x3e6` | `CLASS_MAG_FLOOR_COLLISION` | 3 |
+| `0x3ba` | `CLASS_WALL_COLLISION` | 4 |
+| `0x3f2` | *`Force Field Collision`*, 2048's own | 5 |
+| `0x3ed` | `CLASS_TRACK_WALL_COLLISION` | 6 |
+| `0x3cd` | `CLASS_RESET_COLLISION` | 7 |
+| anything else | | 15 |
+
+Evidence:
+
+- **The class IDs are this project's own, unchanged.** Six of the seven
+  constants in `crates/formats/src/vex/classes.rs` appear as literals in one
+  `if`/`else if` chain, which is not a coincidence a wrong reading produces.
+- **`0x3e7` is branched past before any byte is chosen** - the decompiler
+  renders the guard as `if (iVar7 != 999)`, and `999 == 0x3e7 ==
+  CLASS_CAGE_COLLISION`. That independently reproduces the behaviour
+  `oag_formats::collision::SurfaceKind::Cage` already documents from Pulse's
+  own loader: cage geometry is parsed and then skipped.
+- **`0x3f2` is a class only 2048 declares**, and its name comes from that
+  title's own class-name table: the record at `0x81521f8c` pairs `0x3f2` with
+  the string at `0x814ccc84`, `"Force Field Collision"`. The record before it
+  pairs `0x3ed` with `"Track Wall Collision"`, which is how the table's stride
+  and shape were confirmed. The seven `"… Collision"` strings in the whole
+  binary are exactly the seven classes above.
+- **A completely independent measurement reproduces the same six rows.** 2048's
+  DLC re-ships twelve Wipeout HD circuits; HD keeps its collision in named
+  `.vex` classes; matching the two titles' collision triangles by position gives
+  **170,744 pairs and no disagreement** on any of the six. See
+  [`2048-collision.md`](../../../formats/2048-collision.md).
+- Address-identical and instruction-identical in
+  `/vita-2048-usa-v104/eboot.elf` (`8126f800` in both), the same cross-check
+  the two loaders above use.
+
+`FUN_81190106`, which it calls, takes that byte as its last argument and writes
+it once per triangle - so the byte is chosen per *mesh*, from the class, and
+never per triangle.
+
 ## History
 
+- 2026-08-26 (second pass): `SimpleMesh_Load` 92, `SimpleMesh_Construct` 88 and
+  `TrackCollision_MeshFromNode` 88 named, which finishes `track_col.col` -
+  `oag_formats::kdcol` reads all 26 shipped files with every byte accounted for.
+  The bounds correction above landed in the same pass. `RcsModel_Load`'s three
+  sections are still unread inside.
 - 2026-08-26: 85 / 87, first RE pass on either function. Decompilation,
   disassembly at the two points where it changed the reading (`RcsModel_Load`'s
   section-A-size source, `KdTree_Load`'s version-vs-return-value branch),

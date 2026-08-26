@@ -9,7 +9,8 @@ on 2026-08-26.
 **The short version.** 2048 is Wipeout HD's asset tree on a little-endian
 console. The container, the plugin XML, the handling XML and the `.vex` class
 table all read with no code change at all. Three *binary* formats changed
-underneath it, and one of the three is now read.
+underneath it; **two of the three are now read**, and the one that is not
+(`.rcsmodel`) costs a picture rather than a race.
 
 ## What reads unchanged
 
@@ -19,6 +20,7 @@ underneath it, and one of the three is now read.
 | [`.vex`](vex.md) class table | **yes** | Version 6, little-endian, the same class IDs HD's version 6 carries. |
 | [Handling stats](handling-stats.md) | **yes** | Both the HD-derived roster's per-team files and the shared `<Global>` block at `Data\XML\handlingstats.xml`. The native roster's five teams parse too, `SUPERPHANTOM` class included. |
 | [`WO Track`](track.md) spline | **yes, after a version gate** | See below. |
+| [Collision](2048-collision.md) | **yes, in a container of its own** | Not the `.vex` path: a `track_col.col` beside every `track.vex`. See below. |
 | Plugin definitions | **yes, but split three ways** | `Data\Plugins\teams\`, `tracks\` and `music\` each ship their own `Definition.xml` where every other title ships one file carrying all three node kinds. `oag_title::Title::plugin_definition` holds one name, so this build reads the teams one and sees no circuit or soundtrack list. |
 
 ## What changed, and what state each is in
@@ -43,23 +45,24 @@ on the real file - `189824 + 682966 + 16573144 = 17445934`, exactly the file
 length. All three sections' interiors are unread. See
 [track-and-collision-loaders.md](../ghidra/functions/vita-2048-eu-v104/track-and-collision-loaders.md).
 
-**Collision moved out of the `.vex` into `track_col.col`, a k-d tree - outer
-shape read, geometry unread.** `KdTree_Load` (`0x8118d134`) is named off its own
-`"kdtr%04x"` format string; the magic, the ASCII version, the `"----"` section
-tags, the 24-byte node array and the leaf index array all land where the
-decompiled control flow predicts on the real 1,068,082-byte file. What is *not*
-read is each node's trailing 16 bytes and the entire `KdTreeMeshShape.cpp`
-trailer, which is where the triangles live. Same evidence page.
+**Collision moved out of the `.vex` into `track_col.col`, a k-d tree - and is
+now read, whole.** `KdTree_Load` (`0x8118d134`) and `SimpleMesh_Load`
+(`0x8118fac8`) between them account for every byte of all 26 shipped files, and
+`TrackCollision_MeshFromNode` (`0x8126f800`) names six of the nine surface bytes
+by switching on this project's own already-recovered `.vex` collision class IDs.
+`oag_formats::kdcol` reads it. Full evidence, including the independent
+170,744-triangle match against Wipeout HD's named collision classes and the
+winding check, is in [2048-collision.md](2048-collision.md).
 
 ## What a race does today
 
 `just play 2048 --race` opens the package, reads the spline, places the craft on
 the start line and runs the simulation. What it does **not** do, and why:
 
-- **The craft falls through the floor.** `collision::from_vex` returns zero
-  colliders because 2048 authors none there, and `track_col.col` is not decoded
-  - so there is no ground. This is the one thing between the current state and a
-  race, and decoding the k-d tree's mesh trailer is what fixes it.
+- **The craft flies.** It hovers on the surface, is `grounded` every tick, and
+  collides with the barriers - `track_col.col` is decoded and its 15,986
+  triangles on `altima` become four colliders. With no steering input it drives
+  until it meets a wall and stops there, which is what any title does.
 - **Nothing draws its authored surface.** Both the circuit and every craft have
   external geometry in `.rcsmodel`, so the circuit falls back to the derived
   ribbon and the craft draw nothing at all - the same honest half-picture a

@@ -15,3 +15,6 @@
 0x81000032	function	GameRoot_Construct	84	game-boot.md
 0x812f15b2	function	RcsModel_Load	85	track-and-collision-loaders.md
 0x8118d134	function	KdTree_Load	87	track-and-collision-loaders.md
+0x8118fac8	function	SimpleMesh_Load	92	track-and-collision-loaders.md
+0x8118f9bc	function	SimpleMesh_Construct	88	track-and-collision-loaders.md
+0x8126f800	function	TrackCollision_MeshFromNode	88	track-and-collision-loaders.md
