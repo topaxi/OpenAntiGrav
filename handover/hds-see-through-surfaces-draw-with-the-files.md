@@ -86,12 +86,27 @@ now two hops deep in a bomb weapon's own constructor, tied to
 gameplay code gets. That table entry should be treated as refuted pending a
 render-side counter-example, not merely unconfirmed.
 
+**2026-08-26 finds the render layer's own dispatch loop, and it narrows the
+question further without closing it.** `RenderManager_FlushDrawQueue_q`
+(`0x002d6300`) - paired with `RenderManager_PrepareEye_q` (`0x002d6a78`),
+called once per eye from `Game_PresentLoop_q` - walks an array at
+`RenderManager+0x630` strictly index `0` to the count at `+0x44b0`, calling a
+virtual method on each queued object. **No comparison against any per-entry
+value happens anywhere in that loop** - it plays the array back in whatever
+order it was populated, nothing more. See
+[renderer.md](../docs/ghidra/functions/ps3-hdfury-eu/renderer.md#the-per-eye-draw-dispatch-and-what-it-says-about-sort-order).
+**What this does not show**: where `+0x630` gets populated, or whether it
+holds every transparent draw. No literal `0x630` store exists anywhere in the
+render layer's address range, so the enqueue site either sits outside it or
+uses a computed offset - a different search than this one.
+
 ## Open
 
-- Transparent draws are not depth-sorted anywhere (list order only); the
-  `SortRoot.cpp` lead is now spent - it resolves to gameplay/weapon code, not
-  a render mechanism - so the render layer's own draw-order call site (if
-  any) needs a different search entirely
+- Transparent draws are not depth-sorted in the dispatch/flush step (strict
+  insertion order, confirmed 2026-08-26); the `SortRoot.cpp` lead is spent
+  and the flush loop itself has no sort key, so the only remaining place a
+  sort could hide is the **enqueue** side - whatever writes into
+  `RenderManager+0x630` before `_FlushDrawQueue_q` reads it back
 - `Transparency::Mode2` is not routed to the cutout pass; `material.rs`
   already refutes alpha-test for it, so what it should route to instead is
   unread
@@ -100,13 +115,16 @@ render-side counter-example, not merely unconfirmed.
 
 ## Next Steps
 
-- Search for the renderer's *own* draw-order mechanism by RSX method
-  constants or state-sort call sites in the render layer's own address range
-  (`0x00279xxx`-`0x002ecxxx`), per renderer.md's existing "the draw path"
-  open item - `SortRoot` is spent as a lead, per the 2026-08-25 note above,
-  so do not chase it further on this question
-- If that search turns up a real sort key, read it before implementing
-  anything - do not add a distance-based sort speculatively
+- Find what populates `RenderManager+0x630` (the `{object, extra}` pairs
+  `_FlushDrawQueue_q` walks) and what decides the order entries land in it -
+  a literal-offset search came up empty in the render layer's address range,
+  so try register-indexed stores, or work backward from whatever implements
+  vtable slot `0x1c` for a known queued class (`Model`, `Billboard`, ... -
+  none confirmed queued here yet)
+- If that search turns up a real sort key on the enqueue side, read it before
+  implementing anything - do not add a distance-based sort speculatively. If
+  it turns up nothing (submission order only, e.g. scene-graph traversal
+  order), that positively confirms "no sort" rather than just narrowing to it
 - Separately, and not blocking the above: `renderer.md`'s `SortRoot` note now
   names two of its three unnamed derived classes' shared shape (a
   pooled-allocator-plus-hash-property-lookup pattern) without naming the
