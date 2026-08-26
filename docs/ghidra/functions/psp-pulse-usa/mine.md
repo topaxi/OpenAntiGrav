@@ -179,13 +179,23 @@ contiguous run at `0x08a78a2c`.
 | `+0xfc` | `slowdown_time` | `0x08a78a3c` |
 | `+0x100` | `trigger_radius` | `0x08a78b24` |
 
-The block sits immediately after the Bomb's eight (`WeaponStats_ParseBomb`,
-`0x0880cef0`, `+0xc8`..`+0xe4`) and immediately before LeachBeam's. Walking back
-the other way - Plasma's eleven at `+0x9c`, Autopilot's two at `+0x94`, Shield's
-and Turbo's measured pairs at `+0x8c` and `+0x84`, the Cannon's five at `+0x70`
-and Quake's four at `+0x60` - closes the layout onto the Missile's `+0x5c`
-without a gap, which is what makes "the struct is laid out in pool order" a read
-rather than a guess.
+The block ends at `+0x100` and the Missile's ends at `+0x5c`, and what fills the
+`0xa4` bytes between them is **arithmetic, not a read**: Quake's four attributes,
+the Cannon's five, Turbo's two, Shield's two, Autopilot's two, Plasma's eleven
+and the Bomb's eight, at four bytes each, come to exactly that. Two of the seven
+are independently measured - [shield-pickup.md](shield-pickup.md) read Turbo's
+pair at `+0x84` and Shield's at `+0x8c` off the handlers that spend them - and
+those two land where the arithmetic puts them, which is what makes "the struct is
+laid out in pool order" a supported claim rather than a bare one.
+
+**The other five parsers were not read.** `WeaponStats_ParseBomb` (`0x0880cef0`)
+in particular resisted one: it is not a defined function in the Ghidra database,
+`create_function` refuses it, and the bridge cannot read bytes anywhere in
+`.text` (it reads `.rodata` normally). So the Bomb's own offsets are **not
+established here** - only its parser's address and name, which come from
+`WeaponStats_Parse`'s dispatch chain and its unambiguous `type`-string pointers.
+Nothing in this project needs those offsets: `oag_formats::weapons` matches
+attributes by name.
 
 `WeaponStats_Parse`'s dispatch chain names all fourteen parsers in one read; the
 three this page needs are in the table at the top, and the Cannon's

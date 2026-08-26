@@ -99,7 +99,17 @@ use oag_physics::{Ray, Raycaster};
 /// wall did.
 ///
 /// 128 is eight craft with sixteen apiece in the air at once, which no rate of
-/// fire this engine can reach will exhaust. Fixed-size rather than a `Vec`
+/// fire this engine can reach will exhaust.
+///
+/// **That argument was written when everything here died on its first wall, and
+/// the Mine is the first thing that does not.** A laid mine holds its slot for
+/// the authored `timetodie` - seven seconds - whatever the craft does next, so
+/// occupancy is now a function of how often pads are crossed rather than of how
+/// far a shot flies. Eight craft laying [`mine::CLUSTER`] apiece is forty, and a
+/// second full round inside seven seconds would be eighty: still inside 128, and
+/// no longer by the margin the paragraph above assumes. Worth re-checking
+/// against any weapon that persists longer - the Bomb's `timetodie` is
+/// **twenty** seconds. Fixed-size rather than a `Vec`
 /// because [ADR-0003](../../../docs/architecture/adr/0003-no-ecs.md) requires
 /// the world to snapshot in one `memcpy`-shaped operation; at roughly 48 bytes
 /// a slot the whole array is about 6 KiB, which is not a number worth

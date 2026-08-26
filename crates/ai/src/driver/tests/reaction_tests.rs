@@ -33,6 +33,26 @@ fn closing_ahead() -> Field {
     }
 }
 
+/// A craft on this one's tail, twenty units back.
+///
+/// The mirror of [`closing_ahead`], and the one a rear weapon cares about. Note
+/// `cos_bearing` is `-1.0`: a craft behind is a hundred and eighty degrees off
+/// the nose, which is exactly what the forward weapon's cone rejects and what a
+/// rear weapon must not be gated on.
+fn closing_behind() -> Field {
+    Field {
+        behind: Some(Rival {
+            slot: 4,
+            gap: 20.0,
+            offset: 0.0,
+            closing: 8.0,
+            range: 20.0,
+            cos_bearing: -1.0,
+        }),
+        ..Field::EMPTY
+    }
+}
+
 /// Drives `ticks` ticks against a rival that is there the whole time, and
 /// returns the thrust each tick.
 fn thrust_over(reaction_ticks: u16, ticks: usize) -> Vec<f32> {
@@ -131,4 +151,96 @@ fn a_driver_does_not_fire_at_a_rival_it_has_not_noticed() {
     // at all, which is what the reflex was withholding.
     driver.drive(&state, &context);
     assert_eq!(driver.reflex.filter(&field).ahead, field.ahead);
+}
+
+/// **A rear weapon is never spent on a craft ahead.** The case this exists for
+/// is overtaking: a driver reeling somebody in has a rival ahead and nobody
+/// behind, and a mine laid then goes on the track behind the *overtaker*, where
+/// there is nobody to hit. It is the pickup thrown away for nothing, and it
+/// would read from the cockpit as the AI doing something inexplicable.
+///
+/// Asserted over three hundred ticks rather than one, because the trigger is a
+/// **rate**: a single `None` proves nothing when the roll fails most ticks
+/// anyway. Three hundred ticks at the shipped rate is far past the point a
+/// gate-less version would have dropped.
+#[test]
+fn a_driver_does_not_lay_mines_at_a_craft_ahead() {
+    let line = straight_with_corridor();
+    let pilot = Pilot {
+        trigger: Span::fixed(1.0),
+        ..Pilot::BALANCED
+    };
+    let field = closing_ahead();
+    let tuning = Tuning::default();
+    let mut driver = Driver::seeded(11);
+    let state = craft(Vec3::ZERO, 100.0);
+    let context = Context {
+        line: &line,
+        tuning: &tuning,
+        pilot: &pilot,
+        field: &field,
+    };
+    for tick in 0..300 {
+        driver.drive(&state, &context);
+        assert_eq!(
+            driver.wants_to_drop(&context),
+            None,
+            "tick {tick}: laid mines while overtaking - the rival is ahead and the \
+             cluster goes out of the back"
+        );
+    }
+    // And the same driver, same seed, same tick budget, *does* want to drop when
+    // the rival moves behind it. Without this the test above passes for a
+    // `wants_to_drop` that is broken outright and never returns anything.
+    let behind = closing_behind();
+    let context = Context {
+        field: &behind,
+        ..context
+    };
+    let mut dropped = false;
+    for _ in 0..300 {
+        driver.drive(&state, &context);
+        if driver.wants_to_drop(&context).is_some() {
+            dropped = true;
+            break;
+        }
+    }
+    assert!(
+        dropped,
+        "the driver never laid mines in three hundred ticks with a rival on its \
+         tail, so the test above proves nothing"
+    );
+}
+
+/// The forward weapon is the exact mirror: never fired at a craft *behind*.
+///
+/// The other half of the same concern. `wants_to_fire` gates on the cone, and a
+/// craft astern has `cos_bearing` of `-1.0`, so this should already hold - what
+/// it pins is that it holds through `Field::behind` being populated at all,
+/// which is the state a rear weapon introduced.
+#[test]
+fn a_driver_does_not_fire_forward_at_a_craft_behind() {
+    let line = straight_with_corridor();
+    let pilot = Pilot {
+        trigger: Span::fixed(1.0),
+        ..Pilot::BALANCED
+    };
+    let field = closing_behind();
+    let tuning = Tuning::default();
+    let mut driver = Driver::seeded(11);
+    let state = craft(Vec3::ZERO, 100.0);
+    let context = Context {
+        line: &line,
+        tuning: &tuning,
+        pilot: &pilot,
+        field: &field,
+    };
+    for tick in 0..300 {
+        driver.drive(&state, &context);
+        assert_eq!(
+            driver.wants_to_fire(&context),
+            None,
+            "tick {tick}: fired a forward weapon at a craft behind it"
+        );
+    }
 }

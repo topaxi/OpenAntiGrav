@@ -5,6 +5,23 @@
 //! everything here is a *decision to spend a pickup*, and nothing else on
 //! [`Driver`] reads a weapon at all.
 //!
+//! # Two weapons, two directions, and the pair must not be confused
+//!
+//! [`Driver::wants_to_fire`] is for weapons that leave the **nose** and
+//! [`Driver::wants_to_drop`] for the two that come out of the **tail** - the
+//! Mine and, when it lands, the Bomb. They read different halves of
+//! [`crate::Field`] and neither falls back to the other, which is the whole
+//! point: a driver reeling somebody in has a rival *ahead* and nobody behind,
+//! and a cluster laid then goes on the track behind the overtaker where there
+//! is nobody to hit. That is the pickup thrown away for nothing, and from the
+//! cockpit it reads as the AI doing something inexplicable. It is pinned by
+//! `a_driver_does_not_lay_mines_at_a_craft_ahead` and by its mirror, so a rear
+//! weapon wired to the forward gate fails rather than merely looking odd.
+//!
+//! The forward gate rejects a craft astern on its own, through the cone -
+//! `Rival::cos_bearing` is `-1.0` back there - but that is a consequence rather
+//! than a statement, so the mirror test states it.
+//!
 //! **Both functions are ours**, and it is worth saying once here rather than
 //! twice below. `WeaponAi_Update` (`0x08851550`) is where the original decides
 //! this, and only its authored *table* has been read - see
