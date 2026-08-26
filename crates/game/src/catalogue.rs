@@ -224,15 +224,52 @@ fn read_music(node: &Node) -> Option<Music> {
 /// One team a player can race for.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Team {
-    /// The plugin's own id, e.g. `Feisar`. What a setting stores, what
-    /// `--team` accepts, and the key the string table's display name is under -
-    /// **not** the display name itself. See the module docs.
+    /// The ship folder, e.g. `Feisar`: the leaf of [`Self::location`].
+    ///
+    /// What a setting stores, what `--team` accepts, the key the string table's
+    /// display name is under, and the component every `Data\Ships\...` path a
+    /// race builds is assembled from - **not** the display name itself. See the
+    /// module docs.
+    ///
+    /// **Read off the location rather than the `name` attribute**, which is the
+    /// same word on Pulse and on all four packs and is not on Wipeout Pure:
+    /// that disc declares `name="AG Systems"` over
+    /// `location="Data\Ships\AG_Systems"`, and composing a path from the space
+    /// missed both the hull and the handling stats, so a founding team was
+    /// dropped from Pure's roster on both pressings. See [`Self::name`].
     pub id: String,
+    /// The declared name, where the disc spells it differently from [`Self::id`].
+    ///
+    /// `None` whenever the two agree, which is every team on every other
+    /// source. So this is not "the label": it is the label the *definition*
+    /// carries, for when the string table cannot be asked. The table is still
+    /// asked first, and this is what stops Pure's menu reading `AG_Systems`
+    /// while its string tables go unread.
+    pub name: Option<String>,
     /// The ship directory, e.g. `Data\Ships\Feisar`.
     pub location: String,
     /// The string-table id of the team's description, e.g. the `helpText`
     /// attribute. `None` for a team that declares none.
     pub help_text: Option<String>,
+}
+
+impl Team {
+    /// What to show a player for this team.
+    ///
+    /// **The order is the whole content of this function**, and the middle step
+    /// is the one that is easy to get wrong: the string table wins, because
+    /// `Mantis` is labelled `Mirage` there and a build that preferred the
+    /// definition's own spelling would show the folder name for a pack the
+    /// packaging calls something else. [`Self::name`] is only reached for when
+    /// the table cannot answer, which on Wipeout Pure is always - its string
+    /// tables go unread - and the id is the last resort rather than the first.
+    #[must_use]
+    pub fn label<'a>(&'a self, strings: &'a crate::language::StringTable) -> &'a str {
+        strings
+            .get(&self.id)
+            .or(self.name.as_deref())
+            .unwrap_or(&self.id)
+    }
 }
 
 /// Reads every raceable `PI_Team` out of a plugin definition, in file order.
@@ -263,14 +300,30 @@ fn collect_teams(node: &Node, out: &mut Vec<Team>) {
 }
 
 fn read_team(node: &Node) -> Option<Team> {
-    let id = node.attr("name")?.to_string();
+    let declared = node.attr("name")?.to_string();
     let values = node.children_named("Values").next()?;
     if values.attr("type").is_some_and(|kind| kind != "Race") {
         return None;
     }
+    let location = values.attr("location")?.to_string();
+    // The **folder**, not the declared name. Every path a race builds for a team
+    // is `Data\Ships\<folder>\...`, so the folder is the id and the declared
+    // name is a label - which is the split `Mantis` already forced, its pack
+    // being sold as Mirage. Taking the name would work on all twelve of Pulse's
+    // teams and on none of the cases where the two differ.
+    let id = location
+        .rsplit(['\\', '/'])
+        .next()
+        .filter(|leaf| !leaf.is_empty())?
+        .to_string();
+    // Carried only where it says something the id does not. On Pulse and on
+    // every pack the two are the same word and this is `None`, which keeps the
+    // label lookup below on the string table where it belongs.
+    let name = (declared != id).then_some(declared);
     Some(Team {
         id,
-        location: values.attr("location")?.to_string(),
+        name,
+        location,
         help_text: values.attr("helpText").map(str::to_string),
     })
 }

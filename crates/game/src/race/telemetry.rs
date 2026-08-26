@@ -147,6 +147,12 @@ impl Race {
             zone: race.zone.into(),
             score: race.score,
             pickup: ship.pickup.weapon,
+            // The reticle, whatever it is doing. `Sight::visible` is what
+            // decides whether anything reaches the screen, so this is passed
+            // unconditionally rather than gated here - the brackets are watched
+            // opening again after a target is lost, which a gate on "has a
+            // target" would cut off.
+            sight: Some(self.sight),
         }
     }
 }

@@ -145,9 +145,21 @@ answers, all measured:
 | `m<addr>,<len>` | memory read |
 | `M<addr>,<len>:<hex>` | memory write - **honours page permissions**, `E03` on a read-only page, `OK` and readable-back on a writable one |
 | `Z0` / `z0` | software breakpoint set/clear, always `OK` (see the trap below) |
+| `Z2` | **not implemented** - empty reply, not `OK`. No write watchpoints on this build; see below |
 | `vCont;c` | resume |
 | `vCont;s:<tid>` | single-step one thread |
 | `\x03` | interrupt; replies `S05`, sometimes seconds late |
+
+**`Z2` (write watchpoint) is not implemented.** Measured 2026-08-26 arming one
+on a live `RenderManager` instance mid-race: the reply was an empty packet,
+not `OK` and not `E`-prefixed either - the stub simply does not recognise the
+packet type. `Z0` software breakpoints are the only stop mechanism this stub
+offers; finding what writes to a particular address needs a different route
+(bracket it between two known call sites and read the value at each, or work
+backward from a candidate writer's own decompilation) rather than trapping
+the write itself. See
+[renderer.md](../ghidra/functions/ps3-hdfury-eu/renderer.md#runtime-verified-118-real-draws-two-object-families-no-watchpoint-support)
+for the investigation this came out of.
 
 Not implemented, and this is the first thing to get wrong: **bare `c` and `s`
 return an *empty packet*.** An empty packet is indistinguishable from an

@@ -163,10 +163,18 @@ fn every_cue_states_where_it_is_heard_from() {
     // The point is that no cue is *unstated*. `Unplaced` is a legitimate answer
     // and it means "the call site has not been read", so it must be reached
     // deliberately rather than by a match arm nobody revisited.
-    // Two are `Unplaced` and each for its own reason: `ShieldActive`'s call
+    // Four are `Unplaced` and each for its own reason: `ShieldActive`'s call
     // site is recorded as a full-volume pan-zero play, and `Disengaging`'s is
-    // *read* as the no-emitter path. Both are announcer lines.
-    const DRY: [Cue; 3] = [Cue::ShieldActive, Cue::Disengaging, Cue::Blowup];
+    // *read* as the no-emitter path - both announcer lines. `Blowup` is the
+    // player's own craft through the same no-emitter path, and `LockOn` is a
+    // HUD sound about the player's own reticle, opened at `0x400` with no
+    // emitter argument at all.
+    const DRY: [Cue; 4] = [
+        Cue::ShieldActive,
+        Cue::Disengaging,
+        Cue::Blowup,
+        Cue::LockOn,
+    ];
     for cue in Cue::ALL {
         let placement = cue.placement();
         if DRY.contains(&cue) {

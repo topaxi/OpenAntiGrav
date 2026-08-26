@@ -619,9 +619,19 @@ Recorded as a direction, not a decision:
 
 Recorded so none of this reads as undiscovered work.
 
-- **The `<Mode3D>` layer.** The countdown (`Pulse_Ready_Go`, `Cockpit_321GO`) and
-  the weapon sights (`missile_sight_inner`/`_outer`, `leachbeam_sight`). Needs a
-  second pass with its own projection.
+- **The `<Mode3D>` layer: the countdown only, now.** `Pulse_Ready_Go` and
+  `Cockpit_321GO` still need a second pass with its own projection.
+
+  **The weapon sights came off this list on 2026-08-26** - they are drawn, and as
+  2D quads rather than through a 3D pass. The three model names this entry used
+  to list are right; what was missing is that they are **nine widgets over three
+  models**: `missile_sight_1` ... `missile_sight_4` all instance
+  `missile_sight_outer.vex`, `missile_sight_inner` has its own, and
+  `leachbeam_sight_1` ... `leachbeam_sight_4` instance `leachbeam_sight.vex`.
+  Each model is a single 8-unit textured quad, so that block needs no projection
+  of its own - only a per-quad rotation. See
+  [lock-sight.md](../ghidra/functions/psp-pulse-usa/lock-sight.md), which also
+  identifies the lock tone as `~ROCKLOCK`.
 - **Zone and Eliminator HUDs.** Their layouts parse; nothing drives them.
 - **Medal targets.** `IG_HUD_GOLD`/`SILVER`/`BRONZE`/`RECORD` need progression
   data.

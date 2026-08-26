@@ -119,6 +119,30 @@ impl Image {
         })
     }
 
+    /// An image somebody else already decoded, for [`Sheet::build_with`].
+    ///
+    /// `None` when the dimensions and the buffer disagree, or when either
+    /// exceeds what a sheet coordinate can hold - a caller handing over pixels
+    /// is doing so *because* it decoded them elsewhere, so the one thing worth
+    /// checking here is that the two halves match.
+    ///
+    /// `bits_per_pixel` is reported as 32 because that is what the caller hands
+    /// over, whatever the source packed it as; the field only reaches a report
+    /// line.
+    fn from_rgba(width: u32, height: u32, rgba: Vec<u8>) -> Option<Self> {
+        let width = u16::try_from(width).ok()?;
+        let height = u16::try_from(height).ok()?;
+        if rgba.len() != usize::from(width) * usize::from(height) * 4 {
+            return None;
+        }
+        Some(Self {
+            width,
+            height,
+            bits_per_pixel: 32,
+            rgba,
+        })
+    }
+
     /// The decoded pixels, consuming the image: the sheet copies them out and
     /// nothing wants them twice.
     fn into_rgba(self) -> Vec<u8> {
@@ -193,12 +217,41 @@ impl Sheet {
     /// than one archive.
     #[must_use]
     pub fn build(blobs: &[(String, Vec<u8>)], report: &mut Vec<String>) -> Self {
+        Self::build_with(blobs, Vec::new(), report)
+    }
+
+    /// [`Self::build`], plus images somebody else already decoded.
+    ///
+    /// `extra` is `(name, width, height, RGBA8888)`, appended after the blobs in
+    /// the order given, so a sheet built the same way twice is byte-identical
+    /// and a screenshot stays comparable.
+    ///
+    /// **It exists for art that is not in an image file.** The lock-on reticle's
+    /// three pieces are `.vex` *models* whose texture is embedded in the model,
+    /// so there is no `.mip` for [`Image::decode`] to read - `oag_render::mesh`
+    /// is what unpacks them, and it hands back pixels rather than a blob. See
+    /// `crate::race::sight`.
+    #[must_use]
+    pub fn build_with(
+        blobs: &[(String, Vec<u8>)],
+        extra: Vec<(String, u32, u32, Vec<u8>)>,
+        report: &mut Vec<String>,
+    ) -> Self {
         let mut decoded: Vec<(String, Image)> = Vec::new();
 
         for (src, blob) in blobs {
             match Image::decode(blob) {
                 Ok(image) => decoded.push((src.clone(), image)),
                 Err(e) => report.push(format!("image {src}: {e}")),
+            }
+        }
+
+        for (src, width, height, rgba) in extra {
+            match Image::from_rgba(width, height, rgba) {
+                Some(image) => decoded.push((src, image)),
+                None => report.push(format!(
+                    "image {src}: {width}x{height} does not match the pixels handed over"
+                )),
             }
         }
 

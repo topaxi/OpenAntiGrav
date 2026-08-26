@@ -218,9 +218,7 @@ impl Pending {
             teams: boot_shell
                 .teams
                 .iter()
-                .map(|team| {
-                    menu::Choice::labelled(&team.id, boot_shell.strings.get_or_id(&team.id))
-                })
+                .map(|team| menu::Choice::labelled(&team.id, team.label(&boot_shell.strings)))
                 .collect(),
             tracks: boot_shell
                 .tracks

@@ -86,27 +86,73 @@ now two hops deep in a bomb weapon's own constructor, tied to
 gameplay code gets. That table entry should be treated as refuted pending a
 render-side counter-example, not merely unconfirmed.
 
+**2026-08-26 finds the render layer's own dispatch loop, then confirms its
+shape against a live race.** `RenderManager_FlushDrawQueue` (`0x002d6300`,
+now 90-confidence, no `_q`) - paired with `RenderManager_PrepareEye_q`
+(`0x002d6a78`), called once per eye from `Game_PresentLoop_q` - walks an
+array at `RenderManager+0x630` strictly index `0` to the count at `+0x44b0`,
+calling a virtual method on each queued object. **No comparison against any
+per-entry value happens anywhere in that loop.** A breakpoint mid-race on
+Talon's Junction (RPCS3, `PPU Decoder: Interpreter (static)`) then read the
+queue live: **118 real entries**, two distinct object families (one emitter
+submitting many draws with a rising per-entry parameter, one fixed-stride
+array of individual instances), and **both families' per-entry values are
+sorted ascending with no exceptions** - exactly what plain sequential
+iteration over a backing array produces, not what a spatial/material sort
+would reliably produce across two unrelated families in the same frame. See
+[renderer.md](../docs/ghidra/functions/ps3-hdfury-eu/renderer.md#runtime-verified-118-real-draws-two-object-families-no-watchpoint-support).
+**What this still does not show**: the literal enqueue site's PC. A `Z2`
+write watchpoint on the live instance came back unsupported by this RPCS3
+build's GDB stub (empty reply, not `OK`) - see
+[rpcs3-debugger.md](../docs/reverse-engineering/rpcs3-debugger.md). No
+literal `0x630` store exists anywhere in the render layer's address range
+either, so the enqueue site sits outside it or uses a computed offset.
+
 ## Open
 
-- Transparent draws are not depth-sorted anywhere (list order only); the
-  `SortRoot.cpp` lead is now spent - it resolves to gameplay/weapon code, not
-  a render mechanism - so the render layer's own draw-order call site (if
-  any) needs a different search entirely
+- Transparent draws are not depth-sorted in the dispatch/flush step (strict
+  insertion order, confirmed 2026-08-26 both statically and at runtime); the
+  `SortRoot.cpp` lead is spent and the flush loop itself has no sort key, so
+  the only remaining place a sort could hide is the **enqueue** side -
+  whatever writes into `RenderManager+0x630` before `_FlushDrawQueue` reads
+  it back. Runtime data (both queued families' per-entry values sorted
+  ascending with no exceptions) now argues this is submission order rather
+  than a hidden sort, but the write site itself is still unread, so this is
+  strong corroboration, not closure
 - `Transparency::Mode2` is not routed to the cutout pass; `material.rs`
   already refutes alpha-test for it, so what it should route to instead is
   unread
 - Whether Pulse's own transparent draws should be depth-sorted is unmeasured
   (the question above was scoped to HD only)
+- What the two queued object families actually are: one vtable at
+  `0x00864cb8` (one repeated instance, many draws, rising per-entry
+  parameter - reads as a batch emitter, HUD text or particles are plausible
+  guesses, neither confirmed), one at `0x00867e58` (many 624-byte instances
+  at a fixed stride - reads as a typed array of individual objects). Neither
+  vtable's constructors sit in the render layer's address range; below-50
+  confidence, so neither is named. See renderer.md's runtime section for the
+  constructor addresses
 
 ## Next Steps
 
-- Search for the renderer's *own* draw-order mechanism by RSX method
-  constants or state-sort call sites in the render layer's own address range
-  (`0x00279xxx`-`0x002ecxxx`), per renderer.md's existing "the draw path"
-  open item - `SortRoot` is spent as a lead, per the 2026-08-25 note above,
-  so do not chase it further on this question
-- If that search turns up a real sort key, read it before implementing
-  anything - do not add a distance-based sort speculatively
+- Identify the two object families from their constructors:
+  `0x00864cb8`'s ctors are at `0x0046fb88`/`0x0046f218`/`0x00163ad8`/
+  `0x00163340`/`0x00163408`/`0x001634d8`/`0x00470770`/`0x001641f0`;
+  `0x00867e58`'s at `0x005eb3a8`/`0x002023e8`/`0x002024e0`/`0x00201118`/
+  `0x00200e10`/`0x00200f08`/`0x00200fc8`. Read one of each for a `__FILE__`
+  string at the usual `+0x30` offset before guessing a class name - none was
+  found in the quick pass that got these addresses
+- Finding the literal enqueue call site is now lower priority than it was:
+  the runtime read is strong (not certain) evidence there is no sort to
+  find. If it still seems worth chasing, `Z2` watchpoints are a dead end
+  (confirmed unsupported) - try bracketing instead: breakpoint on a call
+  site between two consecutive frames' `Flush` calls and single-step, or
+  work backward once one of the two object families above is identified,
+  since its constructor or update method is the natural place a "register
+  with the renderer" call would sit
+- If a real sort key does turn up on the enqueue side after all, read it
+  before implementing anything - do not add a distance-based sort
+  speculatively
 - Separately, and not blocking the above: `renderer.md`'s `SortRoot` note now
   names two of its three unnamed derived classes' shared shape (a
   pooled-allocator-plus-hash-property-lookup pattern) without naming the

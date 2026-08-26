@@ -44,6 +44,29 @@ impl Race {
     /// setting through the loader would put it in front of every caller that has
     /// no screen. [`crate::display::BoostFovKick::OFF`] leaves [`Race::projection`]
     /// bit-identical to what it returned before the effect existed.
+    /// The field of view the picture is being drawn at, for the lock-on reticle.
+    ///
+    /// See [`Race::sight_fov`]. Cheap and idempotent, so the frame loop may set
+    /// it every frame rather than tracking whether the setting moved.
+    pub fn set_sight_fov(&mut self, fov: crate::display::Fov) {
+        self.sight_fov = fov;
+    }
+
+    /// The lock-on reticle, for whoever draws it.
+    ///
+    /// Render-only state - see [`Race::sight`] - so this returning a borrow
+    /// rather than a copy costs nothing and cannot be mistaken for world state.
+    #[must_use]
+    pub fn sight(&self) -> &crate::race::sight::Sight {
+        &self.sight
+    }
+
+    /// What the reticle is doing, which is what `~ROCKLOCK` plays off.
+    #[must_use]
+    pub fn sight_state(&self) -> crate::race::sight::State {
+        self.sight_state
+    }
+
     pub fn set_boost_fov_kick(&mut self, kick: crate::display::BoostFovKick) {
         self.boost_fov_kick = kick;
         if kick == crate::display::BoostFovKick::OFF {

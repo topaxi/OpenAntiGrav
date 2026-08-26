@@ -129,6 +129,8 @@ around `0x006bxxxx`:
 | `0x002d6190` | `RenderManager_CreateInstance` | 84 |
 | `0x002d5ed0` | `RenderManager_ConstructComplete` | 80 |
 | `0x002d5710` | `RenderManager_Construct` | 76 |
+| `0x002d6300` | `RenderManager_FlushDrawQueue` | 90 |
+| `0x002d6a78` | `RenderManager_PrepareEye_q` | 55 |
 | `0x002bebb0` | `MeshImporter_Construct` | 78 |
 | `0x00650330` | `Gcm_Init` | 88 |
 | `0x005c9194` | `Gcm_InitDevice` | 82 |
@@ -239,6 +241,117 @@ returns 1 otherwise. It is called from the device init when `current + 6`
 would pass `end`, which is what fixes the field at `+0x0c` as the callback and
 therefore the whole `{begin, end, current, callback}` layout. **76** - the
 behaviour is certain and only the name is a convention.
+
+### The per-eye draw dispatch, and what it says about sort order
+
+Found 2026-08-26 chasing the [see-through-surfaces
+thread](../../../../handover/hds-see-through-surfaces-draw-with-the-files.md)'s
+open question of whether HD depth-sorts transparent draws anywhere. `SortRoot`
+was already spent as a lead (above); this is the render layer's own call site,
+reached from `Game_PresentLoop_q` rather than from `SortRoot`.
+
+`RenderManager_PrepareEye_q` (`0x002d6a78`) and
+`RenderManager_FlushDrawQueue` (`0x002d6300`) are always called as a pair,
+`Prepare` immediately before `Flush`, at all seven call sites: six inside
+`Game_PresentLoop_q`'s mono/stereo branches (matching the "mirrored two-pass
+draw sequence for the stereo path" [engine-trail.md](engine-trail.md) already
+described from the caller's side) and once more from the boot function before
+the loop starts, priming the first frame. Both take the `RenderManager`
+instance itself as `param_1` - confirmed by field agreement, not guessed:
+`Flush` reads and writes `+0x620`, `+0x624`, `+0x44b0` and `+0x630`, all fields
+`RenderManager_Construct`/`_ConstructComplete` initialise on the same struct.
+
+`RenderManager_FlushDrawQueue`, in order:
+
+1. Zeroes the two matrix-stack depth counters at `+0x620`/`+0x624` - the same
+   counters the constructor sets to zero at startup, so this is a per-frame
+   stack reset, not a one-time initialisation.
+2. Walks an array at `+0x630` of `{object, extra}` 8-byte pairs, index `0` to
+   the count held at `+0x44b0`, calling `(*object->vtable[0x1c])(object,
+   render_manager, extra)` on each - a virtual dispatch through the queued
+   object's own vtable, not RenderManager's.
+3. Zeroes `+0x44b0` at the end, so the same array at `+0x630` is empty again
+   for the next frame's `Prepare`/`Flush` pair. Its capacity is not
+   established - nothing read here bounds the allocation, only the live
+   count.
+
+**The walk is strict index order, `0` to count, with no comparison against any
+per-entry value anywhere in the loop** - no distance term, no material/layer
+read, no branch keyed on the entry's contents at all. Whatever populates
+`+0x630` decides the draw order; this function only ever plays it back in
+insertion order.
+
+**90**, runtime-verified 2026-08-26 (below): a live breakpoint confirmed `r3`
+at entry is the `RenderManager` instance and that `+0x44b0`/`+0x630` hold a
+real, populated draw queue during an actual race, not just field-offset
+agreement with the constructor. Capped short of the rubric's 94 ceiling for a
+single-binary trace because the breakpoint confirms the *dispatch* loop's
+shape and data, not every claim on this page - the enqueue site itself is
+still unread. `PrepareEye` is unaffected by that trace and stays where it
+was (**55**, `_q`): it does per-eye resolution/aspect bookkeeping (writes
+`+0x104`/`+0x108`, the same pair `RenderManager_Construct` seeds from a
+sub-720/720-and-above split) and conditionally calls `0x0027cd60`, but nothing
+pins its exact purpose beyond "runs once before each eye's draws".
+
+**What this does not establish**: where `+0x630` gets populated. No `stw`
+with a literal `0x630` offset appears anywhere in the render layer's address
+range - the enqueue site, if it stores through a computed offset rather than
+a literal one, needs a different search (register-indexed stores, or working
+backward from what implements each queued class's vtable slot `0x1c`). So this
+narrows the open question to "no sort in the dispatch/flush step, on whatever
+list end up in this array" - it does not yet show the array holds every
+transparent draw, or that no sort happens on the *enqueue* side before an
+entry lands in it.
+
+### Runtime-verified: 118 real draws, two object families, no watchpoint support
+
+**2026-08-26**, against a live race on Talon's Junction (RPCS3
+`v0.0.42-19777-3be5aa99`, `PPU Decoder: Interpreter (static)` - the only mode
+`Z0` breakpoints fire under, per
+[rpcs3-debugger.md](../../../reverse-engineering/rpcs3-debugger.md)). A
+breakpoint on `RenderManager_FlushDrawQueue` (`0x002d6300`) hit mid-race and
+`r3` read back `0x321894d0`. From there, direct memory reads:
+
+- `+0x44b0` (the draw count) was **118** - a real per-frame scene, not a
+  handful of UI elements, which is evidence the array is the general draw
+  queue and not something narrower.
+- The first ten `+0x630` entries share **one** object pointer
+  (`0x328d5170`) and **one** vtable (`0x00864cb8`), each with a different
+  `extra` value - `82, 86, 87, 91, 96, 100, 101, 105, 106, 109`,
+  monotonically increasing. One object submitting many draws with a rising
+  per-entry parameter reads as a batch emitter (particles, glyphs, or
+  similar), not a single mesh.
+- The next six share **one** vtable (`0x00867e58`) but each has its own
+  object pointer, evenly spaced **624 bytes** apart
+  (`0x303cef60, 0x303cf1d0, 0x303cf440, ...`) - a fixed-stride array of
+  distinct instances, consistent with a simple `for` loop over a typed
+  array. Their `extra` fields also rise monotonically, in steps of exactly
+  **2** (`0x58002a90, 92, 94, 96, 98, 9a`).
+- **Both families' `extra` sequences are sorted ascending with no
+  exceptions.** That is what plain sequential iteration over a backing
+  array produces; a spatial or material sort would not reliably come out
+  monotonic entry after entry across two unrelated object families in the
+  same frame. This is the strongest evidence on this page against a sort
+  existing anywhere upstream of the dispatch loop, not just inside it.
+- Neither vtable's constructors sit in the render layer's own address range
+  (`0x00864cb8`'s at `0x0016xxxx`/`0x0046xxxx`, `0x00867e58`'s at
+  `0x0020xxxx`/`0x005ebxxx`) - both outside `0x00279xxx`-`0x002ecxxx`. Below
+  50 confidence for what either class actually is, so neither is named; the
+  addresses are recorded as a lead for whoever picks this up next, not a
+  conclusion. It does corroborate the established pattern
+  ([`SortRoot`](#what-was-deliberately-not-read),
+  [`DetonatorBomb`](detonator-bomb.md)) that objects queue themselves with
+  the render layer from gameplay-side code rather than the render layer
+  owning them.
+- A `Z2` (write watchpoint) armed on `instance+0x630` to try to catch the
+  enqueue site's own PC got back an **empty reply**, not `OK` - RPCS3's GDB
+  stub does not implement write watchpoints on this build. Recorded because
+  the toolchain page only says `Z0` was measured; `Z2` now is too, and it is
+  a dead end, not an unknown.
+
+The enqueue site itself is still unread - this corroborates "no sort" with
+real per-frame data rather than closing the question outright, per
+[the see-through-surfaces thread](../../../../handover/hds-see-through-surfaces-draw-with-the-files.md).
 
 ## The lineage result: HD keeps Pulse's importer-per-class layout
 
@@ -1586,9 +1699,28 @@ The whole table, in file order:
 
 ## What was deliberately not read
 
-- **The draw path.** No mesh submission, no state setting, no shader binding.
-  It is inline command-buffer writing and finding it needs a search for RSX
-  method constants, not a call graph.
+- **The draw path itself.** `RenderManager_FlushDrawQueue`
+  (`0x002d6300`, [above](#the-per-eye-draw-dispatch-and-what-it-says-about-sort-order))
+  is the dispatch loop, but no mesh submission, no state setting and no
+  shader binding is read inside the per-object vtable call it makes - that is
+  inline command-buffer writing and finding it needs a search for RSX method
+  constants inside whatever implements vtable slot `0x1c` for each queued
+  class, not a call graph.
+- **Where `RenderManager+0x630` gets populated.** The dispatch/flush loop
+  only ever plays the array back in insertion order, and a live read of it
+  mid-race is now good (not certain) evidence that order is plain sequential
+  submission rather than a hidden sort - [see
+  above](#runtime-verified-118-real-draws-two-object-families-no-watchpoint-support).
+  But nothing yet reads the enqueue site itself: no literal `0x630` store
+  exists anywhere in the render layer's address range, and a `Z2` write
+  watchpoint on the live instance came back unsupported by this RPCS3 GDB
+  stub build (empty reply), so the enqueue site needs bracketing or working
+  backward from an identified queued class rather than trapping the write.
+- **What the two live-observed queued object classes are.** One vtable at
+  `0x00864cb8`, one at `0x00867e58` - see the runtime section above for the
+  constructor addresses. Neither sits in the render layer's own address
+  range and neither is named; below-50 confidence for any specific class
+  guess.
 - **`0x005cd700`**, the registry's second constructor. It is byte-similar to
   `ShaderRegistry_Register` and has **no branch to it anywhere in the image**,
   so the base-versus-complete split that
@@ -1659,10 +1791,11 @@ The whole table, in file order:
 - **Post-processing has no `.cpp` of its own**, and that turned out to be the
   wrong place to look: it is a set of named shader programs, not a class. See
   [the shader section](#shaders-are-in-exactly-two-places-and-neither-is-a-file-type-on-the-disc).
-- **`RenderManager`'s methods.** This page names its constructors and its
-  singleton, and reads no method, no vtable slot and no frame entry point. The
-  512-byte table, the two matrix arrays and the 768 KiB buffer are all
-  unexplained.
+- **Most of `RenderManager`'s methods.** This page now names its constructors,
+  its singleton and its per-eye `Prepare`/`Flush` pair
+  ([above](#the-per-eye-draw-dispatch-and-what-it-says-about-sort-order)), but
+  no other method and no vtable slot. The 512-byte table, the two matrix
+  arrays and the 768 KiB buffer are all still unexplained.
 - **Everything about `Model.cpp`, `Billboard.cpp`, `Font.cpp`, `Pen.cpp` and
   the `Fx*` family** beyond where they start.
 

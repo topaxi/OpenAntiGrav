@@ -28,16 +28,30 @@ file does not need to carry its own.
   `ls` may be shell-aliased (`ls -la` failing with `ls:1: command not found:
   -la` reads like a broken argument and is not), and a spawned agent has a
   second, independent reason to see `data/` as empty: being gitignored, it does
-  not travel into a worktree or a restricted sandbox.
+  not travel into a worktree or a restricted sandbox. **In a worktree, fix that
+  with `just link-data`** before concluding anything - it symlinks every `data/`
+  subdirectory from the main checkout, and until it is run the DLC and trace
+  suites skip silently (or, under `OAG_REQUIRE_GAME_DATA=1`, fail in a heap
+  naming files that were in the main checkout all along). Added 2026-08-26 after
+  exactly that happened: five `dlc_ground_truth` failures that were a worktree
+  with no `data/dlc` in it and nothing else.
 - **Derived evidence under `data/` is not durable; the scenarios and scripts
   that regenerate it are.** A 2026-07-29 pass found three reference traces gone,
   leaving `force-balance-ground-truth.md`, `contact-response.md` and three
   citations inside `wall.rs` pointing at files that were not there. Anything
   under `data/traces/`, `data/shots/` or `data/cache/` can be absent; the
   committed `verification/scenarios/*.inputs` are what reproduce it.
+  **Two are absent right now (2026-08-26):** `pad0-boost.csv`, which the three
+  `chase_camera_ground_truth` tests read, and
+  `talons-junction-time-trial-lap-omega.csv`, which `maglock_ground_truth` reads.
+  All four skip cleanly and only fail under `OAG_REQUIRE_GAME_DATA=1`, so a
+  sweep with that variable set reads as four reds that are not.
+  `stall_rescue_ground_truth::a_craft_that_stops_on_the_disc_is_put_back` is a
+  **real** red as of the same date - it fails identically on `origin/main` with
+  "nothing recovered the craft", is not a missing-data skip, and is undiagnosed.
 - **Check `git status` before assuming the tree is clean.** A whole milestone's
   work once sat uncommitted for a day.
-- **Gate status:** last measured green at **2,458 tests (2026-08-26)** in 6.4s,
+- **Gate status:** last measured green at **2,470 tests (2026-08-26)** in 3.3s,
   with `fmt`, `clippy`, `check-docs`, `check-deps`, `check-determinism`,
   `check-size`, `check-names` and `check-handover` all clean (480 skipped -
   the `#[ignore]`d disc-backed ones). Re-measure rather than trusting the number here -
@@ -421,7 +435,6 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [Wipeout HD's video decodes, and the logo reel is the Studio Liverpool ident](handover/wipeout-hds-video-decodes-and-the-logo-reel.md)
 - [Wipeout HD's soundtrack plays; finding it fixed a disc-wide PSARC bug](handover/wipeout-hds-soundtrack-plays-finding-it-fixed-a.md)
 - [Pure's soundtrack plays, and both titles' track names are recovered - Pulse's are deliberately unwired](handover/pures-soundtrack-plays-and-both-titles-track-names.md)
-- [Wipeout HD / Fury: a circuit drives, textured and blended, off the PS3 disc](handover/wipeout-hd-fury-a-circuit-drives-textured-and.md)
 - [HD/Fury's HUD draws, and three of Pulse's constants applied to every title were why it did not](handover/hd-furys-hud-draws-and-three-of-pulses.md)
 - [Wipeout HD / Fury's HUD reads, and the reader it shares with Pulse was wrong in three ways Pulse's own data could never have shown](handover/wipeout-hd-furys-hud-reads-and-the-reader.md)
 - [`.gtf` reads, so HD's textures are pixels](handover/gtf-reads-so-hds-textures-are-pixels.md)
@@ -457,6 +470,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [Frame comparison: three residuals](handover/frame-comparison-three-residuals.md)
 - [Weapons: seven of thirteen, and two doc pages had two of them swapped](handover/weapons-seven-of-thirteen-and-two-pages-were.md)
 - [Projectiles follow the floor, and the km/h fix - both now landed](handover/projectiles-follow-the-floor-and-the-km-h.md)
+- [The Missile fires without a lock, and the lock-on reticle and its tone are in](handover/the-missile-fires-without-a-lock-now-and.md)
 - [A weapon identified by "it fires more than one" is not identified](handover/a-weapon-identified-by-it-fires-more-than.md)
 - [The hull sparks are approximated in three named ways](handover/the-hull-sparks-are-approximated-in-three-named.md)
 - [The original's camera/HUD shake on impact is untraced](handover/the-originals-camera-hud-shake-on-impact-is.md)
@@ -489,7 +503,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [`--until` cannot reach a late movie frame on a machine with an audio device](handover/until-cannot-reach-a-late-movie-frame-on.md)
 - [Where Pulse's language picker belongs is unevidenced](handover/where-pulses-language-picker-belongs-is-unevidenced.md)
 - [Pure's string tables are not read, and its front-end font is absent](handover/pures-string-tables-are-not-read-and-its.md)
-- [`boot.rs` still applies five Pulse literals to every source](handover/boot-rs-still-applies-five-pulse-literals-to.md)
+- [`raceable` composes a Pulse path on every source, and nothing has established why that works](handover/raceable-composes-a-pulse-path-on-every-source.md)
 - [Pure's `Title Screen` is missing its own logo wordmark - not chased further](handover/pures-title-screen-is-missing-its-own-logo.md)
 - [A *slot-resolved* record's own field layout](handover/a-slot-resolved-records-own-field-layout.md)
 - [The `.vex` class-ID table's extent](handover/the-vex-class-id-tables-extent.md)
@@ -504,7 +518,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [The chase camera's 3/4 factor](handover/the-chase-cameras-3-4-factor.md)
 - [The loading screen has no caller](handover/the-loading-screen-has-no-caller.md)
 - [`Anim Transform` `0x3c0` is read and played, and closing it fixed a placement defect](handover/anim-transform-0x3c0-is-read-and-played-and.md)
-- [The PS3 Ghidra path works; two improvements to it are still open](handover/the-ps3-ghidra-path-works-two-improvements-to.md)
+- [The PS3 Ghidra path works; the cspec-only fork is done, `lvlx` is what's left](handover/the-ps3-ghidra-path-works-two-improvements-to.md)
 - [Wipeout HD Fury's executable is 26,100 functions with 26 of them named, and no gameplay behaviour yet](handover/wipeout-hd-furys-executable-is-26100-functions-with.md)
 - [The alpha-test cutout reference is recovered as three values, not one, and the per-batch selector is not](handover/the-alpha-test-cutout-reference-is-recovered-as.md)
 
@@ -633,6 +647,20 @@ writers in it at the same time:
   everything.** Do not read that session as an argument for more agents.
 
 ## Traps that are live
+
+**A fragment `<LoadXML>` never resolving is not always a missing file - HD's
+own disc disables one by misspelling the tag.** 2026-08-26, diffing the three
+copies of `speedlap_hud.xml`
+([the HUD thread](handover/wipeout-hd-furys-hud-reads-and-the-reader.md)).
+`DATA05`'s copy references `HUD_lap_ghost.xml` through `<aLoadXML>`/
+`</aLoadXML>` instead of `<LoadXML>`/`</LoadXML>` - one added letter per tag,
+which is also exactly `DATA05`'s 2-byte size difference from the otherwise
+byte-identical `DATA00`/`DATA06` copies. `LoadXML_Item`'s reader keys on the
+literal tag name, so this is not a fragment that fails to resolve and logs a
+miss - it is a fragment the reader never looks for at all, deliberately
+authored to be skipped without deleting the reference. If a HUD or front-end
+composition is ever missing a feature that a sibling copy of the same root
+has, check for a misspelled tag before assuming a parser or precedence bug.
 
 **Reaching an arbitrary circuit through the front end is gated by Race Campaign
 progression, not by anything `psp-drive.py` or the debugger can skip.** 2026-08-26,

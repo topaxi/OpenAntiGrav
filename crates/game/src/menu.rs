@@ -1828,7 +1828,7 @@ fn zoom(draw: &mut Draw, origin: (f32, f32), scale: f32, alpha: f32) {
             rect[3] *= scale;
             color[3] *= alpha;
         }
-        Draw::Sprite { rect, color, .. } => {
+        Draw::Sprite { rect, color, .. } | Draw::RotatedSprite { rect, color, .. } => {
             rect[0] = about(rect[0], origin.0);
             rect[1] = about(rect[1], origin.1);
             rect[2] *= scale;
@@ -1842,11 +1842,8 @@ fn zoom(draw: &mut Draw, origin: (f32, f32), scale: f32, alpha: f32) {
 
 /// Multiplies one draw's alpha, leaving it where it is.
 fn fade(draw: &mut Draw, alpha: f32) {
-    match draw {
-        Draw::Text { color, .. } | Draw::Fill { color, .. } | Draw::Sprite { color, .. } => {
-            color[3] *= alpha;
-        }
-        Draw::Video { .. } => {}
+    if let Some(color) = draw.colour_mut() {
+        color[3] *= alpha;
     }
 }
 

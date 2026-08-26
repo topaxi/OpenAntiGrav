@@ -102,7 +102,7 @@ pub(super) fn load_teams(
 ) -> Vec<crate::catalogue::Team> {
     let declared = crate::catalogue::all_teams(documents);
     let declared_count = declared.len();
-    let mut teams: Vec<_> = declared
+    let teams: Vec<_> = declared
         .into_iter()
         .filter(|team| raceable(archives, &team.id))
         .collect();
@@ -116,31 +116,28 @@ pub(super) fn load_teams(
     }
 
     // A source whose plugin definition will not read is reported and not fatal
-    // - see `definitions` - but a TEAM row with nothing in it would leave the
-    // player unable to start a race at all, where the circuits row still has a
-    // default to fall back on. So the eight teams the PSP disc always ships
-    // stand in, still filtered against what is really there. This is the list
-    // the menu definition itself carried before the roster became data. It
-    // used to fire on every HD boot, when `definitions` asked for Pulse's
-    // plugin name: eight of HD's twelve teams, off a list this crate holds
-    // rather than one the disc declares. The line below says which happened.
+    // - see `definitions` - and an empty roster is now reported as exactly that
+    // rather than filled in. It used to fall back to the eight teams the PSP
+    // disc ships, filtered against what was really there, and that stand-in
+    // fired on every HD boot for as long as `definitions` asked every title for
+    // Pulse's plugin name: eight of HD's twelve teams, off a list this crate
+    // holds rather than one the disc declares. Eight teams in a menu is what a
+    // working front end looks like, which is why nothing failed and nothing
+    // said so.
+    //
+    // No title can state the right answer here either, so this is not an axis
+    // the title package grew: a roster for the definition-unreadable case has
+    // never been measured on any of the three, and `oag_pure::names::
+    // handling_stats` declines to hold one for that reason. An empty row is
+    // survivable - `livery::teams_for_slots` fills every slot with the player's
+    // own craft and says so - and it is honest, where another title's roster is
+    // not. `crates/game/tests/roster_declared_ground_truth.rs` is what says no
+    // source present needs the branch.
     if teams.is_empty() {
-        teams = oag_formats::handling::TEAMS
-            .iter()
-            .filter(|id| raceable(archives, id))
-            .map(|id| crate::catalogue::Team {
-                id: (*id).to_string(),
-                location: format!(r"Data\Ships\{id}"),
-                help_text: None,
-            })
-            .collect();
-        if !teams.is_empty() {
-            report.push(format!(
-                "no team was declared; falling back to the {} shipped team(s) \
-                 this source actually carries",
-                teams.len()
-            ));
-        }
+        report.push(format!(
+            "{definition}: no team is declared on this source, so no race can \
+             be started from the menus"
+        ));
     }
 
     report.push(format!(

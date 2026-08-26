@@ -14,6 +14,7 @@
 use super::*;
 use oag_formats::track;
 
+mod autopilot;
 mod camera;
 mod cues;
 mod field;
@@ -307,6 +308,28 @@ fn one_turbo_table() -> oag_formats::weapons::WeaponStats {
              <Weapon type="Turbo"><Stats absorb="23" time="0.75"/></Weapon>
              <Pickupodds class="Venom">
                <Weapon type="Turbo"><Stats ai="1" back="1" front="1" human="1"/></Weapon>
+             </Pickupodds>
+           </WeaponStats>"#,
+    )
+    .expect("the fixture table must parse")
+}
+
+/// A table authoring a Missile and nothing else, for the tests about firing one
+/// without a lock.
+///
+/// The two lock distances are the shipped shape - a window a long way down the
+/// nose - so a test on an empty grid is provably unable to lock rather than
+/// merely unlucky.
+fn one_missile_table() -> oag_formats::weapons::WeaponStats {
+    oag_formats::weapons::parse(
+        r#"<WeaponStats>
+             <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
+             <Weapon type="Missile"><Stats absorb="23" blastforce="10"
+                blastradius="8" damage="12" launchSpeed="200"
+                lock_min_dist="10" lock_max_dist="400" venomspeed="800"
+                flashspeed="800" rapierspeed="800" phantomspeed="800"/></Weapon>
+             <Pickupodds class="Venom">
+               <Weapon type="Missile"><Stats ai="1" back="1" front="1" human="1"/></Weapon>
              </Pickupodds>
            </WeaponStats>"#,
     )

@@ -326,6 +326,7 @@ pub(super) fn advance_laid(
                     kind,
                     owner,
                     struck: Some(slot),
+                    blast: true,
                 });
             }
         }
@@ -335,6 +336,15 @@ pub(super) fn advance_laid(
     if projectile.lifetime > 0.0 {
         return None;
     }
+    // **Both ways out of here spend a blast**, which is the opposite of the
+    // Missile's expiry and is recovered rather than assumed. `Impact::blast`
+    // exists because a missile that runs out of time spawns its explosion and
+    // hurts nobody - the pool's teardown calls the spawner and neither the
+    // damage nor the force. A mine's fuse running out is the other shape
+    // entirely: the chain that reads it (`FUN_08867370` counts `+0x48` down,
+    // `FUN_08867b50` sweeps, `Weapon_PostBlastImpulse` posts) *is* the blast,
+    // and there is no path where it goes off quietly. A mine that expired
+    // harmlessly would be a mine nobody ever needed to drive around.
     // The fuse. An unauthored weapon is the one path that reaches here with
     // nothing to spend, and it produces an impact whose blast lookup then finds
     // nothing - one free slot and no damage, rather than a charge that lives for
@@ -344,5 +354,6 @@ pub(super) fn advance_laid(
         kind,
         owner,
         struck: None,
+        blast: true,
     })
 }

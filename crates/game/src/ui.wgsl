@@ -41,6 +41,10 @@ struct Instance {
     @location(3) border: vec4<f32>,
     // 0 indexes the glyph atlas, 1 the sprite sheet.
     @location(4) mode: f32,
+    // Clockwise turn about the quad's own centre, in radians. Zero for
+    // everything but the lock-on reticle's corner brackets, which are four
+    // instances of one model at four quarter turns.
+    @location(5) rotation: f32,
 };
 
 struct VertexOut {
@@ -75,8 +79,19 @@ fn to_clip(pixels: vec2<f32>) -> vec4<f32> {
 @vertex
 fn vs_main(@builtin(vertex_index) index: u32, instance: Instance) -> VertexOut {
     let corner = corner_of(index);
+    // The **geometry** turns and the `uv` below does not, so this spins the
+    // quad rather than the texture lookup - the difference between drawing one
+    // model four ways and sampling one atlas patch four ways. About the middle
+    // of the rectangle, so a rotated sprite keeps the centre an unrotated one
+    // would have had.
+    let centred = corner - vec2<f32>(0.5, 0.5);
+    let turn = mat2x2<f32>(
+        vec2<f32>(cos(instance.rotation), sin(instance.rotation)),
+        vec2<f32>(-sin(instance.rotation), cos(instance.rotation)),
+    );
+    let placed = turn * centred + vec2<f32>(0.5, 0.5);
     var out: VertexOut;
-    out.position = to_clip(instance.rect.xy + corner * instance.rect.zw);
+    out.position = to_clip(instance.rect.xy + placed * instance.rect.zw);
     // Normalised here rather than in the fragment shader, against whichever
     // texture this quad indexes.
     let size = select(uniforms.atlas, uniforms.sprites, instance.mode > 0.5);

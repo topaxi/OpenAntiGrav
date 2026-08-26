@@ -352,6 +352,13 @@ impl Race {
             };
         }
 
+        // The lock-on reticle, on the fixed tick beside the camera and the
+        // exhaust and for the same reason: a headless capture calls only
+        // `tick`, so a reticle advanced in the frame loop would be at a
+        // different extent in a screenshot than in a window at the same tick
+        // count. **After the camera**, because it projects through it.
+        self.update_sight();
+
         // Cooldown-gated, not edge-triggered - see `Self::sparks_cooldown`'s
         // doc comment for why a sustained scrape must re-fire periodically
         // rather than spawn once and go silent.

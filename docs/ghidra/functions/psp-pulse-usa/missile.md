@@ -24,6 +24,21 @@ Ported in `crates/gameplay/src/projectile/missile.rs` and
 | `0x08844ae8` | `Ship_FireHeldWeapon` | 85 |
 | `0x08861d20` | `WeaponPickup_Grant` | 80 |
 | `0x0886e0f8` | `WeaponPickup_ArmRocket` | 80 |
+| `0x08869588` | `MissilePool_Update` - **renamed**, see below | 88 |
+| `0x08868d50` | `Missile_SpawnExplosion` | 85 |
+| `0x08868ea4` | `Missile_ApplyBlastForce` | 88 |
+| `0x088690fc` | `MissilePool_TestCraftHits` | 85 |
+| `0x088687c0` | `MissilePool_SpawnRemote` | 78 |
+| `0x08868a10` | `MissilePool_DestroyRemote` | 78 |
+| `0x0886de60` | `RocketPool_Update` | 82 |
+
+**`0x08869588` was `Projectiles_Update_q` at 75** on
+[weapon-fire.md](weapon-fire.md), where it was read as the projectile pool in
+general. It is the **Missile's** pool specifically, and three things say so
+rather than one: it calls `Missile_Update` on every slot, its teardown calls
+`Missile_SpawnExplosion`, and the Rocket has a pool of its own at `+0x124` whose
+update (`RocketPool_Update`) calls `Rocket_Update` instead. The `_q` comes off
+with the rename.
 
 **Read [weapon-fire.md](weapon-fire.md) first** for the fire-request word and the
 Rocket; this page is the Missile's half and it corrects one claim on that page -
@@ -88,6 +103,10 @@ if (world->live < 0x2e) {
                  ...);
 }
 ```
+
+**The target is passed through unchecked**, and that settles a question this
+page used to leave open. `craft+0x160` is whatever `Ship_FireHeldWeapon` put
+there, `Missile_Init` takes it as it comes, and nothing between the two tests it.
 
 **Three independent things say bit `0x40` is the Missile**, which is why this is
 at 90 rather than at a shrug:
@@ -337,6 +356,138 @@ Collision code `4` comes from a second, separate query (`FUN_08831948`) rather
 than from the surface's own material code; reading it as "hit a craft" fits every
 site but is **inference at 55**, and Ghidra types that helper as returning `void`
 while its caller consumes a value, so the code-4 path itself is only at 80.
+
+## A press with no lock still fires
+
+**Recovered, confidence 90**, and this page previously implied the opposite -
+`crates/game/src/race/weapons.rs` declined the shot and kept the pickup, which
+was ours.
+
+`Ship_FireHeldWeapon` (`0x08844ae8`) branches on the lock and calls
+`Weapon_RequestFire` on **both** arms:
+
+```c
+if ((self->target == -1) || ((self->lock_flags & 1) == 0)) {   // +0x85c, +0x860
+    Weapon_RequestFire(craft, pose, 0, 0xffffffff);            // null target, index -1
+} else {
+    Weapon_RequestFire(craft, pose, entity_table[self->target] + 0x794);
+}
+```
+
+`Weapon_FireMissile` then clears `craft+0x1bc` **before** its `live < 0x2e`
+bounds check, so the pickup is spent even when the pool is full, and hands
+`craft+0x160` to `Missile_Init` without testing it. `Missile_Update` skips its
+whole guidance block on `self+0xe0 == 0` - already recorded under
+[The target is fixed at launch](#the-target-is-fixed-at-launch) - so the missile
+rides the floor, glances off walls up to five times, and otherwise flies
+ballistically.
+
+**`entity+0x85c` has exactly three consumers in the whole executable**, by
+exhaustive operand search: `Craft_Construct_q` sets it to `-1`,
+`Ship_AcquireLock` writes it, `Ship_FireHeldWeapon` reads it. So nothing else in
+the game reads the lock - whatever draws the sight reads the mirror at
+`weapon_record+0x1b4` instead, and that has not been chased.
+
+## And it ends itself after three seconds
+
+**Recovered, confidence 90.** `MissilePool_Update` (`0x08869588`) runs a second
+pass over every live slot after updating it:
+
+```c
+if ((3.0 < missile->age) && ((missile->flags & 1) != 0)) {
+    missile->flags |= 4;                    // the destroy bit
+    ...                                     // trail released, a cue played
+}
+if ((missile->flags & 4) != 0) {
+    Missile_SpawnExplosion(pool, &missile->position);   // FUN_08868d50, fourcc MIEX
+    ...                                     // slot swapped out of the live range
+}
+```
+
+`missile+0x50` is **the same field `Missile_SpeedNow` ramps on** - that function
+reads `+0x50` and nothing else for its `age < 1.0` blend, and `Missile_Update`
+accumulates it by `dt` at the top of its own body. One field, two consumers, so
+the ramp's age and the timeout's age cannot drift apart. That is what puts this
+at 90 rather than at "a float compared against 3.0".
+
+Bit `4` is shared: the wall and craft paths reach the same teardown through
+`flags |= 0x14` and `|= 0x24`. So the expiry is a **detonation**, not a reap.
+
+The `flags & 1` half is *locally simulated*, not *alive*:
+`MissilePool_SpawnRemote_q` (`0x088687c0`) initialises the same word to `2`
+instead and then fast-forwards the missile by the message's latency, so a remote
+craft's missile is ended by its owner rather than by this timer.
+
+**The Rocket has the same shape with different numbers.** `RocketPool_Update`
+(`0x0886de60`) tests `5.0 < rocket+0x48` and takes its destroy branch - but that
+branch reaches the trail release and **no** explosion spawner, so a stale rocket
+vanishes where a stale missile goes off.
+
+## The blast, and what does not reach it
+
+**Confidence 88, and the method matters more than the reading**: both halves of a
+missile's damage have exactly two callers each, by exhaustive operand search over
+all 524,719 instructions rather than by following the decompiler.
+
+| Function | What it does | Called from |
+| --- | --- | --- |
+| `FUN_08869054` | damage bookkeeping - `weapon_record+0x120`, the `+0x12c` pending count, `slowdown_time` into `+0x130` | `MissilePool_TestCraftHits`, `MissilePool_DestroyRemote_q` |
+| `Missile_ApplyBlastForce` (`0x08868ea4`) | the impulse, below | the same two |
+| `Missile_SpawnExplosion` (`0x08868d50`) | the `MIEX` explosion object at a position | `MissilePool_Update`, `MissilePool_DestroyRemote_q` |
+
+So **`MissilePool_Update`'s teardown reaches the explosion and neither the damage
+nor the force**. A missile that runs out of time, or that gives up on its fifth
+wall, *looks* like it went off and hurts nobody.
+
+The force itself, which corrects a live claim in
+[pickups.md](../../../gameplay/pickups.md):
+
+```c
+for (i = 0; i < ship_count; i++) {
+    if (i == struck) continue;                       // the direct hit is excluded
+    d = craft[i].position - point;
+    if (length(d) < stats[+0x48]) {                  // blastradius
+        craft[i].impulse += normalize(d)
+                          * (1.0 - length(d)/stats[+0x48]) * stats[+0x4c];  // blastforce
+    }
+}
+```
+
+**Linear falloff to nothing at the radius**, and the *damage* does not go through
+it at all. `oag_gameplay::projectile::blast` spends both flat and includes the
+firer; both are recorded there as ours and are now known to be wrong rather than
+merely unevidenced. Not changed in the same pass, because it moves how every
+weapon lands.
+
+### One thing that disagrees, left standing
+
+`MissilePool_DestroyRemote_q` (`0x08868a10`) handles the "somebody else's missile
+died" message. Its `message+8 == -1` branch - died on nothing, no craft struck -
+**does** call `Missile_ApplyBlastForce`, where the local expiry does not. Either
+the network path is compensating for something the local path does elsewhere, or
+one of the two is a bug in the original. Nothing here decides it, and the local
+path is what is ported.
+
+### By-catch: a cue that reads wrong
+
+The expiry branch plays the cue at `_DAT_00278950`, and that pointer resolves to
+**`"SHURIKENEXPL"`** - checked twice against a wider read of `0x08a79b90`, where
+the neighbouring pointers resolve correctly to `"MISSILEEXPWALL"` and
+`"MISSILEEXPSHIP"`. Confidence 60 that this is a copy-paste in the original
+rather than a misread. Not load-bearing: nothing here plays a cue on that path.
+
+## The lock-on sight, and the lock flag's writer
+
+By-catch of the same pass, chased to the end on its own page:
+[lock-sight.md](lock-sight.md). In short - `BOOT.BIN` holds one contiguous run of
+sight **widget** names at `0x08a79cd4`, nine of them over **three** models
+(`missile_sight_1` ... `_4` all instance `missile_sight_outer.vex`), and
+`HudSight_Update` (`0x0881dbcc`) both places them and **writes
+`entity+0x860 & 1`** - the flag `Ship_FireHeldWeapon` gates the lock on. So the
+lock is not instant: it needs `0.8` seconds of holding a target on screen.
+
+The tone is `~ROCKLOCK`, one voice started once and switched between a seeking
+and a locked variant by a parameter (`HudSight_UpdateTone`, `0x0881b34c`).
 
 ## A correction: `craft+0x1bc` is not a target
 
