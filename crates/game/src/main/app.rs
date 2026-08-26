@@ -246,6 +246,7 @@ impl App {
             meter: perf::Meter::new(),
             overlay,
             stalled: true,
+            paused: false,
             next_frame: std::time::Instant::now(),
             race_options: self.race_options.clone(),
             pending: self.pending.take(),

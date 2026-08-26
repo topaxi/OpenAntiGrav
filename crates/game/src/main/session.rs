@@ -61,6 +61,10 @@ pub(crate) struct Session {
     /// Starts `true`: the first frame's `elapsed` reaches back to before the
     /// window existed.
     pub(crate) stalled: bool,
+    /// Toggled by `Start` while a race is running: freezes the tick, nothing
+    /// else. There is deliberately no pause screen behind it - see
+    /// [`Session::frame`], which is the only place this is read.
+    pub(crate) paused: bool,
     /// When the next frame is due, under a frame limit.
     ///
     /// A schedule rather than a stopwatch - see

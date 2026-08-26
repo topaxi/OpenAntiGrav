@@ -173,6 +173,18 @@ impl Session {
                 self.controls.buttons_mut().consume_press(Button::Select);
                 self.cycle_camera_view();
             }
+            // Pause, on the same button the original spends on "leave the
+            // results table" - free during a still-running race because
+            // nothing else there reads `Start` yet. **No menu, no overlay**:
+            // this only decides whether `Race::tick` below runs, so the world
+            // is exactly as the freezing tick left it, the way the finished
+            // race arm below already leaves it under the results table.
+            if matches!(&self.stage, Stage::Race(stage) if !stage.race.finished())
+                && self.controls.buttons().is_pressed(Button::Start)
+            {
+                self.controls.buttons_mut().consume_press(Button::Start);
+                self.paused = !self.paused;
+            }
             // What leaves the results table, and it is the same thing escape
             // does from a race: hand the window back to the menus, or quit a
             // `--race` run that never had any. There is nothing else the table
@@ -324,6 +336,13 @@ impl Session {
                     // the player looked at it. Nothing this call touches is
                     // `World` state, so "nothing is stepped" is still true of
                     // the thing that sentence is about.
+                    self.audio.race_tick(&mut stage.race);
+                }
+                Stage::Race(stage) if self.paused => {
+                    // Same shape as the finished arm above and for the same
+                    // reason: the audio is not simulation state, so ticking
+                    // it is what keeps the engine note honest while `World`
+                    // itself sits frozen at whatever tick `Start` caught it on.
                     self.audio.race_tick(&mut stage.race);
                 }
                 Stage::Race(stage) => {

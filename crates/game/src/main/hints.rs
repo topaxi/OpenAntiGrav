@@ -24,7 +24,8 @@ pub(crate) const SHELL_KEYS: &str = "up and down move, left and right change a s
 pub(crate) const RACE_TITLE: &str = "OpenAntiGrav - race";
 
 pub(crate) const RACE_KEYS: &str = "arrow keys or the left stick steer, X, return or R2 thrusts, \
-     Q and E or the shoulders are the airbrakes, L2 is both, C fires a pickup and Z absorbs it";
+     Q and E or the shoulders are the airbrakes, L2 is both, C fires a pickup and Z absorbs it, \
+     space or start pauses";
 
 /// What escape does from a race the menus started, and from one `--race` did.
 ///
