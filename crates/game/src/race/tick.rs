@@ -159,6 +159,11 @@ impl Race {
         // ate has to come back out of the step rather than being invisible on
         // both sides.
         let mut absorbed = [false; MAX_SHIPS];
+        // Read before the step, for `ignite_missile_bounces` below: a bounce
+        // never stops a projectile, so it never reaches `impacts` and the
+        // only way to see one is to compare this counter before and after.
+        let bounces_before: [u8; oag_gameplay::projectile::MAX_PROJECTILES] =
+            std::array::from_fn(|slot| self.world.projectiles.slots[slot].bounces);
         let impacts = oag_gameplay::projectile::step(
             &mut self.world,
             self.dt,
@@ -177,8 +182,9 @@ impl Race {
         // actually ended the tick rather than a tick behind it.
         self.advance_projectile_flares();
         for impact in impacts.iter().flatten() {
-            self.ignite_blast(impact.point, impact.struck.map(usize::from));
+            self.ignite_blast(impact.kind, impact.point, impact.struck.map(usize::from));
         }
+        self.ignite_missile_bounces(&bounces_before);
         // After the craft have moved, so a flare sits on this tick's nozzle
         // rather than the last one's.
         self.advance_engine_flares();

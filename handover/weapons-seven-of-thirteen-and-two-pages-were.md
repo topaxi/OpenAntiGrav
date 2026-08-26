@@ -164,11 +164,50 @@ Put back.
   and the reason it exists is fairness rather than fidelity - a charge the
   player can steer around and an opponent cannot is a worse wrong answer than a
   dodge nobody has verified.
-- **A mine and a bomb both draw nothing.** `Pulse_Mine.vex` and
-  `Pulse_Bomb.vex` are both named and located and no renderer reads either, so a
-  laid charge is invisible - which for a weapon whose whole point is that a
-  rival does not see it coming is arguably fine, and for the player who laid it
-  is not.
+- **A mine and a bomb both draw no model.** `Pulse_Mine.vex` and
+  `Pulse_Bomb.vex` are both named and located and no renderer reads either.
+  They were not, however, invisible - see the fixed bug below, which is what
+  a maintainer who plays Pulse was actually seeing.
+
+**Fixed 2026-08-26: a laid mine or bomb rode the Rocket's flare from the
+moment it landed.** Reported from play as "the mines are animating the
+explosion when dropped, instead of when detonating (only tested via
+pulse)". `Race::advance_projectile_flares` (`crates/game/src/race/weapons.rs`)
+gated on `projectile.kind.is_none()` - true for *any* live projectile - to
+decide who rides a [`ROCKET_FLARE_EFFECT`] (`WO_ROCKET_FLARE`) instance. That
+effect's emitters are looping (see `mine.md`'s neighbour reading on
+`Rocket_Init`), so a mine or a bomb got it attached the instant
+[`Race::lay_mines`] placed it and kept it burning at that fixed point for the
+charge's whole life - which reads exactly like an explosion that started at
+the drop and never really ended. Invisible to `just test`: the headless
+harness builds `Race` with an empty `psys::Library`
+(`crates/game/src/race/tests.rs`), so `self.effects.get(ROCKET_FLARE_EFFECT)`
+is always `None` there and the attach never fires - only `just play` against
+the real disc loads the asset. `docs/formats/pob.md` already listed
+`WO_MISSILE_HEAD` as the Missile's own, separate effect, which is what said
+this gate was wrong rather than merely coincidental. Fix: gate on
+`kind == Some(Weapon::Rocket)` instead. A Mine and a Bomb now ride nothing,
+which is the correct "not implemented" state.
+
+**And wired the same day: the Missile rides its own `WO_MISSILE_HEAD`.**
+Asked directly - "does the Missile have its own flare in Pulse, I know HD/
+Fury/2048 do" - and it does: `WO_MISSILE_HEAD` is in the PSP disc's own
+35-file name-hash list (`docs/formats/pob.md`), not an HD-only asset, and
+`missile.md`'s reading of `Missile_Init` (`0x0885a160`, confidence 90) already
+had it - "plays `WO_MISSILE_HEAD` at two anchors" is one of the three
+independent things that settles bit `0x40` as the Missile. The gate above
+generalised to `flare_effect_for(kind) -> Option<&'static str>` (Rocket ->
+`WO_ROCKET_FLARE`, Missile -> `WO_MISSILE_HEAD`, everything else -> `None`),
+unit tested the same way. **One simplification, stated rather than
+discovered later**: the original attaches *two* instances, one per anchor,
+and this engine rides *one*, centred on the projectile's own position - the
+Missile carries no located model or locator set here the way the Rocket's
+`Rocket.vex` does, so there is nowhere read to put a second one. The
+`WO_MISSILE_EXPLO` and `WO_MISSILE_BOUNCE` reasons in
+`crates/game/tests/psys_inventory_ground_truth.rs` were also stale ("the
+Missile fires nothing yet" - it does) and are corrected to name the real gap:
+`Race::ignite_blast` reuses the Rocket's own explosion pair for every
+detonating projectile rather than reading which file each weapon authors.
 
 ## Next Steps
 
@@ -176,7 +215,58 @@ Put back.
   `Data\Weapons\Pulse_Bomb.vex` through the existing `.vex` path, plus their
   own cues (`MINELAUNCH`/`MINERADAR`, `BOMBLAUNCH`/`~BOMBRADAR`,
   `BOMBEXPL`/`BOMBEXPL_PC`) - all six strings are located. This is now the
-  biggest gap on both weapons: they work and are invisible.
+  biggest gap on both weapons: they work and draw no model. **Read
+  `Mine_Init`/`Mine_Construct` for a drop-time effect before wiring one** -
+  the fixed bug above is evidence there may be a real, smaller one (an arming
+  flash, a muzzle puff) rather than none at all; do not reuse `ignite_blast`'s
+  detonation effect at lay time on a guess.
+- ~~**Give the Missile its own detonation and bounce effects.**~~ **Done
+  2026-08-26.** `Race::blast_for` now takes `kind` and maps `Missile` to
+  `MISSILE_EXPLO_EFFECT` (`WO_MISSILE_EXPLO`, one file whatever it hit -
+  `Missile_SpawnExplosion`, `0x08868d50`); `Race::ignite_missile_bounces`
+  reads a before/after snapshot of `Projectile::bounces` (a bounce never
+  reaches `Impact`, so there is nothing else to hang the trigger off) and
+  plays `WO_MISSILE_BOUNCE` on every wall glance, per `missile.md`'s
+  `Missile_Update` reading.
+- **The Mine got the same fix, and further - its own detonation is now
+  recovered, not just correctly silent.** `blast_for(Mine, ...)` was `None`
+  for about an hour of this session (drawing nothing, replacing the
+  Rocket-reuse bug), then a live Ghidra session found the actual spawn call:
+  **`Mine_SpawnExplosion`** (`0x08867f1c`, confidence 90) is called from
+  `FUN_08867370`'s uniform teardown, reached from both the fuse timeout and
+  `FUN_08867b50`'s trigger_radius sweep, and plays `WO_MINE_EXPLO` - confirmed
+  by a direct memory read of the string, not inferred from a plausible name.
+  See [mine.md](../docs/ghidra/functions/psp-pulse-usa/mine.md#mine_spawnexplosion-plays-wo_mine_explo)
+  for the full read, including the finding that fourcc `MIEX` is a shared
+  "this is an explosion" tag rather than the Missile's own label -
+  `Missile_SpawnExplosion` uses the identical tag for `WO_MISSILE_EXPLO`.
+  `blast_for(Mine, ...)` now returns `MINE_EXPLO_EFFECT`.
+- **The Bomb is still open, and now the odd one out.** Every other rear/guided
+  weapon that fires has a recovered detonation effect; the Bomb's own teardown
+  is a distinct function from the Mine's (separate pool cursor, `+0xc4`/cap 32
+  against `+0x164`/`+0x64`) and has not been read. `mine.md`'s new section
+  names the two candidates - `WO_MINE_EXPLO` reused at a larger scale (which
+  would match "the bomb should be static, like the mines, just a single big
+  mine" extended to the visual) or its own `WO_BOMB_SMOKERING`. `FUN_08867370`
+  is the template to read next: find the Bomb-pool equivalent (likely nearby,
+  structurally similar) and see what it calls at teardown.
+- **The Missile's flare rides one instance where the original rides two.**
+  `Missile_Init` plays `WO_MISSILE_HEAD` at two anchors; this engine centres
+  one on the projectile's position for lack of a located missile model. Fine
+  as a stated approximation, worth revisiting once the Missile has a drawn
+  model with locators to read anchors off.
+- **A trap worth carrying forward: `get_function_callers` missed
+  `Mine_SpawnExplosion`'s only call site entirely** ("No callers found"),
+  because the call is through the same image-base-relative-looking operand
+  `weapon-fire.md` already documents for `jal` targets in this binary -
+  `func_0x00063f1c(...)` decompiles as a bare offset rather than a resolved
+  call, and only reading the caller's decompilation by hand turned up the real
+  target (`0x63f1c + 0x08804000 = 0x08867f1c`). Static xref search is not
+  enough to prove "nothing calls this" in this binary; read the caller by
+  hand first. The same trick (adding the image base back to a small
+  decompiler-printed constant, then a direct memory read to confirm) also
+  resolved two "unreadable" string-pointer arguments to `Psys_Spawn_q` that
+  looked like implausible addresses (`0x278904`, `0x278970`) until corrected.
 - ~~**Teach the AI to see what is on the track.**~~ **Done 2026-08-26**, and
   the measurement is the point: over a minute of ordinary racing the field's
   *mean* energy barely moved (76 to 86 of 95) while the **worst craft went from

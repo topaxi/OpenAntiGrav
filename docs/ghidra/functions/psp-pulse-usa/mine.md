@@ -25,6 +25,7 @@ because they are one weapon in two sizes. See
 | `0x08859ac8` | `Mine_Init` | 90 |
 | `0x08863a20` | `Weapon_FireBomb` | 88 |
 | `0x08871ddc` | `Weapon_AnnounceIncoming` | 88 |
+| `0x08867f1c` | `Mine_SpawnExplosion` | 90 |
 
 **The addresses on this page are real, not image-relative.** Ghidra renders this
 program's `jal` targets and `lui`/`addiu` operands in the `0x0886xxxx` region as
@@ -247,6 +248,63 @@ opposite ends and met in the middle.
 See [contact-response.md](contact-response.md#weapon_postblastimpulse-0x0886794c-confidence-82)
 for the instruction-level read this rests on.
 
+## `Mine_SpawnExplosion` plays `WO_MINE_EXPLO`
+
+**Recovered 2026-08-26, confidence 90 - direct instruction-level read, closed
+the same day this page's own doc comment in `crates/gameplay/src/projectile/mine.rs`
+started calling this "unread".** `FUN_08867370`'s teardown pass - the second
+loop, over every entity whose `+0x3c` bit `4` ("destroy") is set - calls
+`func_0x00063f1c(param_2, iVar4, auStack_40)` for each. That is the same
+image-base-relative rendering this page's introduction warns about: the real
+target is `0x08867f1c`, now named **`Mine_SpawnExplosion`**. Ghidra's own
+`get_function_callers` finds **no** caller for it - the call is exactly this
+kind of unresolved-at-analysis-time reference, which is why the address only
+turned up by reading `FUN_08867370`'s decompilation by hand rather than by
+searching xrefs.
+
+`Mine_SpawnExplosion` builds a position from the entity (`func_0x00055cd4`,
+the same helper `FUN_08867b50`'s sweep uses) and calls the already-named
+`Psys_Spawn_q` (`0x08915484`) with the fourcc tag `MIEX` (`0x5845494d`) and a
+string-pointer argument. Read *as a pointer* rather than trusted as a
+plausible-looking constant: `func_0x00141890` - `Psys_Spawn_q`'s hash
+step - is a CRC32 over `(pointer, strlen(pointer))`, matching
+`oag_formats::wad::hash_name`'s own mechanism, so the argument has to be a
+string address. The constant the decompiler prints (`0x278904`) is the same
+kind of misrendering `weapon-fire.md` already documents for `jal` targets in
+this binary, and adding the image base back (`0x278904 + 0x08804000 =
+0x08a7c904`) lands inside `.rodata`. A direct memory read there returns the
+literal bytes `57 4F 5F 4D 49 4E 45 5F 45 58 50 4C 4F 00` -
+**`"WO_MINE_EXPLO"`**, null-terminated at 13 characters.
+
+**The `MIEX` tag is not the Missile's.** `Missile_SpawnExplosion`
+(`0x08868d50`, already on this book at 85 from `missile.md`) is structurally
+near-identical - same matrix-copy boilerplate, same allocation call shape,
+same `Psys_Spawn_q` call with the same `0x5845494d` tag - and its own string
+argument, read the same way (`0x278970 + 0x08804000 = 0x08a7c970`), is
+`"WO_MISSILE_EXPLO"`. So `MIEX` is a generic "this is an explosion instance"
+class tag the engine reuses across weapons, not a Missile-specific label as
+`missile.md` read it in isolation; what actually selects the `.pob` is the
+string this second reading resolves. Both functions are independently
+compiled instances of the same explosion-spawn template, not one calling the
+other.
+
+**Reached from both ways a mine can die.** The destroy bit is set from two
+places in this same subsystem: `FUN_08867370`'s own fuse-timeout branch (the
+first loop, `fVar6 <= 0.0`), and `FUN_08867b50`'s trigger_radius sweep - both
+just raise the bit and let the second loop's uniform teardown call
+`Mine_SpawnExplosion`, so a mine that times out and a mine a craft walks into
+play the identical explosion.
+
+**The Bomb's own explosion call is not chased here.** `mine.md`'s own reading
+elsewhere records the Bomb keeps a separate pool cursor (`+0xc4`/cap 32,
+against the Mine's `+0x164`/`+0x64`), so `Weapon_FireBomb`'s teardown is very
+likely a distinct function from `FUN_08867370`, structurally similar but
+unread. Whether it calls this same `Mine_SpawnExplosion` (playing
+`WO_MINE_EXPLO` at a larger scale - which would match a maintainer's own
+description, "the bomb should be static, like the mines, just a single big
+mine", extended from motion to the explosion too) or its own equivalent
+naming `WO_BOMB_SMOKERING` is open.
+
 ## The fire handler drops a cluster, one every 0.1 s
 
 `Weapon_DropMines` (`0x088675cc`) is `Weapons_DispatchFire`'s bit-`0x2` handler,
@@ -393,8 +451,14 @@ second page would be nine tenths this one.
   [weapon-fire.md](weapon-fire.md#what-is-not-verified) recorded and it survives
   a second search. The engine picks a number and says so; see
   `crates/gameplay/src/projectile/mine.rs`.
-- **What a mine does when a craft reaches it.** `trigger_radius` and
-  `blastradius` are authored and their consumer was not chased here.
+- ~~**What a mine does when a craft reaches it.**~~ **Recovered 2026-08-26** -
+  see [`Mine_SpawnExplosion` plays `WO_MINE_EXPLO`](#mine_spawnexplosion-plays-wo_mine_explo)
+  above: `blastradius`'s consumer is `Weapon_PostBlastImpulse_q`, and the
+  visual both `trigger_radius` and the fuse timing out reach is
+  `Mine_SpawnExplosion`.
+- **The Bomb's own explosion call.** Whether `Weapon_FireBomb`'s teardown
+  reaches `Mine_SpawnExplosion` too (the same `WO_MINE_EXPLO`, larger) or its
+  own equivalent is unchased - see the note at the end of the section above.
 - **The `+10.0` fuse branch**, above.
 - **`slowdown_time`**, which shares the unspent `<Global slowdown_limit>`
   mechanic's fate on every other weapon.

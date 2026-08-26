@@ -367,13 +367,15 @@ fn a_rocket_flying_along_world_up_does_not_collapse_its_basis() {
 /// headless fixture with no disc to load either file from.
 #[test]
 fn a_hull_blast_sits_under_the_craft_and_a_track_blast_where_it_struck() {
+    use oag_formats::weapons::Weapon;
+
     let mut race =
         race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_rocket_table());
     let impact = Vec3::new(5.0, 1.0, -3.0);
 
     assert_eq!(
-        race.blast_for(impact, None),
-        (TRACK_BLAST_EFFECT, impact),
+        race.blast_for(Weapon::Rocket, impact, None),
+        Some((TRACK_BLAST_EFFECT, impact)),
         "no craft struck means the track effect, where the rocket struck"
     );
 
@@ -382,14 +384,48 @@ fn a_hull_blast_sits_under_the_craft_and_a_track_blast_where_it_struck() {
     let craft = Vec3::new(-20.0, 4.0, 11.0);
     race.world.ships[struck].physics.body.position = craft;
     assert_eq!(
-        race.blast_for(impact, Some(struck)),
-        (CRAFT_BLAST_EFFECT, craft - Vec3::Y * CRAFT_BLAST_DROP),
+        race.blast_for(Weapon::Rocket, impact, Some(struck)),
+        Some((CRAFT_BLAST_EFFECT, craft - Vec3::Y * CRAFT_BLAST_DROP)),
         "a hull blast is its own effect, drawn under the craft"
     );
 
     // Two separately authored files, which is the whole point of the
     // split - one file at two sizes would be this engine's invention.
     assert_ne!(TRACK_BLAST_EFFECT, CRAFT_BLAST_EFFECT);
+}
+
+/// A Missile and a Mine each play their own single explosion file, whatever
+/// they hit - and a Bomb plays nothing, because its own teardown (a distinct
+/// function from the Mine's) has not been read.
+///
+/// **Regression test for the blast-side twin of the flare bug.** Before
+/// 2026-08-26, `blast_for` took no `kind` at all, so *every* impact - mine
+/// and missile included - played the Rocket's own
+/// `TRACK_BLAST_EFFECT`/`CRAFT_BLAST_EFFECT`. Reusing another weapon's file
+/// is worse than drawing nothing: it is a wrong, confident-looking answer.
+#[test]
+fn each_weapon_plays_only_its_own_recovered_explosion() {
+    use oag_formats::weapons::Weapon;
+
+    let race = race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_rocket_table());
+    let point = Vec3::new(1.0, 2.0, 3.0);
+
+    assert_eq!(
+        race.blast_for(Weapon::Missile, point, None),
+        Some((MISSILE_EXPLO_EFFECT, point)),
+        "the Missile's own explosion, at the impact point, whatever it hit"
+    );
+    assert_eq!(
+        race.blast_for(Weapon::Mine, point, None),
+        Some((MINE_EXPLO_EFFECT, point)),
+        "the Mine's own explosion (Mine_SpawnExplosion), at the impact point"
+    );
+    assert_eq!(
+        race.blast_for(Weapon::Bomb, point, None),
+        None,
+        "the Bomb's own teardown is unread - drawing nothing beats \
+         borrowing the Mine's or the Rocket's"
+    );
 }
 
 /// A rocket in the air carries a flare, and gives it back when it is gone.

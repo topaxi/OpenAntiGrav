@@ -531,6 +531,7 @@
 0x08859ac8	function	Mine_Init	90	mine.md
 0x08863a20	function	Weapon_FireBomb	88	mine.md
 0x08871ddc	function	Weapon_AnnounceIncoming	88	mine.md
+0x08867f1c	function	Mine_SpawnExplosion	90	mine.md
 
 0x08869588	function	MissilePool_Update	88	missile.md
 0x08868d50	function	Missile_SpawnExplosion	85	missile.md

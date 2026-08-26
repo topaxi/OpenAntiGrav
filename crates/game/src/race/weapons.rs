@@ -499,31 +499,43 @@ impl Race {
         )
     }
 
-    /// Plays the explosion a rocket that just went off authored.
+    /// Plays the explosion a weapon that just went off authored - its own,
+    /// not another weapon's.
     ///
-    /// **Recovered end to end.** Which of the two files plays:
-    /// [`TRACK_BLAST_EFFECT`] from `Rocket_Update`'s (`0x0885d2a8`) two
-    /// collision branches, [`CRAFT_BLAST_EFFECT`] from
-    /// `Rocket_SpawnCraftExplosion_q` (`0x0886ed34`) on the craft-hit path.
-    /// Where it plays: a craft hit is drawn at the *struck craft's* own
-    /// position dropped by [`CRAFT_BLAST_DROP`], not at the rocket's impact
-    /// point. What it looks like: everything, out of the file, through
-    /// [`psys::Stage`]. A craft that has since gone inactive falls back to
-    /// the impact point rather than reading a stale pose.
+    /// **Recovered for the Rocket, the Missile and the Mine; deliberately
+    /// silent for the Bomb.** See [`Race::blast_for`] for the map and the
+    /// reading behind each arm - the Bomb draws nothing here because its own
+    /// teardown, a distinct function from the Mine's, has not been read, not
+    /// because it has stopped exploding: the damage and impulse in
+    /// `oag_gameplay::projectile::blast` still land.
     ///
-    /// Nothing is drawn when the effect did not load. That is deliberate and
-    /// it is the rule for every effect here: an authored particle system is
-    /// not something to approximate with billboards, because a stand-in that
-    /// reads as *plausible* is how a wrong picture survives review. Until
+    /// Nothing is drawn when the effect did not load, or when [`blast_for`]
+    /// says this kind has none. That is deliberate and it is the rule for
+    /// every effect here: an authored particle system is not something to
+    /// approximate with billboards, and reusing *another* weapon's file is
+    /// the same invention wearing a real asset - see [`Self::advance_projectile_flares`]'s
+    /// doc comment for the flare bug this was the blast-side twin of. Until
     /// 2026-08-12 this method drew three expanding additive puffs and a
-    /// separate eight-billboard smoke trail, all invented.
+    /// separate eight-billboard smoke trail, all invented; until 2026-08-26
+    /// it drew the *Rocket's* `TRACK_BLAST_EFFECT`/`CRAFT_BLAST_EFFECT` for
+    /// every kind of impact, mine and missile included, because [`blast_for`]
+    /// took no `kind` at all.
     ///
     /// [`Race::sparks`] is deliberately not reused for it: that system
-    /// re-anchors to the hull every tick, so a burst ignited at a rocket's
-    /// impact would emit from the craft instead. It is one hull-mounted
-    /// emitter, and this is why the stage exists alongside it.
-    pub(super) fn ignite_blast(&mut self, point: Vec3, struck: Option<usize>) {
-        let (name, at) = self.blast_for(point, struck);
+    /// re-anchors to the hull every tick, so a burst ignited at an impact
+    /// would emit from the craft instead. It is one hull-mounted emitter, and
+    /// this is why the stage exists alongside it.
+    ///
+    /// [`blast_for`]: Race::blast_for
+    pub(super) fn ignite_blast(
+        &mut self,
+        kind: oag_formats::weapons::Weapon,
+        point: Vec3,
+        struck: Option<usize>,
+    ) {
+        let Some((name, at)) = self.blast_for(kind, point, struck) else {
+            return;
+        };
         let Some(effect) = self.effects.get(name).cloned() else {
             return;
         };
@@ -533,20 +545,91 @@ impl Race {
         self.stage.play(&effect, at, 1.0);
     }
 
-    /// Which explosion a hit plays and where, split out from
-    /// [`Race::ignite_blast`] so the recovered part can be asserted without a
-    /// disc to load the effect from.
-    pub(super) fn blast_for(&self, point: Vec3, struck: Option<usize>) -> (&'static str, Vec3) {
-        match struck {
-            Some(slot) if self.world.ships[slot].active => (
-                CRAFT_BLAST_EFFECT,
-                self.world.ships[slot].physics.body.position - Vec3::Y * CRAFT_BLAST_DROP,
-            ),
-            // A craft that has gone inactive since the hit falls back to the
-            // impact point rather than reading a stale pose - still its own
-            // effect, because what was struck is what chose the file.
-            Some(_) => (CRAFT_BLAST_EFFECT, point),
-            None => (TRACK_BLAST_EFFECT, point),
+    /// Which explosion a hit plays and where, or `None` for a weapon with no
+    /// recovered detonation effect - split out from [`Race::ignite_blast`] so
+    /// the recovered part can be asserted without a disc to load the effect
+    /// from.
+    ///
+    /// - **`Rocket`**: [`TRACK_BLAST_EFFECT`] from `Rocket_Update`'s
+    ///   (`0x0885d2a8`) two collision branches, [`CRAFT_BLAST_EFFECT`] from
+    ///   `Rocket_SpawnCraftExplosion_q` (`0x0886ed34`) on the craft-hit path.
+    ///   A craft hit is drawn at the *struck craft's* own position dropped by
+    ///   [`CRAFT_BLAST_DROP`], not at the rocket's impact point; a craft that
+    ///   has since gone inactive falls back to the impact point rather than
+    ///   reading a stale pose.
+    /// - **`Missile`**: [`MISSILE_EXPLO_EFFECT`] always, whatever it struck -
+    ///   see that constant's doc comment for why there is one file and no
+    ///   drop offset, unlike the Rocket's.
+    /// - **`Mine`**: [`MINE_EXPLO_EFFECT`] always, whatever it struck, the
+    ///   same shape as the Missile's - see that constant's doc comment for
+    ///   `Mine_SpawnExplosion`.
+    /// - **`Bomb`, and everything else**: `None`. The Bomb's own teardown -
+    ///   a distinct function from the Mine's, per its own separate pool
+    ///   cursor - is not chased, so whether it reaches `Mine_SpawnExplosion`
+    ///   too or an equivalent of its own naming `WO_BOMB_SMOKERING` is open.
+    ///   Guessing here - playing the Mine's file, or the Rocket's, which is
+    ///   what this did for every kind before 2026-08-26 - is exactly the
+    ///   invention `CLAUDE.md` forbids.
+    pub(super) fn blast_for(
+        &self,
+        kind: oag_formats::weapons::Weapon,
+        point: Vec3,
+        struck: Option<usize>,
+    ) -> Option<(&'static str, Vec3)> {
+        match kind {
+            oag_formats::weapons::Weapon::Rocket => Some(match struck {
+                Some(slot) if self.world.ships[slot].active => (
+                    CRAFT_BLAST_EFFECT,
+                    self.world.ships[slot].physics.body.position - Vec3::Y * CRAFT_BLAST_DROP,
+                ),
+                // A craft that has gone inactive since the hit falls back to
+                // the impact point rather than reading a stale pose - still
+                // its own effect, because what was struck is what chose the
+                // file.
+                Some(_) => (CRAFT_BLAST_EFFECT, point),
+                None => (TRACK_BLAST_EFFECT, point),
+            }),
+            oag_formats::weapons::Weapon::Missile => Some((MISSILE_EXPLO_EFFECT, point)),
+            oag_formats::weapons::Weapon::Mine => Some((MINE_EXPLO_EFFECT, point)),
+            _ => None,
+        }
+    }
+
+    /// Plays [`MISSILE_BOUNCE_EFFECT`] at every wall a missile glanced off
+    /// this tick.
+    ///
+    /// **Not reached from `Impact`.** A bounce is not a detonation -
+    /// `oag_gameplay::projectile::step` reports only what *stopped* a
+    /// projectile, and a bouncing missile does not stop. So this reads
+    /// `before`, a snapshot of every slot's [`oag_gameplay::projectile::Projectile::bounces`]
+    /// taken right before `step`, and fires wherever a live Missile's own
+    /// counter went up by exactly one this tick - the only way it moves, per
+    /// [`oag_gameplay::projectile::missile::MAX_BOUNCES`]. `Projectile::bounces`
+    /// is public simulation state read here rather than threaded through a
+    /// new out-parameter the way [`Race::tick`]'s `absorbed` is, because nothing
+    /// about the gate is deterministic-critical or hidden - it is the same
+    /// counter [`crate::race::hash`] already hashes.
+    ///
+    /// A slot whose kind changed (a detonation freed it, a new weapon took
+    /// it) cannot show a false bounce: [`oag_gameplay::Projectile::default`]
+    /// resets `bounces` to zero, so the count only ever goes *down* across
+    /// such a transition, never up, and this only looks for an increase.
+    ///
+    /// Called after `projectile::step`, so a bounce plays where the missile
+    /// actually is this tick - a few hundredths of a unit past the wall it
+    /// struck, at [`oag_gameplay::projectile::missile::BOUNCE_PUSH_OFF`], rather
+    /// than exactly on it.
+    pub(super) fn ignite_missile_bounces(
+        &mut self,
+        before: &[u8; oag_gameplay::projectile::MAX_PROJECTILES],
+    ) {
+        let Some(effect) = self.effects.get(MISSILE_BOUNCE_EFFECT).cloned() else {
+            return;
+        };
+        for (slot, projectile) in self.world.projectiles.slots.iter().enumerate() {
+            if bounced_this_tick(projectile.kind, before[slot], projectile.bounces) {
+                self.stage.play(&effect, projectile.position, 1.0);
+            }
         }
     }
 
@@ -591,42 +674,62 @@ impl Race {
         }
     }
 
-    /// Keeps a [`ROCKET_FLARE_EFFECT`] instance riding every projectile in
-    /// the air, and takes it off the ones that are gone.
+    /// Keeps each live projectile's own flare instance riding it - the
+    /// Rocket's [`ROCKET_FLARE_EFFECT`], the Missile's [`MISSILE_FLARE_EFFECT`]
+    /// - and takes it off the ones that are gone.
     ///
-    /// **Recovered.** `Rocket_Init` (`0x0885cdb8`) attaches the flare at
-    /// launch and it rides the rocket for the whole flight; both emitters are
-    /// [`oag_formats::pob::flags::LOOPING`], so the 100-tick duration they
-    /// author is not a countdown and the effect does not need re-triggering
-    /// to outlast it.
+    /// **Recovered, one weapon at a time; see [`flare_effect_for`] for the
+    /// map.** `Rocket_Init` (`0x0885cdb8`) and `Missile_Init` (`0x0885a160`)
+    /// each attach their own file at launch and ride it for the whole
+    /// flight; every emitter involved is [`oag_formats::pob::flags::LOOPING`],
+    /// so the authored duration is not a countdown and the effect does not
+    /// need re-triggering to outlast it.
     ///
-    /// A detonated rocket has its flare **detached, not killed**: emission
-    /// stops and the particles already out finish their own lives, so the
-    /// smoke outlives the rocket the way it does in the original. That is
-    /// also the bug the invented trail could not avoid - it had to drop the
-    /// whole streak the instant the slot vacated, or the next projectile to
-    /// take that slot would have inherited it.
+    /// **Gated on the weapon specifically, not on "any live projectile".**
+    /// A Mine or a Bomb has no flare at all in the source. Matching on
+    /// `kind.is_none()` alone used to attach the Rocket's looping flare to a
+    /// mine or a bomb the instant it was laid - a fire riding a charge from
+    /// the moment it landed rather than from its detonation, which
+    /// [`Race::ignite_blast`] is the only thing that plays.
+    ///
+    /// A projectile that stops riding a flare has it **detached, not
+    /// killed**: emission stops and the particles already out finish their
+    /// own lives, so the smoke outlives the weapon the way it does in the
+    /// original. That is also the bug the invented rocket trail could not
+    /// avoid - it had to drop the whole streak the instant the slot vacated,
+    /// or the next projectile to take that slot would have inherited it.
+    ///
+    /// **A slot's own instance is always detached before that slot can be
+    /// reused by a different weapon**, which is what lets one `Option`
+    /// stand for either effect without recording which: `place` (`spawn`,
+    /// `spawn_guided`, `lay`) only ever takes a slot whose `kind` is already
+    /// `None`, and `kind` only turns `None` inside `projectile::step`, which
+    /// this method always runs after in the same tick - so a freed slot has
+    /// already passed through a `None` tick of its own before it can be
+    /// reused, and this method detaches on exactly that tick.
     ///
     /// **Called after `projectile::step`**, so a flare is anchored where its
-    /// rocket ended the tick.
+    /// weapon ended the tick.
     pub(super) fn advance_projectile_flares(&mut self) {
-        let effect = self.effects.get(ROCKET_FLARE_EFFECT).cloned();
         for (slot, projectile) in self.world.projectiles.slots.iter().enumerate() {
-            match (projectile.kind.is_none(), self.projectile_flare[slot]) {
-                // Gone: hand the instance back and let it fade out.
-                (true, Some(playing)) => {
+            let wants = flare_effect_for(projectile.kind);
+            match (wants, self.projectile_flare[slot]) {
+                // Gone, or a weapon with no flare of its own: hand the
+                // instance back and let it fade out rather than riding a
+                // weapon that never authored this effect.
+                (None, Some(playing)) => {
                     self.stage.detach(playing);
                     self.projectile_flare[slot] = None;
                 }
-                (true, None) => {}
-                (false, Some(playing)) => self.stage.follow(playing, projectile.position),
+                (None, None) => {}
+                (Some(_), Some(playing)) => self.stage.follow(playing, projectile.position),
                 // Freshly in the air. `attach` returning `None` means the
-                // stage is full of flares already, and this rocket simply
+                // stage is full of flares already, and this projectile simply
                 // flies without one rather than evicting someone else's.
-                (false, None) => {
-                    if let Some(effect) = effect.as_ref() {
+                (Some(name), None) => {
+                    if let Some(effect) = self.effects.get(name).cloned() {
                         self.projectile_flare[slot] =
-                            self.stage.attach(effect, projectile.position, 1.0);
+                            self.stage.attach(&effect, projectile.position, 1.0);
                     }
                 }
             }
@@ -749,4 +852,40 @@ impl Race {
             })
             .collect()
     }
+}
+
+/// Which flare effect, if any, a projectile of this kind rides - the
+/// Rocket's [`ROCKET_FLARE_EFFECT`], the Missile's [`MISSILE_FLARE_EFFECT`],
+/// or `None` for everything else, including a Mine or a Bomb.
+///
+/// Split out of [`Race::advance_projectile_flares`] so the gate is testable
+/// without a loaded `psys` library: the bug this replaced (`kind.is_none()`,
+/// true for any live projectile) could only be seen with a real effect
+/// asset attached, which a headless unit test has no disc to load. See that
+/// method's doc comment for the reading.
+#[must_use]
+pub(super) fn flare_effect_for(kind: Option<oag_formats::weapons::Weapon>) -> Option<&'static str> {
+    match kind? {
+        oag_formats::weapons::Weapon::Rocket => Some(ROCKET_FLARE_EFFECT),
+        oag_formats::weapons::Weapon::Missile => Some(MISSILE_FLARE_EFFECT),
+        _ => None,
+    }
+}
+
+/// Whether a projectile's own bounce counter says it glanced off a wall this
+/// tick - split out of [`Race::ignite_missile_bounces`] for the same reason
+/// [`flare_effect_for`] is: testable without a loaded `psys` library.
+///
+/// Only a Missile carries a counter that ever moves (see
+/// [`oag_gameplay::projectile::Projectile::bounces`]), so `kind` gates this
+/// the same way [`flare_effect_for`] gates on the weapon rather than trusting
+/// the counter alone - a stray nonzero `bounces` on some other kind must
+/// never read as a bounce.
+#[must_use]
+pub(super) fn bounced_this_tick(
+    kind: Option<oag_formats::weapons::Weapon>,
+    before: u8,
+    now: u8,
+) -> bool {
+    kind == Some(oag_formats::weapons::Weapon::Missile) && now > before
 }

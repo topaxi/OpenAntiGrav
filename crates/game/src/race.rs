@@ -351,6 +351,24 @@ pub const PROJECTILE_SPRITE_HALF_SIZE: f32 = 1.5;
 /// at the nose and the streak behind it.
 pub const ROCKET_FLARE_EFFECT: &str = "WO_ROCKET_FLARE";
 
+/// The effect the original attaches to every missile at launch.
+///
+/// **Recovered, confidence 90** (the same reading that settles bit `0x40` as
+/// the Missile - see `docs/ghidra/functions/psp-pulse-usa/missile.md`).
+/// `Missile_Init` (`0x0885a160`) plays this **at two anchors**, alongside the
+/// two `Trail_InitPreset` calls that are the missile's own twin-trail
+/// signature.
+///
+/// **This engine rides one instance on the projectile's position, not two on
+/// authored anchors.** The Missile carries no located model or locator set
+/// in this project the way the Rocket's `Rocket.vex` does, so there is
+/// nowhere read to put a second one - see [`Race::advance_projectile_flares`].
+/// A single centred instance is the same simplification the fallback
+/// billboard already makes for every projectile kind, stated here rather
+/// than left to be rediscovered: what is missing is the *second* anchor, not
+/// the trigger.
+pub const MISSILE_FLARE_EFFECT: &str = "WO_MISSILE_HEAD";
+
 /// The explosion a rocket that hits **track geometry** plays.
 ///
 /// **Recovered, confidence 72.** Both of `Rocket_Update`'s (`0x0885d2a8`)
@@ -371,6 +389,60 @@ pub const TRACK_BLAST_EFFECT: &str = "WO_ROCKET_EXPLO_TRACK";
 /// inferred from the names, which is why this engine plays two files rather
 /// than one file at two sizes.
 pub const CRAFT_BLAST_EFFECT: &str = "WO_ROCKET_EXPLO";
+
+/// The explosion a missile plays, whatever it hits and however it ends.
+///
+/// **Recovered, confidence 88.** `Missile_SpawnExplosion` (`0x08868d50`,
+/// fourcc `MIEX`) is the pool teardown's only particle-spawning call, reached
+/// from a craft hit, from the fifth wall bounce giving up, and from the
+/// `SELF_DETONATE_SECONDS` timeout alike - see
+/// `docs/ghidra/functions/psp-pulse-usa/missile.md#the-blast-and-what-does-not-reach-it`.
+///
+/// **One file for every ending, unlike the Rocket's track/craft split.** The
+/// Missile authors no second explosion `.pob` the way the Rocket authors
+/// `WO_ROCKET_EXPLO_TRACK` beside `WO_ROCKET_EXPLO` - `docs/formats/pob.md`'s
+/// 35-name list has exactly one `WO_MISSILE_EXPLO`. So [`Race::blast_for`]
+/// does not drop the struck craft's own position under it the way
+/// [`CRAFT_BLAST_DROP`] does for the Rocket: no equivalent offset has been
+/// read for the Missile, and inventing one would be exactly the kind of
+/// plausible-looking number `CLAUDE.md` forbids. It plays at the impact point.
+pub const MISSILE_EXPLO_EFFECT: &str = "WO_MISSILE_EXPLO";
+
+/// What a missile plays on every wall it glances off, before it finally
+/// detonates.
+///
+/// **Recovered, confidence 92** (the same reading as the flight model's
+/// 12.0 probe length). `Missile_Update`'s wall branch mirrors the velocity,
+/// pushes off the surface and "fires `WO_MISSILE_BOUNCE` with the
+/// `MISSILEEXPWALL` cue" up to [`oag_gameplay::projectile::missile::MAX_BOUNCES`]
+/// times before the fifth attempt gives up and reaches
+/// [`MISSILE_EXPLO_EFFECT`] instead - see
+/// `docs/ghidra/functions/psp-pulse-usa/missile.md#the-flight-model-the-rockets-with-one-literal-changed`.
+///
+/// **A burst, not a riding instance** - [`Race::ignite_missile_bounces`]
+/// plays it with [`psys::Stage::play`], the same one-shot call
+/// [`Race::ignite_blast`] uses, because a bounce is a moment rather than
+/// something to follow.
+pub const MISSILE_BOUNCE_EFFECT: &str = "WO_MISSILE_BOUNCE";
+
+/// The explosion a mine plays, whenever and however it detonates.
+///
+/// **Recovered, confidence 90, direct instruction-level read.** `Mine_SpawnExplosion`
+/// (`0x08867f1c`) is called from `FUN_08867370`'s uniform teardown pass for
+/// every entity the fuse timeout **or** `Weapon_PostBlastImpulse_q`'s own
+/// trigger_radius sweep (`FUN_08867b50`) marked for destruction - so a mine
+/// that runs out of time and a mine a craft walks into play the same file.
+/// It calls the already-named `Psys_Spawn_q` with the fourcc tag `MIEX` - a
+/// generic "this is an explosion" instance tag shared with
+/// [`MISSILE_EXPLO_EFFECT`]'s own spawner, not a per-weapon label - and a
+/// string argument confirmed by a direct memory read to be `"WO_MINE_EXPLO"`.
+/// See `docs/ghidra/functions/psp-pulse-usa/mine.md#mine_spawnexplosion-plays-wo_mine_explo`.
+///
+/// **The Bomb is not this.** Its own teardown is a distinct function - the
+/// pool cursor mine.md reads is `+0xc4`/cap 32 against the Mine's
+/// `+0x164`/`+0x64` - and whether it reaches this same spawner or its own is
+/// unchased; see [`Race::blast_for`].
+pub const MINE_EXPLO_EFFECT: &str = "WO_MINE_EXPLO";
 
 /// How far below a struck craft's centre its blast is drawn, in world units.
 ///

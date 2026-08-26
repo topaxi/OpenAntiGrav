@@ -382,6 +382,72 @@ fn absorbing_a_shield_pays_the_shields_own_absorb() {
 /// tests**, the same split the Shield's wiring test uses. What this owns is
 /// the wiring: that the button reaches the array, three times, with the
 /// disc's numbers, and that the slot empties.
+/// Only the Rocket and the Missile ride a flare, and each rides its **own**:
+/// `WO_ROCKET_FLARE` and `WO_MISSILE_HEAD` are two separate authored files,
+/// not one generic "something is in the air" marker.
+///
+/// **Regression test for a real bug, not a speculative one.** This gate used
+/// to be `kind.is_none()`, true for *every* live projectile, which attached
+/// the Rocket's looping flare to a Mine or a Bomb the instant it was laid -
+/// a fire riding a charge from the moment it landed, reported from play
+/// against real Pulse and impossible to reproduce headlessly because the
+/// test harness's `psys::Library` carries no loaded effects (see
+/// `Race::advance_projectile_flares`'s doc comment for why the gate itself,
+/// rather than the attach, is what is tested here).
+#[test]
+fn each_projectile_rides_only_its_own_flare() {
+    use oag_formats::weapons::Weapon;
+
+    for weapon in Weapon::ALL {
+        let expected = match weapon {
+            Weapon::Rocket => Some(crate::race::ROCKET_FLARE_EFFECT),
+            Weapon::Missile => Some(crate::race::MISSILE_FLARE_EFFECT),
+            _ => None,
+        };
+        assert_eq!(
+            crate::race::weapons::flare_effect_for(Some(weapon)),
+            expected,
+            "{weapon:?} rides the wrong flare"
+        );
+    }
+    assert_eq!(
+        crate::race::weapons::flare_effect_for(None),
+        None,
+        "an empty slot rides nothing"
+    );
+}
+
+/// Only a live Missile whose own counter just went up counts as a bounce -
+/// not another kind sharing the same nonzero value, and not a Missile whose
+/// counter fell (a fresh spawn landing in a slot the old one's `bounces`
+/// snapshot was taken from).
+#[test]
+fn only_a_missiles_own_rising_counter_is_a_bounce() {
+    use crate::race::weapons::bounced_this_tick;
+    use oag_formats::weapons::Weapon;
+
+    assert!(
+        bounced_this_tick(Some(Weapon::Missile), 1, 2),
+        "the counter rose on a live Missile"
+    );
+    assert!(
+        !bounced_this_tick(Some(Weapon::Missile), 2, 2),
+        "an unchanged counter is not a new bounce"
+    );
+    assert!(
+        !bounced_this_tick(Some(Weapon::Missile), 3, 0),
+        "a falling counter is a fresh spawn in the slot, never a bounce"
+    );
+    assert!(
+        !bounced_this_tick(Some(Weapon::Rocket), 1, 2),
+        "a Rocket never bounces, whatever a stray counter says"
+    );
+    assert!(
+        !bounced_this_tick(None, 1, 2),
+        "an empty slot cannot have bounced"
+    );
+}
+
 #[test]
 fn a_fired_rocket_puts_three_projectiles_in_the_air() {
     let mut race =

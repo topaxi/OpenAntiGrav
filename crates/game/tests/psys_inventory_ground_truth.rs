@@ -86,10 +86,6 @@ const NO_TRIGGER_RECOVERED: &[(&str, &str)] = &[
         "the Cannon is in the weapon table and fires nothing - only the \
          Rocket reaches `projectile::spawn`.",
     ),
-    ("WO_MINE_EXPLO", "the Mine is not built."),
-    ("WO_MISSILE_HEAD", "the Missile fires nothing yet."),
-    ("WO_MISSILE_EXPLO", "the Missile fires nothing yet."),
-    ("WO_MISSILE_BOUNCE", "the Missile fires nothing yet."),
     ("WO_PLASMA_HEAD", "the Plasma is not built."),
     ("WO_PLASMA_FLASH", "the Plasma is not built."),
     ("WO_SHURIKEN_HEAD", "the Shuriken is not built."),
@@ -99,7 +95,16 @@ const NO_TRIGGER_RECOVERED: &[(&str, &str)] = &[
     ("WO_REPULSER", "the Repulser is not built."),
     ("WO_REPULSER_BLAST", "the Repulser is not built."),
     ("WO_QUAKE", "the Quake is not built."),
-    ("WO_BOMB_SMOKERING", "the Bomb is not built."),
+    (
+        "WO_BOMB_SMOKERING",
+        "the Bomb is built and detonates, the same way the Mine does - but \
+         its teardown is a distinct function from the Mine's own \
+         `FUN_08867370` (a separate pool cursor, `+0xc4`/cap 32 against the \
+         Mine's `+0x164`/`+0x64`, per `mine.md`), and that function is \
+         unread. The disc authors no separate `WO_BOMB_EXPLO`; whether a \
+         bomb's detonation plays this smoke ring, `WO_MINE_EXPLO` (now \
+         wired for the Mine itself) at a larger scale, or both, is open.",
+    ),
     (
         "WO_WEAPON_ABSORB",
         "the Shield absorbs a pickup already (`spend_pickup`), but nothing \
@@ -169,16 +174,24 @@ const PS2_SYSTEMS: usize = 41;
 const PSP_WIRED: &[&str] = &[
     "WO_SHIP_COLL_SPARK_DAMAGE",
     "WO_ROCKET_FLARE",
+    "WO_MISSILE_HEAD",
     "WO_ROCKET_EXPLO_TRACK",
     "WO_ROCKET_EXPLO",
+    "WO_MISSILE_EXPLO",
+    "WO_MISSILE_BOUNCE",
+    "WO_MINE_EXPLO",
 ];
 
-/// The PS2 carries all four of the PSP's plus its own engine flare.
+/// The PS2 carries all eight of the PSP's plus its own engine flare.
 const PS2_WIRED: &[&str] = &[
     "WO_SHIP_COLL_SPARK_DAMAGE",
     "WO_ROCKET_FLARE",
+    "WO_MISSILE_HEAD",
     "WO_ROCKET_EXPLO_TRACK",
     "WO_ROCKET_EXPLO",
+    "WO_MISSILE_EXPLO",
+    "WO_MISSILE_BOUNCE",
+    "WO_MINE_EXPLO",
     "WO_SHIP_ENGINEFLARE",
 ];
 
@@ -347,7 +360,7 @@ fn the_ps2_port_s_own_effects_are_accounted_for_too() {
 
 /// Wipeout HD/Fury, and deliberately **not** the three-bucket sweep above.
 ///
-/// HD authors 82 distinct particle systems and only 7 are wired - the weapon
+/// HD authors 82 distinct particle systems and only 11 are wired - the weapon
 /// table alone (Detonator, Nitro, per-damage-tier hull states) is mostly
 /// unbuilt in this engine, and writing a `NO_TRIGGER_RECOVERED`-style reason
 /// for each of the other 75 on the strength of "that weapon isn't built"
@@ -429,8 +442,8 @@ mod hd {
 
     /// **A wired name absent from the disc would fire into silence.**
     ///
-    /// All seven of [`RACE_EFFECTS`] are on this disc - a superset of the
-    /// PSP's four and the PS2's five, per `oag_game::race::RACE_EFFECTS`'s
+    /// All eleven of [`RACE_EFFECTS`] are on this disc - a superset of the
+    /// PSP's eight and the PS2's nine, per `oag_game::race::RACE_EFFECTS`'s
     /// own doc comment. Kept separate from [`SYSTEMS`]'s tripwire below so a
     /// changed inventory count fails *that* test rather than masking this
     /// more serious one under the same red.
