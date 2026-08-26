@@ -132,6 +132,7 @@ mod recovery;
 mod respawn;
 mod results;
 mod scene;
+pub mod sight;
 mod spawn;
 mod spline;
 mod start;
@@ -834,6 +835,31 @@ pub struct Race {
     /// the audio layer so that every cue *edge* is raised from one place - see
     /// [`Self::tick`] - and out of the hash like the rest of this group.
     shield_was_up: bool,
+    /// The lock-on reticle, and what its tone is doing.
+    ///
+    /// **Render-only state**, on `Race` rather than in `World` for exactly the
+    /// reason [`Self::exhaust`] is: the reticle is what the screen shows, it
+    /// must not move a determinism hash, and the simulation does not know a
+    /// renderer exists. The *lock it draws* is recomputed here every tick from
+    /// the world rather than stored on a ship - see [`Self::update_sight`].
+    ///
+    /// The acquisition rule it carries is recovered and is **not** yet wired
+    /// into firing: `Ship_FireHeldWeapon` gates the target it passes on the
+    /// same flag this sets, so an unlocked press in the original fires a dumb
+    /// missile. Doing that here changes which shots are guided and is its own
+    /// change; see the handover thread.
+    sight: sight::Sight,
+    /// What [`Self::sight`] said last tick, which is what the tone plays off.
+    sight_state: sight::State,
+    /// The field-of-view setting the picture is being drawn at.
+    ///
+    /// A setter for the same reason [`Self::set_boost_fov_kick`] is one - it is
+    /// a preference out of the settings file and a headless race has none - but
+    /// unlike the kick it is read by [`Self::update_sight`] rather than by the
+    /// camera, because a reticle drawn with the authored field while the player
+    /// widened theirs sits off the craft it is supposed to be over. Defaults to
+    /// [`crate::display::Fov::AUTHORED`], which is the identity.
+    sight_fov: crate::display::Fov,
 }
 
 /// How fast the kick opens, per second, as an exponential approach.

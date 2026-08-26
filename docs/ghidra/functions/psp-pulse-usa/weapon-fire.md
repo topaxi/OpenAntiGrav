@@ -24,7 +24,7 @@ Unmeasured, so capped at **84** by the
 | `0x0886e104` | `Weapon_FireRocket` | 88 |
 | `0x0886f038` | `Rocket_Spawn` - **corrected**, see [rocket-visuals.md](rocket-visuals.md) | 90 |
 | `0x088675cc` | `Weapon_UpdateBurstFire_q` | 72 |
-| `0x08869588` | `Projectiles_Update_q` | 75 |
+| `0x08869588` | **retired** - it is `MissilePool_Update`, see [missile.md](missile.md) | - |
 
 ## Read this first: the disassembly's addresses are image-base-relative
 

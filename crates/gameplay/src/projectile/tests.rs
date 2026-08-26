@@ -802,3 +802,138 @@ fn a_missile_gives_up_after_its_bounce_budget() {
         super::missile::MAX_BOUNCES
     );
 }
+
+/// A missile that locked nothing flies straight on and detonates on its own.
+///
+/// **Recovered**, from the missile pool's second pass in `Projectiles_Update_q`
+/// (`0x08869588`): `3.0 < missile->age` sets the same destroy bit a wall or a
+/// craft sets. The target is `None` throughout, which is the original's null
+/// pointer - `Missile_Update` skips its whole guidance block on it.
+///
+/// Flown in an empty world so nothing but the timer can end it.
+#[test]
+fn an_unguided_missile_detonates_when_its_three_seconds_are_up() {
+    let stats = missile_stats();
+    let world = empty_world();
+    let class = oag_formats::handling::SpeedClass::Venom;
+    let ships: Vec<crate::world::Ship> = Vec::new();
+
+    let mut projectiles = Projectiles::new();
+    projectiles.spawn_guided(Weapon::Missile, Vec3::ZERO, Vec3::Z * 200.0, 0, None, 600.0);
+
+    let mut ticks = 0_usize;
+    let mut ended: Option<Impact> = None;
+    while ended.is_none() {
+        let impacts = projectiles.advance(1.0 / 60.0, &world, &ships, Some(&stats), class);
+        ticks += 1;
+        ended = impacts.into_iter().flatten().next();
+        assert!(ticks < 600, "the missile never ended");
+    }
+
+    let impact = ended.expect("an impact");
+    assert_eq!(impact.struck, None, "an empty world struck a craft");
+    assert!(
+        !impact.blast,
+        "the self-detonation spent a blast the original's teardown never reaches"
+    );
+
+    // **Three seconds as a literal, deliberately, and not the constant.** An
+    // assertion computed from `SELF_DETONATE_SECONDS` passes whatever that
+    // constant is changed to, which makes it a test that the code spends the
+    // constant rather than a test that the recovered number is 3.0. The number
+    // is `MissilePool_Update`'s own `3.0 < age`; if it moves, this line is meant
+    // to fail and be re-read against the disassembly.
+    //
+    // Within two ticks rather than exact: the age is
+    // `MAX_FLIGHT_SECONDS - lifetime` and accumulates rounding over 180 ticks,
+    // so pinning the tick would assert `f32` addition instead of the rule.
+    let flown = ticks as f32 / 60.0;
+    assert!(
+        (flown - 3.0).abs() <= 2.0 / 60.0,
+        "it flew {flown}s, not the recovered 3.0s"
+    );
+    assert_eq!(
+        super::missile::SELF_DETONATE_SECONDS,
+        3.0,
+        "the constant and the number the flight is measured against have parted"
+    );
+}
+
+/// And the self-detonation hurts nobody, however close they are standing.
+///
+/// **The half of the rule that is easy to drop.** The original's damage
+/// (`FUN_08869054`) and blast force (`FUN_08868ea4`) have exactly two callers
+/// each and the pool's expiry teardown is neither of them; it reaches only the
+/// explosion spawner. So a craft parked where a missile runs out of time watches
+/// it go off and takes nothing. See [`Impact::blast`].
+#[test]
+fn a_self_detonating_missile_damages_nobody_standing_in_it() {
+    let mut world = crate::World::new(1);
+    world.ship_count = 2;
+    // Slot 1 is parked near where a missile fired down `+Z` runs out of time,
+    // and well inside `blastradius` of it.
+    for (slot, position) in [Vec3::ZERO, Vec3::Z * 500.0].into_iter().enumerate() {
+        let ship = &mut world.ships[slot];
+        ship.active = true;
+        ship.handling.dimensions = Dimensions {
+            length: 4.0,
+            width: 2.0,
+            height: 1.0,
+            shield: 100.0,
+            ..Dimensions::default()
+        };
+        ship.physics.shield = 100.0;
+        ship.physics.body.mass = 1.0;
+        ship.physics.body.position = position;
+    }
+
+    let table = oag_formats::weapons::parse(
+        r#"<WeaponStats>
+             <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
+             <Weapon type="Missile"><Stats absorb="1" blastforce="10" blastradius="12"
+               damage="25" slowdown_time="1" venomspeed="600" flashspeed="700"
+               rapierspeed="800" phantomspeed="900" launchSpeed="100"
+               lock_min_dist="10" lock_max_dist="200"/></Weapon>
+           </WeaponStats>"#,
+    )
+    .expect("the fixture parses");
+
+    // Fired from beside slot 1's line rather than at it, so the swept hull test
+    // cannot end the flight early - this is about the timer, not about a hit.
+    world.projectiles.spawn_guided(
+        Weapon::Missile,
+        Vec3::X * 40.0,
+        Vec3::Z * 200.0,
+        0,
+        None,
+        600.0,
+    );
+
+    let empty = empty_world();
+    let mut ended = false;
+    for _ in 0..600 {
+        let impacts = step(
+            &mut world,
+            1.0 / 60.0,
+            &empty,
+            Some(&table),
+            oag_formats::handling::SpeedClass::Venom,
+            oag_physics::DamageRules::default(),
+            &mut [false; 2],
+        );
+        if let Some(impact) = impacts.into_iter().flatten().next() {
+            assert!(!impact.blast, "the timer spent a blast");
+            ended = true;
+            break;
+        }
+    }
+    assert!(ended, "the missile never ran out of time");
+    assert_eq!(
+        world.ships[1].physics.shield, 100.0,
+        "a craft standing in a self-detonation took damage the original never deals"
+    );
+    assert_eq!(
+        world.ships[0].physics.shield, 100.0,
+        "the firing craft took damage from its own expired missile"
+    );
+}

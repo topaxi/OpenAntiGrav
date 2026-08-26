@@ -177,7 +177,8 @@ fn load_atlases(
     }
 
     let mut notes = Vec::new();
-    let sheet = crate::sprite::Sheet::build(&blobs, &mut notes);
+    let sheet =
+        crate::sprite::Sheet::build_with(&blobs, sight_art(archives, layout, report), &mut notes);
     report.extend(notes);
     report.push(format!(
         "HUD {entry}: {} of {} texture(s) in a {}x{} sheet",
@@ -194,6 +195,80 @@ fn load_atlases(
         }
     }
     sheet
+}
+
+/// The lock-on reticle's art, decoded out of the `<Mode3D>` models that carry it.
+///
+/// **The sights are the one HUD widget whose picture is not in a texture file.**
+/// `Arcade_HUD.xml` authors nine of them - `missile_sight_1` … `_4` and
+/// `missile_sight_inner`, then `leachbeam_sight_1` … `_4` - over **three**
+/// `.vex` models, each a single 8-unit quad with its texture embedded. So the
+/// art is reached by building the model and taking the texture it unpacked,
+/// which is what [`crate::sprite::Sheet::build_with`] exists for. See
+/// `docs/ghidra/functions/psp-pulse-usa/lock-sight.md`.
+///
+/// Keyed by the model's own `Src`, so [`crate::race::Race`]'s draw looks it up
+/// the way a sprite looks up its atlas.
+///
+/// **A model that will not read costs its own reticle and nothing else.** It is
+/// reported and skipped; the draw then finds no entry and puts nothing on
+/// screen, which is this project's rule for an asset it cannot play rather than
+/// a stand-in that reads as plausible.
+fn sight_art(
+    archives: &mut oag_assets::Archives,
+    layout: Option<&crate::hud::Layout>,
+    report: &mut Vec<String>,
+) -> Vec<(String, u32, u32, Vec<u8>)> {
+    let Some(layout) = layout else {
+        return Vec::new();
+    };
+
+    let mut wanted: Vec<&str> = Vec::new();
+    for model in &layout.models {
+        if !crate::race::sight::is_sight_widget(&model.name) || model.src.is_empty() {
+            continue;
+        }
+        // Four widgets share one model; the sheet wants it once.
+        if !wanted.contains(&model.src.as_str()) {
+            wanted.push(model.src.as_str());
+        }
+    }
+
+    let mut out = Vec::new();
+    for src in wanted {
+        let blob = match archives.read_name(src) {
+            Ok(blob) => blob,
+            Err(why) => {
+                report.push(format!("sight model {src} unavailable ({why})"));
+                continue;
+            }
+        };
+        let model = match oag_render::mesh::build(src, &blob) {
+            Ok(model) => model,
+            Err(why) => {
+                report.push(format!("sight model {src} did not build ({why})"));
+                continue;
+            }
+        };
+        // One texture apiece, and the reticle is what it draws. A model that
+        // embeds none is reported rather than drawn untextured, which for a
+        // white-on-nothing bracket would be an invisible quad.
+        let Some(texture) = model.textures.iter().flatten().next() else {
+            report.push(format!("sight model {src} embeds no texture"));
+            continue;
+        };
+        report.push(format!(
+            "sight model {src}: {}x{}",
+            texture.width, texture.height
+        ));
+        out.push((
+            src.to_string(),
+            texture.width,
+            texture.height,
+            texture.rgba.clone(),
+        ));
+    }
+    out
 }
 
 /// Reads one HUD texture, by the name the layout declares and then by the name

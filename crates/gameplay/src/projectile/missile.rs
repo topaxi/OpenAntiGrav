@@ -25,6 +25,10 @@
 //! - The whole of [`speed_kmh`], from `Missile_SpeedNow` (`0x0885a038`,
 //!   confidence 90).
 //! - The launch speed law in [`launch`], from `Missile_Init` (`0x0885a160`).
+//! - **That a press with no lock still fires**, from `Ship_FireHeldWeapon`
+//!   (`0x08844ae8`, confidence 90) - see [`lock`].
+//! - [`SELF_DETONATE_SECONDS`], from `Projectiles_Update_q` (`0x08869588`,
+//!   confidence 90) - which is what makes an unlocked missile end.
 //!
 //! **Ours**, and it is a short list:
 //!
@@ -86,6 +90,37 @@ pub const MAX_BOUNCES: u8 = 5;
 /// **Recovered, confidence 92** - `0x3dcccccd` = `0.1`, applied along the hit
 /// normal from the hit point.
 pub const BOUNCE_PUSH_OFF: f32 = 0.1;
+
+/// How long a missile flies before it detonates where it is, in seconds.
+///
+/// **Recovered, confidence 90**, and it is the rule that makes a missile with no
+/// target a weapon rather than litter. The missile pool's own per-frame update,
+/// `Projectiles_Update_q` (`0x08869588`), runs a second pass over every live
+/// slot and takes the destroy branch on `3.0 < self->age`:
+///
+/// ```text
+/// if (3.0 < missile->age && (missile->flags & 1)) {
+///     missile->flags |= 4;              // the same bit a wall or a craft sets
+///     ...                               // trail released, cue played
+/// }
+/// ```
+///
+/// **`self+0x50` is the same age [`speed_kmh`] ramps on** - `Missile_SpeedNow`
+/// (`0x0885a038`) reads that field and nothing else for its `age < 1.0` blend,
+/// and `Missile_Update` is what accumulates it by `dt`. One field, two consumers,
+/// so the ramp's age and the timeout's age cannot drift apart.
+///
+/// **Bit `4` is "destroy me", and the teardown that acts on it is shared** with
+/// the wall and craft paths, which reach it through `flags |= 0x14` and
+/// `|= 0x24`. So this is a detonation rather than a reap - see
+/// [`super::Impact::blast`] for the one thing it does *not* do.
+///
+/// The `flags & 1` half of the test is **locally-simulated**, not alive: the
+/// network spawn path (`FUN_088687c0`) initialises the same word to `2` instead,
+/// so a remote craft's missile is destroyed by its owner's message rather than by
+/// this timer. With no networking here the condition is trivially satisfied and
+/// is not ported.
+pub const SELF_DETONATE_SECONDS: f32 = 3.0;
 
 /// How long the missile takes to reach its class speed, in seconds.
 ///
@@ -288,6 +323,30 @@ pub fn steer(velocity: Vec3, position: Vec3, target: Vec3, dt: f32, speed: f32) 
 ///
 /// The winner is the **nearest by longitudinal distance**, not by range and not by
 /// bearing.
+///
+/// # `None` is not a refusal to fire
+///
+/// **Recovered, confidence 90**, and it used to be read the other way here.
+/// `Ship_FireHeldWeapon` (`0x08844ae8`) branches on the lock and fires either
+/// way - with a lock it passes the target's address, and with none it passes a
+/// null and a target index of `-1`:
+///
+/// ```c
+/// if ((self->target == -1) || ((self->lock_flags & 1) == 0)) {
+///     Weapon_RequestFire(craft, pose, 0, 0xffffffff);
+/// } else {
+///     Weapon_RequestFire(craft, pose, entity_table[self->target] + 0x794);
+/// }
+/// ```
+///
+/// `Weapon_FireMissile` (`0x088685cc`) then tests the target not at all: it
+/// clears the held slot, and spawns whatever `craft+0x160` holds. A null reaches
+/// `Missile_Init`, and `Missile_Update` skips its whole guidance block on
+/// `self+0xe0 == 0`, so the missile flies ballistically - riding the floor,
+/// glancing off walls - until [`SELF_DETONATE_SECONDS`] ends it.
+///
+/// So a caller wanting the original's behaviour launches on `None` rather than
+/// declining. `oag_game`'s `Race::fire_missile` does.
 ///
 /// # The condition deliberately not ported
 ///

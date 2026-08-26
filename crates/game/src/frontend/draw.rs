@@ -12,8 +12,105 @@
 //! because every method here already reached into private fields and turning
 //! forty of those into accessors would have been a rewrite rather than a move.
 //! `use super::*` reaches them unchanged.
+//!
+//! [`Draw`] itself moved here on 2026-08-26, off the same argument one step
+//! further: the type and the code that produces it belong together, and
+//! `frontend.rs` was at its own ceiling in `scripts/check-file-size.py`.
+//! `super` re-exports it, so every `crate::frontend::Draw` in the tree is
+//! unchanged.
 
 use super::*;
+
+/// One thing to draw, in the PSP's 480x272 screen space.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Draw {
+    /// A solid rectangle: `[x, y, width, height]` and RGBA.
+    Fill {
+        /// Rectangle.
+        rect: [f32; 4],
+        /// Colour.
+        color: [f32; 4],
+    },
+    /// A movie's current frame, stretched to `rect`.
+    Video {
+        /// Rectangle.
+        rect: [f32; 4],
+        /// Which frame of the movie to show, counting from zero.
+        ///
+        /// Wraps on a movie that loops, so this is what a caller holding the
+        /// whole movie - a headless capture reading a [`crate::movie::FrameStore`] - asks for.
+        frame: usize,
+        /// How far playback has got, counting every loop.
+        ///
+        /// The same number [`crate::movie::Player::position`] reports, and the
+        /// **only** one a [`crate::movie::Feed`] can be asked with: a feed
+        /// decodes forward forever, so on the second time round a 270-frame
+        /// loop it holds positions 270..274 while `frame` has gone back to 0.
+        /// Asking it with `frame` takes nothing from that point on and the
+        /// picture freezes - which is exactly what the menu backdrop used to do
+        /// nine seconds into the boot sequence.
+        position: u64,
+        /// Which movie the frame belongs to.
+        source: Video,
+    },
+    /// One of the front end's own images, from the sprite sheet.
+    Sprite {
+        /// Where it goes on the 480x272 screen: `[x, y, width, height]`.
+        rect: [f32; 4],
+        /// Where it is in the sheet, in sheet pixels: `[x, y, width, height]`.
+        uv: [f32; 4],
+        /// Modulating colour. White leaves the texture alone.
+        color: [f32; 4],
+    },
+    /// A sprite spun about its own centre.
+    ///
+    /// **A separate variant rather than a `rotation` on [`Self::Sprite`]**: the
+    /// front end constructs sprites in a dozen places and none of them turns
+    /// one, so a field there would be `0.0` at every site but this weapon's.
+    ///
+    /// The one thing that needs it is the lock-on reticle, whose four corner
+    /// brackets are four instances of a single corner-bracket model at four
+    /// quarter turns - the original writes an angle per instance to
+    /// `widget+0xac`. See
+    /// [`lock-sight.md`](../../../docs/ghidra/functions/psp-pulse-usa/lock-sight.md).
+    RotatedSprite {
+        /// Where it goes: `[x, y, width, height]`, `x`/`y` being the top-left of
+        /// the *unrotated* rectangle.
+        rect: [f32; 4],
+        /// Where it is in the sheet, in sheet pixels.
+        uv: [f32; 4],
+        /// Modulating colour.
+        color: [f32; 4],
+        /// Clockwise turn about the rectangle's centre, in radians.
+        rotation: f32,
+    },
+    /// A line of text with its baseline-less top-left at `x, y`.
+    Text {
+        /// Left or anchor edge, depending on `align`.
+        x: f32,
+        /// Top edge.
+        y: f32,
+        /// Scale multiplier applied to the glyph cell.
+        scale: f32,
+        /// Colour of the glyph body.
+        color: [f32; 4],
+        /// Colour of the glyph's **baked outline**, when the font has one.
+        ///
+        /// `None` means "the same as the body", which is what every caller wanted
+        /// before the two HUD fonts turned up: those two bake an outline into their
+        /// atlas and distinguish it only by grey level, so drawing them without a
+        /// separate border colour fills the whole silhouette and a digit becomes a
+        /// box. The three menu fonts and the built-in glyphs carry a constant mask, so
+        /// this changes nothing for them whatever it is set to. See [`crate::font::Atlas::luma`].
+        border: Option<[f32; 4]>,
+        /// Alignment about `x`.
+        align: Align,
+        /// The text.
+        text: String,
+        /// Wrap width from `widthlimited="true"`; `None` is one line, however wide.
+        wrap_width: Option<f32>,
+    },
+}
 
 impl Frontend {
     /// What to draw this frame.
@@ -590,5 +687,26 @@ impl Frontend {
     #[must_use]
     pub fn language_screen(&self) -> Option<&Screen> {
         self.screens.language_selection()
+    }
+}
+
+impl Draw {
+    /// The colour this draw is modulated by, when it has one.
+    ///
+    /// `None` for [`Self::Video`] alone: a movie frame has no alpha channel to
+    /// fade and is never part of a page.
+    ///
+    /// **It exists so a new variant is one edit rather than three.** The menu's
+    /// zoom and fade helpers each used to spell the variant list out, so adding
+    /// [`Self::RotatedSprite`] meant remembering both - and forgetting one is a
+    /// widget that silently does not fade with the page it is on.
+    pub fn colour_mut(&mut self) -> Option<&mut [f32; 4]> {
+        match self {
+            Self::Text { color, .. }
+            | Self::Fill { color, .. }
+            | Self::Sprite { color, .. }
+            | Self::RotatedSprite { color, .. } => Some(color),
+            Self::Video { .. } => None,
+        }
     }
 }

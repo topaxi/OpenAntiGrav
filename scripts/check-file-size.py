@@ -122,8 +122,8 @@ BASELINE = {
     # Ratcheted down from 2,005 when the two drawing idioms split out into
     # `menu/rows.rs` and `menu/strip.rs`; `draw_list` picks between them and
     # draws nothing itself.
-    "crates/game/src/menu.rs": 1978,
-    "crates/game/src/frontend.rs": 1357,
+    "crates/game/src/menu.rs": 1975,
+    "crates/game/src/frontend.rs": 1289,
     "crates/render/src/psys.rs": 1956,
     "crates/game/src/audio.rs": 1798,
     "crates/trace/src/main.rs": 1614,

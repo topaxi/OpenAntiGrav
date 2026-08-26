@@ -344,8 +344,13 @@ fn a_pad_can_hand_out_a_missile_and_firing_one_spends_it() {
         race.tick(&oag_gameplay::InputSnapshot::default());
     }
     race.world.ships[0].pickup.weapon = Some(Weapon::Missile);
-    // Only meaningful if there is something to lock; on a full grid there is.
-    assert!(race.fire_missile(0, &stats), "nothing was lockable");
+    // `false` now means the pool was full and nothing else - a missing lock is
+    // no longer a refusal, so this asserts the array had room rather than that
+    // anything was lockable.
+    assert!(
+        race.fire_missile(0, &stats),
+        "the projectile array was full"
+    );
     race.world.projectiles.clear();
 
     race.world.ships[0].pickup.weapon = Some(Weapon::Missile);
@@ -358,5 +363,70 @@ fn a_pad_can_hand_out_a_missile_and_firing_one_spends_it() {
     assert!(
         race.world.projectiles.live() > 0,
         "the pickup was spent and nothing left the rail"
+    );
+}
+
+/// A missile with nothing to lock leaves the rail on a real circuit, and ends
+/// itself.
+///
+/// **The real-data half of the change that made an unlocked press fire.**
+/// `Ship_FireHeldWeapon` (`0x08844ae8`) calls `Weapon_RequestFire` on both arms
+/// of its lock test, and the pool's second pass in `Projectiles_Update_q`
+/// (`0x08869588`) detonates anything older than
+/// `missile::SELF_DETONATE_SECONDS`. A synthetic straight cannot say either
+/// thing honestly: it has no along-track screen for the lock to run, and nothing
+/// for a ballistic missile to ride or glance off on the way out.
+///
+/// Fired from **every** slot on a full grid, because which of them has nobody in
+/// its cone is a property of the shipped starting grid rather than something to
+/// hardcode - the leader looks at empty road, and that is the shot this is about.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_missile_with_no_lock_still_flies_a_real_circuit_and_ends_itself() {
+    use oag_gameplay::projectile::missile::SELF_DETONATE_SECONDS;
+
+    let Some(loaded) = single_race() else { return };
+    let mut race = race::Race::start(loaded.setup);
+    for _ in 0..30 {
+        race.tick(&oag_gameplay::InputSnapshot::default());
+    }
+    let stats = race.missile_stats().expect("the disc authors a Missile");
+
+    for slot in 0..race.world.ship_count as usize {
+        assert!(
+            race.fire_missile(slot, &stats),
+            "slot {slot} put nothing in the air - a press now fires whether or              not anything is lockable, so the only `false` left is a full pool"
+        );
+    }
+
+    let unguided = race
+        .world
+        .projectiles
+        .slots
+        .iter()
+        .filter(|p| p.kind == Some(Weapon::Missile) && p.target.is_none())
+        .count();
+    assert!(
+        unguided > 0,
+        "every craft on the shipped starting grid found something to lock, so          the unguided shot was never exercised"
+    );
+
+    // Two ticks past the recovered timer, to cover the tick of rounding the age
+    // picks up over three seconds.
+    let ticks = (SELF_DETONATE_SECONDS * 60.0) as usize + 2;
+    for _ in 0..ticks {
+        race.tick(&oag_gameplay::InputSnapshot::default());
+    }
+
+    let survivors = race
+        .world
+        .projectiles
+        .slots
+        .iter()
+        .filter(|p| p.kind == Some(Weapon::Missile) && p.target.is_none())
+        .count();
+    assert_eq!(
+        survivors, 0,
+        "{survivors} unguided missiles outlived {SELF_DETONATE_SECONDS}s on a          real circuit - the pool's own expiry is not ending them"
     );
 }

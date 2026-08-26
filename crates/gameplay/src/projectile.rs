@@ -54,8 +54,8 @@
 //!   its three axes. The original tests a projectile against something and
 //!   nothing says what. See [`hull_radius`], which is exact about which way it
 //!   errs.
-//! - **Full damage everywhere inside `blastradius`,** with no falloff. See
-//!   [`Impact`].
+//! - **Full damage everywhere inside `blastradius`,** with no falloff - and
+//!   the original's force *does* fall off. See [`Impact`].
 //! - **The launch offset and the lifetime cap.**
 //!
 //! # Fixed-size, like everything else in the world
@@ -99,12 +99,21 @@ pub const MAX_PROJECTILES: usize = 128;
 
 /// How long a projectile flies before it gives up, in seconds.
 ///
-/// **Ours, and a safety net rather than a mechanic.** A rocket that leaves the
-/// track through a gap in the collision soup would otherwise hold its slot for
-/// the whole race. Long enough that no rocket fired at anything reachable
-/// expires first: the disc's slowest class authors `800` km/h, which is `222`
-/// units a second (see [`launch`] on the unit), so ten seconds is better than
-/// two kilometres - more than a lap of any Pulse circuit is wide.
+/// **The number is ours; that there is a cap at all is not.** A rocket that
+/// leaves the track through a gap in the collision soup would otherwise hold its
+/// slot for the whole race. Long enough that no rocket fired at anything
+/// reachable expires first: the disc's slowest class authors `800` km/h, which
+/// is `222` units a second (see [`launch`] on the unit), so ten seconds is
+/// better than two kilometres - more than a lap of any Pulse circuit is wide.
+///
+/// **The original caps a rocket at `5.0`** (`FUN_0886de60`, `5.0 < self+0x48`)
+/// and reaps it the way this does - that branch reaches the trail release and no
+/// explosion spawner. Not adopted: it halves every rocket's reach and belongs in
+/// a change about the Rocket. See the handover thread.
+///
+/// **A Missile never reaches this**, having detonated at
+/// [`missile::SELF_DETONATE_SECONDS`], but its age is still measured against
+/// this constant - so a change to one moves the other's arithmetic.
 pub const MAX_FLIGHT_SECONDS: f32 = 10.0;
 
 /// One thing in the air.
@@ -179,10 +188,18 @@ pub struct Projectile {
 /// # The blast rule, which is ours
 ///
 /// Everything within `blastradius` of [`Self::point`] takes the **full**
-/// `damage`. The original may well fall off with distance and nothing has been
-/// read that says so, so a falloff curve would be invented detail on top of an
-/// already-invented mechanic. Full damage inside a hard radius is the reading
-/// that has one number in it and that number is the disc's.
+/// `damage`, and the impulse is flat too.
+///
+/// **Half of that is now known to be wrong, and is left standing on purpose.**
+/// `FUN_08868ea4` - the original's blast, reached from a craft hit - walks every
+/// craft but the one struck and adds
+/// `direction * (1 - distance/blastradius) * blastforce`, so the **force** falls
+/// off linearly to nothing at the radius. The **damage** does not go through
+/// that function at all (`FUN_08869054` takes the struck craft alone), which
+/// leaves this engine's damage-everything-inside a bigger invention than it
+/// looked. Both are a change to how every weapon lands rather than to the
+/// Missile, so they are recorded here and handed over rather than folded into a
+/// change about firing without a lock.
 ///
 /// **The firing craft is not excluded.** A rocket launched into a wall at close
 /// range hurts the ship that fired it, which follows from the blast being a
@@ -202,6 +219,30 @@ pub struct Impact {
     /// this is here to tell the two apart for a future direct-hit bonus or a
     /// sound cue, not because the damage differs today.
     pub struck: Option<u8>,
+    /// Whether this detonation spends a blast, or only shows one.
+    ///
+    /// `true` everywhere except a missile that ran out of time - see
+    /// [`missile::SELF_DETONATE_SECONDS`] - and that exception is **recovered
+    /// rather than a choice**, at confidence 88.
+    ///
+    /// The original's damage (`FUN_08869054`) and blast force (`FUN_08868ea4`)
+    /// have exactly two callers each, by exhaustive operand search rather than
+    /// by reading: `FUN_088690fc`, the per-tick swept-segment test against each
+    /// craft, and `FUN_08868a10`, the network "somebody else's missile died"
+    /// handler. The pool's expiry teardown in `Projectiles_Update_q`
+    /// (`0x08869588`) calls **neither** - only `FUN_08868d50`, which spawns the
+    /// `MIEX` explosion where the missile was. A missile that hits nothing
+    /// *looks* like it went off and hurts nobody.
+    ///
+    /// One thing disagrees and is left standing: `FUN_08868a10`'s `craft == -1`
+    /// branch does call the blast force, so the network path spends a blast
+    /// where the local path does not. Open on
+    /// `docs/ghidra/functions/psp-pulse-usa/missile.md`.
+    ///
+    /// A flag rather than a second array, because every consumer already walks
+    /// these and the visual side wants the entry either way: `oag_game`'s tick
+    /// still plays the explosion for a `false` one.
+    pub blast: bool,
 }
 
 /// Everything in the air, in one fixed-size array.
@@ -443,6 +484,7 @@ impl Projectiles {
                         kind,
                         owner: projectile.owner,
                         struck,
+                        blast: true,
                     });
                     *projectile = Projectile::default();
                     continue;
@@ -470,12 +512,42 @@ impl Projectiles {
             }
 
             projectile.lifetime -= dt;
+
+            // **A missile that hit nothing goes off where it is.** Recovered
+            // from the pool's second pass, which tests `3.0 < age` on every live
+            // slot and sets the same destroy bit a wall or a craft sets - see
+            // [`missile::SELF_DETONATE_SECONDS`]. Tested after the move and
+            // against the age at the *end* of the tick, because that is where
+            // the original tests it: `Missile_Update` adds `dt` at the top of
+            // its own body and the pool's pass runs after it. Strictly greater,
+            // as `3.0 < age` is. `blast: false` is the recovered half that is
+            // easy to miss - see [`Impact::blast`].
+            if guided && MAX_FLIGHT_SECONDS - projectile.lifetime > missile::SELF_DETONATE_SECONDS {
+                impacts[index] = Some(Impact {
+                    point: projectile.position,
+                    kind,
+                    owner: projectile.owner,
+                    struck: None,
+                    blast: false,
+                });
+                *projectile = Projectile::default();
+                continue;
+            }
+
             if projectile.lifetime <= 0.0 {
                 // Reaped, not detonated: nothing was struck, so nothing takes a
                 // blast. A projectile that leaves the world simply stops
-                // existing. **Ours** - the original's missile has no lifetime cap
-                // at all, only the bounce budget, so this is the same safety net
-                // the Rocket already had rather than a recovered rule.
+                // existing.
+                //
+                // **The cap itself is ours; that there is one is not.** The
+                // Rocket's pool (`FUN_0886de60`) takes its own destroy branch on
+                // `5.0 < age` at `self+0x48`, and unlike the Missile's it
+                // reaches no explosion spawner - so the original reaps a stale
+                // rocket silently, exactly as this does, just three times
+                // sooner. Porting the 5.0 is a behaviour change to the Rocket
+                // and is deliberately not folded into a change about the
+                // Missile; see the handover thread. A missile never gets here,
+                // having detonated above.
                 *projectile = Projectile::default();
             }
         }
@@ -587,6 +659,10 @@ pub fn step<R: Raycaster + ?Sized>(
     );
 
     for impact in impacts.iter().flatten() {
+        // A detonation that only shows an explosion - see [`Impact::blast`].
+        if !impact.blast {
+            continue;
+        }
         let Some((radius, damage, force)) = blast_stats(weapons, impact.kind) else {
             continue;
         };
