@@ -350,34 +350,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // the one mode that needs it.
     //
     // Two failures, two lines, for the reason `<Global>` above gives at length.
-    //
-    // **The title's own name, not `oag_formats::weapons::RACE_ENTRY`.** That
-    // constant is Pulse's spelling and Wipeout HD answers it too, but Pure names
-    // one lower-cased `Data\XML\weaponstats.xml` and ships no Eliminator
-    // variant - so until 2026-08-26 a Pure race found no table, parsed no
-    // weapons and handed out no pickups, with one report line to say so and
-    // nothing else. See `oag_title::weapons::Weapons`.
-    let weapons_entry = title.weapons.race;
-    let weapons = match read(&mut archives, weapons_entry) {
-        Err(e) => {
-            report.push(format!("{weapons_entry}: {e}"));
-            None
-        }
-        Ok(blob) => match oag_formats::weapons::from_blob(&blob) {
-            Err(e) => {
-                report.push(format!("{weapons_entry}: {e}"));
-                None
-            }
-            Ok(stats) => {
-                report.push(format!(
-                    "{weapons_entry}: {} weapon(s) with an absorb value, {} pickup table(s)",
-                    stats.absorb.len(),
-                    stats.pickups.len()
-                ));
-                Some(stats)
-            }
-        },
-    };
+    let weapons = assets::load_weapons(&mut archives, title, &mut report);
     if options.mode.weapons_enabled() && weapons.is_none() {
         // Only worth saying on a mode that would otherwise hand something out.
         report.push("weapon pads hand nothing out this run".to_string());

@@ -520,6 +520,15 @@ pub struct WeaponStats {
     pub absorb: Vec<(Weapon, f32)>,
     /// One entry per `<Pickupodds>` block, in document order.
     pub pickups: Vec<PickupTable>,
+    /// Weapons the file authors that this build could not decode, and the first
+    /// attribute each was missing.
+    ///
+    /// **Not an error and not silence.** See [`optional_block`]: a title that
+    /// tunes a weapon on different attributes loses that weapon and keeps the
+    /// rest of its table. A loader reports this so the difference between "the
+    /// disc has no Bomb" and "this build cannot read this disc's Bomb" stays
+    /// visible.
+    pub skipped: Vec<(Weapon, &'static str)>,
 }
 
 impl WeaponStats {
@@ -684,6 +693,7 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
     let mut mine = None;
     let mut bomb = None;
     let mut absorb = Vec::new();
+    let mut skipped = Vec::new();
 
     // One pass over `<Weapon>` children, so an unknown `type` is skipped and a
     // duplicate overwrites rather than being silently the first or the last by
@@ -733,25 +743,39 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
             continue;
         }
         if weapon_kind == Weapon::Bomb {
-            bomb = Some(BombStats {
-                absorb: number(block, "Stats", "absorb")?,
-                blastforce: number(block, "Stats", "blastforce")?,
-                blastradius: number(block, "Stats", "blastradius")?,
-                damage: number(block, "Stats", "damage")?,
-                timetodie: number(block, "Stats", "timetodie")?,
-                trigger_radius: number(block, "Stats", "trigger_radius")?,
-            });
+            // **A missing attribute leaves the weapon undecoded rather than
+            // failing the file**, and Pure's Bomb is why: it authors
+            // `damageradius` and **no** `timetodie`, so its charge has no fuse
+            // and sits until something triggers it. That is a different weapon
+            // wearing the same name, not a field this build forgot to read -
+            // and before this, one such block cost Pure its *whole* table, so a
+            // Pure race parsed no Missile, no Rocket and no pickup odds either.
+            //
+            // A bad *value* still fails: a file that does not carry a field is
+            // a dialect, and one with rubbish in a field is broken.
+            bomb = optional_block(&mut skipped, weapon_kind, || {
+                Ok(BombStats {
+                    absorb: number(block, "Stats", "absorb")?,
+                    blastforce: number(block, "Stats", "blastforce")?,
+                    blastradius: number(block, "Stats", "blastradius")?,
+                    damage: number(block, "Stats", "damage")?,
+                    timetodie: number(block, "Stats", "timetodie")?,
+                    trigger_radius: number(block, "Stats", "trigger_radius")?,
+                })
+            })?;
             continue;
         }
         if weapon_kind == Weapon::Mine {
-            mine = Some(MineStats {
-                absorb: number(block, "Stats", "absorb")?,
-                blastforce: number(block, "Stats", "blastforce")?,
-                blastradius: number(block, "Stats", "blastradius")?,
-                damage: number(block, "Stats", "damage")?,
-                timetodie: number(block, "Stats", "timetodie")?,
-                trigger_radius: number(block, "Stats", "trigger_radius")?,
-            });
+            mine = optional_block(&mut skipped, weapon_kind, || {
+                Ok(MineStats {
+                    absorb: number(block, "Stats", "absorb")?,
+                    blastforce: number(block, "Stats", "blastforce")?,
+                    blastradius: number(block, "Stats", "blastradius")?,
+                    damage: number(block, "Stats", "damage")?,
+                    timetodie: number(block, "Stats", "timetodie")?,
+                    trigger_radius: number(block, "Stats", "trigger_radius")?,
+                })
+            })?;
             continue;
         }
         let index = match weapon_kind {
@@ -808,6 +832,7 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
         bomb,
         absorb,
         pickups,
+        skipped,
     })
 }
 
@@ -817,6 +842,32 @@ fn find<'a>(node: &'a Node, name: &str) -> Option<&'a Node> {
         return Some(node);
     }
     node.children.iter().find_map(|child| find(child, name))
+}
+
+/// Decodes one weapon's block, or records that this build cannot.
+///
+/// **The distinction is between a dialect and a broken file.** A block that does
+/// not carry an attribute this build reads is a title tuning that weapon
+/// differently - Pure's fuseless Bomb - and costs that weapon alone. A block
+/// whose attribute is present and unparseable is a broken file and still fails
+/// the whole read.
+///
+/// Recorded rather than dropped: [`WeaponStats::skipped`] is what a loader
+/// reports, so "this title has no Bomb" is visible instead of looking like a
+/// file that omits one.
+fn optional_block<T>(
+    skipped: &mut Vec<(Weapon, &'static str)>,
+    weapon: Weapon,
+    decode: impl FnOnce() -> Result<T>,
+) -> Result<Option<T>> {
+    match decode() {
+        Ok(stats) => Ok(Some(stats)),
+        Err(Error::MissingAttribute { attribute, .. }) => {
+            skipped.push((weapon, attribute));
+            Ok(None)
+        }
+        Err(other) => Err(other),
+    }
 }
 
 /// The four per-class speeds, from whichever of the two dialects the file uses.

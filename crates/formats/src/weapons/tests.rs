@@ -215,17 +215,48 @@ fn a_mines_trigger_radius_is_not_its_blast_radius() {
     assert_ne!(mine.trigger_radius, mine.blastradius);
 }
 
-/// A mine with no fuse never expires, so the field cannot quietly default -
-/// the same argument [`a_missile_missing_a_lock_distance_is_an_error`] makes.
+/// A mine with no fuse never expires, so the field cannot quietly default - and
+/// it does not: the Mine comes back absent, and *recorded*.
+///
+/// **This asserted a whole-file error until 2026-08-26**, and the reasoning was
+/// right while the mechanism was too blunt. Wipeout Pure authors a Bomb with
+/// `damageradius` and no `timetodie` - a charge with no fuse, which sits until
+/// something trips it - and failing the file for it cost Pure its Missile, its
+/// Rocket and its pickup odds too. A block this build cannot decode now costs
+/// that weapon alone.
+///
+/// The rule the old test was defending survives intact, and this pins both
+/// halves of it: nothing defaults, and nothing is silent.
 #[test]
-fn a_mine_missing_its_fuse_is_an_error() {
+fn a_mine_missing_its_fuse_is_absent_rather_than_defaulted() {
     let broken = FIXTURE.replace(r#" timetodie="35""#, "");
-    assert_eq!(
-        parse(&broken),
-        Err(Error::MissingAttribute {
-            element: "Stats",
-            attribute: "timetodie"
-        })
+    let stats = parse(&broken).expect("one undecodable weapon does not fail the file");
+    assert!(
+        stats.mine().is_none(),
+        "a Mine with no fuse was given one from somewhere"
+    );
+    assert!(
+        stats.skipped.contains(&(Weapon::Mine, "timetodie")),
+        "the Mine went missing without saying why: {:?}",
+        stats.skipped
+    );
+    // And the rest of the file is still there, which is the half the old
+    // whole-file error threw away.
+    assert!(stats.missile().is_some(), "the Missile went with it");
+    assert!(stats.rocket().is_some(), "the Rocket went with it");
+}
+
+/// A *present* attribute that will not parse still fails the whole file.
+///
+/// The other side of the line above: a file that does not carry a field is a
+/// dialect, and one with rubbish in a field is broken. Nothing about tolerating
+/// the first should tolerate the second.
+#[test]
+fn a_mine_whose_fuse_is_not_a_number_is_still_an_error() {
+    let broken = FIXTURE.replace(r#"timetodie="35""#, r#"timetodie="soon""#);
+    assert!(
+        matches!(parse(&broken), Err(Error::NotANumber { .. })),
+        "a Mine with a nonsense fuse parsed"
     );
 }
 

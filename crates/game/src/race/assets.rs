@@ -607,3 +607,60 @@ pub(super) fn zone_handling_note(mode: Mode, team: &str) -> Option<String> {
          oag_title::ZoneCraft and docs/gameplay/race-modes.md"
     ))
 }
+
+/// The weapon table this title tunes its weapons from, or `None`.
+///
+/// **The title's own entry name, not `oag_formats::weapons::RACE_ENTRY`.** That
+/// constant is Pulse's spelling and Wipeout HD answers it too, but Pure names one
+/// lower-cased `Data\XML\weaponstats.xml` and ships no Eliminator variant - so
+/// until 2026-08-26 a Pure race found no table, parsed no weapons and handed out
+/// no pickups, with one report line to say so and nothing else. See
+/// `oag_title::weapons::Weapons`.
+///
+/// Read on every mode rather than only the ones with weapons on: it is a
+/// per-race asset like any other, and reading it unconditionally is what makes a
+/// broken file a reported line on every run rather than one nobody sees until
+/// they pick the mode that needs it.
+///
+/// Two failures, two lines, and a third kind that is neither - see
+/// `oag_formats::weapons::WeaponStats::skipped`.
+pub(super) fn load_weapons(
+    archives: &mut oag_assets::Archives,
+    title: &'static oag_title::Title,
+    report: &mut Vec<String>,
+) -> Option<oag_formats::weapons::WeaponStats> {
+    let entry = title.weapons.race;
+    let blob = match archives
+        .read_name(entry)
+        .with_context(|| format!("reading {entry} out of {}", archives.layout.describe()))
+    {
+        Ok(blob) => blob,
+        Err(e) => {
+            report.push(format!("{entry}: {e}"));
+            return None;
+        }
+    };
+    let stats = match oag_formats::weapons::from_blob(&blob) {
+        Ok(stats) => stats,
+        Err(e) => {
+            report.push(format!("{entry}: {e}"));
+            return None;
+        }
+    };
+    report.push(format!(
+        "{entry}: {} weapon(s) with an absorb value, {} pickup table(s)",
+        stats.absorb.len(),
+        stats.pickups.len()
+    ));
+    // A weapon this title tunes on attributes this build does not read.
+    // Reported per weapon, because "the disc has no Bomb" and "this build
+    // cannot read this disc's Bomb" are different statements and only one of
+    // them is about the disc.
+    for (weapon, attribute) in &stats.skipped {
+        report.push(format!(
+            "{entry}: {weapon:?} authors no {attribute}; this build cannot \
+             decode it and the weapon is absent"
+        ));
+    }
+    Some(stats)
+}

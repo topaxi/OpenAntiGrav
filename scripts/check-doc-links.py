@@ -24,7 +24,18 @@ from pathlib import Path
 LINK = re.compile(r"\[([^\]]*)\]\(([^)]+)\)")
 FENCE = re.compile(r"^\s*(```|~~~)")
 HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*$")
-SKIP_DIRS = {"target", ".git", "data"}
+# Directories whose Markdown is not this project's to check.
+#
+# **`.claude` is the one that is easy to leave out and bites.** It holds this
+# repository's own git worktrees, so a session working in one has a *second*
+# checkout of the tree underneath the first - and, worse, whatever third-party
+# source that session cloned into its own `.build`. On 2026-08-26 a vendored
+# `VitaLoaderRedux/README.md` in one worktree failed this check for every other
+# worktree at once, with three broken links in a file nobody here wrote.
+#
+# All four are gitignored, which is the rule this list is approximating: a file
+# git does not track is not a file this project is answerable for.
+SKIP_DIRS = {"target", ".git", ".claude", "data"}
 
 MD_IMAGE = re.compile(r"!\[([^\]]*)\]\([^)]*\)")
 MD_LINK = re.compile(r"\[([^\]]*)\]\([^)]*\)")

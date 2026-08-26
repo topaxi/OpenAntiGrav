@@ -72,6 +72,9 @@ title showing the reticle over a craft ahead.
   blocks that the parser walks past. Nine of its weapons have an absorb value
   against Pulse's thirteen, so the two rosters differ and nothing has compared
   them.
+- **Pure's Bomb is not decoded**, and it is a different weapon rather than a
+  missing field: `damageradius="30"` and no `timetodie`, so it has no fuse.
+  Modelling it is `weapons-next`'s Bomb, not this thread's.
 - **The far-target alpha and HD's own blink** are still unreproduced, as on
   Pulse.
 
