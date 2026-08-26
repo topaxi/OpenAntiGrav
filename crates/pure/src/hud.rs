@@ -55,6 +55,19 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // terms as Pulse's: this is a PSP disc, and its own XML asks for `.mip`.
     texture_extension: None,
     always_on: ALWAYS_ON,
+    // Four instances of one corner-bracket model plus the closed box at the
+    // middle, bound by `HudSight_Bind` (`0x0881b604`) in this order - which is
+    // also the order `sight::BRACKET_ROTATIONS` is indexed by. See
+    // `docs/ghidra/functions/psp-pulse-usa/lock-sight.md`.
+    sights: &oag_title::hud::Sights::Brackets {
+        brackets: [
+            "missile_sight_1",
+            "missile_sight_2",
+            "missile_sight_3",
+            "missile_sight_4",
+        ],
+        inner: "missile_sight_inner",
+    },
     // Moot for the same reason - this disc authors no `PickupBackground` - and
     // recorded as Pulse's answer rather than as `None`, because `None` here
     // would read as the measured "drawn as authored" that HD carries.

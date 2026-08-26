@@ -81,6 +81,72 @@ pub fn replace_extension(reference: &str, extension: &str) -> String {
     format!("{stem}{extension}")
 }
 
+/// How a title authors its lock-on reticle.
+///
+/// **An axis in the [ADR-0022] sense**: the two answers differ in shape, not
+/// just in spelling, and neither is derivable from the other.
+///
+/// Both PSP titles author the reticle as `<Mode3D>` **models** - one corner
+/// bracket instanced four times at the corners of a box that opens and closes,
+/// plus a closed box in the middle - and the runtime writes each instance a
+/// position *and a rotation*. Wipeout HD authors it as concentric `<Image>`
+/// **sprites** at fixed authored sizes, with a separate pair for the locked
+/// state, and rotates nothing.
+///
+/// What the two share is the placement law recovered from `HudSight_Update`
+/// (`docs/ghidra/functions/psp-pulse-usa/lock-sight.md`): where the centre goes,
+/// how it chases, and when the lock is taken. That is why this is an axis on the
+/// *art* rather than three copies of the law.
+///
+/// **The placeholder idiom is shared too, which is what says the reading is
+/// right.** Every sight widget on both dialects is authored at a position whose
+/// centre is `(-width/2, +height/2)` of that title's own screen - `(-240, 136)`
+/// on the PSP's 480x272, `(-960, 540)` on HD's 1920x1080 - so all of them are
+/// placeholders the runtime overwrites, in the same way and by the same
+/// arithmetic.
+///
+/// [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Sights {
+    /// Four instances of one corner-bracket model at the corners of the box,
+    /// plus one closed box at its centre. Both PSP titles.
+    ///
+    /// The four are placed at `±extent` and rotated a quarter turn apart; the
+    /// inner leads them. Sizes come from the models' own quads.
+    Brackets {
+        /// The four bracket widgets, in the order the original's slot run binds
+        /// them - which is also the order the four rotations are indexed by.
+        brackets: [&'static str; 4],
+        /// The closed box at the middle.
+        inner: &'static str,
+    },
+    /// Concentric sprites at one centre, at the sizes the layout authors.
+    ///
+    /// Wipeout HD. Nothing rotates and nothing is offset: every widget is
+    /// centred on the reticle and drawn at its authored size, so the *layout*
+    /// carries the geometry and this carries only which widget is up when.
+    Concentric {
+        /// Drawn whenever the reticle has anything, seeking or locked.
+        seeking: &'static [&'static str],
+        /// Drawn in addition once the lock is taken.
+        ///
+        /// Read off the widget names rather than out of HD's own code, which
+        /// nothing here has disassembled - `MissileSightLockedOnLines` and
+        /// `MissileSightLockedOnMiddle` say what they are. Confidence **70**:
+        /// the names are unambiguous about *what* these are and not about
+        /// whether the seeking set stays up underneath them. Drawn additively
+        /// here, which is the reading that shows every authored widget rather
+        /// than hiding some on a guess.
+        locked: &'static [&'static str],
+    },
+    /// This title's reticle has not been read.
+    ///
+    /// Nothing is drawn, which is this project's answer for an asset it cannot
+    /// place - see `CLAUDE.md`. No shipped title uses it today; it exists so a
+    /// fourth is a row rather than a panic.
+    Unread,
+}
+
 /// How a title's HUD sprites reach the screen: where their pixels come from,
 /// which of them are up whenever the HUD is, and the one colour this build
 /// substitutes.
@@ -133,6 +199,12 @@ pub struct HudArt {
     /// A name absent from a given layout is simply not found, so one list
     /// serves all of a title's modes.
     pub always_on: &'static [&'static str],
+    /// How this title authors its lock-on reticle. See [`Sights`].
+    ///
+    /// Not part of [`Self::always_on`] and deliberately so: the sights are up
+    /// only while a locking weapon is held and something is lockable, which is
+    /// a runtime question that list cannot express.
+    pub sights: &'static Sights,
     /// The layout constant substituted for the pickup backdrop's own colour, or
     /// `None` to draw it as the layout authors it.
     ///

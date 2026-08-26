@@ -42,6 +42,7 @@ pub mod hud;
 pub mod loading;
 pub mod menu;
 pub mod race;
+pub mod weapons;
 
 pub use boot::{BootProfile, BootStep, Provenance};
 pub use hud::{HudArt, HudLayouts};
@@ -144,6 +145,15 @@ pub struct Title {
     /// Where this title keeps its music, or `None` when none of it has been
     /// located. See [`Music`].
     pub music: Option<&'static Music>,
+    /// Which file this title tunes its weapons from. See [`weapons::Weapons`].
+    ///
+    /// An axis because the answers differ in shape: Pulse and Wipeout HD ship
+    /// two tables and choose between them by race mode, Pure ships one. Until
+    /// 2026-08-26 every caller reached for `oag_formats::weapons::RACE_ENTRY`,
+    /// which is Pulse's spelling - so a Pure race found no table, parsed no
+    /// weapons and handed out no pickups, silently, with only a report line to
+    /// say so.
+    pub weapons: &'static weapons::Weapons,
 }
 
 /// Where a title keeps the music its front end and its races play.

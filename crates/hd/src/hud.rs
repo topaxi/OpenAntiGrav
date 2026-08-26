@@ -72,6 +72,25 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // See `texture_entry`, which is this row spelled out with its evidence.
     texture_extension: Some(TEXTURE_EXTENSION),
     always_on: ALWAYS_ON,
+    // **Concentric sprites, not brackets.** HD's arcade HUD composes to zero
+    // `<Mode3D>` models; its reticle is six `<Image>` widgets off
+    // `Data\HUD\Textures\missile_reticule.gtf`, authored at 128, 108, 80 and
+    // 64 pixels square and all centred on `(-960, 540)` - the negated centre of
+    // its own 1920x1080 screen, which is the same placeholder idiom the PSP
+    // titles use at `(-240, 136)`.
+    //
+    // The four here are the seeking set and the two on the other row are the
+    // locked one, read off the names. `MissileSightBG` is the backdrop and is
+    // drawn first, so the order of this list is paint order.
+    sights: &oag_title::hud::Sights::Concentric {
+        seeking: &[
+            "MissileSightBG",
+            "MissileSightOuter",
+            "MissileSightInner",
+            "MissileSightMiddle",
+        ],
+        locked: &["MissileSightLockedOnLines", "MissileSightLockedOnMiddle"],
+    },
     // **Not Pulse's substitution.** HD's `PickupBackground` is a hexagon
     // *outline* rather than a filled white one, so the icon on it is visible in
     // the colour the layout authors. See [`ALWAYS_ON`] for the frame.

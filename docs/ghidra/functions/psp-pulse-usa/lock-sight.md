@@ -290,40 +290,53 @@ sight on "the held weapon locks and something is lockable" instead, and says so.
 ## The other two titles
 
 Measured 2026-08-26 and pinned by `crates/game/tests/lock_sight_ground_truth.rs`.
-The **law** on this page is engine code with no title in it, so what differs is
-only what each disc authors.
+**All three lock, and two dialects draw it.** The law on this page is engine code
+with no title in it; what differs is only what each disc authors.
 
-| | Missile stats | Sight widgets | Reticle draws |
+| | Weapon table | Sight widgets | Reticle |
 | --- | --- | --- | --- |
-| Pulse | yes | 9 `<Mode3D>` models | **yes** |
-| Pure | **no table at all** | 5 `<Mode3D>` models, the Missile's | no |
-| HD/Fury | yes | `<Image>` sprites, **0** models | no |
+| Pulse | two, per mode | 9 `<Mode3D>` models | four brackets + inner |
+| Pure | **one**, `weaponstats.xml` | 5 `<Mode3D>` models, the Missile's | the same |
+| HD/Fury | two, per mode | 6 `<Image>` sprites, **0** models | concentric rings |
 
-**Pure authors the Missile's five sights and nothing to drive them.** Its
-`Arcade_HUD.xml` carries `missile_sight_inner` and `missile_sight_1` … `_4` off
-the same two models, at the same placeholder position - and *not* the
-LeachBeam's four, which is the disc agreeing that the LeachBeam is a Pulse
-weapon. What is missing is upstream of the reticle entirely: **no archive on the
-Pure disc holds `Data\XML\WeaponStats_Race.xml`**, so there are no lock
-distances, no pickup odds and no Missile. Whether Pure names that file something
-else or authors its weapons somewhere else is unread, and finding it is the
-whole job - the sights are already there and their art already loads.
+**Pure is the PSP dialect with two spellings of its own.** Its `Arcade_HUD.xml`
+carries `missile_sight_inner` and `missile_sight_1` … `_4` off the same two
+models at the same placeholder position - and *not* the LeachBeam's four, the
+disc agreeing that is a Pulse weapon. What kept it dark was upstream: Pure names
+one lower-cased `Data\XML\weaponstats.xml` where Pulse names two, and authors a
+single `speed` per weapon where Pulse authors four with a `launchSpeed`. Both are
+now axes - see [weapon-stats.md](../../../formats/weapon-stats.md).
 
-**HD locks and draws its reticle another way.** Its `WeaponStats_Race.xml`
-parses with a Missile whose lock window is real, so `Ship_AcquireLock`, the
-`0.8` s hold and the unguided shot all run on HD as they do on Pulse. But HD's
-arcade HUD composes to **zero** `<Mode3D>` models: its reticle is `<Image>`
-sprites named `MissileSight*` and `LeachBeamSight*` sampling
-`Data\HUD\Textures\missile_reticule.gtf` - the 36th of its texture table. So
-the placement law above applies to HD and the widget names and geometry do not.
-Wiring it is a second naming table and the ordinary sprite path, not new
-recovery.
+**HD draws the same law with different art.** Its arcade HUD composes to zero
+`<Mode3D>` models; the reticle is concentric `<Image>` sprites off
+`Data\HUD\Textures\missile_reticule.gtf`:
 
-**One thing Pure caught that Pulse could not.** Every Pure HUD layout names no
-`.mip`, so Pure always takes the atlas loader's "this layout has no texture"
-branch - which returned an empty sheet before it looked for sight art. Pulse
-never takes that branch. `pure_authors_the_missiles_sights_and_its_art_reaches_the_sheet`
-is what holds it.
+| Widget | Size | Colour |
+| --- | --- | --- |
+| `MissileSightBG` | 128 | white |
+| `MissileSightOuter` | 128 | red |
+| `MissileSightInner` | 108 | green |
+| `MissileSightMiddle` | 80 | white |
+| `MissileSightLockedOnLines` | 128 | white |
+| `MissileSightLockedOnMiddle` | 64 | red |
+
+Nothing rotates and nothing is offset - the sizes are authored and only the
+centre is the reticle's. Which four are the seeking set and which two the locked
+one is read **off the names**, at confidence 70: they are unambiguous about what
+each widget is and silent about whether the seeking set stays up underneath.
+`oag_game` draws them additively, which shows every authored widget rather than
+hiding some on a guess. HD also authors four `LeachBeamSight*` off
+`HUD_Components_01.gtf`, unwired for the same reason Pulse's are.
+
+**The placeholder idiom is what says the reading is right.** Every sight widget
+on every title is authored centred on `(-width/2, +height/2)` of that title's own
+screen - `(-240, 136)` on the PSP's 480x272, `(-960, 540)` on HD's 1920x1080. Same
+arithmetic, different number, and all of them overwritten every frame.
+
+**Which screen also has to be per title**, and that is the one thing that reads
+as a stray widget rather than a missing one when it is wrong: a reticle
+projecting into 480x272 while the layout draws in 1920x1080 lands in the top-left
+ninth of an HD frame - inside its lap counter - and never leaves.
 
 ## What this settles elsewhere
 

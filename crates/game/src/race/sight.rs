@@ -28,7 +28,19 @@
 
 use oag_core::math::{Mat4, Vec3, Vec4};
 
-/// The virtual screen every HUD number on these discs is authored for.
+/// The screen the PSP titles author every HUD number for.
+///
+/// **A default, not the only answer.** Wipeout HD authors its HUD - the sights
+/// included - in 1920x1080, and the reticle has to project into whichever grid
+/// the layout it is drawn beside uses or it lands in the top-left corner of it.
+/// [`Sight::new`] takes the real one off `oag_game::hud::Assets::space`; this is
+/// what [`Sight::default`] uses and what the PSP titles pass.
+///
+/// **The placement law does not change with it.** The original's `240` and `136`
+/// are `screen/2` on its own screen, and every sight widget on every title is
+/// authored at a placeholder whose centre is `(-w/2, +h/2)` - so the arithmetic
+/// is the same and only the number differs. See
+/// `docs/ghidra/functions/psp-pulse-usa/lock-sight.md`.
 pub const SCREEN: [f32; 2] = [480.0, 272.0];
 
 /// How far the reticle may be from the camera and still be drawn, in world
@@ -203,7 +215,12 @@ pub struct Projected {
 /// lands at a mirrored on-screen point that looks entirely plausible in a still
 /// frame. The `0.9` lock cone makes that rare rather than impossible.
 #[must_use]
-pub fn project(view: Mat4, view_projection: Mat4, world: Vec3) -> Option<Projected> {
+pub fn project(
+    view: Mat4,
+    view_projection: Mat4,
+    world: Vec3,
+    screen: [f32; 2],
+) -> Option<Projected> {
     let eye = view * Vec4::new(world.x, world.y, world.z, 1.0);
     let distance = Vec3::new(eye.x, eye.y, eye.z).length();
     if distance >= DRAW_RANGE {
@@ -213,10 +230,10 @@ pub fn project(view: Mat4, view_projection: Mat4, world: Vec3) -> Option<Project
     if clip.w <= 0.0 {
         return None;
     }
-    let x = SCREEN[0] * 0.5 + SCREEN[0] * 0.5 * (clip.x / clip.w);
+    let x = screen[0] * 0.5 + screen[0] * 0.5 * (clip.x / clip.w);
     // The original's `136 + 136 * y/w` against a clip space whose `y` runs
     // down. Ours runs up, so the sign flips and the number does not.
-    let y = SCREEN[1] * 0.5 - SCREEN[1] * 0.5 * (clip.y / clip.w);
+    let y = screen[1] * 0.5 - screen[1] * 0.5 * (clip.y / clip.w);
     Some(Projected {
         screen: [x, y],
         distance,
@@ -274,12 +291,27 @@ pub struct Sight {
     /// The 5 Hz blink accumulator and its flag.
     blink_timer: f32,
     blink: bool,
+    /// The grid this reticle's coordinates are in.
+    ///
+    /// The title's own, off `oag_game::hud::Assets::space` - see [`SCREEN`] for
+    /// why it is a field rather than a constant.
+    screen: [f32; 2],
 }
 
 impl Default for Sight {
+    /// A reticle on the PSP's own screen. See [`Sight::new`].
     fn default() -> Self {
+        Self::new(SCREEN)
+    }
+}
+
+impl Sight {
+    /// A reticle in the grid `screen` names.
+    #[must_use]
+    pub fn new(screen: [f32; 2]) -> Self {
         Self {
-            centre: [SCREEN[0] * 0.5, SCREEN[1] * 0.5],
+            screen,
+            centre: [screen[0] * 0.5, screen[1] * 0.5],
             extent: EXTENT_OPEN,
             hold: 0.0,
             locked: false,
@@ -290,9 +322,13 @@ impl Default for Sight {
             blink: false,
         }
     }
-}
 
-impl Sight {
+    /// The grid this reticle's coordinates are in.
+    #[must_use]
+    pub fn screen(&self) -> [f32; 2] {
+        self.screen
+    }
+
     /// One frame of the reticle, given where its target projected.
     ///
     /// `target` is `None` when nothing is lockable, when the held weapon does
@@ -324,8 +360,8 @@ impl Sight {
                 2.0 * p.screen[0] - previous[0],
                 2.0 * p.screen[1] - previous[1],
             ];
-            let on_screen = (0.0..SCREEN[0]).contains(&extrapolated[0])
-                && (0.0..SCREEN[1]).contains(&extrapolated[1]);
+            let on_screen = (0.0..self.screen[0]).contains(&extrapolated[0])
+                && (0.0..self.screen[1]).contains(&extrapolated[1]);
             on_screen.then_some((extrapolated, p.distance))
         });
         self.previous = target.map(|p| p.screen);

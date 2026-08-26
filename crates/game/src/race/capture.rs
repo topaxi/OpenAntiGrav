@@ -240,6 +240,7 @@ pub fn capture(
     let mut race = Race::start(setup);
     race.set_boost_fov_kick(options.boost_fov_kick);
     race.set_sight_fov(options.fov);
+    race.set_sight_screen(hud.space.size);
     race.set_camera_view(options.camera_view);
     race.set_control_scheme(options.scheme);
     race.set_autopilot(options.autopilot);

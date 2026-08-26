@@ -112,6 +112,15 @@ pub const TITLE: &Title = &Title {
     plugin_definition: names::FRONT_END_PLUGIN_DEFINITION,
     loading: Some(&loading::LOADING),
     music: Some(MUSIC),
+    // **Pulse's two names, and HD answers them.** `Data\XML\WeaponStats_Race.xml`
+    // resolves in `DATA00.PSARC` through the same path normalisation every other
+    // HD entry goes through, and parses with thirteen weapons and four pickup
+    // tables - so this is measured rather than inherited. The Eliminator variant
+    // is declared on the same reading and nothing has opened it.
+    weapons: &oag_title::weapons::Weapons {
+        race: r"Data\XML\WeaponStats_Race.xml",
+        elimination: Some(r"Data\XML\WeaponStats_Elimination.xml"),
+    },
 };
 
 /// Where Wipeout HD keeps its music.
