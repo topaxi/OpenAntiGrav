@@ -116,11 +116,23 @@ uses a computed offset - a different search than this one.
 ## Next Steps
 
 - Find what populates `RenderManager+0x630` (the `{object, extra}` pairs
-  `_FlushDrawQueue_q` walks) and what decides the order entries land in it -
-  a literal-offset search came up empty in the render layer's address range,
-  so try register-indexed stores, or work backward from whatever implements
-  vtable slot `0x1c` for a known queued class (`Model`, `Billboard`, ... -
-  none confirmed queued here yet)
+  `_FlushDrawQueue_q` walks) and what decides the order entries land in it.
+  **Three approaches already tried the same session and came up empty**,
+  recorded so the next session doesn't re-spend the time: (1) a literal
+  `stw ..., 0x630(rX)` search across the whole image, zero hits in the render
+  layer's address range; (2) direct data-xrefs to the singleton global
+  (`PTR_DAT_008b3d00`, the pointer `RenderManager_CreateInstance` stores
+  itself into) - only seven hits, all flag setters and destructor-shaped
+  cleanup in `RenderManager.cpp`'s own small function cluster
+  (`0x002d4b90`-`0x002d4d78`), none touching `+0x630`; (3) a global `stwx`
+  (indexed store) sweep restricted to the render layer's address range - many
+  hits, none inspected yet resolve to a `{ptr, extra}` pair write matching
+  the queue's shape, and `Model`'s own constructor (`0x002c04b0`) does no
+  vtable setup that a reader can see, so verifying which class implements
+  vtable slot `0x1c` is still blocked on finding that constructor's *other*
+  half or its base class first. A cleaner angle for next time: work forward
+  from a specific already-decoded material/model draw call (if one gets
+  found for other reasons) rather than backward from the empty queue
 - If that search turns up a real sort key on the enqueue side, read it before
   implementing anything - do not add a distance-based sort speculatively. If
   it turns up nothing (submission order only, e.g. scene-graph traversal
