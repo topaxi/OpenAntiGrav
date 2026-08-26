@@ -55,6 +55,11 @@ This subsystem is unusually mixed, so the split comes before anything else.
 | **How many mines a press lays** | **ours** | - |
 | **That a mine does not move once laid**, and that `trigger_radius` is what sets it off | **ours** | - |
 | **That a mine cannot be tripped by the craft that laid it**, at any range | **ours** | - |
+| `<Bomb>`: the Mine's six, every one of them larger on both shipped tables | **recovered** | 92 |
+| **A Bomb press lays exactly one**, where a Mine press lays a cluster | **recovered** | 88 |
+| **That a bomb is static**, like a mine - its spawn direction is recovered and any speed is not | **ours** | - |
+| **That a bomb's fuse is its own `timetodie`**, by analogy with `Mine_Init` | **ours** | - |
+| **The blast's impulse falls off linearly** over `blastradius`; the damage does not | **recovered** | 82 |
 | **Not firing at all when nothing locks** | **ours** | - |
 
 The three "ours" rows in the middle are not a gap anyone can close by looking
@@ -103,7 +108,7 @@ what it can be given next, so it is simulation state.
 **Three things about the port are ours, and each is labelled where it lives.**
 The *sequence* still cannot match the original, for the reason the next paragraph
 gives. The retry behind the no-repeat rule is **bounded** where the original's
-loop is not: `IMPLEMENTED` holds six weapons, so a table weighting only one of
+loop is not: `IMPLEMENTED` holds seven weapons, so a table weighting only one of
 them would spin for ever, and after `pickup::REDRAW_ATTEMPTS` a repeat is
 accepted - about one grant in twenty thousand on the shipped odds. And an
 *unplaced* craft spends the `human` column alone, because the original always has
@@ -237,7 +242,7 @@ term entirely - see below.
 ## Only what has an effect is handed out
 
 `oag_gameplay::pickup::IMPLEMENTED` is the pool a pad draws from, and it holds
-**Turbo, Shield, Rocket, Missile, Autopilot and Mine** (2026-08-26).
+**Turbo, Shield, Rocket, Missile, Autopilot, Mine and Bomb** (2026-08-26).
 
 - ~~**Missile** needs the lock distances its own `<Stats>` authors, and a target
   worth locking - which needs the AI.~~ **Built 2026-08-17**, and what unblocked
@@ -245,6 +250,10 @@ term entirely - see below.
   `Ship_AcquireLock` (`0x08844784`) and the guidance from `Missile_Update`
   (`0x0885a918`). See
   [missile.md](../ghidra/functions/psp-pulse-usa/missile.md).
+- ~~**Bomb** needs the Mine first.~~ **Built 2026-08-26**, the same day, and it
+  is the cheapest weapon this project has added: one bigger charge out of the
+  same rear anchor, sharing every line of `oag_gameplay::projectile::mine`
+  except a count.
 - ~~**Mine** needs somewhere to sit and something to trip it.~~ **Built
   2026-08-26**, and the thing that unblocked it was somebody else's mistake:
   the fire handler had been attributed to the Cannon and the Bomb's to the Mine,
@@ -253,18 +262,14 @@ term entirely - see below.
 - **Quake** needs track deformation, **LeachBeam** a beam and a victim, and most
   of the remaining seven need the slowdown mechanic behind
   `<Global slowdown_limit>`, which has no consumer.
-- **Bomb** is the nearest thing left, and it is nearly the Mine: one bigger
-  charge out of the same rear anchor with a bigger blast, a longer `timetodie`
-  and a wider `trigger_radius`, all authored. Its handler `Weapon_FireBomb`
-  (`0x08863a20`) is read end to end in
-  [contact-response.md](../ghidra/functions/psp-pulse-usa/contact-response.md).
+
 - **Autopilot** is the AI's own controller taking over: `Ai_Construct`
   (`0x088536bc`) names the local player's input source the literal
   `"autopilot input"`. It is AI work wearing a pickup's clothes, not pickup
   work.
 
 **This is a departure and a deliberate one.** The authored table weights
-thirteen weapons and the draw sees six of them, so what a player gets is the
+thirteen weapons and the draw sees seven of them, so what a player gets is the
 authored distribution *conditioned on* the implemented set. It narrows to
 nothing as weapons land - adding a variant to `IMPLEMENTED` is the whole change
 - and it beats handing out a mine that cannot be dropped.
@@ -481,9 +486,17 @@ the original does: the stamp is unconditional and the grant is not.
 
 ## What is not built
 
-- **Seven of the thirteen weapons.** Quake needs track deformation, LeachBeam a
-  beam, and most of the rest the slowdown mechanic. The Bomb is the nearest -
-  see above.
+- **Six of the thirteen weapons.** Quake needs track deformation, LeachBeam a
+  beam, and the remaining four - Cannon, Plasma, Repulser, Shuriken - need
+  either the slowdown mechanic or a fire path nothing has read. The Cannon's is
+  the odd one: its fire bit `0x2000` is set by `Weapon_RequestFire` and
+  dispatched by **nothing** in `Weapons_DispatchFire`.
+- **The Bomb's `damageradius`.** Authored, the only second radius any weapon
+  has, and no consumer found - so it is decoded nowhere and spent nowhere. See
+  `oag_formats::weapons::BombStats`.
+- **A mine or a bomb draws nothing.** `Pulse_Mine.vex` and `Pulse_Bomb.vex` are
+  both named and located and no renderer reads either, so a laid charge is
+  invisible.
 - **The pad's ready-to-collect colour cycle.** `WeaponPad_UpdateRefreshTimer`
   (`0x0892c034`) packs a grey into `pad+0x6c` while cooling down and cross-fades
   a small colour table once it is collectable. Observed, not implemented, so a

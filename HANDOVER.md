@@ -455,7 +455,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [The ghost-ship renderer is read and written down nowhere else](handover/the-ghost-ship-renderer-is-read-and-written.md)
 - [Magstrip leftovers, none load-bearing](handover/magstrip-leftovers-none-load-bearing.md)
 - [Frame comparison: three residuals](handover/frame-comparison-three-residuals.md)
-- [Weapons: six of thirteen, and two doc pages had two of them swapped](handover/weapons-six-of-thirteen-and-two-pages-were.md)
+- [Weapons: seven of thirteen, and two doc pages had two of them swapped](handover/weapons-seven-of-thirteen-and-two-pages-were.md)
 - [Projectiles follow the floor, and the km/h fix - both now landed](handover/projectiles-follow-the-floor-and-the-km-h.md)
 - [A weapon identified by "it fires more than one" is not identified](handover/a-weapon-identified-by-it-fires-more-than.md)
 - [The hull sparks are approximated in three named ways](handover/the-hull-sparks-are-approximated-in-three-named.md)

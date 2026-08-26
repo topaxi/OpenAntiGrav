@@ -43,9 +43,9 @@
 //! # Only what has an effect is handed out
 //!
 //! [`IMPLEMENTED`] is the pool a pad draws from: Turbo, Shield, Rocket, Missile,
-//! Autopilot and Mine.
+//! Autopilot, Mine and Bomb.
 //!
-//! Of the eight still out, most need a beam, track deformation or the slowdown
+//! Of the seven still out, most need a beam, track deformation or the slowdown
 //! mechanic behind `<Global slowdown_limit>` - Quake needs to deform the track,
 //! LeachBeam needs a beam and a victim.
 //!
@@ -59,6 +59,14 @@
 //! ordering argument at all. See
 //! `docs/ghidra/functions/psp-pulse-usa/mine.md` and
 //! [`crate::projectile::mine`], which carries this weapon's own split.
+//!
+//! **The Bomb followed it the same day**, and it is the cheapest weapon this
+//! project has added: one bigger charge out of the same rear anchor, sharing
+//! every line of [`crate::projectile::mine`] except a count. Its `<Stats>` are
+//! the Mine's six one size up on both shipped tables, `Weapon_FireBomb`
+//! (`0x08863a20`) spawns once where `Weapon_DropMines` reloads and spawns
+//! again, and a maintainer who plays Pulse describes it as "a single big mine"
+//! - three independent things saying the same shape.
 //!
 //! **It is also the first weapon whose firing is not instantaneous.** A drop is
 //! [`crate::projectile::mine::CLUSTER`] mines laid one every
@@ -118,6 +126,7 @@ pub const IMPLEMENTED: &[Weapon] = &[
     Weapon::Missile,
     Weapon::Autopilot,
     Weapon::Mine,
+    Weapon::Bomb,
 ];
 
 /// Which column of `<Pickupodds>` a craft draws from, and how its place bends it.

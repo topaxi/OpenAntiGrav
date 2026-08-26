@@ -664,14 +664,14 @@ impl Race {
     ///   is named here rather than left to fall through the default below,
     ///   because "no effect by design" and "no arm written yet" must not look
     ///   the same in this file.
-    /// - **A Mine is dropped when somebody is close behind**, on
+    /// - **A Mine or a Bomb is dropped when somebody is close behind**, on
     ///   `oag_ai::Driver::wants_to_drop`, and the pickup is **not** spent on the
     ///   tick it is taken: a cluster comes out over half a second and the craft
     ///   holds the weapon until the last one is laid. This is the one arm that
     ///   returns rather than falling to the bottom of the function.
     /// - **Everything else is absorbed**, which pays energy into the pool and is
     ///   a real effect rather than a discard. It is also what a cautious human
-    ///   does with a weapon they cannot aim, and the remaining seven cannot be
+    ///   does with a weapon they cannot aim, and the remaining six cannot be
     ///   aimed: they need a lock, a beam or a mechanic nothing has read.
     pub(super) fn spend_opponent_pickup(
         &mut self,
@@ -770,8 +770,10 @@ impl Race {
             // added to `pickup::IMPLEMENTED` without an arm reaches a player as a
             // pickup that quietly turns into energy. `oag_gameplay`'s
             // `IMPLEMENTED` and this chain have to grow together.
-        } else if weapon == oag_formats::weapons::Weapon::Mine
-            && self.drop_opponent_mines(slot, field)
+        } else if matches!(
+            weapon,
+            oag_formats::weapons::Weapon::Mine | oag_formats::weapons::Weapon::Bomb
+        ) && self.drop_opponent_mines(weapon, slot, field)
         {
             // **The one arm here that does not spend the pickup**, and it must
             // not: a drop takes half a second to come out and the craft holds
@@ -805,12 +807,21 @@ impl Race {
     /// for that decision. What it is *not* is a rule about mines that the player
     /// is being let off - see that function, whose gates are the forward
     /// weapon's with the aiming taken out.
-    fn drop_opponent_mines(&mut self, slot: usize, field: &oag_ai::Field) -> bool {
-        if self.weapons.as_ref().and_then(|w| w.mine()).is_none() {
-            // No authored Mine, so nothing to lay. Falls through to absorb,
-            // which is the right answer for a pickup that cannot be spent.
+    fn drop_opponent_mines(
+        &mut self,
+        weapon: oag_formats::weapons::Weapon,
+        slot: usize,
+        field: &oag_ai::Field,
+    ) -> bool {
+        let Some(weapons) = self.weapons.as_ref() else {
             return false;
-        }
+        };
+        let Some(drop) = oag_gameplay::projectile::mine::Drop::for_weapon(weapon, weapons) else {
+            // The table authors no block for this weapon, so nothing to lay.
+            // Falls through to absorb, which is the right answer for a pickup
+            // that cannot be spent.
+            return false;
+        };
         let ship = &self.world.ships[slot];
         let context = oag_ai::Context {
             line: &self.racing_line,
@@ -826,9 +837,7 @@ impl Race {
             // the whole action.
             return false;
         }
-        self.world.ships[slot]
-            .pickup
-            .begin_drop(oag_gameplay::projectile::mine::CLUSTER);
+        self.world.ships[slot].pickup.begin_drop(drop.count);
         true
     }
 }

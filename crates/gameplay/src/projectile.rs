@@ -74,6 +74,7 @@ pub mod mine;
 pub mod missile;
 mod rocket;
 
+pub use mine::TriggerRadii;
 pub use rocket::{ROCKET_SHOTS, launch};
 
 use oag_core::math::Vec3;
@@ -336,7 +337,8 @@ impl Projectiles {
         )
     }
 
-    /// Lays one mine, with its own authored fuse instead of the safety net.
+    /// Lays one mine or bomb, with its own authored fuse instead of the safety
+    /// net.
     ///
     /// A third entry point rather than a widened [`Self::spawn_guided`], for the
     /// reason that one is a widened [`Self::spawn`]: a rocket and a missile must
@@ -348,16 +350,8 @@ impl Projectiles {
     /// **detonates** a mine rather than what reaps it - see
     /// [`Self::advance`]'s expiry branch, which is the one place in this module
     /// where the countdown means two different things depending on the weapon.
-    pub fn drop_mine(&mut self, position: Vec3, owner: u8, fuse: f32) -> bool {
-        self.place(
-            Weapon::Mine,
-            position,
-            mine::at_rest(),
-            owner,
-            None,
-            0.0,
-            fuse,
-        )
+    pub fn lay(&mut self, kind: Weapon, position: Vec3, owner: u8, fuse: f32) -> bool {
+        self.place(kind, position, mine::at_rest(), owner, None, 0.0, fuse)
     }
 
     /// The one place a slot is filled.
@@ -414,7 +408,7 @@ impl Projectiles {
         raycaster: &R,
         ships: &[crate::world::Ship],
         missile: Option<&oag_formats::weapons::MissileStats>,
-        mine_stats: Option<&oag_formats::weapons::MineStats>,
+        trigger_radii: TriggerRadii,
         class: oag_formats::handling::SpeedClass,
     ) -> [Option<Impact>; MAX_PROJECTILES] {
         let mut impacts = [None; MAX_PROJECTILES];
@@ -425,14 +419,16 @@ impl Projectiles {
             };
             let guided = kind == Weapon::Missile;
 
-            // **A mine is the one thing here that does not fly**, so it takes
-            // none of what follows: no surface probe, no fall, no sweep, no
-            // guidance. It sits where it was laid, counts its authored fuse
-            // down, and goes off when something comes close enough or when the
-            // fuse runs out. See [`mine`], which carries the split between the
-            // recovered half of that and the read-of-an-authored-attribute half.
-            if kind == Weapon::Mine {
-                impacts[index] = advance_mine(projectile, dt, ships, mine_stats);
+            // **The two rear weapons are the things here that do not fly**, so
+            // they take none of what follows: no surface probe, no fall, no
+            // sweep, no guidance. A mine or a bomb sits where it was laid,
+            // counts its authored fuse down, and goes off when something comes
+            // close enough or when the fuse runs out. See [`mine`], which
+            // carries the split between the recovered half of that and the
+            // read-of-an-authored-attribute half, and which holds both weapons
+            // because they are one weapon in two sizes.
+            if matches!(kind, Weapon::Mine | Weapon::Bomb) {
+                impacts[index] = mine::advance_laid(projectile, kind, dt, ships, trigger_radii);
                 if impacts[index].is_some() {
                     *projectile = Projectile::default();
                 }
@@ -581,65 +577,6 @@ impl Projectiles {
     }
 }
 
-/// One tick of a laid mine: the trip test, then the fuse.
-///
-/// Returns the blast, if this is the tick the mine goes off. Two ways it can be:
-/// a craft came inside `trigger_radius`, or the authored fuse ran out. The trip
-/// is tested **first**, so a mine tripped on the same tick its fuse expires is
-/// recorded as having struck the craft that tripped it - which is the more
-/// informative of two answers that do the same damage.
-///
-/// `stats` is `None` for a table that authors no Mine, in which case the mine
-/// cannot be tripped and simply expires without a blast - the same "no authored
-/// numbers, spend no blast" rule [`blast_stats`] follows, and reachable only
-/// through a bug upstream in [`crate::pickup::IMPLEMENTED`].
-fn advance_mine(
-    projectile: &mut Projectile,
-    dt: f32,
-    ships: &[crate::world::Ship],
-    stats: Option<&oag_formats::weapons::MineStats>,
-) -> Option<Impact> {
-    let here = projectile.position;
-    let owner = projectile.owner;
-
-    if let Some(stats) = stats {
-        // Slot order, and slot order only - the first craft in the array that is
-        // close enough trips it. Which craft is credited when two are inside the
-        // radius on one tick is therefore the array's business rather than the
-        // geometry's, and that is deliberate: the alternative is a nearest-first
-        // search whose result depends on distances that are equal often enough
-        // to matter. See `docs/architecture/determinism.md`.
-        for (slot, ship) in ships.iter().enumerate() {
-            if !ship.active {
-                continue;
-            }
-            let slot = slot as u8;
-            if mine::triggered_by(here, owner, slot, ship.physics.body.position, stats) {
-                return Some(Impact {
-                    point: here,
-                    kind: Weapon::Mine,
-                    owner,
-                    struck: Some(slot),
-                });
-            }
-        }
-    }
-
-    projectile.lifetime -= dt;
-    if projectile.lifetime > 0.0 {
-        return None;
-    }
-    // The fuse. `stats.is_none()` is the one path that reaches here with nothing
-    // to spend, and it produces an impact whose blast lookup then finds nothing -
-    // one free slot and no damage, rather than a mine that lives for ever.
-    Some(Impact {
-        point: here,
-        kind: Weapon::Mine,
-        owner,
-        struck: None,
-    })
-}
-
 /// The nearest of the geometry hit and the hull hits along one tick's step.
 fn nearest_hit<R: Raycaster + ?Sized>(
     from: Vec3,
@@ -734,13 +671,12 @@ pub fn step<R: Raycaster + ?Sized>(
 ) -> [Option<Impact>; MAX_PROJECTILES] {
     let count = world.ship_count as usize;
     let missile_stats = weapons.and_then(oag_formats::weapons::WeaponStats::missile);
-    let mine_stats = weapons.and_then(oag_formats::weapons::WeaponStats::mine);
     let impacts = world.projectiles.advance(
         dt,
         raycaster,
         &world.ships[..count],
         missile_stats.as_ref(),
-        mine_stats.as_ref(),
+        TriggerRadii::from_table(weapons),
         class,
     );
 
@@ -783,6 +719,14 @@ fn blast_stats(
             .map(|s| (s.blastradius, s.damage, s.blastforce)),
         Weapon::Mine => weapons
             .mine()
+            .map(|s| (s.blastradius, s.damage, s.blastforce)),
+        // **`blastradius`, not `damageradius`.** The Bomb is the only weapon
+        // that authors a second radius and the only blast path read at
+        // instruction level spends `blastradius` for both halves; see
+        // `oag_formats::weapons::BombStats`, which is explicit about the one
+        // authored attribute this engine leaves unspent.
+        Weapon::Bomb => weapons
+            .bomb()
             .map(|s| (s.blastradius, s.damage, s.blastforce)),
         _ => None,
     }

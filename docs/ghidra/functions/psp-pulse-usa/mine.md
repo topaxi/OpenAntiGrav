@@ -1,4 +1,4 @@
-# The Mine: the weapon-id map corrected, and a cluster of seven
+# The Mine and the Bomb: the weapon-id map corrected, and one weapon in two sizes
 
 **Binary:** `pulse-psp` `BOOT.BIN`, image base `0x08804000`.
 
@@ -11,7 +11,9 @@ handler [weapon-fire.md](weapon-fire.md) attributed to the Cannon at confidence
 **Bomb**. Both attributions were informed guesses; this page replaces them with
 four independent readings that agree.
 
-Ported in `crates/gameplay/src/projectile/mine.rs`.
+Both are ported in `crates/gameplay/src/projectile/mine.rs` - one module,
+because they are one weapon in two sizes. See
+[The Bomb is the same weapon](#the-bomb-is-the-same-weapon-one-size-up).
 
 | Address | Name | Confidence |
 | --- | --- | --- |
@@ -328,6 +330,58 @@ function group.
 `Mine_Init` is the very next function after `Mine_Construct` in the same group,
 which is what ties the bit-`0x2` handler's spawn call to the mine model rather
 than to a bolt.
+
+## The Bomb is the same weapon, one size up
+
+Everything above about the Mine is the Bomb's too, and the two differ in exactly
+one structural place. Set out here rather than on a page of its own, because a
+second page would be nine tenths this one.
+
+**What is recovered.**
+
+- **A press lays one, not a cluster.** `Weapon_FireBomb` (`0x08863a20`) makes a
+  single spawn call with no reload timer anywhere in it, where
+  `Weapon_DropMines` reloads `craft+0x1b0` and comes back next tick. Read end to
+  end in
+  [contact-response.md](contact-response.md#fun_08863a20-0x08863a20-0x08863ba3-weapons_dispatchfires-world0x44-handler-and-it-looks-like-the-mines-own-fire-handler),
+  which also has the pool cursor (`+0xc4`, cap 32 - a **different** pair from
+  the Mine's `+0x164`/`+0x64`, so nothing about one subsystem's pool transfers
+  to the other) and `+0x40` being the owning craft's index.
+- **The same rear anchor**, `craft+0xa0`, which these two weapons and nothing
+  else use. See the jump table above.
+- **Weapon id 9, fire bit `0x100`**, announcement index 8 - `bomb`.
+- **Its own `.rodata` group**, at `0x08a7c748`: the cues `BOMBLAUNCH`,
+  `~BOMBRADAR`, `BOMBEXPL` and `BOMBEXPL_PC`, and the model
+  `Data\Weapons\Pulse_Bomb.vex`, whose string is materialised by
+  `FUN_08862fc0` at `0x088630a8`. That group is what pairs the bit-`0x100`
+  handler with this weapon, exactly as `MINELAUNCH` pairs the bit-`0x2` one with
+  the Mine.
+- **Eight `<Stats>` attributes**, six of them the Mine's six and every one of
+  those larger on both shipped tables.
+
+**What is not.**
+
+- **`WeaponStats_ParseBomb`'s offsets.** The name is settled at 90 from the
+  dispatch chain; the *offsets* are not read - see the note under the Mine's
+  `<Stats>` table for why the function resisted one. Nothing needs them.
+- **`damageradius`.** The Bomb is the only weapon of the thirteen that authors a
+  second radius, and no consumer of one has been found - the blast path that
+  *was* read spends `blastradius` for both damage and impulse. Left undecoded
+  and named, rather than decoded on a guess about which half it governs.
+- **Whether a bomb moves.** `Weapon_FireBomb` stages the craft's forward row
+  **negated** and hands it to a spawn helper at `0x0885f188` that
+  [contact-response.md](contact-response.md) could not resolve statically - two
+  callers jump past its prologue. So the direction is recovered and any *speed*
+  is not. **This engine lays it static**, which is the same conservative reading
+  the Mine takes and is what a maintainer who plays Pulse describes: "the bomb
+  should be static, like the mines, just a single big mine". A negated forward
+  row is a unit vector, so read as a velocity it would be one unit a second
+  anyway - indistinguishable from static at racing speed.
+- **What arms the bomb's fuse.** `Weapon_FireBomb` writes nothing to the
+  entity's `+0x48`, which contact-response.md records as a clean negative
+  result. This engine takes the fuse from `<Bomb> timetodie` because that is
+  what `Mine_Init` does with `<Mine> timetodie`, and because twenty seconds is
+  not a number with another plausible home.
 
 ## What is still ours, and one clean negative result
 

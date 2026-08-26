@@ -187,4 +187,13 @@ impl Race {
             .as_ref()
             .and_then(oag_formats::weapons::WeaponStats::mine)
     }
+
+    /// The Bomb's authored `<Stats>`, or `None` when the table did not load or
+    /// authors no Bomb.
+    #[must_use]
+    pub fn bomb_stats(&self) -> Option<oag_formats::weapons::BombStats> {
+        self.weapons
+            .as_ref()
+            .and_then(oag_formats::weapons::WeaponStats::bomb)
+    }
 }

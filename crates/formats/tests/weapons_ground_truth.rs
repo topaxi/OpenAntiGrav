@@ -353,6 +353,74 @@ fn the_mine_authors_a_fuse_and_a_trigger_radius() {
     }
 }
 
+/// Claim 1e: the Bomb is the Mine one size up, on both shipped tables.
+///
+/// Shape only, never values - ADR-0006, so what is asserted is the *ordering*
+/// between two weapons rather than either weapon's numbers. That ordering is
+/// the claim `oag_gameplay::projectile::mine` rests on when it treats the two
+/// with one mechanism: if the Bomb were not uniformly the bigger of the pair,
+/// "a single big mine" would be the wrong model and the shared code would be
+/// hiding it.
+///
+/// It doubles as the transposition check the other claims make with a
+/// counterfactual: the Bomb's and the Mine's blocks abut in the struct the
+/// original parses into and share six attribute names, so a decoder that
+/// matched the wrong `<Weapon type>` produces two plausible sets of numbers.
+/// Every one of these comparisons would flip.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_bomb_is_the_mine_one_size_up() {
+    let Some(tables) = tables() else { return };
+    for (name, blob) in &tables {
+        let stats = weapons::from_blob(blob).unwrap_or_else(|e| panic!("{name}: {e}"));
+        let bomb = stats
+            .bomb()
+            .unwrap_or_else(|| panic!("{name}: no Bomb authored"));
+        let mine = stats
+            .mine()
+            .unwrap_or_else(|| panic!("{name}: no Mine authored"));
+
+        println!(
+            "{name}: bomb {} damage / {} blast / {} trigger / {} s vs mine {} / {} / {} / {} s",
+            bomb.damage,
+            bomb.blastradius,
+            bomb.trigger_radius,
+            bomb.timetodie,
+            mine.damage,
+            mine.blastradius,
+            mine.trigger_radius,
+            mine.timetodie
+        );
+        for (what, bigger, smaller) in [
+            ("damage", bomb.damage, mine.damage),
+            ("blastradius", bomb.blastradius, mine.blastradius),
+            ("blastforce", bomb.blastforce, mine.blastforce),
+            ("trigger_radius", bomb.trigger_radius, mine.trigger_radius),
+            ("timetodie", bomb.timetodie, mine.timetodie),
+        ] {
+            assert!(
+                bigger > smaller,
+                "{name}: the Bomb's {what} is {bigger} against the Mine's {smaller} - \
+                 either the two blocks are transposed or the Bomb is not the bigger \
+                 weapon this engine models it as"
+            );
+        }
+        // And the same self-consistency the Mine's own claim makes: a bomb is
+        // tripped by a craft coming close and hurts a wider circle than the one
+        // that tripped it.
+        assert!(
+            bomb.blastradius > bomb.trigger_radius && bomb.trigger_radius > 0.0,
+            "{name}: blast radius {} against trigger radius {}",
+            bomb.blastradius,
+            bomb.trigger_radius
+        );
+        assert!(
+            bomb.timetodie > 0.0,
+            "{name}: a bomb that expires the tick it is dropped - {bomb:?}"
+        );
+    }
+}
+
 /// Claim 2: `absorb` is on every weapon the file authors.
 ///
 /// Stated as "every weapon the *decoder recognises* that the file authors",

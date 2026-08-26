@@ -1,5 +1,18 @@
-//! The Mine: a cluster laid out of the back of a craft, one every tenth of a
-//! second, each sitting where it was dropped until something trips it.
+//! The two weapons that come out of the back: the Mine, a cluster laid one
+//! every tenth of a second, and the Bomb, a single bigger one.
+//!
+//! **One module for both, because they are one weapon in two sizes.** The Bomb
+//! authors six of the Mine's seven attributes and every one of them is larger
+//! on both shipped tables; a maintainer who plays Pulse describes it as "a
+//! single big mine", asked without being shown any of this; and
+//! `Weapon_FireBomb` (`0x08863a20`) differs from `Weapon_DropMines`
+//! (`0x088675cc`) in exactly one structural way - it spawns once where the
+//! other reloads a timer and spawns again. Splitting them would mean two copies
+//! of [`triggered_by`] and [`at_rest`] and two places for the same reading to
+//! drift.
+//!
+//! Everything below says "mine" and means both unless it says otherwise; the
+//! places they differ are [`CLUSTER`] and [`Drop::count`].
 //!
 //! The sibling of [`super::missile`] in shape and its opposite in behaviour -
 //! the Missile is the weapon this engine flies hardest, and the Mine is the one
@@ -45,10 +58,68 @@
 //! - **That a mine will not be tripped by the craft that laid it**, at any
 //!   range. See [`triggered_by`].
 
+use super::{Impact, Projectile};
 use oag_core::math::Vec3;
-use oag_formats::weapons::MineStats;
+use oag_formats::weapons::{BombStats, MineStats, Weapon};
 use oag_physics::ShipState;
 use oag_physics::params::Dimensions;
+
+/// What one press of a rear weapon lays: how many, and with what fuse and trip.
+///
+/// The seam between the two weapons, and it is deliberately small - a count and
+/// three floats. Everything else about a Mine and a Bomb in this engine is the
+/// same code path.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Drop {
+    /// How many charges the press lays.
+    ///
+    /// [`CLUSTER`] for the Mine and **one** for the Bomb. The Bomb's one is
+    /// recovered - `Weapon_FireBomb` (`0x08863a20`) makes a single spawn call
+    /// with no reload timer anywhere in it - which is worth contrasting with the
+    /// Mine's, where the count is the invented number on this whole weapon.
+    pub count: u8,
+    /// Seconds before a laid charge goes off on its own.
+    pub fuse: f32,
+    /// How close a craft must come to set it off early.
+    pub trigger_radius: f32,
+}
+
+impl Drop {
+    /// The Mine's drop.
+    #[must_use]
+    pub const fn mine(stats: &MineStats) -> Self {
+        Self {
+            count: CLUSTER,
+            fuse: stats.timetodie,
+            trigger_radius: stats.trigger_radius,
+        }
+    }
+
+    /// The Bomb's, which is the same thing with a count of one.
+    #[must_use]
+    pub const fn bomb(stats: &BombStats) -> Self {
+        Self {
+            count: 1,
+            fuse: stats.timetodie,
+            trigger_radius: stats.trigger_radius,
+        }
+    }
+
+    /// The drop one weapon makes, or `None` for a weapon that lays nothing and
+    /// for a table that authors no block for it.
+    ///
+    /// The one place the two rear weapons are told apart, so a caller never has
+    /// to. A weapon that is not a rear weapon is `None` rather than a panic:
+    /// asking is how [`crate::pickup::IMPLEMENTED`]'s callers stay honest.
+    #[must_use]
+    pub fn for_weapon(weapon: Weapon, weapons: &oag_formats::weapons::WeaponStats) -> Option<Self> {
+        match weapon {
+            Weapon::Mine => weapons.mine().as_ref().map(Self::mine),
+            Weapon::Bomb => weapons.bomb().as_ref().map(Self::bomb),
+            _ => None,
+        }
+    }
+}
 
 /// How long between one mine leaving and the next, in seconds.
 ///
@@ -136,10 +207,121 @@ pub const fn at_rest() -> Vec3 {
 /// this is the same exclusion [`super::nearest_hit`] already makes for a
 /// rocket's owner, applied to a weapon where it is doing more work.
 ///
+/// Takes the radius rather than a stats block, because the Bomb's and the
+/// Mine's come from two different structs and the rule does not care which.
+///
 /// Note this is the *trip* only. The blast that follows is
 /// [`super::blast`]'s and excludes nobody - a craft that lays a mine and then
 /// reverses into its own cluster still takes the damage.
 #[must_use]
-pub fn triggered_by(mine: Vec3, owner: u8, slot: u8, position: Vec3, stats: &MineStats) -> bool {
-    slot != owner && (position - mine).length() <= stats.trigger_radius
+pub fn triggered_by(mine: Vec3, owner: u8, slot: u8, position: Vec3, trigger_radius: f32) -> bool {
+    slot != owner && (position - mine).length() <= trigger_radius
+}
+
+/// The trip radius of each weapon that has one, so [`super::Projectiles::advance`] can
+/// be handed both without a whole weapon table.
+///
+/// A pair of `Option<f32>` rather than the table itself, because `advance` is
+/// the deterministic core and the table is a loaded asset: the less of it
+/// crosses that line the fewer ways a race can differ from a replay of itself.
+/// `None` is a weapon the table does not author, and a charge of that kind
+/// cannot be tripped - see [`advance_laid`].
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct TriggerRadii {
+    /// `<Weapon type="Mine"><Stats trigger_radius>`.
+    pub mine: Option<f32>,
+    /// `<Weapon type="Bomb"><Stats trigger_radius>`.
+    pub bomb: Option<f32>,
+}
+
+impl TriggerRadii {
+    /// Both, out of a weapon table, or both `None` for a table that did not
+    /// load.
+    #[must_use]
+    pub fn from_table(weapons: Option<&oag_formats::weapons::WeaponStats>) -> Self {
+        let Some(weapons) = weapons else {
+            return Self::default();
+        };
+        Self {
+            mine: weapons.mine().map(|s| s.trigger_radius),
+            bomb: weapons.bomb().map(|s| s.trigger_radius),
+        }
+    }
+
+    /// One weapon's, or `None` for a weapon that is not laid at all.
+    #[must_use]
+    fn get(self, kind: Weapon) -> Option<f32> {
+        match kind {
+            Weapon::Mine => self.mine,
+            Weapon::Bomb => self.bomb,
+            _ => None,
+        }
+    }
+}
+
+/// One tick of a laid charge - a mine or a bomb: the trip test, then the fuse.
+///
+/// Returns the blast, if this is the tick it goes off. Two ways it can be: a
+/// craft came inside `trigger_radius`, or the authored fuse ran out. The trip is
+/// tested **first**, so a charge tripped on the same tick its fuse expires is
+/// recorded as having struck the craft that tripped it - which is the more
+/// informative of two answers that do the same damage.
+///
+/// A charge whose weapon the table does not author cannot be tripped and simply
+/// expires without a blast - the same "no authored numbers, spend no blast" rule
+/// [`super::blast_stats`] follows, and reachable only through a bug upstream in
+/// [`crate::pickup::IMPLEMENTED`].
+pub(super) fn advance_laid(
+    projectile: &mut Projectile,
+    kind: Weapon,
+    dt: f32,
+    ships: &[crate::world::Ship],
+    trigger_radii: TriggerRadii,
+) -> Option<Impact> {
+    let here = projectile.position;
+    let owner = projectile.owner;
+
+    if let Some(trigger_radius) = trigger_radii.get(kind) {
+        // Slot order, and slot order only - the first craft in the array that is
+        // close enough trips it. Which craft is credited when two are inside the
+        // radius on one tick is therefore the array's business rather than the
+        // geometry's, and that is deliberate: the alternative is a nearest-first
+        // search whose result depends on distances that are equal often enough
+        // to matter. See `docs/architecture/determinism.md`.
+        for (slot, ship) in ships.iter().enumerate() {
+            if !ship.active {
+                continue;
+            }
+            let slot = slot as u8;
+            if triggered_by(
+                here,
+                owner,
+                slot,
+                ship.physics.body.position,
+                trigger_radius,
+            ) {
+                return Some(Impact {
+                    point: here,
+                    kind,
+                    owner,
+                    struck: Some(slot),
+                });
+            }
+        }
+    }
+
+    projectile.lifetime -= dt;
+    if projectile.lifetime > 0.0 {
+        return None;
+    }
+    // The fuse. An unauthored weapon is the one path that reaches here with
+    // nothing to spend, and it produces an impact whose blast lookup then finds
+    // nothing - one free slot and no damage, rather than a charge that lives for
+    // ever.
+    Some(Impact {
+        point: here,
+        kind,
+        owner,
+        struck: None,
+    })
 }

@@ -1,4 +1,5 @@
-//! The Mine, on a real circuit out of a real disc image.
+//! The two rear weapons - the Mine and the Bomb - on a real circuit out of a
+//! real disc image.
 //!
 //! **`#[ignore]`d and never run in CI.** It needs game content, which this
 //! project does not ship. See
@@ -91,15 +92,32 @@ fn held(button: Button) -> oag_gameplay::InputSnapshot {
     }
 }
 
-/// Every mine slot 0 has laid, in the order the array holds them.
-fn laid(race: &race::Race) -> Vec<oag_gameplay::projectile::Projectile> {
+/// Every charge of one kind slot 0 has laid, in the order the array holds them.
+fn laid_of(race: &race::Race, kind: Weapon) -> Vec<oag_gameplay::projectile::Projectile> {
     race.world
         .projectiles
         .slots
         .iter()
-        .filter(|p| p.kind == Some(Weapon::Mine) && p.owner == 0)
+        .filter(|p| p.kind == Some(kind) && p.owner == 0)
         .copied()
         .collect()
+}
+
+/// Every mine slot 0 has laid, in the order the array holds them.
+fn laid(race: &race::Race) -> Vec<oag_gameplay::projectile::Projectile> {
+    laid_of(race, Weapon::Mine)
+}
+
+/// A race with the craft already up to speed, and full throttle to keep it
+/// there.
+fn moving() -> Option<(race::Race, oag_gameplay::InputSnapshot)> {
+    let loaded = single_race()?;
+    let mut race = race::Race::start(loaded.setup);
+    let throttle = held(Button::Cross);
+    for _ in 0..120 {
+        race.tick(&throttle);
+    }
+    Some((race, throttle))
 }
 
 /// One press lays the whole cluster, spread along the track, and the pickup
@@ -314,4 +332,159 @@ fn a_cluster_trips_on_a_rival_and_not_on_its_own_dropper() {
         race.world.ships[0].physics.shield, dropper_shield,
         "the craft that laid the cluster was hurt by a mine it drove away from"
     );
+}
+
+/// **A Bomb press lays exactly one, and it is a Mine one size up in every way
+/// the engine models.**
+///
+/// The Bomb shares every line of `oag_gameplay::projectile::mine` with the Mine
+/// except a count, so what a real-data test can say that a unit test cannot is
+/// that sharing it did not quietly make one of them the other. Four claims, all
+/// against the *disc's* numbers rather than chosen ones:
+///
+/// - One charge, not [`CLUSTER`](oag_gameplay::projectile::mine::CLUSTER). A
+///   Bomb wired through the Mine's `Drop` with the wrong count is the single
+///   most likely way this refactor goes wrong, and it is invisible to the type
+///   system.
+/// - It is behind the craft, like the Mine's.
+/// - It does not move. Asserted over sixty ticks of the craft driving away, so
+///   a bomb that inherited any of the launcher's velocity - which is what the
+///   original's own negated-forward spawn direction might have meant - fails.
+/// - Its fuse is the Bomb's own and outlasts the Mine's, which is what says the
+///   two `<Stats>` blocks did not get transposed on the way through `Drop`.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_bomb_is_one_static_charge_behind_the_craft() {
+    let Some((mut race, throttle)) = moving() else {
+        return;
+    };
+    let bomb = race.mine_stats().expect("a Mine");
+    let stats = race.bomb_stats().expect("the disc authors a Bomb");
+
+    let origin = race.world.ships[0].physics.body.position;
+    let forward = race.world.ships[0].physics.body.forward();
+    race.world.ships[0].pickup.weapon = Some(Weapon::Bomb);
+    let mut buttons = oag_gameplay::input::Input::new();
+    buttons.begin_frame(Button::Cross.bit());
+    let press = oag_gameplay::InputSnapshot {
+        buttons: {
+            let mut b = buttons;
+            b.begin_frame(Button::Cross.bit() | Button::Square.bit());
+            b
+        },
+        ..oag_gameplay::InputSnapshot::new()
+    };
+    race.tick(&press);
+
+    let charges = laid_of(&race, Weapon::Bomb);
+    assert_eq!(
+        charges.len(),
+        1,
+        "a Bomb press laid {} charges - it is wired through the Mine's cluster \
+         count",
+        charges.len()
+    );
+    assert_eq!(
+        race.ship_pickup(),
+        None,
+        "the pickup survived a drop of one, so the counter did not reach zero"
+    );
+
+    let along = (charges[0].position - origin).dot(forward);
+    println!(
+        "the bomb sits {along:.2} units along the craft's forward axis, fuse {:.1} s \
+         against the mine's {:.1}",
+        charges[0].lifetime, bomb.timetodie
+    );
+    assert!(along < 0.0, "the bomb was laid {along:.2} units *ahead*");
+    assert!(
+        charges[0].lifetime > bomb.timetodie,
+        "the bomb's fuse is {:.1} s against the mine's {:.1} - the two <Stats> \
+         blocks are transposed",
+        charges[0].lifetime,
+        bomb.timetodie
+    );
+    assert!(
+        charges[0].lifetime <= stats.timetodie,
+        "the bomb carries {:.1} s against an authored {:.1}",
+        charges[0].lifetime,
+        stats.timetodie
+    );
+
+    // Static, over a full second of the craft driving away from it.
+    let placed = charges[0].position;
+    for _ in 0..60 {
+        race.tick(&throttle);
+    }
+    let still = laid_of(&race, Weapon::Bomb);
+    assert_eq!(still.len(), 1, "the bomb went off with nobody near it");
+    let moved = (still[0].position - placed).length();
+    let travelled = (race.world.ships[0].physics.body.position - placed).length();
+    println!("after a second the craft is {travelled:.1} away and the bomb moved {moved:.3}");
+    assert!(
+        moved < 1e-3,
+        "the bomb drifted {moved:.3} units while the craft drove {travelled:.1} away"
+    );
+}
+
+/// A Bomb hurts more than a Mine, on the disc's own numbers, against the same
+/// craft in the same place.
+///
+/// The comparison is the assertion. Both charges are laid at the same point and
+/// the same rival is put on each in turn, so the only difference between the two
+/// measurements is which `<Stats>` block was spent - which is what a blast
+/// lookup wired to the wrong weapon would get wrong while still doing damage.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_bomb_hits_harder_than_a_mine_at_the_same_spot() {
+    let Some((mut race, throttle)) = moving() else {
+        return;
+    };
+    race.bomb_stats().expect("the disc authors a Bomb");
+    let victim = 1;
+    assert!(
+        race.world.ships[victim].active,
+        "no second craft on the grid"
+    );
+
+    let mut taken = Vec::new();
+    for kind in [Weapon::Mine, Weapon::Bomb] {
+        race.world.ships[0].pickup.weapon = Some(kind);
+        race.world.ships[0].pickup.begin_drop(1);
+        race.tick(&throttle);
+
+        let charges = laid_of(&race, kind);
+        assert!(!charges.is_empty(), "{kind:?}: nothing was laid");
+        let before = race.world.ships[victim].physics.shield;
+        race.world.ships[victim].physics.body.position = charges[0].position;
+        race.tick(&throttle);
+        taken.push(before - race.world.ships[victim].physics.shield);
+
+        // Put the victim back out of the way and heal it, so the second
+        // measurement starts from the same place the first did.
+        race.world.ships[victim].physics.shield =
+            race.world.ships[victim].handling.dimensions.shield;
+        race.world.ships[victim].physics.body.position =
+            race.world.ships[0].physics.body.position + forward_of(&race, 0) * 500.0;
+        race.world.ships[0].pickup.weapon = None;
+        race.world.ships[0].pickup.begin_drop(0);
+    }
+
+    println!("mine took {:.1}, bomb took {:.1}", taken[0], taken[1]);
+    assert!(
+        taken[0] > 0.0,
+        "the mine did no damage, so the comparison says nothing"
+    );
+    assert!(
+        taken[1] > taken[0],
+        "the bomb took {:.1} against the mine's {:.1} - the blast lookup is \
+         spending the wrong weapon's block",
+        taken[1],
+        taken[0]
+    );
+}
+
+/// One craft's forward axis, for the arithmetic above.
+fn forward_of(race: &race::Race, slot: usize) -> oag_core::math::Vec3 {
+    race.world.ships[slot].physics.body.forward()
 }

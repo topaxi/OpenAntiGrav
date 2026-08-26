@@ -1,9 +1,9 @@
-# Weapons: six of thirteen, and two doc pages had two of them swapped
+# Weapons: seven of thirteen, and two doc pages had two of them swapped
 
 2026-08-26, [mine.md](../docs/ghidra/functions/psp-pulse-usa/mine.md) and
 [pickups.md](../docs/gameplay/pickups.md) - the pages to read, not this row.
 Supersedes the four-of-thirteen thread. **Turbo, Shield, Rocket, Missile,
-Autopilot and Mine** now do something.
+Autopilot, Mine and Bomb** now do something.
 
 **The Mine is the interesting one, and not because it was hard.** Its blocker
 was that the project had it filed under the wrong function. `weapon-fire.md`
@@ -60,6 +60,32 @@ not the trajectory** - the two new `Held` fields are zero through both reference
 scenarios, and with only their writes removed all eight previous constants
 reproduce bit for bit.
 
+**The Bomb followed the Mine the same day and cost almost nothing**, which is
+the point of recording it here rather than in a thread of its own: it shares
+every line of `oag_gameplay::projectile::mine` except a count. Three
+independent things say it is the Mine one size up - its `<Stats>` are the
+Mine's six with every one larger on both shipped tables; `Weapon_FireBomb`
+(`0x08863a20`) spawns once where `Weapon_DropMines` reloads a timer and spawns
+again; and a maintainer who plays Pulse said so when asked, twice, unprompted
+("a single big mine"). Measured on the disc: 15 damage against the Mine's 5, a
+20-second fuse against 7, and it does not move - 0.000 units of drift while the
+craft that laid it drove 118 away.
+
+**And a third weapon's worth of work fell out of the Mine on the way**, which is
+the finding most likely to matter to whoever reads this next.
+`Weapon_PostBlastImpulse` (`0x0886794c`) had been read at instruction level a
+week earlier and its `stats` pointer left unidentified - the thing holding it at
+confidence 68. It is the **Mine's**: the four offsets it spends (`+0xe8`,
+`+0xec`, `+0xf0`, `+0xfc`) are exactly `damage`, `blastradius`, `blastforce` and
+`slowdown_time` in the block `WeaponStats_ParseMine` writes, in four matching
+roles. The cross-check that makes it more than four numbers lining up is the
+fourth: `+0x130`, the accumulator `+0xfc` feeds, was recorded across this tree
+as `<Global slowdown_limit>`'s consumer *before* anyone knew `+0xfc` held
+`slowdown_time` - the two identifications were made from opposite ends and met.
+**So a blast's impulse falls off linearly (`1.0 - d/blastradius`) and its damage
+does not**, and `projectile::blast` had both flat. Half of an invented rule
+replaced by the original's, at the cost of one trajectory hash move.
+
 **Two files were split rather than baselined** (`projectile/rocket.rs`,
 `driver/weapons.rs`), and the second surfaced a pre-existing bug: `Driver::drift`'s
 doc comment was stranded 270 lines above it, attached to `Driver::wants_to_fire`.
@@ -88,22 +114,38 @@ Put back.
   `Weapons_DispatchFire`. Where the Cannon actually fires is unread; bit
   `0x4000` on `world+0x58` (`0x088537ac`) is the obvious candidate and was not
   chased.
-- Seven weapons are still unbuilt: Quake needs track deformation, LeachBeam a
-  beam, and most of the rest the slowdown mechanic behind
-  `<Global slowdown_limit>`, whose consumer (`weapon_record+0x130`) is known and
-  unspent.
-- **A mine draws nothing.** `Pulse_Mine.vex` is named and located and no
-  renderer reads it, so a laid cluster is invisible.
+- Six weapons are still unbuilt: Quake needs track deformation, LeachBeam a
+  beam, and the remaining four - Cannon, Plasma, Repulser, Shuriken - need
+  either the slowdown mechanic or a fire path nothing has read.
+- **The Bomb's `damageradius` is authored and spent nowhere.** It is the only
+  second radius any weapon has, and the one blast path read at instruction level
+  spends `blastradius` for both damage and impulse. Left undecoded rather than
+  wired on a guess about which half it governs.
+- **`WeaponStats_ParseBomb` (`0x0880cef0`) resisted a read.** It is not a
+  defined function in the Ghidra database, `create_function` refuses it, and the
+  bridge cannot read bytes anywhere in `.text` (it reads `.rodata` normally).
+  Its *name* is settled at 90 off the dispatch chain; its offsets are not, and
+  nothing needs them. Whoever fixes the bridge should re-read that region -
+  five of the fourteen `<Stats>` parsers are in the same state.
+- **A mine and a bomb both draw nothing.** `Pulse_Mine.vex` and
+  `Pulse_Bomb.vex` are both named and located and no renderer reads either, so a
+  laid charge is invisible - which for a weapon whose whole point is that a
+  rival does not see it coming is arguably fine, and for the player who laid it
+  is not.
 
 ## Next Steps
 
-- **The Bomb is the obvious next weapon** and a maintainer has asked for it: one
-  bigger charge out of the same rear anchor, bigger blast, longer `timetodie`,
-  wider `trigger_radius`, all authored and all parsed the same way `MineStats`
-  was. `Weapon_FireBomb` (`0x08863a20`) is read end to end in
-  `contact-response.md` - the negated-forward spawn, the pool cursor, the
-  owning-craft index. Most of `projectile::mine` is reusable as-is; what differs
-  is one spawn instead of a cluster and a velocity that is *not* zero, since the
-  Bomb is spawned along a direction the handler explicitly negates.
+- **Draw the two rear weapons.** `Data\Weapons\Pulse_Mine.vex` and
+  `Data\Weapons\Pulse_Bomb.vex` through the existing `.vex` path, plus their
+  own cues (`MINELAUNCH`/`MINERADAR`, `BOMBLAUNCH`/`~BOMBRADAR`,
+  `BOMBEXPL`/`BOMBEXPL_PC`) - all six strings are located. This is now the
+  biggest gap on both weapons: they work and are invisible.
+- **The Cannon is the odd one left and is worth a session on its own.** Its fire
+  bit `0x2000` is set by `Weapon_RequestFire` and dispatched by **nothing** in
+  `Weapons_DispatchFire`. Bit `0x4000` on `world+0x58` (`0x088537ac`) is the
+  obvious candidate for where it actually fires and was not chased. It is also
+  the only weapon authoring `rounds` and `rate`, which is what made the Mine's
+  handler look like it for months.
 - Measure `CLUSTER` against the running original and retire the invented number.
-- Draw a mine: `Data\Weapons\Pulse_Mine.vex` through the existing `.vex` path.
+- **Re-read the five undefined `<Stats>` parsers** once the Ghidra bridge can
+  read `.text` again - see Open.

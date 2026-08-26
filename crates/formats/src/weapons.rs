@@ -50,12 +50,15 @@
 //! - **The Mine's block**, since `oag_gameplay::projectile::mine` drops one.
 //!   Seven attributes and no speed, which is the shape of a weapon that is not
 //!   launched so much as left behind.
+//! - **The Bomb's block**, less `damageradius`, since the same module drops one
+//!   of those too. That weapon is the Mine one size up and its block says so.
 //!
-//! Everything else - the other nine weapons' blocks and the seven disturber
+//! Everything else - the other eight weapons' blocks and the seven disturber
 //! effects - is named on `docs/formats/weapon-stats.md` and left undecoded,
 //! because a field decoded with no consumer is a field nobody has checked.
-//! `slowdown_time` stays out on all three decoded weapons for exactly that
-//! reason.
+//! `slowdown_time` stays out on all four decoded weapons for exactly that
+//! reason, and so does the Bomb's second radius - see [`BombStats`], which is
+//! explicit about it because that one is easy to mistake for an oversight.
 //!
 //! # Nothing here defaults
 //!
@@ -388,6 +391,58 @@ pub struct MineStats {
     pub trigger_radius: f32,
 }
 
+/// The Bomb's `<Stats>`, less the two attributes nothing consumes.
+///
+/// # The Bomb is the Mine one size up, and that is the shipped data's shape
+///
+/// Six of its eight attributes are the Mine's six, and every one of them is
+/// larger on both shipped tables - a bigger charge, a wider blast, a wider trip
+/// and a fuse nearly three times as long. The engine treats it the same way for
+/// exactly that reason: see [`MineStats`], whose fields these mirror.
+///
+/// It differs from the Mine in two places and only two:
+///
+/// - **A press lays one, not a cluster.** `Weapon_FireBomb` (`0x08863a20`)
+///   makes a single spawn where `Weapon_DropMines` (`0x088675cc`) reloads a
+///   timer and spawns again.
+/// - **`damageradius`**, below.
+///
+/// # `damageradius` is authored and is deliberately not decoded
+///
+/// The Bomb is the **only** weapon of the thirteen that authors a second
+/// radius, and it is smaller than `blastradius` on both shipped tables. The
+/// obvious reading is that the blast pushes over the wider circle and hurts over
+/// the narrower one - and it is left as a reading, because the one blast path
+/// this project has read at instruction level (`Weapon_PostBlastImpulse`,
+/// `0x0886794c`) spends `blastradius` for both, and no consumer of a second
+/// radius has been found anywhere.
+///
+/// So it stays undecoded, for the reason [`RocketStats`] leaves `slowdown_time`
+/// undecoded and the module docs give at length: a field decoded with no
+/// consumer is a field nobody has checked. It is named on
+/// `docs/formats/weapon-stats.md` and here, rather than dropped silently, which
+/// is the part that matters - the next person to look for it should find it
+/// recorded as *known and unspent* rather than as missed.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct BombStats {
+    /// Energy paid back for absorbing it rather than firing it.
+    pub absorb: f32,
+    /// The impulse the blast pushes a craft with, at the centre.
+    pub blastforce: f32,
+    /// How far from the blast a craft is still pushed and hurt.
+    pub blastradius: f32,
+    /// Energy the blast costs a craft inside that radius.
+    pub damage: f32,
+    /// How long a dropped bomb lives before it goes off on its own, in seconds.
+    ///
+    /// Twenty on both shipped tables against the Mine's seven, which is the
+    /// single biggest difference between the two weapons: a bomb left on the
+    /// track is a hazard for most of a lap.
+    pub timetodie: f32,
+    /// How close a craft must come before the bomb goes off.
+    pub trigger_radius: f32,
+}
+
 /// How likely a pad is to hand out one weapon, from one `<Pickupodds>` block.
 ///
 /// Four weights, and their shape is the pickup design: the same weapon is
@@ -457,6 +512,10 @@ pub struct WeaponStats {
     ///
     /// Read it through [`Self::mine`].
     mine: Option<MineStats>,
+    /// The Bomb's own block, or `None` for a file that omits it.
+    ///
+    /// Read it through [`Self::bomb`].
+    bomb: Option<BombStats>,
     /// `absorb` for every weapon the file authors, in document order.
     pub absorb: Vec<(Weapon, f32)>,
     /// One entry per `<Pickupodds>` block, in document order.
@@ -507,6 +566,15 @@ impl WeaponStats {
     #[must_use]
     pub fn mine(&self) -> Option<MineStats> {
         self.mine
+    }
+
+    /// The Bomb's `<Stats>`, or `None` when the file authors no Bomb.
+    ///
+    /// `None` is a real state rather than a failure, exactly as [`Self::rocket`]'s
+    /// is. Both shipped tables do author one.
+    #[must_use]
+    pub fn bomb(&self) -> Option<BombStats> {
+        self.bomb
     }
 
     /// One weapon's `absorb`, or `None` when the file authors no such weapon.
@@ -614,6 +682,7 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
     let mut rocket = None;
     let mut missile = None;
     let mut mine = None;
+    let mut bomb = None;
     let mut absorb = Vec::new();
 
     // One pass over `<Weapon>` children, so an unknown `type` is skipped and a
@@ -670,6 +739,17 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
                     number(block, "Stats", "rapierspeed")?,
                     number(block, "Stats", "phantomspeed")?,
                 ],
+            });
+            continue;
+        }
+        if weapon_kind == Weapon::Bomb {
+            bomb = Some(BombStats {
+                absorb: number(block, "Stats", "absorb")?,
+                blastforce: number(block, "Stats", "blastforce")?,
+                blastradius: number(block, "Stats", "blastradius")?,
+                damage: number(block, "Stats", "damage")?,
+                timetodie: number(block, "Stats", "timetodie")?,
+                trigger_radius: number(block, "Stats", "trigger_radius")?,
             });
             continue;
         }
@@ -735,6 +815,7 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
         rocket,
         missile,
         mine,
+        bomb,
         absorb,
         pickups,
     })

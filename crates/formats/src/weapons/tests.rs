@@ -17,6 +17,7 @@ const FIXTURE: &str = r#"<WeaponStats>
 <Weapon type="Global"><Stats slowdown_limit="1"/></Weapon>
 <Weapon type="Rocket"><Stats absorb="2" blastforce="3" blastradius="4" damage="5" slowdown_time="6" venomspeed="100" flashspeed="200" rapierspeed="300" phantomspeed="400" launchSpeed="7" spread="0.25"/></Weapon>
 <Weapon type="Missile"><Stats absorb="22" blastforce="23" blastradius="24" damage="25" slowdown_time="26" venomspeed="500" flashspeed="600" rapierspeed="700" phantomspeed="800" launchSpeed="27" lock_min_dist="28" lock_max_dist="29"/></Weapon>
+<Weapon type="Bomb"><Stats absorb="40" blastforce="41" blastradius="42" damage="43" damageradius="44" slowdown_time="45" timetodie="46" trigger_radius="47"/></Weapon>
 <Weapon type="Mine"><Stats absorb="30" blastforce="31" blastradius="32" damage="33" slowdown_time="34" timetodie="35" trigger_radius="36"/></Weapon>
 <Weapon type="Turbo"><Stats absorb="4" time="5"/></Weapon>
 <Weapon type="Shield"><Stats absorb="6" time="7"/></Weapon>
@@ -235,6 +236,56 @@ fn a_file_without_a_mine_has_no_mine_stats() {
     let none =
         "<WeaponStats><Weapon type=\"Global\"><Stats slowdown_limit=\"1\"/></Weapon></WeaponStats>";
     assert_eq!(parse(none).expect("parses").mine(), None);
+}
+
+/// The Bomb's six decoded attributes, and the two the fixture authors that it
+/// must **not** pick up.
+///
+/// `damageradius` and `slowdown_time` are both in the fixture and both absent
+/// from [`BombStats`], deliberately - see that struct. A parser that started
+/// reading either would have to change this test, which is the point: the
+/// omission is a decision and a decision should be hard to undo by accident.
+#[test]
+fn the_bomb_reads_six_of_its_eight() {
+    let bomb = parse(FIXTURE)
+        .expect("the fixture parses")
+        .bomb()
+        .expect("the fixture authors a Bomb");
+    assert_eq!(
+        bomb,
+        BombStats {
+            absorb: 40.0,
+            blastforce: 41.0,
+            blastradius: 42.0,
+            damage: 43.0,
+            timetodie: 46.0,
+            trigger_radius: 47.0,
+        }
+    );
+}
+
+/// The Bomb's block is not the Mine's, and the fixture gives them disjoint
+/// numbers so a parser that matched the wrong `<Weapon type>` fails here.
+///
+/// The two share six attribute names out of seven and eight, which is exactly
+/// the shape a copy-pasted parse arm gets wrong silently.
+#[test]
+fn the_bomb_and_the_mine_read_their_own_blocks() {
+    let stats = parse(FIXTURE).expect("parses");
+    let bomb = stats.bomb().expect("a Bomb");
+    let mine = stats.mine().expect("a Mine");
+    assert_ne!(bomb.damage, mine.damage);
+    assert_ne!(bomb.timetodie, mine.timetodie);
+    assert_ne!(bomb.trigger_radius, mine.trigger_radius);
+}
+
+/// A file with no Bomb is not an error, for
+/// [`a_file_without_a_rocket_has_no_rocket_stats`]'s reason.
+#[test]
+fn a_file_without_a_bomb_has_no_bomb_stats() {
+    let none =
+        "<WeaponStats><Weapon type=\"Global\"><Stats slowdown_limit=\"1\"/></Weapon></WeaponStats>";
+    assert_eq!(parse(none).expect("parses").bomb(), None);
 }
 
 /// A file with no Missile is not an error, for [`a_file_without_a_rocket_has_no_rocket_stats`]'s
