@@ -48,7 +48,7 @@
 0x002d6190	function	RenderManager_CreateInstance	84	renderer.md
 0x002d5ed0	function	RenderManager_ConstructComplete	80	renderer.md
 0x002d5710	function	RenderManager_Construct	76	renderer.md
-0x002d6300	function	RenderManager_FlushDrawQueue	68	renderer.md
+0x002d6300	function	RenderManager_FlushDrawQueue	90	renderer.md
 0x002d6a78	function	RenderManager_PrepareEye	55	renderer.md
 0x002bebb0	function	MeshImporter_Construct	78	renderer.md
 0x00650330	function	Gcm_Init	88	renderer.md
