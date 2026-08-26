@@ -8,7 +8,7 @@ Found while chasing why `oag_render::mesh::rcs::build_scene` and
 
 ## `RcsModel_Load` - `0x812f15b2`
 
-**Confidence: 85**
+**Confidence: 94**
 
 Loads one `.rcsmodel` file: peeks the first 32 bytes to learn a size at
 `+0x0c`, allocates and reads exactly that many bytes as one block (call it
@@ -54,15 +54,47 @@ the two further sizes at `812f1658`/`812f1664` are loaded from the
 
 Sections are laid out back to back: A, then B (sized by A's own `+0x24`), then
 C (sized by A's own `+0x44`). `size(+0x0c) + size(+0x24) + size(+0x44)` equals
-the file's own length to the byte (`189824 + 682966 + 16573144 = 17445934`) -
-an exact arithmetic closure on the one file checked, the same kind of evidence
-the `WO Track` point-stride finding rests on. **Not yet corroborated on a
-second file or a second track**, and section A's own interior past `+0x0c`,
-`+0x24` and `+0x44` (what `+0x00`'s `0xca5caded`-shaped value and the other
-unlabelled words are, and the chunk/relocation-table shape section A carries
-for both loaded blocks) is unread - this only establishes where the three
-sections start and end, not what is inside any of them. That is real,
-remaining work.
+the file's own length to the byte (`189824 + 682966 + 16573144 = 17445934`).
+
+**Section A's interior is now read**, and the two size words above turn out to
+be fields of a *table* rather than header slots of their own. Confidence
+**94**, corroborated across **all 993 `.rcsmodel` files** the three EU packages
+ship rather than the one this paragraph used to rest on:
+
+```text
++0x00  u32   magic, 0xca5caded
++0x08  u32   section count - 2 with geometry, 1 without
++0x0c  u32   section A's own size
++0x20        one 0x20-byte descriptor per section:
+               +0x00  u32  a tag, unread
+               +0x04  u32  the section's size
+               +0x08  u32  its relocation table, from the end of the descriptors
+               +0x0c  u32  how many entries that table has
+               +0x10  u32  the base its pointers were linked against
+      then   each section's relocation table, 8 bytes per entry:
+               +0x00  u32  offset of a pointer, in the section named next
+               +0x04  u32  which section that pointer lives in
+```
+
+So `+0x24`/`+0x44` are descriptor 0's and descriptor 1's `+0x04`, and
+`+0x28`/`+0x2c` and `+0x48`/`+0x4c` - which the relocation loops read - are
+those descriptors' table offsets and counts. The loop's own address arithmetic
+is what fixes the layout: it starts at `A + A[0x28] + A[0x08] * 0x20` and reads
+its first entry `0x20` further on, which is `A + 0x20` (the descriptor base)
+plus `count * 0x20` (the descriptors) plus the table offset. On `altima` that
+lands the first table at `A+0x60` with 18,077 entries, the second immediately
+after it at `A+0x23548` with 5,634, and 40 bytes of padding to A's stated end.
+
+**The link base at each descriptor's `+0x10` is `0` on every shipped file**,
+which is what makes the payload readable at all: a pointer on disc is already
+the offset of its target within its section, so nothing downstream simulates
+the rebase. Section B is a serialized object graph and section C is raw GPU
+buffer data - on `altima` all 23,711 pointer locations are in B and none in C.
+
+What is inside **section B** - its object layout - is still unread; see
+[`2048-rcsmodel.md`](../../../formats/2048-rcsmodel.md) for what
+`oag_formats::rcsmodel::psp2` does instead, and for the vertex fields past the
+position that remain unplaced.
 
 ## `KdTree_Load` - `0x8118d134`
 
@@ -247,6 +279,12 @@ never per triangle.
 
 ## History
 
+- 2026-08-26 (third pass): `RcsModel_Load` raised 85 -> 94. Section A's own
+  interior is read - the header, the section descriptors and both relocation
+  tables - and the reading is corroborated over all 993 shipped `.rcsmodel`
+  files rather than the one `altima` the first pass checked. The container's
+  payload is decoded far enough to draw: see
+  [`2048-rcsmodel.md`](../../../formats/2048-rcsmodel.md).
 - 2026-08-26 (second pass): `SimpleMesh_Load` 92, `SimpleMesh_Construct` 88 and
   `TrackCollision_MeshFromNode` 88 named, which finishes `track_col.col` -
   `oag_formats::kdcol` reads all 26 shipped files with every byte accounted for.

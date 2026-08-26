@@ -52,6 +52,7 @@ const TITLE: &Title = &Title {
         team: "Nobody",
         // Named after nothing on any disc, for the reason `sounds` below is.
         ship_dir: r"Data\Nowhere",
+        handling_dir: r"Data\Nowhere",
         zone: oag_title::ZoneCircuit::Prefixed("zone_"),
         zone_craft: oag_title::ZoneCraft::ModelsInTeam {
             hull: "Zone",

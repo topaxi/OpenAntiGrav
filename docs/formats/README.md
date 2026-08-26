@@ -207,6 +207,12 @@ soup, the pad volumes and the `section` visibility mask all read, corpus-wide;
 and **ten of HD's sixteen environments are a Pulse or Pure circuit's spline in
 the same world coordinates**, Talon's Junction among them.
 
+**[2048 rcsmodel](2048-rcsmodel.md)** is the last of the three formats that
+changed underneath 2048: the same extension as Wipeout HD's render container and
+a wholly different file - a linker-style image with relocation tables, read
+little-endian. Positions and triangles are read, which is what lets a 2048
+circuit and a 2048 craft draw at all.
+
 **[2048 collision](2048-collision.md)** is the one format of the three that
 changed underneath 2048 and is now read: a `track_col.col` beside every
 `track.vex`, holding a k-d tree over one triangle soup with a surface byte per

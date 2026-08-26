@@ -96,7 +96,7 @@ pub(super) fn load_tracks(
 /// filter cannot disagree with the loader about how a path is spelled.
 pub(super) fn load_teams(
     archives: &mut oag_assets::Archives,
-    ship_dir: &str,
+    dirs: (&str, &str),
     definition: &str,
     documents: &[String],
     report: &mut Vec<String>,
@@ -105,7 +105,7 @@ pub(super) fn load_teams(
     let declared_count = declared.len();
     let teams: Vec<_> = declared
         .into_iter()
-        .filter(|team| raceable(archives, ship_dir, &team.id))
+        .filter(|team| raceable(archives, dirs, &team.id))
         .collect();
 
     if teams.len() != declared_count {
@@ -150,7 +150,11 @@ pub(super) fn load_teams(
 }
 
 /// Whether both files a race reads for a team are on this source.
-fn raceable(archives: &oag_assets::Archives, ship_dir: &str, id: &str) -> bool {
+fn raceable(
+    archives: &oag_assets::Archives,
+    (ship_dir, handling_dir): (&str, &str),
+    id: &str,
+) -> bool {
     archives
         // The ordinary hull, spelled directly rather than through
         // `race::ship_entry_name`: this asks whether a team is *raceable*, which
@@ -164,7 +168,7 @@ fn raceable(archives: &oag_assets::Archives, ship_dir: &str, id: &str) -> bool {
         ))
         .is_some()
         && archives
-            .locate(&oag_formats::handling::entry_name_in(ship_dir, id))
+            .locate(&oag_formats::handling::entry_name_in(handling_dir, id))
             .is_some()
 }
 

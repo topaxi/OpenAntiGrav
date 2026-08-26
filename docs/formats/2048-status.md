@@ -9,8 +9,10 @@ on 2026-08-26.
 **The short version.** 2048 is Wipeout HD's asset tree on a little-endian
 console. The container, the plugin XML, the handling XML and the `.vex` class
 table all read with no code change at all. Three *binary* formats changed
-underneath it; **two of the three are now read**, and the one that is not
-(`.rcsmodel`) costs a picture rather than a race.
+underneath it, and **all three are now read** - the spline, the collision and
+the render geometry. What is left is not a format but the fields inside one:
+a 2048 model draws untextured, because the vertex's normal and texture
+coordinate are not placed yet.
 
 ## What reads unchanged
 
@@ -21,6 +23,7 @@ underneath it; **two of the three are now read**, and the one that is not
 | [Handling stats](handling-stats.md) | **yes** | Both the HD-derived roster's per-team files and the shared `<Global>` block at `Data\XML\handlingstats.xml`. The native roster's five teams parse too, `SUPERPHANTOM` class included. |
 | [`WO Track`](track.md) spline | **yes, after a version gate** | See below. |
 | [Collision](2048-collision.md) | **yes, in a container of its own** | Not the `.vex` path: a `track_col.col` beside every `track.vex`. See below. |
+| [Render geometry](2048-rcsmodel.md) | **positions and triangles** | A `.rcsmodel` sharing HD's extension and no other part of its format. Normals, texture coordinates and the material binding are not placed. |
 | Plugin definitions | **yes, but split three ways** | `Data\Plugins\teams\`, `tracks\` and `music\` each ship their own `Definition.xml` where every other title ships one file carrying all three node kinds. `oag_title::Title::plugin_definition` holds one name, so this build reads the teams one and sees no circuit or soundtrack list. |
 
 ## What changed, and what state each is in
@@ -63,10 +66,10 @@ the start line and runs the simulation. What it does **not** do, and why:
   collides with the barriers - `track_col.col` is decoded and its 15,986
   triangles on `altima` become four colliders. With no steering input it drives
   until it meets a wall and stops there, which is what any title does.
-- **Nothing draws its authored surface.** Both the circuit and every craft have
-  external geometry in `.rcsmodel`, so the circuit falls back to the derived
-  ribbon and the craft draw nothing at all - the same honest half-picture a
-  Wipeout HD race gives, for the same reason.
+- **The circuit and the craft draw, untextured.** Altima comes up as 413,358
+  triangles over 2,800 submeshes and the craft as its own hull, lit off computed
+  face normals because the authored per-vertex normals and texture coordinates
+  are in the file and not placed. See [2048-rcsmodel.md](2048-rcsmodel.md).
 - **No front end, no music, no HUD art.** `oag_2048::TITLE` carries
   `front_end: None`, `loading: None` and `music: None`, and its `hud_art` is
   `Sights::Unread` with an empty always-on set. None of it has been read; a
@@ -82,8 +85,21 @@ HD-derived teams are at `Data\art\published\hdships\<Team>\`, carrying the same
 file set under the same names. That is the third-title disagreement
 [ADR-0022](../architecture/adr/0022-title-packages.md) asks for.
 
-**Its own five teams are not raceable here**, and the reason is shape rather
-than spelling: `ag_systems2048`, `auricom2048`, `feisar2048`, `piranha2048` and
-`qirex2048` live under `Data\HandlingStats\<team>\<1..4>\handlingstats.xml`, a
-two-level directory this single-string axis cannot express, and what the
-numbered level selects is unread.
+**Its own five teams are what this build actually races**, and getting there
+needed a *second* axis. `ag_systems2048`, `auricom2048`, `feisar2048`,
+`piranha2048` and `qirex2048` keep their models under
+`Data\art\published\Ships\<team>\<1..4>\` and their tuning under
+`Data\HandlingStats\<team>\<1..4>\` - two trees, where the HD-derived roster
+keeps both together. So `RaceDefaults` carries `ship_dir` *and* `handling_dir`,
+and the team id is two levels (`feisar2048\3`).
+
+**The numbered level is the four craft each team flies**, and the disc names
+them: `qirex2048\1\Textures_1\Qirex_Fighter_Livery.gxt`, then `_Agility_`,
+`_Speed_` and `_Prototype_` in order, corroborated by the front end's own
+`locked_Feisar2048_speed.gxt` and its three siblings. Feisar spells the first
+`Combat` where Qirex spells it `Fighter`. Confidence 90.
+
+**What it costs is the HD-derived roster**: one `ship_dir` string cannot address
+both trees, so `Data\art\published\hdships\` is not reachable as a default on
+this title while the native one is. Every file is there; reaching it needs the
+axis to become per-team, which no second title has asked for.

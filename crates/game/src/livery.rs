@@ -239,6 +239,13 @@ fn one(
             None => Err(format!(
                 "{hull_name}: a .vex with external geometry and no .rcsmodel beside it"
             )),
+            // 2048's container is a different file under the same extension
+            // and needs no `.vex` at all - see `oag_render::mesh::rcs::psp2`.
+            Some(geometry) if mesh::rcs::psp2::is_psp2(&geometry) => {
+                mesh::rcs::psp2::build(&hull_name, &geometry)
+                    .map(|(model, built)| (model, built.describe()))
+                    .map_err(|error| format!("{hull_name}: {error:#}"))
+            }
             Some(geometry) => mesh::rcs::build(
                 &hull_name,
                 &blob,
@@ -246,6 +253,7 @@ fn one(
                 &mut |path| archives.read_name(path).ok(),
                 |c| c.mesh,
             )
+            .map(|(model, built)| (model, built.describe()))
             .map_err(|error| format!("{hull_name}: {error:#}")),
         };
         let (hull, built) = match built {
@@ -266,7 +274,7 @@ fn one(
                 });
             }
         };
-        report.push(format!("{hull_name}: {}", built.describe()));
+        report.push(format!("{hull_name}: {built}"));
         let (nozzle, collision_fx) = locators(archives, &hull_name, &blob, report);
         // **The plume comes from here too on this title.** HD ships no
         // `shipboost.vex`; `EF_Boost` inside the flare model is what a speed

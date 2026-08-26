@@ -117,6 +117,18 @@ pub struct RaceDefaults {
     ///
     /// [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
     pub ship_dir: &'static str,
+    /// The archive directory a team's `handlingstats.xml` sits under, one
+    /// subdirectory per team id.
+    ///
+    /// **Equal to [`Self::ship_dir`] on three of the four titles, and on one of
+    /// Wipeout 2048's two rosters** - which is exactly why it is a separate
+    /// field rather than the same one. 2048's HD-derived craft keep their
+    /// models and their tuning together under
+    /// `Data\art\published\hdships\<Team>\`; **its own five teams do not**,
+    /// keeping models at `Data\art\published\Ships\<team>\<1..4>\` and
+    /// tuning at `Data\HandlingStats\<team>\<1..4>\`. One string cannot
+    /// address both trees, and folding them would mean picking a roster.
+    pub handling_dir: &'static str,
     /// How this title names the circuit a Zone race runs on. See
     /// [`ZoneCircuit`].
     pub zone: ZoneCircuit,

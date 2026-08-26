@@ -9,6 +9,7 @@ use super::*;
 
 mod cameras;
 mod environment;
+mod geometry;
 mod surfaces;
 use environment::{envsettings_fog, envsettings_light, hd_sky_model};
 
@@ -211,7 +212,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         }
     };
 
-    let stats_name = handling::entry_name_in(title.race.ship_dir, &team);
+    let stats_name = handling::entry_name_in(title.race.handling_dir, &team);
     let stats_blob = read(&mut archives, &stats_name)?;
     let stats =
         handling::from_blob(&stats_blob).map_err(|e| anyhow::anyhow!("{stats_name}: {e}"))?;
@@ -504,24 +505,13 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // what made the distinction matter: it ships one beside every circuit and
     // the container is not HD's, so this used to be a hard error that stopped
     // the race. The report names which of the two happened.
-    let rcs_model = match &ps3_geometry {
-        None => None,
-        Some(geometry) => match mesh::rcs::build_scene(&track, &track_blob, geometry, &mut |path| {
-            archives.read_name(path).ok()
-        }) {
-            Ok((model, built)) => {
-                report.push(format!("{track}: {}", built.describe()));
-                Some(model)
-            }
-            Err(error) => {
-                report.push(format!(
-                    "{track}: the .rcsmodel beside it will not decode ({error:#}) - \
-                     drawing the derived ribbon instead, as --ribbon does"
-                ));
-                None
-            }
-        },
-    };
+    let rcs_model = geometry::track_model(
+        &mut archives,
+        &track,
+        &track_blob,
+        &ps3_geometry,
+        &mut report,
+    );
     let ribbon = options.ribbon || (mesh::geometry_is_external(&track_blob) && rcs_model.is_none());
     // **Everything else built out of the track `.vex` is PSP-shaped geometry.**
     // The sky, the two pad classes and the per-node visibility all read a

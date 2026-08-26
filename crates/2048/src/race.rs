@@ -17,10 +17,21 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     track: DEFAULT_TRACK,
     team: DEFAULT_TEAM,
     ship_dir: SHIP_DIR,
+    handling_dir: HANDLING_DIR,
     zone: oag_title::ZoneCircuit::Separate(DEFAULT_ZONE_TRACK),
     zone_craft: oag_title::ZoneCraft::OwnShip(ZONE_SHIP),
     sounds: SOUND_BANKS,
 };
+
+/// Where this title keeps the **tuning** for the roster [`SHIP_DIR`] holds the
+/// models of.
+///
+/// A second directory, and 2048 is the only title that needs one: its own five
+/// teams keep their models under [`SHIP_DIR`] and their `handlingstats.xml`
+/// here, one tree apart. Its HD-derived roster keeps both together under
+/// `Data\art\published\hdships\<Team>\`, the way every other title does -
+/// so the split is a fact about *this roster*, not about the title.
+pub const HANDLING_DIR: &str = r"Data\HandlingStats";
 
 /// Where this title keeps its roster - **the one axis 2048 forced into
 /// existence**.
@@ -33,14 +44,46 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
 /// `Locators.vex` and four LODs each - the same file set under the same names,
 /// one directory up and three deep.
 ///
-/// **This is not the whole roster**, and the part it leaves out is recorded
-/// rather than guessed at: 2048's own five teams (`ag_systems2048`,
-/// `auricom2048`, `feisar2048`, `piranha2048`, `qirex2048`) live under
-/// `Data\HandlingStats\<team>\<1..4>\handlingstats.xml`, a *two*-level shape
-/// this single-string axis cannot express, and what the numbered levels select
-/// is unread. So this build races 2048's HD-derived craft and not its native
-/// ones. See `docs/formats/2048-status.md`.
-pub const SHIP_DIR: &str = r"Data\art\published\hdships";
+/// **2048's own five teams**, one directory each: `ag_systems2048`,
+/// `auricom2048`, `feisar2048`, `piranha2048` and `qirex2048`, each holding
+/// four numbered craft - see [`SHIP_TYPES`]. Every one of the twenty carries a
+/// `Ship.vex` and a `ship.rcsmodel`, checked against the manifest.
+///
+/// The team id this build hands to the loader is therefore **two levels**,
+/// `feisar2048\3` rather than `feisar2048`, which the path template joins with
+/// a separator exactly as it joins any other id. That works because the id is
+/// opaque to everything that composes a path with it.
+///
+/// **What it costs is the HD-derived roster** - see [`HD_SHIP_DIR`].
+pub const SHIP_DIR: &str = r"Data\art\published\Ships";
+
+/// Where 2048's **HD-derived** fourteen teams keep both their models and their
+/// tuning, the way every other title keeps a roster.
+///
+/// Not [`SHIP_DIR`], and that is the limitation worth naming rather than
+/// hiding: [`oag_title::RaceDefaults::ship_dir`] holds one string, this title
+/// ships two rosters in two trees, and this build races the native one. Every
+/// file is here - `Ship.vex`, `ship.rcsmodel`, `handlingstats.xml`,
+/// `Engineflare.vex`, four LODs - for all fourteen teams and their `_c1`/`_n1`
+/// Fury variants. Reaching them needs the axis to become per-team rather than
+/// per-title, which is a change no second title has yet asked for.
+pub const HD_SHIP_DIR: &str = r"Data\art\published\hdships";
+
+/// What the numbered directory under a native team selects: **the four craft
+/// each of 2048's five teams flies**.
+///
+/// Recovered from the liveries each one ships, which name their own type:
+/// `qirex2048\1\Textures_1\Qirex_Fighter_Livery.gxt`, then `_Agility_`,
+/// `_Speed_` and `_Prototype_` in order. Confirmed on two teams independently,
+/// and corroborated by the front end's own locked-ship art
+/// (`data/FE/NewImages/lockedships/locked_Feisar2048_speed.gxt` and its three
+/// siblings) - which is the same four names from a different direction.
+///
+/// **Feisar spells the first one `Combat` and Qirex spells it `Fighter`**, on
+/// the same slot; the game's own word for it is fighter. Confidence **90**: two
+/// independent naming schemes on the disc agree on the set and the order, and
+/// nothing has been watched running.
+pub const SHIP_TYPES: [&str; 4] = ["fighter", "agility", "speed", "prototype"];
 
 /// The circuit a race loads when the caller names none.
 ///
@@ -56,19 +99,28 @@ pub const DEFAULT_TRACK: &str = r"Data\art\published\environments\altima\track.v
 
 /// The team whose `handlingstats.xml` a race uses by default.
 ///
-/// **Assegai, as on all three other titles**, and spelled with the capital
-/// 2048 spells it. Sharing the default across the lineage is deliberate: every
-/// capture under `data/traces/` was taken with Assegai, so a default that
-/// matched leaves the comparison available. See [`oag_hd::race::DEFAULT_TEAM`].
+/// **Feisar's speed craft, and this is the one default that deliberately does
+/// *not* match the rest of the lineage.** Pulse, Pure and Wipeout HD all
+/// default to Assegai so that a race is directly comparable with the PPSSPP
+/// captures under `data/traces/`, every one of which was flown with it. There
+/// is no 2048 capture to match, and Assegai on this title is a *ported* craft:
+/// defaulting to it would mean a Wipeout 2048 race that flies a Wipeout HD
+/// ship, which is the wrong first impression of what this title is.
 ///
-/// [`oag_hd::race::DEFAULT_TEAM`]: https://github.com/topaxi/OpenAntiGrav/blob/main/crates/hd/src/race.rs
-pub const DEFAULT_TEAM: &str = "Assegai";
+/// Feisar because it is the lineage's starter team, and `3` because that is
+/// the speed craft - see [`SHIP_TYPES`] for how the numbering was recovered.
+pub const DEFAULT_TEAM: &str = r"feisar2048\3";
 
 /// The hull directory a Zone race flies out of, under [`SHIP_DIR`].
 ///
 /// `Data\art\published\hdships\Zone\Ship.vex` resolves, which is HD's own
 /// shape - a ship directory of its own, and the player's team not reaching the
 /// hull at all.
+///
+/// **It is under [`HD_SHIP_DIR`] and this title's [`SHIP_DIR`] is the native
+/// tree**, so a Zone race here finds no hull and reports it. Whether 2048's own
+/// Zone mode flies one of the twenty native craft instead is unread, and is the
+/// same open question [`DEFAULT_ZONE_TRACK`] records from the circuit end.
 pub const ZONE_SHIP: &str = "Zone";
 
 /// The circuit a Zone race loads when the caller names none.

@@ -282,18 +282,47 @@ as a min and a max - which is exactly as plausible and puts the "max" corner
 inside the geometry. It reads as a subtly wrong struct rather than a wrong
 offset, the same shape as the `WO Track` reserved-block trap.
 
+## The render geometry is in too, and 2048 races its own craft
+
+`.rcsmodel` is read - **all three of the formats 2048 changed are now decoded**.
+The container is nothing like Wipeout HD's: a linker-style image with relocation
+tables, read little-endian, magic `0xca5caded`. `just play 2048 --race` draws
+Altima at 413,358 triangles over 2,800 submeshes and the craft's own hull,
+untextured and lit off computed face normals. Evidence in
+[2048-rcsmodel.md](../docs/formats/2048-rcsmodel.md).
+
+Three things from that pass are worth carrying:
+
+- **The relocation table is the decode.** Section B is a serialized C++ object
+  graph and its layout is unread; rather than guess it, the reader takes the one
+  thing the header states exactly - where every pointer into the GPU section
+  lives - and pairs them 28 bytes apart. That is checked rather than
+  pattern-matched: 244,889 of 244,889 submeshes have an index buffer of exactly
+  `count * 2` rounded to four with the count divisible by three.
+- **No field states the vertex stride.** It comes from the buffer packing -
+  section C is the buffers back to back, so differencing sorted pointer targets
+  gives every length. Strides run 16 to 64 in fours.
+- **`RaceDefaults` needed a second directory.** 2048's own five teams keep
+  models under `Data\art\published\Ships\<team>\<1..4>\` and tuning under
+  `Data\HandlingStats\<team>\<1..4>\`, so `handling_dir` joins `ship_dir`, and
+  the team id is two levels (`feisar2048\3`). The numbered level is the four
+  craft each team flies - fighter, agility, speed, prototype, in that order,
+  recovered from the liveries each ships and corroborated by the front end's
+  locked-ship art.
+
 ## What is left
 
-Everything the run still reports is a known absence rather than a bug, and the
-biggest one is now the only one that costs a picture:
+None of it is a format any more; it is fields inside one, and presentation:
 
-- **No craft and no authored track surface.** Both are `.rcsmodel`, whose
-  container 2048 changed and which is still unread past its three-section outer
-  shape. The circuit draws the derived ribbon and the craft draws nothing.
-  **This is the next piece of format work**, and unlike the collision it is not
-  blocking a race - it is blocking seeing one.
+- **A 2048 model draws untextured.** The per-vertex normal and texture
+  coordinate are in the file and unplaced (four bytes at `+0x0c`, `f16` pairs at
+  the end), as is the material and texture binding. That is the next piece of
+  work and it is what stands between this and a picture worth comparing.
+- **The HD-derived roster is not reachable as a default on this title.** One
+  `ship_dir` string cannot address both of 2048's trees; every file is there.
 - No HUD art (2048's `.gxt` atlases sit under names this build does not ask
-  for), no music, no front end.
+  for), no music, no front end. Zone has no hull here for the same `ship_dir`
+  reason.
 
 ## Why nothing was wired up before that
 
@@ -350,17 +379,14 @@ parser change yet - see What's New above and Next Steps below.
    the planned statistical sweep outright: a sweep could only have said "this
    offset is track-width-shaped", where the pairing gives per-field ground
    truth per point.
-2. ~~`KdTree_Load`'s node tail and its mesh trailer~~ - done, see above.
-   **`RcsModel_Load`'s three sections' interiors are what is left**, and they
-   are now the only unread format on this title: section A's own fields past
-   its three size words, and the chunk/relocation shape inside the "main
-   memory" and GPU blocks. The outer shape is confirmed
-   ([track-and-collision-loaders.md](../docs/ghidra/functions/vita-2048-eu-v104/track-and-collision-loaders.md)),
-   so this starts warm. Worth trying the same two-source approach the surface
-   byte needed: 2048's DLC re-ships twelve circuits and fourteen craft that
-   Wipeout HD also ships, and HD's `.rcsmodel` is **already decoded**
-   ([rcsmodel.md](../docs/formats/rcsmodel.md)) - so a chunk of 2048 geometry
-   can be checked against HD's own vertices rather than guessed at.
+2. ~~`RcsModel_Load`'s sections~~ - done, see above. What is left inside a 2048
+   vertex is the **normal, the tangent and the texture coordinates**, plus the
+   material and texture binding, which together are the difference between a
+   grey model and a comparable picture. The strides are known exactly (16..64 in
+   fours) and the position occupies the first 12 bytes of every one of them, so
+   this starts from a known field boundary rather than cold. HD's own reading
+   ([rcsmodel.md](../docs/formats/rcsmodel.md)) placed the same fields in a
+   different container and is worth reading first.
 3. ~~The `ship_dir` axis~~ - done, see above. It reaches the hull, the plume,
    the shield, the flare and the handling stats, and the roster filter in
    `boot::roster` goes through the same spelling, so the filter cannot disagree

@@ -519,7 +519,7 @@ pub fn load_shell(options: &Options) -> Result<(Shell, oag_assets::Archives)> {
     let tracks = load_tracks(&mut archives, definition, &documents, &mut report);
     let teams = load_teams(
         &mut archives,
-        title.race.ship_dir,
+        (title.race.ship_dir, title.race.handling_dir),
         definition,
         &documents,
         &mut report,
