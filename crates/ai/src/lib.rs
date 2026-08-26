@@ -54,9 +54,14 @@
 //! **nothing here knows another craft exists**, so there is no avoidance, no
 //! overtaking line and no defending - the spread is what keeps craft apart, not
 //! a rule that keeps them apart. No mistake injection and no recovery
-//! behaviour, no reaction latency, no difficulty selection, no weapon
-//! competence, and no adaptation between races. `docs/gameplay/ai.md` describes
-//! all of them.
+//! behaviour, no difficulty selection, no weapon competence, and no adaptation
+//! between races. `docs/gameplay/ai.md` describes all of them.
+//!
+//! **Reaction latency is not a personality axis either, and that is on
+//! purpose.** It is a property of a driver's *perception* rather than of its
+//! character, so it lives on [`Driver`] as a [`Reflex`] and its length comes
+//! from the [`Difficulty`] rather than from a seed: two craft of the same
+//! skill notice the field equally quickly, and get quicker together.
 //!
 //! # Determinism
 //!
@@ -80,7 +85,7 @@ mod pilot;
 pub mod probe;
 
 pub use difficulty::Difficulty;
-pub use driver::{AWARENESS_RANGE, Context, Driver, Personality, Tuning};
+pub use driver::{AWARENESS_RANGE, Context, Driver, Personality, Reflex, Tuning};
 pub use field::{Field, Rival};
 pub use line::{Aim, Frame, Line};
 pub use pilot::{Lean, Pilot, Span, pilot_for_slot};

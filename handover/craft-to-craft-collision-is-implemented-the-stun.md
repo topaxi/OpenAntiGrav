@@ -13,6 +13,12 @@
 
 ## Next Steps
 
+- **`docs/gameplay/ai.md` still carries the withdrawn `0x08815ccc` claim**
+  ("The detection is ours, and there is nothing to recover ... turns out to be
+  `jr ra; nop`"), which the 2026-08-25 correction above retracted. The
+  correction landed in `collision.md` and `contact-response.md` and not there.
+  Noticed 2026-08-26 while closing the AI thread; not fixed, because this
+  thread owns the claim.
 - Settle whether `FUN_0885bf84` is the pending-impulse write.
 - Read what `craftArray->0x164` actually counts.
 - Port `FUN_08868ea4`, or wire `post_blast_impulse` to a real weapon.

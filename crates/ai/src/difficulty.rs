@@ -10,7 +10,7 @@
 //! hardest setting is the least tested one, which is exactly backwards.
 //!
 //! `docs/gameplay/ai.md` sets out the same rule as a six-axis *degradation*
-//! vector. Three of those axes exist and are what a level moves here.
+//! vector. Four of those axes exist and are what a level moves here.
 //!
 //! # What a level may not do
 //!
@@ -143,6 +143,34 @@ impl Difficulty {
         }
     }
 
+    /// How long a driver takes to notice a craft arriving beside, in front of
+    /// or behind it, in ticks.
+    ///
+    /// **Zero at Ace, like [`Self::mistakes`]**, or "the measured ceiling, with
+    /// nothing given back" would stop being true of it.
+    ///
+    /// The scale is a human's, because this is the one axis that models a human
+    /// rather than a car: a simple visual reaction is about a quarter of a
+    /// second, which is fifteen ticks, and that is Skilled. Elite is quicker
+    /// than a person because it is already looking, and Novice is four tenths
+    /// of a second - somebody still working out where the circuit goes, who
+    /// notices the craft alongside once it is properly there.
+    ///
+    /// **It is a delay, not a blindness.** What it costs is the early part of
+    /// a reaction - the lift for a craft closing ahead, the cover for one
+    /// coming up behind, the shot at one crossing the cone - which is exactly
+    /// the part a better driver has and a worse one does not. `driver/reflex.rs`
+    /// is what a channel does while the clock runs.
+    #[must_use]
+    pub fn reaction_ticks(self) -> u16 {
+        match self {
+            Self::Novice => 24,
+            Self::Skilled => 15,
+            Self::Elite => 6,
+            Self::Ace => 0,
+        }
+    }
+
     /// How often a driver misses a braking point, as a multiplier on the base
     /// rate. Zero means never.
     #[must_use]
@@ -162,6 +190,7 @@ impl Difficulty {
             lateral_accel: measured.lateral_accel * self.grip_believed(),
             max_turn_rate: measured.max_turn_rate * self.turn_allowed(),
             mistake_rate: MISTAKE_BASE * self.mistakes(),
+            reaction_ticks: self.reaction_ticks(),
             ..*measured
         }
     }

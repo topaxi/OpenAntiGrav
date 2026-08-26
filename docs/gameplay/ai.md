@@ -309,7 +309,10 @@ driving better, never by being handed thrust. That single rule is what makes
    - braking margin - how early or late relative to the optimum
    - fraction of the available grip budget used through a corner
    - lateral noise on the line, and how much of the corridor it uses
-   - reaction latency to pads, weapons and traffic
+   - reaction latency to weapons and traffic - built, see
+     [Reaction latency](#reaction-latency-a-driver-takes-time-to-notice).
+     **Pads are not in it**: nothing in this controller reacts to a pad at all,
+     so there is no reaction there to be late with
    - explicit mistake injection, with a recovery behaviour rather than a
      teleport back to the line
    - weapon competence: selection, timing, and how well it aims
@@ -1904,7 +1907,7 @@ and the same run now places that player 8th of 8.
 each stage that landed left it saying otherwise. Everything below was checked
 against the code on 2026-08-17; check it again before trusting it.
 
-What is still missing, and it is now a short list: **reaction latency**;
+What is still missing, and it is now a short list:
 **adaptation between races**, which was blocked on per-opponent lap times and is
 not any more; and **anything at all happening when a craft is eliminated**. The
 player's *own* position is on screen; an opponent's is not - `PosTag0`-`PosTag7`,
@@ -1924,6 +1927,7 @@ position and nothing computes that.
 | A livery that is not the player's | 2026-08-15 | `crates/game/src/livery.rs` |
 | **A lap time of its own** | **2026-08-17** | `oag_race::Standing::best_lap_ticks` |
 | **Being recovered when it stops** | **2026-08-17** | `Race::stalled`, `race::STALL_SPEED` |
+| **Reaction latency** | **2026-08-26** | [Reaction latency](#reaction-latency-a-driver-takes-time-to-notice) |
 
 **Two of those rows are narrower than they look.** The `[ai]` section holds
 `difficulty` and nothing else - `rubberbanding`, `adaptive` and `mistakes` are
@@ -1995,6 +1999,99 @@ Still not armed: the `stun_timer` and its gate exist and nothing sets them,
 because what posts the pending impulse at `entity->0x4c + 0x110` is still unread -
 the two calls at the tail of the pair resolver are the candidates and they do not
 rebase onto a function start, so they were left alone rather than guessed at.
+
+### Reaction latency: a driver takes time to notice
+
+Landed 2026-08-26, and it is the fourth of the six skill axes above - the last
+of them that decides how a driver treats the craft around it.
+
+**Nothing on the disc authors this and there is nothing to recover.** The
+original's opponents are a thrust schedule keyed on the player's race position
+and the gap to them, which this project [refuses to
+port](#what-we-build-instead); the whole controller here is ours. So the number
+to justify is a human's, not a hull's.
+
+**What it does.** Until this existed a driver acted on `oag_ai::Field` the tick
+the caller measured it: a rival that came alongside was covered on the frame it
+got there, and one that appeared in the weapon cone was shot at on the same
+frame. That is not a quick driver, it is one with no perception step at all,
+and it is a large part of what makes a *slow* opponent still feel machine-like.
+Each of the field's three channels - ahead, behind, alongside - is now held
+back for `Tuning::reaction_ticks` after its occupant **changes**, and reads as
+empty until then.
+
+Three decisions inside that, each of which could have gone the other way:
+
+- **The driver is told nothing, not something stale.** Holding the previous
+  answer would mean carrying a copy of the field per driver - `f32`s in the
+  world snapshot that would cost `Driver` its `Eq` - and it models the wrong
+  thing anyway. Not having noticed is an absence, not a memory.
+- **A channel *emptying* is acknowledged at once.** A driver still covering a
+  rival that has dropped away reads as a bug; one late to spot an arrival reads
+  as a driver. The asymmetry is deliberate and is the one place the axis is not
+  symmetric in time.
+- **A race place is never held back.** `Field::place` feeds the grudge in
+  `Driver::stew`, and being annoyed about an overtake is a reaction to having
+  *been* passed rather than a reaction time. The standings are not something
+  seen out of a cockpit.
+
+**The numbers**, in ticks at 60 Hz - a simple visual reaction is about a quarter
+of a second, which is fifteen:
+
+| level | ticks | seconds |
+| --- | --- | --- |
+| Novice | 24 | 0.40 |
+| Skilled | 15 | 0.25 |
+| Elite | 6 | 0.10 |
+| **Ace** | **0** | **0** |
+
+Zero at Ace for the same reason `Difficulty::mistakes` is zero there, and
+**zero in `Tuning::default`**, so a caller that has not chosen a difficulty -
+the closed-loop harness, a replay, `oag-trace` - still gets the competent
+driver it always got.
+
+**Measured, on the five-seed harness** in
+`crates/game/tests/difficulty_ground_truth.rs`, leader distance averaged over
+five seeds, before and after:
+
+| level | before | after | change |
+| --- | --- | --- | --- |
+| Novice | 6,444 | 6,338 | -106 |
+| Skilled | 7,000 | 7,058 | +58 |
+| Elite | 7,502 | 7,509 | +7 |
+| **Ace** | **7,614** | **7,614** | **0** |
+
+**Ace is identical seed by seed**, not merely on the mean - `[7474, 7698, 7656,
+7459, 7784]` both runs - which is the one strong result in the table: a latency
+of zero has to change nothing, and it changes nothing.
+
+**The other three rows are not measurements of this axis, and the Novice one
+is the trap.** Its five per-seed deltas are `-352, -11, -283, -90, +208` -
+mixed in sign, on a harness whose own history records adjacent levels sitting
+44 apart on a five-seed set. A mean of -106 against a spread that wide is not a
+slow-down that has been demonstrated.
+
+**And the mechanism says leader distance is the wrong witness here anyway.**
+`Difficulty::temper` scales `trigger`, `ram` and `defence` by `aggression()`,
+which is **zero at Novice** - so at the level where the latency is longest, the
+only behaviours it can withhold are `caution` (a lift for a craft closing
+ahead) and `courtesy` (a yield for one coming up behind), and both of those
+*cost* distance. Withholding them for four tenths of a second makes a Novice
+hold its throttle and its line a little longer, not less. What the axis buys at
+that level is how the craft reads from the cockpit - one that tailgates and
+takes a moment to move over - and distance round a lap does not see it.
+
+What the ground-truth run establishes, then, is that the ordering still holds
+and Ace is untouched. That the axis reaches the controls at all is
+`driver::tests::reaction_tests`, which is where it is actually asserted.
+
+**Where it lives:** `oag_ai::Reflex` on `Driver`, three arrays of integers, so
+the snapshot stays `Copy` and `Eq` and a race replays. `Driver::drive` advances
+the clock and `Driver::wants_to_fire` reads it, in that order within a tick -
+which is a real coupling: a caller that asks whether a driver wants to fire
+without having driven it that tick is asking a driver that has noticed nothing.
+`Race::step_opponents` drives every opponent a few lines before it spends its
+pickup, so in a race the two are the same tick.
 
 ### What is verified, and where
 
