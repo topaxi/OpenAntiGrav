@@ -132,16 +132,40 @@ Pure's definition declares, so it never reaches this filter. The ten are
   a short menu. `livery::teams_for_slots` cycles a short list, so the field is
   filled either way.
 
+## There is no one-line version of this fix
+
+Worth knowing before starting: **fixing `raceable` alone makes things worse.**
+It would put the team in the menu, and then every path built downstream from
+the same id would still miss - which is precisely the "offered and raceable are
+the same set" property `load_teams`' own doc comment says the filter exists to
+keep. The team string is a *path component* everywhere it flows, not just in
+the filter:
+
+- `boot::roster::raceable` - both the hull and the handling stats
+- `race::assets::ship_entry_name`, `boost_entry_name`, `shield_entry_names`
+  (`crates/game/src/race/assets.rs`), each via
+  `oag_pulse::race::ships::entry_name`
+- `livery::load`, which takes `&[String]` of ids, and `livery::teams_for_slots`
+- `livery::flare::ship_entry_name_for`
+- `settings.rs`'s stored `race.team`, and what `--team` accepts
+
+So the change is one decision applied at the boundary, not a patch at the point
+of failure. Either the string that flows becomes the location leaf (everything
+downstream then works unchanged, `--team AG_Systems` becomes typeable, and the
+menu needs the declared `name` kept somewhere as its label), or `Team` grows a
+separate accessor for the directory and every path site above moves to it. The
+first is smaller; the second leaves `id` meaning what each disc says it means.
+
 ## Next Steps
 
-- Compose the ship and handling-stats paths from `Team::location` rather than
-  `Team::id`, in `boot::roster::raceable` and in `race::load` together. That is
-  the whole fix for the dropped team, it needs no further measurement, and it
-  leaves the id question below untouched: on Pulse the leaf equals the id, so
-  nothing changes there, and on Pure the leaf is what already resolves.
-- Leave `Team::id` alone in the same change. What the id *is* differs between
-  the titles and wants deciding on its own evidence, not as a side effect of
-  fixing a path.
+- Pick one of the two shapes above - that is the decision this thread is now
+  down to, and it wants making deliberately rather than at the first call site.
+- Then change every site in the list together, and re-run
+  `roster_declared_ground_truth`, `pure_race_ground_truth`, `livery_ground_truth`
+  and `dlc_ground_truth` against real discs.
 - `roster_declared_ground_truth::only_pure_loses_a_declared_team_and_it_loses_one`
   pins the current nine-of-ten and fails loudly when the drop stops happening -
   update its docs and its count to ten rather than deleting it.
+- Leave `Team::id`'s *meaning* to its own evidence if the first shape is chosen:
+  what `name` is differs between the titles, and that is an ADR-0022 axis
+  question rather than part of this fix.
