@@ -96,6 +96,7 @@ pub(super) fn load_tracks(
 /// filter cannot disagree with the loader about how a path is spelled.
 pub(super) fn load_teams(
     archives: &mut oag_assets::Archives,
+    ship_dir: &str,
     definition: &str,
     documents: &[String],
     report: &mut Vec<String>,
@@ -104,7 +105,7 @@ pub(super) fn load_teams(
     let declared_count = declared.len();
     let teams: Vec<_> = declared
         .into_iter()
-        .filter(|team| raceable(archives, &team.id))
+        .filter(|team| raceable(archives, ship_dir, &team.id))
         .collect();
 
     if teams.len() != declared_count {
@@ -149,20 +150,21 @@ pub(super) fn load_teams(
 }
 
 /// Whether both files a race reads for a team are on this source.
-fn raceable(archives: &oag_assets::Archives, id: &str) -> bool {
+fn raceable(archives: &oag_assets::Archives, ship_dir: &str, id: &str) -> bool {
     archives
         // The ordinary hull, spelled directly rather than through
         // `race::ship_entry_name`: this asks whether a team is *raceable*, which
         // is a question about the normal hull and never about the Zone one, and
         // routing it through the mode-aware helper meant passing a `ZoneCraft`
         // that could not affect the answer.
-        .locate(&oag_pulse::race::ships::entry_name(
+        .locate(&oag_pulse::race::ships::entry_name_in(
+            ship_dir,
             id,
             oag_pulse::race::ships::HULL,
         ))
         .is_some()
         && archives
-            .locate(&oag_formats::handling::entry_name(id))
+            .locate(&oag_formats::handling::entry_name_in(ship_dir, id))
             .is_some()
 }
 

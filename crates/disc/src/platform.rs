@@ -36,6 +36,16 @@ pub enum Platform {
     /// platform therefore groups `Ps3` with [`Platform::Unknown`] rather than
     /// with `Psp` or `Ps2` - it is a disc we can name, not one we can read.
     Ps3,
+    /// Sony PlayStation Vita.
+    ///
+    /// **Never identified from a disc**, unlike the three above: a Vita title
+    /// ships as a `.pkg`, and what this project reads is the decrypted package
+    /// extracted to a directory. Nothing in that tree is an ISO 9660 volume, so
+    /// [`identify`](crate::identify) never returns this - it reaches
+    /// `oag_assets::Layout` through the archive candidate that matched, which
+    /// is the same path an extracted `USRDIR` with no `UMD_DATA.BIN` already
+    /// took. See `oag_2048`.
+    Vita,
     /// Recognised as an ISO 9660 volume, but not as a console we handle.
     Unknown,
 }
@@ -46,6 +56,7 @@ impl std::fmt::Display for Platform {
             Self::Psp => "PSP",
             Self::Ps2 => "PS2",
             Self::Ps3 => "PS3",
+            Self::Vita => "Vita",
             Self::Unknown => "unknown",
         };
         f.write_str(s)

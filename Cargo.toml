@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
 members = [
+  "crates/2048",
   "crates/ai",
   "crates/assets",
   "crates/audio",
@@ -30,6 +31,7 @@ repository = "https://github.com/topaxi/OpenAntiGrav"
 rust-version = "1.88"
 
 [workspace.dependencies]
+oag-2048 = { path = "crates/2048" }
 oag-ai = { path = "crates/ai" }
 oag-assets = { path = "crates/assets" }
 oag-audio = { path = "crates/audio" }

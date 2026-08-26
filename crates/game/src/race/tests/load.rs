@@ -13,10 +13,10 @@ use super::*;
 /// independent strings, because the pairing is the thing that was wrong.
 #[test]
 fn the_boost_plume_follows_the_hull_its_mode_selects() {
-    let craft = oag_pulse::race::DEFAULTS.zone_craft;
+    let craft = oag_pulse::race::DEFAULTS.ships();
     for mode in [Mode::TimeTrial, Mode::SpeedLap, Mode::Zone] {
-        let hull = ship_entry_name("Feisar", mode, craft);
-        let plume = boost_entry_name("Feisar", mode, craft);
+        let hull = ship_entry_name(craft, "Feisar", mode);
+        let plume = boost_entry_name(craft, "Feisar", mode);
         let stem = if mode == Mode::Zone { "Zone" } else { "ship" };
         assert!(
             plume.contains(stem),
@@ -24,11 +24,11 @@ fn the_boost_plume_follows_the_hull_its_mode_selects() {
         );
     }
     assert_eq!(
-        boost_entry_name("Feisar", Mode::Zone, craft),
+        boost_entry_name(craft, "Feisar", Mode::Zone),
         r"Data\Ships\Feisar\Zoneboost.vex"
     );
     assert_eq!(
-        boost_entry_name("Feisar", Mode::TimeTrial, craft),
+        boost_entry_name(craft, "Feisar", Mode::TimeTrial),
         r"Data\Ships\Feisar\shipboost.vex"
     );
 }

@@ -60,6 +60,9 @@
 pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     track: DEFAULT_TRACK,
     team: DEFAULT_TEAM,
+    // The directory three of the four titles spell identically; Wipeout 2048 is
+    // the one that does not. See `oag_title::RaceDefaults::ship_dir`.
+    ship_dir: oag_title::race::SHIP_DIR,
     zone: oag_title::ZoneCircuit::Separate(DEFAULT_ZONE_TRACK),
     zone_craft: oag_title::ZoneCraft::OwnShip(ZONE_TEAM),
     sounds: SOUND_BANKS,

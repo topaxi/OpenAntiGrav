@@ -388,6 +388,9 @@ pub use vertex::{GpuVertex, slots};
 mod anim_node;
 pub use anim_node::{AnimNode, NODE_ANIM_LIMIT};
 
+mod external;
+pub use external::geometry_is_external;
+
 mod flap;
 pub use flap::Flap;
 
@@ -555,24 +558,6 @@ fn build_optional_class(
     }
 
     build_class(label, data, external, Lod::Both, pick)
-}
-
-/// Whether this `.vex`'s render geometry lives outside the file.
-///
-/// True for a PS3 `.vex`, and that is the whole of the test: **Wipeout HD moved
-/// its meshes into a `.rcsmodel` beside each `.vex`** - 643 of them, 686 MiB,
-/// undecoded - and left the node tree, the transforms, the spline, the collision
-/// soup and the pad volumes exactly where they were. So an HD model parses
-/// perfectly and yields no triangles, which is indistinguishable from a decoder
-/// bug unless something says so.
-///
-/// Byte order stands in for the console because it is read from the file's own
-/// magic (`XXEV` against `VEXX`) rather than from anything a caller was told,
-/// which is the rule everywhere else in this project. A big-endian `.vex` is a
-/// PS3 one; no PSP or PS2 pressing ships one.
-#[must_use]
-pub fn geometry_is_external(data: &[u8]) -> bool {
-    vex::has_magic(data) && vex::byte_order(data) == oag_formats::ByteOrder::Big
 }
 
 /// Flattens every node of one class into one buffer pair.

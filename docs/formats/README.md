@@ -207,6 +207,13 @@ soup, the pad volumes and the `section` visibility mask all read, corpus-wide;
 and **ten of HD's sixteen environments are a Pulse or Pure circuit's spline in
 the same world coordinates**, Talon's Junction among them.
 
+**[2048 status](2048-status.md)** is the probe run a third title on, and the
+first that is not a disc at all - *Wipeout 2048* ships as a Vita `.pkg`. Its
+PSARC, its `.vex` class table and its handling XML all read unchanged; three
+binary formats changed underneath them, and the `WO Track` control point is the
+one now recovered - off a **pairing against Wipeout HD**, which re-ships twelve
+of the same circuits with identical control-point counts.
+
 **[HD front end](hd-frontend.md)** is the same reading applied to
 `/data/plugins/frontend/gui/skin.xml` - HD ships six copies of it and they agree
 on every layout global - plus a read-only sweep of the PS3 executable for the

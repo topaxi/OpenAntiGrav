@@ -16,6 +16,9 @@
 pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     track: DEFAULT_TRACK,
     team: DEFAULT_TEAM,
+    // The directory three of the four titles spell identically; Wipeout 2048 is
+    // the one that does not. See `oag_title::RaceDefaults::ship_dir`.
+    ship_dir: oag_title::race::SHIP_DIR,
     zone: oag_title::ZoneCircuit::Prefixed(ZONE_TRACK_PREFIX),
     // The one variant with a recovered selector behind it rather than a name
     // probe: `Ship_LoadModel`'s `case 6`. See `ships::ZONE_HULL`.
@@ -160,13 +163,24 @@ pub mod ships {
     /// too - the prefix comes from a config key, not from the game mode.
     pub const SHIELD: &str = "shipshield";
 
-    /// The archive entry name of one of a team's models.
+    /// The archive entry name of one of a team's models, under the ship
+    /// directory this title keeps its roster in.
     ///
     /// Assembled the way the loader assembles it, with backslashes, which is
-    /// what the name hash needs.
+    /// what the name hash needs. `dir` comes from
+    /// [`oag_title::RaceDefaults::ship_dir`] - see that field for why it is an
+    /// axis and not the constant this function used to spell inline.
+    #[must_use]
+    pub fn entry_name_in(dir: &str, team: &str, model: &str) -> String {
+        format!(r"{dir}\{team}\{model}.vex")
+    }
+
+    /// [`entry_name_in`] under
+    /// [`oag_title::race::SHIP_DIR`](oag_title::race::SHIP_DIR), which is where
+    /// Pulse, Pure and Wipeout HD all keep their rosters.
     #[must_use]
     pub fn entry_name(team: &str, model: &str) -> String {
-        format!(r"Data\Ships\{team}\{model}.vex")
+        entry_name_in(oag_title::race::SHIP_DIR, team, model)
     }
 }
 

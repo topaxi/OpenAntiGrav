@@ -993,7 +993,7 @@ pub fn nodes(data: &[u8]) -> Result<Vec<Node>> {
 mod mesh_header;
 pub use mesh_header::{
     LAYER_DEFAULT, LAYER_EARLY, LAYER_EXHAUST, LAYER_REFLECTION_FIRST, LAYER_SCENE, Material,
-    mesh_layer, mesh_materials,
+    mesh_first_vertex_type, mesh_layer, mesh_materials,
 };
 
 mod attributes;

@@ -220,7 +220,52 @@ is in
 axis/value and bounds, by hypothesis - not read), and the entire mesh-shape
 trailer, which is where the actual triangle geometry this tree indexes lives.
 
-## Why nothing is wired up yet
+## The wiring is in, and a race runs
+
+`just play 2048 --race` (a new justfile case, naming the *directory*
+`data/extracted/vita/PCSF00007` rather than an image) opens the package as
+Wipeout 2048, reads Altima's spline, places the craft on the start line and
+runs the simulation. What landed to get there:
+
+- **`oag-2048`** (`crates/2048`), the fourth title package - archives, HUD
+  layout entries, race defaults, sound banks. `front_end`/`loading`/`music` are
+  `None` and `exhaust`/`flare`/`sights` are `Unread`, deliberately: 2048 ships
+  HD's files under HD's names and changed the containers underneath them, so
+  copying HD's answers would compose to something wrong rather than to nothing.
+- **`Platform::Vita`**, and it is never identified from a disc - 2048's package
+  is a directory, so it reaches `oag_assets::Layout` through the archive
+  candidate that matched.
+- **`RaceDefaults::ship_dir`**, the axis 2048 forced into existence, plus
+  `RaceDefaults::ships()` and `oag_title::race::ShipPaths` bundling it with
+  `zone_craft` so the two travel together. `handling::entry_name_in` and
+  `ships::entry_name_in` take the directory; the old two-argument spellings stay
+  as the three-title convenience wrappers.
+- **`mesh::geometry_is_external` no longer asks the byte order alone.** Its
+  whole test was "is this a big-endian `.vex`", which answers `false` for 2048
+  on a little-endian console; it now also asks whether the first mesh batch
+  declares GU vertex type `0`, which is what an exporter writes when the
+  vertices are elsewhere. Without this a 2048 track went to the batch decoder
+  and died on `unsupported GU vertex type 0x0000`.
+- **A `.rcsmodel` that will not *decode* now degrades exactly like one that is
+  not *there*** - the circuit falls back to the derived ribbon and a craft draws
+  nothing, both reported. Two hard errors before this: `mesh::rcs::build_scene`
+  and `mesh::rcs::build` were both `?`, so 2048's container stopped the race.
+
+## What is between this and an actual race
+
+**The craft falls through the floor**, and there is exactly one reason:
+`collision::from_vex` returns zero colliders (2048 authors none in the `.vex`)
+and `track_col.col` is not decoded, so there is no ground at all. Every tick
+reports `grounded 0.0` and the craft descends. **Decoding `KdTreeMeshShape.cpp`'s
+trailer is the whole of the remaining work for a flyable race** - the k-d tree's
+outer shape is already read and verified against the real file, so this starts
+from a confirmed container rather than cold.
+
+Everything else the run reports is a known absence rather than a bug: no
+authored surface (`.rcsmodel`), no HUD art (`.gxt` atlases under names 2048 does
+not use), no music, no front end.
+
+## Why nothing was wired up before that
 
 Three things gate a race spawning at all, in `crates/game/src/race/load.rs`:
 `track_render::load` (hard error via `?`, needs `WO Track`), `mesh::build_with_textures`
@@ -277,17 +322,13 @@ parser change yet - see What's New above and Next Steps below.
    tail plus its `KdTreeMeshShape.cpp` trailer - both now have a confirmed
    outer shape ([track-and-collision-loaders.md](../docs/ghidra/functions/vita-2048-eu-v104/track-and-collision-loaders.md))
    to build the rest of the decode against, rather than starting cold.
-3. Once all three parse, add the `ship_dir` axis (`RaceDefaults` field, or a
-   dedicated one) and thread it through `handling::entry_name`,
-   `oag_pulse::race::ships::entry_name` and their `oag-game` call sites -
-   scoped care should keep this to the hull/handling path for an MVP craft,
-   leaving boost/shield/flare cosmetics to report their own absence the way
-   every other title's do for an unrecovered asset.
-4. Then the wiring this pass deliberately did not do: a `Platform::Vita`
-   variant in `oag-disc`, a new `oag-vita` title crate (archives = `["data.psarc"]`
-   only, front end/loading/music left `None` per the "no menu, no intro" scope,
-   `hud_art` left conservative - empty `always_on`, `Sights::Unread` - rather
-   than copied from HD on a guess), a try in `oag_game::title::open_source`,
-   and a `2048` case in the `justfile`'s `play` recipe with the same
-   present-or-explain-how-to-regenerate check the `hd` case already has for
-   `data/extracted/`.
+3. ~~The `ship_dir` axis~~ - done, see above. It reaches the hull, the plume,
+   the shield, the flare and the handling stats, and the roster filter in
+   `boot::roster` goes through the same spelling, so the filter cannot disagree
+   with the loader about where a ship is.
+4. ~~The wiring~~ - done, see "The wiring is in" above. What it revealed is
+   that **the k-d tree, not the `.rcsmodel`, is what stands between here and a
+   flyable race**: a craft with no hull is an honest half-picture, a craft with
+   no ground is not a race at all. So step 2's two halves are no longer equal
+   in priority - `KdTreeMeshShape.cpp`'s trailer first, `RcsModel_Load`'s three
+   sections after it.

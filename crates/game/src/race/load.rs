@@ -210,7 +210,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         }
     };
 
-    let stats_name = handling::entry_name(&team);
+    let stats_name = handling::entry_name_in(title.race.ship_dir, &team);
     let stats_blob = read(&mut archives, &stats_name)?;
     let stats =
         handling::from_blob(&stats_blob).map_err(|e| anyhow::anyhow!("{stats_name}: {e}"))?;
@@ -426,8 +426,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let liveries = livery::load(
         &mut archives,
         &slot_teams,
+        title.race.ships(),
         options.mode,
-        title.race.zone_craft,
         title.flare,
         options.lod,
         &mut report,
@@ -497,8 +497,31 @@ pub fn load(options: &Options) -> Result<Loaded> {
     } else {
         None
     };
-    let ribbon =
-        options.ribbon || (mesh::geometry_is_external(&track_blob) && ps3_geometry.is_none());
+    // **Built here rather than below, because whether it built decides the
+    // fallback.** A `.rcsmodel` that will not decode is the same outcome for a
+    // race as no `.rcsmodel` at all - the derived ribbon - and Wipeout 2048 is
+    // what made the distinction matter: it ships one beside every circuit and
+    // the container is not HD's, so this used to be a hard error that stopped
+    // the race. The report names which of the two happened.
+    let rcs_model = match &ps3_geometry {
+        None => None,
+        Some(geometry) => match mesh::rcs::build_scene(&track, &track_blob, geometry, &mut |path| {
+            archives.read_name(path).ok()
+        }) {
+            Ok((model, built)) => {
+                report.push(format!("{track}: {}", built.describe()));
+                Some(model)
+            }
+            Err(error) => {
+                report.push(format!(
+                    "{track}: the .rcsmodel beside it will not decode ({error:#}) - \
+                     drawing the derived ribbon instead, as --ribbon does"
+                ));
+                None
+            }
+        },
+    };
+    let ribbon = options.ribbon || (mesh::geometry_is_external(&track_blob) && rcs_model.is_none());
     // **Everything else built out of the track `.vex` is PSP-shaped geometry.**
     // The sky, the two pad classes and the per-node visibility all read a
     // `Mesh`-layout payload, which a PS3 file does not have - its `Skycube` and
@@ -506,13 +529,14 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // not tied back to those classes. So they are skipped on a PS3 source for
     // the same reason they are skipped on a ribbon build, and reported the same
     // way: absent, not invented.
-    let vex_geometry = !ribbon && ps3_geometry.is_none();
+    let vex_geometry = !ribbon && rcs_model.is_none();
+    // Whether the `.rcsmodel` *built*, not merely whether one was found - the
+    // report below says which surface is on screen, and since a sibling that
+    // will not decode now falls back to the ribbon, "found" is the wrong
+    // question to ask.
+    let rcs_drawn = rcs_model.is_some();
 
-    let track_model = if let Some(geometry) = &ps3_geometry {
-        let (model, built) = mesh::rcs::build_scene(&track, &track_blob, geometry, &mut |path| {
-            archives.read_name(path).ok()
-        })?;
-        report.push(format!("{track}: {}", built.describe()));
+    let track_model = if let Some(model) = rcs_model {
         model
     } else if ribbon {
         track_render::build_model(&label, &ai)
@@ -682,7 +706,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     };
     report.push(format!(
         "drawing the track's {}: {} triangle(s), radius {:.0}",
-        match (vex_geometry, ps3_geometry.is_some()) {
+        match (vex_geometry, rcs_drawn) {
             (true, _) => "art meshes",
             (false, true) => "art meshes out of the .rcsmodel beside it",
             (false, false) => "driveable ribbon",

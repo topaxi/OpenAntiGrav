@@ -22,6 +22,7 @@ oag-pulse.workspace = true
 # because Pure is a played title yet. See roadmap M8.
 oag-hd.workspace = true
 oag-pure.workspace = true
+oag-2048.workspace = true
 oag-ai.workspace = true
 oag-assets.workspace = true
 # For `Title` and the boot profile it carries: the composition root consumes the

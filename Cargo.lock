@@ -1813,6 +1813,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "oag-2048"
+version = "0.1.0"
+dependencies = [
+ "oag-assets",
+ "oag-title",
+]
+
+[[package]]
 name = "oag-ai"
 version = "0.1.0"
 dependencies = [
@@ -1883,6 +1891,7 @@ dependencies = [
  "gstreamer-app",
  "gstreamer-video",
  "log",
+ "oag-2048",
  "oag-ai",
  "oag-assets",
  "oag-audio",

@@ -113,6 +113,21 @@ hash-images:
 # path stays reachable by keyword, ready for whenever Pure becomes playable
 # (roadmap M8).
 #
+# `2048`/`wipeout2048`/`vita` swaps in Wipeout 2048:
+#
+#     just play 2048 --race
+#
+# **This one names a directory, not an image**: 2048 ships as a `.pkg` and what
+# the recipe reads is the decrypted package extracted under
+# `data/extracted/vita/PCSF00007`. The recipe says so if it is not there.
+#
+# `--race` is required and the recipe does not add it: `oag_2048::TITLE` carries
+# `front_end: None`, so a boot with no `--race` has no menu to open and reports
+# exactly that. Expect the same honest half-picture an HD race gives, for the
+# same reason - 2048 keeps its render geometry in `.rcsmodel`, which nothing
+# here decodes, so the circuit comes up as the derived ribbon and the craft do
+# not draw. The spline, the simulation and the collision are what this proves.
+#
 # `hd`/`fury`/`hd-ps3-eu` swaps in Wipeout HD / Fury:
 #
 #     just play hd
@@ -171,7 +186,28 @@ play *ARGS:
         pure-psp-usa|pure-usa)
             args=("data/images/pure-psp-usa.chd" "${args[@]:1}")
             ;;
-        hd|fury|hd-fury|hd-ps3-eu)
+        2048|wipeout2048|vita)
+            src="data/extracted/vita/PCSF00007"
+            # 2048 ships as a `.pkg`, not a disc, so this recipe reads a
+            # *directory* where every other keyword reads an image - the
+            # decrypted package, extracted. Nothing under `data/` is shipped;
+            # name the step that produces it rather than letting the archive
+            # search fail with "no archive named PSP2/data.psarc".
+            if [ ! -f "$src/base/PSP2/data.psarc" ]; then
+                echo "$src/base/PSP2/data.psarc is missing." >&2
+                if [ -f "data/images/2048-vita-eu.pkg" ]; then
+                    echo "The package is there but not extracted. Decrypt and" >&2
+                    echo "unpack it into $src/base first - see" >&2
+                    echo "docs/formats/2048-status.md and data/README.md." >&2
+                else
+                    echo "No 2048 package at all under data/images/; this recipe" >&2
+                    echo "reads your own copy and none is shipped. See data/README.md." >&2
+                fi
+                exit 1
+            fi
+            args=("$src" "${args[@]:1}")
+            ;;
+        hd|fury|hd-ps3-eu)
             img="data/images/hdfury-ps3-eu-dec.iso"
             # A PS3 disc reads as noise until it is layer-1 decrypted, and the
             # encrypted image sits right beside the decrypted one under the same

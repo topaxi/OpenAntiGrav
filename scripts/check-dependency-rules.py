@@ -38,6 +38,7 @@ ROOT = Path(__file__).resolve().parent.parent
 # review (finding S1) to notice. The list is the invariant, so a new title
 # crate with no line here is a hole with no symptom.
 GAMEPLAY_CRATES = {
+    "oag-2048",
     "oag-ai",
     "oag-core",
     "oag-gameplay",
