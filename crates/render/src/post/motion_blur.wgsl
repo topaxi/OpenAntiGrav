@@ -5,13 +5,13 @@
 // Osman, *A Reconstruction Filter for Plausible Motion Blur* (I3D 2012),
 // rather than transliterated from any implementation - the rule ADR-0012
 // sets and the way `fxaa.wgsl` was already done. The chain is the paper's:
-// a tile pass reducing the velocity buffer to each tile's dominant motion, a
-// neighbour pass spreading that dominance one tile outward, and a gather
-// whose taps are weighted by depth ordering and by **both** surfaces' own
-// velocities - the weighting that lets a moving object smear over a sharp
-// background without the background bleeding across the object's silhouette.
-// Both halves of "both" are load-bearing: see `fs_reconstruct`'s cylinder
-// term.
+// a tile pass reducing the velocity buffer to each tile's dominant motion
+// (run separably, one axis at a time - see `fs_tile_max_x`), a neighbour pass
+// spreading that dominance one tile outward, and a gather whose taps are
+// weighted by depth ordering and by **both** surfaces' own velocities - the
+// weighting that lets a moving object smear over a sharp background without
+// the background bleeding across the object's silhouette. Both halves of
+// "both" are load-bearing: see `fs_reconstruct`'s cylinder term.
 //
 // The velocity buffer itself is written by the scene - `mesh.wgsl`'s
 // `velocity_of`, real per-draw motion - so unlike the camera-reprojection
@@ -98,21 +98,52 @@ fn fs_prepare_ms(in: VertexOutput) -> @location(0) vec4<f32> {
 // still gather along the object's path to receive its smear. Tile-max
 // reduces each `tile`-pixel square to its largest velocity; neighbour-max
 // takes the largest of the 3x3 tiles around each.
+//
+// **Tile-max is separable, and has to be.** A max over a square is the max of
+// the row maxima, so the square reduction splits into a horizontal pass
+// (full-size to `ceil(w / tile)` by `h`) and a vertical one (to the tile
+// grid). The reason is not the instruction count - both forms touch every
+// pixel once - but occupancy: the square form runs `tile * tile` serial
+// `textureLoad`s inside only `ceil(w / tile) * ceil(h / tile)` fragments,
+// which at 1080p is 7,569 loads across 299 threads and left most of the GPU
+// idle. Measured on this project's development adapter, splitting it cut the
+// whole chain from 2.6 ms to 1.2 ms a frame - within noise of stubbing the
+// reduction out entirely, so what is left of it is now free. See
+// `docs/rendering/motion-blur.md` for the machine and the method.
 @fragment
-fn fs_tile_max(in: VertexOutput) -> @location(0) vec2<f32> {
-    let tile = vec2<i32>(in.position.xy) * i32(constants.tile);
+fn fs_tile_max_x(in: VertexOutput) -> @location(0) vec2<f32> {
+    let row = i32(in.position.y);
+    let first = i32(in.position.x) * i32(constants.tile);
     let limit = vec2<i32>(textureDimensions(prepared_tex)) - vec2<i32>(1);
     var best = vec2<f32>(0.0);
     var best_len = 0.0;
+    for (var x = 0u; x < constants.tile; x += 1u) {
+        let p = min(vec2<i32>(first + i32(x), row), limit);
+        let v = textureLoad(prepared_tex, p, 0).xy;
+        let len = dot(v, v);
+        if len > best_len {
+            best_len = len;
+            best = v;
+        }
+    }
+    return best;
+}
+
+// The vertical half, reading `fs_tile_max_x`'s output through the tile slot.
+@fragment
+fn fs_tile_max_y(in: VertexOutput) -> @location(0) vec2<f32> {
+    let column = i32(in.position.x);
+    let first = i32(in.position.y) * i32(constants.tile);
+    let limit = vec2<i32>(textureDimensions(tile_tex)) - vec2<i32>(1);
+    var best = vec2<f32>(0.0);
+    var best_len = 0.0;
     for (var y = 0u; y < constants.tile; y += 1u) {
-        for (var x = 0u; x < constants.tile; x += 1u) {
-            let p = min(tile + vec2<i32>(i32(x), i32(y)), limit);
-            let v = textureLoad(prepared_tex, p, 0).xy;
-            let len = dot(v, v);
-            if len > best_len {
-                best_len = len;
-                best = v;
-            }
+        let p = min(vec2<i32>(column, first + i32(y)), limit);
+        let v = textureLoad(tile_tex, p, 0).xy;
+        let len = dot(v, v);
+        if len > best_len {
+            best_len = len;
+            best = v;
         }
     }
     return best;

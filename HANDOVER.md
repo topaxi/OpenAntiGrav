@@ -657,6 +657,31 @@ is worth keeping too: the pass binds depth as `Float { filterable: false }` and
 plain `write_texture` - no depth-writing pipeline, and none of `Depth32Float`'s
 "you may not copy into me".
 
+The same review turned the rule on the fix and it bit twice more. Splitting
+tile-max into two axes needed a frame size the tile edge does **not** divide,
+because a power-of-two frame makes every tile square and full - and it needed
+motion that varies in *both* axes, because a velocity that is constant down
+each column lets any row of the horizontal pass answer for any other. Sizing
+the split's intermediate target wrong on purpose left two green tests before
+a third one, varying both, caught it. **A test that does not vary what the
+code branches on is a test of the average, not of the decision.**
+
+**A reach cap that doubles as a tile size makes a square reduction starve the
+GPU.** Same review. `post::motion_blur`'s tile-max reduced each `K x K` square
+in one pass, `K` being the blur's own pixel cap - 8 % of viewport height, so 87
+at 1080p. That is 7,569 serial `textureLoad`s inside each of only 299
+fragments: the right amount of arithmetic (every pixel once) at almost no
+occupancy, and it measured 1.5 ms of the chain's 2.6 ms on an Intel Arc iGPU.
+Separable - horizontal to `ceil(w / K) x h`, then vertical onto the tile grid -
+is the same arithmetic in 24,840 fragments and took the whole chain to 1.2 ms.
+The tell is the *fragment count*, not the loop: a fullscreen pass whose target
+is much smaller than its source is where this hides.
+
+The reproducible measurement is the table in
+[`docs/rendering/motion-blur.md`](docs/rendering/motion-blur.md) - 2.6 ms
+square, 1.2 ms separable, 1.1 ms with the reduction stubbed out entirely - not
+the stub-the-loop isolation that first pointed at it.
+
 **A worktree sharing `CARGO_TARGET_DIR` with the main checkout compiles against
 the *other* tree's uncommitted code.** 2026-08-18, and it cost a confusing hour.
 Setting `CARGO_TARGET_DIR=<repo>/target` from `.claude/worktrees/<name>` looks

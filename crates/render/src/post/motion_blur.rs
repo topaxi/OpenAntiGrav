@@ -12,7 +12,7 @@
 //!
 //! # The chain
 //!
-//! Five fullscreen passes, written from the published description of McGuire
+//! Six fullscreen passes, written from the published description of McGuire
 //! et al., *A Reconstruction Filter for Plausible Motion Blur* (I3D 2012),
 //! per [ADR-0012](../../../../docs/architecture/adr/0012-wgsl-upscalers-not-native-fidelityfx.md)'s
 //! transliteration rule:
@@ -21,14 +21,25 @@
 //!    every later pass reads one binding whatever the scene's sample count.
 //!    The multisampled variant reads sample 0: averaging velocity across a
 //!    silhouette edge produces a vector that describes neither surface.
-//! 2. **tile-max** - the dominant velocity of each `K`-pixel tile, `K` being
-//!    the blur's own pixel cap, which is what makes one tile of reach enough.
-//! 3. **neighbour-max** - each tile takes its 3x3 neighbourhood's dominant
+//! 2. **tile-max, horizontally** - each run of `K` pixels reduced to its
+//!    dominant velocity, `K` being the blur's own pixel cap, which is what
+//!    makes one tile of reach enough.
+//! 3. **tile-max, vertically** - the same down the columns, landing on the
+//!    tile grid. Two passes rather than one square reduction because the
+//!    square form leaves the GPU almost idle - see `fs_tile_max_x` in the
+//!    shader for the measurement.
+//! 4. **neighbour-max** - each tile takes its 3x3 neighbourhood's dominant
 //!    velocity, so a sharp pixel beside a fast object still gathers along
 //!    the object's path and receives its smear.
-//! 4. **reconstruct** - the depth- and velocity-weighted gather itself.
-//! 5. **copy** - the result back onto the scene target, which the gather
+//! 5. **reconstruct** - the depth- and velocity-weighted gather itself.
+//! 6. **copy** - the result back onto the scene target, which the gather
 //!    cannot read and write at once.
+//!
+//! [ADR-0030](../../../../docs/architecture/adr/0030-velocity-buffer-motion-blur.md)
+//! counts the chain as five passes and four scratch targets, which is what
+//! landed with it; the separable tile-max made it six and five. ADRs are
+//! immutable, so the current count lives here and in
+//! `docs/rendering/motion-blur.md`.
 //!
 //! # An effect of this project's, not the original's
 //!
@@ -153,12 +164,13 @@ const PREPARED_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 /// The tile reductions' format: one velocity per tile.
 const TILE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rg16Float;
 
-/// The five pipelines, their targets, and the uniform they share.
+/// The six pipelines, their targets, and the uniform they share.
 #[derive(Debug)]
 pub struct MotionBlur {
     prepare: wgpu::RenderPipeline,
     prepare_ms: wgpu::RenderPipeline,
-    tile_max: wgpu::RenderPipeline,
+    tile_max_x: wgpu::RenderPipeline,
+    tile_max_y: wgpu::RenderPipeline,
     neighbour_max: wgpu::RenderPipeline,
     reconstruct: wgpu::RenderPipeline,
     copy: wgpu::RenderPipeline,
@@ -169,6 +181,10 @@ pub struct MotionBlur {
     constants: wgpu::Buffer,
     written: Option<Constants>,
     prepared: Option<Target>,
+    /// The horizontal tile reduction's output: `ceil(w / tile)` by the full
+    /// height, the one target here that is neither full-size nor fully
+    /// tiled.
+    tile_rows: Option<Target>,
     tile_a: Option<Target>,
     tile_b: Option<Target>,
     scratch: Option<Target>,
@@ -303,9 +319,15 @@ impl MotionBlur {
             &prepare_ms_pipe_layout,
             PREPARED_FORMAT,
         );
-        let tile_max = pipeline(
-            "motion blur tile-max",
-            "fs_tile_max",
+        let tile_max_x = pipeline(
+            "motion blur tile-max (x)",
+            "fs_tile_max_x",
+            &chain_layout,
+            TILE_FORMAT,
+        );
+        let tile_max_y = pipeline(
+            "motion blur tile-max (y)",
+            "fs_tile_max_y",
             &chain_layout,
             TILE_FORMAT,
         );
@@ -333,7 +355,8 @@ impl MotionBlur {
         Ok(Self {
             prepare,
             prepare_ms,
-            tile_max,
+            tile_max_x,
+            tile_max_y,
             neighbour_max,
             reconstruct,
             copy,
@@ -344,6 +367,7 @@ impl MotionBlur {
             constants,
             written: None,
             prepared: None,
+            tile_rows: None,
             tile_a: None,
             tile_b: None,
             scratch: None,
@@ -370,9 +394,13 @@ impl MotionBlur {
         }
         let tile = max_px(frame.viewport).ceil() as u32;
         self.resize(device, frame.size, tile);
-        let (Some(prepared), Some(tile_a), Some(tile_b), Some(scratch)) =
-            (&self.prepared, &self.tile_a, &self.tile_b, &self.scratch)
-        else {
+        let (Some(prepared), Some(tile_rows), Some(tile_a), Some(tile_b), Some(scratch)) = (
+            &self.prepared,
+            &self.tile_rows,
+            &self.tile_a,
+            &self.tile_b,
+            &self.scratch,
+        ) else {
             return;
         };
 
@@ -386,7 +414,17 @@ impl MotionBlur {
         // bound texture must not also be that pass's render target - usage
         // scopes are validated for what is *bound*, not what the shader
         // statically reads - so each pass names all three texture slots
-        // explicitly with views that are not its own target.
+        // explicitly with views that are not its own target. Five targets and
+        // three slots, so the whole table in one place:
+        //
+        // | pass          | reads          | slot it reads through | target    |
+        // | ---           | ---            | ---                   | ---       |
+        // | prepare       | group 1 only   | -                     | prepared  |
+        // | tile-max x    | prepared       | prepared (3)          | tile_rows |
+        // | tile-max y    | tile_rows      | tile (4)              | tile_a    |
+        // | neighbour-max | tile_a         | tile (4)              | tile_b    |
+        // | reconstruct   | scene, prepared, tile_b | 0, 3, 4      | scratch   |
+        // | copy          | scratch        | colour (0)            | scene     |
         let group = |label: &str,
                      colour: &wgpu::TextureView,
                      prepared_view: &wgpu::TextureView,
@@ -495,19 +533,32 @@ impl MotionBlur {
             &[&idle, &prepare_group],
             &prepared.view,
         );
-        // 2 and 3: the two tile reductions.
-        let tiles = group(
-            "motion blur tile-max",
+        // 2 and 3: the separable tile reduction, horizontal then vertical.
+        let rows = group(
+            "motion blur tile-max (x)",
             &prepared.view,
             &prepared.view,
             &tile_b.view,
         );
         pass(
-            "motion blur tile-max",
-            &self.tile_max,
-            &[&tiles],
+            "motion blur tile-max (x)",
+            &self.tile_max_x,
+            &[&rows],
+            &tile_rows.view,
+        );
+        let columns = group(
+            "motion blur tile-max (y)",
+            &prepared.view,
+            &prepared.view,
+            &tile_rows.view,
+        );
+        pass(
+            "motion blur tile-max (y)",
+            &self.tile_max_y,
+            &[&columns],
             &tile_a.view,
         );
+        // 4: neighbour-max.
         let spread = group(
             "motion blur neighbour-max",
             &prepared.view,
@@ -520,7 +571,7 @@ impl MotionBlur {
             &[&spread],
             &tile_b.view,
         );
-        // 4: the gather, into scratch.
+        // 5: the gather, into scratch.
         let gather = group(
             "motion blur reconstruct",
             frame.scene,
@@ -533,7 +584,7 @@ impl MotionBlur {
             &[&gather],
             &scratch.view,
         );
-        // 5: home.
+        // 6: home.
         let home = group(
             "motion blur copy",
             &scratch.view,
@@ -556,6 +607,15 @@ impl MotionBlur {
             "motion blur prepared",
             PREPARED_FORMAT,
             size,
+        ));
+        // Reduced across x but not yet across y - the intermediate the
+        // separable tile-max needs, and the only target here whose two
+        // dimensions come from different places.
+        self.tile_rows = Some(Target::new(
+            device,
+            "motion blur tile rows",
+            TILE_FORMAT,
+            (tiles.0, size.1),
         ));
         self.tile_a = Some(Target::new(
             device,

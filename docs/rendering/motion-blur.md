@@ -193,19 +193,50 @@ blur is a sharper race, not a broken one.
 > **Weight the taps by depth.** Without it the background drags across
 > foreground silhouettes, which is the single difference between an effect that
 > reads as motion blur and one that reads as a bug.
+
+> As built the chain is **six passes and five targets**, not four:
+> `prepare` folds velocity and depth together so the rest of the chain reads
+> one binding whatever the scene's sample count, and tile-max runs separably,
+> one axis at a time.
+> [ADR-0030](../architecture/adr/0030-velocity-buffer-motion-blur.md) counts
+> five and four, which is what landed with it; the separable split came
+> after. ADRs are immutable, so this line and
+> `oag_render::post::motion_blur`'s module docs carry the current count.
 >
-> That warning was earned twice. The first tier had no per-object velocity at
-> all, which is the whole of ADR-0028 and ADR-0029. The second got the depth
-> weighting right and then lost half of it in the *velocity* weighting: the
-> gather's third term - the paper's product of two cylinders, which credits
-> two surfaces for sharing a motion - was written against the tile
-> neighbourhood's dominant reach instead of the centre pixel's own. That
+> The warning above was earned twice. The first tier had no per-object
+> velocity at all, which is the whole of ADR-0028 and ADR-0029. The second
+> got the depth weighting right and then lost half of it in the *velocity*
+> weighting: the gather's third term - the paper's product of two cylinders,
+> which credits two surfaces for sharing a motion - was written against the
+> tile neighbourhood's dominant reach instead of the centre pixel's own. That
 > reach is `>= own_reach` by construction, so the substitution could only add
 > weight, and the term is the one with no depth gate: a **still** surface in
 > front of a fast one took a full-weight tap of whatever was behind it,
 > measuring 199 of 255 at a test block's silhouette. Fixed to
 > `min(tap_reach, own_reach)`, pinned by
 > `a_still_surface_over_a_moving_background_keeps_its_colour`.
+
+### Cost, measured
+
+The number ADR-0030 says belongs here once measured on real hardware. Intel
+Arc (ARL) integrated graphics, 1920x1080, `strength 0.5`, the whole chain
+timed over 50 submissions:
+
+| | ms/frame |
+| --- | --- |
+| Square tile-max, as ADR-0030 landed | 2.6 |
+| Separable tile-max | **1.2** |
+| Separable, with the reduction stubbed out entirely | 1.1 |
+
+The square form was not doing more arithmetic - both forms touch every pixel
+once - it was doing it in `ceil(w / tile) * ceil(h / tile)` fragments, which
+at 1080p is 299 threads each running 7,569 serial `textureLoad`s. Splitting
+the reduction into a horizontal pass at `ceil(w / tile)` by `h` and a
+vertical one onto the tile grid puts the first pass's work in 24,840
+fragments instead, and what remains of tile-max is now within noise of free.
+This is worth knowing generally: **the reach cap doubles as the tile size, so
+a generous cap makes the tiles large**, and a square reduction over a large
+tile is the one shape where a fullscreen pass can starve the GPU.
 
 **The setting** follows `AntiAliasing` exactly, because it is the fullest
 worked example in the tree: an enum in `oag_game::display` with `name()`,
