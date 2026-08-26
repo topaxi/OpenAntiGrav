@@ -88,19 +88,27 @@ that a Vita (ARM, LE) file defeats by construction, even though the geometry
 once the two formats below are readable: the heuristic needs a third answer
 alongside `Big`/`Little`, or a Vita-specific override.
 
-**The `.rcsmodel` beside it is not HD's container.** `mesh::rcs::build_scene`
-fails immediately: `oag_formats::rcsmodel`'s header read is `ByteOrder::Big.u32(data, 0)`,
-unconditionally, and expects `0x000a0000`; `environments/altima/track.rcsmodel`'s
-first four bytes are `ed ad 5c ca` read either way - not a byte-swap of the
-expected constant, a different value entirely, at 17.4 MiB for one circuit
-(HD's biggest circuit .rcsmodel is nowhere near that). The container itself
-is unrecovered: no chunk table, no version scheme, nothing beyond the
-observation that it opens with what looks like a hash or GUID rather than a
-version word. Needs a first RE pass of its own, most likely by decompiling the
-model-loading path in `vita-2048-eu-v104/eboot.elf` (Ghidra, per `CLAUDE.md`'s
-"RE shall be done on EU 1.04" default) rather than guessing further from bytes
-alone - a chunked container with a genuinely different header shape is not
-something a stride search alone recovers.
+**The `.rcsmodel` beside it is not HD's container**, and this one needed
+Ghidra, not a stride search: `oag_formats::rcsmodel`'s header read is
+`ByteOrder::Big.u32(data, 0)`, unconditionally, and expects `0x000a0000`;
+`environments/altima/track.rcsmodel`'s first four bytes are `ed ad 5c ca` read
+either way - not a byte-swap of the expected constant, a different value
+entirely, at 17.4 MiB for one circuit (HD's biggest circuit `.rcsmodel` is
+nowhere near that). `RcsModel_Load` (`0x812f15b2` in `vita-2048-eu-v104/eboot.elf`,
+named this session, confidence 85 - see
+[track-and-collision-loaders.md](../docs/ghidra/functions/vita-2048-eu-v104/track-and-collision-loaders.md))
+is `Live::Rcs::Model`'s own loader, named off its allocator tags
+(`"PSP2/Psp2.RcsModelLoader.cpp"`) and two error strings that name the class
+directly. It reads a fixed `0x60`-byte prefix, then loads two more sections
+sized from fields inside it: a "main memory" (CPU-resident) block and a GPU
+block, each read whole and then walked for a relocation table twice. Checked
+against the real file: `size(+0x0c) + size(+0x24) + size(+0x44)` equals the
+file's own length exactly (`189824 + 682966 + 16573144 = 17445934`) - the same
+"does the arithmetic close on the real bytes" bar the `WO Track` stride
+cleared. **What is still unrecovered**: the interior of all three sections -
+what fields fill the rest of that `0x60`-byte prefix, and the chunk/relocation
+shape inside the two loaded blocks. That is genuinely more RE, not a quick
+follow-up.
 
 **The `WO Track` (AI spline) payload is version `0x107`, one above every
 previously-seen version (Pulse ships `0x105`), and its per-point record shrank
@@ -161,14 +169,44 @@ into, and it is worth recording precisely:
   offset for plausible *ranges* rather than eyeballing six rows) is the next,
   still-cheap step; see Next Steps.
 
-**Collision moved out of the vex file entirely and into its own container.**
-`collision::from_vex` correctly returns zero nodes (not a bug - the collision
-class IDs are in the class table with no node instances, checked in the code
-before it settles for empty rather than erroring). The 1,068,082-byte
-`track_col.col` beside `track.vex` is a *new*, wholly separate top-level file:
-its first twelve bytes are the literal ASCII tag `kdtr0001----`, i.e. a k-d
-tree, not the flat triangle-soup chunk format `oag_formats::collision::parse_chunks`
-reads out of a vex node. Nothing here has looked past that tag.
+**Collision moved out of the vex file entirely and into its own container -
+a k-d tree, and its outer shape is now read.** `collision::from_vex` correctly
+returns zero nodes (not a bug - the collision class IDs are in the class table
+with no node instances, checked in the code before it settles for empty rather
+than erroring). The 1,068,082-byte `track_col.col` beside `track.vex` is a
+*new*, wholly separate top-level file, and `KdTree_Load` (`0x8118d134`,
+confidence 87, same evidence page) is its loader - named off its own format
+string (`sscanf`-style, literally `"kdtr%04x"`) and two allocator tags
+(`"Backend/General/Collision/KdTree.cpp"`, with a companion string naming a
+`KdTreeMeshShape.cpp` for the part this session did not reach). Reading the
+real file against what the decompiled control flow predicts, every tag and
+count landed exactly where expected:
+
+```text
++0x00  char[4]  "kdtr"
++0x04  char[4]  ASCII version, "0001" on every file seen
++0x08  char[4]  section tag, literal "----", repeated before each section below
++0x0c  u32      node stride - 24 bytes, this file
++0x10  u32      node count N - 27,199, this file
+        then    N * 24-byte k-d nodes: two child-node indices (serialized, fixed
+                 up to real pointers at load) as the first 8 bytes, 16 bytes
+                 unrecovered
+       "----"
++…     u32      leaf/triangle index count M - 93,279, this file
+        then    M * u16 leaf indices
+       "----"
+        then    axis-aligned bounding box, 2 * [f32;3]
+       "----"
+        then    the mesh-shape trailer `KdTreeMeshShape.cpp` owns - 228,692
+                bytes on this file, entirely unread
+```
+
+Full evidence, including why each function is named at the confidence it is,
+is in
+[track-and-collision-loaders.md](../docs/ghidra/functions/vita-2048-eu-v104/track-and-collision-loaders.md).
+**What is still unrecovered**: the k-d node's own 16 trailing bytes (split
+axis/value and bounds, by hypothesis - not read), and the entire mesh-shape
+trailer, which is where the actual triangle geometry this tree indexes lives.
 
 ## Why nothing is wired up yet
 
@@ -187,21 +225,30 @@ which is an honest result, but not the "spawn in" the task asked for, and
 `CLAUDE.md`'s rule against inventing what the assets already author says not
 to guess the tail-field offsets just to get past it: a wrong half-width or
 `ai_bound` would silently steer the AI off the actual track rather than fail
-loudly.
+loudly. Ghidra RE this session named the two loaders themselves
+(`RcsModel_Load`, `KdTree_Load`) and their containers' outer section shape,
+but not enough of either's interior, or the `WO Track` point tail, to write a
+parser change yet - see What's New above and Next Steps below.
 
 ## Open
 
-- The `.rcsmodel` container's header and chunk layout: nothing beyond "not
-  HD's `0x000a0000`-versioned one, and much larger for the same circuit".
+- The `.rcsmodel` container's three sections' own interiors - the rest of the
+  `0x60`-byte prefix past the two size fields, and the chunk/relocation shape
+  inside the "main memory" and "GPU" blocks `RcsModel_Load` reads whole. Only
+  where the three sections start and end is known.
 - The `WO Track` tail's exact field offsets past `pos`/`tangent`/`down`/`lateral`
   (see above) - two plausible half-width candidates, two unexplained
   monotonic fields, and 8 tail bytes seen constant across too small a sample
-  to trust.
-- The k-d tree `.col` format: nothing past its magic tag.
-- Whether the `.rcsmodel` container is version-`0x107`-specific or shared by
-  every 2048 track - checked on one track (`altima`) only. (The `WO Track`
-  stride itself is now corpus-confirmed across all fourteen `track.vex`
-  entries, see above - this open item is the `.rcsmodel` header alone.)
+  to trust. Ghidra has not been opened for this one yet - `KdTree_Load` and
+  `RcsModel_Load` were both found from strings; the equivalent `WO Track`
+  point reader is unnamed and unlocated.
+- The k-d tree node's own trailing 16 bytes (past the two child indices) and
+  the entire `KdTreeMeshShape.cpp` trailer (228,692 bytes on `altima`) - the
+  actual triangle geometry the tree indexes lives there, unread.
+- Whether the `.rcsmodel` and k-d tree containers are shared verbatim by every
+  2048 track, or `RcsModel_Load`/`KdTree_Load`'s section-size arithmetic was
+  only checked on `altima` - unlike `WO Track`'s stride, neither has a
+  corpus-wide check yet.
 - The native roster's numbered subdirectories (`ag_systems2048/1..4`) and their
   relationship to speed class or ship variant.
 - Whether the patch PSARCs (`data1.psarc`/`data2.psarc`) touch any of `altima`,
@@ -217,12 +264,15 @@ loudly.
    version-gated `point_len(version)` the same shape as `reserved_len(version)`
    is the fix once the offsets are confirmed, not before. The stride itself
    (96 bytes) and the four vector offsets are already corpus-confirmed at
-   confidence 90+ and do not need re-checking.
-2. Open `vita-2048-eu-v104/eboot.elf` in Ghidra for the `.rcsmodel` loader -
-   this is the one format here that a byte-level stride search is unlikely to
-   crack alone, per the module docs' own account of how subtle a "looks
-   plausible but is one field off" reading can be.
-3. Once both parse, add the `ship_dir` axis (`RaceDefaults` field, or a
+   confidence 90+ and do not need re-checking. If the statistical sweep stalls,
+   the same string-driven approach that found `RcsModel_Load` and
+   `KdTree_Load` is worth trying on the point reader before falling back to
+   more probing - it is unnamed and its address is not yet known.
+2. Decode `RcsModel_Load`'s three sections' interiors and `KdTree_Load`'s node
+   tail plus its `KdTreeMeshShape.cpp` trailer - both now have a confirmed
+   outer shape ([track-and-collision-loaders.md](../docs/ghidra/functions/vita-2048-eu-v104/track-and-collision-loaders.md))
+   to build the rest of the decode against, rather than starting cold.
+3. Once all three parse, add the `ship_dir` axis (`RaceDefaults` field, or a
    dedicated one) and thread it through `handling::entry_name`,
    `oag_pulse::race::ships::entry_name` and their `oag-game` call sites -
    scoped care should keep this to the hull/handling path for an MVP craft,

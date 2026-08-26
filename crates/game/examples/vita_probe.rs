@@ -110,6 +110,29 @@ fn main() -> anyhow::Result<()> {
                             "first 64 bytes: {:02x?}",
                             &rcs_blob[..64.min(rcs_blob.len())]
                         );
+                        // Live::Rcs::Model header, per PSP2/Psp2.RcsModelLoader.cpp
+                        // (Ghidra, FUN_812f15b2): 0x60 bytes total (+0x10 states its
+                        // own length), a "main memory" size at +0x24 and a GPU
+                        // section size at +0x44.
+                        let u32_le = |at: usize| {
+                            u32::from_le_bytes(rcs_blob[at..at + 4].try_into().unwrap())
+                        };
+                        println!("full header (0x60 bytes): {:02x?}", &rcs_blob[..0x60]);
+                        for at in [
+                            0x00, 0x04, 0x08, 0x0c, 0x10, 0x14, 0x18, 0x1c, 0x20, 0x24, 0x28, 0x2c,
+                            0x30, 0x34, 0x38, 0x3c, 0x40, 0x44, 0x48, 0x4c, 0x50, 0x54, 0x58, 0x5c,
+                        ] {
+                            println!("  +{at:#04x}: {:#010x} ({})", u32_le(at), u32_le(at));
+                        }
+                        let header_len = u32_le(0x10) as usize;
+                        let main_mem = u32_le(0x24) as usize;
+                        let gpu_size = u32_le(0x44) as usize;
+                        println!(
+                            "header {header_len} + main_mem {main_mem} + gpu {gpu_size} = {} \
+                             vs file length {}",
+                            header_len + main_mem + gpu_size,
+                            rcs_blob.len()
+                        );
                         match mesh::rcs::build_scene(track, &blob, &rcs_blob, &mut |p| {
                             archive.read_path(p).ok()
                         }) {
@@ -336,14 +359,49 @@ fn main() -> anyhow::Result<()> {
             println!("{col_path}: {} byte(s)", blob.len());
             println!("first 32 bytes: {:02x?}", &blob[..32.min(blob.len())]);
             let u32_le = |at: usize| u32::from_le_bytes(blob[at..at + 4].try_into().unwrap());
-            let u32_be = |at: usize| u32::from_be_bytes(blob[at..at + 4].try_into().unwrap());
+
+            // Structural walk per Ghidra FUN_8118d134
+            // (Backend/General/Collision/KdTree.cpp): "kdtr" + 4-digit ASCII
+            // version, then repeating [4-byte "----" tag][section], ending
+            // in a KdTreeMeshShape.cpp-owned trailer this probe does not
+            // attempt.
+            let magic = std::str::from_utf8(&blob[0..4]).unwrap_or("?");
+            let version = std::str::from_utf8(&blob[4..8]).unwrap_or("?");
+            let tag1 = &blob[8..12];
+            println!("magic {magic:?} version {version:?} tag1 {tag1:02x?}");
+            let node_stride = u32_le(0x0c) as usize;
+            let node_count = u32_le(0x10) as usize;
+            let nodes_at = 0x14;
+            let nodes_end = nodes_at + node_count * node_stride;
             println!(
-                "+0x00 LE {:#010x} BE {:#010x} | +0x04 LE {:#010x} BE {:#010x}",
-                u32_le(0),
-                u32_be(0),
-                u32_le(4),
-                u32_be(4)
+                "node_stride {node_stride} (expect 24) node_count {node_count} -> nodes [{nodes_at}, {nodes_end})"
             );
+            if nodes_end + 12 <= blob.len() {
+                let tag2 = &blob[nodes_end..nodes_end + 4];
+                let leaf_count = u32_le(nodes_end + 4) as usize;
+                let leaf_at = nodes_end + 8;
+                let leaf_end = leaf_at + leaf_count * 2;
+                println!(
+                    "tag2 {tag2:02x?} leaf_count {leaf_count} -> leaves [{leaf_at}, {leaf_end})"
+                );
+                if leaf_end + 4 + 24 <= blob.len() {
+                    let tag3 = &blob[leaf_end..leaf_end + 4];
+                    let bbox_at = leaf_end + 4;
+                    let f32_le =
+                        |at: usize| f32::from_le_bytes(blob[at..at + 4].try_into().unwrap());
+                    let bbox_min = [f32_le(bbox_at), f32_le(bbox_at + 4), f32_le(bbox_at + 8)];
+                    let bbox_max = [
+                        f32_le(bbox_at + 12),
+                        f32_le(bbox_at + 16),
+                        f32_le(bbox_at + 20),
+                    ];
+                    let after_bbox = bbox_at + 24;
+                    println!(
+                        "tag3 {tag3:02x?} bbox_min {bbox_min:?} bbox_max {bbox_max:?} - {} byte(s) left for the mesh-shape trailer",
+                        blob.len().saturating_sub(after_bbox)
+                    );
+                }
+            }
         }
         Err(e) => println!("{col_path}: ERROR {e}"),
     }
