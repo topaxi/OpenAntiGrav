@@ -429,6 +429,19 @@ warn_when = [
     ] },
 ]
 
+# A strength, not a boolean - each value is a shutter fraction of one
+# simulation tick, and the technique underneath can improve without this row
+# or anyone's settings file moving; it already has once, camera reprojection
+# to `docs/rendering/motion-blur.md`'s per-object velocity buffer, with no
+# migration. Applies live: `Scene::render` reads it fresh each frame, so no
+# `restart_required`. No MSAA warning any more - the blur's prepare stage
+# reads sample 0 of the multisampled attachments, so the combination works.
+[[page.entry]]
+kind = "choice"
+label = "MOTION BLUR"
+setting = "graphics.motion_blur"
+values = ["off", "low", "medium", "high"]
+
 # Applies to the next race built rather than immediately: the sampler is made
 # when a race's pipelines are.
 [[page.entry]]

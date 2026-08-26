@@ -9,6 +9,7 @@ use super::*;
 use log::warn;
 
 mod frame;
+mod motion;
 
 use frame::{depth_texture, msaa_color_texture};
 
@@ -163,6 +164,34 @@ pub struct Scene {
     /// scene draws straight into the caller's target as it always has. See
     /// `oag_render::post::hd_bloom` and [`Scene::render`].
     hd: Option<oag_render::post::hd_bloom::Chain>,
+    /// Per-object motion blur, run last over the finished frame - an
+    /// enhancement of this project's, not a reading of the original. Built
+    /// with the scene whatever `[graphics] motion_blur` says, because that
+    /// setting is a *strength* [`Scene::render`] reads fresh every frame -
+    /// the row applies live, per `docs/rendering/motion-blur.md`'s design -
+    /// and at `off` the pass simply never encodes anything. `RefCell` for
+    /// the reason [`Self::exhaust`] is: its scratch targets resize inside
+    /// `render`'s `&self`.
+    ///
+    /// It reads [`Self::velocity`] and the depth attachment; under MSAA both
+    /// are multisampled and the pass's prepare stage reads sample 0, so
+    /// unlike the camera-reprojection tier this replaced there is no MSAA
+    /// gate. See `oag_render::post::motion_blur` and ADR-0030.
+    motion_blur: Option<std::cell::RefCell<oag_render::post::motion_blur::MotionBlur>>,
+    /// The scene's velocity attachment: every draw's screen-space motion
+    /// since the previous tick, in uv units -
+    /// `oag_render::mesh_render::VELOCITY_FORMAT`, at the scene's own sample
+    /// count. **Always written in the game path**, whatever the blur setting
+    /// says, per the design: the buffer is an FSR 3.1/TAA prerequisite as
+    /// much as a blur input, and gating it on a setting would make it a
+    /// sometimes-there artefact nothing downstream could rely on.
+    velocity: wgpu::Texture,
+    /// The previous tick's camera and model matrices, for the `prev_mvp`
+    /// every drawable's velocity is measured against - see
+    /// [`motion::MotionState`]. `RefCell` for the reason [`Self::exhaust`]
+    /// is: promoting a tick's snapshot is per-frame state `render`'s `&self`
+    /// has to move.
+    motion: std::cell::RefCell<Option<motion::MotionState>>,
     depth: wgpu::Texture,
     /// The colour attachment every pipeline here actually draws into, and its
     /// sample count.
@@ -250,6 +279,10 @@ impl Scene {
         // in place every pipeline below is built against the linear float
         // target and switches itself to linear output - see
         // `mesh_render::is_linear_target`.
+        // The caller's own format survives the shadowing for the one pass
+        // that runs after every chain has already encoded into the caller's
+        // view - see `motion_blur` below.
+        let caller_format = format;
         let format = if hd.is_some() {
             oag_render::post::hd_bloom::SCENE_FORMAT
         } else {
@@ -659,8 +692,17 @@ impl Scene {
             trail_shape.as_ref(),
             trail_blend,
             sample_count,
+            // The race pass carries the velocity attachment, so these
+            // pipelines carry its (write-masked) second target - see
+            // `mesh_render::Velocity`.
+            mesh_render::Velocity::Write,
         ));
-        let sparks = std::cell::RefCell::new(sparks::Pipeline::new(device, format, sample_count));
+        let sparks = std::cell::RefCell::new(sparks::Pipeline::new(
+            device,
+            format,
+            sample_count,
+            mesh_render::Velocity::Write,
+        ));
         // A failure here is reported and dropped rather than propagated: a race
         // without a bloom is a dimmer race, not a broken one. The HD chain
         // replaces this pass outright - its read gate consumes the same glow
@@ -676,9 +718,27 @@ impl Scene {
             }
         };
 
+        // Built against the caller's own format: whichever chain runs, the
+        // frame this pass reads is the one already encoded into the caller's
+        // view - after the HD chain's encode, after the PSP bloom's
+        // composite. A failure is reported and dropped the way the bloom's
+        // is: a race without motion blur is a sharper race, not a broken one.
+        // See `Self::motion_blur` for why this is not gated on the setting.
+        let motion_blur =
+            match oag_render::post::motion_blur::MotionBlur::new(device, caller_format) {
+                Ok(pass) => Some(std::cell::RefCell::new(pass)),
+                Err(e) => {
+                    warn!("motion blur unavailable ({e}) - the frame draws without it");
+                    None
+                }
+            };
+
         Ok(Self {
             bloom,
             hd,
+            motion_blur,
+            velocity: motion::velocity_texture(device, size, sample_count),
+            motion: std::cell::RefCell::new(None),
             track,
             visibility,
             ships,
@@ -723,6 +783,7 @@ impl Scene {
             hd.resize(device, size);
         }
         self.depth = depth_texture(device, size, sample_count);
+        self.velocity = motion::velocity_texture(device, size, sample_count);
         self.msaa_color = msaa_color_texture(device, format, size, sample_count);
     }
 

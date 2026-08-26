@@ -22,6 +22,15 @@ struct Uniforms {
     _pad0: f32,
     _pad1: f32,
     _pad2: f32,
+    // The previous simulation tick's `view_projection * model`, premultiplied.
+    // **Deliberately not symmetric with the pair above**: fog and lighting
+    // need world position, so the current camera and model stay separate;
+    // velocity needs only clip position, and splitting this one back into a
+    // pair would add 64 bytes to every draw for nothing. Applied to the same
+    // node-transformed local position `vs_main` builds `world` from - the
+    // node matrices are this frame's, so scenery moved by an `Anim Transform`
+    // carries camera velocity only, a recorded approximation.
+    prev_mvp: mat4x4<f32>,
 };
 
 // Each material's authored texture transform, already sampled for this frame
@@ -200,6 +209,14 @@ struct VertexOutput {
     // Flat, because it is a property of the material rather than of the
     // vertex: interpolating a bit field would produce roles nothing authored.
     @location(8) @interpolate(flat) slots: u32,
+    // This vertex's clip position under the current and the previous tick's
+    // cameras, for the velocity target. The current one is carried
+    // explicitly rather than recovered from `@builtin(position)`, which by
+    // fragment time is framebuffer coordinates; both divides happen per
+    // fragment because dividing per vertex and interpolating is not
+    // perspective-correct.
+    @location(9) cur_clip: vec4<f32>,
+    @location(10) prev_clip: vec4<f32>,
 };
 
 @vertex
@@ -243,7 +260,29 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     out.view_depth = out.clip.w;
     out.sun_mask = in.sun_mask;
     out.slots = in.slots;
+    out.cur_clip = out.clip;
+    out.prev_clip = uniforms.prev_mvp * placed;
     return out;
+}
+
+// Colour and screen-space velocity together, for the pipelines built against
+// the race's two attachments - see `mesh_render::Velocity`.
+struct MrtOutput {
+    @location(0) colour: vec4<f32>,
+    @location(1) velocity: vec2<f32>,
+}
+
+// How far this surface point moved on screen since the previous tick, in uv
+// units: the NDC delta halved and y-flipped, which is the encoding the
+// reconstruction filter expects. A point that was behind the previous
+// camera's eye plane has no meaningful previous position and reports zero.
+fn velocity_of(in: VertexOutput) -> vec2<f32> {
+    if in.prev_clip.w <= 0.0 {
+        return vec2<f32>(0.0);
+    }
+    let cur = in.cur_clip.xy / in.cur_clip.w;
+    let prev = in.prev_clip.xy / in.prev_clip.w;
+    return (cur - prev) * vec2<f32>(0.5, -0.5);
 }
 
 // The GE's fog is a linear ramp between `near` and `far` - `Gu_Fog`
@@ -636,4 +675,31 @@ fn fs_main_alpha_test(in: VertexOutput) -> @location(0) vec4<f32> {
         discard;
     }
     return vec4<f32>(fogged(shaded.rgb, in.world, in.view_depth), 1.0);
+}
+
+// The velocity-writing twins of `fs_main` and `fs_main_alpha_test`, for the
+// pipelines built against the race's two attachments (`mesh_render::Velocity`).
+// The blended pipelines have no twin on purpose: they write no depth, so the
+// velocity at their pixels belongs to the surface behind them - their second
+// target carries an empty write mask instead, keeping velocity and depth
+// describing the same surface at every pixel.
+@fragment
+fn fs_main_velocity(in: VertexOutput) -> MrtOutput {
+    let shaded = lit_texel(in);
+    return MrtOutput(
+        vec4<f32>(fogged(shaded.rgb, in.world, in.view_depth), 1.0),
+        velocity_of(in),
+    );
+}
+
+@fragment
+fn fs_main_alpha_test_velocity(in: VertexOutput) -> MrtOutput {
+    let shaded = lit_texel(in);
+    if shaded.a < ALPHA_TEST_THRESHOLD {
+        discard;
+    }
+    return MrtOutput(
+        vec4<f32>(fogged(shaded.rgb, in.world, in.view_depth), 1.0),
+        velocity_of(in),
+    );
 }

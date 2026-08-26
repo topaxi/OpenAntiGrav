@@ -7,6 +7,7 @@
 
 use super::super::*;
 use super::Scene;
+use super::motion::MotionState;
 
 impl Scene {
     /// Draws one frame into `view`.
@@ -32,9 +33,20 @@ impl Scene {
         cull: bool,
         pvs_cull: bool,
         anim_seconds: Option<f32>,
+        motion_blur: crate::display::MotionBlur,
     ) -> SceneStats {
         let aspect = viewport.2.max(1.0) / viewport.3.max(1.0);
         let view_projection = race.projection(aspect, self.far, fov) * race.view();
+        // The previous tick's camera and model matrices, promoted from the
+        // last frame that rendered a different tick - what every drawable's
+        // `prev_mvp` velocity is measured against. See [`MotionState`].
+        let prev = MotionState::advance(
+            &self.motion,
+            race,
+            view_projection,
+            usize::from(race.ship_count()),
+        );
+        let prev_vp = prev.view_projection;
         let frustum = cull.then(|| Frustum::from_view_projection(view_projection));
         // Tier one, built once a frame. Both sections come from the authored
         // spline rather than from the section boxes: a control point's
@@ -193,9 +205,15 @@ impl Scene {
                 queue,
                 view_projection,
                 Mat4::from_translation(race.camera_position()),
+                // The previous camera's *translation* cancels against the
+                // previous view-projection exactly as this frame's does
+                // against this one, leaving the sky with rotation-only
+                // velocity - a horizon pans, it does not approach.
+                prev_vp * prev.camera_translation,
             );
         }
-        self.track.write(queue, view_projection, Mat4::IDENTITY);
+        self.track
+            .write(queue, view_projection, Mat4::IDENTITY, prev_vp);
         // How many slots this race fills, which bounds every per-craft loop from
         // here down: the scene always holds a full grid's worth of drawables and a
         // time trial fields one craft.
@@ -210,7 +228,12 @@ impl Scene {
                 continue;
             }
             if let Some(drawable) = self.ships.get(slot) {
-                drawable.write(queue, view_projection, race.ship_model_matrix_of(slot));
+                drawable.write(
+                    queue,
+                    view_projection,
+                    race.ship_model_matrix_of(slot),
+                    prev_vp * prev.ship(slot, race),
+                );
             }
         }
         // The flaps move in *model* space, before the ship's own matrix, so
@@ -246,10 +269,14 @@ impl Scene {
                 continue;
             }
             let state = race.shield_of(slot);
+            // The previous pose composed with *this* frame's swell: the
+            // shell's velocity is its craft's, and folding the swell delta
+            // in would smear a stationary shell for growing.
             shell.write(
                 queue,
                 view_projection,
                 race.ship_model_matrix_of(slot) * Mat4::from_scale(Vec3::splat(state.scale())),
+                prev_vp * prev.ship(slot, race) * Mat4::from_scale(Vec3::splat(state.scale())),
             );
             shell.tint(queue, state.colour());
         }
@@ -265,6 +292,7 @@ impl Scene {
                 queue,
                 view_projection,
                 race.ship_model_matrix_of(0) * Mat4::from_scale(Vec3::splat(state.cockpit_scale())),
+                prev_vp * prev.ship(0, race) * Mat4::from_scale(Vec3::splat(state.cockpit_scale())),
             );
             sphere.tint(queue, state.colour());
         }
@@ -272,8 +300,15 @@ impl Scene {
         // loop is bounded: nothing in the air writes nothing, and the drawables
         // past the live count keep last frame's uniforms and are not drawn.
         let rocket_matrices = race.rocket_model_matrices();
-        for (drawable, matrix) in self.rockets.iter().zip(&rocket_matrices) {
-            drawable.write(queue, view_projection, *matrix);
+        for (index, (drawable, matrix)) in self.rockets.iter().zip(&rocket_matrices).enumerate() {
+            // A rocket that just spawned has no previous pose; this frame's
+            // is zero object velocity, so it takes camera blur alone for one
+            // frame rather than a smear from another rocket's slot. Indexed
+            // previous matrices do drift for one frame when a mid-list
+            // rocket despawns - bounded by the pass's own reach cap and
+            // accepted; see ADR-0030.
+            let previous = prev.rockets.get(index).copied().unwrap_or(*matrix);
+            drawable.write(queue, view_projection, *matrix, prev_vp * previous);
         }
         // Same model matrix as the ship: the original parents the plume to the
         // craft, not to the flare - see `Loaded::boost_model`. Skipped while
@@ -321,8 +356,16 @@ impl Scene {
             // about the nozzle the model is baked at. Identity when the HD
             // exhaust is not active - the flame then draws as authored, and
             // the load report already carries what is missing.
-            let model = race.ship_model_matrix_of(slot) * hd_flame_transform(race, slot, false);
-            flare.write(queue, view_projection, model);
+            let flame = hd_flame_transform(race, slot, false);
+            let model = race.ship_model_matrix_of(slot) * flame;
+            // This frame's flame scale on the previous pose, like the shell's
+            // swell: the flame's velocity is its craft's.
+            flare.write(
+                queue,
+                view_projection,
+                model,
+                prev_vp * prev.ship(slot, race) * flame,
+            );
         }
         for (slot, boost) in self.boost.iter().enumerate().take(drawn) {
             // `None` is a slot whose *team* ships no plume, which is a
@@ -348,8 +391,14 @@ impl Scene {
             } else if !race.exhaust_of(slot).plume_visible() {
                 continue;
             }
-            let model = race.ship_model_matrix_of(slot) * hd_flame_transform(race, slot, true);
-            boost.write(queue, view_projection, model);
+            let flame = hd_flame_transform(race, slot, true);
+            let model = race.ship_model_matrix_of(slot) * flame;
+            boost.write(
+                queue,
+                view_projection,
+                model,
+                prev_vp * prev.ship(slot, race) * flame,
+            );
             let (scale, offset) = match self.boost_uv_transforms.get(slot).and_then(Option::as_ref)
             {
                 Some(transform) => {
@@ -392,13 +441,13 @@ impl Scene {
             boost.write_node_anims(queue, race.exhaust_of(slot).plume_timer());
         }
         if let Some(collision) = &self.collision {
-            collision.write(queue, view_projection, Mat4::IDENTITY);
+            collision.write(queue, view_projection, Mat4::IDENTITY, prev_vp);
         }
         for pads in [self.pads.as_ref(), self.weapon_pads.as_ref()]
             .into_iter()
             .flatten()
         {
-            pads.write(queue, view_projection, Mat4::IDENTITY);
+            pads.write(queue, view_projection, Mat4::IDENTITY, prev_vp);
         }
         // Ready-to-collect vs cooling down - see `Drawable::tint_weapon_pads`
         // and `oag_render::weapon_pad` for the recovered mechanism this
@@ -514,37 +563,62 @@ impl Scene {
             Some(msaa_view) => (msaa_view, Some(target)),
             None => (target, None),
         };
+        let velocity_view = self
+            .velocity
+            .create_view(&wgpu::TextureViewDescriptor::default());
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("race"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: attachment_view,
-                depth_slice: None,
-                resolve_target,
-                ops: wgpu::Operations {
-                    // Black rather than the near-black blue this used to clear
-                    // to. The clear covers the whole attachment and the scene is
-                    // then drawn into a sub-rectangle, so this colour is what
-                    // `Aspect`'s bars are made of - and a bar has to read as a
-                    // bar. The old value was 0.03/0.04/0.06, dark enough that
-                    // losing it costs nothing inside the viewport either.
-                    // Black, and **alpha zero**: alpha is the bloom's glow mask
-                    // and a frame starts with nothing glowing.
-                    // `wgpu::Color::BLACK` has `a: 1.0`, which would mask the
-                    // entire frame in and bloom everything.
-                    load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: 0.0,
-                        g: 0.0,
-                        b: 0.0,
-                        a: 0.0,
-                    }),
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
+            color_attachments: &[
+                Some(wgpu::RenderPassColorAttachment {
+                    view: attachment_view,
+                    depth_slice: None,
+                    resolve_target,
+                    ops: wgpu::Operations {
+                        // Black rather than the near-black blue this used to clear
+                        // to. The clear covers the whole attachment and the scene is
+                        // then drawn into a sub-rectangle, so this colour is what
+                        // `Aspect`'s bars are made of - and a bar has to read as a
+                        // bar. The old value was 0.03/0.04/0.06, dark enough that
+                        // losing it costs nothing inside the viewport either.
+                        // Black, and **alpha zero**: alpha is the bloom's glow mask
+                        // and a frame starts with nothing glowing.
+                        // `wgpu::Color::BLACK` has `a: 1.0`, which would mask the
+                        // entire frame in and bloom everything.
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 0.0,
+                            g: 0.0,
+                            b: 0.0,
+                            a: 0.0,
+                        }),
+                        store: wgpu::StoreOp::Store,
+                    },
+                }),
+                // The velocity target, cleared to zero - nothing moved where
+                // nothing drew - and never resolved: under MSAA the blur's
+                // prepare stage reads sample 0 instead, because averaging
+                // velocity across a silhouette edge produces a vector that
+                // describes neither surface. See `Self::velocity`.
+                Some(wgpu::RenderPassColorAttachment {
+                    view: &velocity_view,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                        store: wgpu::StoreOp::Store,
+                    },
+                }),
+            ],
             depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                 view: &depth_view,
                 depth_ops: Some(wgpu::Operations {
                     load: wgpu::LoadOp::Clear(1.0),
-                    store: wgpu::StoreOp::Discard,
+                    // `Store`, not `Discard`: the motion blur's reconstruction
+                    // weighs its taps by depth ordering after this pass
+                    // closes, and a discarded attachment is undefined memory
+                    // by then. This is also the depth half of
+                    // `docs/overview/modern-features.md`'s FSR 3.1
+                    // prerequisite table.
+                    store: wgpu::StoreOp::Store,
                 }),
                 stencil_ops: None,
             }),
@@ -692,15 +766,39 @@ impl Scene {
         // `oag_render::post::hd_bloom`.
         if let Some(hd) = &self.hd {
             hd.run(encoder, view);
-            return stats;
-        }
-        // The recovered post-process, reading the alpha channel the ribbon and
-        // the flare stamped and adding a blurred copy of the masked colour back
-        // over the frame. `view` is the resolved image in both the MSAA and the
-        // single-sample case, which is why this runs on it rather than on
-        // `attachment_view`. See `oag_render::post::bloom`.
-        if let Some(bloom) = &self.bloom {
+        } else if let Some(bloom) = &self.bloom {
+            // The recovered post-process, reading the alpha channel the ribbon
+            // and the flare stamped and adding a blurred copy of the masked
+            // colour back over the frame. `view` is the resolved image in both
+            // the MSAA and the single-sample case, which is why this runs on
+            // it rather than on `attachment_view`. See
+            // `oag_render::post::bloom`.
             bloom.render(device, encoder, view);
+        }
+        // Motion blur, last: it smears the finished frame - glow included,
+        // which is what a bright thing sweeping past a lens does - and it
+        // runs before the caller composites the HUD over `view`, so the
+        // readouts stay sharp however the world moves. `motion_blur` is the
+        // strength read fresh off the settings this frame, so the row
+        // applies live; at `off` the pass encodes nothing. The velocity
+        // buffer it reads was written by the scene pass above either way -
+        // see `Scene::velocity`.
+        if let Some(pass) = &self.motion_blur {
+            let size = self.depth.size();
+            pass.borrow_mut().render(
+                device,
+                queue,
+                encoder,
+                &oag_render::post::motion_blur::Frame {
+                    scene: view,
+                    velocity: &velocity_view,
+                    depth: &depth_view,
+                    sample_count: self.anti_aliasing.msaa_samples(),
+                    size: (size.width, size.height),
+                    viewport,
+                    strength: motion_blur.shutter(),
+                },
+            );
         }
         stats
     }
@@ -722,7 +820,13 @@ pub(super) fn depth_texture(
         sample_count,
         dimension: wgpu::TextureDimension::D2,
         format: mesh_render::DEPTH_FORMAT,
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+        // `TEXTURE_BINDING` because the motion blur pass reads the depth the
+        // scene just wrote to reproject each pixel against the previous
+        // camera - see `oag_render::post::motion_blur`. Declared even at MSAA
+        // sample counts, where that pass does not run: the flag costs
+        // nothing, and a conditional usage would be one more thing the two
+        // call sites could disagree about.
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
         view_formats: &[],
     })
 }

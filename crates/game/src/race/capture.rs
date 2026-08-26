@@ -160,6 +160,19 @@ pub struct CaptureOptions {
     /// between resamplers has to use. It is also, necessarily, an sRGB pipeline
     /// throughout, exactly as a window is.
     pub presented: Option<Presented>,
+    /// How hard the frame is smeared along each surface's own motion.
+    ///
+    /// Honoured the way `anti_aliasing` and the culling tiers are - a capture
+    /// is how a graphics setting gets compared against itself off - but this
+    /// one changes the *shape* of the run to do it: every velocity is a delta
+    /// against the previous simulation tick, so a one-render capture has no
+    /// previous tick and measures zero everywhere. With this on, the capture
+    /// holds the last tick back, renders a **primer** frame at the
+    /// tick-before-last pose (drawn and discarded - its only product is the
+    /// previous-transform cache it seeds), runs the final tick, and renders
+    /// the frame that is written out. See `oag_render::post::motion_blur` and
+    /// `docs/rendering/motion-blur.md`.
+    pub motion_blur: crate::display::MotionBlur,
 }
 
 /// [`Presented`] with the scene size worked out.
@@ -231,38 +244,17 @@ pub fn capture(
     race.set_autopilot(options.autopilot);
 
     let mut held = HeldButtons::new(options.held);
-    for tick in 0..options.ticks {
-        if let Some(script) = &options.input_script {
-            held.set_held(script.at(tick as usize).buttons);
-        } else {
-            held.pulse(options.pressed, options.held, tick.is_multiple_of(2));
-        }
-        let snapshot = held.snapshot();
-        // Before the tick, so `spend_pickup` can fire it on this tick's edge.
-        if let Some(weapon) = options.give
-            && race.world.ships[0].pickup.weapon.is_none()
-        {
-            race.world.ships[0].pickup.weapon = Some(weapon);
-        }
-        race.tick(&snapshot);
-        // The race's own voices, on the tick that raised them - the same call
-        // the windowed loop makes immediately after `Race::tick` in
-        // `main::session::frame`. Without it a `--dump-audio` capture of a race
-        // carried the music and nothing else: no engines, no collisions, no
-        // speech, and the cues piled up undrained in the race. The dump is the
-        // only end-to-end evidence a headless run has that a sound was made at
-        // all, so a capture that silently held only half the mix is worse than
-        // no capture.
-        audio.race_tick(&mut race);
-        // Inside the tick loop and not beside it, for the reason the exhaust
-        // and the chase camera are advanced from inside `Race::tick`: what a
-        // capture produces has to be a function of the tick count and nothing
-        // else, or the same command line gives a different file on a slower
-        // machine.
-        audio.tick();
-        if options.log_every > 0 && race.world.tick.is_multiple_of(u64::from(options.log_every)) {
-            println!("{}", describe(&race.telemetry()));
-        }
+    // A motion blur capture holds the **last** tick back: every velocity is a
+    // delta against the previous tick, so the primer frame below has to be
+    // rendered at the tick-before-last pose before that tick runs. Every
+    // other capture drives all its ticks here, exactly as before.
+    let deferred_tick = (options.motion_blur != crate::display::MotionBlur::Off
+        && options.ticks > 0)
+        .then(|| options.ticks - 1);
+    let driven = deferred_tick.unwrap_or(options.ticks);
+    let mut finished_early = false;
+    for tick in 0..driven {
+        advance_one_tick(&mut race, &mut held, audio, options, tick);
         // The race ended inside the requested tick count, so the rest of it is
         // not driven - exactly as the window stops stepping a finished race, and
         // for the same reason: a board taken at the last crossing drawn over a
@@ -274,17 +266,10 @@ pub fn capture(
                 "the race finished on tick {} of the {} asked for; the rest are not driven",
                 race.world.tick, options.ticks
             );
+            finished_early = true;
             break;
         }
     }
-    if let Some(age) = options.pose_boost {
-        race.force_boost_state(age, options.pose_intensity, options.pose_speed);
-    }
-    println!(
-        "after {} tick(s): {}",
-        race.world.tick,
-        describe(&race.telemetry())
-    );
 
     let instance = crate::adapter::instance();
     let adapter = crate::adapter::choose(&instance, None, &options.renderer)?.adapter;
@@ -415,6 +400,56 @@ pub fn capture(
         ),
         None => rect,
     };
+
+    // The primer frame a motion blur capture needs: the scene at the
+    // tick-before-last pose, drawn into the same target and then entirely
+    // overwritten by the real frame's clear. Every pixel it produces is
+    // discarded; its whole product is CPU-side, `Scene::render` folding this
+    // pose into `race::scene::frame::MotionState` so the real frame has a
+    // previous tick to measure its `prev_mvp` velocities against. Without it
+    // a one-render capture measures against itself and the velocity buffer
+    // comes out zero everywhere.
+    //
+    // Its own encoder, submitted before the final frame's, because two
+    // renders in one submission would interleave their `write_buffer`
+    // uploads: a queue write lands before the submission's commands, so the
+    // final frame's uniforms would reach both passes. That was already true
+    // of the camera tier's one uniform buffer and is more so now - every
+    // drawable's `prev_mvp` goes through the same queue.
+    //
+    // Then the held-back tick runs, so the frame written out is the state at
+    // exactly `--ticks`, the same as a capture with the blur off.
+    if let Some(tick) = deferred_tick
+        && !finished_early
+    {
+        let mut primer = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("race capture primer"),
+        });
+        scene.render(
+            &device,
+            &queue,
+            &mut primer,
+            &view,
+            &race,
+            viewport,
+            options.fov,
+            options.frustum_culling,
+            options.pvs_culling,
+            options.anim_seconds,
+            options.motion_blur,
+        );
+        queue.submit(Some(primer.finish()));
+        advance_one_tick(&mut race, &mut held, audio, options, tick);
+    }
+    if let Some(age) = options.pose_boost {
+        race.force_boost_state(age, options.pose_intensity, options.pose_speed);
+    }
+    println!(
+        "after {} tick(s): {}",
+        race.world.tick,
+        describe(&race.telemetry())
+    );
+
     // Both tiers follow their settings, because two captures differing only by
     // one of them are how that tier gets validated - see
     // `CaptureOptions::frustum_culling` and `CaptureOptions::pvs_culling`.
@@ -429,6 +464,11 @@ pub fn capture(
         options.frustum_culling,
         options.pvs_culling,
         options.anim_seconds,
+        // Honoured, and honest since the primer render above exists: with the
+        // setting on, this render is the second of two distinct cameras, so
+        // the smear a player sees is the smear the PNG shows. Off, the pass
+        // never observed a previous camera and encodes nothing.
+        options.motion_blur,
     );
 
     // The HUD, into the same target. Without this a race screenshot would show
@@ -526,6 +566,52 @@ pub fn capture(
         .with_context(|| format!("writing {}", options.path.display()))?;
     println!("wrote {} ({width}x{height})", options.path.display());
     Ok(())
+}
+
+/// One simulation tick of a capture: `tick`'s input, the race step, and the
+/// audio that rides it.
+///
+/// Extracted from the tick loop so a motion blur capture can defer exactly
+/// one tick past the primer render without duplicating the input logic -
+/// a second copy of the script/pulse arithmetic is how the two would drift.
+fn advance_one_tick(
+    race: &mut Race,
+    held: &mut HeldButtons,
+    audio: &mut crate::audio::Audio,
+    options: &CaptureOptions,
+    tick: u32,
+) {
+    if let Some(script) = &options.input_script {
+        held.set_held(script.at(tick as usize).buttons);
+    } else {
+        held.pulse(options.pressed, options.held, tick.is_multiple_of(2));
+    }
+    let snapshot = held.snapshot();
+    // Before the tick, so `spend_pickup` can fire it on this tick's edge.
+    if let Some(weapon) = options.give
+        && race.world.ships[0].pickup.weapon.is_none()
+    {
+        race.world.ships[0].pickup.weapon = Some(weapon);
+    }
+    race.tick(&snapshot);
+    // The race's own voices, on the tick that raised them - the same call
+    // the windowed loop makes immediately after `Race::tick` in
+    // `main::session::frame`. Without it a `--dump-audio` capture of a race
+    // carried the music and nothing else: no engines, no collisions, no
+    // speech, and the cues piled up undrained in the race. The dump is the
+    // only end-to-end evidence a headless run has that a sound was made at
+    // all, so a capture that silently held only half the mix is worse than
+    // no capture.
+    audio.race_tick(race);
+    // Beside the race step and not outside the loop, for the reason the
+    // exhaust and the chase camera are advanced from inside `Race::tick`:
+    // what a capture produces has to be a function of the tick count and
+    // nothing else, or the same command line gives a different file on a
+    // slower machine.
+    audio.tick();
+    if options.log_every > 0 && race.world.tick.is_multiple_of(u64::from(options.log_every)) {
+        println!("{}", describe(&race.telemetry()));
+    }
 }
 
 /// One telemetry line, for a log or a report.

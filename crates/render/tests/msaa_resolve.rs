@@ -142,6 +142,7 @@ fn render_and_resolve(
         mesh_render::Depth::Scene,
         mesh_render::TRANSPARENT_BLEND,
         mesh_render::GlowMask::Protected,
+        mesh_render::Velocity::None,
     )
     .expect("building the mesh pipeline");
 

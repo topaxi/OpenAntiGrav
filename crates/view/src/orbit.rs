@@ -298,8 +298,10 @@ impl Session {
             1,
             mesh_render::Depth::Scene,
             mesh_render::TRANSPARENT_BLEND,
-            // The asset viewer runs no bloom, so the mask is moot here.
+            // The asset viewer runs no bloom, so the mask is moot here, and
+            // it draws into one target, so there is no velocity buffer.
             mesh_render::GlowMask::Protected,
+            mesh_render::Velocity::None,
         )?;
         let _ = placeholder_bind_group;
 

@@ -1,9 +1,22 @@
 # Motion blur
 
-> **This is a design, not an implementation.** Nothing described here is built.
-> The page exists so the work is costed and specified before anyone starts, and
-> so the three or four wrong first answers found while designing it are not
-> found again.
+> **Status, 2026-08-25: the tier this page chose is built.** The per-object
+> velocity buffer, the `prev_mvp` uniform, the tile-max / neighbour-max /
+> reconstruction chain and the always-on buffer are implemented as designed
+> - `oag_render::post::motion_blur`, `mesh.wgsl`'s `velocity_of`,
+> `mesh_render::Velocity` - under exactly the strength row and at the
+> placement this page specified. It happened in the two steps the page
+> sanctioned: camera reprojection shipped first as the stepping stone
+> ([ADR-0028](../architecture/adr/0028-camera-motion-blur-first.md), plus
+> [ADR-0029](../architecture/adr/0029-primer-capture-and-craft-focus-mask.md)'s
+> live-feedback patches), and the velocity tier replaced it under the same
+> row with no settings migration
+> ([ADR-0030](../architecture/adr/0030-velocity-buffer-motion-blur.md) - the
+> ADR this page said the tier owes). The predicted ghosting-on-rivals was
+> observed live in the interim, which is as validated as a design prediction
+> gets. What remains below as design rather than implementation: the
+> airbrake flaps' own swing velocity, and this page's read on what the
+> buffer deliberately does not solve.
 
 **This is an invented feature, not a recovered one.** Wipeout Pulse has no
 motion blur; nothing on this page came out of a disassembler, and nothing on it
@@ -133,9 +146,9 @@ sets and the way FXAA was already done.
 
 ## Implementation sketch
 
-**Attachments**, in `oag_game::race`. The depth texture gains `TEXTURE_BINDING`
-and the pass's `depth_ops.store` becomes `StoreOp::Store` - today it is
-`Discard`, which is why the FSR 3.1 table calls the depth buffer unusable. Add
+**Attachments**, in `oag_game::race`. ~~The depth texture gains
+`TEXTURE_BINDING` and the pass's `depth_ops.store` becomes `StoreOp::Store`~~ -
+**done**, by the camera tier, which reads that depth every frame. Add
 an `Rg16Float` velocity target at the scene's sample count, `RENDER_ATTACHMENT |
 TEXTURE_BINDING`, resized alongside depth, cleared to zero each frame with no
 `resolve_target`. The race pass gains a second colour attachment.
@@ -181,6 +194,50 @@ blur is a sharper race, not a broken one.
 > foreground silhouettes, which is the single difference between an effect that
 > reads as motion blur and one that reads as a bug.
 
+> As built the chain is **six passes and five targets**, not four:
+> `prepare` folds velocity and depth together so the rest of the chain reads
+> one binding whatever the scene's sample count, and tile-max runs separably,
+> one axis at a time.
+> [ADR-0030](../architecture/adr/0030-velocity-buffer-motion-blur.md) counts
+> five and four, which is what landed with it; the separable split came
+> after. ADRs are immutable, so this line and
+> `oag_render::post::motion_blur`'s module docs carry the current count.
+>
+> The warning above was earned twice. The first tier had no per-object
+> velocity at all, which is the whole of ADR-0028 and ADR-0029. The second
+> got the depth weighting right and then lost half of it in the *velocity*
+> weighting: the gather's third term - the paper's product of two cylinders,
+> which credits two surfaces for sharing a motion - was written against the
+> tile neighbourhood's dominant reach instead of the centre pixel's own. That
+> reach is `>= own_reach` by construction, so the substitution could only add
+> weight, and the term is the one with no depth gate: a **still** surface in
+> front of a fast one took a full-weight tap of whatever was behind it,
+> measuring 199 of 255 at a test block's silhouette. Fixed to
+> `min(tap_reach, own_reach)`, pinned by
+> `a_still_surface_over_a_moving_background_keeps_its_colour`.
+
+### Cost, measured
+
+The number ADR-0030 says belongs here once measured on real hardware. Intel
+Arc (ARL) integrated graphics, 1920x1080, `strength 0.5`, the whole chain
+timed over 50 submissions:
+
+| | ms/frame |
+| --- | --- |
+| Square tile-max, as ADR-0030 landed | 2.6 |
+| Separable tile-max | **1.2** |
+| Separable, with the reduction stubbed out entirely | 1.1 |
+
+The square form was not doing more arithmetic - both forms touch every pixel
+once - it was doing it in `ceil(w / tile) * ceil(h / tile)` fragments, which
+at 1080p is 299 threads each running 7,569 serial `textureLoad`s. Splitting
+the reduction into a horizontal pass at `ceil(w / tile)` by `h` and a
+vertical one onto the tile grid puts the first pass's work in 24,840
+fragments instead, and what remains of tile-max is now within noise of free.
+This is worth knowing generally: **the reach cap doubles as the tile size, so
+a generous cap makes the tiles large**, and a square reduction over a large
+tile is the one shape where a fullscreen pass can starve the GPU.
+
 **The setting** follows `AntiAliasing` exactly, because it is the fullest
 worked example in the tree: an enum in `oag_game::display` with `name()`,
 `ALL`, `FromStr`, `Display` and the `TryFrom<String>` / `Into<String>` serde
@@ -189,6 +246,20 @@ pair; a field on `Graphics`; a tuple in `menu_seeds`; a `kind = "choice"` row in
 `Session::apply_setting`; a per-frame argument on `Scene::render` next to
 `anim_seconds`; and a field on `race::CaptureOptions` so `--screenshot`
 reflects it, the way `bloom` and `anti_aliasing` already do.
+
+> All of that exists now (`display::MotionBlur`), the `CaptureOptions` field
+> included: `race::capture` holds the last tick back, renders a discarded
+> **primer** frame at the tick-before-last camera, then the real one - so a
+> `--screenshot --motion-blur medium` shows the same smear a player sees,
+> and the tier comparison this page wants has its tool. `--motion-blur`
+> overrides the settings file for one run, like `--anti-aliasing`. See
+> [ADR-0029](../architecture/adr/0029-primer-capture-and-craft-focus-mask.md),
+> which also records the shipped tier's **craft focus mask**: the first
+> real-race session confirmed this page's prediction that camera
+> reprojection smears the craft (the player's own included), and the cheap
+> counter is to project every drawn craft's bounding sphere and have the
+> gather skip those pixels, depth-tested so the road still blurs up to each
+> silhouette. The velocity tier replaces the mask with measurement.
 
 ## What the velocity buffer does not solve
 
@@ -221,6 +292,19 @@ while the depth weighting treats it as foreground - the very artifact that
 weighting exists to prevent. This is accepted rather than fixed: the geometry is
 additive, low contrast and already bloomed, so it should be imperceptible. It is
 listed below as a thing to check, not to assume.
+
+**Camera cuts.** A view switch or a respawn moves the camera further in one
+tick than any surface really travelled, and every pixel measures that jump.
+The reach cap bounds it to one frame of at most [`MAX_STRETCH`] of the
+viewport height, which is why nothing has had to be wired yet - but nothing
+*is* wired, and the pass no longer holds the state a reset would clear.
+[ADR-0028](../architecture/adr/0028-camera-motion-blur-first.md) left a
+`MotionBlur::reset` for whoever wired those events; the velocity tier is
+stateless across frames, so that method is gone and the cache to invalidate
+is `race::scene::frame::MotionState` instead. Whoever wires a cut clears the
+snapshot there, and the frame after it measures zero.
+
+[`MAX_STRETCH`]: ../../crates/render/src/post/motion_blur.rs
 
 ## Settle these before writing any shader
 
@@ -286,18 +370,15 @@ Worth adding a fifth: draw one moving quad, read the velocity target back and
 assert the sign and rough magnitude. A y-flip in the velocity encoding is the
 most likely single bug and it is invisible in the final image.
 
-## ADR-0024 is owed
+## The owed ADRs are written
 
-This page is a design, so it deliberately stops short of being a decision
-record. Whoever implements it owes an ADR, because
-[ADR-0013](../architecture/adr/0013-anti-aliasing-architecture.md) currently
-commits the project to *not* shipping rows that depend on temporal
-infrastructure, and this reverses that for one row. The ADR should record the
-choice of tier, the always-on velocity buffer, the tick-keyed previous
-transform, the after-bloom placement, the sample-0 MSAA decision, and both
-unsolved cases above. ADRs here are immutable, so it is a sibling to 0013 rather
-than an edit to it.
-
-It is deliberately not written yet: the `Rg16Float` question above could still
-change the design, and an ADR recording a decision that then changes is worse
-than one written a week later.
+This section used to say "ADR-0024 is owed" (four ADRs landed in between).
+Three now exist:
+[ADR-0028](../architecture/adr/0028-camera-motion-blur-first.md) for the
+stepping-stone camera tier,
+[ADR-0029](../architecture/adr/0029-primer-capture-and-craft-focus-mask.md)
+for the primer capture and the interim focus mask, and
+[ADR-0030](../architecture/adr/0030-velocity-buffer-motion-blur.md) for this
+page's own tier - the always-on buffer, the sample-0 MSAA reads, the settled
+`Rg16Float` question (multisample-renderable at 4x, pinned by a live test
+with `Rgba16Float` as the fallback), and both unsolved cases above.

@@ -71,16 +71,18 @@
   [the HUD](../ui/hud.md). Its `<Mode3D>` layer is not
 - Post-processing, and the series' distinctive look. Bloom is **done** and
   **recovered**; FXAA, SMAA, MSAA 4x and FSR 1 are built as modern additions.
-  [Motion blur](motion-blur.md) is **designed and costed but not built** - an
-  invented feature rather than a recovered one, written down because its
-  per-object velocity buffer is also two of the five things FSR 3.1 and TAA are
-  waiting on
+  [Motion blur](motion-blur.md) is **built at its designed per-object
+  velocity tier** - every race draw writes measured screen motion, gathered
+  by a McGuire-style reconstruction filter behind a live
+  `[graphics] motion_blur` strength row
+  ([ADR-0030](../architecture/adr/0030-velocity-buffer-motion-blur.md)) - an
+  invented feature rather than a recovered one
 - Modern display features: ultrawide, HDR, VRR, dynamic resolution, and
   FSR-class upscaling - see [modern features](../overview/modern-features.md)
-  for the licensing picture and the pipeline prerequisites (motion vectors,
-  depth, camera jitter) to design in from the start. The first two of those
-  three have a design: [motion blur](motion-blur.md) would deliver them as a
-  side effect
+  for the licensing picture and the pipeline prerequisites to design in from
+  the start. Readable depth and per-draw motion vectors are both done, by
+  [motion blur](motion-blur.md)'s two tiers; sub-pixel camera jitter and a
+  UI-free scene artefact remain
 
 ## The art is raster, and that has a consequence
 

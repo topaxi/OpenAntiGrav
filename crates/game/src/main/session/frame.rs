@@ -471,6 +471,7 @@ impl Session {
                     self.settings.graphics.frustum_culling,
                     pvs_culling,
                     self.anim_seconds,
+                    self.settings.graphics.motion_blur,
                 );
                 if let Some(start) = start {
                     info!("first race frame: encoded in {:?}", start.elapsed());
