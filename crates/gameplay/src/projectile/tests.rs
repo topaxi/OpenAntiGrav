@@ -4,7 +4,7 @@
 //! modules; see `scripts/check-file-size.py`.
 
 use super::*;
-use oag_physics::{CollisionWorld, Surface, TriangleSoup};
+use oag_physics::{CollisionWorld, ShipState, Surface, TriangleSoup};
 
 fn ships(entries: &[(bool, Vec3)]) -> Vec<crate::world::Ship> {
     entries
