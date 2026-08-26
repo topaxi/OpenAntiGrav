@@ -12,16 +12,18 @@
 //! lookup below is already in pixels, so only this file has to change.
 
 use oag_formats::texture::Texture;
-use oag_formats::{gtf, ps2_texture};
+use oag_formats::{gtf, gxt, ps2_texture};
 
-/// One decoded image, from any of the three discs' texture formats.
+/// One decoded image, from any of the four sources' texture formats.
 ///
-/// The three are different formats, not versions of one - a PSP `.mip` is a
-/// header, a palette and pixels; a PS2 texture is the GS upload packet that
-/// would put one in video memory; a PS3 `.gtf` is a big-endian RSX descriptor
-/// over DXT or straight ARGB - but a sheet only needs a size and RGBA, so the
-/// difference stops here. See `docs/formats/psp-texture.md`,
-/// `docs/formats/ps2-texture.md` and `docs/formats/gtf.md`.
+/// Four different formats, not versions of one - a PSP `.mip` is a header, a
+/// palette and pixels; a PS2 texture is the GS upload packet that would put
+/// one in video memory; a PS3 `.gtf` is a big-endian RSX descriptor over DXT
+/// or straight ARGB; a Vita `.gxt` is a little-endian GXM descriptor over a
+/// Morton-tiled BC2 block grid - but a sheet only needs a size and RGBA, so
+/// the difference stops here. See `docs/formats/psp-texture.md`,
+/// `docs/formats/ps2-texture.md`, `docs/formats/gtf.md` and
+/// `docs/formats/2048-hud.md`.
 struct Image {
     width: u16,
     height: u16,
@@ -44,6 +46,11 @@ impl Image {
     /// blamed a format the file is not. [`oag_formats::gtf`] has decoded these
     /// since well before the front end asked for one; nothing was missing but
     /// the branch.
+    ///
+    /// **The Vita branch is [`Self::decode_gxt`]**, tried last for the same
+    /// reason `.gtf` is tried after the two PSP-era formats: 2048 is the one
+    /// title whose textures reach it, and every other title's blob fails it
+    /// immediately on the magic check.
     fn decode(blob: &[u8]) -> Result<Self, String> {
         match Texture::parse(blob) {
             Ok(t) => Ok(Self {
@@ -59,7 +66,9 @@ impl Image {
                     bits_per_pixel: t.bits_per_pixel,
                     rgba: t.to_rgba(),
                 }),
-                Err(_) => Self::decode_gtf(blob).ok_or_else(|| psp.to_string()),
+                Err(_) => Self::decode_gtf(blob)
+                    .or_else(|| Self::decode_gxt(blob))
+                    .ok_or_else(|| psp.to_string()),
             },
         }
     }
@@ -116,6 +125,30 @@ impl Image {
                 .rev()
                 .flat_map(|row| row.iter().flatten().copied())
                 .collect(),
+        })
+    }
+
+    /// The Vita branch, or `None` for a blob that is not a `.gxt` this build
+    /// draws.
+    ///
+    /// **Not flipped**, unlike [`Self::decode_gtf`]'s PS3 texel rows: the
+    /// checkerboard-composited renders `gxt_ground_truth.rs` writes to
+    /// `data/shots/` came out the right way up as decoded -
+    /// `missile_reticule.gxt`'s crosshair sits above its dashed arc and
+    /// `hud_2048.gxt`'s warning triangle points up - so the Vita's own GXM
+    /// convention is top-down like a sheet already is, and no consumer here
+    /// has been checked against a running frame to say otherwise. See
+    /// `docs/formats/2048-hud.md`.
+    fn decode_gxt(blob: &[u8]) -> Option<Self> {
+        let parsed = gxt::Gxt::parse(blob).ok()?;
+        let texture = parsed.only()?;
+        let rgba = texture.to_rgba(blob).ok()?;
+        Some(Self {
+            width: texture.width,
+            height: texture.height,
+            // BC2 is 16 bytes per 4x4 block, 8 bits per texel.
+            bits_per_pixel: 8,
+            rgba: rgba.into_iter().flatten().collect(),
         })
     }
 

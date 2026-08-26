@@ -23,8 +23,12 @@
 //!   but their geometry is in `.rcsmodel` siblings this build cannot decode,
 //!   and HD's `EF_Main`/`EF_Boost` group names have not been checked against
 //!   2048's own. Naming them here would claim a measurement nobody made.
-//! - [`hud::ART`] carries an empty always-on set and
-//!   [`oag_title::hud::Sights::Unread`], for the same reason.
+//! - [`hud::ART`] carries an empty always-on set on the same terms: which
+//!   widgets a race actually shows needs a running frame this title has no
+//!   capture harness for. The reticle axis (`sights`) and the played skin the
+//!   layouts read from are both measured now, off this title's own composed
+//!   data and two decompiled race-manager constructors respectively - see
+//!   `docs/formats/2048-hud.md`.
 //!
 //! # The asset tree is Wipeout HD's, and the ship directory is not
 //!

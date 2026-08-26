@@ -18,3 +18,5 @@
 0x8118fac8	function	SimpleMesh_Load	92	track-and-collision-loaders.md
 0x8118f9bc	function	SimpleMesh_Construct	88	track-and-collision-loaders.md
 0x8126f800	function	TrackCollision_MeshFromNode	88	track-and-collision-loaders.md
+0x8117af40	function	SpArcadeRaceManager_Construct	90	race-hud-selection.md
+0x8114a090	function	DemoRaceManager_Construct	85	race-hud-selection.md

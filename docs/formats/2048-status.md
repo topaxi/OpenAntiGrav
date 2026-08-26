@@ -70,11 +70,20 @@ the start line and runs the simulation. What it does **not** do, and why:
   triangles over 2,800 submeshes and the craft as its own hull, lit off computed
   face normals because the authored per-vertex normals and texture coordinates
   are in the file and not placed. See [2048-rcsmodel.md](2048-rcsmodel.md).
-- **No front end, no music, no HUD art.** `oag_2048::TITLE` carries
-  `front_end: None`, `loading: None` and `music: None`, and its `hud_art` is
-  `Sights::Unread` with an empty always-on set. None of it has been read; a
-  copy of HD's would compose to *something*, which is how a wrong picture
-  survives review.
+- **No front end, no music.** `oag_2048::TITLE` carries `front_end: None`,
+  `loading: None` and `music: None`. Neither has been read.
+- **The HUD layouts are read, the textures decode, and no sprite draws yet.**
+  All 25 non-split-screen HUD roots compose with nothing missing and nothing
+  skipped, the played skin is known (`2048_hud\`, not the bare root previously
+  guessed at), the reticle is `Sights::Concentric`, and `oag_formats::gxt` now
+  reads the Vita's texture container - swept against 9,910 files, real HUD
+  icons render correctly. See [2048-hud.md](2048-hud.md). What is still
+  unread is which widgets a race actually shows: `ALWAYS_ON` is empty, and
+  unlike every other axis on this page it needs a running frame to settle
+  rather than more static reading - this title has no capture harness the way
+  HD's rpcs3 one is. So `just play 2048 --race` still shows no HUD at all
+  rather than the wrong one. A copy of HD's `ALWAYS_ON` would draw
+  *something*, which is how a wrong picture survives review.
 
 ## The one axis 2048 forced into existence
 

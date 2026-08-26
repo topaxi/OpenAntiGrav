@@ -29,6 +29,7 @@
 
 #[cfg(feature = "av1")]
 pub mod av1;
+mod bcn;
 pub mod bik;
 pub mod byte_order;
 pub mod collision;
@@ -39,6 +40,7 @@ pub mod fexml;
 pub mod fnt;
 pub mod fog;
 pub mod gtf;
+pub mod gxt;
 pub mod handling;
 pub mod hd_pvs;
 pub mod ipf;
