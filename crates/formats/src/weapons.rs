@@ -713,14 +713,9 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
                 // Camel-cased in the document while every other attribute here
                 // is lower-cased. The file's spelling, kept verbatim, because
                 // this is the string a lookup is matched against.
-                launch_speed: number(block, "Stats", "launchSpeed")?,
+                launch_speed: optional(block, "Stats", "launchSpeed")?.unwrap_or(0.0),
                 spread: number(block, "Stats", "spread")?,
-                speeds: [
-                    number(block, "Stats", "venomspeed")?,
-                    number(block, "Stats", "flashspeed")?,
-                    number(block, "Stats", "rapierspeed")?,
-                    number(block, "Stats", "phantomspeed")?,
-                ],
+                speeds: class_speeds(block)?,
             });
             continue;
         }
@@ -730,15 +725,10 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
                 blastforce: number(block, "Stats", "blastforce")?,
                 blastradius: number(block, "Stats", "blastradius")?,
                 damage: number(block, "Stats", "damage")?,
-                launch_speed: number(block, "Stats", "launchSpeed")?,
+                launch_speed: optional(block, "Stats", "launchSpeed")?.unwrap_or(0.0),
                 lock_min_dist: number(block, "Stats", "lock_min_dist")?,
                 lock_max_dist: number(block, "Stats", "lock_max_dist")?,
-                speeds: [
-                    number(block, "Stats", "venomspeed")?,
-                    number(block, "Stats", "flashspeed")?,
-                    number(block, "Stats", "rapierspeed")?,
-                    number(block, "Stats", "phantomspeed")?,
-                ],
+                speeds: class_speeds(block)?,
             });
             continue;
         }
@@ -827,6 +817,49 @@ fn find<'a>(node: &'a Node, name: &str) -> Option<&'a Node> {
         return Some(node);
     }
     node.children.iter().find_map(|child| find(child, name))
+}
+
+/// The four per-class speeds, from whichever of the two dialects the file uses.
+///
+/// **Two shapes, and the second is Pure's.** Pulse and Wipeout HD author one
+/// speed per speed class - `venomspeed`, `flashspeed`, `rapierspeed`,
+/// `phantomspeed` - and Pure authors a single `speed` that every class flies at.
+/// Measured 2026-08-26 off `Data\XML\weaponstats.xml`, where the Missile reads
+/// `speed="950"` and the Rocket `speed="1000"` with no per-class attribute in
+/// the file at all.
+///
+/// The per-class spelling wins where both are present, which no shipped file
+/// does; a file with neither is the error, and it names `venomspeed` because
+/// that is the dialect a reader of this project is likelier to be holding.
+///
+/// **Folding one speed into four is not a substitution for missing data.** Pure
+/// genuinely flies every class at the same weapon speed - there is nothing per
+/// class to lose - so the array is the shape this crate carries rather than a
+/// claim about the file.
+fn class_speeds(block: &Node) -> Result<[f32; 4]> {
+    if let Some(one) = optional(block, "Stats", "speed")?
+        && block.value("venomspeed").is_none()
+    {
+        return Ok([one; 4]);
+    }
+    Ok([
+        number(block, "Stats", "venomspeed")?,
+        number(block, "Stats", "flashspeed")?,
+        number(block, "Stats", "rapierspeed")?,
+        number(block, "Stats", "phantomspeed")?,
+    ])
+}
+
+/// [`number`], but a missing attribute is `None` rather than an error.
+///
+/// For the attributes one dialect authors and another does not. A *present*
+/// attribute that will not parse is still an error: this is about the file not
+/// carrying a field, not about tolerating rubbish in one.
+fn optional(node: &Node, element: &'static str, attribute: &'static str) -> Result<Option<f32>> {
+    if node.value(attribute).is_none() {
+        return Ok(None);
+    }
+    number(node, element, attribute).map(Some)
 }
 
 fn number(node: &Node, element: &'static str, attribute: &'static str) -> Result<f32> {

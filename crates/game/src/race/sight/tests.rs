@@ -168,10 +168,10 @@ fn a_target_behind_the_camera_does_not_project() {
     let projection = oag_render::camera::projection(1.0, 480.0 / 272.0, 0.1, 1000.0);
     let view_projection = projection * view;
 
-    let ahead = project(view, view_projection, Vec3::new(0.0, 0.0, -40.0));
+    let ahead = project(view, view_projection, Vec3::new(0.0, 0.0, -40.0), SCREEN);
     assert!(ahead.is_some(), "a craft straight ahead did not project");
 
-    let behind = project(view, view_projection, Vec3::new(0.0, 0.0, 40.0));
+    let behind = project(view, view_projection, Vec3::new(0.0, 0.0, 40.0), SCREEN);
     assert_eq!(
         behind, None,
         "a craft behind the camera projected on screen"
@@ -185,9 +185,9 @@ fn a_target_past_the_draw_range_does_not_project() {
     let projection = oag_render::camera::projection(1.0, 480.0 / 272.0, 0.1, 4000.0);
     let view_projection = projection * view;
 
-    assert!(project(view, view_projection, Vec3::new(0.0, 0.0, -249.0)).is_some());
+    assert!(project(view, view_projection, Vec3::new(0.0, 0.0, -249.0), SCREEN).is_some());
     assert_eq!(
-        project(view, view_projection, Vec3::new(0.0, 0.0, -251.0)),
+        project(view, view_projection, Vec3::new(0.0, 0.0, -251.0), SCREEN),
         None,
         "a craft past the recovered 250-unit sight range still drew a reticle"
     );
@@ -201,7 +201,8 @@ fn a_target_past_the_draw_range_does_not_project() {
 fn a_craft_dead_ahead_projects_to_the_middle_of_the_screen() {
     let view = look_at(Vec3::ZERO, Vec3::NEG_Z, Vec3::Y);
     let projection = oag_render::camera::projection(1.0, 480.0 / 272.0, 0.1, 1000.0);
-    let projected = project(view, projection * view, Vec3::new(0.0, 0.0, -40.0)).expect("ahead");
+    let projected =
+        project(view, projection * view, Vec3::new(0.0, 0.0, -40.0), SCREEN).expect("ahead");
     assert!((projected.screen[0] - 240.0).abs() < 0.5, "{projected:?}");
     assert!((projected.screen[1] - 136.0).abs() < 0.5, "{projected:?}");
 }
@@ -211,8 +212,8 @@ fn a_craft_dead_ahead_projects_to_the_middle_of_the_screen() {
 fn a_craft_above_the_camera_draws_above_the_middle() {
     let view = look_at(Vec3::ZERO, Vec3::NEG_Z, Vec3::Y);
     let projection = oag_render::camera::projection(1.0, 480.0 / 272.0, 0.1, 1000.0);
-    let projected =
-        project(view, projection * view, Vec3::new(0.0, 8.0, -40.0)).expect("above and ahead");
+    let projected = project(view, projection * view, Vec3::new(0.0, 8.0, -40.0), SCREEN)
+        .expect("above and ahead");
     assert!(
         projected.screen[1] < 136.0,
         "a craft above the camera drew at y={}, below the middle - the screen \

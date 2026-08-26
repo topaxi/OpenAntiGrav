@@ -376,22 +376,26 @@ impl Race {
         let target = self.sight_target();
         let projected = target.and_then(|slot| {
             let world = self.world.ships[slot as usize].physics.body.position;
-            // The virtual screen's own aspect, not the window's. The original
+            // **The title's own virtual screen, not the window's.** The original
             // projects into 480x272 because that *is* its screen; this engine
             // letterboxes the same rectangle into whatever the window is, so
-            // the two agree exactly at the original's shape and drift a little
-            // as the display aspect is taken away from it. **Ours**, and the
+            // the two agree exactly at the authored shape and drift a little as
+            // the display aspect is taken away from it. **Ours**, and the
             // alternative - projecting at the window aspect - would put the
-            // reticle off the craft on a 480x272 capture, which is the frame
-            // every comparison against the original is taken at.
-            let aspect = sight::SCREEN[0] / sight::SCREEN[1];
+            // reticle off the craft on an authored-size capture, which is the
+            // frame every comparison against the original is taken at.
+            //
+            // Off the reticle rather than off a constant, because Wipeout HD
+            // authors its HUD in 1920x1080 and the PSP titles in 480x272.
+            let screen = self.sight.screen();
+            let aspect = screen[0] / screen[1];
             let view = self.view();
             // The far plane is irrelevant here - the reticle's own 250-unit
             // range test runs in eye space, before the projection - so this
             // takes a value large enough never to clip a craft the sight would
             // otherwise draw.
             let projection = self.projection(aspect, SIGHT_FAR, self.sight_fov);
-            sight::project(view, projection * view, world)
+            sight::project(view, projection * view, world, screen)
         });
         self.sight_state = self.sight.update(self.dt, projected);
     }

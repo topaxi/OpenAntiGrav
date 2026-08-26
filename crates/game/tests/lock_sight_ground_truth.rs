@@ -218,22 +218,21 @@ fn a_missile_in_hand_locks_a_craft_on_a_real_circuit() {
     );
 }
 
-/// Wipeout Pure authors the Missile's five sights, and its art reaches the sheet.
+/// Wipeout Pure locks and draws its reticle, in the PSP dialect.
 ///
-/// **The reticle is one engine, three titles, and this is the half of that which
-/// is data.** Pure's `Arcade_HUD.xml` carries `missile_sight_inner` and
-/// `missile_sight_1` … `_4` off the same two models Pulse names - and *not* the
-/// LeachBeam's four, which is the disc agreeing that the LeachBeam is a Pulse
-/// weapon.
+/// **Pure was authored for this all along and could not reach it**, for two
+/// reasons that had nothing to do with the reticle. Its layout carries
+/// `missile_sight_inner` and `missile_sight_1` … `_4` off the same two models
+/// Pulse names - and *not* the LeachBeam's four, the disc agreeing that is a
+/// Pulse weapon - and its weapon table is one lower-cased
+/// `Data\XML\weaponstats.xml` rather than Pulse's two.
 ///
-/// **It also covers a path Pulse cannot reach.** Every one of Pure's four HUD
-/// layouts names no `.mip` at all - the whole HUD is `<Model>` geometry - so
-/// Pure always takes the "no texture" branch of the atlas loader, which used to
-/// return an empty sheet before it ever looked for sight art. Pulse never takes
-/// that branch, so nothing else in the tree would notice.
+/// It also covers a path Pulse cannot reach: every Pure HUD layout names no
+/// `.mip`, so Pure always takes the atlas loader's "no texture" branch, which
+/// used to return an empty sheet before it looked for sight art.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn pure_authors_the_missiles_sights_and_its_art_reaches_the_sheet() {
+fn pure_locks_a_craft_and_draws_the_psp_reticle() {
     use oag_game::race::sight;
 
     let Some(image) = image_named("pure-psp-usa.chd") else {
@@ -262,7 +261,6 @@ fn pure_authors_the_missiles_sights_and_its_art_reaches_the_sheet() {
             model.src
         );
     }
-
     assert!(
         !layout
             .models
@@ -270,49 +268,38 @@ fn pure_authors_the_missiles_sights_and_its_art_reaches_the_sheet() {
             .any(|m| sight::LEACHBEAM_BRACKETS.contains(&m.name.as_str())),
         "Pure authors LeachBeam sights, which would mean it has the weapon"
     );
-}
 
-/// But Pure ships no weapon table, so nothing there has a lock to draw.
-///
-/// **The blocker is upstream of everything this change touched.** `Race::load`
-/// looks for `Data\XML\WeaponStats_Race.xml` and Pure's archives hold no entry
-/// by that name, so there are no Missile stats, no pickup odds and no lock
-/// window - the sights are authored and nothing can drive them. Whether Pure
-/// names that file something else, or authors its weapons somewhere else
-/// entirely, is unread.
-///
-/// Asserted rather than left as a note so the day Pure's table is found, this
-/// fails and says where to look.
-#[test]
-#[ignore = "needs a disc image in data/images/"]
-fn pure_ships_no_weapon_table_so_its_sights_have_nothing_to_drive_them() {
-    let Some(image) = image_named("pure-psp-usa.chd") else {
-        return;
-    };
-    let loaded = race_on(&image);
-    let race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup);
+    race.set_sight_screen(loaded.hud.space.size);
     assert!(
-        race.missile_stats().is_none(),
-        "Pure now parses Missile stats - wire its sights up and delete this test"
+        race.missile_stats().is_some(),
+        "Pure's weapon table did not parse - its Missile authors one `speed` \
+         where Pulse authors four, and no `launchSpeed` at all"
+    );
+    assert!(
+        locks_within(&mut race, 240),
+        "Pure never locked a craft on its own starting grid"
     );
 }
 
-/// Wipeout HD locks, and draws its reticle a different way entirely.
+/// Wipeout HD locks too, and draws its reticle the other way.
 ///
-/// **The lock is shared and the reticle is not.** HD's `WeaponStats_Race.xml`
-/// parses, Missile block included, so `Ship_AcquireLock`'s window, the 0.8 s
-/// hold and the unguided shot all run on HD exactly as they do on Pulse - that
-/// half is engine code with no title in it.
+/// **One law, two dialects.** HD's arcade HUD composes to zero `<Mode3D>`
+/// models: its reticle is concentric `<Image>` sprites named `MissileSight*`
+/// off `Data\HUD\Textures\missile_reticule.gtf`, at authored sizes of 128,
+/// 108, 80 and 64 with a red outer and a green inner. What it shares with the
+/// PSP titles is the placement law and the placeholder idiom - every one of its
+/// sight widgets is authored centred on `(-960, 540)`, the negated centre of its
+/// own 1920x1080 screen, exactly as the PSP titles use `(-240, 136)` of theirs.
 ///
-/// Its **sights** are another dialect: HD's arcade HUD composes to **zero**
-/// `<Mode3D>` models, and its reticle is `<Image>` sprites named `MissileSight*`
-/// and `LeachBeamSight*` off `Data\HUD\Textures\missile_reticule.gtf`. So
-/// `crate::race::sight`'s placement law applies and its *widget names and
-/// geometry* do not. Wiring it is a second naming table and a sprite path, not
-/// new recovery.
+/// **That screen is why this test exists.** A reticle projecting into the PSP's
+/// 480x272 while the layout draws in 1920x1080 lands in the top-left ninth of
+/// the picture and never leaves it - which is what HD did until
+/// `Race::set_sight_screen`, and which reads on screen as a stray widget rather
+/// than as a missing one.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn hd_parses_its_missile_but_authors_its_reticle_as_sprites() {
+fn hd_locks_a_craft_and_draws_its_own_concentric_reticle() {
     use oag_game::race::sight;
 
     let Some(image) = image_named("hdfury-ps3-eu-dec.iso") else {
@@ -333,14 +320,64 @@ fn hd_parses_its_missile_but_authors_its_reticle_as_sprites() {
         "HD authors PSP-named sight models; the reticle would draw twice"
     );
 
-    let race = race::Race::start(loaded.setup);
+    let oag_title::hud::Sights::Concentric { seeking, locked } = oag_hd::TITLE.hud_art.sights
+    else {
+        panic!("HD's sight dialect is not the concentric one");
+    };
+    for name in seeking.iter().chain(locked.iter()) {
+        let sprite = layout
+            .sprites
+            .iter()
+            .find(|s| s.name == *name)
+            .unwrap_or_else(|| panic!("HD's arcade layout has no {name}"));
+        assert!(
+            loaded.hud.sheet.get(&sprite.src).is_some(),
+            "{name}'s texture {} did not reach HD's HUD sheet",
+            sprite.src
+        );
+        // The authored rectangle is a placeholder whose *centre* is the negated
+        // middle of HD's own screen. Its size is real and is what gets drawn.
+        let centre = [
+            sprite.rect[0] + sprite.rect[2] * 0.5,
+            sprite.rect[1] + sprite.rect[3] * 0.5,
+        ];
+        assert!(
+            (centre[0] + 960.0).abs() < 0.01 && (centre[1] - 540.0).abs() < 0.01,
+            "{name} is authored centred on {centre:?}, not the (-960, 540) \
+             placeholder every other sight widget on every title uses"
+        );
+    }
+
+    let mut race = race::Race::start(loaded.setup);
+    race.set_sight_screen(loaded.hud.space.size);
+    assert_eq!(
+        race.sight().screen(),
+        [1920.0, 1080.0],
+        "HD's reticle is projecting into somebody else's screen"
+    );
     let stats = race
         .missile_stats()
         .expect("HD authors a Missile with lock distances");
+    assert!(stats.lock_max_dist > stats.lock_min_dist && stats.lock_min_dist >= 0.0);
     assert!(
-        stats.lock_max_dist > stats.lock_min_dist && stats.lock_min_dist >= 0.0,
-        "HD's lock window is {}..{}, which cannot select anything",
-        stats.lock_min_dist,
-        stats.lock_max_dist
+        locks_within(&mut race, 240),
+        "HD never locked a craft on its own starting grid"
     );
+}
+
+/// Hands slot 0 a Missile and races until the reticle locks something.
+fn locks_within(race: &mut race::Race, ticks: u32) -> bool {
+    use oag_game::race::sight;
+
+    for _ in 0..30 {
+        race.tick(&oag_gameplay::InputSnapshot::default());
+    }
+    race.world.ships[0].pickup.weapon = Some(oag_formats::weapons::Weapon::Missile);
+    for _ in 0..ticks {
+        race.tick(&oag_gameplay::InputSnapshot::default());
+        if race.sight_state() == sight::State::Locked {
+            return true;
+        }
+    }
+    false
 }

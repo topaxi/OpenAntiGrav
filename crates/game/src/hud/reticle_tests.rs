@@ -71,15 +71,85 @@ fn context<'a>(
     strings: &'a crate::language::StringTable,
     sheet: &'a crate::sprite::Sheet,
 ) -> Context<'a> {
+    context_with(layout, strings, sheet, oag_pulse::hud::ART)
+}
+
+fn context_with<'a>(
+    layout: &'a Layout,
+    strings: &'a crate::language::StringTable,
+    sheet: &'a crate::sprite::Sheet,
+    art: &'static oag_title::HudArt,
+) -> Context<'a> {
     Context {
         default_border: layout.default_border(),
         layout,
         strings,
         sheet,
-        art: oag_pulse::hud::ART,
+        art,
         hud_line_height: 25.0,
         small_line_height: 10.0,
     }
+}
+
+/// The shape Wipeout HD authors its reticle in, cut to four widgets.
+///
+/// Concentric `<Image>` sprites rather than `<Mode3D>` models, at the sizes and
+/// the colours the real layout carries - a red outer and a green inner - and all
+/// centred on `(-960, 540)`, which is the negated centre of HD's own 1920x1080
+/// screen and the same placeholder idiom the PSP titles use at `(-240, 136)`.
+const HD_SIGHTS: &str = r#"
+<Screen>
+<Screen name="HUD">
+<Image name="MissileSightBG">
+<Values x="-1024" y="476" width="128" height="128" U="0" V="0" TxtrWidth="128" TxtrHeight="128" Color="0xFFFFFFFF" Src="missile_reticule.gtf"></Values>
+</Image>
+<Image name="MissileSightOuter">
+<Values x="-1024" y="476" width="128" height="128" U="0" V="128" TxtrWidth="128" TxtrHeight="128" Color="0xFFFF0000" Src="missile_reticule.gtf"></Values>
+</Image>
+<Image name="MissileSightLockedOnLines">
+<Values x="-1024" y="476" width="128" height="128" U="128" V="128" TxtrWidth="128" TxtrHeight="128" Color="0xFFFFFFFF" Src="missile_reticule.gtf"></Values>
+</Image>
+<Image name="MissileSightLockedOnMiddle">
+<Values x="-992" y="508" width="64" height="64" U="0" V="0" TxtrWidth="128" TxtrHeight="128" Color="0xFFFF0000" Src="missile_reticule.gtf"></Values>
+</Image>
+</Screen>
+</Screen>
+"#;
+
+/// Wipeout HD's art rows, with only the sight axis filled in for real.
+static HD_ART: oag_title::HudArt = oag_title::HudArt {
+    texture_extension: None,
+    always_on: &[],
+    sights: &oag_title::hud::Sights::Concentric {
+        seeking: &["MissileSightBG", "MissileSightOuter"],
+        locked: &["MissileSightLockedOnLines", "MissileSightLockedOnMiddle"],
+    },
+    pickup_backdrop_colour: None,
+};
+
+fn hd_sheet() -> crate::sprite::Sheet {
+    let mut report = Vec::new();
+    crate::sprite::Sheet::build_with(
+        &[],
+        vec![(
+            "missile_reticule.gtf".to_string(),
+            256,
+            256,
+            vec![255u8; 256 * 256 * 4],
+        )],
+        &mut report,
+    )
+}
+
+fn plain(frame: &Frame) -> Vec<([f32; 4], [f32; 4])> {
+    frame
+        .sprites
+        .iter()
+        .filter_map(|draw| match draw {
+            Draw::Sprite { rect, color, .. } => Some((*rect, *color)),
+            _ => None,
+        })
+        .collect()
 }
 
 /// A reticle that has been holding a target long enough to have locked it.
@@ -348,4 +418,119 @@ fn a_locked_reticle_holds_one_tint() {
         );
         one_more(&mut reticle, at);
     }
+}
+
+/// Wipeout HD's dialect: concentric sprites at one centre, no rotation.
+///
+/// **The layout carries the geometry here and the law carries the centre.** Each
+/// widget keeps its authored size and its authored colour - HD authors a red
+/// outer where the PSP titles author one white bracket four times - and only the
+/// position is the reticle's.
+#[test]
+fn the_concentric_dialect_centres_each_sprite_at_its_authored_size() {
+    let layout = Layout::from_xml(HD_SIGHTS);
+    let sheet = hd_sheet();
+    let strings = strings();
+    let at = [700.0, 400.0];
+
+    let mut reticle = sight::Sight::new([1920.0, 1080.0]);
+    let target = sight::Projected {
+        screen: at,
+        distance: 60.0,
+    };
+    for _ in 0..12 {
+        reticle.update(1.0 / 60.0, Some(target));
+    }
+    assert!(
+        !reticle.locked(),
+        "the fixture was meant to still be seeking"
+    );
+
+    let readout = Readout {
+        sight: Some(reticle),
+        ..Readout::blank()
+    };
+    let frame = draw_list(&context_with(&layout, &strings, &sheet, &HD_ART), &readout);
+
+    // Seeking: the two seeking widgets and neither locked one.
+    let drawn = plain(&frame);
+    assert_eq!(drawn.len(), 2, "{frame:?}");
+    let centre = reticle.centre();
+    for (rect, colour) in &drawn {
+        assert!(
+            (rect[0] + rect[2] * 0.5 - centre[0]).abs() < 0.01
+                && (rect[1] + rect[3] * 0.5 - centre[1]).abs() < 0.01,
+            "{rect:?} is not centred on {centre:?}"
+        );
+        assert!(
+            (rect[2] - 128.0).abs() < 0.01,
+            "{rect:?} is not the authored 128 wide"
+        );
+        assert!(colour[3] > 0.0);
+    }
+    // The authored red survives: one of the two is not white.
+    assert!(
+        drawn.iter().any(|(_, c)| c[1] < 0.5 && c[0] > 0.5),
+        "HD's authored red outer came out white: {drawn:?}"
+    );
+
+    // Nothing rotates in this dialect.
+    assert!(rotated(&frame).is_empty(), "{frame:?}");
+}
+
+/// And the locked pair is added once the lock is taken.
+#[test]
+fn the_concentric_dialect_adds_its_locked_widgets_on_the_lock() {
+    let layout = Layout::from_xml(HD_SIGHTS);
+    let sheet = hd_sheet();
+    let strings = strings();
+    let at = [700.0, 400.0];
+
+    let mut reticle = sight::Sight::new([1920.0, 1080.0]);
+    let target = sight::Projected {
+        screen: at,
+        distance: 60.0,
+    };
+    for _ in 0..600 {
+        if reticle.update(1.0 / 60.0, Some(target)) == sight::State::Locked {
+            break;
+        }
+    }
+    assert!(reticle.locked(), "the reticle never locked");
+
+    let readout = Readout {
+        sight: Some(reticle),
+        ..Readout::blank()
+    };
+    let frame = draw_list(&context_with(&layout, &strings, &sheet, &HD_ART), &readout);
+    assert_eq!(
+        plain(&frame).len(),
+        4,
+        "a locked HD reticle draws the seeking pair and the locked pair: {frame:?}"
+    );
+}
+
+/// A title whose reticle has not been read draws nothing rather than guessing.
+#[test]
+fn an_unread_sight_dialect_draws_nothing() {
+    static UNREAD: oag_title::HudArt = oag_title::HudArt {
+        texture_extension: None,
+        always_on: &[],
+        sights: &oag_title::hud::Sights::Unread,
+        pickup_backdrop_colour: None,
+    };
+
+    let layout = Layout::from_xml(SIGHTS);
+    let sheet = sheet();
+    let strings = strings();
+    let readout = Readout {
+        sight: Some(locked_on([240.0, 136.0])),
+        ..Readout::blank()
+    };
+
+    let frame = draw_list(&context_with(&layout, &strings, &sheet, &UNREAD), &readout);
+    assert!(
+        rotated(&frame).is_empty() && plain(&frame).is_empty(),
+        "{frame:?}"
+    );
 }

@@ -55,6 +55,14 @@ pub const TITLE: &Title = &Title {
     plugin_definition: names::GAME_PLUGIN_DEFINITION,
     loading: Some(&loading::LOADING),
     music: Some(MUSIC),
+    // The two tables Pulse picks between by race mode. `DAT_08b32428` is what
+    // selects the file - measured `0` in a single race and `1` in Eliminator,
+    // at Venom both times, so it is the *file* and not the speed class. See
+    // `docs/ghidra/functions/psp-pulse-usa/missile.md`.
+    weapons: &oag_title::weapons::Weapons {
+        race: r"Data\XML\WeaponStats_Race.xml",
+        elimination: Some(r"Data\XML\WeaponStats_Elimination.xml"),
+    },
 };
 
 /// Where Pulse keeps its music.

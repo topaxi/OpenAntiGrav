@@ -101,17 +101,6 @@ reticle is render-only state on `Race`.
   changes which shots are guided, so it wants its own change: the five disc-backed
   missile tests call `Race::fire_missile` directly after 30 ticks and would all
   start getting unguided missiles.
-- **Pure authors the Missile's five sights and has no weapon table to drive
-  them.** No archive on the Pure disc holds `Data\XML\WeaponStats_Race.xml`, so
-  there are no lock distances and no Missile at all. The widgets and their art
-  are already there and already load; finding Pure's weapon data is the whole
-  job. `pure_ships_no_weapon_table_so_its_sights_have_nothing_to_drive_them`
-  fails the day it is found.
-- **HD locks but draws no reticle.** Its Missile parses with a real lock window,
-  so the hold and the unguided shot work there already; its sights are `<Image>`
-  sprites named `MissileSight*`/`LeachBeamSight*` off `missile_reticule.gtf`
-  rather than `<Mode3D>` models, so `sight_draws` finds nothing to place. A
-  second naming table and the ordinary sprite path.
 - **The LeachBeam's reticle is not driven.** Its four widgets are bound and its
   model is in the sheet; what is missing is upstream - `oag_formats::weapons`
   parses no `<Weapon type="LeachBeam">`, so there are no `lock_min_dist` /
@@ -147,10 +136,10 @@ reticle is render-only state on `Race`.
   past `sight::HOLD_SECONDS` first.
 - Parse `<Weapon type="LeachBeam">` and give its four sight widgets the same
   treatment the Missile's five just got.
-- Find where Pure keeps its weapon data. Its sights are authored and loading and
-  are waiting on nothing else.
-- Give HD's `MissileSight*` sprites the placement law; the lock behind them
-  already runs.
+
+**Pure and HD both lock and draw now** - see
+[pure-and-hd-lock-on-too-and-two-axes.md](pure-and-hd-lock-on-too-and-two-axes.md),
+which is where the two rows that used to sit here went.
 - Decide the blast in one place: linear falloff on force, the struck craft
   excluded, damage on the direct hit alone. It moves every weapon, so it wants
   its own change and its own hash move.

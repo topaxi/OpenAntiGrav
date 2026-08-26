@@ -118,6 +118,31 @@ class-name order.
 **Projectile speed is per speed class**, spelled out rather than indexed:
 `venomspeed`, `flashspeed`, `rapierspeed`, `phantomspeed`.
 
+**On Pulse and Wipeout HD. Wipeout Pure authors a single `speed`.** Measured
+2026-08-26 off Pure's own table: its Missile reads
+`speed="950" lock_min_dist="10" lock_max_dist="800"` and its Rocket
+`speed="1000" spread="0.05"`, with no per-class attribute anywhere in the file
+and **no `launchSpeed` on either**. So a Pure craft flies every class's weapons
+at the same speed, which is a property of the disc rather than of this reading -
+there is no per-class figure to have lost.
+
+`oag_formats::weapons` accepts both: the per-class spelling wins where present,
+one `speed` folds into all four, and `launchSpeed` defaults to zero when the
+file does not carry it. A file with neither spelling is still an error.
+
+### And Pure ships one table, not two
+
+Pulse and HD ship `WeaponStats_Race.xml` and `WeaponStats_Elimination.xml` and
+pick between them by race mode - the global `DAT_08b32428` selects the *file*,
+recovered on [missile.md](../ghidra/functions/psp-pulse-usa/missile.md). Pure
+ships a single, lower-cased **`Data\XML\weaponstats.xml`**, named at
+`0x08a445a0` in `/psp-pure-usa/BOOT.BIN` three strings before the `"WeaponStats"`
+and `"Weapon"` element names its parser matches.
+
+Which file a title reads is `oag_title::weapons::Weapons`. Until it was an axis,
+every caller reached for Pulse's spelling and a Pure race parsed no weapons at
+all - no pickups, no missile, no lock - with one report line to say so.
+
 **And those four are authored in km/h, not units per second.** Confidence 84,
 and it belongs here rather than only in the page that found it:
 `Rocket_SpeedForClass` (`0x0885d1b0`) is a pure table lookup that returns the

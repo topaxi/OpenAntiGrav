@@ -76,9 +76,14 @@ const TITLE: &Title = &Title {
     },
     // And unread on the same terms: which widgets a HUD keeps up, and out of
     // which texture, is decided long after an archive has been found.
+    weapons: &oag_title::weapons::Weapons {
+        race: r"Data\XML\WeaponStats_Race.xml",
+        elimination: None,
+    },
     hud_art: &oag_title::HudArt {
         texture_extension: None,
         always_on: &[],
+        sights: &oag_title::hud::Sights::Unread,
         pickup_backdrop_colour: None,
     },
     // Unread here for the fourth and fifth time, and the same reason both
