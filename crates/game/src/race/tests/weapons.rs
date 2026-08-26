@@ -843,3 +843,75 @@ fn firing_under_autopilot_cancels_it_and_keeps_the_pickup() {
         "the cancel spent the pickup, which the original's branch never touches"
     );
 }
+
+/// **An opponent that declines a shot keeps the pickup.** It did not, and this
+/// is the test that says so.
+///
+/// `Race::spend_opponent_pickup` is an `&&`-chain whose fallthrough is the
+/// *absorb* branch, and every weapon arm in it reads
+/// `weapon == X && self.fire_x(...)`. `fire_x` returns `false` for the ordinary
+/// case of a driver choosing not to shoot this tick - `Driver::wants_to_fire`
+/// rolls against a `TRIGGER_RATE` of `0.05`, so it declines about nineteen
+/// ticks in twenty - and a `false` right-hand side falls straight through to
+/// `else`, which pays the weapon's `absorb` into the energy pool and clears the
+/// slot.
+///
+/// The comment beside the Rocket's arm claimed the opposite in as many words
+/// ("the pickup is kept rather than spent - the same rule the player's path
+/// follows"), which is what kept this hidden for so long: the player's path
+/// *is* a `match` with early returns and does keep it. The consequence is that
+/// an opponent cashes in a Rocket, a Missile or a Mine on the first tick it
+/// does not fire, which is nearly always the tick it collected it.
+///
+/// The field is empty, so there is provably nothing to shoot at and the decline
+/// is not a roll that might have gone the other way.
+#[test]
+fn an_opponent_that_declines_a_shot_does_not_absorb_the_pickup() {
+    for weapon in [
+        oag_formats::weapons::Weapon::Rocket,
+        oag_formats::weapons::Weapon::Mine,
+    ] {
+        let mut race = race_with_a_grid();
+        race.weapons = Some(rear_and_forward_table());
+
+        let slot = 1;
+        assert!(race.world.ships[slot].active, "no opponent on the grid");
+        race.world.ships[slot].physics.shield = 10.0;
+        race.world.ships[slot].pickup.weapon = Some(weapon);
+
+        race.spend_opponent_pickup(
+            slot,
+            &oag_physics::ShipControls::default(),
+            &oag_ai::Field::EMPTY,
+        );
+
+        assert_eq!(
+            race.world.ships[slot].physics.shield, 10.0,
+            "{weapon:?}: the opponent absorbed a pickup it never chose to fire - \
+             `spend_opponent_pickup`'s `&&`-chain falls through to the absorb \
+             branch whenever a `fire_*` helper declines"
+        );
+        assert_eq!(
+            race.world.ships[slot].pickup.weapon,
+            Some(weapon),
+            "{weapon:?}: the pickup left the slot without anything being fired"
+        );
+    }
+}
+
+/// A table authoring one forward weapon and one rear one, both weighted, for
+/// the test above - which needs a weapon of each shape to show that the
+/// fallthrough is the chain's and not one arm's.
+fn rear_and_forward_table() -> oag_formats::weapons::WeaponStats {
+    oag_formats::weapons::parse(
+        r#"<WeaponStats>
+             <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
+             <Weapon type="Rocket"><Stats absorb="23" blastforce="3" blastradius="4" damage="5" venomspeed="100" flashspeed="200" rapierspeed="300" phantomspeed="400" launchSpeed="7" spread="0.1"/></Weapon>
+             <Weapon type="Mine"><Stats absorb="24" blastforce="5" blastradius="6" damage="7" timetodie="8" trigger_radius="2"/></Weapon>
+             <Pickupodds class="Venom">
+               <Weapon type="Rocket"><Stats ai="1" back="1" front="1" human="1"/></Weapon>
+             </Pickupodds>
+           </WeaponStats>"#,
+    )
+    .expect("the fixture table must parse")
+}

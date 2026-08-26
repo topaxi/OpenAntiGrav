@@ -669,6 +669,14 @@ impl Race {
     ///   tick it is taken: a cluster comes out over half a second and the craft
     ///   holds the weapon until the last one is laid. This is the one arm that
     ///   returns rather than falling to the bottom of the function.
+    /// - **A declined shot keeps the pickup**, on every armed weapon. It did not
+    ///   until 2026-08-26, and the bug was invisible because the comments here
+    ///   described the intended behaviour rather than the written one: each arm
+    ///   was `weapon == X && self.fire_x(..)`, so a helper returning `false` -
+    ///   the ordinary "not this tick" answer, nineteen ticks in twenty - made the
+    ///   *condition* false and fell into the absorb branch. An opponent cashed
+    ///   every weapon in for energy on the tick it collected it and essentially
+    ///   never fired one.
     /// - **Everything else is absorbed**, which pays energy into the pool and is
     ///   a real effect rather than a discard. It is also what a cautious human
     ///   does with a weapon they cannot aim, and the remaining six cannot be
@@ -756,31 +764,43 @@ impl Race {
             // an opponent's boost has to be visible from behind, or the field
             // gains speed with nothing on screen saying why.
             self.exhaust[slot].boost(exhaust::BOOST_SECONDS);
-        } else if weapon == oag_formats::weapons::Weapon::Rocket
-            && self.fire_opponent_rocket(slot, field)
-        {
-            // Fired. `fire_opponent_rocket` reports false when there was no
-            // target, no authored rocket or no free slot, and then the pickup is
-            // kept rather than spent - the same rule the player's path follows.
-        } else if weapon == oag_formats::weapons::Weapon::Missile
-            && self.fire_opponent_missile(slot, field)
-        {
-            // Likewise. Note this chain's shape: **anything not named here falls
-            // through to the absorb branch**, silently, which is how a weapon
-            // added to `pickup::IMPLEMENTED` without an arm reaches a player as a
-            // pickup that quietly turns into energy. `oag_gameplay`'s
-            // `IMPLEMENTED` and this chain have to grow together.
+        } else if weapon == oag_formats::weapons::Weapon::Rocket {
+            // **The `if` is inside the arm, not `&&`ed onto its condition**, and
+            // that is the whole of finding an opponent that never fired. As an
+            // `&&` a declined shot made the *condition* false and fell through to
+            // the absorb branch below, so the craft cashed the Rocket in for
+            // energy on the first tick it chose not to shoot - which, at a
+            // `TRIGGER_RATE` of `0.05`, is nineteen ticks in twenty and so
+            // effectively the tick it collected it. The comment that used to sit
+            // here claimed the opposite in as many words. See
+            // `an_opponent_that_declines_a_shot_does_not_absorb_the_pickup`.
+            if !self.fire_opponent_rocket(slot, field) {
+                // No target, no authored rocket or no free slot. Keep it - the
+                // same rule the player's path follows, which is a `match` with
+                // early returns and always did.
+                return;
+            }
+        } else if weapon == oag_formats::weapons::Weapon::Missile {
+            if !self.fire_opponent_missile(slot, field) {
+                return;
+            }
         } else if matches!(
             weapon,
             oag_formats::weapons::Weapon::Mine | oag_formats::weapons::Weapon::Bomb
-        ) && self.drop_opponent_mines(weapon, slot, field)
-        {
-            // **The one arm here that does not spend the pickup**, and it must
-            // not: a drop takes half a second to come out and the craft holds
-            // the Mine until the last one is laid. The `return` inside
-            // `drop_opponent_mines`' caller does that - see below.
+        ) {
+            // **Neither branch spends the pickup here.** A drop that starts keeps
+            // the weapon in the slot until the last charge is laid, which is
+            // recovered; a drop that is declined keeps it for the reason above.
+            // So this arm returns either way.
+            self.drop_opponent_mines(weapon, slot, field);
             return;
         } else {
+            // **Anything not named above falls through to absorb**, which is how
+            // a weapon added to `pickup::IMPLEMENTED` without an arm reaches a
+            // craft as a pickup that quietly turns into energy. `oag_gameplay`'s
+            // `IMPLEMENTED` and this chain have to grow together, and
+            // `every_implemented_weapon_has_a_fire_arm_on_both_paths` is what
+            // makes that fail loudly.
             let Some(amount) = absorb else {
                 return;
             };
