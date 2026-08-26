@@ -37,6 +37,25 @@ all four at once, and which spelling Pure keys its own display name under -
 `AG Systems` or `AG_Systems` - has not been read off the disc. That question is
 step one, not the code change.
 
+**Not a DLC absence, checked rather than assumed.** The obvious rival
+explanation is that this team's ship simply is not on the disc - Pulse's
+`Auricom`, `Harimau`, `Icaras` and `Mantis` are exactly that case, and a team
+whose content sits in an unmounted pack looks identical from here. It does not
+hold: with **no packs mounted**, the underscore spelling resolves both files on
+both pressings, and only the declared spelling misses.
+
+```
+pure-psp-usa.chd: AG_Systems   hull=true  stats=true
+pure-psp-usa.chd: AG Systems   hull=false stats=false
+pure-psp-eu.chd:  AG_Systems   hull=true  stats=true
+pure-psp-eu.chd:  AG Systems   hull=false stats=false
+```
+
+So the content is present and reachable, the location leaf is the spelling that
+reaches it, and the id is the spelling that does not. That also settles half of
+the design question below: `Team::location`'s leaf is known to be the right path
+component, and what is left open is only what the *id* is for.
+
 **Not the `Van_Uber` case.** That thread is about a Pure team whose `Ship.vex`
 does not resolve by name at all; `Van_Uber` is not among the ten `PI_Team` nodes
 Pure's definition declares, so it never reaches this filter. The ten are
@@ -53,6 +72,9 @@ Pure's definition declares, so it never reaches this filter. The ten are
   name. `load_teams`' own doc comment claims the filter and the loader "cannot
   disagree about how a path is spelled" because both compose from the same
   functions; that stays true either way, but both would have to move together.
+  This is the likelier shape of the two now that the location leaf is confirmed
+  to resolve, since it leaves the id - and so the settings file and `--team` -
+  spelled as the disc declares.
 - `raceable` reaches for `oag_pulse::race::ships::entry_name` on every source -
   a fourth Pulse constant applied to all three titles, in the same function the
   roster stand-in was just removed from. HD keeps all twelve teams through it,
