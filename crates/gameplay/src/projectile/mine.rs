@@ -111,6 +111,12 @@ impl Drop {
     /// The one place the two rear weapons are told apart, so a caller never has
     /// to. A weapon that is not a rear weapon is `None` rather than a panic:
     /// asking is how [`crate::pickup::IMPLEMENTED`]'s callers stay honest.
+    ///
+    /// **This and [`TriggerRadii::get`] are the same list written twice**, and
+    /// neither fails loudly on its own: a third rear weapon missing an arm here
+    /// simply lays nothing, and one missing an arm there is laid and can never
+    /// be tripped. `every_rear_weapon_can_be_laid_and_tripped` in
+    /// [`crate::pickup::tests`] is what makes the pair fail together.
     #[must_use]
     pub fn for_weapon(weapon: Weapon, weapons: &oag_formats::weapons::WeaponStats) -> Option<Self> {
         match weapon {
@@ -182,6 +188,18 @@ pub fn drop_point(state: &ShipState, dimensions: &Dimensions) -> Vec3 {
 /// the craft moves between drops and each mine is laid where the craft then
 /// was.
 ///
+/// **The Bomb reaches the same answer by a different route**, and the two should
+/// not be confused: everything above is a negative result about the *Mine's*
+/// subsystem, and none of it is evidence about the Bomb's. `Weapon_FireBomb`
+/// (`0x08863a20`) stages the craft's forward row **negated** and hands it to a
+/// spawn helper at `0x0885f188` that could not be resolved statically - two
+/// callers jump past its prologue. So the Bomb's direction is recovered and its
+/// speed is unfound, which is a weaker position than the Mine's. What settles it
+/// is a maintainer who plays Pulse, asked directly: "the bomb should be static,
+/// like the mines, just a single big mine". A negated matrix row is also a unit
+/// vector, so read as a velocity it would be one unit a second - at racing speed,
+/// indistinguishable from static anyway.
+///
 /// A function rather than a constant so the reasoning has somewhere to live and
 /// so a later read that finds the integration has one place to change.
 #[must_use]
@@ -249,8 +267,11 @@ impl TriggerRadii {
     }
 
     /// One weapon's, or `None` for a weapon that is not laid at all.
+    ///
+    /// The twin of [`Drop::for_weapon`]; see that function for why the pair is
+    /// guarded by a test rather than by the type system.
     #[must_use]
-    fn get(self, kind: Weapon) -> Option<f32> {
+    pub(crate) fn get(self, kind: Weapon) -> Option<f32> {
         match kind {
             Weapon::Mine => self.mine,
             Weapon::Bomb => self.bomb,

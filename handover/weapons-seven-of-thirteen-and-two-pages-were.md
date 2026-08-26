@@ -86,6 +86,21 @@ as `<Global slowdown_limit>`'s consumer *before* anyone knew `+0xfc` held
 does not**, and `projectile::blast` had both flat. Half of an invented rule
 replaced by the original's, at the cost of one trajectory hash move.
 
+**And a live gameplay bug came out of reviewing the wiring**, which is the one
+finding here that is not about weapons at all. `Race::spend_opponent_pickup` is
+an `&&`-chain and every armed weapon read `weapon == X && self.fire_x(..)`.
+`fire_x` returns `false` for the ordinary "not this tick" answer - the trigger
+is a *rate*, `0.05`, so it declines nineteen ticks in twenty - and a `false`
+right-hand side made the condition false and fell through to the **absorb**
+branch. The function runs every tick for every opponent, so a craft cashed in a
+Rocket, a Missile or a Mine on the first tick it chose not to shoot: opponents
+essentially never fired. **What hid it is worth carrying forward**: the comments
+in that chain described the intended behaviour rather than the written one - the
+Rocket's arm said "the pickup is kept rather than spent" in as many words - and
+a comment that asserts the opposite of its code reads as documentation of a
+decision, so nobody re-derived it. Fixed, with a test that drives a forward
+weapon and a rear one against an empty field.
+
 **Two files were split rather than baselined** (`projectile/rocket.rs`,
 `driver/weapons.rs`), and the second surfaced a pre-existing bug: `Driver::drift`'s
 doc comment was stranded 270 lines above it, attached to `Driver::wants_to_fire`.
@@ -121,12 +136,18 @@ Put back.
   second radius any weapon has, and the one blast path read at instruction level
   spends `blastradius` for both damage and impulse. Left undecoded rather than
   wired on a guess about which half it governs.
-- **`WeaponStats_ParseBomb` (`0x0880cef0`) resisted a read.** It is not a
-  defined function in the Ghidra database, `create_function` refuses it, and the
-  bridge cannot read bytes anywhere in `.text` (it reads `.rodata` normally).
-  Its *name* is settled at 90 off the dispatch chain; its offsets are not, and
-  nothing needs them. Whoever fixes the bridge should re-read that region -
-  five of the fourteen `<Stats>` parsers are in the same state.
+- **`WeaponStats_ParseBomb` (`0x0880cef0`) resisted a read**, and the *shape*
+  of the failure is the useful part. `decompile_function` works fine on
+  `0x0880d124` and `0x08862d9c`, while `inspect_memory_content` and
+  `read_memory` fail on **those same addresses** - so it is not "the bridge
+  cannot read `.text`", it is that the memory-read tools fail there while the
+  decompiler works. The real blocker is narrower: five of the fourteen `<Stats>`
+  parsers were never defined as functions in the database, `create_function`
+  refuses to make one, and with the memory tools out there is no third way in.
+  Anyone hitting this should try `run_analysis` over that range first rather
+  than assuming the whole segment is unreadable. The Bomb's parser *name* is
+  settled at 90 off the dispatch chain either way; its offsets are not, and
+  nothing needs them.
 - **A mine and a bomb both draw nothing.** `Pulse_Mine.vex` and
   `Pulse_Bomb.vex` are both named and located and no renderer reads either, so a
   laid charge is invisible - which for a weapon whose whole point is that a
