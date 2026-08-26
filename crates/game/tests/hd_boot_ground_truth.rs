@@ -136,9 +136,11 @@ fn the_menus_offer_the_twelve_teams_this_disc_declares() {
         12,
         "the roster should be the disc's twelve, not the eight-team stand-in: {teams:?}"
     );
-    // The stand-in is `oag_formats::handling::TEAMS`, which is the PSP roster
-    // and has no Fury team in it. Naming one directly is what tells the two
-    // cases apart when the count is right for the wrong reason.
+    // The stand-in was `oag_formats::handling::TEAMS`, the PSP roster, which has
+    // no Fury team in it. It is gone rather than fixed - see
+    // `roster_declared_ground_truth` - and naming a Fury team directly is still
+    // what tells the two cases apart when the count is right for the wrong
+    // reason.
     assert!(
         teams.contains(&"Icaras"),
         "a Fury team is missing, so this is a PSP-shaped roster: {teams:?}"

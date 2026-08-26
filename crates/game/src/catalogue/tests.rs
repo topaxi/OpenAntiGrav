@@ -129,9 +129,15 @@ fn a_team_carries_its_ship_directory_and_its_description_key() {
 }
 
 /// The id is the folder leaf, which is why `race::ship_entry_name` can go
-/// on formatting a path out of the id alone. It holds for every team on
-/// the disc and in every pack; `dlc_ground_truth` re-checks it against
-/// real content rather than trusting this fixture.
+/// on formatting a path out of the id alone.
+///
+/// **True of this fixture and of Pulse, and false on Wipeout Pure**, which
+/// declares `name="AG Systems"` against `location="Data\Ships\AG_Systems"` on
+/// both pressings - so the path built from that id misses and the team is
+/// dropped from the roster. Measured 2026-08-26; see
+/// `crates/game/tests/roster_declared_ground_truth.rs`, which pins the nine of
+/// ten Pure currently offers. `dlc_ground_truth` re-checks the rule against
+/// real content, but only Pulse's, which is why it never caught this.
 #[test]
 fn a_team_id_is_the_leaf_of_its_directory() {
     for team in teams(DEFINITION) {
