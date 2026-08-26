@@ -7,9 +7,11 @@
 // sets and the way `fxaa.wgsl` was already done. The chain is the paper's:
 // a tile pass reducing the velocity buffer to each tile's dominant motion, a
 // neighbour pass spreading that dominance one tile outward, and a gather
-// whose taps are weighted by depth ordering and by both surfaces' own
+// whose taps are weighted by depth ordering and by **both** surfaces' own
 // velocities - the weighting that lets a moving object smear over a sharp
 // background without the background bleeding across the object's silhouette.
+// Both halves of "both" are load-bearing: see `fs_reconstruct`'s cylinder
+// term.
 //
 // The velocity buffer itself is written by the scene - `mesh.wgsl`'s
 // `velocity_of`, real per-draw motion - so unlike the camera-reprojection
@@ -238,11 +240,28 @@ fn fs_reconstruct(in: VertexOutput) -> @location(0) vec4<f32> {
         // tap behind contributes where the centre's motion covers it (we
         // smear over it); the cylinder term keeps two similarly-moving
         // surfaces - the inside of one blurred object - blending evenly.
+        //
+        // **The cylinder radius is the smaller of the two surfaces' own
+        // reaches**, which is what the paper's product of two cylinders comes
+        // to, and it is the only term with no depth gate. Widening it to the
+        // neighbourhood's dominant reach - which is `>= own_reach` by
+        // construction, so the substitution only ever adds weight - drops the
+        // "is the centre even moving?" half of the test, and a still surface
+        // in front of a fast one then takes a full-weight tap of whatever is
+        // behind it. That is the background dragging across a foreground
+        // silhouette the design page names as "the single difference between
+        // an effect that reads as motion blur and one that reads as a bug".
+        // Measured at a 22 % darkening on a still block over a fast
+        // background before the fix; pinned by
+        // `a_still_surface_over_a_moving_background_keeps_its_colour`. Do not
+        // floor this radius the way `cone` floors its own: a zero reach here
+        // *means* "not smearing", and `cylinder`'s own sub-pixel early-out is
+        // what turns that into zero weight.
         let front = soft_depth_compare(tap.z, own_depth);
         let behind = soft_depth_compare(own_depth, tap.z);
         let w = front * cone(distance, tap_reach)
             + behind * cone(distance, own_reach)
-            + cylinder(distance, min(tap_reach, dominant_len)) * 2.0;
+            + cylinder(distance, min(tap_reach, own_reach)) * 2.0;
 
         sum += textureSampleLevel(colour_tex, colour_sampler, tap_uv, 0.0) * w;
         weight += w;

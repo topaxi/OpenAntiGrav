@@ -193,6 +193,19 @@ blur is a sharper race, not a broken one.
 > **Weight the taps by depth.** Without it the background drags across
 > foreground silhouettes, which is the single difference between an effect that
 > reads as motion blur and one that reads as a bug.
+>
+> That warning was earned twice. The first tier had no per-object velocity at
+> all, which is the whole of ADR-0028 and ADR-0029. The second got the depth
+> weighting right and then lost half of it in the *velocity* weighting: the
+> gather's third term - the paper's product of two cylinders, which credits
+> two surfaces for sharing a motion - was written against the tile
+> neighbourhood's dominant reach instead of the centre pixel's own. That
+> reach is `>= own_reach` by construction, so the substitution could only add
+> weight, and the term is the one with no depth gate: a **still** surface in
+> front of a fast one took a full-weight tap of whatever was behind it,
+> measuring 199 of 255 at a test block's silhouette. Fixed to
+> `min(tap_reach, own_reach)`, pinned by
+> `a_still_surface_over_a_moving_background_keeps_its_colour`.
 
 **The setting** follows `AntiAliasing` exactly, because it is the fullest
 worked example in the tree: an enum in `oag_game::display` with `name()`,

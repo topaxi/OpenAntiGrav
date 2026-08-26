@@ -634,6 +634,29 @@ writers in it at the same time:
 
 ## Traps that are live
 
+**A device test with a *uniform* depth buffer cannot exercise any
+depth-weighted term - it proves the pass runs, not that the weighting is
+right.** 2026-08-26, found reviewing the motion blur chain. `post::motion_blur`
+gathers its taps with McGuire's three weights, two of which are gated on
+`soft_depth_compare`. Its device test cleared depth to a flat `0.5`, so both
+gates returned `1` for every tap in the frame and the two cone terms absorbed
+the whole weight - the test was green, and it was structurally blind to the
+half of the filter that classifies surfaces. What hid behind that was a real
+bug: the third, *ungated* term was written against the tile neighbourhood's
+dominant reach instead of the centre pixel's own, so a still surface in front
+of a fast one took full-weight taps of the background and read 199 of 255 at
+its silhouette. Twenty lines of a second test with two depths caught it
+immediately.
+
+Generalise it, because the next weighted gather will have the same shape:
+**whatever a filter classifies by, the test has to vary.** Uniform depth, a
+single velocity, one material - each turns an assertion about a *decision* into
+an assertion about an average. The cheap trick that made the second test easy
+is worth keeping too: the pass binds depth as `Float { filterable: false }` and
+`textureLoad`s it, so an `R32Float` texture with `COPY_DST` works and takes a
+plain `write_texture` - no depth-writing pipeline, and none of `Depth32Float`'s
+"you may not copy into me".
+
 **A worktree sharing `CARGO_TARGET_DIR` with the main checkout compiles against
 the *other* tree's uncommitted code.** 2026-08-18, and it cost a confusing hour.
 Setting `CARGO_TARGET_DIR=<repo>/target` from `.claude/worktrees/<name>` looks

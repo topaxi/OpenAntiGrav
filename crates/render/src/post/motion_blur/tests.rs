@@ -299,3 +299,194 @@ fn the_chain_smears_what_moved_and_leaves_still_surfaces_sharp() {
     assert_eq!(red_at(14, 31), 0, "the still block smeared left");
     assert_eq!(red_at(19, 31), 0, "the still block smeared right");
 }
+
+/// The one property the test above **cannot** see: a still surface in *front*
+/// of a fast one keeps its colour.
+///
+/// That test's depth is a flat plane, so `soft_depth_compare` returns 1 in
+/// both directions for every tap and the two cone terms absorb the whole
+/// weight. Any bug in a depth-*weighted* term hides behind a uniform depth
+/// buffer - which is how `fs_reconstruct`'s cylinder term shipped measuring
+/// the neighbourhood's dominant reach instead of the centre pixel's own,
+/// dropping the "is the centre even moving?" half of the paper's test. A
+/// still block over a fast background read 199 of 255 at its edge until that
+/// was fixed. Depth separation is the whole point of this test; if the two
+/// ever merge, this is the half to keep.
+///
+/// **The depth attachment is `R32Float`, not a depth format.** The pass binds
+/// it as `Float { filterable: false }` and `textureLoad`s it, which a plain
+/// colour texture satisfies - and unlike `Depth32Float` it takes a
+/// `write_texture`, so two depths need no depth-writing pipeline.
+///
+/// **Skips when there is no adapter**, so a green CI run is not evidence that
+/// it ran:
+///
+/// ```sh
+/// cargo nextest run -p oag-render -E 'test(a_still_surface_over_a_moving)' --no-capture
+/// ```
+#[test]
+fn a_still_surface_over_a_moving_background_keeps_its_colour() {
+    let instance = wgpu::Instance::default();
+    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let (device, queue) =
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+            .expect("requesting the device");
+
+    const SIZE: u32 = 64;
+    let (bx, by) = (30u32, 30u32);
+    let red = still_block_over_a_moving_background(&device, &queue, SIZE, (bx, by));
+    let at = |x: u32, y: u32| red[(y * SIZE + x) as usize];
+    // Both silhouette columns, which are where the background's taps land and
+    // so where the wrong cylinder radius showed: 199 and 200 before the fix,
+    // 254 after. The same one count of tolerance the test above explains -
+    // `cone`'s quarter-pixel floor letting sub-pixel taps graze the edge.
+    for x in [bx, bx + 3] {
+        assert!(
+            at(x, by + 1) >= 254,
+            "the background bled across the still block's silhouette at \
+             x={x}: {}",
+            at(x, by + 1)
+        );
+    }
+    assert_eq!(
+        at(bx + 1, by + 1),
+        255,
+        "the still block's interior was touched"
+    );
+}
+
+/// Draws a 4x4 still white block at `block` over a black background running
+/// `0.1` uv/tick to the right, with the block nearer in depth, and returns the
+/// red channel of the blurred frame.
+///
+/// The block is small enough that its own tile still reduces to the
+/// background's velocity, so it gathers along a path it is not travelling -
+/// exactly the case the weights have to reject.
+fn still_block_over_a_moving_background(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    size: u32,
+    (bx, by): (u32, u32),
+) -> Vec<u8> {
+    let format = wgpu::TextureFormat::Rgba8Unorm;
+    let extent = wgpu::Extent3d {
+        width: size,
+        height: size,
+        depth_or_array_layers: 1,
+    };
+    let block = |x: u32, y: u32| (bx..bx + 4).contains(&x) && (by..by + 4).contains(&y);
+
+    let texture = |label, format, usage| {
+        device.create_texture(&wgpu::TextureDescriptor {
+            label: Some(label),
+            size: extent,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage,
+            view_formats: &[],
+        })
+    };
+    let upload = |texture: &wgpu::Texture, bytes: &[u8]| {
+        queue.write_texture(
+            texture.as_image_copy(),
+            bytes,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(size * 4),
+                rows_per_image: None,
+            },
+            extent,
+        );
+    };
+
+    let scene = texture(
+        "scene",
+        format,
+        wgpu::TextureUsages::TEXTURE_BINDING
+            | wgpu::TextureUsages::RENDER_ATTACHMENT
+            | wgpu::TextureUsages::COPY_DST
+            | wgpu::TextureUsages::COPY_SRC,
+    );
+    let velocity = texture(
+        "velocity",
+        crate::mesh_render::VELOCITY_FORMAT,
+        wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+    );
+    let depth = texture(
+        "depth",
+        wgpu::TextureFormat::R32Float,
+        wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+    );
+
+    let count = (size * size * 4) as usize;
+    let mut pixels = Vec::with_capacity(count);
+    let mut velocities = Vec::with_capacity(count);
+    let mut depths = Vec::with_capacity(count);
+    for y in 0..size {
+        for x in 0..size {
+            let near = block(x, y);
+            pixels.extend_from_slice(if near {
+                &[255, 255, 255, 255]
+            } else {
+                &[0, 0, 0, 255]
+            });
+            // The block is still; everything behind it runs 0.1 uv/tick right.
+            velocities.extend_from_slice(&f32_to_half(if near { 0.0 } else { 0.1 }).to_le_bytes());
+            velocities.extend_from_slice(&f32_to_half(0.0).to_le_bytes());
+            // Far enough apart that `SOFT_Z` reads the block as decisively in
+            // front, which is what the cone terms then correctly refuse.
+            depths.extend_from_slice(&(if near { 0.2f32 } else { 0.8 }).to_le_bytes());
+        }
+    }
+    upload(&scene, &pixels);
+    upload(&velocity, &velocities);
+    upload(&depth, &depths);
+
+    let mut blur = MotionBlur::new(device, format).expect("building the pipelines");
+    let mut encoder = device.create_command_encoder(&Default::default());
+    blur.render(
+        device,
+        queue,
+        &mut encoder,
+        &Frame {
+            scene: &scene.create_view(&Default::default()),
+            velocity: &velocity.create_view(&Default::default()),
+            depth: &depth.create_view(&Default::default()),
+            sample_count: 1,
+            size: (size, size),
+            viewport: (0.0, 0.0, size as f32, size as f32),
+            strength: 0.5,
+        },
+    );
+
+    let readback = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("readback"),
+        size: u64::from(size * size * 4),
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+    encoder.copy_texture_to_buffer(
+        scene.as_image_copy(),
+        wgpu::TexelCopyBufferInfo {
+            buffer: &readback,
+            layout: wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(size * 4),
+                rows_per_image: None,
+            },
+        },
+        extent,
+    );
+    queue.submit(Some(encoder.finish()));
+    readback.slice(..).map_async(wgpu::MapMode::Read, |_| {});
+    device
+        .poll(wgpu::PollType::wait_indefinitely())
+        .expect("waiting for the readback");
+    let data = readback.slice(..).get_mapped_range().expect("mapping");
+    (0..(size * size) as usize).map(|i| data[i * 4]).collect()
+}
