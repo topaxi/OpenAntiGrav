@@ -196,17 +196,16 @@ The load report went from `4 collision node(s) -> 400 collider(s), 12737
 triangle(s)` to `5 -> 530, 16883`, which is the barrier's own 130 meshes and
 4,146 triangles exactly.
 
-**What is deliberately still open**, and it is the part the earlier caution was
-right about: whether *Pulse's* class table names this ID at all. `vex.md`
-records that table as read only as far as `0x08ab26a0` with the terminator never
-reached, so `0x3ed` is past the last entry anyone has read rather than past the
-table. Pulse authors no node of this class - the survey in
+**Resolved 2026-08-26**: whether *Pulse's* class table names this ID at all was
+open, and it does not. [`vex.md`](vex.md#node-types) now records the table read
+to its terminator at `0x08ab4be4` - 863 real records, game-class ids `0x3b9`
+through `0x3eb` only. `0x3ec`/`0x3ed`/`0x3ee` are the exact three missing
+against HD's 866-record table, not a coincidence of count. Pulse authors no
+node of this class either way - the survey in
 [`collision_ground_truth.rs`](../../crates/formats/tests/collision_ground_truth.rs)
 walks every `.vex` on both its discs and finds no sixth class carrying a
 collision payload - so listing the ID in `classes::V6` changes nothing Pulse
-decodes, and version 6 is a format generation rather than a title. Reading
-further in Pulse's own table is still the cheap way to learn whether it has a
-name there, and it is no longer blocking anything.
+decodes, and version 6 is a format generation rather than a title.
 
 Two things this does *not* claim. HD's own loader has not been disassembled, so
 the surface-type byte it would write is unread and `SurfaceKind::surface_type`

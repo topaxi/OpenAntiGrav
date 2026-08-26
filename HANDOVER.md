@@ -508,7 +508,6 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [`raceable` composes a Pulse path on every source, and nothing has established why that works](handover/raceable-composes-a-pulse-path-on-every-source.md)
 - [Pure's `Title Screen` is missing its own logo wordmark - not chased further](handover/pures-title-screen-is-missing-its-own-logo.md)
 - [A *slot-resolved* record's own field layout](handover/a-slot-resolved-records-own-field-layout.md)
-- [The `.vex` class-ID table's extent](handover/the-vex-class-id-tables-extent.md)
 - [One team's `Ship.vex` does not resolve by name](handover/one-teams-ship-vex-does-not-resolve-by.md)
 - [The airbrake flap rotation axis is chosen, not recovered](handover/the-airbrake-flap-rotation-axis-is-chosen-not.md)
 - [A model built from several small pieces sharing one atlas](handover/a-model-built-from-several-small-pieces-sharing.md)

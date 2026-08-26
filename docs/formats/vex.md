@@ -121,8 +121,21 @@ Three properties of the table itself, all needed to read it correctly:
   yet.
 - **Terminated by `id == -1`**, per both walkers. Past the game classes it
   continues into generic Maya classes with small sequential ids (`0 Invalid`,
-  `1 Base`, `2 Name`, …). Read as far as `0x08ab26a0`; **the terminator was not
-  reached, so the extent is not stated here.**
+  `1 Base`, `2 Name`, …) up to `0x3b8 Last`. **The full extent is now read**
+  (2026-08-26): the terminator sits at `0x08ab4be4`, one entry past `0x3b8`,
+  giving **863 real records** in Pulse's own PSP table -
+  `(0x08ab4be4 - 0x08ab2370) / 12`. The id column alone settles it, checked
+  against dozens of already-documented names (`Mesh 0x125`, `WO Track 0x3bb`,
+  `Wall Collision 0x3ba`, … through `cannon_flash 0x3eb`) with no mismatch.
+  **`0x3ec` (`wingtip`), `0x3ed` (`Track Wall Collision`) and `0x3ee`
+  (`absorb`) are absent from Pulse's own table** - its game-class ids run
+  `0x3b9`..`0x3eb` and stop there, three short of HD's 866-record table
+  (`crates/formats/src/vex/class_names.rs`), which is exactly the three ids
+  above. This settles the question [hd-status.md](hd-status.md#0x3ed-is-the-barrier-along-the-road)
+  left open: Pulse's PSP binary does not name `0x3ed` at all, so
+  `classes::V6::CLASS_TRACK_WALL_COLLISION` is a version-6 format id carried
+  over from HD, not a Pulse-attested one - consistent with Pulse authoring no
+  node of that class ([`collision_ground_truth.rs`](../../crates/formats/tests/collision_ground_truth.rs)).
 - **`0x3e3` has no entry**, and the ids are not strictly ordered (`0x3d0`,
   `0x3e9`, `0x3eb` all sit out of sequence), so a gap is not evidence of a missing
   class.
@@ -1489,14 +1502,12 @@ the road, where `Wall Collision` on HD is the wider scenery. What established
 that is not the node name but its geometry, over all 16 circuits: see
 [hd-status](hd-status.md#0x3ed-is-the-barrier-along-the-road).
 
-Note what listing it in `classes::V6` does and does not say. The table above was
-**read only as far as `0x08ab26a0` and its terminator was never reached**, so
-`0x3ed` is past the last entry anyone has read rather than past the table, and
-whether *this binary* names it is still unknown. Version 6 is a format
-generation and HD's files are version 6, so the ID belongs in the version-6
-table; the constant's name is HD's spelling of the node, not a recovered table
-entry. Reading further in this binary's own table is still the cheap way to
-settle the remaining half.
+Note what listing it in `classes::V6` does and does not say. **The table above
+has now been read to its terminator (2026-08-26) and `0x3ed` is not in it** -
+Pulse's game-class ids run `0x3b9`..`0x3eb` and stop, three short of HD's
+866-record table. See [the resolution above](#node-types) for the address and the count. Version 6 is a format generation and HD's files
+are version 6, so the ID still belongs in the version-6 table; the constant's
+name is HD's spelling of the node, not a Pulse-attested table entry.
 
 **What is not there is the geometry.** Everything under
 ["Geometry is pre-batched GE display lists"](#geometry-is-pre-batched-ge-display-lists)

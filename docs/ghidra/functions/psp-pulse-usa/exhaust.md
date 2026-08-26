@@ -38,8 +38,12 @@ Two structural facts that earlier readings had wrong, both load-bearing:
   `.data` means nothing is registered yet, not that every class shares a handler.
 - **The table is terminated by `id == -1`**, per both walkers. It continues past
   the game classes into generic Maya classes with small sequential ids
-  (`0 Invalid`, `1 Base`, `2 Name`, …). Read as far as `0x08ab26a0` here; the
-  terminator was not reached, so **the extent is not stated**.
+  (`0 Invalid`, `1 Base`, `2 Name`, …) up to `0x3b8 Last`. **Read to the
+  terminator on 2026-08-26**: it sits at `0x08ab4be4`, giving 863 real records
+  (`(0x08ab4be4 - 0x08ab2370) / 12`). Game-class ids run `0x3b9`..`0x3eb` and
+  stop - `0x3ec`/`0x3ed`/`0x3ee`, present in HD's 866-record table
+  (`crates/formats/src/vex/class_names.rs`), are absent from Pulse's own copy.
+  See [`vex.md`](../../../formats/vex.md#node-types).
 
 Confidence **95**, and the reason is that the decode is self-validating: ten IDs
 already sit in `crates/formats/src/vex.rs:64-103`, put there by earlier passes

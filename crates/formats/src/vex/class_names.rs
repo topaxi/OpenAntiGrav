@@ -5,8 +5,11 @@
 //! Wipeout HD's `EBOOT.elf`, at **`0x00921110`**: stride 12,
 //! `{u32 id, char *name, ptr}`, terminated by `id == -1` at `0x009239a8`, names
 //! packed from `0x0079c000`. **866 records.** The same table is in Pulse's PSP
-//! `BOOT.BIN` at `0x08ab2370` in the same shape; that read stopped short of the
-//! terminator, which is why this one is the authority. See
+//! `BOOT.BIN` at `0x08ab2370` in the same shape, now also read to its own
+//! terminator (`0x08ab4be4`): **863 records**, three short - `wingtip`
+//! (`0x3ec`), `Track Wall Collision` (`0x3ed`) and `absorb` (`0x3ee`) are not
+//! in Pulse's copy. HD's table is still the authority here since it is the
+//! larger, superset reading. See
 //! `docs/ghidra/functions/ps3-hdfury-eu/vex-classes.md` and
 //! `docs/ghidra/functions/psp-pulse-usa/exhaust.md`.
 //!
