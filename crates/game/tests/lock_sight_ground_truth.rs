@@ -27,10 +27,11 @@ use std::path::{Path, PathBuf};
 
 use oag_game::race;
 
-fn image() -> Option<PathBuf> {
+fn image_named(name: &str) -> Option<PathBuf> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
-        .join("data/images/pulse-psp-usa.chd");
+        .join("data/images")
+        .join(name);
 
     if path.exists() {
         return Some(path);
@@ -44,9 +45,11 @@ fn image() -> Option<PathBuf> {
     None
 }
 
-/// A single race: the one mode whose layout authors the sights at all.
-fn single_race() -> Option<race::Loaded> {
-    let image = image()?;
+fn image() -> Option<PathBuf> {
+    image_named("pulse-psp-usa.chd")
+}
+
+fn race_on(image: &Path) -> race::Loaded {
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
         class: oag_physics::SpeedClass::Venom,
@@ -57,7 +60,12 @@ fn single_race() -> Option<race::Loaded> {
     for line in &loaded.report {
         println!("{line}");
     }
-    Some(loaded)
+    loaded
+}
+
+/// A single race: the one mode whose layout authors the sights at all.
+fn single_race() -> Option<race::Loaded> {
+    Some(race_on(&image()?))
 }
 
 /// `Arcade_HUD.xml` authors nine sight widgets over three models.
@@ -207,5 +215,132 @@ fn a_missile_in_hand_locks_a_craft_on_a_real_circuit() {
     assert!(
         seconds >= 0.8,
         "it locked after {seconds}s, inside the recovered 0.8s hold"
+    );
+}
+
+/// Wipeout Pure authors the Missile's five sights, and its art reaches the sheet.
+///
+/// **The reticle is one engine, three titles, and this is the half of that which
+/// is data.** Pure's `Arcade_HUD.xml` carries `missile_sight_inner` and
+/// `missile_sight_1` … `_4` off the same two models Pulse names - and *not* the
+/// LeachBeam's four, which is the disc agreeing that the LeachBeam is a Pulse
+/// weapon.
+///
+/// **It also covers a path Pulse cannot reach.** Every one of Pure's four HUD
+/// layouts names no `.mip` at all - the whole HUD is `<Model>` geometry - so
+/// Pure always takes the "no texture" branch of the atlas loader, which used to
+/// return an empty sheet before it ever looked for sight art. Pulse never takes
+/// that branch, so nothing else in the tree would notice.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn pure_authors_the_missiles_sights_and_its_art_reaches_the_sheet() {
+    use oag_game::race::sight;
+
+    let Some(image) = image_named("pure-psp-usa.chd") else {
+        return;
+    };
+    let loaded = race_on(&image);
+    let layout = loaded
+        .hud
+        .layout
+        .as_ref()
+        .expect("Pure's arcade layout parsed");
+
+    for name in sight::MISSILE_BRACKETS
+        .iter()
+        .chain(std::iter::once(&sight::MISSILE_INNER))
+    {
+        let model = layout
+            .models
+            .iter()
+            .find(|m| m.name == *name)
+            .unwrap_or_else(|| panic!("Pure's arcade layout has no {name}"));
+        assert!(
+            loaded.hud.sheet.get(&model.src).is_some(),
+            "{name}'s model {} did not reach Pure's HUD sheet - a layout that \
+             names no atlas must still load its sight art",
+            model.src
+        );
+    }
+
+    assert!(
+        !layout
+            .models
+            .iter()
+            .any(|m| sight::LEACHBEAM_BRACKETS.contains(&m.name.as_str())),
+        "Pure authors LeachBeam sights, which would mean it has the weapon"
+    );
+}
+
+/// But Pure ships no weapon table, so nothing there has a lock to draw.
+///
+/// **The blocker is upstream of everything this change touched.** `Race::load`
+/// looks for `Data\XML\WeaponStats_Race.xml` and Pure's archives hold no entry
+/// by that name, so there are no Missile stats, no pickup odds and no lock
+/// window - the sights are authored and nothing can drive them. Whether Pure
+/// names that file something else, or authors its weapons somewhere else
+/// entirely, is unread.
+///
+/// Asserted rather than left as a note so the day Pure's table is found, this
+/// fails and says where to look.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn pure_ships_no_weapon_table_so_its_sights_have_nothing_to_drive_them() {
+    let Some(image) = image_named("pure-psp-usa.chd") else {
+        return;
+    };
+    let loaded = race_on(&image);
+    let race = race::Race::start(loaded.setup);
+    assert!(
+        race.missile_stats().is_none(),
+        "Pure now parses Missile stats - wire its sights up and delete this test"
+    );
+}
+
+/// Wipeout HD locks, and draws its reticle a different way entirely.
+///
+/// **The lock is shared and the reticle is not.** HD's `WeaponStats_Race.xml`
+/// parses, Missile block included, so `Ship_AcquireLock`'s window, the 0.8 s
+/// hold and the unguided shot all run on HD exactly as they do on Pulse - that
+/// half is engine code with no title in it.
+///
+/// Its **sights** are another dialect: HD's arcade HUD composes to **zero**
+/// `<Mode3D>` models, and its reticle is `<Image>` sprites named `MissileSight*`
+/// and `LeachBeamSight*` off `Data\HUD\Textures\missile_reticule.gtf`. So
+/// `crate::race::sight`'s placement law applies and its *widget names and
+/// geometry* do not. Wiring it is a second naming table and a sprite path, not
+/// new recovery.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn hd_parses_its_missile_but_authors_its_reticle_as_sprites() {
+    use oag_game::race::sight;
+
+    let Some(image) = image_named("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let loaded = race_on(&image);
+    let layout = loaded
+        .hud
+        .layout
+        .as_ref()
+        .expect("HD's arcade layout parsed");
+
+    assert!(
+        !layout
+            .models
+            .iter()
+            .any(|m| sight::is_sight_widget(&m.name)),
+        "HD authors PSP-named sight models; the reticle would draw twice"
+    );
+
+    let race = race::Race::start(loaded.setup);
+    let stats = race
+        .missile_stats()
+        .expect("HD authors a Missile with lock distances");
+    assert!(
+        stats.lock_max_dist > stats.lock_min_dist && stats.lock_min_dist >= 0.0,
+        "HD's lock window is {}..{}, which cannot select anything",
+        stats.lock_min_dist,
+        stats.lock_max_dist
     );
 }

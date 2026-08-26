@@ -287,6 +287,44 @@ Missile, which does not match how the weapon plays. Either `mode == 2` is
 commoner than it looks or one of the two reads is wrong. `oag_game` gates the
 sight on "the held weapon locks and something is lockable" instead, and says so.
 
+## The other two titles
+
+Measured 2026-08-26 and pinned by `crates/game/tests/lock_sight_ground_truth.rs`.
+The **law** on this page is engine code with no title in it, so what differs is
+only what each disc authors.
+
+| | Missile stats | Sight widgets | Reticle draws |
+| --- | --- | --- | --- |
+| Pulse | yes | 9 `<Mode3D>` models | **yes** |
+| Pure | **no table at all** | 5 `<Mode3D>` models, the Missile's | no |
+| HD/Fury | yes | `<Image>` sprites, **0** models | no |
+
+**Pure authors the Missile's five sights and nothing to drive them.** Its
+`Arcade_HUD.xml` carries `missile_sight_inner` and `missile_sight_1` … `_4` off
+the same two models, at the same placeholder position - and *not* the
+LeachBeam's four, which is the disc agreeing that the LeachBeam is a Pulse
+weapon. What is missing is upstream of the reticle entirely: **no archive on the
+Pure disc holds `Data\XML\WeaponStats_Race.xml`**, so there are no lock
+distances, no pickup odds and no Missile. Whether Pure names that file something
+else or authors its weapons somewhere else is unread, and finding it is the
+whole job - the sights are already there and their art already loads.
+
+**HD locks and draws its reticle another way.** Its `WeaponStats_Race.xml`
+parses with a Missile whose lock window is real, so `Ship_AcquireLock`, the
+`0.8` s hold and the unguided shot all run on HD as they do on Pulse. But HD's
+arcade HUD composes to **zero** `<Mode3D>` models: its reticle is `<Image>`
+sprites named `MissileSight*` and `LeachBeamSight*` sampling
+`Data\HUD\Textures\missile_reticule.gtf` - the 36th of its texture table. So
+the placement law above applies to HD and the widget names and geometry do not.
+Wiring it is a second naming table and the ordinary sprite path, not new
+recovery.
+
+**One thing Pure caught that Pulse could not.** Every Pure HUD layout names no
+`.mip`, so Pure always takes the atlas loader's "this layout has no texture"
+branch - which returned an empty sheet before it looked for sight art. Pulse
+never takes that branch. `pure_authors_the_missiles_sights_and_its_art_reaches_the_sheet`
+is what holds it.
+
 ## What this settles elsewhere
 
 - **`entity+0x860 & 1` has a writer.** It is here, and it means "the reticle has

@@ -160,12 +160,25 @@ fn load_atlases(
     report: &mut Vec<String>,
 ) -> crate::sprite::Sheet {
     let references = layout.map(crate::hud::Layout::textures).unwrap_or_default();
+    // **A layout that names no `.mip` may still have sight art**, and taking the
+    // early return before [`sight_art`] is what made Pure's reticle draw
+    // nothing: all four of its HUD layouts are `<Model>` geometry with no atlas
+    // at all, so this branch is the *only* one they ever take. The report line
+    // stays - it is still true and still worth saying - but the sheet is built
+    // either way.
     if references.is_empty() {
         report.push(format!(
             "HUD {entry} names no texture; its sprites are drawn from <Model> \
              geometry rather than an atlas"
         ));
-        return crate::sprite::Sheet::default();
+        let extra = sight_art(archives, layout, report);
+        if extra.is_empty() {
+            return crate::sprite::Sheet::default();
+        }
+        let mut notes = Vec::new();
+        let sheet = crate::sprite::Sheet::build_with(&[], extra, &mut notes);
+        report.extend(notes);
+        return sheet;
     }
 
     let mut blobs: Vec<(String, Vec<u8>)> = Vec::new();
