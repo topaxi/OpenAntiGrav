@@ -253,6 +253,125 @@ developer's hostname and username. The project database is a working copy;
 the record of truth is `docs/ghidra/`. See
 [ADR-0005](../architecture/adr/0005-ghidra-conventions.md).
 
+### Vita
+
+All four of WipEout 2048's `eboot.elf` (base + patch v1.04, both regions) import
+cleanly into [VitaLoaderRedux](https://github.com/CreepNT/VitaLoaderRedux) as of
+2026-08-26: language `ARM:LE:32:v7`, base address `0x81000000`, named
+`.text`/`.data`/`VarImport` blocks, 1197 functions seeded by the loader itself
+before auto-analysis even runs. `docs/ghidra/functions/vita-2048-*/` and
+`BINARY_PROGRAMS` entries still wait on a first recovered name, per
+[ADR-0005](../architecture/adr/0005-ghidra-conventions.md)'s own workflow.
+
+**Default RE target: `PCSF00007` (EU), `patch-v104`.** Same role split as
+`psp-pulse-usa` vs `psp-pulse-eu`: the patch is what a real device actually
+runs (`base` is corroboration only), and EU is preferred over USA by policy
+here the way `pulse-psp-eu` is preferred over the USA disc elsewhere in this
+project. Program paths: `/vita-2048-eu-v104/eboot.elf` (target of record),
+`/vita-2048-usa-v104/eboot.elf`, `/vita-2048-eu-base/eboot.elf`,
+`/vita-2048-usa-base/eboot.elf` (corroboration-only).
+
+#### `eboot.bin` is still NpDrm-encrypted under the SELF wrapper
+
+**An earlier `strip-vita-self.py` only ever cut the SCE header off - it never
+decrypted anything.** A plaintext ELF header and phdrs made `readelf` look
+satisfied (the earlier "extraction pipeline complete" claim), but that says
+nothing about the segments: measured directly against
+`data/extracted/vita/PCSF00007/patch-v104/eboot.bin`, the bytes at each
+segment's declared offset are not zlib (no `0x78` header, `zlib.decompress`
+fails immediately), and the first 64 KiB measures 7.9975 bits/byte of entropy
+- ciphertext, not compressed-but-parseable data. `scripts/vita-self-decrypt.py`
+replaces it and does the whole job; the old script is removed rather than kept
+around half-working.
+
+Two more things were wrong before any of that mattered:
+
+1. **The program header table is not where the ELF's own `e_phoff` says.**
+   `e_phoff` reads `0x34` (the standard 52-byte `Elf32_Ehdr` size), but the
+   real table is 12 bytes later, at absolute `phdr_offset` in the outer
+   `SCE_header` (`0xe0` here = `elf_offset (0xa0) + 0x40`, not `elf_offset +
+   e_phoff`) - confirmed directly from the header's own `phdr_offset` field,
+   not inferred from byte-shifting. This is
+   [CelesteBlue-dev/PSVita-RE-tools](https://github.com/CelesteBlue-dev/PSVita-RE-tools)'s
+   own `vita-unmake-fself/src/self.h` `ELF_header` struct: a trailing
+   `uint32_t pad[3]` after the standard 14 fields, which is exactly the gap.
+2. **The `SCE_header` fields past `elf_offset` matter and neither script read
+   them.** `phdr_offset`, `section_info_offset` and friends are 6 more `Q`
+   fields [KorewaWatchful](https://github.com/KorewaWatchful)/
+   [Vita3K](https://github.com/Vita3K/Vita3K) both read; a script stopping at
+   `elf_offset` (as `strip-vita-self.py` did) has no way to find the real
+   phdrs or the per-segment metadata that names each segment's encryption and
+   compression.
+
+#### `vita-self-decrypt.py`: klicensee, no hardware, no F00D
+
+**A full PC-only decrypt path exists and needs nothing but the title's
+klicensee** - confirmed by reading
+[Vita3K/Vita3K](https://github.com/Vita3K/Vita3K)'s `vita3k/packages/src/
+sce_utils.cpp` (`decrypt_fself`/`get_segments`) directly, the same code path
+Vita3K itself uses to run retail titles from a PKG + zRIF with no console.
+`scripts/vita-self-decrypt.py` reimplements it in Python
+(`cryptography` for AES, `zlib` for inflate): klicensee unwraps an
+NpDrm-wrapped intermediate key, which with a compiled-in "metadata key"
+(selected by system-version range and key revision - the table in
+`sce_utils.cpp`'s `register_keys()`, credited there to TeamMolecule's
+`sceutils`) decrypts the SELF's metadata block into per-segment AES-128-CTR
+keys; each segment decrypts, then inflates if compressed, then lands at its
+own phdr's `p_offset`. Verified three ways on the EU patch-v104 output, not
+assumed: `readelf` reports clean `PT_LOAD`/`PT_SCE_VERSION` phdrs, disassembly
+at `0x81000000` is real ARM Thumb-2 (`movw`/`movt` pairs, sane `push`/`pop`
+prologues, not noise), and `SceModuleInfo.name` at the address `e_entry`
+encodes (top 2 bits segment, bottom 30 bits offset - the convention
+`ArmElfPrxLoader` itself uses) reads `WO_Game\0`.
+
+**The klicensee itself needs zero hardware and zero network crypto calls -
+it is recoverable purely from the zRIF string**, which is a much lighter
+claim than it sounds: a zRIF is `base64(zlib(license_bytes, preset_dictionary))`,
+confirmed by reading [KorewaWatchful/libzrif](https://github.com/KorewaWatchful/libzrif)'s
+`keyflate.c` directly - no AES anywhere in it. `scripts/zrif-to-klicensee.py`
+does this decode; `data/keys/README.md` has the details. This is a *different,
+lighter* layer than `psvpfsparser`'s own `-f00d_url`/`-f00d_cache`, which
+derives the *PFS filesystem* key and does need the F00D service - confirmed
+by reading `motoharu-gosuto/psvpfstools`'s own README, which never mentions
+SELF or NpDrm at all. Do not conflate the two: PFS decrypt (`psvpfsparser`)
+gets you a *readable* `eboot.bin`; klicensee decrypt
+(`vita-self-decrypt.py`) gets you a *plain* one.
+
+zRIFs for both regions' base app (patch reuses the base license - same
+content ID family, checked directly) came from nopaystation.com's own TSV
+export (`https://nopaystation.com/tsv/PSV_GAMES.tsv`, fetched and grepped by
+title ID directly, not scraped through a rendered page - the earlier attempt
+at that was unreliable for picking one row out of a large file).
+
+#### GhidraMCP import traps, still true regardless of input
+
+**`analyzeHeadless -loader <name>` matches `Loader.getClass().getSimpleName()`,
+not the display name.** `ArmElfPrxLoader.getName()` returns `"ARM ELF-PRX for
+PlayStation®Vita"` (with the `®`), and passing that string to `-loader` fails
+with `Invalid loader name specified` - confirmed by decompiling
+`LoaderService.getLoaderClassByName`, which filters on `getClass().equals`
+compared against `getSimpleName()`. Pass `ArmElfPrxLoader`. Also,
+`analyzeHeadless` rejects a project path of `.` ("Path element starting with
+'.' is not permitted") - pass an absolute path.
+
+**`GhidraMCP`'s `import_file` picks the loader Ghidra's own auto-detection
+would - which is only `ArmElfPrxLoader` once the file is genuinely decryptable.**
+Importing the *encrypted* `strip-vita-self.py` output with no `language`
+silently fell through to the stock ELF loader instead of erroring: the tell
+was language `ARM:LE:32:v8` (`ArmElfPrxLoader` hardcodes `v7`), base address
+`0`, and stock `_elfHeader`/`_elfProgramHeaders` blocks
+`ArmElfPrxLoader.load()` never creates - exactly the PS3 raw-binary trap
+above, but reached without passing a language at all. The cause is
+`findSupportedLoadSpecs` swallowing its real rejection reason
+(`UnsupportedElfException`/`MalformedElfException`, or a failed
+`SceModuleInfo` name check) into a silently empty list, so Ghidra falls back
+to whatever else claims the file. Importing the *correctly decrypted*
+`vita-self-decrypt.py` output the same way (no `language`) picks
+`ArmElfPrxLoader` correctly, because this time it actually has a load spec to
+offer. The lesson: a clean `import_file` result on this format is not proof
+the right loader ran - check `Language` and the block names in
+`get_metadata`/`list_segments` regardless.
+
 ### GhidraMCP
 
 [GhidraMCP](https://github.com/LaurieWired/GhidraMCP) exposes Ghidra over an

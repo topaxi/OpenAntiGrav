@@ -87,12 +87,13 @@ AES-encrypted under the disc key. Decrypting needs this pressing's redump
 [Ps3GhidraScripts](https://github.com/clienthax/Ps3GhidraScripts) for the
 PPC64/PRX side.
 
-### Vita PKGs decrypt in three steps; `data/extracted/vita/` holds the result
+### Vita PKGs decrypt in four steps; `data/extracted/vita/` holds the result
 
 In a 2048 PKG, `sce_sys/param.sfo` and `sce_pfs/files.db` (magic `SCENGPFS`)
 are plaintext, but everything inside the PFS layer is encrypted - `eboot.bin`,
-`PSP2/data1.psarc`, `data2.psarc`, even the manual PNGs. Three tools, each
-solving one layer:
+`PSP2/data1.psarc`, `data2.psarc`, even the manual PNGs. On top of that,
+`eboot.bin` itself is an NpDrm-encrypted SELF, a second, independent layer
+PFS decryption does not touch. Four tools, each solving one layer:
 
 1. `pkg2zip -x <pkg>` strips the PKG's outer AES-CTR layer. This alone
    produces a readable directory tree still full of high-entropy files - it
@@ -104,26 +105,45 @@ solving one layer:
    layer given the title's zRIF (or raw klicensee) - see
    `scripts/build-psvpfstools.sh` for the four upstream build fixes it needed.
    A patch pkg reuses its base app's zRIF (same content ID, same license) -
-   checked directly, not assumed. zRIFs and the derived F00D cache live in
-   `data/keys/`, see its own README.
-3. The result is a plain ELF wrapped in an SCE self header, still not
-   something Ghidra's Vita loader can open directly -
-   `scripts/strip-vita-self.py` (`just strip-vita-self <path>`) strips that
-   header to the bare ELF-PRX. [VitaLoaderRedux](https://github.com/CreepNT/VitaLoaderRedux)
-   (`just build-vita-loader-redux`) is what actually reads it in Ghidra;
-   install is manual (File > Install Extensions).
+   checked directly, not assumed. This gets you a *readable* `eboot.bin` -
+   `readelf` parses its ELF header and phdrs cleanly - but not yet a *plain*
+   one; see step 4.
+3. `just zrif-to-klicensee <zrif>` (`scripts/zrif-to-klicensee.py`) decodes
+   the same zRIF back to its 16-byte klicensee - pure zlib with a preset
+   dictionary, no AES, no console-derived secret. zRIFs and the derived
+   klicensee live in `data/keys/vita-zrif.tsv`, see `data/keys/README.md` for
+   how they were recovered and why this is a *different, lighter* layer than
+   `psvpfsparser`'s own `-f00d_url`/`-f00d_cache` (which derives the PFS key
+   and does need the F00D service).
+4. `eboot.bin` past step 2 is a plain ELF header and phdrs wrapped around
+   still-NpDrm-encrypted code/data segments - confirmed directly (not zlib,
+   ~8 bits/byte entropy), not something Ghidra's Vita loader can open.
+   `just vita-self-decrypt <path> -k <klicensee>` (`scripts/vita-self-decrypt.py`)
+   decrypts and decompresses every segment and places it at its real ELF
+   offset. [VitaLoaderRedux](https://github.com/CreepNT/VitaLoaderRedux)
+   (`just build-vita-loader-redux`) is what actually reads the result in
+   Ghidra; install is manual (File > Install Extensions). An earlier
+   `strip-vita-self.py` only did the *header* half of this step and left the
+   segments encrypted - removed once `vita-self-decrypt.py` did the whole job.
 
 All seven of WipEout 2048's PKGs (USA + EUR base, patch v1.04, DLC1/DLC2) have
 been run through steps 1-2; `data/extracted/vita/{PCSA00015,PCSF00007}/{base,
-patch-v104,dlc1,dlc2}/` holds the result, verified with `readelf` rather than
-assumed, and base/patch `eboot.elf` (step 3) for both regions. DLC PKGs carry
-no binaries at all, only `dlcN.psarc` + `sce_sys` metadata - checked directly
-against the decrypted tree, not inferred from the PKG type.
+patch-v104,dlc1,dlc2}/` holds the result. Base and patch `eboot.elf` for both
+regions have been through steps 3-4 and verified three ways, not assumed:
+`readelf` reports clean `PT_LOAD`/`PT_SCE_VERSION` phdrs, disassembly at
+`0x81000000` is real ARM Thumb-2, and all four import into VitaLoaderRedux
+(language `ARM:LE:32:v7`, base `0x81000000`) - see
+[toolchain.md#vita](../docs/reverse-engineering/toolchain.md#vita) for the
+full trail. DLC PKGs carry no binaries at all, only `dlcN.psarc` +
+`sce_sys` metadata - checked directly against the decrypted tree, not
+inferred from the PKG type.
 
-Nothing has actually been imported into a Ghidra program yet - there is no
-`docs/ghidra/functions/vita-2048-*/` or `names.tsv` for it, and no
-`BINARY_PROGRAMS` entry in `scripts/apply-ghidra-names.py`. See `HANDOVER.md`'s
-open threads for the current state of that work.
+The four programs are imported (`/vita-2048-{eu,usa}-{v104,base}/eboot.elf`),
+default target `/vita-2048-eu-v104/eboot.elf`. Naming still has no
+`docs/ghidra/functions/vita-2048-*/` or `names.tsv` - those wait on a first
+recovered name, per [ADR-0005](../docs/architecture/adr/0005-ghidra-conventions.md)'s
+own workflow. See `HANDOVER.md`'s open threads for the current state of that
+work.
 
 Note what these two share and Pulse/Pure do not: **HD/Fury and 2048 both ship
 PSARC archives rather than WADs**, and 2048 arrives as a PKG rather than a disc
