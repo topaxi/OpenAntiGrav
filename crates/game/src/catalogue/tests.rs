@@ -330,3 +330,39 @@ fn a_chosen_copy_beats_the_served_table() {
 
     assert_eq!(label(&tracks[0], &names, &served, &tracks), "VINETA K");
 }
+
+/// The team label falls through table, then declared name, then folder - in
+/// that order.
+///
+/// The order is the point, not the fallback. `Mantis` is the case that fixes
+/// it: its pack is sold as Mirage, the disc's own string table says so, and a
+/// build that preferred a definition's spelling would put the folder name in
+/// the menu for it. The middle step exists only for a source whose table cannot
+/// answer, which is Wipeout Pure.
+#[test]
+fn a_team_label_prefers_the_table_then_the_declared_name_then_the_folder() {
+    let strings = crate::language::StringTable::from_xml(
+        r#"<Screen name="Top"><Entry ID="Mantis" String="Mirage"/></Screen>"#,
+    );
+    let team = |id: &str, name: Option<&str>| Team {
+        id: id.to_string(),
+        name: name.map(str::to_string),
+        location: format!(r"Data\Ships\{id}"),
+        help_text: None,
+    };
+
+    // In the table and also carrying a declared name: the table still wins, or
+    // a pack team reads as its own folder instead of what it was sold as.
+    assert_eq!(
+        team("Mantis", Some("Something Else")).label(&strings),
+        "Mirage"
+    );
+    // Not in the table, declared differently from the folder: Pure's case.
+    assert_eq!(
+        team("AG_Systems", Some("AG Systems")).label(&strings),
+        "AG Systems"
+    );
+    // Neither: the folder, which is what a team with no table entry already
+    // fell back to.
+    assert_eq!(team("Feisar", None).label(&strings), "Feisar");
+}

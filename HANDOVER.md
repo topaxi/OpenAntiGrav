@@ -51,7 +51,7 @@ file does not need to carry its own.
   "nothing recovered the craft", is not a missing-data skip, and is undiagnosed.
 - **Check `git status` before assuming the tree is clean.** A whole milestone's
   work once sat uncommitted for a day.
-- **Gate status:** last measured green at **2,468 tests (2026-08-26)** in 8.5s,
+- **Gate status:** last measured green at **2,470 tests (2026-08-26)** in 3.3s,
   with `fmt`, `clippy`, `check-docs`, `check-deps`, `check-determinism`,
   `check-size`, `check-names` and `check-handover` all clean (480 skipped -
   the `#[ignore]`d disc-backed ones). Re-measure rather than trusting the number here -

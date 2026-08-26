@@ -218,21 +218,7 @@ impl Pending {
             teams: boot_shell
                 .teams
                 .iter()
-                .map(|team| {
-                    // The table first, the definition's own spelling second, the
-                    // folder last. Only the middle step is new, and it exists
-                    // for one source: Pure declares `AG Systems` over the folder
-                    // `AG_Systems` and its string tables go unread, so without
-                    // it that row would read as the folder name. The order
-                    // matters - `Mantis` is labelled `Mirage` by the table and
-                    // must not be relabelled by anything below it.
-                    let label = boot_shell
-                        .strings
-                        .get(&team.id)
-                        .or(team.name.as_deref())
-                        .unwrap_or(&team.id);
-                    menu::Choice::labelled(&team.id, label)
-                })
+                .map(|team| menu::Choice::labelled(&team.id, team.label(&boot_shell.strings)))
                 .collect(),
             tracks: boot_shell
                 .tracks

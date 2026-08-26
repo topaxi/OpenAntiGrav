@@ -253,6 +253,25 @@ pub struct Team {
     pub help_text: Option<String>,
 }
 
+impl Team {
+    /// What to show a player for this team.
+    ///
+    /// **The order is the whole content of this function**, and the middle step
+    /// is the one that is easy to get wrong: the string table wins, because
+    /// `Mantis` is labelled `Mirage` there and a build that preferred the
+    /// definition's own spelling would show the folder name for a pack the
+    /// packaging calls something else. [`Self::name`] is only reached for when
+    /// the table cannot answer, which on Wipeout Pure is always - its string
+    /// tables go unread - and the id is the last resort rather than the first.
+    #[must_use]
+    pub fn label<'a>(&'a self, strings: &'a crate::language::StringTable) -> &'a str {
+        strings
+            .get(&self.id)
+            .or(self.name.as_deref())
+            .unwrap_or(&self.id)
+    }
+}
+
 /// Reads every raceable `PI_Team` out of a plugin definition, in file order.
 ///
 /// Alternate hulls (`PI_TeamModel`, `PI_ModelSkin` - the concept, zone and
