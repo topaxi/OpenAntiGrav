@@ -816,7 +816,7 @@ the zero-on-consume this page already reads - landing on the same watched
 address a beat later. That is the consumer this page already reads,
 corroborating the target address rather than a coincidence.
 
-#### `Weapon_PostBlastImpulse_q` (`0x0886794c`), confidence 68
+#### `Weapon_PostBlastImpulse` (`0x0886794c`), confidence 82
 
 The more frequent of the two (5 of 6 logged hits). A short, straight-line
 function - no loop, disassembled and read instruction-by-instruction because
@@ -835,6 +835,42 @@ instruction's operand computes `T + 0x110`, and the live watchpoint (armed at
 exactly that address, so `T+0x110` really is the pending-impulse slot for
 whatever entity `T` names, corroborated at runtime rather than only in the
 static trace.
+
+**Identified 2026-08-26: `stats` is the per-speed-class `<WeaponStats>` struct,
+and the four offsets this function spends are the Mine's.** The block
+`WeaponStats_ParseMine` (`0x0880d124`) writes runs `+0xe8`..`+0x100`, and the
+four fields read below land on it in four matching roles:
+
+| read | as | is |
+| --- | --- | --- |
+| `stats->0xe8` | accumulated into `T->0x120` | `<Mine>` `damage` |
+| `stats->0xec` | the falloff's radius | `<Mine>` `blastradius` |
+| `stats->0xf0` | the impulse's magnitude | `<Mine>` `blastforce` |
+| `stats->0xfc` | accumulated into `T->0x130` | `<Mine>` `slowdown_time` |
+
+**The fourth is the cross-check that makes this more than four numbers lining
+up.** `+0x130` was already recorded across this tree - before anyone knew what
+`+0xfc` was - as the consumer of the unspent mechanic behind
+`<Global slowdown_limit>`. It is `slowdown_time`'s accumulator, and it was
+identified from the other end.
+
+Two consequences:
+
+- **The table's identity, which step 1 below leaves open, is settled**: it
+  resolves to the weapon stats struct `WeaponStats_Parse` fills, not to some
+  other per-weapon record. What `S->0x40` selects is still open, and it no
+  longer matters much - every entry has to reach the same struct for these
+  offsets to mean anything.
+- **This whole chain is the Mine's blast.** `0x0886794c`, its caller
+  `FUN_08867b50` and *its* caller `FUN_08867370` all sit in `0x08867xxx`, which
+  is `Weapon_DropMines`' own subsystem, and the fuse `FUN_08867370` counts down
+  at `+0x48` is the one `Mine_Init` (`0x08859ac8`) loads `<Mine> timetodie`
+  into. See [mine.md](mine.md). `FUN_08867370` is **still not renamed** - see
+  that page for the one measurement that resists it.
+
+Raised to **82** on that basis. What holds it off 84 is unchanged and is listed
+under "what is not verified": `stats->0x368`'s tri-state, and what `T->0x120`,
+`T->0x124` and `T->0x130` are consumed by.
 
 **Full instruction-level re-read, 2026-08-19** (`disassemble_bytes` over
 `0x0886794c`-`0x08867b4f`, the whole function body), corrects and extends the
@@ -869,7 +905,9 @@ first pass:
    `0886798c`'s `jal`: raw operand `0x00055cd4`, real address
    `0x08859cd4` after the same image-base correction, a **three-instruction
    leaf** (`a0 += 0x90; *a1 = *a0; jr ra`) that is exactly `Vec4
-   GetPosition_q(entity, out)` and nothing more, unnamed. The first pass did
+   GetPosition_q(entity, out)` and nothing more. **Named `Entity_GetPosition`
+   2026-08-26** - three instructions with one possible reading is as settled as
+   a function gets. The first pass did
    not resolve this call at all.
 4. `d = |T->0x50 - S->0x90|` (`vsub.q` then `vdot.t`/`vsqrt.s`) - the first
    pass's "target_position" is `T->0x50` specifically, and it is the **same**

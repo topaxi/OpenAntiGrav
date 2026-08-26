@@ -195,13 +195,25 @@ pub struct Projectile {
 
 /// What a projectile did when it stopped.
 ///
-/// # The blast rule, which is ours
+/// # The blast rule: half recovered, half ours
 ///
 /// Everything within `blastradius` of [`Self::point`] takes the **full**
-/// `damage`. The original may well fall off with distance and nothing has been
-/// read that says so, so a falloff curve would be invented detail on top of an
-/// already-invented mechanic. Full damage inside a hard radius is the reading
-/// that has one number in it and that number is the disc's.
+/// `damage`, and **that half is now recovered**:
+/// `Weapon_PostBlastImpulse_q` (`0x0886794c`) accumulates the authored figure
+/// into the target flat, with no distance term anywhere near it.
+///
+/// **The impulse is not flat**, which this module had wrong until 2026-08-26.
+/// The same function scales it by `1.0 - d / blastradius`, a linear falloff -
+/// so a craft on the edge of a blast is nudged and one at its centre is thrown.
+/// See [`blast`] and
+/// `docs/ghidra/functions/psp-pulse-usa/mine.md#the-blast-confirmed-from-the-other-end-and-it-falls-off`.
+///
+/// **What is still ours is that the rule is the same for every weapon.** The
+/// function that was read spends the *Mine's* four `<Stats>` offsets, so
+/// strictly the falloff is recovered for one weapon. Applying it to all of them
+/// is an extrapolation, and it is the smaller of the two available inventions:
+/// the alternative is a world where a mine's push falls off and a rocket's does
+/// not, which nothing suggests and which would need its own flag.
 ///
 /// **The firing craft is not excluded.** A rocket launched into a wall at close
 /// range hurts the ship that fired it, which follows from the blast being a
@@ -778,9 +790,9 @@ fn blast_stats(
 
 /// Spends one blast against every craft inside its radius.
 ///
-/// Full `damage` and a `force` impulse directed away from `point`, with no
-/// falloff and with the firing craft included - the choices [`Impact`] records
-/// and defends. Damage goes through [`oag_physics::damage::apply_weapon`], so
+/// Full `damage` and a `force` impulse directed away from `point` and **scaled
+/// linearly by distance**, with the firing craft included - the split
+/// [`Impact`] records and defends. Damage goes through [`oag_physics::damage::apply_weapon`], so
 /// the state gate, the weapons-off halving and the clamp are the recovered ones.
 ///
 /// Returns how many craft it reached, which is what a caller asserting "the
@@ -816,7 +828,8 @@ pub fn blast(
             continue;
         }
         let offset = ship.physics.body.position - point;
-        if offset.length() > radius {
+        let distance = offset.length();
+        if distance > radius {
             continue;
         }
         reached += 1;
@@ -834,12 +847,28 @@ pub fn blast(
         // World up rather than a zero push or a normalised NaN: something has to
         // happen, and up is the one direction that does not depend on an
         // arbitrary axis of the craft or of the track.
-        let direction = if offset.length() > 1e-4 {
+        let direction = if distance > 1e-4 {
             offset.normalize()
         } else {
             Vec3::Y
         };
-        ship.physics.body.apply_impulse(direction * force);
+        // **The falloff is recovered and the damage above deliberately has
+        // none.** `1.0 - d / blastradius`, exactly as `Weapon_PostBlastImpulse_q`
+        // (`0x0886794c`) computes it, so a craft on the rim is nudged and one at
+        // the centre is thrown. The original does **not** clamp this - a hit
+        // outside the radius drives the term negative there and nothing in that
+        // function stops it - which cannot happen here because the range test
+        // above has already skipped anything further out. A `radius` of zero
+        // would divide by zero, so it is guarded: a weapon with no radius
+        // reaches nobody anyway, since the test above admits only `d <= 0`.
+        let falloff = if radius > 0.0 {
+            1.0 - distance / radius
+        } else {
+            1.0
+        };
+        ship.physics
+            .body
+            .apply_impulse(direction * (falloff * force));
     }
     reached
 }

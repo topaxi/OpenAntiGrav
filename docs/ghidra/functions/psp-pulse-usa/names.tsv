@@ -566,7 +566,8 @@
 0x0883f13c	function	Ship_ApplyPendingWeaponDamage	82	shield-pickup.md
 0x0885e1c0	function	ShipShield_Deactivate	84	shield-pickup.md
 0x0885eb54	function	ShipShield_InitColours	82	shield-pickup.md
-0x0886794c	function	Weapon_PostBlastImpulse	68	contact-response.md
+0x0886794c	function	Weapon_PostBlastImpulse	82	contact-response.md
+0x08859cd4	function	Entity_GetPosition	90	contact-response.md
 0x089391c4	function	SoundEmitter_Init	85	positional-audio.md
 0x08939720	function	SoundEmitter_Update	84	positional-audio.md
 0x08939c00	function	SoundEmitter_ComputeVolumeAndAngle	85	positional-audio.md

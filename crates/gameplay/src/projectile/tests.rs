@@ -336,6 +336,12 @@ fn a_rocket_that_hits_nothing_is_reaped_without_detonating() {
 /// The craft outside is the assertion that matters - a blast that reached
 /// every craft on the track would pass any test that only looked at the one
 /// that was hit.
+///
+/// **And the two halves treat distance differently**, which is recovered and is
+/// the thing most likely to be quietly undone by a later edit: the damage is
+/// flat inside the radius and the impulse falls off linearly. The grid puts one
+/// craft at the centre and one at four fifths of the radius precisely so the
+/// two are distinguishable - equal damage, and a fivefold difference in push.
 #[test]
 fn a_blast_reaches_inside_the_radius_and_stops_at_it() {
     let mut grid = ships(&[
@@ -367,20 +373,31 @@ fn a_blast_reaches_inside_the_radius_and_stops_at_it() {
         "a craft outside the radius took damage"
     );
 
-    // `dv = J / m`, so 100 units of force on a mass of 2 is 50 units of
-    // velocity, directed away from the centre.
+    // `dv = J / m`. The craft at `z = 8` is four fifths of the way out, so
+    // `falloff = 1 - 8/10 = 0.2`: 20 units of impulse on a mass of 2, or 10
+    // units of velocity, directed away from the centre. Flat force would give
+    // 50 here, so this is the assertion the falloff lives or dies on.
     let pushed = grid[1].physics.body.linear_velocity;
-    assert!((pushed.z - 50.0).abs() < 1e-3, "pushed {pushed:?}");
+    assert!((pushed.z - 10.0).abs() < 1e-3, "pushed {pushed:?}");
     assert_eq!(
         grid[2].physics.body.linear_velocity,
         Vec3::ZERO,
         "a craft outside the radius was pushed"
     );
     // The craft exactly on the centre has no direction, and gets world up
-    // rather than a NaN.
+    // rather than a NaN. It is also where `falloff` is `1.0`, so it takes the
+    // whole authored force - the other end of the same rule.
     let centred = grid[0].physics.body.linear_velocity;
     assert!(centred.is_finite(), "a centred craft got {centred:?}");
     assert!((centred.y - 50.0).abs() < 1e-3, "{centred:?}");
+    // Damage, by contrast, does not fall off: both craft lost the same 30.
+    // Asserted as a relation rather than twice as a number, so it survives the
+    // figures above changing.
+    assert_eq!(
+        grid[0].physics.shield, grid[1].physics.shield,
+        "the damage fell off with distance - it is the impulse that does, not \
+         the damage"
+    );
 }
 
 /// A shielded craft inside the radius takes neither half. The damage gate is

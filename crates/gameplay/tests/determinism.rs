@@ -371,6 +371,25 @@ fn run(ticks: u32) -> (u64, u64) {
 ///   stream and then reproduced the old constants with one of them reverted has
 ///   shown the other one was inert.
 ///
+/// - **Moved 2026-08-26, later, and this one is a real behaviour move** - the
+///   first on this constant that is not a hash-stream addition.
+///   `projectile::blast` scaled its impulse flat inside the radius, which this
+///   module recorded as ours; `Weapon_PostBlastImpulse` (`0x0886794c`) scales
+///   it by `1.0 - d / blastradius`, and the four `<Stats>` offsets it spends
+///   are the Mine's, identified in
+///   `docs/ghidra/functions/psp-pulse-usa/mine.md`. So an invented rule was
+///   replaced by a recovered one and craft caught by a blast now end up
+///   somewhere else. **The damage is untouched and stays flat**, which is the
+///   same read's other half.
+///
+///   Isolated the way this paragraph requires: with `falloff` forced to `1.0`
+///   and nothing else changed, the constants this commit replaces -
+///   `0x3b00_aaf7_5fa6_012e` / `0x8190_a8a4_a597_de7c` at 60 ticks and
+///   `0x9014_04ca_b696_5f8f` / `0xea4f_cef3_68eb_a4b9` at 600 - reproduced bit
+///   for bit. [`REFERENCE_VOLLEY`] did **not** move, which is itself
+///   informative: its craft never gets close enough to a detonation to be
+///   pushed, so the two scenarios cover different halves of this function.
+///
 /// **Never edit these to make the test pass**, the same rule
 /// `crates/physics/tests/determinism.rs` states at length: a movement here is a
 /// change to what a race *does*, and the change is the thing to find. When a
@@ -378,8 +397,8 @@ fn run(ticks: u32) -> (u64, u64) {
 /// beneath this comment and isolate the cause first, by removing the new field's
 /// own write and checking that the previous constants reproduce bit for bit.
 const REFERENCE: &[(u32, u64, u64)] = &[
-    (60, 0x3b00_aaf7_5fa6_012e, 0x8190_a8a4_a597_de7c),
-    (600, 0x9014_04ca_b696_5f8f, 0xea4f_cef3_68eb_a4b9),
+    (60, 0xde9b_58b2_91cb_0dfb, 0xc5fb_0d05_0b56_bb85),
+    (600, 0x91fe_78d0_5a4b_01aa, 0x08a9_2c99_ab0f_f54c),
 ];
 
 /// The volley scenario: a craft at an angle fires a real fanned Rocket volley

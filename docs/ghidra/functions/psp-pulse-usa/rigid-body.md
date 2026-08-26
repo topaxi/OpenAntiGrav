@@ -236,7 +236,7 @@ anything. The four fields are one consistent scheme:
 
 **Open contradiction, 2026-08-19, not resolved here - and a follow-up check
 sharpened it rather than closing it.** A live check in
-[contact-response.md](contact-response.md#weapon_postblastimpulse_q-0x0886794c-confidence-68),
+[contact-response.md](contact-response.md#weapon_postblastimpulse-0x0886794c-confidence-82),
 under "What `T` actually is", read `body+0x50` off a real craft mid-tick, off a
 body pointer confirmed by direct pointer equality, and it held a track-scale
 value that changed with the craft's actual position - not tensor-shaped data.

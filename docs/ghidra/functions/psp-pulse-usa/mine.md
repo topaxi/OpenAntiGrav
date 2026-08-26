@@ -202,6 +202,49 @@ three this page needs are in the table at the top, and the Cannon's
 (`0x0880c774`) is here because it is the weapon the burst handler was wrongly
 attributed to.
 
+## The blast: confirmed from the other end, and it falls off
+
+The `<Stats>` offsets above are read off the parser's own stores. They are also
+**independently confirmed by a consumer**, which is worth more than either
+reading alone: `Weapon_PostBlastImpulse_q` (`0x0886794c`) - read at instruction
+level on 2026-08-19, before any of this - spends exactly four offsets, and all
+four are in this block:
+
+```c
+T->0x120 += stats->0xe8;                       // damage, accumulated flat
+falloff   = 1.0f - d / stats->0xec;            // blastradius, a LINEAR falloff
+T->0x110 += normalize(T->0x50 - S->0x90)
+          * (falloff * stats->0xf0);           // blastforce
+T->0x130 += stats->0xfc;                       // slowdown_time
+```
+
+Four offsets, four roles, and the roles are the ones the attribute names
+predict. **The fourth is the cross-check**: `+0x130` was recorded as the
+consumer of the unspent `<Global slowdown_limit>` mechanic long before anyone
+knew `+0xfc` held `slowdown_time`, so the two identifications were made from
+opposite ends and met in the middle.
+
+**Two things fall out.**
+
+1. **The blast impulse falls off linearly with distance and the damage does
+   not.** `1.0 - d/blastradius` scales the impulse; the damage accumulator takes
+   the authored figure flat. `oag_gameplay::projectile::blast` applied *both*
+   flat and said so - "full damage everywhere inside `blastradius`, with no
+   falloff" was recorded as this project's own reading, and half of it is now
+   replaced by the original's. Not clamped in the original, incidentally: a hit
+   outside the radius drives the term negative and nothing in that function
+   stops it.
+2. **The whole `0x08867xxx` chain is the Mine's.** `0x0886794c`, its caller
+   `FUN_08867b50` and *its* caller `FUN_08867370` sit in `Weapon_DropMines`'
+   own subsystem range, and the timer `FUN_08867370` counts down at `+0x48` is
+   the one `Mine_Init` loads `timetodie` into. That is the third independent
+   line pointing at `FUN_08867370` being this weapon's per-tick update - see
+   [What is still ours](#what-is-still-ours-and-one-clean-negative-result) for
+   the one measurement that still resists naming it.
+
+See [contact-response.md](contact-response.md#weapon_postblastimpulse-0x0886794c-confidence-82)
+for the instruction-level read this rests on.
+
 ## The fire handler drops a cluster, one every 0.1 s
 
 `Weapon_DropMines` (`0x088675cc`) is `Weapons_DispatchFire`'s bit-`0x2` handler,
