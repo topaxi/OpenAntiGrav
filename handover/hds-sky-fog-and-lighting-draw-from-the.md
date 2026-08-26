@@ -4,13 +4,13 @@
 
 ## Open
 
-- Whether `fogColour.w` is `Fog.Fog Density` unscaled is unconfirmed - the PPU fill is unread and the binder's `Crc32_HashString` name is not yet found
+- Whether `fogColour.w` is `Fog.Fog Density` unscaled is still unconfirmed. **Narrowed 2026-08-26**: `Fog.Fog Density` is now known to land on `+0x500` of the HDR/Bloom/Fog/Lighting settings singleton (`docs/ghidra/functions/ps3-hdfury-eu/renderer.md`, "`Fog.Fog Density`'s field offset is read"), a plain float. What copies `+0x500` into the `fogColour` shader constant's `w`, and whether that copy scales it, is still unread - `get_xrefs_to` on the singleton's storage address (`0x008b6fb4`) finds nothing, because the consumer is itself a TOC-mismatched function the way the registrar was.
 - The sky rotation's sign is unverified - nothing on the disc checks it
 - HD's exposure stage (adaptive exposure) is unread - a saturate-and-encode stand-in is used instead
-- The iridescent/facing material (`etched_glass_tech`, `dot(N, V)` sampling) and the second-texture emissive variants are read but not implemented
+- The iridescent/facing material (`etched_glass_tech`, `dot(N, V)` sampling) and the second-texture emissive variants are read but not implemented. **This is now also `talons-junctions-missing-floor-is-a-glass-floor.md`'s Next Steps item** ("wire up sampling of the normal map, specular map, and facing ramp roles") - the two threads converge on the same renderer work, which is a multi-sitting bind-group change (`crates/render/src/mesh.rs` sits at the 1,000-line cap and the mesh pipeline is already at wgpu's four-bind-group downlevel limit), not attempted here.
 
 ## Next Steps
 
-- Implement the iridescent/facing material class (`etched_glass_tech` samples its gradient at `dot(N, V)`; per-material classification is possible at load)
+- Implement the iridescent/facing material class (`etched_glass_tech` samples its gradient at `dot(N, V)`; per-material classification is possible at load) - see `talons-junctions-missing-floor-is-a-glass-floor.md`, which owns the same work from the texture-role side
 - Implement the second-texture emissive variants
-- Walk the name table at `0x008b7f40` to find `fogColour.w`'s binder hash and settle whether it is `Fog Density` unscaled
+- Find what reads `+0x500` off the settings singleton (storage `0x008b6fb4`) and writes it into the `fogColour` shader constant - same method as the offset find (`disassemble_function` + `scripts/ps3-toc.py resolve` on each `lwz`), starting from a search for loads of the singleton pointer rather than `get_xrefs_to`, which is blind to it
