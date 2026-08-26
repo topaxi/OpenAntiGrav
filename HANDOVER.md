@@ -648,6 +648,23 @@ writers in it at the same time:
 
 ## Traps that are live
 
+**Reaching an arbitrary circuit through the front end is gated by Race Campaign
+progression, not by anything `psp-drive.py` or the debugger can skip.** 2026-08-26,
+chasing [nothing-airborne-has-ever-been-captured](handover/nothing-airborne-has-ever-been-captured.md).
+RaceBox's Custom Race → Track Select is a **fixed** wrapping list of three -
+confirmed live, up/down only, `right`/`left` genuinely do nothing there, matching
+`docs/reverse-engineering/ppsspp-debugger.md`'s existing note - and the three are
+exactly the `PI_Track` entries in `Data\Plugins\PI001\Definition.xml` carrying no
+`<Unlock>` element at all: `16_Track` (Talon's Junction), `03_Track` (Moa Therma),
+`18_Track` (Metropia reversed). Every other circuit's `PI_Track` node carries
+`<Unlock Grid="N">`, and a fresh profile has only Grid 1 of 16 open. **The XML
+attribute answers "how many grids" before a single button gets pressed** - no
+need to grind blind: `13_Track` needs `Grid6` (five grids of real races first),
+where `10_Track` needs `Grid0` (the currently-open grid, so just its own Race
+Campaign cell). Check the target's own `<Unlock Grid="N">` before planning a
+capture around it, and expect an `N` above 0-1 to mean the capture is not this
+session's task.
+
 **A device test with a *uniform* depth buffer cannot exercise any
 depth-weighted term - it proves the pass runs, not that the weighting is
 right.** 2026-08-26, found reviewing the motion blur chain. `post::motion_blur`
