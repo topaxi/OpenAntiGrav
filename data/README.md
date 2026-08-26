@@ -25,6 +25,26 @@ data/
 `tools/` is populated by `just build-allegrex`. It holds a git checkout and a
 build output, neither of which belongs in this repository.
 
+### In a git worktree, run `just link-data` first
+
+This whole directory is gitignored, so it does **not** travel into a
+`git worktree add` the way tracked files do: a fresh worktree gets a `data/`
+holding nothing but this file. `just link-data`
+(`scripts/link-worktree-data.sh`) symlinks every subdirectory above from the
+main checkout into the current worktree, which is enough for `just test-data`
+and for every disc-backed CLI run.
+
+Symlinks rather than copies, deliberately - `images/` alone is several
+gigabytes, and derived output (`cache/`, `traces/`, `shots/`) written through a
+link lands in the main checkout, where the next worktree and the next session
+can see it too. The script is idempotent, does nothing in the main checkout,
+and leaves any real directory it finds in place rather than replacing it.
+
+Worth doing before concluding anything about a test run. Without it, disc-backed
+tests skip silently and a run looks greener than it is; with
+`OAG_REQUIRE_GAME_DATA=1` set they instead fail in a heap, naming files that
+were in the main checkout all along.
+
 `cache/` is where a **repository checkout** caches converted assets. A packaged
 build has no checkout around it and uses `~/.cache/oag/` instead, rather than
 writing beside wherever it was run from - see

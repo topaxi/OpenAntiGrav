@@ -28,16 +28,30 @@ file does not need to carry its own.
   `ls` may be shell-aliased (`ls -la` failing with `ls:1: command not found:
   -la` reads like a broken argument and is not), and a spawned agent has a
   second, independent reason to see `data/` as empty: being gitignored, it does
-  not travel into a worktree or a restricted sandbox.
+  not travel into a worktree or a restricted sandbox. **In a worktree, fix that
+  with `just link-data`** before concluding anything - it symlinks every `data/`
+  subdirectory from the main checkout, and until it is run the DLC and trace
+  suites skip silently (or, under `OAG_REQUIRE_GAME_DATA=1`, fail in a heap
+  naming files that were in the main checkout all along). Added 2026-08-26 after
+  exactly that happened: five `dlc_ground_truth` failures that were a worktree
+  with no `data/dlc` in it and nothing else.
 - **Derived evidence under `data/` is not durable; the scenarios and scripts
   that regenerate it are.** A 2026-07-29 pass found three reference traces gone,
   leaving `force-balance-ground-truth.md`, `contact-response.md` and three
   citations inside `wall.rs` pointing at files that were not there. Anything
   under `data/traces/`, `data/shots/` or `data/cache/` can be absent; the
   committed `verification/scenarios/*.inputs` are what reproduce it.
+  **Two are absent right now (2026-08-26):** `pad0-boost.csv`, which the three
+  `chase_camera_ground_truth` tests read, and
+  `talons-junction-time-trial-lap-omega.csv`, which `maglock_ground_truth` reads.
+  All four skip cleanly and only fail under `OAG_REQUIRE_GAME_DATA=1`, so a
+  sweep with that variable set reads as four reds that are not.
+  `stall_rescue_ground_truth::a_craft_that_stops_on_the_disc_is_put_back` is a
+  **real** red as of the same date - it fails identically on `origin/main` with
+  "nothing recovered the craft", is not a missing-data skip, and is undiagnosed.
 - **Check `git status` before assuming the tree is clean.** A whole milestone's
   work once sat uncommitted for a day.
-- **Gate status:** last measured green at **2,458 tests (2026-08-26)** in 6.4s,
+- **Gate status:** last measured green at **2,468 tests (2026-08-26)** in 8.5s,
   with `fmt`, `clippy`, `check-docs`, `check-deps`, `check-determinism`,
   `check-size`, `check-names` and `check-handover` all clean (480 skipped -
   the `#[ignore]`d disc-backed ones). Re-measure rather than trusting the number here -

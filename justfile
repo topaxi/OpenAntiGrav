@@ -51,6 +51,13 @@ test:
 test-data:
     cargo nextest run --workspace --run-ignored all
 
+# Symlinks the main checkout's data/ subdirectories into this worktree.
+# `data/` is gitignored, so it does not travel into a `git worktree add` and
+# every disc-backed test skips here until this is run. No-op in the main
+# checkout, and it never replaces a real directory.
+link-data:
+    bash scripts/link-worktree-data.sh
+
 build:
     cargo build --workspace
 

@@ -65,6 +65,18 @@ real-data check or reporting untested code as verified.** Give the
 orchestrating session the exact command to run - it has the images and can
 verify directly, the way a human maintainer would from their own checkout.
 
+**In a worktree, that is fixable in one command: `just link-data`.** It
+symlinks every `data/` subdirectory from the main checkout into this worktree
+(`scripts/link-worktree-data.sh`), so the disc images, the DLC packs and the
+reference traces are all reachable and `just test-data` works here. It is a
+no-op in the main checkout and never replaces a real directory. Run it right
+after `git worktree add` - the failure it prevents is not an obvious one:
+under `OAG_REQUIRE_GAME_DATA=1` a missing `data/` reads as a wall of "is
+missing" failures naming files that are sitting in the main checkout the whole
+time, and without that variable the same tests skip silently and a run looks
+greener than it is. A restricted sandbox with no access to the main checkout
+is the case this cannot fix.
+
 **Separately, and even when `data/` genuinely is populated: `fd` and `rg`
 respect `.gitignore` by default, so both silently return nothing under
 `data/` with exit code 0 - no error, no warning, just an empty result that
