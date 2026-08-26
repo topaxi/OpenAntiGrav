@@ -506,6 +506,15 @@ pub enum Cue {
     /// non-looping waveforms the audible result is the same pair of blips; what
     /// is lost is the original's ability to switch mid-voice, which at that
     /// length it never gets to use. Recorded rather than smoothed over.
+    ///
+    /// **Which waveform is which is inference, at 55.** What is read is that the
+    /// parameter takes `0` while seeking and `1` once locked; that those values
+    /// index the cue's two waveforms *in that order* is the obvious reading and
+    /// not one taken off the bank's command list, whose selecting opcode is
+    /// unread - the same gap [`Banks::pick`] exists because of. If the two turn
+    /// out to be the other way round, the seeking blip and the lock chime are
+    /// swapped and nothing else changes. `--sound` writes a WAV and settles it
+    /// by ear.
     LockOn,
 }
 

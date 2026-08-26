@@ -167,7 +167,9 @@ The half-extent (`hud+0x280`) is eased toward one of three values:
 ```c
 extent_target = visible ? (locked ? 6.0 : 9.6) : 30.0;
 extent_target *= zoom;
-// eased at dt * 50.0 per second, 1.4x faster while shrinking from wide
+// eased at dt * 50.0 per second, 1.4x faster while the current extent is above
+// the target *before* the zoom - so the threshold is 6.0 once locked and 9.6
+// before it, not a fixed 9.6
 ```
 
 so the brackets sit wide open at `30`, close to `9.6` once they have something,
@@ -210,6 +212,14 @@ All five widgets are shown when `visible` or while the extent is still easing,
 and hidden otherwise, so the brackets are watched closing even after the target
 is gone.
 
+**The blink is a tint and never a hide**, which is the half of this that is easy
+to get backwards: both arms above write a colour and neither drops the draw. A
+port that gates the draw on the blink strobes the reticle off five times a
+second. What is *not* recovered is which colour channel each arm lights, because
+that depends on the byte order of the widget's colour word and nothing here has
+read it - so `oag_game` carries the `0xc0 >> 8` brightness difference and leaves
+the reticle white rather than inventing a hue.
+
 ## The tone: `~ROCKLOCK`, one voice with two states
 
 `HudSight_Update` publishes a small state to a global,
@@ -234,9 +244,17 @@ else {
 ```
 
 **One cue, started once and parameterised**, rather than two cues. `~ROCKLOCK`
-is a real cue in the disc's own banks - `oag-wad sounds` lists it at 2 waveforms,
-0.11 s, not looping - and the parameter is what picks which of the two plays. The
-`~` prefix marks it the way `~MISSILETVL` and `~LEACHATTACH` are marked.
+is a real cue in the disc's own banks - `oag-wad sounds` puts it in `hud.bnk` as
+cue 6 at 2 waveforms, 0.11 s, neither looping - and the parameter is what picks
+which of the two plays. The `~` prefix marks it the way `~MISSILETVL` and
+`~LEACHATTACH` are marked.
+
+**Which waveform each parameter value selects is inference at 55.** That the
+parameter is `0` while seeking and `1` once locked is read; that those index the
+cue's two waveforms in that order is the obvious reading and is not taken off the
+bank's command list, whose selecting opcode is unread - the same gap
+`oag_game::audio::sfx` records for every cue with alternates. If it is the other
+way round the blip and the chime swap and nothing else does.
 
 **This retires the "the lock tone is unidentified, `~ROCKLOCK` at 40" note.** It
 is identified: `_DAT_00275ba4` is the pointer to that string and

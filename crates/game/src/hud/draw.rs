@@ -536,14 +536,19 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
 fn sight_draws(cx: &Context<'_>, sight: &crate::race::sight::Sight) -> Vec<Draw> {
     use crate::race::sight;
 
-    if !sight.visible() || !sight.blinking_on() {
+    // **Visibility alone.** The seeking blink is a *tint* - the original writes
+    // a colour on both of its phases and drops the draw on neither - so gating
+    // on it here would strobe the reticle off every 0.1 s. See
+    // [`crate::race::sight::Sight::tint`].
+    if !sight.visible() {
         return Vec::new();
     }
     let alpha = sight.alpha();
     if alpha <= 0.0 {
         return Vec::new();
     }
-    let colour = [1.0, 1.0, 1.0, alpha];
+    let tint = sight.tint();
+    let colour = [tint, tint, tint, alpha];
 
     let model_for = |name: &str| {
         cx.layout

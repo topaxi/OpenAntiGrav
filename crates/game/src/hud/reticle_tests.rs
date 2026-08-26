@@ -95,6 +95,45 @@ fn locked_on(screen: [f32; 2]) -> sight::Sight {
     reticle
 }
 
+/// A reticle that has a target on screen but has not held it long enough.
+fn seeking(screen: [f32; 2]) -> sight::Sight {
+    let mut reticle = sight::Sight::default();
+    let target = sight::Projected {
+        screen,
+        distance: 60.0,
+    };
+    // Well inside the 0.8 s hold, so it is still closing.
+    for _ in 0..12 {
+        assert_eq!(
+            reticle.update(1.0 / 60.0, Some(target)),
+            sight::State::Seeking
+        );
+    }
+    reticle
+}
+
+/// One more frame of the same target, which is how the blink phase is advanced.
+fn one_more(reticle: &mut sight::Sight, screen: [f32; 2]) {
+    reticle.update(
+        1.0 / 60.0,
+        Some(sight::Projected {
+            screen,
+            distance: 60.0,
+        }),
+    );
+}
+
+fn colours(frame: &Frame) -> Vec<[f32; 4]> {
+    frame
+        .sprites
+        .iter()
+        .filter_map(|draw| match draw {
+            Draw::RotatedSprite { color, .. } => Some(*color),
+            _ => None,
+        })
+        .collect()
+}
+
 fn rotated(frame: &Frame) -> Vec<(f32, f32, f32)> {
     frame
         .sprites
@@ -226,4 +265,87 @@ fn a_sight_model_that_did_not_decode_draws_nothing() {
 
     let frame = draw_list(&context(&layout, &strings, &empty), &readout);
     assert!(rotated(&frame).is_empty(), "{frame:?}");
+}
+
+/// A seeking reticle is drawn on **both** halves of its blink, in two tints.
+///
+/// **The blink is a tint and never a hide**, and this test exists because the
+/// first version of the draw got that backwards and strobed the reticle off
+/// every 0.1 s. `HudSight_Update` writes a colour on both phases -
+/// `value | 0xff000000` on one and `value * 0xc0 >> 8` in all three channels on
+/// the other - and drops the draw on neither.
+///
+/// Every other test in this file uses a *locked* reticle, whose blink is not
+/// spent at all, which is exactly why none of them noticed.
+#[test]
+fn a_seeking_reticle_is_drawn_on_both_halves_of_its_blink() {
+    let layout = Layout::from_xml(SIGHTS);
+    let sheet = sheet();
+    let strings = strings();
+    let at = [240.0, 136.0];
+
+    let mut reticle = seeking(at);
+    let mut seen: Vec<f32> = Vec::new();
+    // A blink half is 0.1 s, so a fifth of a second covers both of them twice.
+    for _ in 0..12 {
+        let readout = Readout {
+            sight: Some(reticle),
+            ..Readout::blank()
+        };
+        let frame = draw_list(&context(&layout, &strings, &sheet), &readout);
+        let drawn = colours(&frame);
+        assert_eq!(
+            drawn.len(),
+            5,
+            "a seeking reticle drew {} pieces on one frame, not five - the \
+             blink is hiding it rather than tinting it",
+            drawn.len()
+        );
+        let tint = drawn[0][0];
+        assert!(
+            drawn.iter().all(|c| (c[0] - tint).abs() < 1e-6),
+            "the five pieces disagree about their tint: {drawn:?}"
+        );
+        if !seen.iter().any(|&s| (s - tint).abs() < 1e-6) {
+            seen.push(tint);
+        }
+        one_more(&mut reticle, at);
+    }
+
+    seen.sort_by(f32::total_cmp);
+    assert_eq!(
+        seen.len(),
+        2,
+        "the seeking blink produced {} tint(s), not two: {seen:?}",
+        seen.len()
+    );
+    // The recovered pair: the full value, and it scaled by `0xc0 >> 8`.
+    assert!((seen[0] - 0.75).abs() < 1e-6, "{seen:?}");
+    assert!((seen[1] - 1.0).abs() < 1e-6, "{seen:?}");
+}
+
+/// A locked reticle stops blinking and holds one tint.
+#[test]
+fn a_locked_reticle_holds_one_tint() {
+    let layout = Layout::from_xml(SIGHTS);
+    let sheet = sheet();
+    let strings = strings();
+    let at = [240.0, 136.0];
+
+    let mut reticle = locked_on(at);
+    for _ in 0..24 {
+        let readout = Readout {
+            sight: Some(reticle),
+            ..Readout::blank()
+        };
+        let frame = draw_list(&context(&layout, &strings, &sheet), &readout);
+        let drawn = colours(&frame);
+        assert_eq!(drawn.len(), 5);
+        assert!(
+            (drawn[0][0] - 1.0).abs() < 1e-6,
+            "a locked reticle dimmed to {}, so the blink is still being spent",
+            drawn[0][0]
+        );
+        one_more(&mut reticle, at);
+    }
 }

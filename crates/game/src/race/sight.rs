@@ -66,12 +66,17 @@ pub const EXTENT_LOCKED: f32 = 6.0;
 
 /// How fast the extent eases toward its target, in pixels a second.
 ///
-/// **Recovered, confidence 85** - `dt * 50.0`, taken `1.4` times faster while
-/// the current extent is above [`EXTENT_SEEKING`], which is the direction that
-/// snaps shut rather than the one that opens.
+/// **Recovered, confidence 85** - `dt * 50.0`, taken [`EXTENT_SNAP`] times
+/// faster while the current extent is above the one this frame is easing
+/// toward, which is the direction that snaps shut rather than the one that
+/// opens.
 pub const EXTENT_RATE: f32 = 50.0;
 
-/// The extra rate applied while the extent is shrinking from wide open.
+/// The extra rate applied while the extent is shrinking toward its target.
+///
+/// **The comparison is against the frame's own target**, not against
+/// [`EXTENT_SEEKING`]: the original tests the current extent against the value
+/// it is heading for, so the threshold is `6.0` once locked and `9.6` before.
 pub const EXTENT_SNAP: f32 = 1.4;
 
 /// The base speed the reticle centre chases at, in pixels a second.
@@ -124,6 +129,13 @@ pub const ALPHA_FAR: f32 = 96.0;
 
 /// How fast alpha eases, in units of 255 a second.
 pub const ALPHA_RATE: f32 = 1000.0;
+
+/// What the dim half of the seeking blink multiplies the colour by.
+///
+/// **Recovered, confidence 85** - `value * 0xc0 >> 8`, which is `0.75`, written
+/// into all three colour channels on that phase where the other phase writes
+/// the unscaled value. See [`Sight::tint`] for what is and is not ported of it.
+pub const BLINK_TINT: f32 = 0.75;
 
 /// How long each half of the seeking blink lasts, in seconds.
 ///
@@ -359,7 +371,7 @@ impl Sight {
             self.centre[1] += dy * t / VERTICAL_WEIGHT;
         }
 
-        let wanted = if visible.is_some() {
+        let unzoomed = if visible.is_some() {
             if self.locked {
                 EXTENT_LOCKED
             } else {
@@ -367,15 +379,19 @@ impl Sight {
             }
         } else {
             EXTENT_OPEN
-        } * zoom;
+        };
+        // **Against this frame's own target, not against [`EXTENT_SEEKING`].**
+        // The original compares the current extent with the value it is easing
+        // toward, taken *before* the zoom - so a locked reticle snaps 1.4x
+        // faster anywhere above six, and one still seeking only above 9.6.
         let ease = dt
             * EXTENT_RATE
-            * if self.extent > EXTENT_SEEKING {
+            * if self.extent > unzoomed {
                 EXTENT_SNAP
             } else {
                 1.0
             };
-        self.extent = ease_toward(self.extent, wanted, ease);
+        self.extent = ease_toward(self.extent, unzoomed * zoom, ease);
 
         let alpha_target = if visible.is_some() { ALPHA_NEAR } else { 0.0 };
         self.alpha = ease_toward(self.alpha, alpha_target, dt * ALPHA_RATE);
@@ -426,10 +442,29 @@ impl Sight {
         (self.alpha / 255.0).clamp(0.0, 1.0)
     }
 
-    /// Whether the seeking blink is on this frame. Always on once locked.
+    /// What the reticle's colour is multiplied by this frame.
+    ///
+    /// **The blink is a tint and never a hide**, which is worth stating because
+    /// the obvious reading of "blink" is the wrong one and this file had it
+    /// wrong: `HudSight_Update` writes a colour on *both* phases and drops the
+    /// draw on neither. While the reticle is seeking, one phase takes the full
+    /// value and the other takes it scaled by `0xc0 >> 8` - [`BLINK_TINT`],
+    /// recovered as a literal. Once locked the blink stops being spent and the
+    /// colour holds.
+    ///
+    /// **What is not reproduced is the hue.** The original's two seeking arms
+    /// light different channels of the widget's colour word, and which channel
+    /// is which depends on that word's byte order - which is unread. So this
+    /// carries the recovered *brightness* difference and leaves the reticle
+    /// white, rather than inventing a colour to be confidently wrong about. See
+    /// `docs/ghidra/functions/psp-pulse-usa/lock-sight.md`.
     #[must_use]
-    pub fn blinking_on(&self) -> bool {
-        self.locked || self.blink
+    pub fn tint(&self) -> f32 {
+        if self.locked || !self.blink {
+            1.0
+        } else {
+            BLINK_TINT
+        }
     }
 
     /// The four corner brackets, in the order [`BRACKET_ROTATIONS`] indexes.
