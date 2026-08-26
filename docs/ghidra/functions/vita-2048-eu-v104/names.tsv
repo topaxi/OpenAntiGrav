@@ -1,0 +1,15 @@
+# Applied symbol names for vita-2048-eu-v104 eboot.elf (image base 0x81000000).
+#
+# The evidence lives in the page named in the last column; this file exists so
+# the names can be re-applied to a fresh Ghidra database without hand-editing.
+# Run `just apply-names` after importing eboot.elf. See ADR-0005: the pages are
+# the record of truth, and scripts/apply-ghidra-names.py checks that every row
+# here still appears in its evidence page before it renames anything.
+#
+# kind is `function` or `data`. Confidence below 70 gets a `_q` suffix applied,
+# below 50 is skipped. Recovered library and import symbols keep their real
+# names rather than the project's Subsystem_VerbNoun scheme.
+#
+# address	kind	name	confidence	evidence
+0x81003dd2	function	Game_Main	86	game-boot.md
+0x81000032	function	GameRoot_Construct	84	game-boot.md
