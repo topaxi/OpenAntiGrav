@@ -138,6 +138,7 @@ fn write_driver(hasher: &mut StateHasher, driver: &oag_ai::Driver) {
         provocation,
         pilot,
         mistake,
+        reflex,
     } = driver;
 
     // **Hashed, unlike `handling`.** A driver's place on the racing line is the
@@ -172,6 +173,23 @@ fn write_driver(hasher: &mut StateHasher, driver: &oag_ai::Driver) {
     // sailing through a braking point it should have taken is about to be
     // somewhere a driver that braked is not. See `oag_ai::Driver::mistake`.
     hasher.write_u32(u32::from(*mistake));
+    // **And what it has noticed of the craft around it.** Reaction latency
+    // holds a rival back for a few ticks after it arrives, so two runs that
+    // agree on every position and disagree on which craft their drivers have
+    // seen are about to lift, cover and shoot at different moments. The
+    // half-noticed rival and its countdown are in it too: they decide *when*
+    // the next one is seen, which is the same argument. See
+    // `oag_ai::Reflex`.
+    let oag_ai::Reflex {
+        seen,
+        pending,
+        wait,
+    } = reflex;
+    for channel in 0..3 {
+        hasher.write_u8(seen[channel]);
+        hasher.write_u8(pending[channel]);
+        hasher.write_u32(u32::from(wait[channel]));
+    }
 }
 
 /// A craft's place in the race, which decides the finishing order and is

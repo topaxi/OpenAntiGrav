@@ -37,9 +37,10 @@ file does not need to carry its own.
   committed `verification/scenarios/*.inputs` are what reproduce it.
 - **Check `git status` before assuming the tree is clean.** A whole milestone's
   work once sat uncommitted for a day.
-- **Gate status:** last measured green at **2,138 tests (2026-08-18)** in 8.3s,
-  with `fmt`, `clippy`, `check-docs`, `check-deps`, `check-determinism` and
-  `check-size` all clean. Re-measure rather than trusting the number here -
+- **Gate status:** last measured green at **2,458 tests (2026-08-26)** in 6.4s,
+  with `fmt`, `clippy`, `check-docs`, `check-deps`, `check-determinism`,
+  `check-size`, `check-names` and `check-handover` all clean (480 skipped -
+  the `#[ignore]`d disc-backed ones). Re-measure rather than trusting the number here -
   `git stash && just test` is how the drift was caught last time.
 - **The whole disc-backed sweep is 2,488 of 2,494 in about 7:40**, measured
   2026-08-18 with `cargo nextest run --workspace --run-ignored all
@@ -467,7 +468,6 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [Zone races run on all three titles now, and the craft axis closed the way the circuit one did](handover/zone-races-run-on-all-three-titles-now.md)
 - [The AI is authored XML, and its units are the only thing blocking a port of the original's numbers](handover/the-ai-is-authored-xml-and-its-units.md)
 - [The HUD shows a place, measured against the original; the shield bar's colour is the new open half](handover/the-hud-shows-a-place-measured-against-the.md)
-- [The AI drives; two residuals are what is left](handover/the-ai-drives-two-residuals-are-what-is.md)
 - [The field drove in single file, and the fix is a per-craft personality off the disc's own AI corridor](handover/the-field-drove-in-single-file-and-the.md)
 - [`psp-pulse-usa`'s import carries unrelocated address constants, at least around `0x08835830`](handover/psp-pulse-usas-import-carries-unrelocated-address-constants.md)
 - [Nothing airborne has ever been captured](handover/nothing-airborne-has-ever-been-captured.md)
