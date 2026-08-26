@@ -754,6 +754,117 @@ section IDs run to the 64-bit cap, not a spread.
 This is the only place found so far where a mechanically correct per-field byte
 swap produces plausible garbage instead of an error.
 
+## Wipeout 2048 authors version `0x107`, and the control point shrank to 96 bytes
+
+**Confidence 95** for the stride and the five floats, **90** for `section_id`,
+**92** for `flags`, **80** for `racing_line`. Measured on
+`data/extracted/vita/PCSF00007`, the EU base and DLC PSARCs, with
+`crates/game/examples/vita_rosetta.rs` as the reproducer.
+
+Everything above the control point is unchanged: magic `dtOW` little-endian, the
+`0x20` header, the `0x20` reserved block, paths at `0x20` bytes, junctions at
+`0x10`. Only the control point moved.
+
+```c
+struct SplinePt_0x107 {       // 0x60 bytes
+    float pos[4];             // +0x00  unchanged
+    float tangent[4];         // +0x10  unchanged
+    float down[4];            // +0x20  unchanged
+    float lateral[4];         // +0x30  unchanged
+    float unk_0x40;           // +0x40
+    float half_width_left;    // +0x44  unchanged
+    float half_width_right;   // +0x48  unchanged
+    float ai_bound_left;      // +0x4c  unchanged
+    float ai_bound_right;     // +0x50  unchanged
+    float racing_line;        // +0x54  unchanged
+    u8    unk_0x58[2];        // +0x58  varies per point, unplaced
+    u8    unk_0x5a;           // +0x5a  0xff on every point measured
+    u8    unk_0x5b;           // +0x5b  0x00 on every point measured
+    u8    section_id;         // +0x5c  was +0x60; 0xff when the track has none
+    u8    flags;              // +0x5d  was +0x61
+    u8    unk_0x5e[2];        // +0x5e  unplaced
+};
+```
+
+### Why this is measured rather than reasoned
+
+**Wipeout 2048's DLC re-ships twelve Wipeout HD circuits, and the splines are
+the same splines.** `Vineta_K`, `Ubermall`, `Sebenco_Climb`, `Sol_2`,
+`amphiseum`, `modesto_heights`, `talons_junction`, `tech_de_ra` and `zone_1`
+through `zone_4` appear in `dlc1.psarc`/`dlc2.psarc` beside HD's own copies in
+`DATA00.PSARC`/`DATA02.PSARC`. On all twelve the path count, the junction count
+and **every per-path control-point count** are identical, so control point `k`
+of path `i` is the same point in both files and HD's fully decoded `0x106`
+record is ground truth for 2048's `0x107` one. That is 10,165 paired control
+points.
+
+**Word by word, the two records agree up to `+0x58`.** Comparing 2048's
+little-endian word at each offset against HD's big-endian word at the same
+offset, agreement runs 10,127/10,165 at `+0x00` down to 6,895/10,165 at `+0x48`
+- the shortfall being points 2048 re-exported with slightly different values -
+and then falls off a cliff to **0/10,165 at `+0x58` and 17/10,165 at `+0x5c`**.
+So the record is HD's, verbatim, through `racing_line`, with the eight bytes
+HD leaves zero at `+0x58` replaced and HD's `+0x60..+0x70` dropped: 112 - 16 =
+96.
+
+**The four floats past `lateral` are exact, and where they are not, they are the
+same number.** Bit-identical on 6,951 (`half_width_left`), 6,895
+(`half_width_right`), 7,485 (`ai_bound_left`) and 7,506 (`ai_bound_right`) of
+10,165 points; across every remaining point the **worst relative difference is
+0.0002** - the two exporters wrote the same value and rounded it differently.
+A wrong offset does not produce that.
+
+**`flags` at `+0x5d` is exact on every point.** HD authors a non-zero `flags` on
+173 of the 10,165 paired points; the byte at 2048's `+0x5d` equals it on all
+173, and equals zero on all 9,992 of the rest. The `(0x5d, HD flags)` histogram
+has exactly two entries, `(0,0)` and `(1,1)`.
+
+**`section_id` at `+0x5c` is confirmed against each file's own scene tree, not
+against HD's numbering.** 2048 re-sectioned most of the ports, so the *values*
+differ; what does not differ is the count. On every one of the twelve ported
+circuits and all fourteen the base package ships, **the number of distinct values at
+`+0x5c` equals the number of `section` nodes that file's own `.vex` authors** -
+`Vineta_K` 4 and 4, `talons_junction` 18 of 19, `tech_de_ra` 22 and 22, `park`
+10 and 10, `altima` 2 and 2 - and a circuit that authors no `section` node at
+all (`mall`, `sol`, `Ubermall`, `Sol_2`, `zone_1`..`zone_4`) carries the single
+value `0xff` on every point. On the two circuits 2048 did **not** re-section,
+`talons_junction` and `tech_de_ra`, the indices at which `+0x5c` changes are
+*exactly* the indices at which HD's `section_id` changes - 18 of 18 and 22 of
+22, a Jaccard agreement of 1.000 against the ~0.03 every other candidate offset
+scores.
+
+One circuit does not close: `cathedral` has 6 distinct `+0x5c` values with a
+maximum of 9 against 6 `section` nodes, so at least one id indexes past the
+table. Recorded rather than explained.
+
+**`racing_line` at `+0x54` rests on structural continuity, not on a matched
+value.** HD authors zero on all 10,165 paired points and 2048 authors zero on
+all 28,290 points of the fourteen circuits its base package ships, so the pairing cannot
+distinguish this field from any other zero. What it does say is that 2048's
+word at `+0x54` equals HD's on 10,161 of 10,165 points, and that the fields
+either side of it are confirmed - the field is where the layout says it is,
+and it is unauthored, exactly as it is unauthored on the Wipeout HD and Pulse
+circuits above.
+
+### The layout reads sanely on the circuits nothing can be paired against
+
+All fourteen circuits in 2048's base package parse - the ten it authors itself
+plus the four Wipeout HD circuits it ships there rather than as DLC
+(`Anulpha_Pass`, `Chenghou_Project`, `Moa_Therma`, `Vineta_K`) - and
+`AiTrack::encoded_len()` lands on the payload length **to the byte** on every
+one (`altima` 195,104; `mall` 316,480). Half-widths run 1.77 to 71.84 and are
+positive on every point of every track; AI bounds run -59.85 to 59.88; `flags`
+is `{0}` or `{0,1}`; `+0x5a`/`+0x5b` are `(0xff, 0x00)` on all 28,290 points.
+
+### What is not placed
+
+`+0x58`/`+0x59` vary per point and per circuit (up to 71 distinct values on
+`Sebenco_Climb`) and are not placed. `+0x5a` and `+0x5b` are constant across
+every point of every track measured, so nothing distinguishes a field from
+padding. `+0x5e`/`+0x5f` carry up to 13 distinct values corpus-wide and are not
+placed either. The `WO Track` point reader in `vita-2048-eu-v104/eboot.elf` is
+still unnamed and unlocated - none of the above needed it.
+
 ## Open questions
 
 ### Where is lap counting?

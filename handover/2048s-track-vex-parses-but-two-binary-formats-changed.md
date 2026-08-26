@@ -148,31 +148,33 @@ into, and it is worth recording precisely:
   initialised zero, which briefly looked like a suspicious perfect match -
   fixed; there is no unexplained zero-scoring offset once every slot is
   actually measured.) **Confidence 90.**
-- **The tail - `half_width_left/right`, `ai_bound_left/right`, `racing_line`,
-  `section_id`, `flags` - has moved and is not yet placed. Confidence ~10,
-  hypotheses only.** The old layout put them at `0x44..0x62` with an 8-byte
-  dead gap after `lateral` and 14 bytes of trailing pad to `0x70`; the new
-  96-byte record has only 32 bytes left after the four vectors for the same
-  job, so at least 16 of the old 36 tail bytes (gap + fields + trailing pad)
-  are gone somewhere in there. Eyeballing six consecutive points of one path
-  on `altima`: `0x48` (~20→14, decreasing) and `0x50` (~12.8→6.6, decreasing)
-  are both positive and track-width-shaped, so are the weakest kind of
-  candidate for `half_width_left`/`half_width_right`; `0x44` (~59→65,
-  increasing) and `0x4c` (~-51→-57, decreasing) are a monotonic pair not in
-  the old schema at all - **tested and ruled out as a literal alias of
-  `pos.x`/`pos.z`** (the per-point difference itself drifts by ~18 units
-  across six points rather than holding constant or scaling cleanly, so
-  it is correlated with position but is not simply it); and the last 8 bytes
-  (`0x58..0x60`) read bit-identical across all six sampled points
-  (`2a 2a ff 00 01 00 46 44`), consistent with `section_id`/`flags` staying
-  constant through one section of one path - equally consistent with a
-  sample too narrow to see anything vary. **None of this should be treated as
-  more than a hypothesis list.** Six points of one path of one track is not
-  enough to separate "real field" from "coincidentally smooth stretch", and
-  CLAUDE.md's confidence rubric would not clear a rename or a parser change on
-  it. A wider sweep (every path of several tracks, checking each candidate
-  offset for plausible *ranges* rather than eyeballing six rows) is the next,
-  still-cheap step; see Next Steps.
+- **The tail is now placed, off Wipeout HD rather than off a statistical
+  sweep.** 2048's DLC re-ships twelve HD circuits (`Vineta_K`, `Ubermall`,
+  `Sebenco_Climb`, `Sol_2`, `amphiseum`, `modesto_heights`, `talons_junction`,
+  `tech_de_ra`, `zone_1`..`zone_4`) whose path counts, junction counts and
+  per-path control-point counts are **identical** to HD's own copies, so point
+  `k` of path `i` is the same point in both files and HD's fully decoded
+  112-byte record is ground truth for 2048's 96-byte one - 10,165 paired
+  points. `half_width_left/right` and `ai_bound_left/right` **did not move**
+  (`0x44`/`0x48`/`0x4c`/`0x50`), nor did `racing_line` (`0x54`); `section_id`
+  and `flags` moved from `0x60`/`0x61` to **`0x5c`/`0x5d`**. Confidence 95 for
+  the floats, 90/92 for `section_id`/`flags`, 80 for `racing_line` (HD authors
+  zero everywhere, so the pairing cannot distinguish it - it rests on the
+  layout either side of it being confirmed). `crates/formats/src/track.rs`
+  carries this as `point_len(version)` plus a version-gated tail offset, and
+  all fourteen circuits in 2048's base package now parse with
+  `encoded_len()` landing on the payload length to the byte. Full evidence -
+  the word-by-word agreement cliff at `0x58`, the exact `flags` histogram, and
+  the `section`-node-count check that settles `section_id` without relying on
+  HD's numbering - is in
+  [`docs/formats/track.md`](../docs/formats/track.md); the reproducer is
+  `crates/game/examples/vita_rosetta.rs`.
+- **What is still unplaced in the record**: `0x58`/`0x59` (vary per point, up
+  to 71 distinct values on one circuit), `0x5a`/`0x5b` (constant `0xff`/`0x00`
+  on all 28,290 points, so nothing separates field from padding) and
+  `0x5e`/`0x5f`. None of them is needed to drive the track. One circuit does
+  not close on `section_id` either: `cathedral` has 6 distinct ids with a
+  maximum of 9 against 6 `section` nodes.
 
 **Collision moved out of the vex file entirely and into its own container -
 a k-d tree, and its outer shape is now read.** `collision::from_vex` correctly
@@ -226,9 +228,9 @@ or `mesh::rcs::build_scene` for the drivable geometry (both currently error;
 everything downstream of a missing model degrades to "drawn nothing" rather
 than failing, per every other title), and `collision::from_vex` (does not error,
 just returns nothing - a real track needs `track_col.col` instead, once its
-own format is read). **The `WO Track` payload is the one that is fatal today**:
-`oag_render::track::load` propagates its `OutOfBounds` error with `?` and
-nothing downstream runs. Building the `oag-vita` crate, the `Platform::Vita`
+own format is read). **`WO Track` was the one that was fatal, and is no longer**:
+`oag_render::track::load` propagates its `OutOfBounds` error with `?`, and the
+version-gated stride above is what clears it. Building the `oag-vita` crate, the `Platform::Vita`
 disc variant, the `ship_dir` axis and the `just play 2048` justfile case now
 would produce a command that compiles and then fails at exactly that line -
 which is an honest result, but not the "spawn in" the task asked for, and
@@ -247,12 +249,11 @@ parser change yet - see What's New above and Next Steps below.
   chunk/relocation shape inside the "main memory" and "GPU" blocks
   `RcsModel_Load` reads whole. Only where the three sections start and end is
   known.
-- The `WO Track` tail's exact field offsets past `pos`/`tangent`/`down`/`lateral`
-  (see above) - two plausible half-width candidates, two unexplained
-  monotonic fields, and 8 tail bytes seen constant across too small a sample
-  to trust. Ghidra has not been opened for this one yet - `KdTree_Load` and
-  `RcsModel_Load` were both found from strings; the equivalent `WO Track`
-  point reader is unnamed and unlocated.
+- The four unplaced bytes of the `WO Track` point tail (`0x58`/`0x59` and
+  `0x5e`/`0x5f`), the constant `0xff`/`0x00` pair at `0x5a`/`0x5b`, and
+  `cathedral`'s section id of 9 against 6 `section` nodes. The `WO Track`
+  point reader in the eboot is still unnamed and unlocated - the layout was
+  recovered from the HD pairing without it.
 - The k-d tree node's own trailing 16 bytes (past the two child indices) and
   the entire `KdTreeMeshShape.cpp` trailer (228,692 bytes on `altima`) - the
   actual triangle geometry the tree indexes lives there, unread.
@@ -268,17 +269,10 @@ parser change yet - see What's New above and Next Steps below.
 
 ## Next Steps
 
-1. Nail the `WO Track` tail layout with a wider statistical sweep (every path
-   of every one of the fourteen tracks the corpus check above already
-   enumerates, range/monotonicity checks per candidate offset rather than
-   eyeballing six rows) before touching `crates/formats/src/track.rs` - a
-   version-gated `point_len(version)` the same shape as `reserved_len(version)`
-   is the fix once the offsets are confirmed, not before. The stride itself
-   (96 bytes) and the four vector offsets are already corpus-confirmed at
-   confidence 90+ and do not need re-checking. If the statistical sweep stalls,
-   the same string-driven approach that found `RcsModel_Load` and
-   `KdTree_Load` is worth trying on the point reader before falling back to
-   more probing - it is unnamed and its address is not yet known.
+1. ~~Nail the `WO Track` tail layout~~ - done, see above. The HD pairing beat
+   the planned statistical sweep outright: a sweep could only have said "this
+   offset is track-width-shaped", where the pairing gives per-field ground
+   truth per point.
 2. Decode `RcsModel_Load`'s three sections' interiors and `KdTree_Load`'s node
    tail plus its `KdTreeMeshShape.cpp` trailer - both now have a confirmed
    outer shape ([track-and-collision-loaders.md](../docs/ghidra/functions/vita-2048-eu-v104/track-and-collision-loaders.md))

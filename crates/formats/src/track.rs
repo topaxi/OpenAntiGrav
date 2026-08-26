@@ -18,8 +18,39 @@
 //!   +0x20         reserved, 0x20 bytes, only when version >= 0x101
 //!         then    paths,     0x20 bytes each
 //!         then    junctions, 0x10 bytes each
-//!         then    each path's control points in path order, 0x70 bytes each
+//!         then    each path's control points in path order,
+//!                 0x70 bytes each, or 0x60 from version 0x107
 //! ```
+//!
+//! ```text
+//! control point:
+//!   +0x00  [f32;3]  pos       (16-byte slot)
+//!   +0x10  [f32;3]  tangent
+//!   +0x20  [f32;3]  down
+//!   +0x30  [f32;3]  lateral
+//!   +0x44  f32      half_width_left
+//!   +0x48  f32      half_width_right
+//!   +0x4c  f32      ai_bound_left
+//!   +0x50  f32      ai_bound_right
+//!   +0x54  f32      racing_line
+//!          then     section_id and flags, one byte each, at +0x60/+0x61
+//!                   before version 0x107 and at +0x5c/+0x5d from it
+//! ```
+//!
+//! # Wipeout 2048 shortened the control point
+//!
+//! Version `0x107` - 2048's, one above the `0x106` Wipeout HD writes - drops
+//! the record from 112 bytes to 96. Everything up to and including
+//! `racing_line` stays exactly where it was; only `section_id` and `flags`
+//! move, from `+0x60`/`+0x61` into the eight bytes `+0x58..+0x60` that HD
+//! leaves zero, at `+0x5c`/`+0x5d`. `+0x5a` and `+0x5b` are `0xff` and `0x00`
+//! on every point of every 2048 track measured and are not placed;
+//! `+0x58`/`+0x59` vary and are not placed either.
+//!
+//! That is measured rather than reasoned: 2048's DLC re-ships twelve Wipeout HD
+//! circuits with byte-identical path and control-point counts, so control point
+//! `k` of path `i` is the same point in both files and HD's decoded record is
+//! ground truth for 2048's. See `docs/formats/track.md` for the numbers.
 //!
 //! # The reserved block is the whole trick
 //!
@@ -70,8 +101,15 @@ pub const PATH_LEN: usize = 0x20;
 /// Bytes per junction.
 pub const JUNCTION_LEN: usize = 0x10;
 
-/// Bytes per spline control point.
+/// Bytes per spline control point, before version [`SHORT_POINT_VERSION`].
 pub const POINT_LEN: usize = 0x70;
+
+/// Bytes per spline control point from version [`SHORT_POINT_VERSION`].
+pub const POINT_LEN_SHORT: usize = 0x60;
+
+/// First version whose control point is [`POINT_LEN_SHORT`] bytes: Wipeout
+/// 2048's.
+pub const SHORT_POINT_VERSION: u32 = 0x107;
 
 /// Magic at `+0x00`, `WOtd` read big-endian.
 pub const MAGIC: u32 = 0x574f_7464;
@@ -168,6 +206,9 @@ pub struct SplinePoint {
     /// The authored racing line, as a lateral offset from the centre.
     pub racing_line: f32,
     /// Which [`section`](crate::vex) this point belongs to, for visibility.
+    ///
+    /// `0xff` on a track that authors no `section` node at all, which several
+    /// of Wipeout 2048's circuits do.
     pub section_id: u8,
     /// Flags, OR-accumulated across the four control points of a segment.
     pub flags: u8,
@@ -264,7 +305,7 @@ impl AiTrack {
             + reserved_len(self.version)
             + self.paths.len() * PATH_LEN
             + self.junctions.len() * JUNCTION_LEN
-            + points * POINT_LEN
+            + points * point_len(self.version)
     }
 
     /// Total control points across every path.
@@ -484,6 +525,16 @@ pub fn reserved_len(version: u32) -> usize {
     if version >= 0x101 { RESERVED_LEN } else { 0 }
 }
 
+/// Bytes per control point for a given version.
+#[must_use]
+pub fn point_len(version: u32) -> usize {
+    if version >= SHORT_POINT_VERSION {
+        POINT_LEN_SHORT
+    } else {
+        POINT_LEN
+    }
+}
+
 /// Which way round a payload's words are, from its own magic, or `None` when
 /// the magic is neither.
 ///
@@ -560,7 +611,13 @@ pub fn parse(payload: &[u8]) -> Result<AiTrack> {
     let mut at = points_at;
     for i in 0..path_count {
         let count = u32_at(order, payload, paths_at + i * PATH_LEN) as usize;
-        at = end_of("control points", at, count, POINT_LEN, payload.len())?;
+        at = end_of(
+            "control points",
+            at,
+            count,
+            point_len(version),
+            payload.len(),
+        )?;
         counts.push(count);
     }
 
@@ -580,9 +637,14 @@ pub fn parse(payload: &[u8]) -> Result<AiTrack> {
         let base = paths_at + i * PATH_LEN;
         let mut points = Vec::with_capacity(count);
         for k in 0..count {
-            points.push(point_at(order, payload, points_from + k * POINT_LEN));
+            points.push(point_at(
+                order,
+                payload,
+                points_from + k * point_len(version),
+                version,
+            ));
         }
-        points_from += count * POINT_LEN;
+        points_from += count * point_len(version);
 
         paths.push(Path {
             points,
@@ -637,7 +699,12 @@ fn index_at(
     Ok(Some(raw as usize))
 }
 
-fn point_at(order: ByteOrder, payload: &[u8], at: usize) -> SplinePoint {
+fn point_at(order: ByteOrder, payload: &[u8], at: usize, version: u32) -> SplinePoint {
+    let section_at = if version >= SHORT_POINT_VERSION {
+        0x5c
+    } else {
+        0x60
+    };
     SplinePoint {
         pos: vec3_at(order, payload, at),
         tangent: vec3_at(order, payload, at + 0x10),
@@ -648,8 +715,8 @@ fn point_at(order: ByteOrder, payload: &[u8], at: usize) -> SplinePoint {
         ai_bound_left: f32_at(order, payload, at + 0x4c),
         ai_bound_right: f32_at(order, payload, at + 0x50),
         racing_line: f32_at(order, payload, at + 0x54),
-        section_id: payload[at + 0x60],
-        flags: payload[at + 0x61],
+        section_id: payload[at + section_at],
+        flags: payload[at + section_at + 1],
     }
 }
 
