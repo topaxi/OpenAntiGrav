@@ -1028,6 +1028,62 @@ out for `0x008b6fb4` specifically, a screen-keyed menu walk into a race, and
 a GDB-stub session with its own trap list - a fresh session's worth of setup,
 not a continuation of this one.
 
+### `fogColour` is engine parameter slot 7; its value-pointer setter is not found (2026-08-26, continued)
+
+The ambiguity the section above left open - whether materials patch by the
+argument-passing wrapper shape or the fslot-offset direct patch - resolves in
+favour of neither read standing alone: `fogColour` is **engine parameter slot
+7** in the 81-entry table "The engine's own parameter table, read from its
+initialiser" above already recovered (`Shader_InitEngineParams`,
+`Shader_InitParamEntry`), which is a *third* mechanism from the same section -
+material-declared parameters resolve against this shared table by hash rather
+than always carrying their own value. Its entry sits at a concrete,
+now-located address: `Shader_InitEngineParams`'s own `lwz r29,-0x54c0(r2)`
+(resolved against its real TOC, `0x008bd3c4`, the same TOC as the two
+functions above) loads a runtime-allocated struct pointer from static storage
+`0x008b7f04` - four bytes short of the `0x008b7f40` name table the first pass
+of this thread walked, the same shader-engine data region. `fogColour` is
+entry 7 of that struct's `+0x4000` table (`+0x4000 + 7*0x20 = +0x40e0`), so
+its **value pointer** - `0` until "a frame fills it", per `Shader_InitParamEntry`'s
+own layout - lives at `+0x40f8` of whatever `0x008b7f04` holds at runtime.
+
+**What does *not* fill it, checked and ruled out.** `Material_SetInstanceParamPointer`
+(`0x005d4bb0`, already named on
+[engine-trail.md](engine-trail.md)) looked like the candidate - it is exactly
+"find a `0x20`-byte entry by hash, write its `+0x18`" - but its own first
+comparison, `!(entry[+0x04] & 0x8000)`, **skips every entry whose kind has bit
+15 set**, and `0xc000` (every engine parameter's kind, `fogColour` included)
+has that bit set by construction. The function that binds instance overrides
+is provably the wrong one for an engine-global slot. Its real callers
+(reached through its cross-TOC OPD trampoline, `0x00677018`, since a direct
+`get_function_callers` on `0x005d4bb0` finds only the trampoline itself) are
+29 addresses spanning the image, `Trail_InitManagerBuffers` (`0x006b6870`,
+the known `TrailSpeed` binding) among them and nothing yet tying the rest to
+fog.
+
+**The one lead this session's search actually narrows to two addresses, and
+both go dark.** Loading `0x008b7f04` needs the literal instruction
+`lwz rX,-0x54c0(r2)` against this exact TOC, and a masked
+`search_byte_patterns` for that instruction (any destination register) finds
+it in exactly **two** places in the whole 21 MB image: `0x0067f044` and
+`0x0067f1c8`, inside two near-identical five/six-line functions
+(`0x0067f030`, `0x0067f1b8`) that each do nothing but stash the pointer into
+an object field and call `0x00326328` - a constructor-shaped pair, not the
+setter itself. **Neither has a single statically-visible caller.**
+`get_function_callers` finds none for either; `get_xrefs_to` on both finds
+only their own `.opd` table entries referencing themselves, which is Ghidra
+seeing the OPD's own `{address, TOC}` pair, not a call. Whatever constructs
+these objects does it through a computed/indirect call - the same class of
+gap `renderer.md`'s draw-path note already names ("no import census or call
+graph finds it") - so this is where static analysis runs out, not merely
+where the session did.
+
+Confidence 88 on the offset chain (`base` at `0x008b7f04`, `fogColour` at
+`+0x40e0`, its value pointer at `+0x40f8`) - read off the real TOC, and the
+slot number cross-checked eight ways already on this page. Confidence on
+"unscaled" itself is unmoved at 60; this narrows the address to look at, not
+the answer.
+
 ### The registry is resolved: every post program's block is addressable
 
 Read 2026-08-18 with [`scripts/ps3-registry.py`](../../../../scripts/ps3-registry.py).
