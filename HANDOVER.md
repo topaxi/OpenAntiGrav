@@ -401,6 +401,7 @@ player's own legitimate pressing gets hard-rejected.
 
 Each is a real, named next step, one file per thread under [`handover/`](handover/). Task numbers in a title are the ones the agent passes used, kept because commits and docs cite them. **When a thread's work lands, delete its file and this line** - the same rule this file always followed for a row, now for a file.
 
+- [2048's eboot strips clean and is ready to import; nothing has been named in it yet](handover/2048s-eboot-strips-clean-and-is-ready.md)
 - [Streaming decode for audio would break seek, and nothing forces the change yet](handover/streaming-decode-for-audio-would-break-seek-and.md)
 - [A circuit's billboard slots are a 9-entry array on the engine side, and slot 7 is not what it says it is](handover/a-circuits-billboard-slots-are-a-9-entry.md)
 - [A parser cannot fail on a field it does not know about, so coverage is now measured](handover/a-parser-cannot-fail-on-a-field-it.md)
@@ -560,7 +561,9 @@ answer.
 | **Sweep and prune is not reimplemented** | The original's packing clamps world space rather than rebasing it, so it never drops a genuinely overlapping pair; ours does the same job without the packing. |
 | **The four-corner hover variant** | Not implemented. Its selector is known (`DAT_08ab07e3 == 0 && DAT_08b31048 == 6`, which also disables the brakes and the weapons) and it is not the racing configuration. |
 | **Pure asset work** | No longer deferred as a whole. [ADR-0022](docs/architecture/adr/0022-title-packages.md) opened the format and asset layers on the strength of [`pure-status.md`](docs/formats/pure-status.md)'s measurements; ADR-0009 item 2 still defers Pure *simulation* work behind M4's exit. |
-| **PS3 and Vita content** | Paused 2026-08-09, on the toolchain rather than on the research. Both are encrypted - see [`data/README.md`](data/README.md#the-ps3-and-vita-images-are-encrypted-and-nothing-here-decrypts-them-yet) for the two different mechanisms and the tools each needs. None of `PS3Dec`/`scetool`/`pkg2zip`/`psvpfsparser` is installed and there is no RPCS3 install to borrow a decrypted copy from. The one architecturally relevant fact was free: **HD/Fury and 2048 both ship PSARC, not WAD**, and 2048 arrives as a PKG rather than a disc filesystem. |
+| **PS3 content** | Still paused (since 2026-08-09), on the toolchain rather than on the research - see [`data/README.md`](data/README.md#the-ps3-image-is-encrypted-and-nothing-here-decrypts-it-yet). None of `PS3Dec`/`scetool` is installed and there is no RPCS3 install to borrow a decrypted copy from. |
+| **Vita content** | No longer paused as of 2026-08-26: `pkg2zip` + `psvpfsparser` (`just build-psvpfstools`) decrypt a PKG fully, and `scripts/strip-vita-self.py` gets from there to an ELF VitaLoaderRedux can open - see [`data/README.md`](data/README.md#vita-pkgs-decrypt-in-three-steps-dataextractedvita-holds-the-result). All seven of WipEout 2048's PKGs are decrypted in `data/extracted/vita/`. What is still open is the RE work itself - nothing has been imported into a Ghidra program yet. |
+| _(shared architectural fact)_ | **HD/Fury and 2048 both ship PSARC, not WAD**, and 2048 arrives as a PKG rather than a disc filesystem. |
 | **A "CPU renderer" switch** | There is nothing to switch. wgpu ships no software rasteriser (`Backend::Noop` draws nothing), so CPU rendering exists only via a system Vulkan implementation such as lavapipe, selected outside the process. |
 | **RENDERER applies on the next launch** | The device is made once at boot and everything hangs off it. Live switching means tearing down the surface, the pipelines and every GPU resource. |
 | **PS2 `.PSS`/`.IPF` through GStreamer** | [ADR-0017](docs/architecture/adr/0017-gstreamer-native-video.md). |

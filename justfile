@@ -562,6 +562,19 @@ build-emotionengine *ARGS:
 build-ps3-scripts *ARGS:
     ./scripts/build-ghidra-ps3-scripts.sh {{ARGS}}
 
+# Build the ELF/PRX loader for Vita binaries against the installed Ghidra.
+# Needs build-allegrex to have run at least once - this borrows its Gradle
+# wrapper too, same as build-emotionengine. Installation into Ghidra is
+# manual; this only builds the zip.
+build-vita-loader-redux *ARGS:
+    ./scripts/build-vita-loader-redux.sh {{ARGS}}
+
+# Build psvpfsparser, which decrypts a PS Vita PKG's PFS layer given its
+# zRIF or klicensee. pkg2zip alone only strips the outer AES-CTR layer - see
+# data/README.md#vita-pkgs-decrypt-in-three-steps-dataextractedvita-holds-the-result.
+build-psvpfstools *ARGS:
+    ./scripts/build-psvpfstools.sh {{ARGS}}
+
 # Add r2 to the unaffected list of Ghidra's PowerPC 64/32-addr compiler spec,
 # which PS3 PPU code needs to decompile correctly - r2 is the TOC pointer and a
 # call does not clobber it. Edits the Ghidra install, so it needs sudo and does
@@ -575,6 +588,11 @@ patch-ppc-cspec *ARGS:
 # Resolve the PSP import stubs from the binary's own NID tables
 resolve-imports boot="data/extracted/psp/PSP_GAME/SYSDIR/BOOT.BIN":
     python3 scripts/resolve-psp-imports.py {{boot}} --modules -o data/ghidra/psp-imports.tsv
+
+# Strip a decrypted Vita SELF (eboot.bin/.suprx) to the plain ELF-PRX
+# VitaLoaderRedux can actually import - see scripts/strip-vita-self.py.
+strip-vita-self *ARGS:
+    python3 scripts/strip-vita-self.py {{ARGS}}
 
 # Apply every documented symbol name to the open Ghidra program
 apply-names *ARGS: resolve-imports
