@@ -676,3 +676,189 @@ fn the_tile_reduction_finds_motion_in_the_tile_it_belongs_to() {
     );
     assert_eq!(red_at(14, 12), 0, "the still block smeared right");
 }
+
+/// The multisampled prepare variant, which nothing else here reaches.
+///
+/// Every other test in this file passes `sample_count: 1`, so `fs_prepare_ms`,
+/// its own bind group layout and its multisampled bindings were built and
+/// never run - and [ADR-0030](../../../../../docs/architecture/adr/0030-velocity-buffer-motion-blur.md)
+/// deleted the MSAA gate that used to skip the pass entirely, so `msaa4x` plus
+/// any motion blur strength is now a combination a player can select from the
+/// menu. A wrong layout there is not a subtle artefact; it is a validation
+/// error the moment they do.
+///
+/// The multisampled attachments are filled by **clearing** them: a render pass
+/// with no draws at all still runs its load ops, which is the cheapest way to
+/// get a known value into every sample of an `Rg16Float` and a `Depth32Float`
+/// without a multisampled pipeline of its own. Uniform velocity is enough
+/// here - what is under test is that sample 0 arrives at all, not how the
+/// weights treat it.
+///
+/// **Skips when there is no adapter**, so a green CI run is not evidence that
+/// it ran:
+///
+/// ```sh
+/// cargo nextest run -p oag-render -E 'test(the_multisampled_prepare)' --no-capture
+/// ```
+#[test]
+fn the_multisampled_prepare_variant_reads_sample_zero_and_the_chain_runs() {
+    let instance = wgpu::Instance::default();
+    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let (device, queue) =
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+            .expect("requesting the device");
+
+    const SIZE: u32 = 64;
+    // The scene's own MSAA sample count, which `Scene::render` passes straight
+    // through - see `AntiAliasing::msaa_samples`.
+    const SAMPLES: u32 = 4;
+    let format = wgpu::TextureFormat::Rgba8Unorm;
+    let extent = wgpu::Extent3d {
+        width: SIZE,
+        height: SIZE,
+        depth_or_array_layers: 1,
+    };
+
+    // The colour the blur reads is single-sampled in the game too: MSAA
+    // resolves into the caller's view inside the race pass, and this runs on
+    // the resolved image. Only velocity and depth stay multisampled.
+    let scene = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("scene"),
+        size: extent,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING
+            | wgpu::TextureUsages::RENDER_ATTACHMENT
+            | wgpu::TextureUsages::COPY_DST
+            | wgpu::TextureUsages::COPY_SRC,
+        view_formats: &[],
+    });
+    let mut pixels = vec![0u8; (SIZE * SIZE * 4) as usize];
+    for y in 31..33 {
+        for x in 31..33 {
+            let at = ((y * SIZE + x) * 4) as usize;
+            pixels[at..at + 4].copy_from_slice(&[255, 255, 255, 255]);
+        }
+    }
+    queue.write_texture(
+        scene.as_image_copy(),
+        &pixels,
+        wgpu::TexelCopyBufferLayout {
+            offset: 0,
+            bytes_per_row: Some(SIZE * 4),
+            rows_per_image: None,
+        },
+        extent,
+    );
+
+    let multisampled = |label, format| {
+        device.create_texture(&wgpu::TextureDescriptor {
+            label: Some(label),
+            size: extent,
+            mip_level_count: 1,
+            sample_count: SAMPLES,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        })
+    };
+    let velocity = multisampled("velocity", crate::mesh_render::VELOCITY_FORMAT);
+    let depth = multisampled("depth", wgpu::TextureFormat::Depth32Float);
+    let velocity_view = velocity.create_view(&Default::default());
+    let depth_view = depth.create_view(&Default::default());
+
+    let mut clear = device.create_command_encoder(&Default::default());
+    clear.begin_render_pass(&wgpu::RenderPassDescriptor {
+        label: Some("fill the multisampled attachments"),
+        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+            view: &velocity_view,
+            depth_slice: None,
+            resolve_target: None,
+            ops: wgpu::Operations {
+                // 0.1 uv/tick to the right, in every sample of every texel.
+                load: wgpu::LoadOp::Clear(wgpu::Color {
+                    r: 0.1,
+                    g: 0.0,
+                    b: 0.0,
+                    a: 0.0,
+                }),
+                store: wgpu::StoreOp::Store,
+            },
+        })],
+        depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+            view: &depth_view,
+            depth_ops: Some(wgpu::Operations {
+                load: wgpu::LoadOp::Clear(0.5),
+                store: wgpu::StoreOp::Store,
+            }),
+            stencil_ops: None,
+        }),
+        timestamp_writes: None,
+        occlusion_query_set: None,
+        multiview_mask: None,
+    });
+    queue.submit(Some(clear.finish()));
+
+    let mut blur = MotionBlur::new(&device, format).expect("building the pipelines");
+    let mut encoder = device.create_command_encoder(&Default::default());
+    blur.render(
+        &device,
+        &queue,
+        &mut encoder,
+        &Frame {
+            scene: &scene.create_view(&Default::default()),
+            velocity: &velocity_view,
+            depth: &depth_view,
+            sample_count: SAMPLES,
+            size: (SIZE, SIZE),
+            viewport: (0.0, 0.0, SIZE as f32, SIZE as f32),
+            strength: 0.5,
+        },
+    );
+
+    let readback = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("readback"),
+        size: u64::from(SIZE * SIZE * 4),
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+    encoder.copy_texture_to_buffer(
+        scene.as_image_copy(),
+        wgpu::TexelCopyBufferInfo {
+            buffer: &readback,
+            layout: wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(SIZE * 4),
+                rows_per_image: None,
+            },
+        },
+        extent,
+    );
+    queue.submit(Some(encoder.finish()));
+    readback.slice(..).map_async(wgpu::MapMode::Read, |_| {});
+    device
+        .poll(wgpu::PollType::wait_indefinitely())
+        .expect("waiting for the readback");
+    let data = readback.slice(..).get_mapped_range().expect("mapping");
+    let red_at = |x: u32, y: u32| data[((y * SIZE + x) * 4) as usize];
+
+    // The velocity that reached the gather came out of a multisampled texture
+    // through `fs_prepare_ms`; a zero there would leave the block untouched.
+    assert!(
+        red_at(30, 31) > 0 && red_at(33, 31) > 0,
+        "the block did not smear, so sample 0 of the multisampled velocity \
+         never reached the gather"
+    );
+    assert!(
+        red_at(31, 31) < 255,
+        "the block kept full brightness, so nothing was gathered"
+    );
+    // Purely horizontal motion, exactly as in the single-sampled case.
+    assert_eq!(red_at(31, 28), 0, "the smear leaked vertically");
+}
