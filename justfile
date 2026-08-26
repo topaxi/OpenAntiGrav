@@ -556,6 +556,12 @@ build-allegrex *ARGS:
 build-emotionengine *ARGS:
     ./scripts/build-ghidra-emotionengine.sh {{ARGS}}
 
+# Build psvpfsparser, which decrypts a PS Vita PKG's PFS layer given its
+# zRIF or klicensee. pkg2zip alone only strips the outer AES-CTR layer - see
+# data/README.md#the-ps3-and-vita-images-are-encrypted-and-nothing-here-decrypts-them-yet.
+build-psvpfstools *ARGS:
+    ./scripts/build-psvpfstools.sh {{ARGS}}
+
 # Add r2 to the unaffected list of Ghidra's PowerPC 64/32-addr compiler spec,
 # which PS3 PPU code needs to decompile correctly - r2 is the TOC pointer and a
 # call does not clobber it. Edits the Ghidra install, so it needs sudo and does
