@@ -363,6 +363,15 @@ are never reached; a `DATA00` copy does not exist so the `fe` archive
 would add exactly one `Label` (a `<Text>` with no children), making it `36, 1,
 33, 5`.
 
+The concept the missing widget names is not cut art: `/data/sound/speech_zone.bnk`
+(`DATA00.PSARC`, confirmed again in `DATA01.PSARC` at a different byte count -
+an eighth multi-copy root, unread beyond this) ships a `PERFECT_LAP` announcer
+cue in its `zone_vo` bank, the same cue Pulse's `Data.wad` carries under the
+identical name. A voice line is not the same claim as an on-screen label, and
+`PERFECT_LAP` names a lap rather than `ER_PERFECT`'s zone, but it rules out
+"the widget is unused leftover text" as the reason `DATA02` might be the
+correct pick.
+
 **This is not a new failure mode - it is the same one `Archives::locations`'s
 own doc comment already names for a different file.** Wipeout HD's front-end
 plugin definition (`Data\Plugins\frontend\definition.xml`, five copies,
