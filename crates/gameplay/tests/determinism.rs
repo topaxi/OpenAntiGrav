@@ -144,6 +144,24 @@ fn run(ticks: u32) -> (u64, u64) {
 ///
 /// # History
 ///
+/// - **Moved 2026-08-26**, when `Driver::reflex` joined the hash. Reaction
+///   latency holds a rival back for a few ticks after it arrives in one of a
+///   driver's three channels, so which craft a driver has *noticed* decides
+///   when it lifts, covers and shoots - and the half-noticed rival and its
+///   countdown decide when the next one is seen. All three arrays are hashed,
+///   for the reason `oag_gameplay::hash::write_driver` gives. **Isolated the
+///   documented way**: with `reflex` destructured as `reflex: _` and no writes
+///   for it, and nothing else changed, the previous constants -
+///   `0xffc0_1c63_959d_dbf6` / `0xe299_6e55_2185_5b6c` at 60 ticks and
+///   `0x5ed5_6f2b_3d34_7983` / `0x4611_ee6c_59a8_b981` at 600, and
+///   `0xa1a8_de37_f513_74c4` / `0xa755_4730_fc35_b820` and
+///   `0xb6e6_af7d_a1f9_fb77` / `0x32e3_49c0_29f2_3e96` for the volley -
+///   reproduce bit for bit. That is the whole of the claim that the axis is
+///   opt-in: `Tuning::reaction_ticks` defaults to zero, so a driver that has
+///   not been given a difficulty notices on the frame exactly as it always
+///   did, and what moved here is nine more writes per ship per tick entering
+///   the stream. Neither scenario fields an opponent, so every channel reads
+///   `Reflex::IDLE` throughout both.
 /// - **Moved 2026-08-24**, when `Ship::autopilot_timer` joined the hash. The
 ///   Autopilot pickup arms it and the composition root reads it to decide
 ///   whether slot 0 is flown by its own driver, so it is simulation state and a
@@ -338,8 +356,8 @@ fn run(ticks: u32) -> (u64, u64) {
 /// beneath this comment and isolate the cause first, by removing the new field's
 /// own write and checking that the previous constants reproduce bit for bit.
 const REFERENCE: &[(u32, u64, u64)] = &[
-    (60, 0xffc0_1c63_959d_dbf6, 0xe299_6e55_2185_5b6c),
-    (600, 0x5ed5_6f2b_3d34_7983, 0x4611_ee6c_59a8_b981),
+    (60, 0x9c5d_3b4c_b229_2baa, 0x0d31_b55a_669c_4254),
+    (600, 0xfc00_1ad4_d9ef_7f57, 0x0e7b_e5cd_c260_ab11),
 ];
 
 /// The volley scenario: a craft at an angle fires a real fanned Rocket volley
@@ -425,8 +443,9 @@ fn run_volley(ticks: u32) -> (u64, u64) {
 ///
 /// # History
 ///
-/// - **Moved 2026-08-24**, by `Ship::autopilot_timer` joining the hash. The
-///   isolation and the previous constants are in [`REFERENCE`]'s history note,
+/// - **Moved 2026-08-26**, by `Driver::reflex` joining the hash, and
+///   **2026-08-24** by `Ship::autopilot_timer` doing the same. Both isolations
+///   and both sets of previous constants are in [`REFERENCE`]'s history note,
 ///   which covers both scenarios in one pass rather than twice.
 ///
 /// - **Recorded 2026-08-18**, with the scenario, as finding D1's gate. There is
@@ -444,8 +463,8 @@ fn run_volley(ticks: u32) -> (u64, u64) {
 /// **Never edit these to make the test pass**, for the same reason
 /// [`REFERENCE`] says at length.
 const REFERENCE_VOLLEY: &[(u32, u64, u64)] = &[
-    (60, 0xa1a8_de37_f513_74c4, 0xa755_4730_fc35_b820),
-    (600, 0xb6e6_af7d_a1f9_fb77, 0x32e3_49c0_29f2_3e96),
+    (60, 0x87aa_86d6_9f6b_73e8, 0x525b_5a02_6095_f7a0),
+    (600, 0x5cab_0e84_dfbe_0a9b, 0xce16_0eaa_37a7_9f16),
 ];
 
 #[test]

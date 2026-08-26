@@ -130,6 +130,20 @@ fn an_opponents_rocket_is_owned_by_the_slot_that_fired_it() {
         ..oag_ai::Field::EMPTY
     };
 
+    // **A driver cannot shoot at a craft it has not noticed yet.**
+    // `wants_to_fire` reads the reaction-latency clock that `Driver::drive`
+    // advances, and `Race::step_opponents` drives every opponent a few lines
+    // before it spends its pickup - so in a race the two are the same tick.
+    // This fixture calls `fire_opponent_rocket` directly and has to advance the
+    // clock itself. See `oag_ai::Reflex`.
+    let latency = race.ai_tuning.reaction_ticks;
+    for _ in 0..=latency {
+        race.world.ships[firing]
+            .driver
+            .reflex
+            .advance(&field, latency);
+    }
+
     // Sweep the phase so the trigger roll lands, then check who owns what.
     let mut fired = false;
     for phase in 0..2_000u32 {

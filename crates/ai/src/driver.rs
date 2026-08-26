@@ -30,6 +30,7 @@ use crate::noise::{roll, wobble};
 use crate::pilot::Pilot;
 
 pub use personality::Personality;
+pub use reflex::Reflex;
 pub use tuning::Tuning;
 
 /// Everything a driver reads that is not its own craft.
@@ -156,6 +157,15 @@ pub struct Driver {
     /// An integer, because this type is `Eq` and lives in the world snapshot,
     /// for the reason [`Self::provocation`] gives.
     pub mistake: u16,
+    /// What this driver has noticed of the craft around it, and what it is
+    /// still in the middle of noticing.
+    ///
+    /// Reaction latency, and the one piece of driver state that is about
+    /// *perception* rather than about driving - see [`Reflex`]. Integers, for
+    /// the reason [`Self::provocation`] gives; `Reflex::IDLE` for a driver that
+    /// has not ticked yet, which is not the same as one that has looked and
+    /// seen nobody.
+    pub reflex: Reflex,
 }
 
 /// How much of the line either side of the last index a driver looks at.
@@ -295,6 +305,17 @@ impl Driver {
         if line.is_empty() {
             return ShipControls::default();
         }
+
+        // **What this driver has noticed, not what the caller measured.** At
+        // the default zero latency the two are the same field; above it a craft
+        // that has just arrived is not in this one yet. Advanced before it is
+        // read, so a wait that runs out this tick is acted on this tick.
+        self.reflex.advance(ctx.field, tuning.reaction_ticks);
+        let noticed = self.reflex.filter(ctx.field);
+        let ctx = &Context {
+            field: &noticed,
+            ..*ctx
+        };
 
         let personality = self.personality(ctx.pilot);
         let body = &state.body;
@@ -465,7 +486,10 @@ impl Driver {
         if personality.trigger <= 0.0 {
             return None;
         }
-        let target = ctx.field.ahead?;
+        // **Noticed, not measured.** A driver cannot shoot at a craft it has
+        // not seen yet; the clock itself is advanced by [`Self::drive`], which
+        // is the tick this one shares. See [`Reflex`].
+        let target = self.reflex.filter(ctx.field).ahead?;
         if target.range <= WEAPON_MIN_RANGE || target.range > WEAPON_RANGE {
             return None;
         }
@@ -934,6 +958,7 @@ fn airbrakes(brake: f32, differential: f32, floor: f32) -> (f32, f32) {
 
 mod personality;
 mod ram;
+mod reflex;
 mod tuning;
 
 #[cfg(test)]

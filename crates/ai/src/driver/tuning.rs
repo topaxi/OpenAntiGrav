@@ -181,6 +181,17 @@ pub struct Tuning {
     ///
     /// [`Difficulty::mistakes`]: crate::Difficulty::mistakes
     pub mistake_rate: f32,
+    /// How long a driver takes to notice a craft arriving beside, in front of
+    /// or behind it, in ticks.
+    ///
+    /// **Zero for a driver that reacts on the frame**, which is what the
+    /// hardest difficulty sets it to - see [`Difficulty::reaction_ticks`], and
+    /// [`super::reflex`] for what a channel does while the clock runs. An
+    /// integer because it counts ticks and rides in the world snapshot; the
+    /// same reason `Driver::mistake` is one.
+    ///
+    /// [`Difficulty::reaction_ticks`]: crate::Difficulty::reaction_ticks
+    pub reaction_ticks: u16,
 }
 
 impl Default for Tuning {
@@ -207,6 +218,11 @@ impl Default for Tuning {
             // that has not chosen a difficulty - the closed-loop harness, a
             // replay - quietly non-deterministic in its driving.
             mistake_rate: 0.0,
+            // **Zero for the same reason, and it is load-bearing.** A default
+            // that took a tick to notice anything would change what every
+            // existing closed-loop assertion measures, and none of them chose
+            // a difficulty. See `super::reflex`.
+            reaction_ticks: 0,
         }
     }
 }
