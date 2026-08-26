@@ -280,6 +280,79 @@ fn the_missile_authors_a_lock_window_and_its_own_speeds() {
     }
 }
 
+/// Claim 1d: the Mine authors a fuse and a trigger radius, in both shipped
+/// tables, and its block is not the Bomb's.
+///
+/// Shape only, never values - ADR-0006. Three things are worth asserting and
+/// each has a failure it is aimed at:
+///
+/// - `timetodie > 0`, because a mine with a zero fuse is one that expires on
+///   the tick it is dropped, which reads as a gameplay bug rather than as a
+///   parse failure. It is also the offset (`+0xf4`) that identified the drop
+///   handler as the Mine's at all, so a zero here would mean the identification
+///   rested on a field the file does not really author.
+/// - `trigger_radius > 0` and `blastradius > trigger_radius`. The two are read
+///   into adjacent fields by adjacent lines of a hand-written arm - the same
+///   transposition risk the Missile's lock window has - and the *ordering* is
+///   the part that says which is which: a mine is tripped by a craft coming
+///   close and then hurts a wider circle than the one that tripped it.
+/// - The Mine's block is not the Bomb's. The Bomb's eight attributes sit
+///   directly before the Mine's seven in the struct the original parses into,
+///   and both weapons author `blastforce`, `blastradius`, `damage`,
+///   `trigger_radius` and `timetodie` under the same names. A decoder that
+///   matched the wrong `<Weapon type>` would still produce six plausible
+///   numbers. The shipped tables give the two weapons different blast figures,
+///   so comparing them catches it.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_mine_authors_a_fuse_and_a_trigger_radius() {
+    let Some(tables) = tables() else { return };
+    for (name, blob) in &tables {
+        let stats = weapons::from_blob(blob).unwrap_or_else(|e| panic!("{name}: {e}"));
+        let mine = stats
+            .mine()
+            .unwrap_or_else(|| panic!("{name}: no Mine authored"));
+
+        println!(
+            "{name}: mine fuse {} s, trigger {}, blast {}",
+            mine.timetodie, mine.trigger_radius, mine.blastradius
+        );
+        assert!(
+            mine.timetodie > 0.0,
+            "{name}: a mine that expires the tick it is dropped - {mine:?}"
+        );
+        assert!(
+            mine.trigger_radius > 0.0,
+            "{name}: a mine nothing can trip - {mine:?}"
+        );
+        assert!(
+            mine.blastradius > mine.trigger_radius,
+            "{name}: blast radius {} is not wider than trigger radius {}, which is \
+             what reading the two into each other looks like",
+            mine.blastradius,
+            mine.trigger_radius
+        );
+        assert!(
+            mine.damage > 0.0 && mine.blastforce > 0.0,
+            "{name}: a mine that hurts nobody - {mine:?}"
+        );
+
+        // The Mine's block is not the Rocket's. Same argument the Missile makes
+        // one claim up, against the neighbour that shares the most attributes.
+        let rocket = stats
+            .rocket()
+            .unwrap_or_else(|| panic!("{name}: no Rocket authored"));
+        assert!(
+            (rocket.blastforce - mine.blastforce).abs() > f32::EPSILON
+                || (rocket.damage - mine.damage).abs() > f32::EPSILON
+                || (rocket.absorb - mine.absorb).abs() > f32::EPSILON,
+            "{name}: the Mine reads identical to the Rocket on every compared \
+             field, which is what matching the wrong <Weapon type> looks like - \
+             rocket {rocket:?} mine {mine:?}"
+        );
+    }
+}
+
 /// Claim 2: `absorb` is on every weapon the file authors.
 ///
 /// Stated as "every weapon the *decoder recognises* that the file authors",

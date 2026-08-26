@@ -45,6 +45,15 @@ The handler `weapon-fire.md` read as the Cannon plays the mine launch cue. Every
 ordering argument below only explains *why* the wrong answer was so easy to
 reach.
 
+**And a maintainer who has played Pulse says the same thing**, asked without
+being shown any of this: the Mine drops *several* small ones, the Bomb drops *a
+single bigger one with a bigger explosion*. That is the burst-versus-single
+split exactly, and it is the second time on this subsystem that from-play
+knowledge has settled a question the decompiler left open - the first being the
+rocket's three-abreast fan, recorded on
+[weapon-fire.md](weapon-fire.md#history). The shipped `<Stats>` agree with the
+description too: the Bomb's blast figures are the larger pair.
+
 ## Three enumerations, not one
 
 The thing that made this map hard is that Pulse carries **three** weapon
