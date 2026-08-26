@@ -146,58 +146,83 @@ fn the_boot_report_credits_the_discs_own_definition() {
     }
 }
 
-/// Which sources lose a declared team to the raceability filter, measured.
+/// No source loses a declared team to the raceability filter.
 ///
 /// `load_teams` filters the declared list against both files a race reads and
-/// reports the drop. On the four Pulse-family and HD sources it drops nothing.
-/// **Both Pure pressings declare ten and keep nine**, and the one they lose is
-/// the same on each: `AG Systems`, declared with a space where its own
-/// `location` says `Data\Ships\AG_Systems`. `raceable` composes both entry
-/// names from the team's *id*, so the space is carried into the path, and a
-/// founding team is silently absent from Pure's menu on both pressings.
+/// reports the drop. **Both Pure pressings used to declare ten and keep nine**,
+/// losing `AG Systems` - declared with a space where its own `location` says
+/// `Data\Ships\AG_Systems` - because every path was composed from the declared
+/// name rather than the folder. `catalogue::read_team` reads the folder now,
+/// so all ten resolve and the team is back in the menu; measured 2026-08-26
+/// against both pressings, and the underscore spelling was confirmed to hold
+/// both the hull and the handling stats with no DLC mounted.
 ///
-/// Pinned rather than asserted away, because the number is the evidence: nine
-/// is what this build currently offers on Pure and ten is what the disc says,
-/// so a fix moves this to ten and a regression moves it to eight. Measured
-/// 2026-08-26 against `pure-psp-usa.chd` and `pure-psp-eu.chd`, confidence 95 -
-/// the id and the location are both read straight off the disc's own
-/// `Definition.xml`, and the two pressings agree.
+/// The count is asserted, not just the absence of a drop, because "nothing was
+/// dropped" is also what an empty roster looks like.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn only_pure_loses_a_declared_team_and_it_loses_one() {
+fn no_source_loses_a_declared_team() {
     for (label, image) in images() {
         let shell = shell(label, &image);
-        let dropped = shell
-            .report
-            .iter()
-            .any(|line| line.contains("declared team(s) have no ship"));
+        assert!(
+            !shell
+                .report
+                .iter()
+                .any(|line| line.contains("declared team(s) have no ship")),
+            "{label}: a declared team lost its ship or its handling stats: {:#?}",
+            shell.report
+        );
         if label.starts_with("pure-") {
-            assert!(
-                dropped,
-                "{label}: no team is dropped any more. If `raceable` learned to \
-                 read the declared location, this file's docs and the count \
-                 below need updating rather than this assertion deleting: {:#?}",
-                shell.report
-            );
             assert_eq!(
                 shell.teams.len(),
-                9,
-                "{label}: nine of the ten declared is what a build that composes \
-                 the path from the id offers: {:#?}",
+                10,
+                "{label}: ten is what this disc declares: {:#?}",
                 shell.report
             );
+            // Named directly, because the count alone cannot tell a restored
+            // `AG_Systems` from some other team arriving in its place.
             let ids: Vec<&str> = shell.teams.iter().map(|team| team.id.as_str()).collect();
             assert!(
-                !ids.contains(&"AG Systems"),
-                "{label}: the team this measurement is about is present, so the \
-                 count of nine now means something else: {ids:?}"
+                ids.contains(&"AG_Systems"),
+                "{label}: the team this file exists for is the folder \
+                 `AG_Systems`, and it is absent: {ids:?}"
             );
-        } else {
-            assert!(
-                !dropped,
-                "{label}: a declared team lost its ship or its handling stats, \
-                 which no source outside Pure has ever done: {:#?}",
-                shell.report
+        }
+    }
+}
+
+/// The declared name survives as a label where it differs from the folder.
+///
+/// The other half of reading the id off the location: `AG_Systems` is the right
+/// path component and the wrong thing to show a player. Pure's string tables go
+/// unread (`load_strings` finds no entries for its language plugins), so
+/// nothing else would put the space back.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn pure_keeps_the_name_it_declares_for_the_team_whose_folder_differs() {
+    for (label, image) in images() {
+        if !label.starts_with("pure-") {
+            continue;
+        }
+        let shell = shell(label, &image);
+        let team = shell
+            .teams
+            .iter()
+            .find(|team| team.id == "AG_Systems")
+            .unwrap_or_else(|| panic!("{label}: the folder `AG_Systems` is not in the roster"));
+        assert_eq!(
+            team.name.as_deref(),
+            Some("AG Systems"),
+            "{label}: the declared name is what the menu falls back to here"
+        );
+        // Every other team on the disc spells the two the same way, and carries
+        // no second spelling for that reason.
+        for other in shell.teams.iter().filter(|team| team.id != "AG_Systems") {
+            assert_eq!(
+                other.name, None,
+                "{label}: {} declares a name differing from its folder, which \
+                 only AG Systems was ever measured doing",
+                other.id
             );
         }
     }

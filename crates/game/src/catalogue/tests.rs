@@ -131,13 +131,14 @@ fn a_team_carries_its_ship_directory_and_its_description_key() {
 /// The id is the folder leaf, which is why `race::ship_entry_name` can go
 /// on formatting a path out of the id alone.
 ///
-/// **True of this fixture and of Pulse, and false on Wipeout Pure**, which
-/// declares `name="AG Systems"` against `location="Data\Ships\AG_Systems"` on
-/// both pressings - so the path built from that id misses and the team is
-/// dropped from the roster. Measured 2026-08-26; see
-/// `crates/game/tests/roster_declared_ground_truth.rs`, which pins the nine of
-/// ten Pure currently offers. `dlc_ground_truth` re-checks the rule against
-/// real content, but only Pulse's, which is why it never caught this.
+/// **True by construction now, and worth keeping anyway.** It used to be true
+/// of Pulse by luck - every team's declared name happened to equal its folder -
+/// and false on Wipeout Pure, which declares `name="AG Systems"` against
+/// `location="Data\Ships\AG_Systems"` on both pressings and so lost a founding
+/// team from its roster. `read_team` reads the folder now and keeps the
+/// declared name as `Team::name`, which is the split `Mantis`/`Mirage` already
+/// needed. This asserts the property a future parser change could quietly
+/// break; `roster_declared_ground_truth` asserts it against real discs.
 #[test]
 fn a_team_id_is_the_leaf_of_its_directory() {
     for team in teams(DEFINITION) {
@@ -194,18 +195,50 @@ fn a_pack_adds_to_the_source_without_replacing_any_of_it() {
 
 /// A pack that redeclared a team the disc already has must not shadow it.
 /// No shipped pack does, and this is what keeps it that way.
+///
+/// **Redeclaring is now same-folder rather than same-name**, since the id is
+/// the folder: this fixture used to name `Assegai` over
+/// `Data\Ships\Somewhere_Else`, which is two different ships wearing one name
+/// and is covered separately below.
 #[test]
 fn the_source_wins_when_a_pack_redeclares_an_id() {
     let shadow = r#"
 <Screen name="Top">
   <PI_Team name="Assegai">
-    <Values type="Race" location="Data\Ships\Somewhere_Else"/>
+    <Values type="Race" location="Data\Ships\Assegai" helpText="MSC_PACK_OVERRIDE"/>
   </PI_Team>
 </Screen>
 "#;
     let teams = all_teams(&[DEFINITION.to_string(), shadow.to_string()]);
     assert_eq!(teams.len(), 1);
     assert_eq!(teams[0].location, r"Data\Ships\Assegai");
+    assert_eq!(
+        teams[0].help_text.as_deref(),
+        Some("MSC_TEAMDES_ASS"),
+        "the disc's own declaration wins the whole row, not just the location"
+    );
+}
+
+/// Two folders under one declared name are two teams, not one.
+///
+/// The other half of the id-is-the-folder rule. Nothing ships this, but the
+/// old rule would have collapsed the pair into whichever came first, and
+/// silently: a ship folder that no path is ever built for is a team the player
+/// cannot race.
+#[test]
+fn one_name_over_two_folders_is_two_teams() {
+    let elsewhere = r#"
+<Screen name="Top">
+  <PI_Team name="Assegai">
+    <Values type="Race" location="Data\Ships\Somewhere_Else"/>
+  </PI_Team>
+</Screen>
+"#;
+    let teams = all_teams(&[DEFINITION.to_string(), elsewhere.to_string()]);
+    assert_eq!(
+        teams.iter().map(|t| t.id.as_str()).collect::<Vec<_>>(),
+        ["Assegai", "Somewhere_Else"]
+    );
 }
 
 /// A `PI_Track` with no `location` names no environment, so there is
