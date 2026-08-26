@@ -443,6 +443,13 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
         frame.sprites.extend(drawn);
     }
 
+    // The lock-on reticle, over the bars and under the text - it is the only
+    // HUD sprite anchored on the *world* rather than on the screen, so it moves
+    // across everything else and must not be under it.
+    if let Some(sight) = &readout.sight {
+        frame.sprites.extend(sight_draws(cx, sight));
+    }
+
     // The pickup, after the always-on sprites and before the text. Conditional
     // rather than allow-listed, because *which* icon is live changes with what
     // the craft is holding - see `pickup_sprites`.
@@ -511,6 +518,79 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
 /// coordinates meant for a different one. That is what an HD race did until the
 /// sheet learnt to hold six.
 #[must_use]
+/// The lock-on reticle's five pieces, as sprites.
+///
+/// **Four instances of one model plus one of another**, which is what the
+/// original's nine widgets over three models come to for the Missile. Each is
+/// drawn at the size the model's own quad is - `8.0` units, and the
+/// `<Mode3D mode="orthographic">` block those widgets live in spans the 480x272
+/// screen one unit to a pixel, so eight units is eight pixels. The *box* they
+/// sit at the corners of grows and shrinks; the brackets themselves do not, and
+/// the original writes only a position and a rotation to each. See
+/// `docs/ghidra/functions/psp-pulse-usa/lock-sight.md`.
+///
+/// Empty whenever the reticle has nothing to show, when the layout authors no
+/// sight widgets, or when their model did not decode - the last being this
+/// project's rule for an asset it cannot play: draw nothing, and the loader
+/// report already said why.
+fn sight_draws(cx: &Context<'_>, sight: &crate::race::sight::Sight) -> Vec<Draw> {
+    use crate::race::sight;
+
+    if !sight.visible() || !sight.blinking_on() {
+        return Vec::new();
+    }
+    let alpha = sight.alpha();
+    if alpha <= 0.0 {
+        return Vec::new();
+    }
+    let colour = [1.0, 1.0, 1.0, alpha];
+
+    let model_for = |name: &str| {
+        cx.layout
+            .models
+            .iter()
+            .find(|model| model.name == name)
+            .and_then(|model| cx.sheet.get(&model.src))
+    };
+
+    let mut out = Vec::new();
+    let mut place = |placed: crate::sprite::Placed, piece: sight::Piece| {
+        let (w, h) = (placed.width as f32, placed.height as f32);
+        // The model is a quad centred on its own origin, so the piece's centre
+        // is the middle of the rectangle rather than its corner.
+        out.push(Draw::RotatedSprite {
+            rect: [
+                piece.centre[0] - SIGHT_SIZE * 0.5,
+                piece.centre[1] - SIGHT_SIZE * 0.5,
+                SIGHT_SIZE,
+                SIGHT_SIZE,
+            ],
+            uv: [placed.x as f32, placed.y as f32, w, h],
+            color: colour,
+            rotation: piece.rotation,
+        });
+    };
+
+    for (name, piece) in sight::MISSILE_BRACKETS.iter().zip(sight.brackets()) {
+        if let Some(placed) = model_for(name) {
+            place(placed, piece);
+        }
+    }
+    if let Some(placed) = model_for(sight::MISSILE_INNER) {
+        place(placed, sight.inner());
+    }
+    out
+}
+
+/// How big one piece of the reticle is drawn, in screen pixels.
+///
+/// The model's own quad: `missile_sight_outer.vex` runs `-3.9989 .. 3.9989` on
+/// both axes, and its `<Mode3D>` block is orthographic over the 480x272 screen
+/// at one unit to the pixel. Rounded to the eight units the exporter plainly
+/// meant, rather than carrying the quantisation of a 16-bit position through to
+/// a screen rectangle.
+const SIGHT_SIZE: f32 = 8.0;
+
 pub fn sprite_draw(sprite: &Sprite, sheet: &crate::sprite::Sheet) -> Option<Draw> {
     let placed = sheet.get(&sprite.src)?;
     Some(Draw::Sprite {

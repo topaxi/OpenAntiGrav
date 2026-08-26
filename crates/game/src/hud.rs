@@ -474,6 +474,14 @@ pub struct Readout {
     /// `None` on every tick of a race with weapons off, which is every mode but
     /// the single race - see `oag_race::Mode::weapons_enabled`.
     pub pickup: Option<oag_formats::weapons::Weapon>,
+    /// The lock-on reticle, or `None` for a caller that has none to draw.
+    ///
+    /// `Copy` state off `Race`, passed whole rather than reduced to five
+    /// rectangles here, so [`draw_list`] can resolve each piece against the
+    /// layout's own `<Mode3D>` models - which is where the art comes from and
+    /// what makes the four brackets one model drawn four ways. See
+    /// [`crate::race::sight`].
+    pub sight: Option<crate::race::sight::Sight>,
 }
 
 /// What [`Readout::speed_full_kmh`] defaults to.
@@ -609,5 +617,7 @@ pub fn inside_screen(rect: [f32; 4]) -> bool {
         && rect[1] + rect[3] <= SCREEN.1
 }
 
+#[cfg(test)]
+mod reticle_tests;
 #[cfg(test)]
 mod tests;

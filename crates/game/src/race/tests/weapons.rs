@@ -705,6 +705,79 @@ fn an_unguided_missile_fired_by_hand_ends_itself_on_time() {
     );
 }
 
+/// Holding a Missile behind a craft puts the reticle on it and then locks it.
+///
+/// **The whole lock-on chain through `Race::tick`**, which the unit tests in
+/// `race::sight` cannot reach: the held weapon decides there is a lock to take,
+/// `Ship_AcquireLock`'s window picks the craft, the camera projects it, and the
+/// reticle spends [`sight::HOLD_SECONDS`] closing on it. The tone follows the
+/// same three states.
+#[test]
+fn holding_a_missile_behind_a_craft_locks_it_after_the_recovered_hold() {
+    use crate::race::sight;
+
+    let mut race = race_with_a_grid();
+    race.weapons = Some(one_missile_table());
+
+    // Slot 1 parked squarely down slot 0's nose, inside the fixture table's
+    // 10..400 longitudinal window. Placed rather than driven: this is about the
+    // reticle, and an opponent that drove away would be testing the lock's
+    // window instead.
+    let forward = race.world.ships[0].physics.body.forward();
+    let ahead = race.world.ships[0].physics.body.position + forward * 60.0;
+
+    race.world.ships[0].pickup.weapon = Some(oag_formats::weapons::Weapon::Missile);
+
+    let mut states = Vec::new();
+    for _ in 0..180 {
+        race.world.ships[1].physics.body.position = ahead;
+        race.world.ships[1].physics.body.linear_velocity = Vec3::ZERO;
+        race.tick(&InputSnapshot::default());
+        states.push(race.sight_state());
+    }
+
+    assert!(
+        states.contains(&sight::State::Seeking),
+        "the reticle never found the craft parked down the nose"
+    );
+    let locked = states
+        .iter()
+        .position(|&s| s == sight::State::Locked)
+        .expect("the reticle never locked");
+    let seconds = locked as f32 / 60.0;
+    assert!(
+        seconds >= 0.8,
+        "it locked after {seconds}s, inside the recovered 0.8s hold"
+    );
+    assert!(race.sight().locked(), "the lock did not stay taken");
+}
+
+/// And holding something that does not lock draws no reticle at all.
+///
+/// The Missile and the LeachBeam are the only two weapons `Ship_AcquireLock`
+/// reads distances for; a Rocket has no lock and must not borrow one.
+#[test]
+fn holding_a_rocket_draws_no_reticle() {
+    use crate::race::sight;
+
+    let mut race = race_with_a_grid();
+    race.weapons = Some(one_missile_table());
+    let forward = race.world.ships[0].physics.body.forward();
+    let ahead = race.world.ships[0].physics.body.position + forward * 60.0;
+    race.world.ships[0].pickup.weapon = Some(oag_formats::weapons::Weapon::Rocket);
+
+    for _ in 0..180 {
+        race.world.ships[1].physics.body.position = ahead;
+        race.tick(&InputSnapshot::default());
+        assert_eq!(
+            race.sight_state(),
+            sight::State::Absent,
+            "a Rocket put a lock-on reticle on screen"
+        );
+    }
+    assert!(!race.sight().locked());
+}
+
 /// The cockpit view swaps the shield's **model**, it does not merely hide the
 /// player's hull.
 ///

@@ -293,78 +293,10 @@ pub enum Video {
     Backdrop,
 }
 
-/// One thing to draw, in the PSP's 480x272 screen space.
-#[derive(Debug, Clone, PartialEq)]
-pub enum Draw {
-    /// A solid rectangle: `[x, y, width, height]` and RGBA.
-    Fill {
-        /// Rectangle.
-        rect: [f32; 4],
-        /// Colour.
-        color: [f32; 4],
-    },
-    /// A movie's current frame, stretched to `rect`.
-    Video {
-        /// Rectangle.
-        rect: [f32; 4],
-        /// Which frame of the movie to show, counting from zero.
-        ///
-        /// Wraps on a movie that loops, so this is what a caller holding the
-        /// whole movie - a headless capture reading a [`crate::movie::FrameStore`] - asks for.
-        frame: usize,
-        /// How far playback has got, counting every loop.
-        ///
-        /// The same number [`crate::movie::Player::position`] reports, and the
-        /// **only** one a [`crate::movie::Feed`] can be asked with: a feed
-        /// decodes forward forever, so on the second time round a 270-frame
-        /// loop it holds positions 270..274 while `frame` has gone back to 0.
-        /// Asking it with `frame` takes nothing from that point on and the
-        /// picture freezes - which is exactly what the menu backdrop used to do
-        /// nine seconds into the boot sequence.
-        position: u64,
-        /// Which movie the frame belongs to.
-        source: Video,
-    },
-    /// One of the front end's own images, from the sprite sheet.
-    Sprite {
-        /// Where it goes on the 480x272 screen: `[x, y, width, height]`.
-        rect: [f32; 4],
-        /// Where it is in the sheet, in sheet pixels: `[x, y, width, height]`.
-        uv: [f32; 4],
-        /// Modulating colour. White leaves the texture alone.
-        color: [f32; 4],
-    },
-    /// A line of text with its baseline-less top-left at `x, y`.
-    Text {
-        /// Left or anchor edge, depending on `align`.
-        x: f32,
-        /// Top edge.
-        y: f32,
-        /// Scale multiplier applied to the glyph cell.
-        scale: f32,
-        /// Colour of the glyph body.
-        color: [f32; 4],
-        /// Colour of the glyph's **baked outline**, when the font has one.
-        ///
-        /// `None` means "the same as the body", which is what every caller wanted
-        /// before the two HUD fonts turned up: those two bake an outline into their
-        /// atlas and distinguish it only by grey level, so drawing them without a
-        /// separate border colour fills the whole silhouette and a digit becomes a
-        /// box. The three menu fonts and the built-in glyphs carry a constant mask, so
-        /// this changes nothing for them whatever it is set to. See [`crate::font::Atlas::luma`].
-        border: Option<[f32; 4]>,
-        /// Alignment about `x`.
-        align: Align,
-        /// The text.
-        text: String,
-        /// Wrap width from `widthlimited="true"`; `None` is one line, however wide.
-        wrap_width: Option<f32>,
-    },
-}
-
 mod draw;
 mod space;
 
+pub use draw::Draw;
 pub use space::{SCREEN, Space, pillarbox, pillarbox_in};
 
 /// How the intro state is getting on.

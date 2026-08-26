@@ -457,7 +457,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [Frame comparison: three residuals](handover/frame-comparison-three-residuals.md)
 - [Weapons: four of thirteen are built, and the fourth is the first one that is *recovered* rather than half-invented](handover/weapons-four-of-thirteen-are-built-and-the.md)
 - [Projectiles follow the floor, and the km/h fix - both now landed](handover/projectiles-follow-the-floor-and-the-km-h.md)
-- [The Missile fires without a lock now, and the lock-on indicator is nine widgets nobody draws](handover/the-missile-fires-without-a-lock-now-and.md)
+- [The Missile fires without a lock, and the lock-on reticle and its tone are in](handover/the-missile-fires-without-a-lock-now-and.md)
 - [A weapon identified by "it fires more than one" is not identified](handover/a-weapon-identified-by-it-fires-more-than.md)
 - [The hull sparks are approximated in three named ways](handover/the-hull-sparks-are-approximated-in-three-named.md)
 - [The original's camera/HUD shake on impact is untraced](handover/the-originals-camera-hud-shake-on-impact-is.md)

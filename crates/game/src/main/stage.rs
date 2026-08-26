@@ -394,6 +394,8 @@ impl Stage {
                 .context("building the scoreboard overlay")?;
         let mut race = race::Race::start(setup);
         race.set_boost_fov_kick(settings.graphics.boost_fov_kick);
+        // The reticle projects through the same field the picture is drawn at.
+        race.set_sight_fov(settings.graphics.fov);
         // Applied before the first tick, but unlike the kick this one is also
         // set again whenever the cycle button or the menu row moves it - see
         // `Session::cycle_camera_view`.

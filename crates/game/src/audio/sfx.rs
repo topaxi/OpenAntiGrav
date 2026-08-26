@@ -108,6 +108,9 @@ pub(super) struct SfxVoices {
     engines: [Engine; oag_gameplay::MAX_SHIPS],
     /// The shield's held voice, while one is up and the alternate drawn was a
     /// loop. See [`Cue::Shield`].
+    /// What the lock-on reticle was doing last frame, so its two blips fire on
+    /// the transitions rather than every frame. See [`Cue::LockOn`].
+    sight: crate::race::sight::State,
     shield: Option<VoiceId>,
     /// Whether the shield has already been responded to for this activation.
     ///
@@ -153,6 +156,7 @@ impl Audio {
             let mut rng = Rng::new(SFX_SEED);
             SfxVoices {
                 engines: std::array::from_fn(|_| Engine::new(&mut rng)),
+                sight: crate::race::sight::State::Absent,
                 shield: None,
                 shield_open: false,
                 blowup: None,
@@ -233,6 +237,42 @@ impl Audio {
                     }
                 }
                 _ => {}
+            }
+
+            // The lock-on reticle's two blips, on the edges of its state rather
+            // than as a level: one voice per transition, because this mixer has
+            // no equivalent of the original's cue parameter. See [`Cue::LockOn`].
+            let sight = race.sight_state();
+            if sight != voices.sight {
+                let waveform = match sight {
+                    crate::race::sight::State::Absent => None,
+                    crate::race::sight::State::Seeking => Some(0),
+                    crate::race::sight::State::Locked => Some(1),
+                };
+                // Only forward transitions blip. Falling back from locked to
+                // seeking - the target sliding off the nose - would otherwise
+                // chatter as the reticle hunted.
+                let forward = matches!(
+                    (voices.sight, sight),
+                    (
+                        crate::race::sight::State::Absent,
+                        crate::race::sight::State::Seeking
+                    ) | (
+                        crate::race::sight::State::Seeking,
+                        crate::race::sight::State::Locked
+                    )
+                );
+                if let (Some(index), true) = (waveform, forward)
+                    && let Some((sound, looping)) = banks.pick_at(Cue::LockOn, index)
+                {
+                    let play = if looping {
+                        Play::looping(sound, Cue::LockOn.bus())
+                    } else {
+                        Play::once(sound, Cue::LockOn.bus())
+                    };
+                    let _ = mixer.play(play);
+                }
+                voices.sight = sight;
             }
 
             // The explosion, on the same level-and-latch shape the shield uses
@@ -445,11 +485,33 @@ pub enum Cue {
     /// reading rather than a gap in it - whatever an opponent's explosion
     /// sounds like comes from somewhere this pass did not find.
     Blowup,
+    /// The lock-on reticle, seeking and then locked.
+    ///
+    /// `HudSight_UpdateTone` (`0x0881b34c`) opens **one** `~ROCKLOCK` voice the
+    /// first frame the reticle has anything, keeps the handle, and switches a
+    /// parameter between `0` while it is seeking and `1` once it has locked -
+    /// stopping the voice only when the target goes away. See
+    /// [`lock-sight.md`](../../../../docs/ghidra/functions/psp-pulse-usa/lock-sight.md),
+    /// confidence 85.
+    ///
+    /// **The bank agrees with the reading**: `~ROCKLOCK` lives in `hud.bnk`
+    /// beside `SPEEDUPPAD` and `~BLOWUP`, and it binds exactly **two**
+    /// waveforms, neither looping, 0.11 s apiece - which is what a parameter
+    /// with two values selects between.
+    ///
+    /// **This port fires them as two edges rather than as one parameterised
+    /// voice**, because this mixer has no cue parameters: waveform `0` on
+    /// entering [`crate::race::sight::State::Seeking`] and waveform `1` on
+    /// entering [`crate::race::sight::State::Locked`]. With two 0.11 s
+    /// non-looping waveforms the audible result is the same pair of blips; what
+    /// is lost is the original's ability to switch mid-voice, which at that
+    /// length it never gets to use. Recorded rather than smoothed over.
+    LockOn,
 }
 
 impl Cue {
     /// Every cue this port fires, which is every one it knows how to load.
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 9] = [
         Self::SpeedupPad,
         Self::Collision,
         Self::Absorb,
@@ -458,13 +520,14 @@ impl Cue {
         Self::ShieldActive,
         Self::Disengaging,
         Self::Blowup,
+        Self::LockOn,
     ];
 
     /// The bank the cue is looked up in.
     #[must_use]
     pub fn bank(self) -> BankName {
         match self {
-            Self::SpeedupPad | Self::Blowup => BankName::Hud,
+            Self::SpeedupPad | Self::Blowup | Self::LockOn => BankName::Hud,
             Self::Collision | Self::Engine => BankName::Ship,
             Self::Absorb | Self::Shield => BankName::Weapons,
             Self::ShieldActive | Self::Disengaging => BankName::Speech,
@@ -528,6 +591,7 @@ impl Cue {
             Self::ShieldActive => "shieldactive",
             Self::Disengaging => "disengaging",
             Self::Blowup => "~BLOWUP",
+            Self::LockOn => "~ROCKLOCK",
         }
     }
 
@@ -586,6 +650,11 @@ impl Cue {
             // Read, not assumed: case 4 hands it to the path that takes no
             // emitter and a volume of `0x400`.
             Self::Blowup => Placement::Unplaced,
+            // `HudSight_UpdateTone` opens it with a volume of `0x400` and no
+            // emitter argument, which is the same dry, full-volume shape - and
+            // it is a HUD sound about the player's own reticle rather than a
+            // thing happening somewhere in the world.
+            Self::LockOn => Placement::Unplaced,
         }
     }
 }
@@ -805,6 +874,25 @@ impl Banks {
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.sounds.is_empty()
+    }
+
+    /// One *named* waveform of a cue, by index, clamped to what it binds.
+    ///
+    /// For the one cue whose alternates are **not** interchangeable:
+    /// [`Cue::LockOn`] binds two, and which of them plays is the original's
+    /// seeking/locked parameter rather than a draw. Every other cue goes
+    /// through [`Self::pick`] and should - see the module docs on why the
+    /// selecting opcode being unread makes a random draw the honest default.
+    ///
+    /// Clamped rather than `None` on an out-of-range index: a bank that binds
+    /// one waveform where this expects two should play the one it has, not go
+    /// silent.
+    #[must_use]
+    pub fn pick_at(&self, cue: Cue, index: usize) -> Option<(Arc<Sound>, bool)> {
+        let loaded = self.sounds.get(&cue)?;
+        let index = index.min(loaded.waveforms.len().checked_sub(1)?);
+        let (sound, looping) = &loaded.waveforms[index];
+        Some((Arc::clone(sound), *looping))
     }
 
     /// One waveform for a cue, chosen by `rng` when the cue has alternates.

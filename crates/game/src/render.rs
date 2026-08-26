@@ -56,6 +56,16 @@ struct Quad {
     /// without splitting the pass. The movie still needs a split because it is a
     /// genuinely different pipeline; a sprite is not.
     mode: f32,
+    /// Clockwise turn about the quad's own centre, in radians.
+    ///
+    /// `0.0` for everything but [`Draw::RotatedSprite`]. The **geometry** spins
+    /// and the `uv` does not, which is what makes this a rotated model rather
+    /// than a rotated texture lookup: the four corner brackets of the lock-on
+    /// reticle are one model drawn four times.
+    ///
+    /// A trailing attribute, so adding it changed no existing site's meaning -
+    /// see [`Draw::RotatedSprite`] on why the variant is separate too.
+    rotation: f32,
 }
 
 /// What a glyph's baked outline is drawn in when nothing supplies a colour.
@@ -325,7 +335,8 @@ impl Renderer {
                         1 => Float32x4,
                         2 => Float32x4,
                         3 => Float32x4,
-                        4 => Float32
+                        4 => Float32,
+                        5 => Float32
                     ],
                 })],
                 compilation_options: Default::default(),
@@ -523,6 +534,20 @@ impl Renderer {
                     // inert here. It still has to be a real value.
                     border: *color,
                     mode: MODE_SPRITE,
+                    rotation: 0.0,
+                }),
+                Draw::RotatedSprite {
+                    rect,
+                    uv,
+                    color,
+                    rotation,
+                } => self.quads.push(Quad {
+                    rect: *rect,
+                    uv: *uv,
+                    color: *color,
+                    border: *color,
+                    mode: MODE_SPRITE,
+                    rotation: *rotation,
                 }),
                 Draw::Text {
                     x,
@@ -654,6 +679,7 @@ impl Renderer {
             // is a no-op and this only has to be a real value.
             border: color,
             mode: MODE_ATLAS,
+            rotation: 0.0,
         });
     }
 }

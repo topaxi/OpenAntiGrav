@@ -172,19 +172,20 @@ pub struct Fill {
 
 /// One `<Mode3D><Model>`: a `.vex` model drawn in the 3D overlay layer.
 ///
-/// Recorded and **not drawn**. The referenced models are the countdown
-/// (`Pulse_Ready_Go`, `Cockpit_321GO`) and the weapon sights, all of which need
-/// a second pass with a projection of their own. See `docs/ui/hud.md`.
+/// Recorded here, and drawn by whoever wants one. The countdown
+/// (`Pulse_Ready_Go`, `Cockpit_321GO`) still needs a second pass with a
+/// projection of its own; the weapon sights do not, and are drawn. See
+/// `docs/ui/hud.md`.
 ///
-/// **The sights are nine widgets and this comment used to name two of them
-/// wrongly.** `BOOT.BIN` holds one contiguous run of them at `0x08a79cd4` -
-/// `missile_sight_1` … `missile_sight_4`, `missile_sight_inner`, then
-/// `leachbeam_sight_1` … `leachbeam_sight_4` - and there is **no**
-/// `missile_sight_outer` string anywhere in the executable. Four brackets and a
-/// centre is the shape of a lock-on reticle rather than of an inner/outer pair,
-/// which changes what drawing them means: they are anchored on the *locked
-/// craft*, not on the screen. That is the missing lock-on indicator; see the
-/// handover thread.
+/// **The sights are nine widgets over three models.** The three model names this
+/// comment used to list are right; what it did not say is that four widgets
+/// instance each of two of them. `Arcade_HUD.xml` authors `missile_sight_1` …
+/// `missile_sight_4` all off `missile_sight_outer.vex`, `missile_sight_inner`
+/// off its own, and `leachbeam_sight_1` … `leachbeam_sight_4` off
+/// `leachbeam_sight.vex` - nine widgets, all at the same placeholder position,
+/// which the runtime overwrites every frame. Four brackets around a centre is a
+/// lock-on reticle anchored on the *locked craft*. Drawn as of 2026-08-26; see
+/// `docs/ghidra/functions/psp-pulse-usa/lock-sight.md` for the placement law.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Model {
     /// The `name` attribute.

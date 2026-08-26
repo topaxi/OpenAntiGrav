@@ -619,19 +619,19 @@ Recorded as a direction, not a decision:
 
 Recorded so none of this reads as undiscovered work.
 
-- **The `<Mode3D>` layer.** The countdown (`Pulse_Ready_Go`, `Cockpit_321GO`) and
-  the weapon sights. Needs a second pass with its own projection.
+- **The `<Mode3D>` layer: the countdown only, now.** `Pulse_Ready_Go` and
+  `Cockpit_321GO` still need a second pass with its own projection.
 
-  **The sights are nine widgets, and this entry named two of them wrongly until
-  2026-08-26.** One contiguous run in `BOOT.BIN` at `0x08a79cd4`:
-  `missile_sight_1` … `missile_sight_4`, `missile_sight_inner`, then
-  `leachbeam_sight_1` … `leachbeam_sight_4`. There is **no**
-  `missile_sight_outer` string in the executable at all. Four brackets and a
-  centre is a lock-on reticle, not an inner/outer pair - so these are anchored on
-  the craft `Ship_AcquireLock` picked rather than parked on the screen, and
-  drawing them is what would give the Missile the lock-on indicator this engine
-  does not have. The lock **tone** is a separate loose end: no cue has been tied
-  to it, and `~ROCKLOCK` (`0x08a79b98`) is a candidate at 40 and nothing more.
+  **The weapon sights came off this list on 2026-08-26** - they are drawn, and as
+  2D quads rather than through a 3D pass. The three model names this entry used
+  to list are right; what was missing is that they are **nine widgets over three
+  models**: `missile_sight_1` ... `missile_sight_4` all instance
+  `missile_sight_outer.vex`, `missile_sight_inner` has its own, and
+  `leachbeam_sight_1` ... `leachbeam_sight_4` instance `leachbeam_sight.vex`.
+  Each model is a single 8-unit textured quad, so that block needs no projection
+  of its own - only a per-quad rotation. See
+  [lock-sight.md](../ghidra/functions/psp-pulse-usa/lock-sight.md), which also
+  identifies the lock tone as `~ROCKLOCK`.
 - **Zone and Eliminator HUDs.** Their layouts parse; nothing drives them.
 - **Medal targets.** `IG_HUD_GOLD`/`SILVER`/`BRONZE`/`RECORD` need progression
   data.

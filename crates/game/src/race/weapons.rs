@@ -7,6 +7,14 @@
 
 use super::*;
 
+/// The far plane the reticle's own projection uses.
+///
+/// Not a visual range: [`sight::DRAW_RANGE`] is, and it is tested in eye space
+/// before the projection runs. This only has to be far enough that no craft the
+/// sight would draw is clipped by it, which at 250 units of draw range anything
+/// past a few thousand is.
+const SIGHT_FAR: f32 = 10_000.0;
+
 impl Race {
     /// Hands a time trial or a speed lap its free Turbo.
     ///
@@ -251,6 +259,93 @@ impl Race {
             );
         }
         self.world.ships[0].pickup.weapon = None;
+    }
+
+    /// One tick of the lock-on reticle, and the tone state that goes with it.
+    ///
+    /// **Recovered** from `HudSight_Update` (`0x0881dbcc`) - the law itself is
+    /// in [`crate::race::sight`], and this is only what feeds it. See
+    /// `docs/ghidra/functions/psp-pulse-usa/lock-sight.md`.
+    ///
+    /// # Which craft it points at
+    ///
+    /// The one `Ship_AcquireLock` would pick for the weapon the player is
+    /// **holding**, recomputed every tick. The original runs that function per
+    /// frame and stores the winner on the entity; running it here reaches the
+    /// same answer without putting a lock on `World`, which would move a
+    /// determinism hash for something only the screen reads.
+    ///
+    /// **Only the Missile drives it today**, and the LeachBeam is the reason
+    /// that is worth stating rather than assuming: it locks too - it is the
+    /// other weapon `Ship_AcquireLock` reads distances for, at `stats+0x114`
+    /// and `+0x118`, and it has its own four `leachbeam_sight_*` widgets over a
+    /// hollow-triangle model. What stops it here is that
+    /// `oag_formats::weapons` does not parse a `<Weapon type="LeachBeam">`
+    /// block at all, so there are no distances to run the window against.
+    /// Wiring it is parsing that block and adding an arm here, not new geometry.
+    ///
+    /// # The gate is ours
+    ///
+    /// The original guards its projection with a condition this project has
+    /// read and not understood - see the page's "The gate is the one part not
+    /// read". This uses "the held weapon locks, and something is lockable",
+    /// which is what the weapon plays like.
+    pub(super) fn update_sight(&mut self) {
+        let target = self.sight_target();
+        let projected = target.and_then(|slot| {
+            let world = self.world.ships[slot as usize].physics.body.position;
+            // The virtual screen's own aspect, not the window's. The original
+            // projects into 480x272 because that *is* its screen; this engine
+            // letterboxes the same rectangle into whatever the window is, so
+            // the two agree exactly at the original's shape and drift a little
+            // as the display aspect is taken away from it. **Ours**, and the
+            // alternative - projecting at the window aspect - would put the
+            // reticle off the craft on a 480x272 capture, which is the frame
+            // every comparison against the original is taken at.
+            let aspect = sight::SCREEN[0] / sight::SCREEN[1];
+            let view = self.view();
+            // The far plane is irrelevant here - the reticle's own 250-unit
+            // range test runs in eye space, before the projection - so this
+            // takes a value large enough never to clip a craft the sight would
+            // otherwise draw.
+            let projection = self.projection(aspect, SIGHT_FAR, self.sight_fov);
+            sight::project(view, projection * view, world)
+        });
+        self.sight_state = self.sight.update(self.dt, projected);
+    }
+
+    /// Which craft the reticle is over, or `None`.
+    ///
+    /// Split out so the choice can be asserted without a camera. Returns
+    /// `None` whenever the player is holding something that does not lock,
+    /// which is every weapon but the Missile and the LeachBeam.
+    pub(super) fn sight_target(&self) -> Option<u8> {
+        if self.world.ships[0].pickup.weapon != Some(oag_formats::weapons::Weapon::Missile) {
+            return None;
+        }
+        let stats = self
+            .weapons
+            .as_ref()
+            .and_then(oag_formats::weapons::WeaponStats::missile)?;
+        let count = self.world.ship_count as usize;
+        let ship = &self.world.ships[0];
+        // From the nose and along the craft's forward, the same two the fire
+        // path takes the lock from - see [`Race::fire_missile`] on why the nose
+        // and not the centre.
+        let (origin, _, _) = oag_gameplay::projectile::missile::launch(
+            &ship.physics,
+            &ship.handling.dimensions,
+            &stats,
+            to_format_class(self.class),
+        );
+        oag_gameplay::projectile::missile::lock(
+            &self.world.ships[..count],
+            0,
+            origin,
+            ship.physics.body.forward(),
+            &stats,
+            self.course.as_ref().map(oag_race::Course::length),
+        )
     }
 
     /// Locks a target if there is one and puts one missile in the air for `slot`.

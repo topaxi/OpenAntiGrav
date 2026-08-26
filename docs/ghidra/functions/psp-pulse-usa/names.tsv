@@ -530,6 +530,10 @@
 0x088687c0	function	MissilePool_SpawnRemote	78	missile.md
 0x08868a10	function	MissilePool_DestroyRemote	78	missile.md
 0x0886de60	function	RocketPool_Update	82	missile.md
+0x0881dbcc	function	HudSight_Update	88	lock-sight.md
+0x0881b604	function	HudSight_Bind	90	lock-sight.md
+0x0881b34c	function	HudSight_UpdateTone	85	lock-sight.md
+0x0883b358	function	Hud_ResolveLockTarget	80	lock-sight.md
 0x08851d88	function	WeaponAiStats_Load	90	ai-stats.md
 0x08852178	function	WeaponAiStats_ParseWeapon	90	ai-stats.md
 0x08851d3c	function	WeaponAiStats_Reset	90	ai-stats.md

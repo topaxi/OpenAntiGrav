@@ -1,0 +1,492 @@
+//! The lock-on reticle: where its five pieces go, and when it says "locked".
+//!
+//! **Recovered whole** from `HudSight_Update` (`0x0881dbcc`), confidence 88 -
+//! evidence and per-claim confidences on
+//! `docs/ghidra/functions/psp-pulse-usa/lock-sight.md`. Everything in this file
+//! is the original's arithmetic; the short list of what is not is under
+//! [What is ours](#what-is-ours).
+//!
+//! The reticle is four corner brackets around a box plus one closed box in the
+//! middle. The brackets sit at `±extent` from a *smoothed* centre that chases
+//! the locked craft's projected position; the inner one leads them, offset
+//! toward the true position by at most `0.4` of the extent. That lag is the
+//! whole visual: the brackets are seen closing.
+//!
+//! # What is ours
+//!
+//! - **The gate.** The original guards its projection block with a condition
+//!   this project has read but not understood - see the page's "The gate is the
+//!   one part not read". [`Race`](super::Race) drives this from "the held weapon
+//!   locks and something is lockable" instead, which is what the weapon plays
+//!   like, and says so.
+//! - **The screen-space sign convention.** The original computes
+//!   `136 + 136 * y/w` against a clip space whose `y` runs down; this engine's
+//!   runs up, so [`project`] flips it. Same number, our axis.
+//! - **Nothing else.** The extents, the rates, the `0.8`, the `0.7`, the four
+//!   rotations, the `0.4` inner clamp, the `250.0` range and the `w > 0` guard
+//!   are all read out of the function.
+
+use oag_core::math::{Mat4, Vec3, Vec4};
+
+/// The virtual screen every HUD number on these discs is authored for.
+pub const SCREEN: [f32; 2] = [480.0, 272.0];
+
+/// How far the reticle may be from the camera and still be drawn, in world
+/// units.
+///
+/// **Recovered, confidence 90** - `HudSight_Update` tests
+/// `length(eye_space) < 250.0` before it projects. It is a range on the *sight*
+/// and not on the lock: the Missile's authored `lock_max_dist` is longer, so a
+/// craft can be locked and have no reticle drawn over it.
+pub const DRAW_RANGE: f32 = 250.0;
+
+/// How long a target must stay on screen before the lock takes, in seconds.
+///
+/// **Recovered, confidence 90**, and it is the answer to a question
+/// `missile.md` recorded as open for months: `HudSight_Update` accumulates `dt`
+/// into a hold timer whenever the target projects on screen, resets it to zero
+/// the moment it does not, and only sets the lock flag - `entity+0x860 & 1`,
+/// the one `Ship_FireHeldWeapon` gates on - when that timer is past `0.8` **and**
+/// the reticle has caught up with the target this frame.
+///
+/// So a lock is not a property of geometry alone. Two craft in identical
+/// positions differ by how long one of them has been held there.
+pub const HOLD_SECONDS: f32 = 0.8;
+
+/// The reticle's half-extent when it has nothing, in screen pixels.
+///
+/// **Recovered, confidence 88.** The brackets sit this far out and wait.
+pub const EXTENT_OPEN: f32 = 30.0;
+
+/// The half-extent while a target is on screen but not yet locked.
+pub const EXTENT_SEEKING: f32 = 9.6;
+
+/// The half-extent once the lock is taken. The brackets close this far.
+pub const EXTENT_LOCKED: f32 = 6.0;
+
+/// How fast the extent eases toward its target, in pixels a second.
+///
+/// **Recovered, confidence 85** - `dt * 50.0`, taken `1.4` times faster while
+/// the current extent is above [`EXTENT_SEEKING`], which is the direction that
+/// snaps shut rather than the one that opens.
+pub const EXTENT_RATE: f32 = 50.0;
+
+/// The extra rate applied while the extent is shrinking from wide open.
+pub const EXTENT_SNAP: f32 = 1.4;
+
+/// The base speed the reticle centre chases at, in pixels a second.
+///
+/// **Recovered, confidence 88** - `step = dt * 30.0`, then multiplied by the
+/// rate below. Split into two constants because the original does: one is a
+/// distance a frame, the other is unitless.
+pub const CHASE_STEP: f32 = 30.0;
+
+/// How much the vertical counts for, when deciding whether the reticle arrived.
+///
+/// **Recovered, confidence 90** - the literal `0x3f333333` = `0.7`, applied to
+/// `dy` before the distance and **divided back out** of the step afterwards.
+/// The two are not the same operation once the step is clamped, which is why
+/// both halves are reproduced rather than cancelled.
+pub const VERTICAL_WEIGHT: f32 = 0.7;
+
+/// How much of the extent the inner box may lead the brackets by.
+///
+/// **Recovered, confidence 88** - the offset from the smoothed centre to the
+/// true projected point, clamped to `0.4 * extent`.
+pub const INNER_LEAD: f32 = 0.4;
+
+/// The four rotations the corner brackets are drawn at, in radians.
+///
+/// **Recovered, confidence 92**, and they are *rotations* rather than mirrors:
+/// the original writes an angle to `widget+0xac` for each of the four, as the
+/// literals `0x3fc90fdb`, `0x40490fdb`, `0` and `0x4096cbe4`. One corner
+/// bracket makes four corners no other way.
+///
+/// Indexed the way the corners below are: `[-e,-e]`, `[+e,-e]`, `[-e,+e]`,
+/// `[+e,+e]`.
+pub const BRACKET_ROTATIONS: [f32; 4] = [
+    std::f32::consts::FRAC_PI_2,
+    std::f32::consts::PI,
+    0.0,
+    std::f32::consts::PI + std::f32::consts::FRAC_PI_2,
+];
+
+/// The alpha a near target's reticle is drawn at, out of 255.
+pub const ALPHA_NEAR: f32 = 255.0;
+
+/// The alpha a far target's reticle is drawn at.
+///
+/// **Recovered, confidence 80.** "Far" is a second, softer range test on the
+/// projected depth, on top of [`DRAW_RANGE`]; this engine has no equivalent of
+/// the global it compares against, so [`Sight::update`] treats every drawn
+/// target as near. Recorded rather than approximated - see the module docs.
+pub const ALPHA_FAR: f32 = 96.0;
+
+/// How fast alpha eases, in units of 255 a second.
+pub const ALPHA_RATE: f32 = 1000.0;
+
+/// How long each half of the seeking blink lasts, in seconds.
+///
+/// **Recovered, confidence 85** - a `0.1` accumulator toggling a flag, so 5 Hz
+/// on and off, 10 toggles a second. It runs the whole time and is only *spent*
+/// while the reticle is not locked.
+pub const BLINK_PERIOD: f32 = 0.1;
+
+/// The four corner-bracket widgets of the Missile's reticle, in the order the
+/// original's slot run binds them.
+///
+/// **Recovered** from `HudSight_Bind` (`0x0881b604`), which looks each up by
+/// name under the `"HUD->"` path. All four instance one model - see
+/// [`is_sight_widget`].
+pub const MISSILE_BRACKETS: [&str; 4] = [
+    "missile_sight_1",
+    "missile_sight_2",
+    "missile_sight_3",
+    "missile_sight_4",
+];
+
+/// The closed box at the middle of the Missile's reticle.
+pub const MISSILE_INNER: &str = "missile_sight_inner";
+
+/// The LeachBeam's four, which are hollow arrowheads rather than brackets.
+///
+/// **Bound by the original and not drawn here**, and the reason is upstream of
+/// the reticle: `oag_formats::weapons` parses no `<Weapon type="LeachBeam">`
+/// block, so there are no `lock_min_dist`/`lock_max_dist` to run
+/// `Ship_AcquireLock`'s window against. Listed anyway so
+/// [`is_sight_widget`] pulls their model into the sheet with the rest -
+/// the art is on the disc and reaching it is not the blocker.
+pub const LEACHBEAM_BRACKETS: [&str; 4] = [
+    "leachbeam_sight_1",
+    "leachbeam_sight_2",
+    "leachbeam_sight_3",
+    "leachbeam_sight_4",
+];
+
+/// Whether a `<Mode3D><Model>` widget is one of the nine lock-on sights.
+///
+/// By name, the way the original binds them, rather than by the model each
+/// names: four widgets share `missile_sight_outer.vex` and four share
+/// `leachbeam_sight.vex`, so the model is not what tells them apart.
+#[must_use]
+pub fn is_sight_widget(name: &str) -> bool {
+    MISSILE_BRACKETS.contains(&name) || name == MISSILE_INNER || LEACHBEAM_BRACKETS.contains(&name)
+}
+
+/// Where a target is on screen, and how far away it is.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Projected {
+    /// Screen position in the 480x272 space, `y` down.
+    pub screen: [f32; 2],
+    /// Distance from the camera in world units, which drives the zoom.
+    pub distance: f32,
+}
+
+/// Projects a world position into the HUD's screen space.
+///
+/// Returns `None` for a target behind the camera or past [`DRAW_RANGE`].
+///
+/// **`w > 0` is the original's own guard**, not one added here, and it is the
+/// one that matters: a craft behind the camera divides by a negative `w` and
+/// lands at a mirrored on-screen point that looks entirely plausible in a still
+/// frame. The `0.9` lock cone makes that rare rather than impossible.
+#[must_use]
+pub fn project(view: Mat4, view_projection: Mat4, world: Vec3) -> Option<Projected> {
+    let eye = view * Vec4::new(world.x, world.y, world.z, 1.0);
+    let distance = Vec3::new(eye.x, eye.y, eye.z).length();
+    if distance >= DRAW_RANGE {
+        return None;
+    }
+    let clip = view_projection * Vec4::new(world.x, world.y, world.z, 1.0);
+    if clip.w <= 0.0 {
+        return None;
+    }
+    let x = SCREEN[0] * 0.5 + SCREEN[0] * 0.5 * (clip.x / clip.w);
+    // The original's `136 + 136 * y/w` against a clip space whose `y` runs
+    // down. Ours runs up, so the sign flips and the number does not.
+    let y = SCREEN[1] * 0.5 - SCREEN[1] * 0.5 * (clip.y / clip.w);
+    Some(Projected {
+        screen: [x, y],
+        distance,
+    })
+}
+
+/// What the reticle is doing, and what the tone plays because of it.
+///
+/// **Recovered**: the original publishes exactly these three values into
+/// `DAT_002aca54`, which `HudSight_UpdateTone` (`0x0881b34c`) turns into one
+/// `~ROCKLOCK` voice with a parameter. See `lock-sight.md`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum State {
+    /// Nothing to lock, or nothing on screen. The voice is stopped.
+    #[default]
+    Absent,
+    /// A target is on screen and the brackets are closing. Parameter `0`.
+    Seeking,
+    /// The lock is taken. Parameter `1`.
+    Locked,
+}
+
+/// One of the five pieces of the reticle, placed.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Piece {
+    /// Centre in screen space.
+    pub centre: [f32; 2],
+    /// Rotation in radians, clockwise about that centre. Zero for the inner.
+    pub rotation: f32,
+}
+
+/// The reticle's live state for one player.
+///
+/// Held on [`Race`](super::Race) rather than in `World`, for the reason
+/// `Race::exhaust` is: it is what the screen shows, it must not move a
+/// determinism hash, and the simulation does not know a renderer exists.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Sight {
+    /// The smoothed centre the brackets are drawn around (`hud+0xc0`/`+0xc4`).
+    centre: [f32; 2],
+    /// The half-extent (`hud+0x280`).
+    extent: f32,
+    /// How long the target has been on screen (`hud+0xe8` - the slot the widget
+    /// bind skips, which is what made it look like a tenth widget).
+    hold: f32,
+    /// Whether the lock is taken this frame (`hud+0xc8`).
+    locked: bool,
+    /// Where the target actually projected, kept so the inner can lead.
+    target: Option<[f32; 2]>,
+    /// The previous frame's projection, for the original's `2*new - old`
+    /// on-screen test.
+    previous: Option<[f32; 2]>,
+    /// Eased alpha, 0..255.
+    alpha: f32,
+    /// The 5 Hz blink accumulator and its flag.
+    blink_timer: f32,
+    blink: bool,
+}
+
+impl Default for Sight {
+    fn default() -> Self {
+        Self {
+            centre: [SCREEN[0] * 0.5, SCREEN[1] * 0.5],
+            extent: EXTENT_OPEN,
+            hold: 0.0,
+            locked: false,
+            target: None,
+            previous: None,
+            alpha: 0.0,
+            blink_timer: 0.0,
+            blink: false,
+        }
+    }
+}
+
+impl Sight {
+    /// One frame of the reticle, given where its target projected.
+    ///
+    /// `target` is `None` when nothing is lockable, when the held weapon does
+    /// not lock, or when [`project`] refused - all three are the same thing to
+    /// this function, which is the original's arrangement.
+    ///
+    /// Returns what the tone should be doing.
+    ///
+    /// # The order is the original's and two steps of it look wrong
+    ///
+    /// 1. **The on-screen test is run against `2 * new - old`**, a one-frame
+    ///    extrapolation, and what is *drawn* is the smoothed centre. So a target
+    ///    about to leave the screen stops counting a frame early.
+    /// 2. **The lock is taken only on the frame the reticle arrives.** Being
+    ///    held past [`HOLD_SECONDS`] is necessary and not sufficient: the
+    ///    brackets have to have caught up in the same frame.
+    pub fn update(&mut self, dt: f32, target: Option<Projected>) -> State {
+        self.blink_timer -= dt;
+        while self.blink_timer < 0.0 {
+            self.blink_timer += BLINK_PERIOD;
+            self.blink = !self.blink;
+        }
+
+        // The extrapolated point is what decides "on screen"; the raw one is
+        // what everything else uses.
+        let visible = target.and_then(|p| {
+            let previous = self.previous.unwrap_or(p.screen);
+            let extrapolated = [
+                2.0 * p.screen[0] - previous[0],
+                2.0 * p.screen[1] - previous[1],
+            ];
+            let on_screen = (0.0..SCREEN[0]).contains(&extrapolated[0])
+                && (0.0..SCREEN[1]).contains(&extrapolated[1]);
+            on_screen.then_some((extrapolated, p.distance))
+        });
+        self.previous = target.map(|p| p.screen);
+
+        self.hold = if visible.is_some() {
+            self.hold + dt
+        } else {
+            0.0
+        };
+
+        let was_locked = self.locked;
+        self.locked = false;
+        let (aim, zoom) = match visible {
+            Some((screen, distance)) => (screen, (CHASE_STEP / distance).clamp(1.0, 5.0)),
+            // The centre is left where it is and the brackets open; the
+            // original does not recentre.
+            None => (self.centre, 1.0),
+        };
+        self.target = visible.map(|(screen, _)| screen);
+
+        let step = dt * CHASE_STEP;
+        let dx = aim[0] - self.centre[0];
+        let dy = (aim[1] - self.centre[1]) * VERTICAL_WEIGHT;
+        let distance = (dx * dx + dy * dy).sqrt();
+
+        let mut rate = 1.0;
+        if visible.is_some() {
+            rate = (distance * 0.12 + 1.5) * 1.1;
+            if self.hold > HOLD_SECONDS && was_locked {
+                rate = 15.0;
+            }
+            rate *= zoom;
+        }
+
+        if distance < step * rate {
+            self.centre = aim;
+            if visible.is_some() && self.hold > HOLD_SECONDS {
+                self.locked = true;
+            }
+        } else {
+            let t = step * rate / distance;
+            self.centre[0] += dx * t;
+            self.centre[1] += dy * t / VERTICAL_WEIGHT;
+        }
+
+        let wanted = if visible.is_some() {
+            if self.locked {
+                EXTENT_LOCKED
+            } else {
+                EXTENT_SEEKING
+            }
+        } else {
+            EXTENT_OPEN
+        } * zoom;
+        let ease = dt
+            * EXTENT_RATE
+            * if self.extent > EXTENT_SEEKING {
+                EXTENT_SNAP
+            } else {
+                1.0
+            };
+        self.extent = ease_toward(self.extent, wanted, ease);
+
+        let alpha_target = if visible.is_some() { ALPHA_NEAR } else { 0.0 };
+        self.alpha = ease_toward(self.alpha, alpha_target, dt * ALPHA_RATE);
+
+        match (visible.is_some(), self.locked) {
+            (false, _) => State::Absent,
+            (true, false) => State::Seeking,
+            (true, true) => State::Locked,
+        }
+    }
+
+    /// Whether anything is drawn at all.
+    ///
+    /// **Recovered**: the original shows all five while the target is visible
+    /// *or* while the extent is still easing, so the brackets are watched
+    /// opening again after a target is lost rather than vanishing with it.
+    #[must_use]
+    pub fn visible(&self) -> bool {
+        self.target.is_some() || (self.extent - EXTENT_OPEN).abs() > 0.01
+    }
+
+    /// Whether the lock is taken.
+    #[must_use]
+    pub fn locked(&self) -> bool {
+        self.locked
+    }
+
+    /// The smoothed centre the brackets are drawn around.
+    #[must_use]
+    pub fn centre(&self) -> [f32; 2] {
+        self.centre
+    }
+
+    /// Where the target actually is on screen, or `None` when there is none.
+    ///
+    /// The point [`Self::centre`] is chasing, after the original's one-frame
+    /// extrapolation. The two are equal on exactly the frames the reticle
+    /// arrives - which is also the only kind of frame a lock is taken on, so
+    /// `locked() && centre() != aim()` is impossible by construction.
+    #[must_use]
+    pub fn aim(&self) -> Option<[f32; 2]> {
+        self.target
+    }
+
+    /// The eased alpha, 0..1.
+    #[must_use]
+    pub fn alpha(&self) -> f32 {
+        (self.alpha / 255.0).clamp(0.0, 1.0)
+    }
+
+    /// Whether the seeking blink is on this frame. Always on once locked.
+    #[must_use]
+    pub fn blinking_on(&self) -> bool {
+        self.locked || self.blink
+    }
+
+    /// The four corner brackets, in the order [`BRACKET_ROTATIONS`] indexes.
+    #[must_use]
+    pub fn brackets(&self) -> [Piece; 4] {
+        let e = self.extent;
+        let [cx, cy] = self.centre;
+        let corners = [
+            [cx - e, cy - e],
+            [cx + e, cy - e],
+            [cx - e, cy + e],
+            [cx + e, cy + e],
+        ];
+        std::array::from_fn(|i| Piece {
+            centre: corners[i],
+            rotation: BRACKET_ROTATIONS[i],
+        })
+    }
+
+    /// The inner box, which leads the brackets toward the true position.
+    #[must_use]
+    pub fn inner(&self) -> Piece {
+        let [cx, cy] = self.centre;
+        let limit = INNER_LEAD * self.extent;
+        let Some(target) = self.target else {
+            return Piece {
+                centre: self.centre,
+                rotation: 0.0,
+            };
+        };
+        let mut dx = target[0] - cx;
+        let mut dy = target[1] - cy;
+        let length = (dx * dx + dy * dy).sqrt();
+        if length > limit && length > 0.0 {
+            let t = limit / length;
+            dx *= t;
+            dy *= t;
+        }
+        Piece {
+            centre: [cx + dx, cy + dy],
+            rotation: 0.0,
+        }
+    }
+}
+
+/// Moves `current` toward `wanted` by at most `step`.
+///
+/// The original writes this out twice, once for the extent and once for the
+/// alpha, in the same shape both times: assign the target, then walk back to
+/// the clamped value if the step did not cover the gap.
+fn ease_toward(current: f32, wanted: f32, step: f32) -> f32 {
+    if current < wanted {
+        (current + step).min(wanted)
+    } else {
+        (current - step).max(wanted)
+    }
+}
+
+#[cfg(test)]
+mod tests;

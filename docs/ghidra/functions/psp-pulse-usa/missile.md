@@ -476,28 +476,18 @@ the neighbouring pointers resolve correctly to `"MISSILEEXPWALL"` and
 `"MISSILEEXPSHIP"`. Confidence 60 that this is a copy-paste in the original
 rather than a misread. Not load-bearing: nothing here plays a cue on that path.
 
-## The lock-on sight is nine widgets, and none of them is drawn
+## The lock-on sight, and the lock flag's writer
 
-By-catch of the same pass, and the answer to "why is there no lock-on indicator".
-`BOOT.BIN` holds one contiguous run of `<Mode3D>` model names at `0x08a79cd4`:
+By-catch of the same pass, chased to the end on its own page:
+[lock-sight.md](lock-sight.md). In short - `BOOT.BIN` holds one contiguous run of
+sight **widget** names at `0x08a79cd4`, nine of them over **three** models
+(`missile_sight_1` ... `_4` all instance `missile_sight_outer.vex`), and
+`HudSight_Update` (`0x0881dbcc`) both places them and **writes
+`entity+0x860 & 1`** - the flag `Ship_FireHeldWeapon` gates the lock on. So the
+lock is not instant: it needs `0.8` seconds of holding a target on screen.
 
-```text
-missile_sight_1  missile_sight_2  missile_sight_3  missile_sight_4
-missile_sight_inner
-leachbeam_sight_1  leachbeam_sight_2  leachbeam_sight_3  leachbeam_sight_4
-```
-
-**There is no `missile_sight_outer` string in the executable**, which
-[hud.md](../../../ui/hud.md) and `oag_game::hud::widget::Model` both claimed;
-both corrected. Four brackets and a centre is a lock-on reticle, so these are
-anchored on the craft `Ship_AcquireLock` picked rather than parked on the screen.
-`oag-game` parses them and draws none of them - the `<Mode3D>` layer needs its
-own projection pass.
-
-The lock **tone** is not identified. `~ROCKLOCK` (`0x08a79b98`) is the only
-plausible-looking string and no instruction references its pointer, so it is a
-candidate at **40** - below the threshold at which this project writes a name
-down.
+The tone is `~ROCKLOCK`, one voice started once and switched between a seeking
+and a locked variant by a parameter (`HudSight_UpdateTone`, `0x0881b34c`).
 
 ## A correction: `craft+0x1bc` is not a target
 
