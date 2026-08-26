@@ -19,8 +19,8 @@ use oag_physics::{Body, Sideshift};
 mod line_following_tests;
 mod personality_tests;
 mod provocation_tests;
-mod reaction_tests;
 mod ramming_tests;
+mod reaction_tests;
 mod yielding_tests;
 
 fn placed(place: u8) -> Field {

@@ -467,7 +467,6 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [Zone races run on all three titles now, and the craft axis closed the way the circuit one did](handover/zone-races-run-on-all-three-titles-now.md)
 - [The AI is authored XML, and its units are the only thing blocking a port of the original's numbers](handover/the-ai-is-authored-xml-and-its-units.md)
 - [The HUD shows a place, measured against the original; the shield bar's colour is the new open half](handover/the-hud-shows-a-place-measured-against-the.md)
-- [The AI drives; two residuals are what is left](handover/the-ai-drives-two-residuals-are-what-is.md)
 - [The field drove in single file, and the fix is a per-craft personality off the disc's own AI corridor](handover/the-field-drove-in-single-file-and-the.md)
 - [`psp-pulse-usa`'s import carries unrelocated address constants, at least around `0x08835830`](handover/psp-pulse-usas-import-carries-unrelocated-address-constants.md)
 - [Nothing airborne has ever been captured](handover/nothing-airborne-has-ever-been-captured.md)
