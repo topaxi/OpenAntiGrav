@@ -295,6 +295,94 @@ Worth knowing before spending time on it: the executable's own
 choice is not made by composing a name at runtime. See
 [race-hud.md](../ghidra/functions/ps3-hdfury-eu/race-hud.md).
 
+### The precedence mechanism, read precisely
+
+`Archives::holder_of` (`crates/assets/src/source.rs`) checks the bulk archive
+(`data`, which `oag_hd`'s `DATA_CANDIDATES` pins to `DATA00` alone) first, then
+the companion archive (`fe`, pinned to `DATA02` alone), then `extra` in
+candidate order, and returns the **first** match - `read_name` never sees the
+other copies. So `/data/xml/elimination_hud.xml` and `/data/xml/speedlap_hud.xml`
+resolve to `DATA00`, which has both. `/data/xml/zone_hud.xml` has no `DATA00`
+copy at all, so the `data` check misses and the `fe` check (`DATA02`) wins over
+`DATA03` and `DATA06`, which are only ever reached through `extra` - behind
+`DATA02` in every case a `DATA00` copy is absent.
+
+### Diffing the three copies directly: three different relations, not one
+
+2026-08-26. Every prior pass at this open question read the executable; nobody
+had extracted and diffed the actual bytes. `scripts/psarc.py cat` against
+`hdfury-ps3-eu-dec.iso` pulls a specific archive's copy of a path without
+guessing at precedence, and the three multi-copy roots turn out to disagree in
+three different ways - not one bug repeated three times.
+
+**`elimination_hud.xml` (`DATA00`, 1,856 B vs `DATA02`, 5,666 B): two different
+designs, not a superset and a subset.** `DATA00`'s copy composes entirely from
+twelve `HUD_Elim_*`-prefixed fragments private to Elimination mode, including
+`hud_elim_positions.xml` - an 8-slot position list (`PosTag0`-`PosTag7`), each
+slot carrying a `VoiceCom` icon and an `MPWeaponIcon`, textured from
+`fury_hud.gtf`. `DATA02`'s copy instead reuses the *generic* race-HUD
+fragments other modes share (`HUD_lap_counters.xml`, `HUD_damage_indicator.xml`,
+`HUD_pickups.xml`, ...) and adds one inline block - not a fragment - defining a
+`KillsText` counter and six `PosTag0`-`PosTag5` slots on `HUD_Components.gtf`/
+`HUD_Components_01.gtf`, with no voice-chat or per-opponent weapon icons. Every
+fragment either copy names resolves on the disc; this is not a missing-file
+defect in either one.
+
+**`speedlap_hud.xml` (four copies: `DATA00`/`DATA06` both 2,635 B, `DATA05`
+2,637 B, `DATA02` 2,392 B): a real superset/subset, plus a disabled feature
+caught in the act.** `DATA00` and `DATA06` are byte-identical. `DATA02` is
+that same file with exactly two `<LoadXML>` blocks removed - the
+`HUD_lap_ghost.xml` include and the `SplitScreen_hud\SplitScreen_other_player_tag.xml`
+include - and nothing added; every line `DATA02` has, `DATA00` also has.
+`DATA05` is `DATA00`'s content with the ghost-lap block's tag misspelled,
+`<aLoadXML>`/`</aLoadXML>` instead of `<LoadXML>`/`</LoadXML>` - a
+one-character-per-tag change that accounts for `DATA05`'s extra 2 bytes
+exactly. `LoadXML_Item`'s reader keys on the literal tag name (see this page's
+own `Open` history and `oag_formats::fexml`), so a renamed tag is not a
+fragment that fails to resolve - it is a fragment that is never looked for at
+all, authored to be skipped without deleting the reference. This project has
+not previously documented this project's own disc doing that as a way to
+disable a feature; it is worth knowing the shape exists, next time a HUD or
+front-end oddity looks like a parser bug.
+
+**`zone_hud.xml` (`DATA02` 10,681 B, `DATA03` 10,979 B, `DATA06` 10,891 B): the
+copy precedence actually serves is the one missing a widget the other two
+share.** `DATA03` and `DATA06` both carry a `<Text name="Zone Perfect Txt"
+idstring="ER_PERFECT" .../>` that `DATA02` does not have at all;
+`ER_PERFECT` resolves to the string `"PERFECT"` in
+`/data/plugins/languages/english/entries.xml`. `DATA03` and `DATA06` differ
+from each other only in how eleven ring-of-dots widgets spell the same colour
+attribute - symbolic (`color="FEGlobals->HD_Blue"` in `DATA03`) versus literal
+(`color="0xFF8AC0CA"` in `DATA06`) - which direction that went, or whether the
+two actually resolve to the same value, is not checked here. Per the
+precedence mechanism above, **`zone_hud.xml` resolves to `DATA02`** - the one
+copy of the three missing the "PERFECT" widget - because `DATA03` and `DATA06`
+are never reached; a `DATA00` copy does not exist so the `fe` archive
+(`DATA02`) wins outright. `hd_hud_ground_truth.rs`'s pinned zone_hud row (`36,
+1, 32, 5`) is this composition; resolving to `DATA03` or `DATA06` instead
+would add exactly one `Label` (a `<Text>` with no children), making it `36, 1,
+33, 5`.
+
+**This is not a new failure mode - it is the same one `Archives::locations`'s
+own doc comment already names for a different file.** Wipeout HD's front-end
+plugin definition (`Data\Plugins\frontend\definition.xml`, five copies,
+[`oag_hd::names::FRONT_END_PLUGIN_DEFINITION`](../../crates/hd/src/lib.rs))
+disagrees the same way: `DATA02`'s copy numbers the circuits the way the base
+game did, `DATA06`'s the way the Fury-era front end does, and blind precedence
+landed on the wrong one for eight circuit names until `oag_game::boot::load_circuit_names`
+was written to pick the copy that agrees with a corroborating source instead
+of the one mounted first. `DATA02` is the base game's copy there too, by the
+same reasoning that page states outright: "presumably the base game's, from
+before Fury added four." Three independent files now show `DATA02` as the
+emptier, pre-Fury copy of something `DATA00`, `DATA03` or `DATA06` also ships,
+fuller - which is corroborating, not proof: nobody has watched a PS3 read any
+of them, so "which copy the original loads" per root stays exactly as open
+as it was, sharpened rather than settled. `elimination_hud.xml` above is the
+counter-example worth keeping in view before generalising this further: its
+two copies are not "one fuller than the other," they are two different
+designs, and "prefer the richer copy" would be the wrong rule to encode
+outright even here.
+
 ## What a race reads today
 
 **Since 2026-08-18 an HD race reads HD's own root**, not Pulse's:

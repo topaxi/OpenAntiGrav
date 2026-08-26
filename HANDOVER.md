@@ -634,6 +634,20 @@ writers in it at the same time:
 
 ## Traps that are live
 
+**A fragment `<LoadXML>` never resolving is not always a missing file - HD's
+own disc disables one by misspelling the tag.** 2026-08-26, diffing the three
+copies of `speedlap_hud.xml`
+([the HUD thread](handover/wipeout-hd-furys-hud-reads-and-the-reader.md)).
+`DATA05`'s copy references `HUD_lap_ghost.xml` through `<aLoadXML>`/
+`</aLoadXML>` instead of `<LoadXML>`/`</LoadXML>` - one added letter per tag,
+which is also exactly `DATA05`'s 2-byte size difference from the otherwise
+byte-identical `DATA00`/`DATA06` copies. `LoadXML_Item`'s reader keys on the
+literal tag name, so this is not a fragment that fails to resolve and logs a
+miss - it is a fragment the reader never looks for at all, deliberately
+authored to be skipped without deleting the reference. If a HUD or front-end
+composition is ever missing a feature that a sibling copy of the same root
+has, check for a misspelled tag before assuming a parser or precedence bug.
+
 **Reaching an arbitrary circuit through the front end is gated by Race Campaign
 progression, not by anything `psp-drive.py` or the debugger can skip.** 2026-08-26,
 chasing [nothing-airborne-has-ever-been-captured](handover/nothing-airborne-has-ever-been-captured.md).
