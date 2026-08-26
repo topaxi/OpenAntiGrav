@@ -984,12 +984,49 @@ yet confirms the *type* tag's meaning from first principles.
 `get_xrefs_to` on the singleton's storage address (`0x008b6fb4`) finds
 nothing - consistent with the consumer being itself a TOC-mismatched
 function Ghidra cannot resolve the load for, the same defect one level
-removed. Finding it means the same `disassemble_function` +
-`scripts/ps3-toc.py resolve` walk again, from a different starting point (a
-search for `+0x500`-shaped loads of the singleton pointer, or a call chain
-from the material-parameter patch system down to it) - not attempted this
-session. Confidence on "unscaled" stays at 60, unmoved; this narrows *where*
-the answer lives without answering it.
+removed. Confidence on "unscaled" stays at 60, unmoved.
+
+**Three negative results from chasing it (2026-08-26), worth recording so the
+next pass does not repeat them.**
+
+- **The hash never appears as a literal.** `search_byte_patterns` for
+  `3D C3 12 58` (`fogColour`'s crc32, big-endian) finds nothing anywhere in
+  the image. This is now *checked*, not merely the "no immediate hashes"
+  claim carried forward - the binder genuinely resolves by string at runtime.
+- **`FUN_005a2090` is slot resolution, not value fetch.** Traced from
+  `downsamplescaleaddfeedback_fp`'s own parameter binder
+  (`FUN_005e29c0`, disassembled end to end): passed a TOC-relative name
+  string, it hashes and linear-scans a *program instance's own declaration
+  table* (16-byte stride entries, count at `+0xc`, offset at `+0x12` of the
+  table header) to find which slot that program declares the name at. It
+  answers "where", never "what" - a dead end for finding the fog value
+  itself, useful only for finding *other* programs' own parameter tables.
+- **The value itself arrives as a float argument, not a global read.**
+  `FUN_005e29c0`'s four resolved parameters (`scale`, `scaleFeedback`,
+  `scaleAdd`, `fullscreenTintColour`) are bound from `f1`/`f2`/`f3` -
+  register arguments the function receives, not a load from any singleton.
+  So the pattern for a per-pass parameter wrapper is: the *caller* holds the
+  current value and passes it in; the wrapper only resolves where to put it.
+  If `fogColour` is patched the same way, the lead is **`fogColour`'s own
+  wrapper's caller**, not a load of `0x008b6fb4` - the caller is where
+  `+0x500` (or whatever reads it) would surface, if this pattern holds for
+  materials the way it does for post passes. Not yet confirmed that
+  materials use the same argument-passing wrapper shape rather than the
+  fslot-offset direct patch `scripts/ps3-microcode.py`'s docstring describes
+  - the two may be the same mechanism seen from different sides, or two
+  different ones; that ambiguity is itself unresolved.
+
+**An rpcs3 live read was considered and deliberately not started.** Reading
+the patched constant in a loaded circuit's compiled microcode against
+`+0x500`'s live value would raise confidence on "unscaled" for *that one
+circuit at that moment*, but cannot by itself rule out a per-circuit
+multiplier or the `Alternate` selector - it is evidence toward the existing
+60, not a resolution of it. It also needs the runtime-to-static address
+mapping ("The address space during a race is 480 MiB in six pieces",
+[rpcs3-debugger.md](../../../reverse-engineering/rpcs3-debugger.md)) worked
+out for `0x008b6fb4` specifically, a screen-keyed menu walk into a race, and
+a GDB-stub session with its own trap list - a fresh session's worth of setup,
+not a continuation of this one.
 
 ### The registry is resolved: every post program's block is addressable
 
