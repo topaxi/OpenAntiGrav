@@ -556,6 +556,13 @@ build-allegrex *ARGS:
 build-emotionengine *ARGS:
     ./scripts/build-ghidra-emotionengine.sh {{ARGS}}
 
+# Build the ELF/PRX loader for Vita binaries against the installed Ghidra.
+# Needs build-allegrex to have run at least once - this borrows its Gradle
+# wrapper too, same as build-emotionengine. Installation into Ghidra is
+# manual; this only builds the zip.
+build-vita-loader-redux *ARGS:
+    ./scripts/build-vita-loader-redux.sh {{ARGS}}
+
 # Build psvpfsparser, which decrypts a PS Vita PKG's PFS layer given its
 # zRIF or klicensee. pkg2zip alone only strips the outer AES-CTR layer - see
 # data/README.md#the-ps3-and-vita-images-are-encrypted-and-nothing-here-decrypts-them-yet.
