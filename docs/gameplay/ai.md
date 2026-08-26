@@ -2062,12 +2062,28 @@ five seeds, before and after:
 | **Ace** | **7,614** | **7,614** | **0** |
 
 **Ace is identical seed by seed**, not merely on the mean - `[7474, 7698, 7656,
-7459, 7784]` both runs - which is the control this table is worth having for: a
-latency of zero has to change nothing, and it changes nothing. Novice pays 1.6
-per cent and the novice-to-skilled gap widens from 556 to 720. Skilled and
-Elite move by less than the per-seed spread this harness prints - the elite and
-ace means once sat 44 apart on a five-seed set, which is why it averages and
-prints the spread at all - so those two numbers are not evidence either way.
+7459, 7784]` both runs - which is the one strong result in the table: a latency
+of zero has to change nothing, and it changes nothing.
+
+**The other three rows are not measurements of this axis, and the Novice one
+is the trap.** Its five per-seed deltas are `-352, -11, -283, -90, +208` -
+mixed in sign, on a harness whose own history records adjacent levels sitting
+44 apart on a five-seed set. A mean of -106 against a spread that wide is not a
+slow-down that has been demonstrated.
+
+**And the mechanism says leader distance is the wrong witness here anyway.**
+`Difficulty::temper` scales `trigger`, `ram` and `defence` by `aggression()`,
+which is **zero at Novice** - so at the level where the latency is longest, the
+only behaviours it can withhold are `caution` (a lift for a craft closing
+ahead) and `courtesy` (a yield for one coming up behind), and both of those
+*cost* distance. Withholding them for four tenths of a second makes a Novice
+hold its throttle and its line a little longer, not less. What the axis buys at
+that level is how the craft reads from the cockpit - one that tailgates and
+takes a moment to move over - and distance round a lap does not see it.
+
+What the ground-truth run establishes, then, is that the ordering still holds
+and Ace is untouched. That the axis reaches the controls at all is
+`driver::tests::reaction_tests`, which is where it is actually asserted.
 
 **Where it lives:** `oag_ai::Reflex` on `Driver`, three arrays of integers, so
 the snapshot stays `Copy` and `Eq` and a race replays. `Driver::drive` advances

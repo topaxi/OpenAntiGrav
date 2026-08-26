@@ -160,8 +160,11 @@ fn run(ticks: u32) -> (u64, u64) {
 ///   opt-in: `Tuning::reaction_ticks` defaults to zero, so a driver that has
 ///   not been given a difficulty notices on the frame exactly as it always
 ///   did, and what moved here is nine more writes per ship per tick entering
-///   the stream. Neither scenario fields an opponent, so every channel reads
-///   `Reflex::IDLE` throughout both.
+///   the stream. **Neither scenario ever calls `Driver::drive`** - both step
+///   projectiles over a world whose drivers are never run - so every channel
+///   reads `Reflex::IDLE` throughout both. That is the load-bearing claim, not
+///   "there is no AI in it": a reflex only stays idle while nothing advances
+///   it.
 /// - **Moved 2026-08-24**, when `Ship::autopilot_timer` joined the hash. The
 ///   Autopilot pickup arms it and the composition root reads it to decide
 ///   whether slot 0 is flown by its own driver, so it is simulation state and a

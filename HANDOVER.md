@@ -37,9 +37,10 @@ file does not need to carry its own.
   committed `verification/scenarios/*.inputs` are what reproduce it.
 - **Check `git status` before assuming the tree is clean.** A whole milestone's
   work once sat uncommitted for a day.
-- **Gate status:** last measured green at **2,138 tests (2026-08-18)** in 8.3s,
-  with `fmt`, `clippy`, `check-docs`, `check-deps`, `check-determinism` and
-  `check-size` all clean. Re-measure rather than trusting the number here -
+- **Gate status:** last measured green at **2,458 tests (2026-08-26)** in 6.4s,
+  with `fmt`, `clippy`, `check-docs`, `check-deps`, `check-determinism`,
+  `check-size`, `check-names` and `check-handover` all clean (480 skipped -
+  the `#[ignore]`d disc-backed ones). Re-measure rather than trusting the number here -
   `git stash && just test` is how the drift was caught last time.
 - **The whole disc-backed sweep is 2,488 of 2,494 in about 7:40**, measured
   2026-08-18 with `cargo nextest run --workspace --run-ignored all
