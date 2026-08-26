@@ -359,14 +359,15 @@ pub const ROCKET_FLARE_EFFECT: &str = "WO_ROCKET_FLARE";
 /// two `Trail_InitPreset` calls that are the missile's own twin-trail
 /// signature.
 ///
-/// **This engine rides one instance on the projectile's position, not two on
-/// authored anchors.** The Missile carries no located model or locator set
-/// in this project the way the Rocket's `Rocket.vex` does, so there is
-/// nowhere read to put a second one - see [`Race::advance_projectile_flares`].
-/// A single centred instance is the same simplification the fallback
-/// billboard already makes for every projectile kind, stated here rather
-/// than left to be rediscovered: what is missing is the *second* anchor, not
-/// the trigger.
+/// **Both anchors are now ridden.** The "two anchors" are not fixed hull
+/// locators on a missile model this project never located - they are two
+/// points `Missile_Update` computes every tick, orbiting the missile's own
+/// flight line at a constant rate. Nothing about them needed a `.vex` or a
+/// locator: [`weapons::missile_flare_anchors`] derives both from the
+/// projectile's own tracked position and velocity, at confidence 80. See
+/// that function's doc comment for the full formula and what is still
+/// unsettled about it, and [`Race::advance_projectile_flares`] for how the
+/// two instances are attached and followed.
 pub const MISSILE_FLARE_EFFECT: &str = "WO_MISSILE_HEAD";
 
 /// The explosion a rocket that hits **track geometry** plays.
@@ -704,13 +705,18 @@ pub struct Race {
     /// The [`ENGINE_FLARE_EFFECT`] instance riding each craft's nozzle, on a
     /// source that authors one. All `None` on a PSP-sourced race.
     engine_flare: [Option<psys::Playing>; MAX_SHIPS],
-    /// The flare instance riding each live projectile, indexed by its
-    /// [`oag_gameplay::projectile`] slot.
+    /// The flare instance riding each live projectile's **primary** anchor,
+    /// indexed by its [`oag_gameplay::projectile`] slot.
     ///
     /// The slot **is** the identity: it is fixed for a projectile's whole
     /// life and reused the moment the projectile is gone, which is exactly
     /// when the flare should be a fresh one.
     projectile_flare: [Option<psys::Playing>; oag_gameplay::projectile::MAX_PROJECTILES],
+    /// The Missile's own **second**, orbiting flare instance - see
+    /// [`weapons::missile_flare_anchors`]. `None` for every slot that is not
+    /// currently a live Missile; every other kind rides [`Self::projectile_flare`]
+    /// alone.
+    projectile_flare_orbit: [Option<psys::Playing>; oag_gameplay::projectile::MAX_PROJECTILES],
     /// The stage's generator, deliberately **not** `world.rng` - see
     /// [`Self::exhaust_rng`].
     stage_rng: Rng,

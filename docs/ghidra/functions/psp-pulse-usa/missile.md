@@ -115,7 +115,9 @@ at 90 rather than at a shrug:
    twin-trail signature already recorded on [exhaust.md](exhaust.md), where the
    racing craft's single trail was settled by noting that only the missile
    constructor makes two.
-2. It plays `WO_MISSILE_HEAD` at two anchors and the sound cues `MISSILE` and
+2. It plays `WO_MISSILE_HEAD` at two anchors (see
+   [The two flare anchors orbit the missile's own flight line](#the-two-flare-anchors-orbit-the-missiles-own-flight-line)
+   for what "anchor" turns out to mean here) and the sound cues `MISSILE` and
    `_MISSILETVL`.
 3. `Weapon_RequestFire`'s case for this weapon is one of exactly **two** that
    take a target argument, and the two weapons that author `lock_max_dist` /
@@ -475,6 +477,79 @@ The expiry branch plays the cue at `_DAT_00278950`, and that pointer resolves to
 the neighbouring pointers resolve correctly to `"MISSILEEXPWALL"` and
 `"MISSILEEXPSHIP"`. Confidence 60 that this is a copy-paste in the original
 rather than a misread. Not load-bearing: nothing here plays a cue on that path.
+
+## The two flare anchors orbit the missile's own flight line
+
+**Recovered 2026-08-26, confidence 80, and it corrects a wrong framing this
+page itself carried until then.** "`WO_MISSILE_HEAD` at two anchors" read as
+two fixed points on a missile model - hull locators, the way `Ship Collision
+Fx` and `Engine Flare` are locators on the ship. `Missile_Init`'s two
+`Psys_Spawn_q` calls (`0x08915484`, already named in this project's own
+database - see [mine.md](mine.md#mine_spawnexplosion-plays-wo_mine_explo)
+for the same function read from the Mine's side) are at entity offsets
+`+0xf0` and `+0x130`, each seeded at
+launch from a copy of the firing craft's own pose matrix - but `Missile_Update`
+(`0x0885a918`) overwrites both, **every tick**, with a computed pair of points
+that orbit the missile's own flight line.
+
+The mechanism, read at instruction level:
+
+```c
+// Rebuilt once a tick, only skipped when the velocity is within about eight
+// degrees of the previous tick's own up axis (a Gram-Schmidt orthonormalise
+// with a `-0.99 < dot < 0.99` guard; what happens on the skipped tick is not
+// chased past the guard itself).
+back  = normalize(-velocity);                              // entity+0xb0
+up    = normalize(world_up - back * dot(world_up, back));  // entity+0x80
+right = cross(up, back);                                   // entity+0x70
+
+theta    = age * 15.0;                    // entity+0x50, unclamped seconds since launch
+lateral  = 1.5;
+vertical = min(age * 6.0, 3.0);
+
+anchor_a = position + right * lateral * sin(theta) + up * vertical * cos(theta);  // entity+0x120
+anchor_b = position + right * lateral * (1 - sin(theta)) + up * vertical * (1 - cos(theta));  // entity+0x160
+```
+
+`sin` and `cos` of the **same** angle is a rotation, not a crossfade: the two
+points orbit the missile's flight line at a constant `15 rad/s` (about
+`2.4 Hz`), growing from a single point at launch into a fixed `1.5` x `3.0`
+unit ellipse over the first half second, and keep orbiting for the whole
+flight - `entity+0x50` is added to unconditionally every tick with no
+`min()` anywhere in `Missile_Update` (confirmed at the accumulation site),
+so the angle is not a launch transient that settles.
+
+`world_up` is a hardcoded `(0, 1, 0)`; `back`/`+0xb0` is the same velocity
+`Missile_Update`'s own guidance and surface-ride logic already reads and
+writes, already ported as `Projectile::velocity`. Nothing here needs a
+missile model, a locator, or any state this project does not already carry
+per projectile - `age`, `position` and `velocity` are all it takes. Ported as
+[`oag_game::race::weapons::missile_flare_anchors`](../../../../crates/game/src/race/weapons.rs),
+which `Race::advance_projectile_flares` rides both instances off.
+
+**Independently consistent with a maintainer's own description from play**,
+asked before any of this was decompiled: "the missile rotates with two
+trails." That the two independent readings - instruction-level and from-play
+- describe the same "rotating pair" rather than "two static points" or "a
+flicker" is why this is at 80 rather than lower despite the residual gaps
+below.
+
+**What is not settled:**
+
+- **The handedness of `right = cross(up, back)`.** Only cosmetic - it swaps
+  which of the two visually-interchangeable anchors leads - but unread
+  against a capture, so this project's own sign could be either way round
+  from the original's.
+- **What happens on a skipped-rebuild tick.** The `-0.99 < dot < 0.99` guard
+  around the basis rebuild means the original reuses the *previous* tick's
+  basis when the velocity direction is nearly parallel to it; this project's
+  port recomputes fresh every tick (it carries no basis between them), which
+  differs only in the rare case a missile's direction changes by more than
+  ~8 degrees between two consecutive ticks relative to its own up axis.
+- **No visual capture exists.** `race_ground_truth.rs` already records that
+  no rendered frame has contained even a *rocket*; the Missile is in the same
+  position. This reading is instruction-level plus a from-play description,
+  not a frame-to-frame comparison.
 
 ## The lock-on sight, and the lock flag's writer
 

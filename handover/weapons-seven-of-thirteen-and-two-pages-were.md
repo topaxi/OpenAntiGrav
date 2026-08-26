@@ -250,11 +250,23 @@ detonating projectile rather than reading which file each weapon authors.
   mine" extended to the visual) or its own `WO_BOMB_SMOKERING`. `FUN_08867370`
   is the template to read next: find the Bomb-pool equivalent (likely nearby,
   structurally similar) and see what it calls at teardown.
-- **The Missile's flare rides one instance where the original rides two.**
-  `Missile_Init` plays `WO_MISSILE_HEAD` at two anchors; this engine centres
-  one on the projectile's position for lack of a located missile model. Fine
-  as a stated approximation, worth revisiting once the Missile has a drawn
-  model with locators to read anchors off.
+- ~~**The Missile's flare rides one instance where the original rides
+  two.**~~ **Wrong framing, corrected and implemented the same session.**
+  "Needs a located missile model" was never true: the two anchors are not
+  hull locators at all, they are two points `Missile_Update` computes fresh
+  every tick, orbiting the missile's own flight line - a `sin`/`cos` pair on
+  the same angle, growing to a fixed `1.5`x`3.0`-unit ellipse over the first
+  half second and rotating at `15 rad/s` for the whole ~3 second flight.
+  Fully derivable from state this engine already tracks per projectile
+  (`position`, `velocity`, `lifetime`), so it needed no model - see
+  [missile.md](../docs/ghidra/functions/psp-pulse-usa/missile.md#the-two-flare-anchors-orbit-the-missiles-own-flight-line)
+  for the read and `oag_game::race::weapons::missile_flare_anchors` for the
+  port. **Independently confirmed from play, asked before any of this was
+  decompiled**: "the missile rotates with two trails" - matching the
+  instruction-level reading of a rotation rather than the crossfade this
+  session first assumed from the raw sin/cos terms alone. `Race` now carries
+  a second per-slot instance array (`projectile_flare_orbit`) purely for this
+  second anchor; the Rocket's single-instance path is untouched.
 - **A trap worth carrying forward: `get_function_callers` missed
   `Mine_SpawnExplosion`'s only call site entirely** ("No callers found"),
   because the call is through the same image-base-relative-looking operand
