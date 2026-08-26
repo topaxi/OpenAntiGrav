@@ -42,12 +42,38 @@
 //!
 //! # Only what has an effect is handed out
 //!
-//! [`IMPLEMENTED`] is the pool a pad draws from: Turbo, Shield, Rocket, Missile
-//! and Autopilot.
+//! [`IMPLEMENTED`] is the pool a pad draws from: Turbo, Shield, Rocket, Missile,
+//! Autopilot, Mine and Bomb.
 //!
-//! Of the nine still out, most need a beam, track deformation or the slowdown
+//! Of the seven still out, most need a beam, track deformation or the slowdown
 //! mechanic behind `<Global slowdown_limit>` - Quake needs to deform the track,
 //! LeachBeam needs a beam and a victim.
+//!
+//! **The Mine left that list on 2026-08-26**, and it is the third in a row that
+//! a *reading* let through rather than a mechanic - and the first where the
+//! reading was of somebody else's mistake. Two pages had this weapon's fire
+//! handler down as the Cannon's and the Bomb's handler down as the Mine's,
+//! because `Weapon_RequestFire`'s jump table holds its entries for those two
+//! weapons out of address order. `Mine_Init` (`0x08859ac8`) plays `MINELAUNCH`
+//! and loads `Data\\Weapons\\Pulse_Mine.vex`, which settles it without any
+//! ordering argument at all. See
+//! `docs/ghidra/functions/psp-pulse-usa/mine.md` and
+//! [`crate::projectile::mine`], which carries this weapon's own split.
+//!
+//! **The Bomb followed it the same day**, and it is the cheapest weapon this
+//! project has added: one bigger charge out of the same rear anchor, sharing
+//! every line of [`crate::projectile::mine`] except a count. Its `<Stats>` are
+//! the Mine's six one size up on both shipped tables, `Weapon_FireBomb`
+//! (`0x08863a20`) spawns once where `Weapon_DropMines` reloads and spawns
+//! again, and a maintainer who plays Pulse describes it as "a single big mine"
+//! - three independent things saying the same shape.
+//!
+//! **It is also the first weapon whose firing is not instantaneous.** A drop is
+//! [`crate::projectile::mine::CLUSTER`] mines laid one every
+//! [`crate::projectile::mine::DROP_INTERVAL`], and the craft goes on holding the
+//! pickup until the last one is out - which is the original's own arrangement
+//! and is why [`Held`] carries the two counters rather than the fire path
+//! spending the slot outright.
 //!
 //! **The Autopilot left that list on 2026-08-24**, and like the Missile before
 //! it what let it was a reading rather than a mechanic: `Autopilot_Fire`
@@ -99,6 +125,8 @@ pub const IMPLEMENTED: &[Weapon] = &[
     Weapon::Rocket,
     Weapon::Missile,
     Weapon::Autopilot,
+    Weapon::Mine,
+    Weapon::Bomb,
 ];
 
 /// Which column of `<Pickupodds>` a craft draws from, and how its place bends it.
@@ -187,7 +215,7 @@ impl Driver {
 /// whether it can hold two at once is unread - `SubWeapon` exists as a HUD
 /// widget, which suggests it can, and no code has been read that fills it. One
 /// slot is the conservative reading and the one the HUD can draw.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Held {
     /// The weapon in the slot, or `None`.
     pub weapon: Option<Weapon>,
@@ -201,16 +229,77 @@ pub struct Held {
     /// Set by [`Self::grant`] and never cleared, so a craft that fires and
     /// crosses another pad still remembers. It is world state and is hashed.
     pub last: Option<Weapon>,
+    /// How many mines are still to be laid from the drop in progress.
+    ///
+    /// **Recovered as a mechanism**, at confidence 90: the original keeps the
+    /// same counter on the craft at `+0x1ac`, `Weapon_DropMines`
+    /// (`0x088675cc`) decrements it once per spawn, and the craft goes on
+    /// holding the weapon until it reaches zero. What is *not* recovered is the
+    /// value it starts at - see [`crate::projectile::mine::CLUSTER`], which is
+    /// the one invented number on this weapon.
+    ///
+    /// Zero for every craft that is not mid-drop, which is every craft almost
+    /// all of the time.
+    pub dropping: u8,
+    /// Seconds until the next mine of a drop in progress leaves.
+    ///
+    /// The original's `craft+0x1b0`, reloaded with a literal `0.1` after every
+    /// spawn. Meaningless when [`Self::dropping`] is zero, and held at zero
+    /// there rather than left stale so that two worlds with no drop in flight
+    /// hash the same.
+    pub drop_reload: f32,
 }
 
 impl Held {
-    /// Nothing held, and nothing remembered.
+    /// Nothing held, nothing remembered and nothing being laid.
     #[must_use]
     pub const fn empty() -> Self {
         Self {
             weapon: None,
             last: None,
+            dropping: 0,
+            drop_reload: 0.0,
         }
+    }
+
+    /// Whether a cluster is still coming out of the back of this craft.
+    #[must_use]
+    pub const fn is_dropping(&self) -> bool {
+        self.dropping > 0
+    }
+
+    /// Starts a drop of `count` mines, the first of them on this very tick.
+    ///
+    /// **The first leaves immediately rather than after one interval.** The
+    /// original's reload timer is decremented *before* it is tested and its
+    /// initial value is one of the things `weapon-fire.md` lists as unread, so
+    /// which of the two it does is genuinely open. Immediately is the reading
+    /// that makes a fire press visibly do something on the tick it is pressed.
+    pub const fn begin_drop(&mut self, count: u8) {
+        self.dropping = count;
+        self.drop_reload = 0.0;
+    }
+
+    /// Counts one tick off the drop and says whether a mine leaves now.
+    ///
+    /// Clears the held slot when the last one is out, which is the recovered
+    /// coupling: `Weapon_DropMines` writes `-1` into `craft+0x1bc` and drops its
+    /// own fire bit in the same branch that sees the counter reach zero.
+    pub fn advance_drop(&mut self, dt: f32, interval: f32) -> bool {
+        if self.dropping == 0 {
+            return false;
+        }
+        self.drop_reload -= dt;
+        if self.drop_reload > 0.0 {
+            return false;
+        }
+        self.drop_reload = interval;
+        self.dropping -= 1;
+        if self.dropping == 0 {
+            self.weapon = None;
+            self.drop_reload = 0.0;
+        }
+        true
     }
 
     /// Whether the slot can take a pickup.

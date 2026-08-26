@@ -276,23 +276,43 @@ project reads `Weapon::ALL`'s index as a weapon id, so this is a documentation
 correction rather than a bug; `oag_gameplay::hash::write_weapon` uses the index
 only as a hash discriminant, where any stable order does.
 
-### One thing this does *not* settle, and a conflict it opens
+### One thing this does *not* settle, and a conflict it opens - **resolved 2026-08-26**
+
+**Read [mine.md](mine.md) for the resolution.** The short version, because the
+paragraphs below are kept as the record of how the conflict was posed:
+`FUN_08871ddc` has been read - it is `Weapon_AnnounceIncoming` (`0x08871ddc`) -
+and it *is* the remap the last paragraph here suspected. **The id space this
+section's table describes is the shipped file's element order, not
+`craft+0x1bc`.** The tell is Turbo and Shield: this loader's own literals put
+them at 3 and 4, while [shield-pickup.md](shield-pickup.md) measured
+`craft+0x1bc` reaching the Turbo at 4 and the Shield at 5. So the correction two
+paragraphs up - "`Weapon::ALL` is the one that is wrong about ids" - is itself
+wrong about *which* ids: `Weapon::ALL`'s pool order is right about the weapon id
+at eleven of thirteen positions, and this file's order is a fourth thing that
+`WeaponAiStats_Load` and the announcement table both index by.
+
+And the conflict it opened is settled the other way from the guess below: **bit
+`0x2` is the Mine's, not the Bomb's and not the Cannon's.** Its spawn plays
+`MINELAUNCH` and loads `Data\Weapons\Pulse_Mine.vex`, which needs no ordering
+argument at all.
+
+The original posing, kept:
 
 Combining the id map above with `Weapon_RequestFire`'s id-to-bit switch puts
 **fire-request bit `0x2` on the Bomb**. That bit's handler is
-`Weapon_UpdateBurstFire_q` (`0x088675cc`), which
-[weapon-fire.md](weapon-fire.md#the-other-multi-shot-weapon-a-staggered-burst)
-reads as the **Cannon** at confidence 72 on the grounds that `rounds` and `rate`
+`Weapon_DropMines` (`0x088675cc`), which
+[weapon-fire.md](weapon-fire.md#the-other-multi-shot-weapon-a-staggered-burst-and-it-is-the-mine)
+read as the **Cannon** at confidence 72 on the grounds that `rounds` and `rate`
 are the Cannon's `<Stats>` and nobody else's. A Bomb that fires thirty rounds at
 a tenth of a second apart makes no sense.
 
-**Both readings are left standing and the conflict is recorded rather than
-resolved.** Three loose ends say the id-to-bit switch is not as simple as it
-looks: bit `0x2000` (case 3) is dispatched by *nothing* in
-`Weapons_DispatchFire`; three of the cases make no call to `FUN_08871ddc` where
-the rest do; and that call's argument is a **second** id space which remaps 3 to
-5, 8 to 9 and 9 to 8. Until `FUN_08871ddc` is read, "id 8 is the Bomb *and* bit
-`0x2` is the Cannon" may both be true with a remap in between.
+Three loose ends said the id-to-bit switch was not as simple as it looks: bit
+`0x2000` (case 3) is dispatched by *nothing* in `Weapons_DispatchFire`; three of
+the cases make no call to `FUN_08871ddc` where the rest do; and that call's
+argument is a **second** id space which remaps 3 to 5, 8 to 9 and 9 to 8. Two of
+the three are now explained - see [mine.md](mine.md). The first is not: nothing
+dispatches bit `0x2000`, and where the Cannon's fire actually happens is still
+unread.
 
 ### The shipped values are nearly uniform, and that is the finding
 

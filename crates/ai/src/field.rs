@@ -55,6 +55,39 @@ pub struct Rival {
     pub cos_bearing: f32,
 }
 
+/// Something laid on the track that a driver would rather not touch.
+///
+/// A mine or a bomb today; anything that sits still and hurts, in principle.
+///
+/// **Plain numbers the caller measured**, like [`Rival`] and for the same
+/// reason: this crate must not know what a weapon is. `oag_game::Race::field_for`
+/// decides what counts as a threat - it is the half that knows the charge's
+/// authored `trigger_radius` - and hands over two distances. A driver dodges
+/// what it is told about and asks nothing else.
+///
+/// # What a successful dodge is
+///
+/// **Passing outside the charge's trigger radius, so it never goes off at all.**
+/// Not "surviving the blast": a mine's blast radius is wider than a Pulse lane,
+/// so a driver that tried to leave *that* would swerve into the scenery and
+/// still take the hit. The trigger radius is a few units, which is a dodge a
+/// craft can actually make. That is why the caller measures the threat against
+/// the trigger radius and not the blast radius, and it is the whole reason this
+/// term is worth having.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct Hazard {
+    /// How far ahead it sits along this craft's own forward axis, in units.
+    ///
+    /// Always positive - the caller drops anything level with or behind the
+    /// craft, because there is nothing left to steer around.
+    pub distance: f32,
+    /// How far across it sits, positive to **this** craft's right.
+    ///
+    /// The same axis and sign as [`Rival::offset`], so the two terms that read
+    /// it cannot disagree about which way is right.
+    pub offset: f32,
+}
+
 /// The rivals a driver may react to, and its own place.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Field {
@@ -65,6 +98,11 @@ pub struct Field {
     /// A craft close enough alongside to touch, which is neither ahead nor
     /// behind for as long as it is there.
     pub alongside: Option<Rival>,
+    /// The nearest laid charge worth steering around, if there is one.
+    ///
+    /// Not a rival, so not one of the three above: a mine does not close, does
+    /// not have a place and cannot be blocked. See [`Hazard`].
+    pub hazard: Option<Hazard>,
     /// This craft's own race position, `1`-based.
     ///
     /// Zero when nothing places it - a track with no closed ring, or the tick
@@ -84,6 +122,7 @@ impl Field {
         ahead: None,
         behind: None,
         alongside: None,
+        hazard: None,
         place: 0,
     };
 }
@@ -104,6 +143,7 @@ mod tests {
         assert!(Field::EMPTY.ahead.is_none());
         assert!(Field::EMPTY.behind.is_none());
         assert!(Field::EMPTY.alongside.is_none());
+        assert!(Field::EMPTY.hazard.is_none());
     }
 
     /// Zero is "nobody has placed this craft yet", and a driver that read it as

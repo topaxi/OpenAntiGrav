@@ -816,7 +816,7 @@ the zero-on-consume this page already reads - landing on the same watched
 address a beat later. That is the consumer this page already reads,
 corroborating the target address rather than a coincidence.
 
-#### `Weapon_PostBlastImpulse_q` (`0x0886794c`), confidence 68
+#### `Weapon_PostBlastImpulse` (`0x0886794c`), confidence 82
 
 The more frequent of the two (5 of 6 logged hits). A short, straight-line
 function - no loop, disassembled and read instruction-by-instruction because
@@ -835,6 +835,42 @@ instruction's operand computes `T + 0x110`, and the live watchpoint (armed at
 exactly that address, so `T+0x110` really is the pending-impulse slot for
 whatever entity `T` names, corroborated at runtime rather than only in the
 static trace.
+
+**Identified 2026-08-26: `stats` is the per-speed-class `<WeaponStats>` struct,
+and the four offsets this function spends are the Mine's.** The block
+`WeaponStats_ParseMine` (`0x0880d124`) writes runs `+0xe8`..`+0x100`, and the
+four fields read below land on it in four matching roles:
+
+| read | as | is |
+| --- | --- | --- |
+| `stats->0xe8` | accumulated into `T->0x120` | `<Mine>` `damage` |
+| `stats->0xec` | the falloff's radius | `<Mine>` `blastradius` |
+| `stats->0xf0` | the impulse's magnitude | `<Mine>` `blastforce` |
+| `stats->0xfc` | accumulated into `T->0x130` | `<Mine>` `slowdown_time` |
+
+**The fourth is the cross-check that makes this more than four numbers lining
+up.** `+0x130` was already recorded across this tree - before anyone knew what
+`+0xfc` was - as the consumer of the unspent mechanic behind
+`<Global slowdown_limit>`. It is `slowdown_time`'s accumulator, and it was
+identified from the other end.
+
+Two consequences:
+
+- **The table's identity, which step 1 below leaves open, is settled**: it
+  resolves to the weapon stats struct `WeaponStats_Parse` fills, not to some
+  other per-weapon record. What `S->0x40` selects is still open, and it no
+  longer matters much - every entry has to reach the same struct for these
+  offsets to mean anything.
+- **This whole chain is the Mine's blast.** `0x0886794c`, its caller
+  `FUN_08867b50` and *its* caller `FUN_08867370` all sit in `0x08867xxx`, which
+  is `Weapon_DropMines`' own subsystem, and the fuse `FUN_08867370` counts down
+  at `+0x48` is the one `Mine_Init` (`0x08859ac8`) loads `<Mine> timetodie`
+  into. See [mine.md](mine.md). `FUN_08867370` is **still not renamed** - see
+  that page for the one measurement that resists it.
+
+Raised to **82** on that basis. What holds it off 84 is unchanged and is listed
+under "what is not verified": `stats->0x368`'s tri-state, and what `T->0x120`,
+`T->0x124` and `T->0x130` are consumed by.
 
 **Full instruction-level re-read, 2026-08-19** (`disassemble_bytes` over
 `0x0886794c`-`0x08867b4f`, the whole function body), corrects and extends the
@@ -869,7 +905,9 @@ first pass:
    `0886798c`'s `jal`: raw operand `0x00055cd4`, real address
    `0x08859cd4` after the same image-base correction, a **three-instruction
    leaf** (`a0 += 0x90; *a1 = *a0; jr ra`) that is exactly `Vec4
-   GetPosition_q(entity, out)` and nothing more, unnamed. The first pass did
+   GetPosition_q(entity, out)` and nothing more. **Named `Entity_GetPosition`
+   2026-08-26** - three instructions with one possible reading is as settled as
+   a function gets. The first pass did
    not resolve this call at all.
 4. `d = |T->0x50 - S->0x90|` (`vsub.q` then `vdot.t`/`vsqrt.s`) - the first
    pass's "target_position" is `T->0x50` specifically, and it is the **same**
@@ -1336,6 +1374,13 @@ count. Left open rather than guessed at.
 
 ### `FUN_08863a20` (`0x08863a20`-`0x08863ba3`): `Weapons_DispatchFire`'s `world+0x44` handler, and it looks like the Mine's own fire handler
 
+**Corrected 2026-08-26: it is the Bomb's, not the Mine's**, and the function is
+`Weapon_FireBomb`. Everything read below stands - the negated-forward spawn, the
+pool cursor, `+0x40` being the owning craft's index - only the weapon's name
+changes. The Mine is the bit-`0x2` handler this section explicitly ruled out.
+See [mine.md](../psp-pulse-usa/mine.md), which reads the weapon-id jump table as
+a table and finds its entries 8 and 9 out of address order.
+
 **Read 2026-08-19**, chasing `weapon-fire.md`'s own hint: "`world+0x44`'s
 handler ... fires *backwards* (`vneg_q` on the craft's forward row), which
 reads as a Bomb or a Mine". Disassembled in full - the decompiler fails on it
@@ -1391,7 +1436,8 @@ them. The spawn call at `0x0885f188` was the next candidate this page
 expected to chase - it did not pan out cleanly; see the next section for why
 and for where the search actually landed instead.
 
-**Confidence on "this is the Mine": informed guess, not measured.** The
+**Confidence on "this is the Mine": informed guess, not measured** - and the
+guess was wrong; see the correction at the top of this section. The
 "fires backwards" mechanism, the subsystem-pool-plus-craftIndex-plus-unique-id
 spawn shape, and process of elimination against the Rocket
 (`Weapon_FireRocket`), Missile (`Weapon_FireMissile`, `world+0x4c`'s handler)

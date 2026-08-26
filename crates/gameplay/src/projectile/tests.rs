@@ -4,7 +4,7 @@
 //! modules; see `scripts/check-file-size.py`.
 
 use super::*;
-use oag_physics::{CollisionWorld, Surface, TriangleSoup};
+use oag_physics::{CollisionWorld, ShipState, Surface, TriangleSoup};
 
 fn ships(entries: &[(bool, Vec3)]) -> Vec<crate::world::Ship> {
     entries
@@ -106,6 +106,7 @@ fn over_empty_space_a_projectile_keeps_its_heading_and_falls() {
             &world,
             &ships(&[]),
             None,
+            TriggerRadii::default(),
             oag_formats::handling::SpeedClass::Venom,
         );
         assert!(impacts.iter().all(Option::is_none), "nothing to hit");
@@ -146,6 +147,7 @@ fn a_projectile_over_a_floor_rides_it_rather_than_detonating() {
             &world,
             &ships(&[]),
             None,
+            TriggerRadii::default(),
             oag_formats::handling::SpeedClass::Venom,
         );
         assert!(
@@ -189,6 +191,7 @@ fn a_rocket_hits_a_wall_it_would_tunnel_through_in_one_tick() {
             &world,
             &ships(&[]),
             None,
+            TriggerRadii::default(),
             oag_formats::handling::SpeedClass::Venom,
         );
         if let Some(hit) = impacts.into_iter().flatten().next() {
@@ -222,6 +225,7 @@ fn a_rocket_strikes_a_craft_that_is_not_its_owner() {
                 &world,
                 &grid,
                 None,
+                TriggerRadii::default(),
                 oag_formats::handling::SpeedClass::Venom,
             )
             .into_iter()
@@ -252,6 +256,7 @@ fn an_inactive_slot_is_not_a_target() {
             &world,
             &grid,
             None,
+            TriggerRadii::default(),
             oag_formats::handling::SpeedClass::Venom,
         );
         assert!(
@@ -278,6 +283,7 @@ fn geometry_in_front_of_a_craft_stops_the_rocket_first() {
                 &world,
                 &grid,
                 None,
+                TriggerRadii::default(),
                 oag_formats::handling::SpeedClass::Venom,
             )
             .into_iter()
@@ -313,6 +319,7 @@ fn a_rocket_that_hits_nothing_is_reaped_without_detonating() {
             &world,
             &ships(&[]),
             None,
+            TriggerRadii::default(),
             oag_formats::handling::SpeedClass::Venom,
         );
         assert!(
@@ -329,6 +336,12 @@ fn a_rocket_that_hits_nothing_is_reaped_without_detonating() {
 /// The craft outside is the assertion that matters - a blast that reached
 /// every craft on the track would pass any test that only looked at the one
 /// that was hit.
+///
+/// **And the two halves treat distance differently**, which is recovered and is
+/// the thing most likely to be quietly undone by a later edit: the damage is
+/// flat inside the radius and the impulse falls off linearly. The grid puts one
+/// craft at the centre and one at four fifths of the radius precisely so the
+/// two are distinguishable - equal damage, and a fivefold difference in push.
 #[test]
 fn a_blast_reaches_inside_the_radius_and_stops_at_it() {
     let mut grid = ships(&[
@@ -360,20 +373,31 @@ fn a_blast_reaches_inside_the_radius_and_stops_at_it() {
         "a craft outside the radius took damage"
     );
 
-    // `dv = J / m`, so 100 units of force on a mass of 2 is 50 units of
-    // velocity, directed away from the centre.
+    // `dv = J / m`. The craft at `z = 8` is four fifths of the way out, so
+    // `falloff = 1 - 8/10 = 0.2`: 20 units of impulse on a mass of 2, or 10
+    // units of velocity, directed away from the centre. Flat force would give
+    // 50 here, so this is the assertion the falloff lives or dies on.
     let pushed = grid[1].physics.body.linear_velocity;
-    assert!((pushed.z - 50.0).abs() < 1e-3, "pushed {pushed:?}");
+    assert!((pushed.z - 10.0).abs() < 1e-3, "pushed {pushed:?}");
     assert_eq!(
         grid[2].physics.body.linear_velocity,
         Vec3::ZERO,
         "a craft outside the radius was pushed"
     );
     // The craft exactly on the centre has no direction, and gets world up
-    // rather than a NaN.
+    // rather than a NaN. It is also where `falloff` is `1.0`, so it takes the
+    // whole authored force - the other end of the same rule.
     let centred = grid[0].physics.body.linear_velocity;
     assert!(centred.is_finite(), "a centred craft got {centred:?}");
     assert!((centred.y - 50.0).abs() < 1e-3, "{centred:?}");
+    // Damage, by contrast, does not fall off: both craft lost the same 30.
+    // Asserted as a relation rather than twice as a number, so it survives the
+    // figures above changing.
+    assert_eq!(
+        grid[0].physics.shield, grid[1].physics.shield,
+        "the damage fell off with distance - it is the impulse that does, not \
+         the damage"
+    );
 }
 
 /// A shielded craft inside the radius takes neither half. The damage gate is
@@ -706,7 +730,14 @@ fn a_missile_mirrors_off_a_wall_where_a_rocket_detonates() {
         if live.kind.is_some() {
             before = live.velocity.length();
         }
-        projectiles.advance(1.0 / 60.0, &world, &ships, Some(&stats), class);
+        projectiles.advance(
+            1.0 / 60.0,
+            &world,
+            &ships,
+            Some(&stats),
+            TriggerRadii::default(),
+            class,
+        );
         let after = projectiles.slots[0];
         if after.kind.is_some() && after.bounces > 0 {
             bounced = Some((before, after));
@@ -734,7 +765,14 @@ fn a_missile_mirrors_off_a_wall_where_a_rocket_detonates() {
     let mut rockets = Projectiles::new();
     rockets.spawn(Weapon::Rocket, Vec3::ZERO, Vec3::Z * 200.0, 0);
     for _ in 0..40 {
-        rockets.advance(1.0 / 60.0, &world, &ships, Some(&stats), class);
+        rockets.advance(
+            1.0 / 60.0,
+            &world,
+            &ships,
+            Some(&stats),
+            TriggerRadii::default(),
+            class,
+        );
     }
     assert_eq!(
         rockets.live(),
@@ -788,7 +826,14 @@ fn a_missile_gives_up_after_its_bounce_budget() {
     projectiles.spawn_guided(Weapon::Missile, Vec3::ZERO, Vec3::Z * 200.0, 0, None, 600.0);
     let mut highest = 0;
     for _ in 0..600 {
-        projectiles.advance(1.0 / 60.0, &world, &ships, Some(&stats), class);
+        projectiles.advance(
+            1.0 / 60.0,
+            &world,
+            &ships,
+            Some(&stats),
+            TriggerRadii::default(),
+            class,
+        );
         highest = highest.max(projectiles.slots[0].bounces);
         if projectiles.live() == 0 {
             break;
@@ -824,7 +869,14 @@ fn an_unguided_missile_detonates_when_its_three_seconds_are_up() {
     let mut ticks = 0_usize;
     let mut ended: Option<Impact> = None;
     while ended.is_none() {
-        let impacts = projectiles.advance(1.0 / 60.0, &world, &ships, Some(&stats), class);
+        let impacts = projectiles.advance(
+            1.0 / 60.0,
+            &world,
+            &ships,
+            Some(&stats),
+            TriggerRadii::default(),
+            class,
+        );
         ticks += 1;
         ended = impacts.into_iter().flatten().next();
         assert!(ticks < 600, "the missile never ended");

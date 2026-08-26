@@ -597,6 +597,8 @@ fn every_implemented_weapon_has_a_fire_arm_on_both_paths() {
         Weapon::Rocket,
         Weapon::Missile,
         Weapon::Autopilot,
+        Weapon::Mine,
+        Weapon::Bomb,
     ];
 
     assert_eq!(
@@ -821,163 +823,74 @@ fn the_cockpit_view_swaps_the_shield_shell_for_its_sphere() {
     );
 }
 
-/// How long [`one_autopilot_table`]'s Autopilot flies for, in seconds.
-const FIXTURE_AUTOPILOT_TIME: f32 = 3.5;
+/// **An opponent that declines a shot keeps the pickup.** It did not, and this
+/// is the test that says so.
+///
+/// `Race::spend_opponent_pickup` is an `&&`-chain whose fallthrough is the
+/// *absorb* branch, and every weapon arm in it reads
+/// `weapon == X && self.fire_x(...)`. `fire_x` returns `false` for the ordinary
+/// case of a driver choosing not to shoot this tick - `Driver::wants_to_fire`
+/// rolls against a `TRIGGER_RATE` of `0.05`, so it declines about nineteen
+/// ticks in twenty - and a `false` right-hand side falls straight through to
+/// `else`, which pays the weapon's `absorb` into the energy pool and clears the
+/// slot.
+///
+/// The comment beside the Rocket's arm claimed the opposite in as many words
+/// ("the pickup is kept rather than spent - the same rule the player's path
+/// follows"), which is what kept this hidden for so long: the player's path
+/// *is* a `match` with early returns and does keep it. The consequence is that
+/// an opponent cashes in a Rocket, a Missile or a Mine on the first tick it
+/// does not fire, which is nearly always the tick it collected it.
+///
+/// The field is empty, so there is provably nothing to shoot at and the decline
+/// is not a roll that might have gone the other way.
+#[test]
+fn an_opponent_that_declines_a_shot_does_not_absorb_the_pickup() {
+    for weapon in [
+        oag_formats::weapons::Weapon::Rocket,
+        oag_formats::weapons::Weapon::Mine,
+    ] {
+        let mut race = race_with_a_grid();
+        race.weapons = Some(rear_and_forward_table());
 
-/// The Autopilot's own fixture, with `time` unlike the Turbo's and the
-/// Shield's for the reason [`one_shield_table`] gives.
-fn one_autopilot_table() -> oag_formats::weapons::WeaponStats {
+        let slot = 1;
+        assert!(race.world.ships[slot].active, "no opponent on the grid");
+        race.world.ships[slot].physics.shield = 10.0;
+        race.world.ships[slot].pickup.weapon = Some(weapon);
+
+        race.spend_opponent_pickup(
+            slot,
+            &oag_physics::ShipControls::default(),
+            &oag_ai::Field::EMPTY,
+        );
+
+        assert_eq!(
+            race.world.ships[slot].physics.shield, 10.0,
+            "{weapon:?}: the opponent absorbed a pickup it never chose to fire - \
+             `spend_opponent_pickup`'s `&&`-chain falls through to the absorb \
+             branch whenever a `fire_*` helper declines"
+        );
+        assert_eq!(
+            race.world.ships[slot].pickup.weapon,
+            Some(weapon),
+            "{weapon:?}: the pickup left the slot without anything being fired"
+        );
+    }
+}
+
+/// A table authoring one forward weapon and one rear one, both weighted, for
+/// the test above - which needs a weapon of each shape to show that the
+/// fallthrough is the chain's and not one arm's.
+fn rear_and_forward_table() -> oag_formats::weapons::WeaponStats {
     oag_formats::weapons::parse(
         r#"<WeaponStats>
              <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
-             <Weapon type="Autopilot"><Stats absorb="4" time="3.5"/></Weapon>
+             <Weapon type="Rocket"><Stats absorb="23" blastforce="3" blastradius="4" damage="5" venomspeed="100" flashspeed="200" rapierspeed="300" phantomspeed="400" launchSpeed="7" spread="0.1"/></Weapon>
+             <Weapon type="Mine"><Stats absorb="24" blastforce="5" blastradius="6" damage="7" timetodie="8" trigger_radius="2"/></Weapon>
              <Pickupodds class="Venom">
-               <Weapon type="Autopilot"><Stats ai="1" back="1" front="1" human="1"/></Weapon>
+               <Weapon type="Rocket"><Stats ai="1" back="1" front="1" human="1"/></Weapon>
              </Pickupodds>
            </WeaponStats>"#,
     )
     .expect("the fixture table must parse")
-}
-
-/// The Autopilot's whole life: armed off the disc's own `time`, flying the
-/// craft, warning at one second, and letting go.
-///
-/// `Autopilot_Fire` (`0x088613bc`) and `Autopilot_Update` (`0x08861404`) are
-/// what this pins - see `docs/ghidra/functions/psp-pulse-usa/autopilot.md`. What
-/// it does **not** pin is the takeover itself, which is this project's reuse of
-/// `oag_ai::Driver` rather than a reading; the assertion below is only that the
-/// snapshot stops being consulted, not that the craft flies the way the
-/// original's does.
-#[test]
-fn a_fired_autopilot_flies_the_craft_for_its_authored_duration() {
-    let mut race = race_with_weapon_table(
-        Mode::SingleRace,
-        enveloping_pad(),
-        1.0,
-        one_autopilot_table(),
-    );
-    let mut buttons = Buttons::new();
-
-    race.tick(&buttons.tick(CROSS));
-    assert_eq!(
-        race.ship_pickup(),
-        Some(oag_formats::weapons::Weapon::Autopilot)
-    );
-    assert!(
-        !race.flown_for_the_player(),
-        "holding one is not the same as having spent it"
-    );
-
-    race.tick(&buttons.tick(CROSS | SQUARE));
-    assert_eq!(race.ship_pickup(), None, "firing must spend the pickup");
-    assert!(race.flown_for_the_player(), "the craft was not handed over");
-    // The authored `time` less the one tick the countdown has already run.
-    let armed = race.world.ships[0].autopilot_timer;
-    assert!(
-        (armed - (FIXTURE_AUTOPILOT_TIME - race.dt())).abs() < 1e-5,
-        "expected {FIXTURE_AUTOPILOT_TIME} less one tick, got {armed}"
-    );
-
-    // It ends, and the operator's flag is untouched by any of it.
-    let mut ticks: u32 = 1;
-    while race.world.ships[0].autopilot_timer > 0.0 {
-        race.tick(&buttons.tick(CROSS));
-        ticks += 1;
-        assert!(ticks < 600, "the autopilot never let go");
-    }
-    assert!(!race.flown_for_the_player());
-    assert!(
-        !race.autopilot(),
-        "the pickup moved the operator's own switch"
-    );
-    // Measured in seconds rather than in ticks: the tick count is the file's
-    // duration divided by `dt` and rounded up, plus the one the arm itself
-    // consumed, and pinning that arithmetic tests the rounding rather than the
-    // duration. What matters is that it ran for what the file says.
-    let flown = ticks as f32 * race.dt();
-    assert!(
-        flown >= FIXTURE_AUTOPILOT_TIME && flown < FIXTURE_AUTOPILOT_TIME + 2.0 * race.dt(),
-        "flew for {flown} s against the file's {FIXTURE_AUTOPILOT_TIME}"
-    );
-}
-
-/// The one-second warning is an edge, and it is the only cue this raises.
-#[test]
-fn the_autopilot_warns_once_a_second_before_it_lets_go() {
-    let mut race = race_with_weapon_table(
-        Mode::SingleRace,
-        enveloping_pad(),
-        1.0,
-        one_autopilot_table(),
-    );
-    let mut buttons = Buttons::new();
-    race.tick(&buttons.tick(CROSS));
-    race.tick(&buttons.tick(CROSS | SQUARE));
-
-    let mut warnings = 0;
-    let mut at = None;
-    for tick in 0..600u32 {
-        race.tick(&buttons.tick(CROSS));
-        let raised = race
-            .drain_cues()
-            .into_iter()
-            .filter(|e| e.cue == crate::audio::sfx::Cue::Disengaging)
-            .count();
-        if raised > 0 && at.is_none() {
-            at = Some(tick);
-        }
-        warnings += raised;
-    }
-    // Once, not sixty times: `Autopilot_Update` keeps `craft+0x144` for exactly
-    // this, and a level test would say "disengaging" for the whole last second.
-    assert_eq!(warnings, 1, "the warning is not an edge");
-    // And a second before the end, within the tick the crossing lands on.
-    let at = at.expect("no warning at all");
-    // The crossing is `now < 1.0 && now + dt > 1.0`, so the remainder at the
-    // warning lands inside one tick below a second - never above it.
-    let remaining = FIXTURE_AUTOPILOT_TIME - (at + 2) as f32 * race.dt();
-    assert!(
-        remaining > 1.0 - 2.0 * race.dt() && remaining <= 1.0,
-        "warned with {remaining} s left, not one"
-    );
-}
-
-/// Pressing fire while it runs cancels it and fires nothing.
-///
-/// `FUN_08844ec4` tests the running bit before its held-weapon jump table and
-/// zeroes the timer instead of dispatching. The pickup survives, because that
-/// path never touches `craft+0x1bc`.
-#[test]
-fn firing_under_autopilot_cancels_it_and_keeps_the_pickup() {
-    let mut race = race_with_weapon_table(
-        Mode::SingleRace,
-        enveloping_pad(),
-        1.0,
-        one_autopilot_table(),
-    );
-    let mut buttons = Buttons::new();
-    race.tick(&buttons.tick(CROSS));
-    race.tick(&buttons.tick(CROSS | SQUARE));
-    assert!(race.flown_for_the_player());
-
-    // A second pickup put in the slot directly - the pad only grants on a *new*
-    // entry and the craft is already standing on this one. A fixture, like the
-    // shield timer two tests up, not a grant.
-    let held = Some(oag_formats::weapons::Weapon::Rocket);
-    race.world.ships[0].pickup.weapon = held;
-    assert!(
-        race.flown_for_the_player(),
-        "it let go before the test began"
-    );
-
-    // Released first: the fire button is edge-triggered, so a second press
-    // without a gap is not a press at all.
-    race.tick(&buttons.tick(CROSS));
-    race.tick(&buttons.tick(CROSS | SQUARE));
-    assert!(!race.flown_for_the_player(), "firing did not cancel it");
-    assert_eq!(
-        race.ship_pickup(),
-        held,
-        "the cancel spent the pickup, which the original's branch never touches"
-    );
 }

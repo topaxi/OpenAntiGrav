@@ -85,7 +85,9 @@ mod pilot;
 pub mod probe;
 
 pub use difficulty::Difficulty;
-pub use driver::{AWARENESS_RANGE, Context, Driver, Personality, Reflex, Tuning};
-pub use field::{Field, Rival};
+pub use driver::{
+    AVOIDANCE_LOOKAHEAD, AWARENESS_RANGE, Context, Driver, Personality, Reflex, Tuning,
+};
+pub use field::{Field, Hazard, Rival};
 pub use line::{Aim, Frame, Line};
 pub use pilot::{Lean, Pilot, Span, pilot_for_slot};

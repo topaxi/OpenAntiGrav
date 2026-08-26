@@ -1,8 +1,13 @@
 //! Things a weapon puts in the air, and what they hit.
 //!
-//! Today that is the Rocket alone. The Missile, the Plasma bolt, the Bomb, the
-//! Mine and the Shuriken all belong here when they land; what each of them adds
+//! Today that is the Rocket, the Missile and the Mine. The Plasma bolt, the
+//! Bomb and the Shuriken all belong here when they land; what each of them adds
 //! is a launch rule and an impact rule, not a second flight model.
+//!
+//! **The Mine is the exception that proves that**, and it is worth knowing
+//! before reading [`Projectiles::advance`]: it adds no flight model because it
+//! has none. It takes an early return at the top of the loop and shares only
+//! the array and the blast. See [`mine`].
 //!
 //! # What is recovered and what is ours
 //!
@@ -65,12 +70,20 @@
 //! operation - `docs/architecture/adr/0003-no-ecs.md`. A full array drops the
 //! shot rather than growing, and [`Projectiles::spawn`] says so.
 
+mod blast;
+pub mod mine;
 pub mod missile;
+mod rocket;
+
+pub use blast::blast;
+use blast::blast_stats;
+pub use mine::TriggerRadii;
+pub use rocket::{ROCKET_SHOTS, launch};
 
 use oag_core::math::Vec3;
-use oag_formats::weapons::{RocketStats, Weapon};
+use oag_formats::weapons::Weapon;
 use oag_physics::params::Dimensions;
-use oag_physics::{Ray, Raycaster, ShipState};
+use oag_physics::{Ray, Raycaster};
 
 /// The most projectiles that can be in the air at once.
 ///
@@ -90,7 +103,17 @@ use oag_physics::{Ray, Raycaster, ShipState};
 /// wall did.
 ///
 /// 128 is eight craft with sixteen apiece in the air at once, which no rate of
-/// fire this engine can reach will exhaust. Fixed-size rather than a `Vec`
+/// fire this engine can reach will exhaust.
+///
+/// **That argument was written when everything here died on its first wall, and
+/// the Mine is the first thing that does not.** A laid mine holds its slot for
+/// the authored `timetodie` - seven seconds - whatever the craft does next, so
+/// occupancy is now a function of how often pads are crossed rather than of how
+/// far a shot flies. Eight craft laying [`mine::CLUSTER`] apiece is forty, and a
+/// second full round inside seven seconds would be eighty: still inside 128, and
+/// no longer by the margin the paragraph above assumes. Worth re-checking
+/// against any weapon that persists longer - the Bomb's `timetodie` is
+/// **twenty** seconds. Fixed-size rather than a `Vec`
 /// because [ADR-0003](../../../docs/architecture/adr/0003-no-ecs.md) requires
 /// the world to snapshot in one `memcpy`-shaped operation; at roughly 48 bytes
 /// a slot the whole array is about 6 KiB, which is not a number worth
@@ -185,21 +208,44 @@ pub struct Projectile {
 
 /// What a projectile did when it stopped.
 ///
-/// # The blast rule, which is ours
+/// # The blast rule: half recovered, half ours
 ///
 /// Everything within `blastradius` of [`Self::point`] takes the **full**
-/// `damage`, and the impulse is flat too.
+/// `damage`, and the **impulse falls off linearly** - `1.0 - d / blastradius`,
+/// to nothing at the radius, so a craft on the rim is nudged and one at the
+/// centre is thrown. This module had the impulse flat until 2026-08-26.
 ///
-/// **Half of that is now known to be wrong, and is left standing on purpose.**
-/// `FUN_08868ea4` - the original's blast, reached from a craft hit - walks every
-/// craft but the one struck and adds
-/// `direction * (1 - distance/blastradius) * blastforce`, so the **force** falls
-/// off linearly to nothing at the radius. The **damage** does not go through
-/// that function at all (`FUN_08869054` takes the struck craft alone), which
-/// leaves this engine's damage-everything-inside a bigger invention than it
-/// looked. Both are a change to how every weapon lands rather than to the
-/// Missile, so they are recorded here and handed over rather than folded into a
-/// change about firing without a lock.
+/// **The falloff is recovered twice over, from two functions read
+/// independently and days apart**, which is worth more than either read alone:
+///
+/// - `Weapon_PostBlastImpulse` (`0x0886794c`), the Mine subsystem's, whose four
+///   `<Stats>` offsets are the Mine's `damage`, `blastradius`, `blastforce` and
+///   `slowdown_time` - see
+///   `docs/ghidra/functions/psp-pulse-usa/mine.md#the-blast-confirmed-from-the-other-end-and-it-falls-off`.
+/// - `FUN_08868ea4`, reached from a **craft hit** rather than from a fuse, which
+///   walks every craft but the one struck and adds
+///   `direction * (1 - distance/blastradius) * blastforce`.
+///
+/// Two subsystems, one arithmetic. That is why it is implemented for every
+/// weapon rather than for the Mine alone.
+///
+/// # The damage is the half still to settle, and the two paths disagree
+///
+/// `blast` applies full `damage` to everything inside the radius, and **that is
+/// still this engine's invention** - more so than it looked, because the two
+/// recovered paths do not agree with each other:
+///
+/// - The Mine's sweep accumulates the authored `damage` into **every** craft it
+///   reaches, flat, with no distance term.
+/// - The craft-hit path does not damage through `FUN_08868ea4` at all;
+///   `FUN_08869054` takes the **struck craft alone**.
+///
+/// Both readings are sound and they are describing different things - a mine
+/// going off among a group against a rocket hitting somebody - so neither
+/// cancels the other and nothing here is changed on the strength of one. What
+/// this module does is the Mine's rule applied everywhere, which is at least a
+/// recovered rule rather than a guess, and the disagreement is recorded so the
+/// next reader starts from it rather than rediscovering it.
 ///
 /// **The firing craft is not excluded.** A rocket launched into a wall at close
 /// range hurts the ship that fired it, which follows from the blast being a
@@ -335,6 +381,46 @@ impl Projectiles {
         target: Option<u8>,
         launch_speed_kmh: f32,
     ) -> bool {
+        self.place(
+            kind,
+            position,
+            velocity,
+            owner,
+            target,
+            launch_speed_kmh,
+            MAX_FLIGHT_SECONDS,
+        )
+    }
+
+    /// Lays one mine or bomb, with its own authored fuse instead of the safety
+    /// net.
+    ///
+    /// A third entry point rather than a widened [`Self::spawn_guided`], for the
+    /// reason that one is a widened [`Self::spawn`]: a rocket and a missile must
+    /// keep landing in the same slot with the same fields they always did, or a
+    /// determinism reference stops being a question about the weapon that
+    /// changed.
+    ///
+    /// `fuse` is `<Weapon type="Mine"><Stats timetodie>` and running out is what
+    /// **detonates** a mine rather than what reaps it - see
+    /// [`Self::advance`]'s expiry branch, which is the one place in this module
+    /// where the countdown means two different things depending on the weapon.
+    pub fn lay(&mut self, kind: Weapon, position: Vec3, owner: u8, fuse: f32) -> bool {
+        self.place(kind, position, mine::at_rest(), owner, None, 0.0, fuse)
+    }
+
+    /// The one place a slot is filled.
+    #[allow(clippy::too_many_arguments)]
+    fn place(
+        &mut self,
+        kind: Weapon,
+        position: Vec3,
+        velocity: Vec3,
+        owner: u8,
+        target: Option<u8>,
+        launch_speed_kmh: f32,
+        lifetime: f32,
+    ) -> bool {
         let Some(slot) = self.slots.iter_mut().find(|p| p.kind.is_none()) else {
             return false;
         };
@@ -343,7 +429,7 @@ impl Projectiles {
             position,
             velocity,
             owner,
-            lifetime: MAX_FLIGHT_SECONDS,
+            lifetime,
             // World up until the first probe corrects it - see the field.
             surface: Vec3::Y,
             target,
@@ -377,6 +463,7 @@ impl Projectiles {
         raycaster: &R,
         ships: &[crate::world::Ship],
         missile: Option<&oag_formats::weapons::MissileStats>,
+        trigger_radii: TriggerRadii,
         class: oag_formats::handling::SpeedClass,
     ) -> [Option<Impact>; MAX_PROJECTILES] {
         let mut impacts = [None; MAX_PROJECTILES];
@@ -386,6 +473,22 @@ impl Projectiles {
                 continue;
             };
             let guided = kind == Weapon::Missile;
+
+            // **The two rear weapons are the things here that do not fly**, so
+            // they take none of what follows: no surface probe, no fall, no
+            // sweep, no guidance. A mine or a bomb sits where it was laid,
+            // counts its authored fuse down, and goes off when something comes
+            // close enough or when the fuse runs out. See [`mine`], which
+            // carries the split between the recovered half of that and the
+            // read-of-an-authored-attribute half, and which holds both weapons
+            // because they are one weapon in two sizes.
+            if matches!(kind, Weapon::Mine | Weapon::Bomb) {
+                impacts[index] = mine::advance_laid(projectile, kind, dt, ships, trigger_radii);
+                if impacts[index].is_some() {
+                    *projectile = Projectile::default();
+                }
+                continue;
+            }
 
             // A missile's speed is pinned to its ramp every tick rather than
             // integrated, so the whole flight needs to know how old it is. Age
@@ -548,6 +651,13 @@ impl Projectiles {
                 // and is deliberately not folded into a change about the
                 // Missile; see the handover thread. A missile never gets here,
                 // having detonated above.
+                //
+                // **A mine or a bomb never gets here either**, for a different
+                // reason: its countdown is the disc's own `timetodie` and
+                // running out is a *detonation*, handled in [`advance_laid`]
+                // rather than folded into this branch. That is the one place in
+                // this module where the same field means two things depending
+                // on the weapon, and it is spelled out at both ends.
                 *projectile = Projectile::default();
             }
         }
@@ -655,6 +765,7 @@ pub fn step<R: Raycaster + ?Sized>(
         raycaster,
         &world.ships[..count],
         missile_stats.as_ref(),
+        TriggerRadii::from_table(weapons),
         class,
     );
 
@@ -678,97 +789,6 @@ pub fn step<R: Raycaster + ?Sized>(
     }
 
     impacts
-}
-
-/// One weapon's `blastradius`, `damage` and `blastforce`, or `None`.
-///
-/// `None` for a table that did not load, for a weapon it does not author, and for
-/// a weapon whose block this crate does not decode - all three are the same
-/// answer to the caller, which is "spend no blast". A weapon that reaches an
-/// impact with no authored numbers is a bug upstream in
-/// [`crate::pickup::IMPLEMENTED`], not something to paper over with a default.
-fn blast_stats(
-    weapons: Option<&oag_formats::weapons::WeaponStats>,
-    kind: Weapon,
-) -> Option<(f32, f32, f32)> {
-    let weapons = weapons?;
-    match kind {
-        Weapon::Rocket => weapons
-            .rocket()
-            .map(|s| (s.blastradius, s.damage, s.blastforce)),
-        Weapon::Missile => weapons
-            .missile()
-            .map(|s| (s.blastradius, s.damage, s.blastforce)),
-        _ => None,
-    }
-}
-
-/// Spends one blast against every craft inside its radius.
-///
-/// Full `damage` and a `force` impulse directed away from `point`, with no
-/// falloff and with the firing craft included - the choices [`Impact`] records
-/// and defends. Damage goes through [`oag_physics::damage::apply_weapon`], so
-/// the state gate, the weapons-off halving and the clamp are the recovered ones.
-///
-/// Returns how many craft it reached, which is what a caller asserting "the
-/// blast did something" wants and what a test asserting "and nothing outside the
-/// radius" needs the other half of.
-///
-/// # `absorbed`
-///
-/// One flag per ship slot, **set and never cleared**, marking a craft whose
-/// fired Shield swallowed this blast. The original's weapon-damage drain
-/// (`Ship_ApplyPendingWeaponDamage`, `0x0883f13c`) takes a shield branch that
-/// discards the amount and calls `ShipShield_Hit` instead, so a swallowed hit is
-/// the *only* thing that makes the shell visibly react - see
-/// `docs/ghidra/functions/psp-pulse-usa/shield-pickup.md`.
-///
-/// An out-parameter rather than a second return value, because the caller that
-/// wants it is two layers up and the intermediate ([`step`]) already returns the
-/// thing every other caller asks for. A caller with nothing to draw passes a
-/// scratch array; a short slice is written as far as it goes rather than
-/// panicking, so `&mut []` is a legal "do not tell me".
-pub fn blast(
-    ships: &mut [crate::world::Ship],
-    point: Vec3,
-    radius: f32,
-    damage: f32,
-    force: f32,
-    rules: oag_physics::DamageRules,
-    absorbed: &mut [bool],
-) -> usize {
-    let mut reached = 0;
-    for (slot, ship) in ships.iter_mut().enumerate() {
-        if !ship.active {
-            continue;
-        }
-        let offset = ship.physics.body.position - point;
-        if offset.length() > radius {
-            continue;
-        }
-        reached += 1;
-
-        let dimensions = ship.handling.dimensions;
-        let report =
-            oag_physics::damage::apply_weapon(&mut ship.physics, &dimensions, damage, rules);
-        // `|=` rather than `=`: two blasts in one tick against one shielded
-        // craft are two absorbs, and the second must not clear the first.
-        if let Some(flag) = absorbed.get_mut(slot) {
-            *flag |= report.absorbed;
-        }
-
-        // A craft exactly on the blast centre has no direction to be pushed in.
-        // World up rather than a zero push or a normalised NaN: something has to
-        // happen, and up is the one direction that does not depend on an
-        // arbitrary axis of the craft or of the track.
-        let direction = if offset.length() > 1e-4 {
-            offset.normalize()
-        } else {
-            Vec3::Y
-        };
-        ship.physics.body.apply_impulse(direction * force);
-    }
-    reached
 }
 
 /// The sphere a craft is tested against.
@@ -841,15 +861,6 @@ fn segment_sphere(p0: Vec3, p1: Vec3, centre: Vec3, radius: f32) -> Option<f32> 
     }
 }
 
-/// How many rockets one press puts in the air.
-///
-/// **Recovered, confidence 88.** `Weapon_FireRocket` (`0x0886e104`) makes three
-/// literal calls to one spawn helper in a single invocation, with no timer
-/// between them: one through the craft's own matrix, one through it rotated by
-/// `+spread`, one by `-spread`. See
-/// `docs/ghidra/functions/psp-pulse-usa/weapon-fire.md`.
-pub const ROCKET_SHOTS: usize = 3;
-
 /// How many km/h one world unit per second is, for the authored weapon speeds.
 ///
 /// **Recovered, confidence 84**, as the divisor both of
@@ -902,80 +913,6 @@ pub const WALL_FACING: f32 = 0.25;
 /// a new floor and climbing it. `0.5` is 60 degrees, which passes any bank or
 /// roll a Pulse circuit authors and rejects anything vertical.
 pub const RIDEABLE_COS: f32 = 0.5;
-
-/// Where a craft launches its rockets from, and how fast.
-///
-/// Returns [`ROCKET_SHOTS`] `(position, velocity)` pairs in the original's own
-/// order - straight ahead, `+spread`, `-spread` - because that order decides
-/// which projectile slot each lands in, and the slot is hashed state.
-///
-/// # What is recovered here, and what is not
-///
-/// **Recovered.** That there are three; that they leave *together* rather than
-/// as a burst; that they share the craft's position and differ only by a
-/// rotation built from `<Rocket spread>` and its negation; and that `spread` is
-/// an angle in radians (from the `vcst_s(5)` = `2/pi` the original multiplies by
-/// before `vcos_s`/`vsin_s`, which is Allegrex's radians-to-quarter-turns
-/// conversion).
-///
-/// **Ours.**
-///
-/// - **The axis the fan rotates about.** The original builds its rotation
-///   through four `vpfxs`-prefixed lanes and reading the axis back off the
-///   prefixes was not attempted. The craft's **up** axis is what a lateral
-///   spread of forward-firing rockets wants, and it is what this uses.
-/// - **The launch offset.** The original passes the craft's pose for the
-///   position and varies only the matrix, so all three share an origin - that
-///   part is recovered. Pushing that origin forward by the hull's own extent,
-///   so a rocket starts outside the craft that fired it, is this engine's, and
-///   it uses the craft's *unrotated* forward so the three still share it.
-/// - **The speed being the class's plus `launchSpeed`** rather than one or the
-///   other, and the craft's own velocity not being inherited. The original's
-///   flight speed is the class's **alone** - neither `Rocket_Init` nor
-///   `Rocket_Update` mentions `launchSpeed` - so the sum is this engine's
-///   choice and stays one, flagged here rather than quietly corrected: what
-///   `launchSpeed` *is* for has not been found.
-/// - **Treating `launchSpeed` as km/h too.** The four class speeds are measured
-///   (see below); `launchSpeed` is authored in the same `<Stats>` block and in
-///   the same range, so it is converted with them. Nothing reads it, so nothing
-///   confirms it.
-///
-/// # The authored speeds are km/h, not units per second
-///
-/// **Recovered, confidence 84** - `docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`.
-/// `Rocket_SpeedForClass` (`0x0885d1b0`) returns the authored float for the
-/// current class and does no arithmetic, and **both** of its callers divide by
-/// `3.6` before it becomes a velocity. Spending the numbers as units per
-/// second, which this did until 2026-08-11, flies a rocket **3.6x too fast**:
-/// the disc authors `venomspeed="800" launchSpeed="200"`, so a Venom rocket ran
-/// at `1000` units/s, which the HUD's own `* 3.6` would read as **3600 km/h**
-/// against a craft that tops out near 600. Converted it is `278` units/s, or
-/// 1000 km/h - faster than the craft, which is what a rocket should be.
-///
-/// The conversion is at the call site rather than inside
-/// [`RocketStats::speed_for`] on purpose, mirroring the original: the lookup
-/// hands back the authored figure and the consumer spends it.
-#[must_use]
-pub fn launch(
-    state: &ShipState,
-    dimensions: &Dimensions,
-    stats: &RocketStats,
-    class: oag_formats::handling::SpeedClass,
-) -> [(Vec3, Vec3); ROCKET_SHOTS] {
-    let forward = state.body.forward();
-    let up = state.body.up();
-    let nose = state.body.position
-        + forward * oag_physics::wall::hull_extent(&state.body, dimensions, forward);
-    let speed = (stats.speed_for(class) + stats.launch_speed) / KMH_PER_UNIT_PER_SECOND;
-
-    // The original's own order. A zero `spread` collapses all three onto the
-    // same ray rather than erroring: that is a file that authors no fan, not a
-    // broken weapon.
-    [0.0, stats.spread, -stats.spread].map(|angle| {
-        let direction = oag_core::math::quat_from_axis_angle(up, angle) * forward;
-        (nose, direction * speed)
-    })
-}
 
 #[cfg(test)]
 mod tests;

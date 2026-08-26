@@ -233,6 +233,28 @@ impl Race {
                     // ballistically and goes off on its own timer.
                     self.fire_missile(0, &stats);
                 }
+                oag_formats::weapons::Weapon::Mine | oag_formats::weapons::Weapon::Bomb => {
+                    let Some(drop) =
+                        oag_gameplay::projectile::mine::Drop::for_weapon(weapon, weapons)
+                    else {
+                        // As the Rocket: nothing to lay.
+                        return;
+                    };
+                    // **The pickup is not spent here, and that is recovered.**
+                    // `Weapon_DropMines` (`0x088675cc`) clears the craft's
+                    // held-weapon slot only in the branch where its counter
+                    // reaches zero, so a craft goes on holding the Mine for the
+                    // whole half-second the cluster takes to come out. Starting
+                    // the drop is the whole action; `Race::lay_mines` does the
+                    // rest, one mine at a time, and clears the slot when the
+                    // last one is out.
+                    //
+                    // Returning early therefore skips the `weapon = None` at the
+                    // bottom of this function on purpose - it is the one arm
+                    // here that must not spend the slot.
+                    self.world.ships[0].pickup.begin_drop(drop.count);
+                    return;
+                }
                 // The other nine have no effect to run. Deliberately *not* spent:
                 // a pickup that vanishes when fired and does nothing is worse
                 // than one the player can still absorb.
@@ -259,6 +281,66 @@ impl Race {
             );
         }
         self.world.ships[0].pickup.weapon = None;
+    }
+
+    /// Lays whatever charge is due from every craft mid-drop, one tick's worth.
+    ///
+    /// Both rear weapons, because they are one mechanism: a Bomb is a drop of
+    /// one. See `oag_gameplay::projectile::mine`.
+    ///
+    /// **Every craft, in slot order**, because a drop is per-craft state and an
+    /// opponent's cluster has to come out at the same rate the player's does.
+    /// Slot order is the determinism rule the whole tick follows.
+    ///
+    /// Called from the tick right after `Race::spend_pickup`, so a mine is laid
+    /// from where the craft is *before* this tick's force law - the same instant
+    /// a rocket fired on the same tick leaves from. A mine does not move once
+    /// laid, so this is the only chance to get its position right.
+    ///
+    /// Does nothing at all when no craft is mid-drop, which is every craft
+    /// almost all of the time: [`oag_gameplay::pickup::Held::advance_drop`]
+    /// returns immediately on a zero counter.
+    pub(super) fn lay_mines(&mut self) {
+        let Some(weapons) = self.weapons.as_ref() else {
+            // No table. A craft cannot have started a drop without one - the arm
+            // above gates on exactly this - so there is nothing in flight to
+            // abandon.
+            return;
+        };
+        for slot in 0..self.world.ship_count as usize {
+            if !self.world.ships[slot].active || !self.world.ships[slot].pickup.is_dropping() {
+                continue;
+            }
+            // **The held weapon, re-read every tick, and it is what says which
+            // of the two is coming out.** A drop keeps the pickup in the slot
+            // until the last charge is laid - that is the recovered coupling -
+            // so the weapon is still there to be asked.
+            let Some(weapon) = self.world.ships[slot].pickup.weapon else {
+                continue;
+            };
+            let Some(drop) = oag_gameplay::projectile::mine::Drop::for_weapon(weapon, weapons)
+            else {
+                continue;
+            };
+            let due = self.world.ships[slot]
+                .pickup
+                .advance_drop(self.dt, oag_gameplay::projectile::mine::DROP_INTERVAL);
+            if !due {
+                continue;
+            }
+            let ship = &self.world.ships[slot];
+            let point = oag_gameplay::projectile::mine::drop_point(
+                &ship.physics,
+                &ship.handling.dimensions,
+            );
+            // A full array drops this mine and not the drop: the counter has
+            // already been spent, so the cluster goes on laying the rest rather
+            // than stalling. That matches `Projectiles::spawn`'s own rule -
+            // a shot that cannot be taken is lost, not queued.
+            self.world
+                .projectiles
+                .lay(weapon, point, slot as u8, drop.fuse);
+        }
     }
 
     /// One tick of the lock-on reticle, and the tone state that goes with it.

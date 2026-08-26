@@ -14,6 +14,7 @@
 use super::*;
 use oag_formats::track;
 
+mod autopilot;
 mod camera;
 mod cues;
 mod field;

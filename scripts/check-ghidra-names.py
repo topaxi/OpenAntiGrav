@@ -79,7 +79,6 @@ SUFFIX_BASELINE = {
     "ps2-pulse-eu/0x0015a550": ("Ship_UpdateAirbrakes_q", 78),
     "psp-pulse-eu/0x08846904": ("Ship_UpdateSideshiftInput_q", 70),
     "psp-pulse-usa/0x08846a54": ("Ship_UpdateSideshiftInput_q", 72),
-    "psp-pulse-usa/0x088675cc": ("Weapon_UpdateBurstFire_q", 72),
     "psp-pulse-usa/0x0886ebdc": ("Rocket_HitCraft_q", 78),
     "psp-pulse-usa/0x0886ed34": ("Rocket_SpawnCraftExplosion_q", 78),
     "psp-pulse-usa/0x08915484": ("Psys_Spawn_q", 72),

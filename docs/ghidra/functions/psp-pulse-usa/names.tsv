@@ -501,7 +501,6 @@
 0x0880c058	function	WeaponStats_ParseRocket	88	weapon-fire.md
 0x08861814	function	Weapons_DispatchFire	80	weapon-fire.md
 0x0886e104	function	Weapon_FireRocket	88	weapon-fire.md
-0x088675cc	function	Weapon_UpdateBurstFire_q	72	weapon-fire.md
 
 0x0885cc24	function	Rocket_Ctor	85	rocket-visuals.md
 0x0885cdb8	function	Rocket_Init	85	rocket-visuals.md
@@ -523,6 +522,16 @@
 0x08861d20	function	WeaponPickup_Grant	80	missile.md
 0x0886e0f8	function	WeaponPickup_ArmRocket	80	missile.md
 0x0880e93c	function	WeaponStats_ParsePickupOdds	92	missile.md
+
+0x0880d124	function	WeaponStats_ParseMine	92	mine.md
+0x0880cef0	function	WeaponStats_ParseBomb	90	mine.md
+0x0880c774	function	WeaponStats_ParseCannon	90	mine.md
+0x088675cc	function	Weapon_DropMines	90	mine.md
+0x08859930	function	Mine_Construct	92	mine.md
+0x08859ac8	function	Mine_Init	90	mine.md
+0x08863a20	function	Weapon_FireBomb	88	mine.md
+0x08871ddc	function	Weapon_AnnounceIncoming	88	mine.md
+
 0x08869588	function	MissilePool_Update	88	missile.md
 0x08868d50	function	Missile_SpawnExplosion	85	missile.md
 0x08868ea4	function	Missile_ApplyBlastForce	88	missile.md
@@ -568,7 +577,8 @@
 0x0883f13c	function	Ship_ApplyPendingWeaponDamage	82	shield-pickup.md
 0x0885e1c0	function	ShipShield_Deactivate	84	shield-pickup.md
 0x0885eb54	function	ShipShield_InitColours	82	shield-pickup.md
-0x0886794c	function	Weapon_PostBlastImpulse	68	contact-response.md
+0x0886794c	function	Weapon_PostBlastImpulse	82	contact-response.md
+0x08859cd4	function	Entity_GetPosition	90	contact-response.md
 0x089391c4	function	SoundEmitter_Init	85	positional-audio.md
 0x08939720	function	SoundEmitter_Update	84	positional-audio.md
 0x08939c00	function	SoundEmitter_ComputeVolumeAndAngle	85	positional-audio.md

@@ -287,3 +287,54 @@ fn a_held_slot_gives_up_what_it_holds_exactly_once() {
     assert_eq!(held.take(), Some(Weapon::Turbo));
     assert_eq!(held.take(), None);
 }
+
+/// **Every rear weapon can be both laid and tripped.**
+///
+/// `mine::Drop::for_weapon` says how many charges a press lays and
+/// `mine::TriggerRadii::get` says how close a craft has to come to set one off,
+/// and the two are the same list of weapons written twice. Neither fails loudly
+/// when they disagree: a weapon missing from the first lays nothing at all, and
+/// one missing from the second is laid and can then never be tripped - it just
+/// sits there until its fuse runs out, which reads as a tuning problem rather
+/// than as a wiring one.
+///
+/// `every_implemented_weapon_has_a_fire_arm_on_both_paths` cannot catch it,
+/// because the fire arm *does* exist in both cases.
+///
+/// The table authors every weapon in [`IMPLEMENTED`], so a weapon that answers
+/// one call and not the other is a missing `match` arm rather than a missing
+/// `<Weapon>` element.
+#[test]
+fn every_rear_weapon_can_be_laid_and_tripped() {
+    use crate::projectile::mine::{Drop, TriggerRadii};
+
+    let table = oag_formats::weapons::parse(
+        r#"<WeaponStats>
+             <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
+             <Weapon type="Mine"><Stats absorb="1" blastforce="2" blastradius="3" damage="4" timetodie="5" trigger_radius="6"/></Weapon>
+             <Weapon type="Bomb"><Stats absorb="7" blastforce="8" blastradius="9" damage="10" damageradius="11" timetodie="12" trigger_radius="13"/></Weapon>
+           </WeaponStats>"#,
+    )
+    .expect("the fixture table must parse");
+    let radii = TriggerRadii::from_table(Some(&table));
+
+    for &weapon in IMPLEMENTED {
+        let laid = Drop::for_weapon(weapon, &table);
+        let trippable = radii.get(weapon);
+        assert_eq!(
+            laid.is_some(),
+            trippable.is_some(),
+            "{weapon:?} answers one of `Drop::for_weapon` and `TriggerRadii::get` \
+             and not the other, so it is either laid and untrippable or not laid \
+             at all. Both `match`es are in `projectile/mine.rs` and grow together."
+        );
+        if let Some(laid) = laid {
+            assert!(laid.count > 0, "{weapon:?} lays nothing");
+            assert_eq!(
+                Some(laid.trigger_radius),
+                trippable,
+                "{weapon:?}: the two paths disagree about its trigger radius"
+            );
+        }
+    }
+}

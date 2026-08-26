@@ -198,4 +198,25 @@ impl Race {
             .as_ref()
             .and_then(oag_formats::weapons::WeaponStats::missile)
     }
+
+    /// The Mine's authored `<Stats>`, or `None` when the table did not load or
+    /// authors no Mine.
+    ///
+    /// An accessor for [`Self::missile_stats`]'s reason. Read by
+    /// `crates/game/tests/mine_ground_truth.rs`.
+    #[must_use]
+    pub fn mine_stats(&self) -> Option<oag_formats::weapons::MineStats> {
+        self.weapons
+            .as_ref()
+            .and_then(oag_formats::weapons::WeaponStats::mine)
+    }
+
+    /// The Bomb's authored `<Stats>`, or `None` when the table did not load or
+    /// authors no Bomb.
+    #[must_use]
+    pub fn bomb_stats(&self) -> Option<oag_formats::weapons::BombStats> {
+        self.weapons
+            .as_ref()
+            .and_then(oag_formats::weapons::WeaponStats::bomb)
+    }
 }

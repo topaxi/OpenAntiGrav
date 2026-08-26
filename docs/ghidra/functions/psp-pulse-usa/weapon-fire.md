@@ -23,7 +23,7 @@ Unmeasured, so capped at **84** by the
 | `0x08861814` | `Weapons_DispatchFire` | 80 |
 | `0x0886e104` | `Weapon_FireRocket` | 88 |
 | `0x0886f038` | `Rocket_Spawn` - **corrected**, see [rocket-visuals.md](rocket-visuals.md) | 90 |
-| `0x088675cc` | `Weapon_UpdateBurstFire_q` | 72 |
+| `0x088675cc` | `Weapon_DropMines` - **corrected**, see [mine.md](mine.md) | 90 |
 | `0x08869588` | **retired** - it is `MissilePool_Update`, see [missile.md](missile.md) | - |
 
 ## Read this first: the disassembly's addresses are image-base-relative
@@ -180,9 +180,17 @@ forward-firing rockets is for; it is a reading, not a finding.
 cap is `0x30` elsewhere. Three spawns from a single check at 45 live would take
 it to 48. Recorded because it is the kind of detail worth *not* reproducing.
 
-## The other multi-shot weapon: a staggered burst
+## The other multi-shot weapon: a staggered burst, and it is the Mine
 
-`Weapon_UpdateBurstFire_q` (`0x088675cc`), the bit-`0x2` handler, is a different
+**Corrected 2026-08-26.** This section called the bit-`0x2` handler the Cannon
+at confidence 72 and that was wrong; it is the **Mine**, at 90, and the
+function is `Weapon_DropMines`. The whole read is on [mine.md](mine.md): the
+weapon-id jump table's entries 8 and 9 are out of address order, so reading the
+case bodies in address order transposes the Mine and the Bomb. The paragraphs
+below are kept as written because the *mechanism* they describe is right - only
+the attribution was wrong.
+
+`Weapon_DropMines` (`0x088675cc`), the bit-`0x2` handler, is a different
 mechanism and worth keeping straight from the Rocket's:
 
 ```c
@@ -224,8 +232,9 @@ the subsystem.
 
 ## What is not verified
 
-- **Which weapon the burst handler belongs to**, at 72 for the Cannon - see
-  above. The subsystem-pointer table is **not** pool-ordered, so adjacency
+- ~~**Which weapon the burst handler belongs to**, at 72 for the Cannon.~~
+  **Settled 2026-08-26: it is the Mine, at 90.** See
+  [mine.md](mine.md#weapon_requestfires-jump-table-read-as-a-table). The subsystem-pointer table is **not** pool-ordered, so adjacency
   arguments are weak here: `world+0x44`'s handler (`0x08863a20`) fires
   *backwards* (`vneg_q` on the craft's forward row), which reads as a Bomb or a
   Mine and would be pool index 8 or 9 rather than -1. **Read in full,
@@ -238,8 +247,10 @@ the subsystem.
   not a weapon-type enum, which is evidence (not proof) that the global
   per-weapon stats table `Weapon_PostBlastImpulse_q` reads through that same
   offset is keyed by craft rather than by weapon type.
-- **What writes `craft+0x1ac`**, the burst's round count. No store to that offset
-  on a craft base was found outside the decrement itself. It is set by the code
+- **What writes `craft+0x1ac`**, the drop's mine count. No store to that offset
+  on a craft base was found outside the decrement itself, and a second sweep on
+  2026-08-26 reproduced that negative result exactly - see
+  [mine.md](mine.md#what-is-still-ours-and-one-clean-negative-result). It is set by the code
   that arms a pickup - the same never-found grant/fire call site
   `docs/gameplay/pickups.md` has been recording since the pickups landed.
 - **Which axis the fan rotates about.** See above.
@@ -269,7 +280,7 @@ three rows from "ours" to "recovered" because of this page.
   about it is not the same as applying it in the direction that bites.
 - **2026-08-11.** Written while answering "should a rocket fire three?".
   **The first version of this page got it wrong** and the mistake is worth
-  keeping: `Weapon_UpdateBurstFire_q` was found first, reads as a plausible
+  keeping: the bit-`0x2` handler was found first, reads as a plausible
   multi-shot weapon, and was written up at 68 confidence as the Rocket - which
   would have produced a staggered burst 0.1 s apart rather than a fan. A
   maintainer who had actually played the game said the three fly in parallel,
