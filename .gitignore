@@ -7,6 +7,7 @@
 # excluded directory, so the directory itself must stay traversable.
 /data/*
 !/data/README.md
+!/data/**/README.md
 
 # Belt-and-braces: even outside /data/, no game content may ever be committed.
 # These patterns exist so a stray copy in the wrong directory still gets caught.

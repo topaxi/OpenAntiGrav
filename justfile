@@ -589,10 +589,14 @@ patch-ppc-cspec *ARGS:
 resolve-imports boot="data/extracted/psp/PSP_GAME/SYSDIR/BOOT.BIN":
     python3 scripts/resolve-psp-imports.py {{boot}} --modules -o data/ghidra/psp-imports.tsv
 
-# Strip a decrypted Vita SELF (eboot.bin/.suprx) to the plain ELF-PRX
-# VitaLoaderRedux can actually import - see scripts/strip-vita-self.py.
-strip-vita-self *ARGS:
-    python3 scripts/strip-vita-self.py {{ARGS}}
+# Recover a Vita title's klicensee from its zRIF - see scripts/zrif-to-klicensee.py.
+zrif-to-klicensee *ARGS:
+    python3 scripts/zrif-to-klicensee.py {{ARGS}}
+
+# Decrypt a Vita retail SELF (eboot.bin/.suprx) to the plain ELF-PRX
+# VitaLoaderRedux can actually import - see scripts/vita-self-decrypt.py.
+vita-self-decrypt *ARGS:
+    python3 scripts/vita-self-decrypt.py {{ARGS}}
 
 # Apply every documented symbol name to the open Ghidra program
 apply-names *ARGS: resolve-imports
