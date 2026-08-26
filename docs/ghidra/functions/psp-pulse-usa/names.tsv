@@ -501,7 +501,6 @@
 0x0880c058	function	WeaponStats_ParseRocket	88	weapon-fire.md
 0x08861814	function	Weapons_DispatchFire	80	weapon-fire.md
 0x0886e104	function	Weapon_FireRocket	88	weapon-fire.md
-0x088675cc	function	Weapon_UpdateBurstFire_q	72	weapon-fire.md
 0x08869588	function	Projectiles_Update_q	75	weapon-fire.md
 
 0x0885cc24	function	Rocket_Ctor	85	rocket-visuals.md
@@ -524,6 +523,15 @@
 0x08861d20	function	WeaponPickup_Grant	80	missile.md
 0x0886e0f8	function	WeaponPickup_ArmRocket	80	missile.md
 0x0880e93c	function	WeaponStats_ParsePickupOdds	92	missile.md
+
+0x0880d124	function	WeaponStats_ParseMine	92	mine.md
+0x0880cef0	function	WeaponStats_ParseBomb	90	mine.md
+0x0880c774	function	WeaponStats_ParseCannon	90	mine.md
+0x088675cc	function	Weapon_DropMines	90	mine.md
+0x08859930	function	Mine_Construct	92	mine.md
+0x08859ac8	function	Mine_Init	90	mine.md
+0x08863a20	function	Weapon_FireBomb	88	mine.md
+0x08871ddc	function	Weapon_AnnounceIncoming	88	mine.md
 0x08851d88	function	WeaponAiStats_Load	90	ai-stats.md
 0x08852178	function	WeaponAiStats_ParseWeapon	90	ai-stats.md
 0x08851d3c	function	WeaponAiStats_Reset	90	ai-stats.md

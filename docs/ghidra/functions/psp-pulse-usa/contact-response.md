@@ -1336,6 +1336,13 @@ count. Left open rather than guessed at.
 
 ### `FUN_08863a20` (`0x08863a20`-`0x08863ba3`): `Weapons_DispatchFire`'s `world+0x44` handler, and it looks like the Mine's own fire handler
 
+**Corrected 2026-08-26: it is the Bomb's, not the Mine's**, and the function is
+`Weapon_FireBomb`. Everything read below stands - the negated-forward spawn, the
+pool cursor, `+0x40` being the owning craft's index - only the weapon's name
+changes. The Mine is the bit-`0x2` handler this section explicitly ruled out.
+See [mine.md](../psp-pulse-usa/mine.md), which reads the weapon-id jump table as
+a table and finds its entries 8 and 9 out of address order.
+
 **Read 2026-08-19**, chasing `weapon-fire.md`'s own hint: "`world+0x44`'s
 handler ... fires *backwards* (`vneg_q` on the craft's forward row), which
 reads as a Bomb or a Mine". Disassembled in full - the decompiler fails on it
@@ -1391,7 +1398,8 @@ them. The spawn call at `0x0885f188` was the next candidate this page
 expected to chase - it did not pan out cleanly; see the next section for why
 and for where the search actually landed instead.
 
-**Confidence on "this is the Mine": informed guess, not measured.** The
+**Confidence on "this is the Mine": informed guess, not measured** - and the
+guess was wrong; see the correction at the top of this section. The
 "fires backwards" mechanism, the subsystem-pool-plus-craftIndex-plus-unique-id
 spawn shape, and process of elimination against the Rocket
 (`Weapon_FireRocket`), Missile (`Weapon_FireMissile`, `world+0x4c`'s handler)
