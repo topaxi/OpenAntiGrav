@@ -9,7 +9,7 @@
 # permission fixups, and more - see its README for the full list. Needed
 # before Ghidra can make sense of the eboot.bin recovered by
 # scripts/build-psvpfstools.sh; see
-# data/README.md#the-ps3-and-vita-images-are-encrypted-and-nothing-here-decrypts-them-yet.
+# data/README.md#vita-pkgs-decrypt-in-three-steps-dataextractedvita-holds-the-result.
 #
 # Unlike Allegrex or the PS2/PS3 extensions, upstream ships no Gradle
 # wrapper of its own - its README says to install Gradle system-wide and run

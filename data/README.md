@@ -14,8 +14,10 @@ data/
   extracted/
     psp/        Files extracted from a PSP UMD image
     ps2/        Files extracted from a PS2 DVD image
+    vita/       Decrypted Vita PKG content - see below
   cache/        Assets converted from your originals, rebuilt on demand
   dlc/          PSN DLC packages, as downloaded - see below
+  keys/         zRIF strings and F00D cache for Vita PFS decryption - see below
   ghidra/       Ghidra project directory (shared analysis, not versioned)
   tools/        Built third-party tooling, e.g. the Allegrex Ghidra extension
   traces/       Runtime traces captured from PPSSPP / PCSX2
@@ -74,28 +76,54 @@ Tooling looks for these names. Copy your own images here and rename:
 
 `.iso` works anywhere `.chd` does; the tools sniff the container.
 
-### The PS3 and Vita images are encrypted, and nothing here decrypts them yet
+### The PS3 image is encrypted, and nothing here decrypts it yet
 
-Both are readable at the *directory* level and opaque at the *content* level,
-in two different ways, and both are ordinary tooling problems rather than
-research ones:
+`hdfury-ps3-eu.iso` is a standard redump encrypted image: the ISO 9660
+filesystem is plaintext (`PS3_DISC.SFB`, `PARAM.SFO` and `ICON0.PNG` all read
+normally, and `oag-unpack list` walks it fine), while everything under
+`PS3_GAME/USRDIR/` - `DATA00..06.PSARC`, `EBOOT.BIN`, `DFENGINE.SPRX` - is
+AES-encrypted under the disc key. Decrypting needs this pressing's redump
+`.dkey`, then `PS3Dec`; the SELF then needs `scetool` before Ghidra, with
+[Ps3GhidraScripts](https://github.com/clienthax/Ps3GhidraScripts) for the
+PPC64/PRX side.
 
-- **PS3.** `hdfury-ps3-eu.iso` is a standard redump encrypted image: the ISO
-  9660 filesystem is plaintext (`PS3_DISC.SFB`, `PARAM.SFO` and `ICON0.PNG` all
-  read normally, and `oag-unpack list` walks it fine), while everything under
-  `PS3_GAME/USRDIR/` - `DATA00..06.PSARC`, `EBOOT.BIN`, `DFENGINE.SPRX` - is
-  AES-encrypted under the disc key. Decrypting needs this pressing's redump
-  `.dkey`, then `PS3Dec`; the SELF then needs `scetool` before Ghidra, with
-  [Ps3GhidraScripts](https://github.com/clienthax/Ps3GhidraScripts) for the
-  PPC64/PRX side.
-- **Vita.** In a 2048 PKG, `sce_sys/param.sfo` and `sce_pfs/files.db` (magic
-  `SCENGPFS`) are plaintext, but everything inside the PFS layer is encrypted -
-  `eboot.bin`, `PSP2/data1.psarc`, `data2.psarc`, even the manual PNGs. A
-  `pkg2zip` run that produces a readable directory tree full of high-entropy
-  files has done the PKG's AES-CTR layer but not the PFS layer, i.e. it ran
-  without a zRIF. Supply the zRIF (or use `psvpfsparser` with the klicensee),
-  then decrypt the Vita SELF, then
-  [VitaLoaderRedux](https://github.com/CreepNT/VitaLoaderRedux) for Ghidra.
+### Vita PKGs decrypt in three steps; `data/extracted/vita/` holds the result
+
+In a 2048 PKG, `sce_sys/param.sfo` and `sce_pfs/files.db` (magic `SCENGPFS`)
+are plaintext, but everything inside the PFS layer is encrypted - `eboot.bin`,
+`PSP2/data1.psarc`, `data2.psarc`, even the manual PNGs. Three tools, each
+solving one layer:
+
+1. `pkg2zip -x <pkg>` strips the PKG's outer AES-CTR layer. This alone
+   produces a readable directory tree still full of high-entropy files - it
+   ran without a zRIF, so the PFS layer underneath is still opaque. Not
+   wrapped in a project script; it is a single well-known command run
+   directly against `data/images/2048-vita-{usa,eu}{,-patch}.pkg` or a
+   `data/dlc/*.pkg`.
+2. `just build-psvpfstools` builds `psvpfsparser`, which decrypts that PFS
+   layer given the title's zRIF (or raw klicensee) - see
+   `scripts/build-psvpfstools.sh` for the four upstream build fixes it needed.
+   A patch pkg reuses its base app's zRIF (same content ID, same license) -
+   checked directly, not assumed. zRIFs and the derived F00D cache live in
+   `data/keys/`, see its own README.
+3. The result is a plain ELF wrapped in an SCE self header, still not
+   something Ghidra's Vita loader can open directly -
+   `scripts/strip-vita-self.py` (`just strip-vita-self <path>`) strips that
+   header to the bare ELF-PRX. [VitaLoaderRedux](https://github.com/CreepNT/VitaLoaderRedux)
+   (`just build-vita-loader-redux`) is what actually reads it in Ghidra;
+   install is manual (File > Install Extensions).
+
+All seven of WipEout 2048's PKGs (USA + EUR base, patch v1.04, DLC1/DLC2) have
+been run through steps 1-2; `data/extracted/vita/{PCSA00015,PCSF00007}/{base,
+patch-v104,dlc1,dlc2}/` holds the result, verified with `readelf` rather than
+assumed, and base/patch `eboot.elf` (step 3) for both regions. DLC PKGs carry
+no binaries at all, only `dlcN.psarc` + `sce_sys` metadata - checked directly
+against the decrypted tree, not inferred from the PKG type.
+
+Nothing has actually been imported into a Ghidra program yet - there is no
+`docs/ghidra/functions/vita-2048-*/` or `names.tsv` for it, and no
+`BINARY_PROGRAMS` entry in `scripts/apply-ghidra-names.py`. See `HANDOVER.md`'s
+open threads for the current state of that work.
 
 Note what these two share and Pulse/Pure do not: **HD/Fury and 2048 both ship
 PSARC archives rather than WADs**, and 2048 arrives as a PKG rather than a disc

@@ -2,8 +2,8 @@
 #
 # Builds psvpfsparser, the CLI from motoharu-gosuto/psvpfstools that decrypts
 # a PS Vita PKG's PFS layer (sce_pfs/{files,unicv}.db) given its zRIF or raw
-# klicensee. See data/README.md#the-ps3-and-vita-images-are-encrypted-and-
-# nothing-here-decrypts-them-yet for what pkg2zip does and does not decrypt.
+# klicensee. See data/README.md#vita-pkgs-decrypt-in-three-steps-dataextractedvita-holds-the-result
+# for what pkg2zip does and does not decrypt.
 #
 # Deliberately NOT the Vita3K/psvpfsparser fork: that one is a library used
 # internally by the Vita3K emulator with no standalone CLI. This project's

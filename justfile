@@ -565,7 +565,7 @@ build-vita-loader-redux *ARGS:
 
 # Build psvpfsparser, which decrypts a PS Vita PKG's PFS layer given its
 # zRIF or klicensee. pkg2zip alone only strips the outer AES-CTR layer - see
-# data/README.md#the-ps3-and-vita-images-are-encrypted-and-nothing-here-decrypts-them-yet.
+# data/README.md#vita-pkgs-decrypt-in-three-steps-dataextractedvita-holds-the-result.
 build-psvpfstools *ARGS:
     ./scripts/build-psvpfstools.sh {{ARGS}}
 
@@ -580,6 +580,11 @@ patch-ppc-cspec *ARGS:
 # Resolve the PSP import stubs from the binary's own NID tables
 resolve-imports boot="data/extracted/psp/PSP_GAME/SYSDIR/BOOT.BIN":
     python3 scripts/resolve-psp-imports.py {{boot}} --modules -o data/ghidra/psp-imports.tsv
+
+# Strip a decrypted Vita SELF (eboot.bin/.suprx) to the plain ELF-PRX
+# VitaLoaderRedux can actually import - see scripts/strip-vita-self.py.
+strip-vita-self *ARGS:
+    python3 scripts/strip-vita-self.py {{ARGS}}
 
 # Apply every documented symbol name to the open Ghidra program
 apply-names *ARGS: resolve-imports
