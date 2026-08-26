@@ -933,6 +933,64 @@ and which are that reading - judged against an rpcs3 reference frame of the
 same grid. Confidence 84 on the curve (the static-reading cap; the formula is
 the microcode's own arithmetic), 60 on density-unscaled.
 
+### `Fog.Fog Density`'s field offset is read; the PPU fill from there is not (2026-08-26)
+
+`FUN_003a83d8`/`FUN_003a9520` are named above as the functions that register
+`Fog.Fog Density` and `Lighting.Sky colour` by string. **Both carry their own
+TOC, `0x008bd3c4`, not the global `0x008ad4d8` `scripts/ps3-toc.py toc`
+resolves for the rest of the image** - so `decompile_function` on either
+renders a completely different, entirely coherent, entirely wrong function:
+every `PTR_DAT_008a70xx`/`PTR_s_..._008a70xx` symbol it prints is Ghidra
+resolving the same `lwz rX,d(r2)` displacements against the wrong table, and
+what comes out reads as a **Race End / split-screen HUD field
+initialiser** - `Race End Save`, `Race End Photo`, `EndRace Results`, `Zone
+Gold/Silver/Bronze Medal`, HUD XML paths - not fog or lighting at all. It is
+the same failure mode as the `CCookie.cpp`/`SrcRel` trap already on this page
+(HANDOVER.md, "the same defect has a second failure mode"), on the very
+functions this page already cites by address, so the trap is worth naming
+here rather than only in HANDOVER: **do not `decompile_function` these two
+without resolving through the real TOC first**, or the picture that comes
+back is a different, real, coherent struct - not garbage, which is what
+makes it costly to notice.
+
+Read correctly - `disassemble_function` plus `scripts/ps3-toc.py resolve
+0x003a83d8 <displacement>` on each `lwz r5,d(r2)` that feeds a registration
+call - the function is one long flat list of
+`register(struct, struct+offset, name, type)` calls into a lazily-constructed
+settings singleton (storage pointer at `0x008b6fb4`, first built by
+`FUN_003a83d8` on `param_2 == 0`, `FUN_003a9520` returning the same
+singleton). All 76 resolve cleanly, self-consistent with what this page
+already knew about the `HDR and Bloom` keys (`Bloom adaption rate` lands on
+`+0x52c`, `Tone adaption boost` on `+0x540`, `Tone maximum brightness` on
+`+0x548` - exactly the offsets "The bloom chain, read pass by pass" above
+already cites). The fog and lighting neighbourhood:
+
+| Offset | Key | Registrar (type) |
+| --- | --- | --- |
+| `+0x4e0` | `Fog.Fog Color` | `FUN_005d3ec0` (0) |
+| `+0x500` | `Fog.Fog Density` | `FUN_005d4418` (0) |
+| `+0x4f0` | `Fog.Alternate Fog Color` | `FUN_005d3ec0` (0) |
+| `+0x504` | `Fog.Alternate Fog Density` | `FUN_005d4418` (0) |
+
+`+0x500` is a scalar (`FUN_005d4418`'s type-0 slot, the same registrar every
+plain float on this table uses - `Tone adaption boost` among them), which at
+least rules out `Fog.Fog Density` being anything but one number. Confidence
+82 - the offsets are read off the real TOC and cross-checked against this
+page's own prior, independently-sourced HDR/Bloom offsets, but nothing here
+yet confirms the *type* tag's meaning from first principles.
+
+**Still not read**: what copies `+0x500` from this singleton into the
+`fogColour` shader constant's `w` component, and whether that copy scales it.
+`get_xrefs_to` on the singleton's storage address (`0x008b6fb4`) finds
+nothing - consistent with the consumer being itself a TOC-mismatched
+function Ghidra cannot resolve the load for, the same defect one level
+removed. Finding it means the same `disassemble_function` +
+`scripts/ps3-toc.py resolve` walk again, from a different starting point (a
+search for `+0x500`-shaped loads of the singleton pointer, or a call chain
+from the material-parameter patch system down to it) - not attempted this
+session. Confidence on "unscaled" stays at 60, unmoved; this narrows *where*
+the answer lives without answering it.
+
 ### The registry is resolved: every post program's block is addressable
 
 Read 2026-08-18 with [`scripts/ps3-registry.py`](../../../../scripts/ps3-registry.py).
