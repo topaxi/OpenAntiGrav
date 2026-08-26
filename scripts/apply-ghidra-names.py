@@ -67,6 +67,14 @@ BINARY_PROGRAMS = {
     # `rpcs3 --decrypt` writes beside it. See
     # docs/reverse-engineering/toolchain.md#ps3.
     "ps3-hdfury-eu": "/ps3-hdfury-eu/EBOOT.elf",
+    # Vita `eboot.elf` is likewise not what ships on disc/in the PKG: it is
+    # `scripts/vita-self-decrypt.py`'s output, not the SELF itself. Target of
+    # record; the other three are corroboration-only. See
+    # docs/reverse-engineering/toolchain.md#vita.
+    "vita-2048-eu-v104": "/vita-2048-eu-v104/eboot.elf",
+    "vita-2048-usa-v104": "/vita-2048-usa-v104/eboot.elf",
+    "vita-2048-eu-base": "/vita-2048-eu-base/eboot.elf",
+    "vita-2048-usa-base": "/vita-2048-usa-base/eboot.elf",
 }
 
 # (names.tsv, program) pairs used when no positional inputs are given. The

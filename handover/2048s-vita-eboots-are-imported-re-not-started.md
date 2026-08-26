@@ -1,4 +1,4 @@
-# 2048's four Vita eboots are decrypted and imported; RE itself hasn't started
+# 2048's four Vita eboots are decrypted and imported; loose ends from getting there
 
 2026-08-26. All four of WipEout 2048's `eboot.elf` (base + patch v1.04, USA +
 EU) are genuinely plaintext ARM ELF32 and open in Ghidra via VitaLoaderRedux:
@@ -42,12 +42,17 @@ The actual decrypt algorithm (klicensee -> NpDrm-unwrap -> metadata-block AES
 reimplemented in Python rather than shelled out to, since Vita3K is a whole
 emulator with no standalone CLI for just this step.
 
+**Update, same day**: `docs/ghidra/functions/vita-2048-eu-v104/` and its
+`BINARY_PROGRAMS` entries now exist - the first RE pass named `Game_Main` and
+`GameRoot_Construct`. See
+[name the boot allocator and managers](vita-2048-name-the-boot-managers.md)
+for that thread's continuation and
+[2048 vs HD/Fury lineage](vita-2048-vs-hd-fury-lineage.md) for the
+codebase-lineage question it raised. What's left here is loose ends unrelated
+to either.
+
 ## Open
 
-- No `docs/ghidra/functions/vita-2048-*/` directory, no `names.tsv`, no
-  `BINARY_PROGRAMS` entry in `apply-ghidra-names.py` - all four wait on a
-  first recovered name, per ADR-0005's own workflow, same as before. This is
-  now the *only* thing blocking that, not a toolchain problem.
 - `data/keys/` does not exist in every checkout (this session rebuilt it from
   scratch after finding it absent) - worth checking whether it is worth
   syncing somewhere more durable than a single machine's gitignored `data/`,
@@ -61,14 +66,8 @@ emulator with no standalone CLI for just this step.
 
 ## Next Steps
 
-- Run full auto-analysis on `/vita-2048-eu-v104/eboot.elf` (the target of
-  record) if not already complete, then start recovering names the normal
-  way (observe -> hypothesise -> verify -> document), same workflow as every
-  other binary. First recovered name creates
-  `docs/ghidra/functions/vita-2048-eu-v104/names.tsv` and the matching
-  `BINARY_PROGRAMS` entry in one change, per CLAUDE.md.
 - The other three programs (`usa-v104`, `eu-base`, `usa-base`) are imported
-  but not analyzed - run auto-analysis on them opportunistically, same
+  but not fully analyzed - run auto-analysis on them opportunistically, same
   "corroboration only" role as `psp-pulse-eu`/`psp-pure-eu`, not urgent.
 - Decide whether `data/keys/vita-zrif.tsv` should also record DLC1/DLC2
   zRIFs now that the recovery method (nopaystation.com's TSV export, grepped
