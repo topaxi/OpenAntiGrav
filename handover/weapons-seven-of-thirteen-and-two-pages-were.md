@@ -148,22 +148,22 @@ Put back.
   than assuming the whole segment is unreadable. The Bomb's parser *name* is
   settled at 90 off the dispatch chain either way; its offsets are not, and
   nothing needs them.
-- **Nothing in the AI can see a projectile**, so no driver evades anything -
-  not a mine, not a bomb, and not a rocket or a missile either. `oag_ai::Context`
-  carries the line, the tuning, the pilot and `Field`, and `Field` is rivals and
-  a place; the crate does not mention a projectile anywhere. The rear weapons
-  make this visible for the first time, because they leave something *on the
-  track* that stays there for seven or twenty seconds rather than passing
-  through in a tick.
-  **Measured, so the size of the problem is known rather than guessed**
-  (`crates/game/tests/opponent_weapons_ground_truth.rs`): over a minute of
-  ordinary racing on the disc's own pads, 12 charges are laid, all seven
-  opponents survive, mean energy ends at 76 of 95 and the worst craft at 34.
-  Under a Mine handed back the moment a craft empties - far more generous than
-  any pad layout - the same field grinds to a mean of **21 of 95 in ten
-  seconds** and the worst craft is destroyed. So the pads' `refresh_time` and
-  the seven-weapon draw are what keep it in proportion, not anything the AI
-  does. Re-measure if either is ever changed.
+- **The AI dodges laid charges but nothing else.** `oag_ai::Hazard` reaches a
+  driver through `Field`, and `Driver::avoidance` leans away from the nearest
+  one - but only mines and bombs are reported. A rocket or a missile in flight
+  still cannot be seen or avoided, which is defensible (by the time a driver
+  could react to one it has arrived) and is a choice rather than an oversight.
+- **A driver notices a charge with no reaction latency at all.** `Reflex`'s
+  clock is keyed on *which craft* is in a channel and a charge has no identity
+  to track, so `Reflex::filter` passes the hazard straight through. The
+  avoidance ramp starting gently at the far edge of its lookahead is what makes
+  that look gradual rather than clairvoyant.
+- **What a driver in the original does about a laid charge is unread.**
+  `WeaponAi_Update` (`0x08851550`) is where it would live and only its authored
+  table has been read. Everything in `driver/avoidance.rs` is this project's,
+  and the reason it exists is fairness rather than fidelity - a charge the
+  player can steer around and an opponent cannot is a worse wrong answer than a
+  dodge nobody has verified.
 - **A mine and a bomb both draw nothing.** `Pulse_Mine.vex` and
   `Pulse_Bomb.vex` are both named and located and no renderer reads either, so a
   laid charge is invisible - which for a weapon whose whole point is that a
@@ -177,16 +177,13 @@ Put back.
   own cues (`MINELAUNCH`/`MINERADAR`, `BOMBLAUNCH`/`~BOMBRADAR`,
   `BOMBEXPL`/`BOMBEXPL_PC`) - all six strings are located. This is now the
   biggest gap on both weapons: they work and are invisible.
-- **Teach the AI to see what is on the track.** The cheapest useful version is
-  a lateral dodge: give `oag_ai::Context` the nearest laid charge inside some
-  look-ahead as a `(range, offset)` pair - the same shape `Rival` already uses -
-  and let `Driver::drift` lean away from it inside the corridor it already
-  respects. That reuses the whole existing steering budget rather than adding a
-  second one, and it wants doing before the rear weapons are drawn: a charge a
-  player can see and an AI cannot is a fairness problem the moment it is
-  visible. **Note what it is not**: recovering what the original's drivers do
-  about mines, which is unread. `WeaponAi_Update` (`0x08851550`) is the place to
-  look first.
+- ~~**Teach the AI to see what is on the track.**~~ **Done 2026-08-26**, and
+  the measurement is the point: over a minute of ordinary racing the field's
+  *mean* energy barely moved (76 to 86 of 95) while the **worst craft went from
+  34 to 75**. The damage was never spread evenly - it was concentrated on
+  whichever craft sat behind a driver with a Mine, eating cluster after cluster
+  on a line it could not see. Mines still land; one craft is no longer singled
+  out for a punishment it had no way to avoid.
 - **The Cannon is the odd one left and is worth a session on its own.** Its fire
   bit `0x2000` is set by `Weapon_RequestFire` and dispatched by **nothing** in
   `Weapons_DispatchFire`. Bit `0x4000` on `world+0x58` (`0x088537ac`) is the

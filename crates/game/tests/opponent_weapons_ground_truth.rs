@@ -166,11 +166,9 @@ fn an_opponent_handed_one_weapon_keeps_it_until_it_fires_it() {
 ///
 /// A measurement before it is an assertion, because the number was not
 /// predictable from the code. Every craft follows the *same* authored racing
-/// line; a mine cluster is laid *on* that line, since the only spread it gets is
-/// the craft moving between drops and nothing scatters one sideways; and the AI
-/// **cannot see a projectile at all** - `oag_ai::Context` carries the line, the
-/// tuning, the pilot and the rivals, and nothing else. So the geometry is set up
-/// for the field to mine itself and no driver can steer around a charge.
+/// line and a mine cluster is laid *on* that line, since the only spread it gets
+/// is the craft moving between drops and nothing scatters one sideways. So the
+/// geometry is set up for the field to mine itself.
 ///
 /// What keeps it in proportion is three things, and this is what the test
 /// checks is still true: the pads' own `refresh_time` rations the pickups, the
@@ -181,10 +179,29 @@ fn an_opponent_handed_one_weapon_keeps_it_until_it_fires_it() {
 ///
 /// **The stress case is much worse and is recorded here rather than asserted**:
 /// with a Mine handed back the moment a craft empties - far more generous than
-/// any pad layout - the field grinds to a mean of 21 of 95 energy in ten seconds
-/// and the worst craft is destroyed. That is not a realistic arrangement, but it
-/// is the direction this weapon pushes a one-line grid in, and it is the number
-/// to re-measure if pads are ever made more frequent or the draw is narrowed.
+/// any pad layout - the field ground to a mean of 21 of 95 energy in ten seconds
+/// and the worst craft was destroyed. That is not a realistic arrangement, but
+/// it is the direction this weapon pushes a one-line grid in, and it is the
+/// number to re-measure if pads are ever made more frequent or the draw is
+/// narrowed.
+///
+/// # What the dodge bought, measured
+///
+/// This test is also the before-and-after for `Driver::avoidance`, which is the
+/// term that lets a driver see a laid charge at all. Same circuit, same seed,
+/// same minute:
+///
+/// | | mean energy | worst craft |
+/// | --- | --- | --- |
+/// | blind | 76 of 95 | **34** |
+/// | dodging | 86 of 95 | **75** |
+///
+/// The mean barely moves and the *worst* craft more than doubles, which is the
+/// shape to expect and is worth stating: the damage was never spread evenly. It
+/// was concentrated on whichever craft was sitting behind a driver with a Mine,
+/// eating cluster after cluster on a line it could not see. The dodge does not
+/// make mines useless - 75 of 95 is still a craft that has been hit - it stops
+/// one craft being singled out for a punishment it had no way to avoid.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn a_field_racing_with_real_pads_does_not_mine_itself_to_death() {
@@ -224,7 +241,9 @@ fn a_field_racing_with_real_pads_does_not_mine_itself_to_death() {
         .map(|slot| race.world.ships[slot].physics.shield)
         .fold(f32::INFINITY, f32::min);
     println!(
-        "a minute of racing with the disc's own pads: {laid} charges laid,          {alive} of {} opponents still active, mean energy {mean:.0} of {full:.0},          worst {worst:.0}",
+        "a minute of racing with the disc's own pads: {laid} charges laid, \
+         {alive} of {} opponents still active, mean energy {mean:.0} of {full:.0}, \
+         worst {worst:.0}",
         opponents.len()
     );
 
@@ -234,7 +253,20 @@ fn a_field_racing_with_real_pads_does_not_mine_itself_to_death() {
         "a craft was destroyed over a minute of ordinary racing"
     );
     assert!(
-        mean > full * 0.5,
-        "the field ground itself to a mean of {mean:.0} of {full:.0} over a minute          of ordinary racing - a grid that all follows one racing line and lays          mines on it is mining itself down, and nothing in the AI can see a charge          to avoid it"
+        mean > full * 0.7,
+        "the field ground itself to a mean of {mean:.0} of {full:.0} over a minute \
+         of ordinary racing - a grid that all follows one racing line and lays \
+         mines on it will mine itself down unless `Driver::avoidance` is steering \
+         around them"
+    );
+    // **The worst craft, not only the mean**, because the mean was never the
+    // problem: blind, it sat at 76 of 95 while one craft was ground down to 34.
+    // A regression in the dodge shows up here first and in the mean barely at
+    // all.
+    assert!(
+        worst > full * 0.5,
+        "one craft ended on {worst:.0} of {full:.0} while the field averaged \
+         {mean:.0} - it is being singled out, which is what happens when a driver \
+         cannot see the charges it is driving over"
     );
 }

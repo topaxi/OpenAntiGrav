@@ -16,6 +16,7 @@ use crate::line::Frame;
 use oag_core::math::{Quat, Vec3};
 use oag_physics::{Body, Sideshift};
 
+mod avoidance_tests;
 mod line_following_tests;
 mod personality_tests;
 mod provocation_tests;

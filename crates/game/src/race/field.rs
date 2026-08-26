@@ -425,6 +425,7 @@ impl Race {
 
         let mut field = oag_ai::Field {
             place: places[slot],
+            hazard: self.hazard_for(slot, forward, right),
             ..oag_ai::Field::EMPTY
         };
         let (mut best_ahead, mut best_behind, mut best_alongside) =
@@ -859,6 +860,79 @@ impl Race {
         }
         self.world.ships[slot].pickup.begin_drop(drop.count);
         true
+    }
+}
+
+impl Race {
+    /// The nearest laid charge `slot` should steer around, if any.
+    ///
+    /// **This is the half that knows what a weapon is**, which is why it is here
+    /// and not in `oag-ai`: that crate is handed plain numbers and dodges what it
+    /// is told about. See [`oag_ai::Hazard`].
+    ///
+    /// # What counts as a threat, and why it is the trigger radius
+    ///
+    /// A charge is reported when all four hold:
+    ///
+    /// 1. **It is a laid charge**, not something in flight. A rocket cannot be
+    ///    steered around - by the time a driver could react it has arrived - and
+    ///    pretending otherwise would be a dodge that never works.
+    /// 2. **It is not this craft's own.** `projectile::mine::triggered_by`
+    ///    excludes the owner outright, so a craft's own cluster is harmless to
+    ///    it and swerving round one would be a driver frightened of nothing.
+    /// 3. **It is ahead**, along this craft's own forward axis, inside
+    ///    `oag_ai::avoidance::LOOKAHEAD`.
+    /// 4. **It is close enough across to be tripped**: within the charge's own
+    ///    authored `trigger_radius` plus half a hull. **Not `blastradius`** - a
+    ///    mine's blast is wider than a Pulse lane, so a driver told to leave it
+    ///    would swerve into the scenery and take the hit anyway. Missing the
+    ///    trigger means the charge never goes off at all, and that is a dodge a
+    ///    craft can actually make.
+    ///
+    /// # Nearest wins, and ties break by slot
+    ///
+    /// The array is walked in index order and a strictly-nearer charge replaces
+    /// the incumbent, so two charges at exactly equal distance resolve to the
+    /// lower slot. That is the same rule every other search in this file
+    /// follows and it is what keeps the result out of the hands of float noise -
+    /// see `docs/architecture/determinism.md`.
+    fn hazard_for(
+        &self,
+        slot: usize,
+        forward: oag_core::math::Vec3,
+        right: oag_core::math::Vec3,
+    ) -> Option<oag_ai::Hazard> {
+        let radii = oag_gameplay::projectile::TriggerRadii::from_table(self.weapons.as_ref());
+        let origin = self.world.ships[slot].physics.body.position;
+        // Half the hull's width, so a charge the craft would clip with a wingtip
+        // counts as much as one it would drive over.
+        let half_width = self.world.ships[slot].handling.dimensions.width * 0.5;
+
+        let mut best: Option<oag_ai::Hazard> = None;
+        for charge in &self.world.projectiles.slots {
+            let Some(kind) = charge.kind else { continue };
+            if charge.owner as usize == slot {
+                continue;
+            }
+            let Some(trigger_radius) = radii.get(kind) else {
+                // Not a laid charge - or one whose weapon the table does not
+                // author, which cannot be tripped and so is not a threat.
+                continue;
+            };
+            let to_it = charge.position - origin;
+            let distance = to_it.dot(forward);
+            if distance <= 0.0 || distance >= oag_ai::AVOIDANCE_LOOKAHEAD {
+                continue;
+            }
+            let offset = to_it.dot(right);
+            if offset.abs() > trigger_radius + half_width {
+                continue;
+            }
+            if best.is_none_or(|best| distance < best.distance) {
+                best = Some(oag_ai::Hazard { distance, offset });
+            }
+        }
+        best
     }
 }
 

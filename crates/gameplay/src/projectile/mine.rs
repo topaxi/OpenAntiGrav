@@ -271,7 +271,7 @@ impl TriggerRadii {
     /// The twin of [`Drop::for_weapon`]; see that function for why the pair is
     /// guarded by a test rather than by the type system.
     #[must_use]
-    pub(crate) fn get(self, kind: Weapon) -> Option<f32> {
+    pub fn get(self, kind: Weapon) -> Option<f32> {
         match kind {
             Weapon::Mine => self.mine,
             Weapon::Bomb => self.bomb,

@@ -100,12 +100,25 @@ impl Reflex {
     ///
     /// Every channel it has not noticed yet reads empty. [`Field::place`] is
     /// passed through - see this module's header for why.
+    ///
+    /// **[`Field::hazard`] is passed through too, and for a different reason.**
+    /// The clock below is keyed on *which craft* is in a channel, so it can tell
+    /// "a new rival arrived" from "the same one is still there"; a laid charge
+    /// has no identity to track, and giving it one would mean a fourth channel
+    /// keyed on something that does not exist. The consequence is stated rather
+    /// than hidden: a driver reacts to a charge with no latency at all. It is
+    /// the smaller wrong answer, because [`Driver::avoidance`] is already a ramp
+    /// that starts gently at the far edge of its lookahead - so the reaction
+    /// *looks* gradual even though the noticing is instant - and because the
+    /// alternative leaves an opponent driving through a mine a player would have
+    /// steered around.
     #[must_use]
     pub fn filter(&self, field: &Field) -> Field {
         Field {
             ahead: self.noticed(AHEAD, field.ahead),
             behind: self.noticed(BEHIND, field.behind),
             alongside: self.noticed(ALONGSIDE, field.alongside),
+            hazard: field.hazard,
             place: field.place,
         }
     }

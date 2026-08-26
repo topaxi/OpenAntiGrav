@@ -29,6 +29,7 @@ use crate::line::{Aim, Line};
 use crate::noise::{roll, wobble};
 use crate::pilot::Pilot;
 
+pub use avoidance::LOOKAHEAD as AVOIDANCE_LOOKAHEAD;
 pub use personality::Personality;
 pub use reflex::Reflex;
 pub use tuning::Tuning;
@@ -628,7 +629,13 @@ impl Driver {
             .clamp(-1.0, 1.0);
         let inside = personality.inside * bend;
         let social = self.social(ctx, personality, bend);
-        let wanted = (personality.line_bias + wobbled + inside + social).clamp(-1.0, 1.0);
+        // **Summed with the rest rather than overriding them**, so a driver
+        // dodging a mine is still driving a line. It has the largest budget of
+        // the terms here and it still has to win the argument; see
+        // [`Driver::avoidance`].
+        let avoidance = self.avoidance(ctx.field.hazard);
+        let wanted =
+            (personality.line_bias + wobbled + inside + social + avoidance).clamp(-1.0, 1.0);
         // Every term above is in the same fraction-of-the-room units and is
         // clamped once here, so no term can fight the corridor: the clamp below
         // is the backstop and not the mechanism.
@@ -878,6 +885,7 @@ fn airbrakes(brake: f32, differential: f32, floor: f32) -> (f32, f32) {
     }
 }
 
+mod avoidance;
 mod personality;
 mod ram;
 mod reflex;
