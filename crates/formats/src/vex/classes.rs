@@ -53,8 +53,10 @@ pub const CLASS_CAGE_COLLISION: u32 = 0x3e7;
 /// **Only Wipeout HD authors it, and this ID is not from a class table.**
 /// Confidence 85, on four measurements over all 16 of HD's circuits -
 /// one node each, all parsing, 97 % of their triangles near-vertical, and an
-/// extent matching the floor's rather than the wall's. The numbers and what
-/// they deliberately do *not* settle about Pulse's own table are in
+/// extent matching the floor's rather than the wall's. **Pulse's own class
+/// table does not name this ID at all** - read to its terminator, it stops
+/// three entries short of HD's, and this is one of the three - so nothing
+/// here is a Pulse-attested table entry regardless. The numbers are in
 /// `docs/formats/hd-status.md`; the tests are
 /// `crates/game/tests/hd_trackwall_ground_truth.rs`.
 pub const CLASS_TRACK_WALL_COLLISION: u32 = 0x3ed;

@@ -33,7 +33,8 @@
 //!    one thing a format measurement cannot show.
 //!
 //! What none of them establish is that Pulse's own class table names this ID -
-//! see `oag_formats::vex::CLASS_TRACK_WALL_COLLISION` for why that is left open.
+//! and, since that table has now been read to its terminator, it doesn't. See
+//! `oag_formats::vex::CLASS_TRACK_WALL_COLLISION`.
 
 use std::path::{Path, PathBuf};
 
