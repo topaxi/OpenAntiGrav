@@ -136,17 +136,11 @@ database. Build from source against the installed Ghidra, same reasoning as
 Allegrex and the Emotion Engine above:
 
 ```sh
-git clone https://github.com/clienthax/Ps3GhidraScripts.git \
-    data/tools/ps3-ghidra-scripts
-chmod +x data/tools/ps3-ghidra-scripts/gradlew
-env -u JAVA_TOOL_OPTIONS \
-    JAVA_HOME=/usr/lib/jvm/java-21-openjdk \
-    GHIDRA_INSTALL_DIR=/opt/ghidra \
-    data/tools/ps3-ghidra-scripts/gradlew \
-        --project-dir data/tools/ps3-ghidra-scripts \
-        --no-daemon buildExtension
+just build-ps3-scripts
 ```
 
+This also adds this project's PS3 compiler-spec fix as a second language - see
+below - since upstream ships no `data/languages/` of its own to conflict with.
 Then `File > Install Extensions > +` and restart.
 
 **4. Import.** Use the script, which does all of the below in one command and
@@ -170,6 +164,49 @@ By hand, the order matters and is easy to get wrong:
 
 A correct import of Wipeout HD / Fury reports 26,100 functions, 159 memory
 blocks, and imports named from the NID database.
+
+#### An extension-shipped alternative to step 2
+
+Step 2 edits the Ghidra installation itself, which is root-owned and does not
+survive a Ghidra upgrade. The fix can instead ship as part of the
+Ps3GhidraScripts extension: `scripts/ghidra-ps3-language/ppc_64_32_ps3.cspec`
+(the same `ppc_64_32.cspec` with `r2` added to `<unaffected>`) plus
+`scripts/ghidra-ps3-language/ppc_ps3.ldefs`, defining a second language,
+`PowerPC:BE:64:A2ALT-32addr-PS3`, that reuses stock Ghidra's own
+`ppc_64_isa_altivec_be.sla` and `ppc_64.pspec` by filename rather than
+vendoring them - Ghidra's `SleighLanguageProvider` falls back to an
+application-wide search by filename when a referenced file is not found
+beside the `.ldefs`, so this works as long as the filename is unique across
+the install (verified true for both on this machine). A duplicate id is not
+allowed, which is why it needs its own rather than reusing step 1's.
+
+`just build-ps3-scripts` (`scripts/build-ghidra-ps3-scripts.sh`) copies these
+two tracked files into the Ps3GhidraScripts checkout before building, so step
+3 always produces an extension carrying both the scripts and this language -
+there is no separate build to run. Install it the same way as step 3 and
+restart Ghidra. `scripts/import-ps3-eboot.sh --ps3-cspec` then imports under
+it instead of step 2's language, and skips the `just patch-ppc-cspec` check
+entirely since there is nothing on the Ghidra install left to check. Verified
+2026-08-26: `analyzeHeadless` against a scratch project reports `Using
+Language/Compiler: PowerPC:BE:64:A2ALT-32addr-PS3:default` and imports
+successfully.
+
+**Not yet the default.** The live `OpenAntiGrav.gpr` project was imported
+under step 1/2's stock id, and Ghidra does not migrate a program between
+language ids - switching means a fresh reimport under the new one. That is
+safe by this project's own rule (`just apply-names` reproduces the recovered
+names onto a fresh import, per [ADR-0005](../architecture/adr/0005-ghidra-conventions.md)),
+but slow enough on a 26,100-function binary that it should be a deliberate
+choice made when re-importing anyway, not a default flipped underneath an
+existing project. There is also no `.opinion` file for it yet - same as step
+1's stock id, the language still has to be chosen by hand.
+
+The two added files are this project's own, tracked in `scripts/`, not
+upstream's - Ps3GhidraScripts itself ships no `data/languages/` to compare
+against. Whether to open a PR to
+[clienthax/Ps3GhidraScripts](https://github.com/clienthax/Ps3GhidraScripts) is
+undecided - ask before publishing anything there, same rule as the `lvlx`
+vendoring question below.
 
 #### PS3 traps
 

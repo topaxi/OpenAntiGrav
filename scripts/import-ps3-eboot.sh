@@ -10,7 +10,16 @@
 #      auto-detects `PowerPC:BE:64:A2ALT` - the 64-bit-address variant - which
 #      imports cleanly and is not what Ps3GhidraScripts expects. Headless takes
 #      a loader and a processor together, which the GUI's "recommended"
-#      checkbox and GhidraMCP's `import_file` both make awkward.
+#      checkbox and GhidraMCP's `import_file` both make awkward. `--ps3-cspec`
+#      imports under `PowerPC:BE:64:A2ALT-32addr-PS3` instead - the same
+#      slafile and pspec, but a compiler spec shipped by the (locally patched)
+#      Ps3GhidraScripts extension rather than a root-owned edit to the Ghidra
+#      install. It is not the default: the live `OpenAntiGrav.gpr` project was
+#      imported under the stock id, and switching means a fresh reimport under
+#      the new one - safe per ADR-0005 (`just apply-names` reproduces the
+#      recovered names), but slow enough on a 26,100-function binary that it
+#      should be a deliberate choice, not a script default. See
+#      docs/reverse-engineering/toolchain.md#ps3.
 #   2. `AnalyzePs3Binary.java` must run *before* auto-analysis, not after. It
 #      defines the imports, exports and TOC that analysis then works from.
 #      `-preScript` is exactly that hook.
@@ -30,7 +39,7 @@
 # firmware install.
 #
 # Usage:
-#   scripts/import-ps3-eboot.sh [--eboot <path>] [--folder <name>] [--no-analysis]
+#   scripts/import-ps3-eboot.sh [--eboot <path>] [--folder <name>] [--no-analysis] [--ps3-cspec]
 #
 # Environment:
 #   GHIDRA_INSTALL_DIR   Ghidra root. Default: /opt/ghidra
@@ -45,6 +54,7 @@ set -euo pipefail
 GHIDRA_INSTALL_DIR="${GHIDRA_INSTALL_DIR:-/opt/ghidra}"
 LANGUAGE="PowerPC:BE:64:A2ALT-32addr"
 CSPEC="default"
+ps3_cspec=0
 
 project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 project_name="OpenAntiGrav"
@@ -58,6 +68,7 @@ while [[ $# -gt 0 ]]; do
         --eboot)  eboot="${2:?--eboot needs a path}"; shift 2 ;;
         --folder) folder="${2:?--folder needs a name}"; shift 2 ;;
         --no-analysis) analysis=0; shift ;;
+        --ps3-cspec) ps3_cspec=1; shift ;;
         # Print the header comment block, however long it happens to be.
         -h|--help) awk 'NR>2 && /^#/ {sub(/^# ?/,""); print; next} NR>2 {exit}' \
                        "${BASH_SOURCE[0]}"; exit 0 ;;
@@ -68,26 +79,46 @@ done
 die() { echo "error: $*" >&2; exit 1; }
 step() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 
+if [[ $ps3_cspec -eq 1 ]]; then
+    LANGUAGE="PowerPC:BE:64:A2ALT-32addr-PS3"
+fi
+
 step "Checking prerequisites"
 
 headless="$GHIDRA_INSTALL_DIR/support/analyzeHeadless"
 [[ -x $headless ]] || die "$headless not found. Set GHIDRA_INSTALL_DIR."
 
-# The compiler-spec fix is not optional: without it the decompiler treats r2 as
-# call-clobbered and invents TOC reloads, which reads as plausible output.
-if ! "$project_root/scripts/patch-ghidra-ppc-cspec.sh" --check >/dev/null 2>&1; then
-    die "ppc_64_32.cspec is missing the r2 fix. Run: just patch-ppc-cspec"
-fi
-echo "cspec: r2 is in the unaffected list"
-
 # Installed extensions put their ghidra_scripts on the default script path, so
-# finding one is how we know the extension is installed and enabled.
+# finding one is how we know the extension is installed and enabled. Prune
+# `*.oag-backup` dirs - this repo's own naming for a backup taken before
+# reinstalling an extension or patching Ghidra in place - or a stale backup
+# copy wins the search over the live one.
 analyze_script="$(find "$HOME/.config/ghidra" "$GHIDRA_INSTALL_DIR/Ghidra/Extensions" \
+    \( -name '*.oag-backup' -prune \) -o \
     -name AnalyzePs3Binary.java -print -quit 2>/dev/null || true)"
 [[ -n $analyze_script ]] || die \
     "AnalyzePs3Binary.java not found. Install the Ps3GhidraScripts extension:
    see docs/reverse-engineering/toolchain.md#ps3"
 echo "scripts: $(dirname "$analyze_script")"
+
+if [[ $ps3_cspec -eq 1 ]]; then
+    # The fix ships with the extension's own language now (ppc_64_32_ps3.cspec,
+    # data/languages/ next to ghidra_scripts/ in the same install), so there is
+    # nothing to check on the Ghidra install itself.
+    ldefs="$(dirname "$(dirname "$analyze_script")")/data/languages/ppc_ps3.ldefs"
+    [[ -f $ldefs ]] || die \
+        "$ldefs not found. The installed Ps3GhidraScripts extension predates the
+   PS3 language addition - run: just build-ps3-scripts, then reinstall it. See
+   docs/reverse-engineering/toolchain.md#ps3."
+    echo "language: $LANGUAGE ships from $ldefs"
+else
+    # The compiler-spec fix is not optional: without it the decompiler treats r2
+    # as call-clobbered and invents TOC reloads, which reads as plausible output.
+    if ! "$project_root/scripts/patch-ghidra-ppc-cspec.sh" --check >/dev/null 2>&1; then
+        die "ppc_64_32.cspec is missing the r2 fix. Run: just patch-ppc-cspec"
+    fi
+    echo "cspec: r2 is in the unaffected list"
+fi
 
 if [[ -f "$project_root/$project_name.lock" ]]; then
     die "$project_name.lock exists - Ghidra has the project open. Close it and re-run."
@@ -150,6 +181,9 @@ Reopen Ghidra and check, in this order:
   1. the language reads $LANGUAGE, not the -32addr-less variant
   2. the function count is in the thousands, not single digits
   3. imports carry real names (cellGcmSys, sceNp...) rather than FUN_ addresses
+
+This is a separate project from any existing $project_name/$folder import under
+the other language id - Ghidra does not migrate a program between languages.
 
 Then apply this project's own names:
 

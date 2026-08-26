@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Ships the PS3 PPU compiler-spec fix (ppc_64_32_ps3.cspec) as an installable language,
+     rather than a root-owned edit to the Ghidra install. Reuses stock Ghidra's own
+     `slafile`/`processorspec` by filename - Ghidra's SleighLanguageProvider falls back to
+     an application-wide search by filename when a referenced file is not found beside this
+     .ldefs, so an extension can point at another module's compiled .sla/.pspec without
+     vendoring them, as long as the filename is unique across the install (verified: neither
+     ppc_64_isa_altivec_be.sla nor ppc_64.pspec exists anywhere else on this machine).
+
+     This needs its own language id: `PowerPC:BE:64:A2ALT-32addr` is already taken by stock
+     Ghidra's entry for the same slafile/pspec, and Ghidra errors on a duplicate id rather
+     than letting one override the other. Decompilation is otherwise identical to the stock
+     language with scripts/patch-ghidra-ppc-cspec.sh applied - same slafile, same pspec, and
+     ppc_64_32_ps3.cspec is that patched cspec verbatim (see its own header). See
+     OpenAntiGrav's docs/reverse-engineering/toolchain.md#ps3.
+-->
+<language_definitions>
+  <language processor="PowerPC"
+            endian="big"
+            size="32"
+            variant="PowerISA-Altivec-64-32addr-PS3"
+            version="1.7"
+            slafile="ppc_64_isa_altivec_be.sla"
+            processorspec="ppc_64.pspec"
+            manualindexfile="../manuals/PowerISA.idx"
+            id="PowerPC:BE:64:A2ALT-32addr-PS3">
+    <description>Power ISA 3.0 Big Endian w/Altivec and 32-bit Addressing, PS3 PPU cspec (r2 unaffected)</description>
+    <truncate_space space="ram" size="4"/>
+    <compiler name="default" spec="ppc_64_32_ps3.cspec" id="default"/>
+  </language>
+</language_definitions>

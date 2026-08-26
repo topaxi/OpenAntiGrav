@@ -556,11 +556,19 @@ build-allegrex *ARGS:
 build-emotionengine *ARGS:
     ./scripts/build-ghidra-emotionengine.sh {{ARGS}}
 
+# Build the Ps3GhidraScripts extension against the installed Ghidra, with this
+# project's PS3 compiler-spec fix (scripts/ghidra-ps3-language/) added as a
+# second language. See docs/reverse-engineering/toolchain.md#ps3.
+build-ps3-scripts *ARGS:
+    ./scripts/build-ghidra-ps3-scripts.sh {{ARGS}}
+
 # Add r2 to the unaffected list of Ghidra's PowerPC 64/32-addr compiler spec,
 # which PS3 PPU code needs to decompile correctly - r2 is the TOC pointer and a
 # call does not clobber it. Edits the Ghidra install, so it needs sudo and does
 # not survive a Ghidra upgrade; `--check` reports whether it is still applied.
-# Run `scripts/patch-ghidra-ppc-cspec.sh --help` for the rest.
+# Run `scripts/patch-ghidra-ppc-cspec.sh --help` for the rest. `just
+# build-ps3-scripts` plus `scripts/import-ps3-eboot.sh --ps3-cspec` is an
+# alternative that does not touch the Ghidra install at all.
 patch-ppc-cspec *ARGS:
     ./scripts/patch-ghidra-ppc-cspec.sh {{ARGS}}
 
