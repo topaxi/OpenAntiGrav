@@ -185,6 +185,23 @@ impl Session {
                 self.controls.buttons_mut().consume_press(Button::Start);
                 self.paused = !self.paused;
             }
+            // Circle is "back" everywhere else on screen - the menus, the
+            // front end - and a paused race is the one place a still-running
+            // one reads it too. Gated on `self.paused` rather than on the
+            // stage alone, so an unpaused race keeps Circle for
+            // `spend_pickup`'s absorb - see `race::weapons`. Same shape as
+            // the results-table block below: hand the window back to the
+            // menus, exactly as `escape` does from any race.
+            if matches!(self.stage, Stage::Race(_))
+                && self.paused
+                && self.controls.buttons().is_pressed(Button::Circle)
+            {
+                self.controls.buttons_mut().consume_press(Button::Circle);
+                self.escape();
+                // The remaining steps this frame owed belong to whatever is on
+                // screen now, and it has not been drawn once yet.
+                break;
+            }
             // What leaves the results table, and it is the same thing escape
             // does from a race: hand the window back to the menus, or quit a
             // `--race` run that never had any. There is nothing else the table
