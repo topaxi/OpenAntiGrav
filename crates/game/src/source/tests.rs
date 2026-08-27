@@ -307,6 +307,73 @@ fn a_missing_package_root_contributes_nothing_rather_than_failing() {
     assert!(package_directories_in(Path::new("/nonexistent/oag/vita")).is_empty());
 }
 
+/// The bug a portable deploy actually hit: a 2048 extract dropped beside the
+/// AppImage or in the stable data directory, the same two places a disc
+/// image is found in either of those situations, must not be invisible just
+/// because the current directory has no `data/` in it.
+#[test]
+fn the_package_search_path_covers_the_same_ground_as_the_image_search_path() {
+    assert_eq!(
+        package_search_path().first().unwrap(),
+        Path::new("data/extracted/vita"),
+        "the checkout's own directory is searched first, same as search_path"
+    );
+}
+
+/// One package root per image root, and each one is that same image root
+/// with its trailing `images` swapped for `extracted/vita` - not just the
+/// same *count*, which would pass by coincidence if either list's shape ever
+/// changed without the other.
+///
+/// `$APPIMAGE` deliberately left unset, the same reason
+/// `dlc_roots_fall_back_to_the_search_path_and_never_fail` leaves `$OAG_DLC`
+/// alone: it is a real thing a developer's own shell may already be setting,
+/// and both `search_path` and `package_search_path` read it straight from the
+/// environment rather than taking it as an argument.
+#[test]
+fn the_package_search_path_mirrors_the_image_search_path_root_for_root() {
+    if std::env::var_os("APPIMAGE").is_some() {
+        return;
+    }
+
+    let images = search_path();
+    let packages = package_search_path();
+    assert_eq!(
+        images.len(),
+        packages.len(),
+        "one package root per image root: {images:?} vs {packages:?}"
+    );
+
+    for (image_root, package_root) in images.iter().zip(&packages) {
+        // "images" is always the last component `search_path` adds, whether
+        // it is `data/images` or `<data dir>/oag/images` - swapping it for
+        // `extracted/vita` turns one list into the other exactly.
+        let mut expected = image_root.clone();
+        assert!(expected.pop(), "{image_root:?} has no trailing component");
+        expected.push("extracted");
+        expected.push("vita");
+        assert_eq!(
+            package_root, &expected,
+            "{package_root:?} does not mirror image root {image_root:?}"
+        );
+    }
+}
+
+/// Never the mounted AppImage itself, for the same reason `search_path`
+/// excludes it: a package found inside `$APPDIR` would mean game content had
+/// been packaged.
+#[test]
+fn the_mounted_appimage_is_not_searched_for_a_package_either() {
+    for path in package_search_path() {
+        let text = path.to_string_lossy().to_lowercase();
+        assert!(
+            !text.contains("/tmp/.mount_") && !text.contains("appdir"),
+            "the package itself is on the search path: {}",
+            path.display()
+        );
+    }
+}
+
 /// [`candidates`] appends package directories after every image, so a
 /// no-argument boot on a machine with both keeps opening the image it always
 /// did - see [`candidates`]'s own doc comment.

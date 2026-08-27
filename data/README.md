@@ -89,6 +89,14 @@ PPC64/PRX side.
 
 ### Vita PKGs decrypt in four steps; `data/extracted/vita/` holds the result
 
+This is the checkout's own location, and the one every RE script below names
+directly. It is not the only place the launcher looks: on a portable or Steam
+Deck build with no `data/` beside the running AppImage,
+[`docs/tools/packaging.md#where-the-disc-image-comes-from`](../docs/tools/packaging.md#where-the-disc-image-comes-from)
+documents the two other places a 2048 extract is found, and
+[`scripts/deploy-to-deck.sh`](../scripts/deploy-to-deck.sh) is what puts it
+there.
+
 In a 2048 PKG, `sce_sys/param.sfo` and `sce_pfs/files.db` (magic `SCENGPFS`)
 are plaintext, but everything inside the PFS layer is encrypted - `eboot.bin`,
 `PSP2/data1.psarc`, `data2.psarc`, even the manual PNGs. On top of that,

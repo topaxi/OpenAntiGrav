@@ -296,6 +296,18 @@ search path contains neither.
 When nothing is found, the error lists every directory that was tried. For a
 "copy two files into a folder" workflow, that message is the entire interface.
 
+Wipeout 2048 ships as an extracted Vita package (a directory, not a disc
+image - see [`data/README.md`](../../data/README.md)), so it is not one of the
+five names above and the [disc chooser](oag-game.md#finding-the-disc-image)
+finds it through a parallel search, `package_search_path()`, over the same
+guessed locations as steps 4-6 above with `extracted/vita` standing in for
+`images`: `data/extracted/vita` under the current directory; beside the
+AppImage, both the directory itself (a package dropped straight in) and its
+own `extracted/vita` subdirectory; and `~/.local/share/oag/extracted/vita`.
+[`scripts/deploy-to-deck.sh`](../../scripts/deploy-to-deck.sh) syncs a
+checkout's `data/extracted/vita` to the last of those on the remote, so a Deck
+deploy finds it the same way it finds `data/images`.
+
 The movie cache follows the same reasoning: `data/cache/movies` in a checkout
 (recognised by a `data/` directory existing), and `~/.cache/oag/movies`
 otherwise, rather than scattering a cache through whatever folder the AppImage

@@ -28,6 +28,14 @@
 //! itself, and looking inside it would invite someone to bundle an image into
 //! the package, which is the one thing that must never happen.
 //!
+//! Wipeout 2048's own extract is a directory rather than a disc image, so it
+//! is not one of the four `IMAGE_NAMES` steps 4-6 above scan for; it has its
+//! own parallel search, [`package_search_path`], over the same three
+//! locations with `extracted/vita` standing in for `images`. Only
+//! [`candidates`] reaches it - `resolve`/`explicit` never open a package,
+//! because nothing yet plays 2048 past its placeholder menu (see
+//! `crate::main::session::placeholder`).
+//!
 //! # The first three are a decision; the last three are a guess
 //!
 //! Steps 1 to 3 are a player *stating* which source they want, and [`explicit`]
@@ -216,13 +224,14 @@ fn stated(
 /// alphabetically - the same order [`first_image`] picks from, so the first row
 /// of a chooser is the image a boot with nothing named would have opened.
 ///
-/// [`package_directories`] is appended last, once, rather than folded into the
-/// per-directory loop above: unlike an image, an extracted package is not
-/// something a player drops beside the executable, it is the one fixed
-/// location `data/README.md` documents, so there is exactly one place to look
-/// rather than one per search-path entry. Appending it after every image
-/// candidate keeps `first_image` - and so a no-argument boot - picking the
-/// same source it always did on a machine that also has a `.chd` or `.iso`.
+/// [`package_directories`] is appended last, once per root on
+/// [`package_search_path`], rather than folded into the per-directory loop
+/// above: an extracted package is found by its own shape
+/// ([`package_directories_in`]), not by name the way `images_in` matches
+/// [`IMAGE_NAMES`], so it needs its own scan rather than a branch inside
+/// `images_in`. Appending it after every image candidate keeps `first_image`
+/// (and so a no-argument boot) picking the same source it always did on a
+/// machine that also has a `.chd` or `.iso`.
 ///
 /// Empty is an ordinary answer: it means this machine has no image anywhere the
 /// engine looks, and [`resolve`] is what turns that into the message about it.
@@ -257,13 +266,64 @@ pub fn candidates() -> Vec<PathBuf> {
 /// `oag_2048`'s own module docs. `just play 2048` reads the same location.
 const PACKAGE_ROOT: &str = "data/extracted/vita";
 
-/// Every 2048 package extract under [`PACKAGE_ROOT`].
+/// Every root [`package_directories`] scans, in order.
 ///
-/// One line over [`package_directories_in`], parameterised on the same terms
-/// [`first_image`] is over [`images_in`]: so the real search and a test
-/// fixture cannot answer this question differently.
+/// **The same roots [`search_path`] looks for a disc image in, one for one**,
+/// with `extracted/vita` standing in for `images`: the checkout's own
+/// directory; beside a portable AppImage, both the directory itself (a
+/// package dropped straight in, the same "copy both files into one folder"
+/// case `search_path` covers for an image) and an `extracted/vita`
+/// subdirectory in it; and the stable data directory. This used to be
+/// [`PACKAGE_ROOT`] alone, which is exactly the bug a portable deploy hit - a
+/// Steam Deck running the AppImage from `~/Desktop` has no `data/` beside its
+/// current directory at all, so the package a player extracted was invisible
+/// to the launcher no matter where they put it. `$APPDIR` is excluded for the
+/// same reason it is excluded from `search_path`: looking inside the mounted
+/// image would invite bundling game content into the package.
+#[must_use]
+pub fn package_search_path() -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    let mut push = |path: PathBuf| {
+        if !paths.contains(&path) {
+            paths.push(path);
+        }
+    };
+
+    push(PathBuf::from(PACKAGE_ROOT));
+
+    if let Some(appimage) = std::env::var_os("APPIMAGE")
+        && let Some(directory) = Path::new(&appimage).parent()
+    {
+        push(directory.to_path_buf());
+        push(directory.join("extracted").join("vita"));
+    }
+
+    if let Some(data) = dirs::data_dir() {
+        push(data.join("oag").join("extracted").join("vita"));
+    }
+
+    paths
+}
+
+/// Every 2048 package extract on [`package_search_path`].
+///
+/// Dedups by canonical path the same way [`candidates`] does for
+/// `search_path`, for the same reason: a checkout with the AppImage sitting
+/// in it would otherwise offer one extract twice.
 fn package_directories() -> Vec<PathBuf> {
-    package_directories_in(Path::new(PACKAGE_ROOT))
+    let mut found: Vec<PathBuf> = Vec::new();
+    let mut seen: Vec<PathBuf> = Vec::new();
+
+    for root in package_search_path() {
+        let key = root.canonicalize().unwrap_or_else(|_| root.clone());
+        if seen.contains(&key) {
+            continue;
+        }
+        seen.push(key);
+        found.extend(package_directories_in(&root));
+    }
+
+    found
 }
 
 /// Every 2048 package extract directly under `root`, alphabetical for the
