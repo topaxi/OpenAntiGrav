@@ -1114,6 +1114,30 @@ project's importer handled `BOOT.BIN`, and whether it is related to the
 decompiler failing on several functions in the same file, are both still
 open - no evidence ties either to the mechanism above.
 
+**It is not just `jal`: `lui`/`lw` HI16/LO16 pairs and raw 32-bit data words
+carry the same pre-relocation values, and the fix generalises.** Found
+2026-08-27 while chasing the three unidentified globals on
+[zone-mode.md](docs/ghidra/functions/psp-pulse-usa/zone-mode.md#not-determined)'s
+case-4 arm: `disassemble_bytes` on `lui a0,0x2b` / `lw a0,-0x37c8(a0)` at
+`0x088444b0` gives a naive address of `0x002ac838` - small, and in no mapped
+section - and `get_xrefs_to` on that naive value duly finds nothing, same
+failure shape as a `jal`. Adding the image base the same way the `jal` fix
+does (`0x08804000 + 0x002ac838 = 0x08ab0838`) reproduces the address the
+2026-08-24 pass already had by hand, and does the same for the other two
+globals on that page (`0x08ab2120`, `0x08ab10e8`) against their own naive
+values. A 32-bit data word is the same story one level removed: the pointer
+stored at that now-correct `0x08ab0838` slot reads `88 59 27 00` (LE
+`0x00275988`), which resolves to nothing on its own but to the `"PickupBackground"`
+string table entry once the same `+0x08804000` is applied
+(`0x08804000 + 0x00275988 = 0x08a79988`, confirmed by `inspect_memory_content`
+landing on readable text). **Same fix, three different encodings** - a
+26-bit jump target, a 16+16 hi/lo pair, and a plain 32-bit word - so the
+practical rule widens: any address-shaped value read off this program's
+static bytes (not already surfaced via a working xref) is a pre-relocation
+candidate, not just call targets. `get_xrefs_to`/`get_xrefs_from` on the
+naively-read address will report nothing either way, which reads exactly
+like "no reference" and is not.
+
 ## Verification status: what to lean on
 
 **The disc chooser was driven end to end on this machine** (2026-08-18), which
