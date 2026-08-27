@@ -204,7 +204,7 @@ pub const CAMERA_COLUMNS: [&str; 12] = [
 
 mod flare;
 
-pub use flare::{Flare, FLARE_COLUMNS};
+pub use flare::{FLARE_COLUMNS, Flare};
 
 /// One tick of ship state, as the original held it.
 ///
