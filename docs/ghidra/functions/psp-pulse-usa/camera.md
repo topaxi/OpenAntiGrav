@@ -1145,6 +1145,78 @@ craft-on-craft or weapon impulse (the only inputs that arm the stun) has not
 been captured. Confidence **80** for quiescent-through-a-wall-contact, on two
 restarts of one circuit; no writer for the field has been found on any path.
 
+### `craft+0x7c` stays quiescent through an armed collision stun too, 2026-08-27
+
+The remaining case - a hit that actually arms `stun_timer` - closed this
+thread. Two things had to be sorted out first, both live-verified rather than
+assumed:
+
+- **AI craft never run `FUN_088455ec` at all.** A live watch on all eight
+  craft's `Ship_ApplyCollisionImpulse` entries found `fov_additive` pinned at
+  exactly `0` on every AI craft, every tick, regardless of speed - only the
+  player's entity ever carries a nonzero value. So a capture of an AI-on-AI
+  hit (five genuine ones were captured this session, impulses of realistic
+  magnitude - e.g. `(-24.6, -1.5, -9.2)`, `(22.5, -1.4, 38.1)` units) answers
+  nothing about this field: `fov_intercept` reads `0` on an AI craft whether
+  or not the field has a writer, because nothing ever runs the code that
+  would write it. Only the player's own entity is an informative subject.
+- **Getting the player specifically hit through gameplay proved fragile.**
+  Random driving with weaving found zero player hits in ~1,600 ticks (the
+  five AI-AI hits above all landed on other craft); teleporting the player
+  close behind a specific AI craft, and firing seven simultaneous rockets
+  from every AI at once, each destabilised the emulator (one froze the race,
+  one hung the debugger) without landing a player hit either. Neither
+  scenario is required by the thread's own wording ("craft-on-craft **or**
+  weapon-impulse"), and `Weapon_PostBlastImpulse_q` accumulates into the
+  pending-impulse slot with a plain `vadd.q` - nothing about the slot is a
+  handshake - so the consumer path was tested directly instead: a write of
+  `(-20.0, -3.0, -10.0)` (matching the two genuine AI-AI captures' order of
+  magnitude) into `*(entity+0x4c)+0x110` at a `Ship_ApplyCollisionImpulse`
+  breakpoint on the player's own entity, filtered live off `craft ==
+  *(entity+0x94)` rather than guessed.
+
+The injection was consumed exactly as a real hit is: `stun_timer` read `0.0`
+before the write and `0.4828` one tick after (`0.5` minus one tick's `dt`,
+matching `Ship_ApplyCollisionImpulse`'s own `+= 0.5` and the per-tick
+countdown this page's contact-response citations already establish), then
+decayed steadily (`0.4661`, `0.4494`, ... `0.0991` over the next 23 ticks) -
+the positive control this measurement needs, since a write that merely lands
+in memory without being consumed would prove nothing. `fov_intercept` read
+exactly `0.000000` on **every one of those 24 ticks**, through the stun's
+full arm-and-decay. `fov_additive` kept tracking the speed law throughout
+(confirming the entity was live and correctly resolved the whole time, per
+the offset-chain fix below) - its own value moved only because the craft's
+`dot(fwd, vel)` was near zero and slightly negative at the time, unrelated to
+the stun.
+
+**Caveat stated plainly**: this tests the *consumer* side of the pending-
+impulse mechanism, not a naturally-occurring writer - it proves
+`Ship_ApplyCollisionImpulse` taking the hit branch does not touch
+`craft+0x7c`, not that a real rival or weapon hit could never route through
+some other path this session didn't exercise. The two genuine AI-AI captures
+(realistic impulse magnitudes, independently confirmed nonzero) are cited as
+corroboration that the injected magnitude is representative, not as a
+substitute for a natural player hit. Confidence **75** - live-injected on the
+verified consumer path with a real positive control, one tick short of a
+fully natural capture.
+
+**A real bug surfaced getting here, now fixed**: `scripts/psp-watch-
+pending-impulse.py`'s `ENTITY_TO_CRAFT = 0xFC0` (`craft = entity + 0xFC0`)
+does not hold - checked against a known player craft address, it resolved 7
+of 8 live `Ship_ApplyCollisionImpulse` a0 values to out-of-RAM-range
+addresses, and the one slot that "worked" in the original 2026-08-19 capture
+was not the player. `Ship_ApplyCollisionImpulse`'s a0 **is** the entity
+directly (the same object `craft+0x1c4` reaches elsewhere); `craft` is
+`*(entity + 0x94)`, the reciprocal `ENTITY_OWNER` pointer shield.md already
+documents. See `contact-response.md`'s correction for the live evidence
+(the reciprocal check, and the fov law matching to float precision only
+under this reading).
+
+This closes `handover/the-originals-fov-widens-with-speed-and-race.md`:
+`craft+0x7c` is now measured quiescent through a clean run, a real wall
+contact, and an armed-and-decaying collision stun. No writer for the field
+has been found on any path in this codebase.
+
 ## Applied renames, 2026-08-08 (second pass)
 
 | Address | Name | Conf |
