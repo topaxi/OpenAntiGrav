@@ -75,6 +75,11 @@ Two structural facts to expect, both different from every other binary here:
   becomes a 9-entry slot array indexed by its own `Num`, that it instantiates
   rather than textures existing geometry, and the one slot the engine
   overrides regardless of what its manifest authored.
+- [sound.md](sound.md) - the SCREAM grain-opcode dispatch table
+  (`0x00927614`), the located `0x05`/`0x06`/`0x08` "play/stop a child cue"
+  handlers, and guard `0x22`'s three-way variable-versus-immediate skip - the
+  mechanism `.COLLISIONS`' severity and ship/wall split runs on, still
+  undecoded past the opcode itself.
 
 Add a row to [`names.tsv`](names.tsv) and the page it cites in the same change:
 `scripts/apply-ghidra-names.py` refuses a row whose address and name do not

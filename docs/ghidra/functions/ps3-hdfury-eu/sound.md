@@ -1,0 +1,275 @@
+# The SCREAM grain-opcode dispatch table, and guard `0x22`
+
+2026-08-27. [`psp-audio.md`](../../../formats/psp-audio.md#a-cue-that-plays-other-cues)
+records two open items on the "a cue that plays other cues" finding: locate
+the handler(s) it calls "the handler was never located", and decode guard
+`0x22`, the mechanism that picks which of a parent cue's children actually
+plays (the severity and ship/wall split on `.COLLISIONS`). Both are done. A
+pointer table at `0x008c0060` was suspected as the way in and was not it - see
+[Dead end](#dead-end-0x008c0060-is-not-a-dispatch-table) below.
+
+## The real dispatch table
+
+`0x00927614` is an array of PPC64 OPD-address entries, one per grain opcode,
+confirmed against [`psp-audio.md`](../../../formats/psp-audio.md#a-cue-that-plays-other-cues)'s
+own independent finding: index `0x08` resolves to a function whose only error
+path prints `"SCREAM: snd_SFX_GRAIN_TYPE_BRANCH invalid sound index %d\n"` -
+the binary's own name for grain type `0x08`, landing on exactly the index the
+doc predicted. That single match is what pins the table's base and stride;
+every other index in this page follows from the same arithmetic, not from a
+second guess.
+
+```text
+scripts/ps3-toc.py u32 <0x00927614 + 4*opcode>   # -> an OPD address
+scripts/ps3-toc.py u32 <that OPD address>        # -> the code address (func)
+```
+
+Every function reached this way carries TOC `0x008bd3c4` (module B, per
+[memory.md](memory.md#every-function-has-its-own-toc-and-ghidra-uses-one-for-all-of-them)) -
+Ghidra renders every TOC-relative load in them against the wrong base, so
+every string and global reference below was checked with `scripts/ps3-toc.py`,
+never trusted from `decompile_function` directly. Where Ghidra's decompile
+shows a symbol like `PTR_s_R2Button_008b0170`, that name is the wrong-TOC
+artifact the trap on [memory.md](memory.md) warns about - it is not a real
+button-input reference, it is `0x2c98(r2)` under this function's *real* TOC,
+which is a completely different global.
+
+### Opcodes read so far
+
+| Opcode | Address | Name | Confidence | What it does |
+| --- | --- | --- | --- | --- |
+| `0x05` | `0x006274b0` | `Scream_DoGrainPlayChild` | 82 | Resolve a child cue by index or name, play it with a computed volume and pan |
+| `0x06` | `0x00625988` | `Scream_DoGrainStopChild` | 78 | Resolve a child cue by index or name, stop every active voice currently playing it |
+| `0x08` | `0x00625fc0` | `Scream_DoGrainBranch` | 84 | `snd_SFX_GRAIN_TYPE_BRANCH` - resolve a child cue by index or name, bounds-check the index, replace this voice's own playback state with it |
+| `0x22` | `0x00623690` | `Scream_DoGrainGuard` | 84 | Three-way compare a named variable against an immediate; skip the next grain unless the comparison holds |
+| `0x23` | `0x00623770` | `Scream_DoGrainMarker` | 78 | No-op (two instructions: `li r3,0; blr`) - the interpretation as a goto marker rests on `0x24`'s behaviour, not on anything this function does itself |
+| `0x24` | `0x006255f8` | `Scream_DoGrainGoto` | 80 | Scan a marker table by id, set the skip count to jump to the match; recursion-depth-guarded at 8 |
+
+Confidence is capped at 84 throughout by the rubric's "decompilation only,
+consistent call sites" band - none of this is runtime-verified, and no second
+binary corroborates it yet (see [Not corroborated on PSP](#not-corroborated-on-psp-yet)).
+
+### `0x08` - the located handler, `snd_SFX_GRAIN_TYPE_BRANCH`
+
+```c
+// FUN_00625fc0(voice, _, operand), lightly re-flowed from the decompile
+local_40 = voice->bank;                         // param_1 + 0xb0
+record = (operand & 0xffffff) + bank->base;      // bank->base at +0x34
+index = *(int *)(record + 0xc);                  // the child's cue index, or -1
+if (index < 0) {
+    name = record + 0x10;                        // the child's name, exactly per psp-audio.md's layout
+    index = lookup_by_name(0, name);
+    if (index < 0) index = lookup_by_name(voice->bank, name);
+    if (index < 0) { if (!quiet) printf("SCREAM: Didn't find child sound named -> %s\n", name); return -1; }
+}
+if (index >= bank->cue_count) {                   // *(short *)(bank + 0x16)
+    printf("SCREAM: snd_SFX_GRAIN_TYPE_BRANCH invalid sound index %d\n", index);
+    return -1;
+}
+cue = bank->cue_table[index];                     // *(int *)(bank + 0x1c), stride 0xc
+// ... replaces this voice's own cue pointer, key-on fields and bank pointer with `cue`'s
+```
+
+The bounds check against `bank->cue_count` (a `short` at `+0x16`) is the
+mechanism `psp-audio.md`'s corpus census already named: `weapons_det.bnk`
+holds child index **65** in a **55-cue** bank, and this is exactly the branch
+that would print `snd_SFX_GRAIN_TYPE_BRANCH invalid sound index %d` for it.
+Evidence, checked against `scripts/ps3-toc.py` rather than Ghidra's own
+resolution:
+
+```text
+$ python3 scripts/ps3-toc.py toc 0x00625fc0
+0x00625fc0 toc=0x008bd3c4 exact
+$ python3 scripts/ps3-toc.py resolve 0x00625fc0 0x2ca0
+0x008c0064 -> 0x007cfad0 'SCREAM: snd_SFX_GRAIN_TYPE_BRANCH invalid sound index %d\n'
+```
+
+`0x2ca0(r2)` is the `lwz r3,0x2ca0(r2)` at `0x00626040`, the not-found-index
+branch's format-string load. This is confidence **84**: the decompiled control
+flow is unambiguous, and the function's *own* error message names the grain
+type it implements - as strong as a decompilation-only reading gets without a
+runtime trace or a second binary.
+
+### `0x05` - plays a child with a computed volume and pan
+
+`FUN_006274b0` reads the **same 32-byte record** `psp-audio.md` already
+documented for the exclusive `0x05`/`0x08` forms, and resolves two fields the
+page had marked unread:
+
+- `+0x00` (`psp-audio.md`: *"volume, 0..127"*) - confirmed, clamped to
+  `0..0x7f` before use.
+- `+0x04` (`psp-audio.md`: *"unread; 0, or a small negative number"*) - this
+  function reduces it modulo `0x168` (360) after the same clamp, so it is a
+  **pan angle in degrees**, exactly the reading
+  [`psp-pulse-usa/sound.md`](../../../ghidra/functions/psp-pulse-usa/sound.md#the-rest-of-the-table)
+  already gives the same field shape on PSP's own key-on record.
+- `+0x0c`/`+0x10` - the child index-or-name pair, resolved identically to
+  `0x08`, then handed with the volume and pan to `FUN_00626e78` (not read).
+
+Both `+0x00` and `+0x04` are **not always literal values**: a byte `< 0` in
+either field is an indirect reference. `FUN_006274b0` reads it as
+`table[-6 - value]` where `table` is the global at `scripts/ps3-toc.py resolve
+0x006274b0 0x2c74` (`0x008c0038`, a runtime pointer - its target was not read,
+see [Not determined](#not-determined)). Guard `0x22` below indexes the *same*
+global with a different formula (`~value`, i.e. `-1 - value`), so the two
+opcodes agree on the table but not on the offset applied to reach it - an
+open detail, not a contradiction; each opcode's own operand byte may simply
+use a different small range.
+
+Confidence **82**: the record layout and the two previously-unread fields are
+a direct, unambiguous read; one rung below `0x08` because the variable
+indirection scheme is observed but not itself resolved.
+
+### `0x06` - stops a child rather than playing it
+
+`FUN_00625988` resolves a child cue by the same index-or-name scheme, then
+computes `cue_table + index * 0xc` (the resolved cue's own record address,
+not its content) and passes that as a **key** to `FUN_0062e1c0` in a loop:
+
+```c
+do {
+    found = FUN_0062e1c0(voice, key);   // unlinks a matching node from
+} while (found != 0);                   // voice->active_list (+0x78, chained +0x7c)
+                                         // and calls FUN_0062de08(node, 1, 0, 0)
+```
+
+`FUN_0062e1c0` searches a linked list at `voice + 0x78` for a node whose
+`+0x04` field equals `key`, unlinks it, and releases it - repeated until no
+more match. This is "stop every currently active instance of this child cue",
+not a play command; it happens to share the by-index-or-name resolver with
+`0x05` and `0x08` because all three need to turn the same 32-byte record into
+a resolved cue. **This opcode is outside the `0x05`/`0x08` exclusivity
+`psp-audio.md` documented** - that finding was specifically about which of the
+two *play* forms a record uses, and still holds; `0x06` is a third, distinct
+consumer of the same record shape.
+
+Confidence **78**: the resolve-and-loop control flow is as clean as the other
+two, but "stop" is inferred from the unlink-and-release shape rather than from
+a string naming it, so it sits a rung below `0x08`.
+
+## Guard `0x22`: a three-way variable-versus-immediate skip
+
+```c
+// FUN_00623690(voice, _, operand), operand is a 4-byte record
+byte var_ref = operand[1];
+byte value = (var_ref < 0) ? sysvar_table[~var_ref] : voice->local_vars[var_ref];  // +0xa4
+byte mode = operand[2];
+byte threshold = operand[3];
+bool keep_going;
+if (mode == 1)      keep_going = (value == threshold);
+else if (mode == 2) keep_going = (value >  threshold);
+else                keep_going = (value <  threshold);   // mode 0
+if (!keep_going) voice->skip_count += 1;                  // +0xa2, a `short`
+return 0;
+```
+
+Two things make this unambiguous rather than merely plausible:
+
+1. **The three comparison modes are direct register compares with no
+   TOC-relative loads involved** - `cmpw`/`bgt`/`blt`/`beq` against a byte
+   already in a register, so none of this reading depends on the per-function
+   TOC defect at all. Verified against the raw disassembly, not the
+   decompile, specifically because the decompile's text for mode `0`
+   (*"skip if `threshold <= value`"*) reads oddly next to the assembly's
+   `bgt`-to-continue - they agree once the branch target is checked (`bgt`
+   branches to the **no-skip** return, so *not*-greater falls through to the
+   skip path), but it is worth flagging as the kind of place a decompile can
+   mislead even without a TOC problem.
+2. **The field `voice + 0xa2` this function increments is the same field
+   `0x08`'s handler initialises to `0xffff`** on starting a new voice, and
+   **the same field `0x24` (below) decrements to jump** - one field, written
+   by three independently-read functions, consistent with "skip count" across
+   all three.
+
+This is exactly the mechanism [`psp-audio.md`](../../../formats/psp-audio.md#what-it-does-not-decide)
+described as missing: *"a parent's grains are guarded by `0x22`, whose operand
+is not decoded"*. It is decoded now, structurally - what remains open is
+**which `var_ref` value the severity variable is, and which the ship/wall
+variable is**. That is not a decompilation question; `sysvar_table`
+(`0x008c0038`, resolved via `scripts/ps3-toc.py resolve 0x00623690 0x2c74`) is
+a runtime pointer whose target was not read, and `voice->local_vars` is
+populated by whatever set up the voice, not by anything in this function. Per
+this project's rule against inventing what the data does not state, no
+mapping from a `var_ref` value to "severity" or "ship vs wall" is recorded
+here - reading `sysvar_table`'s contents, or catching a real collision with a
+breakpoint on this function, are the two ways to get one.
+
+**One consequence worth carrying back to the format page and the Rust side**:
+`0x22`'s condition depends on live voice state (`local_vars`) and a runtime
+global, neither of which a static WAD read can see. `cue_tree_sounds`
+returning every reachable leaf and leaving the choice to the caller - the
+"honest gap" `psp-audio.md` already describes - is not a placeholder for a
+static answer this page could now supply; the real selection needs the
+simulation to hand the interpreter the actual collision context. Nothing in
+`crates/formats/src/sblk/child.rs` should change on the strength of this
+finding alone.
+
+### `0x23` and `0x24`: a marker and its goto, corroborating the skip-count field
+
+`FUN_00623770` (opcode `0x23`) is `li r3,0x0; blr` - two instructions, nothing
+else. `FUN_006255f8` (opcode `0x24`) scans a table of 8-byte entries
+(`*(u16*)(cue+something) + i*8`, matched against a marker id in the operand)
+and, on a match, sets `voice + 0xa2` (the same skip-count field `0x22`
+increments) to `i - 1` - a computed jump rather than a plain increment. A
+recursion guard at the same runtime global `0x22` reads
+(`sysvar_table + 0x20`, an `int`, capped at 8) refuses to jump further once
+tripped. This matches [`psp-pulse-usa/sound.md`](../../../ghidra/functions/psp-pulse-usa/sound.md#not-determined)'s
+own hypothesis, *"`0x23` looks like a marker and `0x24` like a goto"*, from
+the PSP side of the same engine - independent, if not yet corroborating,
+since the PSP handlers themselves were not reachable this session (see below).
+
+Confidence: `0x24`'s mechanism is read as cleanly as `0x22`'s (**80**); `0x23`
+being a no-op is certain, but the *name* "marker" is inferred entirely from
+what `0x24` does with it, not from anything in `0x23` itself, so it is capped
+lower (**78**) than the certainty of the two instructions alone would suggest.
+
+## Dead end: `0x008c0060` is not a dispatch table
+
+The thread that started this page named `0x008c0060` (r2 `0x008ad4d8`) as
+where to look for `snd_DoGrain`. It is not a table indexed by opcode or
+anything else - it is simply where module B's linker-packed small-data area
+happens to place two format-string pointers back to back
+(`0x008c0060` = *"Didn't find child sound named"*, `0x008c0064` = *"invalid
+sound index %d"*, both confirmed above). Scanning which functions load each
+consecutive word in that region turns up **unrelated functions scattered
+across a wide code range** - proof it is a sequence of independently-declared
+globals, not a table walked by index. The real dispatch table
+(`0x00927614`) was found the other way: by locating *where the OPD address of
+a known handler is itself stored as data* (`image.word_addresses(opd_addr)`,
+not the code address), which is what a real indirect-call table holds on
+PPC64. Writing this down so the next session does not re-walk `0x008c0060`
+expecting a table.
+
+## Not corroborated on PSP yet
+
+[`psp-pulse-usa/sound.md`](../../../ghidra/functions/psp-pulse-usa/sound.md#the-command-list-is-a-45-entry-jump-table)
+already names the equivalent table, `g_scream_opcode_table` at `0x08ac326c`,
+45 entries, single TOC (MIPS has none of PPC64's problem). Reading it
+directly (`read_memory`) confirms the same shape holds there too: index `0x01`
+and `0x09` share a handler and indices `0x0c`-`0x13` share another, both
+exactly as that page already documented - strong indirect confirmation the
+index-by-opcode reading transfers. But `decompile_function`,
+`disassemble_function` and `create_function` all refused on the PSP-side
+`0x22`/`0x23`/`0x24` handlers (`0x0018a594`/`0x0018a658`/`0x0018a660`) this
+session - that address range is outside whatever `psp-pulse-usa`'s
+auto-analysis already covered, and `disassemble_bytes` reported success with
+zero instructions decoded rather than an error. Not chased further; a fresh
+analysis pass (or `create_function` after first fixing whatever blocks it) is
+what a second-binary corroboration of this page needs.
+
+## Not determined
+
+- **`sysvar_table`'s contents** (`0x008c0038`). A runtime pointer, not a
+  static table - reading what it points at needs a live process, not a
+  disassembly.
+- **Which `var_ref` value means severity, and which means ship-vs-wall**, for
+  `.COLLISIONS`' guard `0x22` grains specifically. Blocked on the item above,
+  or on a breakpoint during a real collision.
+- **Why `0x05`'s variable-indirect fields index `sysvar_table` at `-6 - value`
+  while `0x22`'s indexes it at `-1 - value`.** Both read the same global;
+  the differing offset was not chased further this session.
+- **`FUN_00626e78`** (`0x05`'s and `0x08`'s callee that actually starts
+  playback) and **`FUN_0062de08`** (`0x06`'s voice-release callee) - neither
+  was read.
+- **Opcodes `0x00`-`0x04`, `0x07`, `0x09`-`0x21`, `0x25`-`0x2c`.** The table
+  covers at least 40 entries past `0x927614`; only six are read.
