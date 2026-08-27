@@ -470,7 +470,6 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [The AI's six-stage plan (line-follower to a field of pilots) is complete; what remains unbuilt is the residual](handover/the-ais-six-stage-plan-line-follower-to.md)
 - [The AI was never the problem: four contact-path bugs, and what is left after them](handover/the-ai-was-never-the-problem-four-contact.md)
 - [A global reached through `$gp` has an instruction displacement unrelated to its address](handover/a-global-reached-through-gp-has-an-instruction.md)
-- [`search_instructions`'s `mnemonic` filter is exact-match, and delay-slot forms are their own mnemonics](handover/search-instructionss-mnemonic-filter-is-exact-match-and.md)
 - [`just apply-names` reported success for renames the bridge did not make](handover/just-apply-names-reported-success-for-renames-the.md)
 - [DLC packs are mounted; two things inside them are not read](handover/dlc-packs-are-mounted-two-things-inside-them.md)
 - [Two recovered chase-camera behaviours are ported; `headtilt` is not](handover/two-recovered-chase-camera-behaviours-are-ported-headtilt.md)
@@ -606,6 +605,11 @@ rather than of any pass:
 - [Reading a capture](docs/reverse-engineering/verification-protocol.md#reading-a-capture-rules-that-each-cost-a-session) -
   control columns first, unclamped ramps, clean-capture detection, ask the
   tangent not the index, Left-Up-Forward, and threshold-versus-frame stability.
+- [GhidraMCP bridge quirks](docs/reverse-engineering/toolchain.md#search_instructionss-mnemonic-filter-is-exact-match-not-substring) -
+  `search_instructions`'s `mnemonic` filter is exact-match despite its own
+  description, so a sweep filtered on one mnemonic silently misses every
+  underscore-prefixed delay-slot form of it; `run_script_inline`'s current
+  failure mode.
 - [Measuring a renderer change](docs/rendering/README.md#measuring-a-renderer-change) -
   aggregates rank broken changes higher, brightness thresholds measure the
   circuit, measure a screenshot before citing it.

@@ -421,6 +421,39 @@ An agent can generate a plausible reading of anything.** Every rename needs a
 documentation page with checkable evidence, and every claim needs a confidence
 score.
 
+#### `search_instructions`'s `mnemonic` filter is exact-match, not substring
+
+Its own tool description says "case-insensitive substring match on both
+fields" - for `mnemonic` that is not what it does. Confirmed live
+2026-08-27 against `psp-pulse-usa`: `mnemonic="lv"` returns 0 matches
+(524,719 instructions scanned) where `mnemonic="lv.q"` returns 1,000+
+(truncated at the request limit). `"lv"` is a literal substring of
+`"lv.q"`, so a true substring match would have returned the same set for
+both; it does not, so the field is exact-match in practice regardless of
+what the description claims.
+
+This matters because **MIPS delay-slot instructions render with their own,
+distinct mnemonic**: a leading underscore - `_lw`, `_lwc1`, `_addiu`,
+`_move`, `_sw`, and so on for every mnemonic that can occupy a delay slot.
+A sweep that filters on `mnemonic="lw"` silently misses every `_lw` in a
+branch delay slot, which on this compiler's output is a large fraction of
+all loads. **A sweep run against one mnemonic form has checked at most
+half of what it looks like it has.**
+
+Sweep with `operand_pattern` only and no `mnemonic` filter, or run each
+delay-slot form explicitly alongside its plain one.
+
+`run_script_inline`, which would otherwise let a single script enumerate
+every form in one pass, is currently gated off by config rather than
+broken: it returns `"Script execution disabled. Set
+GHIDRA_MCP_ALLOW_SCRIPTS=1 ..."` (checked live 2026-08-27, `dry_run:
+true`). An earlier session (2026-08-17) saw a different failure from the
+same call - `GhidraPlaceholderBundle cannot be cast to
+GhidraSourceBundle` - which does not reproduce now; whether that was fixed
+or is just superseded by the env-var gate is unknown. Either way, treat
+coverage as the union of explicit per-mnemonic sweeps until scripting is
+enabled and confirmed working, not as a fact that stays true on its own.
+
 ## Emulators
 
 ### PPSSPP (PSP)
