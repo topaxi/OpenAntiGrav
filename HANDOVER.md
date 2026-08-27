@@ -477,7 +477,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [Task #7: PRESS START does not fade in or throb](handover/task-7-press-start-does-not-fade-in.md)
 - [PS2 front-end layout is hardcoded to 480x272](handover/ps2-front-end-layout-is-hardcoded-to-480x272.md)
 - [The HUD layout ground truth is PSP-only, and the PS2 layouts are unchecked](handover/the-hud-layout-ground-truth-is-psp-only.md)
-- [PS2 sky and pads: 30 circuits unswept](handover/ps2-sky-and-pads-30-circuits-unswept.md)
+- [`12_Track`'s sky draws one white face](handover/12-tracks-sky-draws-one-white-face.md)
 - [Audio: race SFX plays on all three titles](handover/audio-race-sfx-plays-on-all-three-titles.md)
 - [`oag-trace plan` has never been replayed into the emulator](handover/oag-trace-plan-has-never-been-replayed-into.md)
 - [M6 authored lighting: no hardware light slot found enabled](handover/m6-authored-lighting-no-hardware-light-slot-found.md)
