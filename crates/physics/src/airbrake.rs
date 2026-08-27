@@ -430,6 +430,15 @@ pub fn sideshift_force(state: &ShipState, handling: &Handling, grounded: f32) ->
 /// bit 0 is established). It is left out rather than guessed at; the effect is
 /// that our sideshift is available in a state the original may withhold it in.
 pub fn advance_sideshift(state: &mut ShipState, input: &ShipControls, dt: f32) {
+    // The original's own countdown is gated, not clamped - `if (t > 0.0f) t
+    // -= dt;` - so it lands slightly negative on the tick that crosses zero
+    // and then freezes there, where `.max(0.0)` here converges to exactly
+    // `0.0`. Deliberately not matched: every reader of these fields, original
+    // and port alike, gates on `> 0.0`/`<= 0.0`, so the residue changes
+    // nothing observable, and these three feed `ShipState::hash_state`'s
+    // committed golden hashes. See
+    // `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`'s countdown
+    // section for the decompiled evidence.
     for timer in &mut state.sideshift_timers {
         *timer = (*timer - dt).max(0.0);
     }

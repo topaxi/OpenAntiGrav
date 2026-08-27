@@ -308,6 +308,46 @@ the lockout's 1.2 s total: read correctly from the code, confirmed not to
 fire on a left tap, but the right pair's own values and a repeat of this
 capture are what would raise it.
 
+### The countdown does not clamp at zero, and the port's does - deliberately left that way
+
+The capture also shows two of the five columns freezing at a tiny **negative**
+value instead of `0.0` once they expire: `ss_shift_l` at `-0.000149006` from
+tick 197 onward, `ss_tap_window_l` at `-0.0004569963` from tick 196 onward,
+each held bit-exact for the rest of the run. A clamped countdown cannot
+produce that at all, let alone two different residues.
+
+Read directly from `Ship_UpdateSideshiftInput_q`'s decompile (`0x08846a54`),
+the countdown block is
+
+```c
+if (0.0 < fVar6)  { *(float *)(param_2 + 0x89c) = fVar6  - param_1; }  // tap window, left
+if (0.0 < fVar9)  { *(float *)(param_2 + 0x8a0) = fVar9  - param_1; }  // tap window, right
+if (0.0 < fVar8)  { *(float *)(param_2 + 0x8a4) = fVar8  - param_1; }  // shift force, left
+if (0.0 < fVar10) { *(float *)(param_2 + 0x8a8) = fVar10 - param_1; }  // shift force, right
+if (0.0 < fVar11) { *(float *)(param_2 + 0x8ac) = fVar11 - param_1; }  // lockout
+```
+
+`if (timer > 0.0f) timer -= dt;` - gated, not clamped. The tick that crosses
+zero still subtracts a full `dt`, landing slightly negative, and every tick
+after that the gate itself is false, so the field is never touched again.
+That is exactly what the capture shows. Confidence **95**: the instruction
+was read directly, not inferred from the data (the data only pointed at the
+hypothesis first).
+
+`crates/physics/src/airbrake.rs`'s `advance_sideshift` instead does
+`(*timer - dt).max(0.0)` on all five, unconditionally, every tick - it
+converges to exactly `0.0` rather than freezing on a residue. **Deliberately
+not changed to match**, for two reasons: every consumer of these fields in
+the whole tree, original and port alike, gates on `> 0.0`/`<= 0.0`, which a
+residue of `-1.5e-4` and a clamped `0.0` answer identically - there is no
+behaviour this affects. And `ShipState::hash_state`
+(`crates/physics/src/probe.rs`) hashes `sideshift_timers`, `shift_tap_windows`
+and `shift_lockout` into committed golden-test hashes; matching the residue
+would change those constants for a purely cosmetic difference, which is a
+real cost for zero behavioural gain. If a bit-exact comparison of these
+columns against a real capture is ever built, this paragraph is why a `-1.5e-4`
+reading is not a bug.
+
 **What this does not settle: the lateral-displacement claim.** The scripted
 run-up (`180 cross`, no steering) grazes a wall on Talon's Junction around
 tick 60-90 - the same collision the standing-start capture already documents
