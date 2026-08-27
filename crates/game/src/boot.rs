@@ -1627,9 +1627,8 @@ pub fn chosen_language<'a>(
 /// The chosen language's string table.
 ///
 /// Public for the same reason [`load_languages`] is: the HUD resolves its own
-/// `idstring` keys through this - `IG_HUD_LAP` on Pulse, `HUD_Lap` on Pure, the
-/// disc's own spelling either way - and a race reaches it without booting the
-/// front end.
+/// `idstring` keys through this (`IG_HUD_LAP` on Pulse, `HUD_Lap` on Pure),
+/// and a race reaches it without booting the front end.
 pub fn load_strings(
     archives: &mut oag_assets::Archives,
     languages: &[Language],
@@ -1639,55 +1638,35 @@ pub fn load_strings(
     let Some(language) = chosen_language(languages, preferred) else {
         return StringTable::default();
     };
-    let Some(entries) = language.entries.as_deref() else {
-        // No `Dynamic Entry File Source` does not always mean no strings.
-        // Every plugin Pulse offers points one, but Pure's `PI000` (English)
-        // states every string inline in its own `Definition.xml` instead - see
-        // `docs/formats/pure-status.md`. Re-reading the definition costs one
-        // extra archive read on this path alone, and parses safely into an
-        // empty table for a plugin that truly names nothing: `<Font>`/
-        // `<Values>` carry no `<Entry>` tag, so `StringTable::from_xml` only
-        // ever picks up the language's own strings, never font metadata.
-        let name = pulse::names::language_definition(&language.plugin);
-        return match archives
-            .read_name(&name)
-            .and_then(|blob| expand(&blob).map_err(|e| oag_assets::Error::BadSpec(e.to_string())))
-        {
-            Ok(xml) => {
-                let table = StringTable::from_xml(&xml);
-                if table.is_empty() {
-                    report.push(format!("{} names no string table", language.name));
-                } else {
-                    report.push(format!(
-                        "{name}: {} strings inline for {}",
-                        table.len(),
-                        language.name
-                    ));
-                }
-                table
-            }
-            Err(e) => {
-                report.push(format!("{name}: {e}"));
-                StringTable::default()
-            }
-        };
+    // No `Dynamic Entry File Source` does not always mean no strings: Pure's
+    // `PI000` (English) states every string inline in `Definition.xml`
+    // instead of naming a separate file - see `docs/formats/pure-status.md`.
+    // Re-parsing the definition is safe for a plugin that really names
+    // nothing too: `<Font>`/`<Values>` carry no `<Entry>` tag.
+    let name = match language.entries.as_deref() {
+        Some(entries) => entries.to_string(),
+        None => pulse::names::language_definition(&language.plugin),
     };
 
     match archives
-        .read_name(entries)
+        .read_name(&name)
         .and_then(|blob| expand(&blob).map_err(|e| oag_assets::Error::BadSpec(e.to_string())))
     {
         Ok(xml) => {
             let table = StringTable::from_xml(&xml);
-            report.push(format!(
-                "{entries}: {} strings for {}",
-                table.len(),
-                language.name
-            ));
+            if table.is_empty() {
+                report.push(format!("{} names no string table", language.name));
+            } else {
+                report.push(format!(
+                    "{name}: {} strings for {}",
+                    table.len(),
+                    language.name
+                ));
+            }
             table
         }
         Err(e) => {
-            report.push(format!("{entries}: {e}"));
+            report.push(format!("{name}: {e}"));
             StringTable::default()
         }
     }
