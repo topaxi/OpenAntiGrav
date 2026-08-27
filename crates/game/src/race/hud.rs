@@ -96,11 +96,13 @@ pub(super) fn load_hud(
 
     let sheet = load_atlases(archives, title, layout.as_ref(), entry, report);
 
-    // The HUD's captions are `idstring` keys - `IG_HUD_LAP`, `IG_HUD_BEST` - and
-    // without a table `StringTable::get_or_id` falls back to the key itself, which
-    // put `ig_hud_lap` on screen where `LAP` belongs. The preferred language is the
-    // player's saved one; a race reached through `--race` has no settings to read,
-    // so this takes the chain's default rather than threading one through.
+    // The HUD's captions are `idstring` keys - `IG_HUD_LAP` on Pulse,
+    // `HUD_Lap` on Pure, whatever the layout's own XML names - and without a
+    // table `StringTable::get_or_id` falls back to the key itself, which put
+    // `IG_HUD_LAP` on screen where `LAP` belongs. The preferred language is
+    // the player's saved one; a race reached through `--race` has no settings
+    // to read, so this takes the chain's default rather than threading one
+    // through.
     //
     // **Before the fonts now**, because the plugins parsed here are also what
     // name the two faces below - the same reordering `boot::load_shell` needed.

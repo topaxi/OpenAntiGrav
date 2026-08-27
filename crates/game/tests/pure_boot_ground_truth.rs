@@ -422,6 +422,58 @@ fn the_whole_chain_is_walked_and_nothing_in_it_is_skipped() {
     }
 }
 
+/// The regression guard for `oag_pure::FRONT_END::language_plugins`.
+///
+/// The old list was Pulse's USA set copied wholesale - `PI008`-`PI012` - which
+/// resolved `PI012` as "English" (the first `<Entry Language="English">` in a
+/// plugin with no `<Font>` block at all) while naming no `entries.xml`, so the
+/// picker's English row drew with an empty string table. See
+/// `docs/formats/pure-status.md#the-language-plugin-id-space-is-pures-own-not-pulses`.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn pures_picker_offers_its_own_five_languages_english_included() {
+    for (label, image) in images() {
+        let loaded = load(&image);
+        let languages = loaded.frontend.languages();
+
+        let found: Vec<(&str, &str)> = languages
+            .iter()
+            .map(|l| (l.plugin.as_str(), l.name.as_str()))
+            .collect();
+        assert_eq!(
+            found,
+            [
+                ("PI000", "English"),
+                ("PI008", "French"),
+                ("PI009", "German"),
+                ("PI010", "Spanish"),
+                ("PI011", "Italian"),
+            ],
+            "{label}: Pure's own plugin ids, not Pulse's"
+        );
+
+        // English's string table lives inline in `PI000\Definition.xml` -
+        // Pure names no `entries.xml` for it at all - so this is the one
+        // language here with `entries: None` and it must still resolve a
+        // real table via `load_strings`'s inline fallback.
+        let english = languages
+            .iter()
+            .find(|l| l.name == "English")
+            .expect("English is in the list asserted above");
+        assert_eq!(english.entries, None, "{label}: PI000 names no entries.xml");
+        assert!(
+            loaded.strings.len() > 100,
+            "{label}: English should resolve PI000's inline string table, got {} entries",
+            loaded.strings.len()
+        );
+
+        // The HUD's own idstring convention on Pure, read straight off
+        // `TimeTrial_HUD.xml`'s `idstring="HUD_Lap"` - not Pulse's `IG_HUD_LAP`.
+        assert_eq!(loaded.strings.get_or_id("HUD_Lap"), "Lap", "{label}");
+        assert_eq!(loaded.strings.get_or_id("HUD_best"), "best", "{label}");
+    }
+}
+
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn pures_own_globals_are_merged_only_where_the_disc_leaves_them_out() {

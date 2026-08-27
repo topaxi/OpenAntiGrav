@@ -1626,8 +1626,9 @@ pub fn chosen_language<'a>(
 
 /// The chosen language's string table.
 ///
-/// Public for the same reason [`load_languages`] is: the HUD resolves `IG_HUD_*`
-/// keys through this, and a race reaches it without booting the front end.
+/// Public for the same reason [`load_languages`] is: the HUD resolves its own
+/// `idstring` keys through this (`IG_HUD_LAP` on Pulse, `HUD_Lap` on Pure),
+/// and a race reaches it without booting the front end.
 pub fn load_strings(
     archives: &mut oag_assets::Archives,
     languages: &[Language],
@@ -1637,26 +1638,35 @@ pub fn load_strings(
     let Some(language) = chosen_language(languages, preferred) else {
         return StringTable::default();
     };
-    let Some(entries) = language.entries.as_deref() else {
-        report.push(format!("{} names no string table", language.name));
-        return StringTable::default();
+    // No `Dynamic Entry File Source` does not always mean no strings: Pure's
+    // `PI000` (English) states every string inline in `Definition.xml`
+    // instead of naming a separate file - see `docs/formats/pure-status.md`.
+    // Re-parsing the definition is safe for a plugin that really names
+    // nothing too: `<Font>`/`<Values>` carry no `<Entry>` tag.
+    let name = match language.entries.as_deref() {
+        Some(entries) => entries.to_string(),
+        None => pulse::names::language_definition(&language.plugin),
     };
 
     match archives
-        .read_name(entries)
+        .read_name(&name)
         .and_then(|blob| expand(&blob).map_err(|e| oag_assets::Error::BadSpec(e.to_string())))
     {
         Ok(xml) => {
             let table = StringTable::from_xml(&xml);
-            report.push(format!(
-                "{entries}: {} strings for {}",
-                table.len(),
-                language.name
-            ));
+            if table.is_empty() {
+                report.push(format!("{} names no string table", language.name));
+            } else {
+                report.push(format!(
+                    "{name}: {} strings for {}",
+                    table.len(),
+                    language.name
+                ));
+            }
             table
         }
         Err(e) => {
-            report.push(format!("{entries}: {e}"));
+            report.push(format!("{name}: {e}"));
             StringTable::default()
         }
     }

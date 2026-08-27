@@ -8,12 +8,20 @@
 //! - `<Entry ID="French" String="Français">`, its name in itself, which is what
 //!   the picker shows;
 //! - `<Entry ID="Dynamic Entry File Source" String="Data\Plugins\PI008\entries.xml">`,
-//!   pointing at the string table.
+//!   pointing at the string table - or, when a plugin names none, its strings
+//!   are stated inline in `Definition.xml` instead: Pure's `PI000` (English)
+//!   does this, and [`boot::load_strings`](crate::boot::load_strings) falls
+//!   back to re-parsing the definition itself in that case.
 //!
 //! The plugin id is the only stable handle: nothing in the path says which
-//! language it is. On the USA disc the five that exist are `PI008` French,
-//! `PI009` German, `PI010` Spanish, `PI011` Italian and `PI012` English, and
-//! that mapping was recovered by reading each plugin rather than assumed.
+//! language it is, **and it is not a shared convention between titles.**
+//! On the Pulse USA disc the five that exist are `PI008` French, `PI009`
+//! German, `PI010` Spanish, `PI011` Italian and `PI012` English; on Pure the
+//! same four non-English plugins keep their ids but English is `PI000`, not
+//! `PI012` - `PI012` on Pure is an unrelated American-spelling patch with no
+//! `<Font>` block of its own. Each mapping was recovered by reading every
+//! plugin on its own disc, never carried over from the other title. See
+//! `docs/formats/pure-status.md#the-language-plugin-id-space-is-pures-own-not-pulses`.
 //!
 //! See `docs/architecture/frontend-boot.md`.
 
