@@ -314,10 +314,24 @@ Three things from that pass are worth carrying:
 
 None of it is a format any more; it is fields inside one, and presentation:
 
-- **A 2048 model draws untextured.** The per-vertex normal and texture
-  coordinate are in the file and unplaced (four bytes at `+0x0c`, `f16` pairs at
-  the end), as is the material and texture binding. That is the next piece of
-  work and it is what stands between this and a picture worth comparing.
+- **A 2048 model draws untextured, but it is lit off real normals now.**
+  2026-08-27 found *where* the normal, tangent and texture coordinates are:
+  section B carries a per-chunk vertex declaration structurally identical to
+  HD's own
+  ([2048-rcsmodel.md](../docs/formats/2048-rcsmodel.md#section-b-carries-a-vertex-declaration-structurally-identical-to-hds)) -
+  `normal@0x0c`, `tangent@0x10`, `Uv1@0x14`, `lightmapUV@0x18` on the common
+  28-byte stride. HD's packed-normal encoding does not apply at that offset
+  (chance-level dot product against HD ground truth), but the byte budget
+  argued for a different shape - one signed byte per component, 4th byte
+  padding - and it closed outright: **100% within 18° over a 1,504-vertex
+  index-exact oracle, mean dot 0.994, and 33,335,682 of 33,335,682 normals
+  unit-length across the full corpus**
+  ([2048-rcsmodel.md](../docs/formats/2048-rcsmodel.md#the-normal-is-cracked-three-signed-bytes-not-a-packed-word)).
+  Implemented in `oag_formats::rcsmodel::psp2::unpack_normal`, wired into
+  `oag_render::mesh::rcs::psp2::build`, and `just play 2048 --race` now draws
+  Altima lit off the file's own normals. What is still missing is the texture
+  coordinate's own type nibble (`t8`) and the material/texture binding - that
+  is what stands between this and a picture worth comparing.
 - **The HD-derived roster is not reachable as a default on this title.** One
   `ship_dir` string cannot address both of 2048's trees; every file is there.
 - No HUD art (2048's `.gxt` atlases sit under names this build does not ask
@@ -348,11 +362,29 @@ parser change yet - see What's New above and Next Steps below.
 
 ## Open
 
-- The `.rcsmodel` container's three sections' own interiors - what fills the
-  rest of section A past its own `+0x0c`/`+0x24`/`+0x44` size fields, and the
-  chunk/relocation shape inside the "main memory" and "GPU" blocks
-  `RcsModel_Load` reads whole. Only where the three sections start and end is
-  known.
+- Section B's vertex declaration is found and its offsets are cross-checked
+  (see "What is left" above). `normal`'s type (5) is now decoded too -
+  confidence 96, see below - but `tangent`'s (also 5, 4 components) and
+  `Uv1`'s/`lightmapUV`'s (8, 2 components) are not. Needs either a verified
+  SceGxm attribute-format reference or Ghidra RE of the eboot's
+  vertex-stream setup path (whoever consumes a submesh record's
+  `+0x10`/`+0x2c` pointers) - not located this session; `RcsModel_Load`
+  itself never touches section B past relocating it. Section B's *other*
+  contents past this one declaration - the rest of the serialized object
+  graph `RcsModel_Load` reads whole - remain unwalked.
+- `normal`'s own type nibble is closed: two failed passes (HD's packed word,
+  both byte orders; a reordered-fields-plus-derived-z scheme that looked
+  confirmed on two hand-picked examples until checked at scale) were followed
+  by an exhaustive per-byte search - one signed byte per component,
+  `byte/127.0`, x/y/z in file order, 4th byte alignment padding - which
+  scores 100% within 18° (mean dot 0.994) over the 1,504-vertex index-exact
+  oracle and 33,335,682/33,335,682 unit-length across the full corpus. See
+  [2048-rcsmodel.md](../docs/formats/2048-rcsmodel.md#the-normal-is-cracked-three-signed-bytes-not-a-packed-word).
+  Implemented and wired into the renderer. The index-exact correspondence
+  itself (`crates/game/examples/vita_rcsmodel_exact.rs`) is a reusable oracle
+  for `tangent`'s and the texcoords' type nibbles too, though a texcoord's
+  *values* cannot be cross-title-matched the same way (a lightmap atlas is
+  baked per platform) - only its encoding's plausibility can be checked.
 - The four unplaced bytes of the `WO Track` point tail (`0x58`/`0x59` and
   `0x5e`/`0x5f`), the constant `0xff`/`0x00` pair at `0x5a`/`0x5b`, and
   `cathedral`'s section id of 9 against 6 `section` nodes. The `WO Track`
@@ -397,3 +429,24 @@ parser change yet - see What's New above and Next Steps below.
    no ground is not a race at all. So step 2's two halves are no longer equal
    in priority - `KdTreeMeshShape.cpp`'s trailer first, `RcsModel_Load`'s three
    sections after it.
+5. ~~Section B's vertex declaration~~ - found 2026-08-27, offsets
+   cross-checked, see "What is left" above.
+6. ~~`normal`'s encoding~~ - cracked the same session, see "Open" above:
+   three signed bytes, `byte/127.0`, x/y/z in file order, 4th byte padding.
+   Implemented in `oag_formats::rcsmodel::psp2::unpack_normal` and wired into
+   `oag_render::mesh::rcs::psp2::build`; `just play 2048 --race` now draws
+   Altima lit off real normals. The index-exact correspondence built to get
+   there (`crates/game/examples/vita_rcsmodel_exact.rs`, 1,504 vertices, zero
+   ambiguity) is a reusable oracle for the next guess.
+7. **`tangent`'s and the texcoords' type nibbles.** `tangent` shares
+   `normal`'s type code (5) with 4 components rather than 3 - worth checking
+   whether the same per-byte scheme applies before assuming it needs its own
+   RE pass. `Uv1`/`lightmapUV` (type 8, 2 components each) still need a
+   content oracle that does not depend on cross-title value matching, since a
+   lightmap atlas is baked per platform - a range-plausibility check is what
+   this session had, and it is weak evidence either way (see
+   [2048-rcsmodel.md](../docs/formats/2048-rcsmodel.md#section-b-carries-a-vertex-declaration-structurally-identical-to-hds)).
+   Finding `RcsModel_Load`'s actual consumer in Ghidra (the function that
+   binds this declaration into a GPU vertex-attribute setup) would settle
+   both nibbles' SceGxm symbolic names at once, which the empirical route
+   this session took does not give.

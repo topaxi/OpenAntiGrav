@@ -6,11 +6,13 @@
 //! carries its own counts and its own buffer pointers, and the stride falls out
 //! of the buffer packing. So this builder takes the model blob alone.
 //!
-//! What it draws is positions and triangles, untextured, lit off computed face
-//! normals - the same honest half-picture `super::build` gives an HD model
-//! whose material binding has not been read. `oag_formats::rcsmodel::psp2`'s
-//! module docs list what is not decoded yet; the ones that show here are the
-//! per-vertex normals, the texture coordinates and the material binding.
+//! What it draws is positions, triangles and normals - the file's own where a
+//! submesh's stride carries one, computed off the triangles where it does not
+//! (see [`super::face_normals`]) - untextured, the same honest half-picture
+//! `super::build` gives an HD model whose material binding has not been read.
+//! `oag_formats::rcsmodel::psp2`'s module docs list what is not decoded yet;
+//! the ones that show here are the texture coordinates and the material
+//! binding.
 
 use anyhow::Result;
 
@@ -28,6 +30,11 @@ pub struct Report {
     /// Relocation entries naming a GPU pointer this reading does not account
     /// for - see [`psp2::Model::unpaired_pointers`].
     pub unpaired: usize,
+    /// Vertices whose normal came from the file rather than off the
+    /// triangles - see [`super::face_normals`]. Reported for the same reason
+    /// HD's own build counts it: the fallback is silent and the difference is
+    /// visible.
+    pub authored_normals: usize,
 }
 
 impl Report {
@@ -35,9 +42,9 @@ impl Report {
     #[must_use]
     pub fn describe(&self) -> String {
         format!(
-            "{} triangle(s) over {} submesh(es), untextured and lit off face \
-             normals; {} unaccounted GPU pointer(s)",
-            self.triangles, self.submeshes, self.unpaired
+            "{} triangle(s) over {} submesh(es), untextured, {} authored \
+             normal(s) (rest off face normals); {} unaccounted GPU pointer(s)",
+            self.triangles, self.submeshes, self.authored_normals, self.unpaired
         )
     }
 }
@@ -77,18 +84,20 @@ pub fn build(label: &str, model_blob: &[u8]) -> Result<(Model, Report)> {
         let first = u32::try_from(model.indices.len()).unwrap_or(u32::MAX);
         let mut lo = [f32::MAX; 3];
         let mut hi = [f32::MIN; 3];
-        for position in &submesh.positions {
+        for (i, position) in submesh.positions.iter().enumerate() {
             for a in 0..3 {
                 lo[a] = lo[a].min(position[a]);
                 hi[a] = hi[a].max(position[a]);
             }
+            // The file's own normal where this submesh's stride carries one
+            // (`psp2::SubMesh::normals`) - a zero otherwise, which is
+            // `super::face_normals`'s signal to derive one from the
+            // triangles, exactly as it already does for an HD model.
+            let normal = submesh.normals.get(i).copied().unwrap_or([0.0; 3]);
+            report.authored_normals += usize::from(normal != [0.0; 3]);
             model.vertices.push(GpuVertex {
                 position: *position,
-                // **Nothing is invented here.** The per-vertex normal is in the
-                // file, packed into the four bytes at +0x0c, and unread - so
-                // this leaves a zero and the shader's own face-normal path
-                // lights the surface, rather than a made-up direction.
-                normal: [0.0; 3],
+                normal,
                 colour: [1.0, 1.0, 1.0, 1.0],
                 texcoord: [0.0, 0.0],
                 lit: 1.0,
@@ -123,11 +132,10 @@ pub fn build(label: &str, model_blob: &[u8]) -> Result<(Model, Report)> {
         report.triangles += submesh.triangle_count();
     }
     model.mesh_count = report.submeshes;
-    // **The authored normals are in the file and are not read** - four bytes at
-    // each vertex's +0x0c, unplaced. So the shape is lit off the triangles this
-    // builder already decoded, which is a fact about the geometry rather than a
-    // stand-in for data nobody has. See `super::face_normals`, whose docs make
-    // the same argument for the HD container.
+    // Fills in only the vertices left at a zero normal above - a submesh
+    // whose stride was too small to carry one (not observed on any of the
+    // 993 shipped files). See `super::face_normals`, whose docs make the
+    // same fallback argument for the HD container.
     super::face_normals(&mut model);
     finish_bounds(&mut model);
     Ok((model, report))
