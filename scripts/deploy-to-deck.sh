@@ -1,0 +1,141 @@
+#!/usr/bin/env bash
+#
+# Builds the portable AppImage and copies it, plus whatever's under
+# data/images/ and data/dlc/, onto a Steam Deck (or any Linux box reachable
+# over ssh).
+#
+# The AppImage lands on the remote user's Desktop, ready to double-click or run
+# from a terminal. The data lands where `oag-game`'s own search path already
+# looks without any flag: `<XDG_DATA_HOME>/oag/images` and
+# `<XDG_DATA_HOME>/oag/dlc` (see crates/game/src/source.rs and
+# docs/tools/packaging.md#where-the-disc-image-comes-from) - so a fresh Deck
+# needs nothing set to find them.
+#
+# Usage:
+#   scripts/deploy-to-deck.sh [host] [--skip-build] [--no-data] [--dry-run] [--scp]
+#
+#   host          user@host to deploy to. Default: $OAG_DECK_HOST or
+#                 deck@steamdeck.
+#   --skip-build  Don't rebuild; sync whatever is already in data/appimage/
+#                 OpenAntiGrav-x86_64-portable.AppImage.
+#   --no-data     Only sync the AppImage; skip data/images and data/dlc.
+#   --dry-run     Pass --dry-run to rsync, or print what scp would copy.
+#                 Touches nothing, locally or on the remote, beyond the ssh
+#                 probes needed to resolve paths.
+#   --scp         Force scp instead of probing the remote for rsync.
+
+set -euo pipefail
+
+project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+appimage="$project_root/data/appimage/OpenAntiGrav-x86_64-portable.AppImage"
+
+host="${OAG_DECK_HOST:-deck@steamdeck}"
+skip_build=0
+sync_data=1
+dry_run=0
+force_scp=0
+host_given=0
+
+step() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
+die()  { echo "error: $*" >&2; exit 1; }
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --skip-build) skip_build=1; shift ;;
+        --no-data)    sync_data=0; shift ;;
+        --dry-run)    dry_run=1; shift ;;
+        --scp)        force_scp=1; shift ;;
+        -h|--help) awk 'NR>2 && /^#/ {sub(/^# ?/,""); print; next} NR>2 {exit}' \
+                       "${BASH_SOURCE[0]}"; exit 0 ;;
+        -*) die "unknown argument: $1" ;;
+        *)
+            (( host_given )) && die "unexpected extra argument: $1"
+            host="$1"; host_given=1; shift ;;
+    esac
+done
+
+if (( skip_build )); then
+    [[ -f $appimage ]] || die "$appimage not found. Run 'just appimage-portable' first, or drop --skip-build."
+else
+    step "Building the portable AppImage"
+    "$project_root/scripts/build-appimage.sh" --container
+    [[ -f $appimage ]] || die "$appimage still missing after the build - see the output above."
+fi
+
+step "Resolving paths on $host"
+remote_home="$(ssh "$host" 'echo "$HOME"')"
+[[ -n $remote_home ]] || die "could not read \$HOME on $host"
+remote_data_home="$(ssh "$host" 'echo "${XDG_DATA_HOME:-$HOME/.local/share}"')"
+desktop_dir="$remote_home/Desktop"
+images_dir="$remote_data_home/oag/images"
+dlc_dir="$remote_data_home/oag/dlc"
+echo "AppImage -> $desktop_dir/"
+echo "images   -> $images_dir/"
+echo "dlc      -> $dlc_dir/"
+
+if (( dry_run )); then
+    echo "(--dry-run: not creating remote directories or transferring anything)"
+else
+    ssh "$host" mkdir -p "$desktop_dir" "$images_dir" "$dlc_dir"
+fi
+
+use_rsync=0
+if (( ! force_scp )) && ssh "$host" 'command -v rsync' >/dev/null 2>&1; then
+    use_rsync=1
+fi
+
+dry_flag=()
+(( dry_run )) && dry_flag=(--dry-run)
+
+sync_file() {
+    local src="$1" dest_dir="$2"
+    if (( use_rsync )); then
+        rsync -avz "${dry_flag[@]}" "$src" "$host:$dest_dir/"
+    elif (( dry_run )); then
+        echo "would run: scp '$src' '$host:$dest_dir/'"
+    else
+        scp "$src" "$host:$dest_dir/"
+    fi
+}
+
+sync_dir() {
+    local src="$1" dest_dir="$2"
+    if [[ ! -d $src ]] || [[ -z "$(ls -A "$src" 2>/dev/null)" ]]; then
+        echo "skipping $src: nothing there yet"
+        return
+    fi
+    if (( use_rsync )); then
+        rsync -avz "${dry_flag[@]}" "$src/" "$host:$dest_dir/"
+    elif (( dry_run )); then
+        echo "would run: scp -r '$src'/* '$host:$dest_dir/'"
+    else
+        scp -r "$src"/* "$host:$dest_dir/"
+    fi
+}
+
+step "Transport: $( (( use_rsync )) && echo rsync || echo scp )"
+
+step "Copying the AppImage"
+sync_file "$appimage" "$desktop_dir"
+
+if ! (( dry_run )); then
+    # Not relied on above: plain scp does not preserve the executable bit, and
+    # this is cheap insurance even when rsync -a already carried it over.
+    ssh "$host" chmod +x "$desktop_dir/$(basename "$appimage")"
+fi
+
+if (( sync_data )); then
+    step "Copying data/images"
+    sync_dir "$project_root/data/images" "$images_dir"
+    step "Copying data/dlc"
+    sync_dir "$project_root/data/dlc" "$dlc_dir"
+else
+    step "Skipping data/ (--no-data)"
+fi
+
+step "Done"
+echo "AppImage: $desktop_dir/$(basename "$appimage")"
+echo "images:   $images_dir"
+echo "dlc:      $dlc_dir"
+echo
+echo "Run it: ssh $host '$desktop_dir/$(basename "$appimage")'"

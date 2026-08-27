@@ -316,6 +316,12 @@ appimage-portable *ARGS:
 install-desktop-file *ARGS:
     ./scripts/install-desktop-file.sh {{ARGS}}
 
+# Build the portable AppImage and copy it, plus any data/images and data/dlc
+# you have, onto the Steam Deck (or any host reachable over ssh) - see
+# docs/tools/packaging.md#steam-deck and scripts/deploy-to-deck.sh
+deploy-deck *ARGS:
+    ./scripts/deploy-to-deck.sh {{ARGS}}
+
 # View assets straight from a disc image
 view *ARGS:
     cargo run -q -p oag-view -- {{ARGS}}

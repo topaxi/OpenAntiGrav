@@ -347,14 +347,33 @@ Two structural points, because both are easy to get wrong later:
 
 ## Running it on a Steam Deck
 
-Not yet verified on real hardware. These are the steps to try, in Desktop Mode:
+`just deploy-deck` (`scripts/deploy-to-deck.sh`) automates the copy: it builds
+`just appimage-portable`, then rsyncs (falling back to `scp` if the remote has
+no rsync) the AppImage onto the Deck's `~/Desktop` and whatever's under
+`data/images/`/`data/dlc/` onto `<XDG_DATA_HOME>/oag/{images,dlc}` there - the
+same places [`crates/game/src/source.rs`](../../crates/game/src/source.rs)
+already searches, so nothing needs setting on the Deck side to find them.
+
+```sh
+just deploy-deck                    # deck@steamdeck, or $OAG_DECK_HOST
+just deploy-deck user@host          # a different target
+just deploy-deck --dry-run          # show the plan, change nothing
+just deploy-deck --skip-build       # sync an AppImage already built
+just deploy-deck --no-data          # AppImage only
+```
+
+Deployment itself is not yet verified on real hardware - `--dry-run` first is
+worth it the first time against a new host. If something goes wrong, these are
+the same steps by hand, in Desktop Mode:
 
 1. Copy two files into one folder, e.g. `~/Games/OpenAntiGrav/`:
-   `OpenAntiGrav-x86_64.AppImage`, and your own disc image (named
+   `OpenAntiGrav-x86_64-portable.AppImage`, and your own disc image (named
    `pulse-psp-usa.chd`, or anything ending `.chd`/`.iso`).
-2. `chmod +x OpenAntiGrav-x86_64.AppImage`, which `scp` does not preserve.
+2. `chmod +x OpenAntiGrav-x86_64-portable.AppImage`, which plain `scp` does not
+   preserve (`just deploy-deck` does this explicitly either way).
 3. Run it from a terminal the first time, so its output is visible:
-   `./OpenAntiGrav-x86_64.AppImage`. Expect the archive report, then the intro.
+   `./OpenAntiGrav-x86_64-portable.AppImage`. Expect the archive report, then
+   the intro.
 4. If it exits with a `GLIBC_...' not found` message, the AppImage was built
    natively: rebuild with `just appimage-portable` and copy that one over. See
    [the glibc floor](#glibc). Whatever version the message names is the Deck's
