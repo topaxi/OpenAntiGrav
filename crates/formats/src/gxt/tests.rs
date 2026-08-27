@@ -18,6 +18,18 @@ fn blob(descriptor: &[u8; DESCRIPTOR_LEN], texels: &[u8]) -> Vec<u8> {
 
 /// `format` at `width` x `height`, one level, texels at 0x40.
 fn descriptor(format: u8, width: u16, height: u16, len: u32) -> [u8; DESCRIPTOR_LEN] {
+    descriptor_mips(format, width, height, len as usize, 1)
+}
+
+/// The same, with a mip count - what a chain-length check needs.
+fn descriptor_mips(
+    format: u8,
+    width: u16,
+    height: u16,
+    len: usize,
+    mips: u8,
+) -> [u8; DESCRIPTOR_LEN] {
+    let len = len as u32;
     let mut out = [0u8; DESCRIPTOR_LEN];
     out[0..4].copy_from_slice(&((HEADER_LEN + DESCRIPTOR_LEN) as u32).to_le_bytes());
     out[4..8].copy_from_slice(&len.to_le_bytes());
@@ -25,7 +37,7 @@ fn descriptor(format: u8, width: u16, height: u16, len: u32) -> [u8; DESCRIPTOR_
     out[0x14..0x18].copy_from_slice(&(u32::from(format) << 24).to_le_bytes());
     out[0x18..0x1a].copy_from_slice(&width.to_le_bytes());
     out[0x1a..0x1c].copy_from_slice(&height.to_le_bytes());
-    out[0x1c] = 1;
+    out[0x1c] = mips;
     out
 }
 
@@ -102,17 +114,48 @@ fn a_declared_length_that_disagrees_with_ubc2s_own_arithmetic_is_refused() {
 
 #[test]
 fn an_unsupported_format_parses_but_refuses_to_decode() {
-    // 0x83 is PVRTII4BPP - present on this title's bare-root skin, not
-    // decoded. The declared length is trusted rather than checked, since the
-    // block size for a format this module does not know is not knowable.
-    let data = blob(&descriptor(0x83, 256, 256, 43696), &[0u8; 43696]);
+    // 0x85 is UBC1 - 505 textures on this title's disc, none of them reached
+    // by anything that draws, and not decoded. The declared length is trusted
+    // rather than checked, since the block size for a format this module does
+    // not know is not knowable; the length here is deliberately not any
+    // formula's answer, to show that it passes anyway.
+    let data = blob(&descriptor(0x85, 256, 256, 1234), &[0u8; 1234]);
     let gxt = Gxt::parse(&data).expect("parses");
     let texture = gxt.only().expect("one");
     assert_eq!(texture.format(), None);
     assert_eq!(
         texture.to_rgba(&data),
         Err(Error::Unsupported {
-            format: 0x8300_0000
+            format: 0x8500_0000
+        })
+    );
+}
+
+/// A `PVRTII4BPP` texture, which this module decoded nothing of until
+/// 2026-08-27, now goes through the same length check `UBC2` always did - see
+/// [`super::MIN_LEVEL_LEN`], whose 16-byte floor is what makes a real mip
+/// chain close.
+#[test]
+fn a_pvrtc_mip_chain_closes_only_with_the_sixteen_byte_level_floor() {
+    // 32x32 with four levels: 512 + 128 + 32 + 8 on the plain arithmetic, and
+    // the last level is one 4x4 word, which is stored in 16 bytes rather than
+    // 8. Every shipped file agrees with the floored figure and none with the
+    // plain one.
+    let floored = 512 + 128 + 32 + 16;
+    let data = blob(
+        &descriptor_mips(0x83, 32, 32, floored, 4),
+        &vec![0u8; floored],
+    );
+    let gxt = Gxt::parse(&data).expect("parses");
+    assert_eq!(gxt.only().expect("one").format(), Some(Format::Pvrtii4bpp));
+
+    let plain = 512 + 128 + 32 + 8;
+    let data = blob(&descriptor_mips(0x83, 32, 32, plain, 4), &vec![0u8; plain]);
+    assert_eq!(
+        Gxt::parse(&data),
+        Err(Error::ChainLengthMismatch {
+            expected: floored,
+            declared: plain as u32,
         })
     );
 }
