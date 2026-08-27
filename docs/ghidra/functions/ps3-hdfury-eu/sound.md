@@ -4,20 +4,30 @@
 records two open items on the "a cue that plays other cues" finding: locate
 the handler(s) it calls "the handler was never located", and decode guard
 `0x22`, the mechanism that picks which of a parent cue's children actually
-plays (the severity and ship/wall split on `.COLLISIONS`). Both are done. A
-pointer table at `0x008c0060` was suspected as the way in and was not it - see
+plays (the severity and ship/wall split on `.COLLISIONS`). Both are done, and
+finding the dispatch table's base turned up a third: opcode `0x19`, the
+[still-open](../../../formats/psp-audio.md#which-of-a-cues-waveforms-sounds-is-still-open)
+"which alternate sounds" question, is now decoded too. A pointer table at
+`0x008c0060` was suspected as the way in and was not it - see
 [Dead end](#dead-end-0x008c0060-is-not-a-dispatch-table) below.
 
 ## The real dispatch table
 
-`0x00927614` is an array of PPC64 OPD-address entries, one per grain opcode,
-confirmed against [`psp-audio.md`](../../../formats/psp-audio.md#a-cue-that-plays-other-cues)'s
-own independent finding: index `0x08` resolves to a function whose only error
-path prints `"SCREAM: snd_SFX_GRAIN_TYPE_BRANCH invalid sound index %d\n"` -
-the binary's own name for grain type `0x08`, landing on exactly the index the
-doc predicted. That single match is what pins the table's base and stride;
-every other index in this page follows from the same arithmetic, not from a
-second guess.
+`0x00927614` is an array of PPC64 OPD-address entries, one per grain opcode.
+What pins its base and stride is a **shape match against
+[`psp-pulse-usa/sound.md`](../../../ghidra/functions/psp-pulse-usa/sound.md#the-command-list-is-a-45-entry-jump-table)'s**
+own, independently-found table on a completely different CPU and binary:
+indices `0x01` and `0x09` share one handler on both (`0x00626728` here,
+`0x0898bc78` there); indices `0x0c`-`0x13`, eight in a row, share a second
+handler on both (`0x006254c8` here, `0x0898afa8` there). An off-by-one base
+would misalign both runs at once, on two unrelated binaries - a fingerprint
+match, not an opcode-number coincidence. **On top of that**, index `0x08`
+resolves to a function whose only error path prints `"SCREAM:
+snd_SFX_GRAIN_TYPE_BRANCH invalid sound index %d\n"` - the binary's own name
+for grain type `0x08`, landing on exactly the index
+[`psp-audio.md`](../../../formats/psp-audio.md#a-cue-that-plays-other-cues)
+predicted. Every opcode index in this page follows from the same arithmetic,
+not from a further guess.
 
 ```text
 scripts/ps3-toc.py u32 <0x00927614 + 4*opcode>   # -> an OPD address
@@ -41,6 +51,7 @@ which is a completely different global.
 | `0x05` | `0x006274b0` | `Scream_DoGrainPlayChild` | 82 | Resolve a child cue by index or name, play it with a computed volume and pan |
 | `0x06` | `0x00625988` | `Scream_DoGrainStopChild` | 78 | Resolve a child cue by index or name, stop every active voice currently playing it |
 | `0x08` | `0x00625fc0` | `Scream_DoGrainBranch` | 84 | `snd_SFX_GRAIN_TYPE_BRANCH` - resolve a child cue by index or name, bounds-check the index, replace this voice's own playback state with it |
+| `0x19` | `0x00625e88` | `Scream_DoGrainAlternate` | 80 | Pick a random one of the next N key-ons (never repeating the previous pick), jump the program counter to it |
 | `0x22` | `0x00623690` | `Scream_DoGrainGuard` | 84 | Three-way compare a named variable against an immediate; skip the next grain unless the comparison holds |
 | `0x23` | `0x00623770` | `Scream_DoGrainMarker` | 78 | No-op (two instructions: `li r3,0; blr`) - the interpretation as a goto marker rests on `0x24`'s behaviour, not on anything this function does itself |
 | `0x24` | `0x006255f8` | `Scream_DoGrainGoto` | 80 | Scan a marker table by id, set the skip count to jump to the match; recursion-depth-guarded at 8 |
@@ -159,11 +170,18 @@ bool keep_going;
 if (mode == 1)      keep_going = (value == threshold);
 else if (mode == 2) keep_going = (value >  threshold);
 else                keep_going = (value <  threshold);   // mode 0
-if (!keep_going) voice->skip_count += 1;                  // +0xa2, a `short`
+if (!keep_going) voice->pc += 1;                          // +0xa2, a `short`
 return 0;
 ```
 
-Two things make this unambiguous rather than merely plausible:
+`voice + 0xa2` is read here as the interpreter's **program counter**, not a
+separate skip-count field: [`psp-pulse-usa/sound.md`](../../../ghidra/functions/psp-pulse-usa/sound.md#the-command-list-is-a-45-entry-jump-table)
+already establishes that shape on the PSP side (*"`handler + 0x4a` is the
+program counter"*, a different offset for a different generation's voice
+struct, same role). On a failed comparison this function adds `1` to it
+directly - advancing past the next grain rather than maintaining a separate
+counter of how many to skip. Two things make the reading unambiguous rather
+than merely plausible:
 
 1. **The three comparison modes are direct register compares with no
    TOC-relative loads involved** - `cmpw`/`bgt`/`blt`/`beq` against a byte
@@ -175,11 +193,13 @@ Two things make this unambiguous rather than merely plausible:
    branches to the **no-skip** return, so *not*-greater falls through to the
    skip path), but it is worth flagging as the kind of place a decompile can
    mislead even without a TOC problem.
-2. **The field `voice + 0xa2` this function increments is the same field
-   `0x08`'s handler initialises to `0xffff`** on starting a new voice, and
-   **the same field `0x24` (below) decrements to jump** - one field, written
-   by three independently-read functions, consistent with "skip count" across
-   all three.
+2. **The same field is written consistently by three independently-read
+   functions.** `0x08`'s handler initialises it to `0xffff` (`-1`) when
+   starting a new voice - a pre-increment convention, consistent with a pc
+   that reaches `0` on the first fetch. `0x19` (below) advances it by a
+   computed jump distance. `0x24` (below) assigns it a jump target outright.
+   All three read as operations on one running position, not as increments to
+   a separate counter.
 
 This is exactly the mechanism [`psp-audio.md`](../../../formats/psp-audio.md#what-it-does-not-decide)
 described as missing: *"a parent's grains are guarded by `0x22`, whose operand
@@ -204,16 +224,18 @@ simulation to hand the interpreter the actual collision context. Nothing in
 `crates/formats/src/sblk/child.rs` should change on the strength of this
 finding alone.
 
-### `0x23` and `0x24`: a marker and its goto, corroborating the skip-count field
+### `0x23` and `0x24`: a marker and its goto
 
 `FUN_00623770` (opcode `0x23`) is `li r3,0x0; blr` - two instructions, nothing
 else. `FUN_006255f8` (opcode `0x24`) scans a table of 8-byte entries
 (`*(u16*)(cue+something) + i*8`, matched against a marker id in the operand)
-and, on a match, sets `voice + 0xa2` (the same skip-count field `0x22`
-increments) to `i - 1` - a computed jump rather than a plain increment. A
-recursion guard at the same runtime global `0x22` reads
-(`sysvar_table + 0x20`, an `int`, capped at 8) refuses to jump further once
-tripped. This matches [`psp-pulse-usa/sound.md`](../../../ghidra/functions/psp-pulse-usa/sound.md#not-determined)'s
+and, on a match, **assigns** `voice + 0xa2` (the same pc field `0x22` reads)
+to `i - 1` - a jump target, not an increment. A separate path in the same
+function, taken when a recursion-depth guard at the same runtime global `0x22`
+reads is exceeded (`sysvar_table + 0x20`, an `int`, capped at 8), *decrements*
+`voice + 0xa2` by `1` instead - a distinct, error-reporting action, not part
+of the jump logic; the two should not be conflated. This matches
+[`psp-pulse-usa/sound.md`](../../../ghidra/functions/psp-pulse-usa/sound.md#not-determined)'s
 own hypothesis, *"`0x23` looks like a marker and `0x24` like a goto"*, from
 the PSP side of the same engine - independent, if not yet corroborating,
 since the PSP handlers themselves were not reachable this session (see below).
@@ -222,6 +244,46 @@ Confidence: `0x24`'s mechanism is read as cleanly as `0x22`'s (**80**); `0x23`
 being a no-op is certain, but the *name* "marker" is inferred entirely from
 what `0x24` does with it, not from anything in `0x23` itself, so it is capped
 lower (**78**) than the certainty of the two instructions alone would suggest.
+
+### `0x19` - alternate selection, decoded
+
+`FUN_00625e88` (opcode `0x19`) is the answer to the thread's other open item,
+[`psp-audio.md`](../../../formats/psp-audio.md#which-of-a-cues-waveforms-sounds-is-still-open)'s
+*"which command in a cue's run selects the waveform that sounds"*, spotted
+only while confirming the table's base (see above) and not originally in
+scope:
+
+```c
+// FUN_00625e88(voice, _, operand), first call for this voice (voice + 0xa8 == 0)
+count = operand[1];                        // the key-on group size - matches the thread's reading
+pick = rand() % count;
+if (operand[3] == pick) {                  // avoid repeating the immediately previous pick
+    pick += 1;
+    if (pick == count) pick = 0;
+}
+operand[3] = pick;                         // cached for next time this cue plays
+voice->pc += pick * operand[2];            // operand[2]: "voices per alternate" - jumps forward that many grains
+voice->last_alternate_span = (count - pick - 1) * operand[2];  // +0xac
+voice->pc_dirty = 1;                       // +0xa8, guards re-entry
+```
+
+On a **second** call for the same voice (`+0xa8` already set), it takes an
+error path instead - a log call (`FUN_0062341a8(10, cue_id, name, pc+1, 0)`)
+and returns failure, so a cue is only allowed to roll its alternate once per
+play.
+
+This confirms the thread's operand-layout reading directly: `operand[1]` is
+the group count and `operand[2]` is voices-per-alternate, read here from the
+same bytes the thread's `b * count` arithmetic already predicted from data
+alone. It also lands cleanly on the pc reading above: the jump distance is
+literally `pick * voicesPerAlternate` grains forward, which is exactly how a
+"pick one of N key-ons that follow" selector would use a running program
+counter. Not corroborated on PSP this session (see below).
+
+Confidence **80**: the random-pick-with-no-immediate-repeat shape and the
+pc arithmetic are both unambiguous reads; capped in the probable band because
+`FUN_0062a618` (the RNG call) and the log call's exact fields were not
+separately verified.
 
 ## Dead end: `0x008c0060` is not a dispatch table
 
@@ -242,20 +304,18 @@ expecting a table.
 
 ## Not corroborated on PSP yet
 
-[`psp-pulse-usa/sound.md`](../../../ghidra/functions/psp-pulse-usa/sound.md#the-command-list-is-a-45-entry-jump-table)
-already names the equivalent table, `g_scream_opcode_table` at `0x08ac326c`,
-45 entries, single TOC (MIPS has none of PPC64's problem). Reading it
-directly (`read_memory`) confirms the same shape holds there too: index `0x01`
-and `0x09` share a handler and indices `0x0c`-`0x13` share another, both
-exactly as that page already documented - strong indirect confirmation the
-index-by-opcode reading transfers. But `decompile_function`,
-`disassemble_function` and `create_function` all refused on the PSP-side
-`0x22`/`0x23`/`0x24` handlers (`0x0018a594`/`0x0018a658`/`0x0018a660`) this
-session - that address range is outside whatever `psp-pulse-usa`'s
-auto-analysis already covered, and `disassemble_bytes` reported success with
-zero instructions decoded rather than an error. Not chased further; a fresh
-analysis pass (or `create_function` after first fixing whatever blocks it) is
-what a second-binary corroboration of this page needs.
+The table's base and stride are cross-binary-confirmed (above), but the
+individual `0x22`/`0x23`/`0x24`/`0x19` **handler readings** are not: PSP's
+`g_scream_opcode_table` (`0x08ac326c`, single TOC, none of PPC64's problem)
+gives their PSP addresses directly by the same index arithmetic
+(`0x0018a594`/`0x0018a658`/`0x0018a660`/`0x0018a178`), but
+`decompile_function`, `disassemble_function` and `create_function` all
+refused on them this session - that address range is outside whatever
+`psp-pulse-usa`'s auto-analysis already covered, and `disassemble_bytes`
+reported success with zero instructions decoded rather than an error. Not
+chased further; a fresh analysis pass (or `create_function` after first fixing
+whatever blocks it) is what a second-binary corroboration of the four
+handler readings on this page needs.
 
 ## Not determined
 
@@ -269,7 +329,8 @@ what a second-binary corroboration of this page needs.
   while `0x22`'s indexes it at `-1 - value`.** Both read the same global;
   the differing offset was not chased further this session.
 - **`FUN_00626e78`** (`0x05`'s and `0x08`'s callee that actually starts
-  playback) and **`FUN_0062de08`** (`0x06`'s voice-release callee) - neither
-  was read.
-- **Opcodes `0x00`-`0x04`, `0x07`, `0x09`-`0x21`, `0x25`-`0x2c`.** The table
-  covers at least 40 entries past `0x927614`; only six are read.
+  playback), **`FUN_0062de08`** (`0x06`'s voice-release callee) and
+  **`FUN_0062a618`** (`0x19`'s RNG call) - none was read.
+- **Opcodes `0x00`-`0x04`, `0x07`, `0x09`-`0x18`, `0x1a`-`0x21`,
+  `0x25`-`0x2c`.** The table covers at least 40 entries past `0x927614`;
+  only seven are read.

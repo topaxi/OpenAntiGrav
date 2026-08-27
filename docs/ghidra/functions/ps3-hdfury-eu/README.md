@@ -77,9 +77,10 @@ Two structural facts to expect, both different from every other binary here:
   overrides regardless of what its manifest authored.
 - [sound.md](sound.md) - the SCREAM grain-opcode dispatch table
   (`0x00927614`), the located `0x05`/`0x06`/`0x08` "play/stop a child cue"
-  handlers, and guard `0x22`'s three-way variable-versus-immediate skip - the
+  handlers, guard `0x22`'s three-way variable-versus-immediate skip (the
   mechanism `.COLLISIONS`' severity and ship/wall split runs on, still
-  undecoded past the opcode itself.
+  undecoded past the opcode itself), and `0x19`'s alternate-selection
+  handler - a random pick that never repeats the previous one.
 
 Add a row to [`names.tsv`](names.tsv) and the page it cites in the same change:
 `scripts/apply-ghidra-names.py` refuses a row whose address and name do not

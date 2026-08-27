@@ -133,3 +133,4 @@
 0x00623690	function	Scream_DoGrainGuard	84	sound.md
 0x00623770	function	Scream_DoGrainMarker	78	sound.md
 0x006255f8	function	Scream_DoGrainGoto	80	sound.md
+0x00625e88	function	Scream_DoGrainAlternate	80	sound.md
