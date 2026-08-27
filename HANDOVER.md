@@ -531,7 +531,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [Two PS2 identifications, one of which is wrong](handover/two-ps2-identifications-one-of-which-is-wrong.md)
 - [The SAP clamp globals](handover/the-sap-clamp-globals.md)
 - [SteamOS's own glibc version](handover/steamoss-own-glibc-version.md)
-- [The loading screen has no caller](handover/the-loading-screen-has-no-caller.md)
+- [The loading screen draws now; the wave's decode is still not runtime-verified](handover/the-loading-screen-has-no-caller.md)
 - [`Anim Transform` `0x3c0` is read and played, and closing it fixed a placement defect](handover/anim-transform-0x3c0-is-read-and-played-and.md)
 - [The PS3 Ghidra path works; the cspec-only fork is done, `lvlx` is what's left](handover/the-ps3-ghidra-path-works-two-improvements-to.md)
 - [Wipeout HD Fury's executable is 26,100 functions with 26 of them named, and no gameplay behaviour yet](handover/wipeout-hd-furys-executable-is-26100-functions-with.md)

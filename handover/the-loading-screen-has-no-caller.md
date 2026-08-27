@@ -1,12 +1,11 @@
-# The loading screen has no caller
+# The loading screen draws now; the wave's decode is still not runtime-verified
 
-The rippling band is procedural and the `loading` plugin holds no video; the decode is pinned against the real blob (which is **swizzled**, bit 0 of `+0x07`, and **fully opaque**, so both plausible wrong readings are excluded by construction). **Nothing is runtime-verified against the original, and the game does not draw a loading screen yet.**
+The rippling band is procedural and the `loading` plugin holds no video; the decode is pinned against the real blob (which is **swizzled**, bit 0 of `+0x07`, and **fully opaque**, so both plausible wrong readings are excluded by construction). **The "no caller" half is stale**: `LoadingStage` (`crates/game/src/main/loading_stage.rs`) now constructs `oag_render::loading::Pipeline` and calls `capture::draw_wave` on both the boot path and the pre-race path (`feat(loading): recover HD's loading screen, and put one before every race`, 2026-08-24). Confirmed today against the real disc, not just the code: `OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all -E 'binary(loading_screen_ground_truth)'` is 5/5, and `pulse_still_gets_its_tips_and_its_own_strip` specifically asserts `assets.wave` is true and that the loader's notes do **not** contain `"authored stand-in strip"` - the disc's own glow strip is what gets found and drawn, not a placeholder. **What is still true from the original record: nothing about the decode is runtime-verified against the original.**
 
 ## Open
 
-- Nothing about the decode is runtime-verified against the original.
-- The game does not draw a loading screen yet.
+- Nothing about the wave's motion model is runtime-verified against the original. Every constant in `docs/ghidra/functions/psp-pulse-usa/loading-screen.md` is read from the decompiler, confidence 85 at best, and the page's own "Not determined" section names the missing measurement.
 
 ## Next Steps
 
-- No next step named in the original record - read the prose above and decide one.
+- Capture `g_loading_wave_phase` (`0x08abf470`) and the emitted vertex Y values across a few frames of a type-4 (tip) loading screen in a running PPSSPP, per `docs/ghidra/functions/psp-pulse-usa/loading-screen.md#not-determined` and `docs/reverse-engineering/ppsspp-debugger.md`. `scripts/ppsspp_debugger.py`'s `Debugger` class already has `add_breakpoint`/`each_hit`/`read_f32s`/`read_u32` - nothing new needs building. **The real difficulty is reaching a type-4 screen at all**: `scripts/psp-trace.py`'s capture flow assumes a savestate already sitting at the race start line, so a fresh loading screen means front-end navigation from a cold boot, which `ppsspp-debugger.md` puts at ~3 minutes under software rendering and wants *sighted* navigation (screenshots) to do reliably. A cheap scouting step before committing to the full capture: break on `Loading_Show` (`0x0890aed8`) on a cold boot and read `a0` - the doc says type 4 is passed from `Game_MainLoop` at `0x088072f0`, so this settles whether a wave-bearing screen fires before any menu navigation at all, which is the actual difficulty of the real capture.
