@@ -408,7 +408,7 @@ Confidence **94**, the rubric's cap for a reading that makes an arithmetic
 invariant come out exactly across many real files - reached from an exact
 tiling on 83 banks and corroborated by a flag word the rule never touches.
 
-### Which of a cue's waveforms sounds is still open
+### Which of a cue's waveforms sounds - decoded on HD, 2026-08-27
 
 `ship.bnk`'s `.COLLISIONS` binds **fifteen** waveforms, `ship_zone.bnk`'s ten,
 and `SHIP_ZM`'s `~ENGINE` nine. Something chooses, and it is one of the 41
@@ -430,12 +430,21 @@ eight. A further 29 occurrences have no key-on after them at all, which is the
 `0x19`-sits-after-its-key-ons case and is counted separately rather than
 folded in.
 
-**This is still a lead, not a finding**, and the reason is that counting a
-group is not the same as choosing from it: nothing here says *which* member
-sounds, or whether the choice is random, round-robin or weighted. What it does
-establish is that the two library generations put the same field at opposite
-ends of the operand - which is worth knowing before anyone reads `0x19`'s
-handler and finds the two builds disagreeing.
+**This was a lead, and it is a finding now.** `0x19`'s handler is read on HD's
+binary - [ps3-hdfury-eu/sound.md](../ghidra/functions/ps3-hdfury-eu/sound.md#0x19---alternate-selection-decoded) -
+and it chooses **randomly among the `count` key-ons that follow, never
+repeating the same pick two plays in a row**, then jumps the interpreter's
+program counter forward by `pick * b` grains to land on it. The operand byte
+layout above is confirmed directly rather than inferred from run-length
+arithmetic: `a` (HD) is read as the group count and `b` as voices-per-
+alternate in the decompiled handler itself. One detail beyond what the static
+byte layout could show: HD's handler **writes the chosen pick back into the
+operand's own third byte** as a per-cue "last alternate" cache, so a cue's
+command data is mutated at runtime, not read-only once loaded - worth knowing
+before assuming any SBLK command byte reflects only what shipped on disc.
+Not corroborated on PSP/PS2 this session; see the sound page's own
+not-corroborated note. What the two library generations put at opposite ends
+of the operand is still worth knowing before reading either build's handler.
 
 An earlier version of this section reported **61 of 87** for a weaker form of
 the same rule. That number came from a scan whose run-length walk did not stop
@@ -445,7 +454,9 @@ walk is clipped now.
 What the *data* says regardless of the opcode is that these are **alternates,
 not layers**: `.COLLISIONS`'s fifteen samples all fall between 0.20 s and
 0.35 s, which is fifteen recordings of one event. `oag_game::audio::sfx` plays
-one of them, chosen by its own generator, and says so.
+one of them, chosen by its own generator, and says so - whether that generator
+matches "random, never repeats the immediately previous pick" is not checked
+by this page and is a Rust-side task of its own, not assumed here.
 
 ## A cue that plays other cues
 
@@ -504,23 +515,43 @@ data contains the error the binary complains about.
 
 Confidence **85**: two independent encodings of the same relation, an exact
 exclusivity across the corpus, and both forms named by strings in the
-executable. It is not 94 because the handler function has not been located -
-`0x05` and `0x08` are known to *both* play a child and are **not** known to
-differ from each other.
+executable.
+
+**2026-08-27: the handler is located, in HD's `EBOOT.elf`, and the two forms
+do differ.** `0x05` (`Scream_DoGrainPlayChild`) resolves the child and plays
+it with a computed volume and pan; `0x08` (`Scream_DoGrainBranch`, named by
+its own `snd_SFX_GRAIN_TYPE_BRANCH invalid sound index %d` error string)
+bounds-checks the index against the bank's cue count - exactly the check the
+`weapons_det.bnk` index-65-in-55-cues record above would fail - and replaces
+this voice's own playback state with the resolved cue outright. See
+[ps3-hdfury-eu/sound.md](../ghidra/functions/ps3-hdfury-eu/sound.md#0x08---the-located-handler-snd_sfx_grain_type_branch).
+Still capped at 85: the read is against HD's binary, not PSP's or PS2's, so
+this is one binary's decompilation, not a second encoding of *this* engine's
+own PSP/PS2 build.
 
 ### What it does not decide
 
-**Which child plays.** A parent's grains are guarded by `0x22`, whose operand
-is not decoded. `oag_formats::sblk::Bank::cue_tree_sounds` therefore returns
-every reachable leaf, and the caller chooses - the same honest gap as
+**Which child plays.** A parent's grains are guarded by `0x22`. Its opcode is
+now decoded too - see
+[ps3-hdfury-eu/sound.md](../ghidra/functions/ps3-hdfury-eu/sound.md#guard-0x22-a-three-way-variable-versus-immediate-skip):
+a three-way compare of a named interpreter variable against an immediate,
+skipping the grain unless it holds. What is *not* decoded is which variable
+means severity and which means ship-vs-wall, and that variable's value is
+runtime state a static WAD read cannot see regardless -
+`oag_formats::sblk::Bank::cue_tree_sounds` returning every reachable leaf and
+leaving the caller to choose is therefore not a placeholder for a static
+answer; it is the shape the format actually needs. The same honest gap as
 [which alternate sounds](#which-of-a-cues-waveforms-sounds-is-still-open), one
 level up.
 
 A structural reading of the surrounding grains is *suggestive* and is recorded
 here as a hypothesis only: `0x23` looks like a marker and `0x24` like a goto,
-with the marker id in operand byte 1. Under that reading every goto in every
-bank on all six discs finds its marker, and 3.4% of HD's grains and 1.8% of
-Pure's become unreachable - but 15% of Pulse's do, and the check cannot tell
+with the marker id in operand byte 1. **Corroborated 2026-08-27 on HD's own
+binary**: `0x23`'s handler is a two-instruction no-op and `0x24`'s scans a
+marker table and sets the same skip-count field `0x22` writes - see the sound
+page above. Under the marker/goto reading every goto in every bank on all six
+discs finds its marker, and 3.4% of HD's grains and 1.8% of Pure's become
+unreachable - but 15% of Pulse's do, and the check cannot tell
 the two byte readings apart on the goto side at all, so **`0x22`, `0x23` and
 `0x24` stay undecoded.**
 

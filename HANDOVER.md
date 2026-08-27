@@ -443,6 +443,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [HD's circuits are named off a different archive from the one that lists them](handover/hds-circuits-are-named-off-a-different-archive.md)
 - [HD's `LoadXML` includes are collected and never followed](handover/hds-loadxml-includes-are-collected-and-never-followed.md)
 - [A cue can play other cues, and that is what `.COLLISIONS` does on HD](handover/a-cue-can-play-other-cues-and-that.md)
+- [Alternate selection never repeats the previous pick, and `Banks::pick` does not know that](handover/alternate-selection-never-repeats-the-previous-pick.md)
 - [HD's `.bnk` sound banks read, and HD makes five of the six sounds](handover/hds-bnk-sound-banks-read-and-hd-makes.md)
 - [HD/Fury's particle effects parse, and a "field that disagrees" turned out to be a wrong check](handover/hd-furys-particle-effects-parse-and-a-field.md)
 - [Pulse's draw order is recovered, and it is a layer sort rather than a depth sort](handover/pulses-draw-order-is-recovered-and-it-is.md)

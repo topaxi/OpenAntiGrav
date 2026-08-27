@@ -4,10 +4,37 @@
 
 ## Open
 
-- The handler was never located, so `0x05` vs `0x08` is undecided (confidence capped at 85).
-- Severity and ship/wall splits are deliberately not wired - guard `0x22` is undecoded.
-- Alternate selection remains open - `0x19` counts a key-on group but does not choose from it.
+- ~~The handler was never located, so `0x05` vs `0x08` is undecided.~~ **Located
+  2026-08-27**: both are read, and they differ (`0x05` plays the child with a
+  computed volume and pan, `0x08` bounds-checks and replaces this voice's own
+  state). [ps3-hdfury-eu/sound.md](../docs/ghidra/functions/ps3-hdfury-eu/sound.md).
+- ~~Severity and ship/wall splits are deliberately not wired - guard `0x22` is
+  undecoded.~~ **`0x22`'s opcode is decoded 2026-08-27**: a three-way compare
+  of a named interpreter variable against an immediate, skipping the grain
+  unless it holds - see the sound page above. **Still not wired, and now for a
+  structural reason rather than a missing read**: the variable's value is
+  runtime voice state (`voice->local_vars` and a runtime global,
+  `sysvar_table`) that a static WAD parse cannot see, and which `var_ref`
+  value means severity or ship-vs-wall is still unknown. `cue_tree_sounds`
+  returning every reachable leaf is the shape the format needs, not a
+  placeholder for a static answer this thread could now supply.
+- ~~Alternate selection remains open - `0x19` counts a key-on group but does
+  not choose from it.~~ **Decoded 2026-08-27**, while confirming the dispatch
+  table's base rather than by design: random pick among the group, never
+  repeating the immediately previous pick. Wiring it into
+  `oag_game::audio::sfx::Banks::pick` is real, unblocked work now, split into
+  its own thread:
+  [`handover/alternate-selection-never-repeats-the-previous-pick.md`](alternate-selection-never-repeats-the-previous-pick.md).
 
 ## Next Steps
 
-- Decode guard `0x22`, starting from the pointer table at `0x008c0060` (r2 `0x008ad4d8`), to wire severity and ship/wall splits and locate `snd_DoGrain`.
+- Read `sysvar_table` (`0x008c0038` in HD's `EBOOT.elf`, a runtime pointer -
+  its target needs a live process, not a disassembly) or catch a real
+  collision with a breakpoint on `Scream_DoGrainGuard` (`0x00623690`), to learn
+  which `var_ref` value is severity and which is ship-vs-wall.
+- Corroborate `0x22`/`0x23`/`0x24`/`0x19` on the PSP side:
+  `g_scream_opcode_table` (`0x08ac326c` in `psp-pulse-usa`) names the same
+  four indices, but `decompile_function`/`disassemble_function`/
+  `create_function` all refused on them this session - that address range
+  needs a fresh analysis pass first. See
+  [ps3-hdfury-eu/sound.md#not-corroborated-on-psp-yet](../docs/ghidra/functions/ps3-hdfury-eu/sound.md#not-corroborated-on-psp-yet).
