@@ -809,6 +809,28 @@ rigid-body position (thousands of hits) ran alongside the whole time to prove
 the instrument was live throughout, per that page's rule that a quiet
 watchpoint and a working one that saw nothing look identical.
 
+**Correction, 2026-08-27: that control watchpoint's own craft address was
+computed with a wrong offset, `scripts/psp-watch-pending-impulse.py`'s
+`ENTITY_TO_CRAFT = 0xFC0` added straight to `entities[0]`.** It happened to
+land on a valid, live-written rigid body that day, which is why the control
+fired and read as corroboration - but checked against a *known* player craft
+address (`handover/the-originals-fov-widens-with-speed-and-race.md`'s
+capture), that formula resolves 7 of 8 live `Ship_ApplyCollisionImpulse` a0
+values to out-of-RAM-range garbage, and the one slot that happened to work
+was not the player. **`Ship_ApplyCollisionImpulse`'s own a0 is the entity
+directly** - the same object reached elsewhere via `craft+0x1c4`
+(shield.md/camera.md's `ENTITY_POINTER`) - and `craft` is recovered by
+*dereferencing* the reciprocal owner pointer, `*(entity + 0x94)`, not by
+adding a constant to `entity`'s own address. Confirmed both directions live:
+`*(entity+0x94) == craft` for the known player craft, and - the stronger
+check, since a wrong pointer would not coincidentally satisfy a physics law -
+`entity+0x790` matches `0.075 * dot(fwd, vel) + entity+0x7c` to float
+precision only when `entity` is resolved this way. Fixed in
+`psp-watch-pending-impulse.py`; the day's actual finding (the two writers, the
+addresses, the pending-impulse mechanism) is untouched, since the control
+watchpoint firing was corroboration, not load-bearing evidence for either
+writer's identity.
+
 Three of the eight armed craft took a hit during one drive. Every hit logged
 one of two program counters, immediately followed by a **write** from
 `Ship_ApplyCollisionImpulse` itself (`0x0883f3d0`/`0x0883f398`/`0x0883f410`) -

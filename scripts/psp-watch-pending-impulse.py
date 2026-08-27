@@ -39,7 +39,24 @@ from ppsspp_debugger import Debugger
 
 APPLY = 0x0883F274  # Ship_ApplyCollisionImpulse
 BODY_POINTER = 0x1CC
-ENTITY_TO_CRAFT = 0xFC0  # Ship_ApplyCollisionImpulse's a0 vs Ship_UpdateCraft's a0
+ENTITY_OWNER = 0x94  # *(entity + 0x94) == the Ship_UpdateCraft craft that owns it
+
+# Correction, 2026-08-27: this used to be `ENTITY_TO_CRAFT = 0xFC0`, added
+# straight to `entities[0]` below to get its craft. That does not hold -
+# checked live against a known player craft address
+# (handover/the-originals-fov-widens-with-speed-and-race.md's capture): 7 of
+# 8 live Ship_ApplyCollisionImpulse a0 values produced an out-of-RAM-range
+# "entity" under `a0 + 0xFC0`, and the one that happened to resolve was not
+# the player. `Ship_ApplyCollisionImpulse`'s own a0 **is** the entity
+# directly - the same "ship entity" reached elsewhere via `craft+0x1c4`
+# (shield.md/camera.md/psp_trace_fields.py's ENTITY_POINTER), confirmed both
+# directions against the known player craft and against camera.md's live fov
+# law (`entity+0x790 == 0.075*dot(fwd,vel) + entity+0x7c`, matched to float
+# precision only when `entity` is resolved this way). So `craft` is reached
+# by *dereferencing* `entity + 0x94` (the reciprocal ENTITY_OWNER pointer
+# shield.md already documents), not by adding a constant to `entity`'s own
+# address - the two objects are independently heap-allocated, not two
+# offsets into one block.
 
 
 def main():
@@ -95,7 +112,7 @@ def main():
         )
         print("armed write watch 0x%08x (entity 0x%08x)" % (addr, e))
 
-    craft0 = entities[0] + ENTITY_TO_CRAFT
+    craft0 = dbg.read_u32(entities[0] + ENTITY_OWNER)
     control_addr = dbg.read_u32(craft0 + BODY_POINTER)
     dbg.call(
         "memory.breakpoint.add",
