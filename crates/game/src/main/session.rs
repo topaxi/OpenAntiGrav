@@ -24,6 +24,8 @@ mod frame;
 mod load;
 #[path = "session/menus.rs"]
 pub(crate) mod menus;
+#[path = "session/placeholder.rs"]
+mod placeholder;
 
 /// Everything that only exists once there is a window.
 pub(crate) struct Session {

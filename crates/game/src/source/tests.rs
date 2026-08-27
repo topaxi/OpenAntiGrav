@@ -281,6 +281,52 @@ fn a_missing_directory_is_not_an_error() {
     assert_eq!(first_image(Path::new("/nonexistent/oag/images")), None);
 }
 
+/// A 2048 extract is a directory, not a file, so [`images_in`]'s own scan
+/// never finds it - [`package_directories_in`] is the other half.
+#[test]
+fn an_extracted_package_is_found_by_its_own_shape() {
+    let root = temp_dir("packages");
+    std::fs::create_dir_all(root.join("PCSF00007/base/PSP2")).unwrap();
+    std::fs::write(root.join("PCSF00007/base/PSP2/data.psarc"), b"").unwrap();
+    // A partial extract - decrypted but not yet unpacked this far, or a
+    // directory that is not a 2048 package at all - must not be offered as
+    // if it opens.
+    std::fs::create_dir_all(root.join("PCSA00015/base")).unwrap();
+    std::fs::create_dir_all(root.join("notes")).unwrap();
+
+    assert_eq!(
+        package_directories_in(&root),
+        [root.join("PCSF00007")],
+        "only the directory that actually has PSP2/data.psarc under base/"
+    );
+    std::fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn a_missing_package_root_contributes_nothing_rather_than_failing() {
+    assert!(package_directories_in(Path::new("/nonexistent/oag/vita")).is_empty());
+}
+
+/// [`candidates`] appends package directories after every image, so a
+/// no-argument boot on a machine with both keeps opening the image it always
+/// did - see [`candidates`]'s own doc comment.
+#[test]
+fn package_directories_are_appended_after_every_image_not_folded_in() {
+    let root = temp_dir("packages-order");
+    std::fs::write(root.join(IMAGE_NAMES[0]), b"").unwrap();
+    std::fs::create_dir_all(root.join("PCSF00007/base/PSP2")).unwrap();
+    std::fs::write(root.join("PCSF00007/base/PSP2/data.psarc"), b"").unwrap();
+
+    let mut found = images_in(&root);
+    found.extend(package_directories_in(&root));
+    assert_eq!(
+        found,
+        [root.join(IMAGE_NAMES[0]), root.join("PCSF00007")],
+        "the image still leads"
+    );
+    std::fs::remove_dir_all(&root).unwrap();
+}
+
 /// A directory of this test's own, so the tests do not depend on - or
 /// disturb - whatever the developer has in `data/images`.
 fn temp_dir(name: &str) -> PathBuf {

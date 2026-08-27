@@ -50,7 +50,17 @@ impl Session {
             let Some(pending) = self.pending.as_ref() else {
                 return Ok(());
             };
-            pending.windowed(source)?
+            match pending.windowed(source) {
+                Ok(prepared) => prepared,
+                // **Not necessarily this title's refusal.** A source that will
+                // not open at all fails the same way, so
+                // `finish_launcher_placeholder` re-opens it and checks the
+                // title's own front end before doing anything with the pick -
+                // and hands this error straight back when it is not the one
+                // case this route exists for. See
+                // `crate::session::placeholder`.
+                Err(e) => return self.finish_launcher_placeholder(source, e),
+            }
         };
         self.pending = None;
         self.race_options = Some(prepared.race_options);

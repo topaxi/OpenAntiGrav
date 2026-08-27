@@ -216,6 +216,14 @@ fn stated(
 /// alphabetically - the same order [`first_image`] picks from, so the first row
 /// of a chooser is the image a boot with nothing named would have opened.
 ///
+/// [`package_directories`] is appended last, once, rather than folded into the
+/// per-directory loop above: unlike an image, an extracted package is not
+/// something a player drops beside the executable, it is the one fixed
+/// location `data/README.md` documents, so there is exactly one place to look
+/// rather than one per search-path entry. Appending it after every image
+/// candidate keeps `first_image` - and so a no-argument boot - picking the
+/// same source it always did on a machine that also has a `.chd` or `.iso`.
+///
 /// Empty is an ordinary answer: it means this machine has no image anywhere the
 /// engine looks, and [`resolve`] is what turns that into the message about it.
 #[must_use]
@@ -240,6 +248,42 @@ pub fn candidates() -> Vec<PathBuf> {
         found.extend(images_in(&directory));
     }
 
+    found.extend(package_directories());
+    found
+}
+
+/// Where Wipeout 2048's own extracts live, unlike every other title's a
+/// **directory** rather than a disc image - see `data/README.md` and
+/// `oag_2048`'s own module docs. `just play 2048` reads the same location.
+const PACKAGE_ROOT: &str = "data/extracted/vita";
+
+/// Every 2048 package extract under [`PACKAGE_ROOT`].
+///
+/// One line over [`package_directories_in`], parameterised on the same terms
+/// [`first_image`] is over [`images_in`]: so the real search and a test
+/// fixture cannot answer this question differently.
+fn package_directories() -> Vec<PathBuf> {
+    package_directories_in(Path::new(PACKAGE_ROOT))
+}
+
+/// Every 2048 package extract directly under `root`, alphabetical for the
+/// same reason [`images_in`]'s `containers` is.
+///
+/// **Cheap and title-blind, the same way [`is_container`] is**: this only asks
+/// whether `<candidate>/base/PSP2/data.psarc` exists, which is what tells an
+/// extracted package apart from an empty or partial one - it does not open the
+/// archives and does not decide this is Wipeout 2048. [`crate::launcher`]'s own
+/// `survey` is what opens each candidate and decides whether it is playable at
+/// all, the same as it does for every `.chd` and `.iso` this module finds.
+fn package_directories_in(root: &Path) -> Vec<PathBuf> {
+    let mut found: Vec<PathBuf> = std::fs::read_dir(root)
+        .into_iter()
+        .flatten()
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| path.join("base/PSP2/data.psarc").is_file())
+        .collect();
+    found.sort();
     found
 }
 

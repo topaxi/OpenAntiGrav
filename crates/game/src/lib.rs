@@ -57,6 +57,7 @@ pub mod mp3;
 pub mod music;
 pub mod perf;
 pub mod pilots;
+pub mod placeholder;
 pub mod prefetch;
 pub mod race;
 pub mod render;
