@@ -408,7 +408,7 @@ Confidence **94**, the rubric's cap for a reading that makes an arithmetic
 invariant come out exactly across many real files - reached from an exact
 tiling on 83 banks and corroborated by a flag word the rule never touches.
 
-### Which of a cue's waveforms sounds is still open
+### Which of a cue's waveforms sounds - decoded on HD, 2026-08-27
 
 `ship.bnk`'s `.COLLISIONS` binds **fifteen** waveforms, `ship_zone.bnk`'s ten,
 and `SHIP_ZM`'s `~ENGINE` nine. Something chooses, and it is one of the 41
@@ -430,12 +430,21 @@ eight. A further 29 occurrences have no key-on after them at all, which is the
 `0x19`-sits-after-its-key-ons case and is counted separately rather than
 folded in.
 
-**This is still a lead, not a finding**, and the reason is that counting a
-group is not the same as choosing from it: nothing here says *which* member
-sounds, or whether the choice is random, round-robin or weighted. What it does
-establish is that the two library generations put the same field at opposite
-ends of the operand - which is worth knowing before anyone reads `0x19`'s
-handler and finds the two builds disagreeing.
+**This was a lead, and it is a finding now.** `0x19`'s handler is read on HD's
+binary - [ps3-hdfury-eu/sound.md](../ghidra/functions/ps3-hdfury-eu/sound.md#0x19---alternate-selection-decoded) -
+and it chooses **randomly among the `count` key-ons that follow, never
+repeating the same pick two plays in a row**, then jumps the interpreter's
+program counter forward by `pick * b` grains to land on it. The operand byte
+layout above is confirmed directly rather than inferred from run-length
+arithmetic: `a` (HD) is read as the group count and `b` as voices-per-
+alternate in the decompiled handler itself. One detail beyond what the static
+byte layout could show: HD's handler **writes the chosen pick back into the
+operand's own third byte** as a per-cue "last alternate" cache, so a cue's
+command data is mutated at runtime, not read-only once loaded - worth knowing
+before assuming any SBLK command byte reflects only what shipped on disc.
+Not corroborated on PSP/PS2 this session; see the sound page's own
+not-corroborated note. What the two library generations put at opposite ends
+of the operand is still worth knowing before reading either build's handler.
 
 An earlier version of this section reported **61 of 87** for a weaker form of
 the same rule. That number came from a scan whose run-length walk did not stop
@@ -445,7 +454,9 @@ walk is clipped now.
 What the *data* says regardless of the opcode is that these are **alternates,
 not layers**: `.COLLISIONS`'s fifteen samples all fall between 0.20 s and
 0.35 s, which is fifteen recordings of one event. `oag_game::audio::sfx` plays
-one of them, chosen by its own generator, and says so.
+one of them, chosen by its own generator, and says so - whether that generator
+matches "random, never repeats the immediately previous pick" is not checked
+by this page and is a Rust-side task of its own, not assumed here.
 
 ## A cue that plays other cues
 

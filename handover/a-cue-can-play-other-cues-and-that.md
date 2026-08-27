@@ -18,8 +18,13 @@
   value means severity or ship-vs-wall is still unknown. `cue_tree_sounds`
   returning every reachable leaf is the shape the format needs, not a
   placeholder for a static answer this thread could now supply.
-- Alternate selection remains open - `0x19` counts a key-on group but does not
-  choose from it. Untouched this pass.
+- ~~Alternate selection remains open - `0x19` counts a key-on group but does
+  not choose from it.~~ **Decoded 2026-08-27**, while confirming the dispatch
+  table's base rather than by design: random pick among the group, never
+  repeating the immediately previous pick. Wiring it into
+  `oag_game::audio::sfx::Banks::pick` is real, unblocked work now, split into
+  its own thread:
+  [`handover/alternate-selection-never-repeats-the-previous-pick.md`](alternate-selection-never-repeats-the-previous-pick.md).
 
 ## Next Steps
 
@@ -27,11 +32,9 @@
   its target needs a live process, not a disassembly) or catch a real
   collision with a breakpoint on `Scream_DoGrainGuard` (`0x00623690`), to learn
   which `var_ref` value is severity and which is ship-vs-wall.
-- Corroborate `0x22`/`0x23`/`0x24` on the PSP side: `g_scream_opcode_table`
-  (`0x08ac326c` in `psp-pulse-usa`) names the same three indices, but
-  `decompile_function`/`disassemble_function`/`create_function` all refused on
-  them this session - that address range needs a fresh analysis pass first.
-  See [ps3-hdfury-eu/sound.md#not-corroborated-on-psp-yet](../docs/ghidra/functions/ps3-hdfury-eu/sound.md#not-corroborated-on-psp-yet).
-- `0x19`'s alternate selection (see Open above) is now the more valuable of
-  the two remaining gaps, since `0x22`'s selection turns out to need runtime
-  context that Rust-side wiring can't supply from the disc alone.
+- Corroborate `0x22`/`0x23`/`0x24`/`0x19` on the PSP side:
+  `g_scream_opcode_table` (`0x08ac326c` in `psp-pulse-usa`) names the same
+  four indices, but `decompile_function`/`disassemble_function`/
+  `create_function` all refused on them this session - that address range
+  needs a fresh analysis pass first. See
+  [ps3-hdfury-eu/sound.md#not-corroborated-on-psp-yet](../docs/ghidra/functions/ps3-hdfury-eu/sound.md#not-corroborated-on-psp-yet).
