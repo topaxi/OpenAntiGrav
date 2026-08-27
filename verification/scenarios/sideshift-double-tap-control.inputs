@@ -1,0 +1,23 @@
+# The control for `sideshift-double-tap.inputs`: the same file with the two
+# `l` tokens dropped, so the two scripts are tick-for-tick identical except
+# for the gesture itself. Any divergence between the two is the sideshift and
+# nothing else - see `sideshift-double-tap.inputs` and
+# `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`.
+#
+# This is what the 2026-08-04 note on the other file called "the same file
+# with the two `l` tokens dropped" without committing it; committed here so a
+# real capture has a real control to diff against, not just a description of
+# one.
+
+# Reach racing speed on the opening straight.
+180 cross
+
+# Where the double tap alone lived. Ticks preserved so the two scripts stay
+# frame-aligned.
+1 cross
+3 cross
+
+1 cross
+
+# Hold the line through the window the shift and lockout would have covered.
+100 cross

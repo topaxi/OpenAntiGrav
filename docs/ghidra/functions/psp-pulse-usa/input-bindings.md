@@ -259,6 +259,56 @@ sits above both branches rather than inside the button one.
 Confidence **85** for this section: one function, read end to end, with every
 literal identified.
 
+### Confirmed at runtime: the veteran double-tap, captured off a real PPSSPP session
+
+Every claim in the veteran section above was static analysis until 2026-08-27,
+when `verification/scenarios/sideshift-double-tap.inputs` was captured for the
+first time off a real, booted `pulse-psp-usa.chd` (see
+[`ppsspp-debugger.md`](../../../reverse-engineering/ppsspp-debugger.md) for the
+capture recipe) with the five entity floats above recorded per tick (added to
+`scripts/psp_trace_fields.py`'s `ENTITY_FIELDS` in the same pass -
+`ss_tap_window_l`/`_r` at `+0x89c`/`+0x8a0`, `ss_shift_l`/`_r` at
+`+0x8a4`/`+0x8a8`, `ss_lockout` at `+0x8ac`). Against a committed control
+(`sideshift-double-tap-control.inputs`, the same script with the two `l`
+tokens dropped, which never touches any of the five columns over its own 285
+ticks - a clean negative), the capture with the taps reads exactly what the
+static read predicted, to the tick:
+
+- `ss_tap_window_l` arms at `0.25` on the first tap (tick 181) and counts down
+  by `dt` every tick after.
+- `ss_shift_l` fires at `0.2` on the second tap (tick 185, three ticks later
+  as scripted, well inside the `0.25 s`/15-tick window) and counts down the
+  same way.
+- `ss_lockout` sets to `1.0` on the same tick `ss_shift_l` fires - not on the
+  first tap - and decays to zero over the following ~60 ticks, i.e. **1.0 s**
+  at 60 Hz.
+- `ss_tap_window_r`/`ss_shift_r` stay at `0` throughout, as they should for a
+  gesture tapped left.
+
+Confidence **95** for the three constants and which offset each belongs to -
+independently confirmed at runtime, not just read out of the decompiler - with
+the 5-point left/right assignment now doubly checked (static reading plus a
+live capture that fires exactly the branch a left tap should).
+
+**What this does not settle: the lateral-displacement claim.** The scripted
+run-up (`180 cross`, no steering) grazes a wall on Talon's Junction around
+tick 60-90 - the same collision the standing-start capture already documents
+(`ppsspp-debugger.md`'s reference-scenario section) - and the capture and its
+control, despite an identical script up to tick 180, are already `1.17` units
+apart in position by the time the first tap fires (tick 181), against `0.035`
+units apart at tick 0. A wall contact amplifies the residual pose spread
+between any two captures (documented at `~0.03` units / `1-2°` even from a
+pinned `--start-heading` start), so a large chunk of the runs' eventual `42`
+units of separation at tick 284 is that amplification, not the sideshift. The
+static reading's "11.7 units of leftward displacement" figure came from
+`oag-trace drive` runs through our own simulation, which does not hit this
+wall on the same script (`travelled 427.986` unit(s), never below `grounded`)
+- so it was never itself a runtime measurement of the original, and this
+capture does not supply one either. A clean displacement comparison needs a
+run-up that stays off the wall, which this scenario's `180 cross` does not do
+on the real hardware; the timer columns above are the runtime leg that does
+not depend on getting that right.
+
 ## The tap-history path is the barrel roll
 
 `engine.md` closes its sideshift section by recording a third path it
