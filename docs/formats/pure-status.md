@@ -688,8 +688,11 @@ naively is unsafe:
   (`docs/architecture/frontend-boot.md#the-eu-disc-pulse-psp-eudchd`),
   loads its `PI005` but never offers it as a picker choice on either region.
   **Whether Pure's own boot manifest does the same is unread** - no Ghidra
-  pass has walked Pure's plugin table the way Pulse's was walked. That is the
-  one open question this leaves; see the next-steps note in `HANDOVER.md`.
+  pass has walked Pure's plugin table the way Pulse's was walked. Left
+  unread deliberately rather than tracked as a thread: Japanese Wipeout Pure
+  shipped its own regional disc, so this project's Japanese support is a
+  separate image and boot chain to add when that becomes a goal, not a
+  question about the EU/USA pressings this page covers.
 
 **`PI000` states its own strings inline rather than pointing at an
 `entries.xml`.** Every other language plugin here names one (`Dynamic Entry
@@ -708,7 +711,8 @@ and string content are read directly off both pressings and asserted in
 [`pures_picker_offers_its_own_five_languages_english_included`]. The one
 unmeasured claim - whether `PI005` is ever offered in Pure's own picker - is
 carried at no confidence score, per the RE workflow's rule for an unread
-question rather than a guess.
+question rather than a guess; it is out of scope rather than open, per the
+note above.
 
 [`Language::from_definition`]: https://github.com/topaxi/OpenAntiGrav/blob/main/crates/game/src/language.rs
 [`load_strings`]: https://github.com/topaxi/OpenAntiGrav/blob/main/crates/game/src/boot.rs
