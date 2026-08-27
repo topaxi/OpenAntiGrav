@@ -294,9 +294,9 @@ The dirty flag is set from bit 22 (`0x400000`) of `entity+0x860`, which reads as
    | `0x08844434` | `craft+0x874 = 0.5` - the state timer this page already had |
    | `0x08844448` | `FUN_0883e9b0(craft, hud_bank, "~BLOWUP", 0x400, 0)`, handle kept at `craft+0xcac` |
    | `0x08844454` | **`if (craft+0x368 != 0) return`** - everything below is the local player's alone |
-   | `0x088444b4` | a call on `*(0x08ab0838)`, unidentified - the HUD hide is presumably here |
+   | `0x088444b4` | `FUN_0881a2f0(*(0x08ab0838))` - **the shield/energy-bar widget**, see below |
    | `0x088444c8` | `(*(0x08ab2120))+0x58 = 0`, a byte |
-   | `0x088444e4` | `(*(0x08ab10e8))+0x2c &= ~6` |
+   | `0x088444e4` | `(*(0x08ab10e8))+0x2c &= ~6` - **likely another camera-shaped object**, see below |
    | `0x088444f0` | **`(*(0x08ab10b0))+0xe4 = 0.0`** - the active camera, and `+0xe4` is the *duration* field of the shake setter `FUN_08878750` writes, so this **cancels a running shake** |
    | `0x088444fc` | `FUN_0888058c(camera, craft, 1)` - the camera's **subject setter**: it writes `camera+0x1e0 = craft` and places the camera off the craft's own node. See below. |
    | `0x08844514` | `(*(0x088594cc))+0x2c \|= 6`, then `+0x26c = 0` |
@@ -319,10 +319,32 @@ The dirty flag is set from bit 22 (`0x400000`) of `entity+0x860`, which reads as
    original releases `craft+0xcac` is unread and that is the shortest lifetime
    the evidence supports.
 
-   **Still not ported, and now with addresses rather than a shrug**: the HUD
-   hide and the camera hand-off. Three of the four globals above
-   (`0x08ab0838`, `0x08ab2120`, `0x08ab10e8`) are unidentified, and until they
-   are, "hides the HUD" is a summary of a call rather than a reading of one.
+   **Still not ported.** `0x08ab0838` is identified: it is the same
+   `DAT_08ab0838` [`shield.md`](shield.md#the-shield-recharge) already reads as
+   *the HUD object* `Ship_SetShield` passes to `Hud_SetEnergyBar`
+   (`0x0881a1c8`) - the shield/energy-bar widget, not a generic "the HUD".
+   `FUN_0881a2f0` (renamed nowhere yet, but read in full) releases exactly
+   three resource handles off it, at `+0x90`/`+0x94`/`+0x98`, each through
+   `FUN_08991d94(handle)` - a tracked-free wrapper (it stamps an allocator
+   debug ring buffer via `FUN_08993bc4` before delegating to the real
+   free). `FUN_08991d94` is the same helper `Hud_SetEnergyBar` itself calls,
+   and `FUN_0881a2f0` sits immediately after `Hud_SetEnergyBar` in the binary
+   with **the case-4 call as its only caller anywhere in the program**
+   (`search_instructions` on the corrected jal target, zero other hits).
+   Confidence **85**: the identity of the object comes from an independent,
+   already-documented cross-reference rather than a guess, and the "releases
+   three textures" reading is a plain decompile; what stays unconfirmed is
+   whether these three handles are specifically textures (as opposed to some
+   other handle-shaped resource) and whether the widget is destroyed outright
+   or just its GPU-side textures are, since nothing here reads what `+0x90`
+   etc. actually are. So: **on death, the shield bar's own textures are torn
+   down** - a real HUD-hide effect, just a narrower and more specific one
+   than "hides the HUD".
+
+   `0x08ab2120` is still fully unidentified - a single `sb zero, 0x58(a0)`,
+   no call to decompile, and no other code in the program reaches the same
+   corrected address (checked the same way as above). Below the confidence
+   floor to name or guess further from static reading alone.
 
    **The camera half is much closer than it looks**, and the two things that
    make it so are worth having written down:
@@ -337,6 +359,25 @@ The dirty flag is set from bit 22 (`0x400000`) of `entity+0x860`, which reads as
      photo path goes: it is the *death* camera specifically. Recorded at
      **80** - the call is unambiguous, and what mode 5 then looks like is
      unread.
+
+   **`0x08ab10e8` sits 0x38 bytes from `DAT_08ab10b0`** - the already-named
+   active-camera object - on the same data page, and the two are touched in a
+   pattern that reads like a camera hand-off: case 4 clears bit `0x6` of
+   `(*0x08ab10e8)+0x2c` at `0x088444e4`, then a few instructions later sets the
+   *same* bit `0x6` of `(*DAT_08ab10b0)+0x2c` at `0x08844514`, right before
+   `Camera_SetMode(camera, 5)` fires. That symmetry - one camera-shaped
+   object's flag going off as the active camera's identical flag goes on - is
+   consistent with `0x08ab10e8` being a second camera the death cam is
+   replacing (the player's normal in-race view is the obvious guess, since
+   nothing else is live at the moment of death), but nothing here confirms
+   *which* object it is, only that it looks camera-shaped. Confidence **55**:
+   the structural parallel is real and directly read, the identity is not -
+   `camera.md` names no "player camera" *pointer* to match against, only the
+   `Camera_UpdatePlayerView` function that would presumably use one. A live
+   watchpoint on `0x08ab10e8` (the same technique
+   [`ship-parts.md`](ship-parts.md#the-rotation-axis-recovered-from-a-live-read) used for the
+   airbrake flap) would settle it in one PPSSPP session; static reading has
+   nothing further to offer here.
 
    `FUN_0888058c`, the subject setter case 4 calls just before it, is
    unnamed and half-read: it writes `camera+0x1e0 = craft` and places the
