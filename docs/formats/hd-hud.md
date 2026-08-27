@@ -392,6 +392,82 @@ two copies are not "one fuller than the other," they are two different
 designs, and "prefer the richer copy" would be the wrong rule to encode
 outright even here.
 
+### The seven archives are content-release layers, not two eras
+
+2026-08-27. Every prior pass framed the open question as a single dichotomy -
+"is `DATA02` the pre-Fury copy of this one file." Listing and diffing all
+seven archives' full path sets disc-wide (`scripts/psarc.py list` per
+archive, no per-file guessing) shows the split is finer than that, and gives
+the `DATA02`-is-older reading independent corroboration beyond the three
+files already cited above.
+
+**The team roster alone settles part of it.** `/data/ships/*` splits cleanly:
+`DATA02` carries exactly Wipeout HD's original eight teams (`ag_systems`,
+`assegai`, `egx`, `feisar`, `goteki`, `piranha`, `qirex`, `triakis`) plus
+non-team entries (`drone`, `flame_test`, `ship_damage`, `zone`); `DATA03`
+carries exactly Fury's four added teams (`auricom`, `harimau`, `icaras`,
+`mirage`) and nothing else; `DATA06` carries all twelve, each with `_c1`/`_n1`
+variant suffixes (an extra class per team `DATA02`/`DATA03` do not have).
+`DATA00`'s only `/data/ships/` entries are `detonator` and `zone` - it is not
+a team archive at all. This is a clean, disc-verified split matching Wipeout
+HD/Fury's known release history (eight launch teams, four added by the Fury
+expansion) and needs no interpretation: `DATA02` is demonstrably the pre-Fury
+roster, `DATA03` is demonstrably Fury-added, independent of any HUD file.
+
+**Per-track content sharpens rather than contradicts this.** All eight base
+circuits' directory names appear in `DATA00`, `DATA02` and `DATA03` alike, so
+tracks are not split base-vs-Fury by name - but their *contents* are:
+`DATA02`'s `01_vineta_k/` carries the bulk per-track assets (`hd_textures/`,
+`fe/preview.bik`, `audioconfig.xml`, the `.bnk`); `DATA03`'s carries only
+`lmaps_dlc/` (extra lightmaps) and `materials_dlc/`, plus
+`track_reversed.{envsettings,probes,pvs,pvspatch,rcsmodel,vex}` and
+`start_grid_reversed.vex`/`stats_reversed.xml` - the reverse-direction
+variant, a documented Fury feature; `DATA00`'s carries `aurora.xml`,
+`padreplacement_reversed.{rcsmodel,vex}` and `fe/trackselectemblem_fury.gtf`.
+Every one of `DATA00`'s and `DATA03`'s track-level files is additive
+(reversed variants, Fury-branded art, lightmap/material overrides) layered on
+top of `DATA02`'s base set, never a replacement of it. `DATA00` also holds
+content no other archive does: the `aurora` circuit and `new_mode_pads`
+(unread further this pass), both Fury additions by name, plus the three
+`2097_hud`/`wo3_hud`/`duel_hud`/`splitscreenzone_hud` skin directories and a
+fully redesigned `elimination_hud.xml` fragment set (`hud_elim_*`) - so
+`DATA00` reads as *Fury's own scaffold-and-skins layer*, not a generic
+"newest wins" archive.
+
+**`DATA01`, `DATA04` and `DATA05` are a third kind of layer, not aligned to
+either era.** `DATA01`'s `/data/sound/xfship_*.xfx` set already includes all
+twelve teams' engine audio, Fury's four alongside the base eight in one
+un-split archive - so ship audio was never partitioned base/Fury the way
+ships and tracks were. `DATA04` is a localisation patch (Chinese/Korean
+fonts, all fifteen `/data/plugins/languages/*/entries.xml`, three novice/
+skilled trophy tiers) with no gameplay content at all. `DATA05` is a
+front-end asset patch (rank badges, PlayStation Store banners, on/off toggle
+icons) carrying its own narrow HUD fixes (`hud_lap_ghost.xml`,
+`hud_positions.xml`, plus the `2097_hud`/`wo3_hud` skin folders again).
+Neither maps to "base" or "Fury" - both read as later, narrower patch
+archives on top of whichever of `DATA00`/`DATA02`/`DATA03` they touch.
+
+**What this changes about the open question, and what it does not.**
+`zone_hud.xml`'s `DATA02` copy (missing the "PERFECT" widget) is now
+corroborated as the pre-Fury base by a *fourth* independent line of evidence
+(team roster, track content, and the two prior HUD-file diffs), and `DATA03`'s
+copy sits inside an archive independently confirmed - by its team roster
+alone, with no HUD-specific reasoning at all - to be Fury-added content. That
+raises confidence that the "PERFECT" widget is a real Fury-era addition and
+`DATA02`'s precedence pick is the stale one, but it is still corroboration,
+not proof: nobody has watched a PS3 resolve any of these paths, and the
+seven-archive picture shows enough distinct content domains (base, Fury
+scaffold, Fury new-teams-and-reverse, and three further unaligned patch
+layers) that "prefer the later-numbered archive" is not a rule this evidence
+licenses either - `DATA06`'s fuller roster and `DATA05`'s narrower one are
+patches over different, specific gaps, not a strict chronological ladder.
+Changing `Archives::holder_of`'s precedence on this evidence alone would
+still be encoding a guess, per this page's own rule above. What it does give
+a future fix is a second corroborating source, independent of the front-end
+plugin definition's circuit numbering, for the specific claim that `DATA02`
+is HD's pre-Fury layer - useful if `load_circuit_names`'s corroboration
+approach is ever generalised to the HUD roots.
+
 ## What a race reads today
 
 **Since 2026-08-18 an HD race reads HD's own root**, not Pulse's:
