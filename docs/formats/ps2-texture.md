@@ -384,7 +384,13 @@ empty. **Confidence 88**: the same kind of exact-count data agreement the
 ship finding scored 90 on, one point short because 5 of 32 are near misses
 rather than exact and the reason for the shortfall (a handful of `Texture`
 nodes per track that reference no unique pixel data, a merge during
-packing, something else) is not identified.
+packing, something else) is not identified. **`12_Track`'s shortfall is
+visible, not just an untested edge case**: its `Skycube` names the missing
+ordinal, so one whole face of its sky draws the untextured white 1x1 in the
+running renderer - see [`skycube.md`](skycube.md#what-this-engine-does-with-it).
+The other four near-miss circuits' missing ordinals happen to fall outside
+what their sky and pads actually reference, so they draw fully textured
+despite the same short set.
 
 Track and environment models made of many small shared-atlas pieces (crates,
 decorations, ship-part-sized props) are the ones the wider, ungrouped 535/975
