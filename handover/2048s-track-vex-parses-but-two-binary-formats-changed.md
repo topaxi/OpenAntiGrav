@@ -363,7 +363,14 @@ parser change yet - see What's New above and Next Steps below.
   reference or Ghidra RE of the eboot's vertex-stream setup path (whoever
   consumes a submesh record's `+0x10`/`+0x2c` pointers). Section B's *other*
   contents past this one declaration - the rest of the serialized object graph
-  `RcsModel_Load` reads whole - remain unwalked.
+  `RcsModel_Load` reads whole - remain unwalked. A second pass the same
+  session ruled out three more candidates for `normal`'s type - HD's packed
+  word read either byte order, and a reordered-fields-plus-derived-z scheme -
+  against an **index-exact** vertex correspondence (1,504 vertices, zero
+  ambiguity, see
+  [2048-rcsmodel.md](../docs/formats/2048-rcsmodel.md#a-cleaner-oracle-exists-and-it-still-doesnt-decode-the-type-nibble)),
+  which is now a reusable oracle for the next guess rather than something to
+  rebuild from scratch.
 - The four unplaced bytes of the `WO Track` point tail (`0x58`/`0x59` and
   `0x5e`/`0x5f`), the constant `0xff`/`0x00` pair at `0x5a`/`0x5b`, and
   `cathedral`'s section id of 9 against 6 `section` nodes. The `WO Track`
@@ -409,10 +416,16 @@ parser change yet - see What's New above and Next Steps below.
    in priority - `KdTreeMeshShape.cpp`'s trailer first, `RcsModel_Load`'s three
    sections after it.
 5. ~~Section B's vertex declaration~~ - found 2026-08-27, offsets
-   cross-checked, see "What is left" above. What is left is the type nibble's
-   meaning: read the eboot's vertex-stream setup path (a
+   cross-checked, see "What is left" above. A same-session follow-up built an
+   **index-exact** vertex correspondence (1,504 vertices, zero ambiguity -
+   `crates/game/examples/vita_rcsmodel_exact.rs`) and ruled out three more
+   `normal` encodings against it, including one that looked confirmed on two
+   hand-picked examples until checked at the full 1,504-vertex scale (20.5%
+   within 18°). What is left is the type nibble's meaning: read the eboot's
+   vertex-stream setup path (a
    `sceGxmSetVertexStream`/`sceGxmVertexAttribute`-shaped call, or whoever
    reads a submesh record's `+0x10`/`+0x2c` pointers) for the SceGxm
    attribute-format enum, or find a verified reference for it rather than
    guessing from HD's RSX codes - already checked and confirmed not to
-   transfer.
+   transfer. The index-exact corpus is there to check the next guess against
+   cheaply, before trusting a small-sample fit.

@@ -181,6 +181,52 @@ corpus. A lightmap atlas is also baked per platform, so even a correct decode
 has no reason to match HD's own coordinates numerically at the same vertex -
 unlike position and normal, which are geometry and port unchanged.
 
+### A cleaner oracle exists, and it still doesn't decode the type nibble
+
+**2026-08-27, same session.** The spatial nearest-neighbour match above drops
+1,894,162 of ~2.4M candidate vertices as ambiguous - several vertices sit at
+the same position with different normals at a hard edge, and a search cannot
+tell which is which. An **index-exact** correspondence sidesteps that
+entirely, the same way HD's `WO Track` tail was settled: if an HD submesh and
+a 2048 submesh share the same vertex count *and* comparing position `v` to
+position `v` directly by index agrees closely with no search at all, vertex
+`v` is the same authored vertex on both platforms, unambiguously.
+
+That correspondence is real, and rare: only 9 of 7,749 same-vertex-count
+candidates (25,712 2048 submeshes total, across the twelve ported circuits)
+pass a 5 cm index-agreement bar - most of a track was genuinely re-tessellated
+for the Vita, and only a few submeshes were re-exported byte-for-byte in the
+same order. Those nine give 1,504 vertices with zero correspondence ambiguity
+- the reproducer is `crates/game/examples/vita_rcsmodel_exact.rs`.
+
+Against that clean sample, every encoding hypothesis tried still fails to
+generalise:
+
+| Hypothesis | n | within 18° | mean dot |
+| --- | --- | --- | --- |
+| HD's packed word, read little-endian | 1,504 | 0.8% | -0.042 |
+| HD's packed word, read big-endian | 1,504 | 5.6% | -0.019 |
+| fields reordered, z derived from unit length (oracle sign) | 1,504 | 20.5% | 0.382 |
+
+The big-endian candidate was worth trying precisely because the declaration's
+own repeated-stride field (above) is big-endian in an otherwise little-endian
+container - not a stretch, and still wrong. **The third row is the trap worth
+naming**: two near-planar submeshes appeared, by eye, to confirm it almost
+exactly - the low 11-bit field matched no HD component, but the other two
+fields (reordered) landed within a few hundredths of HD's x/y, and the missing
+magnitude matched a unit-sphere completion for z to three decimal places on
+one of the two. Tested at scale it reaches 20.5%, nowhere near a real decode.
+**Both hand-picked examples happen to be simple, close-to-axis-aligned
+directions**, which a wrong candidate scheme can fit by chance far more easily
+than a general one - the same shape of trap `HANDOVER.md`'s "Traps that are
+live" section already records for this format, and the reason nothing here is
+implemented on fewer than a full-corpus check.
+
+What survives this pass: the index-exact correspondence itself, as a reusable,
+ambiguity-free oracle for the next hypothesis - cheaper to test against than
+rebuilding spatial matching, and immune to the hard-edge noise that likely
+explains why the spatial-matched sweep never got a clean read either.
+
 ## What is not decoded
 
 Named here rather than left to be rediscovered:
