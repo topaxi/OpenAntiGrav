@@ -504,7 +504,6 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [The AI is authored XML, and its units are the only thing blocking a port of the original's numbers](handover/the-ai-is-authored-xml-and-its-units.md)
 - [The HUD shows a place, measured against the original; the shield bar's colour is the new open half](handover/the-hud-shows-a-place-measured-against-the.md)
 - [The field drove in single file, and the fix is a per-craft personality off the disc's own AI corridor](handover/the-field-drove-in-single-file-and-the.md)
-- [`psp-pulse-usa`'s import carries unrelocated address constants, at least around `0x08835830`](handover/psp-pulse-usas-import-carries-unrelocated-address-constants.md)
 - [Nothing airborne has ever been captured](handover/nothing-airborne-has-ever-been-captured.md)
 - [The hover probe takes only the deepest hit](handover/the-hover-probe-takes-only-the-deepest-hit.md)
 - [Is there a fifth handling class?](handover/is-there-a-fifth-handling-class.md)
@@ -1085,8 +1084,8 @@ no way to apply their `names.tsv` live until the bridge can disambiguate
 same-named programs, or until each is loaded in a Ghidra project without a
 `BOOT.BIN` name collision.
 
-**`psp-pulse-usa`'s Ghidra DB stores `jal` targets pre-relocation, so
-`get_xrefs_to`/`get_function_callers` return "none" for almost everything.**
+**`psp-pulse-usa`'s Ghidra DB stores every `jal` target pre-relocation, so
+`get_xrefs_to`/`get_function_callers` return "none" for almost all of them.**
 Found 2026-08-11, re-derived independently 2026-08-19, and it cost most of a
 session before the mechanism was understood. Ghidra's *static* disassembly
 bytes for a `jal` hold the unrelocated `R_MIPS_26` field - decoding them with
@@ -1103,6 +1102,15 @@ tool says "no callers", it is not evidence of that - search
 (`jal 0x000645cc`, not `jal 0x0886a5cc`) instead of trusting the "none"
 result. Full derivation, and confirmation this is not database corruption:
 [contact-response.md](docs/ghidra/functions/psp-pulse-usa/contact-response.md#its-call-target-needed-the-image-base-added-by-hand---ghidras-own-bytes-are-pre-relocation).
+**Settled 2026-08-27: it is not regional, it is every one.** A different
+session had independently concluded (2026-08-17, since retracted - see
+[weapon-fire.md](docs/ghidra/functions/psp-pulse-usa/weapon-fire.md#read-this-first-the-disassemblys-addresses-are-image-base-relative))
+that two address ranges were exempt; `search_instructions` across the whole
+program found zero `jal` anywhere - not just those two ranges - that
+displays an already-relocated (`0x08`-prefixed) target, out of 524,728
+instructions scanned, and the specific counter-example instruction that
+claim cited does not exist in the database. Apply the workaround
+unconditionally to a static `jal` reading here; there is no exempt region.
 Whether this is a general PSP-ELF-relocation trait or specific to how this
 project's importer handled `BOOT.BIN`, and whether it is related to the
 decompiler failing on several functions in the same file, are both still
