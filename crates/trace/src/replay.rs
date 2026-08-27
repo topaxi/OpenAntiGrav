@@ -761,6 +761,14 @@ fn frame_of(state: &ShipState, tick: u64, dt: f32, speed_cached: f32, options: &
         // that did not will read a flat zero against the capture's pool rather
         // than silently agreeing.
         shield: Some(state.shield),
+        // Neither camera fov term is modelled by `ShipState` - `SPEED_FOV_GAIN_DEG`
+        // in `crates/game/src/race.rs` reproduces the additive term as a
+        // projection-time constant, not as simulation state, and the intercept
+        // has no known writer at all. Reported absent for the same reason
+        // `timer_2e0` above is: a field we do not simulate must not read as
+        // agreement.
+        fov_intercept: None,
+        fov_additive: None,
         // `ShipState::sideshift_timers` carries the shift force but not the tap
         // window or the lockout, so there is nothing to compare the other three
         // columns against yet - reported absent rather than a false agreement.

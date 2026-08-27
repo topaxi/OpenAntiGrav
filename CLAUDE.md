@@ -152,8 +152,8 @@ review:
 2. No crate depends on `oag-game` (the composition root).
 
 Two size rules, both enforced by `just check-size` (`scripts/check-file-size.py`) as
-ratchets over a frozen baseline. `BASELINE` holds the files still over rule 1 - 22 as of
-2026-08-25, down from 27 - and each may shrink but not grow; `TEST_BASELINE` is **empty**, so rule 2 has no exemptions at all:
+ratchets over a frozen baseline. `BASELINE` holds the files still over rule 1 - 20 as of
+2026-08-27, down from 27 - and each may shrink but not grow; `TEST_BASELINE` is **empty**, so rule 2 has no exemptions at all:
 
 1. A Rust file may not exceed **1,000 lines**.
 2. An inline `#[cfg(test)] mod` body may not exceed **200 lines**. Past that it moves to a
