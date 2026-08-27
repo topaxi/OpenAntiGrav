@@ -418,9 +418,18 @@ def main():
                     "entity 0x%08x (craft 0x%08x -> +0x1c4)" % (entity, craft),
                     file=sys.stderr,
                 )
-            entity_blob = dbg.read(entity + ENTITY_FIELDS[0][1], 4 * len(ENTITY_FIELDS))
+            # A single contiguous read spanning the lowest to the highest offset,
+            # not `4 * len(ENTITY_FIELDS)` from the first: that sizing assumed the
+            # fields were packed back to back, which held while `shield` was the
+            # only one and stopped holding the moment the sideshift timers - 0x824
+            # bytes further into the entity - joined it. Costs one bigger read
+            # instead of one small one; still far under the 4 KB where a `memory.read`
+            # gets expensive (docs/reverse-engineering/ppsspp-debugger.md).
+            entity_lo = min(at for _, at in ENTITY_FIELDS)
+            entity_hi = max(at for _, at in ENTITY_FIELDS) + 4
+            entity_blob = dbg.read(entity + entity_lo, entity_hi - entity_lo)
             values += [
-                struct.unpack("<f", entity_blob[at - ENTITY_FIELDS[0][1] :][:4])[0]
+                struct.unpack("<f", entity_blob[at - entity_lo :][:4])[0]
                 for _, at in ENTITY_FIELDS
             ]
             values += [struct.unpack("<f", body_blob[at : at + 4])[0] for _, at in BODY_FIELDS]
