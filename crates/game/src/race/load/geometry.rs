@@ -33,7 +33,8 @@ pub(super) fn track_model(
         // of its own rather than a branch inside HD's. See
         // `oag_render::mesh::rcs::psp2`.
         Some(geometry) if mesh::rcs::psp2::is_psp2(geometry) => {
-            match mesh::rcs::psp2::build(track, geometry) {
+            match mesh::rcs::psp2::build(track, geometry, &mut |path| archives.read_name(path).ok())
+            {
                 Ok((model, built)) => {
                     report.push(format!("{track}: {}", built.describe()));
                     Some(model)

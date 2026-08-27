@@ -66,6 +66,7 @@
 //! [`oag_2048::hud::LAYOUTS`]: https://github.com/topaxi/OpenAntiGrav/blob/main/crates/2048/src/hud.rs
 
 use crate::bcn;
+use crate::pvrtc;
 
 /// Bytes of file header before the first descriptor.
 pub const HEADER_LEN: usize = 32;
@@ -84,6 +85,20 @@ pub const MAX_TEXTURES: u32 = 64;
 /// Most mip levels a descriptor may declare, on the same terms as
 /// [`crate::gtf::MAX_MIP_LEVELS`].
 pub const MAX_MIP_LEVELS: u8 = 16;
+
+/// Fewest bytes any one mip level occupies, whatever its own dimensions
+/// imply.
+///
+/// **Measured, not assumed, and it is the whole difference between reading
+/// this container's `PVRTII4BPP` textures and rejecting them.** A `PVRTII4BPP`
+/// level whose block grid is a single 4x4 word would be 8 bytes on the plain
+/// arithmetic, and is stored as 16; every level with two words or more is
+/// stored at exactly the plain figure. Swept over all three EU packages: the
+/// plain arithmetic closes on 2,923 of 10,204 `PVRTII4BPP` textures and this
+/// floor closes on **10,204 of 10,204**, with the shortfall being exactly one
+/// word on exactly those chains that bottom out at a single-word level. Free
+/// for `UBC2`, whose one block is already 16 bytes.
+pub const MIN_LEVEL_LEN: usize = 16;
 
 /// What went wrong reading a `.gxt`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -210,14 +225,17 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// The texel format this module decodes, from the top byte of the
 /// descriptor's `format` field (`SceGxmTextureBaseFormat`).
 ///
-/// Only `UBC2` is here - the one format the `2048_hud` skin's own textures
-/// use. A format byte outside it parses (see [`Texture::format_byte`]) but
-/// refuses [`Texture::to_rgba`] with [`Error::Unsupported`] rather than
-/// guessing at a decode.
+/// Two of the six format bytes this title's corpus carries. A format byte
+/// outside them parses (see [`Texture::format_byte`]) but refuses
+/// [`Texture::to_rgba`] with [`Error::Unsupported`] rather than guessing at a
+/// decode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Format {
     /// `0x86`, BC2: 16 bytes per 4x4 block, four bits of alpha per texel.
     Ubc2,
+    /// `0x83`, PVRTC-II at 4 bits per texel: 8 bytes per 4x4 **word**, and
+    /// not a block codec at all - see `oag_formats::pvrtc`.
+    Pvrtii4bpp,
 }
 
 impl Format {
@@ -225,15 +243,17 @@ impl Format {
     /// module does not decode.
     fn from_byte(byte: u8) -> Option<Self> {
         match byte {
+            0x83 => Some(Self::Pvrtii4bpp),
             0x86 => Some(Self::Ubc2),
             _ => None,
         }
     }
 
-    /// Bytes one 4x4 block occupies.
+    /// Bytes one 4x4 block or word occupies.
     const fn unit_len(self) -> usize {
         match self {
             Self::Ubc2 => 16,
+            Self::Pvrtii4bpp => pvrtc::WORD_LEN,
         }
     }
 }
@@ -272,7 +292,8 @@ impl Texture {
         )
     }
 
-    /// Bytes one mip level occupies, for a format [`Self::format`] names.
+    /// Bytes one mip level occupies, for a format [`Self::format`] names,
+    /// floored at [`MIN_LEVEL_LEN`].
     ///
     /// `None` for a format this module does not decode, since the block size
     /// (and so the chain length) is not knowable without one. That means
@@ -285,7 +306,7 @@ impl Texture {
         let (width, height) = self.level_size(level);
         let across = (width as usize).div_ceil(4);
         let down = (height as usize).div_ceil(4);
-        Some(across * down * format.unit_len())
+        Some((across * down * format.unit_len()).max(MIN_LEVEL_LEN))
     }
 
     /// Bytes the whole mip chain occupies, tightly packed - there is no
@@ -326,7 +347,14 @@ impl Texture {
             got: blob.len(),
         })?;
         let (width, height) = self.level_size(0);
-        blocks(format, texels, width, height).ok_or(Error::DataOutOfBounds {
+        let decoded = match format {
+            Format::Ubc2 => blocks(texels, width, height),
+            // Not a block walk: every texel reads four words, and the word
+            // grid's own Morton order is applied inside the codec rather
+            // than here. See [`crate::pvrtc`].
+            Format::Pvrtii4bpp => pvrtc::decode_ii_4bpp(texels, width, height),
+        };
+        decoded.ok_or(Error::DataOutOfBounds {
             offset: range.start as u32,
             length: (range.end - range.start) as u32,
             got: blob.len(),
@@ -368,10 +396,10 @@ impl Texture {
 /// module decodes, including `hud_2048.gxt`'s 1024x512 - untwiddled visually
 /// on that file specifically, since it draws sprite art rather than one
 /// recognisable shape, but consistent with the same rule.
-fn blocks(format: Format, texels: &[u8], width: u32, height: u32) -> Option<Vec<[u8; 4]>> {
+fn blocks(texels: &[u8], width: u32, height: u32) -> Option<Vec<[u8; 4]>> {
     let pixels = (width as usize).checked_mul(height as usize)?;
     let mut out = vec![[0u8; 4]; pixels];
-    let unit = format.unit_len();
+    let unit = Format::Ubc2.unit_len();
     let across = (width as usize).div_ceil(4) as u32;
     let down = (height as usize).div_ceil(4) as u32;
 
@@ -380,7 +408,6 @@ fn blocks(format: Format, texels: &[u8], width: u32, height: u32) -> Option<Vec<
             let index = twiddle(bx, by, across, down) as usize;
             let at = index * unit;
             let block = texels.get(at..at + unit)?;
-            let Format::Ubc2 = format;
             let texels16 = bcn::dxt23(block.try_into().ok()?);
             for (i, texel) in texels16.into_iter().enumerate() {
                 let x = bx as usize * 4 + i % 4;
@@ -409,7 +436,7 @@ fn blocks(format: Format, texels: &[u8], width: u32, height: u32) -> Option<Vec<
 /// steps before it ran out of `bx` ones. Same algorithm as `ClassiCube`'s
 /// Vita port's `TwiddleCalcFactors`, reimplemented as a direct bit-scatter
 /// rather than a mask-and-subtract loop.
-fn twiddle(bx: u32, by: u32, across: u32, down: u32) -> u32 {
+pub(crate) fn twiddle(bx: u32, by: u32, across: u32, down: u32) -> u32 {
     let (mut w, mut h) = (across, down);
     let mut mask_x = 0u32;
     let mut mask_y = 0u32;

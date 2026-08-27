@@ -10,9 +10,17 @@ on 2026-08-26.
 console. The container, the plugin XML, the handling XML and the `.vex` class
 table all read with no code change at all. Three *binary* formats changed
 underneath it, and **all three are now read** - the spline, the collision and
-the render geometry. What is left is not a format but the fields inside one:
-a 2048 model draws untextured, because the vertex's normal and texture
-coordinate are not placed yet.
+the render geometry, including its normal, its diffuse texture coordinate and
+its material table and its per-submesh material binding (all added
+2026-08-27, after this page's own last full pass). **A race now draws
+textured**: the circuit paints 2,782 of its 2,800 draws and the craft all 16
+of its own. Getting there needed two independent gaps closed on the same day,
+neither a follow-on to the other - the submesh-to-material index
+([2048-rcsmodel.md](2048-rcsmodel.md), confidence 90, measured across all
+244,889 shipped submeshes rather than read out of the executable) and the
+`PVRTII4BPP` pixel format almost every 2048 texture is stored in
+([gxt.md](gxt.md), confidence 92, validated against Wipeout HD's own `.gtf`
+copies of 2,284 shared textures).
 
 ## What reads unchanged
 
@@ -23,7 +31,7 @@ coordinate are not placed yet.
 | [Handling stats](handling-stats.md) | **yes** | Both the HD-derived roster's per-team files and the shared `<Global>` block at `Data\XML\handlingstats.xml`. The native roster's five teams parse too, `SUPERPHANTOM` class included. |
 | [`WO Track`](track.md) spline | **yes, after a version gate** | See below. |
 | [Collision](2048-collision.md) | **yes, in a container of its own** | Not the `.vex` path: a `track_col.col` beside every `track.vex`. See below. |
-| [Render geometry](2048-rcsmodel.md) | **positions and triangles** | A `.rcsmodel` sharing HD's extension and no other part of its format. Normals, texture coordinates and the material binding are not placed. |
+| [Render geometry](2048-rcsmodel.md) | **positions, triangles, normals, diffuse UV, the material table and the per-submesh material binding** | A `.rcsmodel` sharing HD's extension and no other part of its format. Draws textured. `tangent`'s type nibble and section B's wider object graph are still unread. |
 | Plugin definitions | **yes, but split three ways** | `Data\Plugins\teams\`, `tracks\` and `music\` each ship their own `Definition.xml` where every other title ships one file carrying all three node kinds. `oag_title::Title::plugin_definition` holds one name, so this build reads the teams one and sees no circuit or soundtrack list. |
 
 ## What changed, and what state each is in
@@ -66,10 +74,18 @@ the start line and runs the simulation. What it does **not** do, and why:
   collides with the barriers - `track_col.col` is decoded and its 15,986
   triangles on `altima` become four colliders. With no steering input it drives
   until it meets a wall and stops there, which is what any title does.
-- **The circuit and the craft draw, untextured.** Altima comes up as 413,358
-  triangles over 2,800 submeshes and the craft as its own hull, lit off computed
-  face normals because the authored per-vertex normals and texture coordinates
-  are in the file and not placed. See [2048-rcsmodel.md](2048-rcsmodel.md).
+- **The circuit and the craft draw, textured.** Altima comes up as 413,358
+  triangles over 2,800 submeshes, 2,782 of them painted from 521 of its 527
+  materials, and the craft as its own hull with all 16 draws painted from 5 of
+  its 6 - livery, tech panels, plastics, light strips and canopy glass, each on
+  the submeshes the file's own index names. Both lit off the file's own
+  authored normals. 18 of the circuit's draws name a `.gxt` that does not
+  resolve or will not decode and get no texture rather than a neighbour's. The
+  screenshot is `data/shots/2048_altima_textured.png`. What is still absent
+  from it is unrelated: `.envsettings` does not parse for this title, so the
+  race lights off a stand-in rig, unfogged and without bloom, and `track.pvs`
+  is not this project's HD PVS layout, so every chunk draws.
+  See [2048-rcsmodel.md](2048-rcsmodel.md) and [gxt.md](gxt.md).
 - **No front end, no music.** `oag_2048::TITLE` carries `front_end: None`,
   `loading: None` and `music: None`. Neither has been read.
 - **The HUD layouts are read, the textures decode, and no sprite draws yet.**

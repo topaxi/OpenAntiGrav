@@ -55,6 +55,7 @@ pub mod pob;
 pub mod ps2_music;
 pub mod ps2_texture;
 pub mod psarc;
+mod pvrtc;
 pub mod pvs;
 pub mod rcsmaterial;
 pub mod rcsmodel;

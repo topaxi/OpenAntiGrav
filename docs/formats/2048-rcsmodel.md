@@ -272,6 +272,145 @@ itself never touches section B past relocating it, and the actual consumer
 was not located this session. The empirical decode is what the renderer
 uses; the SDK-level name is left for whoever finds that code.
 
+## `Uv1`'s type is cracked too: two little-endian `f16`s
+
+**2026-08-27, later the same day the normal was cracked.** The byte budget
+already argued for this - `Uv1@stride-8` to `lightmapUV@stride-4` is 4 bytes
+on the common 28-byte layout, and this reading already assumed `lightmapUV`
+was `f16` pairs. What settles it as fact rather than a plausible guess is
+content, the same index-exact oracle that scored the normal: 1,432 vertices
+across 9 same-export submeshes (twelve HD-ported circuits), decoded as `f16`
+against Wipeout HD's own diffuse UV at the same authored vertices. Mean
+squared distance is indistinguishable from zero; decoded as `unorm16` (the
+only other 2-byte-per-component encoding the byte budget allows) it is 0.41,
+chance level. The two decodings even agree on which 16 of 1,432 vertices
+leave `[0, 1]` - `unorm16` cannot represent that at all, since a road texture
+tiles.
+
+**Found through a stride map, not a per-submesh pointer.** A submesh record
+does carry a word at `+0x28` that is a valid declaration offset on some
+files - the craft this reading was built against among them - but it
+resolves for only 14.2% of the corpus's submeshes, where anchoring on
+`position` per file and keying by stride (`psp2::vertex_decl::find_by_stride`)
+resolves 92.5%. The reproducer is `crates/game/examples/vita_rcsmodel_uv_oracle.rs`;
+the decode is `oag_formats::rcsmodel::psp2::unpack_texcoord`.
+
+**Confidence 96** on the decode, on the same basis as the normal. What is
+not decoded: `tangent`'s type (`t5`, 4 components - the byte budget argument
+for `normal` does not apply since 4 components exactly fill 4 bytes) and
+`lightmapUV`'s content (offset placed via the same declaration, but its
+value is a per-platform baked atlas coordinate with no HD counterpart to
+check against).
+
+## The material table is read, and finding a submesh's own binding was tried and ruled out
+
+**2026-08-27, same day.** `.gxt`/`.rcsmaterial` ASCII text sits in the clear
+inside section B - 52,637 and 34,388 occurrences across the 993-file corpus -
+found the same way the buffer pointers were: pair a pointer to the thing it
+points at. A file-level header (`+0x44` count, `+0x48` an offset table)
+names every material's 64-byte header, which carries the `.rcsmaterial` path
+at `+0x04` and a technique/shading-group name at `+0x18`. Every texture a
+material references is found by scanning that material's own byte extent for
+any pointer resolving to `.gxt` text, rather than by decoding the shader
+input table's own struct - that struct's shape changes with entry count in a
+way this reading did not solve (clean at two entries, garbage read past it
+at four, six or eight). See `oag_formats::rcsmodel::psp2::material`'s module
+doc for the full account, including a trap worth naming: the first version of
+this reading capped the file-level count at 64, calibrated from small props
+and a 16-submesh craft, which silently rejected altima's own 527 real
+materials as implausible. Fixed once the miscount was traced back to the
+cap rather than the read.
+
+## Which submesh uses which material: a plain index, `0x18` bytes before the record
+
+**2026-08-27, later the same day. Confidence 90.** An earlier pass this same
+day recorded this as genuinely unresolved, and that pass's reasoning was sound
+while its conclusion was wrong - which is the part worth carrying forward.
+
+It had checked every submesh record field against every *material's own
+identity*: the two unidentified header words at `+0x00` and `+0x08`, the name
+pointer, and the still-uninterpreted 64-bit word 8 bytes past a submesh's
+vertex pointer. Nothing matched anywhere in the corpus, and nothing ever could
+have: **an index does not resemble the thing it indexes.** A submesh carrying
+`3` matches nothing about material 3, so a search for a material's identity was
+structurally blind to the answer.
+
+Searching for an *index* instead - a small integer in `[0, count)` - finds
+exactly one field, `0x18` bytes **before** the record's own start
+(`psp2::MATERIAL_INDEX_BEFORE_RECORD`), as a little-endian `u32` whose high
+half is `0` on every submesh measured. The offset is negative because the
+record is *located* rather than walked to (see the section above): what this
+reading calls the record's start is where its two buffer pointers put it, not
+the start of whatever enclosing struct section B serializes.
+
+### The control group is the evidence, because small integers are everywhere
+
+Swept over every byte-, half- and word-aligned offset from `-0x60` to `+0x80`
+across all three EU packages:
+
+| Condition | Result |
+| --- | --- |
+| Value inside `[0, material count)` | **244,889 of 244,889 submeshes**, no violation |
+| Value `0` on every submesh of a one-material model | **147 of 147 models**, no violation |
+| Distinct values used per multi-material model | **80.3 on average** |
+
+The first two conditions are passed by **nineteen** offsets in that window -
+lots of fields are accidentally small. The third is what separates them:
+eighteen of the nineteen average **3.2 or fewer** distinct values per
+multi-material model, where this one averages 80.3. **86 of the 414
+multi-material models name every single material they declare** through it,
+and 138 name at least 90%. Altima's own circuit uses **525 of its 527**
+materials across 2,800 submeshes; a field that merely happened to be small
+cannot do that.
+
+### And it reads correctly where a human can check it
+
+`feisar2048\3`'s sixteen submeshes resolve to five of its six materials:
+`2048_ship_tech` on seven, `2048_ship_paint_shiny_final` (the team livery) on
+four, `2048_ship_plastic` on three, `2048_ship_lights` on one, and
+`2048_ship_glass_dg` on **exactly one**.
+
+That last one is the canary. The submesh a name match would have guessed at -
+the one authored `GlassShape` - is the one this index independently lands on,
+**without any name being compared**. Name-matching a submesh to a material is
+the invented-not-measured failure `CLAUDE.md` forbids, and is exactly what the
+earlier pass rightly refused to do; that it agrees here is corroboration, not
+the method.
+
+### What holds this at 90 rather than higher
+
+**It is measured, not read out of the executable.** `RcsModel_Load`
+(`0x812f15b2`) never touches section B past relocating it, and the function
+that binds a submesh to a GPU texture unit was **not located**: all eleven
+callers of `sceGxmDraw` (NID `0xBC059AFC`) in `vita-2048-eu-v104` turn out to
+be debug primitives, sprite quads and the engine-flare effect, so this engine's
+mesh path reaches the GPU some other way - a deferred command buffer, by
+hypothesis, not read. No function was named, so
+[names.tsv](../ghidra/functions/vita-2048-eu-v104/names.tsv) gains no row.
+Confirming the field at the instruction level is the one thing that would take
+it past 90, and it stays open.
+
+The three words beside it are still unread: `-0x20` and `-0x1c` are `0`,
+`-0x10` is `0xffffffff` and `-0x08` is `0x00010001` on every file sampled.
+
+Reproducers: `crates/game/examples/vita_rcsmodel_material_index_probe.rs` (the
+sweep and its control group) and `vita_rcsmodel_material_index_check.rs` (the
+craft and the circuit read out in full). Pinned by
+`crates/formats/tests/psp2_rcsmodel_material_ground_truth.rs`.
+
+## A texture bound also would not have painted, until the same day
+
+**2026-08-27.** Even granting a resolved binding, a sweep of every distinct
+diffuse `.gxt` the corpus's materials name (6,135 of them) found **15 decode**.
+The other 6,120 failed with `gxt::Error::Unsupported` - 6,037 of them format
+`0x83` (`PVRTII4BPP`). So "load textures" had two independent gaps stacked, and
+neither was a follow-on to the other: the binding above, and the pixel format
+almost everything is compressed in.
+
+**Both are closed.** `oag_formats::pvrtc` decodes `PVRTII4BPP` at confidence
+92, validated against Wipeout HD's own `.gtf` copies of 2,284 shared textures -
+see [gxt.md](gxt.md).
+
 ## What is not decoded
 
 Named here rather than left to be rediscovered:
@@ -280,18 +419,20 @@ Named here rather than left to be rediscovered:
   `altima`'s GPU-pointer entries - about one in a hundred corpus-wide - are not
   half of a submesh pair, and are counted and reported rather than dropped in
   silence (`psp2::Model::unpaired_pointers`).
-- **The SceGxm type codes**, past `normal`'s (confidence 96 - see above).
-  `tangent`'s (`t5`, 4 components) and `Uv1`/`lightmapUV`'s (`t8`, 2
-  components) are still open; HD's RSX encodings are confirmed not to apply
-  to this format at all, so neither is a safe guess from HD's own reading. A
-  model still draws untextured until `t8` is placed and bound to a material.
-- **`RcsModel_Load`'s actual consumer** - whichever function binds this
+- **`tangent`'s SceGxm type code** (`t5`, 4 components) - HD's RSX encodings
+  are confirmed not to apply to this format at all, so it is not a safe guess
+  from HD's own reading. `normal` and `Uv1`, the format's other two `t5`/`t8`
+  fields, are both cracked (see above).
+- **`RcsModel_Load`'s actual consumer** - whichever function binds a
   declaration's fields into a GPU vertex-attribute setup at runtime. Not
-  located this session; the normal's encoding was settled empirically
-  instead (see above), which is why the SceGxm symbolic name for type `5`
-  is recognised by behaviour rather than confirmed by name.
-- **The material and texture binding**, and the 64-bit hashes each submesh
-  record carries beside its buffer pointers.
+  located this session; both `normal` and `Uv1` were settled empirically
+  instead (see above), which is why neither SceGxm type code's symbolic name
+  is confirmed, only recognised by behaviour.
+- **The 64-bit hashes** each submesh record carries beside its buffer
+  pointers, the two unidentified 32-bit words each material header carries,
+  and the three words beside the material index at `-0x20`, `-0x10` and
+  `-0x08`. The binding itself is read - see the material index section above -
+  but at confidence 90, off measurement rather than off the executable.
 - **The section tags** at each descriptor's `+0x00` (`0xe35e00df` and
   `0xe9f17935` on `altima`).
 
@@ -301,11 +442,25 @@ allocation when its size is zero.
 
 ## What it looks like
 
-`just play 2048 --race` draws Altima's road, barriers and scenery - 413,358
-triangles over 2,800 submeshes - and the craft's hull, untextured, lit off
-the file's own authored normals where a submesh's stride carries one -
-33,335,682 of 33,335,682 across the corpus - and off computed face normals
-only where it does not, which is not observed on any shipped file. That is
-closer to right than an HD model gives before its material binding is read,
-and untextured is what the still-undecoded texture-coordinate and material
-fields cost.
+`just play 2048 --race` draws a **textured** Altima and a textured craft.
+
+- The circuit: 413,358 triangles over 2,800 submeshes, **2,782 of them
+  textured**, from 521 of its 527 materials. 18 draws name a `.gxt` that does
+  not resolve in the archive or will not decode, and get no texture rather than
+  a neighbour's.
+- The craft: 7,416 triangles over 16 submeshes, **16 of 16 textured**, from 5
+  of its 6 materials - the Feisar livery, its tech panels, its plastics, its
+  light strips and its canopy glass, each on the submeshes the file's own
+  index names.
+- Both lit off the file's own authored normals where a submesh's stride carries
+  one - 33,335,682 of 33,335,682 across the corpus - and off computed face
+  normals only where it does not, which is not observed on any shipped file.
+
+The screenshot is `data/shots/2048_altima_textured.png`: the start straight
+with legible grandstand advertising, the overhead gantry banner, panelled road
+surface and the craft's own wordmark on its tail.
+
+Still absent from that picture, and unrelated to anything above: the
+`.envsettings` sun/fog/bloom blocks do not parse for this title, so the race
+draws with a stand-in lighting rig, unfogged and without bloom; and
+`track.pvs` is not this project's HD PVS layout, so every chunk draws.
