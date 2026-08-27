@@ -28,7 +28,7 @@ use oag_core::math::Vec3;
 /// column located in it - so a capture that grows a column stays readable.
 /// [`Trace::columns`] is what [`Trace::to_csv`] writes, which is this list
 /// filtered down to the columns the trace in hand actually carries.
-pub const COLUMNS: [&str; 54] = [
+pub const COLUMNS: [&str; 59] = [
     "tick",
     "dt",
     "grounded",
@@ -41,6 +41,11 @@ pub const COLUMNS: [&str; 54] = [
     "stun_timer",
     "timer_2e0",
     "shield",
+    "ss_tap_window_l",
+    "ss_tap_window_r",
+    "ss_shift_l",
+    "ss_shift_r",
+    "ss_lockout",
     "right_x",
     "right_y",
     "right_z",
@@ -124,10 +129,15 @@ pub const REQUIRED_COLUMNS: [&str; 25] = [
 ];
 
 /// The columns a trace may carry and an older one does not.
-pub const OPTIONAL_COLUMNS: [&str; 29] = [
+pub const OPTIONAL_COLUMNS: [&str; 34] = [
     "stun_timer",
     "timer_2e0",
     "shield",
+    "ss_tap_window_l",
+    "ss_tap_window_r",
+    "ss_shift_l",
+    "ss_shift_r",
+    "ss_lockout",
     "avel_x",
     "avel_y",
     "avel_z",
@@ -192,90 +202,9 @@ pub const CAMERA_COLUMNS: [&str; 12] = [
     "cam_pos_z",
 ];
 
-/// The eight exhaust-flare columns, written by `scripts/psp-trace.py --flare`:
-/// all present or all absent, for the same reason as [`CAMERA_COLUMNS`].
-///
-/// Each is one `f32` read straight out of the flare object the capture walks to
-/// as `craft+0x1c4` -> `+0x78`, at the offsets `scripts/psp_trace_fields.py`'s
-/// `FLARE_FIELDS` lists. Recording the offset each column came from matters more
-/// than usual here, because four of the eight have names that could plausibly
-/// belong to a different field:
-///
-/// | Column | Flare offset | What it is |
-/// | --- | --- | --- |
-/// | `boost_timer` | `+0xb8` | seconds left on the pad boost; `ExhaustFlare_OnSpeedupPad` stores `0.8` here |
-/// | `plume_timer` | `+0x88` | seconds since the `<Team>boost.vex` plume was **revealed** - not the boost timer |
-/// | `intensity` | `+0xbc` | the `0..=1` engine ramp the size and layer alphas read |
-/// | `half_size` | `+0xc4` | flare quad half-extent, world units, already flickered |
-/// | `engine_on` | `+0x94` | see below - an integer field, not a float |
-/// | `flare_speed_kmh` | `+0x8c` | craft speed in km/h |
-/// | `speed_ramp` | `+0x90` | `((flare_speed_kmh - 100) / 500)` clamped to `0..=1` |
-/// | `boost_accum` | `+0x60` | the throttle-charge accumulator |
-///
-/// **`engine_on` is an integer read through a float lens, and is compared as a
-/// predicate rather than by value.** The capture `struct.unpack("<f", ..)`s all
-/// eight, but `+0x94` holds a small integer, so the column comes out as a
-/// denormal: every non-zero row of `data/traces/pad0-boost.csv` reads
-/// `3.601337e-43`, which is the `f32` whose bit pattern is `257`. The two
-/// distinct values across that whole capture are exactly `0` and that denormal.
-/// Stored here as written rather than normalised - this crate converts nothing
-/// on the way in - so anything reading it must ask whether it is zero, never
-/// what it equals. See [`Flare::engine_on_is_set`].
-pub const FLARE_COLUMNS: [&str; 8] = [
-    "boost_timer",
-    "plume_timer",
-    "intensity",
-    "half_size",
-    "engine_on",
-    "flare_speed_kmh",
-    "speed_ramp",
-    "boost_accum",
-];
+mod flare;
 
-/// The exhaust flare's eight fields for one tick.
-///
-/// One struct rather than eight `Option<f32>` on [`Frame`], because the group is
-/// all-or-nothing: a capture either ran `--flare` or it did not, and eight
-/// independently-optional fields would make "half a flare" representable when it
-/// is not a state any file can be in. The angular and camera groups get the same
-/// guarantee from [`Vec3`] being indivisible; this one has to spell it out.
-///
-/// Field order matches [`FLARE_COLUMNS`], which matches the capture's own header
-/// order, so a row written from this reads back into the same struct.
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
-pub struct Flare {
-    /// Seconds left on the pad boost, `flare+0xb8`.
-    pub boost_timer: f32,
-    /// Seconds since the plume was revealed, `flare+0x88`. **Not** the boost
-    /// timer: the reveal is edge-triggered, so this restarts at a reveal and
-    /// then runs its own span regardless of how long the boost lasts.
-    pub plume_timer: f32,
-    /// The `0..=1` engine intensity ramp, `flare+0xbc`.
-    pub intensity: f32,
-    /// Flare quad half-extent in world units, `flare+0xc4`, flicker included.
-    pub half_size: f32,
-    /// Whether the engine counts as lit, `flare+0x94`.
-    ///
-    /// An integer field the capture reads as a float - see [`FLARE_COLUMNS`].
-    /// Read it through [`Self::engine_on_is_set`] rather than comparing it.
-    pub engine_on: f32,
-    /// Craft speed in km/h, `flare+0x8c`.
-    pub speed_kmh: f32,
-    /// The clamped speed ramp, `flare+0x90`.
-    pub speed_ramp: f32,
-    /// The throttle-charge accumulator, `flare+0x60`.
-    pub boost_accumulator: f32,
-}
-
-impl Flare {
-    /// Whether the engine-on field is set, which is the only question its raw
-    /// value can answer - see [`FLARE_COLUMNS`] for why it is not a `bool` here
-    /// and not comparable as a number.
-    #[must_use]
-    pub fn engine_on_is_set(&self) -> bool {
-        self.engine_on != 0.0
-    }
-}
+pub use flare::{Flare, FLARE_COLUMNS};
 
 /// One tick of ship state, as the original held it.
 ///
@@ -401,6 +330,31 @@ pub struct Frame {
     /// capture taken in that mode can absorb a real hit and read almost
     /// unchanged one tick later.
     pub shield: Option<f32>,
+    /// The veteran double-tap's left tap window, `entity+0x89c`, or `None` for a
+    /// capture taken before the column existed.
+    ///
+    /// Opens to `0.25` on a first left-airbrake tap and counts down by `dt`;
+    /// a second tap while it is still positive is what fires [`Self::ss_shift_l`].
+    /// See `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`, confirmed at
+    /// runtime against a capture of `sideshift-double-tap.inputs`.
+    pub ss_tap_window_l: Option<f32>,
+    /// The mirror of [`Self::ss_tap_window_l`] for the right airbrake,
+    /// `entity+0x8a0`.
+    pub ss_tap_window_r: Option<f32>,
+    /// The veteran double-tap's left shift force timer, `entity+0x8a4`, or
+    /// `None`.
+    ///
+    /// Set to `0.2` on the tap window's second tap; the already-ported force
+    /// itself lives in `crates/physics/src/airbrake.rs`.
+    pub ss_shift_l: Option<f32>,
+    /// The mirror of [`Self::ss_shift_l`] for the right airbrake,
+    /// `entity+0x8a8`.
+    pub ss_shift_r: Option<f32>,
+    /// The lockout common to both sideshift schemes, `entity+0x8ac`, or `None`.
+    ///
+    /// Set to `1.0` on any tick either shift timer is positive and counted down
+    /// by `dt` - one second between sideshifts, novice or veteran.
+    pub ss_lockout: Option<f32>,
     /// Row 0 of the player camera node's basis, or `None` for a capture taken
     /// without `--camera`.
     ///
@@ -452,6 +406,11 @@ impl Default for Frame {
             stun_timer: None,
             timer_2e0: None,
             shield: None,
+            ss_tap_window_l: None,
+            ss_tap_window_r: None,
+            ss_shift_l: None,
+            ss_shift_r: None,
+            ss_lockout: None,
             camera_row0: None,
             camera_up: None,
             camera_forward: None,
@@ -543,6 +502,11 @@ impl Frame {
             "stun_timer" => self.stun_timer?,
             "timer_2e0" => self.timer_2e0?,
             "shield" => self.shield?,
+            "ss_tap_window_l" => self.ss_tap_window_l?,
+            "ss_tap_window_r" => self.ss_tap_window_r?,
+            "ss_shift_l" => self.ss_shift_l?,
+            "ss_shift_r" => self.ss_shift_r?,
+            "ss_lockout" => self.ss_lockout?,
             "cam_right_x" => self.camera_row0?.x,
             "cam_right_y" => self.camera_row0?.y,
             "cam_right_z" => self.camera_row0?.z,
@@ -577,6 +541,11 @@ impl Frame {
             "stun_timer" => self.stun_timer.is_some(),
             "timer_2e0" => self.timer_2e0.is_some(),
             "shield" => self.shield.is_some(),
+            "ss_tap_window_l" => self.ss_tap_window_l.is_some(),
+            "ss_tap_window_r" => self.ss_tap_window_r.is_some(),
+            "ss_shift_l" => self.ss_shift_l.is_some(),
+            "ss_shift_r" => self.ss_shift_r.is_some(),
+            "ss_lockout" => self.ss_lockout.is_some(),
             "cam_right_x" | "cam_right_y" | "cam_right_z" => self.camera_row0.is_some(),
             "cam_up_x" | "cam_up_y" | "cam_up_z" => self.camera_up.is_some(),
             "cam_fwd_x" | "cam_fwd_y" | "cam_fwd_z" => self.camera_forward.is_some(),
@@ -625,6 +594,11 @@ impl Frame {
             "stun_timer" => self.stun_timer = Some(value),
             "timer_2e0" => self.timer_2e0 = Some(value),
             "shield" => self.shield = Some(value),
+            "ss_tap_window_l" => self.ss_tap_window_l = Some(value),
+            "ss_tap_window_r" => self.ss_tap_window_r = Some(value),
+            "ss_shift_l" => self.ss_shift_l = Some(value),
+            "ss_shift_r" => self.ss_shift_r = Some(value),
+            "ss_lockout" => self.ss_lockout = Some(value),
             "cam_right_x" => self.camera_row0.get_or_insert(Vec3::ZERO).x = value,
             "cam_right_y" => self.camera_row0.get_or_insert(Vec3::ZERO).y = value,
             "cam_right_z" => self.camera_row0.get_or_insert(Vec3::ZERO).z = value,

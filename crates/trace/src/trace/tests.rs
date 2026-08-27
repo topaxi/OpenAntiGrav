@@ -14,13 +14,14 @@ use super::*;
 pub(crate) const FIXTURE: &str = "\
 tick,dt,grounded,throttle,brake,steer,airbrake_l,airbrake_r,speed_cached,\
 stun_timer,timer_2e0,shield,\
+ss_tap_window_l,ss_tap_window_r,ss_shift_l,ss_shift_r,ss_lockout,\
 right_x,right_y,right_z,up_x,up_y,up_z,fwd_x,fwd_y,fwd_z,\
 pos_x,pos_y,pos_z,vel_x,vel_y,vel_z,speed,avel_x,avel_y,avel_z,omega_x,omega_y,omega_z,\
 cam_right_x,cam_right_y,cam_right_z,cam_up_x,cam_up_y,cam_up_z,\
 cam_fwd_x,cam_fwd_y,cam_fwd_z,cam_pos_x,cam_pos_y,cam_pos_z,\
 boost_timer,plume_timer,intensity,half_size,engine_on,flare_speed_kmh,speed_ramp,boost_accum
-0,0.016683,1,100,0,0,0,0,21.98,0,0,300,1,0,0,0,1,0,0,0,1,10,2.5,-30,0,0,22,22,0,0,0,0,0,0,1,0,0,0,1,0,0,0,1,10,8,-45,0.8,0.25,0.5,3.5,1,79.2,0.3125,0.1875
-1,0.016683,1,100,0,0,0,0,22,0,0,296.5,1,0,0,0,1,0,0,0,1,10,2.5,-29.63301,0,0,22.1,22.1,0,0,0,0,0,0,1,0,0,0,1,0,0,0,1,10,8,-44.6,0.78,0.2666,0.52,3.55,1,79.56,0.3187,0.19
+0,0.016683,1,100,0,0,0,0,21.98,0,0,300,0.25,0,0.2,0,1,1,0,0,0,1,0,0,0,1,10,2.5,-30,0,0,22,22,0,0,0,0,0,0,1,0,0,0,1,0,0,0,1,10,8,-45,0.8,0.25,0.5,3.5,1,79.2,0.3125,0.1875
+1,0.016683,1,100,0,0,0,0,22,0,0,296.5,0.233317,0,0.183317,0,0.983317,1,0,0,0,1,0,0,0,1,10,2.5,-29.63301,0,0,22.1,22.1,0,0,0,0,0,0,1,0,0,0,1,0,0,0,1,10,8,-44.6,0.78,0.2666,0.52,3.55,1,79.56,0.3187,0.19
 ";
 
 /// The same two ticks as a capture taken **before** the angular-velocity and
@@ -211,6 +212,41 @@ fn the_new_columns_are_read_when_they_are_there() {
     assert_eq!(frame.angular_rate, Some(Vec3::new(0.0625, -0.5, 0.031_25)));
     assert_eq!(frame.stun_timer, Some(0.5));
     assert_eq!(frame.timer_2e0, Some(0.75));
+}
+
+#[test]
+fn the_sideshift_timer_columns_are_read_when_they_are_there() {
+    let frame = Trace::parse(FIXTURE).unwrap().frames[0];
+    assert_eq!(frame.ss_tap_window_l, Some(0.25));
+    assert_eq!(frame.ss_tap_window_r, Some(0.0));
+    assert_eq!(frame.ss_shift_l, Some(0.2));
+    assert_eq!(frame.ss_shift_r, Some(0.0));
+    assert_eq!(frame.ss_lockout, Some(1.0));
+}
+
+/// The mirror of [`a_trace_without_the_flare_columns_has_no_flare_rather_than_zeroes`]
+/// for the sideshift timers: a capture taken before the column existed - every
+/// one in `data/traces/` before 2026-08-27 - keeps parsing, with the five
+/// columns **absent** rather than zero. A zero `ss_lockout` would be a claim
+/// that the original was never locked out, and no capture before this one
+/// measured that at all.
+#[test]
+fn a_trace_without_the_sideshift_columns_has_them_absent_rather_than_zero() {
+    let frame = Trace::parse(LEGACY_FIXTURE).unwrap().frames[0];
+    assert_eq!(frame.ss_tap_window_l, None);
+    assert_eq!(frame.ss_tap_window_r, None);
+    assert_eq!(frame.ss_shift_l, None);
+    assert_eq!(frame.ss_shift_r, None);
+    assert_eq!(frame.ss_lockout, None);
+    for column in [
+        "ss_tap_window_l",
+        "ss_tap_window_r",
+        "ss_shift_l",
+        "ss_shift_r",
+        "ss_lockout",
+    ] {
+        assert!(!frame.has(column), "{column} reported present");
+    }
 }
 
 #[test]
