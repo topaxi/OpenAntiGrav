@@ -98,18 +98,41 @@ sync_file() {
     fi
 }
 
+# $1 src dir, $2 remote dest dir, then any number of basenames to leave behind
+# (see the hdfury exclusion below for why).
 sync_dir() {
     local src="$1" dest_dir="$2"
+    shift 2
+    local excludes=("$@")
+
     if [[ ! -d $src ]] || [[ -z "$(ls -A "$src" 2>/dev/null)" ]]; then
         echo "skipping $src: nothing there yet"
         return
     fi
+
     if (( use_rsync )); then
-        rsync -avz "${dry_flag[@]}" "$src/" "$host:$dest_dir/"
-    elif (( dry_run )); then
-        echo "would run: scp -r '$src'/* '$host:$dest_dir/'"
+        local exclude_args=() e
+        for e in "${excludes[@]}"; do exclude_args+=(--exclude "$e"); done
+        rsync -avz --progress "${dry_flag[@]}" "${exclude_args[@]}" "$src/" "$host:$dest_dir/"
     else
-        scp -r "$src"/* "$host:$dest_dir/"
+        # scp has no exclude flag, so walk the directory ourselves.
+        local entry name skip e
+        for entry in "$src"/*; do
+            name="$(basename "$entry")"
+            skip=0
+            for e in "${excludes[@]}"; do
+                [[ $name == "$e" ]] && { skip=1; break; }
+            done
+            if (( skip )); then
+                echo "skipping $name (excluded)"
+                continue
+            fi
+            if (( dry_run )); then
+                echo "would run: scp -r '$entry' '$host:$dest_dir/'"
+            else
+                scp -r "$entry" "$host:$dest_dir/"
+            fi
+        done
     fi
 }
 
@@ -126,7 +149,13 @@ fi
 
 if (( sync_data )); then
     step "Copying data/images"
-    sync_dir "$project_root/data/images" "$images_dir"
+    # hdfury-ps3-eu.iso is the still-encrypted disc image and hdfury-ps3-eu.dkey
+    # its decryption key - dead weight here: only hdfury-ps3-eu-dec.iso is
+    # openable, and HD/Fury isn't played past its menus yet either way (see
+    # data/README.md and docs/formats/ps3-disc.md). The key also has no reason
+    # to leave this machine.
+    sync_dir "$project_root/data/images" "$images_dir" \
+        "hdfury-ps3-eu.iso" "hdfury-ps3-eu.dkey"
     step "Copying data/dlc"
     sync_dir "$project_root/data/dlc" "$dlc_dir"
 else
