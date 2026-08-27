@@ -420,7 +420,6 @@ player's own legitimate pressing gets hard-rejected.
 Each is a real, named next step, one file per thread under [`handover/`](handover/). Task numbers in a title are the ones the agent passes used, kept because commits and docs cite them. **When a thread's work lands, delete its file and this line** - the same rule this file always followed for a row, now for a file.
 
 - [2048's four Vita eboots are decrypted and imported; loose ends from getting there](handover/2048s-vita-eboots-are-imported-re-not-started.md)
-- [Name the tracked allocator and the manager constructors off Game_Main](handover/vita-2048-name-the-boot-managers.md)
 - [Check whether 2048 is the HD/Fury codebase retargeted, not a Pulse-lineage build](handover/vita-2048-vs-hd-fury-lineage.md)
 - [2048's PSARC and title plumbing are wiring-ready; two binary formats changed underneath a track](handover/2048s-track-vex-parses-but-two-binary-formats-changed.md)
 - [Streaming decode for audio would break seek, and nothing forces the change yet](handover/streaming-decode-for-audio-would-break-seek-and.md)

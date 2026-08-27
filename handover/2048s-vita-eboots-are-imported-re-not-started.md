@@ -45,9 +45,9 @@ emulator with no standalone CLI for just this step.
 **Update, same day**: `docs/ghidra/functions/vita-2048-eu-v104/` and its
 `BINARY_PROGRAMS` entries now exist - the first RE pass named `Game_Main` and
 `GameRoot_Construct`. See
-[name the boot allocator and managers](vita-2048-name-the-boot-managers.md)
-for that thread's continuation and
-[2048 vs HD/Fury lineage](vita-2048-vs-hd-fury-lineage.md) for the
+[game-boot.md](../docs/ghidra/functions/vita-2048-eu-v104/game-boot.md) for
+the boot allocator and manager/root constructors that thread went on to name,
+and [2048 vs HD/Fury lineage](vita-2048-vs-hd-fury-lineage.md) for the
 codebase-lineage question it raised. What's left here is loose ends unrelated
 to either.
 

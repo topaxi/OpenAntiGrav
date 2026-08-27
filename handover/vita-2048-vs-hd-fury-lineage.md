@@ -28,10 +28,16 @@ observation, not a conclusion.
 - `ps3-hdfury-eu`'s own `names.tsv` has 107 rows (`docs/ghidra/functions/ps3-hdfury-eu/`)
   - a real body of named functions to check against, not a cold start.
 - If the hypothesis holds, it changes where to look first for *every* future
-  2048 name, not just this one - worth resolving before the boot-manager
-  naming in [name the boot allocator and managers](vita-2048-name-the-boot-managers.md)
-  goes much further, so names aren't picked independently on both binaries
-  when they could be cross-verified together.
+  2048 name, not just this one. **2026-08-27: the boot-manager naming thread
+  went ahead without waiting on this one** - `Memory_Alloc`, `Heap_Alloc`,
+  `SystemRoot_Construct`, `SpeechManager_Construct`, `SoundManager_Construct`,
+  `FrontendRoot_Construct` and `MusicManager_Construct` are named in
+  [game-boot.md](../docs/ghidra/functions/vita-2048-eu-v104/game-boot.md) on
+  single-binary evidence only, at confidence 80-90. If this hypothesis is
+  later confirmed, revisit those seven against `ps3-hdfury-eu`'s `names.tsv`
+  for cross-verification - a same-role match there would raise confidence,
+  not change any of the names, since none of the seven were guessed off an
+  assumed HD/Fury shape.
 
 ## Next Steps
 
