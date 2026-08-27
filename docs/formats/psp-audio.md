@@ -504,23 +504,43 @@ data contains the error the binary complains about.
 
 Confidence **85**: two independent encodings of the same relation, an exact
 exclusivity across the corpus, and both forms named by strings in the
-executable. It is not 94 because the handler function has not been located -
-`0x05` and `0x08` are known to *both* play a child and are **not** known to
-differ from each other.
+executable.
+
+**2026-08-27: the handler is located, in HD's `EBOOT.elf`, and the two forms
+do differ.** `0x05` (`Scream_DoGrainPlayChild`) resolves the child and plays
+it with a computed volume and pan; `0x08` (`Scream_DoGrainBranch`, named by
+its own `snd_SFX_GRAIN_TYPE_BRANCH invalid sound index %d` error string)
+bounds-checks the index against the bank's cue count - exactly the check the
+`weapons_det.bnk` index-65-in-55-cues record above would fail - and replaces
+this voice's own playback state with the resolved cue outright. See
+[ps3-hdfury-eu/sound.md](../ghidra/functions/ps3-hdfury-eu/sound.md#0x08---the-located-handler-snd_sfx_grain_type_branch).
+Still capped at 85: the read is against HD's binary, not PSP's or PS2's, so
+this is one binary's decompilation, not a second encoding of *this* engine's
+own PSP/PS2 build.
 
 ### What it does not decide
 
-**Which child plays.** A parent's grains are guarded by `0x22`, whose operand
-is not decoded. `oag_formats::sblk::Bank::cue_tree_sounds` therefore returns
-every reachable leaf, and the caller chooses - the same honest gap as
+**Which child plays.** A parent's grains are guarded by `0x22`. Its opcode is
+now decoded too - see
+[ps3-hdfury-eu/sound.md](../ghidra/functions/ps3-hdfury-eu/sound.md#guard-0x22-a-three-way-variable-versus-immediate-skip):
+a three-way compare of a named interpreter variable against an immediate,
+skipping the grain unless it holds. What is *not* decoded is which variable
+means severity and which means ship-vs-wall, and that variable's value is
+runtime state a static WAD read cannot see regardless -
+`oag_formats::sblk::Bank::cue_tree_sounds` returning every reachable leaf and
+leaving the caller to choose is therefore not a placeholder for a static
+answer; it is the shape the format actually needs. The same honest gap as
 [which alternate sounds](#which-of-a-cues-waveforms-sounds-is-still-open), one
 level up.
 
 A structural reading of the surrounding grains is *suggestive* and is recorded
 here as a hypothesis only: `0x23` looks like a marker and `0x24` like a goto,
-with the marker id in operand byte 1. Under that reading every goto in every
-bank on all six discs finds its marker, and 3.4% of HD's grains and 1.8% of
-Pure's become unreachable - but 15% of Pulse's do, and the check cannot tell
+with the marker id in operand byte 1. **Corroborated 2026-08-27 on HD's own
+binary**: `0x23`'s handler is a two-instruction no-op and `0x24`'s scans a
+marker table and sets the same skip-count field `0x22` writes - see the sound
+page above. Under the marker/goto reading every goto in every bank on all six
+discs finds its marker, and 3.4% of HD's grains and 1.8% of Pure's become
+unreachable - but 15% of Pulse's do, and the check cannot tell
 the two byte readings apart on the goto side at all, so **`0x22`, `0x23` and
 `0x24` stay undecoded.**
 
