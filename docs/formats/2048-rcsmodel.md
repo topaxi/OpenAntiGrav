@@ -112,21 +112,88 @@ So both are already in the space their caller draws them in, and
 box. That is 0.0014 %, it is recorded rather than explained, and a reading wrong
 about the offset would not miss by that little.
 
+## Section B carries a vertex declaration, structurally identical to HD's
+
+**2026-08-27.** Section B - the object graph this reading otherwise never
+walks - carries a per-chunk vertex declaration in the same shape
+[rcsmodel.md](rcsmodel.md#the-chunk-declares-its-vertex-layout-at-the-word-0x58-points-at)
+documents for Wipeout HD: a 4-byte
+header (`count`, `stride`, two reserved bytes) then `count` 8-byte attribute
+records (`name_hash`, a repeated `stride`, a type byte, an offset byte). Found
+by scanning section B for HD's own `~crc32` attribute-name hashes
+(`position` `0xb9d31b0a`, `normal` `0xde7a971b`, `tangent` `0xdbe5f417`,
+`lightmapUV` `0x26a7b665`) and decoding outward from each hit - the reproducer
+is `crates/game/examples/vita_rcsmodel_rosetta.rs`.
+
+**The container mixes byte order within one 8-byte record.** `name_hash` is
+little-endian, matching the rest of this format - but the record's own
+repeated `stride` field only cross-checks against the header's stride read
+**big-endian**; read little-endian it disagrees on every record. Consistent
+with a serializer that writes scalar fields through explicit byte shifts
+(host-endian-independent) while `name_hash` is a straight native-endian word
+copy that the PS3-to-Vita port never adjusted.
+
+**Confidence 85 on the structure and the offsets below**, from the same kind
+of closure this whole format's reading rests on: every decoded declaration's
+attribute records cross-check their restated stride against the header's, and
+the last attribute's offset plus its byte span reaches the header's own
+stride exactly. Measured on the twelve HD-ported circuits' declarations (7 to
+30 per environment). The common layout, stride 28:
+
+| Attribute | Offset | Type nibble (components, code) |
+| --- | --- | --- |
+| `position` | `0x00` | `c3 t9` |
+| `normal` | `0x0c` | `c3 t5` |
+| `tangent` | `0x10` | `c4 t5` |
+| `Uv1` | `0x14` | `c2 t8` |
+| `lightmapUV` | `0x18` | `c2 t8` |
+
+Smaller strides drop attributes from the tail (stride 20 keeps
+`position`/`normal`/`VertexColour1`; stride 16 keeps only
+`position`/`normal`) rather than reordering the ones they keep.
+`find_declarations` anchors on the `position` hash and assumes it is always
+record 0 (`header_at = position_at - 4`) - true on every declaration checked
+by hand, not independently verified against every chunk in the corpus, so a
+declaration where `position` is not first would be silently missed rather
+than misdecoded.
+
+**What the offsets do not give: the type nibble's meaning.** 2048 runs on the
+Vita's SceGxm, not the PS3's RSX, so the low nibble is a different hardware
+enum and HD's `RSX_*` codes are not a safe translation - confirmed rather than
+assumed: `normal`'s declared type (`t5`) tested as HD's packed 11:11:10 word
+at this now-*correct* offset still scores at chance (1.1% within 18°,
+mean|dot| 0.311 against a 0.5 random baseline, n=532,140 - the same
+position-matched HD-pairing oracle `rcsmodel.md`'s own normal recovery used).
+The byte budget is a second, independent constraint: `normal@0x0c` to
+`tangent@0x10` is exactly 4 bytes for 3 declared components, which alone rules
+out at least one otherwise-plausible per-component width. `position`'s type
+(`t9`) is the one nibble this reading can name with confidence, because
+`position` is independently confirmed as 3 little-endian `f32` (measured, not
+recalled) - so `t9` is *some* 4-byte-per-component float code, whatever SceGxm
+calls it.
+
+`lightmapUV`'s plausibility (decodes to a finite `f16` pair within a
+texcoord-shaped range) is 80.7% at the declared offset against 76.2% for the
+old last-four-bytes guess - **not meaningfully different, and not evidence
+either way**: on the dominant 28-byte layout `lightmapUV`'s declared offset
+(24) *is* `stride - 4`, so the two tests read the same bytes on most of the
+corpus. A lightmap atlas is also baked per platform, so even a correct decode
+has no reason to match HD's own coordinates numerically at the same vertex -
+unlike position and normal, which are geometry and port unchanged.
+
 ## What is not decoded
 
 Named here rather than left to be rediscovered:
 
-- **Section B's object graph.** Its layout is unread; see above for what is done
-  instead. 5,294 of `altima`'s GPU-pointer entries - about one in a hundred
-  corpus-wide - are not half of a submesh pair, and are counted and reported
-  rather than dropped in silence (`psp2::Model::unpaired_pointers`).
-- **Vertex normals and tangents**, the four bytes at each vertex's `+0x0c` and
-  `+0x10`. They look like packed 11:11:10 triples, which is not a measurement.
-  The renderer derives face normals from the triangles instead and says so.
-- **Texture coordinates.** The last four or eight bytes of a vertex are one or
-  two `f16` pairs - on a track the second is a lightmap coordinate, which the
-  per-circuit `lmaps/*-lmap.gxt` entries corroborate. Not placed, so a 2048
-  model draws untextured.
+- **Section B's object graph**, past the declaration above. 5,294 of
+  `altima`'s GPU-pointer entries - about one in a hundred corpus-wide - are not
+  half of a submesh pair, and are counted and reported rather than dropped in
+  silence (`psp2::Model::unpaired_pointers`).
+- **The SceGxm type codes** (`t5`, `t8`, and `t9` beyond "is a 4-byte float").
+  The declaration states *where* a vertex's normal, tangent and texture
+  coordinates are (see above); it does not state how the bytes there decode,
+  and HD's RSX encodings are confirmed not to apply. A model still draws
+  untextured and lit off computed face normals until this is read.
 - **The material and texture binding**, and the 64-bit hashes each submesh
   record carries beside its buffer pointers.
 - **The section tags** at each descriptor's `+0x00` (`0xe35e00df` and
