@@ -654,6 +654,10 @@ writers in it at the same time:
 
 ## Traps that are live
 
+**A future bit-exact comparison of the sideshift timer columns will see a tiny negative residue where a clamped port reads exactly `0.0` - that is the original, not a bug.** 2026-08-27, capturing `sideshift-double-tap.inputs` off real PPSSPP for the first time. `Ship_UpdateSideshiftInput_q`'s own countdown (`0x08846a54`, decompiled via ghidra-mcp) is `if (timer > 0.0f) timer -= dt;` - gated, not clamped - so the tick that crosses zero still subtracts a full `dt` and lands slightly negative (`ss_shift_l` froze at `-0.000149006`, `ss_tap_window_l` at `-0.0004569963`, each held bit-exact for the rest of the run), then the field is never touched again. `crates/physics/src/airbrake.rs`'s `advance_sideshift` clamps with `.max(0.0)` instead and converges to exactly `0.0`. Left that way deliberately - every reader in the tree gates on `> 0.0`/`<= 0.0`, so the residue is behaviourally invisible, and the three fields feed `ShipState::hash_state`'s committed golden hashes, so matching it costs a hash regeneration for a cosmetic difference. Full evidence and the exact decompiled block:
+[`input-bindings.md`](docs/ghidra/functions/psp-pulse-usa/input-bindings.md#the-countdown-does-not-clamp-at-zero-and-the-ports-does---deliberately-left-that-way).
+If a bit-exact trace comparison is ever built and wants to match this too, it is a small, mechanical change (drop the three `.max(0.0)` calls in `advance_sideshift`, regenerate the affected golden hashes) - not a data gap.
+
 **A fragment `<LoadXML>` never resolving is not always a missing file - HD's
 own disc disables one by misspelling the tag.** 2026-08-26, diffing the three
 copies of `speedlap_hud.xml`
