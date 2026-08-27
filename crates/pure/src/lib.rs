@@ -108,12 +108,22 @@ pub const MUSIC: &oag_title::Music = &oag_title::Music {
 /// evidence [`oag_title::FrontEnd`] exists on.
 pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     root: names::FRONTEND_ROOT,
-    // The same five numbered plugins Pulse uses, and Pure resolves all of them;
-    // what it does *not* resolve is their string tables, which is a separate gap
-    // recorded in `HANDOVER.md`. Written out here for the reason
-    // `names::FRONTEND_ROOT` is: two titles agreeing is a measurement worth
-    // seeing rather than an arrangement to depend on.
-    language_plugins: &["PI008", "PI009", "PI010", "PI011", "PI012"],
+    // **Not the same five ids Pulse uses - only French/German/Spanish/Italian
+    // are.** The old list here was Pulse's USA set copied wholesale, on the
+    // unchecked assumption that `PI012` is Pure's English the way it is
+    // Pulse USA's. Read directly off both Pure pressings (`oag-wad cat` on
+    // every `Data\Plugins\PI0NN\Definition.xml`), `PI012` on Pure carries no
+    // `<Font>` block and no self-naming `<Entry ID="English">` at all - it is
+    // a small, unlocalised American-spelling patch (its own comment: "US-
+    // English ie English with different spellings"), the same shape as
+    // `PI003`'s Japanese button-glyph patch. Pure's real English is `PI000`:
+    // eight `<Font Language="English">` blocks naming exactly the files
+    // `oag_game::language`'s role table already credits to "Pure" (
+    // `FX300ANG.fnt`, `HUDFont.fnt`, `LTe50325.fnt`...), plus a self-naming
+    // `<Entry ID="English" String="English">`. See
+    // `docs/formats/pure-status.md#the-language-plugin-id-space-is-pures-own-not-pulses`.
+    // Confidence 90.
+    language_plugins: &["PI000", "PI008", "PI009", "PI010", "PI011"],
     menu: frontend::MENU_SKIN,
     boot: frontend::BOOT_PROFILE,
     // Pure authors a frame on `FE Screen` too - rule lines, scroll arrows, a
