@@ -322,7 +322,11 @@ than assumed: replaying `talons-junction-clean-lap.csv` under both schemes is
 **byte-identical** despite 58 uses of `l`/`r`, because the autopilot holds its
 airbrakes rather than tapping them and never centres the stick while holding one,
 so neither gesture ever fires. The flag exists on `run` for the day a capture of a
-sideshift exists.
+sideshift exists, and that day is 2026-08-27: `sideshift-double-tap.csv` needs no
+`--scheme` override to replay correctly, because it was captured off a
+never-configured profile under veteran, which is `ControlScheme::default()` -
+now itself confirmed rather than only inferred, see
+`docs/ghidra/functions/psp-pulse-usa/input-bindings.md`.
 
 `steer-both-ways` turns both ways on purpose. The sign of the yaw response is one
 of the things this harness exists to settle - row 0 of the recorded basis being

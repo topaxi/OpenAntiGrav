@@ -25,10 +25,14 @@ pub enum ControlScheme {
     /// `L` and `R` are the two airbrakes separately, and there is no sideshift
     /// button - double-tap an airbrake instead.
     ///
-    /// The default, at confidence **75**: two independent paths in
-    /// `Options_LoadControlMapping` select it and the value a never-configured
-    /// profile holds was not read. If a measurement overturns that, this
-    /// attribute moves and nothing else does.
+    /// The default, at confidence **90**: two independent paths in
+    /// `Options_LoadControlMapping` select it, and a 2026-08-27 capture off a
+    /// genuinely never-configured PPSSPP profile (first-boot dialogs answered
+    /// fresh, no `Control_Type` ever written) fired the veteran double-tap
+    /// gesture correctly with no scheme set explicitly - see
+    /// `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`'s runtime
+    /// section. If a measurement overturns that, this attribute moves and
+    /// nothing else does.
     #[default]
     Veteran,
 }

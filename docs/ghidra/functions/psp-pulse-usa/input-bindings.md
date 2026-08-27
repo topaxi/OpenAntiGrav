@@ -252,9 +252,16 @@ producer, which was not re-read here.
 
 `entity+0x8ac` is set to `1.0` at the end of the function on any tick where
 either sideshift timer is positive, is counted down by `dt`, and gates the
-whole trigger block. **One second between sideshifts**, whichever scheme is
-live. This is what `engine.md` was reaching for with "repeat lockout", but it
-sits above both branches rather than inside the button one.
+whole trigger block. This is what `engine.md` was reaching for with "repeat
+lockout", but it sits above both branches rather than inside the button one.
+
+**Corrected by the runtime capture below: the gap between sideshifts is closer
+to 1.2 s than 1.0 s.** `entity+0x8ac` being *set* to `1.0` every tick the shift
+timer runs, rather than once at the trigger, means the lockout does not start
+counting down until the ~0.2 s shift force itself has expired - so the two
+timers add rather than overlap. A previous pass of this page read "set to
+`1.0`" as "one second between sideshifts" and that is the part the capture
+corrects, not the mechanism itself.
 
 Confidence **85** for this section: one function, read end to end, with every
 literal identified.
@@ -280,15 +287,26 @@ static read predicted, to the tick:
   as scripted, well inside the `0.25 s`/15-tick window) and counts down the
   same way.
 - `ss_lockout` sets to `1.0` on the same tick `ss_shift_l` fires - not on the
-  first tap - and decays to zero over the following ~60 ticks, i.e. **1.0 s**
-  at 60 Hz.
-- `ss_tap_window_r`/`ss_shift_r` stay at `0` throughout, as they should for a
-  gesture tapped left.
+  first tap - and **stays pinned at exactly `1.0` for as long as `ss_shift_l`
+  is positive** (ticks 185-196, the same 12 ticks the shift force runs), only
+  starting to count down by `dt` once `ss_shift_l` goes non-positive at tick
+  197. It reaches zero around tick 256. So the lockout's own `1.0 s` is real,
+  but it is not the whole gap: the shift force's ~`0.2 s` runs *first*, with
+  the lockout re-armed to `1.0` on every one of those ticks rather than
+  counting down alongside it, so the two add rather than overlap - **~71
+  ticks, ~1.2 s, from the fire to the next sideshift being legal**, not the
+  `1.0 s` a flat reading of "set to `1.0`" suggests.
+- `ss_tap_window_r`/`ss_shift_r` stay at `0` throughout, confirming a left tap
+  never touches the right pair - not that the right pair themselves fire at
+  `0.25`/`0.2` on a right tap, which this capture never sent one to check.
 
-Confidence **95** for the three constants and which offset each belongs to -
-independently confirmed at runtime, not just read out of the decompiler - with
-the 5-point left/right assignment now doubly checked (static reading plus a
-live capture that fires exactly the branch a left tap should).
+Confidence **95** for the three constants (`0.25`, `0.2`, `1.0`) and the
+left-hand offsets they were read off (`0x89c`/`0x8a4`/`0x8ac`) - independently
+confirmed at runtime, not just read out of the decompiler. Confidence **85**,
+unchanged, for the right-hand offsets (`0x8a0`/`0x8a8`) and for the *shape* of
+the lockout's 1.2 s total: read correctly from the code, confirmed not to
+fire on a left tap, but the right pair's own values and a repeat of this
+capture are what would raise it.
 
 **What this does not settle: the lateral-displacement claim.** The scripted
 run-up (`180 cross`, no steering) grazes a wall on Talon's Junction around
@@ -381,8 +399,16 @@ roll's energy cost) are left unnamed: both were seen only through a caller.
 - Novice: hold `L`, flick the stick past `+/-10` on the `+/-100` axis, having
   been inside `+/-10` first.
 - Veteran: double-tap `L` or `R` within `0.25 s`.
-- Either way, `0.2 s` of force (already ported, see
-  `crates/physics/src/airbrake.rs`) and then `1.0 s` before another will fire.
+- Either way, `0.2 s` of force, then a `1.0 s` lockout that does not start
+  counting down until the force expires - **~1.2 s total from one sideshift
+  firing to the next being legal**, confirmed at runtime above. Already ported
+  correctly: `crates/physics/src/airbrake.rs`'s `advance_sideshift` re-arms
+  `shift_lockout` to `SIDESHIFT_LOCKOUT` on every tick either
+  `sideshift_timers` entry is positive rather than once at the trigger, and
+  `airbrake/tests.rs` already asserts the lockout clears at
+  `(SIDESHIFT_DURATION + SIDESHIFT_LOCKOUT) / DT` ticks - the additive total
+  this capture now confirms against the original rather than only the port's
+  own reading of the decompiler.
 - The armed latch, the two tap windows and the lockout are all **per-craft
   state in the original**, so they belong in `oag_physics::ship::ShipState`
   beside `sideshift_timers`, not in the input layer. `InputSnapshot` needs
