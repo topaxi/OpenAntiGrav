@@ -84,8 +84,25 @@ ENTITY_OWNER = 0x94
 # these gives a sideshift capture a runtime leg for the *timings themselves*,
 # not just the lateral displacement they produce - see
 # handover/sideshift-has-no-runtime-leg.md.
+#
+# The camera's additive fov term and its still-unidentified intercept, from
+# docs/ghidra/functions/psp-pulse-usa/camera.md's "Correction" section -
+# `FUN_088455ec` (the internal rig update) does
+# `entity[0x790] = dot(fwd, vel) * 0.075 + entity[0x7c]` on this same entity,
+# not on `Ship_UpdateCraft`'s own craft: the offsets only make sense read off
+# here, the same trap the shield field's own history (above) already
+# documents once. `fov_additive` (`+0x790`) has a *second* writer besides that
+# store - `Hud_Update`'s impact-shake path - so a nonzero value alone does not
+# say which one fired. `fov_intercept` (`+0x7c`) is what
+# handover/the-originals-fov-widens-with-speed-and-race.md's open item asks
+# for: measured at 0 to within +/-0.64 degrees on a clean run in both
+# camera.md and projection-vs-the-original.md, but never yet sampled through
+# an actual impact, and camera.md is explicit that no writer for it has been
+# found at all.
 ENTITY_FIELDS = [
     ("shield", 0x88),
+    ("fov_intercept", 0x7C),
+    ("fov_additive", 0x790),
     ("ss_tap_window_l", 0x89C),
     ("ss_tap_window_r", 0x8A0),
     ("ss_shift_l", 0x8A4),
