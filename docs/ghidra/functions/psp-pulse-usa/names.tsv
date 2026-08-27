@@ -593,3 +593,4 @@
 0x088613bc	function	Autopilot_Fire	88	autopilot.md
 0x08861404	function	Autopilot_Update	85	autopilot.md
 0x0892c684	function	WeatherPos_RegisterClass	90	weatherpos.md
+0x0892d9fc	function	Airbrake_Update	90	ship-parts.md
