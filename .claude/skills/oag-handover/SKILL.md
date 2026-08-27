@@ -82,9 +82,10 @@ learned expensively** sections for the thread's subject (title keywords, functio
 names, file paths) — these sections exist specifically because someone already lost
 time on adjacent ground.
 
-Tell the user, briefly, before starting: which thread, which next step, one line on
-the plan. This is the point where a fresh set of eyes could redirect you cheaply —
-don't skip it and don't over-explain it.
+Tell the user, briefly, before starting: which thread got picked, which next step,
+and the expected outcome — what will be true or land differently once this step is
+done. This is the point where a fresh set of eyes could redirect you cheaply — don't
+skip it and don't over-explain it.
 
 ## 4. Branch into a worktree — before your first file mutation, no exceptions
 
