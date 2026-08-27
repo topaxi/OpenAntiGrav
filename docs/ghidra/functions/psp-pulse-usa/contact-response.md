@@ -1240,6 +1240,16 @@ tried to decompile (including `Body_ResolveContactPair` itself, clean in
 on their own explain a decompilation failure, so treat the decompiler outage
 as a separate, undiagnosed thing rather than the same bug.
 
+**One part answered 2026-08-27: within this program, it is every `jal`, not
+some of them.** A separate pass (closing
+[the unrelocated-address thread](../../../../HANDOVER.md#working-rules-that-were-learned-expensively))
+found and retracted a competing claim that the wart was regional; a full
+`search_instructions` sweep found zero `jal` targets anywhere in
+`psp-pulse-usa`'s `BOOT.BIN` that render already-relocated (`0x08`-prefixed),
+out of 524,728 instructions scanned. Whether the *same* is true of the other
+three PSP imports, or of a PSP-relocatable-ELF import in general, is still
+untested.
+
 ### `FUN_0883f540` (`0x0883f540`-`0x0883f7b7`): `a1` is the ship's own position
 
 **Read 2026-08-19.** `Ship_ApplyCollisionImpulse`'s caller, and it settles the

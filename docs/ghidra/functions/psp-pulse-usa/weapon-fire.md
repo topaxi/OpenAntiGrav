@@ -47,12 +47,24 @@ jal 0x000645cc      ; calls 0x088685cc
 
 Every "no callers found" in this page's history was this, not an absent caller.
 
-**But the wart is regional, established 2026-08-17.** A sweep working in
-`0x0882xxxx` and `0x0885xxxx` found `jal` and `lui` operands rendering absolute
-and in range there, with `get_function_callers` working normally. So applying
-the workaround where it is not needed makes you search for immediates that do
-not exist - which produced one confident wrong conclusion in this session.
-Check that a `jal` in your region resolves to a plausible function first.
+**Corrected 2026-08-27: the wart is universal, not regional.** This page
+previously claimed (dated 2026-08-17) that a sweep of `0x0882xxxx` and
+`0x0885xxxx` found `jal` operands rendering absolute and in range there,
+citing `jal 0x08851c94` as an example. Re-checked with `search_instructions`
+across the whole program: that instruction does not exist anywhere in the
+database (`jal` + operand `0x08851c94`, zero matches out of 524,728
+instructions scanned), and no `jal` in the entire program - not a subset, all
+of it - ever displays a target beginning `0x08` (same query, operand pattern
+`"0x08"`, zero matches). A 25-address, evenly-spread sample across the whole
+`.text` section (`0x08804000`-`0x08a76a3b`) turned up unrelocated targets at
+every single site, including inside `0x0882xxxx` and `0x0885xxxx` themselves.
+The 2026-08-17 finding was never reproducible from this database; treat it as
+retracted. **Always apply the `image_base + ((word & 0x03FFFFFF) << 2)`
+workaround to a static `jal` reading here - there is no region where it is
+safe to skip it.** Cross-checked against four resolved targets: two land
+exactly on a named function's entry point, two land on real, disassemblable
+code immediately adjacent to a named function that Ghidra simply never gave
+its own `Function` object - none landed on garbage.
 
 ## The Rocket's `<Stats>` struct
 
