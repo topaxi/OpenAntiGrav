@@ -633,6 +633,87 @@ What it does **not** have matters as much, and is why `oag-pure`'s
   `crates/game/tests/font_roles_ground_truth.rs` re-derives it. Pure's menus
   draw in `Default`, which is why `MenuSkin::menu_font` stays `None`.
 
+### The language plugin id space is Pure's own, not Pulse's
+
+`oag_pure::FRONT_END::language_plugins` used to be Pulse's USA set copied
+outright - `PI008`-`PI012` - on the unchecked assumption that a title's
+language ids are a shared convention. They are not: Pure's own id space was
+never probed before this was measured, only assumed to line up with Pulse's,
+and it does not.
+
+Hashing every `Data\Plugins\PI0NN\Definition.xml` for `NN` in `000..032`
+against both `pure-psp-eu.chd` and `pure-psp-usa.chd` finds nine plugins on
+each pressing: `PI000`, `PI001`, `PI003`, `PI004`, `PI005`, `PI008`-`PI012`.
+Five name a `<Font Language=...>` block and a self-naming `<Entry ID=
+"<language>">` - the shape [`Language::from_definition`] treats as a real,
+picker-worthy language:
+
+| Plugin | Language | Native name | Font source (Default role) |
+| --- | --- | --- | ---: |
+| `PI000` | English | English | `FX300ANG.fnt` |
+| `PI008` | French | Français | `FX300ANG.fnt` |
+| `PI009` | German | Deutsch | `FX300ANG.fnt` |
+| `PI010` | Spanish | Español | `FX300ANG.fnt` |
+| `PI011` | Italian | Italiano | `FX300ANG.fnt` |
+
+The other four are not languages at all, despite each carrying a `Language=`
+attribute somewhere in its tree - which is exactly why probing the id space
+naively is unsafe:
+
+- **`PI001`** is a `PI_Skin` (UI chrome), and **`PI004`** is billboard
+  placements - neither carries a `Language` attribute at all, so
+  `Language::from_definition` already returns `None` for both.
+- **`PI003`** carries no `<Font>` block, only a `<StringTable>` whose own
+  comment reads `Japanese-English ie English string with Japanese Buttons` -
+  a button-glyph substitution layer for use alongside Japanese, not a
+  selectable language. `find_language_attribute`'s depth-first walk falls
+  through to its first `<Entry Language="English">` for want of a `<Font>`
+  match anywhere above it, so it *does* parse as "English" - a second,
+  string-table-only "English" that must not be added to the picker list.
+- **`PI012`** is the same shape for the same reason: no `<Font>` block, and
+  its own comment reads `US-English ie English with different spellings` - a
+  handful of American-spelling overrides (`Synchronizing` for
+  `Synchronising`, `minimize` for `minimise`), not a base language. It also
+  resolves as "English" under the same fallback, and it is what the old
+  plugin list mistakenly wired up: [`load_strings`] found no
+  `Dynamic Entry File Source` in it (it has none), so the picker's "English"
+  drew with an **empty** string table - the `HUD_CURRENT`/`HUD_BEST`/`HUD_LAP`
+  raw-key symptom a race actually showed on screen.
+- **`PI005`** is a real, complete Japanese language plugin - eight `<Font
+  Language="Japanese">` blocks and its own inline strings - present on both
+  Pure pressings and, per its structure alone, exactly as picker-worthy as
+  `PI000`. It is left out of `language_plugins` here on the strength of
+  Pulse's own precedent rather than a measurement of Pure's: Pulse's boot-time
+  plugin manifest, read directly out of the executable
+  (`docs/architecture/frontend-boot.md#the-eu-disc-pulse-psp-eudchd`),
+  loads its `PI005` but never offers it as a picker choice on either region.
+  **Whether Pure's own boot manifest does the same is unread** - no Ghidra
+  pass has walked Pure's plugin table the way Pulse's was walked. That is the
+  one open question this leaves; see the next-steps note in `HANDOVER.md`.
+
+**`PI000` states its own strings inline rather than pointing at an
+`entries.xml`.** Every other language plugin here names one (`Dynamic Entry
+File Source`); `PI000` does not, and `Data\Plugins\PI000\entries.xml` does not
+exist on either pressing - the roughly 1,000-entry table, HUD captions
+(`idstring="HUD_Lap"`, `HUD_current`, `HUD_best` - matched directly against
+`Data\XML\TimeTrial_HUD.xml`'s own `idstring` attributes) included, sits
+directly inside `Definition.xml`'s own `<StringTable>`. [`load_strings`] now
+re-parses the definition itself as a string table when a language names no
+external one; a `<Font>`/`<Values>` node carries no `<Entry>` tag, so this
+costs nothing on the discs where the field really is absent and only helps
+the one where it is not.
+
+Confidence **90**: every plugin id, its `Language`/`Entry` shape and its font
+and string content are read directly off both pressings and asserted in
+[`pures_picker_offers_its_own_five_languages_english_included`]. The one
+unmeasured claim - whether `PI005` is ever offered in Pure's own picker - is
+carried at no confidence score, per the RE workflow's rule for an unread
+question rather than a guess.
+
+[`Language::from_definition`]: https://github.com/topaxi/OpenAntiGrav/blob/main/crates/game/src/language.rs
+[`load_strings`]: https://github.com/topaxi/OpenAntiGrav/blob/main/crates/game/src/boot.rs
+[`pures_picker_offers_its_own_five_languages_english_included`]: https://github.com/topaxi/OpenAntiGrav/blob/main/crates/game/tests/pure_boot_ground_truth.rs
+
 See [front-end menu definitions](fe-menu-definitions.md) and
 [the original's menus](../ui/menus-original.md).
 
