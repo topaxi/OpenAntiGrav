@@ -11,7 +11,7 @@ supply — do not guess past a blocker.
 
 ## 0. Hard rule: no file mutation before `EnterWorktree`
 
-**Everything before step 4 is read-only.** No `Edit`, no `Write`, no `rm`/`mv`/`sed -i`,
+**Everything before step 5 is read-only.** No `Edit`, no `Write`, no `rm`/`mv`/`sed -i`,
 no fixing a typo you happen to notice — not even in the main checkout, and not even if
 it looks like a one-line fix. This bit a real session: uncommitted work was found
 sitting in the main checkout, read (per step 1 below) as "a previous session's
@@ -34,7 +34,7 @@ done                                # any PID besides this session's own with cw
 A PID other than this session's own with `cwd` equal to the main checkout means a live
 session is working there directly, right now, outside any worktree — revert any edit
 you already made there, leave the rest of that checkout untouched, and take it purely
-as a reminder to obey step 4 yourself, not as something to fix on that session's behalf.
+as a reminder to obey step 5 yourself, not as something to fix on that session's behalf.
 Otherwise, the uncommitted state really is a past session's leftovers — still don't
 edit it from the main checkout; either pick it up properly by entering a worktree
 first, or leave it alone and pick a different thread.
@@ -82,12 +82,14 @@ learned expensively** sections for the thread's subject (title keywords, functio
 names, file paths) — these sections exist specifically because someone already lost
 time on adjacent ground.
 
-Tell the user, briefly, before starting: which thread got picked, which next step,
-and the expected outcome — what will be true or land differently once this step is
-done. This is the point where a fresh set of eyes could redirect you cheaply — don't
-skip it and don't over-explain it.
+## 4. Tell the user, briefly, before starting
 
-## 4. Branch into a worktree — before your first file mutation, no exceptions
+Before touching a worktree or a file, tell the user: which thread got picked, which
+next step, and the expected outcome — what will be true or land differently once this
+step is done. This is the point where a fresh set of eyes could redirect you cheaply —
+don't skip it and don't over-explain it.
+
+## 5. Branch into a worktree — before your first file mutation, no exceptions
 
 This is the gate step 0 exists to enforce: the *first* `Edit`/`Write`/mutating `Bash`
 call of the session happens after this step, never before it. Call `EnterWorktree` to
@@ -106,7 +108,7 @@ switches the session into it. Do the rest of the work there; leave it for
 `ExitWorktree` at the user's request or the harness's own end-of-session prompt —
 don't remove it yourself.
 
-## 5. Do the work
+## 6. Do the work
 
 Follow this repo's normal rules — nothing about this skill changes them:
 
@@ -121,7 +123,7 @@ Follow this repo's normal rules — nothing about this skill changes them:
 - Non-trivial work gets a task list, checked off as it lands, per the global
   instructions.
 
-Commit as you go, in the worktree — don't let one giant diff accumulate for step 7 to
+Commit as you go, in the worktree — don't let one giant diff accumulate for step 8 to
 squash at the end. The worktree exists precisely so this is safe: commit each landed,
 buildable increment on its own (a doc page written, a rename plus its `names.tsv` row,
 one passing test, one implementation slice) as soon as it's true, rather than batching
@@ -130,9 +132,9 @@ interrupted session's partial progress reviewable — a maintainer picking the t
 back up sees exactly which increments landed and which didn't, instead of one opaque
 blob or, worse, uncommitted work that a crash or context loss can still lose even
 though the worktree itself persists. Small commit messages are fine; they don't need
-the full PR-body treatment step 7's final state does.
+the full PR-body treatment step 8's final state does.
 
-## 6. If you get stuck, stop — don't push through on a guess
+## 7. If you get stuck, stop — don't push through on a guess
 
 Blocked means: the next step needs a Ghidra project that isn't open, a disc image
 that isn't in `data/images/`, a decompile that doesn't resolve to a confident enough
@@ -151,11 +153,11 @@ resolved. Report back:
 
 Leave the thread file as-is if nothing publishable resulted; add findings to its
 `## Open`/`## Next Steps` if you narrowed the problem even without finishing it. If
-step 5's granular commits already cover everything real that landed, there's nothing
+step 6's granular commits already cover everything real that landed, there's nothing
 further to commit — don't invent a wrap-up commit just to have one; an uncommitted
 scratch note about the blocker is fine to leave sitting in the worktree.
 
-## 7. If you finish clean
+## 8. If you finish clean
 
 Update docs with evidence and confidence per the RE workflow, update the thread
 file's `## Open`/`## Next Steps` to reflect what's left (or, if nothing is left,
