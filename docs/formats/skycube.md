@@ -256,8 +256,25 @@ pads use - see `ps2-texture.md`'s "How a model finds its texture set" - so the
 fix is passing the *same* resolved set into `build_sky` (and `build_pads`,
 which had the identical bug) rather than resolving a second one. Confirmed on
 `03_Track` (Moa Therma, the reported case): white sky before, textured sky
-after, `just view --sky` gives the identical result standalone. Also confirmed
-on the two circuits with a texture set short by 1-2 slots
-(`02_Track`, `12_Track`) - the missing ordinals are not among the sky's own, so
-both skies draw fully textured despite the track's own art meshes reporting a
-couple of undecoded slots.
+after, `just view --sky` gives the identical result standalone.
+
+**The other 30 PS2 circuits were visually swept 2026-08-27**, not just
+reasoned about: all 32 `Data\Environments\<n>_Track\track[_reversed].vex`
+files, sky and pads both (64 renders), via
+`oag-view --sky/--pads --textures <preceding-entry-index> --draws
+--screenshot`, resolving the preceding-entry index the same way
+`oag_game::race::load` does (see [`ps2-texture.md`](ps2-texture.md)). 63 of 64
+resolve every draw's texture. **`12_Track`'s sky (forward direction only, not
+`12_Track_reversed`) does not**: `--draws` reports one opaque draw -
+`skycube1_nolightShape`, texture ordinal 151 - binding the white 1x1 fallback,
+because the model wants 152 texture slots and the preceding entry's resolved
+set decodes only 151 (the near-miss `ps2-texture.md` already measured for this
+circuit). Spinning the camera around the cube shows exactly what that draw
+predicts: one whole face pure white, the rest of the cube textured normally -
+the original bug's visual signature, still present on this one face of this
+one circuit. **This corrects an earlier claim on this page** that both
+`02_Track` and `12_Track`, despite their short sets, "draw fully textured" -
+true for `02_Track` (and its reversed twin, and `06_Track_reversed`, the third
+near-miss circuit - all three checked in this sweep and clean) but not for
+`12_Track`. The root cause of the one-slot shortfall itself is still
+unidentified; see [`ps2-texture.md`](ps2-texture.md#how-a-model-finds-its-texture-set-directory-position-not-a-name).
