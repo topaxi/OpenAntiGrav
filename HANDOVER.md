@@ -198,6 +198,24 @@ provocation buys the next. Account, sweep and remainders:
 Guarded by `crates/game/tests/ram_ground_truth.rs`, `#[ignore]`d so **CI does
 not run it**.
 
+### The airbrake flap's rotation axis was recoverable after all - a per-instance handler, not class dispatch
+
+**2026-08-27.** `oag_render::mesh::Flap::deflect` had used local X to swing the
+flap since it was implemented, flagged below the confidence-50 floor as
+"chosen, not recovered" - class-id dispatch genuinely has no per-class handler
+for a tagged node (`ship-parts.md`'s static-search section still stands). What
+that search could not find is a per-instance handler reached indirectly, the
+same shape `Exhaust_Update` has. A live PPSSPP session with a read watchpoint
+on the graphics deflection state (`craft+0x2d8`/`+0x2dc`) found it: 1,929 of
+3,210 hits landed in one function, now `Airbrake_Update` (`0x0892d9fc`,
+confidence 90). Its raw VFPU disassembly builds
+`(1,0,0,0)`/`(0,cos,sin,0)`/`(0,-sin,cos,0)`/`(0,0,0,1)` - local X, exactly
+what the code already used. Full evidence, the watchpoint counts and the
+disassembly are in `ship-parts.md`'s "recovered from a live read" section.
+**The lesson for the next below-50 flag in this codebase**: "no per-class
+dispatch" and "no per-instance handler" are different claims, and only the
+first one had actually been checked.
+
 ### M4 and M5
 
 M4 (shield/energy, Zone's ending, the grid, weapon pads, the weapon table,
@@ -512,7 +530,6 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [Pure's `Title Screen` is missing its own logo wordmark - not chased further](handover/pures-title-screen-is-missing-its-own-logo.md)
 - [A *slot-resolved* record's own field layout](handover/a-slot-resolved-records-own-field-layout.md)
 - [One team's `Ship.vex` does not resolve by name](handover/one-teams-ship-vex-does-not-resolve-by.md)
-- [The airbrake flap rotation axis is chosen, not recovered](handover/the-airbrake-flap-rotation-axis-is-chosen-not.md)
 - [A model built from several small pieces sharing one atlas](handover/a-model-built-from-several-small-pieces-sharing.md)
 - [Which movie cut plays, and what plays the three 260-frame reels](handover/which-movie-cut-plays-and-what-plays-the.md)
 - [The PS2 PAL/NTSC selector's ultimate trigger](handover/the-ps2-pal-ntsc-selectors-ultimate-trigger.md)

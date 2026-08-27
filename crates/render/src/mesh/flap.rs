@@ -42,18 +42,21 @@ impl Flap {
     /// baked vertices directly would swing them about the model's origin
     /// instead of the hinge, which on Assegai is 6.2 units behind it.
     ///
-    /// # The axis is chosen, not recovered
+    /// # The axis is recovered, from a live read
     ///
     /// The `Airbrake` node's payload is **zero bytes** and its class
     /// descriptor carries no handler, so the file does not say which way the
-    /// flap turns and there is no per-class update function in the binary to
-    /// read it out of - the dispatch that drives a tagged node is indirect
-    /// (`Exhaust_Update`, the worked example of the same shape, has no direct
-    /// callers either). Under the confidence rubric that puts the axis below
-    /// 50, so it is **not** presented as recovered: local X is picked because
-    /// it swings the flap the way an airbrake looks like it should, and the
-    /// mirrored hinges then take care of the sign. What *is* recovered is
-    /// everything around it - the hinge pose, the deflection in radians and
+    /// flap turns and class-id dispatch has no per-class function to read it
+    /// out of. What that search missed is a per-instance handler reached
+    /// indirectly (the same shape `Exhaust_Update` has - no direct callers
+    /// either): a live PPSSPP session with a read watchpoint on the graphics
+    /// deflection state found `Airbrake_Update`, whose raw VFPU disassembly
+    /// builds `(1,0,0,0)`/`(0,cos,sin,0)`/`(0,-sin,cos,0)`/`(0,0,0,1)` -
+    /// local X, row-major. Confidence 90; see
+    /// `docs/ghidra/functions/psp-pulse-usa/ship-parts.md`'s "recovered from
+    /// a live read" section for the disassembly and the watchpoint counts.
+    /// The mirrored hinges still take care of the sign, and everything else
+    /// was already recovered - the hinge pose, the deflection in radians and
     /// both rates.
     #[must_use]
     pub fn deflect(&self, angle: f32) -> Mat4 {
