@@ -170,7 +170,8 @@ out at least one otherwise-plausible per-component width. `position`'s type
 (`t9`) is the one nibble this reading can name with confidence, because
 `position` is independently confirmed as 3 little-endian `f32` (measured, not
 recalled) - so `t9` is *some* 4-byte-per-component float code, whatever SceGxm
-calls it.
+calls it. (`t5`'s meaning did not stay open long - the byte-budget argument
+above turns out to be the whole answer; see "The normal is cracked" below.)
 
 `lightmapUV`'s plausibility (decodes to a finite `f16` pair within a
 texcoord-shaped range) is 80.7% at the declared offset against 76.2% for the
@@ -227,6 +228,50 @@ ambiguity-free oracle for the next hypothesis - cheaper to test against than
 rebuilding spatial matching, and immune to the hard-edge noise that likely
 explains why the spatial-matched sweep never got a clean read either.
 
+### The normal is cracked: three signed bytes, not a packed word
+
+**2026-08-27, same session, next hypothesis.** Every candidate tried above
+shares one assumption - that `normal`'s 4-byte slot is one packed word, HD's
+shape. The declaration itself argues against that: `tangent` declares the
+*same* type code (`5`) with 4 components rather than 3, and `tangent`'s own
+byte budget (`+0x10` to `Uv1@0x14`) is exactly 4 bytes for those 4 components
+- one byte each, no padding needed. If type `5` is a fixed **one byte per
+component**, `normal`'s 3 components take 3 bytes and the 4th byte to
+`tangent@0x10` is alignment padding, not a fourth used field - a completely
+different shape of encoding than the packed word tried three times over
+above.
+
+An exhaustive search over that shape - every assignment of 3 of the 4 raw
+bytes to x/y/z, both a signed and an HD-style unsigned-biased reading, plus
+every field-to-axis permutation of the packed-word family for good measure
+(60 candidates total) - against the same 1,504-vertex index-exact oracle,
+settles it outright:
+
+| Hypothesis | n | within 18° | mean dot |
+| --- | --- | --- | --- |
+| **`byte[0]=x byte[1]=y byte[2]=z, each `i8/127`, byte[3] padding** | 1,504 | **100.0%** | **0.994** |
+| next best (bytes reordered) | 1,504 | 54.0% | 0.802 |
+| every packed-word permutation tried | 1,504 | ≤27.6% | ≤0.489 |
+
+**Confidence 96.** The winner is not merely best of a field - it is a clean
+break, 0.994 against a 0.802 runner-up, and it generalises: the same decode
+scores **33,335,682 of 33,335,682 normals unit-length within 2%** across
+*all 993 shipped files*, not just the twelve HD-ported ones the oracle could
+check content against. The unused 4th byte is `0x00` on every one of the
+1,504 oracle vertices - genuine alignment padding, not a fourth field this
+reading is leaving on the table. The reproducer is
+`crates/game/examples/vita_rcsmodel_bytesearch.rs`; the decode lives in
+`oag_formats::rcsmodel::psp2::unpack_normal`.
+
+**What this does not confirm**: the SceGxm symbolic name for type code `5`.
+The decode behaviour (signed, one byte per component, normalised by 127)
+matches what a format called `S8N` would do on Vita's GPU, but that is
+recognition of a shape, not a Ghidra-confirmed symbol - `RcsModel_Load`
+itself never touches section B past relocating it, and the actual consumer
+(wherever the eboot binds a `SceGxmVertexAttribute` from this declaration)
+was not located this session. The empirical decode is what the renderer
+uses; the SDK-level name is left for whoever finds that code.
+
 ## What is not decoded
 
 Named here rather than left to be rediscovered:
@@ -235,11 +280,16 @@ Named here rather than left to be rediscovered:
   `altima`'s GPU-pointer entries - about one in a hundred corpus-wide - are not
   half of a submesh pair, and are counted and reported rather than dropped in
   silence (`psp2::Model::unpaired_pointers`).
-- **The SceGxm type codes** (`t5`, `t8`, and `t9` beyond "is a 4-byte float").
-  The declaration states *where* a vertex's normal, tangent and texture
-  coordinates are (see above); it does not state how the bytes there decode,
-  and HD's RSX encodings are confirmed not to apply. A model still draws
-  untextured and lit off computed face normals until this is read.
+- **The SceGxm type codes**, past `normal`'s (confidence 96 - see above).
+  `tangent`'s (`t5`, 4 components) and `Uv1`/`lightmapUV`'s (`t8`, 2
+  components) are still open; HD's RSX encodings are confirmed not to apply
+  to this format at all, so neither is a safe guess from HD's own reading. A
+  model still draws untextured until `t8` is placed and bound to a material.
+- **`RcsModel_Load`'s actual consumer** - whichever function binds this
+  declaration's fields into a GPU vertex-attribute setup at runtime. Not
+  located this session; the normal's encoding was settled empirically
+  instead (see above), which is why the SceGxm symbolic name for type `5`
+  is recognised by behaviour rather than confirmed by name.
 - **The material and texture binding**, and the 64-bit hashes each submesh
   record carries beside its buffer pointers.
 - **The section tags** at each descriptor's `+0x00` (`0xe35e00df` and
@@ -252,7 +302,10 @@ allocation when its size is zero.
 ## What it looks like
 
 `just play 2048 --race` draws Altima's road, barriers and scenery - 413,358
-triangles over 2,800 submeshes - and the craft's hull, untextured and lit off
-computed face normals. That is the same honest half-picture an HD model gives
-before its material binding is read, and it is what the two undecoded vertex
-fields above cost.
+triangles over 2,800 submeshes - and the craft's hull, untextured, lit off
+the file's own authored normals where a submesh's stride carries one -
+33,335,682 of 33,335,682 across the corpus - and off computed face normals
+only where it does not, which is not observed on any shipped file. That is
+closer to right than an HD model gives before its material binding is read,
+and untextured is what the still-undecoded texture-coordinate and material
+fields cost.
