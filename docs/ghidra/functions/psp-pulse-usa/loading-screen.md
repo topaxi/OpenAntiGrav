@@ -200,6 +200,36 @@ index is bounded by the wrap, and the divisor 99.0 matches its own maximum.
 while the screen fades out. `Loading_ThreadMain` then counts five more frames
 (`DAT_08abf458 > 4`) before `sceKernelExitDeleteThread`. Confidence **80**.
 
+### Confirmed at runtime: the tip screen fires at cold boot, before the state machine exists
+
+The type table above reads `0x088072f0` in `Game_MainLoop` as passing `4` (tip
+screen), and it was unclear whether that call is reachable only after front-end
+navigation or fires unconditionally at boot. **It fires unconditionally, and
+immediately**: captured 2026-08-27 against `pulse-psp-usa.chd` in PPSSPP
+v1.20.4 (`PPSSPPHeadless`, CPU paused at `pc=0x08804000` per `--debugger`'s
+break-at-start, breakpoint armed at `Loading_Show` before the first
+`cpu.resume`), the first two hits of `Loading_Show` are:
+
+| Hit | `a0` (type) | Emulated time | State machine |
+| --- | ---: | ---: | --- |
+| 0 | 0 (boot logo) | 0.017 s | not yet constructed (`0x08b31784` unreadable) |
+| 1 | 4 (tip/wave screen) | 4.154 s | not yet constructed |
+
+No button was pressed between them or before. Both calls land before
+`0x08b31784`'s state machine pointer is valid at all - consistent with the
+observed cold-boot state sequence on [main loop](main-loop.md) starting at
+`LogoFMV`, since these two `Loading_Show` calls are earlier than that.
+
+**This retires the "reaching a type-4 screen needs ~3 minutes of front-end
+navigation" difficulty** that the runtime-capture next step was scoped around:
+a type-4, wave-bearing screen is up within about four seconds of any cold
+boot, no menu walk and no sighted navigation required. The remaining capture
+(`g_loading_wave_phase` and the emitted vertex Y values across a few frames)
+can be taken directly off this same boot, breaking inside `Loading_DrawWave`
+instead of `Loading_Show`. Confidence **92**: a direct breakpoint capture, two
+hits, the type and ordering matching the static table exactly, on one binary
+and one emulator version.
+
 ### What it looks like
 
 Reimplementing the loop above in a scratch script and plotting the three bands
@@ -354,10 +384,12 @@ traced back to a filename.
 
 ## Not determined
 
-- **Runtime capture.** Nothing on this page has been observed in the running
-  game. The one measurement that would settle the motion model is a PPSSPP
-  capture of `g_loading_wave_phase` (`0x08abf470`) and the emitted vertex Y
-  values across a few frames of a type-4 screen; see
+- **The motion model itself is still not runtime-verified.** The call
+  sequence that reaches a type-4 screen now is (see above); the wave's own
+  motion - `g_loading_wave_phase` (`0x08abf470`) and the emitted vertex Y
+  values across a few frames - has not. `Loading_DrawWave` (`0x0890a8e4`) is
+  the breakpoint to use, reachable within about four seconds of any cold boot
+  with no navigation; see
   [the debugger page](../../../reverse-engineering/ppsspp-debugger.md).
 - The exact signatures of `FUN_08810f68` and `FUN_08810f84`. Read here as
   `(src_w, src_h, dst_w, dst_h)` and `(x, y, z, u, v, ...)` from four
