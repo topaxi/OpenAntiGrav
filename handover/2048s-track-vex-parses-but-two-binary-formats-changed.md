@@ -314,10 +314,17 @@ Three things from that pass are worth carrying:
 
 None of it is a format any more; it is fields inside one, and presentation:
 
-- **A 2048 model draws untextured.** The per-vertex normal and texture
-  coordinate are in the file and unplaced (four bytes at `+0x0c`, `f16` pairs at
-  the end), as is the material and texture binding. That is the next piece of
-  work and it is what stands between this and a picture worth comparing.
+- **A 2048 model draws untextured.** 2026-08-27 found *where* the normal,
+  tangent and texture coordinates are: section B carries a per-chunk vertex
+  declaration structurally identical to HD's own
+  ([2048-rcsmodel.md](../docs/formats/2048-rcsmodel.md#section-b-carries-a-vertex-declaration-structurally-identical-to-hds)) -
+  `normal@0x0c`, `tangent@0x10`, `Uv1@0x14`, `lightmapUV@0x18` on the common
+  28-byte stride. What is still missing is *how the bytes there decode*: 2048
+  runs on the Vita's SceGxm, not HD's PS3 RSX, so the type nibble is a
+  different enum and HD's packed-normal encoding is confirmed **not** to apply
+  at the correct offset (chance-level dot product against HD ground truth,
+  n=532,140). That, plus the material and texture binding, is what stands
+  between this and a picture worth comparing.
 - **The HD-derived roster is not reachable as a default on this title.** One
   `ship_dir` string cannot address both of 2048's trees; every file is there.
 - No HUD art (2048's `.gxt` atlases sit under names this build does not ask
@@ -348,11 +355,15 @@ parser change yet - see What's New above and Next Steps below.
 
 ## Open
 
-- The `.rcsmodel` container's three sections' own interiors - what fills the
-  rest of section A past its own `+0x0c`/`+0x24`/`+0x44` size fields, and the
-  chunk/relocation shape inside the "main memory" and "GPU" blocks
-  `RcsModel_Load` reads whole. Only where the three sections start and end is
-  known.
+- Section B's vertex declaration is found and its offsets are cross-checked
+  (see "What is left" above), but the **type nibble's meaning** (SceGxm
+  attribute-format codes, not RSX) is not - `normal`'s and `tangent`'s type
+  (5), `Uv1`'s and `lightmapUV`'s type (8), and `position`'s type (9) beyond
+  "some 4-byte float". Needs either a verified SceGxm attribute-format
+  reference or Ghidra RE of the eboot's vertex-stream setup path (whoever
+  consumes a submesh record's `+0x10`/`+0x2c` pointers). Section B's *other*
+  contents past this one declaration - the rest of the serialized object graph
+  `RcsModel_Load` reads whole - remain unwalked.
 - The four unplaced bytes of the `WO Track` point tail (`0x58`/`0x59` and
   `0x5e`/`0x5f`), the constant `0xff`/`0x00` pair at `0x5a`/`0x5b`, and
   `cathedral`'s section id of 9 against 6 `section` nodes. The `WO Track`
@@ -397,3 +408,11 @@ parser change yet - see What's New above and Next Steps below.
    no ground is not a race at all. So step 2's two halves are no longer equal
    in priority - `KdTreeMeshShape.cpp`'s trailer first, `RcsModel_Load`'s three
    sections after it.
+5. ~~Section B's vertex declaration~~ - found 2026-08-27, offsets
+   cross-checked, see "What is left" above. What is left is the type nibble's
+   meaning: read the eboot's vertex-stream setup path (a
+   `sceGxmSetVertexStream`/`sceGxmVertexAttribute`-shaped call, or whoever
+   reads a submesh record's `+0x10`/`+0x2c` pointers) for the SceGxm
+   attribute-format enum, or find a verified reference for it rather than
+   guessing from HD's RSX codes - already checked and confirmed not to
+   transfer.
