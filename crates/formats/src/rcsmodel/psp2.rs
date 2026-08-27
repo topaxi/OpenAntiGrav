@@ -36,17 +36,35 @@
 //!
 //! # What is decoded, and what is deliberately not
 //!
-//! **Positions and triangle indices.** That is enough to draw a 2048 circuit
-//! and a 2048 craft, which nothing could before.
+//! **Positions, triangle indices and vertex normals.** That is enough to draw
+//! a lit 2048 circuit and a lit 2048 craft, which nothing could before.
 //!
-//! **Not decoded**: the object graph's own layout. This module finds submesh
-//! records *through the relocation table* rather than by walking B - see
-//! [`submeshes`] - which is honest about what is known and is what makes the
-//! reading checkable. Also not decoded: vertex normals and tangents (the four
-//! bytes at `+0x0c` and `+0x10` of a vertex), texture coordinates (two `f16`
-//! pairs at the end of each vertex, one of them a lightmap coordinate on a
-//! track), the material and texture binding, and the 64-bit hashes each record
-//! carries. See `docs/formats/2048-rcsmodel.md`.
+//! **The normal is three signed bytes, `byte/127.0`, at `+0x0c` - not a
+//! packed word.** Section B carries a per-chunk vertex declaration in the
+//! same shape as HD's own (`docs/formats/2048-rcsmodel.md`'s "Section B
+//! carries a vertex declaration" section), naming `normal`'s offset (`0x0c`,
+//! immediately after the 12-byte position, on every declaration decoded) and
+//! its type - a Vita SceGxm code, not one of HD's RSX ones, so HD's packed
+//! 11:11:10 word was tried at this exact offset and ruled out. **Confidence
+//! 96**: an index-exact vertex correspondence against Wipeout HD (1,504
+//! vertices, zero ambiguity - the same shape of oracle that settled the `WO
+//! Track` tail) scores this exact decode at 100% within 18 degrees, mean dot
+//! 0.994, against every other candidate tried scoring at or below chance.
+//! The fourth byte is `0x00` on all 1,504 - genuine padding to a 4-byte
+//! attribute width, not a fourth field. See [`unpack_normal`].
+//!
+//! **Not decoded**: the object graph's own layout, past this one
+//! declaration. This module finds submesh records *through the relocation
+//! table* rather than by walking B - see [`submeshes`] - which is honest
+//! about what is known and is what makes the reading checkable. Also not
+//! decoded: the tangent (four bytes at `+0x10`, same declared type as
+//! `normal` but four components rather than three - the padding argument
+//! above does not apply, since 4 components exactly fill 4 bytes), texture
+//! coordinates (two `f16` pairs at the end of each vertex, one of them a
+//! lightmap coordinate on a track - offset placed via the same declaration,
+//! content unconfirmable across titles since a lightmap atlas is baked per
+//! platform), the material and texture binding, and the 64-bit hashes each
+//! record carries. See `docs/formats/2048-rcsmodel.md`.
 //!
 //! # Why the record layout is trustworthy anyway
 //!
@@ -91,6 +109,30 @@ pub const INDEX_POINTER: usize = 0x10;
 
 /// Offset of the vertex-buffer pointer within a submesh record.
 pub const VERTEX_POINTER: usize = INDEX_POINTER + BUFFER_POINTER_GAP;
+
+/// Bytes a vertex's position occupies - three little-endian `f32`.
+pub const POSITION_LEN: usize = 12;
+
+/// Byte offset of the vertex normal, immediately after the position.
+///
+/// The same on every declared stride this reading has seen (16, 20, 28) -
+/// see the module doc's confidence note. Mirrors
+/// [`crate::rcsmodel::NORMAL_OFFSET`], which is `POSITION_LEN` for the same
+/// reason on the unrelated HD container.
+pub const NORMAL_OFFSET: usize = POSITION_LEN;
+
+/// Turns the three bytes at [`NORMAL_OFFSET`] into a unit vector.
+///
+/// **Not HD's packed word.** Each byte is one signed, two's-complement
+/// component - `x`, `y`, `z` in that order - divided by 127. The declaration
+/// names a fourth byte after these three that this function does not read;
+/// it is `0x00` on all 1,504 vertices an index-exact correspondence against
+/// Wipeout HD checked, so it is padding to a 4-byte attribute width rather
+/// than a fourth field. See the module doc for the confidence evidence.
+#[must_use]
+pub fn unpack_normal(bytes: [u8; 3]) -> [f32; 3] {
+    std::array::from_fn(|i| f32::from(bytes[i] as i8) / 127.0)
+}
 
 /// Something wrong with a 2048 `.rcsmodel`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -165,6 +207,13 @@ pub struct SubMesh {
     /// Vertex positions, in whatever space the model is authored in - world
     /// space for a circuit, model space for a craft. See [`Model::positions`].
     pub positions: Vec<[f32; 3]>,
+    /// Vertex normals, one per vertex, in the same space as [`positions`](Self::positions).
+    ///
+    /// Empty rather than `None` when a submesh's stride is too small to hold
+    /// one (`< NORMAL_OFFSET + 3`) - not observed on any of the 993 shipped
+    /// files (the smallest declared stride is 16), but not assumed away
+    /// either. See [`unpack_normal`].
+    pub normals: Vec<[f32; 3]>,
     /// Bytes per vertex, derived from the buffer's own length rather than read
     /// from a field - see [`Model::parse`].
     pub stride: usize,
@@ -217,6 +266,17 @@ impl Model {
         self.submeshes
             .iter()
             .flat_map(|s| s.positions.iter().copied())
+    }
+
+    /// Every decoded vertex normal in the model, submesh by submesh.
+    ///
+    /// Shorter than [`Self::positions`] when a submesh's stride was too
+    /// small to carry one - see [`SubMesh::normals`] - which is not observed
+    /// on any of the 993 shipped files.
+    pub fn normals(&self) -> impl Iterator<Item = [f32; 3]> + '_ {
+        self.submeshes
+            .iter()
+            .flat_map(|s| s.normals.iter().copied())
     }
 }
 
@@ -414,10 +474,19 @@ fn one(
         let at = vertex_at + v * stride;
         positions.push([f32_at(file, at), f32_at(file, at + 4), f32_at(file, at + 8)]);
     }
+    let mut normals = Vec::new();
+    if stride >= NORMAL_OFFSET + 3 {
+        normals.reserve_exact(vertex_count);
+        for v in 0..vertex_count {
+            let at = vertex_at + v * stride + NORMAL_OFFSET;
+            normals.push(unpack_normal([file[at], file[at + 1], file[at + 2]]));
+        }
+    }
     Some(SubMesh {
         record,
         indices,
         positions,
+        normals,
         stride,
     })
 }

@@ -201,6 +201,42 @@ fn positions_decode_as_a_float_triple_at_the_start_of_every_vertex() {
     );
 }
 
+/// Normals decode as unit vectors - a self-consistency check the whole
+/// corpus can run, not just the twelve HD-ported circuits.
+///
+/// **The real confirmation is elsewhere**: an index-exact vertex
+/// correspondence against Wipeout HD (1,504 vertices, zero ambiguity) scores
+/// this exact decode - three signed bytes, `byte/127.0`, x/y/z at
+/// [`psp2::NORMAL_OFFSET`] - at 100% within 18 degrees, mean dot 0.994,
+/// against every other candidate tried at or below chance. See
+/// `docs/formats/2048-rcsmodel.md`. What this test adds is reach: the ported
+/// circuits are 12 of 993 files, and unit length is a property every decoded
+/// normal should have regardless of which file it came from.
+#[test]
+#[ignore = "needs the extracted 2048 packages in data/extracted/vita/"]
+fn normals_decode_as_unit_vectors() {
+    let mut unit = 0usize;
+    let mut total = 0usize;
+    let found = survey(&mut |_, decoded| {
+        for normal in decoded.normals() {
+            total += 1;
+            let len = (0..3).map(|a| normal[a] * normal[a]).sum::<f32>().sqrt();
+            if (len - 1.0).abs() < 0.02 {
+                unit += 1;
+            }
+        }
+    });
+    if found.files == 0 {
+        return;
+    }
+    println!("{unit}/{total} normals are unit-length within 2%");
+    assert!(total > 0, "no normals decoded at all");
+    assert!(
+        unit * 100 >= total * 99,
+        "only {unit} of {total} normals are unit-length"
+    );
+}
+
 /// A circuit's positions are world space and a craft's are its own.
 ///
 /// The check that says a caller composes no transform onto either: `altima`'s

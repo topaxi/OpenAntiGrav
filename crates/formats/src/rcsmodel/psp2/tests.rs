@@ -63,6 +63,62 @@ fn build(submeshes: &[(usize, usize, usize)]) -> Vec<u8> {
     out
 }
 
+/// Builds a one-submesh image like [`build`], but pokes a specific 3-byte
+/// normal into every vertex at [`NORMAL_OFFSET`] instead of leaving the tail
+/// zeroed - proves the decode reads the field this module claims, at the
+/// offset it claims, not a neighbour or a zeroed pad.
+fn build_with_normal(vertex_count: usize, stride: usize, normal: [u8; 3]) -> Vec<u8> {
+    let mut file = build(&[(vertex_count * 3, vertex_count, stride)]);
+    let decoded = parse(&file).expect("the plain fixture parses");
+    let mesh = &decoded.submeshes[0];
+    assert_eq!(mesh.positions.len(), vertex_count);
+    let gpu = decoded.sections[1];
+    let base = gpu.at + gpu.len - vertex_count * stride;
+    for v in 0..vertex_count {
+        let at = base + v * stride + NORMAL_OFFSET;
+        file[at..at + 3].copy_from_slice(&normal);
+    }
+    file
+}
+
+#[test]
+fn unpack_normal_decodes_signed_bytes_over_127() {
+    assert_eq!(unpack_normal([127, 0, 0]), [1.0, 0.0, 0.0]);
+    assert_eq!(unpack_normal([0, 127, 0]), [0.0, 1.0, 0.0]);
+    assert_eq!(unpack_normal([0, 0, 127]), [0.0, 0.0, 1.0]);
+    // -128 two's-complement, not -127 - the encoder never emits it (every
+    // shipped normal byte measured is unit-length within float rounding),
+    // but the decode itself must not panic or wrap.
+    let n = unpack_normal([0x80, 0, 0]);
+    assert!((n[0] + 128.0 / 127.0).abs() < 1e-6, "{n:?}");
+}
+
+/// The normal decodes from the declared offset, on a stride that carries one
+/// (28, the commonest declared layout) and on the smallest stride this
+/// reading has ever seen carry one (16).
+#[test]
+fn a_submeshs_normal_decodes_at_the_declared_offset() {
+    for stride in [16, 20, 28] {
+        let file = build_with_normal(4, stride, [127, 0, 0]);
+        let decoded = parse(&file).expect("parses");
+        let mesh = &decoded.submeshes[0];
+        assert_eq!(mesh.normals.len(), 4, "stride {stride}");
+        for n in &mesh.normals {
+            assert_eq!(*n, [1.0, 0.0, 0.0], "stride {stride}");
+        }
+    }
+}
+
+/// A stride too small to hold a normal past the position leaves `normals`
+/// empty rather than reading into the next vertex - not observed on any
+/// shipped file (16 is the smallest declared stride), but not assumed away.
+#[test]
+fn too_small_a_stride_leaves_normals_empty() {
+    let file = build(&[(9, 4, 12)]);
+    let decoded = parse(&file).expect("parses");
+    assert!(decoded.submeshes[0].normals.is_empty());
+}
+
 #[test]
 fn it_reads_a_submesh_out_of_the_relocation_table() {
     let decoded = parse(&build(&[(9, 4, 28)])).expect("the fixture parses");
