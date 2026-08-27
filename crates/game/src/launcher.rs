@@ -348,6 +348,22 @@ pub fn draw_list(launcher: &Launcher) -> Vec<Draw> {
     // soon as something is wrong is a screen that helps least when it matters.
     out.push(text(MARGIN, SCREEN.1 - 20.0, 1.0, DIM, HINT));
 
+    // The build's own short commit hash, bottom right - `env!` reads
+    // `OAG_GIT_HASH`, set at compile time by `build.rs`. This is the one
+    // screen every build shows before anything else can go wrong, which
+    // makes it the answer to "which build is this" for a bug report or a
+    // Deck deploy that isn't finding what a newer commit should have fixed.
+    out.push(Draw::Text {
+        x: SCREEN.0 - MARGIN,
+        y: SCREEN.1 - 20.0,
+        scale: 1.0,
+        color: DIM,
+        border: None,
+        align: Align::Right,
+        text: env!("OAG_GIT_HASH").to_string(),
+        wrap_width: None,
+    });
+
     out
 }
 

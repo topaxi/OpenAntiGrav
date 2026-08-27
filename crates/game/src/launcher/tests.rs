@@ -200,15 +200,25 @@ fn every_line_fits_on_screen() {
     let atlas = crate::font::Atlas::build();
 
     for draw in draw_list(&launcher) {
-        let Draw::Text { x, text, .. } = draw else {
+        let Draw::Text { x, align, text, .. } = draw else {
             continue;
         };
-        let right = x + crate::font::measure(&atlas, &text);
+        let width = crate::font::measure(&atlas, &text);
+        // `x` anchors the edge alignment names, not always the left one - the
+        // commit hash at the bottom right is drawn `Align::Right`, so its `x`
+        // is where the text *ends*, and the risk this test exists to catch
+        // for that row is running off the left edge instead.
+        let (left, right) = match align {
+            Align::Left => (x, x + width),
+            Align::Centre => (x - width / 2.0, x + width / 2.0),
+            Align::Right => (x - width, x),
+        };
         assert!(
             right <= SCREEN.0 - MARGIN,
             "{text:?} ends at {right}, past {}",
             SCREEN.0 - MARGIN
         );
+        assert!(left >= 0.0, "{text:?} starts at {left}, off the left edge");
     }
 }
 
