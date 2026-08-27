@@ -992,7 +992,12 @@ feature - they are the only rows in any capture where the craft is at rest under
 its own hover, and `trace-force-balance.py` drops the first of them because
 rolling resistance normalises a velocity that is exactly zero there.
 
-**The column set has grown twice since, and the same rule bit twice.** The
+**The column set has grown three times since, and the same rule bit twice.**
+2026-08-27 added the sideshift trigger's five timer floats
+(`ss_tap_window_l`/`_r`, `ss_shift_l`/`_r`, `ss_lockout`) for
+`sideshift-double-tap.inputs`'s first real capture - see
+`docs/ghidra/functions/psp-pulse-usa/input-bindings.md`'s runtime section.
+Before that, the
 angular *velocity* `body+0x150` (`omega_x/y/z`) was added after the first
 completed lap was captured, so that lap could not tell a wrong inertia tensor
 from a second rotation source and the lap had to be **re-flown**, which cost

@@ -307,7 +307,9 @@ pub const SIDESHIFT_DURATION: f32 = 0.2;
 /// The literal `1.0` that `Ship_UpdateSideshiftInput_q` writes into
 /// `entity+0x8ac` on every tick either side's timer is running. That timer
 /// counts down by `dt` and gates the whole trigger block, so it is a second
-/// measured from the *end* of a shift. Confidence **85**; see
+/// measured from the *end* of a shift, not from the trigger - `~1.2 s` total
+/// with [`SIDESHIFT_DURATION`]. Confidence **95**, confirmed 2026-08-27 by a
+/// real capture of `sideshift-double-tap.inputs`; see
 /// `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`.
 pub const SIDESHIFT_LOCKOUT: f32 = 1.0;
 

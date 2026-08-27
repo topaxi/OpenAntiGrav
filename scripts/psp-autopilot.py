@@ -480,9 +480,14 @@ def main():
                         "the chain in psp_trace_fields.py no longer holds"
                         % (entity, craft)
                     )
-                entity_blob = dbg.read(entity + ENTITY_FIELDS[0][1], 4 * len(ENTITY_FIELDS))
+                # Spans lowest to highest offset, not `4 * len(ENTITY_FIELDS)` from
+                # the first - see the matching comment in psp-trace.py, which this
+                # mirrors so the two writers stay one address book, not two.
+                entity_lo = min(at for _, at in ENTITY_FIELDS)
+                entity_hi = max(at for _, at in ENTITY_FIELDS) + 4
+                entity_blob = dbg.read(entity + entity_lo, entity_hi - entity_lo)
                 values += [
-                    struct.unpack_from("<f", entity_blob, at - ENTITY_FIELDS[0][1])[0]
+                    struct.unpack_from("<f", entity_blob, at - entity_lo)[0]
                     for _, at in ENTITY_FIELDS
                 ]
                 values += [struct.unpack_from("<f", body_blob, at)[0] for _, at in BODY_FIELDS]

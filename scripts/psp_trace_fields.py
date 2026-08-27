@@ -74,8 +74,23 @@ CRAFT_FIELDS = [
 ENTITY_POINTER = 0x1C4
 ENTITY_OWNER = 0x94
 
+# The sideshift trigger's own timers, from
+# docs/ghidra/functions/psp-pulse-usa/input-bindings.md - all five floats
+# `Ship_UpdateSideshiftInput_q` reads and writes on the entity, not the craft.
+# `tap_window_l`/`_r` are the veteran double-tap's 0.25 s windows (`entity+0x89c`/
+# `+0x8a0`), `shift_l`/`shift_r` are the two 0.2 s force timers the gesture arms
+# (`+0x8a4`/`+0x8a8`, the same pair the novice flick latch writes), and
+# `lockout` is the 1.0 s cooldown common to both schemes (`+0x8ac`). Recording
+# these gives a sideshift capture a runtime leg for the *timings themselves*,
+# not just the lateral displacement they produce - see
+# handover/sideshift-has-no-runtime-leg.md.
 ENTITY_FIELDS = [
     ("shield", 0x88),
+    ("ss_tap_window_l", 0x89C),
+    ("ss_tap_window_r", 0x8A0),
+    ("ss_shift_l", 0x8A4),
+    ("ss_shift_r", 0x8A8),
+    ("ss_lockout", 0x8AC),
 ]
 
 # Offsets into the rigid body, measured at runtime by diffing successive frames.

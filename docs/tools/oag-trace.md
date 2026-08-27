@@ -308,7 +308,8 @@ every committed scenario.
 | `pitch-both-ways.inputs` | **360 ticks of pitch, stationary on the start line, no thrust.** The cleanest capture in `data/traces/` - `speed/|velocity|` reads `1.0000` on 360 of 360 ticks - and the first with any pitch input at all |
 | `pitch-hold-thrust.inputs` | Thrust and a held nose-up off the line. Clean to tick 128 at 84 units/s, and dirty after |
 | `standing-start.inputs` | **300 ticks of held thrust from the start line.** Two measurements in one: a clean launch to tick 186, then a sustained scrape at speed. The force-balance regression test - see [below](#the-standing-start-and-what-it-regression-tests) |
-| `sideshift-double-tap.inputs` | **The veteran sideshift**: 180 ticks to reach racing speed, then `L` tapped twice inside the `0.25 s` window. Symmetric about the centre line apart from the two taps, so it is decidable against a control that drops them - measured at **11.7 units of leftward displacement** for **1.2 units** of extra path. Not captured from the original yet; see `docs/ghidra/functions/psp-pulse-usa/input-bindings.md` for the recipe |
+| `sideshift-double-tap.inputs` | **The veteran sideshift**: 180 ticks to reach racing speed, then `L` tapped twice inside the `0.25 s` window. **Captured off the original 2026-08-27** - see `input-bindings.md`'s runtime section: the tap window, shift force and lockout timers read exactly `0.25`/`0.2`/`1.0 s` at the ticks the static reading predicted. The **displacement** claim ("11.7 units of leftward displacement") is not confirmed by that capture - the unsteered run-up grazes a wall on Talon's Junction, which swamps the signal with pose-sensitive collision noise; see the same section |
+| `sideshift-double-tap-control.inputs` | The captured control for the file above: identical script, the two `l` tokens dropped. Never touches any of the five sideshift-timer columns over its own 285 ticks |
 | `sideshift-flick.inputs` | **The novice sideshift**, and it needs `--scheme novice`. Holds the sideshift button with the stick already over (which must fire nothing), centres to arm, then flicks. Its control is *the same file under `--scheme veteran`*, where the held button is one airbrake tap and no shift fires - so the steering is identical by construction. The two agree to the printed precision through tick 200 and are **4.0 units apart at tick 210**, inside the shift's own `0.2 s`. Also uncaptured |
 | `talons-junction-time-trial-lap.inputs` | **3,146 ticks of Talon's Junction White - despite the name, not a clean whole lap: it stalls and reverses somewhere in it, see below.** Not hand-authored - see below, and note it no longer flies clean open-loop |
 
@@ -321,7 +322,11 @@ than assumed: replaying `talons-junction-clean-lap.csv` under both schemes is
 **byte-identical** despite 58 uses of `l`/`r`, because the autopilot holds its
 airbrakes rather than tapping them and never centres the stick while holding one,
 so neither gesture ever fires. The flag exists on `run` for the day a capture of a
-sideshift exists.
+sideshift exists, and that day is 2026-08-27: `sideshift-double-tap.csv` needs no
+`--scheme` override to replay correctly, because it was captured off a
+never-configured profile under veteran, which is `ControlScheme::default()` -
+now itself confirmed rather than only inferred, see
+`docs/ghidra/functions/psp-pulse-usa/input-bindings.md`.
 
 `steer-both-ways` turns both ways on purpose. The sign of the yaw response is one
 of the things this harness exists to settle - row 0 of the recorded basis being

@@ -761,6 +761,15 @@ fn frame_of(state: &ShipState, tick: u64, dt: f32, speed_cached: f32, options: &
         // that did not will read a flat zero against the capture's pool rather
         // than silently agreeing.
         shield: Some(state.shield),
+        // `ShipState::sideshift_timers` carries the shift force but not the tap
+        // window or the lockout, so there is nothing to compare the other three
+        // columns against yet - reported absent rather than a false agreement.
+        // See handover/sideshift-has-no-runtime-leg.md.
+        ss_tap_window_l: None,
+        ss_tap_window_r: None,
+        ss_shift_l: None,
+        ss_shift_r: None,
+        ss_lockout: None,
         // The replay simulates the ship, not the original's camera rig, so the
         // camera pose is not compared rather than reported as agreement.
         camera_row0: None,
