@@ -4,10 +4,9 @@
 
 ## Open
 
-- Whether the fov term runs specifically under an external view is inference, not yet confirmed by a breakpoint.
-- `craft+0x7c` has only been observed quiescent on a clean run; unknown whether it carries something during an impact.
+- **2026-08-27: the external-view item above is stale, not open.** The "Settled on the running game" sections this thread's own summary already cites - `camera.md`'s (confidence 94) and `projection-vs-the-original.md`'s - both explicitly retire it: a `Ship_UpdateCraft` breakpoint traced `g_camera_fov_degrees` against the live `fwd`/`vel` in an external view and the law reproduced to `0.0007` degrees over 19 samples, which both pages state settles "runs in an external view" directly rather than by inference. That measurement predates this file's own "Next Steps" bullet below, which was never updated to match. No further capture is needed for this item.
+- `craft+0x7c` is now measured quiescent through a real wall contact too (see `camera.md`'s 2026-08-27 addition), not only a clean run - two restarts, one with a `646` units/s² single-axis deceleration and real shield damage. What remains untested is a craft-on-craft or weapon impulse, the only inputs `contact-response.md` shows actually arm the collision stun; a wall contact does not.
 
 ## Next Steps
 
-- Set an exec breakpoint on `0x088455ec` under an external view to turn the inference into a measurement.
-- Capture a run with an impact in it and check whether `craft+0x7c` carries a nonzero value.
+- Capture a craft-on-craft or weapon-impulse hit (the only inputs that arm `stun_timer`, per `contact-response.md`) and check whether `craft+0x7c` carries a nonzero value there - a wall contact does not exercise that path.

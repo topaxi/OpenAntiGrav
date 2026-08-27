@@ -1109,6 +1109,42 @@ one ship on one circuit.
 that it is quiescent on a clean run, so a capture with an impact in it could
 still show it carrying something.
 
+### `craft+0x7c` stays quiescent through a real wall contact too, 2026-08-27
+
+Checked on Talon's Junction with a standing-start, unsteered `--hold cross` run
+(`scripts/psp-trace.py`, `entity+0x7c`/`entity+0x790` added to `ENTITY_FIELDS`
+as `fov_intercept`/`fov_additive` in `scripts/psp_trace_fields.py`) - the same
+scenario `data/traces/talons-junction-standing-start.csv` and this page's own
+"nothing arms the collision stun" section already use. Read at the
+`Ship_UpdateCraft` breakpoint, so a tick stale relative to `FUN_088455ec`'s own
+update - the same publish-order lag `g_camera_fov_degrees` carries above - which
+is immaterial for a field that never leaves zero. Two independent restarts both
+produced a real wall contact, not a clean run: `shield` dropped
+(`135 -> 134.7959` on one, a comparable drop on the other) and one contact
+killed `10.76` units/s of `vel_z` in a single tick - about `646` units/s²,
+the same order as the `-790` units/s² hit `ppsspp-debugger.md` records for a
+standing-start crash. `fov_intercept` read exactly `0` on every tick of both
+captures, through and after the contact tick.
+
+`fov_additive` is a **third independent confirmation of the speed law**, not
+just a sanity check: fit against `0.075 * dot(fwd, vel)` computed from each
+row's own `fwd_*`/`vel_*` columns, the residual is on the order of `1e-7` at
+every sampled tick (`float32` precision), with no discontinuity at the contact
+tick. It does **not** match `0.075 * speed_cached` this closely - a ~3 % gap at
+matching ticks - and that is not a discrepancy: `speed_cached` is the
+*previous* tick's `dot(vel, fwd)` (`engine.md`, confidence 95), while this
+store reads the current tick's, so an accelerating craft separates the two by
+design. Comparing against the wrong column here would misread an artefact of
+the phase offset as an error in the law.
+
+This is a *scrape*, not the AI/rival hit `Ship_ApplyCollisionImpulse`'s stun
+gate is shown above to require - `stun_timer` read `0.0` throughout, matching
+that section's own captures. So this narrows rather than closes the question:
+`craft+0x7c` is now measured quiescent through an actual wall contact, but a
+craft-on-craft or weapon impulse (the only inputs that arm the stun) has not
+been captured. Confidence **80** for quiescent-through-a-wall-contact, on two
+restarts of one circuit; no writer for the field has been found on any path.
+
 ## Applied renames, 2026-08-08 (second pass)
 
 | Address | Name | Conf |
