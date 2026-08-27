@@ -408,7 +408,10 @@ Confidence **94**, the rubric's cap for a reading that makes an arithmetic
 invariant come out exactly across many real files - reached from an exact
 tiling on 83 banks and corroborated by a flag word the rule never touches.
 
-### Which of a cue's waveforms sounds - decoded on HD, 2026-08-27
+### Which of a cue's waveforms sounds is still open
+
+**Decoded on HD, 2026-08-27.** The heading is kept as-is, matching this page's
+own convention for a section a later finding resolves.
 
 `ship.bnk`'s `.COLLISIONS` binds **fifteen** waveforms, `ship_zone.bnk`'s ten,
 and `SHIP_ZM`'s `~ENGINE` nine. Something chooses, and it is one of the 41
