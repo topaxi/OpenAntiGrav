@@ -52,6 +52,7 @@ struct Survey {
     files: usize,
     decoded: usize,
     pvrtc: usize,
+    argb8888: usize,
     unsupported: BTreeMap<u32, usize>,
 }
 
@@ -80,6 +81,7 @@ fn survey(check: &mut impl FnMut(&str, &Gxt, &[u8])) -> Survey {
             match texture.format() {
                 Some(Format::Ubc2) => out.decoded += 1,
                 Some(Format::Pvrtii4bpp) => out.pvrtc += 1,
+                Some(Format::Argb8888) => out.argb8888 += 1,
                 None => *out.unsupported.entry(texture.format_byte).or_default() += 1,
             }
         }
@@ -94,16 +96,22 @@ fn survey(check: &mut impl FnMut(&str, &Gxt, &[u8])) -> Survey {
 ///
 /// **The counts are pinned, not just printed.** `checked` and the survey's own
 /// totals increment on the same textures inside `survey`'s callback, so
-/// `checked == decoded + pvrtc` alone would hold even if `Gxt::parse` silently
-/// skipped nine thousand files - it says nothing about whether the *right*
-/// files were seen. `9910`/`370`/`8430` are what the corpus actually is
-/// (measured 2026-08-26, the `PVRTII4BPP` count 2026-08-27); a real regression
-/// changes one of these numbers, which only a pinned value can catch.
+/// `checked == decoded + pvrtc + argb8888` alone would hold even if
+/// `Gxt::parse` silently skipped nine thousand files - it says nothing about
+/// whether the *right* files were seen. `9910`/`370`/`8430`/`99` are what the
+/// corpus actually is (measured 2026-08-26, the `PVRTII4BPP` count
+/// 2026-08-27, the `Argb8888` count 2026-08-28); a real regression changes
+/// one of these numbers, which only a pinned value can catch.
 ///
-/// **The `PVRTII4BPP` half of this is the load-bearing new check.** Those
-/// 8,430 textures went through `Gxt::parse` unverified until this crate knew
-/// their unit size - their declared length was simply trusted. Now every one
-/// of them has to satisfy the same arithmetic, and does.
+/// **The `PVRTII4BPP` half of this was the load-bearing new check when it
+/// landed.** Those 8,430 textures went through `Gxt::parse` unverified until
+/// this crate knew their unit size - their declared length was simply
+/// trusted. Now every one of them has to satisfy the same arithmetic, and
+/// does. `Argb8888`'s 99 are smaller in count but exercise a different edge:
+/// no `MIN_LEVEL_LEN` floor applies to them at all (see
+/// `oag_formats::gxt::Texture::level_len`), and all nine distinct
+/// `(width, height, mip count)` shapes in the corpus - down to a chain that
+/// bottoms out at one 4x4 level - agree with the unfloored formula.
 #[test]
 #[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
 fn every_shipped_gxt_parses_and_every_known_format_decodes() {
@@ -130,13 +138,14 @@ fn every_shipped_gxt_parses_and_every_known_format_decodes() {
     }
 
     println!(
-        "{} files, {} UBC2 + {} PVRTII4BPP textures decoded, unsupported formats: {:?}",
-        found.files, found.decoded, found.pvrtc, found.unsupported
+        "{} files, {} UBC2 + {} PVRTII4BPP + {} Argb8888 textures decoded, unsupported formats: {:?}",
+        found.files, found.decoded, found.pvrtc, found.argb8888, found.unsupported
     );
     assert_eq!(found.files, 9910, "shipped .gxt files");
     assert_eq!(found.decoded, 370, "UBC2 textures across them");
     assert_eq!(found.pvrtc, 8430, "PVRTII4BPP textures across them");
-    assert_eq!(checked, found.decoded + found.pvrtc);
+    assert_eq!(found.argb8888, 99, "Argb8888 textures across them");
+    assert_eq!(checked, found.decoded + found.pvrtc + found.argb8888);
 }
 
 /// Decodes a named entry and writes it to a checkerboard-composited PNG so a
@@ -312,6 +321,84 @@ fn the_pvrtc_textures_decode_to_something_a_human_can_check() {
         &mut archive,
         "data/fe/images/detonator.gxt",
         "2048_pvrtc_detonator.png",
+    );
+}
+
+/// `Argb8888`'s own picture check: 2048's Zone/Detonator "Track" speed-class
+/// art, the corpus `docs/formats/gxt.md` left this format's tiling order and
+/// channel order open on.
+///
+/// **Why these three files rather than a prettier one**: an earlier pass
+/// measured, from raw bytes alone before either question was settled, that
+/// `data/Tex/zoneModeTrack{0..14}.gxt` visibly changes shape across the
+/// stage ladder while `data/Tex/zoneMode{0..14}.gxt` (the "general" set,
+/// swept separately below) stays a flat, identical blank across all fifteen,
+/// so a correct decode has a real prediction to check itself against, not
+/// just "does this look like art".
+///
+/// Two invariants a wrong tiling order or a wrong channel order would not
+/// both survive:
+///
+/// - **Opaque fraction is pinned identically across all three stages**,
+///   `2048 / 65536` texels (measured 2026-08-28) - the stencil mask's *area*
+///   does not grow with the stage ladder, only its *shape* does. A wrong
+///   tiling order scrambles which texels are opaque, not how many, so this
+///   alone would not catch it; it is here as a decode sanity check the
+///   shape-difference assertion below does not cover.
+/// - **No two stages decode to the same texel multiset.** The "Track" set is
+///   supposed to be the one that visibly escalates - `zoneMode0.gxt`'s own
+///   ground truth below is the control that shows what a *flat* set decodes
+///   to instead (a single solid colour, checked directly).
+#[test]
+#[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
+fn the_zone_track_art_decodes_to_a_shape_that_escalates_across_stages() {
+    let Some(path) = package() else {
+        return;
+    };
+    let mut archive = oag_assets::psarc::Archive::open(&path.display().to_string())
+        .unwrap_or_else(|e| panic!("opening {}: {e}", path.display()));
+
+    let mut stages = Vec::new();
+    for stage in [0, 7, 14] {
+        let rgba = render_checkerboard(
+            &mut archive,
+            &format!("data/tex/zonemodetrack{stage}.gxt"),
+            &format!("2048_zone_track_stage{stage}.png"),
+        );
+        assert_eq!(rgba.len(), 256 * 256, "zoneModeTrack{stage}: 256x256");
+        let opaque = rgba.iter().filter(|t| t[3] == 255).count();
+        assert_eq!(
+            opaque, 2048,
+            "zoneModeTrack{stage}: opaque texel count, measured 2026-08-28"
+        );
+        stages.push(rgba);
+    }
+    for a in 0..stages.len() {
+        for b in (a + 1)..stages.len() {
+            assert_ne!(
+                stages[a], stages[b],
+                "two sampled stages decoded identically - the escalation this set is named for is missing"
+            );
+        }
+    }
+
+    // The control: the "general" set at the same stage is the flat
+    // placeholder `docs/formats/gxt.md` already found by byte pattern -
+    // every one of fifteen files identical, decoding to one solid colour.
+    // Checked here directly rather than trusted from the earlier byte-level
+    // finding, now that this format actually decodes.
+    let blank = archive
+        .read_path("data/tex/zonemode0.gxt")
+        .expect("zoneMode0.gxt");
+    let parsed = Gxt::parse(&blank).expect("parses");
+    let texture = parsed.only().expect("one texture");
+    let rgba = texture.to_rgba(&blank).expect("decodes");
+    let distinct: std::collections::BTreeSet<[u8; 4]> = rgba.iter().copied().collect();
+    assert_eq!(
+        distinct.len(),
+        1,
+        "zoneMode0.gxt (the 'general' set): expected one flat colour, got {} distinct texels",
+        distinct.len()
     );
 }
 

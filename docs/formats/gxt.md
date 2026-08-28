@@ -1,10 +1,10 @@
 # GXT: the Vita's texture container
 
-**Status: `UBC2` decodes at confidence 85, `PVRTII4BPP` at 92 - together
-88.9% of the corpus.** `oag_formats::gxt` for the container,
+**Status: `UBC2` decodes at confidence 85, `PVRTII4BPP` at 92, `U8U8U8U8` at
+80 - together 89.8% of the corpus.** `oag_formats::gxt` for the container,
 `oag_formats::pvrtc` for the PowerVR codec. Measured on
-`data/extracted/vita/PCSF00007` (Wipeout 2048, EU, patch v1.04), 2026-08-26
-and 2026-08-27.
+`data/extracted/vita/PCSF00007` (Wipeout 2048, EU, patch v1.04), 2026-08-26,
+2026-08-27 and 2026-08-28.
 
 ```sh
 OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-formats --run-ignored all \
@@ -60,7 +60,7 @@ files the base package ships:
 | `0x86` | `UBC2` (BC2/`DXT23`) | `0x86000000` | 370 | **yes** |
 | `0x85` | `UBC1` (BC1/`DXT1`) | `0x85000000` | 505 | no |
 | `0x87` | `UBC3` (BC3/`DXT45`) | `0x87000000` | 493 | no |
-| `0x0c` | `U8U8U8U8` | `0x0c001000` | 99 | no |
+| `0x0c` | `U8U8U8U8` | `0x0c001000` | 99 | **yes** |
 | `0x98` | `U8U8U8` | `0x98001000` | 13 | no |
 
 `UBC2` decodes through `oag_formats::bcn::dxt23` - the same BC2 block math
@@ -84,20 +84,50 @@ these files carry, `0x0c001000`, decomposing exactly as
 `SCE_GXM_TEXTURE_BASE_FORMAT_U8U8U8U8 | SCE_GXM_TEXTURE_SWIZZLE4_ARGB` -
 `0x0c000000 | 0x00001000`. The low three bytes are not noise, then: they are
 `SceGxmTextureSwizzle4Mode`, and this title's whole corpus at this format byte
-carries the *same* swizzle (`ARGB`, `0x001000`), not a mix. **Still not
-decoded, and for a reason beyond the channel order**: `U8U8U8U8` is simple
-math - four bytes a texel, no block or bit-packing - but whether those four
-bytes read in raster or the same Morton/twiddle order [`blocks`] uses for
-`UBC2` is unset by anything in the file (`type` at descriptor `+0x10` is `0`
-on the `ZoneMode2048`/`ZoneMode2048Track` textures measured, the same
-uninformative value the `UBC2` reticle texture carried before that question
-was settled by decoding both ways and looking at the picture). Settling both
-questions the way the reticle atlas or `.gtf`'s "ASSEGAI DEVELOPMENTS" text
-settled theirs needs either a `U8U8U8U8` file with less ambiguous art than
-this format byte's own corpus has offered so far, or the same
-both-ways-and-look method applied carefully - a wrong tiling order can
-produce a plausible-looking wrong picture on abstract art the way it briefly
-did on the reticle before the twiddle order was found.
+carries the *same* swizzle (`ARGB`, `0x001000`), not a mix. **Decoded as of
+2026-08-28** - see the section below.
+
+## `U8U8U8U8`: no block structure, twiddled at texel granularity
+
+**Confidence 80.** `oag_formats::gxt::Format::Argb8888`, `unit_len` 4 bytes,
+one texel. Unlike the two compressed formats, `U8U8U8U8` has no block
+structure to quantise a mip level's storage to - `Texture::level_len` reads
+each level as the plain `width * height * 4`, with no `MIN_LEVEL_LEN` floor,
+which is measured rather than assumed: all 99 `0x0c` textures in the base
+package, across nine distinct `(width, height, mip count)` shapes down to a
+chain that bottoms out at a single 4x4 level, agree with the unfloored
+arithmetic exactly.
+
+**The tiling question is settled the same way `UBC2`'s was, but at texel
+rather than block granularity.** `type` at descriptor `+0x10` is `0` on every
+`0x0c` texture measured, the same uninformative value the `UBC2` reticle
+texture carried before that question was settled by decoding both ways and
+looking at the picture. Raster order on `data/Tex/zoneModeTrack{0,7,14}.gxt`
+(256x256, the "Track" half of 2048's Zone/Detonator speed-class art) decodes
+to horizontal-banded noise, the same signature as `UBC2`'s wrong-order
+control. Reading the same bytes through
+[`twiddle`]'s general grid algorithm applied directly to texel coordinates
+`(x, y)` - there being no 4x4 block to twiddle over - decodes cleanly: every
+texel's `A`, `R` and `G` bytes agree exactly (0 mismatches across all 65,536
+texels checked), a binary stencil mask opaque on exactly 2,048 of them on
+every one of the three sampled stages, while `B` alone carries a smooth
+multi-valued gradient. Composited over a checkerboard the mask reads as a
+thin horizontal band whose *shape* escalates across the stage ladder (solid
+at stage 0, increasingly dashed by 7 and 14) while its *area* does not - see
+`the_zone_track_art_decodes_to_a_shape_that_escalates_across_stages` in
+`crates/formats/tests/gxt_ground_truth.rs`, whose renders this rests on, and
+`data/shots/2048_zone_track_stage{0,7,14}.png`.
+
+**Why 80 and not higher**: the escalating-shape check is real evidence but a
+weaker oracle than a font atlas or an HD-decoded ground truth - unlike
+`PVRTII4BPP`, no independently-decoded copy of this exact art exists to
+compare against (HD's own `.gtf` version of the same "Track" texture set is a
+different container and a different codec, read long before this decoder
+existed, and confirms only that a varying-versus-flat pair exists in the same
+role, not the exact picture). The channel-order finding is strong on its own
+terms (a lockstep three-channel binary mask alongside one continuous channel
+is not something a wrong bit layout would produce by accident), which is what
+keeps this above the two undecoded rows.
 
 ## `PVRTII4BPP`: PowerVR texture compression, and not the PVRTC-I lookalike
 
