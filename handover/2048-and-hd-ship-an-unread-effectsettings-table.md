@@ -384,22 +384,31 @@ hedge into a confirmed mechanism (nothing in either branch of
   `U8U8U8U8` section. What is left from this step is the shader side: what
   `Growing Texture.Colour`/`.Scale Bias`/`.Factors` do with this art, which
   needs an HD Zone-shader read this pass did not attempt.
-- **The database-defect blocker is cleared, 2026-08-28.** The maintainer
-  re-ran `scripts/import-ps3-eboot.sh --ps3-cspec`; verified directly
-  (language now `PowerPC:BE:64:A2ALT-32addr-PS3`, 26,100 functions, real
-  imports) and this binary's `names.tsv` re-applied 114/114 clean.
-  `FUN_003d6dc8` - where the trail from `ZoneMode.effectSettings`'s load site
-  stopped - redecompiled to something structurally different from the old
-  (TOC-defective) "SpeedBar/HUD widget" reading: a fifteen-iteration loop
-  (HD's own stage count), several texture allocations, a 64-entry RGB
-  palette unpack, and two undecoded helper calls shaped like a hashed
-  key-name lookup into the parsed effectSettings table. **Not yet named or
-  confidence-scored** - see
-  [zone-effectsettings-loader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md)'s
-  new section for the finding and the two concrete blockers before it can
-  be: `FUN_003d6dc8`'s own prototype needs fixing first (a second,
-  stack-passed parameter Ghidra missed), then `_opd_FUN_005dde98`/
-  `_opd_FUN_005d91a8` need decompiling in their own right.
+- **The database-defect blocker is cleared, 2026-08-28, and the trail past it
+  is named.** The maintainer re-ran `scripts/import-ps3-eboot.sh --ps3-cspec`;
+  verified directly (language now `PowerPC:BE:64:A2ALT-32addr-PS3`, 26,100
+  functions, real imports) and this binary's `names.tsv` re-applied 114/114
+  clean. `FUN_003d6dc8` - where the trail from `ZoneMode.effectSettings`'s
+  load site stopped - redecompiled to something structurally different from
+  the old (TOC-defective) "SpeedBar/HUD widget" reading. The first read of
+  the new decompile guessed a missing second parameter; that was wrong -
+  `analyze_dataflow` traced the mystery value straight back to this
+  function's own entry `r2`, i.e. its own already-established real TOC
+  (`0x008bd3c4`), lost to Ghidra's constant folding only because several
+  indirect (vtable-style) calls sit between entry and first use. Resolving
+  the TOC-relative reads by hand found a table of per-stage texture
+  filenames - one resolved directly to the string `Data/Tex/DetonatorMode0.gtf`
+  - handed to a get-or-create-by-name resource cache. **Renamed, in
+  `names.tsv`**: `Environment_LoadStageTextures` (72) and
+  `Resource_GetOrCreateByName_q` (65). Full evidence, including the ABI
+  mechanics of the TOC-loss and the resolved memory addresses, on
+  [zone-effectsettings-loader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md).
+  **Also surfaced, not confirmed**: a table-reversal block just before the
+  texture loop, gated by an unidentified flag, has the same shape as 2048's
+  own `Environment_LoadEffectSettingsFiles` reversing a fifteen-stage table
+  under its own "plausibly reversed circuit" flag - independent corroboration
+  that *something* gets reversed on both titles, not of what the flag means
+  on either one.
 - Worth checking against the user's own play on one of the four ported
   `zone_N` circuits in Zone or Detonator mode: a visible symptom (no fog, no
   palette shift, a black/flat scene) would corroborate "the blend math runs

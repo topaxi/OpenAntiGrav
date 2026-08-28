@@ -148,48 +148,93 @@ established were resolving against the wrong TOC - so a completely different
 shape on redecompile is consistent with the earlier reading being exactly
 the artifact `memory.md` warns about, not a second data point confirming it.
 
-**What the new decompile actually shows, not yet confidence-scored or
-renamed**: no `SpeedBar` shape at all. Instead:
+**What the new decompile actually shows**: no `SpeedBar` shape at all.
 
-- A loop of exactly **fifteen** iterations, pairing two objects per
-  iteration from two arrays based at `iVar8 + 0x33b8` and `iVar8 + 0x346c` -
-  the same count as HD's own `zonemode.effectsettings` stage ladder
-  (`docs/formats/effectsettings.md`), for whatever that is worth before the
-  objects themselves are identified.
-- Several texture/render-target allocations through what reads as a texture
-  constructor (`_opd_FUN_005a6ce0`, called with width/height/format-shaped
-  arguments): `0x200 x 0x200`, `0x20 x 0x20`, `0x100 x 1`.
-- A **64-entry palette unpacked from 3-byte RGB triples** (`(uint)*pbVar16 +
-  (uint)pbVar16[1] * 0x100 + (uint)pbVar16[2] * 0x10000`, looped 0x40 times)
-  read from a stack-relative address - plausible fit for a colour ramp or
-  gradient LUT, unconfirmed.
-- Repeated calls to a pair of functions, `_opd_FUN_005dde98` (five
-  arguments, one of them an address inside what looks like a second implicit
-  parameter) and `_opd_FUN_005d91a8` (called with no visible arguments in
-  several call sites, which is itself suspicious - see below) - a plausible
-  shape for "hash this key name, look it up in the parsed effectSettings
-  table, return a float", exactly what fifteen stage-keyed colour blocks
-  would need, but this is a hypothesis from shape alone, not traced.
+**`iStack_24f4` is not a missing parameter - first hypothesis here, and
+wrong.** The initial read of this pass guessed it was a second, stack-passed
+argument Ghidra's auto-analysis missed. `analyze_dataflow` (backward, from
+one of its uses) settles it instead: the value traces straight back to
+**this function's own entry value of `r2`** (`"kind": "input/parameter"`,
+terminating at function input) - which is exactly this function's own real
+TOC, `0x008bd3c4`, already established above. The raw disassembly explains
+why Ghidra couldn't fold it to a constant the way it does for the function's
+*other* TOC-relative loads (e.g. `lwz r14,-0x5a84(r2)` right at entry,
+decompiling cleanly to `iRam008b7940`): between entry and the first
+`iStack_24f4`-relative read, the function makes several calls through
+function pointers loaded from unknown runtime objects (`lwz r2,0x4(r9)`,
+`lwz r2,0x4(r11)`, ...) - the standard ELFv1 convention for calling through a
+pointer of unknown provenance, each one saving the caller's `r2` to
+`0x28(r1)` first and restoring it after. The restore is provably faithful
+(same stack slot, immediately after each call), but Ghidra's constant
+propagation can't see through an indirect call to know that, so it gives up
+and calls the result an opaque input rather than folding it back to
+`0x008bd3c4`. So **every `iStack_24f4 + -0x58xx` read in this decompile is a
+real TOC-relative global read against this function's own TOC** - resolvable
+by hand exactly like the two loads earlier on this page, just with an extra
+"is the round-trip faithful" step first.
 
-**Two concrete blockers before any of this can be named**, both `_q`-below-50
-territory right now:
+**Resolved one, and it's decisive**: `iStack_24f4 + -0x58c8` is
+`0x008bd3c4 - 0x58c8 = 0x008b7afc`. `inspect_memory_content` at the *base*
+of that read family (`iStack_24f4 + -0x58d0 = 0x008b7af4`) finds a table of
+big-endian pointers, mostly 0x20 (32) bytes apart with one 0x10 gap; the
+third entry, at `0x008b7afc` (exactly the address the first offset resolves
+to), holds `0x007b26c8`. Reading *that* address is the payoff: the string
+**`Data/Tex/DetonatorMode0.gtf`** - HD's own texture-set naming this whole
+thread has been chasing - immediately followed in memory by a shorter
+placeholder string, `unlabeled`, at the 0x10-gap slot. So this is a table of
+per-stage texture filenames (`Data/Tex/{Zone,Detonator}Mode{,DLC3}{N}.gtf`,
+one entry short-circuiting to a generic placeholder), read one at a time and
+handed off:
 
-1. `iStack_24f4` is read throughout (`*(int *)(iStack_24f4 + -0x58d0)` etc.)
-   but never assigned inside this decompile - Ghidra inferred a one-parameter
-   signature (`param_1` alone), so this is almost certainly a second,
-   stack-passed parameter the auto-analysis missed, not a real stack
-   variable. Needs `get_function_variables`/`set_function_prototype` to
-   restore the real signature before the `-0x58xx` offsets mean anything.
-2. `_opd_FUN_005dde98`/`_opd_FUN_005d91a8` are themselves undecoded - the
-   "hash + lookup" reading is pattern-matched from the call shape and the
-   stage count matching, not from either function's own body.
+```
+uVar14 = _opd_FUN_005d91a8(pvVar13);                       // per-call state
+uVar10 = *(undefined4 *)(iStack_24f4 + -0x58c4);            // constant across the loop
+uVar11 = *(undefined4 *)(iStack_24f4 + -0x58c0);            // constant across the loop
+_opd_FUN_005dde98(&local_241c, *(undefined4 *)(iStack_24f4 + -0x58c8), uVar10, uVar14, uVar11);
+```
 
-**Next step for whoever picks this up**: fix `FUN_003d6dc8`'s prototype
-first (resolves what `iStack_24f4` actually is), then decompile
-`_opd_FUN_005dde98`/`_opd_FUN_005d91a8` under their own (now-correct) TOCs -
-same OPD-verification discipline this page has used throughout, since the
-project-wide fix does not exempt any individual function from that check,
-it just makes Ghidra's own resolution trustworthy again.
+`_opd_FUN_005dde98` (`0x005dde98`)'s own decompile confirms the shape: `param_2` is read
+with `strlen`, copied into a small-string-optimised local buffer (inline for
+<=15 bytes, heap-allocated past that), and handed to
+`_opd_FUN_005da868(param_1, param_4, name_copy)`; only `if (*param_1 == 0)`
+(cache miss) does it go on to allocate a new refcounted handle
+(`_opd_FUN_005de2d0`) and store it into `*param_1`. **A get-or-create,
+refcounted, named resource cache** - consistent with "load this texture by
+filename, or reuse the cached one" and nothing narrower has been checked
+(what `_opd_FUN_005de2d0` does with the name is unread, so "texture"
+specifically versus "named resource in general" isn't nailed down).
+`_opd_FUN_005d91a8` is trivial: `return *(undefined4 *)PTR_PTR_008bf25c;`, a
+plain getter for an unidentified global (a loader/allocator context,
+plausibly) - not itself named, too little evidence for what that global is.
+
+**Named, confidence-scored, and in `names.tsv`**:
+`FUN_003d6dc8` -> **`Environment_LoadStageTextures`** (72) - a per-stage,
+named-texture-cache loader, matching the fifteen-entry table shape and the
+one resolved filename directly. `FUN_005dde98` -> **`Resource_GetOrCreateByName_q`**
+(65, below 70 so the `_q` stays) - the get-or-create cache mechanism itself,
+kept generic ("Resource" not "Texture") because what it caches was not
+independently confirmed past the one filename string. Both renames applied
+live through the bridge and saved; the rest of this page keeps calling them
+`FUN_003d6dc8`/`FUN_005dde98` where it is quoting what was known at the time
+each earlier section was written.
+
+**A second finding worth flagging, not confirmed**: the block *before* the
+per-stage texture loop - the fifteen 0x250-byte `memcpy`s into stack buffers,
+gated by a different flag (`*(char *)(*(int *)(iVar12 + 0x1bc) + 0x1b5) !=
+'\0'`), then copied back reversed - is the same shape as 2048's own
+`Environment_LoadEffectSettingsFiles` reversing a table in place under a
+flag "plausibly meaning reversed circuit, unconfirmed"
+(`docs/ghidra/functions/vita-2048-eu-v104/zone-environment-fallback.md`).
+Finding the same *shape* independently on HD's own executable is real
+corroboration that a fifteen-stage table gets reversed under *some*
+condition on both titles - it does not confirm what the condition means on
+either one; that stays open on both pages.
+
+**Next step for whoever picks this up**: read `_opd_FUN_005de2d0` to settle
+whether the cached resource actually is a texture (versus something more
+generic the name search happened to land on); trace what sets the reversal
+flag at `iVar12 + 0x1bc, +0x1b5` to test the "reversed circuit" hypothesis
+against a second, independent binary.
 
 ## Tooling note: `program` parameter is unreliable across the two PS3/Vita programs
 

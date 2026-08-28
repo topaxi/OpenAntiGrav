@@ -731,6 +731,25 @@ matches the global one** - check first with `scripts/ps3-toc.py toc <addr>`
 `scripts/ps3-toc.py map` (grep the `.cpp` list) plus raw
 `inspect_memory_content` reads over `search_strings`/`get_xrefs_to` when
 hunting a specific mechanism in a function whose TOC hasn't been checked.
+
+**Even with the TOC defect fixed, a function that calls through an unknown
+pointer can still make Ghidra hide a real TOC-relative global behind a fake
+local variable.** 2026-08-28, past the `--ps3-cspec` reimport above, on
+`Environment_LoadStageTextures` (`0x003d6dc8`,
+[zone-effectsettings-loader.md](docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md)).
+Every ELFv1 indirect call (`lwz r2,0x4(rX)` loading a *different* object's TOC,
+then `std r2` / `ld r2` round-tripping the caller's own TOC to the stack
+around the call) breaks Ghidra's constant propagation even when it is
+provably faithful - so a `-0x58xx(r2)` load *after* such a call decompiles as
+an opaque `iStack_NNNN` read, indistinguishable at a glance from a genuine
+stack variable or a missing parameter. The tell is `analyze_dataflow`
+(backward, from a use of the mystery variable): it terminates at "function
+input" rather than a real definition, which is what a value equal to entry
+`r2` looks like once the direct chain of assignments is too indirect to
+fold. Once recognised, the fix is the same as ever - resolve by hand against
+the function's own already-known TOC - but the *recognition* step is new:
+don't assume a Ghidra-invented local is really local just because the TOC
+defect is fixed; check whether it's actually `r2` in disguise first.
 This is binary-wide, not specific to this one string or this one function.
 
 **A related but separate trap, hit later the same session: proximity to a
