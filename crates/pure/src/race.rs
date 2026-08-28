@@ -65,7 +65,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     ship_dir: oag_title::race::SHIP_DIR,
     // The same directory: this title keeps a team's tuning beside its models.
     handling_dir: oag_title::race::SHIP_DIR,
-    zone: oag_title::ZoneCircuit::Separate(DEFAULT_ZONE_TRACK),
+    zone: oag_title::ZoneCircuit::Separate(ZONE_TRACKS),
     zone_craft: oag_title::ZoneCraft::OwnShip(ZONE_TEAM),
     sounds: SOUND_BANKS,
 };
@@ -117,6 +117,25 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
 /// `pure-psp-eu.chd`, probed 2026-08-19, and `Data\Zone\01_Zone\zone_track.vex`
 /// resolves to nothing.
 pub const DEFAULT_ZONE_TRACK: &str = r"Data\Zone\01_Zone\track.vex";
+
+/// The rest of [`DEFAULT_ZONE_TRACK`]'s siblings, on the same terms: `02_Zone`
+/// through `04_Zone`, each declared `type="Zone"` beside it and each holding a
+/// plain `track.vex`, probed 2026-08-27 against `pure-psp-usa.chd`.
+pub const ZONE_TRACK_2: &str = r"Data\Zone\02_Zone\track.vex";
+/// See [`ZONE_TRACK_2`].
+pub const ZONE_TRACK_3: &str = r"Data\Zone\03_Zone\track.vex";
+/// See [`ZONE_TRACK_2`].
+pub const ZONE_TRACK_4: &str = r"Data\Zone\04_Zone\track.vex";
+
+/// Every Zone circuit this title has, [`DEFAULT_ZONE_TRACK`] first.
+///
+/// What [`DEFAULTS`] hands [`oag_title::ZoneCircuit::Separate`]. A caller
+/// naming one of these four directly gets it honoured in Zone mode; naming
+/// anything else - which is what a menu that has not touched the Circuit row
+/// since picking Zone mode always does, since that row is filled with race
+/// circuits - falls back to [`DEFAULT_ZONE_TRACK`]. See
+/// [`oag_title::ZoneCircuit::variant_of`].
+pub const ZONE_TRACKS: &[&str] = &[DEFAULT_ZONE_TRACK, ZONE_TRACK_2, ZONE_TRACK_3, ZONE_TRACK_4];
 
 /// The team a Zone race flies on this title.
 ///

@@ -18,7 +18,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     team: DEFAULT_TEAM,
     ship_dir: SHIP_DIR,
     handling_dir: HANDLING_DIR,
-    zone: oag_title::ZoneCircuit::Separate(DEFAULT_ZONE_TRACK),
+    zone: oag_title::ZoneCircuit::Separate(&[DEFAULT_ZONE_TRACK]),
     zone_craft: oag_title::ZoneCraft::OwnShip(ZONE_SHIP),
     sounds: SOUND_BANKS,
 };
@@ -136,6 +136,14 @@ pub const ZONE_SHIP: &str = "Zone";
 /// no second `.vex` to prefix to) nor [`oag_title::ZoneCircuit::Separate`].
 /// Nothing here has read how the original selects it, so this names the four
 /// Zone circuits that do exist as files and leaves that question open.
+///
+/// **A single-entry list, deliberately**, where `oag_hd::race::ZONE_TRACKS`
+/// and `oag_pure::race::ZONE_TRACKS` carry four: this title's other three
+/// Zone environments are unread rather than merely unlisted, per this
+/// constant's own docs above. `ZoneCircuit::Separate` only needs the ones a
+/// caller could actually name, and one is what has been measured. Widening it
+/// to four names this title has not been shown to have would be exactly the
+/// invention ADR-0022 and `CLAUDE.md` both rule out.
 pub const DEFAULT_ZONE_TRACK: &str = r"Data\art\published\DLC1\environments\zone_1\track.vex";
 
 /// Where each race cue lives.

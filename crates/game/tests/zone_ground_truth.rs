@@ -387,6 +387,13 @@ fn pure_declares_zone_circuits_of_its_own_and_no_prefixed_file() {
                 .any(|c| c.entry_name() == oag_pure::race::DEFAULT_ZONE_TRACK),
             "{name}: the default zone circuit should be one the definition declares"
         );
+        for track in oag_pure::race::ZONE_TRACKS {
+            assert!(
+                offered.iter().any(|c| c.entry_name() == *track),
+                "{name}: {track} is in oag_pure::race::ZONE_TRACKS but not among the \
+                 disc's own declared type=\"Zone\" circuits"
+            );
+        }
 
         // The other half: Pulse's arrangement is absent, on race circuits and on
         // zone ones alike. Without this the four circuits above are consistent
@@ -502,6 +509,116 @@ fn hd_keeps_four_zone_environments_of_its_own() {
             archives.locate(&prefixed.variant_of(&track)).is_none(),
             "{} resolves, so HD carries Pulse's prefixed arrangement too",
             prefixed.variant_of(&track)
+        );
+    }
+
+    // The other three of `oag_hd::race::ZONE_TRACKS`, and the pairing with
+    // `25_Track`..`28_Track` those docs claim: file order in the plugin
+    // definition names `zone_1`..`zone_4` in that order, which is what
+    // `ZONE_TRACKS`'s own field order rests on.
+    for track in oag_hd::race::ZONE_TRACKS {
+        assert!(
+            archives.locate(track).is_some(),
+            "{track} should be in the manifest"
+        );
+    }
+    assert_eq!(
+        oag_hd::race::ZONE_TRACKS.len(),
+        4,
+        "HD's own zone track list should name all four environments"
+    );
+}
+
+/// **The defect this whole file is now the regression test for.** A menu that
+/// switches to Zone mode without touching the Circuit row hands `race::load`
+/// a *race* circuit's entry name - and until this test existed,
+/// `ZoneCircuit::Separate` passed it through unchanged, so a Zone race on
+/// Wipeout HD or Wipeout Pure loaded the picked race circuit's own
+/// environment, wearing Zone's rules, instead of any Zone environment at all.
+///
+/// Two loads per title: one naming a race circuit (must substitute the
+/// title's default Zone circuit and say so in the report), one naming one of
+/// the title's own Zone circuits directly (must load it unchanged).
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn zone_mode_on_a_named_race_circuit_substitutes_a_zone_environment() {
+    let cases: [(&str, &str, &str); 2] = [
+        (
+            "data/images/hdfury-ps3-eu-dec.iso",
+            oag_hd::race::DEFAULT_TRACK,
+            oag_hd::race::ZONE_TRACK_2,
+        ),
+        (
+            "data/images/pure-psp-eu.chd",
+            oag_pure::race::DEFAULT_TRACK,
+            oag_pure::race::ZONE_TRACK_2,
+        ),
+    ];
+
+    for (name, race_track, own_zone_track) in cases {
+        let Some(path) = image(name) else { continue };
+        let source = path.display().to_string();
+
+        // The race circuit's own environment, so the substitution can be
+        // proven to have actually swapped the geometry and not merely the
+        // report line.
+        let racing = race::load(&race::Options {
+            source: source.clone(),
+            class: SpeedClass::Venom,
+            mode: oag_race::Mode::TimeTrial,
+            track: Some(race_track.to_string()),
+            ..race::Options::default()
+        })
+        .unwrap_or_else(|e| panic!("{name}: loading {race_track} as a time trial: {e:#}"));
+
+        // The same circuit, named the same way a menu that has not touched
+        // the Circuit row since picking Zone mode would - which is exactly
+        // the shape of the bug.
+        let zoning_the_race_circuit = race::load(&race::Options {
+            source: source.clone(),
+            class: SpeedClass::Venom,
+            mode: oag_race::Mode::Zone,
+            track: Some(race_track.to_string()),
+            ..race::Options::default()
+        })
+        .unwrap_or_else(|e| panic!("{name}: racing {race_track} in zone mode: {e:#}"));
+
+        assert!(
+            zoning_the_race_circuit
+                .report
+                .iter()
+                .any(|line| line.starts_with("zone:") && line.contains("->")),
+            "{name}: picking a race circuit in zone mode should report the \
+             substitution to a zone environment: {:#?}",
+            zoning_the_race_circuit.report
+        );
+        assert_ne!(
+            racing.track_model.indices.len(),
+            zoning_the_race_circuit.track_model.indices.len(),
+            "{name}: racing {race_track} in zone mode decoded the same geometry \
+             as the time trial does, so the substitution did not actually swap \
+             the environment - ZoneCircuit::Separate::variant_of stopped \
+             substituting"
+        );
+
+        // Naming one of the title's own Zone circuits directly must not be
+        // rewritten.
+        let zoning_a_zone_circuit = race::load(&race::Options {
+            source,
+            class: SpeedClass::Venom,
+            mode: oag_race::Mode::Zone,
+            track: Some(own_zone_track.to_string()),
+            ..race::Options::default()
+        })
+        .unwrap_or_else(|e| panic!("{name}: racing {own_zone_track} in zone mode: {e:#}"));
+        assert!(
+            zoning_a_zone_circuit
+                .report
+                .iter()
+                .any(|line| line.starts_with("zone:") && line.contains("as named")),
+            "{name}: naming one of this title's own zone circuits should not be \
+             rewritten: {:#?}",
+            zoning_a_zone_circuit.report
         );
     }
 }

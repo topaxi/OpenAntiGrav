@@ -575,11 +575,12 @@ pub(super) fn zone_circuit_miss(
              race another mode here",
             title.name
         ),
-        oag_title::ZoneCircuit::Separate(default) => anyhow::anyhow!(
+        oag_title::ZoneCircuit::Separate(tracks) => anyhow::anyhow!(
             "{track} is in none of this source's archives ({layout}). {} keeps its \
              zone circuits apart from its race ones, so a race circuit's name will \
-             not do: {default} is the one this title opens by default",
-            title.name
+             not do: {} is the one this title opens by default",
+            title.name,
+            tracks[0]
         ),
     }
 }

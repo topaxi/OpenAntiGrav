@@ -364,7 +364,21 @@ pub enum ZoneCircuit {
     /// are Zone. Asking "what is Vineta K's Zone variant" is a question with no
     /// answer in the data, so this variant answers the only question that does
     /// have one.
-    Separate(&'static str),
+    ///
+    /// **Every Zone circuit this title has, first entry first.** Not one
+    /// string: a caller can still name any of the four directly (Pure's own
+    /// four `type="Zone"` circuits, HD's `zone_1`..`zone_4`), and
+    /// [`Self::variant_of`] needs the whole list to tell "the player picked a
+    /// Zone circuit" from "the player picked a race circuit and this is Zone
+    /// mode" - the two cases a menu that always names *something* cannot
+    /// distinguish on its own. The first entry is what [`Self::default_track`]
+    /// answers with, on the same "the disc's own ordering is the best
+    /// available answer" terms as [`RaceDefaults::track`]'s own docs give.
+    ///
+    /// Never empty on a title actually wired up this way - see the
+    /// `oag_pure`/`oag_hd`/`oag_2048` construction sites, each with its own
+    /// evidence for what belongs in the list.
+    Separate(&'static [&'static str]),
 }
 
 impl ZoneCircuit {
@@ -372,13 +386,33 @@ impl ZoneCircuit {
     ///
     /// [`Self::Prefixed`] rewrites it, because on such a title the name the
     /// caller gave is a race circuit and its Zone twin is derivable.
-    /// [`Self::Separate`] hands it back untouched, because there is nothing to
-    /// derive - a caller naming a circuit on Pure or HD has named the one it
-    /// wants, and rewriting it would invent a path the disc does not carry.
+    ///
+    /// [`Self::Separate`] hands it back untouched **only when it already names
+    /// one of this title's own Zone circuits** - checked case- and
+    /// separator-insensitively, the same fold a PSARC container applies before
+    /// it looks a path up, so `--track` and a menu-built entry name agree on
+    /// what counts as a match. Anything else - which is what a menu always
+    /// hands this when the player has not touched the Circuit row since
+    /// picking Zone mode, because that row is filled with race circuits - falls
+    /// back to the title's own default instead of being raced as though it
+    /// were a Zone environment.
+    ///
+    /// **This used to hand back whatever it was given, unconditionally.** On a
+    /// title with no per-circuit Zone mapping to derive, that read as "nothing
+    /// to derive, so trust the caller" - but the caller is a menu that always
+    /// names *some* circuit, Zone-shaped or not, and the untouched name it
+    /// hands back most of the time is a race circuit's own environment. A Zone
+    /// race on Wipeout HD or Wipeout Pure then flew the picked race circuit
+    /// under Zone's rules rather than any Zone environment at all, and the
+    /// load report said `racing {track} as named` - which reads as success.
+    /// Trusting the caller was right; trusting it to have named a Zone circuit
+    /// specifically was not, and this is the fix.
     ///
     /// **Idempotent under `Prefixed`**: a name already carrying the prefix comes
     /// back unchanged, so `--track ...\zone_track.vex --mode zone` asks for
-    /// `zone_track.vex` rather than `zone_zone_track.vex`.
+    /// `zone_track.vex` rather than `zone_zone_track.vex`. `Separate` is
+    /// idempotent too, for the same caller-facing reason: a name already in the
+    /// list is recognised on the second pass exactly as on the first.
     #[must_use]
     pub fn variant_of(self, track: &str) -> String {
         match self {
@@ -390,7 +424,17 @@ impl ZoneCircuit {
                 }
                 format!("{directory}{prefix}{file}")
             }
-            Self::Separate(_) => track.to_string(),
+            Self::Separate(tracks) => {
+                debug_assert!(
+                    !tracks.is_empty(),
+                    "a title wired up as Separate must name at least its own default"
+                );
+                if tracks.iter().any(|&own| paths_match(own, track)) {
+                    track.to_string()
+                } else {
+                    tracks[0].to_string()
+                }
+            }
         }
     }
 
@@ -399,16 +443,33 @@ impl ZoneCircuit {
     /// `race_default` is [`RaceDefaults::track`], which is what a race would
     /// have opened. [`Self::Prefixed`] derives its Zone twin from it, so the
     /// title's opening circuit stays the opening circuit in both modes;
-    /// [`Self::Separate`] ignores it and answers with its own, because a race
-    /// circuit is not a Zone one on those titles and opening it would be a
-    /// normal race wearing the Zone rules.
+    /// [`Self::Separate`] ignores it and answers with its own first entry,
+    /// because a race circuit is not a Zone one on those titles and opening it
+    /// would be a normal race wearing the Zone rules.
     #[must_use]
     pub fn default_track(self, race_default: &str) -> String {
         match self {
             Self::Prefixed(_) => self.variant_of(race_default),
-            Self::Separate(track) => track.to_string(),
+            Self::Separate(tracks) => tracks[0].to_string(),
         }
     }
+}
+
+/// Whether two entry names address the same archive entry.
+///
+/// Mirrors the fold [`oag_assets::psarc`](oag_assets)'s own `normalise`
+/// applies before it looks a path up - leading `/` trimmed, `\` folded to `/`,
+/// ASCII-lowercased - so [`ZoneCircuit::Separate`]'s membership check agrees
+/// with the archive about which spellings name the same file. Repeated here
+/// rather than shared: `oag-title` describes a title and does not depend on
+/// `oag-assets`, which reads one.
+fn paths_match(a: &str, b: &str) -> bool {
+    fn normalise(path: &str) -> String {
+        path.trim_start_matches('/')
+            .replace('\\', "/")
+            .to_ascii_lowercase()
+    }
+    normalise(a) == normalise(b)
 }
 
 #[cfg(test)]
@@ -416,7 +477,12 @@ mod tests {
     use super::ZoneCircuit;
 
     const PULSE: ZoneCircuit = ZoneCircuit::Prefixed("zone_");
-    const PURE: ZoneCircuit = ZoneCircuit::Separate(r"Data\Zone\01_Zone\track.vex");
+    const PURE: ZoneCircuit = ZoneCircuit::Separate(&[
+        r"Data\Zone\01_Zone\track.vex",
+        r"Data\Zone\02_Zone\track.vex",
+        r"Data\Zone\03_Zone\track.vex",
+        r"Data\Zone\04_Zone\track.vex",
+    ]);
 
     /// The prefix goes on the *file*, not the front of the whole entry name,
     /// and both separators the corpus uses are directory separators.
@@ -449,9 +515,10 @@ mod tests {
         assert_eq!(PULSE.variant_of(zone), zone);
     }
 
-    /// A title whose Zone circuits are their own has nothing to derive: the
-    /// caller's name stands, and the default is the title's own Zone circuit
-    /// rather than a rewrite of its race one.
+    /// A title whose Zone circuits are their own has nothing to derive from a
+    /// race circuit: naming one of its *own* Zone circuits stands, and the
+    /// default is the title's own first Zone circuit rather than a rewrite of
+    /// its race one.
     #[test]
     fn separate_circuits_are_never_rewritten() {
         let named = r"Data\Zone\03_Zone\track.vex";
@@ -463,6 +530,35 @@ mod tests {
         assert_eq!(
             PULSE.default_track(r"Data\Environments\16_Track\track.vex"),
             r"Data\Environments\16_Track\zone_track.vex"
+        );
+    }
+
+    /// **The regression this type exists to close.** A menu that switches to
+    /// Zone mode without touching the Circuit row hands `variant_of` a *race*
+    /// circuit, not one of the title's own Zone ones - and until this test
+    /// existed, `Separate` passed it straight through, so the "zone race"
+    /// loaded whichever race environment happened to be selected.
+    #[test]
+    fn separate_substitutes_its_own_default_for_a_race_circuit() {
+        let race_circuit = r"Data\Environments\01_Vineta_K\track.vex";
+        assert_eq!(
+            PURE.variant_of(race_circuit),
+            r"Data\Zone\01_Zone\track.vex"
+        );
+    }
+
+    /// The membership check folds case and separators the same way a PSARC
+    /// container does before it looks a path up, so a caller that spells its
+    /// own Zone circuit differently from the list still gets it honoured
+    /// rather than silently substituted.
+    #[test]
+    fn separate_recognises_its_own_circuit_however_it_is_spelled() {
+        let differently_spelled = "data/zone/03_zone/track.vex";
+        assert_eq!(
+            PURE.variant_of(differently_spelled),
+            differently_spelled,
+            "a name that matches one of PURE's own Zone circuits case- and \
+             separator-insensitively should come back exactly as given"
         );
     }
 }

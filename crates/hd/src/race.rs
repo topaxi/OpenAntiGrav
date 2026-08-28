@@ -33,7 +33,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     ship_dir: oag_title::race::SHIP_DIR,
     // The same directory: this title keeps a team's tuning beside its models.
     handling_dir: oag_title::race::SHIP_DIR,
-    zone: oag_title::ZoneCircuit::Separate(DEFAULT_ZONE_TRACK),
+    zone: oag_title::ZoneCircuit::Separate(ZONE_TRACKS),
     zone_craft: oag_title::ZoneCraft::OwnShip(ZONE_SHIP),
     sounds: SOUND_BANKS,
 };
@@ -113,6 +113,32 @@ pub const ZONE_SHIP: &str = "zone";
 /// which says the same about the sixteen. This is a name that resolves, nothing
 /// more.
 pub const DEFAULT_ZONE_TRACK: &str = "/data/environments/zone_1/track.vex";
+
+/// The rest of [`DEFAULT_ZONE_TRACK`]'s siblings, on the same terms.
+///
+/// **The pairing is a measurement, not an assumption.** `DATA00`'s own
+/// `PI_Track` order names `25_Track`..`28_Track` as HD's four Zone circuits -
+/// `docs/formats/hd-frontend.md` records that much already - and reading
+/// each one's `location` off the disc pairs them in file order:
+/// `25_Track`/`Zone_1`, `26_Track`/`Zone_2`, `27_Track`/`Zone_3`,
+/// `28_Track`/`Zone_4`, probed 2026-08-27 against
+/// `hdfury-ps3-eu-dec.iso`. Each holds a plain `track.vex`, the same as
+/// [`DEFAULT_ZONE_TRACK`]'s own.
+pub const ZONE_TRACK_2: &str = "/data/environments/zone_2/track.vex";
+/// See [`ZONE_TRACK_2`].
+pub const ZONE_TRACK_3: &str = "/data/environments/zone_3/track.vex";
+/// See [`ZONE_TRACK_2`].
+pub const ZONE_TRACK_4: &str = "/data/environments/zone_4/track.vex";
+
+/// Every Zone circuit this title has, [`DEFAULT_ZONE_TRACK`] first.
+///
+/// What [`DEFAULTS`] hands [`oag_title::ZoneCircuit::Separate`]. A caller
+/// naming one of these four directly gets it honoured in Zone mode; naming
+/// anything else - which is what a menu that has not touched the Circuit row
+/// since picking Zone mode always does, since that row is filled with race
+/// circuits - falls back to [`DEFAULT_ZONE_TRACK`]. See
+/// [`oag_title::ZoneCircuit::variant_of`].
+pub const ZONE_TRACKS: &[&str] = &[DEFAULT_ZONE_TRACK, ZONE_TRACK_2, ZONE_TRACK_3, ZONE_TRACK_4];
 
 /// The circuit a race loads when the caller names none.
 ///
