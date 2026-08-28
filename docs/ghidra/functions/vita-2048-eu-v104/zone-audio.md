@@ -172,9 +172,16 @@ indirect (a vtable/function-pointer slot, which does not show up as a direct
    during a live Zone race, the technique
    [`ship-parts.md`](../psp-pulse-usa/ship-parts.md#the-rotation-axis-recovered-from-a-live-read)
    used.
-2. **Verify the bank-path reading against real audio**, once it is
-   reachable: this title's `data.psarc` is not extracted in this tree (only
-   `eboot.bin`/`eboot.elf` are, under `data/extracted/vita/PCSF00007/base`),
-   so `oag-wad sounds`-style confirmation that `speech_zone_NGP.bnk` actually
-   names `zone_5`..`zone_100` - the way it settled the other three titles -
-   is still owed. See `handover/2048s-vita-eboots-are-imported-re-not-started.md`.
+2. **Verify the bank-path reading against real audio.** `data.psarc` is
+   extracted now (2026-08-28, `data/extracted/vita/PCSF00007/base/PSP2/data.psarc`,
+   1.6 GB - see `data/README.md`), so the blocker on data availability this
+   bullet used to name is gone. **The blocker moved to the container
+   itself**: `oag_formats::sblk::Bank::parse` on the real
+   `data/audio/sound/speech_zone_NGP.bnk` fails with
+   `PartialAdpcmBlock { size: 1242097 }`, so this title's `.bnk` is not simply
+   the same SBlk container the other three titles share, at least not for
+   this file - `docs/formats/psp-audio.md`'s "every title in the lineage
+   ships this container" claim has not actually been checked against 2048.
+   Whether the header/name-table portion parses (`byte_order_of` did not
+   immediately refuse the file) and only the codec/section-length math
+   disagrees, or the container itself differs more fundamentally, is unread.
