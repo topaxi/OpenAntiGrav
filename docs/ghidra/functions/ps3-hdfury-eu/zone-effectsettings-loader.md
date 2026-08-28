@@ -130,6 +130,67 @@ searches for the same underlying reason.
   like 2048's `Zone_UpdateStage` (a clamped, cross-faded per-craft field).
   Nothing here reaches far enough to compare.
 
+## 2026-08-28: the TOC defect is fixed project-wide; `FUN_003d6dc8` redecompiled
+
+The maintainer re-ran `scripts/import-ps3-eboot.sh --ps3-cspec`, closing the
+whole-project blocker option 1 above named. Verified directly through the
+live bridge rather than trusted from the script's own output: the program
+now reports language `PowerPC:BE:64:A2ALT-32addr-PS3` (not the old
+`-32addr`), still 26,100 functions, real imports (`cellFsClose`,
+`sys_lwmutex_lock`, ...). `scripts/apply-ghidra-names.py` re-applied all 114
+rows of this binary's `names.tsv` clean (0 skipped, 0 failed) and the program
+was saved.
+
+**`FUN_003d6dc8` no longer reads as `SpeedBar`/HUD widget setup.** That
+reading is not being directly diffed against a saved copy of the old
+decompile, but it depended entirely on TOC-relative loads this page already
+established were resolving against the wrong TOC - so a completely different
+shape on redecompile is consistent with the earlier reading being exactly
+the artifact `memory.md` warns about, not a second data point confirming it.
+
+**What the new decompile actually shows, not yet confidence-scored or
+renamed**: no `SpeedBar` shape at all. Instead:
+
+- A loop of exactly **fifteen** iterations, pairing two objects per
+  iteration from two arrays based at `iVar8 + 0x33b8` and `iVar8 + 0x346c` -
+  the same count as HD's own `zonemode.effectsettings` stage ladder
+  (`docs/formats/effectsettings.md`), for whatever that is worth before the
+  objects themselves are identified.
+- Several texture/render-target allocations through what reads as a texture
+  constructor (`_opd_FUN_005a6ce0`, called with width/height/format-shaped
+  arguments): `0x200 x 0x200`, `0x20 x 0x20`, `0x100 x 1`.
+- A **64-entry palette unpacked from 3-byte RGB triples** (`(uint)*pbVar16 +
+  (uint)pbVar16[1] * 0x100 + (uint)pbVar16[2] * 0x10000`, looped 0x40 times)
+  read from a stack-relative address - plausible fit for a colour ramp or
+  gradient LUT, unconfirmed.
+- Repeated calls to a pair of functions, `_opd_FUN_005dde98` (five
+  arguments, one of them an address inside what looks like a second implicit
+  parameter) and `_opd_FUN_005d91a8` (called with no visible arguments in
+  several call sites, which is itself suspicious - see below) - a plausible
+  shape for "hash this key name, look it up in the parsed effectSettings
+  table, return a float", exactly what fifteen stage-keyed colour blocks
+  would need, but this is a hypothesis from shape alone, not traced.
+
+**Two concrete blockers before any of this can be named**, both `_q`-below-50
+territory right now:
+
+1. `iStack_24f4` is read throughout (`*(int *)(iStack_24f4 + -0x58d0)` etc.)
+   but never assigned inside this decompile - Ghidra inferred a one-parameter
+   signature (`param_1` alone), so this is almost certainly a second,
+   stack-passed parameter the auto-analysis missed, not a real stack
+   variable. Needs `get_function_variables`/`set_function_prototype` to
+   restore the real signature before the `-0x58xx` offsets mean anything.
+2. `_opd_FUN_005dde98`/`_opd_FUN_005d91a8` are themselves undecoded - the
+   "hash + lookup" reading is pattern-matched from the call shape and the
+   stage count matching, not from either function's own body.
+
+**Next step for whoever picks this up**: fix `FUN_003d6dc8`'s prototype
+first (resolves what `iStack_24f4` actually is), then decompile
+`_opd_FUN_005dde98`/`_opd_FUN_005d91a8` under their own (now-correct) TOCs -
+same OPD-verification discipline this page has used throughout, since the
+project-wide fix does not exempt any individual function from that check,
+it just makes Ghidra's own resolution trustworthy again.
+
 ## Tooling note: `program` parameter is unreliable across the two PS3/Vita programs
 
 Passing `program: "EBOOT.elf"` explicitly to `search_strings` and

@@ -672,6 +672,20 @@ two remaining texture-path hits (`livery.rs`, `race/load.rs`) are `mesh::rcs`
 callbacks and so PS3-only. **No sweep outside those two crates has been
 done**, so treat this as two instances found, not the complete list.
 
+**Fixed in place, 2026-08-28 - the workaround below is no longer needed for
+`ps3-hdfury-eu`.** The maintainer ran `scripts/import-ps3-eboot.sh --ps3-cspec`
+(Ghidra closed first, as the script requires); verified directly afterward:
+language reads `PowerPC:BE:64:A2ALT-32addr-PS3`, still 26,100 functions, real
+imports, and `scripts/apply-ghidra-names.py` re-applied all 114 of this
+binary's `names.tsv` rows clean. `AssignPs3R2FromOpd.java` now runs as part
+of the normal import (`-postScript`), so every function's TOC-relative load
+should resolve correctly without `ps3-toc.py` cross-checks going forward -
+though any *pre-existing* decompile read or claim made before this date and
+not yet re-verified should still be treated with the same suspicion the rest
+of this section describes, since it may have been made under the old,
+TOC-defective database. The history below is kept for the lesson, not as a
+live workaround to repeat.
+
 **The Ghidra bridge cannot run scripts, so the PS3 TOC defect has to be worked
 around rather than fixed in place.** 2026-08-18. `GHIDRA_MCP_ALLOW_SCRIPTS` is
 unset on this bridge, so both `run_ghidra_script` and `run_script_inline` refuse

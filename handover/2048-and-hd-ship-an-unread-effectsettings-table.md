@@ -384,22 +384,22 @@ hedge into a confirmed mechanism (nothing in either branch of
   `U8U8U8U8` section. What is left from this step is the shader side: what
   `Growing Texture.Colour`/`.Scale Bias`/`.Factors` do with this art, which
   needs an HD Zone-shader read this pass did not attempt.
-- **Started, 2026-08-28, and blocked on a database defect rather than
-  unstarted anymore**: HD's own `ZoneMode.effectSettings` load site is found
-  (`0x003f3fb0`, TOC-verified by hand) and traced one call further, to
-  `0x003d6dc8` - where the trail stops, because that function's own real TOC
-  also differs from what Ghidra assumes and its decompile cannot be trusted
-  as a result. See
-  [zone-effectsettings-loader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md)
-  for the exact chain, a new instruction-search trap it cost time finding
-  (a byte-pattern hit's real target depends on *that function's own* TOC,
-  not a shared one), and a `program`-parameter tooling bug that silently
-  targets the wrong open Ghidra program unless omitted. **Next attempt
-  needs**: either a full `scripts/import-ps3-eboot.sh` re-run with the TOC
-  fix applied (a maintainer call, since it touches every applied name in the
-  database - see `handover/wipeout-hd-furys-executable-is-26100-functions-with.md`),
-  or manually verifying `0x003d6dc8`'s TOC-relative loads one at a time the
-  way the two solid ones on this page were.
+- **The database-defect blocker is cleared, 2026-08-28.** The maintainer
+  re-ran `scripts/import-ps3-eboot.sh --ps3-cspec`; verified directly
+  (language now `PowerPC:BE:64:A2ALT-32addr-PS3`, 26,100 functions, real
+  imports) and this binary's `names.tsv` re-applied 114/114 clean.
+  `FUN_003d6dc8` - where the trail from `ZoneMode.effectSettings`'s load site
+  stopped - redecompiled to something structurally different from the old
+  (TOC-defective) "SpeedBar/HUD widget" reading: a fifteen-iteration loop
+  (HD's own stage count), several texture allocations, a 64-entry RGB
+  palette unpack, and two undecoded helper calls shaped like a hashed
+  key-name lookup into the parsed effectSettings table. **Not yet named or
+  confidence-scored** - see
+  [zone-effectsettings-loader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md)'s
+  new section for the finding and the two concrete blockers before it can
+  be: `FUN_003d6dc8`'s own prototype needs fixing first (a second,
+  stack-passed parameter Ghidra missed), then `_opd_FUN_005dde98`/
+  `_opd_FUN_005d91a8` need decompiling in their own right.
 - Worth checking against the user's own play on one of the four ported
   `zone_N` circuits in Zone or Detonator mode: a visible symptom (no fog, no
   palette shift, a black/flat scene) would corroborate "the blend math runs
