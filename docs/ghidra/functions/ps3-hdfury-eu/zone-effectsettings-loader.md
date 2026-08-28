@@ -250,12 +250,24 @@ and a refcount increment. **Renamed, in
 that its one exercised call site is confirmed rather than merely plausible,
 crossing the `_q` threshold.
 
-**What is still open, for whoever picks this up next**: `_opd_FUN_005d9610`
-itself (the found/not-found probe) is unread; and the "reversed circuit"
-cross-title corroboration above is still just a shape match - tracing what
-sets the reversal flag at `iVar12 + 0x1bc, +0x1b5` would test that
-hypothesis against a second, independent binary rather than leave it resting
-on 2048's side alone.
+**The found/not-found probe is read too.** `_opd_FUN_005d9610` (`0x005d9610`) -
+**`FwFile_ResolveInSearchPaths`** (72), named on the same `Fw` prefix
+`memory.md`'s framework-layer functions already use - is a generic
+filename-in-search-path resolver, not itself Zone/effectSettings-specific:
+it walks a search-directory list (`PTR_DAT_008bf270`, an array with
+begin/end pointers at `+0x14`/`+0x18`, 0x1c-byte stride), builds each
+candidate as `directory + name` (optionally `+ extension`, tried against a
+caller-supplied extension list, `param_4`), and calls a virtual "does this
+exist" check (`(**(puVar1 + 0xc))(candidate)`) per candidate - the first hit
+copies the resolved full path into the caller's output buffer and returns.
+No literal string corroborates this one; the 72 rests on the loop/`strcpy`/
+`strcat`/`strstr`/vtable-call shape being unambiguous on its own, the same
+standard this page's other confident reads meet.
+
+**Still open**: the "reversed circuit" cross-title corroboration is still
+just a shape match - tracing what sets the reversal flag at
+`iVar12 + 0x1bc, +0x1b5` would test that hypothesis against a second,
+independent binary rather than leave it resting on 2048's side alone.
 
 ## Tooling note: `program` parameter is unreliable across the two PS3/Vita programs
 

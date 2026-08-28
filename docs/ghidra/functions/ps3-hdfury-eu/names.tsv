@@ -137,3 +137,4 @@
 0x003d6dc8	function	Environment_LoadStageTextures	72	zone-effectsettings-loader.md
 0x005dde98	function	Resource_GetOrCreateByName	72	zone-effectsettings-loader.md
 0x005de2d0	function	Texture_LoadWithFallback	80	zone-effectsettings-loader.md
+0x005d9610	function	FwFile_ResolveInSearchPaths	72	zone-effectsettings-loader.md

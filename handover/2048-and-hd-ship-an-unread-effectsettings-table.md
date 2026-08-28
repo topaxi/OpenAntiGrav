@@ -418,10 +418,13 @@ hedge into a confirmed mechanism (nothing in either branch of
   GCM-texture-flag-shaped resource construction on the found path. **Renamed**:
   `Texture_LoadWithFallback` (80); `Resource_GetOrCreateByName`'s own
   confidence moved 65 -> 72, crossing the `_q` threshold now that its one
-  exercised call site is confirmed rather than plausible. **Still open**:
-  `_opd_FUN_005d9610` (the found/not-found probe both paths key off) is
-  unread, and the reversal-flag's exact meaning is still just a cross-title
-  shape match, not traced to its write site on either title.
+  exercised call site is confirmed rather than plausible. The found/not-found
+  probe both paths key off, `_opd_FUN_005d9610`, is read too: a generic
+  filename-in-search-path resolver, not Zone-specific - **renamed**
+  `FwFile_ResolveInSearchPaths` (72). **Still open**: the reversal-flag's
+  exact meaning is still just a cross-title shape match against 2048's
+  `Environment_LoadEffectSettingsFiles`, not traced to a write site on either
+  title.
 - Worth checking against the user's own play on one of the four ported
   `zone_N` circuits in Zone or Detonator mode: a visible symptom (no fog, no
   palette shift, a black/flat scene) would corroborate "the blend math runs
