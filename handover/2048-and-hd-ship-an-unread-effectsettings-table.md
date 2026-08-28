@@ -87,7 +87,21 @@ except for the HUD and the ship-model swap Pulse alone does.
   10-second-per-step timer (`docs/gameplay/race-modes.md#zone`,
   `docs/ghidra/functions/psp-pulse-usa/zone-mode.md`). Nothing confirms stage
   `N` is shown while the zone counter reads `N`, versus some other indexing
-  or interpolation between stages.
+  or interpolation between stages. **Sharpened this session, not settled**:
+  extracted HD's `speech_zone.bnk` and read its cue table with `oag-wad
+  sounds` directly (rather than trusting `psp-audio.md`'s prose count) -
+  cues 26-39 are fourteen **consecutive** `MR_*` names, `MR_SVE`/`MR_VEN`/
+  `MR_SFL`/`MR_FLA`/`MR_SRA`/`MR_RAP`/`MR_SPH`/`MR_PHA`/`MR_SUP`/`MR_ZEN`/
+  `MR_SUZ`/`MR_Z_SUB`/`MR_Z_M1`/`MR_Z_SUP`, matching this table's own 14
+  non-`Start` stage names in the same order, one for one, with no gap - so
+  the `MR_Z_*` prefix on the last three is cosmetic, not a second block.
+  That is strong evidence this **is** the `SpeedClass`/`NextSpeedClass`
+  ladder HD's own HUD and announcer already use - see
+  `docs/formats/psp-audio.md#speech_zonebnk-names-the-zone-announcer-one-ladder-per-title`.
+  **Still open**: what selects a row at runtime, and whether the index is
+  `RaceState::zone` directly (uncapped past 14, per `crates/race/src/zone.rs`)
+  or something derived from it - no HD executable read exists for this, so
+  per `CLAUDE.md` it stays unwired rather than guessed.
 - 2048's table names 13 stages but the title ships 15 `zoneMode*`/`zoneModeTrack*`
   textures each - unexplained. Either two stages are unnamed/implicit, the
   extra two textures are unused leftovers from the HD port, or the

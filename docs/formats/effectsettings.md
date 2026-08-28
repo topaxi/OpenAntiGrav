@@ -119,7 +119,26 @@ except for the HUD and the ship-model swap Pulse alone does.
   ([race-modes.md](../gameplay/race-modes.md#zone),
   [zone-mode.md](../ghidra/functions/psp-pulse-usa/zone-mode.md)). Nothing
   confirms stage `N` is shown while the zone counter reads `N`, versus some
-  other indexing or interpolation between stages.
+  other indexing or interpolation between stages. **Sharpened, not settled,
+  2026-08-28**: HD's own `speech_zone.bnk` names fourteen `MR_*` cues at
+  consecutive indices 26-39 - `MR_SVE`, `MR_VEN`, `MR_SFL`, `MR_FLA`,
+  `MR_SRA`, `MR_RAP`, `MR_SPH`, `MR_PHA`, `MR_SUP`, `MR_ZEN`, `MR_SUZ`,
+  `MR_Z_SUB`, `MR_Z_M1`, `MR_Z_SUP` - which read as Sub Venom/Venom/Sub
+  Flash/Flash/.../Subsonic/Mach 1/Supersonic in that exact order: a 14/14
+  match, one cue per non-`Start` stage of this table's own 15-stage ladder,
+  contiguous rather than two separate blocks (the `MR_Z_*` prefix on the last
+  three is a naming quirk, not a positional break - read directly with
+  `oag-wad sounds` against the extracted `.bnk`, not assumed from
+  `psp-audio.md`'s prose list, which undercounted it as "eleven ... plus
+  three"). That is strong evidence the effectsettings ladder **is** the same
+  thing `SpeedClass`/`NextSpeedClass` names and this announcer voices - see
+  `psp-audio.md#speech_zonebnk-names-the-zone-announcer-one-ladder-per-title`
+  and `crates/hd/src/race.rs`'s `ZONE_ANNOUNCER`. **What it does not
+  establish**: what selects a row at runtime, or whether the index is the raw
+  `RaceState::zone` counter (uncapped, per `crates/race/src/zone.rs`) or
+  something derived from it - HD's own executable has not been read for
+  this. Per `CLAUDE.md`'s rule that a trigger needs recovering before an
+  effect is wired, this stays unwired.
 - **2048's table names 13 stages but the title ships 15 textures each**
   (`zoneMode0..14.gxt` + `zoneModeTrack0..14.gxt`) - unexplained. Either two
   stages are unnamed/implicit, the extra two are unused leftovers from the HD
