@@ -143,38 +143,50 @@
 //! is recorded here rather than tried in the renderer for the same reason.
 //! Whether the placeholder textures correlate with anything at all - a
 //! different, unauthored slot count, a debug-only render path, nothing - is
-//! unread.
+//! unread. **This section is about reusing a placeholder quad's *transform*
+//! for a new object, and stays correct**: the section below finds a real
+//! mechanism, but it needs no new transform at all - the placeholder quad
+//! never moves, only what texture its own draw call resolves to.
 //!
-//! # Settled, live, on Pulse: nothing is placed, and now that is a runtime fact
+//! # Settled, live, on Pulse: construction places nothing, but something else clearly overrides the disc's own texture
 //!
 //! 2026-08-28, a live PPSSPP debugger session
 //! ([`docs/ghidra/functions/psp-pulse-usa/billboards.md`](../../../docs/ghidra/functions/psp-pulse-usa/billboards.md))
-//! walked Pulse's own loader end to end, past the `$gp`-relative addressing
-//! trap that hid it from every static sweep
-//! ([`handover/a-global-reached-through-gp-has-an-instruction.md`](../../../handover/a-global-reached-through-gp-has-an-instruction.md)):
-//! `World_LoadTrack` builds the path, opens the file, and hands each
-//! `<Billboard>` to `TrackStartup_Parse`, which reads the same six attributes
-//! this module does and dispatches on `num` to one of two constructors -
-//! independently confirming HD's `array[Num]`, no-name-lookup architecture on
-//! a second title, and confirming live that `Color`/`Colour` merge into one
-//! field here too. Both constructors funnel into a shared object builder
-//! that, for a `.vex` (model) slot, writes a 4x4 transform into the new
-//! object - **read live, it is the literal identity matrix, the same sixteen
-//! floats for every billboard regardless of `num`.** `num` itself only
-//! indexes the 9-entry array and seeds three derived resource-tag IDs, never
-//! a position. This is no longer an inference from HD's static reading: on
-//! Pulse, construction-time placement is confirmed **absent**, not merely
-//! unrecovered.
+//! walked Pulse's own loader end to end, past a known `$gp`-relative
+//! addressing trap that hid it from every static sweep: `World_LoadTrack`
+//! builds the path, opens the file, and hands each `<Billboard>` to
+//! `TrackStartup_Parse`, which reads the same six attributes this module
+//! does and dispatches on `num` to one of two constructors - independently
+//! confirming HD's `array[Num]`, no-name-lookup architecture on a second
+//! title, and confirming live that `Color`/`Colour` merge into one field
+//! here too. Both constructors funnel into a shared object builder that,
+//! for a `.vex` (model) slot, writes a 4x4 transform into the new object -
+//! **read live, it is the literal identity matrix, the same sixteen floats
+//! for every billboard regardless of `num`.**
 //!
-//! **One live lead survives, and it is stronger than anything HD's side
-//! has.** The colour path (`Billboard_CreateFromColour_q`) walks a per-track
-//! pool before constructing anything, matching entries by type and colour
-//! and consuming the match - confirmed *reached* during a real circuit load,
-//! architecturally exactly where a "candidate mount point" list would live
-//! for a colour-only slot. Its entries' own layout was not read. If
-//! placement exists anywhere in this engine, this pool - not `PI004`'s
-//! catalogue below, and not a draw-time step outside this construction path,
-//! neither of which has been checked - is the next thing to open.
+//! **That was first read as "nothing overrides the disc's `billboard8.tga`
+//! icon", and that reading was wrong - caught by the project owner, who
+//! plays the original and said the start-line gantry never shows a
+//! stretched digit there.** Checked directly: a live screenshot of the
+//! original's start line shows a "GO" board, never a digit, while this
+//! project's own renderer paints the literal icon. The identity-matrix
+//! finding itself still stands; what does not stand is stopping at
+//! construction and concluding nothing happens afterward. It does: `num`'s
+//! three derived resource-tag IDs are lookup keys into a shared registry all
+//! eight slots register into, and the two objects those keys resolve to for
+//! slot 8 are read constantly during a real countdown, not just once at
+//! construction - one of them carries a live per-frame animation-time
+//! accumulator and four candidate display-state pointers, the right shape
+//! for a multi-frame countdown display. The final texture bind was not
+//! caught in the act, so this is strong circumstantial evidence, not an
+//! instruction-level proof - see the doc page for the full chain.
+//!
+//! **One more live lead survives, not yet folded into the above.** The
+//! colour path (`Billboard_CreateFromColour_q`) walks a per-track pool
+//! before constructing anything, matching entries by type and colour and
+//! consuming the match - confirmed *reached* during a real circuit load. Its
+//! entries' own layout was not read; it may be a second instance of the same
+//! registry-and-resolve pattern, for colour slots specifically.
 
 use crate::fexml;
 

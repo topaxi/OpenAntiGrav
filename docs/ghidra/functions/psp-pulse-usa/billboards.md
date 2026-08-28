@@ -136,32 +136,121 @@ live, those sixteen floats are the literal 4x4 identity matrix**
 regardless of `num`. `param_1+0x88` is separately set to the bit pattern
 `0xc1200000` (-10.0f), also a fixed constant.
 
-## Verdict: no placement logic in this chain, and that is now runtime-confirmed rather than inferred
+## Construction writes no transform - true, but the conclusion drawn from it was wrong
 
 `num` (1-8) is used purely as a **resource-slot index** into a 9-entry array
-and as the seed for three derived resource-tag IDs. It is never used to
-select or compute a position, rotation or scale. The one transform written
-at construction time is a **hardcoded identity matrix from static data**,
-identical for every billboard. `World_LoadTrack -> Xml_OpenFile ->
-TrackStartup_Parse -> Billboard_Create*_q -> Billboard_ConstructResource_q`
-is a complete, live-verified path from "read the manifest" to "instantiate a
-billboard object" that never once reads or computes a world-space
-transform for it. This settles, for PSP, the same question HD's page left
-open from static reading alone - and PSP settles it the same way: **nothing
-is placed here either.** [`crates/formats/src/trackstartup.rs`](../../../../crates/formats/src/trackstartup.rs)
-carries the implication for what the renderer may (not) do with a parsed
-manifest.
+and as the seed for three derived resource-tag IDs at construction time. It
+is never used there to select or compute a position, rotation or scale, and
+the one transform `Billboard_ConstructResource_q` writes is a hardcoded
+identity matrix, identical for every billboard. All of that still stands.
+
+**What did not stand: reading "construction places nothing" as "nothing
+overrides what the track mesh already shows".** That was this page's own
+verdict for a few hours on 2026-08-28, and it was wrong - caught by the
+project owner, who plays the original and said the start-line gantry does
+not show a stretched digit there, only this project's own renderer does.
+Checked directly rather than taken on faith: a live PPSSPP screenshot of
+Talon's Junction's start line (`16_Track`) shows a green board reading
+**"GO"**; `--draws` on this project's own render of the same file shows
+node 74 painting the literal `billboard8.tga` digit icon there instead. The
+premise held. See "The registered resource is live, not inert" below for
+what actually overrides it - the mistake was stopping at construction and
+not asking what happens to the object afterward.
+
+## The registered resource is live, not inert
+
+2026-08-28, continuing the same live session. The three tags
+`Billboard_ConstructResource_q` derives from `num` are **lookup keys into a
+shared registry**, not scratch values: a RAM-wide scan for the literal
+4-byte values `0x08100000`/`0x08200000`/`0x08400000` (slot 8's tags) found
+all three clustered at `0x08ba79bc`-`0x08ba79dc`, each paired with a pointer
+- `(0x09837cb0, 0x08100000)`, `(0x09837cb0, 0x08400000)`,
+`(0x0983a240, 0x08200000)`. The immediately adjacent entries carry
+`0x07100000`/`0x07200000`/`0x07400000` - slot 7's tags, by the same
+`(num-1)*0x1000000 + {...}` formula - confirming this one table is where all
+eight billboard slots register, not something slot-8-specific. Two of slot
+8's three tags resolve to the same object; the third resolves to a
+different one.
+
+**Both resolved objects are read constantly, not once at construction.**
+Read/log watchpoints on each (`memory.breakpoint.add`, per
+[`ppsspp-debugger.md`](../../../reverse-engineering/ppsspp-debugger.md))
+armed through a full countdown-to-green cycle (~44 s), against the craft's
+own body position as a live control:
+
+| Object | Hits |
+| --- | --- |
+| `0x09837cb0` (mesh/layer, from the first two tags) | 12,264 |
+| `0x0983a240` (material, from the third tag) | 7,173 |
+| the registry table itself (shared, high-traffic) | 791,239 |
+| control: craft body position | 15,251 |
+
+- **`0x09837cb0`** is read mainly by a per-object world-transform composer
+  (`FUN_088fe208`) and a generic component-update dispatcher
+  (`FUN_0894402c`) that walks a child list and calls two functions through a
+  vtable-shaped pointer at `+0x38` - unremarkable scene-graph plumbing,
+  confirming this object sits in the ordinary per-frame update tree rather
+  than being dead weight.
+- **`0x0983a240`** is read overwhelmingly (6,261 of its hits) by one
+  address, `0x0890cf34`, which has **no function boundary in Ghidra** -
+  reached only through the same kind of indirect/virtual dispatch as
+  `FUN_0894402c`'s vtable calls, which is almost certainly why auto-analysis
+  never defined a function over it. Disassembled directly:
+  ```text
+  lbu   a1, 0xc0(a0)         ; flag byte
+  bne   a1, zero, +0x1c      ; skip accumulation if the flag is set
+  lwc1  f13, 0x40(a0)        ; f13 = current accumulator
+  add.s f12, f13, f12        ; += elapsed time (computed just above)
+  swc1  f12, 0x40(a0)        ; write back
+  ```
+  A **live per-frame animation-time accumulator**, gated by a flag. The same
+  object also holds four pointers at a fixed offset table
+  (`+0x88/+0x90/+0x98/+0xa0` - `0x08f6f450`, `0x08f6fbd0`, `0x08f6f630`,
+  `0x08f6fdb0`), each an identically-shaped wrapper referencing three
+  further heap sub-objects. Four state groups gated by a live clock is the
+  right shape for a multi-frame countdown display; the sub-objects' own
+  content was not decoded, so this is a structural match, not a confirmed
+  content match.
+
+**What this settles**: whatever draws at the gantry position very likely
+resolves through this registration, not through `billboard8.tga` - the
+object is a live scene participant read every frame during exactly the
+window the original shows "GO", not a construction-time artefact nobody
+reads again. **What it does not settle**: the actual texture bind
+(`Gfx_BindTexture`, `0x08928460`) for that screen position was never caught
+in the act, so "this object's resolved state is what gets drawn" is strong
+circumstantial evidence - co-location, timing, and structural shape all
+agreeing - not an instruction-level proof.
+
+## Verdict
+
+Construction-time placement is still absent, confirmed by the identity
+matrix and the resource-tag derivation. **That is not the same claim as
+"nothing overrides the disc's static content", which is false** - a live,
+per-frame-updated resource, reached through the very tags construction
+derives, sits between the manifest and whatever the original actually
+draws, and the two objects behind it are being read and updated throughout
+the countdown a stretched digit would otherwise occupy.
+[`crates/formats/src/trackstartup.rs`](../../../../crates/formats/src/trackstartup.rs)
+carries the corrected implication.
 
 ## What is still open
 
-- **The colour-path pool at `_DAT_002ae2b4+0x3c`** is the single most
-  promising lead either title now has for where a real placement mechanism
-  could live - more promising than HD's `GetBillboardMeshIdFromName`, since
-  this one is confirmed *reached* during a real circuit load, not merely
-  referenced. Its entries' own layout (in particular whatever sits at their
-  `+0x94` and neighbouring offsets) has not been read.
-- Whether the identity-matrix write is later overwritten by something else
-  (a draw-time placement step outside this construction path) is unread -
-  this page only traces construction, not every later use of the object.
+- **The final texture bind is untraced.** Nobody has caught a
+  `Gfx_BindTexture` call for the gantry's screen position and confirmed it
+  reads from `0x0983a240`'s resolved state - the causal chain above is
+  strong but circumstantial.
+- **The four state-group sub-objects** (three each, twelve total, off
+  `0x0983a240+0x88/+0x90/+0x98/+0xa0`) were found but not decoded - unknown
+  whether any names or points at a texture distinguishable from
+  `billboard8.tga`.
+- **`0x0890cf34`** (the animation accumulator) has no function boundary in
+  Ghidra at all; neither it nor `FUN_088fe208`/`FUN_0894402c` were renamed -
+  confidence did not clear the bar, and the first needs a `create_function`
+  pass before it even has an address range to name.
+- **The colour-path pool at `_DAT_002ae2b4+0x3c`** (walked by
+  `Billboard_CreateFromColour_q`) is still unread and still a live,
+  reached-during-load mechanism worth checking - it may be a second
+  instance of the same registry-and-resolve pattern, for colour slots.
 - The `func_0x00XXXXXX` / `+0x08804000` relocation gap above is its own
   open item, tracked separately.
