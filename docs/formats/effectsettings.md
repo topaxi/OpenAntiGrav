@@ -33,6 +33,13 @@ just psarc cat data/images/hdfury-ps3-eu-dec.iso:PS3_GAME/USRDIR/DATA00.PSARC \
 | HD/Fury | `/data/environments/detonatormodedlc3.effectsettings` | 43,230 B | Detonator's DLC3 revision |
 | 2048 | `Data\art\published\environments\<circuit>\ZoneMode2048.effectSettings` | 43,812 B | Zone. Ships in all 10 base circuits, **byte-identical** across every one |
 
+**2048's own loader code names five more files, none of which ship** - see
+[Environment_Load](../ghidra/functions/vita-2048-eu-v104/zone-environment-fallback.md):
+a title-wide `ZoneMode2048default.effectSettings`, and four
+`data/ZoneEnvironmentHDFury/{ZoneMode,DetonatorMode}HDFury[DLC3].effectSettings`
+paths reached for on the four `zone_N` circuits HD's own DLC ports into this
+title. Checked against all three packages (base, DLC1, DLC2): none exist.
+
 2048's copy is HD's ported rather than reauthored: **both titles ship the
 same two texture sets, fifteen files each - corrected 2026-08-28, HD's own
 `zonemodetrack{0..14}.gtf` was missed on the first pass and only 2048's
@@ -123,6 +130,41 @@ lookup in, and no renderer reads a stage's fog/sky/ambient. A Zone race in
 this engine currently looks identical to an ordinary race on every title
 except for the HUD and the ship-model swap Pulse alone does.
 
+## 2048's own loader confirms the mechanism - and reaches for files that never shipped
+
+**2026-08-28, read with a live Ghidra project on `vita-2048-eu-v104`.**
+`Environment_Load` (`0x8102f6d0`, confidence 80 -
+[zone-environment-fallback.md](../ghidra/functions/vita-2048-eu-v104/zone-environment-fallback.md))
+is 2048's own per-race environment loader, called once per race from the
+track loader. On the ordinary path it builds exactly the two files this page
+already documents: `<circuit>\ZoneMode2048.effectSettings` and a second,
+title-wide `ZoneMode2048default.effectSettings` (a **fourth, previously
+unknown file** - presumably a fallback for a circuit that ships no per-circuit
+copy, though the function that would prove that, `FUN_8104619e`, was not
+opened this pass).
+
+**When a circuit has no `art\published\environments\<circuit>\` tree of its
+own, the loader assumes it is one of HD's four ported `zone_N` circuits and
+reaches directly for HD's own title-wide files** -
+`data/ZoneEnvironmentHDFury/ZoneModeHDFury[DLC3].effectSettings` or the
+`DetonatorMode` pair, picked the same way this page's own key names are:
+Detonator vs Zone by a mode flag, `DLC3` vs base by whether the circuit's own
+path names `Zone_1`-`Zone_4`. **Verified reachable, not dead code**: DLC2
+ships those four circuits under `data/art/published/DLC1/environments/zone_N/`
+- the extra `DLC1` segment is exactly what makes the primary path probe fail
+for them, which is exactly what this fallback needs to fire. **And verified
+absent**: none of the five files this section names -
+`ZoneMode2048default.effectSettings` and the four `ZoneEnvironmentHDFury\*`
+paths - exist anywhere on the disc, checked directly against all three
+packages (base, DLC1, DLC2).
+
+**So racing Zone or Detonator on any of the four ported `zone_N` circuits
+loads no effectSettings table at all.** This is not a gap in this project's
+reading; it is the original game's own code reaching for data its own disc
+does not carry. What happens when that load fails - skip the palette,
+something else - is unread; see the evidence page for the exact chain and
+what stops before it.
+
 ## Open
 
 - **The stage-index to zone-number correspondence is inferred from the names
@@ -161,7 +203,12 @@ except for the HUD and the ship-model swap Pulse alone does.
   unread.** Detonator has no known "zone number" that ramps the same way Zone
   does, so either the table is reused wholesale regardless of relevance, or
   Detonator has an escalation mechanic of its own that has not been looked
-  for.
+  for. **One data point, not a resolution**: 2048's `Environment_Load`
+  treats Zone and Detonator as genuinely separate tables even in its
+  fallback path (`ZoneModeHDFury.effectSettings` vs
+  `DetonatorModeHDFury.effectSettings`, picked by a mode flag) - so the
+  engine's own code does not assume they are the same table, whatever the
+  shipped files' shared stage names might suggest.
 - **Checked, 2026-08-28: neither Pulse nor Pure appears to carry an
   analogous table, though a hash-named WAD cannot be proven empty, only
   searched.** `scripts/mine-names.py`'s own candidate generation (executable

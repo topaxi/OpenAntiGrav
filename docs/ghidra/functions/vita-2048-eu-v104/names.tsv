@@ -27,3 +27,4 @@
 0x81262c5a	function	SoundManager_Construct	90	game-boot.md
 0x8106322a	function	FrontendRoot_Construct	90	game-boot.md
 0x8125f796	function	MusicManager_Construct	90	game-boot.md
+0x8102f6d0	function	Environment_Load	80	zone-environment-fallback.md
