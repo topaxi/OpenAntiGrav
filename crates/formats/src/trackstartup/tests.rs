@@ -79,6 +79,44 @@ fn an_empty_or_unrelated_document_yields_nothing() {
     }
 }
 
+/// Pulse ships the same file `fexml`-shortened, with a `<code>` dictionary
+/// up top instead of readable tag names - measured directly off
+/// `Data\Environments\16_Track\TrackStartup.xml`, whose own dictionary
+/// spells the mapping below. A reader that called [`fexml::parse`] on this
+/// text unexpanded found zero billboards on every Pulse circuit; this is the
+/// regression that catches it coming back.
+#[test]
+fn pulse_ships_the_same_file_fexml_shortened() {
+    let shortened = concat!(
+        "<code as=\"Billboard\" bs=\"type\" cs=\"num\" ds=\"location\" ",
+        "es=\"LevelFx\" fs=\"TrackStartup\" gs=\"color\" hs=\"WindSound\" ",
+        "is=\"LoadSoundBank\" js=\"Filename\"></code>\r\n",
+        "<f>\r\n",
+        "<a c=\"1\" b=\"landscape\" d=\"Data\\Billboards\\Pulse_Adverts\\goteki\\GOTEKI_LANDSCAPE_01.vex\"></a>\r\n",
+        "<a c=\"3\" b=\"portrait\" g=\"grey\"></a>\r\n",
+        "<a c=\"8\" b=\"landscape\" d=\"Data\\Environments\\321_Go\\321Go_StartFinish.vex\"></a>\r\n",
+        "<e><h b=\"1\"/></e>\r\n",
+        "<i j=\"TALONS_JUNCTION_ENV.bnk\"/>\r\n",
+        "</f>\r\n",
+    );
+    let m = TrackStartup::parse(shortened);
+    assert_eq!(m.sound_bank.as_deref(), Some("TALONS_JUNCTION_ENV.bnk"));
+    assert_eq!(m.wind_sound, Some(1));
+    assert_eq!(m.billboards.len(), 3);
+    assert_eq!(
+        m.billboard(1).and_then(Billboard::location),
+        Some("/Data/Billboards/Pulse_Adverts/goteki/GOTEKI_LANDSCAPE_01.vex")
+    );
+    assert_eq!(
+        m.billboard(3).map(|b| &b.fill),
+        Some(&Fill::Colour("grey".to_string()))
+    );
+    assert_eq!(
+        m.billboard(8).and_then(Billboard::location),
+        Some("/Data/Environments/321_Go/321Go_StartFinish.vex")
+    );
+}
+
 /// A slot with no model names a colour instead, and dropping it would lose one
 /// entry in eight across the disc.
 #[test]

@@ -730,9 +730,14 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // them** - where a slot's transform comes from is unrecovered, so they stay
     // unwired rather than put somewhere plausible. Reported so that is a line
     // rather than a silence. See `oag_formats::trackstartup`.
-    if ps3_geometry.is_some()
+    //
+    // **Not HD-only.** Pulse ships the same file per circuit, `fexml`-shortened
+    // rather than plain - `TrackStartup::parse` expands either form - so this
+    // also runs on real geometry (`vex_geometry`), whose paths are `\`-joined
+    // where HD's are `/`-joined; `rfind('/')` alone found nothing on Pulse.
+    if (ps3_geometry.is_some() || vex_geometry)
         && let Some(name) = track
-            .rfind('/')
+            .rfind(['/', '\\'])
             .map(|at| format!("{}/trackstartup.xml", &track[..at]))
     {
         match archives.read_name(&name) {
