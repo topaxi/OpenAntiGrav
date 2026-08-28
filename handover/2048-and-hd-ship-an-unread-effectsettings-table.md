@@ -97,6 +97,32 @@ or 2048's new `ZoneCircuit::SameCircuit`) wires a stage lookup in yet. A Zone
 race in this engine still looks identical to an ordinary race on every title
 except for the HUD and the ship-model swap Pulse alone does.
 
+**2026-08-28, later still: with a Ghidra project open on `vita-2048-eu-v104`,
+2048's own loader confirms the mechanism - and reveals the four ported HD
+`zone_N` circuits get no palette at all.** Named `Environment_Load`
+(`0x8102f6d0`, confidence 80,
+[zone-environment-fallback.md](../docs/ghidra/functions/vita-2048-eu-v104/zone-environment-fallback.md)),
+called once per race from the already-identified track loader
+(`zone-audio.md`'s `FUN_8121bce2`). Two findings:
+
+1. Even on the ordinary path, it builds a **second, previously unknown
+   title-wide file**, `ZoneMode2048default.effectSettings`, alongside the
+   per-circuit `ZoneMode2048.effectSettings` this thread already found.
+2. When a circuit has no native `art\published\environments\<circuit>\`
+   tree - true of the four `zone_N` circuits HD's own DLC ports into this
+   title - the loader reaches directly for HD's own title-wide files,
+   `data/ZoneEnvironmentHDFury/{ZoneMode,DetonatorMode}HDFury[DLC3].effectSettings`,
+   picked by mode and DLC3-vs-base.
+
+**Verified reachable, not dead code**: DLC2 ships those four circuits under
+`data/art/published/DLC1/environments/zone_N/` - the extra `DLC1` segment is
+exactly what makes the primary path probe fail, which is exactly what this
+fallback needs to fire. **Verified absent**: none of the five files this
+section names exist anywhere on disc - checked directly against all three
+packages (base, DLC1, DLC2). **So racing Zone or Detonator on any of the
+four ported circuits loads no palette at all** - the original game's own
+data falling short of its own code, not a gap in this project's reading.
+
 ## Open
 
 - The stage-index <-> zone-number mapping is inferred from the names alone
@@ -130,7 +156,12 @@ except for the HUD and the ship-model swap Pulse alone does.
   ladder is unread. Detonator has no "zone number" that ramps the same way
   Zone does (or does it? - unconfirmed), so either the table is reused
   wholesale regardless of relevance, or Detonator has an escalation mechanic
-  of its own that has not been looked for.
+  of its own that has not been looked for. **One data point, not a
+  resolution**: `Environment_Load` treats Zone and Detonator as genuinely
+  separate tables even in its own fallback path (`ZoneModeHDFury` vs
+  `DetonatorModeHDFury`, picked by a mode flag) - the engine's own code does
+  not assume they are the same table, whatever the shipped files' shared
+  stage names might suggest.
 - **Checked, not proven absent.** `scripts/mine-names.py`'s own candidate
   generation (executable strings, template combinations, the plugin
   definition's real track locations) was matched against each disc's
@@ -203,3 +234,11 @@ except for the HUD and the ship-model swap Pulse alone does.
   settle what `Growing Texture.Scale Bias`/`.Factors` actually do to the
   now-identified "Track" art, and what selects an effectsettings row from
   `RaceState::zone` at runtime.
+- Decompile `FUN_8104619e`/`FUN_81044202`/`FUN_81044cfc`, the functions
+  `Environment_Load` hands its two built paths to
+  (`docs/ghidra/functions/vita-2048-eu-v104/zone-environment-fallback.md`),
+  to see what actually happens when the load fails on one of the four
+  ported `zone_N` circuits - skip silently, fall back further, or something
+  else. Worth checking against the user's own play on one of those four
+  circuits in Zone or Detonator mode first, since a visible symptom (no fog,
+  no palette shift, a crash) would say which without reading further code.
