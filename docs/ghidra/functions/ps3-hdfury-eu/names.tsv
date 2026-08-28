@@ -138,3 +138,7 @@
 0x005dde98	function	Resource_GetOrCreateByName	72	zone-effectsettings-loader.md
 0x005de2d0	function	Texture_LoadWithFallback	80	zone-effectsettings-loader.md
 0x005d9610	function	FwFile_ResolveInSearchPaths	72	zone-effectsettings-loader.md
+0x0031e820	function	FwFile_OpenByPath	75	zone-effectsettings-loader.md
+0x0031d570	function	FwFile_ReadChunked	78	zone-effectsettings-loader.md
+0x005d3378	function	FwKeyedText_ParseBuffer	82	zone-effectsettings-loader.md
+0x005d2108	function	FwKeyedText_ParseEntry	80	zone-effectsettings-loader.md

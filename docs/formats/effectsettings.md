@@ -130,6 +130,27 @@ lookup in, and no renderer reads a stage's fog/sky/ambient. A Zone race in
 this engine currently looks identical to an ordinary race on every title
 except for the HUD and the ship-model swap Pulse alone does.
 
+**2026-08-28: HD's own executable is now confirmed to parse this file's text,
+not just carry its path around** - see
+[zone-effectsettings-loader.md](../ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md#2026-08-28-a-fifth-pass-the-live-project-had-reverted-and-once-restored-the-files-own-content-turns-out-to-be-parsed-after-all).
+`Environment_LoadStageTextures` opens `ZoneMode.effectSettings`
+(`FwFile_OpenByPath`), reads it whole (`FwFile_ReadChunked`), and tokenises it
+with a generic, effectSettings-agnostic keyed-config reader
+(`FwKeyedText_ParseBuffer`/`FwKeyedText_ParseEntry`, six call sites elsewhere
+in the binary) into a real per-stage struct table - 15 stages, `0x250` bytes
+each, arithmetic that checks out three independent ways against the
+already-found "reversed circuit" `memcpy` block. **Still not found: who reads
+that table.** Checked directly against HD's own stage 0
+(`just psarc cat ... /data/environments/zonemode.effectsettings`): its
+`Lighting.*` keys are spelled differently from `.envsettings`'
+(`"Sun colour"` vs `envsettings::SUN_COLOUR`'s `"Sun color"`, no `Sun
+direction` key at all) - close enough to look like the same field, not close
+enough to reuse, and one field short of what a full light rig needs. Wiring
+a Rust-side override off that name resemblance, on a file whose *consumer*
+is still unfound, would be exactly the guess `CLAUDE.md` rules out; the
+schema table `FwKeyedText_ParseEntry` reads from (`iVar8 + 0x3664`, found,
+not yet read) is where the authoritative field list actually lives.
+
 ## 2048's own loader confirms the mechanism - and reaches for files that never shipped
 
 **2026-08-28, read with a live Ghidra project on `vita-2048-eu-v104`.**

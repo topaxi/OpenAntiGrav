@@ -186,6 +186,48 @@ hedge into a confirmed mechanism (nothing in either branch of
 `Environment_Load` ever populates `DAT_816c4890` for these circuits; only
 *what* it holds instead remains unverified).
 
+**2026-08-28, later still: the live Ghidra project had silently reverted -
+fixed, and the fix uncovered that HD's executable really does parse this
+file's text.** Picking this thread back up, the live `ps3-hdfury-eu` program
+had lost both the TOC fix and every rename `zone-effectsettings-loader.md`
+documents (plain `PowerPC:BE:64:A2ALT-32addr`, `.opd.FUN_003d6dc8` instead of
+`Environment_LoadStageTextures`) - whether from a Ghidra restart reopening an
+older save or a `save_program` that never landed is untracked, not worth
+chasing once the fix needed redoing anyway. Rebuilt/reinstalled
+Ps3GhidraScripts, reimported under `--ps3-cspec`, reapplied all 118 rows of
+`names.tsv` clean, `just check-names` green project-wide. **Recorded as a
+trap for next time**: a live Ghidra project's applied state is not durable
+between sessions - verify a known rename before trusting a decompile.
+
+With the state trustworthy again, `Environment_LoadStageTextures`'s full
+decompile (finally readable end to end) settles the question this thread's
+own "Does not settle" bullet raised: HD's executable opens
+`ZoneMode.effectSettings` (`FwFile_OpenByPath`), reads it whole
+(`FwFile_ReadChunked`), and tokenises the text with a generic,
+effectSettings-agnostic keyed-config reader (`FwKeyedText_ParseBuffer`/
+`FwKeyedText_ParseEntry`, confirmed shared - six call sites elsewhere in the
+binary, one of them a function-pointer table slot) into a real per-stage
+struct table: 15 stages, `0x250` bytes each, the same base address the
+already-found "reversed circuit" `memcpy` block operates on - stage count,
+stride and total size all check out together for the first time this thread.
+**Still not found: who reads that table.** The per-stage *texture* loading
+this thread already traced (`Resource_GetOrCreateByName` against a hardcoded
+filename table) is a separate subsystem in the same function, feeding
+different memory, not fed by this parse.
+
+Checked directly against the real disc while at it: HD's own stage 0 carries
+`Lighting.*` keys spelled differently from `.envsettings`' constants
+(`"Sun colour"` vs `SUN_COLOUR`'s `"Sun color"`, no `Sun direction` key at
+all) - close enough to *look* like the same field this project's
+`envsettings_light`/`envsettings_fog` already read and draw, not close
+enough to reuse, and one field short of a full light rig. **So this pass
+does not wire anything into the renderer**: the file's content is now
+confirmed parsed by the game, but its consumer inside the executable is
+still unfound, and overriding render state off a name resemblance alone on
+an unfound-consumer file is exactly the guess `CLAUDE.md` rules out. Full
+evidence, including the byte-level trace of every function in this chain:
+[zone-effectsettings-loader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md#2026-08-28-a-fifth-pass-the-live-project-had-reverted-and-once-restored-the-files-own-content-turns-out-to-be-parsed-after-all).
+
 ## Open
 
 - **2026-08-28, a play-based lead pointing straight at this thread.** Fixing
@@ -440,3 +482,17 @@ hedge into a confirmed mechanism (nothing in either branch of
   `zone_N` circuits in Zone or Detonator mode: a visible symptom (no fog, no
   palette shift, a black/flat scene) would corroborate "the blend math runs
   against zero-initialised data" more cheaply than a runtime trace would.
+- **New, sharply localised by this session's find**: read the schema table
+  `FwKeyedText_ParseEntry` looks entries up against (`iVar8 + 0x3664` inside
+  `Environment_LoadStageTextures`'s own state struct at `iVar8 + 0x3660`) -
+  its 36-byte entries (type tag, length, destination pointer) are the
+  authoritative list of which `"key"` strings this parse actually recognises
+  and where each one lands inside the `iVar8 + 0x1000` per-stage table. That
+  settles the vocabulary question `docs/formats/effectsettings.md` currently
+  answers with a spelling guess (HD's `"Sun colour"` versus `.envsettings`'
+  `"Sun color"`), and is the more tractable of the two remaining unknowns -
+  a fixed compiled-in table beats another blind sweep of `g_GameState`'s 100+
+  readers. Once the schema is read, find who reads `iVar8 + 0x1000` itself
+  (this session's other open item, no leads yet) - that is the actual
+  stage-selection trigger `CLAUDE.md` requires before any of this reaches the
+  renderer.
