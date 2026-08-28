@@ -3,13 +3,16 @@
 //!
 //! # Why this matters
 //!
-//! **Neither HD/Fury nor 2048 ships a dedicated Zone environment.** A Zone
-//! race on, say, Altima runs on the circuit's own geometry, and what makes it
-//! *look* like Zone rather than an ordinary race is this file: a title-wide
-//! table with one full colour palette per Zone stage (`Start`, `Sub Flash`,
-//! ..., `Supersonic`), keyed by the zone number the race is on. See
-//! `handover/2048-and-hd-ship-an-unread-effectsettings-table.md` for how this
-//! was found and what is still open.
+//! **2048 has no dedicated Zone circuit at all - it races Zone on whatever
+//! circuit the player picked** (`docs/gameplay/race-modes.md#zone`), where
+//! HD/Fury's own Zone races one of four ported `/data/environments/zone_N/`
+//! circuits. Neither fact explains this file: even on a *dedicated* Zone
+//! circuit, the look still has to escalate as the race goes on - the disc's
+//! own `MSC_EVENT_ZONE` text says the top speed rises every ten seconds, and
+//! this table is the palette that rises with it. One full colour palette per
+//! Zone stage (`Start`, `Sub Flash`, ..., `Supersonic`), keyed by the zone
+//! number the race is on, layered over whichever circuit is racing rather
+//! than replacing its base environment.
 //!
 //! # The format is `.envsettings`'s tokeniser, with a stage prefix on the key
 //!

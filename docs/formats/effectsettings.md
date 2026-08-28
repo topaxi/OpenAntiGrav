@@ -1,11 +1,16 @@
 # `.effectSettings`/`.effectsettings`: the per-stage table that reskins Zone
 
-**Neither HD/Fury nor Wipeout 2048 ships a dedicated Zone environment.** A Zone
-race runs on the circuit's own geometry - Altima, Talon's Junction, whichever
-is selected - and what makes it *look* like Zone is this file: a title-wide
-colour-grade table with one full palette per Zone speed-class stage, read
-against the zone number the race is currently on. Detonator mode ships the
-same mechanism under its own file name.
+**2048 races Zone on whatever circuit the player picked - it has no dedicated
+Zone circuit at all.** HD/Fury's own Zone races one of four ported
+`/data/environments/zone_N/` circuits instead
+([race-modes.md#zone](../gameplay/race-modes.md#zone)), so it is not this
+title that needed a stand-in. What both titles need, dedicated circuit or not,
+is a way for the *look* to escalate as the race goes on - the disc's own
+`MSC_EVENT_ZONE` text says the top speed rises every ten seconds, and this
+file is the palette that rises with it: a title-wide colour-grade table with
+one full palette per Zone speed-class stage, read against the zone number the
+race is currently on and layered over whichever circuit is racing. Detonator
+mode ships the same mechanism under its own file name.
 
 Implemented in
 [`oag_formats::effectsettings`](../../crates/formats/src/effectsettings.rs),
