@@ -144,6 +144,37 @@
 //! Whether the placeholder textures correlate with anything at all - a
 //! different, unauthored slot count, a debug-only render path, nothing - is
 //! unread.
+//!
+//! # Settled, live, on Pulse: nothing is placed, and now that is a runtime fact
+//!
+//! 2026-08-28, a live PPSSPP debugger session
+//! ([`docs/ghidra/functions/psp-pulse-usa/billboards.md`](../../../docs/ghidra/functions/psp-pulse-usa/billboards.md))
+//! walked Pulse's own loader end to end, past the `$gp`-relative addressing
+//! trap that hid it from every static sweep
+//! ([`handover/a-global-reached-through-gp-has-an-instruction.md`](../../../handover/a-global-reached-through-gp-has-an-instruction.md)):
+//! `World_LoadTrack` builds the path, opens the file, and hands each
+//! `<Billboard>` to `TrackStartup_Parse`, which reads the same six attributes
+//! this module does and dispatches on `num` to one of two constructors -
+//! independently confirming HD's `array[Num]`, no-name-lookup architecture on
+//! a second title, and confirming live that `Color`/`Colour` merge into one
+//! field here too. Both constructors funnel into a shared object builder
+//! that, for a `.vex` (model) slot, writes a 4x4 transform into the new
+//! object - **read live, it is the literal identity matrix, the same sixteen
+//! floats for every billboard regardless of `num`.** `num` itself only
+//! indexes the 9-entry array and seeds three derived resource-tag IDs, never
+//! a position. This is no longer an inference from HD's static reading: on
+//! Pulse, construction-time placement is confirmed **absent**, not merely
+//! unrecovered.
+//!
+//! **One live lead survives, and it is stronger than anything HD's side
+//! has.** The colour path (`Billboard_CreateFromColour_q`) walks a per-track
+//! pool before constructing anything, matching entries by type and colour
+//! and consuming the match - confirmed *reached* during a real circuit load,
+//! architecturally exactly where a "candidate mount point" list would live
+//! for a colour-only slot. Its entries' own layout was not read. If
+//! placement exists anywhere in this engine, this pool - not `PI004`'s
+//! catalogue below, and not a draw-time step outside this construction path,
+//! neither of which has been checked - is the next thing to open.
 
 use crate::fexml;
 
