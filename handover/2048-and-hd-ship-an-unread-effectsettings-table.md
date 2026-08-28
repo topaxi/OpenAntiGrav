@@ -155,6 +155,37 @@ it, or whether `DAT_816c4890` is even the parsed effectSettings data rather
 than something built from it - `Environment_LoadEffectSettingsFiles` inserts
 into a *different* cache, and the link between the two was not traced.
 
+**2026-08-28, a parallel pass, on the user's own lead: does 2048's DLC code
+carry an HD-equivalent effect of its own?** Decompiled the DLC fallback's
+own `FUN_8102493c` - the function `Environment_Load` calls directly with the
+raw HDFury effectSettings path, never opened before now - and named it
+`Environment_LoadHDFuryContent` (`0x8102493c`, confidence 75, full evidence
+on the same
+[zone-environment-fallback.md](../docs/ghidra/functions/vita-2048-eu-v104/zone-environment-fallback.md)).
+Yes and no:
+
+- **Yes**: the four ported circuits get their own load-time subsystem. It
+  loads the effectSettings resource into its own cache, preloads all
+  fifteen files of whichever "Track" texture set the active mode names -
+  **confirming `zonemodetrack{0..14}.gtf`/`DetonatorModeTrack{0..14}.gtf`'s
+  identification from the executable's own control flow**, not just the
+  byte-pattern inference above - and builds what reads as procedural
+  geometry, plausibly the `Growing Texture` mesh itself.
+- **No**: it is parallel to, not feeding, `Zone_UpdateStage`'s mechanism.
+  Checked against its full 1,664-line decompile: it never touches `+0x634`,
+  `Zone_UpdateStage`, or `DAT_816c4890`. It also independently corroborates
+  the "reversed circuit" flag hypothesis from the section above, on
+  different data, with the same reversal shape.
+
+**And re-confirmed against `Environment_Load`'s own full decompile, not a
+summary this time**: the DLC branch that calls this function returns
+without ever reaching the label that calls `Zone_UpdateStage` at load time.
+So on the four ported circuits, `Zone_UpdateStage` runs *only* from its
+per-frame caller - turning the earlier "plausibly zero-initialised `.bss`"
+hedge into a confirmed mechanism (nothing in either branch of
+`Environment_Load` ever populates `DAT_816c4890` for these circuits; only
+*what* it holds instead remains unverified).
+
 ## Open
 
 - The stage-index <-> zone-number mapping is inferred from the names alone
@@ -256,8 +287,11 @@ into a *different* cache, and the link between the two was not traced.
   this next attempt should either identify the containing struct's type
   first (narrowing which of those readers are plausible owners) or use a
   runtime watchpoint if one becomes available, rather than repeat the same
-  blind decompile sweep. Only once this is read does wiring a stage into a
-  race stop being a guess.
+  blind decompile sweep. **A fourth candidate, checked and ruled out the
+  same day**: `Environment_LoadHDFuryContent` (the DLC-specific loader) - it
+  is a genuinely separate subsystem with no connection to `+0x634` at all,
+  so it does not narrow the search either. Only once this is read does
+  wiring a stage into a race stop being a guess.
 - Trace how the raw bytes `Environment_LoadEffectSettingsFiles` inserts into
   `DAT_816c7148` end up in `DAT_816c4890`'s own table - **sharpened, not
   settled, third pass**: `DAT_816c4890` is confirmed built by

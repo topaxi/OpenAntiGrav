@@ -31,3 +31,4 @@
 0x8104619e	function	Environment_LoadEffectSettingsFiles	78	zone-environment-fallback.md
 0x81044202	function	Zone_InitStageState	75	zone-environment-fallback.md
 0x81044cfc	function	Zone_UpdateStage	80	zone-environment-fallback.md
+0x8102493c	function	Environment_LoadHDFuryContent	75	zone-environment-fallback.md

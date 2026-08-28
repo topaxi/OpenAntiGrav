@@ -206,6 +206,32 @@ record (plausibly a reversed-circuit flag, unconfirmed). So `DAT_816c4890`
 is a *built* table, not the parsed file itself, but how the raw bytes get
 into it in the first place is still unread.
 
+## The four ported circuits get their own subsystem - parallel, not feeding, `Zone_UpdateStage`
+
+**2026-08-28, a separate pass run alongside the HD one below.** The DLC
+fallback's own `FUN_8102493c` (called with the raw HDFury effectSettings
+path - see above) is now decompiled and named
+`Environment_LoadHDFuryContent` (confidence 75, full evidence on
+[zone-environment-fallback.md](../ghidra/functions/vita-2048-eu-v104/zone-environment-fallback.md#environment_loadhdfurycontent-0x8102493c-confidence-75---a-separate-subsystem-not-a-shared-one)).
+It loads the effectSettings-shaped resource into its own cache (not
+`Environment_LoadEffectSettingsFiles`'s), preloads all fifteen files of
+whichever "Track" texture set the active mode names (confirming
+`zonemodetrack{0..14}.gtf`/`DetonatorModeTrack{0..14}.gtf`'s identification
+from executable control flow, not just the byte-pattern inference above),
+and builds what reads as procedural geometry - plausibly the `Growing
+Texture` mesh itself, unread past recognising the shape. **It touches none
+of `Zone_UpdateStage`, `DAT_816c4890`, or `+0x634`/`+0x638`** - checked
+against its full 1,664-line decompile, not sampled.
+
+**Confirmed against `Environment_Load`'s own full decompile**: the DLC
+branch that calls this function returns without ever reaching the label
+that calls `Zone_UpdateStage` at load time. So on the four ported circuits,
+`Zone_UpdateStage` runs **only** from its per-frame caller - the earlier
+"plausibly zero-initialised `.bss`" hedge is now a confirmed mechanism, not
+a guess: nothing in either `Environment_Load` branch ever populates
+`DAT_816c4890` for these circuits, so the per-frame blend runs against
+whatever it already held, every frame, with certainty.
+
 ## HD's own load site is found; a Ghidra database defect blocks the rest
 
 **2026-08-28, a fourth pass, on HD/Fury's executable this time** (priority
@@ -261,8 +287,13 @@ traced.
   found and named. **What it still does not establish**: what struct that
   field belongs to, what writes it, or whether HD's own selection works the
   same way - no write site was found, and this is 2048's executable, not
-  HD's. Per `CLAUDE.md`'s rule that a trigger needs recovering before an
-  effect is wired, this stays unwired until the write side closes the loop.
+  HD's. **One avenue closed**: the DLC-specific loader,
+  `Environment_LoadHDFuryContent`, was checked in full and does not touch
+  `+0x634`, `Zone_UpdateStage`, or `DAT_816c4890` either - it is a separate
+  subsystem for the four ported circuits, not a second writer to look for
+  the field in. Per `CLAUDE.md`'s rule that a trigger needs recovering
+  before an effect is wired, this stays unwired until the write side closes
+  the loop.
 - **2048's table names 13 stages but the title ships 15 textures in each
   set** - still unexplained, though sharpened by the texture-content finding
   below: the "Track" set is where the real per-stage art lives on both
