@@ -264,10 +264,38 @@ No literal string corroborates this one; the 72 rests on the loop/`strcpy`/
 `strcat`/`strstr`/vtable-call shape being unambiguous on its own, the same
 standard this page's other confident reads meet.
 
+**`iVar12` is `g_GameState`, confirmed rather than guessed.** `iVar12 = *(int
+*)(iStack_24f4 + -0x58d0)` resolves, by the same TOC math as everywhere else
+on this page, to the value stored at `0x008b7af4`: `0x00936fe8` -
+`g_GameState`'s own address, already named at confidence 90
+([mode-manager.md](mode-manager.md)). Independently corroborated by the very
+next condition in the decompile, `*(int *)(iVar12 + 0xe0) == 0xe`: `+0xe0` is
+exactly `g_GameState`'s documented mode field, and `mode-manager.md` already
+lists `14` (`0xe`) among the seven ids with "no `ModeManager`", hypothesising
+"Zone, Zone Battle and Detonator are the obvious candidates" for that bucket
+- unestablished there, and this page's own finding (a Zone/Detonator
+texture-table branch keyed on mode `14` specifically) is a second, independent
+data point for the same hypothesis, on two different functions.
+
+**Why the reversal flag's write site is not chased further this pass**:
+`get_xrefs_to` on `g_GameState` (`0x00936fe8`) returns over 100 hits across
+dozens of functions - the same "the base pointer has dozens of direct
+readers" shape 2048's own `+0x634` write-site search hit three times over on
+`zone-environment-fallback.md`, and that page's own conclusion applies here
+unchanged: a blind sweep of a hundred-plus call sites is not a good use of a
+pass, and the next attempt should identify `g_GameState + 0x1bc`'s pointee
+struct type first (narrowing which readers/writers are plausible owners of
+its own `+0x1b5`), or use a runtime watchpoint if one becomes available.
+What *is* now settled, that was not before: the flag lives inside
+`g_GameState` specifically, not an arbitrary unrelated struct - a concrete
+starting point for that future pass rather than an untyped offset pair.
+
 **Still open**: the "reversed circuit" cross-title corroboration is still
 just a shape match - tracing what sets the reversal flag at
-`iVar12 + 0x1bc, +0x1b5` would test that hypothesis against a second,
-independent binary rather than leave it resting on 2048's side alone.
+`g_GameState + 0x1bc, +0x1b5` would test that hypothesis against a second,
+independent binary rather than leave it resting on 2048's side alone; and
+which of Zone/Zone Battle/Detonator mode id `14` actually is remains
+unestablished on both pages.
 
 ## Tooling note: `program` parameter is unreliable across the two PS3/Vita programs
 

@@ -421,10 +421,21 @@ hedge into a confirmed mechanism (nothing in either branch of
   exercised call site is confirmed rather than plausible. The found/not-found
   probe both paths key off, `_opd_FUN_005d9610`, is read too: a generic
   filename-in-search-path resolver, not Zone-specific - **renamed**
-  `FwFile_ResolveInSearchPaths` (72). **Still open**: the reversal-flag's
-  exact meaning is still just a cross-title shape match against 2048's
-  `Environment_LoadEffectSettingsFiles`, not traced to a write site on either
-  title.
+  `FwFile_ResolveInSearchPaths` (72).
+
+  **The reversal flag is narrowed, not closed.** `iVar12` (the reversal
+  condition's own base pointer) is `g_GameState`, confirmed two ways: the TOC
+  math resolves it to that exact address, and the very next condition checks
+  `+0xe0` - `g_GameState`'s already-documented mode field
+  ([mode-manager.md](../docs/ghidra/functions/ps3-hdfury-eu/mode-manager.md))
+  - against `14`, one of the ids that page already bucketed as "no
+  `ModeManager`, Zone/Zone Battle/Detonator the obvious candidates". Two
+  independent functions now key real behaviour on id `14` specifically,
+  strengthening that bucket without saying which of the three it is. **Not
+  chased further**: `get_xrefs_to` on `g_GameState` returns 100+ hits, the
+  same "dozens of direct readers" shape 2048's own `+0x634` search hit three
+  times - the next attempt needs `g_GameState + 0x1bc`'s pointee struct typed
+  first, or a runtime watchpoint, not a fourth blind sweep.
 - Worth checking against the user's own play on one of the four ported
   `zone_N` circuits in Zone or Detonator mode: a visible symptom (no fog, no
   palette shift, a black/flat scene) would corroborate "the blend math runs

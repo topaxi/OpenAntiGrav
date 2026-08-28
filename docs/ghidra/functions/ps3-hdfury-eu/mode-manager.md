@@ -129,6 +129,16 @@ the dispatch table, which the format string and the bounds check state outright.
 `GetMode()==3`, and 3 is `SPArcade` - a single race, which is what a campaign
 cell is. See `docs/reverse-engineering/rpcs3-debugger.md`.
 
+**A second data point for id `14`, from an unrelated function.**
+`Environment_LoadStageTextures` (`0x003d6dc8`,
+[zone-effectsettings-loader.md](zone-effectsettings-loader.md)) branches its
+Zone-versus-Detonator texture-table choice on `g_GameState.GetMode() == 0xe`
+(`14`) specifically - a second, independent function keying real behaviour on
+the same id this page already put in the Zone/Zone Battle/Detonator bucket by
+elimination. Still not enough to say *which* of the three `14` is, only that
+something in that bucket really does drive Zone/Detonator-shaped logic, on
+two different functions now rather than one hypothesis.
+
 ## Two ways this differs from RaceManager
 
 **There is no intermediate multiplayer base.** All five `MP*` mode managers call
