@@ -33,10 +33,21 @@ just psarc cat data/images/hdfury-ps3-eu-dec.iso:PS3_GAME/USRDIR/DATA00.PSARC \
 | HD/Fury | `/data/environments/detonatormodedlc3.effectsettings` | 43,230 B | Detonator's DLC3 revision |
 | 2048 | `Data\art\published\environments\<circuit>\ZoneMode2048.effectSettings` | 43,812 B | Zone. Ships in all 10 base circuits, **byte-identical** across every one |
 
-2048's copy is HD's ported rather than reauthored: both titles ship 15
-`zoneMode*`/`zonemode*` textures beside the table (2048 doubles them into
-`zoneMode*.gxt` and `zoneModeTrack*.gxt`), matching HD's 15-stage count
-exactly even though 2048's own table only names 13 - see [Open](#open).
+2048's copy is HD's ported rather than reauthored: **both titles ship the
+same two texture sets, fifteen files each - corrected 2026-08-28, HD's own
+`zonemodetrack{0..14}.gtf` was missed on the first pass and only 2048's
+doubled naming was noticed.**
+
+| Title | "General" set | "Track" set |
+| --- | --- | --- |
+| HD | `/data/tex/zonemode{0..14}.gtf` | `/data/tex/zonemodetrack{0..14}.gtf` |
+| 2048 | `data/Tex/zoneMode{0..14}.gxt` | `data/Tex/zoneModeTrack{0..14}.gxt` |
+
+Both counts match HD's 15-stage ladder exactly, even though 2048's own table
+only names 13 - see [Open](#open). **The two sets are not equivalent**: the
+"general" one is a single blank texture duplicated fifteen times on both
+titles, and the "Track" one carries fifteen genuinely distinct images - see
+[Open](#open) for the decode.
 
 ## The format is `.envsettings`'s tokeniser, with a stage prefix
 
@@ -139,10 +150,13 @@ except for the HUD and the ship-model swap Pulse alone does.
   something derived from it - HD's own executable has not been read for
   this. Per `CLAUDE.md`'s rule that a trigger needs recovering before an
   effect is wired, this stays unwired.
-- **2048's table names 13 stages but the title ships 15 textures each**
-  (`zoneMode0..14.gxt` + `zoneModeTrack0..14.gxt`) - unexplained. Either two
-  stages are unnamed/implicit, the extra two are unused leftovers from the HD
-  port, or the stage-to-texture correspondence is not 1:1 to begin with.
+- **2048's table names 13 stages but the title ships 15 textures in each
+  set** - still unexplained, though sharpened by the texture-content finding
+  below: the "Track" set is where the real per-stage art lives on both
+  titles, so this is a mismatch in the *content* set that matters, not in
+  spare duplicates of a placeholder. Either two stages are unnamed/implicit,
+  the extra two are unused leftovers from the HD port, or the
+  stage-to-texture correspondence is not 1:1 to begin with.
 - **Why `detonatormode.effectsettings` carries Zone's own 15-stage ladder is
   unread.** Detonator has no known "zone number" that ramps the same way Zone
   does, so either the table is reused wholesale regardless of relevance, or
@@ -168,25 +182,38 @@ except for the HUD and the ship-model swap Pulse alone does.
   always hide an entry no candidate list reaches - but two independently
   generated candidate sets agreeing on nothing is stronger than "not
   checked."
-- **Settled for HD, 2026-08-28: the texture is blank, so the picture cannot be
-  what `Growing Texture` describes.** All fifteen `/data/tex/zonemode{0..14}.gtf`
-  are **byte-identical** - one 87,552 B DXT4/5 256x256 file shipped fifteen
-  times - and decode (`oag_formats::gtf`) to a flat, uniform
-  `[255, 255, 255, 255]` on every one of the 65,536 texels of every one of the
-  fifteen files. There is no warp tunnel, vignette or grille in the art at
-  all. So `Growing Texture.Colour`/`.Scale Bias`/`.Factors` must drive
-  something computed in the shader - a procedural gradient or an animated UV
-  distortion sampling a blank source - rather than anything sampled from a
-  picture, and what that computation is remains unread; no HD executable has
-  been read for its Zone shader. **2048's own copy is still unchecked**:
-  `zoneMode0.gxt` and `zoneModeTrack0.gxt` both carry format byte `0x0c`
-  (`SceGxmTextureBaseFormat` "uncompressed `U4U4U4U4`"), one of the six
-  format codes [gxt.md](gxt.md#the-format-byte-names-a-scegxmtexturebaseformat)
-  already catalogues (99 of 9,910 files disc-wide) but does not decode - its
-  channel/swizzle order is explicitly unread there, so guessing at it here
-  would risk exactly the "plausible-looking stand-in" `CLAUDE.md` warns
-  against. Whether 2048 ships the same blank placeholder or a real picture is
-  still open.
+- **Which texture depicts `Growing Texture` is settled for HD, 2026-08-28;
+  what the parameters do to it is not.** The "general" `zonemode{0..14}.gtf`
+  set is a red herring: all fifteen are **byte-identical** (one 87,552 B
+  DXT4/5 256x256 file, `md5sum` confirms it) and decode
+  (`oag_formats::gtf`) to flat, uniform `[255, 255, 255, 255]` on every one
+  of the 65,536 texels of every one of the fifteen files - no picture at
+  all. **The "Track" `zonemodetrack{0..14}.gtf` set is where the real art
+  is**: fifteen genuinely distinct DXT4/5 files (confirmed both by decoded
+  pixel content and by raw `md5sum` - no two match), each a greyscale image
+  with a varying alpha channel, and the pattern visibly changes shape
+  between stages sampled (0, 1, 7, 14) - blocky interlocking shapes at
+  `Start`, fine vertical stripes partway through the ladder, a dense small
+  grid at `Supersonic`. That is consistent with `Growing Texture`'s own name
+  - an escalating visual keyed to speed class - but **what the shader does
+  with `Growing Texture.Colour`/`.Scale Bias`/`.Factors` against this art is
+  still unread**; no HD executable has been read for its Zone shader, so
+  whether the four `Scale Bias`/`Factors` numbers pick a UV tile, drive a
+  scroll, or something else is not established, only that there is now a
+  real picture for them to apply to. **2048's own copy could not be checked
+  the same way**, but its byte pattern already corroborates the same
+  two-set split: `zoneMode{0..14}.gxt` are as byte-identical to each other
+  as HD's "general" set, while `zoneModeTrack{0..14}.gxt` are fifteen
+  distinct files, exactly matching HD's "Track" set - checked from the raw
+  bytes alone, without needing to decode them. Both sets carry format byte
+  `0x0c` (`SceGxmTextureBaseFormat` "uncompressed `U4U4U4U4`"), one of the
+  six format codes
+  [gxt.md](gxt.md#the-format-byte-names-a-scegxmtexturebaseformat) already
+  catalogues (99 of 9,910 files disc-wide) but does not decode - its
+  channel/swizzle order is explicitly unread there, so decoding it here on a
+  guess would risk exactly the "plausible-looking stand-in" `CLAUDE.md`
+  warns against. What 2048's own "Track" art actually looks like is still
+  open.
 - **Wiring a stage's values into a race** - the next concrete step once the
   zone-number correspondence above is settled. HD is the best-measured
   target, since its `.envsettings` reading and drawing path already exists.
