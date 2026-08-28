@@ -1,8 +1,13 @@
-//! `trackstartup.xml`: what a Wipeout HD circuit asks to be loaded with it.
+//! `trackstartup.xml`: what a circuit asks to be loaded with it.
 //!
-//! One per circuit, 16 on the disc, plain UTF-8 XML with no expansion or
-//! escaping - so [`crate::fexml::parse`] reads it and this module is the schema
-//! on top, the same split [`crate::handling`] uses.
+//! On HD, one per circuit, 16 on the disc, plain UTF-8 XML with no expansion
+//! or escaping. **Pulse ships the same file, per circuit, `fexml`-shortened**:
+//! a `<code>` dictionary up top and single/double-letter element and
+//! attribute names, the same compression its front-end screens use. Both
+//! forms go through [`crate::fexml::text`] first, which expands the
+//! shortened case and passes the plain one through unchanged (`is_fexml`
+//! keys off the leading `<code`), so this module is the schema on top of
+//! either, the same split [`crate::handling`] uses.
 //!
 //! ```xml
 //! <TrackStartup>
@@ -75,6 +80,127 @@
 //! the kind of legible invention that survives review and removes the pressure
 //! to find the real answer. This module parses and reports; a later change
 //! places, once something says where.
+//!
+//! # Cross-title: Pulse ships the same slots, and slot 7 is not reserved there
+//!
+//! Read directly off 11 of Pulse's 12 circuits (`26_Track` is a `Zone`
+//! variant of `25_Track` and carries no `TrackStartup.xml` of its own, the
+//! same way a `Zone` circuit skips the other per-circuit files this module's
+//! sibling docs describe). **Slot 8 is `321Go_StartFinish.vex` on every one
+//! that authors only one billboard 8** - the same finding as HD's, and the
+//! same model name. `14_Track` authors *three* entries under `num="8"`
+//! (`Checkered_StartFinish.vex`, `Final_Lap_StartFinish.vex`, then
+//! `321Go_StartFinish.vex`) - [`TrackStartup::billboard`] returns the first,
+//! so which one the original actually shows for a checkered flag or a final
+//! lap, and whether `num` is really unique per Pulse file the way its HD
+//! comment insists, is unread.
+//!
+//! **Slot 7 is not HD's `fx350.vex`.** It varies circuit to circuit - a
+//! model (nine different adverts across the eleven circuits, `16_Track`
+//! repeating slot 6's `auricom` advert) or a colour (`01`, `03`, `09`) - so
+//! "slots 7 and 8 are reserved" is an HD-specific finding, not a title-wide
+//! one; only slot 8 generalises.
+//!
+//! # `Data\Plugins\PI004\Definition.xml`: the catalogue a colour fill likely
+//! draws from
+//!
+//! Pulse (and per its own `Language` survey, almost certainly Pure) ships a
+//! plugin, `PI004`, that is a flat catalogue of every billboard advert on the
+//! disc - 35 entries on Pulse, each a name (`Portrait2`, `Landscape14`, ...),
+//! a `type` (`Portrait`/`Landscape`), a `location`, and a **space-separated
+//! list of colours** the model supports (`Landscape19`'s malfunction advert
+//! lists five: `white green blue red purple`). `docs/formats/pure-status.md`
+//! independently found the same plugin id on Pure, described only as
+//! "billboard placements" from its exclusion out of the language picker, not
+//! read for content until now.
+//!
+//! That reframes [`Fill::Colour`]: a `TrackStartup.xml` colour is very
+//! plausibly not a literal tint applied to a placeholder, but a **pool
+//! selector** - "pick a catalogue entry whose colour list contains this
+//! name" - since every colour a circuit authors (`red`, `blue`, `green`,
+//! `grey`, `white`, `yellow`, `purple`, `orange`) appears in `PI004`'s own
+//! tag lists and no circuit authors one that does not. **Not confirmed**:
+//! which entry gets picked when several match, or whether this catalogue is
+//! consulted for anything at all - no function has been traced reading it.
+//!
+//! # A cheap placement hypothesis, tried and it does not hold
+//!
+//! `16_Track`'s own art mesh embeds five numbered placeholder textures -
+//! `billboard1/2/6/7/8.tga`, each an 8x8 icon of its own digit, painted on a
+//! handful of quads scattered through the track (`oag-view --draws`; see
+//! `docs/formats/vex.md`'s texture-stride section for how those were first
+//! found). Slot numbers and texture numbers coinciding is tempting: bind
+//! each numbered slot's advert to the placeholder quad wearing its number,
+//! reusing the quad's own world transform in the same node tree.
+//!
+//! **The disc's own file rules that out for `16_Track`.** Its manifest
+//! authors all eight slots, but only five numbers (`1`, `2`, `6`, `7`, `8`)
+//! have a matching placeholder texture anywhere in the mesh; slots `3`, `4`
+//! and `5` name a colour and a model respectively with no numbered quad to
+//! bind to. A mechanism that cannot place three of the eight slots it is
+//! supposed to explain is not the mechanism - this is the same shape of trap
+//! HD's own `Billboard<digits>` node names turned out to be (see above), and
+//! is recorded here rather than tried in the renderer for the same reason.
+//! Whether the placeholder textures correlate with anything at all - a
+//! different, unauthored slot count, a debug-only render path, nothing - is
+//! unread. **This section is about reusing a placeholder quad's *transform*
+//! for a new object, and stays correct**: the section below finds a real
+//! mechanism, but it needs no new transform at all - the placeholder quad
+//! never moves, only what texture its own draw call resolves to.
+//!
+//! # Settled, live, on Pulse: construction places nothing, but something else clearly overrides the disc's own texture
+//!
+//! 2026-08-28, a live PPSSPP debugger session
+//! ([`docs/ghidra/functions/psp-pulse-usa/billboards.md`](../../../docs/ghidra/functions/psp-pulse-usa/billboards.md))
+//! walked Pulse's own loader end to end, past a known `$gp`-relative
+//! addressing trap that hid it from every static sweep: `World_LoadTrack`
+//! builds the path, opens the file, and hands each `<Billboard>` to
+//! `TrackStartup_Parse`, which reads the same six attributes this module
+//! does and dispatches on `num` to one of two constructors - independently
+//! confirming HD's `array[Num]`, no-name-lookup architecture on a second
+//! title, and confirming live that `Color`/`Colour` merge into one field
+//! here too. Both constructors funnel into a shared object builder that,
+//! for a `.vex` (model) slot, writes a 4x4 transform into the new object -
+//! **read live, it is the literal identity matrix, the same sixteen floats
+//! for every billboard regardless of `num`.**
+//!
+//! **That was first read as "nothing overrides the disc's `billboard8.tga`
+//! icon", and that reading was wrong - caught by the project owner, who
+//! plays the original and said the start-line gantry never shows a
+//! stretched digit there.** Checked directly: a live screenshot of the
+//! original's start line shows a "GO" board, never a digit, while this
+//! project's own renderer paints the literal icon. The identity-matrix
+//! finding itself still stands; what does not stand is stopping at
+//! construction and concluding nothing happens afterward. It does: `num`'s
+//! three derived resource-tag IDs are lookup keys into a shared registry all
+//! eight slots register into, and the two objects those keys resolve to for
+//! slot 8 are read constantly during a real countdown, not just once at
+//! construction - one of them carries a live per-frame animation-time
+//! accumulator and four candidate display-state pointers, the right shape
+//! for a multi-frame countdown display. The final texture bind was not
+//! caught in the act, so this is strong circumstantial evidence, not an
+//! instruction-level proof - see the doc page for the full chain.
+//!
+//! **A third pass found what actually plays there: a separate instantiated
+//! mesh, not a retextured node 74.** A RAM scan during a live race found
+//! `321Go_StartFinish.vex`'s own scene graph fully resident and parsed -
+//! `world`/`camera1`/`start_lights`/`start_light_background` node names,
+//! the same asset `TrackStartup.xml` names as slot 8's `location` on every
+//! circuit that authors one. The disc's own numbered `billboard8.tga` quad
+//! reads as authored track-mesh debris the real gantry covers, not what the
+//! original draws. **One tension remains unresolved and is now the
+//! priority**: the identity transform above and this asset being shared
+//! across all 16 circuits mean something still has to move it to each
+//! circuit's own gantry, and no writer for that transform has been found -
+//! "instantiated" is settled, "drawn where the player sees it" is strong
+//! inference from the asset's own node names, not caught directly.
+//!
+//! **One more live lead survives, not yet folded into the above.** The
+//! colour path (`Billboard_CreateFromColour_q`) walks a per-track pool
+//! before constructing anything, matching entries by type and colour and
+//! consuming the match - confirmed *reached* during a real circuit load. Its
+//! entries' own layout was not read; it may be a second instance of the same
+//! registry-and-resolve pattern, for colour slots specifically.
 
 use crate::fexml;
 
@@ -83,10 +209,16 @@ use crate::fexml;
 /// **A slot is either a model or a colour, and a reader that only knows about
 /// models silently drops one in eight.** 104 of the disc's 118 `<Billboard>`
 /// elements carry a `location`; the other 14 carry a `color` instead and no
-/// model at all - `<Billboard num="1" type="landscape" color="red"/>`. What the
-/// engine does with a colour is unrecovered; keeping it is what makes the
-/// difference between "this circuit has 6 hoardings" and "this circuit has 8,
-/// two of which are not models".
+/// model at all - `<Billboard num="1" type="landscape" color="red"/>`. Keeping
+/// it is what makes the difference between "this circuit has 6 hoardings" and
+/// "this circuit has 8, two of which are not models".
+///
+/// What the engine does with a colour is still not confirmed, but Pulse's
+/// `Data\Plugins\PI004\Definition.xml` is a real lead: see this module's
+/// "cross-title" section. Every colour name any circuit authors also tags at
+/// least one catalogue entry there, which reads as a pool selector rather
+/// than a literal tint - not proven, since nothing has traced a function
+/// reading either the manifest's colour or that catalogue.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Fill {
     /// `location="Data\..."`, as an archive entry name.
@@ -142,16 +274,24 @@ pub struct TrackStartup {
 }
 
 impl TrackStartup {
-    /// Reads a whole `trackstartup.xml`.
+    /// Reads a whole `trackstartup.xml`, HD's plain form or Pulse's
+    /// `fexml`-shortened one.
     ///
     /// **Forgiving on purpose**, like the reader under it: an element this does
     /// not know is ignored and a `<Billboard>` missing `num` or `location` is
     /// dropped rather than failing the file, because the manifest is
     /// supplementary - a circuit whose adverts do not load still races. What
     /// *is* worth knowing is reported by the caller from the counts.
+    ///
+    /// A shortened file whose `<code>` dictionary is somehow empty falls back
+    /// to parsing the raw text rather than returning nothing - the same
+    /// "still races" reasoning one level up, since a body of single-letter
+    /// tags this module's schema does not recognise costs nothing beyond the
+    /// billboards it cannot name.
     #[must_use]
     pub fn parse(xml: &str) -> Self {
-        let root = fexml::parse(xml);
+        let expanded = fexml::text(xml.as_bytes());
+        let root = fexml::parse(expanded.as_deref().unwrap_or(xml));
         let mut out = Self::default();
         for element in descendants(&root) {
             match element.name.to_ascii_lowercase().as_str() {

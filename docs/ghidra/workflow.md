@@ -105,9 +105,19 @@ reads `2800043c` (`lui a0, 0x28`), and the decompiler prints raw constants like
 every string tool work; the displayed constant is what lies. Add `0x08804000`
 when reading a constant out of a decompilation.
 
-The Pulse databases do **not** have this wart - at `psp-pulse-usa` `0x0894f6d8`
-the file on disk holds `2800113c` while the database holds `a908113c`, so their
-instruction bytes were genuinely rewritten. **How they got that way is not
+The Pulse databases do **not** have this wart on `lui`/`addiu` HI16/LO16
+constants - at `psp-pulse-usa` `0x0894f6d8` the file on disk holds `2800113c`
+while the database holds `a908113c`, so their instruction bytes were
+genuinely rewritten there. **A narrower, related wart survives on `jal` call
+targets** (2026-08-28, `docs/ghidra/functions/psp-pulse-usa/billboards.md`):
+several calls inside `Billboard_ConstructResource` (`0x08900220`) decompile
+as `func_0x00XXXXXX(...)`, a low pseudo-address `get_function_by_address`
+cannot resolve, even though the *data*-constant wart is fixed in this same
+region. `real = pseudo + 0x08804000` (this binary's own image base) held for
+every case checked - `func_0x0013ff08` resolved cleanly to a real function
+body once corrected - which reads as the `R_MIPS_26` relocation (`jal`'s
+target encoding) not being applied even where `R_MIPS_HI16`/`R_MIPS_LO16`
+(the `lui`/`addiu` pair) are. **How they got that way is not
 established**; setting `Image Base` in the loader's import options is the
 leading hypothesis and is worth testing next, since it would remove the wart
 entirely. Until then, prefer the order above - it is measured, and it is a large

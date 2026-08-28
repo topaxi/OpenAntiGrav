@@ -2374,3 +2374,13 @@ fn the_rocket_model_is_longest_along_the_axis_it_is_flown_down() {
         "expected one clearly dominant axis, got {span:?}"
     );
 }
+
+#[test]
+#[ignore = "needs a real disc image under data/images/"]
+fn pulses_default_track_reports_its_own_trackstartup_xml() {
+    let Some(loaded) = load() else { return };
+    let report = loaded.report.join("\n");
+    let want = report.contains("8 billboard slot(s), 7 naming a model and 1 a colour")
+        && report.contains("sound bank TALONS_JUNCTION_ENV.bnk");
+    assert!(want, "no matching trackstartup.xml line: {report}");
+}

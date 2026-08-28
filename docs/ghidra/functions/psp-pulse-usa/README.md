@@ -25,11 +25,12 @@ An unencrypted ELF, so no decryption step is needed. See
 | [Loading screen](loading-screen.md) | The screen type field, the `loading` plugin's tip table, and the procedural heartbeat wave that is not a movie |
 | [Sound engine](sound.md) | Cue dispatch by name, and the 32-entry SAS voice table the waveform address and length are committed from |
 | [Audio levels](audio-levels.md) | The group/master volume chain to the DAC, and the finding that the original reserves no headroom |
+| [Billboards](billboards.md) | `TrackStartup.xml`'s element walker and the two billboard constructors, live-traced through a PPSSPP watchpoint - the transform they write is a hardcoded identity matrix, not a computed placement |
 | [Import stubs](imports.md) | The 335 library calls, 306 of them resolved by NID |
 
 ## Renames
 
-**Applied.** 841 symbols: 535 from the pages above, collected in
+**Applied.** 845 symbols: 539 from the pages above, collected in
 [names.tsv](names.tsv), plus 306 import stubs derived from the binary itself.
 
 ```sh
