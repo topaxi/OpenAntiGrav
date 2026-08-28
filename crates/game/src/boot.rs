@@ -292,11 +292,7 @@ pub struct Shell {
     pub strings: StringTable,
     /// The raceable circuits, for the menus.
     pub tracks: Vec<crate::catalogue::Track>,
-    /// The circuits a Zone race can be picked from, on the same terms as
-    /// [`Self::tracks`] - resolved once here rather than by re-parsing the
-    /// definitions when the CIRCUIT row's mode changes, the same reason
-    /// [`Self::tracks`] is resolved here rather than per menu-open. See
-    /// [`oag_title::ZoneCircuit::menu_tracks`].
+    /// The circuits a Zone race can be picked from. See [`oag_title::ZoneCircuit::menu_tracks`].
     pub zone_tracks: Vec<crate::catalogue::Track>,
     /// The chosen language's string-table entry, when it names one.
     ///
@@ -523,13 +519,7 @@ pub fn load_shell(options: &Options) -> Result<(Shell, oag_assets::Archives)> {
     let definition = title.plugin_definition;
     let documents = definitions(&mut archives, definition, &mut report);
     let tracks = load_tracks(&mut archives, definition, &documents, &mut report);
-    let zone_tracks = load_zone_tracks(
-        &mut archives,
-        title.race.zone,
-        &tracks,
-        &documents,
-        &mut report,
-    );
+    let zone_tracks = load_zone_tracks(&mut archives, title.race.zone, &documents, &mut report);
     let teams = load_teams(
         &mut archives,
         (title.race.ship_dir, title.race.handling_dir),

@@ -84,19 +84,22 @@ pub(super) fn load_tracks(
 /// the archives the same way, for the same reason: a pack can declare a Zone
 /// circuit without shipping its geometry.
 ///
-/// The dispatch itself - filtering `race_tracks` by `availableInZone` against
+/// Reads its own declared race list off `documents` rather than taking
+/// [`load_tracks`]'s already-archive-filtered one, so the two loaders stay
+/// independent of each other's ordering - each declares, then each filters.
+/// The dispatch itself - filtering that list by `availableInZone` against
 /// asking the definitions for `type="Zone"` entries instead - is
 /// [`oag_title::ZoneCircuit::menu_tracks`]'s; this is only the loading and
 /// reporting around it, on the same terms [`load_tracks`] already sets.
 pub(super) fn load_zone_tracks(
     archives: &mut oag_assets::Archives,
     zone: oag_title::ZoneCircuit,
-    race_tracks: &[crate::catalogue::Track],
     documents: &[String],
     report: &mut Vec<String>,
 ) -> Vec<crate::catalogue::Track> {
+    let race_tracks = crate::catalogue::all_tracks(documents);
     let declared = zone.menu_tracks(
-        race_tracks,
+        &race_tracks,
         |track| track.available_in_zone,
         |kind| crate::catalogue::all_tracks_of_kind(documents, kind),
     );
