@@ -148,12 +148,26 @@ except for the HUD and the ship-model swap Pulse alone does.
   does, so either the table is reused wholesale regardless of relevance, or
   Detonator has an escalation mechanic of its own that has not been looked
   for.
-- **Whether Pulse or Pure carry an analogous table has not been checked.**
-  Their Zone circuit is plain `Skycube`/`fogCube` geometry
-  ([skycube.md](skycube.md), [vex.md](vex.md)) with no obvious sibling file
-  spotted in either disc's `Data\Environments\` tree, but no targeted search
-  was done - the PSP titles' assets are hash-named in their WAD, unlike the
-  two PSARC titles' plain paths.
+- **Checked, 2026-08-28: neither Pulse nor Pure appears to carry an
+  analogous table, though a hash-named WAD cannot be proven empty, only
+  searched.** `scripts/mine-names.py`'s own candidate generation (executable
+  strings, template combinations, the plugin definition's real track
+  locations - 1,409 candidates for Pulse, 1,509 for Pure) was matched against
+  each disc's `Data.wad` directory. Every `zone`-named entry either disc
+  resolves is geometry (`zone_track.vex`/`_reversed`), the shared hull
+  (`Zone.vex`/`zonewreck.vex`), audio (`ship_zone.bnk`, `speech_zone.bnk`,
+  Pulse's own `ZONE_ENV.bnk`) or HUD/UI (`Zone_HUD.xml`,
+  Pulse's `screen_zone.xml` - read directly: a front-end track-select
+  carousel layout, its only colour a `0xCF000000` UI drop-shadow constant,
+  not a palette). Pure's `Data\Zone\0N_Zone\TrackStartup.xml` is 162-163 B,
+  too small to carry fifteen palettes. A further **322 hand-guessed**
+  candidates (stage-name fragments against both titles' own path
+  conventions) added nothing either. Their Zone circuit is plain
+  `Skycube`/`fogCube` geometry ([skycube.md](skycube.md), [vex.md](vex.md))
+  with no obvious sibling. **Not proof of absence** - a hash-named WAD can
+  always hide an entry no candidate list reaches - but two independently
+  generated candidate sets agreeing on nothing is stronger than "not
+  checked."
 - **Settled for HD, 2026-08-28: the texture is blank, so the picture cannot be
   what `Growing Texture` describes.** All fifteen `/data/tex/zonemode{0..14}.gtf`
   are **byte-identical** - one 87,552 B DXT4/5 256x256 file shipped fifteen

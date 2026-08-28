@@ -111,13 +111,21 @@ except for the HUD and the ship-model swap Pulse alone does.
   Zone does (or does it? - unconfirmed), so either the table is reused
   wholesale regardless of relevance, or Detonator has an escalation mechanic
   of its own that has not been looked for.
-- Whether Pulse or Pure carry any analogous data-driven visual escalation for
-  Zone has not been checked. Their Zone circuit is plain `Skycube`/`fogCube`
-  geometry (`docs/formats/skycube.md`, `docs/formats/vex.md`) with no obvious
-  sibling file spotted so far in either disc's `Data\Environments\` tree, but
-  no targeted search for a similarly-named per-stage table was done - the PSP
-  titles' assets are hash-named in their WAD, which makes a blind directory
-  listing unlike the two PSARC titles' plain paths.
+- **Checked, not proven absent.** `scripts/mine-names.py`'s own candidate
+  generation (executable strings, template combinations, the plugin
+  definition's real track locations) was matched against each disc's
+  `Data.wad` - 1,409 candidates for Pulse, 1,509 for Pure. Every `zone`-named
+  entry either resolves is geometry, the shared hull, audio, or HUD/UI -
+  Pulse's `screen_zone.xml` was read directly and is a front-end track-select
+  carousel layout, its only colour a `0xCF000000` UI drop-shadow constant,
+  not a palette; Pure's four `Data\Zone\0N_Zone\TrackStartup.xml` are 162-163
+  B, too small for fifteen palettes. A further 322 hand-guessed candidates
+  (stage-name fragments against both titles' own path conventions) added
+  nothing. Their Zone circuit is plain `Skycube`/`fogCube` geometry
+  (`docs/formats/skycube.md`, `docs/formats/vex.md`). **A hash-named WAD
+  cannot be proven empty**, only searched - but two independently generated
+  candidate sets agreeing on nothing is real evidence, not just "not
+  checked."
 - **Settled for HD, not for 2048.** Extracted and decoded all fifteen
   `/data/tex/zonemode{0..14}.gtf` with `oag_formats::gtf` - **byte-identical**
   (one 87,552 B DXT4/5 256x256 file shipped fifteen times, `md5sum` confirms
@@ -151,8 +159,3 @@ except for the HUD and the ship-model swap Pulse alone does.
   the format's other 97 real files rather than this one alone, ruling out a
   guess that just happens to look plausible on a texture that may itself be
   flat.
-- Look for an analogous per-stage table on Pulse and Pure before concluding
-  they have none - check the disc's own string table / name-mining output
-  for anything matching `zone` + a stage-name fragment (`venom`, `flash`,
-  `phantom`, `zen`, `subsonic`, `supersonic`) rather than assuming the
-  mechanism is HD-lineage-only.
