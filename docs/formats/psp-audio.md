@@ -162,6 +162,61 @@ circuit banks are addressed some other way. The lead worth following is the
 into context by `crates/game/src/catalogue.rs` with its meaning unrecorded -
 name mining from the self-name field is now known to be a dead end for them.
 
+### `speech_zone.bnk` names the zone announcer, one ladder per title
+
+`zone_vo` (`e66cdc25`) sat in the bank table above with a path and a byte count
+and no cue list. Read with `oag-wad sounds`, it turns out to be the Zone
+milestone announcer, and each title's own copy is different disc data rather
+than one shared table:
+
+| Title | Numbered cues | Extra cues |
+| --- | --- | --- |
+| Pulse (USA and EU, `Data.wad`) | `zone_5`, `10`, `15`, `20`, `25`, `30`, `40`, `50`, `60`, `70`, `80`, `90`, `100` | - |
+| Pure (USA and EU, `Data.wad`) | `zone_5`, `10`, `15`, `20`, `25`, `30`, `40`, `50`, `75`, `100` | `zone_bronze`/`silver`/`gold`, `bronze_med`/`silver_med`/`gold_med`, `ship_destroyed`, `ready`, `go` |
+| Wipeout HD/Fury (`DATA01.PSARC`) | `zone_5`, `10`, `15`, `20`, `25`, `30`, `35`, `40`, `45`, `50`, `60`, `70`, `80`, `90`, `100` | `ready`, `321_GO`, `go`, `RS_1_READY`, `RS_2_GO`, eleven `MR_*` speed-class names (`MR_SVE`, `MR_VEN`, `MR_SFL`, `MR_FLA`, `MR_SRA`, `MR_RAP`, `MR_SPH`, `MR_PHA`, `MR_SUP`, `MR_ZEN`, `MR_SUZ`, plus `MR_Z_SUB`/`MR_Z_M1`/`MR_Z_SUP`), `HBEAT`/`HBEAT_GO`/`HBEAT_ZCHANGE` |
+
+Every numbered cue reads as two waveforms on Pulse and HD (an alternate take,
+the same shape [`Bank::pick`](../../crates/game/src/audio/sfx.rs) already draws
+between elsewhere) and one on Pure. `Data\Sound\speech_zone.bnk` hashes to
+`e66cdc25` on all three - confirmed by name (`oag-wad hash 'Data\Sound\speech_zone.bnk'`
+against the archive's own directory), not by assuming Pulse's spelling carries
+over.
+
+**What ties a number to a moment in the run is read on Pulse only, and even
+there it stops short of the executable.** `Zone_Update` (`0x0882f5cc`) walks a
+milestone table, `g_zone_milestones`, whose thresholds - read live at
+`0x08ab0bc8` - are `6, 11, 16, 21, 26, 31, 41, 51, 61, 71, 81, 91, 101`: the
+zone number *after* the step that just happened, one more than the numbered
+cue's own name (`zone_5` fires on reaching zone `6`, i.e. five zones survived).
+Thirteen thresholds, thirteen numbered cues, same ascending order on both
+sides - see
+[`zone-mode.md`](../ghidra/functions/psp-pulse-usa/zone-mode.md#the-ten-second-step)
+for the call site and why the dispatch between them resolves no further: the
+function the table's second word feeds sits outside this project's Ghidra
+database entirely. Pure and HD's own executables have not been read at all for
+this, so their ladders are attributed by the same "ascending thresholds, one
+title fact" pattern [`oag_title::ZoneCraft`] and [`oag_title::ZoneCircuit`]
+already carry, not by a second Zone_Update.
+
+**HD's speed-class cues are a different layer this does not wire.** `MR_VEN`,
+`MR_FLA`, `MR_RAP`, `MR_PHA` and friends read as Venom/Flash/Rapier/Phantom-
+shaped speed-class names, which is what HD's Zone HUD's `SpeedClass` and
+`NextSpeedClass` text widgets (`docs/ui/hud.md`) suggest they announce. Nothing
+here plays them - which class a zone number maps to, and whether the mapping is
+even in this bank rather than a table elsewhere, is unread.
+
+Ported as [`crate::audio::sfx::Announcer`](../../crates/game/src/audio/sfx/announcer.rs):
+one bank loaded per race, the numbered cues decoded by name, and a cue fires
+when `RaceState::zone` reaches a threshold the loaded title names one for. A
+title with no announcer entry plays nothing rather than guessing at Pulse's
+ladder - **2026-08-28: Wipeout 2048 is no longer that title.** Its own
+`speech_zone_NGP.bnk` and a fifteen-entry ladder matching HD's were read off
+the executable's own control flow (a real decompiled dispatch, not a name
+probe) rather than off the shipped audio - this title's `data.psarc` is still
+not extracted in this tree, so unlike the other three the bank's actual
+contents have not been checked against the reading. See
+[zone-audio.md](../ghidra/functions/vita-2048-eu-v104/zone-audio.md).
+
 ## Where each sound starts
 
 `Scream_OpKeyOn` is the opcode handler that hands a waveform to the hardware

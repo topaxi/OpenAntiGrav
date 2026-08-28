@@ -36,6 +36,23 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone: oag_title::ZoneCircuit::Separate(ZONE_TRACKS),
     zone_craft: oag_title::ZoneCraft::OwnShip(ZONE_SHIP),
     sounds: SOUND_BANKS,
+    zone_announcer: Some(ZONE_ANNOUNCER),
+};
+
+/// Wipeout HD/Fury's Zone milestone announcer.
+///
+/// `Data\Sound\speech_zone.bnk` (`DATA01.PSARC`) names fifteen numbered cues -
+/// every five zones to 50, then every ten to 100 - a third ladder, not Pulse's
+/// or Pure's re-read. It also carries a `ready`/`321_GO`/`go` countdown set and
+/// eleven `MR_*` speed-class lines (`MR_VEN`, `MR_FLA`, `MR_RAP`, `MR_PHA`, ...)
+/// this port does not wire - see
+/// `docs/formats/psp-audio.md#speech_zonebnk-names-the-zone-announcer-one-ladder-per-title`.
+/// No call site has been read on this title's own executable, the same
+/// standing [`oag_title::ZoneCraft`] and [`oag_title::ZoneCircuit`] already
+/// have here.
+pub const ZONE_ANNOUNCER: &oag_title::ZoneAnnouncer = &oag_title::ZoneAnnouncer {
+    bank: r"Data\Sound\speech_zone.bnk",
+    milestones: &[5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 60, 70, 80, 90, 100],
 };
 
 /// Where each race cue lives, and the one title where two of them move.

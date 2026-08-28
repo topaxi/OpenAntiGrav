@@ -68,6 +68,24 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone: oag_title::ZoneCircuit::Separate(ZONE_TRACKS),
     zone_craft: oag_title::ZoneCraft::OwnShip(ZONE_TEAM),
     sounds: SOUND_BANKS,
+    zone_announcer: Some(ZONE_ANNOUNCER),
+};
+
+/// Pure's Zone milestone announcer.
+///
+/// `Data\Sound\speech_zone.bnk` names ten numbered cues, on both the USA and EU
+/// discs - `oag-wad sounds 'data/images/pure-psp-eu.chd:PSP_GAME/USRDIR/Data.wad'
+/// --bank vo`. **A different ladder from Pulse's**, not the same file re-read:
+/// Pure stops naming every five zones after 30 and jumps to 75, and carries a
+/// `zone_bronze`/`silver`/`gold` medal set and a `ship_destroyed` cue this port
+/// does not read. See
+/// `docs/formats/psp-audio.md#speech_zonebnk-names-the-zone-announcer-one-ladder-per-title`.
+/// No call site has been read on Pure's own executable - this ladder is
+/// attributed by the same three-titles-and-no-hole standing
+/// [`oag_title::ZoneCraft`] already has, not by a traced `Zone_Update`.
+pub const ZONE_ANNOUNCER: &oag_title::ZoneAnnouncer = &oag_title::ZoneAnnouncer {
+    bank: r"Data\Sound\speech_zone.bnk",
+    milestones: &[5, 10, 15, 20, 25, 30, 40, 50, 75, 100],
 };
 
 /// Where each race cue lives - **Pulse's spelling exactly**.

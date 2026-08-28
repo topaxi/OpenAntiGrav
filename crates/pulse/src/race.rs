@@ -29,6 +29,21 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
         boost: ships::ZONE_BOOST,
     },
     sounds: SOUND_BANKS,
+    zone_announcer: Some(ZONE_ANNOUNCER),
+};
+
+/// Pulse's Zone milestone announcer.
+///
+/// `Data\Sound\speech_zone.bnk` (`zone_vo`, `e66cdc25`) names these thirteen
+/// cues in ascending order, on both the USA and EU discs - `oag-wad sounds
+/// 'data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/Data.wad' --bank vo`. See
+/// `docs/formats/psp-audio.md#speech_zonebnk-names-the-zone-announcer-one-ladder-per-title`
+/// and [`oag_title::ZoneAnnouncer`] for the confidence split between "the bank
+/// holds these" (95) and "the counter reaching this number is the trigger"
+/// (75, traced on this title's own executable).
+pub const ZONE_ANNOUNCER: &oag_title::ZoneAnnouncer = &oag_title::ZoneAnnouncer {
+    bank: r"Data\Sound\speech_zone.bnk",
+    milestones: &[5, 10, 15, 20, 25, 30, 40, 50, 60, 70, 80, 90, 100],
 };
 
 /// Where each race cue lives.

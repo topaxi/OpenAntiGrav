@@ -109,6 +109,10 @@ fn zone_circuits(
             .filter(|track| track.available_in_zone)
             .collect(),
         ZoneCircuit::Separate(_) => catalogue::tracks_of_kind(&xml, "Zone"),
+        ZoneCircuit::SameCircuit => unreachable!(
+            "none of the three disc-backed titles this sweep covers is 2048, the \
+             only one with no Zone-specific environment"
+        ),
     }
 }
 
@@ -623,13 +627,16 @@ fn zone_mode_on_a_named_race_circuit_substitutes_a_zone_environment() {
     }
 }
 
-/// **The craft axis, on all three titles at once.**
+/// **The craft axis, on the three titles that have a disc image behind them.**
 ///
 /// The companion of the circuit sweeps above, and it splits the corpus the same
 /// way: Pulse keeps the Zone hull inside the player's own team, Pure and HD give
 /// Zone a ship directory of its own. Two shapes, three titles, no hole - which
-/// is what licenses [`oag_title::ZoneCraft`] to be a type rather than a
-/// constant, on the same terms as [`ZoneCircuit`].
+/// is what licensed [`oag_title::ZoneCraft`] to be a type rather than a
+/// constant, on the same terms as [`ZoneCircuit`]. 2048 later added a third
+/// shape, [`oag_title::ZoneCraft::PlayerShip`] - source is play rather than a
+/// disc image, so it has no case here and the `match` below is exhaustive
+/// against it only to keep this test honest if that ever changes.
 ///
 /// Each title is asserted on both halves of its own shape, because either alone
 /// would pass on a build that had quietly fallen back to the other:
@@ -690,6 +697,10 @@ fn every_titles_zone_craft_resolves_and_is_not_the_race_hull() {
                 );
                 assert!(zoning.contains(ship), "{name}: {zoning} should name {ship}");
             }
+            oag_title::ZoneCraft::PlayerShip => unreachable!(
+                "{name}: none of the three titles this sweep covers is 2048, the only \
+                 one with no Zone-specific hull"
+            ),
         }
         println!("{name}: race {racing} / zone {zoning}");
     }

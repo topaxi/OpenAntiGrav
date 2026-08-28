@@ -5,6 +5,10 @@
 //! content. The disc-backed half is
 //! `crates/game/tests/sfx_ground_truth.rs`.
 
+use std::sync::Arc;
+
+use oag_audio::Sound;
+
 use super::*;
 
 /// A `Loaded` holding `count` distinguishable one-frame sounds.

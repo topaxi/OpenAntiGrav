@@ -121,8 +121,12 @@ const DATA_CANDIDATES: &[(&str, Platform)] = &[("PSP2/data.psarc", Platform::Vit
 /// The two downloadable packages, mounted behind the base one.
 ///
 /// `dlc1.psarc` carries five Wipeout HD circuits and `dlc2.psarc` eight more
-/// plus the four Zone ones - which is what [`race::DEFAULT_ZONE_TRACK`] needs
-/// and the base package does not have.
+/// plus the four Zone ones - `docs/formats/track.md` traced all twelve back to
+/// HD's own splines, reshipped verbatim. **None of this build's Zone axis
+/// reads the Zone four**: [`race::DEFAULTS`] plays Zone on whichever circuit
+/// the player picked, base or DLC alike, so mounting these two packages is
+/// only ever about the race circuits they add, never about a Zone-specific
+/// one.
 ///
 /// **The 1.04 patch's `data1.psarc`/`data2.psarc` are deliberately not here.**
 /// A patch archive shadows entries the base also holds, and

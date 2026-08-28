@@ -499,6 +499,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [Zone ends now; what is missing is the explosion, not the rule](handover/zone-ends-now-what-is-missing-is-the.md)
 - [Zone flies its own environment now; the menu is the part still not mode-aware](handover/zone-flies-its-own-environment-now-the-menu.md)
 - [Zone races run on all three titles now, and the craft axis closed the way the circuit one did](handover/zone-races-run-on-all-three-titles-now.md)
+- [2048 and HD ship an unread `.effectSettings` table that reskins Zone stage by stage](handover/2048-and-hd-ship-an-unread-effectsettings-table.md)
 - [The AI is authored XML, and its units are the only thing blocking a port of the original's numbers](handover/the-ai-is-authored-xml-and-its-units.md)
 - [The HUD shows a place, measured against the original; the shield bar's colour is the new open half](handover/the-hud-shows-a-place-measured-against-the.md)
 - [The field drove in single file, and the fix is a per-craft personality off the disc's own AI corridor](handover/the-field-drove-in-single-file-and-the.md)

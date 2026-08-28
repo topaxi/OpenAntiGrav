@@ -187,6 +187,8 @@ fn setup(handling: Handling) -> Setup {
         // No disc, so no banks: a headless race raises its cues and plays none
         // of them, which is the same path a source with no sound banks takes.
         sounds: crate::audio::sfx::Banks::default(),
+        // Same path: no title data, so no ladder, so nothing decodes.
+        announcer: crate::audio::sfx::Announcer::default(),
         // A synthetic track authors no pads, which is also what every Pure
         // track does: an empty set is an ordinary state, not a stub.
         speedup_pads: Vec::new(),

@@ -342,6 +342,13 @@ pub struct Setup {
     /// the choice of which alternate sounds all live in
     /// [`crate::audio::Audio`]. See `docs/architecture/adr/0018-audio-mixer-architecture.md`.
     pub sounds: crate::audio::sfx::Banks,
+    /// Zone mode's milestone announcer, decoded from this title's own
+    /// `oag_title::ZoneAnnouncer` when it has one.
+    ///
+    /// Empty on every other mode and on a title with no recovered ladder -
+    /// [`Self::sounds`]'s rule applies unchanged: a milestone that will not
+    /// resolve plays nothing rather than a substitute.
+    pub announcer: crate::audio::sfx::Announcer,
     /// The track's speedup pads, as trigger volumes.
     ///
     /// The same nodes [`Loaded::pad_model`] draws, decoded for what they *do*

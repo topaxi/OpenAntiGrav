@@ -632,7 +632,24 @@ Recorded so none of this reads as undiscovered work.
   of its own - only a per-quad rotation. See
   [lock-sight.md](../ghidra/functions/psp-pulse-usa/lock-sight.md), which also
   identifies the lock tone as `~ROCKLOCK`.
-- **Zone and Eliminator HUDs.** Their layouts parse; nothing drives them.
+- **Eliminator's HUD.** Its layout parses; nothing drives its own widgets yet.
+  **Zone's no longer belongs on this line** - `"Zone"` and `"Score"` in
+  [`text_for`](../../crates/game/src/hud/draw.rs) draw the counter and the
+  score, and as of 2026-08-28 so does a voice line at each milestone this
+  title's own `speech_zone.bnk` names one for, see
+  [`crate::audio::sfx::Announcer`](../../crates/game/src/audio/sfx/announcer.rs).
+  **Wipeout HD's own Zone counter still has nothing to draw it with**, and not
+  for the reason Pulse's did: HD's `zone_hud.xml` authors no `"Zone"` text
+  widget at all - the counter is `ZonePlus0`-`ZonePlus10`, a row of
+  statically-labelled `"1"`-`"10"` text widgets beside `ZonePlusLight0`-`10`
+  image widgets (`docs/formats/hd-hud.md`'s `ALWAYS_ON` list), which reads as a
+  light-up dial rather than a number readout, alongside `SpeedClass`/
+  `NextSpeedClass` text widgets that likely pair with the `MR_*` speed-class
+  voice lines `speech_zone.bnk` also carries
+  (`docs/formats/psp-audio.md#speech_zonebnk-names-the-zone-announcer-one-ladder-per-title`).
+  Unread on HD's own executable and undrawn here rather than forced onto the
+  Pulse-shaped `"Zone"` match arm, which would be wrong for what this widget
+  set actually is.
 - **Medal targets.** `IG_HUD_GOLD`/`SILVER`/`BRONZE`/`RECORD` need progression
   data.
 - **`IG_PAUSE_QUIT`.** There is no pause: leaving a race drops the `World` rather

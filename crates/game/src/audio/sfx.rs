@@ -68,19 +68,18 @@
 //! [`Cue::ShieldActive`], whose call site plays at full volume with pan zero,
 //! and music, which has no emitter at all.
 
-use std::collections::BTreeMap;
-use std::sync::Arc;
-
-use log::info;
-use oag_assets::source::Archives;
-use oag_audio::{Bus, Play, Sound, VoiceId};
+use oag_audio::{Bus, Play, VoiceId};
 use oag_core::Rng;
 use oag_core::math::Vec3;
-use oag_formats::sblk;
 
 use super::{Audio, TICK_HZ};
 
+mod announcer;
+mod banks;
 mod engine;
+pub use announcer::Announcer;
+use banks::load_named_cue;
+pub use banks::{Banks, Loaded};
 pub use engine::Engine;
 
 /// The seed the effects generator starts from.
@@ -149,7 +148,8 @@ impl Audio {
     /// alternates. See `docs/architecture/adr/0018-audio-mixer-architecture.md`.
     pub fn race_tick(&mut self, race: &mut crate::race::Race) {
         let cues = race.drain_cues();
-        if race.sounds().is_empty() {
+        let announcements = race.drain_announcements();
+        if race.sounds().is_empty() && race.announcer().is_empty() {
             return;
         }
         let voices = self.sfx.get_or_insert_with(|| {
@@ -165,6 +165,7 @@ impl Audio {
             }
         });
         let banks = race.sounds();
+        let announcer = race.announcer();
         let listener = listener_of(race);
         let craft = craft_positions(race);
         let running = !race.finished();
@@ -200,6 +201,29 @@ impl Audio {
                 let _ = mixer.play(Play {
                     gain: pan.gain,
                     pan: pan.pan,
+                    ..play
+                });
+            }
+
+            // The Zone announcer: one voice line per milestone this tick
+            // raised, dry and at full volume like `ShieldActive` - a line in
+            // the player's ear, not a thing happening in the world, and there
+            // is no emitter to place it on in the first place. `None` covers
+            // both "this title has no announcer" and "this title's ladder
+            // does not name this particular zone number" - the same silent
+            // degrade `Banks::pick` already gives an unresolved cue.
+            for milestone in announcements {
+                let Some((sound, looping)) = announcer.pick(milestone, &mut voices.rng) else {
+                    continue;
+                };
+                let play = if looping {
+                    Play::looping(sound, Bus::Speech)
+                } else {
+                    Play::once(sound, Bus::Speech)
+                };
+                let _ = mixer.play(Play {
+                    gain: 1.0,
+                    pan: None,
                     ..play
                 });
             }
@@ -798,178 +822,6 @@ impl CueEvent {
     pub fn is_player(self) -> bool {
         self.slot == 0
     }
-}
-
-/// One cue's decoded audio: every waveform its command run binds.
-#[derive(Debug, Clone)]
-pub struct Loaded {
-    /// The alternates, in command order, each with **its own** loop flag from
-    /// the descriptor's `+0x0e`. Never empty.
-    ///
-    /// Per waveform rather than per cue, because the flag is per waveform and
-    /// several banked cues mix the two: `hud.bnk`'s `~BLOWUP` has one looping
-    /// waveform of two and `~AIRBRAKE_MONO` one of three. Every cue this port
-    /// currently fires happens to be uniform, so collapsing them would be
-    /// invisible today and would silently play a loop as a one-shot the first
-    /// time one of those was wired.
-    pub waveforms: Vec<(Arc<Sound>, bool)>,
-}
-
-/// The sound banks a race needs, decoded and indexed by cue.
-#[derive(Debug, Default, Clone)]
-pub struct Banks {
-    sounds: BTreeMap<Cue, Loaded>,
-    /// What loading did, for the race's own report.
-    pub report: Vec<String>,
-}
-
-impl Banks {
-    /// Reads and decodes every cue in [`Cue::ALL`] out of `archives`.
-    ///
-    /// **Never fails, and reports every cue either way.** Every title in the
-    /// lineage does carry banks - a claim this project got wrong about Pure for
-    /// months - but a cue can still be missing for reasons that are ordinary
-    /// rather than broken: Wipeout HD has no `~ENGINE` at all, its ship audio
-    /// being a per-event `c_*` set rather than a held loop. Each miss is a line
-    /// in [`Self::report`] and silence, not an error and not a substitute.
-    ///
-    /// A race that refused to start because a bank was missing would make the
-    /// audio work a precondition for every other kind of work in the tree.
-    #[must_use]
-    pub fn load(archives: &mut Archives, banks: &oag_title::SoundBanks, zone: bool) -> Self {
-        let mut sounds = BTreeMap::new();
-        let mut report = Vec::new();
-        let mut blobs: BTreeMap<BankName, Vec<u8>> = BTreeMap::new();
-
-        for cue in Cue::ALL {
-            let entry = cue.bank().entry(banks, zone);
-            let blob = match blobs.get(&cue.bank()) {
-                Some(blob) => blob,
-                None => match archives.read_name(entry) {
-                    Ok(blob) => blobs.entry(cue.bank()).or_insert(blob),
-                    Err(e) => {
-                        report.push(format!("sfx: {entry} not read: {e}"));
-                        continue;
-                    }
-                },
-            };
-            match load_cue(blob, cue) {
-                Ok((loaded, skipped)) => {
-                    let undecoded = if skipped == 0 {
-                        String::new()
-                    } else {
-                        format!(", {skipped} skipped as not PS-ADPCM")
-                    };
-                    report.push(format!(
-                        "sfx: {} -> {} waveform(s) from {entry}{undecoded}",
-                        cue.name(),
-                        loaded.waveforms.len()
-                    ));
-                    sounds.insert(cue, loaded);
-                }
-                // Deliberately a report line and not a fallback. Nothing is
-                // substituted for a cue that will not resolve; it stays silent
-                // and says so.
-                Err(e) => report.push(format!("sfx: {} not loaded: {e}", cue.name())),
-            }
-        }
-        for line in &report {
-            info!("{line}");
-        }
-        Self { sounds, report }
-    }
-
-    /// Whether anything at all decoded.
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.sounds.is_empty()
-    }
-
-    /// One *named* waveform of a cue, by index, clamped to what it binds.
-    ///
-    /// For the one cue whose alternates are **not** interchangeable:
-    /// [`Cue::LockOn`] binds two, and which of them plays is the original's
-    /// seeking/locked parameter rather than a draw. Every other cue goes
-    /// through [`Self::pick`] and should - see the module docs on why the
-    /// selecting opcode being unread makes a random draw the honest default.
-    ///
-    /// Clamped rather than `None` on an out-of-range index: a bank that binds
-    /// one waveform where this expects two should play the one it has, not go
-    /// silent.
-    #[must_use]
-    pub fn pick_at(&self, cue: Cue, index: usize) -> Option<(Arc<Sound>, bool)> {
-        let loaded = self.sounds.get(&cue)?;
-        let index = index.min(loaded.waveforms.len().checked_sub(1)?);
-        let (sound, looping) = &loaded.waveforms[index];
-        Some((Arc::clone(sound), *looping))
-    }
-
-    /// One waveform for a cue, chosen by `rng` when the cue has alternates.
-    ///
-    /// `None` when the cue did not load. See the module docs for why the choice
-    /// is made here rather than by the bank: the selecting opcode is unread.
-    #[must_use]
-    pub fn pick(&self, cue: Cue, rng: &mut Rng) -> Option<(Arc<Sound>, bool)> {
-        let loaded = self.sounds.get(&cue)?;
-        let index = match u32::try_from(loaded.waveforms.len()) {
-            Ok(len) if len > 1 => rng.below(len) as usize,
-            _ => 0,
-        };
-        let (sound, looping) = &loaded.waveforms[index];
-        Some((Arc::clone(sound), *looping))
-    }
-}
-
-/// Resolves one cue in one bank blob and decodes what it binds.
-fn load_cue(blob: &[u8], cue: Cue) -> anyhow::Result<(Loaded, usize)> {
-    let bank = sblk::Bank::parse(blob)?;
-    let record = bank
-        .cue_named(cue.name())
-        .ok_or_else(|| anyhow::anyhow!("{:?} names no cue in {}", cue.name(), bank.name))?;
-    // **The tree, not the cue's own run.** On the PSP, PS2 and Pure discs no
-    // wired cue plays a child, so this is `cue_sounds` there and the two are
-    // the same call. Wipeout HD's `.COLLISIONS` binds nothing itself and plays
-    // `c_CShipShip` and `c_CShipWall`, each of which has S/M/L children of its
-    // own - 112 waveforms in all. See `oag_formats::sblk::child`.
-    let sounds = bank.cue_tree_sounds(&record);
-    anyhow::ensure!(
-        !sounds.is_empty(),
-        "{} binds no waveform: its {} command(s) are all opcodes this does not read",
-        cue.name(),
-        record.commands
-    );
-
-    let mut waveforms = Vec::with_capacity(sounds.len());
-    let mut skipped = 0;
-    for sound in &sounds {
-        // **Not every waveform is PS-ADPCM, and the descriptor says which.**
-        // On Wipeout HD about a third set `+0x0e`'s `0x80`, a codec this
-        // project has not identified; decoding one as ADPCM would produce 28
-        // samples a block of noise, which is exactly the plausible-looking
-        // stand-in `CLAUDE.md` forbids. Dropped, and counted so the load
-        // report says so. See `oag_formats::sblk::NOT_ADPCM_FLAG`.
-        if !sound.is_adpcm() {
-            skipped += 1;
-            continue;
-        }
-        let data = bank.waveform(sound).ok_or_else(|| {
-            anyhow::anyhow!("{} reaches outside the waveform section", cue.name())
-        })?;
-        waveforms.push((
-            Arc::new(Sound::new(
-                sblk::decode_adpcm(data),
-                1,
-                sblk::ASSUMED_SAMPLE_RATE,
-            )?),
-            sound.is_looping(),
-        ));
-    }
-    anyhow::ensure!(
-        !waveforms.is_empty(),
-        "all {skipped} of {}'s waveforms are in a codec this does not decode",
-        cue.name()
-    );
-    Ok((Loaded { waveforms }, skipped))
 }
 
 #[cfg(test)]

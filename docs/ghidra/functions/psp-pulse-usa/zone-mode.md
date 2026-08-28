@@ -198,6 +198,67 @@ zone numbers and whose second word triggers the same call the "ready" sample use
 - an announcement list. Confidence **75**. Its all-zero sound-ID column and its
 `{0,0}` / large-sentinel tail are **unexplained**.
 
+**2026-08-28: the table itself, read live, and the disc's own audio close most
+of this.** `read_memory 0x08ab0bc8` on `psp-pulse-usa` gives thirteen 8-byte
+entries, first words `6, 11, 16, 21, 26, 31, 41, 51, 61, 71, 81, 91, 101` and
+every second word `0`, then a `{0,0}` separator and a `{10000,0}` sentinel -
+confirming both halves of the confidence-75 reading above by direct
+observation rather than decompilation. Disassembling `Zone_Update` at the
+instruction level (the decompiler's `func_0x00136768` line loses the operand
+order) gives the exact call:
+
+```
+lw   a2, 0x0(cursor)     ; a2 = milestone[0], the threshold
+bnel a2, a0, +not-yet    ; a0 = the zone counter just incremented
+lw   a1, 0x2c0(s0)       ; (annulled unless the branch is taken)
+lw   a2, 0x4(cursor)     ; a2 = milestone[1] - only reached when a2 == a0
+...
+jal  0x00136768          ; args: DAT_002bde10, DAT_002bddfc, a2, 0x400, 0, 0, 0
+```
+
+So the third argument really is the milestone's own second word, and that word
+really is `0` for all thirteen entries - not a reading error. `0x00136768`
+resolves to no function in this Ghidra project at all (nor do the other two low
+addresses `Zone_Update` calls, `0x00005b38` and `0x00039dc8`): all three sit far
+below the executable's own `0x08804000` load address, in a region this project
+has not mapped, which caps how far static reading can go here - the dispatch
+that turns "milestone reached, argument 0" into a specific voice line is
+**outside this Ghidra project's code**, not merely unread within it.
+
+**What closes the gap instead is the shipped audio, read directly rather than
+inferred.** `Data\Sound\speech_zone.bnk` (`e66cdc25`, `zone_vo` - already in
+[`psp-audio.md`](../../../formats/psp-audio.md)'s bank table) names thirteen
+numbered cues in ascending order - `zone_5`, `zone_10`, `zone_15`, `zone_20`,
+`zone_25`, `zone_30`, `zone_40`, `zone_50`, `zone_60`, `zone_70`, `zone_80`,
+`zone_90`, `zone_100` - at cue indices 2 through 14, one after another with no
+gap. That is thirteen cues for thirteen table rows, each row's threshold one
+more than the number in its cue's name (row 1 is `6` for `zone_5`: five zones
+*completed*, the sixth just begun), in the same ascending order on both sides.
+Two independently-read structures - a table of thresholds with no names, and a
+bank of names with no thresholds - line up exactly, which is a real
+correspondence and not a coincidence dressed as one.
+
+**Confidence stays 75 for "this table drives these thirteen voice lines" as a
+whole claim** - the ordinal match is strong but the argument that would prove
+row *i* selects cue *i* (rather than, say, a parallel cursor `DAT_002bde10`
+advances on its own) is the part sitting in unmapped code. What is now
+confidence **95**, because it is direct observation rather than inference: the
+milestone thresholds themselves, and that the disc ships exactly one voice
+line per threshold. Pure's own `speech_zone.bnk` carries a different ladder -
+`zone_5`/`10`/`15`/`20`/`25`/`30`/`40`/`50`/`75`/`100` plus medal cues
+(`zone_bronze`/`silver`/`gold`, `bronze_med`/`silver_med`/`gold_med`) and
+`ship_destroyed` - and Wipeout HD's carries a third,
+`zone_5`/`10`/.../`50` every five then `60`/`70`/`80`/`90`/`100`, alongside a
+`ready`/`321_GO`/`go` countdown set and eleven `MR_*` speed-class cues
+(`MR_SVE`, `MR_VEN`, `MR_SFL`, `MR_FLA`, ... `MR_SUZ`) that pair with HD's
+`SpeedClass`/`NextSpeedClass` HUD widgets - unread on either title's own
+executable, so each ladder is this title's own data rather than a shared
+table, and HD's speed-class layer stays out of scope here. See
+`crates/game/src/audio/sfx/announcer.rs` for what is ported: playing the
+numbered cue whenever the zone counter reaches a threshold this title's own
+bank names one for, on the same three-titles-and-no-hole standing
+[`oag_title::ZoneCraft`] already has.
+
 ## Correction to [`engine.md`](engine.md)
 
 The auto-speed law recorded on that page is incomplete. The actual branch, at

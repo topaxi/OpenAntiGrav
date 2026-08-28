@@ -694,6 +694,8 @@ pub struct Race {
     /// The decoded sound cues, straight out of [`Setup::sounds`]. Data, not a
     /// device - the mixer and the held voices are [`crate::audio::Audio`]'s.
     sounds: crate::audio::sfx::Banks,
+    /// Zone mode's milestone announcer, straight out of [`Setup::announcer`].
+    announcer: crate::audio::sfx::Announcer,
     /// The multi-instance pool everything *except* the hull-mounted sparks
     /// plays in: the rockets' flares and their detonations today, and
     /// whatever gets a recovered trigger next.
@@ -900,6 +902,15 @@ pub struct Race {
     /// deliberately absent from [`Self::state_hash`]: a race that made no sound
     /// and one that made every sound must hash alike. See [`Self::drain_cues`].
     cues: Vec<crate::audio::sfx::CueEvent>,
+    /// Zone milestone numbers reached this tick, awaiting a drain.
+    ///
+    /// Kept apart from [`Self::cues`] rather than folded into [`Cue`](crate::audio::sfx::Cue):
+    /// the milestone ladder is per-title data
+    /// ([`oag_title::ZoneAnnouncer`]), not one of the engine's own fixed,
+    /// statically-named cues, so there is no `Cue` variant for it to be. Same
+    /// per-tick-output shape as `cues` and the same exclusion from
+    /// [`Self::state_hash`].
+    announcements: Vec<u16>,
     /// Seconds before a wall contact may raise a sound cue again.
     ///
     /// Its own timer rather than [`Self::sparks_cooldown`], because a shielded

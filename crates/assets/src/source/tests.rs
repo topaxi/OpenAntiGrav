@@ -67,6 +67,8 @@ const TITLE: &Title = &Title {
             weapons: r"Data\Sound\nowhere.bnk",
             speech: r"Data\Sound\nowhere.bnk",
         },
+        // Unread here too: nothing in this crate reads the Zone ladder.
+        zone_announcer: None,
     },
     // Unread here for the same reason as the circuit above: an in-race HUD is
     // read *through* archives, and which layout a mode wants is nothing this

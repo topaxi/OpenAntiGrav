@@ -88,6 +88,18 @@ the start line and runs the simulation. What it does **not** do, and why:
   See [2048-rcsmodel.md](2048-rcsmodel.md) and [gxt.md](gxt.md).
 - **No front end, no music.** `oag_2048::TITLE` carries `front_end: None`,
   `loading: None` and `music: None`. Neither has been read.
+- **Zone's announcer is wired, off a bank path that is read rather than
+  measured.** The executable's own track-construction function decompiles to
+  a real dispatch between two live Zone speech banks, gated on the selected
+  circuit's own pack id; a base-package circuit like `DEFAULT_TRACK` reads as
+  taking `data/audio/sound/speech_zone_NGP.bnk`, and `zone_announcer` uses it
+  with the same fifteen-entry ladder Wipeout HD's own `speech_zone.bnk`
+  carries. **Not yet verified against real audio** - this title's
+  `data.psarc` is not extracted in this tree, so unlike the other three
+  titles nothing here has run `oag-wad sounds` against the actual bank - and
+  the milestone table's own reading function was swept for and not found,
+  despite every direct reader of the Zone speech handle being checked. See
+  [zone-audio.md](../ghidra/functions/vita-2048-eu-v104/zone-audio.md).
 - **The HUD layouts are read, the textures decode, and no sprite draws yet.**
   All 25 non-split-screen HUD roots compose with nothing missing and nothing
   skipped, the played skin is known (`2048_hud\`, not the bare root previously

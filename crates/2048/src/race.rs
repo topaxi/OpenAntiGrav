@@ -13,14 +13,68 @@
 
 /// What a race needs before it has opened anything, as
 /// [`oag_title::Title::race`] carries it.
+///
+/// **Both Zone fields used to be wrong, and both were fixed by playing the
+/// mode rather than by reading further disc data - 2026-08-28.**
+///
+/// `zone_craft` used to be [`oag_title::ZoneCraft::OwnShip`], reasoning by
+/// analogy from Pure and HD's own Zone ship directories: the name it built,
+/// `Data\art\published\hdships\Zone\Ship.vex`, sits under [`HD_SHIP_DIR`]
+/// rather than this title's native [`SHIP_DIR`], so it never resolved and
+/// every Zone race on this title failed to load. 2048 has no dedicated Zone
+/// ship at all - Zone flies whichever of the twenty native craft the player
+/// picked, exactly as any other mode. See [`oag_title::ZoneCraft::PlayerShip`].
+///
+/// `zone` used to be [`oag_title::ZoneCircuit::Separate`], pointed at one of
+/// four Zone-named environments `dlc2.psarc` ships - which
+/// `docs/formats/track.md` had already shown are Wipeout HD's own dedicated
+/// Zone circuits, reshipped verbatim splines and all, so this read as the
+/// Pure/HD shape reused. Playing the mode said otherwise: it ran on an
+/// ordinary circuit, not a separate environment - consistent with a fact
+/// noted here unread since before that guess was made: every circuit in the
+/// base package ships a `ZoneMode2048.effectSettings` beside its `track.vex`,
+/// which only makes sense if Zone runs on the circuit that file sits next to.
+/// See [`oag_title::ZoneCircuit::SameCircuit`]. The four ported `zone_N`
+/// environments are real disc content; they are simply not what this axis
+/// answers, and nothing here still names them.
 pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     track: DEFAULT_TRACK,
     team: DEFAULT_TEAM,
     ship_dir: SHIP_DIR,
     handling_dir: HANDLING_DIR,
-    zone: oag_title::ZoneCircuit::Separate(&[DEFAULT_ZONE_TRACK]),
-    zone_craft: oag_title::ZoneCraft::OwnShip(ZONE_SHIP),
+    zone: oag_title::ZoneCircuit::SameCircuit,
+    zone_craft: oag_title::ZoneCraft::PlayerShip,
     sounds: SOUND_BANKS,
+    zone_announcer: Some(ZONE_ANNOUNCER),
+};
+
+/// Wipeout 2048's Zone milestone announcer.
+///
+/// **The bank-path gate was read, and settled on `speech_zone_NGP.bnk`.** The
+/// track-construction function's dispatch (`FUN_812b5890`, `FUN_812b0880` -
+/// `docs/ghidra/functions/vita-2048-eu-v104/zone-audio.md`) turns out to
+/// check which numbered *pack* the current circuit belongs to, `0` through
+/// `4`; `data/audio/sound/speech_zone_NGP.bnk` is what pack `0`'s branch
+/// opens, and [`DEFAULT_TRACK`] carries no DLC path prefix, so pack `0` -
+/// "no expansion pack" - is what a base-package circuit like Altima resolves
+/// to. `data/audio/DLC1/speech_zone.bnk` is the other live path this same
+/// dispatch reaches, for a track that does belong to a pack; this port does
+/// not select between the two per-circuit yet, the same one-value-per-title
+/// simplification [`SOUND_BANKS`]' own doc comment already accepts for
+/// `shipHD.bnk`.
+///
+/// **The milestone ladder is the same string-table evidence it always was.**
+/// Fifteen `zone_N` cues sit in the executable, `5` through `100`, the same
+/// numbers Wipeout HD's own `speech_zone.bnk` carries - and despite an
+/// exhaustive sweep of every reader of the Zone speech bank handle
+/// (`DAT_818c4df4`) in this pass, none of them turned out to be the function
+/// that walks this specific table. So this is on the same footing Pure's and
+/// HD's own ladders are: real data, no traced call site on *this* title's
+/// executable - not a step below them, a step *above* 2048's bank path used
+/// to be, which had no decompiled dispatch behind it at all until this pass.
+pub const ZONE_ANNOUNCER: &oag_title::ZoneAnnouncer = &oag_title::ZoneAnnouncer {
+    bank: r"Data\audio\sound\speech_zone_NGP.bnk",
+    milestones: &[5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 60, 70, 80, 90, 100],
 };
 
 /// Where this title keeps the **tuning** for the roster [`SHIP_DIR`] holds the
@@ -110,41 +164,6 @@ pub const DEFAULT_TRACK: &str = r"Data\art\published\environments\altima\track.v
 /// Feisar because it is the lineage's starter team, and `3` because that is
 /// the speed craft - see [`SHIP_TYPES`] for how the numbering was recovered.
 pub const DEFAULT_TEAM: &str = r"feisar2048\3";
-
-/// The hull directory a Zone race flies out of, under [`SHIP_DIR`].
-///
-/// `Data\art\published\hdships\Zone\Ship.vex` resolves, which is HD's own
-/// shape - a ship directory of its own, and the player's team not reaching the
-/// hull at all.
-///
-/// **It is under [`HD_SHIP_DIR`] and this title's [`SHIP_DIR`] is the native
-/// tree**, so a Zone race here finds no hull and reports it. Whether 2048's own
-/// Zone mode flies one of the twenty native craft instead is unread, and is the
-/// same open question [`DEFAULT_ZONE_TRACK`] records from the circuit end.
-pub const ZONE_SHIP: &str = "Zone";
-
-/// The circuit a Zone race loads when the caller names none.
-///
-/// **In `dlc2.psarc`, not in the base package**, so this resolves only on a
-/// source that carries the downloadable content - see
-/// [`crate::EXTRA_CANDIDATES`].
-///
-/// **What is recorded rather than resolved**: every circuit in the base
-/// package ships a `ZoneMode2048.effectSettings` beside its `track.vex`, which
-/// says 2048's base game has a Zone mode running on its *ordinary* circuits -
-/// a third shape that is neither [`oag_title::ZoneCircuit::Prefixed`] (there is
-/// no second `.vex` to prefix to) nor [`oag_title::ZoneCircuit::Separate`].
-/// Nothing here has read how the original selects it, so this names the four
-/// Zone circuits that do exist as files and leaves that question open.
-///
-/// **A single-entry list, deliberately**, where `oag_hd::race::ZONE_TRACKS`
-/// and `oag_pure::race::ZONE_TRACKS` carry four: this title's other three
-/// Zone environments are unread rather than merely unlisted, per this
-/// constant's own docs above. `ZoneCircuit::Separate` only needs the ones a
-/// caller could actually name, and one is what has been measured. Widening it
-/// to four names this title has not been shown to have would be exactly the
-/// invention ADR-0022 and `CLAUDE.md` both rule out.
-pub const DEFAULT_ZONE_TRACK: &str = r"Data\art\published\DLC1\environments\zone_1\track.vex";
 
 /// Where each race cue lives.
 ///

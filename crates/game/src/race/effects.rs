@@ -774,6 +774,29 @@ impl Race {
         &self.sounds
     }
 
+    /// The decoded Zone milestone announcer this race loaded.
+    #[must_use]
+    pub fn announcer(&self) -> &crate::audio::sfx::Announcer {
+        &self.announcer
+    }
+
+    /// Raises a Zone milestone announcement, to be drained the same tick.
+    ///
+    /// Whether `milestone` actually names a loaded cue is
+    /// [`Self::announcer`]'s question, not this call's - see
+    /// [`Self::drain_announcements`] for why the split is the same one
+    /// [`Self::raise_contact_cue`] and [`Banks::pick`](crate::audio::sfx::Banks::pick)
+    /// already keep.
+    pub(super) fn push_announcement(&mut self, milestone: u16) {
+        self.announcements.push(milestone);
+    }
+
+    /// Takes the Zone milestone numbers this tick raised, leaving the queue
+    /// empty. Same per-tick-output shape as [`Self::drain_cues`].
+    pub fn drain_announcements(&mut self) -> Vec<u16> {
+        std::mem::take(&mut self.announcements)
+    }
+
     /// Whether the player's craft is mid-explosion.
     ///
     /// A *level*, like [`Self::shield_is_up`] and for the same reason:

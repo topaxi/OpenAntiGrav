@@ -260,6 +260,15 @@ impl Race {
                 ship.physics.shield = (ship.physics.shield + zone.recharge).min(max);
             }
 
+            // The announcer's own trigger: raised on every zone step, whether
+            // or not this title's ladder names that particular number - the
+            // same "raise the edge, let the audio layer decide if it has
+            // anything to say" split `raise_contact_cue` and `Banks::pick`
+            // already keep. See `oag_title::ZoneAnnouncer`.
+            if outcome.zone_advanced {
+                self.push_announcement(self.world.race.zone);
+            }
+
             if outcome.lap_completed {
                 self.grant_free_turbo();
             }

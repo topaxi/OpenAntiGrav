@@ -582,6 +582,12 @@ pub(super) fn zone_circuit_miss(
             title.name,
             tracks[0]
         ),
+        // Zone flies the exact circuit a race would on this title, so a miss
+        // here has the same one cause a miss in any other mode does: the name
+        // is not on the disc. No special-cased sentence to write.
+        oag_title::ZoneCircuit::SameCircuit => {
+            anyhow::anyhow!("{track} is in none of this source's archives ({layout})")
+        }
     }
 }
 

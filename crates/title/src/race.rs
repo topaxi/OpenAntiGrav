@@ -137,6 +137,12 @@ pub struct RaceDefaults {
     /// Which `.bnk` each of this title's race cues is looked up in. See
     /// [`SoundBanks`].
     pub sounds: &'static SoundBanks,
+    /// The Zone-mode announcer this title ships, when it has been read off the
+    /// disc. See [`ZoneAnnouncer`].
+    ///
+    /// `None` rather than a guessed ladder for a title whose bank has not been
+    /// read - see [`ZoneAnnouncer`]'s own docs for which that is today.
+    pub zone_announcer: Option<&'static ZoneAnnouncer>,
 }
 
 impl RaceDefaults {
@@ -195,6 +201,57 @@ pub struct SoundBanks {
     pub speech: &'static str,
 }
 
+/// A title's Zone-mode announcer: the milestone numbers it names a voice line
+/// for, and the bank that line is in.
+///
+/// # Every title's ladder is its own disc data, not one shared table
+///
+/// `Data\Sound\speech_zone.bnk` is one path all three measured titles carry -
+/// see `docs/formats/psp-audio.md`'s bank table - but what it names differs:
+/// Pulse announces every five zones to 30 then every ten to 100 (thirteen
+/// cues), Pure stops naming every five after 30 and jumps straight to 75
+/// (ten cues, plus a `bronze`/`silver`/`gold` medal set this port does not
+/// read), and Wipeout HD keeps naming every five all the way to 50 before
+/// switching to tens (fifteen cues, plus eleven speed-class lines this port
+/// also does not read - see the same doc page). A milestone number is
+/// therefore a title fact and not an engine constant, the same way
+/// [`ZoneCircuit`] and [`ZoneCraft`] are.
+///
+/// # The cue name is always `zone_<n>`
+///
+/// Measured on all three: every numbered cue in every title's own
+/// `speech_zone.bnk` is spelled exactly that way, so [`Self::cue_name`] is one
+/// function rather than a per-title table of names.
+///
+/// # Confidence
+///
+/// **95** for "the bank exists, holds these cues, under this name" - read
+/// directly off the shipped audio with `oag-wad sounds`, not inferred. **75**
+/// for "the run-time zone counter reaching this number is what plays this
+/// cue" - traced end to end only on Pulse's executable
+/// (`docs/ghidra/functions/psp-pulse-usa/zone-mode.md#the-ten-second-step`),
+/// where the milestone table's own thresholds and the bank's own cue order
+/// agree ordinally but the instruction that finally selects a waveform sits
+/// outside this project's Ghidra database. Pure and HD's own executables have
+/// not been read for this at all; their ladders are attributed by the pattern
+/// three-titles-and-no-hole already established for the other two Zone axes,
+/// not by a second traced call site.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ZoneAnnouncer {
+    /// `Data\Sound\speech_zone.bnk` on every title measured so far.
+    pub bank: &'static str,
+    /// The zone numbers this title's bank names a `zone_<n>` cue for, ascending.
+    pub milestones: &'static [u16],
+}
+
+impl ZoneAnnouncer {
+    /// The cue name for one of [`Self::milestones`], e.g. `"zone_5"`.
+    #[must_use]
+    pub fn cue_name(milestone: u16) -> String {
+        format!("zone_{milestone}")
+    }
+}
+
 /// Where a title keeps the hull a Zone race flies.
 ///
 /// The companion of [`ZoneCircuit`], and it splits the corpus the same way -
@@ -209,13 +266,16 @@ pub struct SoundBanks {
 /// | Pulse | `Data\Ships\<Team>\Zone.vex` - the player's team, a different file | `pulse-psp-usa.chd` |
 /// | Pure | `Data\Ships\Zone_01\Ship.vex` - a ship directory of its own | `pure-psp-eu.chd` |
 /// | HD / Fury | `/data/ships/zone/ship.vex` - a ship directory of its own | `hdfury-ps3-eu-dec.iso` |
+/// | 2048 | the player's team, unchanged - no Zone-specific model at all | played, see [`Self::PlayerShip`] |
 ///
 /// Pulse's is the one with a recovered *selector* behind it rather than a name
 /// probe: `Ship_LoadModel` (`0x08843258`) `case 6` builds `%s\Zone.vex` under
 /// the established Zone expression, confidence 84 - see
 /// `docs/ghidra/functions/psp-pulse-usa/zone-mode.md`. The other two are name
 /// resolution against shipped archives at 94, and neither title's executable has
-/// been read.
+/// been read. 2048's is the odd one out procedurally as well as in shape: no
+/// name was probed at all, because there is no name to probe - see
+/// [`Self::PlayerShip`].
 ///
 /// # Every title ships a `ZoneMode` handling file, and nothing reads it
 ///
@@ -267,6 +327,26 @@ pub enum ZoneCraft {
     /// changes - which is why this carries one string where
     /// [`Self::ModelsInTeam`] carries two.
     OwnShip(&'static str),
+    /// Zone flies the player's own ship, exactly as any other mode would.
+    /// 2048.
+    ///
+    /// The third shape, and not a variant of either of the other two: not
+    /// [`Self::ModelsInTeam`], because no model file changes at all, and not
+    /// [`Self::OwnShip`], because there is no Zone ship directory to name -
+    /// 2048 is the first title in the lineage with no dedicated Zone craft.
+    ///
+    /// **Source: played, not decompiled or name-probed.** `oag_2048::race`
+    /// used to guess a Zone ship directory shaped like Pure's and HD's, named
+    /// `hdships\Zone` - which resolves under
+    /// [`RaceDefaults::ship_dir`]'s *sibling* tree (2048's HD-derived
+    /// roster, not its native one) and so never loaded, failing every Zone
+    /// race on this title. Confirmed by play instead: 2048 lets the player
+    /// choose their ship for Zone exactly as for any other mode - see
+    /// `oag_2048::race::DEFAULTS`. Confidence 90 on the same bar the rest of
+    /// `oag_2048::race` holds itself to for an unread executable: a direct
+    /// behavioural observation of the shipped game, not yet corroborated
+    /// against a decompiled selector.
+    PlayerShip,
 }
 
 impl ZoneCraft {
@@ -278,7 +358,7 @@ impl ZoneCraft {
     #[must_use]
     pub fn directory(self, player: &str) -> &str {
         match self {
-            Self::ModelsInTeam { .. } => player,
+            Self::ModelsInTeam { .. } | Self::PlayerShip => player,
             Self::OwnShip(ship) => ship,
         }
     }
@@ -293,7 +373,7 @@ impl ZoneCraft {
     pub fn hull(self) -> Option<&'static str> {
         match self {
             Self::ModelsInTeam { hull, .. } => Some(hull),
-            Self::OwnShip(_) => None,
+            Self::OwnShip(_) | Self::PlayerShip => None,
         }
     }
 
@@ -302,7 +382,7 @@ impl ZoneCraft {
     pub fn boost(self) -> Option<&'static str> {
         match self {
             Self::ModelsInTeam { boost, .. } => Some(boost),
-            Self::OwnShip(_) => None,
+            Self::OwnShip(_) | Self::PlayerShip => None,
         }
     }
 }
@@ -319,18 +399,21 @@ impl ZoneCraft {
 /// stand-in for what the data already carries.
 ///
 /// **Where that file lives is the part that diverges**, and unlike the two
-/// fields beside it this one was measured on all three titles rather than two:
+/// fields beside it this one was measured on all three PSP/PS3 titles rather
+/// than two:
 ///
 /// | Title | Zone's environment | Measured on |
 /// | --- | --- | --- |
 /// | Pulse | `Data\Environments\16_Track\zone_track.vex` - the race circuit's own directory, one extra file | `pulse-psp-usa.chd`, `pulse-ps2-eu.chd` |
 /// | Pure | `Data\Zone\01_Zone\track.vex` - four circuits of its own, declared `type="Zone"` | `pure-psp-eu.chd` |
 /// | HD / Fury | `/data/environments/zone_1/track.vex` - four circuits of its own | `hdfury-ps3-eu-dec.iso` |
+/// | 2048 | the race circuit itself, unchanged - no environment swap at all | played, see [`Self::SameCircuit`] |
 ///
-/// Two shapes across three titles, so neither variant is designed from one
-/// example and there is no third state for a title nobody has looked at. That
-/// is what [ADR-0022] licenses and what the `Option` fields this module's docs
-/// refuse do not have.
+/// Two shapes across the three disc-backed titles, so neither variant was
+/// designed from one example and there was no third state for a title nobody
+/// had looked at - which is what [ADR-0022] licenses and what the `Option`
+/// fields this module's docs refuse do not have. 2048 later added a third
+/// shape once it had a measurement of its own; see [`Self::SameCircuit`].
 ///
 /// **The selector in the executable is unread.** `docs/formats/track.md` records
 /// the binary's own `%s\%strack%s.vex` template, whose two `%s`s are exactly the
@@ -379,6 +462,31 @@ pub enum ZoneCircuit {
     /// `oag_pure`/`oag_hd`/`oag_2048` construction sites, each with its own
     /// evidence for what belongs in the list.
     Separate(&'static [&'static str]),
+    /// A Zone race runs the exact circuit a race would have, and nothing is
+    /// derived or substituted at all. 2048.
+    ///
+    /// The third shape, and not a variant of either of the other two: not
+    /// [`Self::Prefixed`], because there is no second `.vex` beside the race
+    /// one to derive a name for, and not [`Self::Separate`], because there is
+    /// no dedicated Zone circuit to point at - 2048 runs Zone on whichever
+    /// circuit the player already picked.
+    ///
+    /// **Source: played, not decompiled or name-probed.** This used to be
+    /// [`Self::Separate`], pointed at `zone_1` of four Zone-named environments
+    /// `dlc2.psarc` ships - `docs/formats/track.md` had already shown those
+    /// four are Wipeout HD's own dedicated Zone circuits, reshipped verbatim
+    /// splines and all, which read as the Pure/HD shape reused. Playing the
+    /// game said otherwise: 2048's Zone mode ran on an ordinary circuit, not
+    /// a separate environment. That agrees with a fact [`RaceDefaults::zone`]
+    /// already carried unread on this title - every circuit in the base
+    /// package ships a `ZoneMode2048.effectSettings` beside its `track.vex` -
+    /// which only makes sense if Zone runs on the circuit that file sits
+    /// next to. The four ported `zone_N` environments are real disc content;
+    /// they are simply not what this axis answers. Confidence 90, on the same
+    /// bar the rest of `oag_2048::race` holds itself to for an unread
+    /// executable: a direct behavioural observation, not yet corroborated
+    /// against a decompiled selector or a read `effectSettings` format.
+    SameCircuit,
 }
 
 impl ZoneCircuit {
@@ -435,6 +543,7 @@ impl ZoneCircuit {
                     tracks[0].to_string()
                 }
             }
+            Self::SameCircuit => track.to_string(),
         }
     }
 
@@ -451,6 +560,7 @@ impl ZoneCircuit {
         match self {
             Self::Prefixed(_) => self.variant_of(race_default),
             Self::Separate(tracks) => tracks[0].to_string(),
+            Self::SameCircuit => race_default.to_string(),
         }
     }
 }
@@ -474,7 +584,7 @@ fn paths_match(a: &str, b: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::ZoneCircuit;
+    use super::{ZoneCircuit, ZoneCraft};
 
     const PULSE: ZoneCircuit = ZoneCircuit::Prefixed("zone_");
     const PURE: ZoneCircuit = ZoneCircuit::Separate(&[
@@ -560,5 +670,29 @@ mod tests {
             "a name that matches one of PURE's own Zone circuits case- and \
              separator-insensitively should come back exactly as given"
         );
+    }
+
+    /// **2048's shape.** Unlike [`ZoneCraft::ModelsInTeam`] and
+    /// [`ZoneCraft::OwnShip`], nothing changes at all: the directory stays the
+    /// player's team and both model stems fall back to whatever a race would
+    /// have used, which is the point - see [`ZoneCraft::PlayerShip`]'s own
+    /// docs for why.
+    #[test]
+    fn player_ship_resolves_to_nothing_but_the_players_own_team() {
+        let craft = ZoneCraft::PlayerShip;
+        assert_eq!(craft.directory("feisar2048\\3"), "feisar2048\\3");
+        assert_eq!(craft.hull(), None);
+        assert_eq!(craft.boost(), None);
+    }
+
+    /// **2048's circuit shape, the companion of the craft one above.** Neither
+    /// method derives or substitutes anything - see
+    /// [`ZoneCircuit::SameCircuit`]'s own docs for why.
+    #[test]
+    fn same_circuit_resolves_to_exactly_what_it_was_given() {
+        let zone = ZoneCircuit::SameCircuit;
+        let track = r"Data\art\published\environments\altima\track.vex";
+        assert_eq!(zone.variant_of(track), track);
+        assert_eq!(zone.default_track(track), track);
     }
 }

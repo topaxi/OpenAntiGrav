@@ -836,6 +836,12 @@ pub fn load(options: &Options) -> Result<Loaded> {
     );
     report.extend(sounds.report.iter().cloned());
 
+    // Loaded regardless of mode, on the same terms `sounds` is: an announcer
+    // with nothing to say (not Zone, or a title with no recovered ladder) is
+    // an empty map and costs nothing to carry.
+    let announcer = crate::audio::sfx::Announcer::load(&mut archives, title.race.zone_announcer);
+    report.extend(announcer.report.iter().cloned());
+
     // The ribbon's texture is a title axis, not a constant: Pulse and Pure name
     // one, HD authors a template whose material names its own. See
     // `oag_title::exhaust::Exhaust` and `assets::trail_texture`.
@@ -957,6 +963,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             collision_fx,
             effects,
             sounds,
+            announcer,
             speedup_pads,
             weapon_pads,
             weapons,

@@ -131,6 +131,7 @@ made *one* decision that shows up twice:
 | Pulse | the race circuit's directory, `zone_`-prefixed | the player's team, `Zone.vex` |
 | Pure | `Data\Zone\NN_Zone\track.vex` | `Data\Ships\Zone_01\Ship.vex` |
 | HD / Fury | `/data/environments/zone_N/track.vex` | `/data/ships/zone/ship.vex` |
+| 2048 | the race circuit itself, unchanged | the player's own ship, unchanged |
 
 Pulse hangs Zone off the entities a race already has; Pure and HD give Zone
 entities of its own, and there the player's team stops reaching the hull at all.
@@ -138,6 +139,26 @@ Pulse's is the only one with a recovered *selector* behind it (`case 6`,
 confidence 84); the other two are name resolution at 94, and neither title's
 executable has been read. HD's was already half-recovered before anything wanted
 it - `zone` is one of the four `oag_hd::names::MODE_SHIPS` read off the manifest.
+
+**2048 is a fourth shape on both axes at once, not a variant of the other
+three, and its source is play rather than the disc.** `oag_2048::race` used to
+guess both by analogy: a Pure/HD-shaped Zone ship directory (`hdships\Zone`,
+under 2048's HD-derived ship tree rather than its native one, so it never
+resolved and failed every Zone race), and a Pure/HD-shaped Zone circuit - one
+of the four `zone_1`..`zone_4` environments `dlc2.psarc` ships, which
+`docs/formats/track.md` had already shown are Wipeout HD's own dedicated Zone
+circuits reshipped verbatim. Playing the game settled both instead: 2048 has
+no dedicated Zone craft and no dedicated Zone environment - the player flies
+whichever of the twenty native ships they picked on whichever circuit they
+picked, exactly as in any other mode. That agrees with a fact this title's own
+data already carried unread: every circuit in the base package ships a
+`ZoneMode2048.effectSettings` beside its `track.vex`, which only makes sense
+if Zone runs on the circuit that file sits next to. The four ported `zone_N`
+environments are real disc content, added by the same DLC that adds eight
+ordinary HD-ported race circuits; they are simply not what either axis
+answers here. Confidence 90 on both, the same bar the rest of `oag_2048::race`
+holds itself to for an unread executable - see `oag_title::ZoneCraft::PlayerShip`
+and `oag_title::ZoneCircuit::SameCircuit`.
 
 ### Every title ships one Zone handling block, and this engine does not read it
 
