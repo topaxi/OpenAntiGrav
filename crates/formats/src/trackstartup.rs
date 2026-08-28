@@ -181,6 +181,20 @@
 //! caught in the act, so this is strong circumstantial evidence, not an
 //! instruction-level proof - see the doc page for the full chain.
 //!
+//! **A third pass found what actually plays there: a separate instantiated
+//! mesh, not a retextured node 74.** A RAM scan during a live race found
+//! `321Go_StartFinish.vex`'s own scene graph fully resident and parsed -
+//! `world`/`camera1`/`start_lights`/`start_light_background` node names,
+//! the same asset `TrackStartup.xml` names as slot 8's `location` on every
+//! circuit that authors one. The disc's own numbered `billboard8.tga` quad
+//! reads as authored track-mesh debris the real gantry covers, not what the
+//! original draws. **One tension remains unresolved and is now the
+//! priority**: the identity transform above and this asset being shared
+//! across all 16 circuits mean something still has to move it to each
+//! circuit's own gantry, and no writer for that transform has been found -
+//! "instantiated" is settled, "drawn where the player sees it" is strong
+//! inference from the asset's own node names, not caught directly.
+//!
 //! **One more live lead survives, not yet folded into the above.** The
 //! colour path (`Billboard_CreateFromColour_q`) walks a per-track pool
 //! before constructing anything, matching entries by type and colour and

@@ -1327,4 +1327,44 @@ target's own value is capable of changing by a route other than a normal
 CPU store. Before trusting an absence, cross-check the target's own value
 before and after the window, the way this session did by accident rather
 than by original design; a changed value with a silent log is the tell that
+
+## Halting on a hot function silently voids a timed capture
+
+**Measured 2026-08-28.** An execution breakpoint on `Gfx_BindTexture` -
+called roughly twenty times a rendered frame during ordinary track drawing -
+was run for 22 real seconds, meant to cover a known ~24 s window (dismissing
+the track description through to the green light). It produced 435 hits
+across 13 distinct texture pointers, every one present from the first hit to
+the last and none new after the first few - which reads exactly like a clean
+negative: "nothing else binds a texture in this window."
+
+**It was not a negative. It was a voided capture, and nothing about the
+output said so.** Each breakpoint round trip costs about 44 ms measured
+directly from inter-hit timestamps, and the emulated CPU is fully halted for
+that whole span - no game time passes between hits, only in the brief
+resume-to-next-hit gap. At roughly twenty binds per frame, 435 hits is on the
+order of twenty to thirty rendered frames: **about 0.3-0.5 s of game time
+elapsed across 22 s of wall clock**, not the ~24 s of countdown the capture
+was meant to observe. Covering the real window this way would need on the
+order of twenty minutes of wall clock per attempt.
+
+**The tell, in hindsight, was in the data the whole time**: a genuinely
+covered 24 s countdown crosses several visually distinct states (description,
+counting down, green light, cars moving) and a function called every frame
+should show *some* drift in which callers reach it as the scene changes. A
+flat, saturated pointer set that stops growing almost immediately is the
+signature of a capture that stalled in near-real-time, not one that finished
+early because there was nothing left to find.
+
+**Consequence: never halt on a function called every frame (or close to it)
+when the thing being measured is "what happens over N seconds of game time",
+even briefly.** This is the same "enabled: False, log: True" non-halting
+watchpoint the section above already recommends for "does anything read
+this" - the addition here is that the failure mode for getting it wrong on a
+*hot* function is not a crash or an obvious timeout, it is a plausible-
+looking, fully-populated, wrong answer. Everything a texture bind needs to
+identify itself typically lives on the texture object it operates on (a
+residency flag, a last-uploaded timestamp, a handle passed to the display
+list) - watch *that* object's fields with a non-halting read watchpoint
+instead of halting on the function that touches it.
 the watch missed something, not that nothing happened.

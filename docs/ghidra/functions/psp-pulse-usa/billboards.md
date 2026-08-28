@@ -222,28 +222,96 @@ in the act, so "this object's resolved state is what gets drawn" is strong
 circumstantial evidence - co-location, timing, and structural shape all
 agreeing - not an instruction-level proof.
 
+## The gantry is a separate instantiated mesh, not a retextured node 74
+
+2026-08-28, a third pass, chasing the actual `Gfx_BindTexture` call for the
+gantry's screen position. That specific catch was not made - see "A trap
+found trying" below - but a RAM-wide scan for the literal bytes
+`321Go_StartFinish` during a live Talon's Junction race found two genuine
+hits: a fully parsed, resident `.vex`-shaped scene graph (`VEXX` header, the
+source authoring path `Z:/WipeoutPSP/X2/Data/Environments/321_Go/321Go_StartFinish.mb`,
+and real node names read forward from it - `world`, `camera1`,
+`cameraShape1`, `start_lights`, `start_light_background`), and, separately,
+the on-disc resource-table reference `Data\Environments\321_Go\321Go_StartFinish.vex`.
+
+This settles the question the task chain set out to answer, just not by
+catching a texture bind: **slot 8's registration instantiates a whole
+separate mesh - the same asset `TrackStartup.xml` names as its `location`
+on every Pulse circuit that authors a single billboard 8 - rather than
+retexturing node 74.** Node 74's `billboard8.tga` quad reads as authored
+track-mesh debris that the real gantry (with its own `start_lights` node -
+plausibly the animated material object above) covers or the original never
+exposes; this project's own renderer shows it only because nothing here
+instantiates the real asset yet.
+
+**A tension this does not resolve, and it is the highest-priority open
+item now:** `Billboard_ConstructResource_q` writes a hardcoded **identity**
+transform, and `321Go_StartFinish.vex` is the same file on all 16 circuits,
+so its own geometry cannot carry Talon's Junction's world position baked
+in. Something has to move this instantiated object from the origin to each
+circuit's own start line, and no writer for that transform has been found.
+Until it is, "instantiated" and "drawn at the gantry" are not the same
+confirmed claim - the first is now solid, the second is inferred from the
+asset's node names (`start_lights` fits a start-line gantry) and from
+`TrackStartup.xml`'s own authored intent, not caught directly.
+
+**The material object's liveness was re-confirmed with a non-halting
+watchpoint** (53,065 hits on its own header over one countdown-to-green
+cycle, alongside a healthy 381,086-hit craft-body control) - it is
+genuinely read and written roughly 2,000 times a second, not dead. **A
+separate sample of its four `+0x88/+0x90/+0x98/+0xa0` wrapper sub-objects,
+taken after the race had already started, found plain front-end credits
+markup text** (`"Assistant Lead Artists"`, `<b d="Ta`) - almost certainly
+stale heap reuse rather than real content, matching the pool-recycling trap
+[`ppsspp-debugger.md`](../../../reverse-engineering/ppsspp-debugger.md)
+already documents, but **not re-checked live during an actual countdown**,
+so this is flagged rather than resolved either way.
+
+## A trap found trying: halting on a hot function silently voids a timed capture
+
+An execution breakpoint on `Gfx_BindTexture` (`0x08928460`, called roughly
+twenty times a frame) produced a plausible-looking, fully-saturated result
+- 435 hits across 13 texture pointers, stable from the first hit onward,
+reading like a clean "nothing else binds here". It wasn't: each halt costs
+about 44 ms and freezes game time completely while halted, so 22 real
+seconds of capture covered on the order of 0.3-0.5 s of actual game time,
+nowhere near the ~24 s countdown window it was meant to observe.
+[`ppsspp-debugger.md`](../../../reverse-engineering/ppsspp-debugger.md)
+now documents this as its own trap - never halt on a function called every
+frame when the thing being measured is "what happens over N seconds",
+even briefly; watch the *object* the function operates on with a
+non-halting watchpoint instead.
+
 ## Verdict
 
-Construction-time placement is still absent, confirmed by the identity
-matrix and the resource-tag derivation. **That is not the same claim as
-"nothing overrides the disc's static content", which is false** - a live,
-per-frame-updated resource, reached through the very tags construction
-derives, sits between the manifest and whatever the original actually
-draws, and the two objects behind it are being read and updated throughout
-the countdown a stretched digit would otherwise occupy.
+Construction-time placement is absent (confirmed: identity matrix,
+resource-tag derivation) - but that is not "nothing overrides the disc's
+static content", which is false. The registration instantiates a real,
+separate, live-updated mesh (`321Go_StartFinish.vex`, matching
+`TrackStartup.xml`'s own `location`), read constantly during exactly the
+window the original shows "GO" instead of a digit. What is still missing
+is the transform that would place that mesh at each circuit's own gantry
+rather than at the world origin - without it, "instantiated" is settled and
+"drawn where the player sees it" is strong inference, not proof.
 [`crates/formats/src/trackstartup.rs`](../../../../crates/formats/src/trackstartup.rs)
 carries the corrected implication.
 
 ## What is still open
 
+- **No transform writer has been found** that would move
+  `321Go_StartFinish`'s instantiated object off the world origin to a given
+  circuit's own gantry. Highest priority: the identity-write and
+  shared-across-16-circuits facts are in direct tension with "drawn at the
+  gantry" until something resolves it.
 - **The final texture bind is untraced.** Nobody has caught a
   `Gfx_BindTexture` call for the gantry's screen position and confirmed it
-  reads from `0x0983a240`'s resolved state - the causal chain above is
-  strong but circumstantial.
-- **The four state-group sub-objects** (three each, twelve total, off
-  `0x0983a240+0x88/+0x90/+0x98/+0xa0`) were found but not decoded - unknown
-  whether any names or points at a texture distinguishable from
-  `billboard8.tga`.
+  reads from the instantiated object - see the halting-function trap above
+  for why that attempt does not count as a negative result.
+- **The material object's live fields, during an actual countdown, are
+  unread** - a light-intensity/phase value tied to `start_lights` is the
+  best guess, not checked. The four `+0x88..+0xa0` wrapper sub-objects'
+  *live* content (as opposed to the stale credits-text sample) is likewise
+  unread.
 - **`0x0890cf34`** (the animation accumulator) has no function boundary in
   Ghidra at all; neither it nor `FUN_088fe208`/`FUN_0894402c` were renamed -
   confidence did not clear the bar, and the first needs a `create_function`
