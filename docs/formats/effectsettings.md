@@ -154,9 +154,25 @@ except for the HUD and the ship-model swap Pulse alone does.
   spotted in either disc's `Data\Environments\` tree, but no targeted search
   was done - the PSP titles' assets are hash-named in their WAD, unlike the
   two PSARC titles' plain paths.
-- **`Growing Texture.Scale Bias`/`.Factors`** (4 floats each) presumably
-  drive whichever `zoneMode*.gxt` is shown and how it is tiled/scrolled, but
-  no `.gxt`/`.gtf` in the set has been opened to see what the texture depicts.
+- **Settled for HD, 2026-08-28: the texture is blank, so the picture cannot be
+  what `Growing Texture` describes.** All fifteen `/data/tex/zonemode{0..14}.gtf`
+  are **byte-identical** - one 87,552 B DXT4/5 256x256 file shipped fifteen
+  times - and decode (`oag_formats::gtf`) to a flat, uniform
+  `[255, 255, 255, 255]` on every one of the 65,536 texels of every one of the
+  fifteen files. There is no warp tunnel, vignette or grille in the art at
+  all. So `Growing Texture.Colour`/`.Scale Bias`/`.Factors` must drive
+  something computed in the shader - a procedural gradient or an animated UV
+  distortion sampling a blank source - rather than anything sampled from a
+  picture, and what that computation is remains unread; no HD executable has
+  been read for its Zone shader. **2048's own copy is still unchecked**:
+  `zoneMode0.gxt` and `zoneModeTrack0.gxt` both carry format byte `0x0c`
+  (`SceGxmTextureBaseFormat` "uncompressed `U4U4U4U4`"), one of the six
+  format codes [gxt.md](gxt.md#the-format-byte-names-a-scegxmtexturebaseformat)
+  already catalogues (99 of 9,910 files disc-wide) but does not decode - its
+  channel/swizzle order is explicitly unread there, so guessing at it here
+  would risk exactly the "plausible-looking stand-in" `CLAUDE.md` warns
+  against. Whether 2048 ships the same blank placeholder or a real picture is
+  still open.
 - **Wiring a stage's values into a race** - the next concrete step once the
   zone-number correspondence above is settled. HD is the best-measured
   target, since its `.envsettings` reading and drawing path already exists.

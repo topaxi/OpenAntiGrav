@@ -118,10 +118,21 @@ except for the HUD and the ship-model swap Pulse alone does.
   no targeted search for a similarly-named per-stage table was done - the PSP
   titles' assets are hash-named in their WAD, which makes a blind directory
   listing unlike the two PSARC titles' plain paths.
-- The `Growing Texture.Scale Bias`/`.Factors` keys (4 floats each) presumably
-  drive whichever `zoneMode*.gxt` is shown and how it is tiled/scrolled, but
-  no `.gxt`/`.gtf` in the set has been opened to see what the texture even
-  depicts (a warp tunnel, a vignette, a scrolling grille - unknown).
+- **Settled for HD, not for 2048.** Extracted and decoded all fifteen
+  `/data/tex/zonemode{0..14}.gtf` with `oag_formats::gtf` - **byte-identical**
+  (one 87,552 B DXT4/5 256x256 file shipped fifteen times, `md5sum` confirms
+  it) and every one of the 65,536 texels of every one of the fifteen decodes
+  to flat `[255, 255, 255, 255]`. No warp tunnel, vignette or grille - the art
+  is blank, so `Growing Texture.Colour`/`.Scale Bias`/`.Factors` drive
+  something computed in the shader rather than anything sampled from a
+  picture. **2048's own copy could not be checked the same way**:
+  `zoneMode0.gxt`/`zoneModeTrack0.gxt` carry format byte `0x0c`
+  (`SceGxmTextureBaseFormat` `U4U4U4U4`), one of the six format codes
+  `docs/formats/gxt.md` already catalogues (99 of 9,910 files) but leaves
+  undecoded - its channel/swizzle order is unread there, so decoding it here
+  on a guess would risk exactly the wrong-picture trap `CLAUDE.md` warns
+  against. Whether 2048 ships the same blank placeholder or a real picture is
+  still open.
 
 ## Next Steps
 
@@ -133,8 +144,13 @@ except for the HUD and the ship-model swap Pulse alone does.
   the best-measured target, since its `.envsettings` reading and drawing path
   already exists ([envsettings.md](../docs/formats/envsettings.md)) and this
   is the same shape.
-- Decode one `zoneMode0.gtf` (or `.gxt`) to see what the texture actually is;
-  that settles what `Growing Texture` is for.
+- Add `SceGxmTextureBaseFormat` `U4U4U4U4` (byte `0x0c`) to `oag_formats::gxt`
+  to check whether 2048's `zoneMode0.gxt`/`zoneModeTrack0.gxt` are the same
+  blank placeholder HD ships or a real picture - the channel/swizzle order
+  needs settling first (`gxt.md`'s own open question), ideally against one of
+  the format's other 97 real files rather than this one alone, ruling out a
+  guess that just happens to look plausible on a texture that may itself be
+  flat.
 - Look for an analogous per-stage table on Pulse and Pure before concluding
   they have none - check the disc's own string table / name-mining output
   for anything matching `zone` + a stage-name fragment (`venom`, `flash`,
