@@ -52,6 +52,8 @@ pub(crate) struct Session {
     /// the only wall clock in the process. Nothing the simulation reads comes
     /// back out of it - see [`perf`].
     pub(crate) meter: perf::Meter,
+    /// The `Dev` overlay's memory line, throttled - see [`perf::memory::Probe`].
+    pub(crate) memory: perf::memory::Probe,
     /// Draws the overlay over whatever the stage drew.
     ///
     /// A renderer of its own because a race has none: `race::Scene` draws
