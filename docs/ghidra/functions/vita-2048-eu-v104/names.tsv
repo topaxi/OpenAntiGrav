@@ -28,3 +28,6 @@
 0x8106322a	function	FrontendRoot_Construct	90	game-boot.md
 0x8125f796	function	MusicManager_Construct	90	game-boot.md
 0x8102f6d0	function	Environment_Load	80	zone-environment-fallback.md
+0x8104619e	function	Environment_LoadEffectSettingsFiles	78	zone-environment-fallback.md
+0x81044202	function	Zone_InitStageState	75	zone-environment-fallback.md
+0x81044cfc	function	Zone_UpdateStage	80	zone-environment-fallback.md
