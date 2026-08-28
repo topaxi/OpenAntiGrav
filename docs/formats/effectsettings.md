@@ -192,13 +192,19 @@ on [zone-environment-fallback.md](../ghidra/functions/vita-2048-eu-v104/zone-env
 **What this does not settle**: the struct `+0x634` belongs to was not
 identified, so its relationship to a `RaceState::zone`-shaped counter this
 project already tracks for the other three titles
-([zone-mode.md](../ghidra/functions/psp-pulse-usa/zone-mode.md)) is open, and
-no write site for `+0x634` was found - only that its *read range* matches
-the table exactly. Whether `DAT_816c4890`'s rows are the parsed
-`ZoneMode2048.effectSettings` data, or something built from it, is also
-unread: `Environment_LoadEffectSettingsFiles` inserts the raw file into a
-*different* cache, and the link from that cache to `DAT_816c4890` was not
-traced.
+([zone-mode.md](../ghidra/functions/psp-pulse-usa/zone-mode.md)) is open.
+**Searched directly, a third pass, 2026-08-28**: `Zone_UpdateStage`'s own two
+callers, `Zone_InitStageState`, the craft state machine (`FUN_811c711e`) and
+an EMP-bar HUD setup function were all fully decompiled and none writes
+`+0x634` - see
+[zone-environment-fallback.md](../ghidra/functions/vita-2048-eu-v104/zone-environment-fallback.md#dat_816c4890-is-built-not-the-raw-file---and-0x634s-writer-is-still-unfound)
+for exactly what was ruled out. **`DAT_816c4890`'s provenance is sharpened,
+not settled, same pass**: `Environment_LoadEffectSettingsFiles` writes it
+directly - not a passive read of the raw-file cache - inside a block that
+reverses a table in place, gated on a flag read off the current circuit
+record (plausibly a reversed-circuit flag, unconfirmed). So `DAT_816c4890`
+is a *built* table, not the parsed file itself, but how the raw bytes get
+into it in the first place is still unread.
 
 ## Open
 

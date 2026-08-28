@@ -261,6 +261,53 @@ but `+0x634`/`+0x638`'s host struct is not independently identified, the
 audio/effect cue names are read from usage rather than confirmed against a
 played race, and there is no runtime trace.
 
+## `DAT_816c4890` is built, not the raw file - and `+0x634`'s writer is still unfound
+
+**2026-08-28, third pass.** `Environment_LoadEffectSettingsFiles` was
+re-read in full (only its first third had been decompiled before): after the
+two independent cache-inserts into `DAT_816c7148` (the primary and
+title-wide-default paths, still true - "Not a primary-then-fallback pair"
+above), a large block gated on `*(char *)(DAT_8153fe00 + 0x1d9)` walks a
+region from `&DAT_816c4778` to `&DAT_816c68d8` with two pointers stepping
+toward each other, `0x59` eight-byte words (712 bytes) per step, swapping
+each pair - the shape of an in-place array reversal, not a copy. `DAT_816c4890`
+sits `0x118` bytes into that same region and is written directly inside this
+block (confirmed via `get_xrefs_to`: `Environment_LoadEffectSettingsFiles`
+writes it at `0x810469de`, in addition to the read at `0x81046614` already
+known). **So `DAT_816c4890` is not the raw parsed file and not a passive
+alias of `DAT_816c7148`'s cache entry** - it is a table this same function
+actively builds and conditionally reverses, gated on a flag read off the
+currently-selected circuit record (`DAT_8153fe00`) at offset `0x1d9`. The
+most likely reading - not confirmed - is a reversed-circuit flag: this
+function already reads `DAT_8153fe00 + 0x74` elsewhere (the circuit's own
+path string, in `Environment_Load` itself) as the same base object, and
+`docs/gameplay/race-modes.md`'s track-reversal handling on other titles is
+exactly the kind of thing that would need a stage table walked in the
+opposite order. **Not settled**: what `+0x1d9` actually is, whether the
+`0x816c4778`-`0x816c68d8` region is sized for 24 rows or some other count
+(`(0x816c68d8 - 0x816c4778) / 712 = 12` swap-pairs, i.e. 24 rows at the
+712-byte stride this loop uses - not the 356-byte stride `Zone_UpdateStage`
+reads `DAT_816c4890` at, so whether a "row" here is one stage or two is
+unread), and how `DAT_816c7148`'s raw bytes end up populating this region at
+all - no call from `Environment_LoadEffectSettingsFiles` into a parser was
+found in this block; it reads as rearranging data already present, not
+decoding it fresh.
+
+**The `+0x634` write site was searched for directly and not found.** Ruled
+out this pass, each by full decompilation: `Zone_UpdateStage`'s own two call
+sites (`Environment_Load` and `FUN_8101bc7a`, the per-frame render/update
+body - neither writes the field, both only call `Zone_UpdateStage(0)`);
+`Zone_InitStageState` (zeroes the module-level `DAT_816c6b*`/`DAT_816c6bd*`
+blend globals only, never touches the per-craft struct); the craft state
+machine `FUN_811c711e` (operates on a *different* object, at offsets in the
+`0x5xxx`-`0x7xxx` range with no `0x634`/`0x638` anywhere in its body); an
+EMP-bar HUD setup function, `FUN_8114b724` (also unrelated offsets). The base
+pointer `(&DAT_8151f0ec)[0]` has dozens of direct readers across this
+executable (`get_xrefs_to` on `DAT_8151f0ec` returns 29 hits in dead-reckoning
+craft/HUD/camera code), and without a runtime watchpoint or exhaustively
+decompiling most of them, the specific writer of `+0x634` was not found this
+pass. Recorded as a real dead end rather than left silently unmentioned.
+
 ## What this settles and what it does not
 
 - **Settles**: the four ported HD Zone circuits are a genuinely incomplete
@@ -276,13 +323,19 @@ played race, and there is no runtime trace.
   `RaceState`-equivalent for 2048 is open.
 - **Does not settle**: whether `+0x634` is driven the same way Pulse's
   `Zone_Update` drives its own zone counter (a plain accumulate-every-10-
-  seconds), or something else - no write site for `+0x634` was found this
-  pass.
-- **Does not settle**: what the `DAT_816c4890` table's 0x59-word rows
-  actually contain, or whether they are the parsed `ZoneMode2048.effectSettings`
-  data at all rather than something built from it - `Environment_LoadEffectSettingsFiles`
-  reads the raw file into a *different* cache (`DAT_816c7148`), and nothing
-  this pass traced the link from that cache to `DAT_816c4890`.
+  seconds), or something else. **Searched directly, third pass, and still
+  not found**: `Zone_UpdateStage`'s own two callers, `Zone_InitStageState`,
+  the craft state machine and an EMP-bar HUD function were all fully
+  decompiled and ruled out - see the section above.
+- **Sharpened, third pass**: `DAT_816c4890` is not the raw parsed file and
+  not a passive read of `DAT_816c7148`'s cache entry - `Environment_LoadEffectSettingsFiles`
+  writes it directly, inside a block that reverses a `0x816c4778`-`0x816c68d8`
+  region in place, gated on a flag read off the current circuit record
+  (plausibly "is this circuit reversed", not confirmed). **Still open**: how
+  the raw file bytes in `DAT_816c7148` get *into* that region in the first
+  place - no parser call was found in the traced block, so either it happens
+  earlier (unread) or `DAT_816c4890`'s table is built some other way
+  entirely.
 
 ## See also
 

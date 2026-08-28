@@ -247,16 +247,26 @@ into a *different* cache, and the link between the two was not traced.
 
 - Find the write site for `Zone_UpdateStage`'s `+0x634` field - the field the
   clamp-to-12 match confirms drives stage selection, but nothing this pass
-  traced writes it. That closes the loop `docs/ghidra/functions/vita-2048-eu-v104/zone-environment-fallback.md`
-  leaves open: what struct it belongs to, and what it is driven by (a plain
-  10-second accumulate the way Pulse's `Zone_Update` works, or something
-  else). Only once that is read does wiring a stage into a race stop being a
-  guess.
-- Trace whether `DAT_816c4890` (the table `Zone_UpdateStage` blends rows of)
-  is actually the parsed `ZoneMode2048.effectSettings` data, or something
-  built from it - `Environment_LoadEffectSettingsFiles` inserts the raw file
-  into a *different* cache (`DAT_816c7148`), and the link between the two was
-  not traced this pass.
+  traced writes it. **Searched a third time, 2026-08-28, and still not
+  found**: `Zone_UpdateStage`'s own two callers, `Zone_InitStageState`, the
+  craft state machine and an EMP-bar HUD function were all fully decompiled
+  and ruled out (see
+  `docs/ghidra/functions/vita-2048-eu-v104/zone-environment-fallback.md`) -
+  the base pointer has dozens of direct readers across the executable, so
+  this next attempt should either identify the containing struct's type
+  first (narrowing which of those readers are plausible owners) or use a
+  runtime watchpoint if one becomes available, rather than repeat the same
+  blind decompile sweep. Only once this is read does wiring a stage into a
+  race stop being a guess.
+- Trace how the raw bytes `Environment_LoadEffectSettingsFiles` inserts into
+  `DAT_816c7148` end up in `DAT_816c4890`'s own table - **sharpened, not
+  settled, third pass**: `DAT_816c4890` is confirmed built by
+  `Environment_LoadEffectSettingsFiles` itself, inside a block that reverses
+  a table in place (gated on a flag plausibly meaning "reversed circuit",
+  unconfirmed), not a passive alias of the raw-file cache as it looked from
+  the outside last pass. What is still unread is the actual parse/copy step
+  that gets bytes from `DAT_816c7148` into that region at all - no call into
+  a parser was found in the traced block.
 - Wire the current stage's fog/sky/ambient into the renderer for one title as
   a proof of concept, once the two items above settle - HD is still the
   best-measured *rendering* target, since its `.envsettings` reading and
