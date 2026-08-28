@@ -123,6 +123,38 @@ packages (base, DLC1, DLC2). **So racing Zone or Detonator on any of the
 four ported circuits loads no palette at all** - the original game's own
 data falling short of its own code, not a gap in this project's reading.
 
+**2026-08-28, a second Ghidra pass the same day: `Zone_UpdateStage`
+(`0x81044cfc`) is the real per-stage selection this thread has been asking
+about.** Traced the three functions `Environment_Load` calls after building
+its paths - full evidence on the same
+[zone-environment-fallback.md](../docs/ghidra/functions/vita-2048-eu-v104/zone-environment-fallback.md).
+Three findings:
+
+1. `Environment_LoadEffectSettingsFiles` (`0x8104619e`, confidence 78) loads
+   **both** built paths independently into a shared cache - not
+   primary-then-fallback. A missing file is a silent no-op for that one
+   insert, confirmed since `ZoneMode2048default.effectSettings` doesn't
+   exist and every base-package Zone race still runs.
+2. `Zone_InitStageState` (`0x81044202`, confidence 75) is a plain lazy-init
+   of the stage-blend state block.
+3. `Zone_UpdateStage` (`0x81044cfc`, confidence 80) reads a per-craft field
+   at `+0x634`, **clamps it to `0xc` (12)** - an exact match against 2048's
+   own thirteen-stage table - and cross-fades the current/next stage's row
+   of a 356-byte-stride table (`DAT_816c4890`). Called once at load and
+   **every frame** from the main render-update loop, both times with
+   `param_1 = 0` (the local player's own craft). Fires
+   `"ZONE_Wave"`/`"ZONE_Pulse"` cues on a stage change.
+
+**Settles that the four unshipped-palette circuits don't crash**: the
+per-frame call is gated on whether *any* environment path was probed
+successfully, not on whether the effectSettings file loaded, so the
+blend math keeps running against whatever is already resident at
+`DAT_816c4890` - plausibly zero-initialised `.bss` on a cold boot, not
+verified. **Does not settle**: what struct `+0x634` belongs to, what writes
+it, or whether `DAT_816c4890` is even the parsed effectSettings data rather
+than something built from it - `Environment_LoadEffectSettingsFiles` inserts
+into a *different* cache, and the link between the two was not traced.
+
 ## Open
 
 - The stage-index <-> zone-number mapping is inferred from the names alone
@@ -141,10 +173,13 @@ data falling short of its own code, not a gap in this project's reading.
   That is strong evidence this **is** the `SpeedClass`/`NextSpeedClass`
   ladder HD's own HUD and announcer already use - see
   `docs/formats/psp-audio.md#speech_zonebnk-names-the-zone-announcer-one-ladder-per-title`.
-  **Still open**: what selects a row at runtime, and whether the index is
-  `RaceState::zone` directly (uncapped past 14, per `crates/race/src/zone.rs`)
-  or something derived from it - no HD executable read exists for this, so
-  per `CLAUDE.md` it stays unwired rather than guessed.
+  **Sharpened again the same day, on 2048's own executable**: `Zone_UpdateStage`
+  reads a per-craft field, clamps it to `12`, an exact match against 2048's
+  own thirteen-stage table - real selection logic, found and named (see the
+  new section above). **Still open**: what struct that field belongs to,
+  what writes it, and whether HD's own selection works the same way - no
+  write site was found and this is 2048's executable, not HD's, so per
+  `CLAUDE.md` it stays unwired until the write side closes the loop.
 - 2048's table names 13 stages but the title ships 15 files in each texture
   set - still unexplained, though sharpened by the texture-content finding
   below: it is a mismatch in the "Track" set that carries the real art, not
@@ -210,14 +245,24 @@ data falling short of its own code, not a gap in this project's reading.
 
 ## Next Steps
 
-- Cross-reference the stage-name ladder against `Zone_Update`'s recovered
-  timer logic to settle whether stage `N` is live exactly while the zone
-  counter reads `N`, before wiring anything that assumes it.
+- Find the write site for `Zone_UpdateStage`'s `+0x634` field - the field the
+  clamp-to-12 match confirms drives stage selection, but nothing this pass
+  traced writes it. That closes the loop `docs/ghidra/functions/vita-2048-eu-v104/zone-environment-fallback.md`
+  leaves open: what struct it belongs to, and what it is driven by (a plain
+  10-second accumulate the way Pulse's `Zone_Update` works, or something
+  else). Only once that is read does wiring a stage into a race stop being a
+  guess.
+- Trace whether `DAT_816c4890` (the table `Zone_UpdateStage` blends rows of)
+  is actually the parsed `ZoneMode2048.effectSettings` data, or something
+  built from it - `Environment_LoadEffectSettingsFiles` inserts the raw file
+  into a *different* cache (`DAT_816c7148`), and the link between the two was
+  not traced this pass.
 - Wire the current stage's fog/sky/ambient into the renderer for one title as
-  a proof of concept, once the timer cross-reference above settles - HD is
-  the best-measured target, since its `.envsettings` reading and drawing path
-  already exists ([envsettings.md](../docs/formats/envsettings.md)) and this
-  is the same shape.
+  a proof of concept, once the two items above settle - HD is still the
+  best-measured *rendering* target, since its `.envsettings` reading and
+  drawing path already exists ([envsettings.md](../docs/formats/envsettings.md))
+  and this is the same shape, even though the clearest recovered *selection*
+  logic so far is on 2048.
 - Add `SceGxmTextureBaseFormat` `U8U8U8U8` (byte `0x0c`, `ARGB` swizzle - now
   identified, see above) to `oag_formats::gxt` to see what 2048's
   `zoneModeTrack{0..14}.gxt` actually depict - the raw bytes already say
@@ -232,13 +277,9 @@ data falling short of its own code, not a gap in this project's reading.
   undertaking than this thread on its own - see
   `handover/wipeout-hd-furys-executable-is-26100-functions-with.md`) to
   settle what `Growing Texture.Scale Bias`/`.Factors` actually do to the
-  now-identified "Track" art, and what selects an effectsettings row from
-  `RaceState::zone` at runtime.
-- Decompile `FUN_8104619e`/`FUN_81044202`/`FUN_81044cfc`, the functions
-  `Environment_Load` hands its two built paths to
-  (`docs/ghidra/functions/vita-2048-eu-v104/zone-environment-fallback.md`),
-  to see what actually happens when the load fails on one of the four
-  ported `zone_N` circuits - skip silently, fall back further, or something
-  else. Worth checking against the user's own play on one of those four
-  circuits in Zone or Detonator mode first, since a visible symptom (no fog,
-  no palette shift, a crash) would say which without reading further code.
+  now-identified "Track" art, and whether HD's own stage-selection mechanism
+  looks anything like 2048's `Zone_UpdateStage`.
+- Worth checking against the user's own play on one of the four ported
+  `zone_N` circuits in Zone or Detonator mode: a visible symptom (no fog, no
+  palette shift, a black/flat scene) would corroborate "the blend math runs
+  against zero-initialised data" more cheaply than a runtime trace would.
