@@ -81,6 +81,47 @@ fn a_one_block_ubc2_texture_decodes_to_its_two_endpoints_and_alpha_nibbles() {
     );
 }
 
+/// A 2x2 `Argb8888` texture, one distinct texel per storage slot, so the
+/// twiddle mapping and the `A, R, G, B` channel order can both be checked at
+/// once against `twiddle`'s own hand-verified 2x2 answer
+/// (`twiddle_over_a_square_grid_is_a_plain_bit_interleave`): storage index 0
+/// lands at `(0, 0)`, 1 at `(0, 1)`, 2 at `(1, 0)`, 3 at `(1, 1)`.
+#[test]
+fn a_two_by_two_argb8888_texture_twiddles_and_reorders_channels() {
+    #[rustfmt::skip]
+    let texels: [u8; 16] = [
+        255, 255,   0,   0, // storage 0 -> (0, 0): opaque red
+        255,   0, 255,   0, // storage 1 -> (0, 1): opaque green
+        255,   0,   0, 255, // storage 2 -> (1, 0): opaque blue
+          0,  10,  20,  30, // storage 3 -> (1, 1): transparent, distinct RGB
+    ];
+    let data = blob(&descriptor(0x0c, 2, 2, 16), &texels);
+
+    let gxt = Gxt::parse(&data).expect("parses");
+    let texture = gxt.only().expect("one texture");
+    assert_eq!(texture.format(), Some(Format::Argb8888));
+
+    let rgba = texture.to_rgba(&data).expect("decodes");
+    assert_eq!(rgba.len(), 4);
+    assert_eq!(rgba[0], [255, 0, 0, 255], "(0, 0): red");
+    assert_eq!(rgba[1], [0, 0, 255, 255], "(1, 0): blue");
+    assert_eq!(rgba[2], [0, 255, 0, 255], "(0, 1): green");
+    assert_eq!(rgba[3], [10, 20, 30, 0], "(1, 1): transparent, RGB kept");
+}
+
+/// No `MIN_LEVEL_LEN` floor applies to `Argb8888` - unlike `PVRTII4BPP`'s
+/// single-word minimum, there is no evidence one is needed (see
+/// `Texture::level_len`), so a mip chain down to a single texel is expected
+/// to close on the plain `width * height * 4` arithmetic with nothing added.
+#[test]
+fn an_argb8888_mip_chain_closes_on_the_plain_arithmetic_with_no_floor() {
+    // 4x4 down to 1x1: three levels, 16 + 4 + 1 texels, 4 bytes each.
+    let plain = (16 + 4 + 1) * 4;
+    let data = blob(&descriptor_mips(0x0c, 4, 4, plain, 3), &vec![0u8; plain]);
+    let gxt = Gxt::parse(&data).expect("parses");
+    assert_eq!(gxt.only().expect("one").format(), Some(Format::Argb8888));
+}
+
 #[test]
 fn a_magic_that_is_not_gxt_is_refused() {
     assert_eq!(

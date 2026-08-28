@@ -225,7 +225,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// The texel format this module decodes, from the top byte of the
 /// descriptor's `format` field (`SceGxmTextureBaseFormat`).
 ///
-/// Two of the six format bytes this title's corpus carries. A format byte
+/// Three of the six format bytes this title's corpus carries. A format byte
 /// outside them parses (see [`Texture::format_byte`]) but refuses
 /// [`Texture::to_rgba`] with [`Error::Unsupported`] rather than guessing at a
 /// decode.
@@ -236,6 +236,9 @@ pub enum Format {
     /// `0x83`, PVRTC-II at 4 bits per texel: 8 bytes per 4x4 **word**, and
     /// not a block codec at all - see `oag_formats::pvrtc`.
     Pvrtii4bpp,
+    /// `0x0c`, `SceGxmTextureSwizzle4Mode::ARGB`: four raw bytes a texel, no
+    /// block or bit-packing at all - see [`argb8888`].
+    Argb8888,
 }
 
 impl Format {
@@ -243,17 +246,21 @@ impl Format {
     /// module does not decode.
     fn from_byte(byte: u8) -> Option<Self> {
         match byte {
+            0x0c => Some(Self::Argb8888),
             0x83 => Some(Self::Pvrtii4bpp),
             0x86 => Some(Self::Ubc2),
             _ => None,
         }
     }
 
-    /// Bytes one 4x4 block or word occupies.
+    /// Bytes one 4x4 block or word occupies. Not meaningful for
+    /// [`Self::Argb8888`], which has no block grid - see
+    /// [`Texture::level_len`], the only caller, which branches around it.
     const fn unit_len(self) -> usize {
         match self {
             Self::Ubc2 => 16,
             Self::Pvrtii4bpp => pvrtc::WORD_LEN,
+            Self::Argb8888 => 4,
         }
     }
 }
@@ -292,8 +299,7 @@ impl Texture {
         )
     }
 
-    /// Bytes one mip level occupies, for a format [`Self::format`] names,
-    /// floored at [`MIN_LEVEL_LEN`].
+    /// Bytes one mip level occupies, for a format [`Self::format`] names.
     ///
     /// `None` for a format this module does not decode, since the block size
     /// (and so the chain length) is not knowable without one. That means
@@ -301,9 +307,21 @@ impl Texture {
     /// module can also decode; an unsupported format's declared length is
     /// trusted rather than verified, which is why [`Error::Unsupported`] is a
     /// decode-time error rather than a parse one.
+    ///
+    /// [`Format::Argb8888`] has no block grid to floor at [`MIN_LEVEL_LEN`] -
+    /// unlike the two compressed formats, it is not quantised to a minimum
+    /// storage unit larger than one texel. Measured directly rather than
+    /// assumed: all 99 `0x0c` textures in the base package's `.gxt` corpus,
+    /// nine distinct `(width, height, mip count)` shapes down to a single
+    /// 4x4 level, agree with the plain `width * height * 4` formula with
+    /// zero floored, so there is no evidence a floor applies here the way
+    /// there is for `PVRTII4BPP`'s own single-word minimum.
     fn level_len(&self, level: u8) -> Option<usize> {
         let format = self.format()?;
         let (width, height) = self.level_size(level);
+        if format == Format::Argb8888 {
+            return Some(width as usize * height as usize * format.unit_len());
+        }
         let across = (width as usize).div_ceil(4);
         let down = (height as usize).div_ceil(4);
         Some((across * down * format.unit_len()).max(MIN_LEVEL_LEN))
@@ -353,6 +371,7 @@ impl Texture {
             // grid's own Morton order is applied inside the codec rather
             // than here. See [`crate::pvrtc`].
             Format::Pvrtii4bpp => pvrtc::decode_ii_4bpp(texels, width, height),
+            Format::Argb8888 => argb8888(texels, width, height),
         };
         decoded.ok_or(Error::DataOutOfBounds {
             offset: range.start as u32,
@@ -418,6 +437,59 @@ fn blocks(texels: &[u8], width: u32, height: u32) -> Option<Vec<[u8; 4]>> {
                     out[y * width as usize + x] = texel;
                 }
             }
+        }
+    }
+    Some(out)
+}
+
+/// Walks the **texel** grid in twiddled (Morton/Z-order) order and reads each
+/// texel's four raw bytes as `A, R, G, B` (`SceGxmTextureSwizzle4Mode::ARGB`,
+/// the swizzle bits `format`'s low three bytes already carried - see the
+/// module docs).
+///
+/// `Format::Argb8888` carries no block structure the way `UBC2` does, so
+/// [`twiddle`]'s general grid algorithm is applied directly over texel
+/// coordinates `(x, y)` here, rather than over block coordinates `(bx, by)`
+/// as [`blocks`] does - one texel is this format's own smallest unit.
+///
+/// # Measured on 2048's Zone/Detonator speed-class art, not assumed
+///
+/// `data/Tex/zoneModeTrack{0,7,14}.gxt` (256x256, `0x0c001000`) is the
+/// corpus [docs/formats/gxt.md](../../../docs/formats/gxt.md) left this
+/// format's tiling order open on. Raster order decodes to horizontal-banded
+/// noise - the same "a swizzle that happens to agree with raster order along
+/// one axis" signature `blocks`'s own doc records for `UBC2`'s reticle
+/// texture. Twiddled order decodes cleanly instead: every texel's `A`, `R`
+/// and `G` bytes agree exactly (measured across all 65,536 texels, zero
+/// mismatches) - a binary stencil mask, opaque on exactly 2,048 of them, the
+/// same count on all three sampled stages - while `B` alone carries a smooth
+/// multi-valued gradient. The mask's *shape* is what escalates, not its
+/// area: composited over a checkerboard it reads as a thin horizontal band,
+/// solid at stage 0 and increasingly dashed by stage 7 and 14 - see
+/// `the_zone_track_art_decodes_to_a_shape_that_escalates_across_stages` in
+/// `gxt_ground_truth.rs`, whose per-stage renders are what this rests on. Not
+/// the same finding as Wipeout HD's own already-decoded `.gtf` copy of this
+/// art (`docs/formats/gxt.md`'s "Track" texture-set section) - that is a
+/// different container, a different codec, and was read long before this
+/// decoder existed; the two agree only in role, both being the varying half
+/// of a matched flat/varying pair, not in exact picture.
+///
+/// Channel order is confirmed independently of the shape: `A`/`R`/`G`'s
+/// lockstep binary mask versus `B`'s continuous gradient is consistent with
+/// the ARGB swizzle [`docs/formats/gxt.md`](../../../docs/formats/gxt.md)
+/// already corroborated against the public `vitasdk` headers by
+/// bit-decomposing `format`, now also corroborated by which channel of the
+/// decode turns out to carry continuous art versus a flat mask.
+fn argb8888(texels: &[u8], width: u32, height: u32) -> Option<Vec<[u8; 4]>> {
+    let pixels = (width as usize).checked_mul(height as usize)?;
+    let mut out = vec![[0u8; 4]; pixels];
+    for y in 0..height {
+        for x in 0..width {
+            let index = twiddle(x, y, width, height) as usize;
+            let at = index.checked_mul(4)?;
+            let texel = texels.get(at..at + 4)?;
+            let (a, r, g, b) = (texel[0], texel[1], texel[2], texel[3]);
+            out[y as usize * width as usize + x as usize] = [r, g, b, a];
         }
     }
     Some(out)
