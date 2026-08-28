@@ -187,35 +187,6 @@ thing keeping that path from rotting, and it is `#[ignore]`d, so `just`
 stayed green throughout. A validity check applied to a state the *operator*
 named rather than a chain led to is a check against the wrong question.
 
-### The AI ram was already a sideshift; its clearance gate was the bug
-
-**2026-08-24, from play: "the AI steers into me and puts its nose in the wall".**
-It never steered - the gate in front of the shove was wrong. **When a report
-names a mechanism, measure before believing it.** A ram targets **only the
-player** now: AI-on-AI shoving spirals in a clump, since a shove provokes and
-provocation buys the next. Account, sweep and remainders:
-[ai.md](docs/gameplay/ai.md), including how violent a sideshift measures.
-Guarded by `crates/game/tests/ram_ground_truth.rs`, `#[ignore]`d so **CI does
-not run it**.
-
-### The airbrake flap's rotation axis was recoverable after all - a per-instance handler, not class dispatch
-
-**2026-08-27.** `oag_render::mesh::Flap::deflect` had used local X to swing the
-flap since it was implemented, flagged below the confidence-50 floor as
-"chosen, not recovered" - class-id dispatch genuinely has no per-class handler
-for a tagged node (`ship-parts.md`'s static-search section still stands). What
-that search could not find is a per-instance handler reached indirectly, the
-same shape `Exhaust_Update` has. A live PPSSPP session with a read watchpoint
-on the graphics deflection state (`craft+0x2d8`/`+0x2dc`) found it: 1,929 of
-3,210 hits landed in one function, now `Airbrake_Update` (`0x0892d9fc`,
-confidence 90). Its raw VFPU disassembly builds
-`(1,0,0,0)`/`(0,cos,sin,0)`/`(0,-sin,cos,0)`/`(0,0,0,1)` - local X, exactly
-what the code already used. Full evidence, the watchpoint counts and the
-disassembly are in `ship-parts.md`'s "recovered from a live read" section.
-**The lesson for the next below-50 flag in this codebase**: "no per-class
-dispatch" and "no per-instance handler" are different claims, and only the
-first one had actually been checked.
-
 ### M4 and M5
 
 M4 (shield/energy, Zone's ending, the grid, weapon pads, the weapon table,
@@ -297,123 +268,6 @@ degrees against `--start-heading`'s 0.0022/0.0001, which is what closed the
 roadmap checkbox instead) -
 [ppsspp-debugger.md](docs/reverse-engineering/ppsspp-debugger.md#save-states-and-the-input-recording-api-that-may-replace-them)
 keeps the mechanism documented for a need heading-pinning cannot reach.
-
-### The exhaust and the boost visuals
-
-Six passes worked this subject; **the evidence is on
-[exhaust.md](docs/ghidra/functions/psp-pulse-usa/exhaust.md),
-[mesh-draw.md](docs/ghidra/functions/psp-pulse-usa/mesh-draw.md) and
-[camera.md](docs/ghidra/functions/psp-pulse-usa/camera.md)** - this is the
-net state and the traps, not the six-pass history that produced it.
-
-- The boost has exactly three elements - `boost_timer` reaching the flare's
-  half-size, the `<Team>boost.vex` plume reveal, and `engine_on` - and no
-  others; no `.pob` boost or speed-pad particle effect exists on the disc,
-  and the hull's blink lights are a separate per-material keyframe animation.
-- One trail per racing craft, not two: `Trail_InitPreset`'s only
-  non-missile caller makes one `Trail_InitPreset(obj, 2)`. Every recovered
-  ribbon constant (ring capacity 10, taper `-4.5`, three layers, per-layer
-  half-widths) matches - a posed render reaches 0.2542 against a capture's
-  recorded 0.2544947.
-- **The plume replays under `TEXMAPMODE` 0, not `oag_render::texgen`**:
-  authored UVs sampled through an animated per-material `TexOffset`
-  u-scroll, settled at confidence 92 by walking six independently frozen
-  frames in GE execution order. Ported everywhere now (922 of 922 gated
-  materials, twelve circuits) as the same mechanism that drives trackside
-  animated textures generally
-  ([scenery-animation.md](docs/rendering/scenery-animation.md)); for the
-  plume specifically it closes the "~11% dimmer" residual (re-measured down
-  from an earlier claimed 26%). `texgen`'s own two light vectors stay
-  correct for the batches actually inside its bracket.
-- `HALF_SIZE_TO_WORLD` is `1.0`, recovered from a live matrix read rather
-  than fitted; the size law
-  `(intensity * 0.6 + 0.4) * 2.5 + boost_timer * 8.0` is exact.
-- The original's fov widens additively with speed -
-  `60.181 + 0.07685 * dot(fwd, vel)` degrees, confirmed against 16 frames of
-  the original's own pixels at 0.0007 deg worst residual - and this is now
-  ported as `SPEED_FOV_GAIN_DEG`, composing with (not replacing) the
-  invented `BoostFovKick`.
-  [projection-vs-the-original.md](docs/rendering/projection-vs-the-original.md).
-- `exhaust::BLEND` (`SrcAlpha`) measures better than the recovered
-  `GU_FIX`/`GU_FIX` blend and is kept for that reason alone, not because it
-  is understood - putting the plume back on the recovered blend restores the
-  authored rim at 29x the original's orange pixel count. A term in the
-  recovered blend chain is still missing; **do not "fix" it back** without
-  re-running exhaust.md's table.
-- Colour space is settled:
-  [ADR-0020](docs/architecture/adr/0020-gamma-authoritative-colour-space.md)
-  makes gamma authoritative, the GE being the specification every recovered
-  blend equation is defined on.
-- `BoostFovKick` and `FLARE_ASPECT` are confirmed **inventions of this
-  project**, not reimplementations of anything on the disc - do not retune
-  either against the original's own numbers.
-
-**Capturing a boost has several silent failure modes**, all recorded on
-[exhaust.md](docs/ghidra/functions/psp-pulse-usa/exhaust.md): `OAG_SHOT_DISPLAY`
-must be set or the capture records nothing at all; a craft placed on a pad by
-on-ring approach can miss it by ~8 units and needs `--settle 30`, checked
-against `grounded`/`boost_timer` rather than trusted; every input
-(`--pose-intensity`, `--pose-speed`, `--pose-boost`) must be pinned together
-or the comparison is invalid; a matched-pose *reference* frame from the
-emulator itself remains unobtainable after three failed capture routes -
-`PPSSPPHeadless --graphics=software` is the untried one. The bright pass is
-unimplemented, and **the PSP has no programmable shaders at all**, so "find
-the shader" is the wrong search.
-
-### The engine/title split (2026-08-09, all seven stages)
-
-**Finished.** [ADR-0022](docs/architecture/adr/0022-title-packages.md) and
-[workspace-layout.md](docs/architecture/workspace-layout.md) are the durable
-record, governed by one rule: a byte stream's decoding lives in
-`oag-formats`, keyed on the file's own version word, while what a title
-*ships* lives in a title package (`oag-pulse`, later `oag-pure`) -
-`oag-formats` must never depend on a title crate, since the reverse edge is a
-cycle.
-
-Landed: `oag-title` (`Title`/`ArchiveCandidates`/`ForeignSerial`, types
-only), `oag-pulse` (Pulse's presentation tables), `oag-assets::source`
-(the title-taking mechanism, tested against a fixture title so the crate no
-longer depends on Pulse's own constants) - both new crates are in
-`scripts/check-dependency-rules.py`'s `GAMEPLAY_CRATES`, validated against
-`cargo metadata` so a crate cannot be listed ahead of its own creation.
-`Archives::read_image` became `oag_pulse::read_image`; the Pure deny-list
-moved from a hardcoded `OTHER_TITLES` to `Title::foreign_serials`, which
-rules a source *out*, never in.
-
-Class-id decoding (`vex::classes`, `fog`/`pvs`/`collision`/`track`) now keys
-on the file's own version word rather than refusing Pure's five-rung ladder
-or its three added attributes. The handling schema was enumerated in full
-across both discs in one pass
-(`crates/pure/tests/handling_schema_ground_truth.rs`) instead of found one
-field at a time, because a survey cannot see an element that is not there -
-`<pitch>` is now optional, and the same pass found a Pure file with **no**
-`<Class>` blocks at all, whose six parameter blocks the decoder had been
-silently dropping. Presentation tables moved into `oag-pulse`'s six modules,
-with `oag-render` gaining `oag-pulse` as a normal dependency - the sanctioned
-reverse edge rule 1 anticipated. The physics seam is stated in four module
-docs but deliberately **not** moved: relocating M4's live-blocker constants
-mid-investigation is the one part of this refactor with real downside, and
-`Course::START_LINE_OFFSET` could not even be filed, which is itself the
-finding (confidence 65, stands in for a computation nobody has read).
-[ADR-0023](docs/architecture/adr/0023-boot-sequence-as-title-data.md)
-supersedes ADR-0022 item 4 for the boot sequence alone: both titles were
-cold-booted and a front-end XML's declared entry point turned out not to be
-its runtime's on Pulse, so the order is a per-title `Measured`/`Declared`
-table rather than something the data alone can derive.
-
-**Stage 3's pre-swizzle precondition was checked, and it failed.** The claim
-was that `Texture` payload `+0x06` bit 0 is font-atlas-only in Pulse; it is
-set on 88 of 5,375 `Texture` nodes on the Pulse PSP pressing and 120 of 8,972
-on the PS2 one, on ship liveries, glass, engine and environment maps.
-[pure-status.md](docs/formats/pure-status.md) carries the correction and the
-open question - whether the original Pulse claim or the bit's meaning is
-wrong. **Do not make `vex::textures` read `+0x06` unconditionally.**
-
-**Decisions not silently reversed**: no `trait Game`, no `enum Title`
-dispatch, no plugin registry, no `oag-psp`/`oag-ps2` crates (ADR-0004
-stands). A `None` in a class table means "not recovered", never "absent from
-the format"; the foreign-serial lists rule a source out, never in, or a real
-player's own legitimate pressing gets hard-rejected.
 
 ## Open threads
 
@@ -620,10 +474,6 @@ writers in it at the same time:
   delete a thread that is closed or stale, never one still carrying open
   work. Never merge numbers into a new total that does not already appear
   merged on the page they came from.
-- **`git-commit` does not isolate a pathspec - it commits everything staged.**
-  `git add <paths> && git-commit` silently sweeps whatever another writer staged
-  in between; it has happened twice. Check `git diff --cached --name-only`
-  immediately before every commit.
 - **`git stash push -- <pathspec>` has the same failure, one level earlier:
   it captures a listed file's *entire* working-tree diff, not the hunks one
   writer actually made.** 2026-08-25. A session isolating its own edits into a
@@ -963,7 +813,7 @@ and the `ffmpeg`/`ffprobe`/GStreamer traps on
 [frontend-boot.md](docs/architecture/frontend-boot.md). What is left is this
 machine and this checkout.
 
-- `data/` is on `ecryptfs`. **`cp --reflink` does not work** (copying the images
+- `data/` could be on `ecryptfs`. **`cp --reflink` does not work** (copying the images
   is a real multi-GB copy), and `ls`/`rg` intermittently fail with "permission
   denied" or "no such file" on directories that plainly exist. `fd`, `find` and
   absolute paths work.
@@ -1215,12 +1065,3 @@ available.
 **Two standing rules.** When the determinism test fails, find the bug - never
 update the reference constants to make it pass. And never raise a confidence
 score on the strength of the simulation agreeing with itself.
-
-## Reference
-
-The user pointed at <https://www.youtube.com/watch?v=lGAWYHmgo7o> as a
-reasonably high-quality capture of Wipeout Pulse, useful for checking a reading
-against the real thing without setting up an emulator capture. It is not an
-authority over the disc images and Ghidra: it is a recording of someone else's
-playthrough, subject to its own encode and possibly the wrong regional cut.
-Whether Pure has an equivalent is not checked.
