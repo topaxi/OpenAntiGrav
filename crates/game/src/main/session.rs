@@ -250,6 +250,10 @@ pub(crate) struct Shell {
     pub(crate) definition: menu::Definition,
     /// Every raceable circuit and the name to show for it.
     pub(crate) tracks: Vec<(catalogue::Track, String)>,
+    /// Every circuit a Zone race can be picked from, on the same terms as
+    /// [`Self::tracks`] - what the CIRCUIT row shows once MODE is Zone. See
+    /// `boot::Shell::zone_tracks` and [`Self::tracks_for`].
+    pub(crate) zone_tracks: Vec<(catalogue::Track, String)>,
     /// Every team, valued by its id and labelled off the disc's string table.
     ///
     /// A pack's teams are in here too, and indistinguishable from the disc's -
@@ -309,9 +313,22 @@ pub(crate) struct Shell {
 }
 
 impl Shell {
-    /// Which circuit a stored `race.track` names, if this source has it.
-    fn track(&self, id: &str) -> Option<&catalogue::Track> {
-        self.tracks
+    /// The list the CIRCUIT row shows for `mode` - [`Self::zone_tracks`] under
+    /// Zone, [`Self::tracks`] otherwise. The one place that dispatch is made,
+    /// so the row drawn, the row seeded and the circuit a launched race
+    /// resolves against cannot disagree about which list is current.
+    pub(crate) fn tracks_for(&self, mode: oag_race::Mode) -> &[(catalogue::Track, String)] {
+        if mode == oag_race::Mode::Zone {
+            &self.zone_tracks
+        } else {
+            &self.tracks
+        }
+    }
+
+    /// Which circuit a stored `race.track` names, if this source has it on
+    /// the list `mode` shows.
+    fn track(&self, mode: oag_race::Mode, id: &str) -> Option<&catalogue::Track> {
+        self.tracks_for(mode)
             .iter()
             .map(|(track, _)| track)
             .find(|track| track.id == id)

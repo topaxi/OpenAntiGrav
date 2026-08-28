@@ -356,11 +356,26 @@ pub fn all_teams(documents: &[String]) -> Vec<Team> {
 /// pack they do not have. Callers filter on
 /// [`oag_assets::Archives::locate`] of [`Track::entry_name`] for that
 /// reason - the check belongs where the archives are, not here.
+///
+/// [`all_tracks_of_kind`] with `"Race"`.
 #[must_use]
 pub fn all_tracks(documents: &[String]) -> Vec<Track> {
+    all_tracks_of_kind(documents, "Race")
+}
+
+/// Every circuit of one `type` across `documents`, the first spelling of an id
+/// winning.
+///
+/// [`all_tracks`] is this with `"Race"`. A caller that knows its title's Zone
+/// circuits are declared apart from the race ones -
+/// [`oag_title::ZoneCircuit::Separate`] - asks for `"Zone"` instead, the same
+/// dispatch [`oag_title::ZoneCircuit::menu_tracks`] makes on the caller's
+/// behalf.
+#[must_use]
+pub fn all_tracks_of_kind(documents: &[String], kind: &str) -> Vec<Track> {
     let mut out: Vec<Track> = Vec::new();
     for document in documents {
-        for track in tracks(document) {
+        for track in tracks_of_kind(document, kind) {
             if !out.iter().any(|seen| seen.id == track.id) {
                 out.push(track);
             }

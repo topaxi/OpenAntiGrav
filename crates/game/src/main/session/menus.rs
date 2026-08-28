@@ -86,9 +86,14 @@ impl Session {
         // screen and what the buttons do cannot disagree.
         model.set_strip_layout(skin.strip().is_some());
         // Supplied before seeding, because a value cannot be seeded onto a list
-        // that is not there yet.
+        // that is not there yet. The race list or the Zone one, matching
+        // whichever `race.mode` is already saved - so a menu reopened on a
+        // saved Zone setting shows the Zone list from the first frame, not
+        // just after the row is next touched. See `Self::race_mode` and
+        // `Self::resupply_tracks_for_mode`, which keeps the two in step
+        // whenever MODE changes while the menus stay open.
         let tracks: Vec<menu::Choice> = shell
-            .tracks
+            .tracks_for(self.race_mode())
             .iter()
             .map(|(track, name)| menu::Choice::labelled(&track.id, name))
             .collect();
@@ -305,6 +310,47 @@ impl Session {
         }
     }
 
+    /// The mode `race.mode` currently names, defaulting the way the menu's
+    /// own row does when the setting names one this build does not have -
+    /// see `oag_race::Mode::from_name`'s own docs. Used to pick which list
+    /// the CIRCUIT row shows; a race actually being launched reads the
+    /// resolved [`oag_race::Options::mode`] instead, which additionally
+    /// preserves an in-flight value across an unrecognised token rather than
+    /// defaulting it.
+    fn race_mode(&self) -> oag_race::Mode {
+        oag_race::Mode::from_name(&self.settings.race.mode).unwrap_or_default()
+    }
+
+    /// Re-supplies the CIRCUIT row from whichever list the current
+    /// `race.mode` names, without touching any other row.
+    ///
+    /// **This is the fix for the menu offering all 24 circuits in Zone
+    /// mode.** The row's list was supplied once in [`Self::open_menus`] and
+    /// nothing told it again when MODE changed - `Menu::supply` only runs at
+    /// menu-open, and a `Menu::seed` on `race.mode` changes what the row is
+    /// *set to*, never what it may be set to. Called from
+    /// [`Session::apply_setting`] whenever `race.mode` is the setting that
+    /// changed, so this is the one other place `ValueSource::Tracks` is
+    /// supplied outside a fresh menu build - and it has to pick the same list
+    /// [`Self::open_menus`] would have, which is what [`Shell::tracks_for`]
+    /// is for.
+    ///
+    /// A no-op when the menus are not open (no `Stage::Menu`) or nothing has
+    /// loaded a shell yet - both real states elsewhere in this module, not
+    /// oversights here.
+    pub(crate) fn resupply_tracks_for_mode(&mut self) {
+        let mode = self.race_mode();
+        let Some(shell) = &self.shell else { return };
+        let tracks: Vec<menu::Choice> = shell
+            .tracks_for(mode)
+            .iter()
+            .map(|(track, name)| menu::Choice::labelled(&track.id, name))
+            .collect();
+        if let Stage::Menu(stage) = &mut self.stage {
+            stage.menu.supply(menu::ValueSource::Tracks, &tracks);
+        }
+    }
+
     /// Acts on one thing the menus did.
     pub(crate) fn handle_menu(&mut self, event: &menu::MenuEvent) {
         match event {
@@ -335,16 +381,32 @@ impl Session {
                     warn!("no disc image has been chosen yet, so there is nothing to race");
                     return;
                 };
+                // Resolved before the circuit below, and out of its usual
+                // order beneath the class and difficulty rows: which list a
+                // stored circuit is checked against - the race one or the
+                // Zone one - depends on it, the same way the CIRCUIT row
+                // itself switches lists on this setting. An unrecognised
+                // token leaves the previous mode in place rather than
+                // substituting one, so a settings file from a build with a
+                // mode this one does not have still races - and still checks
+                // the circuit against whichever list that leftover mode
+                // implies.
+                if let Some(mode) = oag_race::Mode::from_name(&self.settings.race.mode) {
+                    race_options.mode = mode;
+                }
                 let chosen = self.shell.as_ref().and_then(|shell| {
                     shell
-                        .track(&self.settings.race.track)
+                        .track(race_options.mode, &self.settings.race.track)
                         .or_else(|| {
                             warn!(
                                 "this source does not offer {:?}; racing the first \
                                  circuit it does offer, which is what the menu shows",
                                 self.settings.race.track
                             );
-                            shell.tracks.first().map(|(track, _)| track)
+                            shell
+                                .tracks_for(race_options.mode)
+                                .first()
+                                .map(|(track, _)| track)
                         })
                         .map(catalogue::Track::entry_name)
                 });
@@ -381,13 +443,8 @@ impl Session {
                 if let Some(class) = SpeedClass::from_name(&self.settings.race.class) {
                     race_options.class = class;
                 }
-                // Same shape as the speed class above: an unrecognised token
-                // leaves the previous mode in place rather than substituting
-                // one, so a settings file from a build with a mode this one
-                // does not have still races.
-                if let Some(mode) = oag_race::Mode::from_name(&self.settings.race.mode) {
-                    race_options.mode = mode;
-                }
+                // The mode itself was already resolved above, before the
+                // circuit - see the comment there.
                 // Same shape again: an unrecognised level leaves the previous
                 // one in place rather than substituting a default mid-session.
                 if let Some(difficulty) =

@@ -88,12 +88,13 @@ fn race_circuits(archives: &mut oag_assets::Archives, definition: &str) -> Vec<c
 
 /// The same, for the circuits a Zone race can be run on.
 ///
-/// **The two arrangements, dispatched here rather than inside the catalogue.**
-/// A title whose Zone circuits are the race ones with a prefixed file marks them
-/// with `availableInZone`; a title whose Zone circuits are its own declares them
-/// `type="Zone"`, which the race listing skips. `oag_game::catalogue` offers the
-/// two listings and deliberately does not choose between them - that choice
-/// needs the title in hand, so it belongs to a caller like this one.
+/// **The two arrangements, dispatched through [`ZoneCircuit::menu_tracks`]
+/// rather than by hand here.** A title whose Zone circuits are the race ones
+/// with a prefixed file marks them with `availableInZone`; a title whose Zone
+/// circuits are its own declares them `type="Zone"`, which the race listing
+/// skips. This used to make that choice itself with a `match`; it is the
+/// production dispatch now, so this sweep exercises the same code path a
+/// menu's CIRCUIT row does.
 fn zone_circuits(
     archives: &mut oag_assets::Archives,
     definition: &str,
@@ -103,17 +104,12 @@ fn zone_circuits(
         .read_name(definition)
         .expect("the game plugin definition");
     let xml = oag_formats::fexml::text(&blob).expect("the definition is not shortened");
-    match zone {
-        ZoneCircuit::Prefixed(_) => catalogue::tracks(&xml)
-            .into_iter()
-            .filter(|track| track.available_in_zone)
-            .collect(),
-        ZoneCircuit::Separate(_) => catalogue::tracks_of_kind(&xml, "Zone"),
-        ZoneCircuit::SameCircuit => unreachable!(
-            "none of the three disc-backed titles this sweep covers is 2048, the \
-             only one with no Zone-specific environment"
-        ),
-    }
+    let race_tracks = catalogue::tracks(&xml);
+    zone.menu_tracks(
+        &race_tracks,
+        |track| track.available_in_zone,
+        |kind| catalogue::tracks_of_kind(&xml, kind),
+    )
 }
 
 /// **The load-correctness claim, swept over every circuit Pulse declares.**

@@ -79,6 +79,44 @@ pub(super) fn load_tracks(
     tracks
 }
 
+/// Reads the circuits a Zone race can be picked from, the same way
+/// [`load_tracks`] reads the ones a normal race can - and filtered against
+/// the archives the same way, for the same reason: a pack can declare a Zone
+/// circuit without shipping its geometry.
+///
+/// The dispatch itself - filtering `race_tracks` by `availableInZone` against
+/// asking the definitions for `type="Zone"` entries instead - is
+/// [`oag_title::ZoneCircuit::menu_tracks`]'s; this is only the loading and
+/// reporting around it, on the same terms [`load_tracks`] already sets.
+pub(super) fn load_zone_tracks(
+    archives: &mut oag_assets::Archives,
+    zone: oag_title::ZoneCircuit,
+    race_tracks: &[crate::catalogue::Track],
+    documents: &[String],
+    report: &mut Vec<String>,
+) -> Vec<crate::catalogue::Track> {
+    let declared = zone.menu_tracks(
+        race_tracks,
+        |track| track.available_in_zone,
+        |kind| crate::catalogue::all_tracks_of_kind(documents, kind),
+    );
+    let declared_count = declared.len();
+    let tracks: Vec<_> = declared
+        .into_iter()
+        .filter(|track| archives.locate(&track.entry_name()).is_some())
+        .collect();
+
+    if tracks.len() != declared_count {
+        report.push(format!(
+            "dlc: {} declared zone circuit(s) have no geometry on this source; a pack \
+             they belong to is not mounted",
+            declared_count - tracks.len()
+        ));
+    }
+    report.push(format!("{} zone circuit(s) offered", tracks.len()));
+    tracks
+}
+
 /// Reads the roster out of [`definitions`], the same way [`load_tracks`] reads
 /// the circuits.
 ///

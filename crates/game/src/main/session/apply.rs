@@ -382,7 +382,15 @@ impl Session {
                     return;
                 }
             },
-            "race.mode" => self.settings.race.mode = text,
+            "race.mode" => {
+                self.settings.race.mode = text;
+                // The CIRCUIT row's own list depends on this setting - Zone
+                // circuits for a title whose Zone environments are separate
+                // from its race ones, the race list otherwise - and nothing
+                // else re-supplies it when MODE changes underneath an open
+                // menu. See `Session::resupply_tracks_for_mode`.
+                self.resupply_tracks_for_mode();
+            }
             "race.class" => self.settings.race.class = text,
             "race.team" => self.settings.race.team = text,
             "race.track" => self.settings.race.track = text,

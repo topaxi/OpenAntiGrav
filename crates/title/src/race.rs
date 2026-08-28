@@ -563,6 +563,48 @@ impl ZoneCircuit {
             Self::SameCircuit => race_default.to_string(),
         }
     }
+
+    /// Which circuits a menu's CIRCUIT row should offer when Zone is the
+    /// selected mode, given every circuit a normal race offers.
+    ///
+    /// **The dispatch this axis exists for, and the reason it takes closures
+    /// instead of a definition to parse itself.** [`Self::Prefixed`] filters
+    /// `race_tracks` down to the ones flagged `availableInZone`, because on
+    /// such a title the Zone circuits *are* the race ones, just missing the
+    /// prefixed file for eight of Pulse's twenty-four; [`Self::Separate`]
+    /// asks `of_kind("Zone")` instead, because Pure and HD declare their four
+    /// Zone circuits as entries of their own, outside the race listing
+    /// entirely; [`Self::SameCircuit`] hands `race_tracks` back unfiltered,
+    /// the same list a race offers, because 2048 runs Zone on whichever
+    /// circuit is already picked.
+    ///
+    /// Generic over `T` and closures rather than naming
+    /// `oag_game::catalogue::Track` and calling `oag_game::catalogue`
+    /// directly: `oag-title` sits beneath `oag-game` in the dependency graph
+    /// (`docs/architecture/workspace-layout.md`) and must not reach up to it.
+    /// `available_in_zone` and `of_kind` are the two questions
+    /// `crates/game/tests/zone_ground_truth.rs` asked by hand, once per
+    /// title, before this method existed; this is that dispatch moved to the
+    /// one place that has to agree with itself everywhere it is asked - the
+    /// title axis, not a caller (a ground-truth test, a menu, `--menu-page`)
+    /// repeating the match.
+    #[must_use]
+    pub fn menu_tracks<T: Clone>(
+        self,
+        race_tracks: &[T],
+        available_in_zone: impl Fn(&T) -> bool,
+        of_kind: impl FnOnce(&str) -> Vec<T>,
+    ) -> Vec<T> {
+        match self {
+            Self::Prefixed(_) => race_tracks
+                .iter()
+                .filter(|track| available_in_zone(track))
+                .cloned()
+                .collect(),
+            Self::Separate(_) => of_kind("Zone"),
+            Self::SameCircuit => race_tracks.to_vec(),
+        }
+    }
 }
 
 /// Whether two entry names address the same archive entry.
@@ -694,5 +736,86 @@ mod tests {
         let track = r"Data\art\published\environments\altima\track.vex";
         assert_eq!(zone.variant_of(track), track);
         assert_eq!(zone.default_track(track), track);
+    }
+
+    /// A stand-in for `oag_game::catalogue::Track`, carrying only the two
+    /// facts [`ZoneCircuit::menu_tracks`] asks about: an id to tell the
+    /// results apart by, and whether a race circuit is zone-available. This
+    /// module cannot depend on `oag-game` to use the real type - see
+    /// [`ZoneCircuit::menu_tracks`]'s own docs.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    struct StubTrack {
+        id: &'static str,
+        available_in_zone: bool,
+    }
+
+    /// [`ZoneCircuit::Prefixed`] filters the race list down to the circuits
+    /// flagged `availableInZone`, in place, and never calls `of_kind` - a
+    /// title on this shape has no `type="Zone"` entries to ask for.
+    #[test]
+    fn prefixed_filters_the_race_list_by_available_in_zone() {
+        let race_tracks = [
+            StubTrack {
+                id: "16_Track",
+                available_in_zone: true,
+            },
+            StubTrack {
+                id: "01_Track",
+                available_in_zone: false,
+            },
+        ];
+        let offered = PULSE.menu_tracks(
+            &race_tracks,
+            |track| track.available_in_zone,
+            |kind| panic!("Prefixed should never ask of_kind({kind:?})"),
+        );
+        assert_eq!(offered, [race_tracks[0].clone()]);
+    }
+
+    /// [`ZoneCircuit::Separate`] ignores the race list entirely and asks
+    /// `of_kind("Zone")` instead - the title's own Zone circuits are declared
+    /// apart from the race ones, not marked among them.
+    #[test]
+    fn separate_asks_of_kind_zone_and_ignores_the_race_list() {
+        let race_tracks = [StubTrack {
+            id: "01_Vineta_K",
+            available_in_zone: false,
+        }];
+        let zone_tracks = vec![StubTrack {
+            id: "01_Zone",
+            available_in_zone: false,
+        }];
+        let offered = PURE.menu_tracks(
+            &race_tracks,
+            |_| panic!("Separate should never ask available_in_zone"),
+            |kind| {
+                assert_eq!(kind, "Zone");
+                zone_tracks.clone()
+            },
+        );
+        assert_eq!(offered, zone_tracks);
+    }
+
+    /// [`ZoneCircuit::SameCircuit`] hands the race list back unfiltered - 2048
+    /// runs Zone on whichever circuit is already picked, so the menu offers
+    /// exactly the same circuits it would for any other mode.
+    #[test]
+    fn same_circuit_offers_the_race_list_unfiltered() {
+        let race_tracks = [
+            StubTrack {
+                id: "altima",
+                available_in_zone: false,
+            },
+            StubTrack {
+                id: "sebenco",
+                available_in_zone: false,
+            },
+        ];
+        let offered = ZoneCircuit::SameCircuit.menu_tracks(
+            &race_tracks,
+            |_| panic!("SameCircuit should never ask available_in_zone"),
+            |kind| panic!("SameCircuit should never ask of_kind({kind:?})"),
+        );
+        assert_eq!(offered, race_tracks);
     }
 }

@@ -235,6 +235,21 @@ impl Pending {
                     )
                 })
                 .collect(),
+            zone_tracks: boot_shell
+                .zone_tracks
+                .iter()
+                .map(|track| {
+                    (
+                        track.clone(),
+                        catalogue::label(
+                            track,
+                            &boot_shell.circuit_names,
+                            &boot_shell.strings,
+                            &boot_shell.zone_tracks,
+                        ),
+                    )
+                })
+                .collect(),
             languages: boot_shell
                 .languages
                 .iter()

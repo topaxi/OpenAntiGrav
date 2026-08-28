@@ -292,6 +292,12 @@ pub struct Shell {
     pub strings: StringTable,
     /// The raceable circuits, for the menus.
     pub tracks: Vec<crate::catalogue::Track>,
+    /// The circuits a Zone race can be picked from, on the same terms as
+    /// [`Self::tracks`] - resolved once here rather than by re-parsing the
+    /// definitions when the CIRCUIT row's mode changes, the same reason
+    /// [`Self::tracks`] is resolved here rather than per menu-open. See
+    /// [`oag_title::ZoneCircuit::menu_tracks`].
+    pub zone_tracks: Vec<crate::catalogue::Track>,
     /// The chosen language's string-table entry, when it names one.
     ///
     /// Carried because the loading screen needs the *other copies* of it: two
@@ -517,6 +523,13 @@ pub fn load_shell(options: &Options) -> Result<(Shell, oag_assets::Archives)> {
     let definition = title.plugin_definition;
     let documents = definitions(&mut archives, definition, &mut report);
     let tracks = load_tracks(&mut archives, definition, &documents, &mut report);
+    let zone_tracks = load_zone_tracks(
+        &mut archives,
+        title.race.zone,
+        &tracks,
+        &documents,
+        &mut report,
+    );
     let teams = load_teams(
         &mut archives,
         (title.race.ship_dir, title.race.handling_dir),
@@ -651,6 +664,7 @@ pub fn load_shell(options: &Options) -> Result<(Shell, oag_assets::Archives)> {
             languages: offered,
             strings,
             tracks,
+            zone_tracks,
             circuit_names,
             teams,
             font,
@@ -995,6 +1009,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         languages,
         strings,
         tracks,
+        zone_tracks: _,
         circuit_names: _,
         teams,
         font,
@@ -1715,7 +1730,7 @@ pub(crate) mod xml;
 use fonts::{load_font, load_menu_font};
 pub use movies::EntryRef;
 use movies::load_movie;
-use roster::{definitions, load_circuit_names, load_teams, load_tracks};
+use roster::{definitions, load_circuit_names, load_teams, load_tracks, load_zone_tracks};
 use xml::expand;
 
 /// The default movie cache directory: `data/cache/movies` in a repository
