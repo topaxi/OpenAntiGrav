@@ -1,4 +1,4 @@
-# 2048 and HD ship an unread `.effectSettings` table that reskins Zone stage by stage
+# 2048 and HD's `.effectSettings` table now parses; wiring it into a race is what remains
 
 2026-08-28. Surfaced while chasing the 2048 Zone bugs this session also fixed
 (`oag_title::ZoneCraft::PlayerShip`, `oag_title::ZoneCircuit::SameCircuit` -
@@ -16,6 +16,16 @@ titles, that this engine has never opened.
 | HD/Fury | `/data/environments/zonemode.effectsettings` | 21,160 B | **One file, title-wide** - not per-circuit at all. |
 | HD/Fury | `/data/environments/zonemodedlc3.effectsettings` | 43,417 B | A second, larger revision, close to 2048's size. |
 | HD/Fury | `/data/environments/detonatormode.effectsettings` | 43,240 B | Same mechanism, Detonator mode. |
+| HD/Fury | `/data/environments/detonatormodedlc3.effectsettings` | 43,230 B | Detonator's DLC3 revision - not listed in this thread's first pass, found while writing the ground truth for the parser below. |
+
+**2026-08-28, later the same day: a parser landed.** `oag_formats::effectsettings`
+([`effectsettings.rs`](../crates/formats/src/effectsettings.rs),
+[docs/formats/effectsettings.md](../docs/formats/effectsettings.md)) reads all
+five files above plus 2048's ten identical copies, validated against the real
+disc/PSARC in `effectsettings_ground_truth.rs`. It reuses `EnvSettings::parse`
+for the tokeniser and adds a stage index/name read off each key's own prefix.
+**Nothing is wired into a race yet** - see Open and Next Steps below, both
+trimmed to what is still actually open.
 
 Plain text, same `"Key.Subkey"=float [float...]` shape `oag_formats::envsettings`
 already parses for `.envsettings` - just never pointed at this extension.
@@ -64,17 +74,14 @@ set (`zoneMode*` and `zoneModeTrack*`) likely pairs with the `Track Paint`
 key block having its own colour pair distinct from the general palette, but
 that is a guess from naming, not confirmed.
 
-Nothing in this engine reads any of this. `oag_formats` has no
-`.effectSettings`/`.effectsettings` parser, and neither Zone loader (Pulse's
-`ZoneCraft::ModelsInTeam` path, HD's `ZoneCircuit::Separate`, or 2048's new
-`ZoneCircuit::SameCircuit`) wires a stage lookup in. A Zone race in this
-engine currently looks identical to an ordinary race on every title except
-for the HUD and the ship-model swap Pulse alone does.
+**The table now parses, and nothing still reads it at runtime.** Neither Zone
+loader (Pulse's `ZoneCraft::ModelsInTeam` path, HD's `ZoneCircuit::Separate`,
+or 2048's new `ZoneCircuit::SameCircuit`) wires a stage lookup in yet. A Zone
+race in this engine still looks identical to an ordinary race on every title
+except for the HUD and the ship-model swap Pulse alone does.
 
 ## Open
 
-- No `oag_formats` parser exists for this extension. `envsettings.rs` is the
-  right sibling to model it on - same tokeniser, different key set.
 - The stage-index <-> zone-number mapping is inferred from the names alone
   (`"Zone N <Name>"` / `"N <Name>"`), not checked against `Zone_Update`'s own
   10-second-per-step timer (`docs/gameplay/race-modes.md#zone`,
@@ -104,17 +111,14 @@ for the HUD and the ship-model swap Pulse alone does.
 
 ## Next Steps
 
-- Write a small `oag_formats::effectsettings` parser (or extend
-  `envsettings.rs` to take the key set as a parameter) for the
-  `"Key.Subkey"=floats` format, validated against all four files above plus
-  2048's ten identical copies.
 - Cross-reference the stage-name ladder against `Zone_Update`'s recovered
   timer logic to settle whether stage `N` is live exactly while the zone
   counter reads `N`, before wiring anything that assumes it.
-- Once parsed, wire the current stage's fog/sky/ambient into the renderer for
-  one title as a proof of concept - HD is the best-measured target, since its
-  `.envsettings` reading and drawing path already exists
-  (`docs/formats/envsettings.md`) and this is the same shape.
+- Wire the current stage's fog/sky/ambient into the renderer for one title as
+  a proof of concept, once the timer cross-reference above settles - HD is
+  the best-measured target, since its `.envsettings` reading and drawing path
+  already exists ([envsettings.md](../docs/formats/envsettings.md)) and this
+  is the same shape.
 - Decode one `zoneMode0.gtf` (or `.gxt`) to see what the texture actually is;
   that settles what `Growing Texture` is for.
 - Look for an analogous per-stage table on Pulse and Pure before concluding
