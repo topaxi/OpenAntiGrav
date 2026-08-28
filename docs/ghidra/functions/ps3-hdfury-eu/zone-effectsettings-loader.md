@@ -230,11 +230,32 @@ corroboration that a fifteen-stage table gets reversed under *some*
 condition on both titles - it does not confirm what the condition means on
 either one; that stays open on both pages.
 
-**Next step for whoever picks this up**: read `_opd_FUN_005de2d0` to settle
-whether the cached resource actually is a texture (versus something more
-generic the name search happened to land on); trace what sets the reversal
-flag at `iVar12 + 0x1bc, +0x1b5` to test the "reversed circuit" hypothesis
-against a second, independent binary.
+**Settled: it is a texture, not a generic resource.** `_opd_FUN_005de2d0`
+(`0x005de2d0`), the function `Resource_GetOrCreateByName` calls on a cache
+miss, carries two unambiguous format strings read directly from memory:
+`"ERROR: Can't load placeholder texture %s\n"` (`0x007cdb90`) and
+`"WARNING: Can't load %s, using default texture\n"` (`0x007cdbc0`, followed
+in memory by a stray `.gtf` constant). Its own control flow matches a
+texture loader with fallback exactly: a probe call
+(`_opd_FUN_005d9610`, unread) decides found-versus-not; not-found either
+errors (if the *placeholder* itself failed to load) or warns and recursively
+calls `Resource_GetOrCreateByName` with the placeholder's own name instead;
+found falls through to construct the real resource via a chain of indirect
+(vtable) calls ending in GCM-texture-shaped bit-packed flags
+(`0x2000000 | 0x1e80`-style constants, the same family `oag_formats::gtf`
+(`docs/formats/gtf.md`) already decodes from this title's own `.gtf` files)
+and a refcount increment. **Renamed, in
+`names.tsv`**: `Texture_LoadWithFallback` (80) - and
+`Resource_GetOrCreateByName`'s own confidence moved from 65 to **72** now
+that its one exercised call site is confirmed rather than merely plausible,
+crossing the `_q` threshold.
+
+**What is still open, for whoever picks this up next**: `_opd_FUN_005d9610`
+itself (the found/not-found probe) is unread; and the "reversed circuit"
+cross-title corroboration above is still just a shape match - tracing what
+sets the reversal flag at `iVar12 + 0x1bc, +0x1b5` would test that
+hypothesis against a second, independent binary rather than leave it resting
+on 2048's side alone.
 
 ## Tooling note: `program` parameter is unreliable across the two PS3/Vita programs
 

@@ -409,6 +409,19 @@ hedge into a confirmed mechanism (nothing in either branch of
   under its own "plausibly reversed circuit" flag - independent corroboration
   that *something* gets reversed on both titles, not of what the flag means
   on either one.
+
+  **2026-08-28, later the same day: confirmed it's a texture, not a generic
+  resource.** `_opd_FUN_005de2d0`, the cache-miss path `Resource_GetOrCreateByName`
+  calls, carries two unambiguous strings read directly from memory:
+  `"ERROR: Can't load placeholder texture %s"` and `"WARNING: Can't load %s,
+  using default texture"`, plus a fallback-to-placeholder recursion and a
+  GCM-texture-flag-shaped resource construction on the found path. **Renamed**:
+  `Texture_LoadWithFallback` (80); `Resource_GetOrCreateByName`'s own
+  confidence moved 65 -> 72, crossing the `_q` threshold now that its one
+  exercised call site is confirmed rather than plausible. **Still open**:
+  `_opd_FUN_005d9610` (the found/not-found probe both paths key off) is
+  unread, and the reversal-flag's exact meaning is still just a cross-title
+  shape match, not traced to its write site on either title.
 - Worth checking against the user's own play on one of the four ported
   `zone_N` circuits in Zone or Detonator mode: a visible symptom (no fog, no
   palette shift, a black/flat scene) would corroborate "the blend math runs

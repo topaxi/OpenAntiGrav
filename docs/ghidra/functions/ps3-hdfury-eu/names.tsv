@@ -135,4 +135,5 @@
 0x006255f8	function	Scream_DoGrainGoto	80	sound.md
 0x00625e88	function	Scream_DoGrainAlternate	80	sound.md
 0x003d6dc8	function	Environment_LoadStageTextures	72	zone-effectsettings-loader.md
-0x005dde98	function	Resource_GetOrCreateByName	65	zone-effectsettings-loader.md
+0x005dde98	function	Resource_GetOrCreateByName	72	zone-effectsettings-loader.md
+0x005de2d0	function	Texture_LoadWithFallback	80	zone-effectsettings-loader.md
