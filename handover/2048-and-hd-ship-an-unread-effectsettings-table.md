@@ -86,7 +86,8 @@ ladder, a dense small grid at `Supersonic`. So the "Track" set is where
 `Growing Texture`'s real art lives; the "general" set is a placeholder. 2048's
 own byte pattern matches exactly - `zoneMode*.gxt` all identical,
 `zoneModeTrack*.gxt` all distinct - checked without decoding either, since
-both use an undecoded format (`0x0c`, `U4U4U4U4` - see Open). Whether the
+both use an undecoded format (`0x0c`, `U8U8U8U8` - corrected 2026-08-28 from
+an earlier `U4U4U4U4` mislabel, see Open). Whether the
 `Track Paint` key block pairs with the "Track" texture set by more than name
 is still a guess.
 
@@ -160,12 +161,21 @@ except for the HUD and the ship-model swap Pulse alone does.
   HD executable has been read for its Zone shader. **2048's own copy
   couldn't be decoded, but its byte pattern already corroborates the same
   split**: `zoneMode*.gxt` all identical, `zoneModeTrack*.gxt` all distinct
-  - checked from raw bytes alone. Both sets carry format byte `0x0c`
-  (`SceGxmTextureBaseFormat` `U4U4U4U4`), one of the six format codes
+  - checked from raw bytes alone. Both sets carry format byte `0x0c` -
+  **`SceGxmTextureBaseFormat U8U8U8U8`, corrected 2026-08-28 from an earlier
+  `U4U4U4U4` mislabel** in `docs/formats/gxt.md`'s own table, found while
+  chasing this exact decode: the raw `format`, `0x0c001000`, bitwise-matches
+  `U8U8U8U8 | SceGxmTextureSwizzle4Mode::ARGB` against the public vitasdk
+  headers, `0x0c000000 | 0x00001000`, corroborated two ways (the enum's own
+  ordering and the exact bit match) - one of the six format codes
   `docs/formats/gxt.md` already catalogues (99 of 9,910 files) but leaves
-  undecoded - its channel/swizzle order is unread there, so decoding it here
-  on a guess would risk exactly the wrong-picture trap `CLAUDE.md` warns
-  against. What 2048's own "Track" art depicts is still open.
+  undecoded. **Not just a channel-order question**: `U8U8U8U8` needs no
+  block math, but whether its four bytes a texel read raster or the same
+  Morton/twiddle order `.gxt`'s own `UBC2` reader needs is unset by anything
+  in the file (`type` at descriptor `+0x10` is `0` on these textures, the
+  same value that told the `UBC2` reticle nothing and had to be settled by
+  decoding both ways and looking at the picture). What 2048's own "Track"
+  art depicts is still open.
 
 ## Next Steps
 
@@ -177,12 +187,15 @@ except for the HUD and the ship-model swap Pulse alone does.
   the best-measured target, since its `.envsettings` reading and drawing path
   already exists ([envsettings.md](../docs/formats/envsettings.md)) and this
   is the same shape.
-- Add `SceGxmTextureBaseFormat` `U4U4U4U4` (byte `0x0c`) to `oag_formats::gxt`
-  to see what 2048's `zoneModeTrack{0..14}.gxt` actually depict - the raw
-  bytes already say they are not blank, matching HD's own "Track" set, so
-  this closes a real picture rather than confirming another placeholder.
-  The channel/swizzle order needs settling first (`gxt.md`'s own open
-  question), ideally against several of the format's other 97 real files
+- Add `SceGxmTextureBaseFormat` `U8U8U8U8` (byte `0x0c`, `ARGB` swizzle - now
+  identified, see above) to `oag_formats::gxt` to see what 2048's
+  `zoneModeTrack{0..14}.gxt` actually depict - the raw bytes already say
+  they are not blank, matching HD's own "Track" set, so this closes a real
+  picture rather than confirming another placeholder. The channel order is
+  now a well-evidenced starting point; **the tiling order (raster vs
+  Morton/twiddle) is the part still genuinely unread** and needs settling
+  the same way `UBC2`'s reticle texture was - decode both ways and see which
+  looks like a picture - ideally against several of the format's other 97 real files
   rather than one alone.
 - Read HD's Zone shader (needs Ghidra RE on `ps3-hdfury-eu`, a much larger
   undertaking than this thread on its own - see

@@ -60,7 +60,7 @@ files the base package ships:
 | `0x86` | `UBC2` (BC2/`DXT23`) | `0x86000000` | 370 | **yes** |
 | `0x85` | `UBC1` (BC1/`DXT1`) | `0x85000000` | 505 | no |
 | `0x87` | `UBC3` (BC3/`DXT45`) | `0x87000000` | 493 | no |
-| `0x0c` | uncompressed (`U4U4U4U4` range) | `0x0c001000` | 99 | no |
+| `0x0c` | `U8U8U8U8` | `0x0c001000` | 99 | no |
 | `0x98` | `U8U8U8` | `0x98001000` | 13 | no |
 
 `UBC2` decodes through `oag_formats::bcn::dxt23` - the same BC2 block math
@@ -75,6 +75,29 @@ non-zero low bits** (`0x001000`) where every `UBC2`/`PVRTC` row's is clean -
 this module reads only the top byte, so what that low-bit pattern means (a
 swizzle/channel-order variant) is unread rather than folded into the format
 name.
+
+**`0x0c` was mislabeled `U4U4U4U4` until 2026-08-28.** Corroborated against
+the public `vitasdk` headers (`psp2/gxm.h`, `SceGxmTextureBaseFormat`) two
+ways rather than one: the enum's own ordering (`U8` at `0x00`, `S8` at `0x01`,
+`U4U4U4U4` at **`0x02`**, ..., `U8U8U8U8` at **`0x0c`**), and the raw `format`
+these files carry, `0x0c001000`, decomposing exactly as
+`SCE_GXM_TEXTURE_BASE_FORMAT_U8U8U8U8 | SCE_GXM_TEXTURE_SWIZZLE4_ARGB` -
+`0x0c000000 | 0x00001000`. The low three bytes are not noise, then: they are
+`SceGxmTextureSwizzle4Mode`, and this title's whole corpus at this format byte
+carries the *same* swizzle (`ARGB`, `0x001000`), not a mix. **Still not
+decoded, and for a reason beyond the channel order**: `U8U8U8U8` is simple
+math - four bytes a texel, no block or bit-packing - but whether those four
+bytes read in raster or the same Morton/twiddle order [`blocks`] uses for
+`UBC2` is unset by anything in the file (`type` at descriptor `+0x10` is `0`
+on the `ZoneMode2048`/`ZoneMode2048Track` textures measured, the same
+uninformative value the `UBC2` reticle texture carried before that question
+was settled by decoding both ways and looking at the picture). Settling both
+questions the way the reticle atlas or `.gtf`'s "ASSEGAI DEVELOPMENTS" text
+settled theirs needs either a `U8U8U8U8` file with less ambiguous art than
+this format byte's own corpus has offered so far, or the same
+both-ways-and-look method applied carefully - a wrong tiling order can
+produce a plausible-looking wrong picture on abstract art the way it briefly
+did on the reticle before the twiddle order was found.
 
 ## `PVRTII4BPP`: PowerVR texture compression, and not the PVRTC-I lookalike
 

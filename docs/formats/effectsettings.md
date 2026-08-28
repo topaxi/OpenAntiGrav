@@ -206,14 +206,22 @@ except for the HUD and the ship-model swap Pulse alone does.
   as HD's "general" set, while `zoneModeTrack{0..14}.gxt` are fifteen
   distinct files, exactly matching HD's "Track" set - checked from the raw
   bytes alone, without needing to decode them. Both sets carry format byte
-  `0x0c` (`SceGxmTextureBaseFormat` "uncompressed `U4U4U4U4`"), one of the
-  six format codes
+  `0x0c` - **`SceGxmTextureBaseFormat U8U8U8U8`, corrected 2026-08-28 from an
+  earlier `U4U4U4U4` mislabel** (`gxt.md`'s own history of the correction)
+  - one of the six format codes
   [gxt.md](gxt.md#the-format-byte-names-a-scegxmtexturebaseformat) already
-  catalogues (99 of 9,910 files disc-wide) but does not decode - its
-  channel/swizzle order is explicitly unread there, so decoding it here on a
-  guess would risk exactly the "plausible-looking stand-in" `CLAUDE.md`
-  warns against. What 2048's own "Track" art actually looks like is still
-  open.
+  catalogues (99 of 9,910 files disc-wide) but does not decode. The raw
+  `format`, `0x0c001000`, bitwise-matches `U8U8U8U8 | SWIZZLE4_ARGB` exactly
+  against the public vitasdk headers, so the channel order is now a
+  well-evidenced hypothesis rather than a blind guess - but **the tiling
+  order is not**: whether the four raw bytes read raster or the same
+  Morton/twiddle order `.gxt`'s own `UBC2` reader needs is unset by anything
+  in the file, the same ambiguity that format's own reticle-texture decode
+  had to settle by trying both and looking at a recognisable picture. This
+  format's own corpus has offered nothing that recognisable yet, so decoding
+  it here on the channel order alone would still risk the tiling half of the
+  "plausible-looking stand-in" `CLAUDE.md` warns against. What 2048's own
+  "Track" art actually looks like is still open.
 - **Wiring a stage's values into a race** - the next concrete step once the
   zone-number correspondence above is settled. HD is the best-measured
   target, since its `.envsettings` reading and drawing path already exists.
