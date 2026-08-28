@@ -41,7 +41,7 @@ Found the same way `lighting.md` and `fog.md` found their classes' sites: among
 the 46 `Vex_RegisterClass` (`0x08908eb8`) call sites, by decompiling each until
 its second argument (the class id) matched. Both binaries' imports carry the
 "unrelocated address constant" wart documented in
-[`psp-pulse-usas-import-carries-unrelocated-address-constants.md`](../../../../handover/psp-pulse-usas-import-carries-unrelocated-address-constants.md)
+[`positional-audio.md`](positional-audio.md#read-this-before-trusting-an-address-on-this-page)
 in this exact region - `Vex_RegisterClass` itself decompiles as
 `func_0x00104eb8`, not by name - so the call sites were found by
 `search_instructions` for a `jal` to that truncated target rather than by

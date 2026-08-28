@@ -381,7 +381,8 @@ The dirty flag is set from bit 22 (`0x400000`) of `entity+0x860`, which reads as
    the evidence supports.
 
    **Still not ported.** `0x08ab0838` is identified: it is the same
-   `DAT_08ab0838` [`shield.md`](shield.md#the-shield-recharge) already reads as
+   `DAT_08ab0838` [`shield.md`](shield.md#the-pool-is-entity--0x88-and-its-maximum-is-skill-indexed)
+   already reads as
    *the HUD object* `Ship_SetShield` passes to `Hud_SetEnergyBar`
    (`0x0881a1c8`) - the shield/energy-bar widget, not a generic "the HUD".
    `FUN_0881a2f0` (renamed nowhere yet, but read in full) releases exactly
