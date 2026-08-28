@@ -137,11 +137,12 @@ except for the HUD and the ship-model swap Pulse alone does.
 [zone-environment-fallback.md](../ghidra/functions/vita-2048-eu-v104/zone-environment-fallback.md))
 is 2048's own per-race environment loader, called once per race from the
 track loader. On the ordinary path it builds exactly the two files this page
-already documents: `<circuit>\ZoneMode2048.effectSettings` and a second,
+already documents, `<circuit>\ZoneMode2048.effectSettings` and a second,
 title-wide `ZoneMode2048default.effectSettings` (a **fourth, previously
-unknown file** - presumably a fallback for a circuit that ships no per-circuit
-copy, though the function that would prove that, `FUN_8104619e`, was not
-opened this pass).
+unknown file**), and loads both independently into a shared resource cache
+(`Environment_LoadEffectSettingsFiles`, confidence 78) - not
+primary-then-fallback, and a missing file is a silent no-op for that one
+insert rather than an error.
 
 **When a circuit has no `art\published\environments\<circuit>\` tree of its
 own, the loader assumes it is one of HD's four ported `zone_N` circuits and
@@ -158,12 +159,46 @@ absent**: none of the five files this section names -
 paths - exist anywhere on the disc, checked directly against all three
 packages (base, DLC1, DLC2).
 
-**So racing Zone or Detonator on any of the four ported `zone_N` circuits
-loads no effectSettings table at all.** This is not a gap in this project's
-reading; it is the original game's own code reaching for data its own disc
-does not carry. What happens when that load fails - skip the palette,
-something else - is unread; see the evidence page for the exact chain and
-what stops before it.
+**So the code path that would supply a palette on the four ported `zone_N`
+circuits reaches for four files, all of them absent.** This is not a gap in
+this project's reading; it is the original game's own code reaching for data
+its own disc does not carry.
+
+## `Zone_UpdateStage` (`0x81044cfc`) is the real per-stage selection - a second pass, same day
+
+**This is what the "stage-index to zone-number correspondence" bullet below
+was asking about.** `Environment_Load` calls it once at load time, and it is
+also called every frame from 2048's main render-update loop - both call
+sites pass `0`, the local player's own craft. Confidence 80, full evidence
+on [zone-environment-fallback.md](../ghidra/functions/vita-2048-eu-v104/zone-environment-fallback.md):
+
+- Reads a per-craft struct field at `+0x634`, clamps it to `0xc` (**12**) -
+  an exact match against 2048's own `ZoneMode2048.effectSettings` table,
+  which names exactly thirteen stages, `0`-`12`.
+- Indexes a table (`DAT_816c4890`, stride `0x59` words = 356 bytes, one row
+  per stage) by that clamped value and **cross-fades** it against the next
+  stage's row using a separate blend factor - so the visual transition
+  between stages is a smooth interpolation, not a hard cut.
+- Fires `"ZONE_Wave"`/`"ZONE_Pulse"` named cues when the stage (or a related
+  `+0x638`-derived counter) changes.
+- **Keeps running every frame on the four unshipped-palette circuits too** -
+  the per-frame call is gated on whether *any* environment path was probed
+  successfully at load time, not on whether the effectSettings file itself
+  loaded. So there is no crash and no skip on those circuits: the blend math
+  runs against whatever is already resident at `DAT_816c4890`, which nothing
+  traced this pass ever writes for them specifically - plausibly
+  zero-initialised `.bss` on a cold boot, not verified.
+
+**What this does not settle**: the struct `+0x634` belongs to was not
+identified, so its relationship to a `RaceState::zone`-shaped counter this
+project already tracks for the other three titles
+([zone-mode.md](../ghidra/functions/psp-pulse-usa/zone-mode.md)) is open, and
+no write site for `+0x634` was found - only that its *read range* matches
+the table exactly. Whether `DAT_816c4890`'s rows are the parsed
+`ZoneMode2048.effectSettings` data, or something built from it, is also
+unread: `Environment_LoadEffectSettingsFiles` inserts the raw file into a
+*different* cache, and the link from that cache to `DAT_816c4890` was not
+traced.
 
 ## Open
 
@@ -186,12 +221,17 @@ what stops before it.
   three"). That is strong evidence the effectsettings ladder **is** the same
   thing `SpeedClass`/`NextSpeedClass` names and this announcer voices - see
   `psp-audio.md#speech_zonebnk-names-the-zone-announcer-one-ladder-per-title`
-  and `crates/hd/src/race.rs`'s `ZONE_ANNOUNCER`. **What it does not
-  establish**: what selects a row at runtime, or whether the index is the raw
-  `RaceState::zone` counter (uncapped, per `crates/race/src/zone.rs`) or
-  something derived from it - HD's own executable has not been read for
-  this. Per `CLAUDE.md`'s rule that a trigger needs recovering before an
-  effect is wired, this stays unwired.
+  and `crates/hd/src/race.rs`'s `ZONE_ANNOUNCER`. **Sharpened further, same
+  day, on 2048 rather than HD**: `Zone_UpdateStage`
+  (`0x81044cfc` -
+  [zone-environment-fallback.md](../ghidra/functions/vita-2048-eu-v104/zone-environment-fallback.md))
+  reads a per-craft field, clamps it to `12`, and that clamp is an exact
+  match against 2048's own thirteen-stage table - real selection logic,
+  found and named. **What it still does not establish**: what struct that
+  field belongs to, what writes it, or whether HD's own selection works the
+  same way - no write site was found, and this is 2048's executable, not
+  HD's. Per `CLAUDE.md`'s rule that a trigger needs recovering before an
+  effect is wired, this stays unwired until the write side closes the loop.
 - **2048's table names 13 stages but the title ships 15 textures in each
   set** - still unexplained, though sharpened by the texture-content finding
   below: the "Track" set is where the real per-stage art lives on both
@@ -270,8 +310,10 @@ what stops before it.
   "plausible-looking stand-in" `CLAUDE.md` warns against. What 2048's own
   "Track" art actually looks like is still open.
 - **Wiring a stage's values into a race** - the next concrete step once the
-  zone-number correspondence above is settled. HD is the best-measured
-  target, since its `.envsettings` reading and drawing path already exists.
+  write side of `Zone_UpdateStage`'s `+0x634` field is found (on 2048) or an
+  equivalent is read on HD. HD is still the best-measured *rendering*
+  target, since its `.envsettings` reading and drawing path already exists,
+  but the clearest recovered *selection* logic so far is on 2048.
 
 ## See also
 
