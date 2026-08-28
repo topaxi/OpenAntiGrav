@@ -449,8 +449,11 @@ pub enum ZoneCircuit {
     /// have one.
     ///
     /// **Every Zone circuit this title has, first entry first.** Not one
-    /// string: a caller can still name any of the four directly (Pure's own
-    /// four `type="Zone"` circuits, HD's `zone_1`..`zone_4`), and
+    /// string: a caller can still name any of the four directly - Pure's own
+    /// four `type="Zone"` circuits, HD's `zone_1`..`zone_4` (declared
+    /// `type="Race"` with a `zone="true"` flag instead, not `type="Zone"`;
+    /// see [`Self::menu_tracks`]'s own docs for why the query has to match by
+    /// name rather than by `type`) - and
     /// [`Self::variant_of`] needs the whole list to tell "the player picked a
     /// Zone circuit" from "the player picked a race circuit and this is Zone
     /// mode" - the two cases a menu that always names *something* cannot
@@ -461,7 +464,29 @@ pub enum ZoneCircuit {
     /// Never empty on a title actually wired up this way - see the
     /// `oag_pure`/`oag_hd`/`oag_2048` construction sites, each with its own
     /// evidence for what belongs in the list.
-    Separate(&'static [&'static str]),
+    ///
+    /// **`also_race_circuits` says whether every ordinary race circuit is
+    /// *also* offered in Zone mode, alongside this variant's own four -
+    /// `false` on Pure, `true` on HD/Fury.** This is unverified against the
+    /// executable, unlike everything else on this type: it rests on a
+    /// play-based recollection (2026-08-28) that ordinary HD/Fury circuits -
+    /// Anulpha Pass, Moa Therma among them - carry a "zone pendant" in the
+    /// original menu, which is not something any disc data this codebase
+    /// reads encodes. Two things do corroborate it. First, the four `zone="true"`
+    /// entries are not generic placeholders: read against HD's own string
+    /// table (`DATA06`'s `entries.xml`, the copy that names all 28) they are
+    /// **Pro Tozo, Mallavol, Corridon 12 and Syncopia** - real, distinct
+    /// track names, never declared with a reversed variant the way every one
+    /// of the other twelve is, consistent with being Zone-exclusive content
+    /// rather than the substrate a per-circuit Zone effect would be laid
+    /// over. Second, HD ships a title-wide `zonemode.effectsettings`
+    /// (`/data/environments/zonemode.effectsettings`, plus a
+    /// `zonemodedlc3.effectsettings` revision) that nothing in this engine
+    /// reads yet - the same "any circuit + a colour-grade effect" shape 2048
+    /// confirmed for its own `SameCircuit`. Neither is a decompiled selector;
+    /// see `handover/2048-and-hd-ship-an-unread-effectsettings-table.md`'s
+    /// Open item for what would close this.
+    Separate(&'static [&'static str], bool),
     /// A Zone race runs the exact circuit a race would have, and nothing is
     /// derived or substituted at all. 2048.
     ///
@@ -521,6 +546,14 @@ impl ZoneCircuit {
     /// `zone_track.vex` rather than `zone_zone_track.vex`. `Separate` is
     /// idempotent too, for the same caller-facing reason: a name already in the
     /// list is recognised on the second pass exactly as on the first.
+    ///
+    /// **`also_race_circuits` skips the substitution check entirely** and
+    /// hands the name back unconditionally, the same as `SameCircuit` - on
+    /// a title wired this way, an ordinary race circuit is itself a
+    /// legitimate Zone pick (see [`Self::Separate`]'s own docs), so there is
+    /// nothing left to fall back from. Offering it in the menu and then
+    /// substituting `tracks[0]` underneath it regardless would reproduce
+    /// exactly the bug this method exists to close, one layer further down.
     #[must_use]
     pub fn variant_of(self, track: &str) -> String {
         match self {
@@ -532,12 +565,12 @@ impl ZoneCircuit {
                 }
                 format!("{directory}{prefix}{file}")
             }
-            Self::Separate(tracks) => {
+            Self::Separate(tracks, also_race_circuits) => {
                 debug_assert!(
                     !tracks.is_empty(),
                     "a title wired up as Separate must name at least its own default"
                 );
-                if tracks.iter().any(|&own| paths_match(own, track)) {
+                if also_race_circuits || tracks.iter().any(|&own| paths_match(own, track)) {
                     track.to_string()
                 } else {
                     tracks[0].to_string()
@@ -552,14 +585,16 @@ impl ZoneCircuit {
     /// `race_default` is [`RaceDefaults::track`], which is what a race would
     /// have opened. [`Self::Prefixed`] derives its Zone twin from it, so the
     /// title's opening circuit stays the opening circuit in both modes;
-    /// [`Self::Separate`] ignores it and answers with its own first entry,
-    /// because a race circuit is not a Zone one on those titles and opening it
-    /// would be a normal race wearing the Zone rules.
+    /// [`Self::Separate`] ignores it and answers with its own first entry -
+    /// even when `also_race_circuits` also offers every ordinary circuit in
+    /// the menu, opening on the title's own dedicated Zone circuit first is
+    /// still the best available answer with nothing named yet, on the same
+    /// terms [`RaceDefaults::track`]'s own docs give.
     #[must_use]
     pub fn default_track(self, race_default: &str) -> String {
         match self {
             Self::Prefixed(_) => self.variant_of(race_default),
-            Self::Separate(tracks) => tracks[0].to_string(),
+            Self::Separate(tracks, _) => tracks[0].to_string(),
             Self::SameCircuit => race_default.to_string(),
         }
     }
@@ -572,28 +607,47 @@ impl ZoneCircuit {
     /// `race_tracks` down to the ones flagged `availableInZone`, because on
     /// such a title the Zone circuits *are* the race ones, just missing the
     /// prefixed file for eight of Pulse's twenty-four; [`Self::Separate`]
-    /// asks `of_kind("Zone")` instead, because Pure and HD declare their four
-    /// Zone circuits as entries of their own, outside the race listing
+    /// asks `by_own_names` for the tracks it names itself, because Pure and
+    /// HD each declare their own four Zone circuits outside the race listing
     /// entirely; [`Self::SameCircuit`] hands `race_tracks` back unfiltered,
     /// the same list a race offers, because 2048 runs Zone on whichever
     /// circuit is already picked.
+    ///
+    /// **`by_own_names` asks by name, not by `type`.** It used to ask
+    /// `of_kind("Zone")` instead - which read every declared Zone circuit as
+    /// `type="Zone"`, true of Pure but not of HD/Fury, whose own four are
+    /// `type="Race"` carrying a separate `zone="true"` flag (measured
+    /// 2026-08-28 against `hdfury-ps3-eu-dec.iso`, all four and only the four
+    /// pointing at `Zone_1`..`Zone_4`). A kind query answered empty on HD, so
+    /// Zone mode's CIRCUIT row offered nothing there. Asking by the name list
+    /// this variant already carries sidesteps the question: it does not care
+    /// what `type` said, matching either title's declaration shape the same
+    /// way, and it cannot answer with a circuit the title itself does not
+    /// name as one of its own.
+    ///
+    /// **`also_race_circuits` appends every ordinary race circuit after this
+    /// variant's own four, own circuits first** - unverified, see
+    /// [`Self::Separate`]'s own docs for the evidence and its limits. A race
+    /// circuit already present under its own name (true of HD's four Zone
+    /// circuits, which are also `type="Race"` entries in `race_tracks`) is
+    /// not duplicated.
     ///
     /// Generic over `T` and closures rather than naming
     /// `oag_game::catalogue::Track` and calling `oag_game::catalogue`
     /// directly: `oag-title` sits beneath `oag-game` in the dependency graph
     /// (`docs/architecture/workspace-layout.md`) and must not reach up to it.
-    /// `available_in_zone` and `of_kind` are the two questions
+    /// `available_in_zone` and `by_own_names` are the two questions
     /// `crates/game/tests/zone_ground_truth.rs` asked by hand, once per
     /// title, before this method existed; this is that dispatch moved to the
     /// one place that has to agree with itself everywhere it is asked - the
     /// title axis, not a caller (a ground-truth test, a menu, `--menu-page`)
     /// repeating the match.
     #[must_use]
-    pub fn menu_tracks<T: Clone>(
+    pub fn menu_tracks<T: Clone + PartialEq>(
         self,
         race_tracks: &[T],
         available_in_zone: impl Fn(&T) -> bool,
-        of_kind: impl FnOnce(&str) -> Vec<T>,
+        by_own_names: impl FnOnce(&[&str]) -> Vec<T>,
     ) -> Vec<T> {
         match self {
             Self::Prefixed(_) => race_tracks
@@ -601,7 +655,18 @@ impl ZoneCircuit {
                 .filter(|track| available_in_zone(track))
                 .cloned()
                 .collect(),
-            Self::Separate(_) => of_kind("Zone"),
+            Self::Separate(tracks, also_race_circuits) => {
+                let mut offered = by_own_names(tracks);
+                if also_race_circuits {
+                    let extra: Vec<T> = race_tracks
+                        .iter()
+                        .filter(|t| !offered.contains(t))
+                        .cloned()
+                        .collect();
+                    offered.extend(extra);
+                }
+                offered
+            }
             Self::SameCircuit => race_tracks.to_vec(),
         }
     }
@@ -625,197 +690,4 @@ fn paths_match(a: &str, b: &str) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{ZoneCircuit, ZoneCraft};
-
-    const PULSE: ZoneCircuit = ZoneCircuit::Prefixed("zone_");
-    const PURE: ZoneCircuit = ZoneCircuit::Separate(&[
-        r"Data\Zone\01_Zone\track.vex",
-        r"Data\Zone\02_Zone\track.vex",
-        r"Data\Zone\03_Zone\track.vex",
-        r"Data\Zone\04_Zone\track.vex",
-    ]);
-
-    /// The prefix goes on the *file*, not the front of the whole entry name,
-    /// and both separators the corpus uses are directory separators.
-    #[test]
-    fn the_prefix_lands_on_the_file_name() {
-        assert_eq!(
-            PULSE.variant_of(r"Data\Environments\16_Track\track.vex"),
-            r"Data\Environments\16_Track\zone_track.vex"
-        );
-        assert_eq!(
-            PULSE.variant_of("/data/environments/talons_junction/track.vex"),
-            "/data/environments/talons_junction/zone_track.vex"
-        );
-    }
-
-    /// The `_reversed` suffix is part of the file name, so prefixing composes
-    /// with it and produces the fourth of the four names a circuit ships.
-    #[test]
-    fn the_prefix_composes_with_the_reversed_suffix() {
-        assert_eq!(
-            PULSE.variant_of(r"Data\Environments\16_Track\track_reversed.vex"),
-            r"Data\Environments\16_Track\zone_track_reversed.vex"
-        );
-    }
-
-    /// `--track` naming a Zone circuit outright must not be prefixed twice.
-    #[test]
-    fn prefixing_an_already_prefixed_name_changes_nothing() {
-        let zone = r"Data\Environments\16_Track\zone_track.vex";
-        assert_eq!(PULSE.variant_of(zone), zone);
-    }
-
-    /// A title whose Zone circuits are their own has nothing to derive from a
-    /// race circuit: naming one of its *own* Zone circuits stands, and the
-    /// default is the title's own first Zone circuit rather than a rewrite of
-    /// its race one.
-    #[test]
-    fn separate_circuits_are_never_rewritten() {
-        let named = r"Data\Zone\03_Zone\track.vex";
-        assert_eq!(PURE.variant_of(named), named);
-        assert_eq!(
-            PURE.default_track(r"Data\Environments\01_Vineta_K\track.vex"),
-            r"Data\Zone\01_Zone\track.vex"
-        );
-        assert_eq!(
-            PULSE.default_track(r"Data\Environments\16_Track\track.vex"),
-            r"Data\Environments\16_Track\zone_track.vex"
-        );
-    }
-
-    /// **The regression this type exists to close.** A menu that switches to
-    /// Zone mode without touching the Circuit row hands `variant_of` a *race*
-    /// circuit, not one of the title's own Zone ones - and until this test
-    /// existed, `Separate` passed it straight through, so the "zone race"
-    /// loaded whichever race environment happened to be selected.
-    #[test]
-    fn separate_substitutes_its_own_default_for_a_race_circuit() {
-        let race_circuit = r"Data\Environments\01_Vineta_K\track.vex";
-        assert_eq!(
-            PURE.variant_of(race_circuit),
-            r"Data\Zone\01_Zone\track.vex"
-        );
-    }
-
-    /// The membership check folds case and separators the same way a PSARC
-    /// container does before it looks a path up, so a caller that spells its
-    /// own Zone circuit differently from the list still gets it honoured
-    /// rather than silently substituted.
-    #[test]
-    fn separate_recognises_its_own_circuit_however_it_is_spelled() {
-        let differently_spelled = "data/zone/03_zone/track.vex";
-        assert_eq!(
-            PURE.variant_of(differently_spelled),
-            differently_spelled,
-            "a name that matches one of PURE's own Zone circuits case- and \
-             separator-insensitively should come back exactly as given"
-        );
-    }
-
-    /// **2048's shape.** Unlike [`ZoneCraft::ModelsInTeam`] and
-    /// [`ZoneCraft::OwnShip`], nothing changes at all: the directory stays the
-    /// player's team and both model stems fall back to whatever a race would
-    /// have used, which is the point - see [`ZoneCraft::PlayerShip`]'s own
-    /// docs for why.
-    #[test]
-    fn player_ship_resolves_to_nothing_but_the_players_own_team() {
-        let craft = ZoneCraft::PlayerShip;
-        assert_eq!(craft.directory("feisar2048\\3"), "feisar2048\\3");
-        assert_eq!(craft.hull(), None);
-        assert_eq!(craft.boost(), None);
-    }
-
-    /// **2048's circuit shape, the companion of the craft one above.** Neither
-    /// method derives or substitutes anything - see
-    /// [`ZoneCircuit::SameCircuit`]'s own docs for why.
-    #[test]
-    fn same_circuit_resolves_to_exactly_what_it_was_given() {
-        let zone = ZoneCircuit::SameCircuit;
-        let track = r"Data\art\published\environments\altima\track.vex";
-        assert_eq!(zone.variant_of(track), track);
-        assert_eq!(zone.default_track(track), track);
-    }
-
-    /// A stand-in for `oag_game::catalogue::Track`, carrying only the two
-    /// facts [`ZoneCircuit::menu_tracks`] asks about: an id to tell the
-    /// results apart by, and whether a race circuit is zone-available. This
-    /// module cannot depend on `oag-game` to use the real type - see
-    /// [`ZoneCircuit::menu_tracks`]'s own docs.
-    #[derive(Debug, Clone, PartialEq, Eq)]
-    struct StubTrack {
-        id: &'static str,
-        available_in_zone: bool,
-    }
-
-    /// [`ZoneCircuit::Prefixed`] filters the race list down to the circuits
-    /// flagged `availableInZone`, in place, and never calls `of_kind` - a
-    /// title on this shape has no `type="Zone"` entries to ask for.
-    #[test]
-    fn prefixed_filters_the_race_list_by_available_in_zone() {
-        let race_tracks = [
-            StubTrack {
-                id: "16_Track",
-                available_in_zone: true,
-            },
-            StubTrack {
-                id: "01_Track",
-                available_in_zone: false,
-            },
-        ];
-        let offered = PULSE.menu_tracks(
-            &race_tracks,
-            |track| track.available_in_zone,
-            |kind| panic!("Prefixed should never ask of_kind({kind:?})"),
-        );
-        assert_eq!(offered, [race_tracks[0].clone()]);
-    }
-
-    /// [`ZoneCircuit::Separate`] ignores the race list entirely and asks
-    /// `of_kind("Zone")` instead - the title's own Zone circuits are declared
-    /// apart from the race ones, not marked among them.
-    #[test]
-    fn separate_asks_of_kind_zone_and_ignores_the_race_list() {
-        let race_tracks = [StubTrack {
-            id: "01_Vineta_K",
-            available_in_zone: false,
-        }];
-        let zone_tracks = vec![StubTrack {
-            id: "01_Zone",
-            available_in_zone: false,
-        }];
-        let offered = PURE.menu_tracks(
-            &race_tracks,
-            |_| panic!("Separate should never ask available_in_zone"),
-            |kind| {
-                assert_eq!(kind, "Zone");
-                zone_tracks.clone()
-            },
-        );
-        assert_eq!(offered, zone_tracks);
-    }
-
-    /// [`ZoneCircuit::SameCircuit`] hands the race list back unfiltered - 2048
-    /// runs Zone on whichever circuit is already picked, so the menu offers
-    /// exactly the same circuits it would for any other mode.
-    #[test]
-    fn same_circuit_offers_the_race_list_unfiltered() {
-        let race_tracks = [
-            StubTrack {
-                id: "altima",
-                available_in_zone: false,
-            },
-            StubTrack {
-                id: "sebenco",
-                available_in_zone: false,
-            },
-        ];
-        let offered = ZoneCircuit::SameCircuit.menu_tracks(
-            &race_tracks,
-            |_| panic!("SameCircuit should never ask available_in_zone"),
-            |kind| panic!("SameCircuit should never ask of_kind({kind:?})"),
-        );
-        assert_eq!(offered, race_tracks);
-    }
-}
+mod tests;

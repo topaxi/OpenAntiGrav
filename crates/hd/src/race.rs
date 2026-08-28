@@ -33,7 +33,10 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     ship_dir: oag_title::race::SHIP_DIR,
     // The same directory: this title keeps a team's tuning beside its models.
     handling_dir: oag_title::race::SHIP_DIR,
-    zone: oag_title::ZoneCircuit::Separate(ZONE_TRACKS),
+    // `true`: unverified, see `ZONE_TRACKS`'s own docs and
+    // `oag_title::ZoneCircuit::Separate`'s - a play-based lead says ordinary
+    // HD/Fury circuits belong in the Zone picker too, not just these four.
+    zone: oag_title::ZoneCircuit::Separate(ZONE_TRACKS, true),
     zone_craft: oag_title::ZoneCraft::OwnShip(ZONE_SHIP),
     sounds: SOUND_BANKS,
     zone_announcer: Some(ZONE_ANNOUNCER),
@@ -141,20 +144,42 @@ pub const DEFAULT_ZONE_TRACK: &str = "/data/environments/zone_1/track.vex";
 /// `28_Track`/`Zone_4`, probed 2026-08-27 against
 /// `hdfury-ps3-eu-dec.iso`. Each holds a plain `track.vex`, the same as
 /// [`DEFAULT_ZONE_TRACK`]'s own.
+///
+/// **Not `type="Zone"` the way Pure declares its four.** All four of
+/// `25_Track`..`28_Track` are `type="Race"`, carrying a separate
+/// `zone="true"` flag instead - confirmed 2026-08-28 against
+/// `Data\Plugins\frontend\definition.xml`: exactly four `zone="true"`
+/// attributes appear in the file, out of 28 `PI_Track` entries total, and
+/// they are these four and only these four. So a caller asking this title's
+/// definition for `type="Zone"` entries the way it would ask Pure's gets
+/// nothing back; [`oag_title::ZoneCircuit::menu_tracks`] asks by this list's
+/// own names instead, which is shape-agnostic and works on both.
+///
+/// **Not generic "Zone" placeholders either.** Read against `DATA06`'s copy
+/// of `entries.xml` - the one that names all 28 `PI_Track` ids, see
+/// `oag_game::language::CircuitNames`'s own docs - `25_Track`..`28_Track`
+/// resolve to four real, distinct track names: Pro Tozo, Mallavol, Corridon
+/// 12 and Syncopia. None of the four ever appears with a `reversed="true"`
+/// sibling, unlike every one of the other twelve HD/Fury circuits, which is
+/// consistent with genuinely Zone-exclusive content rather than a
+/// placeholder directory. Confirmed 2026-08-28.
 pub const ZONE_TRACK_2: &str = "/data/environments/zone_2/track.vex";
 /// See [`ZONE_TRACK_2`].
 pub const ZONE_TRACK_3: &str = "/data/environments/zone_3/track.vex";
 /// See [`ZONE_TRACK_2`].
 pub const ZONE_TRACK_4: &str = "/data/environments/zone_4/track.vex";
 
-/// Every Zone circuit this title has, [`DEFAULT_ZONE_TRACK`] first.
+/// Every Zone-exclusive circuit this title has, [`DEFAULT_ZONE_TRACK`] first.
 ///
 /// What [`DEFAULTS`] hands [`oag_title::ZoneCircuit::Separate`]. A caller
 /// naming one of these four directly gets it honoured in Zone mode; naming
-/// anything else - which is what a menu that has not touched the Circuit row
-/// since picking Zone mode always does, since that row is filled with race
-/// circuits - falls back to [`DEFAULT_ZONE_TRACK`]. See
-/// [`oag_title::ZoneCircuit::variant_of`].
+/// anything else falls back to [`DEFAULT_ZONE_TRACK`] **only when it also
+/// names none of HD's ordinary race circuits** - `DEFAULTS.zone` wires
+/// `also_race_circuits: true`, so a menu naming Anulpha Pass or Moa Therma
+/// (both ordinary, neither in this list) gets that circuit honoured too, on
+/// a play-based lead rather than disc evidence. See
+/// [`oag_title::ZoneCircuit::variant_of`] and [`oag_title::ZoneCircuit::Separate`]'s
+/// own docs for what backs `also_race_circuits` and what does not yet.
 pub const ZONE_TRACKS: &[&str] = &[DEFAULT_ZONE_TRACK, ZONE_TRACK_2, ZONE_TRACK_3, ZONE_TRACK_4];
 
 /// The circuit a race loads when the caller names none.

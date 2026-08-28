@@ -188,6 +188,59 @@ hedge into a confirmed mechanism (nothing in either branch of
 
 ## Open
 
+- **2026-08-28, a play-based lead pointing straight at this thread.** Fixing
+  today's `ZoneCircuit::Separate` regression (HD's menu asking
+  `catalogue::tracks_of_kind(xml, "Zone")` for zone circuits when HD's own
+  four are `type="Race"` + `zone="true"`, not `type="Zone"` - see
+  `zone-flies-its-own-environment-now-the-menu.md`) surfaced a user
+  recollection from playing the original HD/Fury and Pulse: ordinary
+  circuits like Anulpha Pass (HD) and Moa Therma (Pulse) carry **a "zone
+  pendant"** in the original menu, and their own words on the mechanism -
+  "maybe the zone-annotated tracks are zone only, while the others just use
+  an effect over the normal tracks" - describes almost exactly what this
+  thread already found and left unwired: `zonemode.effectsettings` /
+  `zonemodedlc3.effectsettings` are **title-wide**, not per-circuit, and
+  2048's `SameCircuit` shape already proves the "any circuit + a colour-grade
+  effect" mechanism is real on this engine lineage, not a guess. What that
+  implies for HD specifically, unverified at the time this bullet was first
+  written: HD's Zone mode may not be `ZoneCircuit::Separate`-only (four
+  dedicated `Zone_N` environments and nothing else) - it may *also* let a
+  player pick any ordinary circuit and race it Zone-mode with
+  `zonemode.effectsettings` laid over it, the pendant marking which ones
+  qualify.
+
+  **2026-08-28, later the same day: implemented, on the user's explicit
+  instruction to widen it now rather than wait for the executable.** Two
+  corrections and a correction-to-the-correction first: "Moa Therma isn't on
+  HD" (this bullet's own first draft) was **wrong** - checking a directory
+  name for the string "Moa Therma" missed it, because HD stores that circuit
+  under the non-descriptive id `03_Track`; reading `03_Track` up through
+  `DATA06`'s `entries.xml` (the copy that names all 28 ids) returns `MOA
+  THERMA` directly. And the four `zone="true"` circuits are not generic
+  placeholders either: the same lookup on `25_Track`..`28_Track` returns
+  **Pro Tozo, Mallavol, Corridon 12, Syncopia** - four real, distinct track
+  names, each with no `reversed="true"` sibling, unlike all twelve ordinary
+  circuits. Both findings corroborate the widening rather than contradicting
+  it. `oag_title::ZoneCircuit::Separate` now carries `also_race_circuits:
+  bool` (`true` on HD, `false` on Pure, which stays exactly its own four -
+  no play-based lead pointed at Pure needing the same treatment); HD's
+  `menu_tracks` now offers all 28 `PI_Track` entries in Zone mode (the four
+  zone-exclusive ones first) and `variant_of` stops substituting entirely on
+  this title, so the load path actually races the picked circuit rather than
+  silently rewriting it underneath a menu that now offers it. Ten
+  `zone_ground_truth` tests and the full `just` gate pass, including a new
+  HD-specific load test proving an ordinary circuit's geometry survives Zone
+  mode unsubstituted. **What this is and is not**: a play-based recollection
+  plus the two disc-level corroborations above, not a decompiled selector -
+  confidence stays where a hypothesis sits, not where the rest of this file's
+  measured findings do. `zonemode.effectsettings` itself is still not wired
+  into rendering, so an ordinary circuit raced in Zone mode on this engine
+  currently looks exactly like a normal race on it - what would close that is
+  unchanged from the paragraph above: either HD's own Zone-mode circuit-select
+  screen decompiled (the loader trail is already found and stuck on a TOC
+  defect two items below), or further play-based confirmation of the
+  mechanism's edges (does every ordinary circuit qualify, or only some; does
+  the pendant itself ever appear in this engine's own front end once drawn).
 - The stage-index <-> zone-number mapping is inferred from the names alone
   (`"Zone N <Name>"` / `"N <Name>"`), not checked against `Zone_Update`'s own
   10-second-per-step timer (`docs/gameplay/race-modes.md#zone`,

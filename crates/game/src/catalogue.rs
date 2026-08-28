@@ -74,8 +74,11 @@ pub struct Track {
     /// `crates/game/tests/zone_ground_truth.rs` is that sweep.
     ///
     /// `false` on a title that declares no such attribute anywhere, which is
-    /// every title whose Zone circuits are separate - Pure marks its four with
-    /// `type="Zone"` instead, and [`tracks_of_kind`] is what lists those.
+    /// every title whose Zone circuits are separate - Pure marks its four
+    /// `type="Zone"`, HD/Fury marks its own four `zone="true"` on an
+    /// otherwise ordinary `type="Race"` entry, and [`tracks_named`] is what
+    /// finds either by the name each title already knows its own circuits
+    /// by, rather than by which of the two spellings the disc used.
     pub available_in_zone: bool,
 }
 
@@ -139,11 +142,43 @@ pub fn tracks(definition_xml: &str) -> Vec<Track> {
 pub fn tracks_of_kind(definition_xml: &str, kind: &str) -> Vec<Track> {
     let root = parse(definition_xml);
     let mut out = Vec::new();
-    collect(&root, kind, &mut out);
+    collect(&root, Some(kind), &mut out);
     out
 }
 
-fn collect(node: &Node, kind: &str, out: &mut Vec<Track>) {
+/// Every `PI_Track` in `definition_xml` whose own entry name matches one of
+/// `names`, regardless of `type` - kept in `names`' own order rather than file
+/// order, since [`oag_title::ZoneCircuit::Separate`] indexes that order with
+/// `[0]` for `default_track` and a menu offering the list wants that same
+/// circuit shown first.
+///
+/// **The reason this exists alongside [`tracks_of_kind`]: `type` is not a
+/// reliable way to ask "which are this title's Zone circuits".** Pure
+/// declares its four `type="Zone"`, which `tracks_of_kind(xml, "Zone")`
+/// finds; HD/Fury declares its own four `type="Race"` with a separate
+/// `zone="true"` flag - measured 2026-08-28 against
+/// `hdfury-ps3-eu-dec.iso`'s `Data\Plugins\frontend\definition.xml`, all four
+/// and only the four pointing at `Zone_1`..`Zone_4`, out of 28 `PI_Track`
+/// entries total - so the same kind query answers empty there. Matching by
+/// the title's own declared name list (`oag_hd::race::ZONE_TRACKS`) sidesteps
+/// the question entirely: it does not care what `type` said, only whether the
+/// entry names the circuit the title says is its own.
+#[must_use]
+pub fn tracks_named(definition_xml: &str, names: &[&str]) -> Vec<Track> {
+    let root = parse(definition_xml);
+    let mut all = Vec::new();
+    collect(&root, None, &mut all);
+    names
+        .iter()
+        .filter_map(|&name| {
+            all.iter()
+                .find(|track| paths_match(&track.entry_name(), name))
+                .cloned()
+        })
+        .collect()
+}
+
+fn collect(node: &Node, kind: Option<&str>, out: &mut Vec<Track>) {
     for child in &node.children {
         if child.name == "PI_Track" {
             if let Some(track) = read_track(child, kind) {
@@ -153,6 +188,21 @@ fn collect(node: &Node, kind: &str, out: &mut Vec<Track>) {
             collect(child, kind, out);
         }
     }
+}
+
+/// Whether two entry names address the same archive entry.
+///
+/// Mirrors [`oag_title::race`]'s own `paths_match`, not shared: `oag-game`
+/// does not depend on `oag-title` for this, and this is a small enough fold
+/// (leading `/` trimmed, `\` folded to `/`, ASCII-lowercased) that repeating
+/// it here costs less than a dependency would.
+fn paths_match(a: &str, b: &str) -> bool {
+    fn normalise(path: &str) -> String {
+        path.trim_start_matches('/')
+            .replace('\\', "/")
+            .to_ascii_lowercase()
+    }
+    normalise(a) == normalise(b)
 }
 
 /// One track of the soundtrack, as the plugin declares it.
@@ -384,10 +434,27 @@ pub fn all_tracks_of_kind(documents: &[String], kind: &str) -> Vec<Track> {
     out
 }
 
-fn read_track(node: &Node, wanted: &str) -> Option<Track> {
+/// [`tracks_named`] across `documents`, the first spelling of an id winning -
+/// on the same partial-pack-set terms as [`all_tracks`].
+#[must_use]
+pub fn all_tracks_named(documents: &[String], names: &[&str]) -> Vec<Track> {
+    let mut out: Vec<Track> = Vec::new();
+    for document in documents {
+        for track in tracks_named(document, names) {
+            if !out.iter().any(|seen| seen.id == track.id) {
+                out.push(track);
+            }
+        }
+    }
+    out
+}
+
+fn read_track(node: &Node, wanted: Option<&str>) -> Option<Track> {
     let id = node.attr("name")?.to_string();
     let values = node.children_named("Values").next()?;
-    if values.attr("type").unwrap_or("Race") != wanted {
+    if let Some(wanted) = wanted
+        && values.attr("type").unwrap_or("Race") != wanted
+    {
         return None;
     }
     Some(Track {

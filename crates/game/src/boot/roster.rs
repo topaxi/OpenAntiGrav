@@ -88,8 +88,8 @@ pub(super) fn load_tracks(
 /// [`load_tracks`]'s already-archive-filtered one, so the two loaders stay
 /// independent of each other's ordering - each declares, then each filters.
 /// The dispatch itself - filtering that list by `availableInZone` against
-/// asking the definitions for `type="Zone"` entries instead - is
-/// [`oag_title::ZoneCircuit::menu_tracks`]'s; this is only the loading and
+/// asking the definitions by name for the title's own Zone circuits instead -
+/// is [`oag_title::ZoneCircuit::menu_tracks`]'s; this is only the loading and
 /// reporting around it, on the same terms [`load_tracks`] already sets.
 pub(super) fn load_zone_tracks(
     archives: &mut oag_assets::Archives,
@@ -101,7 +101,7 @@ pub(super) fn load_zone_tracks(
     let declared = zone.menu_tracks(
         &race_tracks,
         |track| track.available_in_zone,
-        |kind| crate::catalogue::all_tracks_of_kind(documents, kind),
+        |names| crate::catalogue::all_tracks_named(documents, names),
     );
     let declared_count = declared.len();
     let tracks: Vec<_> = declared

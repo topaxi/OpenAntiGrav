@@ -91,10 +91,12 @@ fn race_circuits(archives: &mut oag_assets::Archives, definition: &str) -> Vec<c
 /// **The two arrangements, dispatched through [`ZoneCircuit::menu_tracks`]
 /// rather than by hand here.** A title whose Zone circuits are the race ones
 /// with a prefixed file marks them with `availableInZone`; a title whose Zone
-/// circuits are its own declares them `type="Zone"`, which the race listing
-/// skips. This used to make that choice itself with a `match`; it is the
-/// production dispatch now, so this sweep exercises the same code path a
-/// menu's CIRCUIT row does.
+/// circuits are its own is asked by name instead, since which `type` those
+/// entries carry is a per-title choice `catalogue::tracks_named` does not
+/// need to know - Pure declares `type="Zone"`, HD/Fury `type="Race"` with a
+/// `zone="true"` flag, and matching by name finds either. This used to make
+/// that choice itself with a `match`; it is the production dispatch now, so
+/// this sweep exercises the same code path a menu's CIRCUIT row does.
 fn zone_circuits(
     archives: &mut oag_assets::Archives,
     definition: &str,
@@ -108,7 +110,7 @@ fn zone_circuits(
     zone.menu_tracks(
         &race_tracks,
         |track| track.available_in_zone,
-        |kind| catalogue::tracks_of_kind(&xml, kind),
+        |names| catalogue::tracks_named(&xml, names),
     )
 }
 
@@ -362,7 +364,7 @@ fn pure_declares_zone_circuits_of_its_own_and_no_prefixed_file() {
         let mut archives = oag_pure::open(&source).expect("opening Pure");
         let zone = oag_pure::race::DEFAULTS.zone;
         assert!(
-            matches!(zone, ZoneCircuit::Separate(_)),
+            matches!(zone, ZoneCircuit::Separate(..)),
             "{name}: Pure's zone circuits are its own"
         );
 
@@ -476,10 +478,10 @@ fn hd_keeps_four_zone_environments_of_its_own() {
     let Some(path) = image("data/images/hdfury-ps3-eu-dec.iso") else {
         return;
     };
-    let archives = oag_hd::open(&path.display().to_string()).expect("opening HD");
+    let mut archives = oag_hd::open(&path.display().to_string()).expect("opening HD");
     let zone = oag_hd::race::DEFAULTS.zone;
     assert!(
-        matches!(zone, ZoneCircuit::Separate(_)),
+        matches!(zone, ZoneCircuit::Separate(..)),
         "HD's zone circuits are its own"
     );
     assert!(
@@ -527,33 +529,84 @@ fn hd_keeps_four_zone_environments_of_its_own() {
         4,
         "HD's own zone track list should name all four environments"
     );
+
+    // The regression this file exists to catch on HD specifically: its own
+    // four are `type="Race"` with a `zone="true"` flag rather than Pure's
+    // `type="Zone"`, so the menu's CIRCUIT row must be finding them by name
+    // (`ZoneCircuit::Separate`'s own list), not by asking for a `type` that
+    // never appears on this title's declarations.
+    let offered = zone_circuits(
+        &mut archives,
+        oag_hd::names::FRONT_END_PLUGIN_DEFINITION,
+        zone,
+    );
+    let own_count = 4;
+    for track in oag_hd::race::ZONE_TRACKS {
+        assert!(
+            offered
+                .iter()
+                .any(|c| archives.locate(&c.entry_name()) == archives.locate(track)),
+            "{track} is in oag_hd::race::ZONE_TRACKS but not among the tracks the menu \
+             offers for Zone mode"
+        );
+    }
+    assert!(
+        offered[..own_count]
+            .iter()
+            .all(|c| oag_hd::race::ZONE_TRACKS
+                .iter()
+                .any(|t| archives.locate(&c.entry_name()) == archives.locate(t))),
+        "HD's own four zone-exclusive circuits should come first; got {:?}",
+        offered.iter().map(|t| &t.id).collect::<Vec<_>>()
+    );
+
+    // **Unverified, on `also_race_circuits` - see `oag_title::ZoneCircuit::Separate`'s
+    // own docs.** A play-based lead (2026-08-28) says HD's Zone picker also
+    // offers every ordinary race circuit, not just the four zone-exclusive
+    // ones above; nothing in the disc's own data this codebase reads confirms
+    // it, so this assertion documents the implemented behaviour rather than a
+    // measured fact the way every other assertion in this file does.
+    let race_tracks = race_circuits(&mut archives, oag_hd::names::FRONT_END_PLUGIN_DEFINITION);
+    assert_eq!(
+        offered.len(),
+        race_tracks.len(),
+        "HD's own four zone-exclusive circuits are also `type=\"Race\"` entries, so \
+         appending the race list should add no new count beyond it: got {} offered \
+         against {} race circuits",
+        offered.len(),
+        race_tracks.len()
+    );
+    for circuit in &race_tracks {
+        assert!(
+            offered
+                .iter()
+                .any(|c| archives.locate(&c.entry_name()) == archives.locate(&circuit.entry_name())),
+            "{} is an ordinary race circuit but not offered for Zone mode",
+            circuit.id
+        );
+    }
 }
 
-/// **The defect this whole file is now the regression test for.** A menu that
-/// switches to Zone mode without touching the Circuit row hands `race::load`
-/// a *race* circuit's entry name - and until this test existed,
-/// `ZoneCircuit::Separate` passed it through unchanged, so a Zone race on
-/// Wipeout HD or Wipeout Pure loaded the picked race circuit's own
-/// environment, wearing Zone's rules, instead of any Zone environment at all.
+/// **The defect this whole file is now the regression test for, on Pure -
+/// see [`zone_mode_on_hd_races_a_named_race_circuit_directly`] for the
+/// unverified companion HD now takes instead.** A menu that switches to Zone
+/// mode without touching the Circuit row hands `race::load` a *race*
+/// circuit's entry name - and until this test existed, `ZoneCircuit::Separate`
+/// passed it through unchanged, so a Zone race on Wipeout HD or Wipeout Pure
+/// loaded the picked race circuit's own environment, wearing Zone's rules,
+/// instead of any Zone environment at all.
 ///
-/// Two loads per title: one naming a race circuit (must substitute the
-/// title's default Zone circuit and say so in the report), one naming one of
-/// the title's own Zone circuits directly (must load it unchanged).
+/// Two loads: one naming a race circuit (must substitute the title's default
+/// Zone circuit and say so in the report), one naming one of the title's own
+/// Zone circuits directly (must load it unchanged).
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn zone_mode_on_a_named_race_circuit_substitutes_a_zone_environment() {
-    let cases: [(&str, &str, &str); 2] = [
-        (
-            "data/images/hdfury-ps3-eu-dec.iso",
-            oag_hd::race::DEFAULT_TRACK,
-            oag_hd::race::ZONE_TRACK_2,
-        ),
-        (
-            "data/images/pure-psp-eu.chd",
-            oag_pure::race::DEFAULT_TRACK,
-            oag_pure::race::ZONE_TRACK_2,
-        ),
-    ];
+    let cases: [(&str, &str, &str); 1] = [(
+        "data/images/pure-psp-eu.chd",
+        oag_pure::race::DEFAULT_TRACK,
+        oag_pure::race::ZONE_TRACK_2,
+    )];
 
     for (name, race_track, own_zone_track) in cases {
         let Some(path) = image(name) else { continue };
@@ -621,6 +674,78 @@ fn zone_mode_on_a_named_race_circuit_substitutes_a_zone_environment() {
             zoning_a_zone_circuit.report
         );
     }
+}
+
+/// **Unverified, on `also_race_circuits` - see `oag_title::ZoneCircuit::Separate`'s
+/// own docs for the play-based lead behind it and what does not yet back
+/// it.** HD's `ZoneCircuit::variant_of` never substitutes when the flag is
+/// set, so - unlike Pure above - naming an ordinary race circuit in Zone mode
+/// loads that circuit's own environment unchanged, the same geometry a time
+/// trial on it would decode, rather than the title's default zone-exclusive
+/// circuit. Naming one of the four zone-exclusive circuits directly still
+/// loads unchanged too, on the same terms Pure's does.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn zone_mode_on_hd_races_a_named_race_circuit_directly() {
+    let Some(path) = image("data/images/hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let source = path.display().to_string();
+    let race_track = oag_hd::race::DEFAULT_TRACK;
+
+    let racing = race::load(&race::Options {
+        source: source.clone(),
+        class: SpeedClass::Venom,
+        mode: oag_race::Mode::TimeTrial,
+        track: Some(race_track.to_string()),
+        ..race::Options::default()
+    })
+    .unwrap_or_else(|e| panic!("loading {race_track} as a time trial: {e:#}"));
+
+    let zoning_the_race_circuit = race::load(&race::Options {
+        source: source.clone(),
+        class: SpeedClass::Venom,
+        mode: oag_race::Mode::Zone,
+        track: Some(race_track.to_string()),
+        ..race::Options::default()
+    })
+    .unwrap_or_else(|e| panic!("racing {race_track} in zone mode: {e:#}"));
+
+    assert!(
+        zoning_the_race_circuit
+            .report
+            .iter()
+            .any(|line| line.starts_with("zone:") && line.contains("as named")),
+        "HD/Fury: an ordinary race circuit named in zone mode should race \
+         unchanged, not be substituted: {:#?}",
+        zoning_the_race_circuit.report
+    );
+    assert_eq!(
+        racing.track_model.indices.len(),
+        zoning_the_race_circuit.track_model.indices.len(),
+        "HD/Fury: racing {race_track} in zone mode should decode the same \
+         geometry as the time trial, since also_race_circuits means the \
+         circuit is not substituted"
+    );
+
+    let own_zone_track = oag_hd::race::ZONE_TRACK_2;
+    let zoning_a_zone_circuit = race::load(&race::Options {
+        source,
+        class: SpeedClass::Venom,
+        mode: oag_race::Mode::Zone,
+        track: Some(own_zone_track.to_string()),
+        ..race::Options::default()
+    })
+    .unwrap_or_else(|e| panic!("racing {own_zone_track} in zone mode: {e:#}"));
+    assert!(
+        zoning_a_zone_circuit
+            .report
+            .iter()
+            .any(|line| line.starts_with("zone:") && line.contains("as named")),
+        "HD/Fury: naming one of this title's own zone circuits should not be \
+         rewritten: {:#?}",
+        zoning_a_zone_circuit.report
+    );
 }
 
 /// **The craft axis, on the three titles that have a disc image behind them.**
