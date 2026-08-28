@@ -283,12 +283,22 @@ into a *different* cache, and the link between the two was not traced.
   the same way `UBC2`'s reticle texture was - decode both ways and see which
   looks like a picture - ideally against several of the format's other 97 real files
   rather than one alone.
-- Read HD's Zone shader (needs Ghidra RE on `ps3-hdfury-eu`, a much larger
-  undertaking than this thread on its own - see
-  `handover/wipeout-hd-furys-executable-is-26100-functions-with.md`) to
-  settle what `Growing Texture.Scale Bias`/`.Factors` actually do to the
-  now-identified "Track" art, and whether HD's own stage-selection mechanism
-  looks anything like 2048's `Zone_UpdateStage`.
+- **Started, 2026-08-28, and blocked on a database defect rather than
+  unstarted anymore**: HD's own `ZoneMode.effectSettings` load site is found
+  (`0x003f3fb0`, TOC-verified by hand) and traced one call further, to
+  `0x003d6dc8` - where the trail stops, because that function's own real TOC
+  also differs from what Ghidra assumes and its decompile cannot be trusted
+  as a result. See
+  [zone-effectsettings-loader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md)
+  for the exact chain, a new instruction-search trap it cost time finding
+  (a byte-pattern hit's real target depends on *that function's own* TOC,
+  not a shared one), and a `program`-parameter tooling bug that silently
+  targets the wrong open Ghidra program unless omitted. **Next attempt
+  needs**: either a full `scripts/import-ps3-eboot.sh` re-run with the TOC
+  fix applied (a maintainer call, since it touches every applied name in the
+  database - see `handover/wipeout-hd-furys-executable-is-26100-functions-with.md`),
+  or manually verifying `0x003d6dc8`'s TOC-relative loads one at a time the
+  way the two solid ones on this page were.
 - Worth checking against the user's own play on one of the four ported
   `zone_N` circuits in Zone or Detonator mode: a visible symptom (no fog, no
   palette shift, a black/flat scene) would corroborate "the blend math runs

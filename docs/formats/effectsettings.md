@@ -206,6 +206,31 @@ record (plausibly a reversed-circuit flag, unconfirmed). So `DAT_816c4890`
 is a *built* table, not the parsed file itself, but how the raw bytes get
 into it in the first place is still unread.
 
+## HD's own load site is found; a Ghidra database defect blocks the rest
+
+**2026-08-28, a fourth pass, on HD/Fury's executable this time** (priority
+order: Pulse, Pure, HD/Fury, 2048 - 2048's own thread is bottom of that
+list, so this closes the HD/Fury half instead of digging further into
+2048's dead end). Full evidence:
+[zone-effectsettings-loader.md](../ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md).
+
+HD reads its own `Data/Environments/ZoneMode.effectSettings` from a
+function (`0x003f3fb0`) independently identified by an *earlier, unrelated*
+session as per-race environment setup (it also loads `sky.gtf`/`skycube`,
+per `envsettings.md`) - TOC-verified by hand, not trusted from Ghidra's own
+(wrong) resolution, since this binary has a known, documented TOC defect
+(`docs/ghidra/functions/ps3-hdfury-eu/memory.md`). That function passes the
+loaded path to a second function, `0x003d6dc8` - and **there the trail
+stops**: that function's own real TOC also differs from what Ghidra
+assumes, so its decompiled body cannot be trusted (the same failure mode
+`memory.md`'s own worked example demonstrates - a plausible-looking wrong
+string, not an error). Closing it needs either a full database re-import
+with the TOC fix applied, or a much larger manual verification pass than
+this one attempted. **Nothing here reaches a stage-selection field the way
+2048's `Zone_UpdateStage` does**, and nothing claims HD works the same way
+2048 does - the two mechanisms have not been compared, only both partially
+traced.
+
 ## Open
 
 - **The stage-index to zone-number correspondence is inferred from the names
