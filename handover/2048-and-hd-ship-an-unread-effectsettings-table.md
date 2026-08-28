@@ -324,8 +324,27 @@ hedge into a confirmed mechanism (nothing in either branch of
   Morton/twiddle order `.gxt`'s own `UBC2` reader needs is unset by anything
   in the file (`type` at descriptor `+0x10` is `0` on these textures, the
   same value that told the `UBC2` reticle nothing and had to be settled by
-  decoding both ways and looking at the picture). What 2048's own "Track"
-  art depicts is still open.
+  decoding both ways and looking at the picture).
+
+  **2026-08-28, later the same day: decoded.** `oag_formats::gxt::Format::Argb8888`,
+  confidence 80. Twiddle order settled the same way, at texel rather than
+  4x4-block granularity - raster order on `zoneModeTrack{0,7,14}.gxt` decodes
+  to the same horizontal-banded noise `UBC2`'s wrong-order control gives;
+  twiddled decodes cleanly, every texel's `A`/`R`/`G` bytes agreeing exactly
+  (0 mismatches across 65,536 texels checked) as a binary stencil mask, `B`
+  alone carrying a continuous gradient. **What 2048's own "Track" art
+  depicts, now answered**: not the same picture HD's independently-decoded
+  `.gtf` copy showed (that was a different container/codec read long before
+  this decoder existed) - 2048's version is a thin horizontal mask band whose
+  *shape* escalates across the stage ladder (solid at stage 0, increasingly
+  dashed by 7 and 14) while its *area* holds fixed at exactly 2,048 of 65,536
+  texels on every sampled stage. See `docs/formats/gxt.md`'s new `U8U8U8U8`
+  section and `crates/formats/tests/gxt_ground_truth.rs`'s
+  `the_zone_track_art_decodes_to_a_shape_that_escalates_across_stages`, whose
+  renders (`data/shots/2048_zone_track_stage{0,7,14}.png`) this rests on.
+  **Still open**: what the shader does with `Growing Texture.Colour`/`.Scale
+  Bias`/`.Factors` against this art - no HD executable has been read for its
+  Zone shader, so wiring this into a render is unstarted.
 
 ## Next Steps
 
@@ -360,16 +379,11 @@ hedge into a confirmed mechanism (nothing in either branch of
   drawing path already exists ([envsettings.md](../docs/formats/envsettings.md))
   and this is the same shape, even though the clearest recovered *selection*
   logic so far is on 2048.
-- Add `SceGxmTextureBaseFormat` `U8U8U8U8` (byte `0x0c`, `ARGB` swizzle - now
-  identified, see above) to `oag_formats::gxt` to see what 2048's
-  `zoneModeTrack{0..14}.gxt` actually depict - the raw bytes already say
-  they are not blank, matching HD's own "Track" set, so this closes a real
-  picture rather than confirming another placeholder. The channel order is
-  now a well-evidenced starting point; **the tiling order (raster vs
-  Morton/twiddle) is the part still genuinely unread** and needs settling
-  the same way `UBC2`'s reticle texture was - decode both ways and see which
-  looks like a picture - ideally against several of the format's other 97 real files
-  rather than one alone.
+- ~~Add `SceGxmTextureBaseFormat` `U8U8U8U8` to `oag_formats::gxt`~~ **Done,
+  2026-08-28** - see the Open section above and `docs/formats/gxt.md`'s
+  `U8U8U8U8` section. What is left from this step is the shader side: what
+  `Growing Texture.Colour`/`.Scale Bias`/`.Factors` do with this art, which
+  needs an HD Zone-shader read this pass did not attempt.
 - **Started, 2026-08-28, and blocked on a database defect rather than
   unstarted anymore**: HD's own `ZoneMode.effectSettings` load site is found
   (`0x003f3fb0`, TOC-verified by hand) and traced one call further, to
