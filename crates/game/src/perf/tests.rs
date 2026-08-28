@@ -21,7 +21,7 @@ fn an_empty_meter_reports_nothing_rather_than_infinity() {
     let meter = Meter::new();
     assert!(meter.is_empty());
     assert_eq!(meter.stats(), None);
-    assert!(draw_list(&meter, Overlay::Pacing, 60, None, None).is_empty());
+    assert!(draw_list(&meter, Overlay::Pacing, 60, None, None, None).is_empty());
 }
 
 #[test]
@@ -111,7 +111,7 @@ fn clearing_forgets_the_load_that_was_not_a_frame() {
 fn off_draws_nothing_however_full_the_meter_is() {
     let mut meter = Meter::new();
     steady(&mut meter, WINDOW, 1.0 / 60.0);
-    assert!(draw_list(&meter, Overlay::Off, 60, None, None).is_empty());
+    assert!(draw_list(&meter, Overlay::Off, 60, None, None, None).is_empty());
 }
 
 /// The counter is one panel and one line; the pacing view adds a second
@@ -121,26 +121,27 @@ fn each_mode_draws_exactly_what_it_promises() {
     let mut meter = Meter::new();
     steady(&mut meter, WINDOW, 1.0 / 60.0);
 
-    let fps = draw_list(&meter, Overlay::Fps, 60, None, None);
+    let fps = draw_list(&meter, Overlay::Fps, 60, None, None, None);
     assert_eq!(fps.len(), 2);
     assert!(matches!(fps[0], Draw::Fill { .. }));
     assert!(matches!(&fps[1], Draw::Text { text, .. } if text.starts_with("60 FPS")));
 
-    let pacing = draw_list(&meter, Overlay::Pacing, 60, None, None);
+    let pacing = draw_list(&meter, Overlay::Pacing, 60, None, None, None);
     // panel + two lines + the rule + one column per frame
     assert_eq!(pacing.len(), 4 + WINDOW);
     assert!(matches!(&pacing[2], Draw::Text { text, .. } if text.starts_with("P99")));
 }
 
-/// `Dev` adds the scene line and the video line, and only when a caller
-/// actually has one to give it - a stage with no scene and no movie
-/// still gets exactly what `Pacing` would have shown it.
+/// `Dev` adds the scene line, the memory line and the video line, and only
+/// when a caller actually has one to give it - a stage with no scene, no
+/// memory sample and no movie still gets exactly what `Pacing` would have
+/// shown it.
 #[test]
-fn dev_adds_a_line_for_whichever_of_scene_and_video_it_is_given() {
+fn dev_adds_a_line_for_whichever_of_scene_memory_and_video_it_is_given() {
     let mut meter = Meter::new();
     steady(&mut meter, WINDOW, 1.0 / 60.0);
 
-    let bare = draw_list(&meter, Overlay::Dev, 60, None, None);
+    let bare = draw_list(&meter, Overlay::Dev, 60, None, None, None);
     // Same shape as `Pacing` with nothing extra: panel + two lines + the
     // rule + one column per frame.
     assert_eq!(bare.len(), 4 + WINDOW);
@@ -150,59 +151,99 @@ fn dev_adds_a_line_for_whichever_of_scene_and_video_it_is_given() {
         draws_culled: 3,
         triangles: 4096,
     };
-    let with_scene = draw_list(&meter, Overlay::Dev, 60, Some(scene), None);
+    let with_scene = draw_list(&meter, Overlay::Dev, 60, Some(scene), None, None);
     assert!(
         with_scene
             .iter()
             .any(|d| matches!(d, Draw::Text { text, .. } if text == "DRAWS 12/15  TRIS 4096"))
     );
 
-    let with_video = draw_list(&meter, Overlay::Dev, 60, None, Some("gstreamer"));
+    let with_memory = draw_list(&meter, Overlay::Dev, 60, None, None, Some(64 * 1024 * 1024));
+    assert!(
+        with_memory
+            .iter()
+            .any(|d| matches!(d, Draw::Text { text, .. } if text == "MEM 64.0 MB"))
+    );
+
+    let with_video = draw_list(&meter, Overlay::Dev, 60, None, Some("gstreamer"), None);
     assert!(
         with_video
             .iter()
             .any(|d| matches!(d, Draw::Text { text, .. } if text == "VIDEO gstreamer"))
     );
 
-    let with_both = draw_list(&meter, Overlay::Dev, 60, Some(scene), Some("av1 cache"));
+    let with_all = draw_list(
+        &meter,
+        Overlay::Dev,
+        60,
+        Some(scene),
+        Some("av1 cache"),
+        Some(64 * 1024 * 1024),
+    );
     assert!(
-        with_both
+        with_all
             .iter()
             .any(|d| matches!(d, Draw::Text { text, .. } if text == "VIDEO av1 cache"))
     );
     assert!(
-        with_both
+        with_all
             .iter()
             .any(|d| matches!(d, Draw::Text { text, .. } if text == "DRAWS 12/15  TRIS 4096"))
+    );
+    assert!(
+        with_all
+            .iter()
+            .any(|d| matches!(d, Draw::Text { text, .. } if text == "MEM 64.0 MB"))
     );
 }
 
 /// Every rectangle has to land inside the panel it is drawn under, or the
 /// overlay writes over the game somewhere nobody looked.
+///
+/// Checked against both `Pacing` and a `Dev` list with all three optional
+/// lines populated - the tallest panel the overlay ever draws, since
+/// `panel_h` grows with the line count and this is the case most likely to
+/// overflow it.
 #[test]
 fn nothing_is_drawn_outside_the_panel() {
     let mut meter = Meter::new();
     for i in 0..WINDOW {
         meter.record(if i == 7 { 0.5 } else { 1.0 / 60.0 });
     }
-    let list = draw_list(&meter, Overlay::Pacing, 60, None, None);
-    let Draw::Fill { rect: panel, .. } = list[0] else {
-        panic!("the panel comes first");
+    let scene = crate::race::SceneStats {
+        draws_submitted: 12,
+        draws_culled: 3,
+        triangles: 4096,
     };
-    for draw in &list[1..] {
-        let Draw::Fill { rect, .. } = draw else {
-            continue;
+    for list in [
+        draw_list(&meter, Overlay::Pacing, 60, None, None, None),
+        draw_list(
+            &meter,
+            Overlay::Dev,
+            60,
+            Some(scene),
+            Some("av1 cache"),
+            Some(64 * 1024 * 1024),
+        ),
+    ] {
+        let Draw::Fill { rect: panel, .. } = list[0] else {
+            panic!("the panel comes first");
         };
-        assert!(rect[0] >= panel[0], "{rect:?} starts left of {panel:?}");
-        assert!(
-            rect[0] + rect[2] <= panel[0] + panel[2],
-            "{rect:?} runs past {panel:?}"
-        );
-        assert!(rect[1] >= panel[1], "{rect:?} starts above {panel:?}");
-        assert!(
-            rect[1] + rect[3] <= panel[1] + panel[3] + 0.001,
-            "{rect:?} runs below {panel:?}"
-        );
+        for draw in &list[1..] {
+            let Draw::Fill { rect, .. } = draw else {
+                continue;
+            };
+            assert!(rect[0] >= panel[0], "{rect:?} starts left of {panel:?}");
+            assert!(
+                rect[0] + rect[2] <= panel[0] + panel[2],
+                "{rect:?} runs past {panel:?}"
+            );
+            assert!(rect[1] >= panel[1], "{rect:?} starts above {panel:?}");
+            assert!(
+                rect[1] + rect[3] <= panel[1] + panel[3] + 0.001,
+                "{rect:?} runs below {panel:?}"
+            );
+        }
     }
 }
 
@@ -216,7 +257,7 @@ fn the_graph_is_scaled_to_the_target_it_is_given() {
     steady(&mut meter, WINDOW, 1.0 / 240.0);
 
     let heights = |target| {
-        draw_list(&meter, Overlay::Pacing, target, None, None)
+        draw_list(&meter, Overlay::Pacing, target, None, None, None)
             .into_iter()
             .skip(4) // the panel, two lines of text and the rule
             .filter_map(|draw| match draw {

@@ -516,6 +516,15 @@ impl Session {
             }
         };
 
+        // Only sampled under `Dev`, which is the one tier that shows it - a
+        // reader that costs nothing at 4 Hz would still be a syscall a frame
+        // at the four-figure rates `Vsync::Off` can reach, paid on every
+        // stage for a line nobody but `Dev` draws. See `perf::memory::Probe`.
+        let memory = match self.settings.graphics.perf_overlay {
+            perf::Overlay::Dev => self.memory.sample(now),
+            _ => None,
+        };
+
         // Over the stage and inside the offscreen target, so the overlay is
         // drawn at the render scale the game is - measuring a frame nobody is
         // presenting would be the one way to get this wrong. One pass, skipped
@@ -526,6 +535,7 @@ impl Session {
             self.presentation_hz(),
             scene_stats,
             video_label,
+            memory,
         );
         if !list.is_empty() {
             self.overlay.overlay(

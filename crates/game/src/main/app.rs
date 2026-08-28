@@ -244,6 +244,7 @@ impl App {
             clock: TickClock::new(TickRate::DEFAULT),
             last: std::time::Instant::now(),
             meter: perf::Meter::new(),
+            memory: perf::memory::Probe::new(),
             overlay,
             stalled: true,
             paused: false,

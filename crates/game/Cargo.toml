@@ -79,6 +79,18 @@ thiserror.workspace = true
 # torrentzipped, and bzip2/zstd/aes would be dependencies for formats that
 # cannot appear here.
 zip = { version = "6", default-features = false, features = ["deflate"] }
+# The `perf` overlay's memory line. This workspace forbids `unsafe`
+# (`unsafe_code = "deny"` at the workspace level - see `crates/game/src/source.rs`
+# for the last place that shaped a design around it), which rules out reading a
+# process's own resident set size by hand: every platform's answer is a raw
+# syscall or an FFI call, and none of it can be written without an `unsafe`
+# block. This crate does that reading and stays a safe-Rust surface, the same
+# way `wgpu` and `symphonia` already carry FFI this workspace's own code never
+# touches. `always_use_statm` trades `/proc/self/smaps`'s better accuracy for
+# `/proc/self/statm`'s single small read on Linux - the overlay only needs a
+# number that moves in the right direction, not the exact byte count, and
+# `perf::memory::Probe` already throttles the read to a few times a second.
+memory-stats = { version = "1.2.0", features = ["always_use_statm"] }
 
 # Platform-native H.264 decode for the PSP `.PMF` path, behind the
 # `native-video` feature: `just build`/`just check`/CI never touch

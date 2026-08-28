@@ -46,6 +46,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::frontend::{Align, Draw};
 
+pub mod memory;
+
 /// How many frames the meter remembers: two seconds at 60 Hz.
 ///
 /// Long enough that a single hitch is visible for long enough to read, short
@@ -76,13 +78,16 @@ pub enum Overlay {
     /// The line, a second line of pacing figures, and a graph of every frame in
     /// the window.
     Pacing,
-    /// Everything [`Self::Pacing`] shows, plus a third line of scene counts:
-    /// draw calls submitted against the total, and triangles submitted - see
-    /// [`crate::race::SceneStats`].
+    /// Everything [`Self::Pacing`] shows, plus a line of scene counts (draw
+    /// calls submitted against the total, and triangles submitted - see
+    /// [`crate::race::SceneStats`]), a line of resident memory (see
+    /// [`memory::Probe`]), and a line naming the video decoder, each present
+    /// only when the caller actually has one to give it.
     ///
-    /// Its own tier rather than folded into `Pacing`, since the extra line
-    /// names renderer-internal things (`[graphics] lod`, frustum culling)
-    /// most players reaching for `pacing` are not asking about.
+    /// Its own tier rather than folded into `Pacing`, since the extra lines
+    /// name renderer- and process-internal things (`[graphics] lod`, frustum
+    /// culling, resident memory) most players reaching for `pacing` are not
+    /// asking about.
     Dev,
 }
 
@@ -560,6 +565,11 @@ const GRAPH_FRAMES: f32 = 2.0;
 /// graph's scale; the numbers are measured, not scaled - but get it wrong and
 /// the graph says nothing, because against a target four times too slow every
 /// column is a green sliver at the floor.
+///
+/// `memory` is the process's resident set size in bytes, from
+/// [`memory::Probe::sample`] - `None` when the platform has no reader or the
+/// probe has not sampled yet, in which case the line is left out the same way
+/// an absent `scene` or `video` already is.
 #[must_use]
 pub fn draw_list(
     meter: &Meter,
@@ -567,6 +577,7 @@ pub fn draw_list(
     target_hz: u32,
     scene: Option<crate::race::SceneStats>,
     video: Option<&str>,
+    memory: Option<u64>,
 ) -> Vec<Draw> {
     if !mode.is_on() {
         return Vec::new();
@@ -598,6 +609,17 @@ pub fn draw_list(
             "DRAWS {}/{total}  TRIS {}",
             scene.draws_submitted, scene.triangles
         ));
+    }
+    // Resident memory, not virtual: what the process is actually holding,
+    // rather than address space it has merely reserved (a wgpu process's
+    // virtual size is a number nobody watching for a leak wants). `None`
+    // means the platform has no reader or the probe has not sampled yet -
+    // left out rather than shown as zero, which would read as "no memory in
+    // use" instead of "not measured".
+    if mode == Overlay::Dev
+        && let Some(bytes) = memory
+    {
+        lines.push(format!("MEM {:.1} MB", bytes as f32 / (1024.0 * 1024.0)));
     }
     // Which decoder is actually serving the movie on screen right now - the
     // front end and the menu backdrop are the only stages with one, and a
