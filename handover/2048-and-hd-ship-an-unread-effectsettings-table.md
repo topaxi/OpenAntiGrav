@@ -621,3 +621,59 @@ evidence, including the byte-level trace of every function in this chain:
   show, so this likely needs a runtime watchpoint rather than another
   static sweep) would settle both when reset happens and, by extension,
   when advancing past it must happen too.
+
+  **2026-08-29, a sixth pass: the reason five passes missed the write -
+  `0x008b7944` is a pointer slot, and the "closed" candidate list was one
+  fifth of the real one.** `read_memory` at `0x008b7944` returns
+  `0x008c2cb8`; the fourth pass's "flat data, not a pointer" check
+  (`inspect_memory_content` at `+0` and `+4` showing "the same run
+  shifted") is true of any address and proves nothing. The array is at
+  `0x008c2cb8` in **initialised** `.data`, so its compile-time contents
+  are readable: exactly **two** entries of `0x38`, holding precisely the
+  values `FUN_003cdc90` writes - so that function is a
+  reset-to-defaults, and the start state (`+0x00 == 0`, both entries) is
+  known without ever finding its caller. `search_byte_patterns` for
+  `008c2cb8` finds **five** TOC slots holding it; every prior pass
+  searched one (`-0x5a80(r2)`). The other four open up eleven functions,
+  seven of them entirely unread - each one's TOC read from its own OPD
+  entry, not inferred from a verified neighbour's address. Exhaustiveness checked properly this
+  time: no slot points mid-array (`008c2cf0`: no matches) and no
+  absolute materialisation exists (operand search `0x2cb8`: thirteen
+  hits, none this address). Two clean negatives: `FUN_0009bb30` - the
+  brief's leading candidate - and `FUN_0007b388` both have TOC
+  `0x008ad4d8` (OPDs read directly), so their `-0x5a80`/`-0x61a4` hits
+  resolve to unrelated globals; they never touch this array, and the
+  fifth pass's 117-hit `stb` sweep over `FUN_0009bb30` was spent on the
+  byte-pattern trap. Two corrections to earlier offset claims, both from
+  the same cause - **this compiler folds a constant bias into the index
+  register before adding the base**, so a bare `d(rX)` displacement is
+  not the struct offset: the gate `FUN_003da540` tests is `+0x2c`, not
+  `+0x0c` (bias `0x20` at `0x003da5f8`), it reads `0` in `.data` so the
+  gate **passes** rather than skips, and the fifth pass's "flag aliased
+  into a `0.5f` top byte" story is void; and `+0x74` is not a field of
+  this struct at all (past the two-entry array's `0x70` end), so the
+  fourth pass's "two disagreeing producers for `+0x74`" dissolves rather
+  than needing reconciliation. The `+0x04` write at `0x003da674` does
+  stand - re-verified with the bias checked. Also: the four
+  `void { return; }` stubs are all real vector getters (a fourth
+  independent confirmation that `+0x00` is the stage index), and they
+  name a new global `0x008c1430` holding the current entity index - and
+  with two entries, that index reads as viewport/player, not stage.
+  All fourteen per-entry dwords are now placed by value and eight by
+  role. Full write-up on
+  [zone-effectsettings-loader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md#2026-08-29-a-sixth-pass-the-array-is-a-pointer-away-the-candidate-list-was-one-fifth-of-the-real-one-and-two-offset-readings-were-off-by-a-folded-bias).
+  **Still nothing wired into Rust, nothing renamed**: the `+0x00` write
+  remains unfound, and the array's owning subsystem is still inferred
+  from its consumers rather than established. **Next step, now bounded
+  rather than open-ended**: sweep the eleven newly-reachable functions
+  (`FUN_003e29e0`, `FUN_003ff860`, `FUN_00400a00`, `FUN_00403a30`,
+  `FUN_004053e0`, `FUN_004074e0`, `FUN_00408fa8` unread; `FUN_003df360`,
+  `FUN_003fc140`, `FUN_003aa888`, `FUN_002b61c8` sampled) with the
+  per-function `rlwinm ..., 0x6, 0x0, 0x19` enumeration plus a +-0x30
+  disassembly window at each hit - a handful of sites per function, never
+  a bare-mnemonic sweep. **Better still, and what five static passes now
+  argue for**: `0x008c2cb8 + 0x00` is a fixed `.data` address, so one
+  RPCS3 run of a Zone race with a write watchpoint on it settles in a
+  single shot both whether the field is ever non-zero and who writes it -
+  including through the indirect calls that have kept `FUN_003cdc90`'s
+  caller hidden for three passes.

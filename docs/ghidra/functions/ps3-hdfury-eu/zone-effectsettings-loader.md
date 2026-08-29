@@ -638,6 +638,16 @@ bytes - the same byte run continues across the boundary. So `n*0x38` indexes the
 directly, the way every earlier pass in this file already assumed; there is no extra
 indirection hiding the real array elsewhere.
 
+> **Corrected 2026-08-29 (sixth pass): this is wrong, and it is the reason the
+> candidate list below was never exhaustive.** `0x008b7944` is a **TOC slot holding
+> a pointer**; `read_memory` there returns `0x008c2cb8`, the array's real address.
+> The check quoted above proves nothing - reading any address and that address `+4`
+> always shows "the same byte run shifted four bytes." Consequences: the array lives
+> at `0x008c2cb8` in `.data` and has exactly **two** entries, and **five** different
+> TOC slots hold its address, so `lwz -0x5a80(r2)` was only ever one fifth of the
+> ways to reach it. See
+> [the sixth pass](#2026-08-29-a-sixth-pass-the-array-is-a-pointer-away-the-candidate-list-was-one-fifth-of-the-real-one-and-two-offset-readings-were-off-by-a-folded-bias).
+
 **A write site was found - `FUN_003cdc90` - but its caller could not be located, and
 the first read of that fact was wrong.** Decompiling the fifteen small functions
 clustered at `0x003cdbd0`-`0x003ce118` (all short `lwz -0x5a80(r2)` users from the
@@ -707,6 +717,14 @@ write disagree in mechanism - random-non-repeat versus deterministic-from-`+4` -
 nothing in this pass established which one runs when, or whether both do on different
 paths.
 
+> **Corrected 2026-08-29 (sixth pass): there is nothing to reconcile - `+0x74` is not
+> part of this struct.** The array is two entries of `0x38`, so it ends at `+0x70`;
+> `arrayBase + 0x74` is `0x008c2d2c`, a word in the *adjacent* structure (it holds
+> `1` in `.data`, immediately before a sixteen-float table). Both "producers" write
+> the same unrelated slot, and `FUN_003cddc0`'s `rand() & 7` reads naturally as a
+> random-variant selector for whatever that structure is. Neither is a per-entity
+> field of the effectSettings entity struct.
+
 **Net effect on the open question**: the stage-selection write (`entry n`'s offset
 `+0`) is still not found. What is now real and documented: the global is flat data,
 one narrow write to offset `+0` exists but has no located caller, and the previously-
@@ -774,12 +792,300 @@ dwords): `+0x00` stage index, `+0x04` event code, `+0x0c` a flag byte aliased in
 `0.5f`-valued field, `+0x18` blend weight (seeded from a real default, not zero),
 `+0x34` a `1.0f` field. The remaining nine dwords per entry are still unplaced.
 
+> **Corrected 2026-08-29 (sixth pass): the gated field is `+0x2c`, not `+0x0c`, so
+> this whole reading is void.** `FUN_003da540` computes `r9 = arrayBase + n*0x38 +
+> 0x20` at `0x003da5f8` and *then* does `lbz r0,0xc(r9)` - a folded bias, so the
+> byte tested is entry offset `0x20 + 0x0c = 0x2c`. `.data` holds `0` there, so the
+> gate **passes** and the `+0x04` write does happen - the opposite of the conclusion
+> below. `+0x0c` really is `0.5f`, but nothing reads its top byte.
+
 **Net effect**: no new write to the stage index (`+0x00`) or a clean, unambiguous
 `+0xc` flag write was found. What is new is real: a plausible (not confirmed) source
 for `+0xc`'s own non-zero state, and five of fourteen per-entry fields now placed by
 offset rather than four. **Not wired into Rust this pass either** - the layout is
 useful documentation, not a trigger, and `FUN_003cdc90` having no located caller is
 still the harder blocker than the flag's own meaning.
+
+### 2026-08-29, a sixth pass: the array is a pointer away, the candidate list was one fifth of the real one, and two offset readings were off by a folded bias
+
+Picked up the fifth pass's own next step (a caller for `FUN_003cdc90`, or the
+`+0x00` write itself). The `+0x00` write is **still not found**, but the reason five
+passes missed it is now understood, measured, and the search space is re-drawn rather
+than merely re-swept. Program state verified trustworthy first, per this page's own
+trap: `list_open_programs` reports language `PowerPC:BE:64:A2ALT-32addr-PS3`, 26,100
+functions, and `0x003d6dc8` still reads back as `Environment_LoadStageTextures`.
+
+#### `0x008b7944` is a pointer slot; the array is at `0x008c2cb8` and has two entries
+
+`read_memory` at `0x008b7930` (80 bytes, the whole neighbourhood at once):
+
+```
+008b7940  00c7dfb0   <- iVar8, the 15 x 0x250 per-stage table's base (already known)
+008b7944  008c2cb8   <- the entity array's base  ** a pointer, not the array **
+008b7948  3dcccccd   (0.1f - the default FUN_003cdc90 seeds +0x18 from)
+008b794c  007b1f60
+008b7950  008623b8
+008b7954  008c1430   <- see "a current-entity global", below
+```
+
+The fourth pass's "flat data, not a pointer" finding is **wrong** and is marked as
+such inline above. It rested on observing that `inspect_memory_content` at
+`0x008b7944` shows the same byte run as `0x008b7940` shifted four bytes - which is
+true of *any* address and its `+4`, and proves nothing either way. The decisive
+reading is the word's own value, and it is an address in `.data`.
+
+Reading `0x008c2cb8` settles the array's extent too, because it is **initialised
+data, not `.bss`** - so the compile-time contents are readable statically:
+
+```
+008c2cb8  00000000 00000000 00000000 3f000000    entry 0
+008c2cc8  3f000000 3dcccccd 3dcccccd 00000000
+008c2cd8  00000000 00000000 00000000 00000000
+008c2ce8  00000000 3f800000
+008c2cf0  00000000 00000000 00000000 3f000000    entry 1 (identical)
+   ...
+008c2d20  00000000 3f800000
+008c2d28  ffffffff 00000001 43400000 00000000    <- NOT entry 2: different shape
+008c2d38  43d00000 42800000 43e00000 42000000       (a 16-float table: 192, 0, 416,
+   ...                                               64, 448, 32, 320, 128, 288, ...)
+```
+
+Two things fall out. First, **the array is exactly two entries** (`2 * 0x38 =
+0x70`), which is independently corroborated by `FUN_003cdc90` zero-initialising
+dwords `[0]` and `[0xe]` and nothing beyond - it clears the whole array, not "the
+two adjacent entries the cross-fade happens to read." A third witness, this one on
+the *code* side rather than the data side, agrees: `0x003da678` is
+`cmpwi cr7,r31,0x1`, where `r31` is the incoming entity index (`or r31,r4,r4` at
+`0x003da5fc`, taken before `r4` is clobbered with the array base one instruction
+later). A bare compare of the index against `1` - no bound, no loop - is what a
+two-element array looks like from a consumer. This matters beyond bookkeeping:
+the `+0x74` correction below depends on the array ending at `0x70`, and were there
+a third entry, `+0x74` would be entry 2's `+0x04` and the fourth pass's puzzle
+would stand. Second, the `.data` image
+**is** the value set `FUN_003cdc90` writes, field for field (`+0x0c`/`+0x10` =
+`0.5f`, `+0x14`/`+0x18` = `0.1f`, `+0x34` = `1.0f`, everything else zero), so that
+function is a reset-to-compile-time-defaults, and the state the game starts in is
+readable off the ELF without finding its caller at all. **Stage index `+0x00`
+starts at `0`, for both entries.**
+
+Two entries also reframes what the index *is*: `FUN_003cdd40` computes it as
+`*(int *)(*(int *)(ctx + 0x13e8) + 0x6284)` (with `ctx` from `FUN_00679e68`), and
+`FUN_003cde60`'s real disassembly takes it from a global when the caller passes
+`-1`. A 0-or-1 index reads as viewport/player, not as anything stage-related.
+
+#### The closed candidate list was one fifth of the real one
+
+Because `0x008b7944` is a pointer slot rather than the array, `lwz -0x5a80(r2)` is
+not "every place in the binary that can reach this global" - it is every place that
+reaches it *through that one TOC slot*. `search_byte_patterns` for the array's own
+address, `008c2cb8`, finds **five** slots holding it:
+
+| slot | displacement | TOC | reached by |
+| --- | --- | --- | --- |
+| `0x008b36c4` | `0x61ec(r2)` | `0x008ad4d8` | `FUN_002b61c8` |
+| `0x008b7220` | `-0x61a4(r2)` | `0x008bd3c4` | `FUN_003aa888` (5 sites) |
+| `0x008b7944` | `-0x5a80(r2)` | `0x008bd3c4` | the 67-hit list all five prior passes used |
+| `0x008b7cc4` | `-0x5700(r2)` | `0x008bd3c4` | `FUN_003df360`, `FUN_003e29e0` |
+| `0x008b82e0` | `-0x50e4(r2)` | `0x008bd3c4` | `FUN_003fc140`, `FUN_003ff860`, `FUN_00400a00`, `FUN_00403a30`, `FUN_004053e0`, `FUN_004074e0`, `FUN_00408fa8` |
+
+**Every TOC in that column was read from the function's own OPD entry, not inferred
+from address proximity to a verified sibling** - which is precisely the standard this
+page's trap section demands and which kills two candidates further down. The eleven
+OPD pairs, all `{func, 008bd3c4}` except where noted: `002b61c8`@`0x00882228`
+(`008ad4d8`, the second TOC - see below), `003aa888`@`0x0088b9f0`,
+`003df360`@`0x0088c468`, `003e29e0`@`0x0088c4c0`, `003fc140`@`0x0088ca88`,
+`003ff860`@`0x0088ca98`, `00400a00`@`0x0088caa0`, `00403a30`@`0x0088cab8`,
+`004053e0`@`0x0088cac0`, `004074e0`@`0x0088cac8`, `00408fa8`@`0x0088cad0`.
+
+The `0x008b36c4` slot is the second TOC's own copy: `0x008ad4d8 + 0x61ec =
+0x008b36c4`, and the word before it (`0x008b36c0`) holds `0x008c1430` - the same
+pair, in the same order, that `0x008b7940`/`0x008b7944` form for the first TOC.
+So this is the ordinary "one TOC subset per module" shape, not a coincidence of
+values, and **a second module reaches the same array**.
+
+Two searches were run to make "exhaustive" mean something this time rather than be
+asserted again:
+
+- `search_byte_patterns` for `008c2cf0` (entry 1's own address, in case some slot
+  pointed mid-array) - **no matches**.
+- `search_instructions` for operand `0x2cb8`, which would catch an absolute
+  materialisation (`lis rX,0x8c` / `addi rX,rX,0x2cb8`) - the one addressing mode no
+  `d(r2)` search can see. Thirteen hits, **none** of them this address: all are
+  either struct-field displacements on non-`r2` bases (`stw r5,0x2cb8(r23)`), stack
+  slots (`stfd f31,0x2cb8(r1)`), or `±0x2cb8(r2)` loads that resolve elsewhere under
+  their own TOC.
+
+So the candidate list is now genuinely closed *for this binary's addressing*, and it
+is roughly twice the size the previous five passes worked from.
+
+#### `FUN_0009bb30` - the brief's leading unexamined candidate - is the byte-pattern trap
+
+Ruled out cleanly, by the method this page's own trap section prescribes rather than
+by reading its 11 KB body. `search_byte_patterns` for `0009bb30` finds one OPD entry
+at `0x008735f0`, holding `{0009bb30, 008ad4d8}` - its real TOC is **`0x008ad4d8`**,
+not `0x008bd3c4`. Its single `lwz r4,-0x5a80(r2)` at `0x0009be0c` therefore resolves
+to `0x008ad4d8 - 0x5a80 = 0x008a7a58`, an unrelated global. **`FUN_0009bb30` never
+touches this array**; it was on the list only because `search_instructions` matches
+encoded bytes, exactly the failure mode the "byte-pattern search across a TOC
+boundary" section above warns about. A fifth pass spent a 117-hit `stb` sweep on it
+for nothing.
+
+`FUN_0007b388` (the sixth hit in the `-0x61a4` family) falls the same way: OPD at
+`0x00872f00` gives TOC `0x008ad4d8`, so its `-0x61a4(r2)` is `0x008a7334`, not the
+array. Two clean negatives.
+
+#### The "empty stub" functions are vector getters, and they name a current-entity global
+
+`FUN_003cde60`, `FUN_003ce000`, `FUN_003ce070`, `FUN_003ce0e0` all decompile to
+`void { return; }` and all disassemble to the same real body (only the final offset
+differs - `+0x40`, `+0x60`, ...):
+
+```
+003cde60: cmpwi   cr7,r3,-0x1        ; caller may pass -1 for "current"
+003cde70: bne     cr7,0x003cde7c
+003cde74: lwz     r9,-0x5a70(r2)     ; 0x008b7954 -> 0x008c1430
+003cde78: lwz     r3,0x0(r9)         ; r3 = *(int*)0x008c1430   ** current index **
+003cde7c: ... clamp r3 to >= 0 ...
+003cde94: rlwinm  r11,r0,0x6,0x0,0x19  ; \  the n*0x38 idiom
+003cde9c: rlwinm  r0,r0,0x3,0x0,0x1c   ; /
+003cde98: lwz     r10,-0x5a80(r2)      ; r10 = arrayBase
+003cdea0: lwz     r8,-0x5a84(r2)       ; r8  = per-stage table base (iVar8)
+003cdeac: lwzx    r9,r10,r11           ; r9 = array[n].+0x00   ** the stage index **
+003cdeb4: mulli   r9,r9,0x250          ; stage * 0x250
+003cdeb8: addi    r9,r9,0x40
+003cdec4: lvx     v2,r9,r11            ; r11 = 0x1000 here; load a 16-byte field
+```
+
+All read-only. Their value is threefold: a fourth independent confirmation that
+`+0x00` is the `0x250`-table stage index; a **new global, `0x008c1430`**, holding the
+current entity index (also reachable as `*(0x008b7954)` and, from the second TOC, as
+`*(0x008b36c0)`); and the "these are almost certainly a decompiler artefact"
+suspicion recorded in the brief is now confirmed fact for all four, not just
+`FUN_003cde60`.
+
+#### A folded index bias invalidates two offset claims - and the method behind them
+
+This is the most transferable finding of the pass. This compiler habitually folds a
+constant bias into the *index register* before adding the base, so a displacement in
+the final load or store is **not** the struct offset. `FUN_003aa888` alone uses three
+different biases (`+0x00`, `+0x10`, `+0x30`) within one function. Concretely, at
+`0x003aec74`:
+
+```
+003aec74: rlwinm  r0,r27,0x3,0x0,0x1c   ; r0 = n*8
+003aec78: lwz     r11,-0x61a4(r2)       ; r11 = arrayBase
+003aec7c: rlwinm  r9,r27,0x6,0x0,0x19   ; r9 = n*64
+003aec84: subf    r9,r0,r9              ; r9 = n*56 = n*0x38
+003aec88: addi    r9,r9,0x30            ; ** bias folded in here **
+003aec90: lfsx    f0,r11,r9             ; reads entry n's +0x30, not +0x00
+003aec94: fmuls   f0,f0,f13
+003aec98: stfsx   f0,r11,r9             ; array[n].+0x30 *= (float)*(r20+0x24)
+```
+
+Applying that check to the fourth pass's two headline offset claims, both taken from
+`FUN_003da540`:
+
+- **The gate is `+0x2c`, not `+0x0c`.** `0x003da5f0`: `subf r30,r27,r26`, and both
+  halves of that subtraction are verified from the same source register rather than
+  assumed - `0x003da580`: `rlwinm r26,r4,0x6,0x0,0x19` (`r4 << 6`) and `0x003da588`:
+  `rlwinm r27,r4,0x3,0x0,0x1c` (`r4 << 3`), so `r30 = r4*64 - r4*8 = n*0x38`.
+  Then `0x003da5f8`: `addi r9,r30,0x20`, `add r9,r9,r4` (`r4` = arrayBase), and only
+  then `0x003da614`: `lbz r0,0xc(r9)`. Entry offset `0x20 + 0x0c = **0x2c**`.
+  `.data` holds `0` at `+0x2c`, so the gate **passes** and the write below it
+  happens - the exact opposite of the fifth pass's conclusion, which had the gate
+  skipping on `0x3f000000`'s top byte. That "flag aliased into a `0.5f` field"
+  reading is void; `+0x0c` is simply a `0.5f`, read by nobody found so far.
+- **The `+0x04` write stands.** `0x003da658` recomputes `subf r9,r27,r26` and adds
+  the base with **no** bias, so `0x003da674`'s `stw r0,0x4(r9)` really is entry
+  offset `+0x04`. Verified rather than assumed, this time.
+
+**The method, not just the two fixes**: every offset on this page derived from a bare
+`d(rX)` displacement without tracing `rX`'s own provenance back through its `addi`
+is suspect and should be re-derived before it is built on. That is how five passes
+came to carry a wrong `+0x0c` and, below, a `+0x74` field that is not in the struct
+at all.
+
+#### `+0x74` is not a field of this struct
+
+`FUN_003cddc0` decompiles to `*(uint *)(iRam008b7944 + 0x74) = rand() & 7` with a
+retry loop avoiding the previous value - an unindexed, constant offset from the array
+*base*. With the array measured at two entries (`0x70` bytes), `arrayBase + 0x74` is
+`0x008c2d2c`, four bytes past its end, in the adjacent structure (it holds `1` in
+`.data`, immediately before the sixteen-float table quoted above). `FUN_003ce2c0`'s
+own `+0x74` write is the same slot. So the fourth pass's "two disagreeing producers
+for `+0x74`, not reconciled" does not need reconciling - **it dissolves**: both write
+a word that is not part of the entity struct, and `rand() & 7` reads as a
+random-variant selector for whatever that neighbouring structure is. Marked inline
+above.
+
+#### Per-entry layout, re-derived and now complete by value
+
+Combining the `.data` image with the bias-corrected access sites, all fourteen dwords
+of the `0x38` stride are placed by *value*, and eight by *role*:
+
+| offset | `.data` default | role | evidence |
+| --- | --- | --- | --- |
+| `+0x00` | `0` | **stage index** into the `0x250` table | `FUN_003cdbd0`-`FUN_003cdc60`, `FUN_003cde60`-`FUN_003ce0e0`, `FUN_003da540`, `FUN_003ce2c0` |
+| `+0x04` | `0` | event code, switched `0`-`0xe` | written `0x003da674`; read by `FUN_003ce2c0` |
+| `+0x08` | `0` | - | |
+| `+0x0c` | `0.5f` | - (no reader found; **not** the gate) | `FUN_003cdc90` dword `[3]` |
+| `+0x10` | `0.5f` | - | `FUN_003cdc90` dword `[4]` |
+| `+0x14` | `0.1f` | - | `FUN_003cdc90` dword `[5]` |
+| `+0x18` | `0.1f` | cross-fade blend weight | `FUN_003ce2c0`; `FUN_003aa888` at `0x003ae0d0` (bias `+0x10`, `lfs 0x8(r9)`) |
+| `+0x1c` | `0` | index into a table at `0x008b721c` | `FUN_003aa888` at `0x003ab81c` (bias `+0x10`, `lwz 0xc(r11)`), then `<<2` and `lwzx` |
+| `+0x20`..`+0x28` | `0` | - | |
+| `+0x2c` | `0` | **gate flag byte** for the `+0x04` write | `0x003da614` (bias `+0x20`, `lbz 0xc(r9)`) |
+| `+0x30` | `0` | float, set from a constant then scaled per frame | `0x003ada58` (store const), `0x003aec98` (multiply in place), `0x003df434` (read) |
+| `+0x34` | `1.0f` | transition marker: `1.0f` on start, `0` elsewhere | `0x003aea18` (`lis r0,0x3f80`), `0x003ada7c` (`0`), `0x002b629x` (second module, same shape) |
+
+The fifth pass had five of fourteen placed and called nine "unplaced"; this is
+fourteen placed by value and a role for eight, all re-derived from disassembly with
+the bias checked, not carried forward.
+
+#### `FUN_002b61c8`: a second module runs the same "start a transition" sequence
+
+TOC verified first (OPD at `0x00882228` holds `{002b61c8, 008ad4d8}`), so its
+`lwz r7,0x61ec(r2)` genuinely is `0x008b36c4` -> the array. Its body at
+`0x002b6230`-`0x002b629c` is a near-clone of `FUN_003aa888`'s own site at
+`0x003ae9e8`: load the current index from `*(*(0x008b36c0))` = `*(0x008c1430)`, clamp
+it, compute `n*0x38 + 0x30`, add the array base, materialise `1.0f` (`lis r0,0x3f80`)
+- while writing the same `0x55c`/`0x560`/`0x564`/`0x593`/`0x5b0` fields of a
+camera-shaped struct that `FUN_003aa888` writes at its own equivalent site. Two
+modules, same sequence. Nothing in it touches `+0x00` either.
+
+#### What is still open, and the bounded next avenue
+
+**The `+0x00` write is still not found.** What changed is that "not found" now has a
+defensible scope: it was never searched for across four of the five ways to reach the
+array. Seven functions on the newly-opened families are entirely unread, and four
+more only sampled:
+
+- unread: `FUN_003e29e0`, `FUN_003ff860`, `FUN_00400a00`, `FUN_00403a30`,
+  `FUN_004053e0`, `FUN_004074e0`, `FUN_00408fa8`
+- sampled at one or five sites only: `FUN_003df360`, `FUN_003fc140`, `FUN_003aa888`,
+  `FUN_002b61c8`
+
+**The method for pass seven, deliberately bounded** (and specifically *not* another
+bare-mnemonic sweep, the mistake passes four and five both made): per function, run
+`search_instructions(function: <f>, mnemonic: "rlwinm", operand_pattern: "0x6, 0x0,
+0x19")` to enumerate every `n*0x38` computation - there were 5 in `FUN_003aa888` and
+2 in `FUN_003da540`, so this is a handful per function, not hundreds - then
+`disassemble_bytes` a +-0x30 window around each and read the folded bias before
+believing any displacement. Entry 0 needs no stride at all, so also check each
+function for `stw rS,0x0(rX)` / `stwx` whose base traces to an array load.
+
+**And the alternative that five static passes now argue for**: a runtime watchpoint.
+`0x008c2cb8 + 0x00` is a fixed, statically-known address in `.data`, so a single
+RPCS3 run of a Zone race with a read/write watch on it settles in one shot both
+whether the field is ever non-zero and who writes it - including through any
+indirect or computed call static xrefs cannot see, which is also what has kept
+`FUN_003cdc90`'s caller hidden for three passes.
+
+**Nothing renamed, nothing wired into Rust.** No name is asserted for the array
+itself: its layout is measured but its owning subsystem is still inferred from
+consumers, which is short of this project's bar for a data name, and per
+`CLAUDE.md`'s rule an effect with no recovered trigger stays unwired.
+`oag_formats::effectsettings` and `cross_fade_rgba8` are unchanged.
 
 ## See also
 
