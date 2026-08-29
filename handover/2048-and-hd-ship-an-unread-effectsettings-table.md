@@ -514,3 +514,43 @@ evidence, including the byte-level trace of every function in this chain:
   Pulse's own already-implemented elapsed-time zone counter
   (`crates/race/src/zone.rs`) without checking HD's executable for the
   same mechanism first.
+
+  **2026-08-29, later the same day: a strong candidate for the reader,
+  not confirmed - and both its source pointers are now identified.** A
+  byte-pattern search for the same TOC-relative load
+  `Environment_LoadStageTextures` uses for `iVar8`, OPD-verified per
+  `memory.md`'s method rather than trusted from Ghidra's own xrefs, found
+  two real hits and ruled one out: `FUN_003d0b98` walks all 15 stage bases
+  but only to `memset(stageBase, 0, 0x250)` them (`li r4,0x0`/`li
+  r5,0x250` confirmed at every one of the 15 calls) - a clear/reset, not
+  a reader, and a genuine negative result: don't re-check it. `FUN_003da540`
+  is the live one: it reads a per-entity field, uses it and that value
+  minus one to index *two* adjacent stages by the table's own `0x250`
+  stride, and copies three RGBA-shaped fields from each into a small
+  blended-output area - the same cross-fade shape as 2048's own
+  `Zone_UpdateStage`, the first time that shape has shown up anywhere in
+  HD's executable rather than only 2048's. **Both source pointers
+  resolved by hand, not assumed**: the saved-TOC arithmetic this page's
+  own TOC-defect section already established identifies one as `iVar8`
+  itself (confirmed - the identical `-0x5a84` displacement
+  `Environment_LoadStageTextures` uses) and the other as `*(int*)0x008b7944`,
+  the very global `Environment_LoadStageTextures` fills with its own
+  default float block - so the per-entity array `uVar55` (the stage
+  value) is read from is a **known global**, not an unidentified one.
+  **Not renamed**: which entity the per-entity index (`param_2`, before
+  its own `*0x38`) selects (craft, camera, something else - traced one
+  level up into ambiguous camera/viewport-selection-shaped code, not
+  settled) and what consumes the blended output are both still open; a
+  name would assert more than is established. Full trace, including the
+  exact decompiled slice and the four-function-deep call chain into it
+  (whose own last hop, `FUN_0067f078`, turned out to have the *same*
+  OPD-self-reference artifact this pass also found and corrected in an
+  earlier claim about `FwKeyedText_ParseBuffer` - see the correction on
+  the doc page), on
+  [zone-effectsettings-loader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md#2026-08-29-later-the-same-day-who-reads-ivar8--0x1000---two-candidates-found-one-ruled-out-one-strong-and-unconfirmed).
+  **Next concrete step, sharpened now that the source array is a known
+  global rather than an unknown one**: find who **writes** the stage
+  value at `*(int*)0x008b7944 + n*0x38` - a single specific global and
+  field pattern, and a far more tractable target than tracing
+  `FUN_003d9970` (~3 KB, what `FUN_003da540` hands its read fields to) or
+  resolving `FUN_003aa888`'s camera/viewport code cold.

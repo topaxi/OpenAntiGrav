@@ -186,6 +186,18 @@ stage currently applies or what draws off it; wiring a Rust-side light-rig
 override still needs that write side traced first, per `CLAUDE.md`'s rule
 that a trigger needs recovering before an effect is wired.
 
+**2026-08-29, later the same day: a strong candidate found, not confirmed.**
+`FUN_003da540` reads a per-entity field, uses it (and that value minus one)
+to index two adjacent stages of this exact table by the same `0x250` stride,
+and copies three RGBA-shaped fields from each into a small blended output
+area - structurally the same shape as 2048's own `Zone_UpdateStage` (a
+per-entity index driving a cross-fade), the first time that shape has
+turned up anywhere in HD's own executable. Not yet established: what the
+per-entity index actually indexes (craft, camera, something else), or what
+consumes the blended output. Full trace, including a ruled-out sibling that
+turned out to be a table-clearing `memset`, on
+[zone-effectsettings-loader.md](../ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md#2026-08-29-later-the-same-day-who-reads-ivar8--0x1000---two-candidates-found-one-ruled-out-one-strong-and-unconfirmed).
+
 ## 2048's own loader confirms the mechanism - and reaches for files that never shipped
 
 **2026-08-28, read with a live Ghidra project on `vita-2048-eu-v104`.**
