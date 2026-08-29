@@ -104,7 +104,22 @@ Highlight, Texture Colour, EQ brightness}`, `Track.{the same four}`,
 Fog/Alt Fog/Track Fog colour+density, Prelit Colour Power/Scale}`, `Sky
 {horizon,zenith} colour`, `EQ {colour,analogue colour} tint`. The vocabulary
 differs from 2048's but the shape - per-stage scene/track/fog/sky/EQ blocks -
-is the same design, a later authoring pass over the same idea.
+is the same design, a later authoring pass over the same idea. **This is
+what `zonemode.effectsettings` itself exercises, not the executable's full
+vocabulary.** `zonemode.effectsettings` is the smaller of HD's four files
+and uses only the plain `Scene`/`Track`/`Lighting` subset above (no
+gradients, no `Aniso`/`Near Colour`/`Luminance Power`, no Detonator/Aurora/
+Airbrake/Radial Bloom keys); `detonatormode.effectsettings` (and both DLC3
+revisions) exercise nearly everything else the schema recognises. Checked
+directly against all four shipped files
+(`just psarc cat ... | grep -o '"[^"]*"' | sort -u`, stage prefix
+stripped): only **8 of the schema's 73 entries never appear in any of
+them** - the five title-wide keys (`ZoneMode`, `Override game control`,
+`Target zone level`, `Transition start speed`, `Transition acceleration`)
+and three per-stage ones (`Scene.Luminance Power`, `Track.Luminance Power`,
+`Radial Bloom Intensity`) - see
+[zone-effectsettings-loader.md](../ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md#the-full-73-entry-vocabulary-in-order)
+for the full 73-entry list and the per-file verification.
 
 `EffectSettings::stage_vec4` exists specifically for HD's `Lighting.Sun
 colour`/`Fog colour` family: they are floats with an alpha, written with
@@ -139,17 +154,37 @@ with a generic, effectSettings-agnostic keyed-config reader
 (`FwKeyedText_ParseBuffer`/`FwKeyedText_ParseEntry`, six call sites elsewhere
 in the binary) into a real per-stage struct table - 15 stages, `0x250` bytes
 each, arithmetic that checks out three independent ways against the
-already-found "reversed circuit" `memcpy` block. **Still not found: who reads
-that table.** Checked directly against HD's own stage 0
-(`just psarc cat ... /data/environments/zonemode.effectsettings`): its
-`Lighting.*` keys are spelled differently from `.envsettings`'
+already-found "reversed circuit" `memcpy` block. Checked directly against
+HD's own stage 0 (`just psarc cat ... /data/environments/zonemode.effectsettings`):
+its `Lighting.*` keys are spelled differently from `.envsettings`'
 (`"Sun colour"` vs `envsettings::SUN_COLOUR`'s `"Sun color"`, no `Sun
 direction` key at all) - close enough to look like the same field, not close
-enough to reuse, and one field short of what a full light rig needs. Wiring
-a Rust-side override off that name resemblance, on a file whose *consumer*
-is still unfound, would be exactly the guess `CLAUDE.md` rules out; the
-schema table `FwKeyedText_ParseEntry` reads from (`iVar8 + 0x3664`, found,
-not yet read) is where the authoritative field list actually lives.
+enough to reuse, and one field short of what a full light rig needs.
+
+**2026-08-29: settled with evidence, not a guess.** The schema table
+`FwKeyedText_ParseEntry` looks a parsed key up against is read -
+[zone-effectsettings-loader.md](../ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md#2026-08-29-the-schema-table-is-read-and-it-is-the-full-recognised-vocabulary-not-a-guess)
+has the full 73-entry vocabulary (`g_EffectSettingsSchemaKeyNames`,
+`0x008b79cc`). HD's executable genuinely recognises the British-spelled,
+`%s`-prefixed family this file's own contents already showed
+(`"%s.Lighting.Sun colour"`, `"%s.Lighting.Fog colour"`/`"...density"`,
+`"%s.Lighting.Alt Fog colour"`/`"...density"`) - `.envsettings`' American
+`"Sun color"` is confirmed to be a different table's own vocabulary
+entirely, not a second spelling this schema also accepts. The 15-stage
+ladder below is independently confirmed from the executable side too: it is
+compiled in verbatim as the `%s` fill-in values, not just present in the
+shipped files. **New key groups this schema recognises that no file-side
+read had surfaced**: `%s.Scene.*`/`%s.Track.*` (texture/near/base colour,
+aniso power/curve, luminance power, three RGB gradients on Scene, no
+gradients on Track), and a trailing group covering EQ tint, sky
+horizon/zenith colour, radial bloom intensity, aurora colour, airbrake
+colour, and four Detonator-only mine/bomb colours - one schema serving both
+modes, which is itself a partial answer to why `detonatormode.effectsettings`
+reuses Zone's own ladder (see [Open](#open)). **Still not found: who reads
+`iVar8 + 0x1000`** - the schema settles *what the file can say*, not what
+stage currently applies or what draws off it; wiring a Rust-side light-rig
+override still needs that write side traced first, per `CLAUDE.md`'s rule
+that a trigger needs recovering before an effect is wired.
 
 ## 2048's own loader confirms the mechanism - and reaches for files that never shipped
 
@@ -326,7 +361,12 @@ traced.
   unread.** Detonator has no known "zone number" that ramps the same way Zone
   does, so either the table is reused wholesale regardless of relevance, or
   Detonator has an escalation mechanic of its own that has not been looked
-  for. **One data point, not a resolution**: 2048's `Environment_Load`
+  for. **Partial answer, 2026-08-29**: HD's own executable schema
+  (`g_EffectSettingsSchemaKeyNames`, above) is a single, mode-agnostic
+  vocabulary shared by both `ZoneMode` and `DetonatorMode` files - it was
+  never authored with a separate Detonator ladder to draw on in the first
+  place, which explains the reuse without yet explaining whether Detonator
+  needs one. **One data point, not a resolution**: 2048's `Environment_Load`
   treats Zone and Detonator as genuinely separate tables even in its
   fallback path (`ZoneModeHDFury.effectSettings` vs
   `DetonatorModeHDFury.effectSettings`, picked by a mode flag) - so the

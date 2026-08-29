@@ -330,6 +330,251 @@ than trusting the parameter.
 
 **Why this does not yet license wiring HD's `Lighting.*` keys into this project's renderer**: `oag_game`'s `envsettings_light`/`envsettings_fog` already read `Lighting.Sun direction`/`Lighting.Sun color`/`Lighting.Constant ambient color`/`Fog.Fog Color`/`Fog.Fog Density` off a circuit's `.envsettings`. `zonemode.effectsettings`'s own stage 0 (`just psarc cat ... /data/environments/zonemode.effectsettings`, checked directly against the disc this pass) carries a *differently spelled* vocabulary under the same-looking group name - `"0 Start.Lighting.Sun colour"` (British spelling, capital first letter, no `direction` key at all), `"0 Start.Lighting.Constant Ambient Colour"`, `"0 Start.Lighting.Fog colour"`/`"...Fog density"` - close enough to look like the same field, not close enough to reuse the same string constant, and missing the one field (`Sun direction`) a full light rig needs. Building an override off a name-alone match, on a file whose *consumer* is still unfound, is exactly the "plausible-looking stand-in" `CLAUDE.md` warns against. The schema table at `iVar8 + 0x3664` (found this pass, not read) is where the authoritative field list actually lives - reading it is the way to settle the vocabulary question with evidence rather than a spelling guess.
 
+## 2026-08-29: the schema table is read, and it is the full recognised vocabulary, not a guess
+
+**Answers this page's own "single well-localised next step" and closes
+`effectsettings.md`'s spelling-guess hedge with hard evidence.** With the
+project state re-verified trustworthy (`get_current_program_info` still
+reports `-32addr-PS3`, `Environment_LoadStageTextures` still decompiles to
+the shape this page already documents), `iVar8` (`Environment_LoadStageTextures`'s
+own base pointer, `= iRam008b7940`) resolves from the binary's own `.data`,
+not `.bss`: reading `0x008b7940` directly returns `0x00c7dfb0`, a fixed
+constant baked into the ELF at link time - so `iVar8` is a compile-time
+address, not a value only a live process would have. That made the parse
+context `iVar8 + 0x3660 = 0x00c81610` (in `.bss`, unreadable statically, as
+expected) traceable no further by address alone - but `FwKeyedText_ParseEntry`'s
+own schema-lookup loop, re-read with this in hand, gives the schema's *start*
+and *end* as `*(param_1+4)`/`*(param_1+8)` with the loop count computed as
+`(end-start)/36` (Ghidra's `>>2` then `* 0x38e38e39` is the classic
+divide-by-36-via-multiplication idiom) - confirming the 36-byte stride this
+page already inferred, but not yet where those two pointers themselves come
+from at runtime.
+
+**Found by search, not by tracing the write**: `get_xrefs_to` on
+`0x007b2458` (`"%s.Lighting.Sun colour"`, found via `search_strings` on
+`"Sun"` - the exact string `effectsettings.md` needed to settle its own
+spelling question) returns exactly one hit, a **data** reference from
+`0x008b7a9c`. That is a 4-byte pointer slot holding this string's address -
+and reading outward from it, both directions, finds it sitting inside a long,
+uninterrupted run of `const char*` values, each pointing to the *next*
+string in the same `.rodata` pool, in strict address order. Walking that run
+back to its own start (the last non-pointer word before it, a float table
+this same function's default-initialisation code writes into `puVar19[..]`)
+gives the array's base: **`0x008b79cc`**. Walking forward, the pointers stay
+well-formed for exactly 73 entries before the shape changes into the
+already-documented per-stage texture-filename table (interleaved
+destination/flag words, not a flat pointer run) - the first non-schema
+entry, `Data/Tex/DetonatorMode0.gtf`, is the texture table's own first
+filename, already named on this page.
+
+**This is not the 36-byte record table `FwKeyedText_ParseEntry` walks -
+it is very likely the compile-time source array some (unfound) initialiser
+builds that table from, in the same order.** No writer of `*(param_1+4)`/
+`*(param_1+8)` was traced this pass (`.bss`, so nothing to read statically);
+what is established is structural, not a write-site trace, but the
+boundaries are measured, not reconciled after an off-by-one guess:
+
+- The word immediately before the array's own base is not itself a pointer -
+  `0x008b79c8` holds `0x43200000` (the float `40.0f`), the tail end of this
+  same function's default-value block (`puVar19[..]` in the decompile
+  above). `0x008b79cc` is confirmed as the array's *first* word by what
+  comes before it changing shape, not by counting forward from a guess.
+- Index 72 (the last of 73) sits at `0x008b79cc + 72*4 = 0x008b7aec`,
+  holding `0x007b26a8` - `"%s.Detonator Bomb Outer Colour"`, the vocabulary's
+  own last entry (below).
+- The very next word, `0x008b7af0`, holds `0x00c7efb0` - **exactly
+  `iVar8 + 0x1000`**, the per-stage destination base this section's own
+  point 6 above already identified. The destination table's own base
+  address sits in memory immediately after the key-name array ends, which
+  is itself corroboration that the two are a matched pair rather than
+  coincidentally adjacent.
+- `0x007b26c8` (`Data/Tex/DetonatorMode0.gtf`) - the per-stage texture
+  table's own first filename, already named on this page - appears two
+  words further on, at `0x008b7af8`, inside that table, not this array.
+
+So 73 is a measured length (float boundary in, destination-base boundary
+out), not a count that happened to land on a round number. Separately, this
+project's own binary is already known to store a keyed-config vocabulary
+this exact way: `g_ShaderParameterNames` (`0x008b7f08`, confidence 95,
+[renderer.md](renderer.md)) is a structurally identical flat `char*` array
+about 1 KB further into the same data blob, for HD's 81 engine shader
+parameters - this is a pattern the binary uses more than once, not a
+one-off reading. **Named**: `g_EffectSettingsSchemaKeyNames` (data,
+confidence 82 - short of the function-level confidences on this page
+because the array's *consumer* is inferred from position, content, and this
+sibling-array precedent, not from a traced write into the runtime schema).
+
+### The full 73-entry vocabulary, in order
+
+```
+ 0  ZoneMode
+ 1  Override game control
+ 2  Target zone level
+ 3  Transition start speed
+ 4  Transition acceleration
+ 5  Texture U scale
+ 6  Texture V scale
+ 7  0 Start
+ 8  1 Sub Venom
+ 9  2 Venom
+10  3 Sub Flash
+11  4 Flash
+12  5 Sub Rapier
+13  6 Rapier
+14  7 Sub Phantom
+15  8 Phantom
+16  9 Super Phantom
+17  10 Zen
+18  11 Super Zen
+19  12 Subsonic
+20  13 Mach 1
+21  14 Supersonic
+22  %s.Scene.Texture Colour
+23  %s.Scene.Near Colour
+24  %s.Scene.Base Colour
+25  %s.Scene.Base Colour Middle
+26  %s.Scene.Base Colour Highlight
+27  %s.Scene.Base Colour Highlight Middle
+28  %s.Scene.Aniso Power
+29  %s.Scene.Aniso Curve
+30  %s.Scene.Luminance Power
+31  %s.Scene.Gradient1.Colour0
+32  %s.Scene.Gradient1.Colour1
+33  %s.Scene.Gradient1.Colour2
+34  %s.Scene.Gradient2.Colour0
+35  %s.Scene.Gradient2.Colour1
+36  %s.Scene.Gradient2.Colour2
+37  %s.Scene.Gradient3.Colour0
+38  %s.Scene.Gradient3.Colour1
+39  %s.Scene.Gradient3.Colour2
+40  %s.Scene.EQ brightness
+41  %s.Track.Texture Colour
+42  %s.Track.Near Colour
+43  %s.Track.Base Colour
+44  %s.Track.Base Colour Middle
+45  %s.Track.Base Colour Highlight
+46  %s.Track.Base Colour Highlight Middle
+47  %s.Track.Aniso Power
+48  %s.Track.Aniso Curve
+49  %s.Track.Luminance Power
+50  %s.Track.EQ brightness
+51  %s.Lighting.Sky reflection colour
+52  %s.Lighting.Sun colour
+53  %s.Lighting.Constant Ambient Colour
+54  %s.Lighting.Prelit Colour Scale
+55  %s.Lighting.Prelit Colour Power
+56  %s.Lighting.Fog colour
+57  %s.Lighting.Fog density
+58  %s.Lighting.Alt Fog colour
+59  %s.Lighting.Alt Fog density
+60  %s.Lighting.Track Fog colour
+61  %s.Lighting.Track Fog density
+62  %s.EQ colour tint
+63  %s.EQ analogue colour tint
+64  %s.Sky horizon colour
+65  %s.Sky zenith colour
+66  %s.Radial Bloom Intensity
+67  %s.Aurora Colour
+68  %s.Airbrake Colour
+69  %s.Detonator Mine Colour
+70  %s.Detonator Mine Electricity Colour
+71  %s.Detonator Bomb Inner Colour
+72  %s.Detonator Bomb Outer Colour
+```
+
+**Verified against every shipped file, not left as a positional inference**:
+`just psarc cat ... | grep -o '"[^"]*"' | sort -u`, stage-prefix stripped, on
+all four HD files (`zonemode`/`zonemodedlc3`/`detonatormode`/
+`detonatormodedlc3.effectsettings`). Exactly **8 of the 73 entries never
+appear in any of the four**: the five title-wide keys `ZoneMode`, `Override
+game control`, `Target zone level`, `Transition start speed`, `Transition
+acceleration` (0-4), and three `%s.`-prefixed ones - `Scene.Luminance Power`
+(30), `Track.Luminance Power` (49), `Radial Bloom Intensity` (66). Every
+other entry, including every `Gradient`/`Aniso`/`Near Colour`/Detonator-only
+key, is exercised by `detonatormode.effectsettings` specifically (the larger
+file); `zonemode.effectsettings` alone uses a smaller subset (no gradients,
+no Aniso/Near Colour/Luminance Power, no Detonator/Aurora/Airbrake/Radial
+Bloom keys) - consistent with `effectsettings.md`'s own file-side reading
+of that file's groups.
+
+Read directly with `read_memory`/`inspect_memory_content` against
+`0x007b1f80` onward (the string pool the array's pointers resolve into), not
+transcribed from any prior guess.
+
+### What this settles
+
+- **The "spelling guess" in `effectsettings.md` is now evidence, not a
+  guess.** HD's own executable recognises `"%s.Lighting.Sun colour"` -
+  British spelling, `%s`-prefixed - as a first-class schema entry, matching
+  the real file's own `"0 Start.Lighting.Sun colour"` exactly once `%s` is
+  substituted with entry 7's own string. `.envsettings`' American-spelled,
+  unprefixed `"Sun color"` (`0x00785ec8`) is a **different table entirely**
+  (`envsettings.md`'s own subject), not a second spelling this same schema
+  also accepts - the two formats' vocabularies do not overlap by name at
+  all, only by field intent.
+- **The `%s` substitution value is the stage's own name string, not a
+  generic index** - entries 7-21 are exactly the 15-stage ladder
+  `effectsettings.md` already recovered from the shipped files
+  (`"0 Start"` .. `"14 Supersonic"`), compiled into the executable
+  verbatim as the fill-in values. That both the disc's own files and the
+  executable's compiled-in schema agree on this exact ladder, independently,
+  is a second corroboration of that ladder beyond the four files
+  `effectsettings.md` already checked.
+- **New key groups, not previously read anywhere in this project**: the
+  `%s.Scene.*` (19 keys - texture/near/base colour family, two aniso
+  parameters, luminance power, three RGB gradients) and `%s.Track.*` (the
+  same ten-key subset of Scene's shape, no gradients) groups, plus a
+  trailing group of eleven title-scoped-per-stage keys covering EQ tint,
+  sky horizon/zenith colour, radial bloom, aurora, airbrake, and four
+  Detonator-only mine/bomb colours. `effectsettings.md`'s own "Each stage's
+  own key groups" section named a subset of these from reading the files
+  directly; this is the first time the *executable's* own recognised list
+  has been read, and it recognises more than what any one file's own
+  contents exercise.
+- **One schema serves both modes.** The Detonator-specific keys (69-72) sit
+  in the same flat array as the Zone-only "%s.Radial Bloom Intensity"/etc -
+  confirming `Environment_LoadStageTextures`'s parser is genuinely mode-
+  agnostic, one compiled-in vocabulary recognising whichever subset a given
+  `.effectSettings` file happens to use. That is a partial answer to this
+  project's own open question of why `detonatormode.effectsettings` reuses
+  Zone's 15-stage ladder verbatim: the loader never had a Detonator-specific
+  schema to author a Detonator-specific ladder into in the first place.
+
+### What this does not settle
+
+- **The runtime `.bss` schema table `FwKeyedText_ParseEntry` actually walks
+  (`*(param_1+4)`/`*(param_1+8)`) was not traced to this array.** The
+  connection argued here is structural (measured boundaries, verified
+  content, a sibling array in the same binary using the identical shape) and
+  circumstantial (no live process to read `.bss` from), not a traced data
+  flow from this array into that pointer pair. A future pass with a running
+  RPCS3 instance, or a static trace of whichever initialiser populates
+  `iVar8 + 0x3660`'s own construction, would close this properly.
+- **Still not found: who reads `iVar8 + 0x1000`** (this page's own prior
+  section already named this as the actual next step past the schema, and
+  it still is). This pass answers *what the file can say*, not *what stage
+  currently applies* or *what draws off it*.
+- **Entries 7-21 are not this pass's discovery - `effectsettings.md`
+  already reads the same fifteen names off the shipped files themselves -
+  but finding them compiled in verbatim as the executable's own `%s`
+  fill-in values is a second, independent source for the same ladder.**
+  That corroborates, rather than merely echoes, `effectsettings.md`'s own
+  "Open" section: HD's `speech_zone.bnk` names fourteen `MR_*` announcer
+  cues in the same order at confidence 75 (traced end to end only on
+  Pulse's own executable), and this pass adds the schema's own compiled-in
+  copy of the names as a third data point, still on neither title's
+  *selection* code. **What this does not license**: assuming HD's stage
+  selection reuses Pulse's already-implemented elapsed-time zone counter
+  (`crates/race/src/zone.rs`, confidence 84, recovered from Pulse's own
+  executable) - that mechanism has not been checked against HD's
+  executable at all, and `oag_title::ZoneAnnouncer`/`crates/game/src/audio/sfx/announcer.rs`
+  (which does play milestone cues off it at runtime) is wired for Pulse's
+  zone-number mechanism specifically, not confirmed to generalise. Nothing
+  here narrows 2048's still-unfound writer of `Zone_UpdateStage`'s `+0x634`
+  field either
+  ([zone-environment-fallback.md](../vita-2048-eu-v104/zone-environment-fallback.md)) -
+  that is 2048's own executable, and this pass never left HD's.
+
 ## See also
 
 - `docs/formats/effectsettings.md` - the file format this loader reaches for

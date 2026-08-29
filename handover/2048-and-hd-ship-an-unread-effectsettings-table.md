@@ -482,17 +482,35 @@ evidence, including the byte-level trace of every function in this chain:
   `zone_N` circuits in Zone or Detonator mode: a visible symptom (no fog, no
   palette shift, a black/flat scene) would corroborate "the blend math runs
   against zero-initialised data" more cheaply than a runtime trace would.
-- **New, sharply localised by this session's find**: read the schema table
-  `FwKeyedText_ParseEntry` looks entries up against (`iVar8 + 0x3664` inside
-  `Environment_LoadStageTextures`'s own state struct at `iVar8 + 0x3660`) -
-  its 36-byte entries (type tag, length, destination pointer) are the
-  authoritative list of which `"key"` strings this parse actually recognises
-  and where each one lands inside the `iVar8 + 0x1000` per-stage table. That
-  settles the vocabulary question `docs/formats/effectsettings.md` currently
-  answers with a spelling guess (HD's `"Sun colour"` versus `.envsettings`'
-  `"Sun color"`), and is the more tractable of the two remaining unknowns -
-  a fixed compiled-in table beats another blind sweep of `g_GameState`'s 100+
-  readers. Once the schema is read, find who reads `iVar8 + 0x1000` itself
-  (this session's other open item, no leads yet) - that is the actual
-  stage-selection trigger `CLAUDE.md` requires before any of this reaches the
-  renderer.
+- ~~Read the schema table `FwKeyedText_ParseEntry` looks entries up
+  against~~ **Done, 2026-08-29**: the vocabulary is read, not the 36-byte
+  runtime record table itself (still in unreadable `.bss`) but a 73-entry
+  compile-time array of key-name strings (`g_EffectSettingsSchemaKeyNames`,
+  `0x008b79cc`), whose boundaries are measured (a float ends the block
+  before it; `iVar8 + 0x1000`, the already-identified per-stage destination
+  base, sits immediately after it ends) rather than reconciled after a
+  guess. Full list, boundary evidence, and per-file verification against
+  all four shipped `.effectSettings` files on
+  [zone-effectsettings-loader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md#2026-08-29-the-schema-table-is-read-and-it-is-the-full-recognised-vocabulary-not-a-guess).
+  This settles the vocabulary/spelling question `docs/formats/effectsettings.md`
+  used to answer with a guess (73 recognised keys; only 8 never appear in
+  any shipped file), and surfaces key groups (`Scene`/`Track` gradients,
+  sky/aurora/airbrake, Detonator-only mine/bomb colours) no file-side read
+  had found. **What it does not settle**: the actual write site of the
+  runtime `.bss` schema pointers (`*(param_1+4)`/`*(param_1+8)`) was not
+  traced to this array - the connection is structural (measured boundaries,
+  verified content, a sibling array in the same binary using the identical
+  shape), not a traced data flow, since `.bss` cannot be read without a
+  live process. **The next concrete step is unchanged in shape, sharper in
+  target**: find who reads `iVar8 + 0x1000` (the per-stage struct table
+  this schema's destination pointers write into) - that is the actual
+  stage-selection trigger `CLAUDE.md` requires before any of this reaches
+  the renderer. **Not a new lead, but worth citing precisely**: the
+  schema's `%s` fill-in values (entries 7-21) being the same 15
+  speed-class names `effectsettings.md`'s own file-side reading and HD's
+  `speech_zone.bnk` `MR_*` cues already agreed on is a third, independent
+  source for the same ladder - it does not by itself establish *how* the
+  original selects a stage, and does not license assuming HD reuses
+  Pulse's own already-implemented elapsed-time zone counter
+  (`crates/race/src/zone.rs`) without checking HD's executable for the
+  same mechanism first.
