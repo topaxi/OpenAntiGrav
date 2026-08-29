@@ -101,3 +101,43 @@ fn a_malformed_line_reports_the_same_error_envsettings_does() {
     let err = EffectSettings::parse("\"0 Start.a\"=1.0\nnonsense\n").expect_err("the second line");
     assert_eq!(err.line, 2);
 }
+
+#[test]
+fn cross_fade_at_full_weight_is_just_the_current_stage() {
+    assert_eq!(
+        cross_fade_rgba8([10, 20, 30, 40], [200, 200, 200, 200], 1.0),
+        [10, 20, 30, 40]
+    );
+}
+
+#[test]
+fn cross_fade_at_zero_weight_is_just_the_previous_stage() {
+    assert_eq!(
+        cross_fade_rgba8([10, 20, 30, 40], [200, 200, 200, 200], 0.0),
+        [200, 200, 200, 200]
+    );
+}
+
+#[test]
+fn cross_fade_at_the_midpoint_averages_each_channel() {
+    // Each term truncates toward zero before the two are summed - not the
+    // same as truncating the sum - so 255*0.5 + 255*0.5 lands on 254, one
+    // short of a rounded average. That is the traced arithmetic, not a
+    // rounding bug: see `cross_fade_rgba8`'s own doc comment.
+    assert_eq!(
+        cross_fade_rgba8([100, 0, 255, 10], [0, 100, 255, 20], 0.5),
+        [50, 50, 254, 15]
+    );
+}
+
+#[test]
+fn cross_fade_clamps_high_rather_than_wrapping() {
+    // An out-of-range weight (never seen at a real call site, but not
+    // checked on the low end by the traced code either) must clamp, not
+    // wrap the way a raw `u8` cast would. A zero previous channel keeps
+    // the negative `other_weight` term from cancelling the overflow out.
+    assert_eq!(
+        cross_fade_rgba8([200, 0, 0, 0], [0, 0, 0, 0], 1.5),
+        [255, 0, 0, 0]
+    );
+}

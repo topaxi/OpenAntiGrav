@@ -43,6 +43,12 @@
 //! alone**, not checked against `Zone_Update`'s own timer - see the thread
 //! file's `## Open`. Nothing here reads either title's executable, and
 //! nothing wires a stage's values into a race yet.
+//!
+//! [`cross_fade_rgba8`] is the one piece of this module that *does* read
+//! the executable - HD/Fury's own runtime cross-fade between adjacent
+//! stages, recovered from two independent functions (confidence 80, see
+//! its own doc comment). It stays a standalone, untriggered utility: which
+//! key feeds it and what selects the current stage are both still open.
 
 use std::collections::BTreeMap;
 
@@ -151,6 +157,49 @@ impl EffectSettings {
             _ => None,
         }
     }
+}
+
+/// Cross-fades two stages' packed-byte colour channels, byte for byte, the
+/// way HD/Fury's own runtime does.
+///
+/// `weight` is the current stage's own share of the blend (`1.0` at the
+/// moment a stage becomes current, falling toward `0.0` as the previous
+/// stage's own share, `1.0 - weight`, takes over) - expected in `0.0..=1.0`;
+/// values outside that range are not clamped going in, matching the traced
+/// code, which never checks the lower bound either.
+///
+/// # Evidence
+///
+/// Recovered independently from two functions in HD/Fury's executable that
+/// compute this exact arithmetic against the same `0x250`-stride runtime
+/// stage table - `FUN_003da540` and `FUN_003ce2c0`, both `ps3-hdfury-eu`,
+/// confidence 80 (real, exercised mechanism; corroborated twice rather than
+/// found once). Per channel: `(int)(current * weight) + (int)(previous *
+/// other_weight)`, each term truncated toward zero before the two are
+/// summed, then clamped to `0xff` on the high side only - not a single
+/// truncate-after-sum. See
+/// [zone-effectsettings-loader.md](../../../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md#2026-08-29-a-fourth-pass-who-writes-0x008b7944--n0x38---one-near-repeat-of-the-opd-trap-caught-before-it-shipped-one-real-correction-one-new-lead).
+///
+/// # What this does not settle
+///
+/// **Nothing calls this yet.** Which parsed `.effectSettings` key feeds
+/// which channel, which stage counts as "current" at a given moment, and
+/// what `weight` should read at runtime are all still unrecovered - see the
+/// thread file's `## Open`
+/// (`handover/2048-and-hd-ship-an-unread-effectsettings-table.md`). This is
+/// the confirmed blend arithmetic alone, ready to reuse once those are
+/// found - implementing it ahead of its trigger is not the same as wiring
+/// it into a race.
+#[must_use]
+pub fn cross_fade_rgba8(current: [u8; 4], previous: [u8; 4], weight: f32) -> [u8; 4] {
+    let other_weight = 1.0 - weight;
+    let mut out = [0u8; 4];
+    for i in 0..4 {
+        let from_current = (f32::from(current[i]) * weight) as i32;
+        let from_previous = (f32::from(previous[i]) * other_weight) as i32;
+        out[i] = (from_current + from_previous).clamp(0, 255) as u8;
+    }
+    out
 }
 
 #[cfg(test)]

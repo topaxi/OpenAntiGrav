@@ -16,7 +16,16 @@ Implemented in
 [`oag_formats::effectsettings`](../../crates/formats/src/effectsettings.rs),
 checked against the disc by
 [`effectsettings_ground_truth.rs`](../../crates/formats/tests/effectsettings_ground_truth.rs).
-**Not yet wired into a race** - see [Open](#open) below.
+**Not yet wired into a race** - see [Open](#open) below. One piece of the
+runtime mechanism is implemented ahead of that, deliberately scoped to stay
+inert: `cross_fade_rgba8` is the confirmed cross-fade blend HD/Fury's own
+executable performs between two adjacent stages (recovered independently
+from `FUN_003da540` and `FUN_003ce2c0`, both `ps3-hdfury-eu`, confidence 80 -
+[zone-effectsettings-loader.md](../ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md#2026-08-29-a-fourth-pass-who-writes-0x008b7944--n0x38---one-near-repeat-of-the-opd-trap-caught-before-it-shipped-one-real-correction-one-new-lead)).
+It takes two already-known colours and a weight and has no caller - which
+key feeds it and what should drive `weight` at runtime are exactly the open
+questions below, so implementing the arithmetic now does not get ahead of
+what CLAUDE.md requires before firing an effect.
 
 ```sh
 just psarc cat data/images/hdfury-ps3-eu-dec.iso:PS3_GAME/USRDIR/DATA00.PSARC \
