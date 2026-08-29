@@ -730,6 +730,57 @@ pass has two disagreeing producers rather than one settled path. `oag_formats::e
 already parses the file; nothing new here changes what is safe to wire into
 `oag_render`/`oag_gameplay`.
 
+### 2026-08-29, a fifth pass: the `+0xc` flag - answered from data already in hand, and a course-correction on search scope
+
+Picked up this page's own next step: trace who sets the flag byte `FUN_003da540`'s
+`+4` write is gated on. **A mis-scoped detour first**: ran `stb` with no operand filter
+across `FUN_003d0b98` (166 hits) and `FUN_0009bb30` (117 hits) hoping to spot a store to
+offset `0xc` of our entity struct - the same "drowns you" mistake the previous pass's
+own advisor call had already flagged for `stw`. Both results are dominated by repeated
+`stb r0/r8/r10/r11,0x0..0xf(rX)` runs against registers never confirmed to derive from
+`-0x5a80(r2)` - almost certainly a generic small-struct clear idiom this binary reuses
+in many unrelated places, not evidence about this specific field. Recorded as a trap
+for next time: `search_instructions` needs the field's own displacement in
+`operand_pattern` (`"0xc("` at minimum), never a bare mnemonic, on a function already
+known to be tens of KB.
+
+**The real answer was already sitting in this same page's own earlier decompile.**
+`FUN_003cdc90` (the write-site-with-no-located-caller from the fourth pass) writes
+`puVar1[3] = 0x3f000000` and `puVar1[0x11] = 0x3f000000` - dword index 3 is entry 0's
+own byte offset `0xc` (`3*4`), dword index `0x11` (17) is entry 1's (`14 + 3`), the
+identical entries `FUN_003da540`'s cross-fade reads. Big-endian: the top byte of
+`0x3f000000` is `0x3f`, non-zero - so this single already-documented write, if it is
+ever reached, leaves `+0xc` non-zero for both entries, which is exactly the state that
+makes `FUN_003da540`'s own gate (`if (flag != 0) skip`) skip the block. **Two readings,
+both consistent with the evidence, neither settled**: this is either a real "already
+initialised, no fresh event pending" flag intentionally packed into a float field's
+top byte, or a coincidental byte-level alias of a genuine `0.5f` field that happens to
+read non-zero - PowerPC has no bitfield syntax in the decompile to tell the two apart,
+and nothing this pass traced reads offset `0xc` as anything other than this one
+byte-test. **Still unresolved**: `FUN_003cdc90` itself still has no located caller (per
+the fourth pass), so even a confirmed flag write does not establish when, or whether,
+it actually runs.
+
+**A useful side-effect of re-reading this decompile carefully: three more of this
+struct's fourteen dword fields are now placed, not just the two (`+0x00` stage,
+`+0x04` from the prior pass) already known.** Dword index 6 (byte `0x18`) is exactly
+the offset `FUN_003ce2c0` reads as the blend weight (`fVar2`); `FUN_003cdc90` seeds it
+with `uRam008b7948` - a *different* global, the neighbouring default-value slot right
+after the entity array's own base (`0x008b7944 + 4`), i.e. one of
+`Environment_LoadStageTextures`'s own ~30 default floats, not a literal constant. Dword
+index 13 (byte `0x34`, each entry's last field before the next entry starts) is seeded
+`0x3f800000` (`1.0f`) for both entries. Layout now known for entry stride `0x38` (14
+dwords): `+0x00` stage index, `+0x04` event code, `+0x0c` a flag byte aliased into a
+`0.5f`-valued field, `+0x18` blend weight (seeded from a real default, not zero),
+`+0x34` a `1.0f` field. The remaining nine dwords per entry are still unplaced.
+
+**Net effect**: no new write to the stage index (`+0x00`) or a clean, unambiguous
+`+0xc` flag write was found. What is new is real: a plausible (not confirmed) source
+for `+0xc`'s own non-zero state, and five of fourteen per-entry fields now placed by
+offset rather than four. **Not wired into Rust this pass either** - the layout is
+useful documentation, not a trigger, and `FUN_003cdc90` having no located caller is
+still the harder blocker than the flag's own meaning.
+
 ## See also
 
 - `docs/formats/effectsettings.md` - the file format this loader reaches for

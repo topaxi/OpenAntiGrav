@@ -589,3 +589,35 @@ evidence, including the byte-level trace of every function in this chain:
   flag byte that gates `FUN_003da540`'s own `+4` write - a single byte at
   a known offset, more tractable than a further blind sweep for the
   `+0` write.
+
+  **2026-08-29, a fifth pass: the `+0xc` answer was already in this
+  thread's own decompile, plus three more of the fourteen per-entry
+  fields placed by offset.** A blind `stb` sweep across two more giant
+  functions (`FUN_003d0b98`, `FUN_0009bb30`) hit the exact same
+  "drowns you" trap the fourth pass's advisor call had already flagged
+  for `stw` - both results are generic small-struct-clear noise, not
+  evidence about this field, and cost real budget for nothing. The real
+  answer: `FUN_003cdc90`'s already-quoted decompile sets dword `[3]`/
+  `[0x11]` (both entries' own `+0xc`) to `0x3f000000` - big-endian, so
+  the top byte read at `+0xc` is `0x3f`, non-zero, which is exactly the
+  state that skips `FUN_003da540`'s own gated write. Whether that is an
+  intentional flag packed into a float's top byte or a coincidental
+  alias is not settled either way - PowerPC decompile has no bitfield
+  syntax to distinguish them - and `FUN_003cdc90` still has no located
+  caller (previous pass), so even a confirmed write does not establish
+  when it runs. Side benefit: dword `6` (`+0x18`) is the exact offset
+  `FUN_003ce2c0` reads as blend weight, seeded from a real neighbouring
+  default (`0x008b7944 + 4`) rather than a literal zero; dword `13`
+  (`+0x34`, each entry's last field) is seeded `1.0f`. Layout now known
+  for five of fourteen dwords per entry: `+0x00` stage, `+0x04` event
+  code, `+0x0c` the aliased flag, `+0x18` weight, `+0x34` a `1.0f`
+  field. Full write-up on
+  [zone-effectsettings-loader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md#2026-08-29-a-fifth-pass-the-0xc-flag---answered-from-data-already-in-hand-and-a-course-correction-on-search-scope).
+  **Still nothing wired into Rust**: layout knowledge, not a trigger -
+  `FUN_003cdc90`'s missing caller is the harder blocker than the flag's
+  own meaning. **Next step, unchanged in kind**: the stage-index write
+  (`+0x00`) itself remains the actual target; a caller for
+  `FUN_003cdc90` (an indirect/computed call Ghidra's static xrefs won't
+  show, so this likely needs a runtime watchpoint rather than another
+  static sweep) would settle both when reset happens and, by extension,
+  when advancing past it must happen too.
