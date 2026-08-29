@@ -554,3 +554,38 @@ evidence, including the byte-level trace of every function in this chain:
   field pattern, and a far more tractable target than tracing
   `FUN_003d9970` (~3 KB, what `FUN_003da540` hands its read fields to) or
   resolving `FUN_003aa888`'s camera/viewport code cold.
+
+  **2026-08-29, a fourth pass: the write to offset `+0` (the stage index
+  itself) is still not found, but the global is confirmed flat (not a
+  pointer), a write with no located caller was found and correctly *not*
+  called a vtable method the second time round, and a real write to a
+  neighbouring field (`+4`) turned up in a part of `FUN_003da540` neither
+  pass had actually read.** `FUN_003da540` (~15.5 KB) and `FUN_003d0b98`
+  (~24 KB) are both far bigger than either pass's own excerpt suggested -
+  measured with `get_function_by_address` this time. `FUN_003d0b98`
+  re-checked with two nets scoped to itself (`stwx`, the `*0x38` stride
+  idiom): still nothing past the already-confirmed memsets, so "ruled
+  out" stands, on a function most of which is still unsurveyed.
+  `FUN_003cdc90` writes offset `+0` for entries 0 and 1 to zero (a real
+  write to the exact pattern) but its only `get_xrefs_to` hit is its own
+  OPD range, and a second-order check (`get_xrefs_to` on *that* address)
+  returns nothing - so it has no located caller, corrected from a first
+  read that called it a vtable "Reset" method before checking that far.
+  New, found by disassembling rather than trusting the prior slice:
+  `FUN_003da540` itself writes entry `n`'s offset `+4` (gated by a flag
+  byte at `+0xc`) from a small object-table lookup - offset `+4` is the
+  same field `FUN_003ce2c0` (a second ~10.2 KB function, found here,
+  that independently re-derives the identical cross-fade blend
+  `FUN_003da540` does, corroborating the mechanism) switches over into a
+  fixed `+0x74` field that then picks one of nine draw/audio branches.
+  `+0x74` now has **two disagreeing producers** - this switch, and
+  `FUN_003cddc0`'s random-non-repeat write from the previous pass - not
+  reconciled. Full trace on
+  [zone-effectsettings-loader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md#2026-08-29-a-fourth-pass-who-writes-0x008b7944--n0x38---one-near-repeat-of-the-opd-trap-caught-before-it-shipped-one-real-correction-one-new-lead).
+  **Nothing wired into Rust from this pass**: the stage-selection write
+  itself is still unfound and the `+4`/`+0x74` mechanism has two
+  unreconciled producers, both short of `CLAUDE.md`'s bar for firing an
+  effect on a recovered trigger. **Next step**: trace who sets the `+0xc`
+  flag byte that gates `FUN_003da540`'s own `+4` write - a single byte at
+  a known offset, more tractable than a further blind sweep for the
+  `+0` write.

@@ -625,6 +625,111 @@ Per `CLAUDE.md`'s confidence floor, this stays unnamed (`FUN_003da540`) rather t
 
 **Sharper next step, given `puVar10` is now a known global rather than an unknown array**: find who **writes** the stage value at `*(int*)0x008b7944 + n*0x38` (entry `n`'s own offset-0 field) - that is the actual stage-selection write site, a far more tractable target (one specific global, one specific field pattern) than tracing `FUN_003d9970` (the function `FUN_003da540` hands its read fields to, ~3 KB, four call sites) or resolving `FUN_003aa888`'s camera/viewport-selection code cold.
 
+### 2026-08-29, a fourth pass: who writes `0x008b7944 + n*0x38` - one near-repeat of the OPD trap caught before it shipped, one real correction, one new lead
+
+Picked up the previous pass's own sharpened next step: find the write site. Method
+(per `search_instructions(mnemonic: lwz, operand_pattern: -0x5a80(r2))`) found 67 hits
+across roughly 20 functions - every place in the binary that loads this global's own
+TOC-relative slot at all, read or write.
+
+**Confirmed first: `0x008b7944` is flat data, not a pointer.** `inspect_memory_content`
+on both `0x008b7940` and `0x008b7944` shows the second is simply the first shifted four
+bytes - the same byte run continues across the boundary. So `n*0x38` indexes the global
+directly, the way every earlier pass in this file already assumed; there is no extra
+indirection hiding the real array elsewhere.
+
+**A write site was found - `FUN_003cdc90` - but its caller could not be located, and
+the first read of that fact was wrong.** Decompiling the fifteen small functions
+clustered at `0x003cdbd0`-`0x003ce118` (all short `lwz -0x5a80(r2)` users from the
+67-hit list) turned up one real store: `FUN_003cdc90` zero-initialises roughly thirty
+`undefined4` fields of the global directly, including offset `0x00` of both entry `0`
+and entry `1` (`puVar1[0] = 0` and `puVar1[0xe] = 0`, the exact stage-index field this
+whole thread is chasing, for the two adjacent entries `FUN_003da540`'s cross-fade
+reads) - a real, if narrow, write. Its `get_xrefs_to` returned one `[DATA]` hit at
+`0x0088c198`, sitting inside a dense run of eight `{func, toc}`-shaped 8-byte pairs
+starting with `FUN_003cdc90` itself, then `FUN_003cdd20`/`FUN_003cdd30` (two constant-
+offset accessors into a *different* global) and five `0067ce*`/`0067cf*` functions
+(destructor-family: `*param_1 = PTR_DAT_...` then a cleanup call, the standard
+scalar-deleting-destructor shape used elsewhere in this binary). **First read: called
+this a genuine 8-slot C++ vtable and `FUN_003cdc90` a real "Reset" virtual method.**
+That read does not survive the check this page's own earlier correction (the
+`FwKeyedText_ParseBuffer` one) exists to catch: `0x0088c198` sits inside the documented
+OPD range (`0x00870520`-`0x008a54d8`), and a follow-up `get_xrefs_to 0x0088c198`
+itself returns **no references at all** - nothing loads that table's address the way a
+real vtable install does (`*param_1 = PTR_DAT_...`). Adjacent OPD descriptors sitting
+next to each other in memory is simply what the OPD segment looks like; it is not by
+itself evidence of a dispatch table. **Corrected**: `FUN_003cdc90` is a real write to
+the exact field pattern, but it has **no located caller** - record it as "a write site
+with no confirmed call site," not as a virtual method. Whether it runs once at load
+(matching 2048's own `Zone_InitStageState`) or not at all in the traced path is open.
+
+**`FUN_003da540` and `FUN_003d0b98` are both far larger than either pass's own slice
+implied - measured this time, not assumed.** `get_function_by_address` gives real
+bodies: `FUN_003da540` spans `0x003da540`-`0x003de1ff` (~15.5 KB), `FUN_003d0b98`
+spans `0x003d0b98`-`0x003d69bb` (~24 KB) - both far past the excerpts either pass
+actually read. Re-checked `FUN_003d0b98` for anything past the already-confirmed
+memsets with two narrow nets scoped to the function alone (`stwx`, and the `rlwinm
+0x6,0x0,0x19` half of the `*0x38` stride idiom `FUN_003da540` uses) - both come back
+with zero hits, so the "just memsets, ruled out" finding stands, but on a function that
+was never read in full; most of its 24 KB is still unsurveyed and doing something else
+entirely.
+
+**The new lead: `FUN_003da540` itself writes entry `n`'s offset `+4` field, not offset
+`+0`.** Disassembling its opening block (rather than trusting the prior pass's
+narrower decompiled slice) finds, at `0x003da674`: `stw r0,0x4(r9)`, where `r9` is
+`entityBase(-0x5a80(r2)) + (r26-r27)` and `r0` comes from `lwz r0,0x640(r11)` -
+`r11` itself an `lwzx` result from a small table indexed by `r31`. The write is gated:
+`lbz r0,0xc(r9)` (a byte flag at entry-offset `0xc`) must be zero, or the whole block
+from `0x003da620` to `0x003da674` is skipped. Offset `+4` is exactly the field
+`FUN_003ce2c0` (below) switches on across fifteen values (`0`-`0xe`) to select one of
+several downstream draw/state branches - so this is a real producer for that field,
+found by tracing a store rather than guessed from the switch shape alone. **Still not
+the stage index**: offset `+0` (the field that indexes the `0x250`-stride per-stage
+table, confirmed by the previous pass) is not written anywhere in this block or
+anywhere else this pass's nets covered - the actual stage-*selection* write remains
+unfound.
+
+**A second independent consumer of the cross-fade, found while chasing this: `FUN_003ce2c0`,
+`0x003ce2c0`-`0x003d0b97` (~10.2 KB), sitting directly before the already-ruled-out
+`FUN_003d0b98`.** Its opening block re-derives the identical blend `FUN_003da540`
+computes - same `-1`/clamp-to-zero previous-stage arithmetic, same `*0x250` stride,
+same `+0x1000`/`+0x1004` RGBA reads - independently, inline, for its own rendering use
+rather than by calling the other function. Two independent call sites agreeing on the
+exact same arithmetic is corroboration that this blend is a real, exercised mechanism,
+not an artefact of one decompile. Immediately after its own blend, it reads entry `n`'s
+`+4` field and remaps it through a chain of `if (iVar36 == k)` comparisons (`k` = `0`
+through `0xe`, mapped to a small output set `{0,1,3,4,5,7,8}`) into a **fixed**, unindexed
+field at `entityBase+0x74` - and `+0x74`'s value then selects which of nine large
+draw/audio-parameter branches (`iVar20 == 0` through `8`) runs later in the same
+function. **Two producers for the same `+0x74` field, not reconciled**: `FUN_003cddc0`
+(found the previous pass, unindexed random write avoiding a repeat) and this switch
+write disagree in mechanism - random-non-repeat versus deterministic-from-`+4` - and
+nothing in this pass established which one runs when, or whether both do on different
+paths.
+
+**Net effect on the open question**: the stage-selection write (`entry n`'s offset
+`+0`) is still not found. What is now real and documented: the global is flat data,
+one narrow write to offset `+0` exists but has no located caller, and the previously-
+unread bulk of both giant neighbouring functions turned up a real (if different)
+write - to offset `+4`, a distinct "event" field - that both closes part of the
+`FUN_003ce2c0`/`+0x74` shape from the previous pass and opens a new one (two producers
+for `+0x74`). **Next concrete step**: `FUN_003da540`'s `+4` write is gated by entry
+`+0xc`'s own flag byte - trace who sets *that* flag, since it is the thing that decides
+whether a fresh event value lands at all, and it is a single byte at a known offset
+rather than a cold sweep. Separately, `stwx`/the shift-idiom nets used here were scoped
+only to the specific functions already on this page's candidate list; a program-wide
+`stwx` search was attempted and returned 500 results capped by the tool's own default
+limit before reaching any of this page's address range (all candidates sit past
+`0x0009bb30`, sorted-by-address results this shallow never got there) - re-running it
+with a higher limit, or address-range-scoped, is unstarted.
+
+**Not wired into Rust**: per `CLAUDE.md`'s rule against firing an effect on an
+unrecovered trigger, none of this pass's findings cross the bar - the actual
+stage-selection write is still unfound, and even the `+4`/`+0x74` mechanism found this
+pass has two disagreeing producers rather than one settled path. `oag_formats::effectsettings`
+already parses the file; nothing new here changes what is safe to wire into
+`oag_render`/`oag_gameplay`.
+
 ## See also
 
 - `docs/formats/effectsettings.md` - the file format this loader reaches for
