@@ -361,16 +361,38 @@ traced.
   [zone-environment-fallback.md](../ghidra/functions/vita-2048-eu-v104/zone-environment-fallback.md))
   reads a per-craft field, clamps it to `12`, and that clamp is an exact
   match against 2048's own thirteen-stage table - real selection logic,
-  found and named. **What it still does not establish**: what struct that
-  field belongs to, what writes it, or whether HD's own selection works the
-  same way - no write site was found, and this is 2048's executable, not
-  HD's. **One avenue closed**: the DLC-specific loader,
+  found and named. **One avenue closed**: the DLC-specific loader,
   `Environment_LoadHDFuryContent`, was checked in full and does not touch
   `+0x634`, `Zone_UpdateStage`, or `DAT_816c4890` either - it is a separate
   subsystem for the four ported circuits, not a second writer to look for
-  the field in. Per `CLAUDE.md`'s rule that a trigger needs recovering
-  before an effect is wired, this stays unwired until the write side closes
-  the loop.
+  the field in.
+
+  **2026-08-30: both titles' write sites found, independently, same day.**
+  2048's `+0x634`/`+0x638` writer is `Hud_UpdateZoneSpeedClassWidget`
+  (`0x81197d6c`) - the Zone-mode HUD's own Speed Class number widget, not a
+  race-progress timer, driven by a percentage-shaped value against a
+  17-entry Mach-number threshold table
+  ([zone-environment-fallback.md](../ghidra/functions/vita-2048-eu-v104/zone-environment-fallback.md#2026-08-30-a-fourth-pass-0x6340x638s-writer-is-found---its-the-zone-mode-huds-own-speed-class-widget-not-racephysics-logic)).
+  HD's own field (a two-entry array's `+0x00`/`+0x04`, a different struct
+  shape from 2048's per-craft one) is written by
+  `Environment_UpdateStageBlend` (`0x003da540`), a self-contained
+  request/commit pair: `+0x04` holds a requested stage sourced from
+  `g_GameState.mode`-dependent tables, committed into `+0x00` when the two
+  differ
+  ([zone-effectsettings-loader.md](../ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md#2026-08-30-a-ninth-pass-the-0x00-write-is-found-environment_updatestageblend-at-0x003da540-confidence-85)).
+  **Per `CLAUDE.md`'s rule that a trigger needs recovering before an effect
+  is wired, the mechanism itself is now recovered on both titles** - what
+  is not recovered is the exact *numeric* mapping from live ship speed to a
+  stage index: 2048's own 17-entry threshold table read inconsistently on
+  direct decode (a per-record string-pointer field didn't line up 1:1 with
+  its own threshold, unresolved rather than force-fit), and HD's
+  `g_GameState.mode`-dependent source tables were traced to their existence,
+  not to their contents. **So the format/blend/render-application plumbing
+  can be wired now** (the recovered fields and cross-fade math are enough
+  to drive it from an explicit stage+weight input, the same way
+  `.envsettings` already drives static fog/sky), **but the live
+  speed-to-stage trigger itself is not** - inventing those thresholds would
+  be exactly the fitted-constant-as-recovered-fact `CLAUDE.md` forbids.
 - **2048's table names 13 stages but the title ships 15 textures in each
   set** - still unexplained, though sharpened by the texture-content finding
   below: the "Track" set is where the real per-stage art lives on both
@@ -453,11 +475,16 @@ traced.
   it here on the channel order alone would still risk the tiling half of the
   "plausible-looking stand-in" `CLAUDE.md` warns against. What 2048's own
   "Track" art actually looks like is still open.
-- **Wiring a stage's values into a race** - the next concrete step once the
-  write side of `Zone_UpdateStage`'s `+0x634` field is found (on 2048) or an
-  equivalent is read on HD. HD is still the best-measured *rendering*
-  target, since its `.envsettings` reading and drawing path already exists,
-  but the clearest recovered *selection* logic so far is on 2048.
+- **Wiring a stage's values into a race** - both titles' write sites are now
+  found (above), so this is the live next step rather than blocked on RE.
+  HD is still the best-measured *rendering* target, since its `.envsettings`
+  reading and drawing path already exists. Scope the first cut to the
+  format/blend/render-application plumbing (parse the stage table, apply
+  `cross_fade_rgba8` between two stages at a given weight, feed the result
+  into the same `mesh_render::Fog`/sky path `.envsettings` already drives)
+  driven by an explicit stage+weight input - **not** by a live
+  speed-computed trigger, since the exact numeric thresholds for that are
+  still unresolved on both titles (see above).
 
 ## See also
 
