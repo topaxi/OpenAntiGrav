@@ -1,0 +1,44 @@
+# A veteran-scheme sideshift, run up to avoid the wall that made the original
+# capture's displacement figure unusable. See `sideshift-double-tap.inputs` for
+# the gesture itself (timer confirmation, tap timing, why `l` is the button and
+# not the axis) - this file exists only to fix the run-up, not to repeat that.
+#
+# `sideshift-double-tap.inputs`'s `180 cross` run-up grazes a wall on Talon's
+# Junction around tick 60-90 (`input-bindings.md`'s runtime section), so the
+# capture and its control were already 1.17 units apart by the time the first
+# tap fired - a wall-contact residue much larger than the sideshift's own
+# signal, and the "11.7 units of leftward displacement" figure was never a
+# runtime measurement of the original to begin with (it came from `oag-trace
+# drive` through our own simulation, which does not hit this wall on the same
+# script). See `handover/sideshift-has-no-runtime-leg.md`.
+#
+# `Ship_UpdateAirbrakes` (`0x0884c9a4`) applies the sideshift as a constant
+# world-space force (`craft.right * handling.sideshift`, divided by mass by the
+# integrator like any other force - see `engine.md`'s "the sideshift is a
+# force" section), not a velocity-scaled one. So a shorter run-up does not bias
+# the measurement the way it would if the shift scaled with speed - the fix
+# here is purely about clearing the wall, not about preserving a particular
+# forward speed.
+#
+# `130 cross` was chosen off `data/traces/talons-junction-standing-start.csv`
+# (the same launch profile - a stationary craft under `--hold cross`, no
+# steering): that capture shows a clean, undisturbed speed climb through tick
+# 130 (~90 units/s, well clear of both the 60-90 graze this script's own
+# citation reports and the ~187 first-contact tick that capture itself shows -
+# see the thread file for why those two disagree, which this file does not
+# depend on either way). 130 ticks clears the disputed window with margin in
+# both directions without needing to fall back to a token run-up.
+
+# Reach speed on the opening straight, short enough to clear the wall.
+130 cross
+
+# Tap one: opens the left window.
+1 cross l
+3 cross
+
+# Tap two: fires the sideshift.
+1 cross l
+
+# The shift itself is 0.2 s, and then a second of lockout. Hold the line
+# through both so the displacement is measurable after it has settled.
+100 cross

@@ -967,6 +967,19 @@ axis ends the run - it drives itself into the first wall, because nothing is
 steering. From there it settles at 21-22 units/s and stays there, which is the
 regime the six-second warmup hands to `--script`.
 
+**Checked 2026-08-30 and not reproduced: the currently-committed
+`talons-junction-standing-start.csv` shows no tick-61 impact at all.** Its
+`speed_cached` climbs smoothly through 45-58 across ticks 55-70 with no
+lateral-velocity discontinuity anywhere near there, and free-runs to `119.4`
+units/s by tick 187 before the first real contact. Same launch profile
+(`--hold cross`, no steering), different outcome - this is the "derived
+evidence under `data/` is not durable" trap from `HANDOVER.md`'s own read-this-first
+section, now caught in a file this page itself cites: whatever produced the
+61-tick impact above is not preserved by the committed CSV, and a session
+reasoning about *this* file's numbers should check what it actually contains
+rather than trust the paragraph above. Not re-diagnosed; noted so the next
+session does not lose time re-discovering the mismatch.
+
 Free running it does not stop at 22. A capture that survived longer
 (`--warmup 2`, saved as `talons-junction-free-run-118.csv`) reads **118 units/s**
 with the engine pinned at its documented cap. So the reference scenario cruises
