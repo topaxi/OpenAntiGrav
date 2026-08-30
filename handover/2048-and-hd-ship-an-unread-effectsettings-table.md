@@ -1019,3 +1019,38 @@ evidence, including the byte-level trace of every function in this chain:
   `0xe` (that is Detonator), so a Zone race reaches `+0x640` through
   `Environment_UpdateStageBlend`'s "anything else" path by construction. Two
   independent negatives now, static and runtime.
+
+  **2026-08-30, a thirteenth pass: HD's key-to-offset table is enumerated in
+  full.** `GHIDRA_MCP_ALLOW_SCRIPTS=1` went live, so the previous pass's
+  "bounded but unspent job" got spent with `run_script_inline`: a symbolic
+  `base + offset` walk of `Environment_RegisterStageSchema`'s loop,
+  resolving each key template against the function's own TOC. **51 per-stage
+  keys, confidence 88**, all landing in `g_effect_settings_stages`
+  (`0x00c7efb0`, newly named).
+
+  **It validates itself three ways** - the offsets fill the `0x250` stride
+  exactly (24 padding bytes), the only two overlaps are `Scene`/`Track.EQ
+  brightness` sitting in the fourth lane of their own `Texture Colour`, and
+  every 16-byte key uses a 16-byte helper while every 4-byte key uses a
+  4-byte one (confirming the previous pass's storage split across all nine
+  helpers by geometry rather than by reading three of them).
+
+  **It corrects a guess this thread has carried since the render wiring**:
+  the three cross-faded fields are `Scene.Texture Colour` (`+0x00`),
+  **`Scene.Base Colour Highlight`** (`+0x20` - the guess said `Near Colour`,
+  which is actually `+0x10`) and `Scene.Base Colour` (`+0x40`). Two of three
+  right. It also confirms the `Lighting.*` keys land where this project's
+  name-keyed reader assumes, which had been an assumption.
+
+  **2048's offsets are a recorded negative.** The same script recovers its
+  51 per-stage key names from the executable - the first time that
+  vocabulary has been read from code rather than from a shipped file - but
+  its destination column is wrong (Thumb reuses `r1` for both the key
+  template and the destination, and destinations come from precomputed stack
+  slots), so it is **not** published. It needs a tracker that models the
+  prologue's stack-slot fills.
+
+  **Still not wired, and the reason is unchanged**: `Scene.*`/`Track.*` turn
+  out to be two *named material groups* rather than indexed slots, which is
+  a far better binding prospect than 2048's `Colour 1..8` - but no consumer
+  of any offset was traced, and HD remains the title with no stage trigger.

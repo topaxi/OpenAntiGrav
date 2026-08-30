@@ -1807,6 +1807,152 @@ destination bases are unchanged from the twelfth pass. Nothing here reaches
 the renderer: an offset and a storage width still do not say which material a
 colour recolours.
 
+## 2026-08-30, a fourteenth pass: the key-to-offset table is enumerated in full, and it corrects `effectsettings.md`'s positional guess
+
+`GHIDRA_MCP_ALLOW_SCRIPTS=1` is live, so the twelfth pass's "bounded but
+unspent job" got spent. A `run_script_inline` walk of
+`Environment_RegisterStageSchema`'s loop body
+(`0x003d4f00`-`0x003d5bb0`) tracks each register symbolically as
+`base + offset`, resolves each `lwz rX,-N(r2)` against this function's TOC
+(`0x008bd3c4`) to the key template it loads, and pairs the two at every
+registration call. **Confidence 88.**
+
+**58 registration calls, 51 of them per-stage** (the first seven run before
+the loop and target non-stage globals). Every per-stage destination resolves
+to `r22 + r23 + offset`, where `r23` advances by `0x250` per iteration - so
+the base is the already-identified per-stage table, now named
+**`g_effect_settings_stages`** (`0x00c7efb0`, i.e. `iVar8 + 0x1000`).
+
+### Why this table is trustworthy: it validates itself
+
+Three independent consistency checks, all run after the enumeration rather
+than assumed:
+
+- **The offsets fill the stride exactly.** The highest key ends at
+  `0x250` - the struct's own stride - with only **24** unassigned padding
+  bytes (`0x158`-`0x15f`, `0x1dc`-`0x1df`, `0x214`-`0x21f`).
+- **The only two overlaps are meaningful ones.** `Scene.EQ brightness`
+  (`+0x0c`) sits in the fourth lane of `Scene.Texture Colour` (`+0x00`, 16
+  bytes) and `Track.EQ brightness` (`+0x6c`) in the fourth lane of
+  `Track.Texture Colour` (`+0x60`). Nothing else collides.
+- **Widths agree with the helpers.** Every key registered through
+  `0x005d3ec0`/`0x005d3e18`/`0x005d3cc8`/`0x005d4010` is 16 bytes apart from
+  its neighbour; every key through `0x005d4418`/`0x005d40b8` is 4 bytes
+  apart. That is the byte/float split the thirteenth pass inferred from three
+  helpers, now confirmed across all nine by geometry.
+
+### The correction: two of the three guessed fields were right, one was not
+
+`effectsettings.md` has carried a positional guess that the three 16-byte
+fields `Environment_UpdateStageBlend` cross-fades at `+0x00`/`+0x20`/`+0x40`
+are `Scene.Texture / Near / Base Colour`. Measured:
+
+| offset | guessed | actual |
+| ---: | --- | --- |
+| `+0x00` | `Scene.Texture Colour` | **`Scene.Texture Colour`** - correct |
+| `+0x20` | `Scene.Near Colour` | **`Scene.Base Colour Highlight`** - wrong; `Near Colour` is at `+0x10` |
+| `+0x40` | `Scene.Base Colour` | **`Scene.Base Colour`** - correct |
+
+So the blend fades the scene's texture colour, its highlight and its base -
+a coherent triple, and not the one the guess named.
+
+### The full table
+
+| offset | bytes | key (after the `%s.` stage prefix) | helper |
+| ---: | ---: | --- | --- |
+| `+0x000` | 16 | `Scene.Texture Colour` | `0x005d3ec0` |
+| `+0x00c` | 4 | `Scene.EQ brightness` | `0x005d4418` |
+| `+0x010` | 16 | `Scene.Near Colour` | `0x005d3ec0` |
+| `+0x020` | 16 | `Scene.Base Colour Highlight` | `0x005d3ec0` |
+| `+0x030` | 16 | `Scene.Base Colour Highlight Middle` | `0x005d3ec0` |
+| `+0x040` | 16 | `Scene.Base Colour` | `0x005d3ec0` |
+| `+0x050` | 16 | `Scene.Base Colour Middle` | `0x005d3ec0` |
+| `+0x060` | 16 | `Track.Texture Colour` | `0x005d3ec0` |
+| `+0x06c` | 4 | `Track.EQ brightness` | `0x005d4418` |
+| `+0x070` | 16 | `Track.Near Colour` | `0x005d3ec0` |
+| `+0x080` | 16 | `Track.Base Colour Highlight` | `0x005d3ec0` |
+| `+0x090` | 16 | `Track.Base Colour Highlight Middle` | `0x005d3ec0` |
+| `+0x0a0` | 16 | `Track.Base Colour` | `0x005d3ec0` |
+| `+0x0b0` | 16 | `Track.Base Colour Middle` | `0x005d3ec0` |
+| `+0x0c0` | 16 | `Scene.Gradient1.Colour0` | `0x005d3ec0` |
+| `+0x0d0` | 16 | `Scene.Gradient1.Colour1` | `0x005d3ec0` |
+| `+0x0e0` | 16 | `Scene.Gradient1.Colour2` | `0x005d3ec0` |
+| `+0x0f0` | 16 | `Scene.Gradient2.Colour0` | `0x005d3ec0` |
+| `+0x100` | 16 | `Scene.Gradient2.Colour1` | `0x005d3ec0` |
+| `+0x110` | 16 | `Scene.Gradient2.Colour2` | `0x005d3ec0` |
+| `+0x120` | 16 | `Scene.Gradient3.Colour0` | `0x005d3ec0` |
+| `+0x130` | 16 | `Scene.Gradient3.Colour1` | `0x005d3ec0` |
+| `+0x140` | 16 | `Scene.Gradient3.Colour2` | `0x005d3ec0` |
+| `+0x150` | 4 | `EQ colour tint` | `0x005d40b8` |
+| `+0x154` | 4 | `EQ analogue colour tint` | `0x005d40b8` |
+| `+0x160` | 16 | `Sky zenith colour` | `0x005d4010` |
+| `+0x170` | 16 | `Sky horizon colour` | `0x005d4010` |
+| `+0x180` | 4 | `Scene.Aniso Power` | `0x005d4418` |
+| `+0x184` | 4 | `Track.Aniso Power` | `0x005d4418` |
+| `+0x188` | 4 | `Radial Bloom Intensity` | `0x005d4418` |
+| `+0x18c` | 4 | `Lighting.Sky reflection colour` | `0x005d40b8` |
+| `+0x190` | 16 | `Lighting.Sun colour` | `0x005d3e18` |
+| `+0x1a0` | 16 | `Lighting.Fog colour` | `0x005d3e18` |
+| `+0x1b0` | 16 | `Lighting.Alt Fog colour` | `0x005d3e18` |
+| `+0x1c0` | 16 | `Lighting.Track Fog colour` | `0x005d3e18` |
+| `+0x1d0` | 4 | `Lighting.Fog density` | `0x005d4418` |
+| `+0x1d4` | 4 | `Lighting.Alt Fog density` | `0x005d4418` |
+| `+0x1d8` | 4 | `Lighting.Track Fog density` | `0x005d4418` |
+| `+0x1e0` | 16 | `Lighting.Constant Ambient Colour` | `0x005d3e18` |
+| `+0x1f0` | 16 | `Lighting.Prelit Colour Scale` | `0x005d3e18` |
+| `+0x200` | 16 | `Lighting.Prelit Colour Power` | `0x005d3cc8` |
+| `+0x210` | 4 | `Aurora Colour` | `0x005d40b8` |
+| `+0x220` | 16 | `Airbrake Colour` | `0x005d3ec0` |
+| `+0x230` | 4 | `Detonator Mine Colour` | `0x005d40b8` |
+| `+0x234` | 4 | `Detonator Mine Electricity Colour` | `0x005d40b8` |
+| `+0x238` | 4 | `Detonator Bomb Inner Colour` | `0x005d40b8` |
+| `+0x23c` | 4 | `Detonator Bomb Outer Colour` | `0x005d40b8` |
+| `+0x240` | 4 | `Track.Luminance Power` | `0x005d4418` |
+| `+0x244` | 4 | `Scene.Luminance Power` | `0x005d4418` |
+| `+0x248` | 4 | `Scene.Aniso Curve` | `0x005d4418` |
+| `+0x24c` | 4 | `Track.Aniso Curve` | `0x005d4418` |
+
+### What this hands the render side, and what it does not
+
+**It does**: the `Lighting.*` keys this project already reads by name resolve
+to `+0x190` (`Sun colour`), `+0x1a0` (`Fog colour`), `+0x1d0` (`Fog
+density`), `+0x1e0` (`Constant Ambient Colour`), `+0x1f0`/`+0x200`
+(`Prelit Colour Scale`/`Power`) - so `oag_formats::effectsettings`'s
+name-keyed reading and the runtime's offset-keyed one agree, which was
+previously an assumption. It also shows the `Fog`/`Alt Fog`/`Track Fog`
+triple is three *parallel* blocks, matching this project's decision to use
+the primary pair.
+
+**It does not** answer the binding question. `Scene.*` and `Track.*` are the
+encouraging half - they are **not** indexed, they are two named material
+groups, so "which material does this recolour" has a plausible answer on HD
+(scenery versus track) rather than an index nobody can resolve. But no
+consumer of any of these offsets was traced this pass, and HD is still the
+title with no recovered stage trigger.
+
+### 2048: the key inventory is enumerated, the offsets are **not** and must not be cited
+
+The same technique was run against `Environment_RegisterStageSchema`
+(`0x8104714c`). It recovers **67 registrations, 51 of them per-stage with
+their key names** - `Window Colour 1..3.{Gradient 1..3, Emissive}`,
+`Edge Colour`, `Colour 1..8.{Colour, Emissive}`,
+`Cube Animation Colour 1.*`, `EQ.{Colour A/B/C, Mid-Band Position, BG
+Colour A/B/C, BG Mid-Band Position}`, `Track Paint.{Primary,Secondary}
+Colour`, `Growing Texture.{Colour, Scale Bias, Factors}`,
+`Background.Diffuse Colour`, `Sky.{Horizon,Zenith} Colour`,
+`Fog.{Environment,Track} Fog Colour` - which is the first enumeration of
+2048's per-stage vocabulary from its **executable** rather than from a
+shipped file.
+
+**Its destination column is wrong and is deliberately not reproduced here.**
+On Thumb the destination register `r1` is also the register the key
+template's `movw`/`movt` pair writes, and the destinations arrive from
+precomputed stack slots; the tracker resolved many of them to stale
+constants (the same value `0x8151c6fc` repeats across unrelated keys, which
+cannot be true). Recorded as a negative result: **2048's key-to-offset table
+needs a tracker that models its prologue's stack-slot fills, not the
+register-only one that works on HD.**
+
 ## See also
 
 - `docs/formats/effectsettings.md` - the file format this loader reaches for

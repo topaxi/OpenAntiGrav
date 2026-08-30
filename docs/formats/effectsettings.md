@@ -578,11 +578,36 @@ traced.
   meaning, and nothing recovered says what advances the field afterwards.
   This build keeps `cross_fade_rgba8`'s convention and zeroes on commit the
   way the traced store does, which is visibly consistent but not evidence.
-- **Which schema keys the three blended runtime fields are.** The cross-fade
-  reads three 16-byte fields per stage; the correspondence to
-  `Scene.Texture/Near/Base Colour` is positional and explicitly unconfirmed,
-  so the Rust side blends fields chosen by the *file's own key names*
-  instead.
+- ~~**Which schema keys the three blended runtime fields are.**~~
+  **Answered 2026-08-30, and the old guess was two-thirds right.** The full
+  key-to-offset table for HD's `0x250` per-stage struct
+  (`g_effect_settings_stages`, `0x00c7efb0`) is enumerated from
+  `Environment_RegisterStageSchema`'s own registration calls - 51 keys,
+  confidence 88, self-validated three ways (the offsets fill the `0x250`
+  stride exactly with 24 padding bytes; the only two overlaps are
+  `Scene`/`Track.EQ brightness` sitting in the fourth lane of their
+  respective `Texture Colour`; and every 16-byte key uses a 16-byte helper
+  and every 4-byte key a 4-byte one). The three cross-faded fields are:
+
+  | offset | guessed | measured |
+  | ---: | --- | --- |
+  | `+0x00` | `Scene.Texture Colour` | **`Scene.Texture Colour`** |
+  | `+0x20` | `Scene.Near Colour` | **`Scene.Base Colour Highlight`** (`Near Colour` is `+0x10`) |
+  | `+0x40` | `Scene.Base Colour` | **`Scene.Base Colour`** |
+
+  The `Lighting.*` keys this project reads by name land at `+0x190`
+  (`Sun colour`), `+0x1a0`/`+0x1d0` (`Fog colour`/`density`), `+0x1e0`
+  (`Constant Ambient Colour`), `+0x1f0`/`+0x200` (`Prelit Colour
+  Scale`/`Power`) - so the name-keyed reading here and the runtime's
+  offset-keyed one agree, which was previously an assumption. Full table on
+  [zone-effectsettings-loader.md](../ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md#2026-08-30-a-fourteenth-pass-the-key-to-offset-table-is-enumerated-in-full-and-it-corrects-effectsettingsmds-positional-guess).
+  **2048's own table is not recovered** - its key inventory is now
+  enumerated from its executable, but the destination tracking that works on
+  HD's PowerPC does not survive Thumb's register reuse, and the wrong
+  offsets are deliberately not published.
+
+  The Rust side still blends fields chosen by the *file's own key names*,
+  which this measurement vindicates rather than changes.
 
   **2026-08-30: the mapping's producer is found, the mapping itself is not.**
   `Environment_RegisterStageSchema` (`0x003d0b98` on HD, `0x8104714c` on
