@@ -712,18 +712,40 @@ evidence, including the byte-level trace of every function in this chain:
   [rpcs3-debugger.md](../docs/reverse-engineering/rpcs3-debugger.md#the-gdb-stub-is-real-and-needs-no-special-build)
   for the full evidence.
 
-  **So this is now a real decision point, not an open question to keep
-  chasing**: with the static search space closed and upstream RPCS3
-  confirmed never to have had write watchpoints, the only way to get one
-  is patching the emulator ourselves - extending the same interpreter
-  dispatch path `Z0` breakpoints already use (`ppu_breakpoint`) to also
-  check stores against a registered address, PPU-only, interpreter-only
-  (matching the existing `Z0` limitation), estimated a few hours to a
-  day plus an ongoing fork to maintain across RPCS3 updates. That
-  tradeoff - real engineering time on an emulator we don't otherwise
-  maintain, for one known static address - is a call for the user or
-  maintainer, not something to spend on unprompted. **Next step: blocked
-  on that decision.** If the answer is no, the remaining route is
+  **2026-08-30, an independent verification pass, same day: the seven
+  verdicts survive, two of their evidence sets did not, and "closed"
+  turned out to be one specific gap short of true.** Re-running the
+  enumeration from scratch (not reusing the sweep's own site list) found
+  `FUN_00403a30` and `FUN_003fc140` each had three-to-four base-load
+  sites the sweep missed entirely (nine real sites against six and five
+  listed); all of them traced out as loads too, so no verdict changes.
+  More importantly: **every pass so far, this one included, has only
+  asked "which functions reference a TOC slot holding this address" -
+  and a writer that receives the array pointer as a call *argument*
+  rather than loading it from a TOC slot would answer to neither
+  question.** `FUN_003df360` already demonstrates the shape in this
+  thread's own evidence (it reads the array via its own TOC slot, then
+  forwards the result through a caller-supplied output pointer) - a
+  writer built the same way round is invisible to every search run so
+  far. Full corrected counts and the new gap on
+  [zone-effectsettings-loader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md#2026-08-30-an-eighth-pass-independent-verification-two-undercounted-function-evidence-sets-corrected-and-the-real-gap-in-closed).
+  Also reconfirmed on this binary, not just the PSP side:
+  `search_instructions`'s `mnemonic` filter is exact-match despite its
+  own docs, so a prefix sweep like `mnemonic="st"` for "any store"
+  silently returns zero rather than matching `stw`/`std`/`stfs` -
+  [toolchain.md](../docs/reverse-engineering/toolchain.md#search_instructionss-mnemonic-filter-is-exact-match-not-substring).
+
+  **So there is one more concrete, bounded static step before the
+  RPCS3-patch decision needs an answer**: a caller sweep of the thirteen
+  now-fully-read accessor functions, checking whether any call site
+  passes an array-derived pointer into a further function - not a new
+  address search, a call-graph one. If that also comes back empty, the
+  decision stands as stated: patching RPCS3 ourselves (extending the
+  same interpreter dispatch path `Z0` breakpoints already use to also
+  check stores against a registered address, PPU-only, interpreter-only,
+  estimated a few hours to a day plus an ongoing fork to maintain across
+  updates) is a call for the user or maintainer, not something to spend
+  on unprompted. If the answer there is no, the remaining route is
   whatever static or play-based evidence can substitute for the write
   site (see the "Worth checking against the user's own play" bullet
   above), or leaving this specific field unwired indefinitely per

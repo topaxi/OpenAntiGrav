@@ -1142,6 +1142,95 @@ for the full evidence and the emulator-patch estimate. Nothing renamed, nothing
 wired into Rust from this pass - a closed static search space is a sharper
 negative result, not a positive one.
 
+## 2026-08-30, an eighth pass: independent verification, two undercounted function evidence sets corrected, and the real gap in "closed"
+
+An independent re-derivation of all seven seventh-pass verdicts, done without
+trusting the writeup's own enumeration - re-running `search_instructions` for
+every array-base TOC displacement per function rather than reusing the prior
+site list. **All seven verdicts stand**, but two of the seven writeups
+understated their own evidence:
+
+- `FUN_00403a30`: the writeup lists six base-load sites; there are **nine**. The
+  three missed (`0x0040503c`, `0x004050ac`, `0x00405114`) were never checked.
+  Traced now: all three are loads (biases `+0x10`/`+0x20`/`+0x10`, resolving to
+  entry `+0x1c`/`+0x20`/`+0x1c`), same shape as the six already found.
+- `FUN_003fc140`: the writeup's own text says "five more" and then lists four
+  addresses - internally inconsistent, and the real count is **nine**. The four
+  missed (`0x003fd744`, `0x003fd7b4`, `0x003fd81c`, `0x003fd8b4`) are traced now:
+  all loads, same `+0x1c`/`+0x20` alternation as the rest of the family.
+
+The other five verdicts (`FUN_004053e0`, `FUN_004074e0`, `FUN_00408fa8`,
+`FUN_003df360`, `FUN_002b61c8`) matched the writeup's own enumeration exactly
+once independently re-run, including a specific challenge to `FUN_00408fa8`'s
+caching claim (its `0x1b8(r1)`/`0x1e0(r1)`/`0x1e4(r1)` frame layout looked like
+it might have swapped slot numbers against its siblings; re-tracing confirmed it
+uses a genuinely different layout, not a mislabelled one) and a documented
+near-miss in `FUN_004074e0` (`stw r0,0x0(r3)` at `0x00408e24` would resolve to
+entry `+0x00` if `r3` still held the array base; it does not - `r3` is
+re-pointed at an unrelated cursor two instructions earlier, read directly
+rather than assumed).
+
+**The completeness argument was also made explicit for the first time**: a
+`+0x00` write has exactly three possible shapes - an indexed store (`stwx` and
+siblings, swept mnemonic-by-mnemonic: zero hits across all seven functions
+except the already-known `FUN_002b61c8` `+0x30` write), a computed index
+feeding a plain `stw rD,0x0(rX)` (covered by the per-site consumer tracing:
+every register that ever holds the array base is followed to its one consumer,
+and every one resolves to a load), and **no index arithmetic at all** - a bare
+`stw rD,0x0(rB)` for entry 0 needs no `rlwinm`/`subf` nearby, which is exactly
+the shape a bias-keyed search structurally cannot find. That third shape was
+checked too: the one place a base register sits live across a stretch of
+unrelated code without immediate index arithmetic (`FUN_00408fa8`,
+`0x00409074`-`0x004090c8`, between the TOC load and its caching `std`) was
+dumped in full, and the register's only consumer there is the cache store.
+
+**A new tool trap, confirmed on this binary rather than only on the PSP
+side**: `search_instructions`' `mnemonic` filter is exact-match, not the
+substring match its own description claims - already documented for MIPS
+delay slots in
+[toolchain.md](../../../reverse-engineering/toolchain.md#search_instructionss-mnemonic-filter-is-exact-match-not-substring),
+now reproduced on PowerPC: `mnemonic="st"` and `mnemonic="stf"` both return
+**zero** matches against a function whose full disassembly plainly contains
+`stw`, `std`, `stfs`, `stfd` and `stvx`. A prefix-style sweep for "any store"
+returns a vacuous zero indistinguishable from a real negative - every count in
+this pass was gathered with exact mnemonics for that reason.
+
+**What "closed" actually means, sharpened rather than walked back**: the
+seventh pass's own hedge - "barring an indirect or computed call... an address
+materialised by arithmetic no byte-pattern search can match" - now has a
+concrete, evidenced instance rather than a generic disclaimer. Every pass
+including this one has asked *which functions reference a TOC slot holding
+this address*; that question is answered exhaustively. **But a writer that
+receives the array pointer as an argument - rather than loading it from a TOC
+slot itself - would reference none of the five slots and appear in no
+candidate list any pass has built.** This is not a hypothetical: `FUN_003df360`
+demonstrates the exact shape in this thread's own evidence, reading entry
+`+0x30` off its TOC slot and forwarding the result through a caller-supplied
+output pointer (`stfs f0,0x0(r28)`, `r28` = its own third argument). A writer
+built the same way round - taking `&array[n]` or the array base as a parameter
+- is invisible to every search run so far, seventh and eighth pass included.
+
+**Next step, concrete and bounded**: pivot from "who references this address"
+to "who calls one of the now-fully-read accessor functions, and does any call
+site pass an array-derived pointer to a further function" - a caller sweep of
+the thirteen known accessors, not a new address search. The runtime watchpoint
+remains the other option and is agnostic to how a writer obtained the pointer,
+but per the section above it needs either upstream RPCS3 gaining `Z2` support
+or a from-scratch patch, neither in hand.
+
+**A weaker hypothesis, recorded but not recommended to lead with**: `+0x00` is
+statically zero in both entries while the neighbouring fields carry real
+non-zero initialisers (`+0x0c`/`+0x10` = `0.5f`, `+0x14`/`+0x18` = `0.1f`,
+`+0x34` = `1.0f`), which invites reading "there is no writer, ever." Weak for
+two reasons: it is a reinterpretation of bytes the sixth pass already read, not
+new evidence, and it fights the read side directly - `FUN_003da540` computes a
+current *and* previous stage from this field for a cross-fade, which only
+makes sense if the field advances at runtime. If it never did, Zone/Detonator
+would never progress past stage 0, which is not what the game does.
+
+Nothing renamed, nothing wired into Rust from this pass either - a corrected
+and better-scoped negative result, not a positive one.
+
 ## See also
 
 - `docs/formats/effectsettings.md` - the file format this loader reaches for

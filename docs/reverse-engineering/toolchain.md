@@ -443,6 +443,14 @@ half of what it looks like it has.**
 Sweep with `operand_pattern` only and no `mnemonic` filter, or run each
 delay-slot form explicitly alongside its plain one.
 
+**Confirmed again 2026-08-30 on `ps3-hdfury-eu` (PowerPC, no delay slots at
+all), so this is the filter's own behaviour, not a MIPS-specific artefact.**
+`mnemonic="st"` and `mnemonic="stf"` both returned 0 matches against a
+function (`FUN_003df360`) whose already-fully-read disassembly plainly
+contains `stw`, `std`, `stfs`, `stfd` and `stvx`. A prefix-style "sweep for any
+store" is a vacuous zero, indistinguishable from a real negative unless every
+exact mnemonic is tried individually.
+
 `run_script_inline`, which would otherwise let a single script enumerate
 every form in one pass, is currently gated off by config rather than
 broken: it returns `"Script execution disabled. Set
