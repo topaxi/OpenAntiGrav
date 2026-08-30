@@ -36,6 +36,16 @@ Single test: `cargo nextest run -p oag-core some_test_name` (nextest, not `cargo
 Ground-truth tests (in `crates/*/tests/*ground_truth*.rs`) are `#[ignore]`d because they
 need a real disc image under `data/images/`; they never run in CI, only via `just test-data`.
 
+**The full `just` gate is not required for a change that touches only `docs/`, `handover/`,
+`HANDOVER.md`, `.claude/`, or doc comments inside a `.rs` file (no code logic changed).**
+Run `just check-docs` (internal links) and, if `HANDOVER.md` changed, `just check-handover`
+(size ratchet) instead - both take well under a second, against minutes for the full suite.
+If any `.rs` file changed at all, still run `just fmt-check` and `just lint`: a doc comment
+can still fail `rustfmt`'s wrapping or clippy's intra-doc-link lints, and those two are cheap.
+`just test`/`test-data` and the rest of the gate exist to catch a *behavior* regression, and a
+docs-only diff has no behavior to regress - re-run the full `just` yourself if a change you
+believed was docs-only turns out to touch code once you're in it.
+
 Asset/RE tools, normally run through `just` (see `justfile` for the full list):
 
 ```sh

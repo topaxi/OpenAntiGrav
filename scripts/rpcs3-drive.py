@@ -40,6 +40,8 @@ Subcommands:
     boot      launch and wait for the Main Menu, then hold it there.
     race      boot, walk the menus into a race, optionally drive and screenshot.
     record    the same, capturing the driven part as video.
+    browse    walk to a named screen, then screenshot it at every step of a
+              carousel without ever confirming into a race.
 
 **Video is the observable a race actually has.** `TTY.log` goes quiet the moment
 the front end hands over, and the GDB stub answers nothing while the target
@@ -276,6 +278,30 @@ class Session:
                 raise RuntimeError("RPCS3 exited before reaching %r" % name)
             time.sleep(2)
         return False
+
+    def wait_for_screen_pressing(self, name, timeout=180.0, press_interval=5.0):
+        """Like `wait_for_screen`, but presses `cross` while it waits.
+
+        The boot chain ahead of `Main Menu` carries at least one real dialog,
+        not just auto-redirects: `EpilepsyWarning`'s `<Dialog>` has
+        `StartEnabled="false"` on its `<Redirect>` twin, so nothing here
+        advances it without a press - measured 2026-08-30, where a plain
+        `wait_for_screen("Main Menu", ...)` sat at `EpilepsyWarning` for the
+        whole timeout with the emulator otherwise healthy. Pressing `cross`
+        elsewhere in the chain is a no-op on an auto-redirect screen, so one
+        button serves the whole walk. Stops **before** ever pressing at `name`
+        itself - the same press means something different once arrived, e.g.
+        `cross` on `Main Menu` is `walk_to_race`'s first step, not this one's.
+        """
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if current_screen() == name:
+                return True
+            if self.proc.poll() is not None:
+                raise RuntimeError("RPCS3 exited before reaching %r" % name)
+            was, now = self.press_once("cross", settle=press_interval)
+            print("  press      %-22s -> %-22s" % (was, now), flush=True)
+        return current_screen() == name
 
     def tap(self, button, settle=4.0):
         was = current_screen()
@@ -646,6 +672,62 @@ def cmd_capture(args):
     return 0
 
 
+def cmd_browse(args):
+    """Screenshot a carousel screen at every step, without ever racing it.
+
+    `capture`'s `--nav` only fires a plan's buttons once, on arrival at a named
+    screen, and the loop that runs it always follows with `cross` - so a plan
+    of many `right`s would move a carousel's highlight that many times with
+    nothing photographed in between, then commit to whatever it landed on.
+    That is right for reaching one chosen circuit to race, and wrong for a
+    screen meant to be *read*: Racebox's `Track Creation` carousel, which is
+    what `entries.xml`'s circuit names actually reach the front end through,
+    is the case this exists for - see
+    docs/formats/hd-frontend.md#a-circuits-name-is-in-a-different-archive-from-the-circuit-list.
+
+    So this walks the `--nav` plan to reach `--screen` exactly as `capture`
+    does, then stops confirming: from there it only taps `--button`,
+    screenshotting after each one, for `--steps` presses.
+    """
+    out = Path(args.out).resolve()
+    out.mkdir(parents=True, exist_ok=True)
+    plan = {}
+    for item in args.nav:
+        screen, _, buttons = item.partition("=")
+        plan[screen] = [b.strip() for b in buttons.split(",") if b.strip()]
+
+    with Session(args.image, args.log_dir) as session:
+        print("rpcs3 pid %d" % session.proc.pid, flush=True)
+        if not session.wait_for_screen_pressing("Main Menu", args.timeout):
+            print("never reached the Main Menu (last screen: %s)"
+                  % current_screen(), file=sys.stderr)
+            return 1
+        time.sleep(args.settle)
+        for index in range(1, args.max_presses + 1):
+            if current_screen() == args.screen:
+                break
+            session.navigate(plan)
+            if current_screen() == args.screen:
+                break
+            was, now = session.press_once("cross")
+            print("  press %2d  %-22s -> %-22s" % (index, was, now),
+                  flush=True)
+        if current_screen() != args.screen:
+            print("ended on %r rather than %r"
+                  % (current_screen(), args.screen), file=sys.stderr)
+            return 1
+        print("at %r; browsing %d step(s) with %r"
+              % (args.screen, args.steps, args.button), flush=True)
+        screenshot(out / "00.png", trim=True)
+        for n in range(1, args.steps + 1):
+            session.tap(args.button, settle=args.settle_step)
+            screenshot(out / ("%02d.png" % n), trim=True)
+            print("  %02d" % n, flush=True)
+
+    print("done; %d shot(s) in %s" % (args.steps + 1, out), flush=True)
+    return 0
+
+
 def track_name():
     """The circuit RPCS3's own TTY log says was loaded, or `None`.
 
@@ -805,6 +887,35 @@ def main(argv=None):
     cap.add_argument("--keep-dumps", action="store_true",
                      help="also write the raw memory, which is game data and "
                           "stays under data/")
+
+    browse = sub.add_parser("browse",
+                            help="screenshot a carousel screen at every step, "
+                                 "with no race entered")
+    browse.set_defaults(run=cmd_browse)
+    browse.add_argument("--timeout", type=float, default=180.0)
+    browse.add_argument("--settle", type=float, default=12.0,
+                        help="pause after the Main Menu before the first "
+                             "press")
+    browse.add_argument("--settle-step", type=float, default=1.5,
+                        help="pause after each carousel press before its "
+                             "screenshot")
+    browse.add_argument("--nav", action="append", default=[],
+                        metavar="SCREEN=BUTTONS",
+                        help="buttons to press at a named screen on the way "
+                             "to --screen, same syntax as capture's --nav, "
+                             "e.g. \"Main Menu=right\"")
+    browse.add_argument("--max-presses", type=int, default=8,
+                        help="cross-presses allowed while walking the --nav "
+                             "plan before giving up on reaching --screen")
+    browse.add_argument("--screen", default="Track Creation",
+                        help="the screen to browse once reached")
+    browse.add_argument("--button", default="right",
+                        help="the button that advances the carousel")
+    browse.add_argument("--steps", type=int, default=27,
+                        help="how many times to press --button, one "
+                             "screenshot each, after the unpressed 00.png")
+    browse.add_argument("--out", default="data/reference/hd-browse",
+                        help="where the screenshots are written")
 
     rec = sub.add_parser("record")
     rec.add_argument("--timeout", type=float, default=180.0)
