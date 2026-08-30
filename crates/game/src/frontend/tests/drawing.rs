@@ -6,6 +6,24 @@
 
 use super::*;
 
+/// `BOOT_PRESS_START`'s own `Draw::Text` out of a draw list, and its alpha.
+fn press_start(draws: &[Draw]) -> (f32, f32, Align, [f32; 4], String) {
+    draws
+        .iter()
+        .find_map(|d| match d {
+            Draw::Text {
+                x,
+                y,
+                align,
+                color,
+                text,
+                ..
+            } if text == "BOOT_PRESS_START" => Some((*x, *y, *align, *color, text.clone())),
+            _ => None,
+        })
+        .expect("Show Logo draws its text widget")
+}
+
 #[test]
 fn show_logo_draws_the_pulse_logo_and_its_press_start_line() {
     let mut frontend = frontend(300);
@@ -17,24 +35,19 @@ fn show_logo_draws_the_pulse_logo_and_its_press_start_line() {
     // The `Text` widget's own coordinates, colour and alignment, from the
     // USA disc's `Skin.xml`. `y` is 220 there and 230 on the EU disc, which
     // drops the `BOOT_LEGAL` line above it.
-    let text = draws
-        .iter()
-        .find_map(|d| match d {
-            Draw::Text {
-                x,
-                y,
-                align,
-                color,
-                text,
-                ..
-            } => Some((*x, *y, *align, *color, text.clone())),
-            _ => None,
-        })
-        .expect("Show Logo draws its text widget");
+    let text = press_start(&draws);
     assert_eq!(text.0, 460.0);
     assert_eq!(text.1, 220.0);
     assert_eq!(text.2, Align::Right);
-    assert_eq!(text.3, argb_to_rgba(0x7fff_ffff));
+    // Alpha, not colour, is where `pulse="true"` and `delay="1"` act - see
+    // `pulse_below_its_delay_is_invisible_and_above_it_throbs`. `pick_a_language`
+    // has just fired `Show Logo`, so `on_screen_for` is a few frames, well under
+    // the one-second `delay`: the widget is not drawn at all yet, on hardware or
+    // here, which is why its own alpha channel reads zero even though its RGB
+    // is the XML's own `0x7FFFFFFF`.
+    let [r, g, b, a] = text.3;
+    assert_eq!([r, g, b], [1.0, 1.0, 1.0]);
+    assert_eq!(a, 0.0, "still within its one-second delay");
     assert_eq!(
         text.4, "BOOT_PRESS_START",
         "with no string table loaded the id stands in for its own string"
@@ -45,6 +58,78 @@ fn show_logo_draws_the_pulse_logo_and_its_press_start_line() {
     // nothing else crept in: a black fill, then the text.
     assert!(matches!(draws[0], Draw::Fill { .. }));
     assert!(!draws.iter().any(|d| matches!(d, Draw::Video { .. })));
+}
+
+/// Below `delay`, invisible; above it, throbbing between the measured floor
+/// and its own authored (ceiling) alpha - `docs/architecture/frontend-boot.md`'s
+/// `BOOT_PRESS_START does not pulse` section, confidence 75.
+#[test]
+fn pulse_below_its_delay_is_invisible_and_above_it_throbs() {
+    let mut frontend = frontend(300);
+    let mut input = Input::new();
+    pick_a_language(&mut frontend, &mut input);
+    assert!(frontend.machine().is(states::SHOW_LOGO));
+    let ceiling = argb_to_rgba(0x7fff_ffff)[3];
+
+    // `on_screen_for` already carries a few frames from `pick_a_language`
+    // itself; read it back rather than assuming zero, so the times below
+    // land exactly rather than a few milliseconds short.
+    let already = frontend.on_screen_for;
+
+    // A hair under one second: still within `delay="1"`.
+    input.begin_frame(0);
+    frontend.update(0.999 - already, &mut input, None);
+    let (.., color, _) = press_start(&frontend.draw_list());
+    assert_eq!(color[3], 0.0, "0.999s: still below the one-second delay");
+
+    // A hair over it: the throb has started, so alpha is no longer zero, but
+    // it has not yet had a full period to ramp up to its own ceiling either.
+    input.begin_frame(0);
+    frontend.update(0.01, &mut input, None); // now at 1.009s
+    let (.., color, _) = press_start(&frontend.draw_list());
+    assert!(
+        color[3] > 0.0 && color[3] < ceiling,
+        "1.009s: past the delay and ramping in, got alpha {}",
+        color[3]
+    );
+
+    // `draw::PULSE_PERIOD`/`PULSE_FLOOR`: five and a quarter periods past the
+    // delay is a sine peak (`sin(0.25 * tau) == 1`) with the one-period ramp
+    // long since at 1.0, so alpha lands exactly on the widget's own ceiling.
+    let period = f64::from(draw::PULSE_PERIOD);
+    input.begin_frame(0);
+    frontend.update(5.25 * period - 0.009, &mut input, None); // now at 1 + 5.25 periods
+    let (.., color, _) = press_start(&frontend.draw_list());
+    assert!(
+        (color[3] - ceiling).abs() < 1e-5,
+        "a sine peak, fully ramped in, should sit on the ceiling; got {}",
+        color[3]
+    );
+
+    // Half a period later is the matching trough (`sin(0.75 * tau) == -1`),
+    // at the measured floor fraction of that same ceiling.
+    input.begin_frame(0);
+    frontend.update(0.5 * period, &mut input, None); // now at 1 + 5.75 periods
+    let (.., color, _) = press_start(&frontend.draw_list());
+    let floor = ceiling * draw::PULSE_FLOOR;
+    assert!(
+        (color[3] - floor).abs() < 1e-5,
+        "a sine trough should sit on the measured floor fraction of the \
+         ceiling ({floor}); got {}",
+        color[3]
+    );
+}
+
+/// `draw_screen` - the public, `--screen`-and-tests-facing entry point - is
+/// unaffected: it is documented to freeze any pulsing widget at its own
+/// ceiling rather than mid-throb, and this is the regression test for that
+/// promise. Only the live boot order (`draw_list`, tested above) animates.
+#[test]
+fn draw_screen_freezes_a_pulsing_widget_at_its_ceiling() {
+    let frontend = frontend(300);
+    let draws = frontend.draw_screen(states::SHOW_LOGO);
+    let (.., color, _) = press_start(&draws);
+    assert_eq!(color, argb_to_rgba(0x7fff_ffff));
 }
 
 /// `BOOT_LEGAL`'s `Viewport`-derived `wrap_width` survives `draw_screen`

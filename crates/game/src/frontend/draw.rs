@@ -156,12 +156,16 @@ impl Frontend {
             // text - because the draw list is drawn in its own order and this
             // belongs at the bottom of it.
             //
-            // One thing the screen has that this still does not reproduce, and
-            // it is recorded rather than approximated: `BOOT_PRESS_START`
-            // carries `pulse="true"` and `delay="1"`, so on the disc it fades in
-            // a second late and throbs instead of appearing at once and standing
-            // still. See `docs/architecture/frontend-boot.md`.
-            let mut out = self.draw_screen(states::SHOW_LOGO);
+            // `draw_screen_at`, not `draw_screen`, and `self.on_screen_for` as
+            // its clock: `BOOT_PRESS_START` carries `pulse="true"` and
+            // `delay="1"`, so on the disc it fades in a second late and throbs
+            // rather than appearing at once and standing still. `--screen` and
+            // every test still go through the public `draw_screen`, which
+            // freezes any pulsing widget at its own ceiling (the same static
+            // colour this screen drew before this existed) - only the live
+            // boot order animates. See [`pulse_alpha`] and
+            // `docs/architecture/frontend-boot.md`.
+            let mut out = self.draw_screen_at(states::SHOW_LOGO, self.on_screen_for);
             self.insert_backdrop(&mut out);
             return out;
         }
@@ -461,10 +465,24 @@ impl Frontend {
     /// A named screen's own widgets, drawn from the XML alone.
     ///
     /// This is what the disc's data describes and nothing else: no state, no
-    /// input, no animation. `--screen` renders through it, which is how the
-    /// image path is checked without moving any screen into the boot order.
+    /// input, no wall-clock animation. `--screen` renders through it, which
+    /// is how the image path is checked without moving any screen into the
+    /// boot order - including a `pulse="true"` widget like `BOOT_PRESS_START`,
+    /// which this draws at its own authored colour (the pulse's ceiling, see
+    /// [`pulse_alpha`]) rather than mid-throb. The live boot order animates it
+    /// instead, through [`Self::draw_screen_at`].
     #[must_use]
     pub fn draw_screen(&self, name: &str) -> Vec<Draw> {
+        self.draw_screen_at(name, f64::INFINITY)
+    }
+
+    /// [`Self::draw_screen`], with `elapsed` seconds of wall clock since the
+    /// screen appeared - the one piece of state that lets a `pulse="true"`
+    /// widget's alpha move. `f64::INFINITY` (what the public method passes)
+    /// reads as "settled": every pulsing widget's alpha lands on the ceiling
+    /// [`pulse_alpha`] converges to, which is its own authored colour, so
+    /// nothing here changes for a caller that never had a clock to give.
+    fn draw_screen_at(&self, name: &str, elapsed: f64) -> Vec<Draw> {
         let (width, height) = self.space.size;
         let mut out = vec![Draw::Fill {
             rect: [0.0, 0.0, width, height],
@@ -485,11 +503,13 @@ impl Frontend {
             let Some(id) = text.idstring.as_deref().or(text.string.as_deref()) else {
                 continue;
             };
+            let mut color = argb_to_rgba(text.color);
+            color[3] *= pulse_alpha(text, elapsed);
             out.push(Draw::Text {
                 x: text.x,
                 y: text.y,
                 scale: text.scale,
-                color: argb_to_rgba(text.color),
+                color,
                 border: None,
                 align: Align::parse(&text.align),
                 text: self.strings.get_or_id(id).to_string(),
@@ -688,6 +708,58 @@ impl Frontend {
     pub fn language_screen(&self) -> Option<&Screen> {
         self.screens.language_selection()
     }
+}
+
+/// The throb's period, in seconds, for a [`Text`] widget whose `pulse` is set.
+///
+/// Measured off a real capture of `BOOT_PRESS_START` on `Show Logo`
+/// (`pulse-psp-eu.chd` under PPSSPPSDL, two independent 20s captures,
+/// confidence 75 - a screen-pixel luminance proxy, not a live memory read).
+/// See `docs/architecture/frontend-boot.md`'s `BOOT_PRESS_START does not
+/// pulse` section. No other `pulse="true"` widget has been captured, so this
+/// is applied to any future one too rather than left unimplemented, on the
+/// same "measure one, extrapolate rather than invent a second value" basis
+/// the rest of this crate uses for shared constants.
+pub(super) const PULSE_PERIOD: f32 = 1.10;
+
+/// The throb's dim floor, as a fraction of the widget's own authored alpha.
+///
+/// The same capture put the dim phase at roughly 42% of the bright phase's
+/// luminance - never fully faded to black - and the bright phase at roughly
+/// the widget's own static (currently: only) rendered alpha, so 1.0 is the
+/// ceiling this multiplies against rather than a second measured number.
+pub(super) const PULSE_FLOOR: f32 = 0.42;
+
+/// A `pulse`/`delay` widget's alpha multiplier, `elapsed` seconds after its
+/// screen appeared. `1.0` for a non-pulsing widget or an infinite `elapsed`
+/// (`draw_screen`'s "settled" default) - both read as "just use the authored
+/// colour". Otherwise: `0.0` before `delay` has elapsed (on hardware the
+/// widget is not drawn at all yet), then a sine throb between [`PULSE_FLOOR`]
+/// and `1.0` with period [`PULSE_PERIOD`], itself ramped in linearly over its
+/// first cycle so the widget's first appearance is a fade rather than a pop
+/// at the dim floor.
+///
+/// **The ramp's own shape and duration are chosen, not measured.** The
+/// capture only covers the repeating throb, not the fade-in `delay="1"`
+/// implies; using one throb period as the fade-in's length reuses the one
+/// timescale that *is* measured rather than inventing an unrelated second
+/// one, and a plain sine stands in for the throb's own shape, which the
+/// capture shows is not quite sinusoidal (it holds near each extreme rather
+/// than smoothly reversing - a detail not modelled here). See
+/// `docs/architecture/frontend-boot.md`'s `BOOT_PRESS_START now pulses`
+/// section for the capture this is built on.
+fn pulse_alpha(text: &Text, elapsed: f64) -> f32 {
+    if !text.pulse || !elapsed.is_finite() {
+        return 1.0;
+    }
+    let since_delay = elapsed - f64::from(text.delay);
+    if since_delay < 0.0 {
+        return 0.0;
+    }
+    let cycles = (since_delay / f64::from(PULSE_PERIOD)) as f32;
+    let wave = (cycles.fract() * std::f32::consts::TAU).sin();
+    let settled = PULSE_FLOOR + (1.0 - PULSE_FLOOR) * (wave + 1.0) / 2.0;
+    settled * cycles.min(1.0)
 }
 
 impl Draw {
