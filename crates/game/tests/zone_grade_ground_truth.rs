@@ -168,3 +168,43 @@ fn a_race_outside_zone_loads_no_grade() {
     };
     assert!(loaded.zone_grade.is_none());
 }
+
+/// **The 2048 branch resolves against a real 2048 source, not just against a
+/// hand-written path.** Its table sits beside the circuit rather than at a
+/// title-wide entry, and its `DEFAULT_TRACK` is spelled with backslashes and a
+/// capital `Data` where the shipped entry is lowercase with forward slashes -
+/// so this is a check that the sibling rewrite plus the archive's own fold
+/// actually reach the file, which is the one thing an HD-only test cannot say.
+#[test]
+#[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
+fn the_2048_branch_resolves_its_per_circuit_table() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("data/extracted/vita/PCSF00007/base");
+    if !path.exists() {
+        assert!(
+            std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
+            "OAG_REQUIRE_GAME_DATA is set but {} is missing",
+            path.display()
+        );
+        println!("skipping: {} not present", path.display());
+        return;
+    }
+    let mut archives = oag_2048::open(&path.display().to_string()).expect("opening 2048");
+    let palette = oag_2048::race::DEFAULTS
+        .zone_palette
+        .expect("2048 ships a table");
+    let name = palette
+        .entry_for(oag_2048::race::DEFAULT_TRACK)
+        .expect("the circuit's own directory");
+    let blob = archives
+        .read_name(&name)
+        .unwrap_or_else(|e| panic!("{name}: {e}"));
+    let text = String::from_utf8(blob).expect("UTF-8");
+    let table = oag_formats::effectsettings::EffectSettings::parse(&text).expect("it parses");
+    // 2048's own thirteen-stage ladder: HD's fifteen with `Sub Venom` and
+    // `Venom` dropped.
+    assert_eq!(table.stages.len(), 13);
+    assert_eq!(table.stages[&0].name, "Start");
+    assert_eq!(table.stages[&12].name, "Supersonic");
+}
