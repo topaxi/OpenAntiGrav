@@ -1489,6 +1489,78 @@ there, not writing the field.
 ladder this title does not have. See
 `crates/game/src/race/zone_grade.rs`'s module docs.
 
+## 2026-08-30, an eleventh pass: the two mode texture-name tables are read whole and named, and three cited addresses are deliberately left unnamed
+
+The tenth pass cited the two texture-path table pointers as evidence that
+mode `0xe` is Detonator without reading past their first string. Both tables
+are now read end to end, and their layout was **reconstructed and then
+verified against an address the reconstruction predicted** rather than
+sampled.
+
+### `g_zone_mode_texture_names` (`0x007b2b10`), confidence 85
+
+Fifteen entries, `Data/Tex/zoneMode0.gtf` .. `zoneMode14.gtf`, **stride 24**,
+spanning `0x007b2b10`-`0x007b2c78`. Clean and uniform - the count matches the
+fifteen `zonemode*.gtf` this project already reads off the disc, and the
+block ends exactly where the next one begins. This is the base
+`Environment_LoadStageTextures` (`0x003d6dc8`) passes in `r4` when
+`g_GameState.mode` is **not** `0xe` (`lwz r4,-0x5848(r2)` at `0x003d7208`).
+
+### `g_zone_mode_track_texture_names` (`0x007b2c78`), confidence 85
+
+Fifteen entries, `Data/Tex/zoneModeTrack0.gtf` .. `Track14.gtf`, stride 28,
+starting immediately after the block above. This is the set that carries the
+real escalating art; the general set decodes to flat white on all fifteen
+files - see [effectsettings.md](../../../formats/effectsettings.md).
+
+### `g_detonator_mode_texture_names` (`0x007b26c8`), confidence 85
+
+Fifteen entries, `Data/Tex/DetonatorMode0.gtf` .. `DetonatorMode14.gtf`, and
+the base the `mode == 0xe` branch passes (`lwz r4,-0x58c8(r2)` at
+`0x003d8d08`). **Its layout is irregular and the irregularity is real, not a
+misread**: entry `0` sits at `+0x00`, a pooled 16-byte `"unlabeled"` constant
+sits at `+0x20`, and entries `1`-`14` follow from `+0x30` at stride 32.
+
+That irregularity is why this is stated as a reconstruction: predicting entry
+`14` at `0x007b26f8 + 32*13` gives `0x007b2898`, and reading there returns
+`Data/Tex/DetonatorMode14.gtf` followed immediately by
+`Data/Tex/DetonatorModeTrack0.gtf`. A layout that predicts an address it was
+not fitted to is checked, not assumed. **What is still unexplained** is the
+`"unlabeled"` constant itself - a second TOC slot (`0x008b7b00`) holds its
+address, so it is reachable in its own right and is plausibly an unrelated
+pooled string the linker placed inside this block, which would mean the
+consumer never strides across it. Not chased.
+
+### `g_detonator_mode_track_texture_names` (`0x007b28b8`), confidence 85
+
+Fifteen entries, `Data/Tex/DetonatorModeTrack0.gtf` .. `Track14.gtf`, stride
+40. Its base is the address the reconstruction above lands on, read directly.
+
+### Three cited addresses that are deliberately **not** named
+
+Recorded so the next pass does not read their absence as an oversight.
+
+- **`0x008b7c00`** - the TOC slot holding `0x0098767c`, the two-entry pointer
+  array `Environment_UpdateStageBlend`'s Zone fall-through reads
+  `[n]->+0x640` from. `0x0098767c` is **`.bss`**: `read_memory` there fails
+  outright, so there are no compile-time contents to identify the element
+  type from, and no writer has been found. Calling it a *craft* array is an
+  analogy to 2048's own per-craft `+0x634`, not a reading of this binary -
+  which puts it under `CLAUDE.md`'s 50 floor, so the hypothesis is written
+  here and `PTR_DAT_008b7c00` keeps its generated name. **What is
+  established**: two entries, indexed by the same `0`/`1` viewport index
+  `Environment_UpdateStageBlend` takes as `param_2`, and its element carries
+  Zone's stage index at `+0x640`.
+- **`0x003d71ec`** (the `cmpwi cr7,r0,0xe` mode test) and **`0x00067c80`**
+  (the `stw r0,0x2e10(r31)` increment) are instruction addresses inside
+  `Environment_LoadStageTextures` and `Detonator_UpdateRace`, both already
+  named. There is no distinct entity to name at either.
+- **`0x000647c4`/`0x00064d44`** sit inside `SPDetonator`'s two constructors.
+  [race-manager.md](race-manager.md) identifies all 22 derived-class
+  constructors and deliberately names none of them, for reasons that page
+  records; naming one pair here because this thread happened to need it would
+  contradict that decision without revisiting it.
+
 ## See also
 
 - `docs/formats/effectsettings.md` - the file format this loader reaches for
