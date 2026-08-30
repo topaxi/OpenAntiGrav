@@ -234,6 +234,33 @@ evidence, including the byte-level trace of every function in this chain:
 
 ## Open
 
+- **2026-08-30, the post-process route is closed - HD has no live whole-frame
+  grade.** The `fullscreenTintColour` lead in
+  `docs/ghidra/functions/ps3-hdfury-eu/renderer.md` was chased to the end, and
+  the useful result is the *enumeration* rather than the one parameter: the
+  resolve pass's five full-screen colour inputs are now all accounted for and
+  none is fed from `g_effect_settings_stages`. `fullscreenTintColour` is bound
+  every frame with `(0,0,0,0)` (its global is cleared per frame and written
+  non-zero by nothing in the image); `saturation`/`finalScale`/`finalBias` are
+  photo mode's exposure controls and both float4s are built **grey**, so they
+  cannot express a hue; `colourScale` is bound every frame with `(1,1,1,1)`,
+  its three setters having no caller anywhere. Full evidence, with the
+  whole-image scans that make it an enumeration rather than a failed search, in
+  `docs/ghidra/functions/ps3-hdfury-eu/renderer.md` ("The resolve's full-screen
+  colour inputs, enumerated") and cross-referenced from
+  `docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md`.
+
+  **What this means for this thread.** The eighteenth pass proved by play that
+  HD's Zone mode really does recolour scene and track, and listed three
+  plausible mechanisms: a post-process tint, a fog-driven material parameter, or
+  an indirect-call reader of `0x00c81a5c`. The first is now gone. It also means
+  **2048's composite-grade finding must not be carried across as a template for
+  HD** - the two engines differ here, and the recolour has to be happening
+  before the resolve. `FunkLayerColour2d_fp` (the post chain's flat-colour quad)
+  is the one program that could still paint a full screen by a route the
+  enumeration does not cover, and is unexamined.
+
+
 - **2026-08-28, a play-based lead pointing straight at this thread.** Fixing
   today's `ZoneCircuit::Separate` regression (HD's menu asking
   `catalogue::tracks_of_kind(xml, "Zone")` for zone circuits when HD's own

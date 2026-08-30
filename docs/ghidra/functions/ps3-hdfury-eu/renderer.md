@@ -2233,6 +2233,10 @@ directly off instructions.
 | `0x0023f568` | function | `PhotoMode_Update` | 78 |
 | `0x00c50f00` | data | `g_FullscreenTintColour` | 88 |
 | `0x00c81a80` | data | `g_RenderGlobals` | 72 |
+| `0x005e1140` | function | `Post_BindFilterColourScaleParams` | 85 |
+| `0x003def38` | function | `Post_SetColourScaleRate` | 80 |
+| `0x003def50` | function | `Post_SetColourScaleTarget` | 80 |
+| `0x003def68` | function | `Post_SetColourScaleImmediate` | 80 |
 
 `Post_BindResolveParams` and `Post_BindResolveCorrectionParams` are named from
 the program-name string each one loads from its own TOC -
@@ -2245,27 +2249,105 @@ deliberately vague: it is provably the render TU's own global state object
 but nothing here establishes what the class is called or what most of its 20 KiB
 holds.
 
-`FUN_003e3e50` is **not** named - see below.
+`Post_BindFilterColourScaleParams` is named the same way, from
+`downsamplescalefiltercolourscale_fp` (`+0x1f78`) and `colourScale` (`+0x1f84`).
+The three `Post_SetColourScale*` setters are named from the single field each
+writes and from the parameter that field ends up in; 80 rather than 85 because
+"colour scale" is the shader's word and "rate/target/immediate" is a reading of
+three one-line functions, well supported by the consumer but not named by
+anything.
 
-### Still open: `colourScale`, the screen fade
+`FUN_003e0668` and `FUN_003e3e50` are **not** named: they are the same routine
+twice and nothing here establishes which is which, or what the second one's two
+extra arguments select.
+
+### `colourScale` is the fifth input, and it is inert too
 
 `downsamplescalefiltercolourscale_fp` declares a `colourScale` parameter (name
-string `0x007cdd10`, TOC slot `0x008bf348`), bound at `0x005e16bc` into slot
-`+0x168` by the binder `FUN_005e1140`. Its two callers are `FUN_003e0668` and
-`FUN_003e3e50`, both in the same render TU.
+string `0x007cdd10`, TOC slot `0x008bf348`) which the plain and correction
+resolves do not have. Its binder is `Post_BindFilterColourScaleParams`
+(`0x005e1140`, OPD `0x008a1450`, TOC `0x008bd3c4`), which binds it into slot
+`+0x168` at `0x005e16bc` from a vector argument.
 
-`FUN_003e3e50` is a **per-frame fade**: it steps a current colour at
-`g_RenderGlobals + 0x3d0` toward a target at `+0x3c0` by a rate at `+0x3b0`
-(four `fsel`-clamped lanes), draws only when the result is above zero, and
-passes that colour as `colourScale`. Not named yet - only half traced.
+**Its two callers are the same routine twice.** `FUN_003e0668` and
+`FUN_003e3e50` are instruction-for-instruction the same screen-fade pass with
+different argument counts (three GPRs versus one) - `lvx` the same three fields
+of `g_RenderGlobals`, the same five `vspltw`/`fsel` lanes, the same `> 0.0`
+gate, the same tail. So there is no second mechanism hiding behind the second
+caller, which was the obvious way this could have been mis-read.
 
-**What the next pass should do**, in the order that just worked for the
-correction path: find what writes `+0x3c0`/`+0x3b0` (the `li r0,0x3c0` cluster
-at `0x003e0700`-`0x003e08c0` is where the setters look to be), check whether
-that setter has a cross-TOC trampoline, then string-scan its module-1 caller
-against TOC `0x008ad4d8`. Two cautions: **`FUN_003e0668` is the other caller of
-`FUN_005e1140` and is unread**, so check both paths before attributing the
-mechanism; and `colourScale` is a *multiply* on the composited frame, so even if
-it turned out to be Zone-driven it can darken and pull toward a hue but cannot
-brighten or shift arbitrarily - it is not the same instrument as 2048's
-composite grade.
+The pass keeps a **rate-limited fade triple** in `g_RenderGlobals`:
+
+| Field | Role |
+| --- | --- |
+| `+0x3b0` | rate, per lane |
+| `+0x3c0` | target colour |
+| `+0x3d0` | current colour - stepped toward the target, then passed as `colourScale` |
+
+Three two-instruction setters exist for it, all of them writing a caller-supplied
+`float4` straight into one field:
+
+| Address | Writes | Name |
+| --- | --- | --- |
+| `0x003def38` | `+0x3b0` | `Post_SetColourScaleRate` |
+| `0x003def50` | `+0x3c0` | `Post_SetColourScaleTarget` |
+| `0x003def68` | `+0x3c0` **and** `+0x3d0` | `Post_SetColourScaleImmediate` |
+
+**None of the three is called from anywhere in the executable.** Each address
+occurs exactly once in the whole image - in its own OPD entry (`0x0088c430`,
+`0x0088c438`, `0x0088c440`) - and *those* entries are referenced by nothing, so
+there is no function-pointer route either. No `b` or `bl` targets any of them,
+which is what rules out the cross-TOC trampoline route that
+`Renderer_SetColourCorrection` does use: that one has a trampoline
+(`FUN_00678ee8`, a plain `b`), and these have none.
+
+Nor is the triple written inline anywhere else. Every function that can name
+`g_RenderGlobals` at all uses `lwz d,-0x578c(r2)`, and all 54 such instructions
+in module 2 fall between `0x003de200` and `0x003e3e60`; a scan of that band for
+any store at displacement `0x3b0`-`0x3df`, and for any `li rX,0x3b0/0x3c0/0x3d0`
+feeding an indexed `stvx`, finds only the setters above, the two fade readers,
+and one initialiser.
+
+**That initialiser fixes the value at identity.** At `0x003dfe40`, inside
+`FUN_003dfc28`, the triple is seeded from two TOC-held float4s: rate from
+`0x007b2ee0` = `(1, 0, 0, 0)` and colour from `0x007b2ef0` = `(0.1, 0, 0, 0)`,
+each **splatted from lane 0** - so `target = current = (1,1,1,1)` and
+`rate = (0.1, 0.1, 0.1, 0.1)`. The fade's own gate is `current.x > 0.0`
+(`lfs f0,-0x56fc(r2)` = `0.0`), so the pass *does* run - and multiplies the
+frame by `(1,1,1,1)`.
+
+So `colourScale` is bound every frame with the identity, for the same structural
+reason `fullscreenTintColour` is bound every frame with zero: the API that would
+move it exists and is unreachable. Confidence 82 - the enumeration is the same
+kind as the tint's and equally exhaustive over PPU text, but it rests on the
+initialiser being the only seeding and on the two fade routines being the only
+readers, neither of which has a second independent route.
+
+### What this closes, for the Zone question
+
+All five of the post chain's full-screen colour inputs are now accounted for,
+and **none is reached from `g_effect_settings_stages` or from anything Zone
+touches**:
+
+| Input | Shipped value | Driven by |
+| --- | --- | --- |
+| `fullscreenTintColour` | `(0,0,0,0)` every frame | nothing |
+| `saturation` | photo-mode only | `PhotoMode_Update` |
+| `finalScale` | photo-mode only, grey | `PhotoMode_Update` |
+| `finalBias` | photo-mode only, grey | `PhotoMode_Update` |
+| `colourScale` | `(1,1,1,1)` every frame | nothing |
+
+**HD has no live whole-frame colour grade.** That is the opposite of 2048,
+where the equivalent table *is* applied as a composite pass
+([zone-effectsettings-loader.md](zone-effectsettings-loader.md)), and it means
+whatever recolours track and scenery in HD's Zone mode has to act **before** the
+resolve - per-material or per-light - not on the composited frame. The composite
+route is now closed by enumeration rather than by failing to find a consumer.
+
+What this does **not** settle: what does drive the visible Zone recolour. The
+`FunkLayerColour2d_fp` flat-colour quad is untouched by this pass and is the one
+remaining post-chain program that could paint a full-screen colour by a
+different route; and the per-material side - `Environment_UpdateStageBlend`'s
+own outputs at `0x00c81a5c` and the `g_effect_settings_stages` rows - is where
+[zone-effectsettings-loader.md](zone-effectsettings-loader.md) already says the
+search belongs.

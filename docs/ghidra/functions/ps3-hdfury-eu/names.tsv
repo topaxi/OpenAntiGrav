@@ -123,6 +123,10 @@
 0x0023f568	function	PhotoMode_Update	78	renderer.md
 0x00c50f00	data	g_FullscreenTintColour	88	renderer.md
 0x00c81a80	data	g_RenderGlobals	72	renderer.md
+0x005e1140	function	Post_BindFilterColourScaleParams	85	renderer.md
+0x003def38	function	Post_SetColourScaleRate	80	renderer.md
+0x003def50	function	Post_SetColourScaleTarget	80	renderer.md
+0x003def68	function	Post_SetColourScaleImmediate	80	renderer.md
 0x002b3bb0	function	LoadingScreen_Construct	85	loading-screen.md
 0x00936fe8	data	g_GameState	90	mode-manager.md
 0x00032f44	data	GameMode_BackendDispatchTable	90	mode-manager.md

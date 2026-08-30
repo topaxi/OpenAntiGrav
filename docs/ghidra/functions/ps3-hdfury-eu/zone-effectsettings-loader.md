@@ -2253,6 +2253,42 @@ section, different stage colour, rather than this pass's two different
 segments) would sharpen the visual evidence further but isn't needed to
 settle "does it happen at all" - it already does.
 
+## 2026-08-30: the post-process route is closed by enumeration, not by search
+
+The eighteenth pass above leaves "a post-process tint" open as one of the
+plausible mechanisms behind the recolour it proved happens. It is now
+**ruled out**, and by a different method than this page has been using: instead
+of looking for a consumer of the stage table, a parallel thread enumerated the
+*inputs* of the post chain's resolve pass exhaustively. See
+[renderer.md](renderer.md), "The resolve's full-screen colour inputs,
+enumerated".
+
+There are exactly five full-screen colour inputs across the three resolve
+programs, and in the shipped executable:
+
+- `fullscreenTintColour` is bound every frame with `(0,0,0,0)` - the global it
+  reads (`0x00c50f00`) is cleared by the present path each frame and written
+  non-zero by nothing, established by a whole-image scan rather than a
+  branch scan;
+- `saturation`, `finalScale` and `finalBias` are photo mode's exposure controls,
+  reached through a cross-TOC trampoline from `PhotoMode_Update`, and both
+  float4s are built **grey**, so they cannot express a hue at all;
+- `colourScale` is bound every frame with `(1,1,1,1)`, its three setters having
+  no caller anywhere in the image.
+
+So the recolour the eighteenth pass observed **cannot** be happening on the
+composited frame. Whatever drives it acts earlier - per-material, per-light, or
+through a program this enumeration does not cover (`FunkLayerColour2d_fp`, the
+flat-colour quad, is the one post program that could paint a full-screen colour
+by a route other than the resolve, and is untouched by that work). The
+`0x00c81a5c` read watchpoint stays the right next step; this narrows where a
+negative result would send the search, and removes one of the three candidates
+the eighteenth pass listed.
+
+It also sharpens the contrast with 2048, which *does* grade the whole frame in
+a composite shader: the two engines are not doing the same thing here, so the
+2048 finding should not be carried across as a template for HD.
+
 ## See also
 
 - `docs/formats/effectsettings.md` - the file format this loader reaches for
