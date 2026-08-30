@@ -1,0 +1,163 @@
+//! Unit tests for [`super`], on two whole stages of HD's own file.
+
+use super::*;
+
+/// `Start` and `Sub Venom`, verbatim from
+/// `/data/environments/zonemode.effectsettings` - the same excerpt
+/// `oag_formats::effectsettings`'s own tests blend, and the same numbers
+/// `effectsettings_ground_truth.rs` asserts straight off the disc image.
+const HD_TWO_STAGES: &str = concat!(
+    "\"0 Start.Lighting.Sun colour\"=1.000000 1.000000 1.000000 0.000000\n",
+    "\"0 Start.Lighting.Constant Ambient Colour\"=1.000000 1.000000 1.000000 0.000000\n",
+    "\"0 Start.Lighting.Fog colour\"=0.000000 0.000000 0.000000 0.000000\n",
+    "\"0 Start.Lighting.Fog density\"=0.000000\n",
+    "\"1 Sub Venom.Lighting.Sun colour\"=0.000000 0.000000 0.000000 0.000000\n",
+    "\"1 Sub Venom.Lighting.Constant Ambient Colour\"=1.500000 1.500000 1.500000 0.000000\n",
+    "\"1 Sub Venom.Lighting.Fog colour\"=0.000000 1.305882 1.800000 0.000000\n",
+    "\"1 Sub Venom.Lighting.Fog density\"=0.002100\n",
+);
+
+fn grade() -> ZoneGrade {
+    let table = EffectSettings::parse(HD_TWO_STAGES).expect("it parses");
+    ZoneGrade::new("zonemode.effectsettings".to_string(), table).expect("it names stages")
+}
+
+/// The circuit's own rig, as `envsettings_light` would hand one over.
+fn circuit_light() -> mesh_render::Light {
+    mesh_render::Light::authored(
+        [0.0, 1.0, 0.0],
+        [0.5, 0.5, 0.5],
+        [0.2, 0.2, 0.2],
+        [1.0; 3],
+        [1.0; 3],
+        0.25,
+    )
+}
+
+/// The circuit's own distance fog, as `envsettings_fog` would hand one over.
+fn circuit_fog() -> mesh_render::Fog {
+    mesh_render::Fog::authored_exp2([0.1, 0.2, 0.3], 0.004)
+}
+
+#[test]
+fn a_fresh_grade_rests_on_stage_zero_fully_applied() {
+    let grade = grade();
+    assert_eq!(grade.blend().current, 0);
+    assert_eq!(grade.blend().requested, 0);
+    assert_eq!(grade.blend().weight, 1.0);
+    assert_eq!(grade.last_stage(), 1);
+}
+
+/// A table naming no stage is not a grade at all - there would be nothing to
+/// select between.
+#[test]
+fn a_table_with_no_stages_builds_no_grade() {
+    let table = EffectSettings::parse("\"Texture U scale\"=1.000000\n").expect("it parses");
+    assert!(ZoneGrade::new("empty".to_string(), table).is_none());
+}
+
+/// **Stage 0 and stage 1 are two different, correctly-sourced fogs**: `Start`
+/// authors none and leaves the circuit's own standing, `Sub Venom` authors the
+/// cyan the file states, at the density the file states.
+#[test]
+fn stage_zero_and_stage_one_produce_different_fog() {
+    let mut grade = grade();
+    let base = Some(circuit_fog());
+
+    let start = grade.fog(base).expect("stage 0 leaves the circuit's fog");
+    assert_eq!(
+        start.colour,
+        circuit_fog().colour,
+        "Start authors density 0, so the circuit's own fog stands"
+    );
+
+    grade.request_stage(1);
+    assert!(grade.commit(), "the request differs, so it commits");
+    // The commit zeroes the weight, so the stage is asked for but not yet
+    // showing - it reads as `Start` until something raises the weight.
+    assert_eq!(grade.blend().weight, 0.0);
+    assert_eq!(
+        grade.fog(base).expect("still the circuit's fog").colour,
+        circuit_fog().colour
+    );
+
+    grade.set_weight(1.0);
+    let sub_venom = grade.fog(base).expect("stage 1 authors its own fog");
+    assert_eq!(sub_venom.colour, [0.0, 1.305_882, 1.8]);
+    assert_eq!(sub_venom.density, 0.002_1);
+    assert_eq!(
+        sub_venom.curve, 1.0,
+        "the same exp2 curve .envsettings drives"
+    );
+    assert_ne!(sub_venom.colour, start.colour);
+}
+
+/// Halfway between the two stages, the fog is halfway between the two authored
+/// colours - the cross-fade reaching the renderer, not just the table.
+#[test]
+fn a_half_committed_stage_fogs_halfway_between_the_two() {
+    let mut grade = grade();
+    grade.request_stage(1);
+    grade.commit();
+    grade.set_weight(0.5);
+    let fog = grade
+        .fog(Some(circuit_fog()))
+        .expect("density is over zero");
+    assert_eq!(fog.colour, [0.0, 1.305_882 / 2.0, 0.9]);
+    assert_eq!(fog.density, 0.002_1 / 2.0);
+}
+
+/// The stage tints the circuit's rig; it never aims one. There is no `Sun
+/// direction` key in this schema, so the direction and the specular weight are
+/// the circuit's own on every stage.
+#[test]
+fn a_stage_recolours_the_rig_and_keeps_its_direction() {
+    let mut grade = grade();
+    grade.request_stage(1);
+    grade.commit();
+    grade.set_weight(1.0);
+    let base = circuit_light();
+    let lit = grade.light(base);
+    assert_eq!(lit.direction, base.direction, "the circuit aims the sun");
+    assert_eq!(lit.specular_scale, base.specular_scale);
+    assert_eq!(lit.sun, [0.0, 0.0, 0.0], "Sub Venom authors a sunless rig");
+    assert_eq!(lit.ambient, [1.5, 1.5, 1.5]);
+    assert_eq!(lit.enabled, 1.0);
+}
+
+/// A circuit with no authored rig is handed back untouched: a tint needs a
+/// direction to tint, and this file states none.
+#[test]
+fn a_stand_in_rig_is_left_alone() {
+    let mut grade = grade();
+    grade.request_stage(1);
+    grade.commit();
+    grade.set_weight(1.0);
+    let stand_in = mesh_render::Light::stand_in();
+    let lit = grade.light(stand_in);
+    assert_eq!(lit.enabled, 0.0, "still the stand-in rig");
+    assert_eq!(lit.sun, stand_in.sun);
+    assert_eq!(lit.ambient, stand_in.ambient);
+    assert_eq!(lit.direction, stand_in.direction);
+}
+
+/// A request past the end of the ladder clamps to it, the way 2048's own
+/// `Zone_UpdateStage` clamps to `0xc` against its thirteen-stage table.
+#[test]
+fn a_request_past_the_ladder_clamps_to_it() {
+    let mut grade = grade();
+    grade.request_stage(99);
+    assert_eq!(grade.blend().requested, 1);
+    assert!(grade.commit());
+    assert_eq!(grade.blend().current, 1);
+}
+
+/// Committing the stage already showing is a no-op - the gate the traced code
+/// draws its transition effect behind.
+#[test]
+fn committing_the_current_stage_changes_nothing() {
+    let mut grade = grade();
+    grade.set_weight(0.75);
+    assert!(!grade.commit());
+    assert_eq!(grade.blend().weight, 0.75, "the weight is left alone");
+}

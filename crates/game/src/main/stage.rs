@@ -345,6 +345,7 @@ impl Stage {
             light,
             authored_fog,
             hd_bloom,
+            zone_grade,
             visibility,
             flare,
             noise,
@@ -378,6 +379,7 @@ impl Stage {
             light,
             authored_fog,
             hd_bloom,
+            zone_grade,
         )?;
         // Against the **surface** format, like every other renderer here, because
         // the HUD is composited into the offscreen target which shares it.

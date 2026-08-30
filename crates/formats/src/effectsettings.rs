@@ -40,15 +40,17 @@
 //! and every stage name in each recovers correctly (checked in
 //! `effectsettings_ground_truth.rs`). Not 90, unlike `.envsettings`: **the
 //! stage-index-to-zone-number correspondence is inferred from the names
-//! alone**, not checked against `Zone_Update`'s own timer - see the thread
-//! file's `## Open`. Nothing here reads either title's executable, and
-//! nothing wires a stage's values into a race yet.
+//! alone**, not checked against `Zone_Update`'s own timer - see
+//! `docs/formats/effectsettings.md`'s `## Open`. Nothing here reads either
+//! title's executable.
 //!
 //! [`cross_fade_rgba8`] is the one piece of this module that *does* read
 //! the executable - HD/Fury's own runtime cross-fade between adjacent
 //! stages, recovered from two independent functions (confidence 80, see
-//! its own doc comment). It stays a standalone, untriggered utility: which
-//! key feeds it and what selects the current stage are both still open.
+//! its own doc comment). [`StagePalette`] is what it blends, and
+//! `oag_game::race::zone_grade` is what applies the result to a race - from
+//! an explicit stage index, because **what selects the stage during a race
+//! is still unrecovered on both titles that ship one of these tables**.
 
 use std::collections::BTreeMap;
 
@@ -157,6 +159,78 @@ impl EffectSettings {
             _ => None,
         }
     }
+
+    /// Four bytes, for a per-stage key the file writes as integers.
+    ///
+    /// [`key::SKY_REFLECTION_COLOUR`] and the two `EQ ... tint` keys are the
+    /// only per-stage colours HD writes this way; every other one carries
+    /// decimal points and answers [`Self::stage_vec4`] instead.
+    #[must_use]
+    pub fn stage_rgba8(&self, stage: u32, key: &str) -> Option<[u8; 4]> {
+        self.table.rgba8(&self.stage_key(stage, key)?)
+    }
+
+    /// A colour key's red, green and blue, whether it is written with three
+    /// numbers or four.
+    ///
+    /// **The alpha lane is dropped rather than carried**: every four-number
+    /// colour key in `zonemode.effectsettings` authors `0.000000` there, on
+    /// all fifteen stages, and no consumer this project has read takes a
+    /// fourth channel from one. A key that authors something else in that lane
+    /// would need reading before it could be used, not defaulting.
+    #[must_use]
+    pub fn stage_rgb(&self, stage: u32, key: &str) -> Option<[f32; 3]> {
+        let key = self.stage_key(stage, key)?;
+        match self.table.entries.get(&key)?.numbers.as_slice() {
+            [r, g, b] | [r, g, b, _] => Some([*r, *g, *b]),
+            _ => None,
+        }
+    }
+
+    /// One stage's [`StagePalette`], or `None` for a stage this file does not
+    /// name at all.
+    ///
+    /// A named stage that authors none of these keys answers
+    /// `Some(StagePalette::default())` - every field `None` - which is a
+    /// different statement from an absent stage and is kept distinguishable
+    /// for that reason.
+    #[must_use]
+    pub fn stage_palette(&self, stage: u32) -> Option<StagePalette> {
+        self.stages.get(&stage)?;
+        Some(StagePalette {
+            fog_colour: self.stage_rgb(stage, key::FOG_COLOUR),
+            fog_density: self.stage_scalar(stage, key::FOG_DENSITY),
+            sun_colour: self.stage_rgb(stage, key::SUN_COLOUR),
+            ambient_colour: self.stage_rgb(stage, key::AMBIENT_COLOUR),
+            prelit_scale: self.stage_rgb(stage, key::PRELIT_SCALE),
+            prelit_power: self.stage_rgb(stage, key::PRELIT_POWER),
+            sky_reflection_colour: self.stage_rgba8(stage, key::SKY_REFLECTION_COLOUR),
+            sky_horizon_colour: self.stage_rgb(stage, key::SKY_HORIZON_COLOUR),
+            sky_zenith_colour: self.stage_rgb(stage, key::SKY_ZENITH_COLOUR),
+        })
+    }
+
+    /// The palette that applies at `stage`, cross-faded against the stage
+    /// before it exactly as HD/Fury's own runtime pairs them.
+    ///
+    /// **`stage - 1`, clamped at zero, is the recovered pairing** - both
+    /// functions that compute this blend index the table by the entity's own
+    /// stage field and by that value minus one, saturating rather than
+    /// wrapping (`ps3-hdfury-eu`, `FUN_003ce2c0` and
+    /// `Environment_UpdateStageBlend` at `0x003da540`, confidence 80). At
+    /// stage `0` the two indices are the same stage, so the blend is the
+    /// identity whatever `weight` reads.
+    ///
+    /// `None` when the file does not name `stage`. A stage whose predecessor
+    /// the file skips blends against itself rather than against a gap.
+    #[must_use]
+    pub fn blended_palette(&self, stage: u32, weight: f32) -> Option<StagePalette> {
+        let current = self.stage_palette(stage)?;
+        let previous = self
+            .stage_palette(stage.saturating_sub(1))
+            .unwrap_or(current);
+        Some(current.cross_fade(previous, weight))
+    }
 }
 
 /// Cross-fades two stages' packed-byte colour channels, byte for byte, the
@@ -200,6 +274,165 @@ pub fn cross_fade_rgba8(current: [u8; 4], previous: [u8; 4], weight: f32) -> [u8
         out[i] = (from_current + from_previous).clamp(0, 255) as u8;
     }
     out
+}
+
+/// The per-stage keys this project reads, spelled the way HD/Fury's own
+/// executable spells them.
+///
+/// **Not a guess at the vocabulary**: every name below appears verbatim in
+/// `g_EffectSettingsSchemaKeyNames` (`0x008b79cc`, `ps3-hdfury-eu`), the
+/// 73-entry schema table `FwKeyedText_ParseEntry` looks a parsed key up
+/// against - see
+/// `docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md`. The
+/// British spellings are the schema's own; `.envsettings`' American
+/// [`envsettings::SUN_COLOUR`] belongs to a different table's vocabulary and
+/// is not a second spelling this one also accepts.
+pub mod key {
+    /// The stage's own distance fog colour. Four floats, alpha authored `0`.
+    pub const FOG_COLOUR: &str = "Lighting.Fog colour";
+    /// The coefficient of the same `exp(-(density * depth)^2)` curve
+    /// `.envsettings`' `Fog.Fog Density` feeds.
+    pub const FOG_DENSITY: &str = "Lighting.Fog density";
+    /// Four floats, alpha authored `0`. **No `Sun direction` key exists** in
+    /// this schema, which is why a stage can only tint a rig, never aim one.
+    pub const SUN_COLOUR: &str = "Lighting.Sun colour";
+    /// Four floats, alpha authored `0`.
+    pub const AMBIENT_COLOUR: &str = "Lighting.Constant Ambient Colour";
+    /// Four floats, alpha authored `0`.
+    pub const PRELIT_SCALE: &str = "Lighting.Prelit Colour Scale";
+    /// Three floats.
+    pub const PRELIT_POWER: &str = "Lighting.Prelit Colour Power";
+    /// **The one colour key on this list the file writes as bytes**, which is
+    /// what makes it the one [`super::cross_fade_rgba8`] can blend in its own
+    /// recovered domain.
+    pub const SKY_REFLECTION_COLOUR: &str = "Lighting.Sky reflection colour";
+    /// Three floats. Parsed and reported; nothing draws it yet - this engine's
+    /// HD sky is the `sky.gtf` cubemap, which has no horizon/zenith term to
+    /// feed.
+    pub const SKY_HORIZON_COLOUR: &str = "Sky horizon colour";
+    /// Three floats, on the same terms as [`SKY_HORIZON_COLOUR`].
+    pub const SKY_ZENITH_COLOUR: &str = "Sky zenith colour";
+}
+
+/// One stage's own palette: the subset of its keys that has somewhere to go.
+///
+/// **Every field is `Option`** and nothing substitutes for an absent key -
+/// `zonemode.effectsettings` is the smallest of HD's four files and exercises
+/// only part of the schema, so "this stage does not author that" is an
+/// ordinary answer rather than a parse failure.
+///
+/// Colours are passed through exactly as authored, **unclamped**: the corpus
+/// writes values well past `1.0` (`Track.Texture Colour` reaches `9.0`), and
+/// clamping here would hide that from a caller that has to decide what to do
+/// about it - the same reason [`EnvSettings::vec3`] does not clamp either.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct StagePalette {
+    /// [`key::FOG_COLOUR`], alpha dropped.
+    pub fog_colour: Option<[f32; 3]>,
+    /// [`key::FOG_DENSITY`].
+    pub fog_density: Option<f32>,
+    /// [`key::SUN_COLOUR`], alpha dropped.
+    pub sun_colour: Option<[f32; 3]>,
+    /// [`key::AMBIENT_COLOUR`], alpha dropped.
+    pub ambient_colour: Option<[f32; 3]>,
+    /// [`key::PRELIT_SCALE`], alpha dropped.
+    pub prelit_scale: Option<[f32; 3]>,
+    /// [`key::PRELIT_POWER`].
+    pub prelit_power: Option<[f32; 3]>,
+    /// [`key::SKY_REFLECTION_COLOUR`], the one byte-written colour here.
+    pub sky_reflection_colour: Option<[u8; 4]>,
+    /// [`key::SKY_HORIZON_COLOUR`]. Read, not drawn - see the key's own note.
+    pub sky_horizon_colour: Option<[f32; 3]>,
+    /// [`key::SKY_ZENITH_COLOUR`]. Read, not drawn.
+    pub sky_zenith_colour: Option<[f32; 3]>,
+}
+
+/// One float channel of the blend, in the float domain the key is authored in.
+///
+/// **The weighting is the recovered one; the domain is the key's own.**
+/// [`cross_fade_rgba8`] is the arithmetic HD/Fury performs on its *packed
+/// byte* fields, truncation and `0xff` clamp included. Running a key the file
+/// writes as `1.800000` through that would send everything past `1.0` to
+/// white - three of `zonemode.effectsettings`' own float colours already do
+/// exceed `1.0` - so the quantisation stays where the storage it belongs to
+/// is, and a float-authored key is blended by the same weights without it.
+/// Which of the two a given runtime field used is not recovered: the three
+/// 16-byte fields HD's own cross-fade reads are unidentified, and the schema's
+/// destination mapping has not been read at that granularity.
+fn fade_scalar(current: f32, previous: f32, weight: f32) -> f32 {
+    // Written as two multiplies and an add rather than a `mul_add`, per
+    // `docs/architecture/determinism.md`.
+    current * weight + previous * (1.0 - weight)
+}
+
+/// One field of the blend, in the two-stage `Option` shape the palettes have.
+///
+/// A field only *blends* where both stages author it. Where the current stage
+/// authors one and the previous does not, the current stage's own value
+/// stands - there is nothing to fade from, and inventing a zero to fade from
+/// would put a value in the picture that no stage wrote. Where the current
+/// stage authors none, the result is `None` whatever the previous holds:
+/// which stage a key is missing from is the file's own statement.
+fn fade_field<T: Copy>(
+    current: Option<T>,
+    previous: Option<T>,
+    blend: impl Fn(T, T) -> T,
+) -> Option<T> {
+    match (current, previous) {
+        (Some(current), Some(previous)) => Some(blend(current, previous)),
+        (Some(current), None) => Some(current),
+        (None, _) => None,
+    }
+}
+
+impl StagePalette {
+    /// Cross-fades this stage against the one before it.
+    ///
+    /// `weight` is **this** palette's own share, matching
+    /// [`cross_fade_rgba8`]'s own convention - `1.0` is this stage alone,
+    /// `0.0` is `previous` alone.
+    ///
+    /// # What is recovered and what is not
+    ///
+    /// - **Recovered (confidence 80)**: that HD/Fury cross-fades stage `n`
+    ///   against stage `n - 1` by a weight, and the byte arithmetic it does it
+    ///   with - see [`cross_fade_rgba8`].
+    /// - **Not recovered**: which of the schema's keys the three blended
+    ///   runtime fields are, and what drives `weight` during a race. The
+    ///   fields blended here are chosen by the file's own key names, not by a
+    ///   read of the executable's destination offsets.
+    #[must_use]
+    pub fn cross_fade(self, previous: Self, weight: f32) -> Self {
+        let fade3 =
+            |c: [f32; 3], p: [f32; 3]| std::array::from_fn(|i| fade_scalar(c[i], p[i], weight));
+        Self {
+            fog_colour: fade_field(self.fog_colour, previous.fog_colour, fade3),
+            fog_density: fade_field(self.fog_density, previous.fog_density, |c, p| {
+                fade_scalar(c, p, weight)
+            }),
+            sun_colour: fade_field(self.sun_colour, previous.sun_colour, fade3),
+            ambient_colour: fade_field(self.ambient_colour, previous.ambient_colour, fade3),
+            prelit_scale: fade_field(self.prelit_scale, previous.prelit_scale, fade3),
+            prelit_power: fade_field(self.prelit_power, previous.prelit_power, fade3),
+            // The one field whose storage is bytes, so the one field the
+            // recovered byte arithmetic applies to unaltered.
+            sky_reflection_colour: fade_field(
+                self.sky_reflection_colour,
+                previous.sky_reflection_colour,
+                |c, p| cross_fade_rgba8(c, p, weight),
+            ),
+            sky_horizon_colour: fade_field(
+                self.sky_horizon_colour,
+                previous.sky_horizon_colour,
+                fade3,
+            ),
+            sky_zenith_colour: fade_field(
+                self.sky_zenith_colour,
+                previous.sky_zenith_colour,
+                fade3,
+            ),
+        }
+    }
 }
 
 #[cfg(test)]

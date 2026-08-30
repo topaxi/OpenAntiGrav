@@ -277,3 +277,126 @@ pub(super) fn envsettings_light(
     ));
     light
 }
+
+/// Everything the four environment readers found, in one value.
+///
+/// Bundled because they are one concern - the staging this module's own docs
+/// name - and because `load.rs` has a 1,000-line ceiling that four separate
+/// call sites plus their reasoning were pushing at. No behaviour of any reader
+/// changed in the move.
+pub(super) struct Staging {
+    /// The circuit's own light rig, or [`mesh_render::Light::stand_in`].
+    pub(super) light: mesh_render::Light,
+    /// The circuit's authored distance fog, where it authors one.
+    pub(super) authored_fog: Option<mesh_render::Fog>,
+    /// The circuit's `HDR and Bloom` block, where it authors one.
+    pub(super) hd_bloom: Option<oag_render::post::hd_bloom::Params>,
+    /// The Zone stage grade this title lays over the two above, in a Zone
+    /// race on a title that ships a table. See [`zone_grade`].
+    pub(super) zone_grade: Option<crate::race::zone_grade::ZoneGrade>,
+}
+
+/// Reads the circuit's staging: its rig, its fog, its bloom and its Zone
+/// grade.
+///
+/// `ps3_geometry` gates the two readers that only a Wipeout HD circuit
+/// answers - a Pulse circuit fogs through its `fogCube` volumes and authors no
+/// `.envsettings` at all - and the Zone grade is gated on the mode and on the
+/// title shipping a table, not on the geometry.
+pub(super) fn staging(
+    archives: &mut oag_assets::Archives,
+    track: &str,
+    ps3_geometry: bool,
+    palette: Option<oag_title::ZonePalette>,
+    mode: oag_race::Mode,
+    report: &mut Vec<String>,
+) -> Staging {
+    // **The circuit's own light rig, where it authors one.** Wipeout HD does:
+    // `track.envsettings` sits beside `track.vex` and states a sun direction, a
+    // sun colour and a constant ambient. `mesh.wgsl`'s two-light rig is a
+    // stand-in for exactly this and says so, and `CLAUDE.md`'s rule about not
+    // inventing what the assets already author is why it is read here rather
+    // than approximated.
+    //
+    // A sibling-path rewrite, the same shape as `mesh::rcs::sibling_name`, and
+    // the same failure behaviour: no file, an unparsable one, or a degenerate
+    // sun direction all fall back to the stand-in and say so. Nothing is
+    // substituted for a value the file does not carry.
+    let light = envsettings_light(archives, track, report);
+    // The circuit's authored distance fog, on the same file. **The curve is no
+    // longer a guess**: every fogged fragment variant of an HD circuit
+    // `.rcsmaterial` computes `exp(-(coefficient * view_depth)^2)` and lerps a
+    // patched `fogColour` in by it - read out of the microcode itself, see
+    // `mesh_render::Fog::curve`.
+    let authored_fog = ps3_geometry
+        .then(|| envsettings_fog(archives, track, report))
+        .flatten();
+    // The circuit's `HDR and Bloom` block, which is what turns the HD race
+    // onto the linear float scene target and the read FunkLayerBloom chain -
+    // see `oag_render::post::hd_bloom` for what of that is the microcode's
+    // and what is this project's. Gated to the PS3 path like the fog above.
+    let hd_bloom = ps3_geometry
+        .then(|| envsettings_bloom(archives, track, report))
+        .flatten();
+    Staging {
+        light,
+        authored_fog,
+        hd_bloom,
+        zone_grade: zone_grade(archives, palette, mode, track, report),
+    }
+}
+
+/// The Zone colour grade a title lays over the circuit, stage by stage, or
+/// `None` with the reason reported.
+///
+/// **Zone only, and only where the title ships a table.** Pulse and Pure ship
+/// none - see [`oag_title::ZonePalette`] for how thoroughly each disc was
+/// searched before that was written down - so this is silent on them rather
+/// than reporting an absence that is true of a whole title, the same rule
+/// [`envsettings_light`] follows. A missing entry on a title that *claims* one
+/// is reported, because that is a gap in this reading rather than in the data.
+///
+/// **Nothing this returns advances during a race.** The grade rests on stage
+/// `0`, which is where HD's own loader leaves it, and what would move it is
+/// unrecovered on both titles - see `crate::race::zone_grade`'s module docs
+/// and `docs/formats/effectsettings.md`'s `## Open`.
+pub(super) fn zone_grade(
+    archives: &mut oag_assets::Archives,
+    palette: Option<oag_title::ZonePalette>,
+    mode: oag_race::Mode,
+    track: &str,
+    report: &mut Vec<String>,
+) -> Option<crate::race::zone_grade::ZoneGrade> {
+    use oag_formats::effectsettings::EffectSettings;
+
+    if mode != oag_race::Mode::Zone {
+        return None;
+    }
+    let name = palette?.entry_for(track)?;
+    let Ok(blob) = archives.read_name(&name) else {
+        report.push(format!(
+            "{name}: not in the archive set - the Zone race keeps the circuit's own colours"
+        ));
+        return None;
+    };
+    let text = match String::from_utf8(blob) {
+        Ok(text) => text,
+        Err(_) => {
+            report.push(format!("{name}: not text, so it is not this format"));
+            return None;
+        }
+    };
+    let table = match EffectSettings::parse(&text) {
+        Ok(table) => table,
+        Err(error) => {
+            report.push(format!("{name}: {error}; no stage grade"));
+            return None;
+        }
+    };
+    let grade = crate::race::zone_grade::ZoneGrade::new(name.clone(), table);
+    match &grade {
+        Some(grade) => report.push(grade.describe()),
+        None => report.push(format!("{name}: names no stage at all; no stage grade")),
+    }
+    grade
+}

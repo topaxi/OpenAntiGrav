@@ -251,3 +251,31 @@ fn same_circuit_offers_the_race_list_unfiltered() {
     );
     assert_eq!(offered, race_tracks);
 }
+
+/// The two scopes the two titles that ship a stage table disagree about: one
+/// entry for the whole title, or one beside every circuit.
+#[test]
+fn a_zone_palette_resolves_per_title_or_per_circuit() {
+    let title_wide = ZonePalette::TitleWide("/data/environments/zonemode.effectsettings");
+    assert_eq!(
+        title_wide.entry_for("/data/environments/talons_junction/track.vex"),
+        Some("/data/environments/zonemode.effectsettings".to_string()),
+        "the circuit does not enter into it"
+    );
+
+    let beside = ZonePalette::BesideCircuit("ZoneMode2048.effectSettings");
+    assert_eq!(
+        beside.entry_for(r"Data\art\published\environments\altima\track.vex"),
+        Some(r"Data\art\published\environments\altima\ZoneMode2048.effectSettings".to_string()),
+        "the separator the caller used is the separator it gets back"
+    );
+    assert_eq!(
+        beside.entry_for("data/art/published/environments/altima/track.vex"),
+        Some("data/art/published/environments/altima/ZoneMode2048.effectSettings".to_string()),
+    );
+    assert_eq!(
+        beside.entry_for("track.vex"),
+        None,
+        "a name with no directory has no sibling to name"
+    );
+}

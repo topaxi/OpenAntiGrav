@@ -11,7 +11,7 @@ mod cameras;
 mod environment;
 mod geometry;
 mod surfaces;
-use environment::{envsettings_fog, envsettings_light, hd_sky_model};
+use environment::hd_sky_model;
 
 /// Loads a track, a ship and its handling out of a disc image.
 ///
@@ -550,38 +550,23 @@ pub fn load(options: &Options) -> Result<Loaded> {
         }
         track_model
     };
-    // **The circuit's own light rig, where it authors one.** Wipeout HD does:
-    // `track.envsettings` sits beside `track.vex` and states a sun direction, a
-    // sun colour and a constant ambient. `mesh.wgsl`'s two-light rig is a
-    // stand-in for exactly this and says so, and `CLAUDE.md`'s rule about not
-    // inventing what the assets already author is why it is read here rather
-    // than approximated.
-    //
-    // A sibling-path rewrite, the same shape as `mesh::rcs::sibling_name`, and
-    // the same failure behaviour: no file, an unparsable one, or a degenerate
-    // sun direction all fall back to the stand-in and say so. Nothing is
-    // substituted for a value the file does not carry.
-    let light = envsettings_light(&mut archives, &track, &mut report);
-    // The circuit's authored distance fog, on the same file. **The curve is no
-    // longer a guess**: every fogged fragment variant of an HD circuit
-    // `.rcsmaterial` computes `exp(-(coefficient * view_depth)^2)` and lerps a
-    // patched `fogColour` in by it - read out of the microcode itself, see
-    // `mesh_render::Fog::curve`. Gated to the PS3 path: a Pulse circuit fogs
-    // through its `fogCube` volumes and authors no `.envsettings` at all.
-    let authored_fog = if ps3_geometry.is_some() {
-        envsettings_fog(&mut archives, &track, &mut report)
-    } else {
-        None
-    };
-    // The circuit's `HDR and Bloom` block, which is what turns the HD race
-    // onto the linear float scene target and the read FunkLayerBloom chain -
-    // see `oag_render::post::hd_bloom` for what of that is the microcode's
-    // and what is this project's. Gated to the PS3 path like the fog above.
-    let hd_bloom = if ps3_geometry.is_some() {
-        environment::envsettings_bloom(&mut archives, &track, &mut report)
-    } else {
-        None
-    };
+    // The circuit's staging, all four readers at once: its light rig, its
+    // distance fog, its bloom block and the Zone stage grade laid over the
+    // first two. Every one of them reports what it found and substitutes
+    // nothing for what it did not - see `environment::staging`.
+    let environment::Staging {
+        light,
+        authored_fog,
+        hd_bloom,
+        zone_grade,
+    } = environment::staging(
+        &mut archives,
+        &track,
+        ps3_geometry.is_some(),
+        title.race.zone_palette,
+        options.mode,
+        &mut report,
+    );
     // The track's authored fog volumes. Empty for a ribbon build, and empty for
     // the four circuits that author no `fogCube` at all - both ordinary, and
     // both meaning the race renders unfogged.
@@ -987,6 +972,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         light,
         authored_fog,
         hd_bloom,
+        zone_grade,
         liveries,
         rocket_model,
         shield_cockpit,

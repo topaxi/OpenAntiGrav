@@ -422,12 +422,13 @@ pass. Recorded as a real dead end rather than left silently unmentioned.
   containing struct at `(&DAT_8151f0ec)[param_1]` was not identified this
   pass, so whether it is (or maps cleanly onto) this project's own
   `RaceState`-equivalent for 2048 is open.
-- **Does not settle**: whether `+0x634` is driven the same way Pulse's
-  `Zone_Update` drives its own zone counter (a plain accumulate-every-10-
-  seconds), or something else. **Searched directly, third pass, and still
-  not found**: `Zone_UpdateStage`'s own two callers, `Zone_InitStageState`,
-  the craft state machine and an EMP-bar HUD function were all fully
-  decompiled and ruled out - see the section above.
+- **Settled, fourth pass**: `+0x634`/`+0x638` are written by
+  `Hud_UpdateZoneSpeedClassWidget` (`0x81197d6c`), the Zone-mode HUD's own
+  Speed Class number/lights widget - not a race-progress timer, not
+  `Zone_Update`'s own accumulate-every-10-seconds shape. See the dated
+  section below for the full trace; the "third pass, still not found"
+  history immediately above predates this and is kept for the record of
+  what was actually checked, not as the current answer.
 - **Sharpened, third pass**: `DAT_816c4890` is not the raw parsed file and
   not a passive read of `DAT_816c7148`'s cache entry - `Environment_LoadEffectSettingsFiles`
   writes it directly, inside a block that reverses a `0x816c4778`-`0x816c68d8`
@@ -437,6 +438,110 @@ pass. Recorded as a real dead end rather than left silently unmentioned.
   place - no parser call was found in the traced block, so either it happens
   earlier (unread) or `DAT_816c4890`'s table is built some other way
   entirely.
+
+## 2026-08-30, a fourth pass: `+0x634`/`+0x638`'s writer is found - it's the Zone-mode HUD's own Speed Class widget, not race/physics logic
+
+**`Hud_UpdateZoneSpeedClassWidget`** (`0x81197d6c`, confidence 82) writes both
+fields `Zone_UpdateStage` reads, in the same block:
+
+```c
+// piVar3 walks a 17-entry table (DAT_8151faf8, stride 0x10), each record's
+// first word a descending threshold; iVar2 is a percentage-shaped progress
+// value read off this widget's own instance struct
+do {
+    if (*piVar3 <= iVar2) {
+        *(uint *)(DAT_8151f0ec + 0x634) = 0x11 - uVar6;   // the field Zone_UpdateStage clamps to 12
+        *(int   *)(DAT_8151f0ec + 0x638) = (int)fVar10;   // the field Zone_UpdateStage divides by 5
+        // ... +0x63c/+0x640/+0x644 also written here (not read by Zone_UpdateStage) ...
+        FUN_810e33d4(*(undefined4 *)(param_2 + 0x704), auStack_30 /* "%d/%d" text */, 0, 0);
+        break;
+    }
+    uVar6 = uVar6 + 1;
+    piVar3 = piVar3 + 4;
+} while (uVar6 < 0x11);
+```
+
+`DAT_8151f0ec` used bare (not indexed) matches `Zone_UpdateStage`'s own
+`(&DAT_8151f0ec)[param_1]` for `param_1 = 0` exactly - both of
+`Zone_UpdateStage`'s call sites already hardcode `param_1 = 0`, confirmed by
+re-decompiling it this pass. Independently byte/decompile-verified in this
+session (not taken from a single trace) before either rename.
+
+**Identified via its init sibling, `Hud_InitZoneSpeedClassWidget`**
+(`0x81197c24`, confidence 82, same vtable-slot group), which looks up scene
+nodes by name - `"ZoneNumber"`, `"ZoneLight%d"` (0-9), `"ZoneSpeedLogo"` -
+storing the results at the exact offsets `Hud_UpdateZoneSpeedClassWidget`
+reads back (`param_1+0x704`/`+0x70c...`/`+0x734`). Unambiguous: this is the
+Zone-mode HUD's own speed-class number/lights display widget, not a
+race-progress or timer subsystem. Both functions are reached only through an
+indirect per-frame widget-update pointer table (`0x815112xx`-`0x815119xx`,
+Thumb-bit-set function pointers); `get_xrefs_to`/`get_function_callers` find
+no static caller for either, which is normal for this kind of HUD dispatch
+and not a blocker to the finding.
+
+**A real Mach-number Speed Class ladder exists near the threshold table, but
+its exact per-entry pairing is not nailed down this pass.** Strings
+`MX_CLASS`, `M1_9_CLASS`, `M1_8_CLASS`, `M1_7_CLASS`, ... down through
+`AP_CLASS`/`A_CLASS`/`B_CLASS`/`C_CLASS`/`D_CLASS` exist as a contiguous
+null-terminated blob at `0x8148a4a0`, confirmed directly
+(`inspect_memory_content`). `search_strings` for `CLASS` elsewhere in this
+binary independently corroborates the same ladder by name
+(`Speed_Class_A_Plus_0`/`_B_0`/`_C_0`/`_D_0`, `SpeedClass`/`NextSpeedClass`
+scene-node strings, `data/fe/newimages/speedclass/{a,b,c,d,ap}_class.tga`) -
+this is a real, title-wide Speed Class concept, not a one-off. **What is not
+settled**: reading the threshold table's own second word as a per-record
+string pointer (`DAT_8151faf8`'s 16-byte stride, word `+4`) gives an
+inconsistent result on direct decode - the record for threshold `90`
+(expected `M1_9_CLASS`) carries the *same* pointer as the record for
+threshold `9999` (`MX_CLASS`), which doesn't fit a clean one-pointer-per-name
+reading and was not resolved further this pass (possibly a sentinel/unused
+first entry, an off-by-one in which word is the "real" pointer, or the
+strings are addressed by some other index entirely). **So: the mechanism and
+its writer are confirmed; a specific threshold-value-to-class-name table is
+not** - do not cite a specific number-to-name pairing from this pass without
+re-deriving it.
+
+**This is the general Speed Class field, not a Zone-specific counter** -
+which matches HD/Fury's own side of this question: HD's `speech_zone.bnk`
+`MR_*` cue names and 2048's `ZoneMode2048.effectSettings` stage list
+(`Subsonic, Mach 1, Supersonic`, ...) were already read as the same ladder by
+name; this pass confirms from 2048's *executable* (not just file/audio
+content) that Zone's stage-blend index rides on the same field this Speed
+Class HUD widget maintains, not a bespoke Zone timer. **What this gives HD's
+own still-unsolved search for its stage-index writer** (see
+`docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md`, which as
+of the same day found its own write site by a different route and did not
+end up needing this): if HD's write site had not already been found, the
+thematic target would have been HD's own Speed Class HUD widget - scene
+node names or a Mach-class string table - not a race-progress or physics
+system.
+
+**A second, unresolved writer of the same field, flagged not chased down**:
+`FUN_811687e2` (an unrelated `"IG_HUD_TARGET"` opponent-lock HUD widget) also
+writes `+0x634` on a *variably*-indexed craft (`param_2+0xd0`, not a
+hardcoded 0), which was not traced to confirm whether it can ever target
+slot 0 and interact with the Speed Class writer above. Not ruled out, but
+lower-confidence than the Speed Class explanation (no named sibling, no
+verified string ladder, no confirmed always-0 index). Two unrelated
+functions (`FUN_811538c2`, a medal-tracker HUD widget; `FUN_813261be`, a TLS
+session struct with a `"RC4-SHA"` literal) also write a `+0x634` field of
+their own - both ruled out by full decompile as coincidental offset
+collisions on unrelated structs, not craft-slot-0 at all.
+
+**Two live tooling notes, confirmed on this bridge/binary and worth carrying
+forward**: `search_instructions`' mnemonic/operand filter returned zero
+matches even against a *known*-positive address on this ARM/Thumb2 binary
+(`ldr.w r6,[r5,#0x634]` inside `Zone_UpdateStage` itself) - the same
+exact-match trap `toolchain.md` already documents for MIPS and PowerPC,
+confirmed a third architecture. And `search_byte_patterns`' `mask` parameter
+does not filter at all on this bridge (a masked query returns either the
+exact-pattern match or nothing, regardless of what the mask says) -
+workaround: drop the mask and enumerate the one truly-unknown nibble as a
+small set of exact patterns instead of relying on wildcarding.
+
+Nothing wired into Rust from this pass - this settles who writes the field
+2048's own Zone stage-blend reads, not what triggers a render change from
+it, which stays open per the existing "does not settle" bullets above.
 
 ## See also
 

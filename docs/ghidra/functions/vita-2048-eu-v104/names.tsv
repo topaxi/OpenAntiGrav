@@ -32,3 +32,5 @@
 0x81044202	function	Zone_InitStageState	75	zone-environment-fallback.md
 0x81044cfc	function	Zone_UpdateStage	80	zone-environment-fallback.md
 0x8102493c	function	Environment_LoadHDFuryContent	75	zone-environment-fallback.md
+0x81197d6c	function	Hud_UpdateZoneSpeedClassWidget	82	zone-environment-fallback.md
+0x81197c24	function	Hud_InitZoneSpeedClassWidget	82	zone-environment-fallback.md

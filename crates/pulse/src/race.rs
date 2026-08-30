@@ -30,6 +30,11 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     },
     sounds: SOUND_BANKS,
     zone_announcer: Some(ZONE_ANNOUNCER),
+    // Searched, not skipped: two independently generated candidate lists
+    // resolved no `.effectSettings`-shaped entry on this disc at all - see
+    // `oag_title::ZonePalette`. A Zone race here escalates its speed alone,
+    // with no colour grade to climb.
+    zone_palette: None,
 };
 
 /// Pulse's Zone milestone announcer.

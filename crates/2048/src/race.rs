@@ -46,6 +46,11 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone_craft: oag_title::ZoneCraft::PlayerShip,
     sounds: SOUND_BANKS,
     zone_announcer: Some(ZONE_ANNOUNCER),
+    // One copy per circuit, which is the arrangement that makes
+    // `ZoneCircuit::SameCircuit` above work: the table sits beside the very
+    // circuit a Zone race runs on. All ten base circuits ship a byte-identical
+    // copy, checked in `effectsettings_ground_truth.rs`.
+    zone_palette: Some(oag_title::ZonePalette::BesideCircuit(ZONE_PALETTE)),
 };
 
 /// Wipeout 2048's Zone milestone announcer.
@@ -149,6 +154,22 @@ pub const SHIP_TYPES: [&str; 4] = ["fighter", "agility", "speed", "prototype"];
 /// Its drivable geometry is another matter: `track.rcsmodel` is 17.4 MiB of a
 /// container this build cannot decode, so a race here comes up as the derived
 /// ribbon rather than the authored surface, exactly as a Wipeout HD race does.
+/// The per-stage colour grade a Zone race climbs, one copy per circuit.
+///
+/// **Per-circuit rather than title-wide**, and the reason
+/// [`oag_title::ZoneCircuit::SameCircuit`] above reads the way it does: this
+/// file sits beside the `track.vex` of whichever ordinary circuit the player
+/// picked, which only makes sense if Zone runs on that circuit. All ten base
+/// circuits ship a byte-identical 43,812-byte copy naming thirteen stages -
+/// HD's fifteen with `Sub Venom`/`Venom` dropped - checked against the disc in
+/// `effectsettings_ground_truth.rs`.
+///
+/// **The title-wide `ZoneMode2048default.effectSettings` this title's own
+/// loader also reaches for does not exist on any of the three packages**, nor
+/// do the four `ZoneEnvironmentHDFury\*` paths its DLC fallback names; see
+/// `docs/formats/effectsettings.md`. So this is the only copy there is.
+pub const ZONE_PALETTE: &str = "ZoneMode2048.effectSettings";
+
 pub const DEFAULT_TRACK: &str = r"Data\art\published\environments\altima\track.vex";
 
 /// The team whose `handlingstats.xml` a race uses by default.

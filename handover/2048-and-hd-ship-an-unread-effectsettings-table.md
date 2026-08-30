@@ -24,8 +24,11 @@ titles, that this engine has never opened.
 five files above plus 2048's ten identical copies, validated against the real
 disc/PSARC in `effectsettings_ground_truth.rs`. It reuses `EnvSettings::parse`
 for the tokeniser and adds a stage index/name read off each key's own prefix.
-**Nothing is wired into a race yet** - see Open and Next Steps below, both
-trimmed to what is still actually open.
+**2026-08-30: the render-application half landed** - a Zone race now grades
+its circuit off this table, driven by an explicit stage index and weight. The
+*trigger* that would move that index during a race is still unrecovered on
+both titles, and is what remains of this thread; see Open and Next Steps
+below.
 
 Plain text, same `"Key.Subkey"=float [float...]` shape `oag_formats::envsettings`
 already parses for `.envsettings` - just never pointed at this extension.
@@ -306,6 +309,28 @@ evidence, including the byte-level trace of every function in this chain:
   what writes it, and whether HD's own selection works the same way - no
   write site was found and this is 2048's executable, not HD's, so per
   `CLAUDE.md` it stays unwired until the write side closes the loop.
+
+  **2026-08-30: both write sites found, independently, same day.**
+  2048's own `+0x634`/`+0x638` writer is `Hud_UpdateZoneSpeedClassWidget`
+  (`0x81197d6c`, confidence 82) - the Zone-mode HUD's Speed Class
+  number/lights widget, identified via its named init sibling's scene-node
+  lookups (`"ZoneNumber"`/`"ZoneLight%d"`/`"ZoneSpeedLogo"`). **Not a
+  race-progress or timer system** - it computes the class index every frame
+  from a percentage-shaped value against a 17-entry Mach-number threshold
+  table (`MX_CLASS`, `M1_9_CLASS`, ... `D_CLASS`, corroborated independently
+  by `Speed_Class_A_Plus_0`-style strings and `speedclass/*.tga` paths
+  elsewhere in the binary) and happens to write into the same per-craft
+  field the colour-grade blend reads. Confirms HD's own
+  `speech_zone.bnk`/`effectSettings` stage-name evidence from the
+  executable side, not just audio/file content. Full trace on
+  [zone-environment-fallback.md](../docs/ghidra/functions/vita-2048-eu-v104/zone-environment-fallback.md#2026-08-30-a-fourth-pass-0x6340x638s-writer-is-found---its-the-zone-mode-huds-own-speed-class-widget-not-racephysics-logic).
+  **HD's own write site was found the same day, independently and first**
+  (see two sections above) - a different function, `Environment_UpdateStageBlend`,
+  a self-contained request/commit pair rather than a HUD widget - so 2048's
+  answer ended up corroborating the "Speed Class, not a bespoke timer"
+  thesis rather than being needed to find HD's own writer. Both titles'
+  write sites are now closed; what remains open on both is the *consumer*
+  of the resulting blend (render wiring), unchanged from before.
 - 2048's table names 13 stages but the title ships 15 files in each texture
   set - still unexplained, though sharpened by the texture-content finding
   below: it is a mismatch in the "Track" set that carries the real art, not
@@ -415,12 +440,30 @@ evidence, including the byte-level trace of every function in this chain:
   the outside last pass. What is still unread is the actual parse/copy step
   that gets bytes from `DAT_816c7148` into that region at all - no call into
   a parser was found in the traced block.
-- Wire the current stage's fog/sky/ambient into the renderer for one title as
-  a proof of concept, once the two items above settle - HD is still the
-  best-measured *rendering* target, since its `.envsettings` reading and
-  drawing path already exists ([envsettings.md](../docs/formats/envsettings.md))
-  and this is the same shape, even though the clearest recovered *selection*
-  logic so far is on 2048.
+- ~~Wire the current stage's fog/sky/ambient into the renderer for one title
+  as a proof of concept~~ **Done, 2026-08-30, on HD/Fury and for Zone
+  specifically.** `oag_title::ZonePalette` names where each title keeps its
+  table (`TitleWide` on HD, `BesideCircuit` on 2048, `None` on Pulse and
+  Pure, which were searched rather than assumed);
+  `oag_formats::effectsettings::StagePalette`/`blended_palette` read one
+  stage and cross-fade it against the stage before it; and
+  `oag_game::race::zone_grade::ZoneGrade` holds the recovered struct's own
+  three fields (`+0x00` current, `+0x04` requested, `+0x18` weight) with a
+  `commit` that reproduces `Environment_UpdateStageBlend`'s gate, applying
+  the result to the same `mesh_render::Fog`/`Light` path `.envsettings`
+  already drives. Checked end to end against `hdfury-ps3-eu-dec.iso` in
+  `crates/game/tests/zone_grade_ground_truth.rs`: a Zone race load carries
+  the fifteen-stage table, and `Sub Venom` fogs `[0, 1.305882, 1.8]` at
+  density `0.0021` where `Start` authors none. **The trigger is still open**
+  and is now the *only* thing between this and a race that escalates on its
+  own - `request_stage`/`set_weight` are a seam with no caller. Two smaller
+  questions the wiring surfaced are in
+  [effectsettings.md](../docs/formats/effectsettings.md)'s `## Open`: which
+  way `+0x18` runs (the commit zeroes it, `cross_fade_rgba8`'s own doc says
+  a fresh stage starts at `1.0` - both cannot be right), and which schema
+  keys the three blended runtime fields actually are, which is also what
+  decides whether the byte-domain blend should apply to keys this build fades
+  in floats.
 - ~~Add `SceGxmTextureBaseFormat` `U8U8U8U8` to `oag_formats::gxt`~~ **Done,
   2026-08-28** - see the Open section above and `docs/formats/gxt.md`'s
   `U8U8U8U8` section. What is left from this step is the shader side: what
@@ -677,3 +720,104 @@ evidence, including the byte-level trace of every function in this chain:
   single shot both whether the field is ever non-zero and who writes it -
   including through the indirect calls that have kept `FUN_003cdc90`'s
   caller hidden for three passes.
+
+  **2026-08-30, a seventh pass: the eleven functions are checked, and
+  none of them writes `+0x00`.** All seven of the sixth pass's remaining
+  unread/sampled functions were traced the way that pass specified - per
+  function, from each `n*0x38` computation's own `rlwinm`/`rlwinm`/`subf`
+  triple, bias checked, not a bare-mnemonic sweep. Five of the
+  `-0x50e4(r2)` family (`FUN_00403a30`, `FUN_004053e0`, `FUN_004074e0`,
+  `FUN_00408fa8`, `FUN_003fc140`) are the same read-only shape already
+  confirmed for that family's other three members: a `+0x18` blend-weight
+  read feeding a distance compare, then two `+0x1c`/`+0x20` reads feeding
+  an unrelated telemetry call. `FUN_003df360` reads `+0x30` once, straight
+  to an output pointer. `FUN_002b61c8` (second module, TOC verified via
+  its own OPD) writes `+0x30`/`+0x34` only - the same two fields
+  `FUN_003aa888` already established, nothing at `+0x00`. **All five
+  TOC-verified paths to the array are now fully read, not sampled, and
+  the static search space for this exact address is closed** - short of
+  an indirect/computed call no static tool here can enumerate. Full
+  trace on
+  [zone-effectsettings-loader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md#2026-08-30-a-seventh-pass-the-last-two-candidate-families-are-exhausted-and-the-0x00-write-is-not-in-any-of-them).
+
+  **Also checked the same day, since it changes what the remaining
+  avenue costs**: the RPCS3 build on this host (`rpcs3-bin` AUR package
+  `0.0.42.19777-1`) is confirmed the exact build `rpcs3-debugger.md`
+  measured `Z2` (write watchpoint) against - same host, not a stale
+  note - and it genuinely does not implement `Z2` (empty reply, not
+  `OK`). **Checked upstream too, not left as a maybe**: fetched
+  `RPCS3/rpcs3`'s own `master` `GDB.cpp` directly - only `Z0` is
+  handled, `Z1`-`Z4` all fall through to the same empty reply, and this
+  has been true since GDB support shipped in 2017 (commit history since
+  is refactors only). GitHub's issue/PR search for "watchpoint" returns
+  zero results either way - nobody has filed for this. `rpcs3-git`
+  tracks the same `master`, so switching to it gains nothing. See
+  [rpcs3-debugger.md](../docs/reverse-engineering/rpcs3-debugger.md#the-gdb-stub-is-real-and-needs-no-special-build)
+  for the full evidence.
+
+  **2026-08-30, an independent verification pass, same day: the seven
+  verdicts survive, two of their evidence sets did not, and "closed"
+  turned out to be one specific gap short of true.** Re-running the
+  enumeration from scratch (not reusing the sweep's own site list) found
+  `FUN_00403a30` and `FUN_003fc140` each had three-to-four base-load
+  sites the sweep missed entirely (nine real sites against six and five
+  listed); all of them traced out as loads too, so no verdict changes.
+  More importantly: **every pass so far, this one included, has only
+  asked "which functions reference a TOC slot holding this address" -
+  and a writer that receives the array pointer as a call *argument*
+  rather than loading it from a TOC slot would answer to neither
+  question.** `FUN_003df360` already demonstrates the shape in this
+  thread's own evidence (it reads the array via its own TOC slot, then
+  forwards the result through a caller-supplied output pointer) - a
+  writer built the same way round is invisible to every search run so
+  far. Full corrected counts and the new gap on
+  [zone-effectsettings-loader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md#2026-08-30-an-eighth-pass-independent-verification-two-undercounted-function-evidence-sets-corrected-and-the-real-gap-in-closed).
+  Also reconfirmed on this binary, not just the PSP side:
+  `search_instructions`'s `mnemonic` filter is exact-match despite its
+  own docs, so a prefix sweep like `mnemonic="st"` for "any store"
+  silently returns zero rather than matching `stw`/`std`/`stfs` -
+  [toolchain.md](../docs/reverse-engineering/toolchain.md#search_instructionss-mnemonic-filter-is-exact-match-not-substring).
+
+  **So there is one more concrete, bounded static step before the
+  RPCS3-patch decision needs an answer**: a caller sweep of the thirteen
+  now-fully-read accessor functions, checking whether any call site
+  passes an array-derived pointer into a further function - not a new
+  address search, a call-graph one.
+
+  **2026-08-30, later the same day: found, by the caller sweep above -
+  just not by its own hypothesis.** The `+0x00` write is real and inside
+  one of the fifteen already-known direct-toucher functions itself, not
+  in an argument-forwarded callee (that hypothesis came back negative
+  across all fourteen others, checked in full). **Renamed
+  `Environment_UpdateStageBlend`** (`0x003da540`, confidence 85,
+  `names.tsv` updated, independently byte-verified in-session before the
+  rename). It computes `n*0x38` once at entry and reuses it six times via
+  a plain `subf` - every prior pass's `rlwinm`-keyed search found only
+  the first reuse or two, never the fourth, which is where the write is.
+  The mechanism is a self-contained request/commit pair: `entry[n].+0x04`
+  (already documented, written elsewhere in the same function from
+  `g_GameState.mode`-dependent sources) holds a *requested* stage: every
+  call checks whether `+0x04 == +0x00` (already applied) and, if not,
+  draws a transition effect and commits `+0x00 = +0x04`. No external
+  caller ever needed to pass a pointer in, which is exactly why the
+  forwarding hypothesis came back empty even though the write is real. A
+  second, unrelated `+0x00` write turned up as a side effect -
+  `Environment_LoadStageTextures` unconditionally zero-resets the whole
+  array on every effectSettings load - but that is a reset to the
+  constant `0`, not a stage-selection write. Full trace, the byte-level
+  re-verification, and a live tooling trap (the shared Ghidra bridge's
+  "current program" is not stable across concurrent sessions - always
+  pass the full `program` path once more than one program can be open)
+  on
+  [zone-effectsettings-loader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md#2026-08-30-a-ninth-pass-the-0x00-write-is-found-environment_updatestageblend-at-0x003da540-confidence-85).
+
+  **This closes the RPCS3-patch decision point above - a runtime watch
+  was never needed to find this write, so there is nothing to greenlight
+  or decline here anymore.** What it does not close: the render-side
+  wiring this whole page has deferred since its first pass.
+  `Environment_UpdateStageBlend` establishes *when* and *to what* the
+  stage index changes (a request/commit pair driven by
+  `g_GameState.mode`), not what the renderer does with the resulting
+  index once it has it - that is `docs/formats/effectsettings.md`'s own
+  open question and the next concrete step for this thread, separate
+  from the RE work this section closes out.

@@ -16,16 +16,15 @@ Implemented in
 [`oag_formats::effectsettings`](../../crates/formats/src/effectsettings.rs),
 checked against the disc by
 [`effectsettings_ground_truth.rs`](../../crates/formats/tests/effectsettings_ground_truth.rs).
-**Not yet wired into a race** - see [Open](#open) below. One piece of the
-runtime mechanism is implemented ahead of that, deliberately scoped to stay
-inert: `cross_fade_rgba8` is the confirmed cross-fade blend HD/Fury's own
-executable performs between two adjacent stages (recovered independently
-from `FUN_003da540` and `FUN_003ce2c0`, both `ps3-hdfury-eu`, confidence 80 -
-[zone-effectsettings-loader.md](../ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md#2026-08-29-a-fourth-pass-who-writes-0x008b7944--n0x38---one-near-repeat-of-the-opd-trap-caught-before-it-shipped-one-real-correction-one-new-lead)).
-It takes two already-known colours and a weight and has no caller - which
-key feeds it and what should drive `weight` at runtime are exactly the open
-questions below, so implementing the arithmetic now does not get ahead of
-what CLAUDE.md requires before firing an effect.
+**Wired into a Zone race since 2026-08-30, driven by an explicit stage index
+and blend weight and by nothing else** - see [What is read and what is
+not](#what-is-read-and-what-is-not). The cross-fade `cross_fade_rgba8`
+performs is the one HD/Fury's own executable performs between two adjacent
+stages (recovered independently from `FUN_003da540` and `FUN_003ce2c0`, both
+`ps3-hdfury-eu`, confidence 80 -
+[zone-effectsettings-loader.md](../ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md#2026-08-29-a-fourth-pass-who-writes-0x008b7944--n0x38---one-near-repeat-of-the-opd-trap-caught-before-it-shipped-one-real-correction-one-new-lead));
+**what moves the stage during a race is still unrecovered**, so a race rests
+on stage `0` and nothing advances it.
 
 ```sh
 just psarc cat data/images/hdfury-ps3-eu-dec.iso:PS3_GAME/USRDIR/DATA00.PSARC \
@@ -147,12 +146,51 @@ see [Open](#open) for what that leaves unsettled.
 
 ## What is read and what is not
 
-Nothing draws off this yet. `oag_formats::effectsettings` parses the table;
-no Zone loader on any title (Pulse's `ZoneCraft::ModelsInTeam`, HD's
-`ZoneCircuit::Separate`, or 2048's `ZoneCircuit::SameCircuit`) wires a stage
-lookup in, and no renderer reads a stage's fog/sky/ambient. A Zone race in
-this engine currently looks identical to an ordinary race on every title
-except for the HUD and the ship-model swap Pulse alone does.
+**2026-08-30: the table now grades a Zone race, from an explicit stage.**
+A Zone race on a title that ships a table loads it and lays the stage that
+is showing over the circuit's own `.envsettings` fog and light rig - the
+same `mesh_render::Fog`/`Light` path
+[`envsettings`](envsettings.md) already drives:
+
+| Piece | Where |
+| --- | --- |
+| Where each title keeps its table | `oag_title::ZonePalette` - `TitleWide` on HD/Fury, `BesideCircuit` on 2048, `None` on Pulse and Pure |
+| One stage's palette, and the blend of two | `oag_formats::effectsettings::{StagePalette, EffectSettings::blended_palette}` |
+| The runtime stage state, and what it does to fog and rig | `oag_game::race::zone_grade::{StageBlend, ZoneGrade}` |
+| Read at race load, applied per frame | `oag_game::race::load::environment::staging`, `race/scene/frame.rs` |
+| Checked against the real image | `crates/game/tests/zone_grade_ground_truth.rs` |
+
+`StageBlend` is the recovered struct's own three fields and no others: a
+current stage (`+0x00`), a requested one (`+0x04`) and a cross-fade weight
+(`+0x18`), with `ZoneGrade::commit` reproducing
+`Environment_UpdateStageBlend`'s request/commit gate. **The transition effect
+that function draws is not drawn** - the call it makes (`FUN_0067a7d8`) is
+unidentified, so nothing is fired in its place.
+
+Three readings this project made where the data alone does not decide, all
+reversible and none of them a substitution for authored values:
+
+- **A stage authoring `Fog density`=`0` leaves the circuit's own fog
+  standing** rather than switching fog off. `Start` authors exactly that, and
+  the guard matches `envsettings_fog`'s own `density <= 0.0`.
+- **The `Fog` block is used; `Alt Fog` and `Track Fog` are parsed and not
+  applied**, because what selects between the three is unread - the same
+  choice `.envsettings`' reader already makes about its own alternate pair.
+- **A stage tints a light rig, never aims one.** This schema has no `Sun
+  direction` key at all, so a circuit that authors no `.envsettings` rig is
+  left with the stand-in rather than given an invented direction to hang a
+  stage colour on.
+
+**What still draws off nothing**: `Sky horizon/zenith colour` (this engine's
+HD sky is the `sky.gtf` cubemap, which has no horizon/zenith term), the
+`Scene.*`/`Track.*` colours, the EQ tints and the `Growing Texture`
+parameters. All are parsed and reported; none is given an invented consumer.
+
+**And nothing moves the stage.** A Zone race rests on stage `0` - which is
+where HD's own loader leaves it, `Environment_LoadStageTextures` resetting
+`+0x00` to `0` on every load - because the mapping from a live race onto a
+stage index is unrecovered on both titles that ship a table. See
+[Open](#open).
 
 **2026-08-28: HD's own executable is now confirmed to parse this file's text,
 not just carry its path around** - see
@@ -361,16 +399,38 @@ traced.
   [zone-environment-fallback.md](../ghidra/functions/vita-2048-eu-v104/zone-environment-fallback.md))
   reads a per-craft field, clamps it to `12`, and that clamp is an exact
   match against 2048's own thirteen-stage table - real selection logic,
-  found and named. **What it still does not establish**: what struct that
-  field belongs to, what writes it, or whether HD's own selection works the
-  same way - no write site was found, and this is 2048's executable, not
-  HD's. **One avenue closed**: the DLC-specific loader,
+  found and named. **One avenue closed**: the DLC-specific loader,
   `Environment_LoadHDFuryContent`, was checked in full and does not touch
   `+0x634`, `Zone_UpdateStage`, or `DAT_816c4890` either - it is a separate
   subsystem for the four ported circuits, not a second writer to look for
-  the field in. Per `CLAUDE.md`'s rule that a trigger needs recovering
-  before an effect is wired, this stays unwired until the write side closes
-  the loop.
+  the field in.
+
+  **2026-08-30: both titles' write sites found, independently, same day.**
+  2048's `+0x634`/`+0x638` writer is `Hud_UpdateZoneSpeedClassWidget`
+  (`0x81197d6c`) - the Zone-mode HUD's own Speed Class number widget, not a
+  race-progress timer, driven by a percentage-shaped value against a
+  17-entry Mach-number threshold table
+  ([zone-environment-fallback.md](../ghidra/functions/vita-2048-eu-v104/zone-environment-fallback.md#2026-08-30-a-fourth-pass-0x6340x638s-writer-is-found---its-the-zone-mode-huds-own-speed-class-widget-not-racephysics-logic)).
+  HD's own field (a two-entry array's `+0x00`/`+0x04`, a different struct
+  shape from 2048's per-craft one) is written by
+  `Environment_UpdateStageBlend` (`0x003da540`), a self-contained
+  request/commit pair: `+0x04` holds a requested stage sourced from
+  `g_GameState.mode`-dependent tables, committed into `+0x00` when the two
+  differ
+  ([zone-effectsettings-loader.md](../ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md#2026-08-30-a-ninth-pass-the-0x00-write-is-found-environment_updatestageblend-at-0x003da540-confidence-85)).
+  **Per `CLAUDE.md`'s rule that a trigger needs recovering before an effect
+  is wired, the mechanism itself is now recovered on both titles** - what
+  is not recovered is the exact *numeric* mapping from live ship speed to a
+  stage index: 2048's own 17-entry threshold table read inconsistently on
+  direct decode (a per-record string-pointer field didn't line up 1:1 with
+  its own threshold, unresolved rather than force-fit), and HD's
+  `g_GameState.mode`-dependent source tables were traced to their existence,
+  not to their contents. **So the format/blend/render-application plumbing
+  can be wired now** (the recovered fields and cross-fade math are enough
+  to drive it from an explicit stage+weight input, the same way
+  `.envsettings` already drives static fog/sky), **but the live
+  speed-to-stage trigger itself is not** - inventing those thresholds would
+  be exactly the fitted-constant-as-recovered-fact `CLAUDE.md` forbids.
 - **2048's table names 13 stages but the title ships 15 textures in each
   set** - still unexplained, though sharpened by the texture-content finding
   below: the "Track" set is where the real per-stage art lives on both
@@ -453,11 +513,31 @@ traced.
   it here on the channel order alone would still risk the tiling half of the
   "plausible-looking stand-in" `CLAUDE.md` warns against. What 2048's own
   "Track" art actually looks like is still open.
-- **Wiring a stage's values into a race** - the next concrete step once the
-  write side of `Zone_UpdateStage`'s `+0x634` field is found (on 2048) or an
-  equivalent is read on HD. HD is still the best-measured *rendering*
-  target, since its `.envsettings` reading and drawing path already exists,
-  but the clearest recovered *selection* logic so far is on 2048.
+- ~~**Wiring a stage's values into a race**~~ **Done, 2026-08-30** - see
+  [What is read and what is not](#what-is-read-and-what-is-not). The
+  format/blend/render-application plumbing is in and checked against the real
+  image; **what remains open is only the live trigger**, which is the numeric
+  mapping neither title has yielded (2048's 17-entry threshold table read
+  inconsistently, HD's mode-keyed source tables were traced to their
+  existence rather than their contents). The seam a recovered trigger
+  attaches to is `ZoneGrade::request_stage`/`set_weight`, which today no race
+  calls.
+- **Which quantity `+0x18` actually is, and which way it runs.**
+  `cross_fade_rgba8`'s own recovered doc reads `1.0` "at the moment a stage
+  becomes current"; `Environment_UpdateStageBlend` writes `+0x18 = 0` at
+  exactly that moment. Both cannot be the same quantity with the same
+  meaning, and nothing recovered says what advances the field afterwards.
+  This build keeps `cross_fade_rgba8`'s convention and zeroes on commit the
+  way the traced store does, which is visibly consistent but not evidence.
+- **Which schema keys the three blended runtime fields are.** The cross-fade
+  reads three 16-byte fields per stage; the correspondence to
+  `Scene.Texture/Near/Base Colour` is positional and explicitly unconfirmed,
+  so the Rust side blends fields chosen by the *file's own key names*
+  instead. A read of the schema's destination-pointer-to-struct-offset
+  mapping would settle it - and would also settle whether the byte-domain
+  blend applies to keys this project currently fades in floats, which it does
+  because three of `zonemode.effectsettings`' own colours exceed `1.0` and
+  byte quantisation would send them all to white.
 
 ## See also
 

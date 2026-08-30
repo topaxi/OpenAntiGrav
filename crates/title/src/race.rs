@@ -143,6 +143,69 @@ pub struct RaceDefaults {
     /// `None` rather than a guessed ladder for a title whose bank has not been
     /// read - see [`ZoneAnnouncer`]'s own docs for which that is today.
     pub zone_announcer: Option<&'static ZoneAnnouncer>,
+    /// Where this title keeps the per-stage colour grade a Zone race escalates
+    /// through. See [`ZonePalette`].
+    ///
+    /// `None` for a title that ships no such table, which is Pulse and Pure -
+    /// see that type's docs for how thoroughly each disc was searched before
+    /// answering `None` rather than pointing at a plausible entry.
+    pub zone_palette: Option<ZonePalette>,
+}
+
+/// Where a title keeps its `.effectSettings` stage table - the per-stage
+/// colour grade a Zone race climbs as its speed class rises.
+///
+/// **An axis because the two titles that ship one disagree about its scope**,
+/// which is the bar [ADR-0022] sets. HD/Fury ships a single title-wide file
+/// that layers over whichever circuit is racing; 2048 ships a byte-identical
+/// copy of one table in each circuit's own directory. Neither shape can be
+/// derived from the other, and neither belongs in `oag-formats`, which must
+/// not know which title it is reading.
+///
+/// **`None` on Pulse and Pure is a searched answer, not an unchecked one.**
+/// Two independently generated candidate lists - `scripts/mine-names.py`'s
+/// 1,409 for Pulse and 1,509 for Pure, plus 322 hand-guessed stage-name
+/// combinations - were matched against each disc's `Data.wad` directory and
+/// resolved nothing but geometry, hulls, audio and HUD layouts. A hash-named
+/// WAD cannot be proven empty, only searched; see
+/// `docs/formats/effectsettings.md`.
+///
+/// [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ZonePalette {
+    /// One table for the whole title, at a fixed entry name, layered over
+    /// whichever circuit the race runs on. HD/Fury:
+    /// `/data/environments/zonemode.effectsettings`.
+    ///
+    /// **`zonemodedlc3.effectsettings` is a second, larger revision of the
+    /// same table and is not what this points at**: what selects between the
+    /// base file and the DLC3 one is unread, so the base file is used and the
+    /// selector is left unresolved rather than guessed at.
+    TitleWide(&'static str),
+    /// One copy per circuit, under the circuit's own directory, named by the
+    /// file name here. 2048: `ZoneMode2048.effectSettings`, which every one of
+    /// the ten base circuits ships a byte-identical copy of.
+    BesideCircuit(&'static str),
+}
+
+impl ZonePalette {
+    /// The archive entry this title's table reads from for a race on `track`,
+    /// where `track` is the circuit's own `.vex` entry name.
+    ///
+    /// [`Self::BesideCircuit`] rewrites the sibling path the same way
+    /// `.envsettings` is found beside a `track.vex`; [`Self::TitleWide`]
+    /// ignores the circuit entirely, which is the whole of the difference
+    /// between the two shapes.
+    #[must_use]
+    pub fn entry_for(&self, track: &str) -> Option<String> {
+        match self {
+            Self::TitleWide(entry) => Some((*entry).to_string()),
+            Self::BesideCircuit(file) => {
+                let at = track.rfind(['/', '\\'])?;
+                Some(format!("{}{}", &track[..=at], file))
+            }
+        }
+    }
 }
 
 impl RaceDefaults {

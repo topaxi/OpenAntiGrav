@@ -458,6 +458,16 @@ pub struct Loaded {
     /// race onto the linear float scene target and the read `FunkLayerBloom`
     /// chain - see `oag_render::post::hd_bloom`.
     pub hd_bloom: Option<oag_render::post::hd_bloom::Params>,
+    /// The Zone colour grade this title lays over the circuit, stage by
+    /// stage, in a Zone race.
+    ///
+    /// `None` outside Zone, and `None` in Zone on a title that ships no
+    /// `.effectSettings` table - Pulse and Pure, whose discs were searched for
+    /// one rather than assumed empty. See [`oag_title::ZonePalette`] and
+    /// [`crate::race::zone_grade::ZoneGrade`], whose module docs carry the one
+    /// thing this is still missing: what selects a stage during a race, which
+    /// is unrecovered on both titles that do ship a table.
+    pub zone_grade: Option<crate::race::zone_grade::ZoneGrade>,
     /// The track's `Skycube`, when it authors one.
     ///
     /// Built from the same blob as [`Self::track_model`] and indexing the same
