@@ -2125,6 +2125,76 @@ watch on `0x00c81a5c` during any HD race (Zone or not; the blend runs in
 every mode) names the consumer directly. That is one RPCS3 run against an
 address with a known-good control built in.
 
+## 2026-08-30, a seventeenth pass: `FUN_003ce2c0` is not the `Scene`/`Track` consumer, and the fourth pass's claim about it was wrong
+
+The deciding read, done with the same base-register tracking the registrar
+enumeration used. **The answer is no**, and one of this page's own claims does
+not survive it.
+
+### It does not read the stage table
+
+Base-aware trace of all 10,452 bytes of `FUN_003ce2c0`: it loads `iVar8` from
+its TOC **once**, and **63** accesses resolve onto that base. Every one of them
+lands at `+0x84`, in the `+0x32bc`-`+0x3374` block, or at `+0x6640`.
+
+**None is in the `+0x1000`-`+0x1250` window** - the stage table
+(`g_effect_settings_stages` is `iVar8 + 0x1000`, fifteen rows of `0x250`). So
+this function does not read the per-stage struct at all; it works on a
+different region of the same object.
+
+> **This corrects [the fourth pass](#2026-08-29-a-fourth-pass-who-writes-0x008b7944--n0x38---one-near-repeat-of-the-opd-trap-caught-before-it-shipped-one-real-correction-one-new-lead)**,
+> which described `FUN_003ce2c0` as re-deriving "the identical blend
+> `FUN_003da540` computes - same `-1`/clamp-to-zero previous-stage arithmetic,
+> same `*0x250` stride, same `+0x1000`/`+0x1004` RGBA reads". The `+0x1000`
+> half is not supported: with the base tracked rather than the displacement
+> read bare, there is no `+0x1000`-window access through `iVar8` in this
+> function. That claim came from reading displacements without their bases -
+> the same trap this page has now hit three separate times.
+>
+> **Scoped honestly**: what is established is "no access *via `iVar8`*". The
+> tracker follows `addi`/`add`/`or`/`rldicl` and displacement forms, not
+> indexed (`lfsx`/`lwzx`) ones, and would not see a stage pointer arriving as
+> a *parameter*. Neither would change the conclusion below, because that rests
+> on reachability, not on this trace.
+
+### It is not reached either
+
+Two tests, one of which is reported only with its own limitation attached:
+
+- **Branch scan** (the discriminating one, controls in the same run): no
+  `bl` or `b` anywhere in the image targets `0x003ce2c0`.
+- **Descriptor-held scan**: no word in initialised memory holds its OPD
+  address `0x0088c240`. **Non-discriminating on its own** - the control,
+  `Environment_UpdateStageBlend`'s own descriptor `0x0088c278`, comes back
+  "held by nothing" too, and that function is definitely called. It rules out
+  a vtable install from initialised data and nothing more.
+
+### What this closes
+
+**HD's executable, as far as static analysis reaches, does not draw
+`Scene.*`/`Track.*` recolouring.** The full chain is now traced and every
+branch of it ends:
+
+| stage | status |
+| --- | --- |
+| authored in `zonemode.effectsettings` | yes - 51 keys |
+| registered into a schema with a destination | yes - `Environment_RegisterStageSchema` |
+| parsed into `g_effect_settings_stages` at known offsets | yes - key-to-offset table, confidence 88 |
+| `Scene.Texture Colour` cross-faded per frame | yes - into `0x00c81a5c`, inside `Scene_PrepareFrame` |
+| **that output read by anything** | **no reader located** |
+| `Scene`/`Track` per-key getters called | **no - seven getters, no branch targets them** |
+| `FUN_003ce2c0` as an alternative reader | **no - reads a different region, and is unreached** |
+
+Four keys *do* reach a draw (`Detonator Mine`/`Mine Electricity`/`Bomb
+Inner`/`Bomb Outer`, `Airbrake Colour`) - so the mechanism is real and
+exercised, just not for the scene and track groups.
+
+**What would still overturn this**: a reader of `0x00c81a5c` reached through
+an indirect call, or a consumer taking a stage pointer as an argument -
+neither visible to a static branch scan. A **read watchpoint on
+`0x00c81a5c`** settles both in one run, and that address has a confirmed
+per-frame writer to serve as the control.
+
 ## See also
 
 - `docs/formats/effectsettings.md` - the file format this loader reaches for

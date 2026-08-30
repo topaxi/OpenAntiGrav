@@ -1127,3 +1127,33 @@ evidence, including the byte-level trace of every function in this chain:
   nothing may write it at all. A **read** watch on `0x00c81a5c` during any HD
   race (the blend runs in every mode, not only Zone) names the `Scene.Texture
   Colour` consumer directly, with a guaranteed-good control built in.
+
+  **2026-08-30, a sixteenth pass: the deciding read, and the answer is no.**
+  Base-aware trace of `FUN_003ce2c0` - the last candidate consumer for
+  `Scene.*`/`Track.*`: it loads `iVar8` once and **63** accesses resolve onto
+  it, all at `+0x84`, `+0x32bc`-`+0x3374` or `+0x6640`. **None in the
+  `+0x1000`-`+0x1250` stage-table window.** It does not read the per-stage
+  struct.
+
+  **That corrects this thread's own fourth pass**, which said this function
+  re-derives the blend with "the same `+0x1000`/`+0x1004` RGBA reads" - a
+  displacement read without its base, the trap this thread has now hit three
+  times. Scoped honestly: what is established is "no access *via `iVar8`*";
+  the tracker does not follow indexed forms or a pointer arriving as a
+  parameter. The conclusion does not rest on that anyway - it rests on
+  reachability, and nothing branches to this function.
+
+  **So HD's executable, as far as static analysis reaches, does not draw
+  track/scenery recolouring.** Every link of the chain is traced and the last
+  two are empty: the keys are authored, registered, parsed to known offsets
+  and `Scene.Texture Colour` really is cross-faded per frame into
+  `0x00c81a5c` inside `Scene_PrepareFrame` - but nothing located reads that
+  output, the seven `Scene`/`Track` getters have no callers, and the one
+  alternative reader is unreached and reads elsewhere. Four keys *do* reach a
+  draw (the Detonator mine/bomb colours and `Airbrake Colour`), so the
+  mechanism is real and exercised - just not for these groups.
+
+  **What would overturn it**: a reader reached by indirect call, or one taking
+  a stage pointer as an argument - neither visible to a static branch scan. A
+  **read watchpoint on `0x00c81a5c`** settles both in one run, with a
+  confirmed per-frame writer as its control.
