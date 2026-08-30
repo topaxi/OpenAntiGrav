@@ -2335,10 +2335,31 @@ load is `lfs f0, 0x0(r9)` - displacement zero, base a per-field pointer. A
 displacement sweep cannot see it, a branch scan cannot see it, and an OPD-
 reference scan cannot see it.
 
+**And a fourth blindness, the one that most likely did the damage:
+Ghidra's own `get_xrefs_to` on `0x00c81a5c` is wrong here by construction.**
+Ghidra resolves every function's `d(r2)` against `0x008ad4d8`, so it reads
+`0x003aaf8c` as touching `0x008a72e0` and never associates that instruction
+with `0x00c81a5c` at all. Asking Ghidra for the xrefs - the natural first move,
+and the one this page's earlier passes describe making - returns a **guaranteed**
+false negative. This is exactly [memory.md](memory.md)'s documented failure mode
+("both false positives and false negatives, and the failure mode is a plausible
+wrong string rather than a visible error") landing on this thread; the miss was
+structural, not careless.
+
 ### The three slots
 
-The literal `0x00c81a5c` occurs once in the image, at `0x008b71cc`, inside a
-run of pointer slots that map one-for-one onto the region:
+**TOC verified first**, per [memory.md](memory.md)'s rule for the overlap band:
+`Scene_PrepareFrame`'s OPD entry is `0x0088b9f0`, declaring TOC
+**`0x008bd3c4`** - so Ghidra's default (`0x008ad4d8`) is wrong for it and every
+displacement below is resolved against the function's own base. Two independent
+corroborations that this is a reading and not arithmetic that merely closes on
+itself: the ten slots below all land coherently inside `iVar8 + 0x35f0..0x3aac`,
+and the slot `0x008b71c4` computed for `lwz r17,-0x6200(r2)` was *separately*
+found by a byte search for the value it holds.
+
+The literal `0x00c81a5c` occurs exactly once in the whole file at a 4-byte
+boundary - `0x008b71cc` - inside a run of pointer slots that map one-for-one
+onto the region:
 
 | Slot | Displacement (TOC `0x008bd3c4`) | Value | = |
 | --- | --- | --- | --- |
