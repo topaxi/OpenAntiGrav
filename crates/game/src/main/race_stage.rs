@@ -41,6 +41,11 @@ impl RaceStage {
         anim_seconds: Option<f32>,
         motion_blur: display::MotionBlur,
     ) -> race::SceneStats {
+        // The Zone stage grade, pointed at the zone the race has reached before
+        // the frame is built - the same per-frame order `Zone_UpdateStage` runs
+        // in on 2048, where it is called from the render update rather than the
+        // simulation. See `race::Scene::sync_zone_grade`.
+        self.scene.sync_zone_grade(&self.race);
         let stats = self.scene.render(
             &gpu.device,
             &gpu.queue,

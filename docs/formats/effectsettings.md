@@ -159,6 +159,27 @@ same `mesh_render::Fog`/`Light` path
 | The runtime stage state, and what it does to fog and rig | `oag_game::race::zone_grade::{StageBlend, ZoneGrade}` |
 | Read at race load, applied per frame | `oag_game::race::load::environment::staging`, `race/scene/frame.rs` |
 | Checked against the real image | `crates/game/tests/zone_grade_ground_truth.rs` |
+| **What advances the stage during a race** | `oag_title::ZoneStages` / `oag_2048::race::ZONE_STAGES` - **2048 only**, and `None` on HD/Fury |
+
+**2026-08-30, later the same day: a 2048 Zone race now escalates on its own**,
+off the seventeen-record zone-number ladder read out of that title's
+executable (see [Open](#open)). HD/Fury still rests where its loader leaves
+it, because its own Zone stage source has no found writer.
+
+**2048's key vocabulary is not HD's, and one difference is load-bearing.**
+HD spells the environment fog as two keys, `Lighting.Fog colour` (four
+numbers, alpha `0`) and `Lighting.Fog density`. 2048 spells it as one,
+`Fog.Environment Fog Colour`, written with **four** numbers where every other
+colour key in its file carries three - and the file has **no density key at
+all** (`grep -ci density` over a shipped `ZoneMode2048.effectSettings`
+returns `0`, checked directly). The fourth lane reads `0.0025`/`0.0015` on
+the environment block and a flat `0.007` on the track block, the same
+magnitude as HD's own `0.0021` and nothing like an alpha. So the fourth lane
+is this file's density; `oag_formats::effectsettings` reads it from there,
+**confidence 74** - three converging reads (missing key, odd arity,
+magnitude), no traced consumer in 2048's executable. The sky pair differs
+only in spelling (`Sky.Horizon Colour` against `Sky horizon colour`) and is
+read both ways.
 
 `StageBlend` is the recovered struct's own three fields and no others: a
 current stage (`+0x00`), a requested one (`+0x04`) and a cross-fade weight
@@ -418,19 +439,33 @@ traced.
   `g_GameState.mode`-dependent tables, committed into `+0x00` when the two
   differ
   ([zone-effectsettings-loader.md](../ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md#2026-08-30-a-ninth-pass-the-0x00-write-is-found-environment_updatestageblend-at-0x003da540-confidence-85)).
-  **Per `CLAUDE.md`'s rule that a trigger needs recovering before an effect
-  is wired, the mechanism itself is now recovered on both titles** - what
-  is not recovered is the exact *numeric* mapping from live ship speed to a
-  stage index: 2048's own 17-entry threshold table read inconsistently on
-  direct decode (a per-record string-pointer field didn't line up 1:1 with
-  its own threshold, unresolved rather than force-fit), and HD's
-  `g_GameState.mode`-dependent source tables were traced to their existence,
-  not to their contents. **So the format/blend/render-application plumbing
-  can be wired now** (the recovered fields and cross-fade math are enough
-  to drive it from an explicit stage+weight input, the same way
-  `.envsettings` already drives static fog/sky), **but the live
-  speed-to-stage trigger itself is not** - inventing those thresholds would
-  be exactly the fitted-constant-as-recovered-fact `CLAUDE.md` forbids.
+  **2026-08-30, later the same day: 2048's numeric mapping is recovered and
+  wired; HD's is not.** The 17-entry table was read out of the executable
+  with `read_memory` (`0x8151faf8`, now `g_zone_speed_class_thresholds`) and
+  the "inconsistency" that stopped the earlier pass is a **sentinel** -
+  seventeen records against sixteen names, record `0` carrying the
+  unreachable threshold `9999` and sharing record `1`'s name pointer, every
+  record below it strictly one name apiece. The thresholds are **zone
+  numbers**, not a speed: the value walked against them is `sprintf`'d as the
+  first `%d` of `"%d/%d"` into the authored scene node `ZoneNumber`, the
+  second `%d` being a per-event target, and the same block stores the matched
+  record's threshold and the record above it into the race state as a
+  progress bar between two class boundaries. Confidence 78. The bands are
+  `0`-`1`, `2`-`8`, `9`-`16`, `17`-`32`, `33`-`39`, then every five to `90` -
+  escalation **every few zones**, which corroborates the play-based lead this
+  work started from; what the lead's second half claimed (that the *named*
+  classes are singled out) the mechanism does not do, and that is recorded as
+  not corroborated rather than fitted. Wired as `oag_title::ZoneStages` /
+  `oag_2048::race::ZONE_STAGES` / `ZoneGrade::show_zone`.
+
+  **HD/Fury stays unwired, and now for a sharper reason.** All four of
+  `Environment_UpdateStageBlend`'s `+0x04` source branches were read the same
+  day: mode `0xe` takes `RaceManager->+0x2e10`, modes `0xd`/`0x15` take
+  per-viewport entries of the same object, and everything else - **Zone
+  included** - falls through to `craftArray[n]->+0x640`, whose writer was not
+  found. Mode `0xe` turned out to be *Detonator*, corrected from
+  `mode-manager.md`'s own bucket. 2048's thirteen-stage numbers are not
+  transplanted onto HD's fifteen-stage ladder to fill the gap.
 - **2048's table names 13 stages but the title ships 15 textures in each
   set** - still unexplained, though sharpened by the texture-content finding
   below: the "Track" set is where the real per-stage art lives on both
@@ -438,11 +473,23 @@ traced.
   spare duplicates of a placeholder. Either two stages are unnamed/implicit,
   the extra two are unused leftovers from the HD port, or the
   stage-to-texture correspondence is not 1:1 to begin with.
-- **Why `detonatormode.effectsettings` carries Zone's own 15-stage ladder is
-  unread.** Detonator has no known "zone number" that ramps the same way Zone
-  does, so either the table is reused wholesale regardless of relevance, or
-  Detonator has an escalation mechanic of its own that has not been looked
-  for. **Partial answer, 2026-08-29**: HD's own executable schema
+- ~~**Why `detonatormode.effectsettings` carries Zone's own 15-stage ladder is
+  unread.**~~ **Answered 2026-08-30: Detonator has an escalation mechanic of
+  its own, and it consumes exactly this table one row per step.**
+  `Detonator_UpdateRace` (`0x00067b40`, `ps3-hdfury-eu`, confidence 75)
+  increments `RaceManager->+0x2e10` by one per event, `SPDetonator`'s two
+  constructors initialise it to `1`, and the race-end path fires once it
+  reaches `15` - which is exactly the stage count
+  `detonatormode.effectsettings` names. See
+  [zone-effectsettings-loader.md](../ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md#2026-08-30-a-tenth-pass-all-four-0x04-source-branches-read---and-mode-0xe-is-detonator-not-zone).
+  The remaining half of the old question - what *event* Detonator counts,
+  i.e. what sets the `raceState->+0x7001` latch the increment is gated on -
+  is unfound: ten of the eleven instructions touching that offset are reads
+  and the one write clears it. **The original wording of this bullet, for the
+  record:** Detonator had no known "zone number" that ramps the way Zone's
+  does, so either the table was reused wholesale regardless of relevance, or
+  Detonator had an escalation of its own nobody had looked for. It was the
+  second. **Partial answer, 2026-08-29**: HD's own executable schema
   (`g_EffectSettingsSchemaKeyNames`, above) is a single, mode-agnostic
   vocabulary shared by both `ZoneMode` and `DetonatorMode` files - it was
   never authored with a separate Detonator ladder to draw on in the first
@@ -520,8 +567,10 @@ traced.
   mapping neither title has yielded (2048's 17-entry threshold table read
   inconsistently, HD's mode-keyed source tables were traced to their
   existence rather than their contents). The seam a recovered trigger
-  attaches to is `ZoneGrade::request_stage`/`set_weight`, which today no race
-  calls.
+  attaches to is `ZoneGrade::request_stage`/`set_weight` on HD, which today no
+  race calls; **2048 is wired**, through `ZoneGrade::show_zone`, which is that
+  title's own `Zone_UpdateStage` shape (a direct assignment each frame, no
+  request/commit gate).
 - **Which quantity `+0x18` actually is, and which way it runs.**
   `cross_fade_rgba8`'s own recovered doc reads `1.0` "at the moment a stage
   becomes current"; `Environment_UpdateStageBlend` writes `+0x18 = 0` at

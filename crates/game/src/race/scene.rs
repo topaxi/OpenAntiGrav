@@ -6,7 +6,7 @@
 //! frame with it is `race/frame.rs`; its tests are `race/tests/scene.rs`.
 
 use super::*;
-use log::warn;
+use log::{info, warn};
 
 mod frame;
 mod motion;
@@ -775,6 +775,44 @@ impl Scene {
             anti_aliasing,
             far,
         })
+    }
+
+    /// Points the Zone colour grade at the zone the race has reached, and
+    /// answers whether that moved it.
+    ///
+    /// Called once a frame, which is where the original does it:
+    /// `Zone_UpdateStage` (`0x81044cfc`, `vita-2048-eu-v104`) runs from the
+    /// main render-update loop every frame, reads the stage index off the
+    /// craft and shows it. A no-op outside Zone, on a title shipping no stage
+    /// table, and on one whose zone-to-stage ladder is unrecovered - see
+    /// [`crate::race::zone_grade::ZoneGrade::show_zone`].
+    ///
+    /// **One precedence question is untested rather than answered.** `frame`
+    /// samples the circuit's own `fogCube` volumes *after* laying the grade
+    /// over the authored fog, and a volume the camera sits inside replaces the
+    /// result outright. No title reaches that today - the two that ship a
+    /// stage table both load their geometry through the PSARC path, which
+    /// parses no `fogCube` at all, so `fog_volumes` is empty on both - and
+    /// which of the two the original prefers is not recovered, since
+    /// `Environment_UpdateStageBlend`'s own consumer is still unfound. Worth
+    /// knowing before a title with both ever loads.
+    pub fn sync_zone_grade(&mut self, race: &Race) -> bool {
+        let zone = race.world.race.zone;
+        let Some(grade) = self.zone_grade.as_mut() else {
+            return false;
+        };
+        if !grade.show_zone(zone) {
+            return false;
+        }
+        // Once per stage change, which is at most fifteen times a race - the
+        // same "log the edge, not the state" rule the announcer cue follows.
+        // It is also the only headless evidence that the grade moved at all,
+        // since a `--screenshot` cannot say so on its own.
+        info!(
+            "zone {zone}: the colour grade steps to stage {}",
+            grade.blend().current
+        );
+        true
     }
 
     /// Rebuilds the depth buffer, and the MSAA colour target if there is one,

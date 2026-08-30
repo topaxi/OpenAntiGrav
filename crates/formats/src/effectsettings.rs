@@ -173,16 +173,33 @@ impl EffectSettings {
     /// A colour key's red, green and blue, whether it is written with three
     /// numbers or four.
     ///
-    /// **The alpha lane is dropped rather than carried**: every four-number
+    /// **The fourth lane is dropped rather than carried**: every four-number
     /// colour key in `zonemode.effectsettings` authors `0.000000` there, on
     /// all fifteen stages, and no consumer this project has read takes a
-    /// fourth channel from one. A key that authors something else in that lane
-    /// would need reading before it could be used, not defaulting.
+    /// fourth channel from one. 2048's own two fog keys are the exception -
+    /// they carry a density there rather than an alpha - and they are read
+    /// through [`Self::stage_fourth`] instead of by widening this.
     #[must_use]
     pub fn stage_rgb(&self, stage: u32, key: &str) -> Option<[f32; 3]> {
         let key = self.stage_key(stage, key)?;
         match self.table.entries.get(&key)?.numbers.as_slice() {
             [r, g, b] | [r, g, b, _] => Some([*r, *g, *b]),
+            _ => None,
+        }
+    }
+
+    /// The fourth number of a four-number per-stage key, and `None` for a key
+    /// written with any other count.
+    ///
+    /// Exists for [`key::ENVIRONMENT_FOG_COLOUR_2048`], where that lane is the
+    /// fog density this file has no separate key for - see that key's own
+    /// evidence. Deliberately narrow: it answers `None` for the three-number
+    /// keys rather than substituting anything.
+    #[must_use]
+    pub fn stage_fourth(&self, stage: u32, key: &str) -> Option<f32> {
+        let key = self.stage_key(stage, key)?;
+        match self.table.entries.get(&key)?.numbers.as_slice() {
+            [_, _, _, fourth] => Some(*fourth),
             _ => None,
         }
     }
@@ -198,15 +215,26 @@ impl EffectSettings {
     pub fn stage_palette(&self, stage: u32) -> Option<StagePalette> {
         self.stages.get(&stage)?;
         Some(StagePalette {
-            fog_colour: self.stage_rgb(stage, key::FOG_COLOUR),
-            fog_density: self.stage_scalar(stage, key::FOG_DENSITY),
+            // HD's spelling first, then 2048's. A file carries one vocabulary
+            // or the other, never both, so the order only decides which miss
+            // costs a second lookup.
+            fog_colour: self
+                .stage_rgb(stage, key::FOG_COLOUR)
+                .or_else(|| self.stage_rgb(stage, key::ENVIRONMENT_FOG_COLOUR_2048)),
+            fog_density: self
+                .stage_scalar(stage, key::FOG_DENSITY)
+                .or_else(|| self.stage_fourth(stage, key::ENVIRONMENT_FOG_COLOUR_2048)),
             sun_colour: self.stage_rgb(stage, key::SUN_COLOUR),
             ambient_colour: self.stage_rgb(stage, key::AMBIENT_COLOUR),
             prelit_scale: self.stage_rgb(stage, key::PRELIT_SCALE),
             prelit_power: self.stage_rgb(stage, key::PRELIT_POWER),
             sky_reflection_colour: self.stage_rgba8(stage, key::SKY_REFLECTION_COLOUR),
-            sky_horizon_colour: self.stage_rgb(stage, key::SKY_HORIZON_COLOUR),
-            sky_zenith_colour: self.stage_rgb(stage, key::SKY_ZENITH_COLOUR),
+            sky_horizon_colour: self
+                .stage_rgb(stage, key::SKY_HORIZON_COLOUR)
+                .or_else(|| self.stage_rgb(stage, key::SKY_HORIZON_COLOUR_2048)),
+            sky_zenith_colour: self
+                .stage_rgb(stage, key::SKY_ZENITH_COLOUR)
+                .or_else(|| self.stage_rgb(stage, key::SKY_ZENITH_COLOUR_2048)),
         })
     }
 
@@ -312,6 +340,33 @@ pub mod key {
     pub const SKY_HORIZON_COLOUR: &str = "Sky horizon colour";
     /// Three floats, on the same terms as [`SKY_HORIZON_COLOUR`].
     pub const SKY_ZENITH_COLOUR: &str = "Sky zenith colour";
+
+    /// Wipeout 2048's own spelling of the environment's distance fog, and the
+    /// one key on this list that is **not** in HD's schema table.
+    ///
+    /// 2048 reauthored the vocabulary: its per-stage blocks carry
+    /// `Fog.Environment Fog Colour` and `Fog.Track Fog Colour` and **no
+    /// density key at all** - `grep -ci density` over a shipped
+    /// `ZoneMode2048.effectSettings` returns `0`, checked directly. Both fog
+    /// keys are written with **four** numbers where every other colour key in
+    /// the file is written with three, and the fourth reads `0.0025`/`0.0015`
+    /// on the environment block and a flat `0.007` on the track block - the
+    /// same magnitude as HD's own [`FOG_DENSITY`] (`0.0021`) and
+    /// `.envsettings`' `Fog.Fog Density`, and nothing like an alpha (HD's own
+    /// four-number fog colour authors `0.000000` there on all fifteen stages).
+    /// So the fourth lane is this file's density. **Confidence 74**: three
+    /// converging reads - the missing key, the odd arity, the magnitude - and
+    /// no traced consumer in 2048's executable.
+    pub const ENVIRONMENT_FOG_COLOUR_2048: &str = "Fog.Environment Fog Colour";
+    /// 2048's second fog block, on the same four-number terms. **Read, not
+    /// drawn**: what selects between the environment and the track block is
+    /// unrecovered, so the primary pair is used, exactly as `.envsettings`'
+    /// own reader uses its primary pair and ignores its alternate.
+    pub const TRACK_FOG_COLOUR_2048: &str = "Fog.Track Fog Colour";
+    /// 2048's spelling of [`SKY_HORIZON_COLOUR`]. Read, not drawn.
+    pub const SKY_HORIZON_COLOUR_2048: &str = "Sky.Horizon Colour";
+    /// 2048's spelling of [`SKY_ZENITH_COLOUR`]. Read, not drawn.
+    pub const SKY_ZENITH_COLOUR_2048: &str = "Sky.Zenith Colour";
 }
 
 /// One stage's own palette: the subset of its keys that has somewhere to go.

@@ -72,6 +72,7 @@ const TITLE: &Title = &Title {
         // Unread on the same terms: resolving archives has nothing to do with
         // the colour grade a Zone race climbs.
         zone_palette: None,
+        zone_stages: None,
     },
     // Unread here for the same reason as the circuit above: an in-race HUD is
     // read *through* archives, and which layout a mode wants is nothing this

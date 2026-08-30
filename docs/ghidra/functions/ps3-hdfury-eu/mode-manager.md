@@ -135,9 +135,21 @@ cell is. See `docs/reverse-engineering/rpcs3-debugger.md`.
 Zone-versus-Detonator texture-table choice on `g_GameState.GetMode() == 0xe`
 (`14`) specifically - a second, independent function keying real behaviour on
 the same id this page already put in the Zone/Zone Battle/Detonator bucket by
-elimination. Still not enough to say *which* of the three `14` is, only that
-something in that bucket really does drive Zone/Detonator-shaped logic, on
-two different functions now rather than one hypothesis.
+elimination.
+
+**Settled 2026-08-30: id `14` is Detonator**, and the sentence above needed
+correcting in one respect - `== 0xe` is the *Detonator* side of that branch,
+not the Zone side. Read out of memory rather than inferred: the `== 0xe`
+branch loads its filename table from `0x008b7afc` -> `0x007b26c8`, the string
+`Data/Tex/DetonatorMode0.gtf`, and the fall-through from `0x008b7b7c` ->
+`0x007b2b10`, `Data/Tex/zoneMode0.gtf`. Corroborated independently by the
+`SPDetonator` constructor pair in [race-manager.md](race-manager.md): the
+same mode's stage counter (`RaceManager->+0x2e10`) is initialised to `1` by
+`0x00064470` and `0x000649f0` and by nothing else in the binary. Zone and
+Zone Battle remain unassigned within the bucket; modes `0xd` and `0x15`
+both read *per-viewport* stage entries of the same RaceManager, which is the
+shape a two-player mode needs. Full trace on
+[zone-effectsettings-loader.md](zone-effectsettings-loader.md#2026-08-30-a-tenth-pass-all-four-0x04-source-branches-read---and-mode-0xe-is-detonator-not-zone).
 
 ## Two ways this differs from RaceManager
 

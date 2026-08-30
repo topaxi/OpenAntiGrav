@@ -1,4 +1,4 @@
-# 2048 and HD's `.effectSettings` table now parses; wiring it into a race is what remains
+# 2048's Zone grade escalates on the disc's own ladder now; HD's own trigger is what remains
 
 2026-08-28. Surfaced while chasing the 2048 Zone bugs this session also fixed
 (`oag_title::ZoneCraft::PlayerShip`, `oag_title::ZoneCircuit::SameCircuit` -
@@ -25,10 +25,11 @@ five files above plus 2048's ten identical copies, validated against the real
 disc/PSARC in `effectsettings_ground_truth.rs`. It reuses `EnvSettings::parse`
 for the tokeniser and adds a stage index/name read off each key's own prefix.
 **2026-08-30: the render-application half landed** - a Zone race now grades
-its circuit off this table, driven by an explicit stage index and weight. The
-*trigger* that would move that index during a race is still unrecovered on
-both titles, and is what remains of this thread; see Open and Next Steps
-below.
+its circuit off this table, driven by an explicit stage index and weight.
+**Later the same day the trigger landed too, on 2048**: its seventeen-record
+zone-number ladder is read out of the executable and a 2048 Zone race now
+escalates on its own. **HD/Fury's own Zone trigger is still unrecovered** and
+is what remains of this thread; see Open and Next Steps below.
 
 Plain text, same `"Key.Subkey"=float [float...]` shape `oag_formats::envsettings`
 already parses for `.envsettings` - just never pointed at this extension.
@@ -821,3 +822,103 @@ evidence, including the byte-level trace of every function in this chain:
   index once it has it - that is `docs/formats/effectsettings.md`'s own
   open question and the next concrete step for this thread, separate
   from the RE work this section closes out.
+
+  **2026-08-30, a tenth pass: 2048's trigger is recovered and wired; HD's
+  Zone trigger is not, and mode `0xe` turned out to be Detonator.** Three
+  results, one of them a correction to two doc pages.
+
+  **2048, closed.** The 17-entry threshold table
+  (`0x8151faf8`, now `g_zone_speed_class_thresholds`) was read with
+  `read_memory` rather than decompiled around, and the "inconsistency" that
+  stopped the fourth pass is a **sentinel**: seventeen records against
+  sixteen names in the blob at `0x8148a4a0` (now
+  `g_zone_speed_class_names`), record `0` carrying the unreachable threshold
+  `9999` and sharing record `1`'s pointer, every record below it strictly one
+  name apiece - checked against the blob's own 12/8-byte string layout, not
+  assumed from order. Thresholds: `9999, 90, 85, 80, 75, 70, 65, 60, 55, 50,
+  45, 40, 33, 17, 9, 2, 0`; class written is `0x11 - i`, clamped to `0xc` by
+  `Zone_UpdateStage`. **The units are zone numbers, confidence 78**: the
+  walked value is `sprintf`'d as the first `%d` of `"%d/%d"` into the
+  authored scene node `ZoneNumber`, the second `%d` is `FUN_812c4e0c`'s
+  per-event target, and the same block stores the matched record's threshold
+  and the one above it into the race state as a progress bar between two
+  class boundaries. What is *not* there is a traced increment of the field
+  itself - the widget's `+0xc` was never resolved to its owning object.
+  **The play-based lead this thread's Open section carried is corroborated on
+  its first half and not its second**: the bands (`0`-`1`, `2`-`8`, `9`-`16`,
+  `17`-`32`, `33`-`39`, then every five to `90`) really are "every few
+  zones", but nothing singles out the *named* classes - every boundary is one
+  class step and the `Sub`/named names simply alternate. Recorded split
+  rather than reshaped. **Also stated rather than glossed**: `0x11 - i`
+  yields `1`-`17` against a thirteen-stage table, so classes `13`-`17`
+  squash onto stage `12`. That is a real lossy squash at the top, not a clean
+  fit.
+
+  **HD, not closed, but its four source branches are all read now.**
+  `Environment_UpdateStageBlend`'s `+0x04` sources: mode `0xe` ->
+  `RaceManager->+0x2e10`; modes `0xd`/`0x15` -> per-viewport entries of the
+  same object; **everything else, Zone included, -> `craftArray[n]->+0x640`**,
+  no writer found. The `0x640(` operand sweep returns nothing on this array,
+  which proves nothing given the folded-index-bias trap the sixth pass
+  recorded; `FUN_003d0b98` (the ~24 KB neighbour carrying the
+  `SpeedClass`/`NextSpeedClass`/`SpeedClassParent` node names, and the
+  thematic next place to look) was sampled at those sites and is building
+  node-name buffers there. So HD carries `zone_stages: None` and 2048's
+  thirteen-stage numbers are **not** transplanted onto its fifteen-stage
+  ladder.
+
+  **The correction, and a long-open question closed by it.** Mode `0xe` is
+  **Detonator**, not Zone: `Environment_LoadStageTextures`' `== 0xe` branch
+  loads `Data/Tex/DetonatorMode0.gtf` (`0x008b7afc` -> `0x007b26c8`, read from
+  memory) and the fall-through loads `Data/Tex/zoneMode0.gtf` (`0x008b7b7c` ->
+  `0x007b2b10`); and `RaceManager->+0x2e10`'s only two non-incrementing
+  writers are `SPDetonator`'s own two constructors (`0x00064470`,
+  `0x000649f0`, both `li r9,0x1`). `mode-manager.md` is corrected.
+  `Detonator_UpdateRace` (`0x00067b40`, confidence 75, renamed) increments
+  `+0x2e10` by exactly one per event and the race ends at `15` - which is
+  exactly `detonatormode.effectsettings`' stage count, so **this thread's
+  "why does Detonator carry Zone's fifteen-stage ladder" is answered**: it
+  has its own fifteen-step escalation and consumes the table one row per
+  step. Full traces on
+  [zone-effectsettings-loader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md#2026-08-30-a-tenth-pass-all-four-0x04-source-branches-read---and-mode-0xe-is-detonator-not-zone)
+  and
+  [zone-environment-fallback.md](../docs/ghidra/functions/vita-2048-eu-v104/zone-environment-fallback.md#2026-08-30-a-fifth-pass-the-threshold-table-is-read-in-full-the-inconsistency-is-a-sentinel-and-the-value-it-is-walked-against-is-the-zone-number).
+
+  **Wired, and checked against the real Vita package**:
+  `oag_title::ZoneStages`, `oag_2048::race::ZONE_STAGES`,
+  `ZoneGrade::show_zone` (driven once a frame from `Scene::sync_zone_grade`,
+  the way `Zone_UpdateStage` is driven from 2048's render update), plus
+  2048's own key spellings in `oag_formats::effectsettings` - that file has
+  no density key at all and packs the density into the fourth lane of
+  `Fog.Environment Fog Colour`, confidence 74. `zone_grade_ground_truth.rs`'s
+  `a_2048_zone_race_escalates_on_the_recovered_ladder` drives a real
+  `ZoneMode2048.effectSettings` across every band boundary from the ladder
+  alone and asserts the disc's own fog colours and densities at stages 1 and
+  12.
+
+  **What is left of this thread**, in order of tractability:
+
+  1. **HD's `craftArray[n]->+0x640` writer.** The static search space is
+     *not* closed the way `+0x00`'s was - the folded-bias trap means an
+     offset sweep is not evidence of absence. The bounded next step is
+     `FUN_003d0b98` read properly rather than sampled: it is HD's Speed Class
+     HUD builder by its own node names, which is exactly what 2048's answer
+     turned out to be. **A write watchpoint is now worth the cost here**, and
+     unlike the `+0x00` hunt it is a live option: the patched RPCS3 build
+     exists (`just build-rpcs3-watchpoints`), the address is computable at
+     runtime from `0x008b7c00`, and one Zone race would settle both the
+     writer and whether the field ever leaves `0`.
+  2. **What sets HD's `raceState->+0x7001`** - the latch Detonator's own
+     increment is gated on, i.e. what *event* Detonator counts. Ten of the
+     eleven instructions touching that offset are reads; the one write clears
+     it.
+  3. **The cross-fade's rate, on both titles.** 2048 fades toward the *next*
+     stage by `DAT_816c6bc8`, which nothing traced writes, so
+     `ZoneGrade::show_zone` leaves the weight at rest and stages change
+     cleanly rather than easing. Still an absence, not a choice.
+  4. **The zone counter's own timing on 2048.** This engine steps
+     `world.race.zone` every ten seconds, which is *Pulse's* recovered
+     constant (`oag_race::zone::STEP_SECONDS`) and has never been checked
+     against 2048's or HD's executables. The ladder wired here is 2048's; the
+     clock feeding it is not, and a 2048 race's escalation will only be
+     correctly *paced* once that is read.

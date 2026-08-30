@@ -49,7 +49,9 @@ pub use hud::{HudArt, HudLayouts};
 pub use loading::Loading;
 pub use menu::{MenuSkin, MenuStrip};
 pub use oag_disc::Platform;
-pub use race::{RaceDefaults, SoundBanks, ZoneAnnouncer, ZoneCircuit, ZoneCraft, ZonePalette};
+pub use race::{
+    RaceDefaults, SoundBanks, ZoneAnnouncer, ZoneCircuit, ZoneCraft, ZonePalette, ZoneStages,
+};
 
 /// One title's release-level facts.
 ///

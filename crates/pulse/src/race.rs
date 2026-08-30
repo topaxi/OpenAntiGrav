@@ -35,6 +35,8 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // `oag_title::ZonePalette`. A Zone race here escalates its speed alone,
     // with no colour grade to climb.
     zone_palette: None,
+    // No stage table to index into, so nothing to map a zone number onto.
+    zone_stages: None,
 };
 
 /// Pulse's Zone milestone announcer.

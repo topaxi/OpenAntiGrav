@@ -144,3 +144,4 @@
 0x005d2108	function	FwKeyedText_ParseEntry	80	zone-effectsettings-loader.md
 0x008b79cc	data	g_EffectSettingsSchemaKeyNames	82	zone-effectsettings-loader.md
 0x003da540	function	Environment_UpdateStageBlend	85	zone-effectsettings-loader.md
+0x00067b40	function	Detonator_UpdateRace	75	zone-effectsettings-loader.md

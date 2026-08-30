@@ -112,6 +112,35 @@ What runs:
 - **Score** rises by one every tick, plus 500 for a zone completed without
   touching anything, which also restores shield.
 
+### The colour grade escalates too, on the two HD-lineage titles
+
+Wipeout HD/Fury and 2048 ship a `.effectSettings` table naming one full
+palette per speed class, laid over whichever circuit the race runs on -
+[effectsettings.md](../formats/effectsettings.md) has the format and
+`oag_game::race::zone_grade` the application. **What selects a stage during a
+race is recovered on 2048 and not on HD.**
+
+2048's Zone HUD widget (`Hud_UpdateZoneSpeedClassWidget`, `0x81197d6c`) walks
+a seventeen-record table of descending **zone-number** thresholds
+(`g_zone_speed_class_thresholds`, `0x8151faf8`) and writes the matched
+record's index into the per-craft field `Zone_UpdateStage` (`0x81044cfc`)
+clamps and shows. So the grade steps at zones `2, 9, 17, 33`, then every five
+to `90` - **every few zones, not every zone** - and a race opens on stage `1`,
+never on the table's own `Start` row. Confidence **78**; full evidence on
+[zone-environment-fallback.md](../ghidra/functions/vita-2048-eu-v104/zone-environment-fallback.md).
+
+HD/Fury's own Zone stage index comes from a per-craft field
+(`craftArray[n]->+0x640`) whose writer has not been found, so an HD Zone race
+loads its table and rests on stage `0`. Its *Detonator* mode, by contrast, is
+fully recovered: `Detonator_UpdateRace` (`0x00067b40`) starts a counter at `1`,
+steps it by one per event and ends the race at `15`, which is exactly the
+stage count `detonatormode.effectsettings` names.
+
+**A caveat that belongs with the timing above, not with the ladder**: the zone
+number this engine feeds that ladder still steps on Pulse's own recovered
+10-second rule, which has never been checked against 2048's or HD's
+executables. The ladder is 2048's; the clock driving it is not.
+
 ### The ship model is fixed, the livery is not
 
 `Ship_LoadModel` loads `<Team>\Zone.vex` instead of `<Team>\Ship.vex` under the
