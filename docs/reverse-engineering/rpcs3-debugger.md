@@ -315,6 +315,61 @@ in [`names.tsv`](../ghidra/functions/ps3-hdfury-eu/names.tsv) is usable as
 typed. The register dump's layout was settled the same way: LR at byte 532 lands
 at `0x00011114`, inside the code range, which no other split does.
 
+### `Z2` misses vector stores, and the miss is silent and total
+
+**2026-08-31, and this one costs a whole test rather than a packet.** The
+patched build's write watchpoints catch **scalar** stores. They do **not** catch
+`stvx` - or, on the reading below, any vector store. So a write watchpoint on a
+buffer that is filled entirely by vector stores reports **zero hits**, which is
+indistinguishable from "the code never ran" unless you have already checked what
+instruction actually writes the target.
+
+**How it surfaced, and why the conclusion is a proof rather than a suspicion.**
+A watchpoint was armed on three fixed addresses in Wipeout HD's per-frame scene
+block (`0x00c49130` and two others) across 90 s of a *confirmed* Zone race. Zero
+hits, values unchanged throughout. That reads as a clean negative - the static
+trail in
+[zone-effectsettings-loader.md](../ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md)
+says `Scene_PrepareFrame` writes those every frame, so a real zero-hit result
+would have overturned it. Three facts settle it the other way without reading
+one line of RPCS3's source:
+
+1. **All three addresses are in `.bss`.** `EBOOT.elf`'s data segment has
+   `filesz 0xd6f80` (to vaddr `0x00936f80`) and `memsz 0xbdfe08` (to
+   `0x0143fe08`). Anything above `0x00936f80` is zero-filled at load,
+   guaranteed by the loader.
+2. **Two of them held non-zero values live** - `2.0` and `1.0`. Something wrote
+   them after load.
+3. **Only vector stores can have.** Every store into that region is `stvx`:
+   eleven of them in `0x003aaf80`-`0x003ab060`, against exactly three scalar
+   stores, all `stfs` to `0x5c0(r1)` - a *stack* scratch slot used to move a
+   float into a vector lane, touching no part of the buffer. There is no `stw`,
+   `stfs`, `stwx` or `stfsx` targeting it anywhere.
+
+Zero at load, non-zero now, and only `stvx` able to have done it: a write
+happened and the hook did not see it. **Credit where the chain ran: the
+zero-hit test came first, and the `.bss` + `stvx` argument is what turned an
+ambiguous negative into a demonstrated gap.**
+
+**What is established and what is inferred.** Established, behaviourally and
+from the ELF: *this* build's write watchpoint missed a `stvx` write to a watched
+address. Inferred, and **not** verified against the patch source: that the hook
+sits on RPCS3's scalar `vm::write<T>` path and therefore misses every vector
+store rather than `stvx` specifically. Treat the general claim as the working
+explanation, and the specific miss as fact.
+
+**The consequence for read watchpoints, which is the part to act on.** A `Z3`
+built the same way will miss `lvx` for the same reason, and a read watchpoint is
+the instrument this project actually needs next - the one thing that names the
+consumer of a per-frame parameter block. So **vector load/store coverage is the
+requirement, not `Z3` support per se**; a scalar-only `Z3` would fail the next
+investigation exactly as `Z2` failed this one, and just as silently.
+
+**The rule, for any watchpoint on this target:** before trusting a zero-hit
+result, disassemble the writer and check whether it is scalar. If the target is
+a `float4`, a matrix, or anything the compiler fills through AltiVec, assume the
+watchpoint is blind until proven otherwise.
+
 ### The stub answers nothing at all while the target runs
 
 Measured directly: after `vCont;c`, an `m` packet gets **no reply** - not a slow
