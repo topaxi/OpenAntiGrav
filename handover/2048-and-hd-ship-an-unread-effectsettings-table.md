@@ -290,9 +290,18 @@ evidence, including the byte-level trace of every function in this chain:
   65, still unnamed**: what consumer honours `0x000c0000`, and whether this is
   *the* shader parameter table, are unread.
 
-  **Next static step is the dirty bit, not the field.** `0x198` has 189 hits
-  image-wide and will not converge; a consumer must `andis`/`rlwinm` `0x000c0000`
-  off `outer+0x4`, which is a far narrower scan.
+  **The dirty-bit key was then run, and it fails - the static route is
+  exhausted.** Code-only scan (below `0x750000`, so `.rodata` in the text
+  segment is not mis-decoded): 212 `oris rA,rS,0xc` **setters** across the
+  render layer (36 in the three block-touching functions), and **zero**
+  `andis.`/`andi.` immediate tests of those bits anywhere; the 76 `rlwinm`
+  bit-12/13 extractions are all outside the three functions and none follows a
+  `lwz rX,0x4(rY)`. So `|= 0x000c0000` is a **generic** dirty convention, not a
+  signature of this block, and the flag is consumed through a register- or
+  table-held mask - meaning **no immediate-keyed scan can find the consumer**.
+  That is a boundary, not a shortfall: the remaining instrument is a watchpoint.
+  Best target is a **read** watchpoint on `0x00c50c10` (the address that gets
+  published), which names the consumer outright.
 
   Gated on a byte at `0x00d45f84`, which is **not** established as Zone-specific
   (seven TOC slots, ~40 users across the scene/render/front-end code). Do not

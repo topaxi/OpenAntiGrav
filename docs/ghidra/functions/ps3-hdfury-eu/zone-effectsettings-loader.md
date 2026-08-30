@@ -2504,11 +2504,40 @@ shader parameter table or a different one with the same protocol. The `+0x198`
 offset is far too common to chase by displacement (189 hits image-wide), so the
 productive route is the object, not the field.
 
-**Concrete next tests, in order of cost:** identify `*(obj+0xd8)`'s type via the
-`0x000c0000` dirty-bit test (a consumer must `andis`/`rlwinm` those bits off
-`outer+0x4`, which is a far narrower scan than `0x198`); or a **write**
-watchpoint on `0x00c49130` / `0x00c50c10` - both now fixed addresses, so no
-runtime mapping is needed.
+#### The dirty-bit key does not converge either - the static route is exhausted
+
+Proposed as the narrow key and **run the same day; it fails, and how it fails is
+the useful part.** Scanning code only (below `0x750000`, so the `.rodata` inside
+the text segment cannot be mis-decoded as instructions):
+
+| Pattern | Hits |
+| --- | --- |
+| `oris rA,rS,0xc` - the flag being **set** | **212** across the render layer, 36 of them in the three block-touching functions |
+| `andis. ..., 0xc` / `0x8` / `0x4` - an immediate **test** | **0** |
+| `andi. ..., 0xc` / `0x8` / `0x4` - a post-shift test | **0** |
+| `rlwinm` extracting PPC bit 12 or 13 (`0x00080000` / `0x00040000`) | 76, **none** inside the three functions, and **none** preceded within six instructions by a `lwz rX, 0x4(rY)` |
+
+Two things follow. First, `|= 0x000c0000` on a `+0x4` word is a **generic
+dirty-marking convention across this render layer**, not a signature of this
+block - 212 setters make it useless as an identifier. Second, and decisively:
+**nothing in the executable tests those bits with an immediate.** The flag word
+is consumed through a mask held in a register or read from a table, so *no*
+immediate-keyed scan can find the consumer. That closes the immediate-based
+static route, rather than merely failing to find something with it.
+
+**So the static chain ends here, at a real boundary rather than at the end of a
+session's patience.** What is established, end to end and statically: the stage
+colour is blended into `0x00c81a5c`, read by `Scene_PrepareFrame`, written to
+`0x00c50c10`, and that address is published into `*(obj+0xd8) + 0x1b8` with a
+dirty flag set. What consumes it is reachable only by identifying the object -
+or by watching the memory.
+
+**Concrete next tests, in order of cost:** a **write** watchpoint on
+`0x00c49130` / `0x00c50c00` / `0x00c50c10` (all fixed addresses - no runtime
+mapping), with `0x00c50c10` the most informative since that is the one whose
+address is published; then a **read** watchpoint on `0x00c50c10`, which names
+the consumer directly and is the one thing that would settle the buffer's
+identity outright.
 
 *(An observation deliberately left as an observation: `g_FullscreenTintColour`
 at `0x00c50f00` is `base + 0x7f00`, just past the highest offset seen here
