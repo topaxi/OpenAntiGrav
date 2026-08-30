@@ -283,6 +283,7 @@ impl App {
             boot_overlay: self.boot_overlay,
             pick_language: self.pick_language,
             race_ready_at: None,
+            suspended_race: None,
         }))
     }
 

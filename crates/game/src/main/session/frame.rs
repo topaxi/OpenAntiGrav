@@ -320,15 +320,20 @@ impl Session {
                     for event in events {
                         self.handle_menu(&event);
                     }
-                    // **Break if the menu just started a race**, the same way
-                    // the results table above breaks when it hands the window
-                    // back. `handle_menu`'s `LaunchRace` swaps `Stage::Menu`
-                    // for `Stage::Race` in place, and without this the frame's
-                    // remaining catch-up steps tick the fresh race with the
-                    // confirm key still held - reading the `X` that started it
-                    // as thrust. Bounded by the catch-up cap, so usually zero
-                    // or one step, which is exactly why it went unnoticed:
-                    // finding G1 of the 2026-08-18 review.
+                    // **Break if the menu just started or resumed a race**,
+                    // the same way the results table above breaks when it
+                    // hands the window back. `LaunchRace` itself only reaches
+                    // `Stage::Loading` synchronously - the race proper waits
+                    // behind that screen's fade - but `Session::resume_race`
+                    // (on `MenuEvent::Closed` over a parked race, see
+                    // `Session::suspended_race`) swaps `Stage::Menu` straight
+                    // for `Stage::Race`, and without this the frame's
+                    // remaining catch-up steps would tick it with whatever
+                    // closed the menu still held - Circle, say, read as the
+                    // in-race absorb it also means. Bounded by the catch-up
+                    // cap, so usually zero or one step, which is exactly why
+                    // the `LaunchRace` shape of this went unnoticed the first
+                    // time: finding G1 of the 2026-08-18 review.
                     if matches!(self.stage, Stage::Race(_)) {
                         break;
                     }
@@ -446,6 +451,20 @@ impl Session {
                     }
                 }
                 _ => {}
+            }
+            // A parked race is not `self.stage` - see `Session::suspended_race` -
+            // so the match above never reaches it, and the menus over it are
+            // free to change window mode, size or render scale while it waits.
+            // Same validation-error reasoning as the two arms above: its
+            // depth attachment has to track the framebuffer too, or the resize
+            // that greeted the menus leaves `resume_race`'s scene sized for a
+            // framebuffer that no longer exists.
+            if let Some(stage) = self.suspended_race.as_mut() {
+                stage.scene.resize(
+                    &self.gpu.device,
+                    self.gpu.config.format,
+                    self.framebuffer.size(),
+                );
             }
         }
 

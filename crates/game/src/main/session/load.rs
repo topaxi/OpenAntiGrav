@@ -356,6 +356,11 @@ impl Session {
     /// player is put back in the menus rather than dropped out of the game.
     pub(crate) fn launch_race(&mut self) -> Result<()> {
         self.stalled = true;
+        // The LAUNCH RACE row means a fresh race even when one is parked - see
+        // `Session::suspended_race`, which `Session::resume_race` is the way
+        // back to instead. Dropped here rather than left to sit until some
+        // later resize or race end reaches for it.
+        self.suspended_race = None;
         let options = self
             .race_options
             .clone()

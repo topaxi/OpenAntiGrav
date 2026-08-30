@@ -14,6 +14,7 @@ use oag_input::Controls;
 use oag_render::mesh_render::Anisotropy;
 
 use crate::gpu::Gpu;
+use crate::race_stage::RaceStage;
 use crate::stage::Stage;
 
 #[path = "session/apply.rs"]
@@ -225,6 +226,16 @@ pub(crate) struct Session {
     /// where a driver that defers pipeline compilation to first use would show
     /// up, since building the pipeline object earlier does not force that.
     pub(crate) race_ready_at: Option<std::time::Instant>,
+    /// A race `escape` parked rather than discarded, waiting for
+    /// [`Self::resume_race`].
+    ///
+    /// **Not part of [`Self::stage`].** The menus are what is on screen while
+    /// this is `Some`, and a `Stage` can only ever be one thing - carrying the
+    /// parked race as a second field is what lets both exist at once. `None`
+    /// whenever the last race ran to completion, or was never escaped from at
+    /// all - see [`Self::open_menus`], which is the only place that fills it,
+    /// and only when the outgoing race had not finished.
+    pub(crate) suspended_race: Option<Box<RaceStage>>,
 }
 
 /// What the menus need to know about the backdrop besides its pixels.

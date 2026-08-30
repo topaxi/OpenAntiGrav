@@ -4,11 +4,11 @@ use anyhow::{Context, Result};
 use log::{error, info, warn};
 
 use oag_game::render::{Renderer, VideoFormat};
-use oag_game::{audio, catalogue, display, marquee, menu, movie, settings};
+use oag_game::{audio, boot, catalogue, display, marquee, menu, movie, settings};
 use oag_physics::SpeedClass;
 
 use crate::frontend_stage::HeldFrame;
-use crate::hints::{ESC_TO_MENU, RACE_KEYS, SHELL_KEYS, SHELL_TITLE};
+use crate::hints::{ESC_TO_MENU, RACE_KEYS, RACE_TITLE, SHELL_KEYS, SHELL_TITLE};
 use crate::menu_stage::{Backdrop, MenuStage, menu_playhead};
 use crate::stage::Stage;
 use crate::window::monitor_names;
@@ -275,24 +275,40 @@ impl Session {
         {
             feed.restart();
         }
-        self.stage = Stage::Menu(Box::new(MenuStage {
-            renderer,
-            menu: model,
-            skin,
-            text_atlas,
-            frame: shell.frame.clone(),
-            marquee: marquee::Timer::default(),
-            // Opening the menus is not a page change: the front end's own
-            // hand-off already had its moment, and starting a transition here
-            // would zoom the first page in from nothing on every boot.
-            change: None,
-            backdrop: shape.map(|shape| Backdrop {
-                player: menu_playhead(carried, frames, shape.frame_rate),
-                rect: shape.rect,
-                shown: seeded,
-                held: seed,
-            }),
-        }));
+        // Replaced rather than plainly assigned, so the outgoing stage passes
+        // through a binding instead of being dropped in place: a race that had
+        // not finished is parked below rather than lost. See
+        // `Session::suspended_race`.
+        let outgoing = std::mem::replace(
+            &mut self.stage,
+            Stage::Menu(Box::new(MenuStage {
+                renderer,
+                menu: model,
+                skin,
+                text_atlas,
+                frame: shell.frame.clone(),
+                marquee: marquee::Timer::default(),
+                // Opening the menus is not a page change: the front end's own
+                // hand-off already had its moment, and starting a transition
+                // here would zoom the first page in from nothing on every boot.
+                change: None,
+                backdrop: shape.map(|shape| Backdrop {
+                    player: menu_playhead(carried, frames, shape.frame_rate),
+                    rect: shape.rect,
+                    shown: seeded,
+                    held: seed,
+                }),
+            })),
+        );
+        // **Finished is excluded deliberately.** A player leaving the results
+        // table is not pausing - there is nothing there to resume back into -
+        // so that race is discarded exactly as it always was. Only a race still
+        // running when `escape` reached here is worth keeping.
+        if let Stage::Race(stage) = outgoing
+            && !stage.race.finished()
+        {
+            self.suspended_race = Some(stage);
+        }
         self.gpu.window.set_title(SHELL_TITLE);
         Ok(())
     }
@@ -469,32 +485,90 @@ impl Session {
                     Err(e) => error!("cannot start a race: {e:#}"),
                 }
             }
-            // Backing out of the root page means the same thing as choosing
-            // QUIT: there is nothing behind the menus to go back to.
-            menu::MenuEvent::Fired(menu::Action::Quit) | menu::MenuEvent::Closed => {
+            // QUIT always quits, parked race or not - it is a row a player
+            // chose deliberately, not a fall-through.
+            menu::MenuEvent::Fired(menu::Action::Quit) => {
                 self.quit = true;
+            }
+            // Backing out of the root page used to always mean the same thing
+            // as QUIT: there was nothing behind the menus to go back to. Now
+            // there can be - a race `escape` parked rather than discarded -
+            // and backing all the way out is the fourth place `escape`'s own
+            // "one rule, three places it lands" doc comment lands: resuming
+            // it, the same way stepping back onto a page still under it just
+            // shows that page. Only when nothing is parked does this still
+            // mean the desktop is behind the root page, exactly as before.
+            menu::MenuEvent::Closed => {
+                if self.suspended_race.is_some() {
+                    self.resume_race();
+                } else {
+                    self.quit = true;
+                }
             }
         }
     }
 
+    /// Swaps the menus for the race `escape` parked over them - the other half
+    /// of [`Self::open_menus`] parking one. Reached only from
+    /// [`Self::handle_menu`], on [`menu::MenuEvent::Closed`] while
+    /// [`Self::suspended_race`] holds something.
+    ///
+    /// A no-op if nothing is parked, which cannot happen through
+    /// `handle_menu`'s own guard but is cheap to make true unconditionally
+    /// rather than only where it is currently checked.
+    fn resume_race(&mut self) {
+        let Some(stage) = self.suspended_race.take() else {
+            return;
+        };
+        // Same reasoning as `Session::launch_race`: the outgoing `MenuStage`'s
+        // last picture, so a later `escape` does not flash black waiting for
+        // the restarted feed's first frame.
+        self.held_menu_backdrop = match &mut self.stage {
+            Stage::Menu(stage) => stage
+                .backdrop
+                .as_mut()
+                .and_then(|backdrop| backdrop.held.take()),
+            _ => None,
+        };
+        self.stage = Stage::Race(stage);
+        // Never left mid-freeze by a pause that predates the trip through the
+        // menus - see `Session::launch_race`, which resets this for the same
+        // reason on a fresh race.
+        self.paused = false;
+        // The playlist's own resume: `pause_race_music` (called on the way
+        // into the menus) saved the position and left `race_index` alone, so
+        // this continues the same track rather than starting a new one - see
+        // its doc comment.
+        self.audio.start_race_music(
+            &self.music_discs,
+            self.settings.audio.music_source,
+            &boot::default_audio_cache_dir(),
+        );
+        self.gpu.window.set_title(RACE_TITLE);
+        println!("\n{RACE_KEYS}{ESC_TO_MENU}");
+    }
+
     /// What escape does, which is **back one level** and not quit.
     ///
-    /// One rule, three places it lands:
+    /// One rule, four places it lands:
     ///
     /// - in the menus, it pops a page, exactly as circle does. On the root page
-    ///   `Menu::back` raises `Closed`, which already means "there is nothing
-    ///   behind the menus", so the last one still quits;
+    ///   `Menu::back` raises `Closed`, which means "there is nothing behind the
+    ///   menus" - which quits, unless a race is parked underneath, in which
+    ///   case there is, and that fourth place is [`Self::resume_race`];
     /// - in a race, it hands the window back to the menus;
     /// - in the front end, in the disc chooser, or in a `--race` run that never
     ///   had menus, there is no level behind and it quits. The chooser is the
     ///   clearest case of the rule rather than an exception to it: it is the
     ///   first thing a run shows, so behind it is the desktop.
     ///
-    /// **Leaving a race discards it.** There is no pause and no resume - the
-    /// `World` is dropped and re-entering the race loads a fresh one - and
-    /// building that is a milestone of its own, not something to half-do here.
-    /// A player who backs out of a race expects to lose it; one who backs out
-    /// and finds a *stale* race would not.
+    /// **Leaving a race parks it, unless the race is over.** A race still
+    /// running is kept in [`Session::suspended_race`] rather than dropped, and
+    /// backing all the way out of the menus resumes it exactly where it was
+    /// left - a player who backs out mid-race expects to be able to get back
+    /// to it. A finished race is different: there is a results table behind it
+    /// rather than a track, and nothing there to resume into, so that one is
+    /// still discarded the way every race used to be.
     pub(crate) fn escape(&mut self) {
         // Collected before anything else touches `self`: `handle_menu` takes
         // `&mut self` and the events borrow the stage.
