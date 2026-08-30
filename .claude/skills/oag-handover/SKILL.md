@@ -168,6 +168,14 @@ done — that's the gate every commit must pass — and confirm `git status` is 
 before reporting: nothing from this thread should be left sitting uncommitted in the
 worktree. Report what now works in concrete terms, not "should work".
 
+**Exception: a session whose whole diff is docs/`handover/`/`HANDOVER.md`/doc-comments
+does not need the full gate** — see CLAUDE.md's own carve-out for the lighter check to
+run instead (`check-docs`, plus `check-handover` if `HANDOVER.md` changed). This is the
+common shape for a pure-RE thread closed per the next paragraph: don't reach for `just
+test`'s several minutes over a rename in a doc page. Still run `just` in full the moment
+any `.rs` file changes logic, not just its comments — this exception is for the diff you
+actually made, not the thread's topic.
+
 **A step that was pure RE — a name recovered, a format decoded, a hypothesis
 confirmed, evidence documented — usually isn't "nothing left".** It unblocks an
 implementation task that this session probably shouldn't also attempt in the same
