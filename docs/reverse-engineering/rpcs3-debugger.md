@@ -179,52 +179,63 @@ within the same interpreter-only limitation this page already documents for
 breakpoints - realistically a few hours to a day of emulator-side work plus an
 ongoing fork to maintain across updates.
 
-### A patched build exists, `Z2` genuinely works on it, and it lives outside this repo
+### A patched build exists, `Z2` genuinely works on it, and the patch is tracked
 
-**2026-08-30: built and verified live against a real HD/Fury race.** Not
-tracked in this repo (it is a separate clone, not this project's source) -
-lives at `/home/topaxi/build/rpcs3-oag` on this host, binary
-`build/bin/rpcs3`. If that directory is ever gone, the exact recipe to
-reproduce it:
+**2026-08-30: built and verified live against a real HD/Fury race, then moved
+into version control for reproducibility.** The patch itself -
+[`scripts/patches/rpcs3-gdb-write-watchpoints.patch`](../../scripts/patches/rpcs3-gdb-write-watchpoints.patch) -
+is tracked in this repo; RPCS3's own source is not (a diff against GPL-2.0
+code carries no licensing weight the way vendoring the source would, and it
+is not this project's source regardless). Build it with:
 
 ```sh
-git clone --recursive https://github.com/RPCS3/rpcs3.git /home/topaxi/build/rpcs3-oag
-cd /home/topaxi/build/rpcs3-oag
-CC=clang CXX=clang++ cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
-  -DUSE_LTO=OFF -DHAS_MEMORY_BREAKPOINTS=ON
-ninja -C build -j16 rpcs3
+just build-rpcs3-watchpoints
 ```
 
-`-DUSE_LTO=OFF` and a `-Wl,--start-group`/`--end-group` wrap around the
-vendored ffmpeg archives in `3rdparty/CMakeLists.txt` (Linux-only, via a
-`PLATFORM_ID` generator expression) are local build-environment workarounds
-for GNU `ld` on this host, not part of the feature - upstream's own CI
-almost certainly links with `lld` and never hits either. `HAS_MEMORY_BREAKPOINTS`
-is a genuine, first-class CMake option (`option(HAS_MEMORY_BREAKPOINTS ...
-OFF)` in the top-level `CMakeLists.txt`) that **defaults off** and gates the
-entire memory-write-hook code path in `vm.h` - including RPCS3's own
-pre-existing Qt memory-breakpoint feature, which is silently compiled out on
-every default build for the same reason `Z2` was never reachable. Building
-with it on also surfaces a real, tiny, pre-existing upstream bug
-(`vm.h` uses `CHAR_BIT` without including `<climits>`) that needs a one-line
-`#include <climits>` fix to compile at all.
+which runs [`scripts/build-rpcs3-watchpoints.sh`](../../scripts/build-rpcs3-watchpoints.sh):
+clones RPCS3 at the exact commit the patch was verified against
+(`3ef20ebb0`, `RPCS3_GIT_VERSION: 19884-3ef20ebb`) into
+`data/tools/rpcs3-watchpoints` (gitignored, several GiB - this is a large
+checkout, not a quick one), applies the patch, and configures/builds with
+the flags below. Binary ends up at
+`data/tools/rpcs3-watchpoints/build/bin/rpcs3`. `--clean` starts fresh;
+`--ref <commit>` rebases onto a newer RPCS3, which needs re-verifying the
+patch still applies and re-running the end-to-end test below, not just a
+rebuild.
 
-The patch itself (`rpcs3/Emu/GDB.cpp` + `rpcs3/Emu/Memory/vm.h`, uncommitted
-in that clone) adds a small range-checked watch registry alongside the
-existing Qt one (not folded into it - a GDB watchpoint has to fire on any
-write overlapping `[addr, addr+len)`, where the Qt feature only matches a
-write's exact start address), wired into `Z2`/`z2` and reusing the identical
+`-DUSE_LTO=OFF` and a `-Wl,--start-group`/`--end-group` wrap around the
+vendored ffmpeg archives in `3rdparty/CMakeLists.txt` (part of the patch,
+Linux-only via a `PLATFORM_ID` generator expression) are local
+build-environment workarounds for GNU `ld` on this host, not part of the
+feature - upstream's own CI almost certainly links with `lld` and never hits
+either, and both are harmless to apply on a system that already uses `lld`.
+`-DHAS_MEMORY_BREAKPOINTS=ON` is the real prerequisite: a genuine,
+first-class CMake option (`option(HAS_MEMORY_BREAKPOINTS ... OFF)` in the
+top-level `CMakeLists.txt`) that **defaults off** and gates the entire
+memory-write-hook code path in `vm.h` - including RPCS3's own pre-existing
+Qt memory-breakpoint feature, which is silently compiled out on every
+default build for the same reason `Z2` was never reachable. Building with it
+on also surfaces a real, tiny, pre-existing upstream bug (`vm.h` uses
+`CHAR_BIT` without including `<climits>`), fixed by the same patch.
+
+The patch adds a small range-checked watch registry alongside the existing
+Qt one (not folded into it - a GDB watchpoint has to fire on any write
+overlapping `[addr, addr+len)`, where the Qt feature only matches a write's
+exact start address), wired into `Z2`/`z2` and reusing the identical
 `dbg_pause` + `check_state()` + `gdb_server::pause_from()` stop/notify path
 `Z0` already uses. Verified end to end with a real GDB client against a live
 Main Menu session: `Z2` answers `OK`, a watched write stops execution with a
 real `S05` (twice, proving reproducibility, not a one-off), `z2` removes it
 and further writes produce silence - client-side transcript and
-`RPCS3.log`'s own `Write watchpoint hit` lines matched one-for-one. Full
+`RPCS3.log`'s own `Write watchpoint hit` lines matched one-for-one, and the
+patch file (re-verified with `git apply --check` against a clean checkout of
+the pinned commit before it was committed here) applies cleanly from
+scratch, not just to the working tree it was developed against. Full
 engineering log, including three dead ends that were each root-caused rather
 than papered over (an `asmjit` per-opcode JIT-caching trap that looked like
 the real fix but wasn't, and the actual cause - the CMake flag defaulting
-off - found only after that), is preserved in this session's scratchpad;
-ask if it needs re-finding.
+off - found only after that), is this project's own git history for the
+commit that added the patch file.
 
 **Same scope limitation as `Z0`, not a new one**: only fires under `PPU
 Decoder: Interpreter (static)` - the LLVM recompiler emits stores as

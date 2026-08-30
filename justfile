@@ -591,6 +591,13 @@ frame-compare theirs ours out="/tmp":
 build-allegrex *ARGS:
     ./scripts/build-ghidra-allegrex.sh {{ARGS}}
 
+# Build a patched RPCS3 with working GDB write watchpoints (Z2/z2) - stock
+# RPCS3 never implemented them, confirmed against upstream master; see
+# docs/reverse-engineering/rpcs3-debugger.md ("A patched build exists").
+# Clones into data/tools/rpcs3-watchpoints (gitignored, several GiB).
+build-rpcs3-watchpoints *ARGS:
+    ./scripts/build-rpcs3-watchpoints.sh {{ARGS}}
+
 # Build the Emotion Engine (PS2) processor module against the installed
 # Ghidra. Stock Ghidra mis-decodes R5900 code as MIPS Release 6; see
 # docs/reverse-engineering/toolchain.md. Needs build-allegrex to have run at

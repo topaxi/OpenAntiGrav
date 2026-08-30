@@ -1,0 +1,296 @@
+Adds GDB `Z2`/`z2` (write watchpoint) support to RPCS3's debug stub. Upstream
+never implemented it - only `Z0` software breakpoints work, confirmed against
+`master`'s own `rpcs3/Emu/GDB.cpp` (see docs/reverse-engineering/rpcs3-debugger.md,
+"A patched build exists"). Applies to RPCS3 commit 3ef20ebb0 ("Fix iso path
+checks", RPCS3_GIT_VERSION 19884-3ef20ebb) - built and used by
+scripts/build-rpcs3-watchpoints.sh / `just build-rpcs3-watchpoints`.
+
+Only fires under `PPU Decoder: Interpreter (static)`, same as `Z0` - the LLVM
+recompiler emits stores as generated machine code that never calls
+`vm::write()`. Needs `-DHAS_MEMORY_BREAKPOINTS=ON` at configure time (a
+genuine, off-by-default upstream CMake option that gates the whole
+memory-write-hook code path this patch extends). The `3rdparty/CMakeLists.txt`
+hunk (an `-Wl,--start-group`/`--end-group` wrap around the vendored ffmpeg
+archives) is a local build-environment workaround for GNU `ld` rather than
+`lld`, not part of the feature itself - upstream's own CI almost certainly
+never needs it.
+
+Verified end to end against a live Wipeout HD/Fury session: `Z2` answers `OK`,
+a watched write stops execution reproducibly, `z2` removes it cleanly -
+client-side transcript matched one-for-one against RPCS3.log's own
+"Write watchpoint hit" lines. Full engineering log (including three dead ends
+that were each root-caused, not papered over) is this project's own git
+history for this commit.
+
+diff --git a/3rdparty/CMakeLists.txt b/3rdparty/CMakeLists.txt
+index b25afb883..f5b62d3cc 100644
+--- a/3rdparty/CMakeLists.txt
++++ b/3rdparty/CMakeLists.txt
+@@ -310,11 +310,13 @@ if(NOT ANDROID)
+ 
+ 		target_link_libraries(3rdparty_ffmpeg
+ 		INTERFACE
++			$<$<PLATFORM_ID:Linux>:-Wl,--start-group>
+ 			${FFMPEG_LIB_AVFORMAT}
+ 			${FFMPEG_LIB_AVCODEC}
+ 			${FFMPEG_LIB_AVUTIL}
+ 			${FFMPEG_LIB_SWSCALE}
+ 			${FFMPEG_LIB_SWRESAMPLE}
++			$<$<PLATFORM_ID:Linux>:-Wl,--end-group>
+ 		)
+ 		target_include_directories(3rdparty_ffmpeg SYSTEM INTERFACE "ffmpeg/include")
+ 	endif()
+diff --git a/rpcs3/Emu/GDB.cpp b/rpcs3/Emu/GDB.cpp
+index 5c6eb1139..e3a904f7b 100644
+--- a/rpcs3/Emu/GDB.cpp
++++ b/rpcs3/Emu/GDB.cpp
+@@ -3,6 +3,7 @@
+ #include "GDB.h"
+ #include "util/logs.hpp"
+ #include "Utilities/StrUtil.h"
++#include "Utilities/mutex.h"
+ #include "Emu/Memory/vm.h"
+ #include "Emu/System.h"
+ #include "Emu/system_config.h"
+@@ -36,14 +37,133 @@
+ 
+ #include "Emu/Cell/timers.hpp"
+ 
++#include <algorithm>
+ #include <charconv>
+ #include <regex>
+ #include <string_view>
++#include <vector>
+ 
+ extern bool ppu_breakpoint(u32 addr, bool is_adding);
+ 
+ LOG_CHANNEL(GDB);
+ 
++// GDB write watchpoints (Z2/z2). See the comment on g_gdb_watch_active in
++// Emu/Memory/vm.h for why this doesn't reuse the Qt debugger's
++// g_breakpoint_handler: that one is keyed on a write's exact start address,
++// a GDB watchpoint has to fire on any write that overlaps [addr, addr+len).
++//
++// Like Z0 software breakpoints (ppu_breakpoint(), above), this only ever
++// fires under `PPU Decoder: Interpreter (static)`. The LLVM recompiler
++// emits stores directly into guest memory rather than going through
++// vm::write(), so there is nothing here to hook for it - matching the
++// existing, documented Z0 limitation rather than a new one.
++//
++// Build requirement: needs -DHAS_MEMORY_BREAKPOINTS=ON (off by default -
++// see the top-level CMakeLists.txt option of the same name). That flag
++// controls whether vm.h's write8()/write<T>() even take a ppu_thread*
++// parameter at all; without it, Z2/z2 still answer OK/parse correctly but
++// silently never fire, since there is no ppu_thread* to check a write
++// against - the same "already say OK unconditionally" shape Z0 already has
++// under the LLVM decoder. This also gates RPCS3's own pre-existing Qt
++// memory-breakpoint feature (g_breakpoint_handler below), so building with
++// it on is a strict improvement, not a Z2-specific requirement.
++namespace
++{
++	struct gdb_watch_range
++	{
++		u32 addr;
++		u32 len;
++	};
++
++	class gdb_watch_registry
++	{
++		mutable shared_mutex m_mutex;
++		std::vector<gdb_watch_range> m_watches;
++
++	public:
++		void add(u32 addr, u32 len)
++		{
++			std::lock_guard lock(m_mutex);
++
++			if (std::none_of(m_watches.begin(), m_watches.end(), [&](const gdb_watch_range& w)
++				{
++					return w.addr == addr && w.len == len;
++				}))
++			{
++				m_watches.push_back({addr, len});
++			}
++		}
++
++		void remove(u32 addr, u32 len)
++		{
++			std::lock_guard lock(m_mutex);
++
++			m_watches.erase(std::remove_if(m_watches.begin(), m_watches.end(), [&](const gdb_watch_range& w)
++				{
++					return w.addr == addr && w.len == len;
++				}), m_watches.end());
++		}
++
++		bool empty() const
++		{
++			std::lock_guard lock(m_mutex);
++			return m_watches.empty();
++		}
++
++		bool overlaps(u32 addr, u32 size) const
++		{
++			std::lock_guard lock(m_mutex);
++
++			for (const auto& w : m_watches)
++			{
++				const u64 write_end = u64{addr} + size;
++				const u64 watch_end = u64{w.addr} + w.len;
++
++				if (u64{addr} < watch_end && write_end > u64{w.addr})
++				{
++					return true;
++				}
++			}
++
++			return false;
++		}
++	};
++
++	gdb_watch_registry g_gdb_watches;
++}
++
++atomic_t<bool> g_gdb_watch_active{false};
++
++bool gdb_watch_check_write(u32 addr, u32 size, ppu_thread* ppu)
++{
++	// This is called unconditionally from every guest write in the
++	// interpreter (see vm.h). The "is anything armed" fast exit lives here,
++	// inside the callee, so it runs at genuine per-call runtime.
++	if (!ppu || !g_gdb_watch_active.load())
++	{
++		return false;
++	}
++
++	if (!g_gdb_watches.overlaps(addr, size))
++	{
++		return false;
++	}
++
++	GDB.success("Write watchpoint hit: %d byte(s) at 0x%x.", size, addr);
++
++	// Same pause mechanism ppubreak() (Emu/Cell/PPUInterpreter.cpp) uses for
++	// the Qt memory-breakpoint feature, and the same one ppu_break() (above,
++	// via check_state()) uses for a Z0 code breakpoint: set dbg_pause and let
++	// check_state() park the thread and notify the GDB server
++	// (Emu/CPU/CPUThread.cpp, gdb_server::pause_from()).
++	if (!ppu->state.test_and_set(cpu_flag::dbg_pause))
++	{
++		ppu->check_state();
++	}
++
++	return true;
++}
++
+ #ifndef _WIN32
+ int closesocket(int s)
+ {
+@@ -879,6 +999,27 @@ bool gdb_thread::cmd_set_breakpoint(gdb_cmd& cmd)
+ 		ppu_breakpoint(addr, true);
+ 		return send_cmd_ack("OK");
+ 	}
++	//write watchpoint
++	if (type == '2')
++	{
++		u32 addr = INVALID_PTR;
++		u32 len = 0;
++		if (cmd.data.find(';') != umax)
++		{
++			GDB.warning("Received request to set watchpoint with condition, but they are not supported.");
++			return send_cmd_ack("E01");
++		}
++		sscanf_s(cmd.data.c_str(), "2,%x,%x", &addr, &len);
++		if (addr == INVALID_PTR || len == 0)
++		{
++			GDB.warning("Can't parse watchpoint request, data: '%s'.", cmd.data);
++			return send_cmd_ack("E02");
++		}
++		g_gdb_watches.add(addr, len);
++		g_gdb_watch_active = true;
++		GDB.success("Added write watchpoint at 0x%x, length %d.", addr, len);
++		return send_cmd_ack("OK");
++	}
+ 	//other breakpoint types are not supported
+ 	return send_cmd_ack("");
+ }
+@@ -899,6 +1040,22 @@ bool gdb_thread::cmd_remove_breakpoint(gdb_cmd& cmd)
+ 		ppu_breakpoint(addr, false);
+ 		return send_cmd_ack("OK");
+ 	}
++	//write watchpoint
++	if (type == '2')
++	{
++		u32 addr = INVALID_PTR;
++		u32 len = 0;
++		sscanf_s(cmd.data.c_str(), "2,%x,%x", &addr, &len);
++		if (addr == INVALID_PTR || len == 0)
++		{
++			GDB.warning("Can't parse watchpoint remove request, data: '%s'.", cmd.data);
++			return send_cmd_ack("E01");
++		}
++		g_gdb_watches.remove(addr, len);
++		g_gdb_watch_active = !g_gdb_watches.empty();
++		GDB.success("Removed write watchpoint at 0x%x, length %d.", addr, len);
++		return send_cmd_ack("OK");
++	}
+ 	//other breakpoint types are not supported
+ 	return send_cmd_ack("");
+ 
+diff --git a/rpcs3/Emu/Memory/vm.h b/rpcs3/Emu/Memory/vm.h
+index c59e32d5b..85bc011be 100644
+--- a/rpcs3/Emu/Memory/vm.h
++++ b/rpcs3/Emu/Memory/vm.h
+@@ -1,5 +1,6 @@
+ #pragma once
+ 
++#include <climits>
+ #include <memory>
+ #include <map>
+ #include "util/types.hpp"
+@@ -19,6 +20,17 @@ LOG_CHANNEL(debugbp_log, "DebugBP");
+ void ppubreak(ppu_thread& ppu);
+ #endif
+ 
++// GDB remote-serial write watchpoints (Z2/z2 packets, see Emu/GDB.cpp).
++// Kept separate from the RPCS3_HAS_MEMORY_BREAKPOINTS machinery above: that
++// one (g_breakpoint_handler) matches only a write whose *start* address is
++// exactly a registered point, which is enough for the Qt debugger's memory
++// breakpoints but not for a GDB watchpoint, which must fire for a write to
++// *any* byte inside an arbitrary [addr, addr+len) range. g_gdb_watch_active
++// is a plain relaxed flag so the check costs one load-and-branch on every
++// guest write when no watchpoint is armed.
++extern atomic_t<bool> g_gdb_watch_active;
++bool gdb_watch_check_write(u32 addr, u32 size, ppu_thread* ppu);
++
+ namespace utils
+ {
+ 	class shm;
+@@ -281,6 +293,17 @@ namespace vm
+ 			debugbp_log.success("BPMW: breakpoint writing(8) 0x%x at 0x%x", value, addr);
+ 			ppubreak(*ppu);
+ 		}
++
++		// Unconditional on purpose - see the comment on gdb_watch_check_write
++		// in Emu/GDB.cpp: on x86-64 this call sits inside the per-opcode
++		// code asmjit compiles once and caches forever (RETURN/RETURN_ in
++		// PPUInterpreter.cpp), so a C++ `if` gating the call itself here
++		// would freeze in whatever g_gdb_watch_active happened to be the
++		// first time this particular store opcode ever ran - almost always
++		// long before any watch is armed - and never fire again. The "is
++		// anything armed" fast path has to live inside the callee, where it
++		// runs at genuine per-call runtime instead of being traced away.
++		gdb_watch_check_write(addr, 1, ppu);
+ #endif
+ 	}
+ 
+@@ -336,6 +359,9 @@ namespace vm
+ 					sizeof(dest_t) * CHAR_BIT, value, addr);
+ 				ppubreak(*ppu);
+ 			}
++
++			// Unconditional - see the comment in write8() above.
++			gdb_watch_check_write(addr, sizeof(dest_t), ppu);
+ #endif
+ 		}
+ 
