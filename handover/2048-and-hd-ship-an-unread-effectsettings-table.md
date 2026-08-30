@@ -306,6 +306,28 @@ evidence, including the byte-level trace of every function in this chain:
   what writes it, and whether HD's own selection works the same way - no
   write site was found and this is 2048's executable, not HD's, so per
   `CLAUDE.md` it stays unwired until the write side closes the loop.
+
+  **2026-08-30: both write sites found, independently, same day.**
+  2048's own `+0x634`/`+0x638` writer is `Hud_UpdateZoneSpeedClassWidget`
+  (`0x81197d6c`, confidence 82) - the Zone-mode HUD's Speed Class
+  number/lights widget, identified via its named init sibling's scene-node
+  lookups (`"ZoneNumber"`/`"ZoneLight%d"`/`"ZoneSpeedLogo"`). **Not a
+  race-progress or timer system** - it computes the class index every frame
+  from a percentage-shaped value against a 17-entry Mach-number threshold
+  table (`MX_CLASS`, `M1_9_CLASS`, ... `D_CLASS`, corroborated independently
+  by `Speed_Class_A_Plus_0`-style strings and `speedclass/*.tga` paths
+  elsewhere in the binary) and happens to write into the same per-craft
+  field the colour-grade blend reads. Confirms HD's own
+  `speech_zone.bnk`/`effectSettings` stage-name evidence from the
+  executable side, not just audio/file content. Full trace on
+  [zone-environment-fallback.md](../docs/ghidra/functions/vita-2048-eu-v104/zone-environment-fallback.md#2026-08-30-a-fourth-pass-0x6340x638s-writer-is-found---its-the-zone-mode-huds-own-speed-class-widget-not-racephysics-logic).
+  **HD's own write site was found the same day, independently and first**
+  (see two sections above) - a different function, `Environment_UpdateStageBlend`,
+  a self-contained request/commit pair rather than a HUD widget - so 2048's
+  answer ended up corroborating the "Speed Class, not a bespoke timer"
+  thesis rather than being needed to find HD's own writer. Both titles'
+  write sites are now closed; what remains open on both is the *consumer*
+  of the resulting blend (render wiring), unchanged from before.
 - 2048's table names 13 stages but the title ships 15 files in each texture
   set - still unexplained, though sharpened by the texture-content finding
   below: it is a mismatch in the "Track" set that carries the real art, not

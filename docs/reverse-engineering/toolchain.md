@@ -451,6 +451,21 @@ contains `stw`, `std`, `stfs`, `stfd` and `stvx`. A prefix-style "sweep for any
 store" is a vacuous zero, indistinguishable from a real negative unless every
 exact mnemonic is tried individually.
 
+**A third architecture, same day: `vita-2048-eu-v104` (ARM:LE:32:v7)
+reproduces it too**, with a real known-positive control this time rather than
+just an unrelated disassembly read - `mnemonic: ldr, operand_pattern: 0x634`
+returned zero matches even though `Zone_UpdateStage` itself contains
+`ldr.w r6,[r5,#0x634]`. Three unrelated instruction sets, three confirmations:
+this is the filter's own implementation, not an artefact of any one
+architecture's mnemonic table. The same investigation also found
+`search_byte_patterns`' `mask` parameter does not filter at all on this
+bridge - a masked query returns either the exact-pattern match or nothing,
+never a genuinely wildcarded set, confirmed by comparing masked queries
+against exact-match controls. **Workaround**: drop the mask and enumerate the
+one truly-unknown nibble (e.g. a register number) as a small set of exact
+patterns run in parallel, rather than relying on wildcarding to do it in one
+call.
+
 `run_script_inline`, which would otherwise let a single script enumerate
 every form in one pass, is currently gated off by config rather than
 broken: it returns `"Script execution disabled. Set
