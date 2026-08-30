@@ -2568,6 +2568,51 @@ at `0x00c50f00` is `base + 0x7f00`, just past the highest offset seen here
 established either way, and it changes none of the tint findings in
 [renderer.md](renderer.md), which rest on the address's own users.)*
 
+### The gate has an *else* branch, and it writes the same fields (2026-08-31)
+
+Found by chasing a live watchpoint result that neither the static reading nor
+the test's own design predicted, and it changes what "gated" means here.
+
+`0x003aaf88`'s `beq cr7, 0x003acb88` does **not** skip the write. It selects the
+**source**. The branch target is a mirror of the same code:
+
+```text
+003acb88  lvx   v1, r21, 0x4e0        ; source is r21/r22, not 0x00c81a5c
+003acba4  lfs   f0, 0x500(r22)
+          stfs -> [sp+0x5c0] ; lvewx ; vperm ; vspltw ; vsel        (same shape)
+003acbbc  stvx  v1, r31, r28          ; +0x110   <- same destination
+003acbe8  stvx  v1, r31, r27          ; +0x120   <- same destination
+003acbf0  stvx  ... +0x7bf0 / +0x7c00 / +0x7c10 / +0x7ba0
+003acc1c  b     0x003ab058            ; rejoins the main path *after* the tint stores
+```
+
+So `+0x110`, `+0x120`, `+0x7c00` and `+0x7c10` are written **every frame on
+either branch**; only the values differ. **`+0x130` is the exception**: the sole
+store to it in the whole function is `0x003ab018`, on the gate-**on** path. That
+makes `+0x130` the one field whose content discriminates between the branches.
+
+**This retires an assumption both this page and the watchpoint tests were
+carrying** - that a write to these addresses implies the `Scene.Texture Colour`
+path ran. It does not, for four of the five.
+
+**And it makes the live values diagnostic.** A 2026-08-30 read during a
+confirmed Zone race found `0x00c49110 = 0.0`, `0x00c49120 = 4.0`,
+`0x00c49130 = 0.0`. `+0x120` non-zero says *a* branch ran; `+0x130` at zero is
+what the **gate-off** branch leaves behind, since nothing on that branch writes
+it. Confidence 60, not higher, because `0.0` is also a legal blended value for a
+colour component - the reading is suggestive, not decisive, and one poll showing
+`+0x130` change would overturn it instantly.
+
+**The sharp test this enables, and it needs no watchpoint.** Poll `0x00c49130`
+once a second across a full Zone race. If it ever leaves `0.0` while `+0x110`
+and `+0x120` move, the gate opens and `Scene.Texture Colour` reaches the block.
+If it stays `0.0` for a whole race while the other two change, the gate is shut
+in practice and the entire `Scene.Texture Colour` path - loader, blend, read and
+all - is **inert in the shipped game**, which would be the largest single
+finding this thread could still produce. Either way the answer does not depend
+on watchpoint reliability, which is why it is the right next test rather than
+the read watchpoint.
+
 ### It is gated on a byte
 
 The block is skipped entirely unless a flag is set:

@@ -315,24 +315,28 @@ in [`names.tsv`](../ghidra/functions/ps3-hdfury-eu/names.tsv) is usable as
 typed. The register dump's layout was settled the same way: LR at byte 532 lands
 at `0x00011114`, inside the code range, which no other split does.
 
-### `Z2` misses vector stores, and the miss is silent and total
+### `Z2` and vector stores: unresolved, and a zero-hit result is not yet evidence
 
-**2026-08-31, and this one costs a whole test rather than a packet.** The
-patched build's write watchpoints catch **scalar** stores. They do **not** catch
-`stvx` - or, on the reading below, any vector store. So a write watchpoint on a
-buffer that is filled entirely by vector stores reports **zero hits**, which is
-indistinguishable from "the code never ran" unless you have already checked what
-instruction actually writes the target.
+**2026-08-31. This section previously claimed the miss was total; a second run
+contradicted that, and the honest state is "unresolved".** What is certain is
+narrower and still worth acting on: **a zero-hit write-watchpoint result on this
+build is not, by itself, evidence that the code never ran**, and if the target
+is filled by vector stores you cannot tell the two apart without further work.
 
-**How it surfaced, and why the conclusion is a proof rather than a suspicion.**
-A watchpoint was armed on three fixed addresses in Wipeout HD's per-frame scene
-block (`0x00c49130` and two others) across 90 s of a *confirmed* Zone race. Zero
-hits, values unchanged throughout. That reads as a clean negative - the static
-trail in
-[zone-effectsettings-loader.md](../ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md)
-says `Scene_PrepareFrame` writes those every frame, so a real zero-hit result
-would have overturned it. Three facts settle it the other way without reading
-one line of RPCS3's source:
+The two runs disagree, and neither has been explained:
+
+| Run | Addresses armed | Written by | Result |
+| --- | --- | --- | --- |
+| 1 | `0x00c50c00`, `0x00c50c10`, `0x00c49130` | the first two by `stvx` on **both** code paths every frame | **zero hits** over 90 s of a confirmed Zone race |
+| 2 | `0x00c49110`, `0x00c49120`, `0x00c49130` | the first two by `stvx` on **both** paths every frame | **a hit**, PC `0x003aae80` |
+
+Run 1 armed two addresses that are written every frame on either branch and saw
+nothing; run 2 armed two addresses of the same kind and saw a hit. Both cannot
+be right about the hook. So the vector-store hypothesis is **not** established,
+and neither is its opposite.
+
+**What run 1 does establish, and it is still a real result.** Its three facts
+stand on their own and are independent of the hook question:
 
 1. **All three addresses are in `.bss`.** `EBOOT.elf`'s data segment has
    `filesz 0xd6f80` (to vaddr `0x00936f80`) and `memsz 0xbdfe08` (to
@@ -346,29 +350,39 @@ one line of RPCS3's source:
    float into a vector lane, touching no part of the buffer. There is no `stw`,
    `stfs`, `stwx` or `stfsx` targeting it anywhere.
 
-Zero at load, non-zero now, and only `stvx` able to have done it: a write
-happened and the hook did not see it. **Credit where the chain ran: the
-zero-hit test came first, and the `.bss` + `stvx` argument is what turned an
-ambiguous negative into a demonstrated gap.**
+Zero at load, non-zero now, and (within the instruction window checked) only
+`stvx` able to have done it. That much says **a write happened at some point
+that run 1's watchpoint did not report**. It does *not* say every vector store
+is missed - run 2 contradicts that - and the "only `stvx` can have written it"
+step has a hole worth naming: `FUN_006ce6e0` hands `&block[0x7c00]` out as a
+*pointer* (`0x006cf164`, `0x006cfc70`), so some other function could write that
+slice with a scalar store through it. The window scan cannot see that, and it
+was not checked.
 
-**What is established and what is inferred.** Established, behaviourally and
-from the ELF: *this* build's write watchpoint missed a `stvx` write to a watched
-address. Inferred, and **not** verified against the patch source: that the hook
-sits on RPCS3's scalar `vm::write<T>` path and therefore misses every vector
-store rather than `stvx` specifically. Treat the general claim as the working
-explanation, and the specific miss as fact.
+**Credit where the chain ran:** the zero-hit test came first, the `.bss` +
+`stvx` argument turned it into an apparent gap, and the second run with
+corrected addresses is what showed the argument had over-reached.
 
-**The consequence for read watchpoints, which is the part to act on.** A `Z3`
-built the same way will miss `lvx` for the same reason, and a read watchpoint is
-the instrument this project actually needs next - the one thing that names the
-consumer of a per-frame parameter block. So **vector load/store coverage is the
-requirement, not `Z3` support per se**; a scalar-only `Z3` would fail the next
-investigation exactly as `Z2` failed this one, and just as silently.
+**Run 2's stop PC is its own puzzle.** `0x003aae80` is a `nop` after a `bl` to
+`0x0042fbf0` - a scalar math helper that cannot touch the buffer - and it sits
+*before* both store clusters in program order, so it is neither the trapping
+instruction nor plausibly a lagging report of one from the same pass. Either the
+reported PC is unrelated to the trap, or the pause is surfaced at a boundary far
+from the store. Unresolved.
 
-**The rule, for any watchpoint on this target:** before trusting a zero-hit
-result, disassemble the writer and check whether it is scalar. If the target is
-a `float4`, a matrix, or anything the compiler fills through AltiVec, assume the
-watchpoint is blind until proven otherwise.
+**The rule, for any watchpoint on this target, and it survives all of the
+above:** a zero-hit result proves nothing until you have disassembled the writer
+and confirmed the watchpoint catches that *class* of store. If the target is a
+`float4`, a matrix, or anything the compiler fills through AltiVec, treat the
+watchpoint as unproven rather than authoritative, and prefer a test that does
+not depend on it - **poll the memory and watch for the value to change**, which
+needs no hook at all.
+
+**The consequence for read watchpoints.** Whether or not `Z2` misses vector
+stores, a `Z3` that only covers scalar loads would miss `lvx`, and `lvx` is how
+this buffer is read. So vector load/store coverage is worth building
+*regardless* of how the run 1/run 2 disagreement resolves - it is cheap
+insurance on the one instrument the Zone thread still needs.
 
 ### The stub answers nothing at all while the target runs
 
