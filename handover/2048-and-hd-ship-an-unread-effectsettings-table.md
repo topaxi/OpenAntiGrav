@@ -677,3 +677,35 @@ evidence, including the byte-level trace of every function in this chain:
   single shot both whether the field is ever non-zero and who writes it -
   including through the indirect calls that have kept `FUN_003cdc90`'s
   caller hidden for three passes.
+
+  **2026-08-30, a seventh pass: the eleven functions are checked, and
+  none of them writes `+0x00`.** All seven of the sixth pass's remaining
+  unread/sampled functions were traced the way that pass specified - per
+  function, from each `n*0x38` computation's own `rlwinm`/`rlwinm`/`subf`
+  triple, bias checked, not a bare-mnemonic sweep. Five of the
+  `-0x50e4(r2)` family (`FUN_00403a30`, `FUN_004053e0`, `FUN_004074e0`,
+  `FUN_00408fa8`, `FUN_003fc140`) are the same read-only shape already
+  confirmed for that family's other three members: a `+0x18` blend-weight
+  read feeding a distance compare, then two `+0x1c`/`+0x20` reads feeding
+  an unrelated telemetry call. `FUN_003df360` reads `+0x30` once, straight
+  to an output pointer. `FUN_002b61c8` (second module, TOC verified via
+  its own OPD) writes `+0x30`/`+0x34` only - the same two fields
+  `FUN_003aa888` already established, nothing at `+0x00`. **All five
+  TOC-verified paths to the array are now fully read, not sampled, and
+  the static search space for this exact address is closed** - short of
+  an indirect/computed call no static tool here can enumerate. Full
+  trace on
+  [zone-effectsettings-loader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md#2026-08-30-a-seventh-pass-the-last-two-candidate-families-are-exhausted-and-the-0x00-write-is-not-in-any-of-them).
+
+  **Also checked the same day, since it changes what the remaining
+  avenue costs**: the RPCS3 build on this host (`rpcs3-bin` AUR package
+  `0.0.42.19777-1`) is confirmed the exact build `rpcs3-debugger.md`
+  measured `Z2` (write watchpoint) against - same host, not a stale
+  note - and it genuinely does not implement `Z2` (empty reply, not
+  `OK`). Whether upstream RPCS3 has since gained watchpoint support in a
+  build newer than this AUR package, or whether patching it in ourselves
+  is worth the cost, is being checked separately. **Next step: unchanged
+  in shape, no static ground left to cover** - either a runtime watch
+  becomes available (upstream support, an emulator patch, or a
+  workaround like single-stepping under the interpreter), or this stays
+  open pending one.

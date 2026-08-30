@@ -1087,6 +1087,58 @@ consumers, which is short of this project's bar for a data name, and per
 `CLAUDE.md`'s rule an effect with no recovered trigger stays unwired.
 `oag_formats::effectsettings` and `cross_fade_rgba8` are unchanged.
 
+## 2026-08-30, a seventh pass: the last two candidate families are exhausted, and the `+0x00` write is not in any of them
+
+Checked the seven functions the sixth pass left unread or only sampled, using
+exactly the method that pass prescribed - per function, trace every `n*0x38`
+computation from its own `rlwinm`/`rlwinm`/`subf` triple, read the bias folded into
+the following `addi` before trusting a displacement, and look specifically for a
+store (not a bare mnemonic sweep):
+
+- `FUN_00403a30`, `FUN_004053e0`, `FUN_004074e0`, `FUN_00408fa8`, `FUN_003fc140`
+  (the `-0x50e4(r2)` family, five of its seven members) are all the same shape as
+  the sixth pass's own `FUN_003e29e0`/`FUN_003ff860`/`FUN_00400a00`: one `+0x18`
+  blend-weight read feeding an `fcmpu` distance/threshold compare, then two
+  duplicated `+0x1c`/`+0x20` read blocks feeding a variant-argument-list builder
+  (a logging/telemetry call, tag/type/value triples pushed onto the stack) - never
+  back into the array. `FUN_00408fa8` caches the array base into a 64-bit stack
+  slot (`std`/`ld` at `0x1b8(r1)`) rather than reloading the TOC slot each time, the
+  one structural variation found; the read-only shape is identical once traced
+  through.
+- `FUN_003df360` (the `-0x5700(r2)` slot's other member) reads entry `+0x30` once
+  and writes the result straight to a caller-supplied output pointer, not back into
+  the array.
+- `FUN_002b61c8` (the second module, TOC `0x008ad4d8`, verified via its own OPD
+  before trusting anything) is a near-clone of `FUN_003aa888`'s "start a
+  transition" sequence, confirmed by tracing `0x002b6230`-`0x002b62a8` byte for
+  byte: it writes entry `+0x30` (zeroed) and `+0x34` (`1.0f`), the same two fields
+  `FUN_003aa888` already established, and touches `+0x00` nowhere.
+
+**All five TOC-verified paths to `0x008c2cb8` (`0x008b36c4`, `0x008b7220`,
+`0x008b7944`, `0x008b7cc4`, `0x008b82e0`) are now fully read, not sampled.** Every
+function reachable through any of them has had its own `n*0x38` computations traced
+from the instruction level, and none of them stores to entry offset `+0x00`. The
+static search space for this exact address is closed: barring an indirect or
+computed call this project's static tools cannot enumerate (a function pointer
+table, a vtable dispatch, or an address materialised by arithmetic no byte-pattern
+search can match), there is no more static ground left to cover for who writes the
+stage index.
+
+That leaves the runoff this page has flagged since the fourth pass as the only
+remaining avenue: a runtime read/write watch on `0x008c2cb8` in a live RPCS3
+session. **Measured the same day and worth recording here since it changes what
+that avenue actually costs**: this exact RPCS3 build (`rpcs3-bin` AUR package
+`0.0.42.19777-1`, build string `RPCS3 v0.0.42-19777-3be5aa99 Alpha | master`,
+matching `rpcs3-debugger.md`'s own measurement byte for byte - same host, not a
+stale note) replies to a GDB `Z2` (write watchpoint) packet with an empty packet,
+not `OK`. `Z0` software breakpoints are the only stop mechanism this stub offers,
+and per `rpcs3-debugger.md` those only fire under `PPU Decoder: Interpreter
+(static)`. Whether upstream RPCS3 has since gained `Z2` support in a build newer
+than this AUR package, and whether adding it ourselves is worth the emulator-side
+patch, is being checked separately rather than assumed either way. Nothing renamed,
+nothing wired into Rust from this pass - a closed static search space is a sharper
+negative result, not a positive one.
+
 ## See also
 
 - `docs/formats/effectsettings.md` - the file format this loader reaches for
