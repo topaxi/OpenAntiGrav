@@ -315,6 +315,35 @@ in [`names.tsv`](../ghidra/functions/ps3-hdfury-eu/names.tsv) is usable as
 typed. The register dump's layout was settled the same way: LR at byte 532 lands
 at `0x00011114`, inside the code range, which no other split does.
 
+### `Z3` (read watchpoint) is also patched in, protocol-verified, not yet trap-verified
+
+**2026-08-31**, extending the same build:
+[`scripts/patches/rpcs3-gdb-read-watchpoints.patch`](../../scripts/patches/rpcs3-gdb-read-watchpoints.patch)
+adds `Z3`/`z3`, tracked separately from the write patch (apply that one
+first - `just build-rpcs3-watchpoints` now applies both in sequence). Reads
+have no single per-width `vm::read<T>()` to hook the way writes have
+`vm::write<T>()` in `vm.h`; every scalar and vector PPU load instead funnels
+through `ppu_feed_data<T>()` in `PPUInterpreter.cpp` (confirmed by reading
+through its call sites, not assumed), which already had an existing
+`RPCS3_HAS_MEMORY_BREAKPOINTS`-gated `bp_read` check for the Qt debugger
+sitting right there for the new hook to sit beside.
+
+`Z3,<addr>,<len>` and `z3,<addr>,<len>` both answer `OK` against a live
+session, parsing and registry bookkeeping matching `Z2`'s exactly - the
+protocol layer is proven. **What is not yet proven is a real guest read
+actually tripping it.** The first attempt, on `0x00c81a5c` (see the vector-
+stores section below), found no trap - but root-caused to that address's own
+reader not executing outside Zone mode, not a defect in the hook: a `Z0`
+breakpoint on the reader instruction itself, checked properly (resume-slice
+-> `pause()` -> walk every thread's PC via `wait_at()`, not `wait_for_stop()`,
+which can go silent on a parked thread the same way it does for `Z0` - see
+above), showed the reader never runs in an Arcade race, and a 120-second `Z3`
+watch cross-checked against `RPCS3.log`'s own `Read watchpoint hit` line
+(the same log-line ground truth `Z2`'s own verification used, written
+synchronously regardless of whether a stop reply ever reaches a client)
+confirmed zero occurrences to match. Same scope limitation as `Z2`/`Z0`:
+interpreter-only.
+
 ### `Z2` and vector stores: unresolved, and a zero-hit result is not yet evidence
 
 **2026-08-31. This section previously claimed the miss was total; a second run

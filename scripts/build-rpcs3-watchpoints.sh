@@ -1,14 +1,22 @@
 #!/usr/bin/env bash
 #
-# Builds a patched RPCS3 with working GDB write watchpoints (Z2/z2).
+# Builds a patched RPCS3 with working GDB write and read watchpoints (Z2/z2,
+# Z3/z3).
 #
 # Stock RPCS3 (including the rpcs3-bin/rpcs3-git AUR packages) never
-# implemented Z2 - confirmed against upstream master's own rpcs3/Emu/GDB.cpp,
-# see docs/reverse-engineering/rpcs3-debugger.md ("A patched build exists").
-# The patch this applies (scripts/patches/rpcs3-gdb-write-watchpoints.patch)
-# adds a small range-checked watch registry reusing the same stop/notify path
-# Z0 software breakpoints already use, verified end to end against a live
-# Wipeout HD/Fury session.
+# implemented either - confirmed against upstream master's own
+# rpcs3/Emu/GDB.cpp, see docs/reverse-engineering/rpcs3-debugger.md ("A
+# patched build exists"). Two patches apply in sequence:
+# scripts/patches/rpcs3-gdb-write-watchpoints.patch (Z2/z2) adds a small
+# range-checked watch registry reusing the same stop/notify path Z0 software
+# breakpoints already use, verified end to end against a live Wipeout
+# HD/Fury session; scripts/patches/rpcs3-gdb-read-watchpoints.patch (Z3/z3)
+# extends it with the read-side equivalent, hooked into ppu_feed_data<T>()
+# in PPUInterpreter.cpp - the one choke point every PPU load (scalar and
+# vector) passes through, since reads have no per-width vm::read<T>()
+# wrapper the way writes have vm::write<T>(). Verified at the protocol level
+# (Z3/z3 parse, ack, and bookkeeping correctly); end-to-end trap-firing on a
+# real guest read is still open, see that patch's own header.
 #
 # Needs -DHAS_MEMORY_BREAKPOINTS=ON, a genuine upstream CMake option that
 # defaults off and gates the whole memory-write-hook code path in vm.h
@@ -46,6 +54,7 @@ PINNED_COMMIT="3ef20ebb0"
 project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 checkout_dir="$project_root/data/tools/rpcs3-watchpoints"
 patch_path="$project_root/scripts/patches/rpcs3-gdb-write-watchpoints.patch"
+read_patch_path="$project_root/scripts/patches/rpcs3-gdb-read-watchpoints.patch"
 
 ref="$PINNED_COMMIT"
 clean=0
@@ -64,6 +73,7 @@ die() { echo "error: $*" >&2; exit 1; }
 step() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 
 [[ -f $patch_path ]] || die "$patch_path not found - is this really the OpenAntiGrav repo?"
+[[ -f $read_patch_path ]] || die "$read_patch_path not found - is this really the OpenAntiGrav repo?"
 
 step "Checking toolchain"
 
@@ -106,6 +116,10 @@ step "Applying the write-watchpoint patch"
 
 git -C "$checkout_dir" apply --verbose "$patch_path"
 
+step "Applying the read-watchpoint patch"
+
+git -C "$checkout_dir" apply --verbose "$read_patch_path"
+
 step "Configuring (CMake, Ninja)"
 
 # USE_LTO=OFF and the ffmpeg link-group hunk in the patch are both there for
@@ -134,12 +148,14 @@ Binary: $binary
 
 To use it:
   1. In ~/.config/rpcs3/config.yml, set Core > PPU Decoder to
-     "Interpreter (static)" - Z2 (and Z0) only fire under it, matching the
-     LLVM recompiler's inability to hook vm::write(). This file is shared
-     with any other RPCS3 install on this machine; switch it back afterward
-     if something else needs the Recompiler.
+     "Interpreter (static)" - Z2/Z3 (and Z0) only fire under it, matching the
+     LLVM recompiler's inability to hook either choke point. This file is
+     shared with any other RPCS3 install on this machine; switch it back
+     afterward if something else needs the Recompiler.
   2. Launch: $binary --no-gui <disc image>
-  3. Connect a GDB client to 127.0.0.1:2345 and use Z2,<addr>,<len> / z2,<addr>,<len>.
+  3. Connect a GDB client to 127.0.0.1:2345 and use Z2,<addr>,<len> /
+     z2,<addr>,<len> for a write watchpoint, Z3,<addr>,<len> / z3,<addr>,<len>
+     for a read one.
 
 See docs/reverse-engineering/rpcs3-debugger.md ("A patched build exists") for
 the full protocol, known traps (one-shot GDB sessions, preferring a narrow
