@@ -2344,6 +2344,23 @@ whatever recolours track and scenery in HD's Zone mode has to act **before** the
 resolve - per-material or per-light - not on the composited frame. The composite
 route is now closed by enumeration rather than by failing to find a consumer.
 
+**A play observation corroborates the enumeration, and nearly on its own.** A
+driven Zone race screenshotted twice ~45 s apart from the same camera angle
+shows stage 0 ("Sub-Venom") with track, sky and buildings all tinted cyan, and
+stage 21 ("Flash") with a **purple** track and walls beside **yellow**
+buildings. A resolve-stage grade is
+`saturate(scene * scale + bloom * scaleAdd + tint)`: the multiply preserves the
+ratio between any two pixels' channels, so two surfaces that read as the same
+hue before it read as the same hue after it. Turning one purple and the other
+yellow needs their pre-grade hues to have differed substantially already, which
+is the opposite of both looking cyan one stage earlier.
+
+Suggestive rather than proof, and worth saying why: the `saturate` is a
+nonlinearity, and a strong additive `tint` followed by clipping *can* separate
+hues that were close. So this is a second, independent argument for the same
+conclusion at confidence 75, not a replacement for the enumeration - which is
+what actually closes the route, and does so without needing any of this.
+
 What this does **not** settle: what does drive the visible Zone recolour. The
 `FunkLayerColour2d_fp` flat-colour quad is untouched by this pass and is the one
 remaining post-chain program that could paint a full-screen colour by a
