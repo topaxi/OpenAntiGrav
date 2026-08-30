@@ -1133,10 +1133,13 @@ matching `rpcs3-debugger.md`'s own measurement byte for byte - same host, not a
 stale note) replies to a GDB `Z2` (write watchpoint) packet with an empty packet,
 not `OK`. `Z0` software breakpoints are the only stop mechanism this stub offers,
 and per `rpcs3-debugger.md` those only fire under `PPU Decoder: Interpreter
-(static)`. Whether upstream RPCS3 has since gained `Z2` support in a build newer
-than this AUR package, and whether adding it ourselves is worth the emulator-side
-patch, is being checked separately rather than assumed either way. Nothing renamed,
-nothing wired into Rust from this pass - a closed static search space is a sharper
+(static)`. **Checked, not left open**: upstream `master`'s own `GDB.cpp` (fetched
+directly, not assumed) never implements `Z2` at all - has not since GDB support
+shipped in 2017 - and neither the `rpcs3-git` AUR package nor any newer build
+would gain it, since both track the same `master` this checked. See
+[rpcs3-debugger.md](../../../reverse-engineering/rpcs3-debugger.md#the-gdb-stub-is-real-and-needs-no-special-build)
+for the full evidence and the emulator-patch estimate. Nothing renamed, nothing
+wired into Rust from this pass - a closed static search space is a sharper
 negative result, not a positive one.
 
 ## See also

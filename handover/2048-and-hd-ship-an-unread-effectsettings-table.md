@@ -702,10 +702,29 @@ evidence, including the byte-level trace of every function in this chain:
   `0.0.42.19777-1`) is confirmed the exact build `rpcs3-debugger.md`
   measured `Z2` (write watchpoint) against - same host, not a stale
   note - and it genuinely does not implement `Z2` (empty reply, not
-  `OK`). Whether upstream RPCS3 has since gained watchpoint support in a
-  build newer than this AUR package, or whether patching it in ourselves
-  is worth the cost, is being checked separately. **Next step: unchanged
-  in shape, no static ground left to cover** - either a runtime watch
-  becomes available (upstream support, an emulator patch, or a
-  workaround like single-stepping under the interpreter), or this stays
-  open pending one.
+  `OK`). **Checked upstream too, not left as a maybe**: fetched
+  `RPCS3/rpcs3`'s own `master` `GDB.cpp` directly - only `Z0` is
+  handled, `Z1`-`Z4` all fall through to the same empty reply, and this
+  has been true since GDB support shipped in 2017 (commit history since
+  is refactors only). GitHub's issue/PR search for "watchpoint" returns
+  zero results either way - nobody has filed for this. `rpcs3-git`
+  tracks the same `master`, so switching to it gains nothing. See
+  [rpcs3-debugger.md](../docs/reverse-engineering/rpcs3-debugger.md#the-gdb-stub-is-real-and-needs-no-special-build)
+  for the full evidence.
+
+  **So this is now a real decision point, not an open question to keep
+  chasing**: with the static search space closed and upstream RPCS3
+  confirmed never to have had write watchpoints, the only way to get one
+  is patching the emulator ourselves - extending the same interpreter
+  dispatch path `Z0` breakpoints already use (`ppu_breakpoint`) to also
+  check stores against a registered address, PPU-only, interpreter-only
+  (matching the existing `Z0` limitation), estimated a few hours to a
+  day plus an ongoing fork to maintain across RPCS3 updates. That
+  tradeoff - real engineering time on an emulator we don't otherwise
+  maintain, for one known static address - is a call for the user or
+  maintainer, not something to spend on unprompted. **Next step: blocked
+  on that decision.** If the answer is no, the remaining route is
+  whatever static or play-based evidence can substitute for the write
+  site (see the "Worth checking against the user's own play" bullet
+  above), or leaving this specific field unwired indefinitely per
+  `CLAUDE.md`'s own rule for an effect with no recovered trigger.

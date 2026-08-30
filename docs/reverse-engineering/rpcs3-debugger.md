@@ -161,6 +161,24 @@ the write itself. See
 [renderer.md](../ghidra/functions/ps3-hdfury-eu/renderer.md#runtime-verified-118-real-draws-two-object-families-no-watchpoint-support)
 for the investigation this came out of.
 
+**Not a gap in this build specifically - upstream has never implemented it.**
+Checked 2026-08-30 against `master`'s own `rpcs3/Emu/GDB.cpp`, fetched directly
+from GitHub rather than assumed: `cmd_set_breakpoint`/`cmd_remove_breakpoint`
+handle `type == '0'` only, and every other type (`Z1`-`Z4`, watchpoints
+included) falls through to `return send_cmd_ack("")` - the identical empty
+reply measured here, on the exact same code path. GitHub's issue and PR search
+for "watchpoint" against `RPCS3/rpcs3` returns zero results either way - nobody
+has filed for this. GDB server support shipped in v0.0.3 (2017-07-20); the
+`Emu/GDB.cpp` commit history since is refactors only, no protocol additions.
+**So a newer build, or the `rpcs3-git` AUR package (also tracks `master`), buys
+nothing here** - this has been Z0-only for the emulator's entire life. Adding
+`Z2` would mean patching RPCS3 itself: the least invasive route is extending
+the same interpreter dispatch path `ppu_breakpoint` already uses for `Z0` to
+also check store instructions against a registered watch address, which stays
+within the same interpreter-only limitation this page already documents for
+breakpoints - realistically a few hours to a day of emulator-side work plus an
+ongoing fork to maintain across updates, not attempted here.
+
 Not implemented, and this is the first thing to get wrong: **bare `c` and `s`
 return an *empty packet*.** An empty packet is indistinguishable from an
 immediate breakpoint hit if the client is not looking for it, so a session built
