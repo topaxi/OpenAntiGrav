@@ -739,14 +739,42 @@ evidence, including the byte-level trace of every function in this chain:
   RPCS3-patch decision needs an answer**: a caller sweep of the thirteen
   now-fully-read accessor functions, checking whether any call site
   passes an array-derived pointer into a further function - not a new
-  address search, a call-graph one. If that also comes back empty, the
-  decision stands as stated: patching RPCS3 ourselves (extending the
-  same interpreter dispatch path `Z0` breakpoints already use to also
-  check stores against a registered address, PPU-only, interpreter-only,
-  estimated a few hours to a day plus an ongoing fork to maintain across
-  updates) is a call for the user or maintainer, not something to spend
-  on unprompted. If the answer there is no, the remaining route is
-  whatever static or play-based evidence can substitute for the write
-  site (see the "Worth checking against the user's own play" bullet
-  above), or leaving this specific field unwired indefinitely per
-  `CLAUDE.md`'s own rule for an effect with no recovered trigger.
+  address search, a call-graph one.
+
+  **2026-08-30, later the same day: found, by the caller sweep above -
+  just not by its own hypothesis.** The `+0x00` write is real and inside
+  one of the fifteen already-known direct-toucher functions itself, not
+  in an argument-forwarded callee (that hypothesis came back negative
+  across all fourteen others, checked in full). **Renamed
+  `Environment_UpdateStageBlend`** (`0x003da540`, confidence 85,
+  `names.tsv` updated, independently byte-verified in-session before the
+  rename). It computes `n*0x38` once at entry and reuses it six times via
+  a plain `subf` - every prior pass's `rlwinm`-keyed search found only
+  the first reuse or two, never the fourth, which is where the write is.
+  The mechanism is a self-contained request/commit pair: `entry[n].+0x04`
+  (already documented, written elsewhere in the same function from
+  `g_GameState.mode`-dependent sources) holds a *requested* stage: every
+  call checks whether `+0x04 == +0x00` (already applied) and, if not,
+  draws a transition effect and commits `+0x00 = +0x04`. No external
+  caller ever needed to pass a pointer in, which is exactly why the
+  forwarding hypothesis came back empty even though the write is real. A
+  second, unrelated `+0x00` write turned up as a side effect -
+  `Environment_LoadStageTextures` unconditionally zero-resets the whole
+  array on every effectSettings load - but that is a reset to the
+  constant `0`, not a stage-selection write. Full trace, the byte-level
+  re-verification, and a live tooling trap (the shared Ghidra bridge's
+  "current program" is not stable across concurrent sessions - always
+  pass the full `program` path once more than one program can be open)
+  on
+  [zone-effectsettings-loader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md#2026-08-30-a-ninth-pass-the-0x00-write-is-found-environment_updatestageblend-at-0x003da540-confidence-85).
+
+  **This closes the RPCS3-patch decision point above - a runtime watch
+  was never needed to find this write, so there is nothing to greenlight
+  or decline here anymore.** What it does not close: the render-side
+  wiring this whole page has deferred since its first pass.
+  `Environment_UpdateStageBlend` establishes *when* and *to what* the
+  stage index changes (a request/commit pair driven by
+  `g_GameState.mode`), not what the renderer does with the resulting
+  index once it has it - that is `docs/formats/effectsettings.md`'s own
+  open question and the next concrete step for this thread, separate
+  from the RE work this section closes out.

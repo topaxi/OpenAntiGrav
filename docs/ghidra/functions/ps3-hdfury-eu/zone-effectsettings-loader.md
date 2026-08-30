@@ -1231,6 +1231,145 @@ would never progress past stage 0, which is not what the game does.
 Nothing renamed, nothing wired into Rust from this pass either - a corrected
 and better-scoped negative result, not a positive one.
 
+## 2026-08-30, a ninth pass: the `+0x00` write is found - `Environment_UpdateStageBlend` at `0x003da540`, confidence 85
+
+Not through the eighth pass's own hypothesis (a pointer forwarded to an
+external callee - checked across all fourteen other direct-toucher functions
+and found nowhere), but inside `FUN_003da540` itself, one of the fifteen
+already-known direct touchers. **Renamed `Environment_UpdateStageBlend`**
+(`0x003da540`, confidence 85, `names.tsv` updated) - independently
+byte-verified in this session (`disassemble_bytes` against
+`/ps3-hdfury-eu/EBOOT.elf` explicitly, not the ambient "current program" -
+see the tooling trap below) before the rename, not taken on faith from a
+single trace.
+
+### Why eight passes missed it: the index is computed once, then reused by `subf`, not by a fresh `rlwinm`
+
+Every prior pass's search method (`search_instructions(mnemonic: rlwinm,
+operand_pattern: "0x6, 0x0, 0x19")`) finds the *defining* `rlwinm` pair once
+per function. `Environment_UpdateStageBlend` computes `n*0x38` this way
+exactly once, at function entry (`0x003da580`/`0x003da588`: `n*64`/`n*8` into
+`r26`/`r27`), then reuses it **six separate times** through a plain `subf
+rX,r27,r26`: `0x003da5f0`, `0x003da658`, `0x003da680`, `0x003da720`,
+`0x003da770`, `0x003dc70c`. The fourth and sixth passes' own already-known
+findings - the `+0x2c` gate and the `+0x04` write - both come from the
+*second* reuse (`0x003da658`/`0x003da674`); nothing stopped there to check
+reuse four, where the write actually is. **Method for the next function like
+this**: after finding the defining `rlwinm` pair, also
+`search_instructions(mnemonic: subf, operand_pattern: "<index-hi-reg>,
+<index-lo-reg>")` for the specific register pair, to enumerate every reuse
+site rather than assuming one `rlwinm` hit means one access.
+
+### The write, traced and independently re-verified
+
+```
+003da718  bl      0x0067a7d8           ; transition-pending FX, draw call
+003da71c  ld      r2, 0x28(r1)         ; restore this function's own TOC after the call
+003da720  subf    r9, r27, r26         ; r9 = n*0x38   (reuse #4 of the r26/r27 pair)
+003da724  lwz     r4, -0x5a80(r2)      ; r4 = arrayBase = 0x008c2cb8
+003da72c  lfs     f13, -0x5a7c(r2)     ; f13 = *(float*)0x008b7948 = 0.1f default
+003da730  addi    r10, r9, 0x10        ; r10 = n*0x38 + 0x10
+003da73c  add     r11, r9, r4          ; r11 = entry_ptr = arrayBase + n*0x38 (NO bias)
+003da740  add     r7,  r10, r4         ; r7  = entry_ptr + 0x10
+003da744  lwz     r8, 0x4(r11)         ; r8 = entry[n].+0x04  (the requested/pending stage)
+003da748  lfs     f0, 0xc(r11)         ; f0 = entry[n].+0x0c  (a 0.5f default)
+003da74c  stwx    r8, r4, r9           ; *** entry[n].+0x00 = entry[n].+0x04 ***  the stage commit
+003da750  stfsx   f0, r4, r10          ; entry[n].+0x10 = old entry[n].+0x0c
+003da754  stw     r0, 0x8(r7)          ; entry[n].+0x18 = 0        (r7+0x8 = entry_ptr+0x18)
+003da758  stfs    f13, 0x8(r11)        ; entry[n].+0x08 = 0.1f
+003da75c  bl      0x0067a7e8           ; matching "end transition" call
+```
+
+`n` is `param_2`, already established elsewhere on this page as a 0-or-1
+entity/viewport index, not stage-related itself. Both the OPD-verified TOC
+(`0x0088c278` holds `{003da540, 008bd3c4}`, confirmed by direct `read_memory`)
+and the `-0x5a80(r2)` displacement (`0x008b7944`, the array-pointer slot every
+other pass on this page also resolves to) match every prior finding on this
+function - this is not a new TOC-boundary trap, the same function this page
+has already traced repeatedly.
+
+The gate, decompiled and TOC-resolved:
+
+```c
+if (entry[n].+0x04 == entry[n].+0x00) {
+    // already applied - the already-documented cross-fade blend runs instead
+} else {
+    // a new value is pending at +0x04 - draw the transition FX once (one or
+    // two calls to FUN_0067a7d8 depending on a flag), then commit:
+    entry[n].+0x00 = entry[n].+0x04;   // <-- the write
+    entry[n].+0x10 = old entry[n].+0x0c;
+    entry[n].+0x18 = 0;
+    entry[n].+0x08 = 0.1f;
+    FUN_0067a7e8();
+}
+```
+
+So the mechanism is a **request/commit pair inside one function**, not a
+setter reached from outside: `entry[n].+0x04` (already documented at this
+page's fourth pass, written at `0x003da674`, gated on the `+0x2c` flag,
+sourced from `g_GameState.mode`-dependent tables - mode `0xe` reads a
+`FUN_00679e68()` context, modes `0xd`/`0x15` read per-index tables, a fallback
+reads `PTR_DAT_008b7c00[n]->+0x640`) holds the *requested* stage. Every call to
+`Environment_UpdateStageBlend` checks whether that request has already been
+applied (`+0x04 == +0x00`), and if not, commits it - draws the transition
+effect and copies `+0x04` into `+0x00`. No external caller passes a stage
+value in by pointer, which is exactly why the eighth pass's own
+argument-forwarding hypothesis came back negative across all fourteen other
+functions even though the write itself is real: it was never going to be
+found there.
+
+### A second, distinct `+0x00` write, found as a side effect: `Environment_LoadStageTextures` resets the whole array unconditionally
+
+Re-checking all fifteen direct touchers for call-argument forwarding surfaced
+one more direct array access this page had not remarked on:
+`Environment_LoadStageTextures` (`0x003d6dc8`) loads the array
+(`lwz r9,-0x5a80(r2)` at `0x003d6ddc`) and unconditionally zero/default-resets
+**both entries in full** (`0x00`-`0x6c`, matching `FUN_003cdc90`'s own
+field pattern exactly - `+0x0c`/`+0x10` = `0.5f`, `+0x14`/`+0x18` = `0.1f`,
+`+0x34` = `1.0f`, zero elsewhere) at `0x003d6e44`-`0x003d6eb4`, unconditionally,
+every time an effectSettings file loads. This writes `+0x00` too, but only
+ever to the constant `0` - a reset, not a stage-selection write, and it plausibly
+explains why `FUN_003cdc90`'s own caller has never been found across five
+prior passes: this inlined block may be the actual load-time reset path, with
+`FUN_003cdc90` either dead code or reached from some other, still-unfound
+call site. Not chased further; not what this pass was hunting for.
+
+### A live tooling trap, worth propagating: the shared Ghidra bridge's "current program" is not stable under concurrent sessions
+
+Mid-pass, `get_function_by_address`/`decompile_function` against known-good
+PS3 addresses started silently returning "no function found" - not an error
+naming the wrong program, just a negative that looks exactly like a bad
+address. Cause: another concurrent session on the same Ghidra MCP bridge
+switched the "current program" to `/vita-2048-eu-v104/eboot.elf`, twice,
+mid-session. **`list_open_programs` plus an explicit `program:
+"/ps3-hdfury-eu/EBOOT.elf"` on every call from then on** fixed it - and once,
+the bare name `"EBOOT.elf"` itself resolved to the *wrong* program (a
+case-insensitive substring match preferred the Vita's lowercase `eboot.elf`
+over the PS3's `EBOOT.elf`), so the full path is what actually disambiguates,
+not just naming a program at all. **When more than one Ghidra program can be
+open at once, pass the full `program` path explicitly on every call for the
+rest of the session once this has happened once - never trust "current."**
+This session's own verification calls after the rename did the same and
+resolved correctly both times.
+
+### What this closes and what it does not
+
+**Closed**: who writes the stage index, with a byte-verified instruction and a
+confidence high enough to name and commit
+(`Environment_UpdateStageBlend`, confidence 85). Nine passes across two
+sessions on this exact question; the actual site was the fourth reuse of an
+index computed once at function entry, missed by a search method that (quite
+reasonably) assumed one `rlwinm` hit meant one access.
+
+**Not closed by this pass**: the RPCS3 watchpoint and upstream-support
+questions above are now moot for *this* specific write (a runtime watch was
+never needed to find it), but the render-side wiring this whole page has
+deferred since its first pass is still unstarted - `Environment_UpdateStageBlend`
+tells us *when* and *to what* the stage index changes, not what the renderer
+does with it once it has. That is
+[`docs/formats/effectsettings.md`](../../../formats/effectsettings.md)'s and this
+handover thread's own next step, not this page's.
+
 ## See also
 
 - `docs/formats/effectsettings.md` - the file format this loader reaches for

@@ -143,3 +143,4 @@
 0x005d3378	function	FwKeyedText_ParseBuffer	82	zone-effectsettings-loader.md
 0x005d2108	function	FwKeyedText_ParseEntry	80	zone-effectsettings-loader.md
 0x008b79cc	data	g_EffectSettingsSchemaKeyNames	82	zone-effectsettings-loader.md
+0x003da540	function	Environment_UpdateStageBlend	85	zone-effectsettings-loader.md
