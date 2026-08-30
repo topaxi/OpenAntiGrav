@@ -234,6 +234,35 @@ evidence, including the byte-level trace of every function in this chain:
 
 ## Open
 
+- **2026-08-31, the object is found and the consumer search is now bounded.**
+  The stalled `0x90(r1)` step is resolved: the slot is filled through a one-line
+  setter (`FUN_005d4958`, `{ *r3 = r4; }`), which is why no `stw`/`std` to it
+  exists. The object is a **stack struct at `sp+0x460`** in `Scene_PrepareFrame`,
+  initialised by `FUN_005d4868` - which sets `obj->0x4 = 0xf0`, the very word
+  that later gets `|= 0x000c0000`.
+
+  **Two corrections**: `obj+0xd8` is not an inherent sub-object, it is assigned
+  at `0x003ab2a4` from `block[0x7c60]` (a runtime pointer stored inside the
+  scene block), so the pointer table is `*(block + 0x7c60)`, one indirection
+  further than recorded. And `obj` is **stack-allocated**, dying when
+  `Scene_PrepareFrame` returns.
+
+  **That second fact is what the search needed.** A dirty flag on a stack object
+  cannot be honoured after the function returns, so **the consumer is inside
+  `Scene_PrepareFrame`'s own call graph**, not somewhere in a 26,000-function
+  image. The unbounded search that defeated the `0x198`, dirty-bit and
+  `.cpp`-filename keys is now bounded by construction - that is the single
+  biggest change to this thread's tractability.
+
+  **Best candidate**: `FUN_005d6e78` (OPD `0x008a0fd8`), called at `0x003ab284`
+  as `(obj, &block[0x7cb0])` - the only call in `Scene_PrepareFrame` taking the
+  object as first argument. Callees `0x005bd0d8`, `0x005d8f68`, `0x005d8700`,
+  `0x005d84d8`; `0x005bd0d8` is in the band `renderer.md` ties to the RSX
+  command emitters. Confidence 60 that it is *the* consumer; 85 on the object's
+  shape and lifetime. Full detail in
+  `docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md`.
+
+
 - **2026-08-31, where the static route stands on this thread, and what is left.**
   The chain is read end to end as data: `zonemode.effectsettings` ->
   `g_effect_settings_stages` -> `Environment_UpdateStageBlend` blends

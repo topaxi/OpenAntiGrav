@@ -2520,6 +2520,57 @@ shader parameter table or a different one with the same protocol. The `+0x198`
 offset is far too common to chase by displacement (189 hits image-wide), so the
 productive route is the object, not the field.
 
+#### The object is found, and it bounds the consumer search (2026-08-31)
+
+The stalled step - "the object behind `*(obj+0xd8)` is unidentified, and in
+`Scene_PrepareFrame` it is the stack slot `0x90(r1)` with nothing writing it" -
+is resolved. The slot is filled through a **one-line setter**, which is why no
+`stw`/`std` to it exists:
+
+```text
+003ab088  addi r29, r1, 0x460            ; the object is a STACK STRUCT at sp+0x460
+003ab148  bl   0x005cc240                ; -> r30
+003ab160  bl   0x005d4868 (r3=r29, r4=r30)   ; its initialiser
+003ab16c  addi r3, r1, 0x90
+003ab170  bl   0x005d4958                ; { *r3 = r4; }  - caches &obj at 0x90(r1)
+```
+
+`FUN_005d4868` is the initialiser and it names the flags word:
+
+```c
+obj->0x004 = 0xf0;          // <- the word that later gets |= 0x000c0000
+obj->0x154 = arg;           // the FUN_005cc240 result
+obj->0x150 = 0;  obj->0x0b4 = obj->0x0b8 = obj->0x0e4 = -1;  obj->0x0e8 = 0;
+obj->0x134 .. obj->0x14c = 0;
+```
+
+**Two corrections to the earlier reading of this chain.** First, `obj+0xd8` is
+not an inherent sub-object: it is *assigned*, at `0x003ab2a4`, from
+`block[0x7c60]` - a runtime pointer that lives **inside the scene block itself**
+- alongside `obj->0xdc = 0x51` and `obj->0x4 |= 0x001c0000`. So the table that
+receives `&block[0x110]` and its siblings is `*(block + 0x7c60)`, one more
+indirection than this page previously said. Second, `obj` is **stack-allocated
+and dies when `Scene_PrepareFrame` returns**.
+
+**That second fact is the useful one, and it is what the whole search needed.**
+A dirty flag on a stack object cannot be honoured after the function returns, so
+**the consumer is inside `Scene_PrepareFrame`'s own call graph** - not somewhere
+in a 26,000-function image. The unbounded search that defeated the `0x198`, the
+dirty-bit and the `.cpp`-filename keys is now bounded by construction.
+
+**The concrete candidate** is `FUN_005d6e78` (OPD `0x008a0fd8`, TOC
+`0x008bd3c4`), called at `0x003ab284` as `FUN_005d6e78(obj, &block[0x7cb0])` -
+the only call in `Scene_PrepareFrame` that takes the object as its first
+argument. It is a large function; its own callees are `0x005bd0d8`,
+`0x005d8f68`, `0x005d8700` and `0x005d84d8`, none of them the RSX constant
+uploaders this page checked for earlier, though `0x005bd0d8` sits in the
+`0x005bd`/`0x005c1` band [renderer.md](renderer.md) ties to the RSX command
+emitters. Reading it is the next step and is now a bounded one.
+
+Confidence 85 on the object's shape and lifetime (read off the initialiser and
+the stack `addi` directly); 60 that `FUN_005d6e78` is the consumer rather than
+one of several - it is the best candidate, not a demonstrated one.
+
 #### The dirty-bit key does not converge either - the static route is exhausted
 
 Proposed as the narrow key and **run the same day; it fails, and how it fails is
