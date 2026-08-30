@@ -279,6 +279,30 @@ class Session:
             time.sleep(2)
         return False
 
+    def wait_for_screen_pressing(self, name, timeout=180.0, press_interval=5.0):
+        """Like `wait_for_screen`, but presses `cross` while it waits.
+
+        The boot chain ahead of `Main Menu` carries at least one real dialog,
+        not just auto-redirects: `EpilepsyWarning`'s `<Dialog>` has
+        `StartEnabled="false"` on its `<Redirect>` twin, so nothing here
+        advances it without a press - measured 2026-08-30, where a plain
+        `wait_for_screen("Main Menu", ...)` sat at `EpilepsyWarning` for the
+        whole timeout with the emulator otherwise healthy. Pressing `cross`
+        elsewhere in the chain is a no-op on an auto-redirect screen, so one
+        button serves the whole walk. Stops **before** ever pressing at `name`
+        itself - the same press means something different once arrived, e.g.
+        `cross` on `Main Menu` is `walk_to_race`'s first step, not this one's.
+        """
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if current_screen() == name:
+                return True
+            if self.proc.poll() is not None:
+                raise RuntimeError("RPCS3 exited before reaching %r" % name)
+            was, now = self.press_once("cross", settle=press_interval)
+            print("  press      %-22s -> %-22s" % (was, now), flush=True)
+        return current_screen() == name
+
     def tap(self, button, settle=4.0):
         was = current_screen()
         self.pad.press(button, 0.15)
@@ -674,7 +698,7 @@ def cmd_browse(args):
 
     with Session(args.image, args.log_dir) as session:
         print("rpcs3 pid %d" % session.proc.pid, flush=True)
-        if not session.wait_for_screen("Main Menu", args.timeout):
+        if not session.wait_for_screen_pressing("Main Menu", args.timeout):
             print("never reached the Main Menu (last screen: %s)"
                   % current_screen(), file=sys.stderr)
             return 1
