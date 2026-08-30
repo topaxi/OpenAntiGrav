@@ -1996,3 +1996,276 @@ subsystem it does not own; the 62 registrations whose payloads begin `SHO\x08`
 are one use of it among others. Left renamed for now rather than churned, and
 recorded here because [ADR-0005](../../../architecture/adr/0005-ghidra-conventions.md)
 makes this page authoritative over the database.
+
+## The resolve's full-screen colour inputs, enumerated (2026-08-30)
+
+The section ["`scaleAdd` re-read"](#scaleadd-re-read-and-the-parameter-names-are-literals)
+above left one thread hanging: `fullscreenTintColour` arrives at the binder as a
+*pointer argument*, so "the caller holds the current value and passes it in" -
+and the caller was never chased. This section chases it, and then chases the
+other three colour-shaped parameters beside it, because the useful result turned
+out to be the **complete enumeration** rather than the one parameter.
+
+**The headline.** The post chain's resolve pass has exactly four full-screen
+colour inputs, and **none of them is fed from the per-stage `.effectSettings`
+table** (`g_effect_settings_stages`, `0x00c7efb0`, see
+[zone-effectsettings-loader.md](zone-effectsettings-loader.md)):
+
+| Parameter | Program | Source | Verdict |
+| --- | --- | --- | --- |
+| `fullscreenTintColour` | both resolve variants | `g_FullscreenTintColour` (`0x00c50f00`) | **provably always `(0,0,0,0)`** |
+| `saturation` | correction variant only | photo mode, via `Renderer_SetColourCorrection` | photo mode |
+| `finalScale` | correction variant only | photo mode, greyscale by construction | photo mode |
+| `finalBias` | correction variant only | photo mode, greyscale by construction | photo mode |
+
+A fifth full-screen colour exists one pass away - `colourScale` on
+`downsamplescalefiltercolourscale_fp` - and is **not** resolved here; see
+"Still open" at the end.
+
+This is a stronger negative for "HD has a 2048-style whole-frame composite
+grade fed by the stage table" than the per-key getter searches in
+[zone-effectsettings-loader.md](zone-effectsettings-loader.md), because it
+enumerates the *inputs* exhaustively instead of searching for a consumer.
+
+### Program state and TOC, verified first
+
+Per [memory.md](memory.md)'s two-TOC defect, every function read below had its
+OPD entry read before its TOC-relative loads were trusted:
+
+| Function | OPD entry | TOC | Ghidra's default correct? |
+| --- | --- | --- | --- |
+| `FUN_003e3268` (present path) | `0x0088c4c8` | `0x008bd3c4` | no |
+| `FUN_003df7c0` (present tail) | - | `0x008bd3c4` | no |
+| `0x005e29c0` (resolve binder) | `0x008a1470` | `0x008bd3c4` | no |
+| `0x005e3f68` (correction binder) | `0x008a1480` | `0x008bd3c4` | no |
+| `0x003df0d8` (colour-correction setter) | `0x0088c458` | `0x008bd3c4` | no |
+| `0x0023f568` (photo mode) | `0x0087feb0` | `0x008ad4d8` | **yes** - below `0x32d5e0` |
+| `0x003e3e50` (screen fade) | `0x0088c4d0` | `0x008bd3c4` | no |
+
+Two independent self-checks that the `0x008bd3c4` reading is right, not merely
+self-consistent: `lfs f2,-0x56d8(r2)` resolves to `0x008b7cec` = `0x3f800000` =
+the `1.0` this page already documents reaching `scaleAdd`; and the eight
+parameter-name slots at `+0x1f94..+0x2014` resolve to eight consecutive
+readable ASCII strings (`scale`, `scaleAdd`, `scaleFeedback`,
+`fullscreenTintColour`, `saturation`, `finalScale`, `finalBias`, plus the two
+program names). A wrong TOC produces a plausible wrong string, never eight
+coherent ones in a row.
+
+`Environment_UpdateStageBlend` (`0x003da540`) and `Scene_PrepareFrame`
+(`0x003aa888`) were checked present under their recovered names before any of
+this, so the database is the one the other pages describe.
+
+### `fullscreenTintColour` is a one-shot global that nothing ever sets
+
+The value reaches the binder in **`r10`**, the eighth GPR argument. At both call
+sites in each present function the instruction immediately before is
+`lwz r10,-0x56dc(r2)`, and against TOC `0x008bd3c4` that slot is `0x008b7ce8`,
+holding **`0x00c50f00`** - a 16-byte `.bss` object, hereafter
+`g_FullscreenTintColour`.
+
+The binder itself (`0x005e29c0`, and identically `0x005e3f68`) does two things
+with it and nothing else:
+
+```text
+005e2cb8  if (!inited[+0x250]) { chain[+0x260] = (0,0,0,0); inited = 1; }
+005e2cf8  if (r10 == 0) r10 = &chain[+0x260];      // 005e34cc, the zero default
+005e2d00  slot = chain[+0x248];                     // "fullscreenTintColour"
+005e2d5c  lvx v0, 0, r10                            // read the float4
+005e2d74  bind(slot, v0)
+```
+
+`lvx` only - the callee never writes through the pointer. `0x005e30bc` is the
+same read on the alternate bind path, and `0x005e4300`/`0x005e487c` are the
+correction binder's pair.
+
+**The caller then zeroes it.** Immediately after the resolve returns,
+`FUN_003e3268` runs
+
+```text
+003e3838  li   r0, 0
+003e383c  lwz  r9, -0x56dc(r2)          ; r9 = 0x00c50f00
+003e3844  stw  r0, 0xe0..0xec(r1)       ; a zeroed float4 on the stack
+003e3858  lvx  v0, r1, r0
+003e385c  stvx v0, 0, r9                ; *g_FullscreenTintColour = (0,0,0,0)
+```
+
+and `FUN_003df7c0` does the same at `0x003dfa50`-`0x003dfa74`. That is the
+shape of a **one-shot per-frame request**: something sets the tint, the present
+path applies it and clears it.
+
+**Nothing sets it.** Four checks, the last two independent of Ghidra:
+
+1. The literal `0x00c50f00` occurs **exactly once** in the whole 21 MB image, at
+   the TOC slot `0x008b7ce8`. There is no second pointer to it and no pointer
+   into its page.
+2. Module 1 cannot reach that slot at all: `0x008b7ce8 - 0x008ad4d8 = 0xa810`,
+   past a signed 16-bit displacement, so none of that module's 11,037 functions
+   can name it with a `d(r2)` load.
+3. A raw scan of the executable's text segment for **any** instruction with
+   `rA == r2` and displacement `0xa924` (`-0x56dc`) finds **nine**, matching
+   Ghidra's own list exactly. Three are in module 1 (`0x000aab68`,
+   `0x000ab3f0`, `0x0067e7f0`) and resolve against `0x008ad4d8` to an unrelated
+   slot. The remaining six are the four load-and-pass sites (`0x003dfa0c`,
+   `0x003dfbb0`, `0x003e37f4`, `0x003e3ca8`) and the two clears (`0x003dfa54`,
+   `0x003e383c`).
+4. Both binders only ever `lvx` from the pointer, so no write escapes through
+   the callee either.
+
+So `fullscreenTintColour` is **bound every frame with the value `(0,0,0,0)`** -
+which is not the same as "not bound", and is why a microcode read alone would
+never have caught it. In the resolve's
+`out = saturate(feedback * scale + bloom * scaleAdd + tint)` the term is inert.
+
+**Confidence 85.** The enumeration is airtight for PPU code in the ELF's own
+text segment. It cannot speak for the four overlay spaces Ghidra reports on this
+program, nor for an SPU module DMA-ing into PPU memory - neither was checked,
+and both are implausible for a tint but neither is excluded.
+
+A consequence worth recording for the reimplementation: `oag_render::post::hd_bloom`'s
+module header lists the feedback mix and tint among the things it deliberately
+does not model. For the tint half that is now **provably correct** rather than a
+deferral.
+
+**A closed lead, so nobody reopens it.** `FUN_0067e7f0` is a two-instruction
+`lwz r3,-0x56dc(r2); blr` and looks exactly like `float4 *GetFullscreenTint()`.
+It is not. Its OPD entry (`0x00873940`) gives it TOC `0x008ad4d8`, so the slot
+it reads is `0x008a7dfc`, which holds a function descriptor. It never touches
+`0x00c50f00`.
+
+**A second closed lead: the `0x00c81a80` / `0x00c81a5c` adjacency is
+coincidence.** They are `0x24` apart and it is tempting.
+`Scene_PrepareFrame`'s `Scene.Texture Colour` output at `0x00c81a5c` is written
+as `0x3aac(r30)` off `iVar8 = 0x00c7dfb0`; the object at `0x00c81a80` is a
+separate global reached through its own TOC slot `0x008b7c38`. Different slots,
+different objects.
+
+### The correction variant's three extra colour parameters are photo mode
+
+`FUN_003e3268` calls **two** binders on mutually exclusive arms, and the switch
+is a single byte:
+
+```text
+003e3798  lbz  r0, 0x3e0(r31)      ; r31 = g_RenderGlobals = 0x00c81a80
+003e379c  cmpwi cr7, r0, 0
+003e37a0  beq  cr7, 0x003e3c60     ; -> plain downsamplescaleaddfeedback_fp
+          (fall through)           ; -> downsamplescaleaddfeedbackcorrection_fp
+```
+
+The correction binder `0x005e3f68` resolves **seven** slots where the plain one
+resolves four, the three extra being `saturation` (`+0x328`, from `f4`),
+`finalScale` (`+0x338`, a float4 read through stack parameter 10) and
+`finalBias` (`+0x348`, a float4 read through stack parameter 11). At the call
+site (`0x003e3830`) those two pointers are `r31 + 0x3f0` and `r31 + 0x400`, and
+`saturation` is `lfs f4, 0x24(r23)` off the FunkLayer chain object
+(`0x008c3520`).
+
+**The setter is `Renderer_SetColourCorrection` (`0x003df0d8`)**, five
+instructions of it:
+
+```c
+void Renderer_SetColourCorrection(bool on, ..., const float4 *scale,
+                                  const float4 *bias, float a, float b) {
+    g_RenderGlobals[0x3e0] = on;
+    if (on) {
+        g_RenderGlobals[0x3f0] = *scale;      // finalScale
+        g_RenderGlobals[0x400] = *bias;       // finalBias
+        g_RenderGlobals[0x3e4] = a;
+        funkLayer[0x24]        = b;           // saturation
+        *(float *)0x00c51118   = a;
+    } else {
+        *(float *)0x00c51118   = *(float *)(0x008c3640 + 0x28);
+    }
+}
+```
+
+**It has no direct caller anywhere.** Its only reference is the cross-TOC
+trampoline `FUN_00678ee8`, whose body is `std r2,0x28(r1); addis r2,r2,1;
+subi r2,r2,0x114; b 0x003df0d8` - and `0x10000 - 0x114 = 0xfeec`, which is
+exactly `0x008bd3c4 - 0x008ad4d8`. That is an independent corroboration of
+[memory.md](memory.md)'s two-TOC finding *and* of the trampoline reading, from a
+function neither was derived from.
+
+The trampoline has exactly two callers, both in **`FUN_0023f568`**: `0x0023fa80`
+with `r3 = 0` (disable) and `0x0023ff64` with `r3 = 1` (enable).
+
+**`FUN_0023f568` is photo mode.** It sits at `0x0023f568`, below `0x32d5e0`,
+so it is in the module Ghidra's default TOC is *correct* for - which is why its
+string references can be read directly here when they cannot be elsewhere in
+this binary. Resolving its `d(r2)` loads against `0x008ad4d8` gives, in order:
+
+```text
+Photo Mode Controls Bar, InGame Taking Photo Redirect, Race End Photo,
+Photo Camera Mode, Photo Hud Display, Photo Blur, Photo Use DOF,
+DOF Focus Distance, DOF Aperture, Exposure, Saturation,
+Photo Mode Controls, Photo Toggle Help Display, Shutter Speed,
+MSC_PHOTO_DEPTH, InGame Taking Photo Transition Screen, MSC_PHOTO_MBT,
+MSC_PHOTO_MBS, FE_MOTION_TRACK, FE_MOTION_SHIP, Fov
+```
+
+Renamed `PhotoMode_Update` (confidence 78 - the strings are decisive about
+*what* the function is, less so about it being the update rather than the
+apply half of it; its own sole caller `FUN_00241940` is unread).
+
+At the enable site both float4s are built **grey**: `finalScale` is one GPR
+word splatted into all four lanes (`0x0023ff24`-`0x0023ff30`), `finalBias` is
+`f30` splatted into all four (`0x0023ff34`-`0x0023ff44`). A per-channel colour
+grade is therefore *structurally impossible* through this path - it can only
+scale and bias luminance uniformly, which with `saturation` is exactly a
+photographic exposure/saturation control and not a hue shift.
+
+The three values all derive from **one float at `[sp+0x7c]`** scaled by three
+different TOC constants (`f1 = (x - k1) * k2`, `f2 = x * k3`, and the splatted
+scale). **Which photo-mode slider that float is has not been established** -
+both `Exposure` and `Saturation` are strings in the same function and neither
+was tied to that stack slot.
+
+Confidence 85 on the chain (setter -> trampoline -> photo mode); the `0x3e0`
+flag, the two pointer arguments and the greyscale construction are each read
+directly off instructions.
+
+### The names this section lands
+
+| Address | Kind | Name | Confidence |
+| --- | --- | --- | --- |
+| `0x005e29c0` | function | `Post_BindResolveParams` | 85 |
+| `0x005e3f68` | function | `Post_BindResolveCorrectionParams` | 85 |
+| `0x003df0d8` | function | `Renderer_SetColourCorrection` | 85 |
+| `0x0023f568` | function | `PhotoMode_Update` | 78 |
+| `0x00c50f00` | data | `g_FullscreenTintColour` | 88 |
+| `0x00c81a80` | data | `g_RenderGlobals` | 72 |
+
+`Post_BindResolveParams` and `Post_BindResolveCorrectionParams` are named from
+the program-name string each one loads from its own TOC -
+`downsamplescaleaddfeedback_fp` (`+0x1fb8`) and
+`downsamplescaleaddfeedbackcorrection_fp` (`+0x2004`) - and from the four
+respectively seven parameter names each resolves. `g_FullscreenTintColour` is
+named by the one parameter it feeds. `g_RenderGlobals` stays at 72 and is
+deliberately vague: it is provably the render TU's own global state object
+(the colour-correction flag, the fade triple, the render-target ladder index),
+but nothing here establishes what the class is called or what most of its 20 KiB
+holds.
+
+`FUN_003e3e50` is **not** named - see below.
+
+### Still open: `colourScale`, the screen fade
+
+`downsamplescalefiltercolourscale_fp` declares a `colourScale` parameter (name
+string `0x007cdd10`, TOC slot `0x008bf348`), bound at `0x005e16bc` into slot
+`+0x168` by the binder `FUN_005e1140`. Its two callers are `FUN_003e0668` and
+`FUN_003e3e50`, both in the same render TU.
+
+`FUN_003e3e50` is a **per-frame fade**: it steps a current colour at
+`g_RenderGlobals + 0x3d0` toward a target at `+0x3c0` by a rate at `+0x3b0`
+(four `fsel`-clamped lanes), draws only when the result is above zero, and
+passes that colour as `colourScale`. Not named yet - only half traced.
+
+**What the next pass should do**, in the order that just worked for the
+correction path: find what writes `+0x3c0`/`+0x3b0` (the `li r0,0x3c0` cluster
+at `0x003e0700`-`0x003e08c0` is where the setters look to be), check whether
+that setter has a cross-TOC trampoline, then string-scan its module-1 caller
+against TOC `0x008ad4d8`. Two cautions: **`FUN_003e0668` is the other caller of
+`FUN_005e1140` and is unread**, so check both paths before attributing the
+mechanism; and `colourScale` is a *multiply* on the composited frame, so even if
+it turned out to be Zone-driven it can darken and pull toward a hue but cannot
+brighten or shift arbitrarily - it is not the same instrument as 2048's
+composite grade.

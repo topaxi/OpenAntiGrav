@@ -117,6 +117,12 @@
 0x007a2da8	data	Trail_SpeedParamName	95	engine-trail.md
 0x003f1300	function	Shader_InitEngineParams	90	renderer.md
 0x005d4cf8	function	Shader_InitParamEntry	88	renderer.md
+0x005e29c0	function	Post_BindResolveParams	85	renderer.md
+0x005e3f68	function	Post_BindResolveCorrectionParams	85	renderer.md
+0x003df0d8	function	Renderer_SetColourCorrection	85	renderer.md
+0x0023f568	function	PhotoMode_Update	78	renderer.md
+0x00c50f00	data	g_FullscreenTintColour	88	renderer.md
+0x00c81a80	data	g_RenderGlobals	72	renderer.md
 0x002b3bb0	function	LoadingScreen_Construct	85	loading-screen.md
 0x00936fe8	data	g_GameState	90	mode-manager.md
 0x00032f44	data	GameMode_BackendDispatchTable	90	mode-manager.md
