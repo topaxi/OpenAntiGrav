@@ -2555,12 +2555,16 @@ address is published into the table; then a **read** watchpoint on
 `0x00c49110`, which names the consumer directly and is the one thing that would
 settle the buffer's identity outright.
 
-**A watchpoint caveat, from a run on 2026-08-30 that armed the wrong two of
-these.** All three destinations are written by `stvx`, a *vector* store. A
-write-watchpoint implementation that hooks only scalar stores (`stw`/`stfs`)
-will report nothing here however correct the address is, so a zero-hit result
-against these addresses is not evidence about `Scene_PrepareFrame` until the
-hook is known to cover `stvx`.
+**A watchpoint caveat that applied for about a day, then was retired.** A run
+on 2026-08-30 armed the wrong two of these and got zero hits, which briefly
+looked like a `stvx`-coverage gap in the write-watchpoint hook. **Confirmed
+from source on 2026-08-31 that no such gap exists** - `STVX` expands to the
+same `vm::write<v128>()` template every scalar store already goes through -
+so a zero-hit result on these addresses is not explained by the store being
+vector-typed. Full account, including what the actual zero-hit result meant
+instead, is in
+[rpcs3-debugger.md](../../reverse-engineering/rpcs3-debugger.md)'s "not a
+gap, confirmed from source" section.
 
 *(An observation deliberately left as an observation: `g_FullscreenTintColour`
 at `0x00c50f00` is `base + 0x7f00`, just past the highest offset seen here
