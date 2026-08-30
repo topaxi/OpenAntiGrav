@@ -4,8 +4,8 @@
 
 ## Open
 
-- Whether the runtime rebases `LoadXML` include paths the same way this reading presumes (`Data\Plugins\PI001\...` -> `Data\Plugins\Frontend\...`) is not confirmed
-- Following the includes would recover HD's own screens and menu tree, not just its layout - not yet done
+- **2026-08-30: the "rebasing" premise looks wrong, not just unconfirmed.** `EBOOT.elf` has no `PI0` string anywhere - the numbered-plugin spelling is not a thing the executable itself ever constructs or matches against. What it does carry, at `0x920988`, is a hardcoded NULL-terminated table of six category paths - `Data\Plugins\{frontend,billboards,grids,music,loading,news}` (lowercase, `strcasecmp`-style resolution is the codebase's own idiom for this) - and a separate fixed-prefix format string, `Data\Plugins\languages\%s` at `0x7869c0`, for the one category that takes a runtime leaf. `frontend` is the only entry with direct code xrefs (`FUN_00163990` builds it; `FUN_004753b8`/`FUN_004756b8` are a singleton getter/setter around it), consistent with the frontend plugin being instantiated off that fixed string rather than off any per-instance id read out of `skin.xml`. Reading `PI001` as *rebased* implies resolution machinery this build never uses; reading it as **stale PSP-lineage text this disc's own runtime never touches** fits every string in the binary instead. Confidence **70** - this is an exhaustive string-table search plus the table's own structure, not a trace through the plugin manager's own XML-node handler (`SVOPluginTagModule::GetPluginTypeAttrib` at `0x7ac6c0` is the accessor that would settle it outright and was not reached; two dead-end decompiles along the way, `FUN_004750b8` and `FUN_0047eb50`, turned out to be `xOrigin`/`yOrigin` attribute parsing, unrelated).
+- Following the includes would recover HD's own screens and menu tree, not just its layout - not yet done, and now doubly so since there is no evidence the runtime itself ever walks a `PI001`-style path to get there
 
 ## Next Steps
 
