@@ -344,74 +344,61 @@ synchronously regardless of whether a stop reply ever reaches a client)
 confirmed zero occurrences to match. Same scope limitation as `Z2`/`Z0`:
 interpreter-only.
 
-### `Z2` and vector stores: unresolved, and a zero-hit result is not yet evidence
+### `Z2`/`Z3` and vector stores: not a gap, confirmed from source - the real bug was PC reporting
 
-**2026-08-31. This section previously claimed the miss was total; a second run
-contradicted that, and the honest state is "unresolved".** What is certain is
-narrower and still worth acting on: **a zero-hit write-watchpoint result on this
-build is not, by itself, evidence that the code never ran**, and if the target
-is filled by vector stores you cannot tell the two apart without further work.
+**2026-08-31. Closed, after two rounds of an apparent gap that turned out not
+to exist.** `STVX` (`PPUInterpreter.cpp:4577`) expands `PPU_WRITE(v128, ...)`
+to `vm::write<v128>(addr, value, &ppu)` - the identical generic template
+every scalar store already goes through. `LVX` (`:4252`) calls
+`ppu_feed_data<v128, Flags...>(ppu, addr)` - the same choke point `Z3` hooks
+for scalar reads (see above). Both confirmed by reading the handlers
+directly, not inferred. **`stvx`/`lvx` were never blind to either
+watchpoint.** (The one real, pre-existing gap is misaligned `STVLX`/`STVRX`
+partial stores, which go through a raw pointer loop instead of
+`vm::write<T>()` - symmetric between `Z2` and `Z3`, not new, and not what
+either run below hit.)
 
-The two runs disagree, and neither has been explained:
+That retires the whole "vector stores" hypothesis this section carried for a
+day. What actually happened across the two runs:
 
-| Run | Addresses armed | Written by | Result |
-| --- | --- | --- | --- |
-| 1 | `0x00c50c00`, `0x00c50c10`, `0x00c49130` | the first two by `stvx` on **both** code paths every frame | **zero hits** over 90 s of a confirmed Zone race |
-| 2 | `0x00c49110`, `0x00c49120`, `0x00c49130` | the first two by `stvx` on **both** paths every frame | **a hit**, PC `0x003aae80` |
+| Run | Addresses armed | Result |
+| --- | --- | --- |
+| 1 | `0x00c50c00`, `0x00c50c10`, `0x00c49130` | zero hits over 90 s of a confirmed Zone race |
+| 2 | `0x00c49110`, `0x00c49120`, `0x00c49130` | a hit, reported PC `0x003aae80` |
 
-Run 1 armed two addresses that are written every frame on either branch and saw
-nothing; run 2 armed two addresses of the same kind and saw a hit. Both cannot
-be right about the hook. So the vector-store hypothesis is **not** established,
-and neither is its opposite.
+**Run 2's PC was never the trapping instruction, and now there's a
+mechanism, not just a puzzle.** `ppu.cia` (the interpreter's own idea of
+"current instruction address", what a stop reply's PC comes from) is only
+kept updated per-instruction when `is_debugger_present()` was true **at the
+moment that particular opcode's dispatch thunk was first JIT-built**
+(`PPUInterpreter.cpp` ~142/264, `Utilities/Thread.cpp:199`) - and that
+function checks for a *native* debugger attached to the RPCS3 process, or
+the `Assume External Debugger` config flag. **A GDB client on port 2345
+satisfies neither.** With both that flag and `PPU Debug` left at their
+shared-config defaults (`false`), `cia` never updates between branches - it
+sits wherever the last `bl`/`b` left it, which is exactly the "a `nop` right
+after an unrelated `bl`" symptom run 2 produced. **Fix: set `Assume External
+Debugger: true` in `config.yml` before booting** - it is baked into each
+opcode's dispatch thunk the first time that opcode executes, so it cannot be
+toggled mid-session.
 
-**What run 1 does establish, and it is still a real result.** Its three facts
-stand on their own and are independent of the hook question:
+**Run 1's zero-hit result still isn't explained, but the space of
+explanations just got smaller.** With the hook itself cleared, the two live
+candidates are: the write that produced the observed non-zero values
+happened once, early (at load or scene-init), rather than every frame as the
+static trail assumed - so a 90-second window arming *after* that point would
+legitimately see nothing further; or the gate genuinely was shut for that
+particular run. Telling those apart needs no watchpoint at all: **poll the
+memory once a second across a race and watch for the value to change** -
+that is the test this thread ran next, see
+[zone-effectsettings-loader.md](../ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md).
 
-1. **All three addresses are in `.bss`.** `EBOOT.elf`'s data segment has
-   `filesz 0xd6f80` (to vaddr `0x00936f80`) and `memsz 0xbdfe08` (to
-   `0x0143fe08`). Anything above `0x00936f80` is zero-filled at load,
-   guaranteed by the loader.
-2. **Two of them held non-zero values live** - `2.0` and `1.0`. Something wrote
-   them after load.
-3. **Only vector stores can have.** Every store into that region is `stvx`:
-   eleven of them in `0x003aaf80`-`0x003ab060`, against exactly three scalar
-   stores, all `stfs` to `0x5c0(r1)` - a *stack* scratch slot used to move a
-   float into a vector lane, touching no part of the buffer. There is no `stw`,
-   `stfs`, `stwx` or `stfsx` targeting it anywhere.
-
-Zero at load, non-zero now, and (within the instruction window checked) only
-`stvx` able to have done it. That much says **a write happened at some point
-that run 1's watchpoint did not report**. It does *not* say every vector store
-is missed - run 2 contradicts that - and the "only `stvx` can have written it"
-step has a hole worth naming: `FUN_006ce6e0` hands `&block[0x7c00]` out as a
-*pointer* (`0x006cf164`, `0x006cfc70`), so some other function could write that
-slice with a scalar store through it. The window scan cannot see that, and it
-was not checked.
-
-**Credit where the chain ran:** the zero-hit test came first, the `.bss` +
-`stvx` argument turned it into an apparent gap, and the second run with
-corrected addresses is what showed the argument had over-reached.
-
-**Run 2's stop PC is its own puzzle.** `0x003aae80` is a `nop` after a `bl` to
-`0x0042fbf0` - a scalar math helper that cannot touch the buffer - and it sits
-*before* both store clusters in program order, so it is neither the trapping
-instruction nor plausibly a lagging report of one from the same pass. Either the
-reported PC is unrelated to the trap, or the pause is surfaced at a boundary far
-from the store. Unresolved.
-
-**The rule, for any watchpoint on this target, and it survives all of the
-above:** a zero-hit result proves nothing until you have disassembled the writer
-and confirmed the watchpoint catches that *class* of store. If the target is a
-`float4`, a matrix, or anything the compiler fills through AltiVec, treat the
-watchpoint as unproven rather than authoritative, and prefer a test that does
-not depend on it - **poll the memory and watch for the value to change**, which
-needs no hook at all.
-
-**The consequence for read watchpoints.** Whether or not `Z2` misses vector
-stores, a `Z3` that only covers scalar loads would miss `lvx`, and `lvx` is how
-this buffer is read. So vector load/store coverage is worth building
-*regardless* of how the run 1/run 2 disagreement resolves - it is cheap
-insurance on the one instrument the Zone thread still needs.
+**The rule that survives all of this:** a stop reply's PC is not trustworthy
+evidence of *where* a trap fired unless `Assume External Debugger` was set
+before boot - a watch or breakpoint can genuinely hit while still reporting
+a PC that looks unrelated. A zero-hit result is still worth double-checking
+against a poll-based test when the stakes are high, but not because of
+vector stores specifically - that possibility is closed.
 
 ### The stub answers nothing at all while the target runs
 
