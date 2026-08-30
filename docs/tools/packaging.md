@@ -207,13 +207,27 @@ Two alternatives, neither needed now: `cargo-zigbuild`
 container, and pinning old symbol versions with `.symver` directives works but is
 fragile and needs revisiting whenever glibc adds a version.
 
-**What is still unverified is the Deck itself.** The SteamOS glibc version was
-never established - SteamOS is a rolling Arch snapshot, the only figure findable
-was 2.33 from a 2022 discussion, and no hardware was available to check. A 2.34
-floor clears any SteamOS 3.x that has seen an update, but the number gets
-*confirmed* by step 4 of
-[running it on a Steam Deck](#running-it-on-a-steam-deck): run it from a
-terminal, and either it starts or it names the version it wanted.
+**The Deck itself is now established from Valve's own package mirror, though
+still not confirmed on physical hardware.** SteamOS is built from
+`steamdeck-packages.steamos.cloud`, a publicly browsable Arch mirror with one
+repo set per SteamOS branch (`core-3.5`, `core-3.7`, `core-3.8`, ...). Its
+`core-<branch>/os/x86_64/` listings give glibc's version directly:
+
+| SteamOS branch | glibc |
+| --- | --- |
+| 3.5 | 2.37 |
+| 3.7 | 2.40 |
+| 3.8 (current stable, 2026-08) | 2.41 |
+| 3.9 (preview) | 2.43 |
+
+Every branch back to 3.5 clears the 2.34 floor with rising margin - this
+supersedes the only figure found before (2.33, from a 2022 forum post, likely
+SteamOS 3.0-3.3 era). The remaining gap is that this is the repo Decks update
+*from*, not a read of an actual Deck's installed `libc.so.6` - a Deck that has
+gone a long time without updating could in principle sit on an older branch
+than `core-rel` serves today. That is still confirmed, if it ever happens, by
+step 4 of [running it on a Steam Deck](#running-it-on-a-steam-deck): run it
+from a terminal, and either it starts or it names the version it wanted.
 
 ## The window/taskbar icon
 

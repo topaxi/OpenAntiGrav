@@ -246,7 +246,36 @@ enough to notice; the sizes are asserted in
 
 ## A circuit's name is in a different archive from the circuit list
 
-**Confidence 92.** The front-end plugin keys circuits `NN_Track` and every
+**Confidence 97, raised from 92 on 2026-08-30: the choice of `DATA06` is now
+measured against the real front end, not only inferred from archive
+geometry.** `scripts/rpcs3-drive.py browse` (added for this) walks Racebox's
+`Track Creation` carousel with no button but `right`, screenshotting every
+step. Across all 24 circuit entries the carousel exposes (12 environments,
+forward then reverse), the drawn name **never once carries a `REVERSE` suffix
+or any other direction text** - forward and reverse read identically, exactly
+as `DATA06`'s table does and the served `DATA02` table does not. The specific
+pairing this page's geometry argument turns on is directly confirmed: both of
+`Talons_Junction`'s two carousel entries draw `TALON'S JUNCTION`, never
+`SEBENCO CLIMB REVERSE`. The direction itself is conveyed by a small arrow
+glyph in the `CIRCUIT DIRECTION` cluster beside the name, not by text - the
+original does not solve the one-column problem the same way
+`oag_game::catalogue::label`'s `FE_REVERSE` suffix does, it avoids having the
+problem by keeping both columns' worth of information in one carousel slot.
+Zone's four circuits were not reached: Racebox's `Track Creation` only ever
+showed the 24 base entries and wrapped, so whether `PRO TOZO` et al. appear
+anywhere in the real front end is still unmeasured. Screenshots stayed under
+`data/` and were not committed, per this project's leakage policy; the names
+transcribed above are the reproducible part.
+
+The front end ahead of Main Menu also settled two things
+[the declared boot chain](#the-declared-boot-chain) had flagged as
+unmeasured, on the same boots: `Language Selection` does run on a PS3 boot
+(`TTY.log`'s `Switching Screen` sequence reads `"" -> Top -> Language
+Selection -> PreFMVConnect -> Studio Logo -> ...`), and `EpilepsyWarning`'s
+`<Dialog>` is the live path, not its `<Redirect>` twin - a boot that only
+waits, pressing nothing, sits at `EpilepsyWarning` for as long as it is given.
+
+The front-end plugin keys circuits `NN_Track` and every
 string table keys their names `NN_TRACK`, so nothing on the RACE page resolved
 and every circuit drew as its own id. This page used to conclude that the names
 were unreachable, on the grounds that folding the case resolves sixteen of the
@@ -455,10 +484,12 @@ paragraph used to end with ("the doc comment must say so") is what
 rejected as insufficient. A caveat in a doc comment is not carried by the value,
 so nothing downstream can print it, test it, or refuse to trust it.
 
-Two specific ambiguities inside the declaration, both unresolved:
+Two specific ambiguities inside the declaration, one resolved on RPCS3, one
+still open:
 
-- **Step 4 is genuinely two-valued.** `EpilepsyWarning` carries *both* a
-  `<Dialog>` whose single option goes to `FirstPlay` and a
+- **Step 4 is genuinely two-valued in the XML, and measured 2026-08-30: the
+  dialog is the live path.** `EpilepsyWarning` carries *both* a `<Dialog>`
+  whose single option goes to `FirstPlay` and a
   `<Redirect ... StartEnabled="false">` whose `Default goto` is `Save Warning`:
 
   ```xml
@@ -476,15 +507,23 @@ Two specific ambiguities inside the declaration, both unresolved:
 
   The table above takes the dialog's path, on the reasoning that the dialog is
   what the player presses and `FirstPlay` would otherwise be unreachable. That
-  is an **inference, confidence 55**, not a reading. `FirstPlay` itself is
-  conditional in name ("new to WipEout?") and its dialog sends both YES and NO
-  to `Save Warning`, so a boot that skips it lands in the same place.
+  reasoning is now **confidence 80** rather than an inference at 55: a boot on
+  RPCS3 that only waits at `EpilepsyWarning`, pressing nothing, sits there for
+  as long as it is given - both `Redirect`s in the family table below are
+  `StartEnabled="false"` and neither fires unprompted. Pressing `cross` moves
+  it to `FirstPlay` every time (`scripts/rpcs3-drive.py`'s
+  `wait_for_screen_pressing`), matching the dialog's own
+  `Option1Destination`. Not raised past 80 because this is RPCS3, not the
+  EBOOT or real hardware, and only the `DATA00`/`DATA05`/`DATA06` family
+  (this ISO's own `skin.xml`) was exercised.
 
-- **`Language Selection` may not run at all.** The PS3 takes its system
-  language from the XMB. The screen exists, is fully authored, and has a
-  `<DisplayLanguages>` widget - but whether a PS3 boot ever shows it, or whether
-  the engine reads the XMB setting and jumps straight to `PreFMVConnect`, is
-  exactly the kind of thing only an emulator or the EBOOT can settle.
+- **`Language Selection` does run, measured the same way.** The PS3 takes its
+  system language from the XMB, and the screen's own `<DisplayLanguages>`
+  widget suggested the engine might read the XMB setting and skip straight to
+  `PreFMVConnect` instead of showing it. It does not skip: `TTY.log`'s
+  `Switching Screen` sequence on a fresh boot reads `"" -> Top -> Language
+  Selection -> PreFMVConnect -> Studio Logo -> EpilepsyWarning -> ...`,
+  confidence 80 for the same reason as above.
 
 ### Two chain families
 
@@ -1128,6 +1167,28 @@ carry `<SVOData>` elements. Pulse's boot has no equivalent at all. A
 reimplementation that has no network will step over all three, which is exactly
 what `BootProfile::next_after`'s `usable` predicate is for.
 
+**HD's `<LoadXML>` includes carry a stale path beside a working one.** 21 of
+`Skin.xml`'s 23 `<LoadXML>` elements author both `Src` and `SrcRel` on the same
+`<Values>`, e.g.
+
+```xml
+<LoadXML><Values Src="Data\Plugins\PI001\GUI\MainMenu_Definition.xml" SrcRel="MainMenu_Definition.xml"></Values></LoadXML>
+```
+
+`Src` still spells the numbered-plugin path from the shared Pulse-lineage
+authoring (`PI001`), which is not a real directory on this disc; `SrcRel` is a
+bare filename, joined against the directory `Skin.xml` itself lives in, and
+lands exactly on the real file - `/data/plugins/frontend/gui/mainmenu_definition.xml`,
+11,035 bytes, the same path `oag_hd::frontend::names::MAIN_MENU` reads
+directly. Nothing needs `Src` to resolve, because `SrcRel` already does; the
+remaining 2 of 23 (`Team_Selection_Definition.xml`, `Track_Selection_Definition.xml`)
+carry `SrcRel` alone, no `Src` at all. Confidence **92** - read directly off
+`Data\Plugins\Frontend\Gui\Skin.xml` in `DATA00.PSARC`, cross-checked against
+the independently-recovered `MainMenu_Definition.xml` path and byte count.
+Which attribute the original engine prefers when both are present is
+unconfirmed; a reader only needs to try `SrcRel` first, never `Src` first,
+which is the one reading with both authored *and* resolving in the same file.
+
 **HD is Pulse's front end scaled up, not a new one.** The element vocabulary
 (`Screen`, `Variable global=`, `Redirect`/`Default goto=`, `Menu`, `LeftLayer`,
 `FEGlobals->` references, `LoadXML`) is the same, the shortened-dialect
@@ -1213,10 +1274,18 @@ code, so the TOC trap cannot touch it.
 it a mount list would be the invention this project has already been bitten by
 twice. A validation list, a prefetch manifest and an existence check all have
 this shape, and `"Prefetched %d files\n"` sits a few hundred bytes away as a
-live alternative reading. The consuming loop was not identified: the only xref
-Ghidra offers into `0x00860c80` is a read at `0x0032e5d8`, inside a function that
-decompiles as a GameData-installer debug dump, and the TOC-relative loads that
-would reach the array leave no instruction operand to search for.
+live alternative reading. The consuming loop was not identified, and the one
+lead Ghidra's own xref list offered turned out not to be it: `0x0032e5d8` was
+re-decompiled 2026-08-30, after the PS3 TOC fix, and `.opd.FUN_0032e430` is a
+`CellSaveDataStatGet` result dumper (`dirName`, `isNewData`, `hddFreeSizeKB`,
+`PARAM_SFO_TITLE`, and so on) with no relation to the archive array at all.
+`0x0032e5d8` is `lwz r3,-0x7f60(r2)`, loading the format string for that
+function's last `printf` (`PARAM_SFO_LIST_PARAM`), which the corrected
+decompile now names directly. Why Ghidra's xref index pointed here - it is
+tagged `[PARAM]`, and that tag was not explained either - is itself
+unresolved. The TOC-relative loads that would reach the array still leave no
+instruction operand to search for, so this is a dead end confirmed rather
+than a new one opened.
 
 **So the archive-layering question stays exactly where it was** before the
 executable was opened - and until the consumer is found, the *order* in the

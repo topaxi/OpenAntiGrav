@@ -72,7 +72,8 @@ craft's. It is pinned by `the_authored_slot_matches_the_captured_start` in
   an instrument.
 
 Whatever lays a grid out is still unread code. What would retire the constant:
-that code, a capture on a second circuit, or the path-boundary lead below.
+that code, or a capture on a second circuit - the path-boundary lead below was
+the third candidate, and a sweep of all 40 files (2026-08-30) killed it.
 
 Getting this wrong is visible rather than subtle, which is the one convenient
 thing about it. Placing the line at the slot - which the first implementation did
@@ -80,19 +81,26 @@ thing about it. Placing the line at the slot - which the first implementation di
 end of it, and that is how the error was found: by driving a time trial on Moa
 Therma and watching it happen.
 
-### The lead that would replace it
+### The lead that was checked and killed
 
 `Course::path_boundaries` reports where one path hands over to the next, and the
 load report prints it beside the start line. On `16_Track` the ring is two paths
 and the boundaries are `[0, 1752]` against a start line at `3415` - the same
-neighbourhood as the offset on one side, nowhere near it on the other, so the
-answer is not simply "the boundary is the line".
+neighbourhood as the offset on one side, nowhere near it on the other, which is
+why this was reported rather than used even on the one circuit in hand.
 
-If a boundary does land on the visible line across several circuits, the start
-line is **authored per track** and comes out of `Path::exit` / `Junction` at the
-same confidence 88 as the traversal - no single-capture constant, and it
-generalises to all 40 circuits by construction. Checking it costs one look at the
-load report per track.
+The generalising question - does a boundary land on the visible line across
+several circuits - was checked on all 40 Pulse circuit files (all four PSP/PS2
+sources; USA and EU agree byte-for-byte, so 32 Pulse files plus Pure's own 8),
+distance from the true start line (the `START_LINE_OFFSET` point) to the
+nearest `path_boundaries()` entry, both directions of the ring: **11.6 to
+1878.4 units, median 648**, and only 4 of the 40 land under 100 units. That is
+not "the boundary is the line" - it reads as boundaries landing wherever a
+track's own path graph happens to split, unrelated to the grid. **Dead as of
+2026-08-30**; `Path::exit` / `Junction` is not evidence for the start line and
+should not be re-chased down this route. What would still retire the constant
+is the code that lays the grid out, unread, or a capture on a second circuit -
+see above.
 
 ## A lap is a wrap, gated
 

@@ -1969,13 +1969,21 @@ its restitution where the one-body path reads the per-body field, it has a
 separating-velocity gate the one-body path does not, and it applies **no
 friction** at all. Track contact was already right and is untouched.
 
-**The detection is ours, and there is nothing to recover.** `0x08815ccc`, the
-box-against-box narrowphase a pair of craft would dispatch to, turns out to be
-`jr ra; nop` - it reports nothing, ever. So craft-to-craft contact never comes out
-of Pulse's narrowphase at all, and what does feed the pair resolver two craft has
-not been found. `pair::overlap` tests an oriented box against an oriented box over
-the hull's own `<Misc width height length>`, which is what the shape kind says a
-craft is.
+**Corrected 2026-08-25: `0x08815ccc` was mislabelled, and the "nothing to
+recover" reading it supported does not hold.** `0x08815ccc` itself is still
+`jr ra; nop` - it reports nothing, ever - but it is the *mesh*-against-mesh
+narrowphase, not the box-against-box one a pair of craft dispatches to; craft,
+being box colliders, never reach it. What a pair of craft actually dispatches
+to is `Collision_BoxAgainstBox` (`0x0881702c`), which is **not** a stub: a
+decompiled fifteen-axis oriented-box SAT that writes a real contact on
+overlap. Whether it ever fires for two craft during a live race depends on two
+gates (`world+0x5464`, each collider's own `+0x68` byte) that are still
+unconfirmed - see
+[contact-response.md](../ghidra/functions/psp-pulse-usa/contact-response.md#0x08815ccc-is-a-stub-but-it-is-not-what-a-pair-of-craft-dispatches-to).
+`pair::overlap` tests an oriented box against an oriented box over the hull's
+own `<Misc width height length>`, which is what the shape kind says a craft
+is - ours, provisionally, until that live check settles whether it is
+approximating a real narrowphase or standing in for one that never runs.
 
 It began as a sphere of half the hull's diagonal and that was **far too big** -
 on a 4 x 2 x 8 hull the sphere reaches 4.58 units where the flank is 2 away, so
