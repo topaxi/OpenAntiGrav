@@ -273,9 +273,26 @@ evidence, including the byte-level trace of every function in this chain:
   at `+0x7ba0`-`+0x7d90`, and nine sub-blocks at stride `0xbe0` from `+0xf80`),
   and - importantly - **neither toucher calls an RSX constant uploader or a
   parameter binder**, so it is not handed straight to the shader-constant path.
-  `FUN_006ce6e0` installs `base+0x7c00` as a pointer into `*(obj+0xd8)+0x198`,
-  which is the next indirection to chase; neither it nor `FUN_00107200`
-  references any string, so the `.cpp`-filename route is unavailable.
+  `FUN_006ce6e0` installs `base+0x7c00` as a pointer into `*(obj+0xd8)+0x198`;
+  neither it nor `FUN_00107200` references any string, so the `.cpp`-filename
+  route is unavailable for either.
+
+  **That indirection is now read, and it explains the missing upload call.**
+  `Scene_PrepareFrame` does not upload the block - it **registers** it, writing
+  pointers into a table hanging off `*(obj+0xd8)` field by field and setting
+  `*(outer+0x4) |= 0x000c0000` after each. At `0x003ab38c` it installs
+  `&block[0x7c10]` - one of the three `Scene.Texture Colour` destinations - into
+  `table+0x1b8`. So the data path is complete: stage colour -> `0x00c81a5c` ->
+  `0x00c50c10` -> published to a consumer through a dirty-flagged pointer table.
+  A table of "where this value lives" pointers, filled per frame and flagged
+  dirty, is the shape of a lazily-uploaded parameter table, and the same concept
+  `Shader_InitParamEntry` implements on the shader side. **Buffer identity 55 ->
+  65, still unnamed**: what consumer honours `0x000c0000`, and whether this is
+  *the* shader parameter table, are unread.
+
+  **Next static step is the dirty bit, not the field.** `0x198` has 189 hits
+  image-wide and will not converge; a consumer must `andis`/`rlwinm` `0x000c0000`
+  off `outer+0x4`, which is a far narrower scan.
 
   Gated on a byte at `0x00d45f84`, which is **not** established as Zone-specific
   (seven TOC slots, ~40 users across the scene/render/front-end code). Do not

@@ -2456,12 +2456,59 @@ attempt did establish about `0x00c49000`:
 - Neither `FUN_006ce6e0` nor `FUN_00107200` references a single string, so the
   `.cpp`-filename route that named the memory layer is unavailable for both.
 
-So the buffer-identity question stays at **55 and unnamed**, and the honest
-statement is that the static route was tried and came back ambiguous rather
-than empty. The concrete next tests, in order of cost: read what consumes
-`*(obj+0xd8) + 0x198`; or set a **write** watchpoint on `0x00c49130` (now a
-fixed address, so no runtime mapping is needed) and see which code writes and
-then reads it.
+#### The next indirection, read: the block is *registered*, not uploaded
+
+Following `*(obj+0xd8) + 0x198` turned out to answer the "why is there no RSX
+upload call" question, which is the part that had made the reading look wrong.
+
+`Scene_PrepareFrame` does not upload the block. It **installs pointers into it**,
+field by field, in a table hanging off `*(obj+0xd8)`, and sets a dirty flag after
+each one. The idiom at `0x003ab340`-`0x003ab38c` is the whole protocol:
+
+```text
+003ab344  lwz  r11, 0xd8(r10)
+003ab34c  stw  r4,  0x98(r11)        ; table[0x98]  = &block[...]
+003ab354  stw  r7,  0x9c(r9)         ; table[0x9c]  = &block[...]
+003ab35c  lwz  r0,  0x4(r10)
+003ab360  oris r0,  r0, 0xc          ; outer->0x4 |= 0x000c0000   (dirty)
+003ab36c  stw  r3,  0x198(r11)       ; table[0x198] = &block[0x7bf0]
+003ab374  stw  r7,  0x19c(r9)        ; table[0x19c] = ...
+003ab38c  stw  r29, 0x1b8(r11)       ; table[0x1b8] = &block[0x7c10]  ***
+```
+
+`r29` was set at `0x003ab2c8` to `base + 0x7c10` - **one of the three
+`Scene.Texture Colour` destinations**. So the chain is complete end to end as a
+*data* path: `Environment_UpdateStageBlend` blends the stage colour into
+`0x00c81a5c`; `Scene_PrepareFrame` reads it, splats it, writes it to
+`0x00c50c10` (`block + 0x7c10`); and `Scene_PrepareFrame` also installs
+`&block[0x7c10]` into `*(obj+0xd8) + 0x1b8` and marks the object dirty.
+
+The same idiom appears at `0x003be24c`, `0x003bef24`, `0x0040e888` and four
+times in `FUN_006ce6e0`, always the same shape: a pointer into the block, into a
+fixed field of the `+0xd8` table, followed by the `|= 0xc0000`.
+
+**A table of "where this value lives" pointers, filled per frame and flagged
+dirty, is the shape of a lazily-uploaded parameter table** - and it is the same
+*concept* `Shader_InitParamEntry` implements on the shader side, whose entries
+carry a value pointer that is "`0` until a frame fills it"
+([renderer.md](renderer.md)). That is why no `Rsx_UploadVertexConstants` call
+appears in `Scene_PrepareFrame`: nothing is uploaded there, only registered, and
+the upload happens later wherever the dirty bits are honoured.
+
+**This raises the buffer-identity confidence from 55 to 65, not higher, and it
+is still unnamed.** What is now read: the block is addressed as a structured set
+of named slices, and those slices are published to a consumer through a
+dirty-flagged pointer table. What is *not* read: the identity of the object at
+`*(obj+0xd8)`, which consumer honours `0x000c0000`, and whether the table is the
+shader parameter table or a different one with the same protocol. The `+0x198`
+offset is far too common to chase by displacement (189 hits image-wide), so the
+productive route is the object, not the field.
+
+**Concrete next tests, in order of cost:** identify `*(obj+0xd8)`'s type via the
+`0x000c0000` dirty-bit test (a consumer must `andis`/`rlwinm` those bits off
+`outer+0x4`, which is a far narrower scan than `0x198`); or a **write**
+watchpoint on `0x00c49130` / `0x00c50c10` - both now fixed addresses, so no
+runtime mapping is needed.
 
 *(An observation deliberately left as an observation: `g_FullscreenTintColour`
 at `0x00c50f00` is `base + 0x7f00`, just past the highest offset seen here
