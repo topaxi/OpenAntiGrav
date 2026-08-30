@@ -115,7 +115,24 @@ impl Scene {
         // instead - static for the race, since its curve reads view depth
         // rather than anything sampled at the camera. `Fog::off` remains for
         // every title that authors neither.
-        let mut eye_fog = self.authored_fog.unwrap_or_else(mesh_render::Fog::off);
+        //
+        // **The Zone stage grade lays over both of these, where a race has
+        // one**: `.effectSettings` authors a full palette per speed class, and
+        // the stage showing recolours the circuit's own fog and rig rather
+        // than replacing them - see `crate::race::zone_grade`. Applied per
+        // frame rather than folded in at load because the stage is a *runtime*
+        // selection in the original, cross-faded against the stage before it;
+        // that it never moves here is the trigger being unrecovered, not the
+        // path being static.
+        let authored_fog = self
+            .zone_grade
+            .as_ref()
+            .map_or(self.authored_fog, |grade| grade.fog(self.authored_fog));
+        let light = self
+            .zone_grade
+            .as_ref()
+            .map_or(self.light, |grade| grade.light(self.light));
+        let mut eye_fog = authored_fog.unwrap_or_else(mesh_render::Fog::off);
         // The specular term reads the eye out of the fog block - it is the one
         // slot in bind group 2 that carries a position - so it is kept current
         // even when the fog itself is static or off.
@@ -127,7 +144,7 @@ impl Scene {
         // not, which is every title whose rig has not been recovered.
         let scene = mesh_render::Scene {
             fog,
-            light: self.light,
+            light,
             // The flame surface's scroll clock - `time`, engine parameter slot
             // 0 on the original. The same `seconds` the texture and node
             // animation ride, so `--anim-seconds` pins all three at once and a

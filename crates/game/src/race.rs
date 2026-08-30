@@ -141,6 +141,7 @@ mod tick;
 mod visibility;
 mod weapons;
 mod worker;
+pub mod zone_grade;
 
 pub use assets::{boost_entry_name, shield_entry_names, ship_entry_name};
 pub use camera::chase_params;
