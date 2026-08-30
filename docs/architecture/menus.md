@@ -283,11 +283,12 @@ can have a title behind it, and every screen but this one can.
 
 ## What escape does
 
-**Back one level, everywhere**, which is one rule and three places it lands:
+**Back one level, everywhere**, which is one rule and four places it lands:
 
 | Where | What happens |
 | --- | --- |
-| The menus | Pops a page, exactly as circle does. On the root page there is nothing behind the menus, so it quits |
+| The menus, race parked underneath | Pops a page, exactly as circle does. On the root page it resumes the parked race instead of quitting - see below |
+| The menus, nothing parked | Pops a page. On the root page there is nothing behind the menus, so it quits |
 | A race | Hands the window back to the menus |
 | The boot sequence, or a `--race` run | Nothing is behind it, so it quits |
 
@@ -304,18 +305,26 @@ Two things this cost that are worth knowing before touching it again:
   "back one level" thirty times a second walks out of the menus and quits. It
   did not matter while the first press exited.
 
-**Leaving a race discards it.** There is no pause and no resume: the `World` is
-dropped and re-entering loads a fresh race. A player who backs out expects to
-lose the race; one who backs out and finds a *stale* one would not, so a
-half-built pause would be worse than none.
+**Leaving a race parks it, unless the race is over.** `Session::open_menus`
+keeps the outgoing `Stage::Race` in `Session::suspended_race` instead of
+letting it drop, and backing all the way out of the menus reaches
+`Session::resume_race` in place of quitting - the fourth row in the table
+above. A finished race is the one exception: there is a results table behind
+it rather than a track, nothing to resume into, so that one is still
+discarded exactly as every race used to be. There is deliberately no pause
+*overlay* yet - backing into the menus over a parked race draws the ordinary
+menu screen, not a translucent layer over the frozen picture - only the
+World's own lifetime changed. See `crates/game/src/main/session/menus.rs`.
 
-**One exception, and it is not the `World`.** The race's own music - a
-playlist through the sixteen soundtrack tracks, distinct from the menu's loop -
-does pause and resume, its position kept in `Audio` for the process's lifetime
-rather than reset on every race. This does not contradict the rule above: it
-is audio state outside the simulation, the same way `docs/architecture/determinism.md`
-already puts every other sound outside it, not a piece of race state being
-quietly kept alive. See `crates/game/src/audio.rs`'s `start_race_music` and
+**The race's own music already worked this way**, and is the reason the
+World's turn was safe to build the same way. Its playlist - through the
+sixteen soundtrack tracks, distinct from the menu's loop - already paused and
+resumed, its position kept in `Audio` for the process's lifetime rather than
+reset on every race, well before the World did. That was audio state outside
+the simulation, the same way `docs/architecture/determinism.md` already puts
+every other sound outside it, not race state being kept alive - but it meant
+`Session::resume_race` had `Audio::start_race_music` to call rather than
+anything to invent. See `crates/game/src/audio.rs`'s `start_race_music` and
 `pause_race_music`.
 
 ## The background the menus sit on
