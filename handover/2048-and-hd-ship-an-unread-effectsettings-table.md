@@ -989,3 +989,33 @@ evidence, including the byte-level trace of every function in this chain:
      render wiring landed.
   4. The full key-to-offset enumeration, once `GHIDRA_MCP_ALLOW_SCRIPTS=1`
      makes it a script rather than a hand-zip.
+
+  **2026-08-30, a twelfth pass: the 36-byte schema record is read, and the
+  byte-versus-float question is closed.** Took the previous pass's own
+  cheapest next step - read the typed registration helpers - and it settled
+  more than intended. **`FwKeyedText_AddSchemaEntry`** (`0x005d3680`,
+  confidence 85) is what all nine helpers wrap; it writes
+  `{type tag, type tag, u16 count, destination pointer, key name}` and
+  advances the registry by `0x24`, **independently confirming the 36-byte
+  stride** this thread previously had only from `FwKeyedText_ParseEntry`'s
+  loop bound. Three helpers read: the four `Detonator * Colour` keys
+  register with count `1` into consecutive **4-byte** slots, `Airbrake
+  Colour` with count `4` into a different region - **both storage domains
+  exist in one file**, so the byte/float straddle `cross_fade_rgba8` and
+  `fade_scalar` already implement is right rather than a hedge. It also
+  **refutes** the withdrawn "`+0x00` might be a Detonator colour" reading on
+  positive evidence: the cross-fade reads 16-byte fields, those colours are
+  4-byte, so `r21`'s array is not the stage struct.
+
+  **A correction to this thread's own previous next-step list**:
+  `"Debug.Reload Growing Textures"` is *not* a subsystem entry point - its
+  only reference is inside `Environment_RegisterStageSchema` itself, so it is
+  another registered schema key. It still implies a reload hook behind that
+  key's destination, but it is not the shortcut it was billed as.
+
+  **Also closed, from the lead's parallel RPCS3 run**: the write watchpoint on
+  `craftArray[0]->+0x640` catching nothing twice is a genuine test of the
+  fallback branch, not an accidental Detonator race - Zone's mode id is not
+  `0xe` (that is Detonator), so a Zone race reaches `+0x640` through
+  `Environment_UpdateStageBlend`'s "anything else" path by construction. Two
+  independent negatives now, static and runtime.

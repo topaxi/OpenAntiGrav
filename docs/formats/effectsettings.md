@@ -600,8 +600,22 @@ traced.
   instructions of `disassemble_bytes` zipped by hand. The **nine** typed
   helpers HD's registrar calls (`0x005d35c0`, `0x005d3cc8`, `0x005d3e18`,
   `0x005d3ec0`, `0x005d4010`, `0x005d40b8`, `0x005d4220`, `0x005d4418`,
-  `0x005d46b8`) are also what would settle the byte-versus-float storage
-  question below - none is read yet. See
+  `0x005d46b8`) are what settles the byte-versus-float storage question -
+  **three are now read, and they settle it: both domains are real, in the
+  same file.** Each helper is a wrapper over `FwKeyedText_AddSchemaEntry`
+  (`0x005d3680`, confidence 85) with literal type constants, and that
+  function writes the 36-byte record field by field - `+0x00`/`+0x01` two
+  type-tag bytes, `+0x02` a `u16` component count, `+0x04` the destination
+  pointer, `+0x08` the key name - advancing the registry by `0x24`, which
+  confirms the 36-byte stride from the *writing* side. The four
+  `Detonator * Colour` keys register with a count of `1` into consecutive
+  **4-byte** slots; `Airbrake Colour` registers with a count of `4` into a
+  different region entirely, i.e. **16 bytes**. So a single blend domain
+  would be wrong for one group or the other - which is the straddle
+  `cross_fade_rgba8` and `fade_scalar` already implement, now on evidence.
+  This also **refutes** (rather than merely leaving unproven) the withdrawn
+  reading that the cross-faded `+0x00` might be a Detonator colour: that
+  blend reads 16-byte fields and the Detonator colours are 4-byte. See
   [zone-effectsettings-loader.md](../ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md#2026-08-30-a-twelfth-pass-the-schemas-registrar-is-found-on-both-titles---and-the-compile-time-array-framing-was-wrong).
 - **Only the fog and a light tint reach the picture, and the blocker is a
   binding, not a parse.** Raised 2026-08-30 by a user racing a real 2048 Zone

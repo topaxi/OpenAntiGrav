@@ -1709,6 +1709,104 @@ says where a parsed colour lands, not which material or mesh it recolours.
 own art*, and nothing recovered says what index 3 is. That binding is the
 real open question behind "it should affect all textures".
 
+## 2026-08-30, a thirteenth pass: the 36-byte schema record is read, and two storage domains are confirmed in one file
+
+Picked up the twelfth pass's own cheapest next step - read the typed
+registration helpers - and it turned out to settle more than the storage
+question it was aimed at.
+
+### `FwKeyedText_AddSchemaEntry` (`0x005d3680`), confidence 85
+
+Every one of the nine helpers `Environment_RegisterStageSchema` calls is a
+three-line wrapper of the same shape:
+
+```c
+void helper(registry, dest, name, flags) {
+    <path walk>(dest, name, flags & 0xff, *(registry + 0x410));
+    if (flags != 0) return;
+    FwKeyedText_AddSchemaEntry(registry, dest, name, A, B, C);
+}
+```
+
+and `FwKeyedText_AddSchemaEntry` appends one record to a vector, writing
+exactly:
+
+```
+record[0x00] u8   = C          (param_6)
+record[0x01] u8   = B          (param_5)
+record[0x02] u16  = A          (param_4)
+record[0x04] u32  = dest       *** the destination pointer ***
+record[0x08] ...  = std::string name   (SSO: 0x0c data/inline, 0x1c length, 0x20 capacity)
+*(registry + 8) = record + 0x24
+```
+
+**The stride is `0x24` = 36 bytes**, read from the vector's own end-pointer
+advance - independently confirming the 36-byte stride
+[the 2026-08-29 pass](#2026-08-29-the-schema-table-is-read-and-it-is-the-full-recognised-vocabulary-not-a-guess)
+derived from `FwKeyedText_ParseEntry`'s `(end - start) / 36` loop bound, now
+from the *writing* side rather than the reading side. The same
+divide-by-36-via-multiply idiom (`>> 2` then `* 0x38e38e39`) appears in this
+function's own capacity check.
+
+So the record is `{type tags, destination pointer, key name}` - the layout
+this page has been describing structurally since its fifth pass, now read
+field by field.
+
+### Two storage domains, in the same file - which settles an open question and kills a withdrawn reading for good
+
+Three helpers read, with their `(A, B, C)` literals:
+
+| Helper | `(A, B, C)` | Example key registered through it |
+| --- | --- | --- |
+| `0x005d40b8` | `(1, 4, 3)` | `%s.Detonator Mine Colour`, `%s.Detonator Bomb Outer Colour` |
+| `0x005d3ec0` | `(4, 3, 8)` | `%s.Airbrake Colour` |
+| `0x005d4418` | `(4, 1, 8)` | (not tied to a key this pass) |
+
+Tied to keys by resolving the registration loop's own TOC slots: `-0x58e8` ..
+`-0x58d8` are schema indices 68-72, which read
+`%s.Airbrake Colour`, `%s.Detonator Mine Colour`,
+`%s.Detonator Mine Electricity Colour`, `%s.Detonator Bomb Inner Colour`,
+`%s.Detonator Bomb Outer Colour` - the vocabulary's own last five entries.
+
+The four Detonator colours land at `r21 + 0x00`, `+0x04`, `+0x08`, `+0x0c` -
+**four bytes apart**, through the `A = 1` helper. `Airbrake Colour` goes
+through the `A = 4` helper to an entirely different base
+(`r23 + r22 + 0x220`). Reading `A` as a component count: the Detonator
+colours are **single 4-byte packed values** and `Airbrake Colour` is **four
+components, 16 bytes**.
+
+**What this settles**: `effectsettings.md`'s open question - whether the
+byte-domain blend applies to keys this project fades in floats - is answered
+"both domains are real, in the same file". A single blend domain would be
+wrong for one group or the other, which is exactly the straddle
+`cross_fade_rgba8` (bytes) and `fade_scalar` (floats) already implement.
+
+**What this kills, on positive evidence rather than caution**: the twelfth
+pass withdrew a reading that `+0x00` of the cross-faded stage struct might be
+a Detonator Bomb colour, on the grounds that `r21`'s base was unidentified.
+That reading is now **refuted**, not merely unproven: `Environment_UpdateStageBlend`
+cross-fades **16-byte** fields at `+0x00`/`+0x20`/`+0x40`, and `r21`'s array
+holds **4-byte** packed values at `+0x00`/`+0x04`/`+0x08`/`+0x0c`. Different
+element sizes, so different arrays. `r21` is a packed-colour region and is
+not the stage struct the blend reads.
+
+### A correction to the twelfth pass's own next-step list
+
+That pass suggested `"Debug.Reload Growing Textures"` (`0x81509e3c`, 2048) as
+"a named Growing Texture subsystem with its own debug reload" and a good
+handle on that effect. **`get_xrefs_to` puts its only reference inside
+`Environment_RegisterStageSchema` itself** (`0x8104b368`) - it is another
+*registered schema key*, not a subsystem entry point. It still implies a
+reload hook exists somewhere behind that key's destination, but it is not the
+shortcut that item made it sound like.
+
+### Still not read
+
+The remaining six helpers, and the key-to-offset table itself - the
+destination bases are unchanged from the twelfth pass. Nothing here reaches
+the renderer: an offset and a storage width still do not say which material a
+colour recolours.
+
 ## See also
 
 - `docs/formats/effectsettings.md` - the file format this loader reaches for

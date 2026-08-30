@@ -150,3 +150,4 @@
 0x007b26c8	data	g_detonator_mode_texture_names	85	zone-effectsettings-loader.md
 0x007b28b8	data	g_detonator_mode_track_texture_names	85	zone-effectsettings-loader.md
 0x003d0b98	function	Environment_RegisterStageSchema	85	zone-effectsettings-loader.md
+0x005d3680	function	FwKeyedText_AddSchemaEntry	85	zone-effectsettings-loader.md
