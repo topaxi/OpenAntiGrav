@@ -159,6 +159,14 @@ names the fourth entry `Tournament`, but its displayed text is `ELIMINATOR`:
 | 3 | `Eliminator` (XML idstring `Tournament`) |
 | 4 | `Zone` |
 
+**A working recipe, verified end to end since**: `Single Player`'s own entrance
+animation is still running when `press_once()` reports the screen name change
+(`TTY.log` names a transition at its start, not its end); the very first
+`right` tap fired immediately after arrival was silently eaten even with a
+longer inter-tap settle, twice in a row. Sleeping 3 seconds before the first
+tap, then four `right` taps at `settle=1.5` with a screenshot after each one
+(confirm step 4 reads `ZONE` before pressing `cross`), reliably lands on Zone.
+
 ## The GDB stub is real, and needs no special build
 
 `config.yml` ships `GDB Server: 127.0.0.1:2345` and the stub honours it with
