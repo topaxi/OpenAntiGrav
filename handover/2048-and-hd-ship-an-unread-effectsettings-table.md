@@ -234,6 +234,43 @@ evidence, including the byte-level trace of every function in this chain:
 
 ## Open
 
+- **2026-08-31, where the static route stands on this thread, and what is left.**
+  The chain is read end to end as data: `zonemode.effectsettings` ->
+  `g_effect_settings_stages` -> `Environment_UpdateStageBlend` blends
+  `Scene.Texture Colour` into `0x00c81a5c` -> `Scene_PrepareFrame` reads it at
+  `0x003aaf8c`, splats and merges it -> `0x00c49110`/`0x00c49120`/`0x00c49130`
+  -> `&block[0x110]` published into `*(obj+0xd8) + 0xf8` with `*(outer+0x4) |=
+  0x000c0000`. Everything to that point is confidence 82-88.
+
+  **Three static keys have now been tried and each is exhausted**, so a fourth
+  attempt should not repeat them: the `0x198` field offset (189 image-wide hits,
+  will not converge); the `0x000c0000` dirty bit (212 setters, and **zero**
+  immediate tests of any kind, so the flag is consumed via a register- or
+  table-held mask); and the `.cpp`-filename route (neither `FUN_006ce6e0` nor
+  `FUN_00107200` references a single string).
+
+  **The one static route not yet tried** is the allocator tag: identify the
+  object behind `*(obj+0xd8)`, find where it is allocated, and read the
+  `__FILE__` pointer `FwMemAllocator_Allocate` is passed - the technique
+  `docs/ghidra/functions/ps3-hdfury-eu/memory.md` used to name the memory layer.
+  A first attempt stalled at the first step: in `Scene_PrepareFrame` the object
+  is the stack local `0x90(r1)`, which is **read** at `0x003ab198` and later but
+  has no `stw`/`std` writing it anywhere in the function, so it arrives by some
+  form this pass did not identify (a frame larger than it looks - the prologue
+  builds `0x680` via `li r0,0x680`, not a plain `stdu` - is the likeliest
+  explanation, making `0x90(r1)` an *incoming* slot rather than a local). That
+  is where the next static session should start, and it is a fresh dig rather
+  than a finish.
+
+  **But the read watchpoint is the better instrument and is now the bottleneck**,
+  blocked on vector load/store coverage in the patched RPCS3 - see
+  `docs/reverse-engineering/rpcs3-debugger.md`, "Z2 misses vector stores". Once
+  that lands: write watchpoints on `0x00c49110`/`0x00c49120`/`0x00c49130` to
+  confirm the block runs and the gate byte `0x00d45f84` is open in a Zone race,
+  then a **read** watchpoint on `0x00c49110`, which names the consumer and
+  settles the buffer's identity outright.
+
+
 - **2026-08-30, THE READER OF `0x00c81a5c` IS LOCATED.** Nineteen passes in,
   the "no reader located" row is answered: `Scene_PrepareFrame` reads it
   itself, at `0x003aaf8c`. Full evidence in
