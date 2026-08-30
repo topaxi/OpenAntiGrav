@@ -1370,6 +1370,125 @@ does with it once it has. That is
 [`docs/formats/effectsettings.md`](../../../formats/effectsettings.md)'s and this
 handover thread's own next step, not this page's.
 
+## 2026-08-30, a tenth pass: all four `+0x04` source branches read - and mode `0xe` is Detonator, not Zone
+
+The ninth pass named `Environment_UpdateStageBlend` (`0x003da540`) and left
+its `+0x04` source as "`g_GameState.mode`-dependent tables" whose contents
+were never read. All four branches are read here, out of the instruction
+stream at `0x003da5f0`-`0x003da674` plus the three targets they jump to.
+
+```
+003da5f0  subf  r30, r27, r26        ; n*0x38
+003da5f8  addi  r9, r30, 0x20        ; +0x20 folded bias - the gate is +0x2c
+003da600  lwz   r4, -0x5a80(r2)      ; arrayBase = 0x008c2cb8
+003da614  lbz   r0, 0xc(r9)          ; entry[n].+0x2c
+003da61c  bne   -> 003da678          ; set: skip the whole source block
+003da620  lwz   r9, -0x58cc(r2)      ; *(0x008b7af8) = 0x009384e1
+003da624  lbz   r0, 0x0(r9)
+003da62c  bne   -> 003da650          ; set: skip the mode dispatch, take the fallback
+003da630  lwz   r9, -0x58d0(r2)      ; g_GameState
+003da634  lwz   r0, 0xe0(r9)         ; g_GameState.mode
+003da638  cmpwi r0, 0xe   ; beq 003dd5dc
+003da640  cmpwi r0, 0xd   ; beq 003dd364
+003da648  cmpwi r0, 0x15  ; beq 003dd3a8
+003da650  ; --- fallback ---
+003da654  lwz   r10, -0x57c4(r2)     ; *(0x008b7c00) = 0x0098767c, a 2-entry pointer array
+003da66c  lwzx  r11, r10, r0         ; r11 = craftArray[n]
+003da670  lwz   r0, 0x640(r11)
+003da674  stw   r0, 0x4(r9)          ; entry[n].+0x04 = craftArray[n]->+0x640
+```
+
+All three mode targets call `FUN_00679e68` first, which decompiles to a
+one-line thunk for `RaceManager_GetInstance()`, then read a field of the
+returned RaceManager:
+
+| `g_GameState.mode` | target | source of `entry[n].+0x04` |
+| ---: | --- | --- |
+| `0xe` | `0x003dd5dc` | `RaceManager->+0x2e10` - **not** indexed by `n` |
+| `0xd` | `0x003dd364` | `*(RaceManager + 0x2dfc + n*4)` |
+| `0x15` | `0x003dd3a8` | `*(RaceManager + 0x351c + n*4)` |
+| anything else | `0x003da650` | `craftArray[n]->+0x640` |
+
+### Mode `0xe` is Detonator - a correction to two pages
+
+[mode-manager.md](mode-manager.md) records `Environment_LoadStageTextures`
+"branches its Zone-versus-Detonator texture-table choice on `GetMode() ==
+0xe`", and put `14` in a Zone/Zone Battle/Detonator bucket without saying
+which. It is **Detonator**, on three independent readings:
+
+1. The filename tables themselves, read out of memory rather than inferred.
+   `Environment_LoadStageTextures` runs the identical gate/dispatch shape at
+   `0x003d71d8`-`0x003d71f0`; the `== 0xe` branch loads `r4` from
+   `-0x58c8(r2)` (`0x008b7afc` -> `0x007b26c8`, the string
+   `Data/Tex/DetonatorMode0.gtf`), and the fall-through loads it from
+   `-0x5848(r2)` (`0x008b7b7c` -> `0x007b2b10`, `Data/Tex/zoneMode0.gtf`).
+   So `0xe` selects the **Detonator** table and Zone is the fall-through.
+2. `RaceManager->+0x2e10` has exactly **three** writers program-wide
+   (`search_instructions` for `stw` at `0x2e10(`). Two of them - `0x000647c4`
+   in `FUN_00064470` and `0x00064d44` in `FUN_000649f0`, both `li r9,0x1`
+   then `stw r9,0x2e10(r26)` - are `SPDetonator`'s **own two constructors**,
+   per [race-manager.md](race-manager.md)'s already-established constructor
+   table. A field initialised only by one class's constructors is that
+   class's field.
+3. The third writer sits in the same address range and is the increment
+   below.
+
+### Detonator's own escalation, recovered end to end
+
+`FUN_00067b40` (`0x00067b40`), **renamed `Detonator_UpdateRace`** (confidence 75),
+reached only
+through its own OPD entry (`0x00872678`) - a virtual `Update`, which is why
+`get_xrefs_to` finds no call site. Its gated block:
+
+```
+00067c74  lwz   r4, 0x2e10(r31)      ; stage
+00067c78  addi  r0, r4, 0x1
+00067c7c  cmpwi cr7, r0, 0xe
+00067c80  stw   r0, 0x2e10(r31)      ; *** stage = stage + 1 ***
+00067c84  ble   cr7, 0x000680d8
+```
+
+Decompiled, with the guards: it runs when `raceState->+0x7001` is set and
+`raceState->+0x7810 > 1`, adds a score increment, **increments the stage by
+exactly one**, and calls `FUN_000654e0(raceManager, oldStage)` while the new
+value is under `0xf`. Later in the same function the race-end path is gated
+`if (stage < 0xf) return;`.
+
+So Detonator's ladder is: **start at `1`, one step per event, race over at
+`15`** - and `detonatormode.effectsettings` names exactly fifteen stages,
+`0`-`14`. That answers this thread's long-open "why does Detonator carry
+Zone's fifteen-stage speed-class ladder": it has its own fifteen-step
+escalation and consumes the table one row per step. The `Start` row is the
+pre-race state, never selected once the counter is constructed at `1`.
+
+**Not settled**: what sets `raceState->+0x7001`. Eleven instructions across
+the binary touch that offset and ten are `lbz`; the single `stb`
+(`0x000e4ac8`, in `FUN_000e4a30`) writes `0`, a clear. So the latch is set
+somewhere an offset search does not reach - the same folded-index-bias trap
+this page's sixth pass records. Not chased: it is the *event* Detonator
+counts, not the stage arithmetic, which is what this pass was after.
+
+### What this means for Zone, which is the thread's actual question
+
+Zone is the fall-through, so its requested stage is `craftArray[n]->+0x640`,
+structurally the same shape as 2048's own per-craft `+0x634`
+([zone-environment-fallback.md](../vita-2048-eu-v104/zone-environment-fallback.md)).
+**No writer was found.** `search_instructions` over every mnemonic with
+operand `0x640(` returns 65 hits program-wide, all but a handful stack
+frames, and none on this array - which proves nothing, because this
+compiler folds a constant bias into the index register before adding the
+base, exactly as the sixth pass established for `+0x2c`. `FUN_003d0b98`,
+the ~24 KB neighbour that carries the `SpeedClass`/`NextSpeedClass`/
+`NextSpeedClassBG`/`SpeedClassParent` scene-node names (the HD analogue of
+2048's own Speed Class widget, and the thematic place to look next), was
+sampled at those string sites and found to be building node-name buffers
+there, not writing the field.
+
+**So HD stays unwired**, and `oag_hd::race::DEFAULTS` carries
+`zone_stages: None` rather than 2048's numbers - which name a thirteen-stage
+ladder this title does not have. See
+`crates/game/src/race/zone_grade.rs`'s module docs.
+
 ## See also
 
 - `docs/formats/effectsettings.md` - the file format this loader reaches for

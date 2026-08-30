@@ -543,6 +543,103 @@ Nothing wired into Rust from this pass - this settles who writes the field
 2048's own Zone stage-blend reads, not what triggers a render change from
 it, which stays open per the existing "does not settle" bullets above.
 
+## 2026-08-30, a fifth pass: the threshold table is read in full, the "inconsistency" is a sentinel, and the value it is walked against is the zone number
+
+The fourth pass found `Hud_UpdateZoneSpeedClassWidget` (`0x81197d6c`) and
+stopped one step short: it read the per-record name pointer as inconsistent
+(threshold `90` and threshold `9999` carrying the same pointer), called the
+number-to-name pairing unsettled, and left the thresholds themselves
+uncited. All three are closed here, and the table is now the live trigger
+`crates/game/src/race/zone_grade.rs` runs a 2048 Zone race off.
+
+### The table, read with `read_memory` rather than inferred
+
+`DAT_8151faf8` (`0x8151faf8`), 17 records of `0x10` bytes, **renamed
+`g_zone_speed_class_thresholds`** (confidence 82). Word `+0` is the threshold,
+word `+4` a pointer into the name blob at `0x8148a4a0` - **renamed
+`g_zone_speed_class_names`** (confidence 82) - and words `+8`/`+0xc` are a
+sprite cell, each a multiple of `83` drawn from `{0, 83, 166, 249, 332, 415}`
+and `{0, 83, 166}`, which is what the `ZoneSpeedLogo` node the init sibling
+looks up needs and nothing a gameplay rule would.
+
+| i | threshold | name | class written (`0x11 - i`) |
+| ---: | ---: | --- | ---: |
+| 0 | 9999 | `MX_CLASS` | 17 |
+| 1 | 90 | `MX_CLASS` | 16 |
+| 2 | 85 | `M1_9_CLASS` | 15 |
+| 3 | 80 | `M1_8_CLASS` | 14 |
+| 4 | 75 | `M1_7_CLASS` | 13 |
+| 5 | 70 | `M1_6_CLASS` | 12 |
+| 6 | 65 | `M1_5_CLASS` | 11 |
+| 7 | 60 | `M1_4_CLASS` | 10 |
+| 8 | 55 | `M1_3_CLASS` | 9 |
+| 9 | 50 | `M1_2_CLASS` | 8 |
+| 10 | 45 | `M1_1_CLASS` | 7 |
+| 11 | 40 | `M1_CLASS` | 6 |
+| 12 | 33 | `AP_CLASS` | 5 |
+| 13 | 17 | `A_CLASS` | 4 |
+| 14 | 9 | `B_CLASS` | 3 |
+| 15 | 2 | `C_CLASS` | 2 |
+| 16 | 0 | `D_CLASS` | 1 |
+
+**The "inconsistency" is a sentinel.** There are seventeen records and the
+name blob holds exactly sixteen null-terminated strings; record `0`'s
+threshold `9999` is unreachable by any run and its pointer is record `1`'s.
+Every record below it is strictly one name apiece, and the pointers step 12
+bytes apart through the twelve-byte names (`MX_CLASS` .. `AP_CLASS`) and 8
+apart through the four short ones (`A_`/`B_`/`C_`/`D_CLASS`) - so the
+pairing is checked by the blob's own layout, not assumed from the order.
+
+### What the value walked against them is
+
+`iVar2 = *(*(param_2 + 0xc) + 0x20)`, and the same block `sprintf`s it as the
+**first `%d` of `"%d/%d"`** into the node `Hud_InitZoneSpeedClassWidget`
+(`0x81197c24`) looked up by the authored name `ZoneNumber`. The second `%d`
+is `FUN_812c4e0c`'s return, and that function is three lines: it picks a word
+off the widget's event descriptor by an event-type field (`+0x2d8` reading
+`4`, `3` or anything else, giving `+0x3bc`, `+0x1cc` or `+0x1b4`) - a
+per-event *target*, so the text reads `progress / goal`.
+
+Two more writes in the same block corroborate the units. Besides `+0x634`
+(the class) and `+0x638`, it stores the raw walked value into the race state
+at `+0x63c`, the **matched record's own threshold** at `+0x640`, and the
+**record above it** at `+0x644`. That triple is a progress bar between two
+class boundaries, and it only means anything if the walked value climbs in
+the thresholds' own units.
+
+**Confidence 78** on "these thresholds are zone numbers": the authored node
+name, the `%d` formatting against an event target, the neighbour-threshold
+pair, and the field being read whole rather than computed from speed or
+position anywhere in this function. What is *not* here is a traced increment
+of `*(widget + 0xc) + 0x20` itself - the widget's `+0xc` was not resolved to
+its owning object, so this rests on four converging reads rather than on a
+found writer.
+
+### What the numbers say about the play-based lead
+
+The lead this work started from was "every few zones, especially the named
+ones." The bands are `0`-`1`, `2`-`8`, `9`-`16`, `17`-`32`, `33`-`39`, then
+every five to `90`. **"Every few zones" is corroborated**; "especially the
+named ones" is **not** - every boundary is one class step, the `Sub`/named
+stage names alternate straight up the ladder, and nothing is skipped or
+singled out. Recorded as a split result rather than reshaped to fit.
+
+### The 17-vs-13 question, answered rather than left tidy
+
+`0x11 - i` yields `1`-`17` and `Zone_UpdateStage` clamps to `0xc`. So classes
+`13`-`17` (thresholds `75` and up) all squash onto stage `12`, `Supersonic` -
+the top of 2048's own thirteen-stage table. That is a real lossy squash at
+the top of the ladder, not a clean fit, and it is stated here rather than let
+the clamp's tidiness stand in for evidence. Classes `1`-`12` map one-for-one
+onto stages `1`-`12`; stage `0` (`Start`) is never selected during a live
+race, since the last record's threshold is `0`.
+
+### Wired
+
+`oag_title::ZoneStages`, `oag_2048::race::ZONE_STAGES` and
+`ZoneGrade::show_zone`; checked against the real Vita package in
+`crates/game/tests/zone_grade_ground_truth.rs`.
+
 ## See also
 
 - `docs/formats/effectsettings.md` - the file format this loader reaches for
