@@ -157,3 +157,4 @@
 0x003cdc30	function	Environment_GetStageBombInnerColour	85	zone-effectsettings-loader.md
 0x003cdc60	function	Environment_GetStageBombOuterColour	85	zone-effectsettings-loader.md
 0x003cde20	function	Environment_GetStageAirbrakeColour	85	zone-effectsettings-loader.md
+0x003aa888	function	Scene_PrepareFrame	78	zone-effectsettings-loader.md

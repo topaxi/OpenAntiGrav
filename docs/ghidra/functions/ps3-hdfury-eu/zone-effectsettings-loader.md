@@ -2038,6 +2038,93 @@ mine/bomb pull their colours from this table is real, but all three are
 effects this engine does not draw, and HD still has no recovered stage
 trigger.
 
+## 2026-08-30, a sixteenth pass: `Scene.Texture Colour`'s blend output is located, and the last alternative route is closed
+
+Pushing on `Scene.*`/`Track.*` specifically, per the user's stated priority.
+Three results: the blend runs inside the render path (confirmed, not
+assumed), its output address is now concrete, and the route this page
+flagged last pass as "the one remaining way `Scene.*` could reach a draw"
+turns out not to exist.
+
+### The blend runs inside HD's own scene render-prep
+
+`Environment_UpdateStageBlend` has exactly **one** caller, and it is
+`0x003aa888` - **renamed `Scene_PrepareFrame`** (confidence 78). Its named
+callees settle what it is: `Scene_RefreshNodeMatrices`, `Pvs_IsUsable`,
+`Pvs_CellBitmap`, `Pvs_NearestCellCached`, `Pvs_BitmapBytes`,
+`Visibility_HideChunk`, `Visibility_ShowAllChunks`,
+`Visibility_CopyCellMask`, `GcmContext_Callback`. Scene graph, visibility
+and the RSX command context - this is render preparation, and the stage
+blend is a step inside it. Full chain, thunk-resolved:
+
+```
+FUN_0067f078 -> FUN_00757de0 (TOC thunk) -> FUN_003e26d0 -> Scene_PrepareFrame -> Environment_UpdateStageBlend
+```
+
+### The blended-output area, located
+
+The fourth pass said this function "copies three RGBA-shaped fields into a
+small blended-output area" without saying where. Traced with base-register
+tracking across `0x003dc580`-`0x003dc600`:
+
+```
+003dc588  lfs f12, 0x1000(r9)    ; stage A, struct +0x00  ) Scene.Texture
+003dc590  lfs f0,  0x1004(r9)    ; stage A, struct +0x04  ) Colour's
+003dc584  lfs f11, 0x1008(r9)    ; stage A, struct +0x08  ) x, y, z
+003dc5a0  lfs f10, 0x1000(r10)   ; stage B, the other side of the fade
+003dc5a4  lfs f8,  0x1004(r10)
+003dc598  lfs f9,  0x1008(r10)
+003dc5c0  stfs f12, 0x3aac(r30)  ; *** r30 = iVar8, so 0x00c81a5c ***
+003dc5c8  stfs f0,  0x3ab0(r30)  ;                     0x00c81a60
+003dc5d0  stfs f11, 0x3ab4(r30)  ;                     0x00c81a64
+```
+
+`r30` is `iVar8` (`lwz r30,-0x5a84(r2)` at `0x003da780`) and `r9`/`r10` are
+`stage*0x250` for the two stages, so the reads are
+`g_effect_settings_stages[stage] + 0x00/0x04/0x08` - **`Scene.Texture
+Colour`'s first three floats**, per the fourteenth pass's table - and the
+write is a fixed three-float global at **`0x00c81a5c`**. Confidence 85.
+
+That is a far better search target than "somewhere in the struct": the
+consumer of `Scene.Texture Colour` is whatever reads `0x00c81a5c`.
+
+### The last alternative route is closed
+
+The fifteenth pass ended by naming `FUN_003ce2c0` - the second site that
+re-derives the cross-fade inline - as "the one remaining route by which
+`Scene.*`/`Track.*` could reach a draw on HD". **It is not a route**: the
+same thunk-aware branch scan that found `Environment_UpdateStageBlend`'s
+caller finds **no branch anywhere in the image targeting `FUN_003ce2c0`**,
+only its OPD descriptor. It is unreached, exactly like the seven dead
+getters.
+
+### No reader for `0x00c81a5c` is located, and a displacement sweep cannot find one
+
+Sweeping the image for instructions using displacements `0x3a80`-`0x3b40`
+returns dozens of hits across unrelated functions - the base-blind trap this
+page's fifth pass already recorded. Two candidates looked real because they
+read all three slots as **floats** at the right widths
+(`FUN_00661f00` at `+0x3aac`/`+0x3ab0`/`+0x3ab4`, `FUN_00661c64` over the
+neighbouring `Environment_LoadStageTextures` region) - and **both fail a
+base check**: `FUN_00661f00` performs no TOC loads at all, so its base is
+caller-supplied and cannot be `iVar8`; `FUN_00661c64`'s single TOC load
+resolves to `0x00927794`, not `iVar8`. Recorded so the next pass does not
+re-derive them as leads.
+
+**So the reader is unfound, and displacement search is the wrong tool for
+it** - it needs base-aware tracking over candidate functions, the same
+treatment the registrar got.
+
+### The cheap way to settle it
+
+`0x00c81a5c` is a **fixed address, written by code now confirmed to run
+every frame inside `Scene_PrepareFrame`**. Unlike the `craftArray[n]->+0x640`
+hunt - where two watchpoint runs caught nothing because nothing may write
+that field at all - a watchpoint here has a guaranteed writer, so a read
+watch on `0x00c81a5c` during any HD race (Zone or not; the blend runs in
+every mode) names the consumer directly. That is one RPCS3 run against an
+address with a known-good control built in.
+
 ## See also
 
 - `docs/formats/effectsettings.md` - the file format this loader reaches for

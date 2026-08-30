@@ -1088,3 +1088,42 @@ evidence, including the byte-level trace of every function in this chain:
   getters, and is the one remaining route by which `Scene.*`/`Track.*` could
   reach a draw on HD. That is the next thing to read, and it needs the same
   base-register tracking the registrar did.
+
+  **2026-08-30, a fifteenth pass, pushing `Scene.*`/`Track.*` on the user's
+  stated priority.** Three results.
+
+  **The blend runs inside the render path, confirmed rather than assumed.**
+  `Environment_UpdateStageBlend`'s only caller is `0x003aa888`, **renamed
+  `Scene_PrepareFrame`** (78) - its named callees are
+  `Scene_RefreshNodeMatrices`, four `Pvs_*`, three `Visibility_*` and
+  `GcmContext_Callback`, i.e. scene graph, visibility and the RSX command
+  context. Chain: `FUN_0067f078` -> `FUN_00757de0` (thunk) -> `FUN_003e26d0`
+  -> `Scene_PrepareFrame` -> the blend.
+
+  **`Scene.Texture Colour`'s output address is now concrete.** The fourth
+  pass said the blend "copies three RGBA-shaped fields into a small
+  blended-output area" without locating it. It reads
+  `g_effect_settings_stages[stage] + 0x00/0x04/0x08` for two stages and
+  writes the cross-fade to a fixed three-float global at **`0x00c81a5c`**
+  (`iVar8 + 0x3aac`), at `0x003dc5c0`-`0x003dc5d0`. Confidence 85. So the
+  consumer of `Scene.Texture Colour` is whatever reads `0x00c81a5c` - a far
+  better target than "somewhere in the struct".
+
+  **The last alternative route is closed.** The previous pass named
+  `FUN_003ce2c0` as "the one remaining way `Scene.*` could reach a draw". It
+  is not a route: the thunk-aware branch scan finds **no branch anywhere**
+  targeting it, only its OPD descriptor. Unreached, like the seven dead
+  getters.
+
+  **No reader for `0x00c81a5c` is located**, and a displacement sweep cannot
+  find one - it is base-blind, the trap this thread already recorded. Two
+  candidates that read all three slots as floats (`FUN_00661f00`,
+  `FUN_00661c64`) **both fail a base check** and are recorded as ruled out so
+  nobody re-derives them.
+
+  **Next step, and it is unusually cheap.** `0x00c81a5c` is a fixed address
+  with a **confirmed per-frame writer** inside `Scene_PrepareFrame` - unlike
+  `craftArray[n]->+0x640`, where two watchpoint runs caught nothing because
+  nothing may write it at all. A **read** watch on `0x00c81a5c` during any HD
+  race (the blend runs in every mode, not only Zone) names the `Scene.Texture
+  Colour` consumer directly, with a guaranteed-good control built in.
