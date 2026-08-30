@@ -1441,3 +1441,39 @@ evidence, including the byte-level trace of every function in this chain:
   resolve pass traced and accounted for, none fed from the stage table) -
   narrowing the remaining search to per-material/per-light and the one
   post-chain program that enumeration doesn't cover (`FunkLayerColour2d_fp`).
+
+  **2026-08-31, a twenty-first pass: `Z3` (read watchpoint) built, and the
+  whole read side confirmed live.** A second RPCS3 patch,
+  `scripts/patches/rpcs3-gdb-read-watchpoints.patch`, extends the tracked
+  Z2 one with `Z3`/`z3` - hooked into `ppu_feed_data<T>()`, the one choke
+  point every PPU load (scalar and vector) passes through. Two false leads
+  chased and closed along the way, both source-verified rather than left as
+  hypotheses: a suspected "`Z2`/`Z3` miss vector stores" gap turned out not
+  to exist (`STVX`/`LVX` route through the identical hooked templates
+  scalar ops use), and a genuinely wrong stop-reply PC traced to
+  `is_debugger_present()`/`Assume External Debugger` gating per-instruction
+  PC tracking in RPCS3's own interpreter - a pre-existing RPCS3 property,
+  fixed by a config flag, not a patch bug.
+
+  With that settled, a `Z0` breakpoint confirmed `Scene_PrepareFrame`'s
+  reader (`0x003aaf8c`) now executes at all in a genuine, screenshot-checked
+  Zone race - it hadn't in an Arcade-mode control - and `Z3` on `0x00c81a5c`
+  fired within 5 seconds, log-confirmed with the correct PC. **The whole
+  chain - stage write, gate, read - is now live-exercised, not just
+  statically reachable.**
+
+  A follow-up, watchpoint-free poll of `0x00c49110`/`0x00c49120`/`0x00c49130`
+  (once a second, 75 seconds, real Zone race) then closed the buffer-identity
+  question too: `0x00c49130` moves through two full cross-fade transitions in
+  sync with its neighbours, live - not just non-zero once, but actively
+  carrying a per-frame blended value during real play. Buffer identity
+  confidence moves 65 -> 82.
+
+  **What is left, and it is now the last real gap**: who reads
+  `0x00c49110`/`0x00c49120`/`0x00c49130` back out for rendering.
+  `FUN_006ce6e0` installing `&block[0x7c00]` into `*(obj+0xd8) + 0x1b8` with
+  a dirty flag is the standing lead; the object behind `*(obj+0xd8)` is not
+  yet identified. That is what decides whether this is wireable into
+  `oag_render` or needs a live read watchpoint on the consumer side too.
+  Full write-up:
+  [zone-effectsettings-loader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md#2026-08-31-0x00c49130-moves-live-during-real-play---no-watchpoint-needed).

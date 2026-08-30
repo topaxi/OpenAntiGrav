@@ -2682,6 +2682,47 @@ confidence 65 per the render thread's own tracking) and what consumes it.
 That is now the only thing left between this chain and a real render-wiring
 decision - see the handover thread's own next steps.
 
+## 2026-08-31: `0x00c49130` moves, live, during real play - no watchpoint needed
+
+The polling test this page's own read-watchpoint pass proposed as a fallback
+("poll the memory once a second and watch for the value to change"), run for
+real: `0x00c49110`, `0x00c49120` and `0x00c49130` read once a second across
+75 seconds of a screenshot-confirmed Zone race, no `Z2`/`Z3` involved at all.
+
+**`0x00c49130` moves**, and moves the way a cross-fade weight moves, not the
+way noise would:
+
+```text
+t=40  x120=4.0                x130=0.0
+t=42  x120=2.83               x130=0.038
+t=43  x120=1.54               x130=0.080
+t=45  x120=1.0  (holds)       x130=0.098  (holds)
+t=57  x110=1.05 (starts)      x130=0.064
+t=59  x110=2.19               x130=0.026
+t=60  x110=3.0  (holds)       x130=0.0
+```
+
+Two back-to-back transitions, `x130` ramping up through one and back down
+through the next while `x120` and `x110` settle to new plateaus in turn -
+6 distinct values recorded for `x130` alone over the run, against a static
+`.bss`-zero image. **This is the buffer identity question, answered without
+a watchpoint**: `0x00c49130` is not a dead field that merely got written
+once at load - it actively carries a per-frame blended value during real
+play, exactly matching what `Environment_UpdateStageBlend` -> `0x00c81a5c`
+-> `Scene_PrepareFrame`'s read -> `+0x130` predicts. Confidence on the
+buffer identity moves from 65 to 82: live behaviour now matches the static
+prediction in both *shape* (a transition, not a step) and *timing*
+(coinciding with the neighbouring fields' own transitions), which a
+one-shot non-zero reading alone would not have shown.
+
+**What is still open**: this proves the block *receives* the value, not what
+*reads* it back out for rendering. `FUN_006ce6e0`'s installation of
+`&block[0x7c00]` into `*(obj+0xd8) + 0x1b8` with a dirty flag remains the
+best lead for that, and the object behind `*(obj+0xd8)` is still
+unidentified - the next real step, and the one that decides whether this can
+be wired into `oag_render` or needs a live read watchpoint on the consumer
+side after all.
+
 ## See also
 
 - `docs/formats/effectsettings.md` - the file format this loader reaches for
