@@ -40,15 +40,17 @@
 //! and every stage name in each recovers correctly (checked in
 //! `effectsettings_ground_truth.rs`). Not 90, unlike `.envsettings`: **the
 //! stage-index-to-zone-number correspondence is inferred from the names
-//! alone**, not checked against `Zone_Update`'s own timer - see the thread
-//! file's `## Open`. Nothing here reads either title's executable, and
-//! nothing wires a stage's values into a race yet.
+//! alone**, not checked against `Zone_Update`'s own timer - see
+//! `docs/formats/effectsettings.md`'s `## Open`. Nothing here reads either
+//! title's executable.
 //!
 //! [`cross_fade_rgba8`] is the one piece of this module that *does* read
 //! the executable - HD/Fury's own runtime cross-fade between adjacent
 //! stages, recovered from two independent functions (confidence 80, see
-//! its own doc comment). It stays a standalone, untriggered utility: which
-//! key feeds it and what selects the current stage are both still open.
+//! its own doc comment). [`StagePalette`] is what it blends, and
+//! `oag_game::race::zone_grade` is what applies the result to a race - from
+//! an explicit stage index, because **what selects the stage during a race
+//! is still unrecovered on both titles that ship one of these tables**.
 
 use std::collections::BTreeMap;
 

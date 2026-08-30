@@ -24,8 +24,11 @@ titles, that this engine has never opened.
 five files above plus 2048's ten identical copies, validated against the real
 disc/PSARC in `effectsettings_ground_truth.rs`. It reuses `EnvSettings::parse`
 for the tokeniser and adds a stage index/name read off each key's own prefix.
-**Nothing is wired into a race yet** - see Open and Next Steps below, both
-trimmed to what is still actually open.
+**2026-08-30: the render-application half landed** - a Zone race now grades
+its circuit off this table, driven by an explicit stage index and weight. The
+*trigger* that would move that index during a race is still unrecovered on
+both titles, and is what remains of this thread; see Open and Next Steps
+below.
 
 Plain text, same `"Key.Subkey"=float [float...]` shape `oag_formats::envsettings`
 already parses for `.envsettings` - just never pointed at this extension.
@@ -437,12 +440,30 @@ evidence, including the byte-level trace of every function in this chain:
   the outside last pass. What is still unread is the actual parse/copy step
   that gets bytes from `DAT_816c7148` into that region at all - no call into
   a parser was found in the traced block.
-- Wire the current stage's fog/sky/ambient into the renderer for one title as
-  a proof of concept, once the two items above settle - HD is still the
-  best-measured *rendering* target, since its `.envsettings` reading and
-  drawing path already exists ([envsettings.md](../docs/formats/envsettings.md))
-  and this is the same shape, even though the clearest recovered *selection*
-  logic so far is on 2048.
+- ~~Wire the current stage's fog/sky/ambient into the renderer for one title
+  as a proof of concept~~ **Done, 2026-08-30, on HD/Fury and for Zone
+  specifically.** `oag_title::ZonePalette` names where each title keeps its
+  table (`TitleWide` on HD, `BesideCircuit` on 2048, `None` on Pulse and
+  Pure, which were searched rather than assumed);
+  `oag_formats::effectsettings::StagePalette`/`blended_palette` read one
+  stage and cross-fade it against the stage before it; and
+  `oag_game::race::zone_grade::ZoneGrade` holds the recovered struct's own
+  three fields (`+0x00` current, `+0x04` requested, `+0x18` weight) with a
+  `commit` that reproduces `Environment_UpdateStageBlend`'s gate, applying
+  the result to the same `mesh_render::Fog`/`Light` path `.envsettings`
+  already drives. Checked end to end against `hdfury-ps3-eu-dec.iso` in
+  `crates/game/tests/zone_grade_ground_truth.rs`: a Zone race load carries
+  the fifteen-stage table, and `Sub Venom` fogs `[0, 1.305882, 1.8]` at
+  density `0.0021` where `Start` authors none. **The trigger is still open**
+  and is now the *only* thing between this and a race that escalates on its
+  own - `request_stage`/`set_weight` are a seam with no caller. Two smaller
+  questions the wiring surfaced are in
+  [effectsettings.md](../docs/formats/effectsettings.md)'s `## Open`: which
+  way `+0x18` runs (the commit zeroes it, `cross_fade_rgba8`'s own doc says
+  a fresh stage starts at `1.0` - both cannot be right), and which schema
+  keys the three blended runtime fields actually are, which is also what
+  decides whether the byte-domain blend should apply to keys this build fades
+  in floats.
 - ~~Add `SceGxmTextureBaseFormat` `U8U8U8U8` to `oag_formats::gxt`~~ **Done,
   2026-08-28** - see the Open section above and `docs/formats/gxt.md`'s
   `U8U8U8U8` section. What is left from this step is the shader side: what
