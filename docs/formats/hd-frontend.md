@@ -1213,10 +1213,18 @@ code, so the TOC trap cannot touch it.
 it a mount list would be the invention this project has already been bitten by
 twice. A validation list, a prefetch manifest and an existence check all have
 this shape, and `"Prefetched %d files\n"` sits a few hundred bytes away as a
-live alternative reading. The consuming loop was not identified: the only xref
-Ghidra offers into `0x00860c80` is a read at `0x0032e5d8`, inside a function that
-decompiles as a GameData-installer debug dump, and the TOC-relative loads that
-would reach the array leave no instruction operand to search for.
+live alternative reading. The consuming loop was not identified, and the one
+lead Ghidra's own xref list offered turned out not to be it: `0x0032e5d8` was
+re-decompiled 2026-08-30, after the PS3 TOC fix, and `.opd.FUN_0032e430` is a
+`CellSaveDataStatGet` result dumper (`dirName`, `isNewData`, `hddFreeSizeKB`,
+`PARAM_SFO_TITLE`, and so on) with no relation to the archive array at all.
+`0x0032e5d8` is `lwz r3,-0x7f60(r2)`, loading the format string for that
+function's last `printf` (`PARAM_SFO_LIST_PARAM`), which the corrected
+decompile now names directly. Why Ghidra's xref index pointed here - it is
+tagged `[PARAM]`, and that tag was not explained either - is itself
+unresolved. The TOC-relative loads that would reach the array still leave no
+instruction operand to search for, so this is a dead end confirmed rather
+than a new one opened.
 
 **So the archive-layering question stays exactly where it was** before the
 executable was opened - and until the consumer is found, the *order* in the
