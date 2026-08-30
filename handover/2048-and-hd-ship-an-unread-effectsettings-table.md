@@ -1202,3 +1202,38 @@ evidence, including the byte-level trace of every function in this chain:
   `wo_composite_zone_fp` from the disc and read what it does with the colour.
   That is an asset-side task, not a decompile - and it is the thing standing
   between this thread and a Zone race that grades the way the original does.
+
+  **2026-08-30, an eighteenth pass: the composite shader is read, and it
+  corrects the pass before it.** New format for this project - see
+  [gxp.md](../docs/formats/gxp.md).
+
+  **The shaders are in the executable, not on disc.** `data.psarc`'s full
+  18,430-entry directory has no shader entries; the shaders are **111 `GXP`
+  blobs embedded in `eboot.elf`** from file offset `0x515f70`. Header and the
+  16-byte `SceGxmProgramParameter` table are implemented against the
+  Vita3K-documented layout and **all 111 parse cleanly**, which is the check
+  that the reading is right. Confidence 88.
+
+  **Blob #77 (file `0x51eac8`) is the Zone composite** - the only one of the
+  111 declaring `zoneEdgeColour`, found by enumerating every uniform and
+  sampler name in all of them. Parameters: `bloomFactor[4]`,
+  `accumFactor[1]`, `screenTintColour[3]`, `zoneEdgeColour[3]`; samplers
+  `mainTex`, `alphaTex`, `bloomTex`.
+
+  **The correction**: the previous pass said 2048 "grades the whole frame".
+  Traced instruction by instruction, the Zone stage colour lands in
+  **`zoneEdgeColour`**, not in the frame-wide `screenTintColour` - which
+  takes a different global (`0x816af060`) whose writer is unchased. The pass
+  being full-screen stands; the stage colour being the frame's *tint* does
+  not, and should not be repeated. Confidence 85 (two copies of each uniform
+  name, cached resource indices matched at both bind and use site, the two
+  colours staged in the order they are consumed).
+
+  **Still unread: the USSE bytecode**, so `zoneEdgeColour`'s arithmetic is
+  unrecovered. Its name says *edge*, and an edge term is not a flat tint - so
+  wiring a full-screen tint off this would be an invention, and a more
+  tempting one now that the plumbing either side of the shader is fully
+  traced. **Nothing wired.**
+
+  **What would close it**: a USSE decoder (Vita3K has a recompiler; this
+  project has none), or observing the pass's output directly.

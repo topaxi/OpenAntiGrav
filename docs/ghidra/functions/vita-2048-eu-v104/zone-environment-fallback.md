@@ -787,6 +787,65 @@ first attempt's naive register tracking, and it is recorded rather than
 worked around: **no 2048 offset table is published.** It would need the
 prologue's stack-slot fills resolved, or a different vantage point entirely.
 
+## 2026-08-30, an eighth pass: the composite shader is read - and the stage colour is `zoneEdgeColour`, not the frame tint
+
+The previous pass ended by naming `wo_composite_zone_fp` as the next thing to
+extract. It is extracted, and it **corrects that pass's own framing**.
+
+### The shaders are in the executable, not on disc
+
+`data.psarc`'s full 18,430-entry directory has **no shader entries** - the
+census is `.gxt`, `.at9`, `.vex`, `.rcsmodel` and twenty others, and the
+`.xfx` files that look like a candidate by name are ship engine audio. The
+shaders are **111 `GXP\0` blobs embedded in `eboot.elf`** from file offset
+`0x515f70`. Format, parser and validation on the new
+[gxp.md](../../../formats/gxp.md).
+
+### Blob #77 is the Zone composite
+
+Enumerating every uniform and sampler name across all 111 programs, exactly
+**one** declares `zoneEdgeColour`: blob #77 at file `0x51eac8`, whose full
+parameter list is `bloomFactor[4]`, `accumFactor[1]`, `screenTintColour[3]`,
+`zoneEdgeColour[3]` with samplers `mainTex`, `alphaTex`, `bloomTex`. Its two
+siblings (#75, #76) are the same composite without the Zone uniform.
+
+### The correction: the stage colour is the *edge* colour
+
+`Zone_SetBlendedStageColour` publishes the cross-faded stage palette to
+`g_zone_blended_stage_colour` (`0x816af070`). Traced from there to the GPU:
+
+- `FUN_81037670` looks both uniforms up by name (`0x81424e18`
+  `screenTintColour`, `0x81424e38` `zoneEdgeColour`) and caches their
+  resource indices at `0x8151c650` and `0x8151c654`.
+- `FUN_810387b4` stages `0x816af060` into `sp+0x78` and
+  `g_zone_blended_stage_colour` into `sp+0x80` (`0x810394a0`, `0x810394b2`).
+- It then writes `sp+0x78` against index `0x8151c650` and **`sp+0x80`
+  against index `0x8151c654`** (`0x8103a9b8`-`0x8103a9ee`).
+
+**So the Zone stage colour lands in `zoneEdgeColour`.** Confidence 85. The
+frame-wide `screenTintColour` takes a *different* global, `0x816af060`,
+written by `FUN_8103875c`/`FUN_81038780` - unchased, so **whether the
+whole-frame tint is also Zone-driven is not established**.
+
+> **This corrects [the seventh pass](#2026-08-30-a-seventh-pass-2048-does-have-a-consumer---the-zone-grade-is-a-full-screen-composite-shader-not-a-per-material-recolour)**,
+> which said 2048 "grades the whole frame". What is now traced is narrower:
+> the stage colour reaches the composite pass as **one of two** colour
+> uniforms, and it is the one named *edge*. The pass being full-screen is
+> still true; the stage colour being the frame's tint is not established and
+> should not be repeated.
+
+### What is still unread, and why it blocks wiring
+
+The USSE bytecode. So `zoneEdgeColour`'s **arithmetic** - how it combines
+with `mainTex`, `bloomTex` and `alphaTex` - is unrecovered. Its name says
+edge, and an edge or rim term is not a flat tint, so **wiring a full-screen
+tint from this would be an invention**, and a more tempting one now than
+before because the plumbing is all traced. It is exactly the case
+`CLAUDE.md`'s rule covers.
+
+**What would close it**: a USSE disassembler (Vita3K has a recompiler; this
+project has no decoder), or observing the pass's output directly.
+
 ## See also
 
 - `docs/formats/effectsettings.md` - the file format this loader reaches for
