@@ -1286,7 +1286,19 @@ evidence, including the byte-level trace of every function in this chain:
   named**: arm `Z2` (or, once available, `Z3` for a read) on `0x00c81a5c`
   during a *confirmed* Zone race - the thing every static attempt on HD's
   side has been missing so far is a verified-Zone run, not a longer window.
-  A tighter, composition-matched before/after screenshot pair (same track
-  section, two different stage colours, rather than this pass's two
-  different segments) is a nice-to-have for the writeup but not a blocker -
-  the recolour is already unambiguous at this resolution.
+
+  **2026-08-30, a twentieth pass: tried for a tighter pair, and found out why
+  one can't come from a single lap.** Zone here is one 6.536 km lap of a
+  real, non-repeating circuit (`LAPS CLEARED: 1` on the Results screen), not
+  a short loop - so there is no track segment a single run passes twice to
+  screenshot at two different colours. Picked the closest compositional
+  match available from a 25-frame burst instead (same curving street shape,
+  same palm-tree silhouette corner, same HUD ladder column - `ZONE 0` cyan
+  vs `ZONE 5` purple/yellow) and wrote up why that's the ceiling for this
+  method, not a same-coordinates pair. See
+  [zone-effectsettings-loader.md's matching section](../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md#2026-08-30-a-closer-matched-screenshot-pair-and-why-one-lap-cant-do-better).
+  Also in this window, `hd-fullscreen-tint` closed the post-process-tint
+  candidate by enumeration (all five full-screen colour inputs to HD's
+  resolve pass traced and accounted for, none fed from the stage table) -
+  narrowing the remaining search to per-material/per-light and the one
+  post-chain program that enumeration doesn't cover (`FunkLayerColour2d_fp`).

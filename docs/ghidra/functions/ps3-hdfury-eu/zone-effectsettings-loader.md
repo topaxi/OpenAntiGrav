@@ -2289,6 +2289,40 @@ It also sharpens the contrast with 2048, which *does* grade the whole frame in
 a composite shader: the two engines are not doing the same thing here, so the
 2048 finding should not be carried across as a template for HD.
 
+## 2026-08-30: a closer-matched screenshot pair, and why one lap can't do better
+
+The eighteenth pass's pair (t+15s/t+60s) proved the recolour but on two
+visibly different stretches of track - fair for "does this happen at all",
+weaker as a side-by-side. Attempted a tighter pair: a 25-frame burst, one
+screenshot every 4 seconds through a second confirmed Zone run (Mode list
+screenshot checked before confirming, same as before).
+
+**Zone in this game is not a looping short circuit - it is one 6.536 km lap of
+a real, non-repeating circuit**, per the Results screen (`LAPS CLEARED: 1`).
+That matters for this exercise specifically: there is no track segment the
+ship passes twice within a single run to screenshot at two different stage
+colours, so a same-coordinates pair is not obtainable from one lap by
+construction, only across multiple laps of a run that survives that long
+(this one, like the first, ended - `ZONE SESSION COMPLETE` - after 6 zones
+and about 68 seconds, holding thrust with no steering).
+
+**Closest available match, by composition rather than by track coordinate**:
+the frame at t+28s (`ZONE 0`/`SUB-VENOM`, cyan) and the frame at t+72s (`ZONE
+5`/`FLASH`, purple track with yellow buildings) both frame a gently curving
+street lined with tall buildings, a palm-tree silhouette in the same screen
+corner, and the same HUD zone-ladder column on the left edge. Not claimed to
+be the same coordinate on the circuit - only the closest visual match this
+run's 25 frames offered, chosen honestly rather than by picking whichever
+pair looks most dramatic. It reads the same way as the original pair: track
+surface and buildings both shift from the stage-0 cyan family to the
+stage-5 purple/yellow family.
+
+**What would actually get a same-coordinates pair**: multiple full laps in
+one session (this build's uncontrolled straight-thrust driving doesn't survive
+that long), or two separate runs paused at a matched distance-travelled
+reading rather than a matched wall-clock time - untried, and not obviously
+worth the setup cost now that the recolour itself is no longer in question.
+
 ## See also
 
 - `docs/formats/effectsettings.md` - the file format this loader reaches for
