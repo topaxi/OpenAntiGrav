@@ -246,9 +246,8 @@ unbacked fallback name, not counter-examples. Still short of the
 arithmetic-invariant ceiling (94) for that reason, and because **the literal
 HUD code path is still unread**; an engine that tries the literal name, fails,
 and falls back would be indistinguishable from here. What raised it off 85:
-chasing this rule through the executable
-([the handover thread](../../handover/wipeout-hd-furys-hud-reads-and-the-reader.md))
-found a hardcoded instance of the identical convention - a ship-thumbnail
+chasing this rule through the executable found a hardcoded instance of the
+identical convention - a ship-thumbnail
 loader builds `%s\fe\miniBW.gtf` from a bare directory, discarding entirely
 that the XML authors the same asset as `Data\Ships\<Ship>\fe\miniBW.tga`. That
 is what a blind extension-replace with no fallback looks like from inside the

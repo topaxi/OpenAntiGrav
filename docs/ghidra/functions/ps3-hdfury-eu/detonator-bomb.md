@@ -1,10 +1,9 @@
 # DetonatorBomb: found chasing SortRoot's callers, not the render sort itself
 
 2026-08-25, a side effect of the `SortRoot.cpp` sweep on
-[renderer.md](renderer.md#what-was-deliberately-not-read) and
-[the HD see-through surfaces handover
-thread](../../../../handover/hds-see-through-surfaces-draw-with-the-files.md).
-That sweep needed to know what subsystem owned the six real callers of
+[renderer.md](renderer.md#what-was-deliberately-not-read), chasing HD's open
+see-through-surfaces depth-sort question. That sweep needed to know what
+subsystem owned the six real callers of
 `SortRoot`'s base constructor; this is as far as that chase got before it
 stopped being about draw order. Read [race-manager.md](race-manager.md) and
 [collision.md](collision.md) first for the `__FILE__`-at-offset-`0x30` anchor
@@ -68,6 +67,3 @@ not an answer to it.
   `SortRoot.cpp` note this page grew out of
 - [race-manager.md](race-manager.md) - the `__FILE__`-at-offset-`0x30`
   pattern and `RaceManager_GetInstance`
-- [the HD see-through surfaces handover
-  thread](../../../../handover/hds-see-through-surfaces-draw-with-the-files.md) -
-  the open depth-sort question this chase was in service of

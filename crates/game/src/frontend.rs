@@ -80,7 +80,7 @@
 
 use crate::input::{Button, Input};
 use crate::language::{Language, StringTable};
-use crate::screen::{Screen, Screens, argb_to_rgba, parse_argb};
+use crate::screen::{Screen, Screens, Text, argb_to_rgba, parse_argb};
 use crate::state_machine::{Event, StateMachine};
 
 use oag_hd::frontend::states as hd_states;

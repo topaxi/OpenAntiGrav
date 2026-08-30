@@ -414,12 +414,66 @@ fires rather than the pad, so something can advance this screen without a press
 and **what that something is has not been found**. It is left unfired here rather
 than modelled as a timeout, because a duration would be invented.
 
-**`BOOT_PRESS_START` does not pulse.** The widget carries `pulse="true"` and
+**`BOOT_PRESS_START` now pulses.** The widget carries `pulse="true"` and
 `delay="1"`, so on hardware it fades in a second after the screen and throbs.
-This build draws it static, at its own `x="460"`, `y="220"`, `align="right"` and
-`0x7FFFFFFF`. Neither attribute is decoded; the text is what was asked for and
-the animation is the one remaining gap on this screen, recorded rather than
-approximated.
+Both attributes are decoded and drawn: `Text::pulse`/`Text::delay`
+(`crates/game/src/screen.rs`) carry the XML through, and
+`frontend::draw::pulse_alpha` computes the alpha multiplier `draw_screen_at`
+applies - invisible until `delay` elapses, then a sine throb between the
+measured floor and the widget's own authored alpha (`0x7FFFFFFF`, at
+`x="460"`, `y="220"`, `align="right"`), ramped in over its first cycle rather
+than popping straight to the floor. `draw_screen`, the public entry point
+`--screen` and every other test use, still freezes any pulsing widget at its
+authored colour - only the live boot order (`draw_list`) animates it, so
+nothing that inspects a screen's static appearance changed.
+
+**The throb's period and depth are now measured, off a real capture.**
+`pulse-psp-eu.chd` under PPSSPPSDL (Xvfb, no window manager, no compositor -
+see [`ppsspp-debugger.md`](../reverse-engineering/ppsspp-debugger.md#running-without-a-real-display-xvfb-works-no-compositor-needed)),
+left sitting on `Show Logo` untouched for 20 seconds, screenshotted through
+`import -window root` cropped to the `PRESS START BUTTON` glyphs at roughly
+11-18 Hz over two independent runs (`gpu.buffer.screenshot` still does not
+work over the websocket debugger, so this is a compositor grab, not a live
+memory read). The crop's mean luminance oscillates cleanly: autocorrelation on
+both runs peaks at lag 1.10 s and its harmonics out to eight cycles (heights
+0.93 down to 0.55 at 8.84 s in the denser run), an FFT of that run puts its
+dominant frequency at 0.90 Hz - a 1.11 s period - at ten times the magnitude of
+its nearest rival, and raw peak-to-peak/trough-to-trough medians land at
+1.10-1.11 s in both runs. Three independent methods agree to within 0.01 s.
+**Period: ≈1.10 s.**
+
+The waveform is not a clean sine - a least-squares sine fit only reaches
+R²=0.53 - because it holds rather than oscillates smoothly: mean crop
+luminance sits flat at ≈55/255 for a beat, eases up, sits flat at ≈129/255 for
+a beat, eases down, repeatable to within a couple of luminance units across 18
+independent trough reads and a comparable number of peak reads in the second
+run. **It never reads as fully faded**: the dim phase is ≈42% of the bright
+phase's luminance (55/129), not zero, so the throb toggles between a dim and a
+bright state rather than fading to black each cycle.
+
+Confidence **75**: two independent 20 s captures converging on the same figure
+three different ways, but this is a screen-pixel luminance proxy, not a direct
+read of the widget's own alpha out of PSP memory - so the luminance ratio
+measures the modulation's period and *shape* confidently, but is a lower bound
+on depth rather than the exact 0-255/0.0-1.0 alpha pair an implementation
+wants. The captured frames and analysis scripts are session-local, not
+committed - a screen capture off the disc is game content like any other, per
+[`legal.md`](../overview/legal.md).
+
+**Turning the ratio into the implemented multiplier, and the fade-in's shape,
+were judgement calls, not further measurement**, and are recorded as such
+rather than presented as decoded: `frontend::draw::PULSE_FLOOR` (0.42) is the
+measured luminance ratio taken directly as the alpha-fraction floor, on the
+reading that the widget's own already-authored alpha (`0x7F` of `0xFF`, and
+close to the capture's own ceiling luminance) already **is** the throb's
+ceiling - so only one new number, not two, needed inventing. The fade-in's
+own duration and shape were never captured at all (the 20 s captures started
+well after boot), so it reuses the one measured timescale there is - one
+throb period - as a ramp, and a plain sine stands in for the throb's own
+shape, which the capture shows is not quite sinusoidal (it holds near each
+extreme rather than smoothly reversing, a detail not modelled). See
+`frontend::draw`'s `PULSE_PERIOD`/`PULSE_FLOOR`/`pulse_alpha` doc comments
+(`crates/game/src/frontend/draw.rs`) for the exact reasoning.
 
 **This build booted the dev/pub reel for a while, and that was wrong.** The reel
 is the one whose contents fit `IntroMovie1`'s frame counters, and pointing the
@@ -892,13 +946,16 @@ why it is 85 and not higher. The consequence for us is that **any screen between
 the intro and the menus that draws no backdrop is wrong**, which is what
 `Launch Game` was.
 
-**`PRESS START` fades in a second late and throbs. Confidence 90, and we do not
-do it.** `BOOT_PRESS_START` carries `pulse="true"` and `delay="1"`. Ours appears
-at once, at full opacity, and stands still. This is independent of the black
-frames and is **the named residual on the intro-to-`Show Logo` transition**:
-closing the flash does not close the report, because a static text pop is itself
-a discontinuity where the disc has a fade. Implementing it needs the pulse's
-period and depth, which no document here states and no capture has measured.
+**`PRESS START` fades in a second late and throbs, and now ours does too.**
+`BOOT_PRESS_START` carries `pulse="true"` and `delay="1"`, confidence 90 that
+this is what those attributes mean (reading `Movie_ParseAttributes`'s own
+boolean convention against how every other authored fade/redirect attribute
+here has been read); this build's `frontend::draw::pulse_alpha` reads both and
+animates the widget's alpha accordingly - see the `BOOT_PRESS_START now
+pulses` section above for the period, floor and ramp it uses, each at
+confidence 75. This closes **the named residual on the intro-to-`Show Logo`
+transition**: closing the flash no longer leaves a static text pop as a
+second, smaller discontinuity where the disc has a fade.
 
 **What is deliberately not claimed.** Nobody has captured the original's boot
 frame by frame, so there is no evidence here about whether the intro's last frame

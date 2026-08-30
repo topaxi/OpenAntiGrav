@@ -1,6 +1,6 @@
 # `weatherPos`'s registration is found, and its runtime constructor fires on a real race
 
-Found while working [the open thread on unrecovered particle triggers](../../../../handover/the-particle-effects-are-played-from-the-disc.md):
+Found while working the open question of unrecovered particle triggers:
 the four environmental effects (`WO_RAIN`, `WO_SNOW`, `WO_MODESTO_STEAM_A`,
 `WO_BLUE_WELDER`) need to know which track places them and where, and
 `weatherPos` `0x3da` ([`vex.md`](../../../formats/vex.md#node-types)) is the

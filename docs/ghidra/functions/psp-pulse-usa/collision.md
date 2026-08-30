@@ -323,9 +323,8 @@ detection "never comes out of Pulse's narrowphase" on the strength of
 `0x08815ccc` being a stub - but `0x08815ccc` is the kind-1-vs-kind-1 (mesh vs
 mesh) dispatch, and craft, being box colliders, are kind 3: their pairs never
 reach `0x08815ccc` at all. Whether they reach `Collision_BoxAgainstBox` instead
-is exactly the two gates above. See
-[handover/craft-to-craft-collision-is-implemented-the-stun.md](../../../../handover/craft-to-craft-collision-is-implemented-the-stun.md)
-for the open item this leaves.
+is exactly the two gates above, and is the open item craft-to-craft
+collision detection leaves.
 
 ### `Collision_BoxAgainstMesh` (`0x08815cd4`) is a ten-ray star from the box centre
 

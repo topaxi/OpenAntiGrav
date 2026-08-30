@@ -125,6 +125,26 @@ pub struct Text {
     pub align: String,
     /// Whether the widget starts hidden.
     pub start_enabled: bool,
+    /// Whether the widget throbs once visible, rather than sitting still.
+    ///
+    /// The one measured case is `BOOT_PRESS_START` on `Show Logo`: its period
+    /// and depth are read off a real capture in
+    /// `docs/architecture/frontend-boot.md` (confidence 75) and hard-coded in
+    /// `frontend::draw`'s `PULSE_PERIOD`/`PULSE_FLOOR` rather than re-derived
+    /// per widget, since no other `pulse="true"` widget has been captured yet
+    /// to say whether they share the same numbers.
+    pub pulse: bool,
+    /// Seconds after the widget's screen appears before it starts drawing at
+    /// all, from the `delay` attribute. Zero when absent, which draws at once
+    /// exactly as before this field existed.
+    ///
+    /// Every widget carries a `delay` in the XML this crate has seen (Pure's
+    /// too), not only pulsing ones - see [`Self::pulse`]'s sibling gap noted
+    /// on [`Skin::collect_widgets`]'s own doc comment, `delay`/`transition`
+    /// together. Only a `pulse` widget acts on it here; a non-pulsing widget's
+    /// `delay` is parsed and otherwise unused, the same trade `Image::auto_load`
+    /// already makes for a flag this crate reads but does not yet act on.
+    pub delay: f32,
     /// The pixel width to wrap at, when `widthlimited="true"` is set.
     ///
     /// Taken from the nearest enclosing `Viewport`'s own `width` - the only
@@ -613,6 +633,8 @@ impl Screens {
                 .unwrap_or(0xffff_ffff),
             align: node.value("align").unwrap_or("left").to_string(),
             start_enabled: node.flag("StartEnabled").unwrap_or(true),
+            pulse: node.flag("pulse").unwrap_or(false),
+            delay: self.number(node.value("delay")).unwrap_or(0.0),
             wrap_width: node
                 .flag("widthlimited")
                 .unwrap_or(false)
