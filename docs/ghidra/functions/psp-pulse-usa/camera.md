@@ -1212,10 +1212,10 @@ documents. See `contact-response.md`'s correction for the live evidence
 (the reciprocal check, and the fov law matching to float precision only
 under this reading).
 
-This closes `handover/the-originals-fov-widens-with-speed-and-race.md`:
-`craft+0x7c` is now measured quiescent through a clean run, a real wall
-contact, and an armed-and-decaying collision stun. No writer for the field
-has been found on any path in this codebase.
+This closes the open question of whether the original's FOV-widens-with-speed
+law is driven off `craft+0x7c`: the field is now measured quiescent through a
+clean run, a real wall contact, and an armed-and-decaying collision stun. No
+writer for the field has been found on any path in this codebase.
 
 ## Applied renames, 2026-08-08 (second pass)
 

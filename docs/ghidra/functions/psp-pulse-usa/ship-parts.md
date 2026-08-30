@@ -3,10 +3,8 @@
 Opened while implementing `Airbrake` (`0x3c5`), the roadmap's "the airbrakes
 visibly deploy" item. It found a negative result about the binary (the class
 system has no per-class dispatch for a tagged node) and, on a second pass with
-a live PPSSPP session
-(`handover/the-airbrake-flap-rotation-axis-is-chosen-not.md`), the per-instance
-handler that dispatch had been hiding - see
-[the live read](#the-rotation-axis-recovered-from-a-live-read) below.
+a live PPSSPP session, the per-instance handler that dispatch had been hiding -
+see [the live read](#the-rotation-axis-recovered-from-a-live-read) below.
 
 ## What the file says, which is more than the class census did
 
@@ -94,10 +92,10 @@ way - which is exactly what the live read below found.
 
 ## The rotation axis, recovered from a live read
 
-`handover/the-airbrake-flap-rotation-axis-is-chosen-not.md` asked for exactly
-this: break under PPSSPP and watch what moves. The static search above had
-already shown class-id dispatch does not exist, so the productive move was a
-**read watchpoint**, not another execution breakpoint.
+The open question was exactly this: break under PPSSPP and watch what moves.
+The static search above had already shown class-id dispatch does not exist,
+so the productive move was a **read watchpoint**, not another execution
+breakpoint.
 
 1. **A player craft's `craft+0x2d8`/`+0x2dc`** (`HandlingXml_ParseAirbrakeGraphics`'s
    two graphics-only deflection states, `engine.md`) ramp cleanly under a live
@@ -127,9 +125,8 @@ already shown class-id dispatch does not exist, so the productive move was a
    radians. Zero deflection branches to a separate function (stow / clear
    override, `FUN_00141588`); nonzero builds a matrix and installs it via
    `FUN_00141284(node, &matrix, 0)`. Both callees are unrelocated import-stub
-   constants in this project's Ghidra import (see
-   `handover/psp-pulse-usas-import-carries-unrelocated-address-constants.md`)
-   and did not resolve to real addresses here.
+   constants in this project's Ghidra import and did not resolve to real
+   addresses here.
 4. **The matrix itself, read off the raw VFPU disassembly rather than the
    decompiler's translation** (Ghidra resolves the `vpfxs` prefixes to
    swizzles directly):

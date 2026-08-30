@@ -244,9 +244,8 @@ behaviour is certain and only the name is a convention.
 
 ### The per-eye draw dispatch, and what it says about sort order
 
-Found 2026-08-26 chasing the [see-through-surfaces
-thread](../../../../handover/hds-see-through-surfaces-draw-with-the-files.md)'s
-open question of whether HD depth-sorts transparent draws anywhere. `SortRoot`
+Found 2026-08-26 chasing HD's open question of whether it depth-sorts
+transparent draws anywhere. `SortRoot`
 was already spent as a lead (above); this is the render layer's own call site,
 reached from `Game_PresentLoop_q` rather than from `SortRoot`.
 
@@ -350,8 +349,8 @@ breakpoint on `RenderManager_FlushDrawQueue` (`0x002d6300`) hit mid-race and
   a dead end, not an unknown.
 
 The enqueue site itself is still unread - this corroborates "no sort" with
-real per-frame data rather than closing the question outright, per
-[the see-through-surfaces thread](../../../../handover/hds-see-through-surfaces-draw-with-the-files.md).
+real per-frame data rather than closing the open see-through-surfaces
+depth-sort question outright.
 
 ## The lineage result: HD keeps Pulse's importer-per-class layout
 

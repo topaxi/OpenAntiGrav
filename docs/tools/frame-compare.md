@@ -136,8 +136,7 @@ have nothing to do with the game.
   clipboard path the existing ~2-tick bound was originally measured with -
   the two have never been shown to share a lag, and an inconsistent one would
   produce exactly this pattern (one clean reading, two noisy ones, same
-  capture, same speed, same box). Full numbers in
-  [the handover thread](../../handover/frame-comparison-three-residuals.md).
+  capture, same speed, same box).
   **Next**: repeat under a real or niri-emulated compositor to see whether
   the inconsistency goes with it, or drive a yawing section instead of a
   straight corridor so the phase reads off `dx` as a linear ramp across

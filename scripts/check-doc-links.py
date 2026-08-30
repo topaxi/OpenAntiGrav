@@ -13,6 +13,14 @@ green.
 
 Links inside fenced code blocks are skipped: those are examples, not
 navigation.
+
+Also enforced: a `docs/` page must never reference `handover/` at all, link or
+plain text - CLAUDE.md's own rule. A thread file under `handover/` is deleted
+the moment its work lands, so a link from a permanent page into one is a dead
+link waiting to happen with nothing else to catch it once the anchor check
+above stops seeing it (the target file is just gone, not malformed). The
+reverse direction is fine and unchecked: a `handover/` thread citing a `docs/`
+page as its evidence is how every thread here is written.
 """
 
 from __future__ import annotations
@@ -138,12 +146,27 @@ def check(root: Path) -> list[str]:
         return anchor_cache[path]
 
     for md in sorted(root.rglob("*.md")):
-        if SKIP_DIRS & set(md.parts):
+        rel = md.relative_to(root)
+        # Relative to `root`, not absolute: `root` itself sits under `.claude`
+        # whenever this runs from inside a worktree (`.claude/worktrees/...`
+        # is where `EnterWorktree` puts one), and `md.parts` on the absolute
+        # path matched `.claude` there unconditionally - which skipped every
+        # file, in every worktree session, silently. `just check-docs` has
+        # been reporting a pass without scanning anything since worktree
+        # sessions started existing; caught while adding the handover check
+        # below and re-verified nothing else was hiding behind it.
+        if SKIP_DIRS & set(rel.parts):
             continue
 
-        rel = md.relative_to(root)
+        under_docs = rel.parts[0] == "docs"
 
         for number, line in strip_code_fences(md.read_text(encoding="utf-8")):
+            if under_docs and "handover/" in line:
+                problems.append(
+                    f"{rel}:{number}: docs/ must not reference handover/ - "
+                    f"{line.strip()}"
+                )
+
             for match in LINK.finditer(line):
                 raw = match.group(2).strip()
                 if is_external(raw):

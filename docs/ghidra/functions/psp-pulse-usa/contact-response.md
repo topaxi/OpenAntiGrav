@@ -814,8 +814,7 @@ computed with a wrong offset, `scripts/psp-watch-pending-impulse.py`'s
 `ENTITY_TO_CRAFT = 0xFC0` added straight to `entities[0]`.** It happened to
 land on a valid, live-written rigid body that day, which is why the control
 fired and read as corroboration - but checked against a *known* player craft
-address (`handover/the-originals-fov-widens-with-speed-and-race.md`'s
-capture), that formula resolves 7 of 8 live `Ship_ApplyCollisionImpulse` a0
+address, that formula resolves 7 of 8 live `Ship_ApplyCollisionImpulse` a0
 values to out-of-RAM-range garbage, and the one slot that happened to work
 was not the player. **`Ship_ApplyCollisionImpulse`'s own a0 is the entity
 directly** - the same object reached elsewhere via `craft+0x1c4`
@@ -1658,8 +1657,7 @@ claim. **The pending-impulse open item's narrowphase exclusion no longer
 holds**: "whatever reaches `Body_ResolveContactPair` with two craft in it is
 somewhere this project has not found" assumed the narrowphase was positively
 ruled out, and it is not - it may or may not be where that pair comes from,
-which is now itself the open question. See
-[handover/craft-to-craft-collision-is-implemented-the-stun.md](../../../../handover/craft-to-craft-collision-is-implemented-the-stun.md).
+which is now itself the open question.
 
 **The consequence for `oag_physics::pair`**: its own doc comment claims "there
 is no recovered test to approximate" - also no longer accurate. There is now a
