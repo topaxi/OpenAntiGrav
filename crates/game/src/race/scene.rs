@@ -786,6 +786,16 @@ impl Scene {
     /// craft and shows it. A no-op outside Zone, on a title shipping no stage
     /// table, and on one whose zone-to-stage ladder is unrecovered - see
     /// [`crate::race::zone_grade::ZoneGrade::show_zone`].
+    ///
+    /// **One precedence question is untested rather than answered.** `frame`
+    /// samples the circuit's own `fogCube` volumes *after* laying the grade
+    /// over the authored fog, and a volume the camera sits inside replaces the
+    /// result outright. No title reaches that today - the two that ship a
+    /// stage table both load their geometry through the PSARC path, which
+    /// parses no `fogCube` at all, so `fog_volumes` is empty on both - and
+    /// which of the two the original prefers is not recovered, since
+    /// `Environment_UpdateStageBlend`'s own consumer is still unfound. Worth
+    /// knowing before a title with both ever loads.
     pub fn sync_zone_grade(&mut self, race: &Race) -> bool {
         let zone = race.world.race.zone;
         let Some(grade) = self.zone_grade.as_mut() else {
@@ -803,12 +813,6 @@ impl Scene {
             grade.blend().current
         );
         true
-    }
-
-    /// Which stage of the Zone grade is showing, for tests and reports.
-    #[must_use]
-    pub fn zone_stage(&self) -> Option<u32> {
-        Some(self.zone_grade.as_ref()?.blend().current)
     }
 
     /// Rebuilds the depth buffer, and the MSAA colour target if there is one,
