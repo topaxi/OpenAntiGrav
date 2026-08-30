@@ -2323,6 +2323,119 @@ that long), or two separate runs paused at a matched distance-travelled
 reading rather than a matched wall-clock time - untried, and not obviously
 worth the setup cost now that the recolour itself is no longer in question.
 
+## 2026-08-30, a nineteenth pass: **the reader of `0x00c81a5c` is located** - `Scene_PrepareFrame` itself, at `0x003aaf8c`
+
+Eighteen passes said "no reader located" and named what would overturn it.
+This does. The reader was invisible to every previous sweep for one reason,
+and it is a reason worth carrying: **every earlier scan looked for the field
+relative to the stage base** (`0x3aac(rX)`, off `iVar8 = 0x00c7dfb0`), because
+that is how the *writer* addresses it. The reader does not address it that way.
+Each of the three floats has **its own dedicated TOC pointer slot**, so the
+load is `lfs f0, 0x0(r9)` - displacement zero, base a per-field pointer. A
+displacement sweep cannot see it, a branch scan cannot see it, and an OPD-
+reference scan cannot see it.
+
+### The three slots
+
+The literal `0x00c81a5c` occurs once in the image, at `0x008b71cc`, inside a
+run of pointer slots that map one-for-one onto the region:
+
+| Slot | Displacement (TOC `0x008bd3c4`) | Value | = |
+| --- | --- | --- | --- |
+| `0x008b71c8` | `-0x61fc` | `0x00c815e0` | `iVar8 + 0x3630` |
+| `0x008b71cc` | `-0x61f8` | **`0x00c81a5c`** | **`iVar8 + 0x3aac`** |
+| `0x008b71d0` | `-0x61f4` | `0x00c815f0` | `iVar8 + 0x3640` |
+| `0x008b71d4` | `-0x61f0` | **`0x00c81a60`** | **`iVar8 + 0x3ab0`** |
+| `0x008b71d8` | `-0x61ec` | `0x00c81600` | `iVar8 + 0x3650` |
+| `0x008b71dc` | `-0x61e8` | **`0x00c81a64`** | **`iVar8 + 0x3ab4`** |
+| `0x008b71e0` | `-0x61e4` | `0x00c815d0` | `iVar8 + 0x3620` |
+| `0x008b71e4` | `-0x61e0` | `0x00c815b0` | `iVar8 + 0x3600` |
+| `0x008b71e8` | `-0x61dc` | `0x00c815c0` | `iVar8 + 0x3610` |
+| `0x008b71ec` | `-0x61d8` | `0x00c815a0` | `iVar8 + 0x35f0` |
+
+`+0x3aac`, `+0x3ab0` and `+0x3ab4` are exactly the three floats
+`Environment_UpdateStageBlend` writes at `0x003dc5c0`/`0x003dc5c8`/`0x003dc5d0`
+(and again at `0x003dc5f8`-`0x003dc600` on its other branch) - the
+**`Scene.Texture Colour`** cross-fade output the eighteenth pass proved is
+recomputed every frame.
+
+### The read
+
+At `0x003aaf8c`, inside `Scene_PrepareFrame` (`0x003aa888`-`0x003aed8f`):
+
+```text
+003aaf8c  lwz   r9,  -0x61f8(r2)      ; &Scene.Texture Colour .x  (0x00c81a5c)
+003aaf94  lwz   r11, -0x61f0(r2)      ; .y                        (0x00c81a60)
+003aaf98  lwz   r10, -0x61e8(r2)      ; .z                        (0x00c81a64)
+003aafa4  lfs   f0,  0x0(r9)          ; *** the read ***
+003aafa8  lfs   f13, 0x0(r11)
+003aafb4  lfs   f12, 0x0(r10)
+          stfs -> [sp+0x5c0] ; lvewx -> v10 / v11 / v12          ; scalar into a lane
+003aafd0  vperm / vspltw                                          ; splat across 4 lanes
+003aaff8  lvx   v13, 0, r10           ; the neighbouring float4s, 0x00c815a0..0x00c81650
+003ab008  vsel  v13, v13, v12, v6     ; merge the splatted component in
+003ab010  vsel  v0,  v0,  v10, v6
+003ab014  vsel  v1,  v1,  v11, v6
+003ab018  stvx  v13, r31, r0          ; r0 = 0x130
+003ab02c  stvx  v10, r31, r9          ; r9 = 0x7c10   (and 0x7c00 alongside)
+```
+
+So each scalar is splatted to a `float4`, `vsel`-merged into one lane of a
+neighbouring vector, and written into a large runtime buffer at
+`r31 = *(0x008c713c)` - offsets `+0x130`, `+0x7c00`, `+0x7c10`. `0x008c713c`
+holds `0` in the image, so it is filled at runtime; the offsets run past
+`0x7c10`, so the buffer is at least 32 KiB, and `Scene_PrepareFrame`'s prologue
+(`0x003aa2a0`-`0x003aa63c`) fills dozens of other fields of it the same way.
+
+**Confidence 88 on the read itself.** The three slots resolve, against this
+function's own OPD-declared TOC, to exactly the three addresses the writer
+writes, and the writer is already confirmed. Nothing about that chain is
+inferred.
+
+**Confidence 55, and no name, on what the destination buffer is.** A >32 KiB
+per-frame block that `Scene_PrepareFrame` fills field by field with splatted
+vectors is shaped exactly like a shader-constant / per-frame parameter block,
+which would make this the whole answer - but "shaped like" is not a reading,
+and no consumer of `*(0x008c713c) + 0x130` has been traced. That is the next
+step and it is now a *bounded* one, against eighteen passes of unbounded
+search.
+
+### It is gated on a byte
+
+The block is skipped entirely unless a flag is set:
+
+```text
+003aaea0  lwz   r17, -0x6200(r2)      ; r17 = 0x00d45f84
+003aaee8  lbz   r0,  0x0(r17)
+003aaef4  cmpwi cr7, r0, 0x0
+003aaf88  beq   cr7, 0x003acb88       ; skip the Scene.Texture Colour read
+```
+
+`0x00d45f84` is **not** Zone-specific on the evidence available: it has seven
+TOC slots across both modules and roughly forty users spread over the scene,
+render and front-end code, so it is a general scene-module global (plausibly a
+struct base whose byte 0 is the flag) rather than a mode switch. Whether the
+byte is set during a Zone race specifically is **unestablished** - do not read
+it as "Zone enables the tint". Confidence 30 on any interpretation of the flag;
+90 that the gate exists and has this shape.
+
+### What this changes
+
+The seventeenth pass's table row **"that output read by anything - no reader
+located"** is now answered: yes, in `Scene_PrepareFrame`, at `0x003aaf8c`. Taken
+with the parallel enumeration in [renderer.md](renderer.md) - which closes the
+whole post-process route, `FunkLayerColour2d_fp` included - the picture is
+consistent: HD's Zone recolour is fed **before** the resolve, through a
+per-frame parameter block, exactly where the differential-hue argument said it
+had to be.
+
+**Still not settled**: that the buffer is the shader constant block, what
+consumes `+0x130`/`+0x7c00`/`+0x7c10`, and whether the gate is on in a Zone
+race. The `0x00c81a5c` read watchpoint earlier passes proposed is now much less
+necessary for *finding* the reader and much more useful for confirming the gate
+- and a **write** watchpoint on `*(0x008c713c) + 0x130` would be the direct
+test of the buffer's role.
+
 ## See also
 
 - `docs/formats/effectsettings.md` - the file format this loader reaches for

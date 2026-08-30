@@ -127,6 +127,10 @@
 0x003def38	function	Post_SetColourScaleRate	80	renderer.md
 0x003def50	function	Post_SetColourScaleTarget	80	renderer.md
 0x003def68	function	Post_SetColourScaleImmediate	80	renderer.md
+0x003cbc58	function	FunkLayer_DrawColourQuad	85	renderer.md
+0x003cbdb0	function	FunkLayer_ResolvePrograms	80	renderer.md
+0x00c7df20	data	g_FunkLayerPrograms	80	renderer.md
+0x008c2c98	data	g_FunkLayerParamSlots	80	renderer.md
 0x002b3bb0	function	LoadingScreen_Construct	85	loading-screen.md
 0x00936fe8	data	g_GameState	90	mode-manager.md
 0x00032f44	data	GameMode_BackendDispatchTable	90	mode-manager.md

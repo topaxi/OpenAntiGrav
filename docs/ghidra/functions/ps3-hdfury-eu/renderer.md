@@ -2368,3 +2368,84 @@ different route; and the per-material side - `Environment_UpdateStageBlend`'s
 own outputs at `0x00c81a5c` and the `g_effect_settings_stages` rows - is where
 [zone-effectsettings-loader.md](zone-effectsettings-loader.md) already says the
 search belongs.
+
+## `FunkLayerColour2d_fp` is a solid-colour quad, and its colours are constants (2026-08-30)
+
+The enumeration above left `FunkLayerColour2d_fp` as the one post-chain program
+that could paint a full screen by a route the resolve does not cover. It is now
+read end to end, and it is a clean negative for the Zone question.
+
+**The programs.** `FunkLayerColour2d_vp` (block `0x0092ea80`) declares exactly
+one parameter - `colour`, hash `0x05079a31`, `float4 x1`, register c467 - one
+attribute (`position`), and three instructions:
+
+```text
+MOV o[POS].xy, v[0].xyxx
+MOV o[POS].zw, c[210].xxxy
+MOV o[TC0],    c[211] | END        ; c[211] == register 467 == colour
+```
+
+`FunkLayerColour2d_fp` (block `0x0092ce00`) declares **zero** parameters and
+**zero** samplers, and is one instruction:
+
+```text
+MOV H0, f[TC0] END
+```
+
+So every pixel it writes is the same constant, and **it never samples the
+framebuffer**. Read with `scripts/ps3-microcode.py` and `scripts/ps3-sho.py`,
+whose block framing validates itself; confidence 92.
+
+**Its one draw wrapper**, `FunkLayer_DrawColourQuad` (`0x003cbc58`, OPD
+`0x0088c108`, TOC `0x008bd3c4`), takes the colour as a `float4 *` in `r4`,
+`lvx`es it at `0x003cbce8`, and binds it into the `colour` slot. The programs
+and the slot index come from two globals a resolver fills once:
+`FunkLayer_ResolvePrograms` (`0x003cbdb0`, called from `FUN_003e12e0`, the
+frame's render-target set allocator) writes `g_FunkLayerPrograms`
+(`0x00c7df20`) `+0x0`/`+0x4` with the vp/fp and `g_FunkLayerParamSlots`
+(`0x008c2c98`) `+0x0` with `colour`'s slot index.
+
+**Only one function in the module reads those two entries for a draw.** Walking
+all 13 functions between `0x003cb868` and `0x003cd850` with real boundaries and
+tracking both global pointers through register copies, the offsets each reads
+are:
+
+| Function | slot offsets | program offsets | binds |
+| --- | --- | --- | --- |
+| `0x003cbc58` | **`0x0`, `0x4`** | **`0x0`** | 2 |
+| `0x003cbdb0` (resolver) | - | `0x0`-`0x18` | 0 |
+| `0x003cc490` | `0x8`,`0xc`,`0x10` | `0xc` | 0 |
+| `0x003cc750` / `0x003cce10` / `0x003cd038` | `0x4`,`0x10` | `0x8` | 0 |
+| `0x003cca80` | `0x8`,`0xc`,`0x18`,`0x1c` | `0xc`,`0x18` | 2 |
+| `0x003cd2e0` (register/release) | - | all | 0 |
+
+`0x0`/`0x4` is Colour2d; everything else is the Fx, FxUv, Copy and CopyBlend
+family.
+
+**Every call site passes a constant.** `FunkLayer_DrawColourQuad` has eleven
+callers. One is in `Scene_PrepareFrame` (`0x003ac928`), and the colour it
+passes is built inline three instructions earlier:
+
+```text
+003ac8f8  lis  r0, 0x3f80          ; 1.0
+003ac8fc  stw  r0, 0x25c(r1)       ; w = 1.0
+003ac900  stw  r0, 0x250(r1)       ; x = 1.0
+003ac910  stw  r9, 0x258(r1)       ; z = 0.0   (r9 = 0)
+003ac914  stw  r9, 0x254(r1)       ; y = 0.0
+```
+
+- an opaque **red** `(1, 0, 0, 1)`, hard-coded, with nothing from the stage
+table anywhere near it. The other ten are all in `FUN_003b8550`, which resolves
+`FunkLayerCorruption_vp`/`_fp` and their `powerFactors`/`color`/`texture`
+parameters against its own TOC - the glitch overlay - and builds each quad's
+colour on its own stack too.
+
+**So Colour2d cannot be the Zone recolour**, and the reason is not only that it
+is a flat fill: a flat quad under a multiply blend *would* be a legitimate
+full-screen tint, so the shader's shape alone would not have settled it. What
+settles it is that no call site is fed anything but a constant.
+
+Confidence 85. The eleven call sites are an exhaustive `bl` enumeration, and
+the two globals' offsets were walked with real function boundaries; what is
+*not* established is the blend state at each site, which is why the argument
+above is made on the arguments rather than on the fragment program.

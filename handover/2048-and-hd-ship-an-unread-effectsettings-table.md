@@ -234,6 +234,49 @@ evidence, including the byte-level trace of every function in this chain:
 
 ## Open
 
+- **2026-08-30, THE READER OF `0x00c81a5c` IS LOCATED.** Nineteen passes in,
+  the "no reader located" row is answered: `Scene_PrepareFrame` reads it
+  itself, at `0x003aaf8c`. Full evidence in
+  `docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md`
+  ("a nineteenth pass").
+
+  **Why eighteen passes missed it, and this is the transferable lesson.**
+  Every earlier sweep looked for the field the way the *writer* addresses it -
+  `0x3aac(rX)` off the stage base `iVar8 = 0x00c7dfb0`. The reader does not
+  address it that way: each of the three floats has **its own dedicated TOC
+  pointer slot** (`0x008b71cc`/`0x008b71d4`/`0x008b71dc`), so the load is
+  `lfs f0, 0x0(r9)` with displacement zero. A displacement sweep, a branch
+  scan and an OPD-reference scan are all structurally blind to that. **When a
+  static search for a consumer of a fixed address comes back empty in this
+  binary, search for the address as a TOC-slot literal before concluding
+  anything** - that one check would have found this on pass two.
+
+  What the read does: splats each scalar to a `float4`, `vsel`-merges it into a
+  neighbouring vector, and stores into a >32 KiB runtime buffer
+  `*(0x008c713c)` at `+0x130`/`+0x7c00`/`+0x7c10`. Confidence 88 on the read
+  (the slots resolve to exactly the three addresses `Environment_UpdateStageBlend`
+  writes, against the function's own OPD TOC). **Confidence 55 and no name on
+  the buffer's identity** - it is shaped like a per-frame shader-constant block
+  and no consumer of it has been traced. That is the next step, and it is now
+  bounded.
+
+  Gated on a byte at `0x00d45f84`, which is **not** established as Zone-specific
+  (seven TOC slots, ~40 users across the scene/render/front-end code). Do not
+  write "Zone enables it" anywhere on the strength of this.
+
+- **2026-08-30, `FunkLayerColour2d_fp` is a clean negative.** The one
+  post-chain program the input enumeration did not cover: its fragment program
+  is `MOV H0, f[TC0]` with zero parameters and zero samplers, its vertex
+  program declares only `colour`, and its single draw wrapper
+  (`FunkLayer_DrawColourQuad`, `0x003cbc58`) has eleven call sites that every
+  one of them feeds a **constant** - `Scene_PrepareFrame` passes a hard-coded
+  opaque red `(1,0,0,1)`, the other ten are the `FunkLayerCorruption` glitch
+  overlay. Note the argument is made on the *call sites*, not on the shader:
+  a flat quad under a multiply blend would be a legitimate full-screen tint, so
+  the shader's shape alone would not have settled it. Details in
+  `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`.
+
+
 - **2026-08-30, the post-process route is closed - HD has no live whole-frame
   grade.** The `fullscreenTintColour` lead in
   `docs/ghidra/functions/ps3-hdfury-eu/renderer.md` was chased to the end, and
