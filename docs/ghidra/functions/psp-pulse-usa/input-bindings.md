@@ -367,6 +367,59 @@ run-up that stays off the wall, which this scenario's `180 cross` does not do
 on the real hardware; the timer columns above are the runtime leg that does
 not depend on getting that right.
 
+### A shorter run-up avoids the graze, but finds a different confound
+
+2026-08-30, `verification/scenarios/sideshift-double-tap-clean.inputs` (and its
+`-control`), same reference scenario, run-up cut from `180 cross` to `130
+cross` so the first tap fires well clear of the documented 60-90 graze window.
+It works, in the narrow sense that neither trace shows a differing
+lateral-velocity spike before the tap - both share one common jolt (`~6.6-6.75`
+units/s on the right-axis column, tick 108 in the capture and tick 103 in the
+control, five ticks apart but otherwise near-identical) that reads as a shared
+track feature, not a divergent wall hit.
+
+**What it finds instead: the "straight" run-up is not straight relative to the
+track, and the control is not a clean do-nothing baseline past about tick
+150.** Both traces drift at a steady, near-identical `~-4.5` to `-5` units/s on
+the `right_x/y/z` columns from as early as tick 125 onward, with zero steering
+input - this is `craft+0x170`, which the field name says `right` but the basis
+section above says is row 0, **the ship's own left axis**, so a negative
+reading here is rightward drift. It is present in both runs before the tap and
+is too large and too repeatable between two independently-booted captures to
+be pose noise; it reads as the track's own camber on this stretch, not
+measurement error.
+
+Left running, that drift is exactly what puts the **control** into a wall:
+from tick ~148 its `pos_z` freezes (`-203.77` at tick 148, `-203.13` at tick
+232 - 0.6 units of lateral motion over 84 ticks) while `pos_x` keeps climbing
+normally, and speed decays from 41 toward 26 and still falling - the same
+grind-along-a-wall signature `ppsspp-debugger.md`'s reference-scenario section
+already documents for this exact configuration, settling toward the ~21-22
+units/s regime described there. The **capture** does not: `pos_z` keeps moving
+freely through the same window (`-204.02` to `-196.12`) and speed climbs
+cleanly past 100 units/s by tick 232. The sideshift's own force window
+(`ss_shift_l` positive, ticks 135-148) is where the two trajectories part:
+the capture's right-axis velocity swings from `-4.55` before the tap up
+through `+8.92` mid-force and settles near `0` to `+0.6`, while the control's
+carries on decaying smoothly through `-3.9` to `-2.3` over the same span. The
+sideshift is what reverses the shared drift enough to clear the wall the
+control rides into.
+
+**So this run confirms the sideshift is a real, signed, mid-run velocity
+event of the right sign (leftward, matching a left tap) and roughly the right
+duration** - but it still does not produce a clean displacement figure in the
+original's units. Past ~tick 148 the two runs are not laterally-offset copies
+of the same trajectory, they are in different physical regimes (free versus
+wall-pinned), so a position difference at any later tick mixes "the
+sideshift's own kick" with "which run happened to dodge the wall" and cannot
+be read as one number. The one window where both runs are still free (tick
+135-148, 13 ticks) is too short for the position delta to clear the pre-existing
+phase noise (a few tenths of a unit either way). Confidence **80** for the
+directional/velocity finding (independently measured, signed correctly against
+the decompiled force's polarity); the absolute "11.7 units" figure remains
+unconfirmed against real hardware, now for a different and better-understood
+reason than the original capture's outright wall graze.
+
 ## The tap-history path is the barrel roll
 
 `engine.md` closes its sideshift section by recording a third path it
