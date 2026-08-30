@@ -2197,6 +2197,62 @@ neither visible to a static branch scan. A **read watchpoint on
 `0x00c81a5c`** settles both in one run, and that address has a confirmed
 per-frame writer to serve as the control.
 
+## 2026-08-30, an eighteenth pass: play evidence overturns the static "no reader located" conclusion - HD's Zone mode does recolour the scene
+
+The seventeenth pass's table above says, honestly, "no reader located" for
+`Scene`/`Track` and lists what would overturn it - all static. This pass is
+not static: it is a real boot, driven start to finish, with a screenshot
+before the recolour and one well after.
+
+**Method.** `Main Menu -> right -> cross` (Single Player), four confirmed
+`right` taps at the Mode list with a screenshot after each one (the eleventh
+pass's dropped-tap trap - this run's step 4 shot was checked and does say
+`ZONE` before confirming), `cross` to commit, then the outer walk's own
+retrying cross-presses through `Track Creation -> Team Selection -> Launch
+Game` to `InGame`. Held thrust only, no steering, from 15 seconds after
+arrival, with a screenshot at t+15s and another at t+60s (t+60s chosen after
+an earlier attempt's 150-second hold ran the entire race to completion and
+landed both shots outside it - on the pre-race grid and the post-race
+results screen respectively, neither of which shows a track at all).
+
+**Result.** The t+15s shot: a cyan track and cyan-lit surrounding structure,
+HUD reading `ZONE 0 / SUB-VENOM`. The t+60s shot: the same HUD's zone counter
+has advanced past `FLASH`/`SUB-RAPTER`, and the track surface, its side
+barriers, and a large flat-faced building alongside the track have all
+shifted - the track/barrier to purple-magenta, the building to solid yellow.
+Ship livery is the one constant between the two frames (this game's own paint
+job, not scenery). This is a genuine, confirmed Zone-mode run (mode list
+verified on-screen per shot 4, not inferred from a tap count) - the exact gap
+the eleventh pass's write-watchpoint attempts left open.
+
+**Per this project's leakage policy, the screenshots themselves are not
+committed** (`just audit-leakage`, `docs/overview/legal.md`) - described here
+in prose instead, same as every other play-observed finding on this page.
+
+**What this does and does not settle.** It proves `Scene.*`/`Track.*`-shaped
+recolouring genuinely happens in a real Zone race - the "does HD do this at
+all" question the render-wiring work needs answered is now yes, empirically,
+independent of whatever the static trail finds. It does **not** identify
+*which* mechanism drives it: `0x00c81a5c`'s reader is still unlocated, the
+per-key getters for `Scene`/`Track` are still uncalled in the static scan,
+and a shading path this page has not yet considered (a post-process tint, a
+fog-driven material parameter, something reached only through an indirect
+call) remains just as plausible as `0x00c81a5c` finally being read somewhere
+this page's tools can't see. **Do not wire anything into `oag_render` off
+this pass alone** - it confirms the target behaviour exists, not the
+mechanism to reproduce it; per `CLAUDE.md`'s "never invent what the assets
+already author," wiring needs the actual reader, not a plausible stand-in
+that happens to look right in the same two colours.
+
+**Next step**: the read watchpoint on `0x00c81a5c` the seventeenth pass
+proposed, now doubly motivated - it would either find the missing reader
+(closing this chain for good) or come back negative again, which would mean
+looking past `0x00c81a5c` entirely for a second, unidentified consumer of the
+per-stage palette. A composition-matched before/after pair (same track
+section, different stage colour, rather than this pass's two different
+segments) would sharpen the visual evidence further but isn't needed to
+settle "does it happen at all" - it already does.
+
 ## See also
 
 - `docs/formats/effectsettings.md` - the file format this loader reaches for

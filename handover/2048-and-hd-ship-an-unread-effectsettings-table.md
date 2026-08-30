@@ -1237,3 +1237,29 @@ evidence, including the byte-level trace of every function in this chain:
 
   **What would close it**: a USSE decoder (Vita3K has a recompiler; this
   project has none), or observing the pass's output directly.
+
+  **2026-08-30, a nineteenth pass: HD's side gets its own "observing the
+  pass's output directly"** - a real Zone boot, driven to a confirmed race
+  (Mode list step 4 screenshot checked, per the eleventh pass's dropped-tap
+  trap), screenshotted at t+15s and t+60s while holding thrust. Track
+  surface, side barriers and a trackside building all shift colour between
+  the two shots (cyan -> purple-magenta / yellow) as the HUD's zone counter
+  advances - full write-up with the exact method in
+  [zone-effectsettings-loader.md's eighteenth pass](../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md#2026-08-30-an-eighteenth-pass-play-evidence-overturns-the-static-no-reader-located-conclusion---hds-zone-mode-does-recolour-the-scene).
+  Screenshots not committed, per leakage policy.
+
+  **This confirms the target behaviour on HD, not the mechanism.** It does
+  not identify a reader for `0x00c81a5c` or any other consumer - the
+  seventeenth pass's static "no reader located" table for HD stands
+  unchanged; this is independent play evidence that the behaviour exists
+  regardless. **Nothing wired** - per `CLAUDE.md`, confirming the effect is
+  real is not the same as having the real trigger to reproduce it with.
+
+  **Next, and it is the same read watchpoint the seventeenth pass already
+  named**: arm `Z2` (or, once available, `Z3` for a read) on `0x00c81a5c`
+  during a *confirmed* Zone race - the thing every static attempt on HD's
+  side has been missing so far is a verified-Zone run, not a longer window.
+  A tighter, composition-matched before/after screenshot pair (same track
+  section, two different stage colours, rather than this pass's two
+  different segments) is a nice-to-have for the writeup but not a blocker -
+  the recolour is already unambiguous at this resolution.
