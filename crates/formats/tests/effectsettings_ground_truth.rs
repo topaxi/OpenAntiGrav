@@ -196,3 +196,100 @@ fn twok48_title_wide_keys_read_with_no_stage() {
     let effect = EffectSettings::parse(&text).expect("it parses");
     assert_eq!(effect.table.scalar("Sky Radius"), Some(4000.0));
 }
+
+/// **The stage table is a real colour grade, read off the disc**: `Start` and
+/// `Sub Venom` differ in every field that has somewhere to go, and both ends
+/// of the recovered cross-fade land on the file's own authored numbers.
+///
+/// Every value asserted here was read out of
+/// `/data/environments/zonemode.effectsettings` itself, not typed from a
+/// guess - the same numbers `effectsettings/tests.rs` blends offline, so a
+/// drift in either fails both.
+#[test]
+#[ignore]
+fn hd_stage_zero_and_stage_one_are_two_different_authored_palettes() {
+    use oag_formats::effectsettings::StagePalette;
+
+    let Some(image) = hd_image() else { return };
+    let spec = format!("{}:PS3_GAME/USRDIR/DATA00.PSARC", image.display());
+    let mut archive = oag_assets::psarc::Archive::open(&spec).expect("the archive opens");
+    let bytes = archive
+        .read_path("/data/environments/zonemode.effectsettings")
+        .expect("the entry reads");
+    let text = String::from_utf8(bytes).expect("UTF-8");
+    let effect = EffectSettings::parse(&text).expect("it parses");
+
+    // `Start`: no fog of its own, a neutral rig, a black sky reflection.
+    let start = StagePalette {
+        fog_colour: Some([0.0, 0.0, 0.0]),
+        fog_density: Some(0.0),
+        sun_colour: Some([1.0, 1.0, 1.0]),
+        ambient_colour: Some([1.0, 1.0, 1.0]),
+        prelit_scale: Some([1.0, 1.0, 1.0]),
+        prelit_power: Some([1.0, 1.0, 1.0]),
+        sky_reflection_colour: Some([0, 0, 0, 255]),
+        sky_horizon_colour: Some([0.0, 0.0, 0.0]),
+        sky_zenith_colour: Some([0.0, 0.0, 0.0]),
+    };
+    // `Sub Venom`: a cyan fog at a real density, a brighter ambient, a sunless
+    // rig and a white sky reflection - the escalation this table exists for.
+    let sub_venom = StagePalette {
+        fog_colour: Some([0.0, 1.305_882, 1.8]),
+        fog_density: Some(0.002_1),
+        sun_colour: Some([0.0, 0.0, 0.0]),
+        ambient_colour: Some([1.5, 1.5, 1.5]),
+        prelit_scale: Some([1.0, 1.0, 1.0]),
+        prelit_power: Some([1.0, 1.0, 1.0]),
+        sky_reflection_colour: Some([255, 255, 255, 255]),
+        sky_horizon_colour: Some([0.0, 0.211_765, 0.247_059]),
+        sky_zenith_colour: Some([0.003_922, 0.286_275, 0.466_667]),
+    };
+    assert_eq!(effect.stage_palette(0), Some(start));
+    assert_eq!(effect.stage_palette(1), Some(sub_venom));
+    assert_ne!(start, sub_venom, "the two stages are a visible grade apart");
+
+    // Stage 0 at rest is exactly `Start` - it pairs with itself, so nothing
+    // fades while a race sits on it.
+    assert_eq!(effect.blended_palette(0, 1.0), Some(start));
+    // Stage 1 fully arrived is exactly `Sub Venom`; stage 1 not yet begun is
+    // exactly `Start`, which is the stage it fades from.
+    assert_eq!(effect.blended_palette(1, 1.0), Some(sub_venom));
+    assert_eq!(effect.blended_palette(1, 0.0), Some(start));
+    // Halfway: the float keys in floats, `1.8` intact rather than clipped to
+    // white, and the one byte-written key through the recovered byte
+    // arithmetic.
+    let half = effect.blended_palette(1, 0.5).expect("stage 1 is named");
+    assert_eq!(half.fog_colour, Some([0.0, 1.305_882 / 2.0, 0.9]));
+    assert_eq!(half.fog_density, Some(0.002_1 / 2.0));
+    assert_eq!(half.sky_reflection_colour, Some([127, 127, 127, 254]));
+}
+
+/// **The whole ladder is populated, not just its first rungs** - every one of
+/// HD's fifteen stages authors the fog, rig and sky-reflection keys this
+/// project reads, so a stage index anywhere on the ladder has a palette to
+/// apply rather than a hole.
+#[test]
+#[ignore]
+fn every_hd_stage_authors_the_keys_this_project_reads() {
+    let Some(image) = hd_image() else { return };
+    let spec = format!("{}:PS3_GAME/USRDIR/DATA00.PSARC", image.display());
+    let mut archive = oag_assets::psarc::Archive::open(&spec).expect("the archive opens");
+    let bytes = archive
+        .read_path("/data/environments/zonemode.effectsettings")
+        .expect("the entry reads");
+    let text = String::from_utf8(bytes).expect("UTF-8");
+    let effect = EffectSettings::parse(&text).expect("it parses");
+    for stage in 0..HD_STAGES.len() as u32 {
+        let palette = effect
+            .stage_palette(stage)
+            .unwrap_or_else(|| panic!("stage {stage} is named"));
+        assert!(palette.fog_colour.is_some(), "stage {stage} fog colour");
+        assert!(palette.fog_density.is_some(), "stage {stage} fog density");
+        assert!(palette.sun_colour.is_some(), "stage {stage} sun colour");
+        assert!(palette.ambient_colour.is_some(), "stage {stage} ambient");
+        assert!(
+            palette.sky_reflection_colour.is_some(),
+            "stage {stage} sky reflection"
+        );
+    }
+}
