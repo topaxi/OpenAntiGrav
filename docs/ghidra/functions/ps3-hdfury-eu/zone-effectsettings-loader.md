@@ -2653,6 +2653,35 @@ necessary for *finding* the reader and much more useful for confirming the gate
 - and a **write** watchpoint on `0x00c49130` would be the direct test of the
 buffer's role.
 
+## 2026-08-31: the read watchpoint fired, live, in a confirmed Zone race - the gate is open
+
+Closes the "whether the gate is on in a Zone race" item above, empirically
+rather than by further static reasoning. With `Z3`/`z3` support built and
+verified (`docs/reverse-engineering/rpcs3-debugger.md`, "`Z3` (read
+watchpoint) is fully verified end to end"): a `Z0` breakpoint on the reader
+instruction (`0x003aaf8c`) confirmed it now *executes at all* in a genuine,
+screenshot-checked Zone race (`RACE TYPE: ZONE`, `Zone_HUD.xml` in
+`TTY.log`) - it had not, in the earlier Arcade-mode attempt - and a `Z3`
+watch on `0x00c81a5c` fired within 5 seconds of arming it, log-confirmed
+with the correct PC (`RPCS3.log`'s own `Read watchpoint hit` line, not a
+stop-reply register dump).
+
+**This is now a fully live-confirmed chain, not a static one with play
+evidence bolted on**: the gate at `0x00d45f84` is open during a real Zone
+race, `Scene_PrepareFrame` genuinely reads `0x00c81a5c` when it is, and the
+whole path from `Environment_UpdateStageBlend`'s write through to this read
+is exercised in practice, not just reachable on paper. Confidence on "the
+gate is open in Zone" moves to 85 (one real, verified boot; not yet checked
+against a non-Zone race with the gate confirmed *shut* as the matching
+control, though the earlier Arcade attempt's "reader never executes" is
+already exactly that control, just recorded before this pass connected the
+two).
+
+**Still open**: the buffer identity (`0x00c49110`/`0x00c49120`/`0x00c49130`,
+confidence 65 per the render thread's own tracking) and what consumes it.
+That is now the only thing left between this chain and a real render-wiring
+decision - see the handover thread's own next steps.
+
 ## See also
 
 - `docs/formats/effectsettings.md` - the file format this loader reaches for

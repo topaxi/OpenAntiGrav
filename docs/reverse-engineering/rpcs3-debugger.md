@@ -315,7 +315,7 @@ in [`names.tsv`](../ghidra/functions/ps3-hdfury-eu/names.tsv) is usable as
 typed. The register dump's layout was settled the same way: LR at byte 532 lands
 at `0x00011114`, inside the code range, which no other split does.
 
-### `Z3` (read watchpoint) is also patched in, protocol-verified, not yet trap-verified
+### `Z3` (read watchpoint) is fully verified end to end
 
 **2026-08-31**, extending the same build:
 [`scripts/patches/rpcs3-gdb-read-watchpoints.patch`](../../scripts/patches/rpcs3-gdb-read-watchpoints.patch)
@@ -326,23 +326,38 @@ have no single per-width `vm::read<T>()` to hook the way writes have
 through `ppu_feed_data<T>()` in `PPUInterpreter.cpp` (confirmed by reading
 through its call sites, not assumed), which already had an existing
 `RPCS3_HAS_MEMORY_BREAKPOINTS`-gated `bp_read` check for the Qt debugger
-sitting right there for the new hook to sit beside.
+sitting right there for the new hook to sit beside. Same scope limitation as
+`Z2`/`Z0`: interpreter-only.
 
-`Z3,<addr>,<len>` and `z3,<addr>,<len>` both answer `OK` against a live
-session, parsing and registry bookkeeping matching `Z2`'s exactly - the
-protocol layer is proven. **What is not yet proven is a real guest read
-actually tripping it.** The first attempt, on `0x00c81a5c` (see the vector-
-stores section below), found no trap - but root-caused to that address's own
-reader not executing outside Zone mode, not a defect in the hook: a `Z0`
-breakpoint on the reader instruction itself, checked properly (resume-slice
--> `pause()` -> walk every thread's PC via `wait_at()`, not `wait_for_stop()`,
+Protocol level came first: `Z3,<addr>,<len>` and `z3,<addr>,<len>` both
+answer `OK` against a live session, parsing and registry bookkeeping
+matching `Z2`'s exactly. The first end-to-end attempt, on `0x00c81a5c`,
+found no trap in an Arcade race - root-caused (not guessed) to that
+address's own reader not executing outside Zone mode: a `Z0` breakpoint on
+the reader instruction itself, checked properly (resume-slice ->
+`pause()` -> walk every thread's PC via `wait_at()`, not `wait_for_stop()`,
 which can go silent on a parked thread the same way it does for `Z0` - see
-above), showed the reader never runs in an Arcade race, and a 120-second `Z3`
-watch cross-checked against `RPCS3.log`'s own `Read watchpoint hit` line
-(the same log-line ground truth `Z2`'s own verification used, written
+above), showed the reader never runs in Arcade, and a 120-second `Z3` watch
+cross-checked against `RPCS3.log`'s own `Read watchpoint hit` line (written
 synchronously regardless of whether a stop reply ever reaches a client)
-confirmed zero occurrences to match. Same scope limitation as `Z2`/`Z0`:
-interpreter-only.
+confirmed zero occurrences to match.
+
+**A rerun with a genuine, screenshot-confirmed Zone race (`RACE TYPE: ZONE`,
+`Zone_HUD.xml` in `TTY.log`) closed it the same day.** A `Z0` sanity check
+confirmed the reader instruction (`Scene_PrepareFrame`, `0x003aaf8c`) now
+executes at all - closing the mode-gating question outright - then `Z3`
+armed on `0x00c81a5c` fired within 5 seconds:
+
+```
+·S 0:01:14.616975 {PPU[0x1000000] Thread (main_thread) [0x003aaf8c]} GDB: Read watchpoint hit: 4 byte(s) at 0xc81a5c.
+```
+
+**That log line's PC is a second, independent way to get an accurate PC**,
+useful regardless of the `Assume External Debugger` finding below: it comes
+from the watch-check call site itself (`gdb_watch_check_read`/
+`gdb_watch_check_write` log their own `addr` argument, not `ppu.cia`), so it
+is correct even when a stop reply's register-dump PC is not. `Z3` is now
+proven at every layer: parse, arm, trap on a real guest read, remove.
 
 ### `Z2`/`Z3` and vector stores: not a gap, confirmed from source - the real bug was PC reporting
 
@@ -380,7 +395,11 @@ sits wherever the last `bl`/`b` left it, which is exactly the "a `nop` right
 after an unrelated `bl`" symptom run 2 produced. **Fix: set `Assume External
 Debugger: true` in `config.yml` before booting** - it is baked into each
 opcode's dispatch thunk the first time that opcode executes, so it cannot be
-toggled mid-session.
+toggled mid-session. **Treat this the same as the `PPU Decoder` switch
+below**: a temporary, session-scoped change to the shared config, not a new
+permanent default - the flag's name suggests it may disable optimizations or
+affect thread-suspend heuristics, unconfirmed either way, so switch it back
+when a run doesn't need accurate stop-reply PCs.
 
 **Run 1's zero-hit result still isn't explained, but the space of
 explanations just got smaller.** With the hook itself cleared, the two live
