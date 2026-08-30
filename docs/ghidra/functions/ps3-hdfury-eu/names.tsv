@@ -142,10 +142,11 @@
 0x0031d570	function	FwFile_ReadChunked	78	zone-effectsettings-loader.md
 0x005d3378	function	FwKeyedText_ParseBuffer	82	zone-effectsettings-loader.md
 0x005d2108	function	FwKeyedText_ParseEntry	80	zone-effectsettings-loader.md
-0x008b79cc	data	g_EffectSettingsSchemaKeyNames	82	zone-effectsettings-loader.md
+0x008b79cc	data	g_EffectSettingsSchemaKeyNames	90	zone-effectsettings-loader.md
 0x003da540	function	Environment_UpdateStageBlend	85	zone-effectsettings-loader.md
 0x00067b40	function	Detonator_UpdateRace	75	zone-effectsettings-loader.md
 0x007b2b10	data	g_zone_mode_texture_names	85	zone-effectsettings-loader.md
 0x007b2c78	data	g_zone_mode_track_texture_names	85	zone-effectsettings-loader.md
 0x007b26c8	data	g_detonator_mode_texture_names	85	zone-effectsettings-loader.md
 0x007b28b8	data	g_detonator_mode_track_texture_names	85	zone-effectsettings-loader.md
+0x003d0b98	function	Environment_RegisterStageSchema	85	zone-effectsettings-loader.md

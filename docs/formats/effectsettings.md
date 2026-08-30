@@ -582,11 +582,49 @@ traced.
   reads three 16-byte fields per stage; the correspondence to
   `Scene.Texture/Near/Base Colour` is positional and explicitly unconfirmed,
   so the Rust side blends fields chosen by the *file's own key names*
-  instead. A read of the schema's destination-pointer-to-struct-offset
-  mapping would settle it - and would also settle whether the byte-domain
-  blend applies to keys this project currently fades in floats, which it does
-  because three of `zonemode.effectsettings`' own colours exceed `1.0` and
-  byte quantisation would send them all to white.
+  instead.
+
+  **2026-08-30: the mapping's producer is found, the mapping itself is not.**
+  `Environment_RegisterStageSchema` (`0x003d0b98` on HD, `0x8104714c` on
+  2048) is the function that hands each `"%s.<Key>"` template, formatted
+  against a stage name, to a typed registration helper together with that
+  stage's destination pointer - so the key-to-offset table exists in code and
+  is enumerable. Two things stop this from being read off it cheaply: HD's
+  registrar keeps **several** running base registers, each advanced by
+  `0x250` per stage (so the per-stage data is spread over more than one
+  region, and an offset means nothing without its base - one promising mid-pass
+  reading was withdrawn for exactly that reason), and 2048's takes its
+  destinations from precomputed stack slots rather than `base + imm`
+  literals. The bounded route is either `GHIDRA_MCP_ALLOW_SCRIPTS=1` on the
+  Ghidra MCP server - `run_script_inline` currently refuses - or ~700
+  instructions of `disassemble_bytes` zipped by hand. The **nine** typed
+  helpers HD's registrar calls (`0x005d35c0`, `0x005d3cc8`, `0x005d3e18`,
+  `0x005d3ec0`, `0x005d4010`, `0x005d40b8`, `0x005d4220`, `0x005d4418`,
+  `0x005d46b8`) are also what would settle the byte-versus-float storage
+  question below - none is read yet. See
+  [zone-effectsettings-loader.md](../ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md#2026-08-30-a-twelfth-pass-the-schemas-registrar-is-found-on-both-titles---and-the-compile-time-array-framing-was-wrong).
+- **Only the fog and a light tint reach the picture, and the blocker is a
+  binding, not a parse.** Raised 2026-08-30 by a user racing a real 2048 Zone
+  race: "it only changes the fog, it should affect all textures and such."
+  That is what this build does, and on 2048 it is the *most* it can do -
+  2048's per-stage blocks author no `Lighting.*` keys at all, so
+  `ZoneGrade::light` is a no-op on that title by construction and fog is the
+  only channel `StagePalette` can reach.
+
+  The rest of what a stage authors - `Colour 1..8.Colour`,
+  `Window Colour 1..3.Gradient 1..3`, `Track Paint.{Primary,Secondary}
+  Colour`, `Background.Diffuse Colour`, `EQ.*`, `Cube Animation Colour 1`,
+  `Edge Colour` - is **indexed into the circuit's own art**, and nothing
+  recovered says which material, mesh or shader slot index `3` is. A
+  key-to-offset table would say where a parsed colour lands in memory; it
+  would still not say what draws with it. **That binding is the open
+  question**, and until it is answered, wiring any of these would mean
+  choosing a material to recolour, which is precisely the invented
+  correspondence `CLAUDE.md` rules out. The two that might not need it -
+  `Sky.{Horizon,Zenith} Colour` and `Background.Diffuse Colour` - are already
+  parsed into `StagePalette` and are unwired only because this engine's sky
+  is textured geometry with no colour input yet; that is a missing seam on
+  this side, not a missing fact about the disc.
 
 ## See also
 

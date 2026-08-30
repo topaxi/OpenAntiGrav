@@ -36,3 +36,4 @@
 0x81197c24	function	Hud_InitZoneSpeedClassWidget	82	zone-environment-fallback.md
 0x8151faf8	data	g_zone_speed_class_thresholds	82	zone-environment-fallback.md
 0x8148a4a0	data	g_zone_speed_class_names	82	zone-environment-fallback.md
+0x8104714c	function	Environment_RegisterStageSchema	80	zone-environment-fallback.md

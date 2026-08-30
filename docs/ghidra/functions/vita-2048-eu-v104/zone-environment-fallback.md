@@ -640,6 +640,51 @@ race, since the last record's threshold is `0`.
 `ZoneGrade::show_zone`; checked against the real Vita package in
 `crates/game/tests/zone_grade_ground_truth.rs`.
 
+## 2026-08-30, a sixth pass: 2048's own effectSettings schema registrar
+
+**`Environment_RegisterStageSchema`** (`0x8104714c`, confidence 80) - the
+counterpart of HD's function of the same name
+([zone-effectsettings-loader.md](../ps3-hdfury-eu/zone-effectsettings-loader.md#2026-08-30-a-twelfth-pass-the-schemas-registrar-is-found-on-both-titles---and-the-compile-time-array-framing-was-wrong)),
+found from this title's own key templates rather than from its loader.
+
+`search_strings` for `Growing Texture` and `Environment Fog Colour` returns
+`"Zone %s.Growing Texture.{Colour,Scale Bias,Factors}"` (`0x8150a5c0`,
+`0x8150a5e0`, `0x8150a604`) and `"Zone %s.Fog.Environment Fog Colour"`
+(`0x8150a680`) - and `get_xrefs_to` on those puts every reference inside this
+one function. Its body is the same format-then-register idiom HD uses:
+
+```
+8104bbe0  movw/movt r1, #0x8150a5c0   ; "Zone %s.Growing Texture.Colour"
+8104bbe4  mov  r0, r8                 ; the formatted-name buffer
+8104bbe6  mov  r2, sp                 ; the stage's own name
+8104bbec  blx  0x813f38e0             ; buffer = format(template, stageName)
+8104bbf0  ldr.w r1, [sp,#0xcc8]       ; the destination pointer
+8104bbfa  bl   0x812f9dac             ; a typed registration helper
+```
+
+Confidence 80 rather than HD's 85: the templates and the idiom are read
+directly, but this function has no static caller (`get_xrefs_to` returns
+nothing - normal for this binary's indirect dispatch) and no loop bound was
+read, so "fifteen stages" is HD's fact, not yet this title's.
+
+**Its destinations are harder to read than HD's**, which matters for anyone
+picking this up: they arrive from precomputed stack slots (`[sp,#0xcc8]`,
+`[sp,#0xccc]`, `[sp,#0xcc4]`) and long-lived registers rather than from
+`base + imm` literals, so the key-to-offset table needs the prologue that
+fills those slots, not a peephole read at each call. Four typed helpers show
+in the sampled window: `0x812f9dac`, `0x812f9ea4`, `0x812f9d30`,
+`0x812f9d6e`.
+
+**Also surfaced, unchased**: `"Debug.Reload Growing Textures"` (`0x81509e3c`)
+- 2048 ships a named Growing Texture subsystem with its own debug reload,
+which is a better handle on that effect than anything the file side has
+offered so far.
+
+**Nothing wired from this pass.** The offsets are not read, and even read they
+would say where a parsed colour lands, not which material or mesh it
+recolours - which is the actual blocker behind "the grade should affect all
+textures, not just the fog".
+
 ## See also
 
 - `docs/formats/effectsettings.md` - the file format this loader reaches for

@@ -934,3 +934,58 @@ evidence, including the byte-level trace of every function in this chain:
      against 2048's or HD's executables. The ladder wired here is 2048's; the
      clock feeding it is not, and a 2048 race's escalation will only be
      correctly *paced* once that is read.
+
+  **2026-08-30, an eleventh pass, on a user observation from a live 2048 Zone
+  race: "it only changes the fog, it should affect all textures and such."**
+  Correct, and this pass establishes *why* rather than fixing it.
+
+  **Found: the schema registrar, on both titles.**
+  `Environment_RegisterStageSchema` - `0x003d0b98` on HD (confidence 85, the
+  ~24 KB neighbour this page ruled out twice as "just memsets") and
+  `0x8104714c` on 2048 (confidence 80, found from its own
+  `"Zone %s.Growing Texture.Colour"` / `"Zone %s.Fog.Environment Fog Colour"`
+  templates). For each stage it formats every key template against that
+  stage's name and hands the result plus a destination pointer to one of nine
+  typed registration helpers - the table `FwKeyedText_ParseEntry` later looks
+  a parsed key up in. **This confirms the 73-key vocabulary from code rather
+  than from position**, so `g_EffectSettingsSchemaKeyNames` moves 82 -> 90.
+
+  **Two corrections to this thread's own earlier claims.** The "73-entry
+  compile-time array" at `0x008b79cc` is not an array - it sits inside the
+  module's **TOC**, and the registrar loads each slot individually
+  (`get_xrefs_to` returns nothing and no word in the binary holds that
+  address, both checked). And `0x007b26c8` sits at `0x008b7afc`, not
+  `0x008b7af8`; `0x008b7af8` holds the mode-dispatch gate byte pointer.
+
+  **Not found: the key-to-offset table, and it would not have been enough
+  anyway.** HD's registrar keeps several base registers each advanced by
+  `0x250` per stage, so an offset is meaningless without its base - one
+  reading was withdrawn mid-pass for exactly that reason, recorded as a trap.
+  `run_script_inline` is refused on this bridge
+  (`GHIDRA_MCP_ALLOW_SCRIPTS` unset), so enumeration needs that variable set
+  or ~700 hand-zipped instructions, and it was not spent because the offsets
+  are HD's while the live trigger is 2048's.
+
+  **The real blocker, stated plainly**: an offset says where a parsed colour
+  lands in memory; it does not say what draws with it. `Colour 1..8.Colour`,
+  `Window Colour N.Gradient N` and `Track Paint.*` are indexed into the
+  circuit's own art and nothing recovered says which material index `3` is.
+  On 2048 specifically, fog really is the ceiling today: its per-stage blocks
+  author **no** `Lighting.*` keys, so `ZoneGrade::light` is a no-op on that
+  title by construction. Full write-up in
+  [effectsettings.md](../docs/formats/effectsettings.md)'s `## Open`.
+
+  **Next steps, in order of tractability:**
+
+  1. `Sky.{Horizon,Zenith} Colour` and `Background.Diffuse Colour` are
+     already parsed into `StagePalette` and need **no** binding - they are
+     unwired because this engine's sky is textured geometry with no colour
+     input. That is a seam to add on this side, not a fact to recover.
+  2. `"Debug.Reload Growing Textures"` (`0x81509e3c`, 2048) names a Growing
+     Texture subsystem with its own debug reload - a better handle on that
+     effect than anything the file side has offered.
+  3. The nine typed registration helpers HD's registrar calls would settle
+     the byte-versus-float storage question this thread has carried since the
+     render wiring landed.
+  4. The full key-to-offset enumeration, once `GHIDRA_MCP_ALLOW_SCRIPTS=1`
+     makes it a script rather than a hand-zip.

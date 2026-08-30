@@ -397,9 +397,15 @@ boundaries are measured, not reconciled after an off-by-one guess:
   address sits in memory immediately after the key-name array ends, which
   is itself corroboration that the two are a matched pair rather than
   coincidentally adjacent.
-- `0x007b26c8` (`Data/Tex/DetonatorMode0.gtf`) - the per-stage texture
-  table's own first filename, already named on this page - appears two
-  words further on, at `0x008b7af8`, inside that table, not this array.
+- `0x007b26c8` (`g_detonator_mode_texture_names`, the per-stage texture
+  table's own first filename, named on this page) appears two words further
+  on, inside that table rather than this run.
+
+  > **Corrected 2026-08-30 (eleventh pass): it is at `0x008b7afc`, not
+  > `0x008b7af8`.** `0x008b7af8` holds `0x009384e1`, the byte-flag pointer
+  > both `Environment_LoadStageTextures` and `Environment_UpdateStageBlend`
+  > gate their mode dispatch on. Read directly: the four words from
+  > `0x008b7af0` are `00c7efb0 00936fe8 009384e1 007b26c8`.
 
 So 73 is a measured length (float boundary in, destination-base boundary
 out), not a count that happened to land on a round number. Separately, this
@@ -1574,6 +1580,134 @@ With the patched RPCS3 build (`docs/reverse-engineering/rpcs3-debugger.md`'s "A 
 **What this does and does not settle.** It does not prove no writer exists anywhere in the binary - 120 seconds under a slowed interpreter decoder may not correspond to enough in-game time or the right in-race event for whatever the write is actually gated on, and this pass did not verify the craft was ever above a walking pace during the window (no speed/velocity field was read alongside the target). It does sharpen the live-verification path for the next attempt: the exact command sequence to reach a genuine Zone race is now known and scripted (see the addresses above), the craft pointer resolves identically and stably across boots (`0x329021b0` both times, though that may just be this build/save-state's own allocator determinism rather than anything address-worth trusting long-term), and a longer window or an in-race progress check (does the value ever move at all, watched continuously rather than via a single watchpoint) is the next concrete step rather than another blind static sweep.
 
 Nothing renamed, nothing wired into Rust from this pass. `PPU Decoder` restored to `Recompiler (LLVM)` afterward - this patched-build interpreter requirement is temporary per session, not a standing environment change.
+
+## 2026-08-30, a twelfth pass: the schema's registrar is found on both titles - and the "compile-time array" framing was wrong
+
+Picked up `effectsettings.md`'s own open question - which key lands at which
+per-stage offset - and found the mechanism that answers it, without being able
+to enumerate it in full. Two corrections and one new function on each title.
+
+### `Environment_RegisterStageSchema` (`0x003d0b98`), confidence 85
+
+The ~24 KB neighbour this page ruled out twice as "just memsets" is the
+**schema registrar**. Its tail, read directly:
+
+```
+003d5adc  lwz  r4, -0x58e4(r2)      ; a "%s.<Key>" template out of the TOC
+003d5ae0  or   r5, r26, r26         ; the stage's own name
+003d5ae4  or   r3, r27, r27         ; the formatted-name buffer
+003d5ae8  bl   0x00455230           ; buffer = format(template, stageName)
+003d5af0  rldicl r4, r21, 0x0, 0x20 ; destination = r21 + 0x00
+003d5af4  li   r6, 0x0
+003d5af8  or   r3, r24, r24         ; the registry
+003d5afc  or   r5, r27, r27         ; the formatted name
+003d5b00  bl   0x005d40b8           ; register(registry, destination, name, 0)
+...
+003d5b90  addi r21, r21, 0x250      ; next stage
+003d5b9c  cmpwi cr7, r31, 0xe       ; fifteen iterations
+```
+
+So for each of the fifteen stages it formats every key template against that
+stage's name and hands the result, plus a destination pointer, to a
+registration helper - which is exactly the table `FwKeyedText_ParseEntry`
+later looks a parsed key up in. Reached from two thin wrappers,
+`FUN_003d69c0`/`FUN_003d69d0`, sitting immediately before
+`Environment_LoadStageTextures`.
+
+**Nine distinct typed helpers** are called, which is the shape a per-value-type
+registration API has: `0x005d35c0`, `0x005d3cc8`, `0x005d3e18`, `0x005d3ec0`,
+`0x005d4010`, `0x005d40b8`, `0x005d4220`, `0x005d4418`, `0x005d46b8`. None is
+read yet; between them they would settle `effectsettings.md`'s open question
+about which keys are stored as packed bytes and which as floats.
+
+### This confirms the vocabulary from code, and corrects how it was framed
+
+[The 2026-08-29 pass](#2026-08-29-the-schema-table-is-read-and-it-is-the-full-recognised-vocabulary-not-a-guess)
+called `0x008b79cc` "a 73-entry compile-time array of key-name strings" and
+rested its identification on position, content and a sibling-array precedent
+rather than on a traced consumer. **Both halves need amending:**
+
+- **The consumer is now traced.** This registrar loads those slots and hands
+  each one to a registration helper together with a per-stage destination.
+  The vocabulary finding is confirmed rather than inferred;
+  `g_EffectSettingsSchemaKeyNames`' confidence moves **82 -> 90**.
+- **It is not an array.** `0x008b79cc`-`0x008b7b7c` sits inside this module's
+  **TOC** (the same region every `-0x5xxx(r2)` displacement on this page
+  resolves into - `0x008bd3c4 - 0x59f8` reaches its base). The registrar
+  loads each slot individually with its own `lwz rX,-N(r2)`; nothing indexes
+  it. Confirmed two ways: `get_xrefs_to 0x008b79cc` returns nothing, and
+  `search_byte_patterns` for `008b79cc` finds no word anywhere holding that
+  address - a real array would have to be reached from somewhere. The 73
+  entries and their order are unaffected: the linker emits TOC slots in
+  first-use order, which for this function is the order the keys are
+  registered in.
+
+### What this does **not** settle: the key-to-offset table
+
+The destinations are **not** one flat `0x250` struct. The registrar keeps
+several running base registers, each advanced by `0x250` per stage - `r21`
+(at `0x003d5b90`) and `r23` (at `0x003d5ad0`) both do it, and one destination
+is computed as `r23 + r22 + 0x220` (`0x003d5ab8`) rather than from a single
+base at all. So the per-stage data is spread across **more than one**
+`0x250`-stride region, and a destination offset is only meaningful once its
+base register is identified. Neither `r21`'s nor `r23`/`r22`'s base was
+traced this pass.
+
+**So `effectsettings.md`'s positional guess - that the three RGBA fields
+`Environment_UpdateStageBlend` cross-fades at `+0x00`/`+0x20`/`+0x40` are
+`Scene.Texture/Near/Base Colour` - is still neither confirmed nor refuted**,
+and one reading that looked promising mid-pass was withdrawn before it
+shipped: the last four registrations land at `r21 + 0x00/0x04/0x08/0x0c` and
+the last four key templates are the `Detonator Bomb` colours, which would
+have made `+0x00` a bomb colour - but only if `r21` were the same base
+`Environment_UpdateStageBlend` reads, and it is not established that it is.
+Recorded as a trap: **on this registrar, an offset without its base register
+is not a fact.**
+
+**Enumerating the full 73-row table is a bounded but unspent job.** The
+in-process route is closed on this bridge - `run_script_inline` refuses with
+"Script execution disabled. Set `GHIDRA_MCP_ALLOW_SCRIPTS=1`" - so it needs
+either that variable set on the Ghidra MCP server or ~700 instructions of
+`disassemble_bytes` across `0x003d4fb0`-`0x003d5ba8`, zipped by hand. It was
+not spent here because the offsets it yields are **HD's**, and HD is the
+title with no recovered stage trigger; see the note on 2048 below.
+
+### 2048 has the same registrar: `Environment_RegisterStageSchema` (`0x8104714c`), confidence 80
+
+Same shape, on a binary with no TOC defect:
+
+```
+8104bbe0  movw/movt r1, #0x8150a5c0   ; "Zone %s.Growing Texture.Colour"
+8104bbe4  mov  r0, r8                 ; buffer
+8104bbe6  mov  r2, sp                 ; stage name
+8104bbec  blx  0x813f38e0             ; format
+8104bbf0  ldr.w r1, [sp,#0xcc8]       ; destination pointer
+8104bbfa  bl   0x812f9dac             ; typed register helper
+```
+
+Found from the template strings rather than from the loader: `search_strings`
+for `Growing Texture` and `Environment Fog Colour` returns
+`"Zone %s.Growing Texture.{Colour,Scale Bias,Factors}"` and
+`"Zone %s.Fog.Environment Fog Colour"`, whose only references are inside this
+function. Its destinations come from precomputed stack slots and registers
+rather than `base + imm` literals, so reading its offset table needs the
+prologue that fills them, not a peephole - the same job as HD's, differently
+shaped. Four typed helpers appear in the sampled window (`0x812f9dac`,
+`0x812f9ea4`, `0x812f9d30`, `0x812f9d6e`).
+
+Also surfaced, unchased: `"Debug.Reload Growing Textures"` (`0x81509e3c`) -
+2048 has a named Growing Texture subsystem with its own debug reload, which
+is a better handle on that effect than anything the file side has offered.
+
+### Nothing wired
+
+No render consumer was found for any key this pass, so nothing reaches
+`oag_render`. **The blocker is not the offset table** - it is that an offset
+says where a parsed colour lands, not which material or mesh it recolours.
+`Colour 1..8.Colour`, `Window Colour 1..3.Gradient 1..3` and
+`Track Paint.{Primary,Secondary} Colour` are all *indexed into the circuit's
+own art*, and nothing recovered says what index 3 is. That binding is the
+real open question behind "it should affect all textures".
 
 ## See also
 
