@@ -777,6 +777,27 @@ impl Scene {
         })
     }
 
+    /// Points the Zone colour grade at the zone the race has reached, and
+    /// answers whether that moved it.
+    ///
+    /// Called once a frame, which is where the original does it:
+    /// `Zone_UpdateStage` (`0x81044cfc`, `vita-2048-eu-v104`) runs from the
+    /// main render-update loop every frame, reads the stage index off the
+    /// craft and shows it. A no-op outside Zone, on a title shipping no stage
+    /// table, and on one whose zone-to-stage ladder is unrecovered - see
+    /// [`crate::race::zone_grade::ZoneGrade::show_zone`].
+    pub fn sync_zone_grade(&mut self, race: &Race) -> bool {
+        self.zone_grade
+            .as_mut()
+            .is_some_and(|grade| grade.show_zone(race.world.race.zone))
+    }
+
+    /// Which stage of the Zone grade is showing, for tests and reports.
+    #[must_use]
+    pub fn zone_stage(&self) -> Option<u32> {
+        Some(self.zone_grade.as_ref()?.blend().current)
+    }
+
     /// Rebuilds the depth buffer, and the MSAA colour target if there is one,
     /// for a new viewport size.
     ///

@@ -18,8 +18,12 @@ const HD_TWO_STAGES: &str = concat!(
 );
 
 fn grade() -> ZoneGrade {
+    grade_with(None)
+}
+
+fn grade_with(stages: Option<&'static oag_title::ZoneStages>) -> ZoneGrade {
     let table = EffectSettings::parse(HD_TWO_STAGES).expect("it parses");
-    ZoneGrade::new("zonemode.effectsettings".to_string(), table).expect("it names stages")
+    ZoneGrade::new("zonemode.effectsettings".to_string(), table, stages).expect("it names stages")
 }
 
 /// The circuit's own rig, as `envsettings_light` would hand one over.
@@ -53,7 +57,7 @@ fn a_fresh_grade_rests_on_stage_zero_fully_applied() {
 #[test]
 fn a_table_with_no_stages_builds_no_grade() {
     let table = EffectSettings::parse("\"Texture U scale\"=1.000000\n").expect("it parses");
-    assert!(ZoneGrade::new("empty".to_string(), table).is_none());
+    assert!(ZoneGrade::new("empty".to_string(), table, None).is_none());
 }
 
 /// **Stage 0 and stage 1 are two different, correctly-sourced fogs**: `Start`
@@ -160,4 +164,33 @@ fn committing_the_current_stage_changes_nothing() {
     grade.set_weight(0.75);
     assert!(!grade.commit());
     assert_eq!(grade.blend().weight, 0.75, "the weight is left alone");
+}
+
+/// A title with no recovered ladder does not move, which is HD/Fury: its own
+/// Zone stage source (`craftArray[n]->+0x640`) has no found writer, so the
+/// grade must sit still rather than borrow 2048's numbers.
+#[test]
+fn a_title_with_no_ladder_never_advances() {
+    let mut grade = grade();
+    assert_eq!(grade.stage_for_zone(40), None);
+    assert!(!grade.show_zone(40));
+    assert_eq!(grade.blend().current, 0);
+}
+
+/// 2048's own table, against this two-stage excerpt: the clamp is the loaded
+/// file's last row, exactly as `Zone_UpdateStage` clamps to its own.
+#[test]
+fn a_recovered_ladder_advances_and_clamps_to_the_loaded_table() {
+    let mut grade = grade_with(Some(oag_2048::race::ZONE_STAGES));
+    // Zone 0 matches the last record (threshold `0`) and is class 1, so a race
+    // opens on stage 1 rather than on `Start`.
+    assert_eq!(grade.stage_for_zone(0), Some(1));
+    assert!(grade.show_zone(0));
+    assert_eq!(grade.blend().current, 1);
+    assert_eq!(grade.blend().weight, 1.0);
+    // Same class, same stage, no change.
+    assert!(!grade.show_zone(1));
+    // A far higher class still clamps to the two-stage excerpt's own last row.
+    assert!(!grade.show_zone(90));
+    assert_eq!(grade.blend().current, 1);
 }

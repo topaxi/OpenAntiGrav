@@ -24,18 +24,37 @@
 //! [`StageBlend`] is those three fields and nothing else. See
 //! `docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md`.
 //!
-//! **Not recovered: the trigger.** What maps a live race onto a stage index -
-//! ship speed, elapsed time, anything - is unknown on both titles. 2048's own
-//! writer is its Zone HUD's Speed Class widget, driven through a 17-entry
-//! threshold table that read inconsistently on direct decode and was left
-//! unresolved rather than force-fit; HD's requested value was traced to
-//! `g_GameState.mode`-dependent tables whose *contents* were never read. So
-//! **nothing here advances a stage on its own**: [`ZoneGrade::request_stage`]
-//! and [`ZoneGrade::set_weight`] exist and no race calls them. A Zone race
-//! rests on stage `0`, which is exactly what HD's own loader leaves behind -
-//! `Environment_LoadStageTextures` resets both entries' `+0x00` to `0` every
-//! time the file loads. Per `CLAUDE.md`, inventing the thresholds would be a
-//! fitted constant presented as a recovered fact.
+//! **Recovered on 2048, and only there: the trigger.** 2048's Zone HUD widget
+//! (`Hud_UpdateZoneSpeedClassWidget`, `0x81197d6c`) walks a seventeen-record
+//! table of descending **zone-number** thresholds and writes the matched
+//! record's index into the per-craft field `Zone_UpdateStage` (`0x81044cfc`)
+//! reads, clamps to the table's last row and shows. That table was read out of
+//! the executable at `0x8151faf8` this session and is
+//! [`oag_title::ZoneStages`]; [`ZoneGrade::show_zone`] is `Zone_UpdateStage`'s
+//! own arithmetic, and a 2048 Zone race in this engine now escalates on it.
+//! The bands are wide - `0`-`1`, `2`-`8`, `9`-`16`, `17`-`32`, `33`-`39`, then
+//! every five to `90` - so the grade steps every few zones rather than every
+//! zone.
+//!
+//! **Not recovered on HD/Fury.** `Environment_UpdateStageBlend` (`0x003da540`)
+//! dispatches on `g_GameState.mode`, and this session read all four of its
+//! branches out of the instruction stream: mode `0xe` takes
+//! `RaceManager->+0x2e10`, modes `0xd`/`0x15` take per-viewport entries of the
+//! same object, and **everything else - Zone included - falls through to
+//! `craftArray[n]->+0x640`**, whose writer was not found. Mode `0xe` turned out
+//! to be *Detonator*, not Zone: it selects the `Data/Tex/DetonatorMode*.gtf`
+//! filename table in `Environment_LoadStageTextures`, and `+0x2e10`'s only two
+//! non-incrementing writers are `SPDetonator`'s own two constructors. So HD
+//! carries no [`oag_title::RaceDefaults::zone_stages`] and a Zone race on it
+//! still rests where its loader leaves it - `Environment_LoadStageTextures`
+//! resets `+0x00` to `0` on every load. Per `CLAUDE.md`, 2048's thirteen-stage
+//! numbers are not transplanted onto HD's fifteen-stage ladder to fill that in.
+//!
+//! **What still is not recovered on either title: the cross-fade's own rate.**
+//! 2048 fades the current stage toward the *next* one by a factor
+//! (`DAT_816c6bc8`) nothing traced writes, so [`ZoneGrade::show_zone`] leaves
+//! the weight at rest and the stage changes cleanly rather than easing. That is
+//! an absence, not a snap chosen for looks.
 
 use oag_formats::effectsettings::{EffectSettings, StagePalette};
 use oag_render::mesh_render;
@@ -95,20 +114,64 @@ pub struct ZoneGrade {
     last_stage: u32,
     /// Which stage applies. See [`StageBlend`].
     blend: StageBlend,
+    /// How this title turns a zone number into a stage, where that is
+    /// recovered. `None` on every title but 2048 - see the module docs.
+    stages: Option<&'static oag_title::ZoneStages>,
 }
 
 impl ZoneGrade {
     /// Builds a grade over a parsed table, or `None` for a file that names no
     /// stage at all - which would be a table with nothing to select.
     #[must_use]
-    pub fn new(entry: String, table: EffectSettings) -> Option<Self> {
+    pub fn new(
+        entry: String,
+        table: EffectSettings,
+        stages: Option<&'static oag_title::ZoneStages>,
+    ) -> Option<Self> {
         let last_stage = *table.stages.keys().next_back()?;
         Some(Self {
             table,
             entry,
             last_stage,
             blend: StageBlend::default(),
+            stages,
         })
+    }
+
+    /// The stage this title's ladder puts zone number `zone` on, clamped to the
+    /// rows the loaded file actually names.
+    ///
+    /// `None` on a title with no recovered ladder, which is every title but
+    /// 2048.
+    #[must_use]
+    pub fn stage_for_zone(&self, zone: u16) -> Option<u32> {
+        Some(self.stages?.stage_for(zone)?.min(self.last_stage))
+    }
+
+    /// Shows the stage zone number `zone` sits on, and answers whether that
+    /// changed the picture.
+    ///
+    /// **This is `Zone_UpdateStage`'s shape, not
+    /// [`Self::commit`]'s.** 2048 assigns the clamped index straight into the
+    /// showing stage every frame - there is no request/commit gate on that
+    /// title, and no weight reset either, so this sets the weight to rest
+    /// rather than reproducing HD's `+0x18 = 0`. The two titles genuinely
+    /// differ here; see the module docs.
+    ///
+    /// A no-op on a title with no recovered ladder, which is how HD/Fury keeps
+    /// resting on stage `0` rather than escalating off numbers that are not
+    /// its own.
+    pub fn show_zone(&mut self, zone: u16) -> bool {
+        let Some(stage) = self.stage_for_zone(zone) else {
+            return false;
+        };
+        if self.blend.current == stage && self.blend.requested == stage {
+            return false;
+        }
+        self.blend.current = stage;
+        self.blend.requested = stage;
+        self.blend.weight = 1.0;
+        true
     }
 
     /// Which stage is showing, which is asked for, and at what weight.
@@ -125,16 +188,18 @@ impl ZoneGrade {
 
     /// Asks for a stage, clamped to the ladder this file actually names.
     ///
-    /// **Nothing in a race calls this.** The mapping from a live race onto a
-    /// stage index is not recovered on either title - see the module docs - so
-    /// this is the seam a recovered trigger would attach to, and until then it
-    /// is reached only by a test.
+    /// **HD/Fury's half of the mechanism, and still unreached by a race**: the
+    /// request/commit pair belongs to `Environment_UpdateStageBlend`, whose own
+    /// Zone-mode source field has no found writer. 2048 goes through
+    /// [`Self::show_zone`] instead, which is that title's own shape. See the
+    /// module docs.
     pub fn request_stage(&mut self, stage: u32) {
         self.blend.requested = stage.min(self.last_stage);
     }
 
-    /// Sets the cross-fade weight. Unreached by a race, for the same reason
-    /// [`Self::request_stage`] is.
+    /// Sets the cross-fade weight. Unreached by a race: what advances it during
+    /// a race is unrecovered on both titles, so [`Self::show_zone`] leaves it at
+    /// rest rather than easing between stages. See the module docs.
     pub fn set_weight(&mut self, weight: f32) {
         self.blend.weight = weight;
     }
@@ -232,11 +297,23 @@ impl ZoneGrade {
             .values()
             .next_back()
             .map_or("?", |stage| stage.name.as_str());
+        let ladder = match self.stages {
+            Some(stages) => format!(
+                "escalating off this title's own {}-record zone-number ladder, starting on \
+                 stage {} ({})",
+                stages.records.len(),
+                self.blend.current,
+                stages.class_for(0).unwrap_or("?"),
+            ),
+            None => format!(
+                "resting on stage {} because what selects a stage during a race is not \
+                 recovered on this title",
+                self.blend.current,
+            ),
+        };
         format!(
-            "{}: the Zone colour grade, {stages} stage(s) from {first} to {last}; resting on \
-             stage {} because what selects a stage during a race is not recovered on either \
-             title that ships this table",
-            self.entry, self.blend.current,
+            "{}: the Zone colour grade, {stages} stage(s) from {first} to {last}; {ladder}",
+            self.entry
         )
     }
 }

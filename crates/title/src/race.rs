@@ -150,6 +150,81 @@ pub struct RaceDefaults {
     /// see that type's docs for how thoroughly each disc was searched before
     /// answering `None` rather than pointing at a plausible entry.
     pub zone_palette: Option<ZonePalette>,
+    /// How this title turns a live zone number into a stage of that table. See
+    /// [`ZoneStages`].
+    ///
+    /// `None` where the mapping is unrecovered, which is every title but 2048,
+    /// HD/Fury included: its stage index is read from a per-craft field whose
+    /// writer has not been found. See [`ZoneStages`]' own docs.
+    pub zone_stages: Option<&'static ZoneStages>,
+}
+
+/// A title's ladder from the zone number a Zone race has reached to the stage
+/// of its [`ZonePalette`] table that should be showing.
+///
+/// # What this is, recovered rather than chosen
+///
+/// Wipeout 2048's Zone HUD widget (`Hud_UpdateZoneSpeedClassWidget`,
+/// `0x81197d6c`) walks a 17-record table of **descending** thresholds, stops at
+/// the first record whose threshold the zone number has reached, and writes
+/// `17 - i` - the record's index counted from the bottom - into the per-craft
+/// field `Zone_UpdateStage` (`0x81044cfc`) then clamps to the stage table's own
+/// last row. [`Self::records`] is that table, read straight out of the
+/// executable at `0x8151faf8`; [`Self::stage_for`] is that arithmetic.
+///
+/// So the escalation is **not** one stage per zone: a class holds for a band of
+/// zones, wide at the bottom of the ladder and five zones apart across most of
+/// it. See `docs/ghidra/functions/vita-2048-eu-v104/zone-environment-fallback.md`.
+///
+/// # Why this is an axis and not one shared rule
+///
+/// The two titles that ship a stage table disagree about where the index comes
+/// from. 2048 reads it off this threshold table. HD/Fury's own
+/// `Environment_UpdateStageBlend` (`0x003da540`) takes Zone's index from a
+/// per-craft field (`+0x640`) instead, and nothing found writes it - so HD
+/// carries `None` here rather than 2048's numbers, which name a
+/// thirteen-stage ladder HD does not have.
+///
+/// [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ZoneStages {
+    /// The threshold table, in the order the executable stores it: descending
+    /// by zone number, each paired with the speed-class name the same record
+    /// points at.
+    ///
+    /// **The first record is a sentinel.** There are seventeen records and only
+    /// sixteen class names; record `0` carries the unreachable threshold
+    /// `9999` and points at the *same* name string as record `1`. That
+    /// duplicate is what an earlier pass read as the table being inconsistent
+    /// and left unresolved - it is a guard entry, and every record below it is
+    /// strictly one name apiece.
+    pub records: &'static [(u16, &'static str)],
+}
+
+impl ZoneStages {
+    /// The stage index showing at zone number `zone`, before the stage table's
+    /// own clamp.
+    ///
+    /// `None` when no record matches, which reproduces the original's own
+    /// behaviour: its loop runs the full seventeen records and, finding
+    /// nothing, writes no class at all and leaves the previous one standing.
+    /// A shipped table ends at threshold `0`, so this cannot happen for a real
+    /// one - the case exists because the loop's exit does.
+    #[must_use]
+    pub fn stage_for(&self, zone: u16) -> Option<u32> {
+        let index = self.records.iter().position(|&(at, _)| zone >= at)?;
+        u32::try_from(self.records.len() - index).ok()
+    }
+
+    /// The speed-class name the original would show at zone number `zone`.
+    ///
+    /// Read off the same record [`Self::stage_for`] picks, so the two cannot
+    /// disagree. For the load report and for tests; nothing drawn reads it.
+    #[must_use]
+    pub fn class_for(&self, zone: u16) -> Option<&'static str> {
+        let index = self.records.iter().position(|&(at, _)| zone >= at)?;
+        Some(self.records[index].1)
+    }
 }
 
 /// Where a title keeps its `.effectSettings` stage table - the per-stage

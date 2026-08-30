@@ -308,6 +308,7 @@ pub(super) fn staging(
     track: &str,
     ps3_geometry: bool,
     palette: Option<oag_title::ZonePalette>,
+    stages: Option<&'static oag_title::ZoneStages>,
     mode: oag_race::Mode,
     report: &mut Vec<String>,
 ) -> Staging {
@@ -342,7 +343,7 @@ pub(super) fn staging(
         light,
         authored_fog,
         hd_bloom,
-        zone_grade: zone_grade(archives, palette, mode, track, report),
+        zone_grade: zone_grade(archives, palette, stages, mode, track, report),
     }
 }
 
@@ -363,6 +364,7 @@ pub(super) fn staging(
 pub(super) fn zone_grade(
     archives: &mut oag_assets::Archives,
     palette: Option<oag_title::ZonePalette>,
+    stages: Option<&'static oag_title::ZoneStages>,
     mode: oag_race::Mode,
     track: &str,
     report: &mut Vec<String>,
@@ -393,7 +395,15 @@ pub(super) fn zone_grade(
             return None;
         }
     };
-    let grade = crate::race::zone_grade::ZoneGrade::new(name.clone(), table);
+    let mut grade = crate::race::zone_grade::ZoneGrade::new(name.clone(), table, stages);
+    // The stage a race *starts* on, which is not stage `0` on a title with a
+    // recovered ladder: 2048's own threshold table matches zone `0` against its
+    // last record and shows stage `1` from the first frame, and HD's Detonator
+    // counter is likewise constructed holding `1`. Stage `0` (`Start`) is the
+    // pre-race state, not the opening lap's.
+    if let Some(grade) = grade.as_mut() {
+        grade.show_zone(0);
+    }
     match &grade {
         Some(grade) => report.push(grade.describe()),
         None => report.push(format!("{name}: names no stage at all; no stage grade")),

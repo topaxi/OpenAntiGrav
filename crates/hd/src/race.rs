@@ -45,6 +45,15 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // circuits are offered in the Zone picker too. `zonemodedlc3` is a second
     // revision this does not point at; what selects it is unread.
     zone_palette: Some(oag_title::ZonePalette::TitleWide(ZONE_PALETTE)),
+    // `None`, and not for want of looking. `Environment_UpdateStageBlend`
+    // (`0x003da540`) sources Zone's requested stage from a per-craft field,
+    // `craftArray[n]->+0x640`, and no writer for it was found - the same
+    // folded-index-bias trap `zone-effectsettings-loader.md`'s sixth pass
+    // records defeats an offset search on this binary. 2048's own ladder is
+    // not transplantable here: it names thirteen stages where this title has
+    // fifteen. Detonator's ladder on this title *is* recovered (one stage per
+    // step, `RaceManager->+0x2e10`), and is not this field.
+    zone_stages: None,
 };
 
 /// Wipeout HD/Fury's Zone milestone announcer.

@@ -51,6 +51,73 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // circuit a Zone race runs on. All ten base circuits ship a byte-identical
     // copy, checked in `effectsettings_ground_truth.rs`.
     zone_palette: Some(oag_title::ZonePalette::BesideCircuit(ZONE_PALETTE)),
+    // The only recovered zone-number-to-stage ladder on any title. See
+    // `ZONE_STAGES`.
+    zone_stages: Some(ZONE_STAGES),
+};
+
+/// Wipeout 2048's zone-number to speed-class ladder, read out of the
+/// executable rather than fitted to anything.
+///
+/// # The evidence
+///
+/// `Hud_UpdateZoneSpeedClassWidget` (`0x81197d6c`, confidence 82) walks
+/// seventeen 16-byte records at `0x8151faf8`, each record's first word a
+/// descending threshold and its second a pointer into the class-name blob at
+/// `0x8148a4a0`. The thresholds and the pointers below were read with
+/// `read_memory` directly, not inferred: the pointers step 12 bytes apart
+/// through the twelve-byte names and 8 apart through the four short ones,
+/// resolving one-for-one onto `MX_CLASS`, `M1_9_CLASS` .. `M1_1_CLASS`,
+/// `M1_CLASS`, `AP_CLASS`, `A_CLASS`, `B_CLASS`, `C_CLASS`, `D_CLASS`.
+///
+/// The value walked against these is `*(*(widget + 0xc) + 0x20)`, which the
+/// same block `sprintf`s as the first `%d` of `"%d/%d"` into the scene node
+/// `Hud_InitZoneSpeedClassWidget` (`0x81197c24`) looked up by the authored
+/// name **`ZoneNumber`** - so it is the zone counter the HUD shows, and the
+/// second `%d` is `FUN_812c4e0c`'s event-type-keyed target. The same block
+/// also writes the matched record's own threshold and the record above it
+/// into the race state (`+0x640`/`+0x644`), which is a progress bar *between
+/// two class boundaries* and only makes sense if the walked value climbs in
+/// the thresholds' own units. **Confidence 78** on "these are zone numbers":
+/// four converging reads, no traced increment of the field itself.
+///
+/// # What the numbers say, and what the play lead said
+///
+/// A class holds for a band of zones - `0`-`1`, `2`-`8`, `9`-`16`, `17`-`32`,
+/// `33`-`39`, then every five to `90`. That is escalation **every few zones**,
+/// which is what the recollection this work started from described. What the
+/// mechanism does *not* do is single out the named stages: the boundaries
+/// alternate `Sub`/named all the way up, one class step each, nothing skipped.
+/// Recorded as corroborated on the first half and not on the second, rather
+/// than reshaped to fit either.
+///
+/// # The sentinel
+///
+/// Record `0`'s threshold `9999` is unreachable and shares record `1`'s name
+/// pointer. `docs/ghidra/functions/vita-2048-eu-v104/zone-environment-fallback.md`'s
+/// fourth pass read that duplicate as the table not making sense and stopped;
+/// it is a guard entry, and it is transcribed here as it is stored so the row
+/// count matches the executable's own `while (i < 0x11)`.
+pub const ZONE_STAGES: &oag_title::ZoneStages = &oag_title::ZoneStages {
+    records: &[
+        (9999, "MX_CLASS"),
+        (90, "MX_CLASS"),
+        (85, "M1_9_CLASS"),
+        (80, "M1_8_CLASS"),
+        (75, "M1_7_CLASS"),
+        (70, "M1_6_CLASS"),
+        (65, "M1_5_CLASS"),
+        (60, "M1_4_CLASS"),
+        (55, "M1_3_CLASS"),
+        (50, "M1_2_CLASS"),
+        (45, "M1_1_CLASS"),
+        (40, "M1_CLASS"),
+        (33, "AP_CLASS"),
+        (17, "A_CLASS"),
+        (9, "B_CLASS"),
+        (2, "C_CLASS"),
+        (0, "D_CLASS"),
+    ],
 };
 
 /// Wipeout 2048's Zone milestone announcer.
@@ -208,3 +275,82 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
     weapons: r"Data\audio\sound\weapons.bnk",
     speech: r"Data\audio\sound\speech.bnk",
 };
+
+#[cfg(test)]
+mod zone_stage_tests {
+    use super::ZONE_STAGES;
+
+    /// The table as the executable stores it: seventeen records, the first a
+    /// sentinel, the last matching zone `0` so the walk can never fall off the
+    /// end during a real race.
+    #[test]
+    fn the_table_is_the_seventeen_records_the_executable_holds() {
+        assert_eq!(ZONE_STAGES.records.len(), 17);
+        assert_eq!(ZONE_STAGES.records[0], (9999, "MX_CLASS"));
+        assert_eq!(
+            ZONE_STAGES.records[1].1, "MX_CLASS",
+            "record 0 is a sentinel"
+        );
+        assert_eq!(ZONE_STAGES.records[16], (0, "D_CLASS"));
+        // Sixteen distinct names across seventeen records.
+        let mut names: Vec<_> = ZONE_STAGES.records.iter().map(|r| r.1).collect();
+        names.sort_unstable();
+        names.dedup();
+        assert_eq!(names.len(), 16);
+    }
+
+    /// Strictly descending below the sentinel, which is what makes
+    /// "first record the zone has reached" well defined.
+    #[test]
+    fn the_thresholds_descend() {
+        for pair in ZONE_STAGES.records.windows(2) {
+            assert!(pair[0].0 > pair[1].0, "{pair:?} is not descending");
+        }
+    }
+
+    /// `0x11 - i`, read off `Hud_UpdateZoneSpeedClassWidget` at `0x81197d6c`.
+    #[test]
+    fn a_zone_maps_to_its_records_index_counted_from_the_bottom() {
+        assert_eq!(ZONE_STAGES.stage_for(0), Some(1));
+        assert_eq!(ZONE_STAGES.stage_for(1), Some(1));
+        assert_eq!(ZONE_STAGES.stage_for(2), Some(2));
+        assert_eq!(ZONE_STAGES.stage_for(8), Some(2));
+        assert_eq!(ZONE_STAGES.stage_for(9), Some(3));
+        assert_eq!(ZONE_STAGES.stage_for(17), Some(4));
+        assert_eq!(ZONE_STAGES.stage_for(33), Some(5));
+        assert_eq!(ZONE_STAGES.stage_for(40), Some(6));
+        assert_eq!(ZONE_STAGES.stage_for(70), Some(12));
+        assert_eq!(ZONE_STAGES.stage_for(90), Some(16));
+        // The sentinel is reachable only by a zone number no run reaches.
+        assert_eq!(ZONE_STAGES.stage_for(9999), Some(17));
+    }
+
+    /// The class name and the stage come off the same record, so a report
+    /// naming one cannot disagree with the picture drawn from the other.
+    #[test]
+    fn the_class_name_comes_off_the_same_record_as_the_stage() {
+        assert_eq!(ZONE_STAGES.class_for(0), Some("D_CLASS"));
+        assert_eq!(ZONE_STAGES.class_for(2), Some("C_CLASS"));
+        assert_eq!(ZONE_STAGES.class_for(17), Some("A_CLASS"));
+        assert_eq!(ZONE_STAGES.class_for(33), Some("AP_CLASS"));
+        assert_eq!(ZONE_STAGES.class_for(40), Some("M1_CLASS"));
+    }
+
+    /// **The escalation is every few zones, not every zone** - the half of the
+    /// play-based lead this session started from that the numbers corroborate.
+    /// The other half ("especially the named ones") they do not: every band
+    /// boundary is one class step, alternating `Sub`/named all the way up, with
+    /// nothing skipped and nothing singled out.
+    #[test]
+    fn a_class_holds_for_a_band_of_zones() {
+        let boundaries: Vec<u16> = (0..=90u16)
+            .filter(|&zone| {
+                zone == 0 || ZONE_STAGES.stage_for(zone) != ZONE_STAGES.stage_for(zone - 1)
+            })
+            .collect();
+        assert_eq!(
+            boundaries,
+            vec![0, 2, 9, 17, 33, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90],
+        );
+    }
+}

@@ -22,12 +22,14 @@
 //!
 //! # What is deliberately not asserted
 //!
-//! **Nothing about when a stage changes.** No trigger is recovered on either
-//! title that ships one of these tables, so a race rests on stage `0` and this
-//! file drives the stage by hand to check the plumbing. See
-//! `oag_game::race::zone_grade`'s module docs and
-//! `docs/formats/effectsettings.md`'s `## Open`; the one assertion here about
-//! it is that a freshly loaded race really is on stage `0` and stays there.
+//! **Nothing about when HD's own stage changes.** HD/Fury's Zone stage index
+//! comes from a per-craft field (`craftArray[n]->+0x640`) whose writer is not
+//! found, so an HD race still rests on stage `0` and the HD tests below drive
+//! the stage by hand to check the plumbing. **2048 is different**: its
+//! zone-number ladder *is* recovered
+//! (`oag_2048::race::ZONE_STAGES`), and the last test in this file drives a
+//! real 2048 table through it, asserting the disc's own colours at the
+//! recovered band boundaries. See `oag_game::race::zone_grade`'s module docs.
 
 use std::path::{Path, PathBuf};
 
@@ -207,4 +209,100 @@ fn the_2048_branch_resolves_its_per_circuit_table() {
     assert_eq!(table.stages.len(), 13);
     assert_eq!(table.stages[&0].name, "Start");
     assert_eq!(table.stages[&12].name, "Supersonic");
+}
+
+/// **The recovered ladder moves a real 2048 table, at the recovered zone
+/// boundaries, to the colours the disc itself authors.**
+///
+/// This is the end-to-end check that separates "the plumbing works when driven
+/// by hand" from "a race escalates on its own": nothing here picks a stage.
+/// Every stage comes from `ZONE_STAGES::stage_for`, which is
+/// `Hud_UpdateZoneSpeedClassWidget`'s own `0x11 - i` against the seventeen
+/// thresholds read out of `0x8151faf8`.
+#[test]
+#[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
+fn a_2048_zone_race_escalates_on_the_recovered_ladder() {
+    let Some(mut archives) = open_2048() else {
+        return;
+    };
+    let palette = oag_2048::race::DEFAULTS
+        .zone_palette
+        .expect("2048 ships a table");
+    let name = palette
+        .entry_for(oag_2048::race::DEFAULT_TRACK)
+        .expect("the circuit's own directory");
+    let text = String::from_utf8(archives.read_name(&name).expect("the table")).expect("UTF-8");
+    let table = oag_formats::effectsettings::EffectSettings::parse(&text).expect("it parses");
+    let mut grade =
+        race::zone_grade::ZoneGrade::new(name, table, oag_2048::race::DEFAULTS.zone_stages)
+            .expect("it names stages");
+
+    // A race *opens* on stage 1, not on `Start`: zone 0 matches the table's
+    // last record (threshold `0`), which is class 1.
+    assert!(grade.show_zone(0));
+    assert_eq!(grade.blend().current, 1);
+    let opening = grade.palette();
+
+    // Every band boundary the thresholds state, and nothing between them.
+    let boundaries = [
+        (0u16, 1u32),
+        (1, 1),
+        (2, 2),
+        (8, 2),
+        (9, 3),
+        (16, 3),
+        (17, 4),
+        (33, 5),
+        (40, 6),
+        (70, 12),
+        // Past the file's own last row the clamp holds, exactly as
+        // `Zone_UpdateStage` clamps to `0xc` against this same thirteen-stage
+        // table.
+        (90, 12),
+        (200, 12),
+    ];
+    for (zone, expected) in boundaries {
+        grade.show_zone(zone);
+        assert_eq!(
+            grade.blend().current,
+            expected,
+            "zone {zone} should show stage {expected}"
+        );
+    }
+
+    // And the picture really differs, in the file's own numbers. Straight out
+    // of `ZoneMode2048.effectSettings`:
+    //   "Zone 1 Sub Flash.Fog.Environment Fog Colour"=0.592157 x3 0.001500
+    //   "Zone 12 Supersonic.Fog.Environment Fog Colour"
+    //       =0.129412 0.968627 1.000000 0.002500
+    // The fourth lane is the density this file has no separate key for - see
+    // `oag_formats::effectsettings::key::ENVIRONMENT_FOG_COLOUR_2048`.
+    assert_eq!(opening.fog_colour, Some([0.592_157; 3]));
+    assert_eq!(opening.fog_density, Some(0.001_5));
+    grade.show_zone(70);
+    let top = grade.palette();
+    assert_eq!(top.fog_colour, Some([0.129_412, 0.968_627, 1.0]));
+    assert_eq!(top.fog_density, Some(0.002_5));
+    assert_ne!(
+        (opening.fog_colour, opening.fog_density),
+        (top.fog_colour, top.fog_density),
+        "stage 1 and stage 12 must not author the same fog"
+    );
+}
+
+/// The base Vita package, or `None` with a printed reason.
+fn open_2048() -> Option<oag_assets::Archives> {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("data/extracted/vita/PCSF00007/base");
+    if !path.exists() {
+        assert!(
+            std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
+            "OAG_REQUIRE_GAME_DATA is set but {} is missing",
+            path.display()
+        );
+        println!("skipping: {} not present", path.display());
+        return None;
+    }
+    Some(oag_2048::open(&path.display().to_string()).expect("opening 2048"))
 }
