@@ -6,7 +6,7 @@
 //! frame with it is `race/frame.rs`; its tests are `race/tests/scene.rs`.
 
 use super::*;
-use log::warn;
+use log::{info, warn};
 
 mod frame;
 mod motion;
@@ -787,9 +787,22 @@ impl Scene {
     /// table, and on one whose zone-to-stage ladder is unrecovered - see
     /// [`crate::race::zone_grade::ZoneGrade::show_zone`].
     pub fn sync_zone_grade(&mut self, race: &Race) -> bool {
-        self.zone_grade
-            .as_mut()
-            .is_some_and(|grade| grade.show_zone(race.world.race.zone))
+        let zone = race.world.race.zone;
+        let Some(grade) = self.zone_grade.as_mut() else {
+            return false;
+        };
+        if !grade.show_zone(zone) {
+            return false;
+        }
+        // Once per stage change, which is at most fifteen times a race - the
+        // same "log the edge, not the state" rule the announcer cue follows.
+        // It is also the only headless evidence that the grade moved at all,
+        // since a `--screenshot` cannot say so on its own.
+        info!(
+            "zone {zone}: the colour grade steps to stage {}",
+            grade.blend().current
+        );
+        true
     }
 
     /// Which stage of the Zone grade is showing, for tests and reports.
