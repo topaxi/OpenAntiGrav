@@ -130,6 +130,35 @@ default highlighted row:
 a screen change - and so are *not* evidence either way about whether the d-pad
 arrives.
 
+### `Session.navigate()`'s taps have no confirmation, and a dropped one fails silently
+
+**2026-08-30, cost a wrong "genuine Zone race" claim before it was caught.**
+`navigate()` presses each button in a plan with a fixed settle
+(`self.tap(button, settle=1.2)`), unlike `walk_to_race()`'s own `cross` steps,
+which retry against `TTY.log` until the screen actually changes. Moving a
+carousel highlight produces no `TTY.log` line at all (see above), so there is
+nothing to confirm against - a tap sent while the previous one is still being
+processed is silently lost, and the plan's own `print("nav %s at %s" ...)`
+line fires whether or not the press actually landed. Four `right` presses
+meant to cycle Racebox's `Single Player` Mode list from its default to `Zone`
+landed on `Eliminator` (one entry short) in a live run, with nothing in the
+log to say so - only a screenshot after the fact caught it. **Verify with a
+screenshot before confirming a multi-step d-pad sequence, especially under a
+slower decoder** (interpreter mode makes a drop more likely, not less);
+counting `nav` log lines is not evidence the presses all landed.
+
+The same investigation measured Racebox's actual on-screen Mode order, which
+is not simply the XML's own declaration order by name - `racebox_definition.xml`
+names the fourth entry `Tournament`, but its displayed text is `ELIMINATOR`:
+
+| presses from default | shown |
+| --- | --- |
+| 0 | `Arcade` |
+| 1 | `Time Trial` |
+| 2 | `Speed Lap` |
+| 3 | `Eliminator` (XML idstring `Tournament`) |
+| 4 | `Zone` |
+
 ## The GDB stub is real, and needs no special build
 
 `config.yml` ships `GDB Server: 127.0.0.1:2345` and the stub honours it with
