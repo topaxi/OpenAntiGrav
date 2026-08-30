@@ -311,6 +311,12 @@ impl StringTable {
 /// environment and are named separately; it is asserted in
 /// `crates/game/tests/hd_boot_ground_truth.rs`.
 ///
+/// **Measured against the real front end, 2026-08-30**, not only inferred
+/// from archive geometry: every one of Racebox's 24 `Track Creation` carousel
+/// entries reads its name with no `REVERSE` suffix, `Talons_Junction`'s two
+/// entries both included - see
+/// `docs/formats/hd-frontend.md#a-circuits-name-is-in-a-different-archive-from-the-circuit-list`.
+///
 /// A source with one copy - which is every PSP title - selects that copy, folds
 /// a spelling that already matched, and comes out exactly where
 /// [`StringTable::get_or_id`] left it.
