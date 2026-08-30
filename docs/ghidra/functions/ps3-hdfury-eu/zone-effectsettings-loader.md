@@ -2774,6 +2774,230 @@ unidentified - the next real step, and the one that decides whether this can
 be wired into `oag_render` or needs a live read watchpoint on the consumer
 side after all.
 
+## 2026-08-31, a twentieth pass: `FUN_005d6e78` is ruled out, and a second live write-site for `0x00c49110` is found by literal search
+
+Two results, one negative and one new positive, from directly checking the
+nineteenth pass's own candidate rather than trusting the callee list handed
+down with it.
+
+### `FUN_005d6e78` is not the consumer - structurally, not just "not found"
+
+Its OPD (`0x008a0fd8` -> `{0x005d6e78, 0x008bd3c4}`, read directly) confirms
+this is the right function. Its full disassembly is six instructions, twice
+unrolled three times:
+
+```
+005d6e78  li   r11,0x50
+005d6e7c  lvx  v0,0,r4
+005d6e80  li   r0,0x10
+005d6e84  li   r9,0x60
+005d6e88  stvx v0,r3,r11
+005d6e8c  lvx  v0,r4,r0
+...  (four more lvx/stvx pairs, same shape)
+005d6ec8  lvx  v1,r4,r11
+005d6ecc  stvx v1,r3,r0
+005d6ed0  blr
+```
+
+Six `lvx`/`stvx` pairs, copying `r4[0x00..0x60)` to `r3[0x50..0xb0)` one
+quadword at a time, and `blr`. **No `bl` anywhere in the function** -
+`get_function_callees` independently returns empty. The callee list this
+thread was handed (`0x005bd0d8`, `0x005d8f68`, `0x005d8700`, `0x005d84d8`)
+does not match what is live in the project now; this is the same "a live
+Ghidra project's applied state is not assumed durable between sessions"
+trap the fifth pass already named, just biting the call graph instead of a
+rename this time. Whoever reads this next should not carry that callee list
+forward.
+
+The call site itself rules the function out a second, independent way.
+`Scene_PrepareFrame` calls it at `0x003ab284` with `r3` = `obj` (reloaded at
+`0x003ab274`, `lwz r3,0x90(r1)`) and `r4` = `r31+0x7cb0`
+(`addi r4,r31,0x7cb0`, `0x003ab27c`) - **before** `0x003ab278`
+(`lwz r29,0x7c60(r31)`) and `0x003ab2a4` (`stw r29,0xd8(r11)`), the two
+instructions that actually populate `obj+0xd8`. So even setting the
+disassembly aside, `*(obj+0xd8)` does not hold a valid value yet at the
+point `FUN_005d6e78` runs, and the function never reads `r3` (`obj`) at any
+offset regardless - it only ever writes through `r3+0x50..r3+0xa0`, from a
+source (`block+0x7cb0..+0x7d10`) that is itself outside the `+0x110`/`+0x120`/
+`+0x130` tint destinations and the `+0x7bf0`/`+0x7c00`/`+0x7c10`/`+0x7ba0`
+quartet the eighteenth/nineteenth passes already mapped. Confidence 92 that
+this specific function is not, and structurally cannot be, a reader of the
+dirty-flagged pointer table - it is an unrelated six-quadword copy helper
+that happens to be `Scene_PrepareFrame`'s own next call after the tint
+splat, nothing more.
+
+### The widened search the team lead flagged - applied, and it finds a second writer
+
+The block is static and long-lived, so a consumer is not bounded to
+`Scene_PrepareFrame`'s call graph the way the *dirty-flag protocol itself*
+is - only whoever must honour `*(obj+0xd8)`'s dirty bit is bounded that way.
+Searching the whole image for the three live tint addresses as **literal
+bytes**, the same technique that found `0x00c81a5c`'s own reader in the
+nineteenth pass:
+
+| address | `search_byte_patterns` hits |
+| --- | --- |
+| `0x00c49110` | exactly one: `0x008b7e5c` |
+| `0x00c49120` | none |
+| `0x00c49130` | none |
+
+Only `0x00c49110` has its own dedicated TOC slot anywhere in the image;
+`0x00c49120`/`0x00c49130` are not held as a literal by anything, so any
+reader of those two (if one exists) reaches them by displacement off some
+other base, not this route.
+
+`0x008b7e5c` is loaded (`lwz rX, -0x5568(r2)`) from five sites in four
+functions - each checked against its own OPD before being trusted, per this
+page's own standing trap:
+
+| function | OPD TOC | `-0x5568(TOC)` resolves to | verdict |
+| --- | --- | --- | --- |
+| `FUN_000b0bd0` | `0x008ad4d8` | `0x008a7f70` | **false lead** - wrong TOC, different global entirely |
+| `FUN_000b0c30` | `0x008ad4d8` | `0x008a7f70` | **false lead**, same reason |
+| `FUN_003ea368` (x2: `0x003eb544`, `0x003eb7f4`) | `0x008bd3c4` | `0x008b7e5c` | **genuine** |
+| `FUN_003eb890` (`0x003ec3c0`) | `0x008bd3c4` | `0x008b7e5c` | **genuine** |
+
+The two module-1 hits are exactly the same "byte pattern is TOC-blind" trap
+this page's own third section (`FUN_000b6b98`) already caught once before -
+recorded so the next search doesn't have to rediscover it a third time.
+
+### The genuine hits: a second, independent write of the live tint into the same `+0xd8`/`+0xf8` protocol
+
+`FUN_003ea368` (loops over a small dynamic entity list) and `FUN_003eb890`
+(the same body specialised to one entity, passed by index) are near-
+identical - same field offsets, same five hashed strings (`RigidBody`,
+`AbsorbFader`, `LeachFader`, `AbsorbScroller`, `LeachScroller`), same gate.
+The relevant fragment, identical in both (decompiled, TOC already verified
+for the load that matters):
+
+```c
+if ((*PTR_DAT_008b7e4c == '\0') &&
+    (*(int *)(PTR_g_GameState_008b7e50 + 0xe0) == 0xe)) {      // mode == Detonator
+  if ((entity->0xe4 & 0x2000) == 0) {
+    *(undefined **)(*(int *)(iVar16 + 0xd8) + 0xf8) = PTR_DAT_008b7e5c;  // = 0x00c49110
+    *(undefined4 *)(*(int *)(iVar16 + 0xd8) + 0xfc) = 1;
+    *(uint *)(iVar16 + 4) = *(uint *)(iVar16 + 4) | 0xc0000;             // dirty
+  } else {
+    *(undefined **)(*(int *)(iVar16 + 0xd8) + 0xf8) = puVar7 + 0x97650;  // a local static buffer instead
+    ...
+  }
+}
+_opd_FUN_005d4a08(*(undefined4 *)(entity + 300), *param_1);
+```
+
+`iVar16 = *param_1` - **a different object from `Scene_PrepareFrame`'s own
+stack `obj`** (that one is dead by the time this runs; nothing here claims
+otherwise), but the **same struct shape and protocol**: a `+0x4` dirty-flags
+word taking the identical `|= 0xc0000`, a `+0xd8` pointer-table field, an
+`+0xf8` slot. That is the useful part - it means this `+0xd8`/`+0xf8`
+convention is a **general parameter-table mechanism used by more than one
+subsystem**, not something `Scene_PrepareFrame` invented for its own use,
+and it is a second, independent confirmation (a writer, not the reader this
+page has spent nineteen passes hunting) that `0x00c49110` is treated
+image-wide as a live, reusable "current scene tint" value. `mode == 0xe`
+is Detonator, not Zone, per the tenth pass's own three-way-confirmed
+reading - so this particular write-site is Detonator-gated, and further
+gated on a per-entity flag (`+0xe4 & 0x4000`, `+0xe8 != 0`, `+0x140 != 0`)
+that only a small number of active entities carry, unlike
+`Scene_PrepareFrame`'s own unconditional per-frame write. Confidence 85 on
+the write itself (TOC-verified load, matching an already-established
+protocol exactly); deliberately no confidence claimed yet on what kind of
+entity this is - see below.
+
+**Reached, statically, by exactly one caller each**, both themselves
+uncalled by any direct `bl` in the image: `FUN_003ea368` <- `FUN_006cdfc0`
+(no static callers); `FUN_003eb890` has no static callers at all.
+`FUN_006cdfc0`'s own body is three calls -
+`FUN_003f0950(entity, ctx)`, `FUN_005c1d0c(entity->0x154, 0x1fec, 1)`, then
+`FUN_003ea368(entity)` - and that middle call reuses the exact same
+`FUN_005c1d0c(ctx, 0x1fec, ...)` idiom `Scene_PrepareFrame` itself issues at
+its own block-setup preamble (`0x003ab224`). That is a real structural echo
+between the two call sites, not a shared caller - consistent with, not an
+exception to, this project's own repeated finding that per-object-type
+update callbacks in this renderer are reached through indirect/virtual
+dispatch invisible to a static branch scan (`renderer.md`'s "no import
+census or call graph finds it" gap, and this page's own seven dead-vs-live
+getter split in the fifteenth pass).
+
+**Not established, and deliberately not guessed at**: what kind of entity
+`FUN_003ea368`/`FUN_003eb890` update. The five hashed strings and the
+Detonator gate are suggestive of a mine/absorb-type effect, and
+`renderer.md`'s own asset-importer census independently lists
+`ShipAbsorbNode` as a real HD-only scene-node class with no Pulse
+counterpart - but nothing this pass traced connects that importer class to
+these two functions structurally, so the two are named side by side and
+left unpaired, the same discipline `renderer.md` itself already applies to
+`ShipAbsorbNode`/`exitglow`. Confidence on any reading of these functions'
+own purpose is below 50; per this project's naming rule, neither is renamed.
+
+### `FUN_005d4a08` - the most concrete remaining lead, not itself confirmed
+
+Called immediately after the `+0xf8` install, on both branches of the
+`entity->0xe4 & 0x2000` check, as `FUN_005d4a08(entity+300, iVar16)`. Its
+whole body:
+
+```c
+void _opd_FUN_005d4a08(int *param_1,int *param_2)
+{
+  int iVar1 = *param_1;
+  *param_2 = (int)(param_1 + 1);
+  while (iVar1 != 1) {
+    (*(code *)**(undefined4 **)(PTR_PTR_008bf21c + iVar1 * 4))(param_2);
+    int *piVar2 = (int *)*param_2;
+    *param_2 = (int)(piVar2 + 1);
+    iVar1 = *piVar2;
+  }
+}
+```
+
+A tag-dispatch interpreter: read a tag from the entity's own small compiled
+list, index a shared table by it, call through **two** levels of
+indirection, advance, repeat until tag `1`. This is the shape a consumer
+would take - it is handed exactly the context (`iVar16`) whose `+0xd8`
+table now points at the live tint - but it is not confirmed to reach a draw
+or an RSX write this pass. Two reasons it stops here rather than one line
+short of a finding:
+
+- `PTR_PTR_008bf21c`'s own entries are **not uniformly pointers**. Reading
+  the raw bytes at that address directly shows `0x3f000000`, `0xbf000000`,
+  `0x00000000`, `0x3f800000` sitting among what look like pointers - `0.5f`,
+  `-0.5f`, `0.0f`, `1.0f` as IEEE-754 literals, not addresses. So the table
+  is heterogeneous by tag, and the dispatcher's own `**` double-dereference
+  only makes sense for the entries that are genuinely pointers-to-pointers;
+  decoding which tag means what needs the tag values actually carried by a
+  real entity's compiled list, not read cold from this pass.
+- `PTR_PTR_008bf21c` sits at `PTR_DAT_008bf208 + 0x14` - i.e. **inside** the
+  address span of the still-unresolved numeric-type jump table the
+  `FwKeyedText_ParseEntry` section of this page already flagged ("values
+  2-8 go through a jump table at `PTR_DAT_008bf208`, not resolved this
+  pass"). Whether `FUN_005d4a08` shares that exact table with the
+  effectSettings text parser, or the two are coincidentally adjacent data,
+  is not established either way.
+
+`FUN_005d4a08` is called from six other places besides these two
+(`FUN_003e4ec8`, `FUN_003e9ea0`, `FUN_003ed148`, `FUN_003ed810`,
+`FUN_005d6e20` - all clustered in the same `0x003e4000`-`0x003ed000` and
+`0x005d6000` neighbourhoods as the functions already read on this page),
+consistent with it being a generic utility several per-entity-type update
+functions share, rather than something built specifically for this one
+write-site.
+
+### What this changes
+
+`FUN_005d6e78` is retired as a candidate, definitively rather than by
+exhaustion. In its place: a second, TOC-verified writer of the exact live
+tint address exists, reached through a completely different call path than
+`Scene_PrepareFrame`, using the same `+0xd8`/`+0xf8` protocol - real
+corroboration that the protocol is a general renderer mechanism rather than
+private to the scene-blend chain, found precisely by widening the search
+the way the team lead's caveat said to rather than continuing to assume the
+consumer sits inside `Scene_PrepareFrame`'s own call graph. The actual
+consumer - whoever executes the tag that reads `+0xf8` back out and turns
+it into a shader constant or vertex colour - is still not found, but the
+search is now bounded to one small, concrete artefact
+(`PTR_PTR_008bf21c`'s own entries, and one real entity's compiled list at
+`+300`/`+0x12c`) rather than an open-ended image-wide hunt.
+
 ## See also
 
 - `docs/formats/effectsettings.md` - the file format this loader reaches for

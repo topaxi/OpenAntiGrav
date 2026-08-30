@@ -254,13 +254,31 @@ evidence, including the byte-level trace of every function in this chain:
   `.cpp`-filename keys is now bounded by construction - that is the single
   biggest change to this thread's tractability.
 
-  **Best candidate**: `FUN_005d6e78` (OPD `0x008a0fd8`), called at `0x003ab284`
-  as `(obj, &block[0x7cb0])` - the only call in `Scene_PrepareFrame` taking the
-  object as first argument. Callees `0x005bd0d8`, `0x005d8f68`, `0x005d8700`,
-  `0x005d84d8`; `0x005bd0d8` is in the band `renderer.md` ties to the RSX
-  command emitters. Confidence 60 that it is *the* consumer; 85 on the object's
-  shape and lifetime. Full detail in
-  `docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md`.
+  **2026-08-31, ruled out: `FUN_005d6e78` is ruled out, and a second writer of
+  the same tint is found instead.** Checked directly rather than trusted: its
+  disassembly is six `lvx`/`stvx` pairs and a `blr`, no `bl` anywhere, and it
+  never reads its first argument (`obj`) at all - it only writes `obj+0x50..
+  0xb0` from an unrelated source range. The callee list this candidate was
+  carried forward with (`0x005bd0d8` etc.) does not match what is live in the
+  project now, the same "state not durable between sessions" trap this thread
+  already named once for a rename, this time for a call graph. Ruling it out
+  is now confidence 92, not a guess.
+
+  **In its place**: widening the search to a literal-address scan for
+  `0x00c49110` (the technique that found `0x00c81a5c`'s own reader) finds a
+  genuine second, TOC-verified writer - `FUN_003ea368`/`FUN_003eb890`, reached
+  through a completely different call path than `Scene_PrepareFrame`, using
+  the identical `+0xd8`/`+0xf8` dirty-flagged protocol, gated on Detonator
+  mode (`g_GameState+0xe0 == 0xe`) and a per-entity flag. Real corroboration
+  that the protocol is a general renderer mechanism, not private to the scene
+  blend - but this is a writer, not the consumer search itself resolving.
+  `FUN_005d4a08`, called right after, is a tag-dispatch interpreter over the
+  entity's own compiled list and is the most concrete remaining lead, but its
+  dispatch table (`PTR_PTR_008bf21c`) mixes real pointers with inline float
+  constants and was not decoded this pass. Full detail, including why the
+  entity type itself is deliberately left unnamed (confidence <50), in
+  `docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md`'s
+  twentieth pass.
 
 
 - **2026-08-31, where the static route stands on this thread, and what is left.**
