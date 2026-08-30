@@ -132,10 +132,9 @@ impl Course {
     /// the grid out is unread code (`docs/formats/track.md`, "How a ship gets its
     /// grid slot").
     ///
-    /// What would retire it: that code, or a capture on a second circuit, or
-    /// [`Self::path_boundaries`] turning out to land on the line across circuits -
-    /// which would make the start line authored data at confidence 88 rather than
-    /// a constant at 65.
+    /// What would retire it: that code, or a capture on a second circuit.
+    /// [`Self::path_boundaries`] landing on the line across circuits was a third
+    /// candidate and is dead - see its own doc comment.
     ///
     /// # Which side of the engine/title seam this is on
     ///
@@ -309,13 +308,16 @@ impl Course {
 
     /// Ring indices where one path hands over to the next.
     ///
-    /// **A lead, not a mechanism.** If the authored path boundaries turn out to
-    /// sit on the visible start line across several circuits, then the start line
-    /// is authored per track and [`Self::START_LINE_OFFSET`] - a single-capture
-    /// constant applied to all 40 circuits - can be replaced by something at the
-    /// same confidence 88 as the traversal itself. On `16_Track` the boundary is
-    /// in the same neighbourhood as the offset but not on it, which is exactly
-    /// why this is reported rather than used.
+    /// **Was a lead on whether the start line is authored data; it is not.** A
+    /// boundary landing on the visible start line across circuits would have let
+    /// [`Self::START_LINE_OFFSET`] - a single-capture constant applied to all 40
+    /// circuits - be replaced by something at the traversal's own confidence 88.
+    /// Checked on all 40 Pulse circuit files (2026-08-30): the nearest boundary to
+    /// the true start line ranges 11.6 to 1878.4 units, median 648, with only 4 of
+    /// 40 under 100 units. A path split is authored for its own reasons and is not
+    /// evidence of a start line; see `docs/gameplay/lap-counting.md` for the sweep.
+    /// Still reported in the load report because it costs nothing and is
+    /// occasionally useful for reading a track's own split structure.
     #[must_use]
     pub fn path_boundaries(&self) -> Vec<usize> {
         let count = self.paths.len();
