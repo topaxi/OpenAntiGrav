@@ -1953,6 +1953,91 @@ cannot be true). Recorded as a negative result: **2048's key-to-offset table
 needs a tracker that models its prologue's stack-slot fills, not the
 register-only one that works on HD.**
 
+## 2026-08-30, a fifteenth pass: the stage table has a per-key getter API - four keys reach a draw, and the `Scene`/`Track` colours reach nothing
+
+Pulled the shader-consumer thread. **There is no generic material-parameter
+upload path**: nothing downstream of the effectSettings struct touches
+`Shader_InitEngineParams` / `ShaderRegistry_*` / `g_ShaderParameterNames`.
+What exists instead is a **per-key getter API**, and it answers the question
+more sharply than a shader trail would have.
+
+### The getters
+
+`search_instructions` for `-0x5a84(r2)` - the TOC slot holding `iVar8`, the
+only route to `g_effect_settings_stages` other than the registrar's own -
+returns 29 sites, and sixteen of them are **tiny functions** clustered at
+`0x003cd870`-`0x003ce120`, each reading exactly one offset. Cross-referenced
+against the fourteenth pass's key-to-offset table:
+
+| getter | struct offset | key | reached by |
+| --- | ---: | --- | --- |
+| `0x003cdbd0` `Environment_GetStageMineColour` | `+0x230` | `Detonator Mine Colour` | `FUN_00138e58`, `FUN_001395f0` |
+| `0x003cdc00` `Environment_GetStageMineElectricityColour` | `+0x234` | `Detonator Mine Electricity Colour` | `FUN_001395f0` |
+| `0x003cdc30` `Environment_GetStageBombInnerColour` | `+0x238` | `Detonator Bomb Inner Colour` | `FUN_001340d8` |
+| `0x003cdc60` `Environment_GetStageBombOuterColour` | `+0x23c` | `Detonator Bomb Outer Colour` | `FUN_001340d8` |
+| `0x003cde20` `Environment_GetStageAirbrakeColour` | `+0x220` | `Airbrake Colour` | `FUN_00107b58`, `FUN_00107c28` |
+| `0x003cdd40` | `+0x70` (and `+0x210`) | `Track.Near Colour`, `Aurora Colour` | `FUN_00298268` |
+| `0x003cde60` | `+0x40` | `Scene.Base Colour` | **nothing** |
+| `0x003cded0` | `+0x20` | `Scene.Base Colour Highlight` | **nothing** |
+| `0x003ce000` | `+0x60` | `Track.Texture Colour` | **nothing** |
+| `0x003ce070` | `+0xa0` | `Track.Base Colour` | **nothing** |
+| `0x003ce0e0` | `+0x80` | `Track.Base Colour Highlight` | **nothing** |
+| `0x003cdf40`, `0x003cdfa0` | `+0x150` | `EQ colour tint`, `EQ analogue colour tint` | **nothing** |
+
+The offsets in the getters are written `iVar8 + 0x1230` and so on - i.e.
+`0x1000 + key offset` - which is a second, independent confirmation of the
+fourteenth pass's table: the two were derived from different functions and
+agree on every key they share.
+
+So the effectSettings stage palette **is** consumed at draw time on HD, but
+**per effect**: the mine, the bomb, the airbrake each pull their own key
+through their own getter. That is why no shader-parameter trail exists to
+find - the design never had one.
+
+### The negative, and how it was made trustworthy
+
+"Nothing calls it" is the claim most likely to be an artefact of a missed
+reference, so it was established twice and the first attempt was discarded:
+
+- **Discarded**: scanning the whole image for a word holding each getter's
+  OPD descriptor address. It reported "no hits" for all of them - *including
+  the two known-good controls*, so the test does not discriminate. Calls here
+  go `bl <thunk>` -> `b <getter>`, never through a descriptor load. Recorded
+  because it is a plausible-looking test that proves nothing.
+- **Kept**: scanning every `bl`/`b` instruction in the image, resolving its
+  flow target, and separately following the small TOC thunks
+  (`std r2,0x28(r1)` / `addis` / `subi` / `b <target>`) that HD uses for
+  cross-module calls. With `Environment_GetStageAirbrakeColour` (`+0x220`)
+  and the `+0x70` getter as **positive controls in the same scan** - both
+  resolved their real callers - the seven getters above came back with **no
+  branch anywhere in the image targeting them**.
+
+**So `Scene.Base Colour`, `Scene.Base Colour Highlight`, `Track.Texture
+Colour`, `Track.Base Colour`, `Track.Base Colour Highlight` and both `EQ`
+tints have no consumer through this API.** Confidence 85 on the negative -
+two controls in the same scan is what earns that, rather than an absence of
+hits alone.
+
+### What this does and does not settle for "it should affect all textures"
+
+**Does**: it rules out the mechanism the search was aimed at. There is no
+material-parameter upload to redirect these colours into, on HD, and the
+getters that would serve `Scene`/`Track` are dead code.
+
+**Does not**: it does not prove the offsets are unread. `FUN_003ce2c0`
+(~10.4 KB, the second site that re-derives the cross-fade inline) reads
+struct offsets *directly* rather than through the getters, and `+0x20` and
+`+0x150` are both among the displacements it uses - though on this function
+a bare displacement is not attributable to a base without the same tracking
+the registrar needed, so that is a lead and not a finding. **That is the one
+remaining route by which `Scene.*`/`Track.*` could reach a draw on HD**, and
+it is the next thing to read.
+
+**Nothing is wired.** Confirming that the airbrake and the Detonator
+mine/bomb pull their colours from this table is real, but all three are
+effects this engine does not draw, and HD still has no recovered stage
+trigger.
+
 ## See also
 
 - `docs/formats/effectsettings.md` - the file format this loader reaches for

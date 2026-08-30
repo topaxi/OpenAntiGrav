@@ -1054,3 +1054,37 @@ evidence, including the byte-level trace of every function in this chain:
   out to be two *named material groups* rather than indexed slots, which is
   a far better binding prospect than 2048's `Colour 1..8` - but no consumer
   of any offset was traced, and HD remains the title with no stage trigger.
+
+  **2026-08-30, a fourteenth pass: there is no shader-parameter path - the
+  stage table has a per-key getter API instead, and the `Scene`/`Track`
+  colours are dead code on it.** Pulled the `Shader_InitEngineParams` /
+  `ShaderRegistry_*` thread and it is genuinely cold: nothing downstream of
+  the effectSettings struct touches that infrastructure. What exists is
+  sixteen tiny getters at `0x003cd870`-`0x003ce120`, each reading one offset
+  of `g_effect_settings_stages` - and their offsets (`iVar8 + 0x1230`, etc.)
+  independently reproduce the previous pass's key-to-offset table from a
+  different function.
+
+  **Four keys reach a draw**, through TOC thunks: `Detonator Mine Colour`,
+  `Mine Electricity Colour`, `Bomb Inner`/`Outer Colour` and `Airbrake
+  Colour` (all five getters named, `names.tsv` updated). So the palette *is*
+  consumed at draw time on HD - **per effect**, each pulling its own key.
+  That is why no shader-parameter trail exists: the design never had one.
+
+  **Seven keys reach nothing**: `Scene.Base Colour`, `Scene.Base Colour
+  Highlight`, `Track.Texture Colour`, `Track.Base Colour`, `Track.Base
+  Colour Highlight` and both `EQ` tints have **no branch anywhere in the
+  image targeting their getters**. Confidence 85, and the method is why: a
+  first test (scanning for words holding each getter's OPD address) reported
+  "no hits" for the known-good controls too, so it was discarded as
+  non-discriminating; the kept test resolves every `bl`/`b` flow target in
+  the image plus the small TOC thunks, **with two positive controls in the
+  same scan**.
+
+  **What this means for "it should affect all textures"**: the mechanism the
+  search was aimed at is ruled out - there is no material-parameter upload to
+  redirect these colours into. It does **not** prove the offsets are unread:
+  `FUN_003ce2c0` reads struct offsets directly rather than through the
+  getters, and is the one remaining route by which `Scene.*`/`Track.*` could
+  reach a draw on HD. That is the next thing to read, and it needs the same
+  base-register tracking the registrar did.

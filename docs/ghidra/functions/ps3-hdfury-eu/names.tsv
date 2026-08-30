@@ -152,3 +152,8 @@
 0x003d0b98	function	Environment_RegisterStageSchema	85	zone-effectsettings-loader.md
 0x005d3680	function	FwKeyedText_AddSchemaEntry	85	zone-effectsettings-loader.md
 0x00c7efb0	data	g_effect_settings_stages	88	zone-effectsettings-loader.md
+0x003cdbd0	function	Environment_GetStageMineColour	85	zone-effectsettings-loader.md
+0x003cdc00	function	Environment_GetStageMineElectricityColour	85	zone-effectsettings-loader.md
+0x003cdc30	function	Environment_GetStageBombInnerColour	85	zone-effectsettings-loader.md
+0x003cdc60	function	Environment_GetStageBombOuterColour	85	zone-effectsettings-loader.md
+0x003cde20	function	Environment_GetStageAirbrakeColour	85	zone-effectsettings-loader.md
