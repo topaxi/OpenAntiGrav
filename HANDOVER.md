@@ -365,7 +365,6 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [Task #31 residual: the unguarded `slice(..)` in the race's draw path](handover/task-31-residual-the-unguarded-slice-in-the.md)
 - [Menus: rebinding is the one thing that does not work](handover/menus-rebinding-is-the-one-thing-that-does.md)
 - [MONITOR has only ever run on a one-screen machine](handover/monitor-has-only-ever-run-on-a-one.md)
-- [Do the game's capture paths need encode-on-write?](handover/do-the-games-capture-paths-need-encode-on.md)
 - [FSR 1's default is open](handover/fsr-1s-default-is-open.md)
 - [Front-end gaps behind `Image`](handover/front-end-gaps-behind-image.md)
 - [Pure's dev/pub hold duration, and how the original picks a regional cut](handover/pures-dev-pub-hold-duration-and-how-the.md)

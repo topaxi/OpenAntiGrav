@@ -591,13 +591,28 @@ Measured from the one image there is, not read out of the widget's layout code.
 
 **Colour space is not a detail here.** A `.mip` palette holds sRGB bytes, so
 declaring the sheet's texture `Rgba8UnormSrgb` makes sampling return linear -
-right for the window, whose surface encodes on write, and wrong for the headless
-capture, which targets `Rgba8Unorm` deliberately so the PNG is not double-encoded.
-The sheet's format therefore follows the target's. Caught by measurement: the
+right for a window surface that itself encoded on write (true when this was
+measured), and wrong for the headless capture, which targets `Rgba8Unorm`
+deliberately so the PNG is not double-encoded. Caught by measurement: the
 logo's dominant teal is `(36, 147, 153)` in the texture and came out
-`(5, 74, 81)` in a capture, which is that colour linearised exactly once. Text and
-solid fills never showed it, because they write their colour straight through with
-no sRGB source.
+`(5, 74, 81)` in a capture, which is that colour linearised exactly once. Text
+and solid fills were reasoned to be unaffected either way, because they write
+their colour straight through with no sRGB source, rather than sampling a
+texture that could be declared either format.
+
+**[ADR-0020](adr/0020-gamma-authoritative-colour-space.md) later removed the
+window's encode entirely** - `config.format.remove_srgb_suffix()` - so the
+sheet's format fork (`format.is_srgb()`) now always takes the raw side on
+every path, and window and capture run the identical pipeline. That closes the
+question of whether the capture paths need encode-on-write by construction,
+but the text/fill reasoning above was never independently measured the way
+the logo's teal was - until now. `Language Selection`'s menu
+text is authored `0x33A6B9` (`(51, 166, 185)`); a headless `--screenshot` of
+that screen reads the glyphs' solid-fill pixels back as `(51, 165, 184)`, a
+1-level difference consistent with glyph-edge rounding, not the ~30-level
+shift a single gamma encode/decode of a colour this saturated would produce
+(compare the teal figure above, or ADR-0020's `73/255` plume table). Text and
+fills reach the screen as authored, measured, not just reasoned.
 
 **`Viewport` recursion and `BOOT_LEGAL` wrapping are both implemented now
 (2026-08-25).** They used to be one open gap; they turned out to be two, found
