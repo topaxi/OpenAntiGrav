@@ -903,11 +903,23 @@ evidence, including the byte-level trace of every function in this chain:
      offset sweep is not evidence of absence. The bounded next step is
      `FUN_003d0b98` read properly rather than sampled: it is HD's Speed Class
      HUD builder by its own node names, which is exactly what 2048's answer
-     turned out to be. **A write watchpoint is now worth the cost here**, and
-     unlike the `+0x00` hunt it is a live option: the patched RPCS3 build
-     exists (`just build-rpcs3-watchpoints`), the address is computable at
-     runtime from `0x008b7c00`, and one Zone race would settle both the
-     writer and whether the field ever leaves `0`.
+     turned out to be.
+
+     **2026-08-30, tried live, twice, with the actual patched build - zero
+     hits, and it's a stronger negative than it sounds.** A real `Z2` watch
+     on the live-resolved address caught nothing across 120s each on an
+     ordinary race *and* a genuine Zone race (reached this time by actually
+     driving `racebox_definition.xml`'s own `Mode` list to `Zone`, not
+     inferred from the fallback branch). A watchpoint fires on any write
+     regardless of value, so this means the address was never touched at
+     all in either window, not just "stayed at 1." Full transcript on
+     [zone-effectsettings-loader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md#2026-08-30-an-eleventh-pass-a-live-write-watchpoint-on-craftarray0-0x640-armed-twice-zero-hits).
+     Not conclusive - 120s under a slowed interpreter may not be enough
+     in-game time or the right in-race event, and craft speed was never
+     checked alongside the target - but `FUN_003d0b98` read properly is
+     still the next concrete step, now with the exact live Zone-race
+     command sequence already scripted rather than needing to be solved
+     again.
   2. **What sets HD's `raceState->+0x7001`** - the latch Detonator's own
      increment is gated on, i.e. what *event* Detonator counts. Ten of the
      eleven instructions touching that offset are reads; the one write clears

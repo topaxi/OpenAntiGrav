@@ -1561,6 +1561,20 @@ Recorded so the next pass does not read their absence as an oversight.
   records; naming one pair here because this thread happened to need it would
   contradict that decision without revisiting it.
 
+## 2026-08-30, an eleventh pass: a live write watchpoint on `craftArray[0]->+0x640`, armed twice, zero hits
+
+With the patched RPCS3 build (`docs/reverse-engineering/rpcs3-debugger.md`'s "A patched build exists" section) and `PPU Decoder: Interpreter (static)`, drove a real HD/Fury boot to a live race twice and watched the exact address the tenth pass computed - `craftArray[0]->+0x640`, resolved live from `*(0x008b7c00)` rather than trusted from the `.data` snapshot - with a genuine `Z2` write watchpoint, holding thrust for 120 seconds each run.
+
+**Run 1, an ordinary Campaign race** (the default `RACE_WALK`, mode not `0xe`/`0xd`/`0x15` so the same fallback branch fires): `craftArray[0] = 0x329021b0`, watch target `0x329027f0`, value `0x00000001` before arming. `Z2` armed cleanly (`OK`). No hit in 120s; the value read back `0x00000001` afterward.
+
+**Run 2, a genuine Zone race**, reached this session by actually driving the front end's own `racebox_definition.xml` `<List name="Mode">` (`Main Menu` -> right -> `Racebox` -> `Single Player`, four `right` presses to cycle the Mode list's default `Arcade` through `Time Trial`/`Speed Lap`/`Tournament` to `Zone`, confirm -> `Track Creation` -> `Team Selection` -> `Launch Game` -> `InGame`) - not the default Campaign walk, and not the earlier session's untested assumption that Track Creation alone proves Zone unreachable (it doesn't; that session never changed `Mode` off its `Arcade` default). Same result: `craftArray[0] = 0x329021b0`, target `0x329027f0`, value `0x00000001` throughout, `Z2` armed cleanly, no hit in 120s.
+
+**A write watchpoint fires on any write to the address, regardless of whether the value changes** - so this is not "the value stayed at 1", it is **the address was never written at all** in either 120-second window, including a genuine Zone race entered through the mode selector rather than inferred from the fallback branch's own control flow. That is a stronger negative than the static passes could produce on their own, and it survived being run twice, on two different modes, with the live pointer re-resolved each time rather than reused.
+
+**What this does and does not settle.** It does not prove no writer exists anywhere in the binary - 120 seconds under a slowed interpreter decoder may not correspond to enough in-game time or the right in-race event for whatever the write is actually gated on, and this pass did not verify the craft was ever above a walking pace during the window (no speed/velocity field was read alongside the target). It does sharpen the live-verification path for the next attempt: the exact command sequence to reach a genuine Zone race is now known and scripted (see the addresses above), the craft pointer resolves identically and stably across boots (`0x329021b0` both times, though that may just be this build/save-state's own allocator determinism rather than anything address-worth trusting long-term), and a longer window or an in-race progress check (does the value ever move at all, watched continuously rather than via a single watchpoint) is the next concrete step rather than another blind static sweep.
+
+Nothing renamed, nothing wired into Rust from this pass. `PPU Decoder` restored to `Recompiler (LLVM)` afterward - this patched-build interpreter requirement is temporary per session, not a standing environment change.
+
 ## See also
 
 - `docs/formats/effectsettings.md` - the file format this loader reaches for
