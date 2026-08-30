@@ -1,0 +1,18 @@
+# The control for `sideshift-double-tap-clean.inputs`: the same file with the
+# two `l` tokens dropped, so the two scripts are tick-for-tick identical except
+# for the gesture itself. Any divergence between the two is the sideshift and
+# nothing else - see `sideshift-double-tap-clean.inputs` and
+# `handover/sideshift-has-no-runtime-leg.md`.
+
+# Reach speed on the opening straight, short enough to clear the wall.
+130 cross
+
+# Where the double tap alone lived. Ticks preserved so the two scripts stay
+# frame-aligned.
+1 cross
+3 cross
+
+1 cross
+
+# Hold the line through the window the shift and lockout would have covered.
+100 cross
