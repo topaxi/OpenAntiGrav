@@ -1167,6 +1167,28 @@ carry `<SVOData>` elements. Pulse's boot has no equivalent at all. A
 reimplementation that has no network will step over all three, which is exactly
 what `BootProfile::next_after`'s `usable` predicate is for.
 
+**HD's `<LoadXML>` includes carry a stale path beside a working one.** 21 of
+`Skin.xml`'s 23 `<LoadXML>` elements author both `Src` and `SrcRel` on the same
+`<Values>`, e.g.
+
+```xml
+<LoadXML><Values Src="Data\Plugins\PI001\GUI\MainMenu_Definition.xml" SrcRel="MainMenu_Definition.xml"></Values></LoadXML>
+```
+
+`Src` still spells the numbered-plugin path from the shared Pulse-lineage
+authoring (`PI001`), which is not a real directory on this disc; `SrcRel` is a
+bare filename, joined against the directory `Skin.xml` itself lives in, and
+lands exactly on the real file - `/data/plugins/frontend/gui/mainmenu_definition.xml`,
+11,035 bytes, the same path `oag_hd::frontend::names::MAIN_MENU` reads
+directly. Nothing needs `Src` to resolve, because `SrcRel` already does; the
+remaining 2 of 23 (`Team_Selection_Definition.xml`, `Track_Selection_Definition.xml`)
+carry `SrcRel` alone, no `Src` at all. Confidence **92** - read directly off
+`Data\Plugins\Frontend\Gui\Skin.xml` in `DATA00.PSARC`, cross-checked against
+the independently-recovered `MainMenu_Definition.xml` path and byte count.
+Which attribute the original engine prefers when both are present is
+unconfirmed; a reader only needs to try `SrcRel` first, never `Src` first,
+which is the one reading with both authored *and* resolving in the same file.
+
 **HD is Pulse's front end scaled up, not a new one.** The element vocabulary
 (`Screen`, `Variable global=`, `Redirect`/`Default goto=`, `Menu`, `LeftLayer`,
 `FEGlobals->` references, `LoadXML`) is the same, the shortened-dialect
