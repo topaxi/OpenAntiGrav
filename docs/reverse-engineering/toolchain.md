@@ -245,6 +245,51 @@ appear. Measured on Wipeout HD / Fury: **851 `lvlx`** in 1,911,344 instructions
 across the four executable sections, and none of the other seven forms. Narrow,
 but concentrated in vector code.
 
+#### Two PS3 read errors that produce a plausible wrong answer with no visible error
+
+Both of these were hit on Wipeout HD / Fury, both cost real time, and both share
+a shape that makes them worth one combined warning: **the wrong reading resolves
+to a real address holding real, sensible-looking data.** Nothing throws, nothing
+looks malformed, and the mistake survives review because the output reads like a
+finding. Neither is caught by any check in this repository; the only defence is
+knowing to look.
+
+**1. `get_xrefs_to` on a fixed address is unreliable, and so is any sweep that
+only knows one addressing form.** Ghidra resolves every function's `d(r2)`
+against a single TOC, and 59% of this binary's functions use the other one (see
+[the two-TOC defect](../ghidra/functions/ps3-hdfury-eu/memory.md)). A consumer
+of a global therefore may not appear in Ghidra's xrefs *at all*. It took
+nineteen passes to find the reader of `0x00c81a5c` on the Zone thread partly for
+this reason, and partly for a second one: every sweep looked for the field the
+way the **writer** addresses it - `0x3aac(rX)` off a base pointer - while the
+reader reached it through **its own dedicated TOC pointer slot**, making the
+load `lfs f0, 0x0(r9)` at displacement zero. A displacement sweep, a branch scan
+and an OPD-reference scan are all blind to that.
+
+> **The rule: before concluding that a fixed address has no consumer, search the
+> whole image for that address as a 4-byte literal.** Every hit in the data
+> segment is a candidate TOC slot; for each, compute its displacement from both
+> TOCs and scan the text for `d(r2)` instructions using it. That single check
+> would have found the `0x00c81a5c` reader on pass two. A worked example is in
+> [zone-effectsettings-loader.md](../ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md),
+> "a nineteenth pass".
+
+**2. A raw 16-bit displacement above `0x7fff` is negative.** PPC `lwz`/`lfs`/
+`stw`/`addi` displacements are **signed**. Reading the raw field as unsigned
+gives a slot roughly `0x10000` too high - and in a TOC region that is still a
+live, readable address holding a plausible value. On the same thread,
+`lwz r31, <raw 0x9d78>(r2)` was read as `TOC + 0x9d78 = 0x008c713c`, which holds
+`0` in the image and reads perfectly as "an uninitialised runtime pointer, so
+the buffer is heap-allocated". The correct reading is `TOC - 0x6288 =
+0x008b713c`, which holds the static address `0x00c49000`. The wrong version was
+committed and had to be corrected.
+
+> **The rule: sign-extend before you resolve.** `d = raw - 0x10000 if raw >=
+> 0x8000 else raw`. Ghidra's own listing prints the signed form (`-0x6288`), so
+> the error only bites when reading raw instruction words in a script - which is
+> exactly what the whole-image scans above require you to do. A slot that reads
+> as `0` is the classic tell, because a genuinely-used TOC slot rarely is.
+
 The Ghidra project (`OpenAntiGrav.gpr` / `OpenAntiGrav.rep/`) lives at the
 repository root, not under `data/`, and is gitignored by name rather than by
 directory - see the comment above `*.gpr` in `.gitignore`: a project opened at
