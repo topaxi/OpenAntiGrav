@@ -40,6 +40,11 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone_craft: oag_title::ZoneCraft::OwnShip(ZONE_SHIP),
     sounds: SOUND_BANKS,
     zone_announcer: Some(ZONE_ANNOUNCER),
+    // One title-wide table, layered over whichever circuit races - the shape
+    // `ZoneCircuit::Separate(_, true)` above already implies, since ordinary
+    // circuits are offered in the Zone picker too. `zonemodedlc3` is a second
+    // revision this does not point at; what selects it is unread.
+    zone_palette: Some(oag_title::ZonePalette::TitleWide(ZONE_PALETTE)),
 };
 
 /// Wipeout HD/Fury's Zone milestone announcer.
@@ -113,6 +118,21 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
 /// `Data\Ships\zone\Ship.vex` normalises onto `data/ships/zone/ship.vex`, which
 /// is what the manifest stores.
 pub const ZONE_SHIP: &str = "zone";
+
+/// The per-stage colour grade a Zone race climbs, one file for the whole
+/// title.
+///
+/// **Title-wide rather than per-circuit**, which is what makes it usable on an
+/// ordinary circuit as well as on the four dedicated ones - the arrangement
+/// [`oag_title::ZoneCircuit::Separate`]'s own `also_race_circuits` flag
+/// already asserts for this title. 21,160 bytes, fifteen stages named `Start`
+/// through `Supersonic`, parsed by `oag_formats::effectsettings` and checked
+/// against the disc in `effectsettings_ground_truth.rs`.
+///
+/// **This is the base revision, not `zonemodedlc3.effectsettings`.** That file
+/// is a second, twice-as-large authoring of the same table; what selects
+/// between them is unread, so nothing here selects.
+pub const ZONE_PALETTE: &str = "/data/environments/zonemode.effectsettings";
 
 /// The circuit a Zone race loads when the caller names none.
 ///
