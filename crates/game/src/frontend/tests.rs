@@ -143,7 +143,12 @@ const GRID: (u32, u32) = (SCREEN.0 as u32, SCREEN.1 as u32);
 
 /// Wipeout HD's boot, as `boot::load_shell` resolves it: the picker, the logo
 /// reel, and nothing after them that this build can drive.
-fn hd(frames: usize) -> Frontend {
+///
+/// `has_picture` is the reel's own, not the picker's - the picker plays no
+/// movie at all, which is exactly the shape that once made the boot-wide
+/// overlay default ignore this argument entirely. See
+/// `the_overlay_does_not_default_on_when_the_reel_has_a_picture`.
+fn hd(frames: usize, has_picture: bool) -> Frontend {
     Frontend::booting(
         Sequence {
             steps: vec![
@@ -157,7 +162,7 @@ fn hd(frames: usize) -> Frontend {
                         frames,
                         frame_rate: crate::movie::FRAME_RATE,
                         aspect: GRID,
-                        has_picture: false,
+                        has_picture,
                     },
                 },
             ],

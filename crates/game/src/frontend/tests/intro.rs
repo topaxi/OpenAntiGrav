@@ -241,7 +241,7 @@ fn the_picker_moves_and_wraps_both_ways() {
 /// `Frontend::advance`.
 #[test]
 fn a_boot_that_runs_out_of_chain_opens_the_menus() {
-    let mut frontend = hd(20);
+    let mut frontend = hd(20, false);
     let mut input = Input::new();
 
     // Pick a language, which is the only step ahead of the reel.
@@ -272,7 +272,7 @@ fn a_boot_that_runs_out_of_chain_opens_the_menus() {
 /// ones the disc states.
 #[test]
 fn the_chain_running_out_is_reported_rather_than_silent() {
-    let mut frontend = hd(20);
+    let mut frontend = hd(20, false);
     let mut input = Input::new();
     input.begin_frame(Button::Cross.bit());
     frontend.update(FRAME, &mut input, None);
@@ -315,4 +315,61 @@ fn a_chain_with_steps_left_advances_through_them_as_before() {
         "the movie ending advances to the last step rather than past it"
     );
     assert!(!frontend.is_finished(), "PRESS START has not been pressed");
+}
+
+/// A decoded `Studio Logo` reel does not carry the frame counter over it.
+///
+/// **The bug this guards**: HD's chain opens on `Language Selection`, which
+/// plays no movie at all, so `Frontend::booting`'s old `overlay: !first.has_picture`
+/// read *that* screen's placeholder rather than the reel's own flag - forcing
+/// the counter on for the whole boot even when `Studio Logo`'s own `.bik`
+/// decoded and drew a picture. Pulse and Pure never hit this because their
+/// first step already is the movie leg. See
+/// `handover/wipeout-hds-video-decodes-and-the-logo-reel.md`.
+#[test]
+fn the_overlay_does_not_default_on_when_the_reel_has_a_picture() {
+    let mut frontend = hd(20, true);
+    let mut input = Input::new();
+    input.begin_frame(Button::Cross.bit());
+    frontend.update(FRAME, &mut input, None);
+    assert!(
+        run_until(&mut frontend, &mut input, 200, |f| f
+            .machine()
+            .is(hd_states::STUDIO_LOGO)),
+        "the picker hands on to the logo reel"
+    );
+
+    let draws = frontend.draw_list();
+    assert!(
+        !draws
+            .iter()
+            .any(|d| matches!(d, Draw::Text { text, .. } if text.contains("INTRO FRAME"))),
+        "a picture was decoded, so nothing should stand in for it: {draws:#?}"
+    );
+}
+
+/// The counter still shows when the reel truly has no picture.
+///
+/// The other half of the guard above: the auto-on behaviour itself must
+/// survive the fix, not just get switched off unconditionally.
+#[test]
+fn the_overlay_still_defaults_on_when_the_reel_has_no_picture() {
+    let mut frontend = hd(20, false);
+    let mut input = Input::new();
+    input.begin_frame(Button::Cross.bit());
+    frontend.update(FRAME, &mut input, None);
+    assert!(
+        run_until(&mut frontend, &mut input, 200, |f| f
+            .machine()
+            .is(hd_states::STUDIO_LOGO)),
+        "the picker hands on to the logo reel"
+    );
+
+    let draws = frontend.draw_list();
+    assert!(
+        draws
+            .iter()
+            .any(|d| matches!(d, Draw::Text { text, .. } if text.contains("INTRO FRAME"))),
+        "no picture decoded, so the counter is the only sign the leg is running: {draws:#?}"
+    );
 }

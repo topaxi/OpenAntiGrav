@@ -475,6 +475,20 @@ impl Frontend {
             (frames, _) => frames,
         };
 
+        // The first step that actually plays a movie, distinct from `first`
+        // above. Pulse and Pure open straight on their movie leg, so `first` is
+        // that movie and the two agree. **HD does not**: its declared chain
+        // opens on `Language Selection` and walks two more movie-less screens
+        // before `Studio Logo` plays anything, so `first` is forever a
+        // no-movie placeholder (`has_picture: false`) and using it below would
+        // force the counter on for the whole boot even when `Studio Logo`'s own
+        // movie decodes fine. Falls back to `first` itself on a chain with no
+        // movie anywhere, which keeps the no-picture default for that case.
+        let first_movie = steps
+            .iter()
+            .find(|step| step.movie.frames > 0)
+            .map_or(first, |step| step.movie);
+
         let mut frontend = Self {
             machine,
             screens,
@@ -492,7 +506,7 @@ impl Frontend {
             // runs - forty seconds for the disc's own intro - so the counter is
             // the only sign it is running. With one it is clutter, and the
             // pacing can be read off the picture instead.
-            overlay: !first.has_picture,
+            overlay: !first_movie.has_picture,
             hold: Hold::None,
             held_for: 0.0,
             dev_pub_redirect: Some(states::DEV_PUB_REDIRECT.to_string()),
