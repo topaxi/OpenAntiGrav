@@ -253,8 +253,24 @@ evidence, including the byte-level trace of every function in this chain:
 
   What the read does: splats each scalar to a `float4`, `vsel`-merges it into a
   neighbouring vector, and stores into a large scene block at the **fixed**
-  address `0x00c49000`, offsets `+0x130`/`+0x7c00`/`+0x7c10` - i.e. the fixed
-  addresses `0x00c49130`, `0x00c50c00`, `0x00c50c10`. Confidence 88 on the read.
+  address `0x00c49000`, offsets `+0x110`/`+0x120`/`+0x130` - i.e. the fixed
+  addresses **`0x00c49110`, `0x00c49120`, `0x00c49130`**. Confidence 88 on the
+  read.
+
+  **Second correction, 2026-08-31**: the first write-up named `+0x7c00`/`+0x7c10`
+  as two of the three destinations. Wrong - those stores carry `v10`/`v11`
+  *after* they have been reloaded from unrelated addresses; the merged tint is
+  in `v13`/`v0`/`v1`, going to `+0x130`/`+0x110`/`+0x120`. Mis-attributing the
+  nearest `li` value to the wrong store in an interleaved run is the same class
+  of error as the sign trap. It cost a real test: a watchpoint run armed
+  `0x00c50c00`/`0x00c50c10`, two addresses that were never destinations. The
+  published pointer is likewise `table+0xf8 = &block[0x110]` (at `0x003ab430`),
+  not `table+0x1b8`.
+
+  **Watchpoint caveat**: all three destinations are written by `stvx`, a vector
+  store. A write-watchpoint hook that covers only `stw`/`stfs` will report
+  nothing here however correct the address, so a zero-hit result proves nothing
+  about `Scene_PrepareFrame` until the hook is known to cover `stvx`.
 
   **Correction, same day:** the first write-up said the destination was a
   *runtime* buffer `*(0x008c713c)`. That was a sign error - the raw

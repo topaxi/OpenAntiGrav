@@ -2397,13 +2397,26 @@ At `0x003aaf8c`, inside `Scene_PrepareFrame` (`0x003aa888`-`0x003aed8f`):
 003ab008  vsel  v13, v13, v12, v6     ; merge the splatted component in
 003ab010  vsel  v0,  v0,  v10, v6
 003ab014  vsel  v1,  v1,  v11, v6
-003ab018  stvx  v13, r31, r0          ; r0 = 0x130
-003ab02c  stvx  v10, r31, r9          ; r9 = 0x7c10   (and 0x7c00 alongside)
+003ab018  stvx  v13, r31, r0          ; r0  = 0x130   <- merged .z
+003ab040  stvx  v0,  r31, r28         ; r28 = 0x110   <- merged .x
+003ab044  stvx  v1,  r31, r27         ; r27 = 0x120   <- merged .y
 ```
+
+**A correction to this section's first version, which named `+0x7c00`/`+0x7c10`
+as two of the three destinations.** They are not. The stores at `0x003ab02c`
+and `0x003ab034` do target those offsets, but they store `v10` and `v11`
+*after* `0x003ab020`-`0x003ab028` has reloaded those registers from
+`0x00c815b0`/`0x00c815c0` - unrelated vectors. The three registers actually
+carrying the merged `Scene.Texture Colour` are `v13`, `v0` and `v1`, and they go
+to `+0x130`, `+0x110` and `+0x120`, with `r27`/`r28` set to `0x120`/`0x110` back
+at `0x003aad64`/`0x003aad80`. The mistake was attributing the nearest `li`
+values to the wrong stores in an interleaved run - the same class of error as
+the sign trap, and caught the same way: by re-reading the instruction stream
+rather than the summary.
 
 So each scalar is splatted to a `float4`, `vsel`-merged into one lane of a
 neighbouring vector, and written into a large buffer at `r31`, at offsets
-`+0x130`, `+0x7c00` and `+0x7c10`.
+**`+0x110`, `+0x120` and `+0x130`**.
 
 **`r31` is a fixed address, not a runtime pointer** - and this page said the
 opposite for one commit, so the correction is worth stating plainly. `r31` is
@@ -2416,8 +2429,8 @@ the `Scene.Texture Colour` slots themselves. *(A caution for the next reader of
 this binary: a raw 16-bit displacement above `0x7fff` is always negative, and
 mis-signing one produces a slot that exists, reads cleanly, and means nothing.)*
 
-So the three destinations are the **fixed addresses** `0x00c49130`,
-`0x00c50c00` and `0x00c50c10`, which makes them directly watchpointable with no
+So the three destinations are the **fixed addresses** `0x00c49110`,
+`0x00c49120` and `0x00c49130`, which makes them directly watchpointable with no
 runtime address mapping needed - the thing that made the earlier watchpoint
 proposals expensive.
 
@@ -2473,15 +2486,18 @@ each one. The idiom at `0x003ab340`-`0x003ab38c` is the whole protocol:
 003ab360  oris r0,  r0, 0xc          ; outer->0x4 |= 0x000c0000   (dirty)
 003ab36c  stw  r3,  0x198(r11)       ; table[0x198] = &block[0x7bf0]
 003ab374  stw  r7,  0x19c(r9)        ; table[0x19c] = ...
-003ab38c  stw  r29, 0x1b8(r11)       ; table[0x1b8] = &block[0x7c10]  ***
+003ab38c  stw  r29, 0x1b8(r11)       ; table[0x1b8] = &block[0x7c10]
+003ab430  stw  r23, 0xf8(r11)        ; table[0xf8]  = &block[0x110]   ***
 ```
 
-`r29` was set at `0x003ab2c8` to `base + 0x7c10` - **one of the three
-`Scene.Texture Colour` destinations**. So the chain is complete end to end as a
-*data* path: `Environment_UpdateStageBlend` blends the stage colour into
-`0x00c81a5c`; `Scene_PrepareFrame` reads it, splats it, writes it to
-`0x00c50c10` (`block + 0x7c10`); and `Scene_PrepareFrame` also installs
-`&block[0x7c10]` into `*(obj+0xd8) + 0x1b8` and marks the object dirty.
+`r23` was set at `0x003ab2cc` to `base + 0x110` - **the first of the three
+`Scene.Texture Colour` destinations**. (`r29` at `0x003ab2c8` is `base +
+0x7c10`, a different slice; the first version of this section wrongly treated
+that one as the tint's.) So the chain is complete end to end as a *data* path:
+`Environment_UpdateStageBlend` blends the stage colour into `0x00c81a5c`;
+`Scene_PrepareFrame` reads it, splats it, writes it to `0x00c49110`
+(`block + 0x110`); and `Scene_PrepareFrame` also installs `&block[0x110]` into
+`*(obj+0xd8) + 0xf8` and marks the object dirty.
 
 The same idiom appears at `0x003be24c`, `0x003bef24`, `0x0040e888` and four
 times in `FUN_006ce6e0`, always the same shape: a pointer into the block, into a
@@ -2528,16 +2544,23 @@ static route, rather than merely failing to find something with it.
 **So the static chain ends here, at a real boundary rather than at the end of a
 session's patience.** What is established, end to end and statically: the stage
 colour is blended into `0x00c81a5c`, read by `Scene_PrepareFrame`, written to
-`0x00c50c10`, and that address is published into `*(obj+0xd8) + 0x1b8` with a
+`0x00c49110`, and that address is published into `*(obj+0xd8) + 0xf8` with a
 dirty flag set. What consumes it is reachable only by identifying the object -
 or by watching the memory.
 
 **Concrete next tests, in order of cost:** a **write** watchpoint on
-`0x00c49130` / `0x00c50c00` / `0x00c50c10` (all fixed addresses - no runtime
-mapping), with `0x00c50c10` the most informative since that is the one whose
-address is published; then a **read** watchpoint on `0x00c50c10`, which names
-the consumer directly and is the one thing that would settle the buffer's
-identity outright.
+`0x00c49110` / `0x00c49120` / `0x00c49130` (all fixed addresses - no runtime
+mapping), with `0x00c49110` the most informative since that is the one whose
+address is published into the table; then a **read** watchpoint on
+`0x00c49110`, which names the consumer directly and is the one thing that would
+settle the buffer's identity outright.
+
+**A watchpoint caveat, from a run on 2026-08-30 that armed the wrong two of
+these.** All three destinations are written by `stvx`, a *vector* store. A
+write-watchpoint implementation that hooks only scalar stores (`stw`/`stfs`)
+will report nothing here however correct the address is, so a zero-hit result
+against these addresses is not evidence about `Scene_PrepareFrame` until the
+hook is known to cover `stvx`.
 
 *(An observation deliberately left as an observation: `g_FullscreenTintColour`
 at `0x00c50f00` is `base + 0x7f00`, just past the highest offset seen here
