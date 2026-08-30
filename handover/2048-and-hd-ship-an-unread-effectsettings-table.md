@@ -252,13 +252,30 @@ evidence, including the byte-level trace of every function in this chain:
   anything** - that one check would have found this on pass two.
 
   What the read does: splats each scalar to a `float4`, `vsel`-merges it into a
-  neighbouring vector, and stores into a >32 KiB runtime buffer
-  `*(0x008c713c)` at `+0x130`/`+0x7c00`/`+0x7c10`. Confidence 88 on the read
-  (the slots resolve to exactly the three addresses `Environment_UpdateStageBlend`
-  writes, against the function's own OPD TOC). **Confidence 55 and no name on
-  the buffer's identity** - it is shaped like a per-frame shader-constant block
-  and no consumer of it has been traced. That is the next step, and it is now
-  bounded.
+  neighbouring vector, and stores into a large scene block at the **fixed**
+  address `0x00c49000`, offsets `+0x130`/`+0x7c00`/`+0x7c10` - i.e. the fixed
+  addresses `0x00c49130`, `0x00c50c00`, `0x00c50c10`. Confidence 88 on the read.
+
+  **Correction, same day:** the first write-up said the destination was a
+  *runtime* buffer `*(0x008c713c)`. That was a sign error - the raw
+  displacement field `0x9d78` is **signed**, so it is `-0x6288` and the slot is
+  `0x008b713c` (holding `0x00c49000`), not `0x008c713c` (which holds 0 and
+  reads convincingly as an uninitialised pointer). Fixed in the doc. The
+  correction *helps*: the destinations are static, so a watchpoint on them
+  needs no runtime address mapping. **General trap for this binary: a raw 16-bit
+  displacement above `0x7fff` is negative, and mis-signing one yields a slot
+  that exists, reads cleanly, and means nothing.**
+
+  **The buffer's identity is still open at 55, and the static attempt to close
+  it came back ambiguous rather than empty.** `0x00c49000` is touched from
+  exactly three places (`Scene_PrepareFrame`, `FUN_006ce6e0`, `FUN_00107200`),
+  is a structured block (small fields at `+0xc0`-`+0x200`, a dense `float4` run
+  at `+0x7ba0`-`+0x7d90`, and nine sub-blocks at stride `0xbe0` from `+0xf80`),
+  and - importantly - **neither toucher calls an RSX constant uploader or a
+  parameter binder**, so it is not handed straight to the shader-constant path.
+  `FUN_006ce6e0` installs `base+0x7c00` as a pointer into `*(obj+0xd8)+0x198`,
+  which is the next indirection to chase; neither it nor `FUN_00107200`
+  references any string, so the `.cpp`-filename route is unavailable.
 
   Gated on a byte at `0x00d45f84`, which is **not** established as Zone-specific
   (seven TOC slots, ~40 users across the scene/render/front-end code). Do not

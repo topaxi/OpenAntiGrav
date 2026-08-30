@@ -2402,24 +2402,72 @@ At `0x003aaf8c`, inside `Scene_PrepareFrame` (`0x003aa888`-`0x003aed8f`):
 ```
 
 So each scalar is splatted to a `float4`, `vsel`-merged into one lane of a
-neighbouring vector, and written into a large runtime buffer at
-`r31 = *(0x008c713c)` - offsets `+0x130`, `+0x7c00`, `+0x7c10`. `0x008c713c`
-holds `0` in the image, so it is filled at runtime; the offsets run past
-`0x7c10`, so the buffer is at least 32 KiB, and `Scene_PrepareFrame`'s prologue
-(`0x003aa2a0`-`0x003aa63c`) fills dozens of other fields of it the same way.
+neighbouring vector, and written into a large buffer at `r31`, at offsets
+`+0x130`, `+0x7c00` and `+0x7c10`.
+
+**`r31` is a fixed address, not a runtime pointer** - and this page said the
+opposite for one commit, so the correction is worth stating plainly. `r31` is
+loaded once, at `0x003aa98c`, by an instruction whose raw displacement field is
+`0x9d78`. That field is **signed**: `0x9d78` is `-0x6288`, not `+0x9d78`. Read
+as unsigned it points at `0x008c713c`, which holds `0` in the image and reads
+as "a runtime pointer"; read correctly it is the slot `0x008b713c`, which holds
+**`0x00c49000`** - a static, page-aligned address in the same neighbourhood as
+the `Scene.Texture Colour` slots themselves. *(A caution for the next reader of
+this binary: a raw 16-bit displacement above `0x7fff` is always negative, and
+mis-signing one produces a slot that exists, reads cleanly, and means nothing.)*
+
+So the three destinations are the **fixed addresses** `0x00c49130`,
+`0x00c50c00` and `0x00c50c10`, which makes them directly watchpointable with no
+runtime address mapping needed - the thing that made the earlier watchpoint
+proposals expensive.
 
 **Confidence 88 on the read itself.** The three slots resolve, against this
 function's own OPD-declared TOC, to exactly the three addresses the writer
 writes, and the writer is already confirmed. Nothing about that chain is
 inferred.
 
-**Confidence 55, and no name, on what the destination buffer is.** A >32 KiB
-per-frame block that `Scene_PrepareFrame` fills field by field with splatted
-vectors is shaped exactly like a shader-constant / per-frame parameter block,
-which would make this the whole answer - but "shaped like" is not a reading,
-and no consumer of `*(0x008c713c) + 0x130` has been traced. That is the next
-step and it is now a *bounded* one, against eighteen passes of unbounded
-search.
+**Confidence 55, and no name, on what the destination buffer is** - and a
+static attempt to close that, made 2026-08-30, **did not close it**. What the
+attempt did establish about `0x00c49000`:
+
+- It is touched from exactly **three** places in the image, found by scanning
+  for its two TOC slots (`0x008b713c`, module 2, disp `-0x6288`; `0x008a9800`,
+  module 1, disp `-0x3cd8`) rather than by `get_xrefs_to`: `Scene_PrepareFrame`
+  (29 loads), `FUN_006ce6e0` (2), and `FUN_00107200` (1, the only module-1
+  toucher).
+- It is a **structured block, not a flat array**. `Scene_PrepareFrame` takes
+  pointers into it at ~90 distinct offsets, and they are not scattered: there
+  is a run of small fields at `+0xc0`-`+0x200`, a dense run of `float4`s at
+  `+0x7ba0`-`+0x7d90` (where `Scene.Texture Colour` lands), and an array of
+  **nine sub-blocks at a stride of exactly `0xbe0`** - `+0xf80`, `+0x1b60`,
+  `+0x2740`, `+0x3320`, `+0x3f00`, `+0x4ae0`, `+0x56c0`, `+0x62a0`, `+0x6e80` -
+  each with the same internal shape (`base+N`, `base+N+0x40`, `base+N+0x50`,
+  `base+N+0x1b0` taken together).
+- **Neither toucher calls an RSX constant uploader.** `Rsx_UploadVertexConstants`
+  (`0x005c176c`) and `0x005c1754` are called nowhere in `Scene_PrepareFrame` or
+  `FUN_006ce6e0`, and neither function calls the parameter binders
+  (`0x005a3ef0`/`0x005a3d20`) either. So the hypothesis that the block is
+  handed straight to the shader-constant path is **not** supported: whatever
+  consumes it does so somewhere else.
+- `FUN_006ce6e0` **installs pointers into it** rather than reading it -
+  `addi r7, base, 0x7c00` at `0x006cf164` is stored to `*(obj+0xd8) + 0x198`,
+  with `base+0x7bc0` beside it. So sub-ranges of the block are handed to some
+  object as pointers, which is one more indirection to chase.
+- Neither `FUN_006ce6e0` nor `FUN_00107200` references a single string, so the
+  `.cpp`-filename route that named the memory layer is unavailable for both.
+
+So the buffer-identity question stays at **55 and unnamed**, and the honest
+statement is that the static route was tried and came back ambiguous rather
+than empty. The concrete next tests, in order of cost: read what consumes
+`*(obj+0xd8) + 0x198`; or set a **write** watchpoint on `0x00c49130` (now a
+fixed address, so no runtime mapping is needed) and see which code writes and
+then reads it.
+
+*(An observation deliberately left as an observation: `g_FullscreenTintColour`
+at `0x00c50f00` is `base + 0x7f00`, just past the highest offset seen here
+(`+0x7d90`). It may be inside this block or merely adjacent to it; nothing
+established either way, and it changes none of the tint findings in
+[renderer.md](renderer.md), which rest on the address's own users.)*
 
 ### It is gated on a byte
 
@@ -2454,8 +2502,8 @@ had to be.
 consumes `+0x130`/`+0x7c00`/`+0x7c10`, and whether the gate is on in a Zone
 race. The `0x00c81a5c` read watchpoint earlier passes proposed is now much less
 necessary for *finding* the reader and much more useful for confirming the gate
-- and a **write** watchpoint on `*(0x008c713c) + 0x130` would be the direct
-test of the buffer's role.
+- and a **write** watchpoint on `0x00c49130` would be the direct test of the
+buffer's role.
 
 ## See also
 
