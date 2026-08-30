@@ -421,6 +421,41 @@ This build draws it static, at its own `x="460"`, `y="220"`, `align="right"` and
 the animation is the one remaining gap on this screen, recorded rather than
 approximated.
 
+**The throb's period and depth are now measured, off a real capture.**
+`pulse-psp-eu.chd` under PPSSPPSDL (Xvfb, no window manager, no compositor -
+see [`ppsspp-debugger.md`](../reverse-engineering/ppsspp-debugger.md#running-without-a-real-display-xvfb-works-no-compositor-needed)),
+left sitting on `Show Logo` untouched for 20 seconds, screenshotted through
+`import -window root` cropped to the `PRESS START BUTTON` glyphs at roughly
+11-18 Hz over two independent runs (`gpu.buffer.screenshot` still does not
+work over the websocket debugger, so this is a compositor grab, not a live
+memory read). The crop's mean luminance oscillates cleanly: autocorrelation on
+both runs peaks at lag 1.10 s and its harmonics out to eight cycles (heights
+0.93 down to 0.55 at 8.84 s in the denser run), an FFT of that run puts its
+dominant frequency at 0.90 Hz - a 1.11 s period - at ten times the magnitude of
+its nearest rival, and raw peak-to-peak/trough-to-trough medians land at
+1.10-1.11 s in both runs. Three independent methods agree to within 0.01 s.
+**Period: ≈1.10 s.**
+
+The waveform is not a clean sine - a least-squares sine fit only reaches
+R²=0.53 - because it holds rather than oscillates smoothly: mean crop
+luminance sits flat at ≈55/255 for a beat, eases up, sits flat at ≈129/255 for
+a beat, eases down, repeatable to within a couple of luminance units across 18
+independent trough reads and a comparable number of peak reads in the second
+run. **It never reads as fully faded**: the dim phase is ≈42% of the bright
+phase's luminance (55/129), not zero, so the throb toggles between a dim and a
+bright state rather than fading to black each cycle.
+
+Confidence **75**: two independent 20 s captures converging on the same figure
+three different ways, but this is a screen-pixel luminance proxy, not a direct
+read of the widget's own alpha out of PSP memory - so the luminance ratio
+measures the modulation's period and *shape* confidently, but is a lower bound
+on depth rather than the exact 0-255/0.0-1.0 alpha pair an implementation
+wants; that conversion, and the fade-in itself (`delay="1"` was not
+re-measured this pass), is `handover/task-7-press-start-throb-implementation.md`'s
+job, not RE. The captured frames and analysis scripts are session-local, not
+committed - a screen capture off the disc is game content like any other, per
+[`legal.md`](../overview/legal.md).
+
 **This build booted the dev/pub reel for a while, and that was wrong.** The reel
 is the one whose contents fit `IntroMovie1`'s frame counters, and pointing the
 boot at it was reasoned from those constants rather than from what the disc does.
@@ -898,7 +933,11 @@ at once, at full opacity, and stands still. This is independent of the black
 frames and is **the named residual on the intro-to-`Show Logo` transition**:
 closing the flash does not close the report, because a static text pop is itself
 a discontinuity where the disc has a fade. Implementing it needs the pulse's
-period and depth, which no document here states and no capture has measured.
+period and depth - both now measured (confidence 75, a luminance-proxy capture
+rather than a memory read) in the `BOOT_PRESS_START does not pulse` section
+above: period ≈1.10 s, holding at a dim floor and a bright ceiling roughly 42%
+apart in luminance rather than fading to black. Turning that into an
+implementation is `handover/task-7-press-start-throb-implementation.md`.
 
 **What is deliberately not claimed.** Nobody has captured the original's boot
 frame by frame, so there is no evidence here about whether the intro's last frame
