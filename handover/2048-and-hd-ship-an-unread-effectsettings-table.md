@@ -1157,3 +1157,48 @@ evidence, including the byte-level trace of every function in this chain:
   a stage pointer as an argument - neither visible to a static branch scan. A
   **read watchpoint on `0x00c81a5c`** settles both in one run, with a
   confirmed per-frame writer as its control.
+
+  **2026-08-30, a seventeenth pass: 2048 has a consumer, and it is a
+  full-screen composite shader.** HD's side closed as a negative; 2048's does
+  not, and the difference explains why HD's search kept coming up empty - the
+  two titles apply this table in structurally different places.
+
+  Chain, traced end to end: `Zone_UpdateStage` blends stage against stage+1
+  and hands the 16-byte result to **`Zone_SetBlendedStageColour`**
+  (`0x8103876e`, renamed, 85 - two stores and a return), which publishes it to
+  **`g_zone_blended_stage_colour`** (`0x816af070`, renamed, 85). That global is
+  **read** at `0x810394b2` by an 11,902-byte function calling **33 distinct
+  `SceGxm_*` entry points** - a GXM draw function. Its sibling writer
+  (`FUN_8103d2ae`) carries the shader-name table:
+  `wo_composite_zone_fp`/`_vp`, `wo_composite_zone_hdfury_fp`/`_vp`, plus
+  bloom, blur and the ordinary composite programs.
+
+  **So the original grades the whole frame in a composite pass**, not by
+  recolouring individual materials. Confidence 80. That reframes the user
+  observation this work started from: "it should affect all textures" is right
+  *because it is a screen-space grade*, and the "which material is `Colour 3`"
+  framing - the thing that made this look intractable - was the wrong
+  question. **A full-screen grade needs no per-material binding.** What it
+  needs is `wo_composite_zone_fp`'s own arithmetic, a shader this project has
+  not extracted.
+
+  **Also recovered, for 2048 only**: the cross-fade rate and direction.
+  `DAT_816c6bc8 = DAT_816c6bc4 * 0.0002` clamped to `1.0`, zero unless a
+  transition is running; the stage commits only once the transition timer
+  passes `5000.0`; and the blend runs current -> **next** (`stage + 1`,
+  clamped to `0xc`), not against the previous stage as HD's does. That
+  answers this thread's long-open weight question for this title, and is
+  explicitly **not** transferable to HD.
+
+  **Still not read**: 2048's key-to-offset table. The Thumb tracker was
+  replaced with the decompiler's own dataflow, which fixed the template
+  pairing and resolved the 16 non-stage globals plus two per-stage keys - but
+  the rest come back `expr:INDIRECT`, the decompiler modelling them as
+  call-clobber effects on stack-held pointers. Sharper obstacle than the
+  first attempt's naive tracking, and recorded rather than worked around: no
+  2048 offset table is published.
+
+  **Next step, and it is now a different kind of job**: extract
+  `wo_composite_zone_fp` from the disc and read what it does with the colour.
+  That is an asset-side task, not a decompile - and it is the thing standing
+  between this thread and a Zone race that grades the way the original does.

@@ -642,8 +642,27 @@ traced.
   reading that the cross-faded `+0x00` might be a Detonator colour: that
   blend reads 16-byte fields and the Detonator colours are 4-byte. See
   [zone-effectsettings-loader.md](../ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md#2026-08-30-a-twelfth-pass-the-schemas-registrar-is-found-on-both-titles---and-the-compile-time-array-framing-was-wrong).
-- **Only the fog and a light tint reach the picture, and the blocker is a
-  binding, not a parse.** Raised 2026-08-30 by a user racing a real 2048 Zone
+- **2026-08-30: on 2048 the original grades the *whole frame*, in a composite
+  shader - so the "which material does `Colour 3` recolour" framing below was
+  the wrong question.** `Zone_UpdateStage`'s blended stage colour is published
+  to `g_zone_blended_stage_colour` (`0x816af070`) by
+  `Zone_SetBlendedStageColour` (`0x8103876e`) and read by an 11.9 KB function
+  calling 33 `SceGxm_*` entry points; the sibling that also writes it carries
+  the shader-name table `wo_composite_zone_fp`/`_vp` and
+  `wo_composite_zone_hdfury_fp`/`_vp`, alongside bloom, blur and the ordinary
+  composite programs. Confidence 80 - the data flow is traced and the names
+  are the disc's own; the shader binary itself is not extracted, so how the
+  pass combines the colour with the frame is unrecovered. **A full-screen
+  grade needs no per-material binding**, which removes the blocker the bullet
+  below describes - what it needs instead is `wo_composite_zone_fp`. See
+  [zone-environment-fallback.md](../ghidra/functions/vita-2048-eu-v104/zone-environment-fallback.md#2026-08-30-a-seventh-pass-2048-does-have-a-consumer---the-zone-grade-is-a-full-screen-composite-shader-not-a-per-material-recolour).
+  **HD is the opposite case**: its `Scene.*`/`Track.*` keys have no located
+  consumer at all - seven per-key getters that nothing branches to - while
+  four keys (`Detonator` mine/bomb, `Airbrake`) do reach a draw through their
+  own getters. The two titles apply this table in structurally different
+  places, which is why HD's search kept coming up empty.
+- **Only the fog and a light tint reach the picture, and on HD the blocker is
+  a binding, not a parse.** Raised 2026-08-30 by a user racing a real 2048 Zone
   race: "it only changes the fog, it should affect all textures and such."
   That is what this build does, and on 2048 it is the *most* it can do -
   2048's per-stage blocks author no `Lighting.*` keys at all, so

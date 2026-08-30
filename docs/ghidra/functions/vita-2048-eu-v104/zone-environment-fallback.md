@@ -685,6 +685,108 @@ would say where a parsed colour lands, not which material or mesh it
 recolours - which is the actual blocker behind "the grade should affect all
 textures, not just the fog".
 
+## 2026-08-30, a seventh pass: 2048 *does* have a consumer - the Zone grade is a full-screen composite shader, not a per-material recolour
+
+HD's side of this question closed as a negative (`Scene.*`/`Track.*` have no
+located consumer -
+[zone-effectsettings-loader.md](../ps3-hdfury-eu/zone-effectsettings-loader.md)).
+**2048's does not.** The chain is complete, and it explains why HD's search
+kept coming up empty: the two titles apply the grade in structurally
+different places.
+
+### The chain, end to end
+
+```
+Zone_UpdateStage (0x81044cfc)
+  reads craft +0x634 -> clamp 0..12 -> DAT_816c6bac              the stage
+  blends DAT_816c4890[stage] against DAT_816c4890[stage+1]
+  hands the 16-byte result to
+Zone_SetBlendedStageColour (0x8103876e)                          renamed, 85
+  g_zone_blended_stage_colour = result                           0x816af070, renamed, 85
+                    |
+                    v  read at 0x810394b2
+FUN_810387b4  (11,902 bytes)
+  calls 33 distinct SceGxm_* entry points - a GXM draw/render function
+```
+
+`Zone_SetBlendedStageColour` is two stores and a return, which is what makes
+it safe to name at 85: it exists only to publish that vector.
+
+### The shader names settle what kind of pass it is
+
+`FUN_8103d2ae` - the other writer of `g_zone_blended_stage_colour` - carries
+a shader-name table, read directly off its string references:
+
+```
+default              wo_blur_fp             wo_composite_vp
+wo_bloom_gate_fp     wo_blur_vp             wo_composite_nocc_fp
+wo_bloom_gate_vp     wo_blur_ds_fp          wo_composite_notonemap_fp
+wo_composite_zone_fp        wo_composite_zone_vp
+wo_composite_zone_hdfury_fp wo_composite_zone_hdfury_vp
+```
+
+Bloom, blur and composite - a post-processing chain - **with two
+Zone-specific composite programs in it**, and a second pair named
+`hdfury` for the ported HD circuits this page's own fallback section is
+about.
+
+**So 2048 applies the Zone colour grade as a full-screen composite pass**,
+fed by the blended stage colour, rather than by recolouring individual
+materials. Confidence **80**: the data flow is traced instruction by
+instruction, the reader is unambiguously a GXM render function, and the
+shader names are the disc's own - what is *not* read is the shader binary
+itself, so exactly how `wo_composite_zone_fp` combines the colour with the
+frame is unrecovered.
+
+### This reframes the user-facing question
+
+The observation that started this work - "it only changes the fog, it should
+affect all textures and such" - now has a mechanism behind it. The original
+does affect everything, because it grades the **whole frame** in a composite
+pass. It does not do it by binding `Colour 3` to some material, which is the
+reading that made the problem look intractable.
+
+**What that changes for wiring**: a full-screen grade needs no per-material
+binding, which was the blocker. What it still needs is the composite's own
+arithmetic - which of the stage's colours the pass consumes, and how it
+combines them - and that is in `wo_composite_zone_fp`, a shader this project
+has not extracted.
+
+### The cross-fade rate, recovered for 2048
+
+`Zone_UpdateStage`'s own weight, read from the same decompile:
+
+- `DAT_816c6bc8` (the blend factor) `= DAT_816c6bc4 * 0.0002`, clamped to
+  `1.0`, and `0.0` unless a transition is running (`DAT_816c6bcc`).
+- `DAT_816c6bc4` is a transition timer accumulating from the frame delta.
+- **The stage only commits once `DAT_816c6bc4 > 5000.0`**, and the `/5`
+  counter at craft `+0x638` commits at `> 1000.0`.
+- The blend runs current -> **next** (`DAT_8151c6f4 = stage + 1`, clamped to
+  `0xc`), not against the previous stage the way HD's does.
+
+That is the direction-and-rate question this thread has carried since the
+render wiring landed, answered for this title. **It is not transferable to
+HD**, which blends against `stage - 1` from a different field.
+
+### What is still not read: 2048's key-to-offset table
+
+The Thumb tracker was replaced with the decompiler's own dataflow
+(`DecompInterface` + `HighFunction`, walking `PcodeOp.CALL` and expanding
+each destination varnode). That fixed the template pairing - all 51
+per-stage key names now sit against their own registration call - and
+resolved the **16 non-stage globals** (`0x816c710c`, `0x816c7110`,
+`0x8151c71c`, `0x8151c740`, `0x816c7028`, `0x816c6ba0`, `0x816c6bac`,
+`0x816c6ba8`, `0x8151c708`, `0x8151c70c`, `0x816c6ba4`, `0x8151c6fc`) plus
+two per-stage ones (`EQ.Mid-Band Position` -> `0x8151c738`,
+`EQ.BG Mid-Band Position` -> `0x8151c73c`).
+
+**The rest come back `expr:INDIRECT`** - the decompiler models them as
+call-clobber effects on stack-held pointers, so the destination is not
+recoverable from the call site alone. That is a sharper obstacle than the
+first attempt's naive register tracking, and it is recorded rather than
+worked around: **no 2048 offset table is published.** It would need the
+prologue's stack-slot fills resolved, or a different vantage point entirely.
+
 ## See also
 
 - `docs/formats/effectsettings.md` - the file format this loader reaches for
