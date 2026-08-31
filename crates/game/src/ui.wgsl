@@ -84,14 +84,22 @@ fn vs_main(@builtin(vertex_index) index: u32, instance: Instance) -> VertexOut {
     // model four ways and sampling one atlas patch four ways. About the middle
     // of the rectangle, so a rotated sprite keeps the centre an unrotated one
     // would have had.
-    let centred = corner - vec2<f32>(0.5, 0.5);
+    //
+    // **In pixels, not in the unit square.** Turning the corner first and
+    // scaling by `rect.zw` afterwards is `scale . rotate`, which shears any quad
+    // that is not square: HD's `ZoneBG` is a 676x153 bar authored at a quarter
+    // turn, and that order left it 676 wide and 153 tall with its art lying on
+    // its side instead of standing it up as the 153x676 column it is. A square
+    // quad comes out the same either way, which is why the lock-on reticle -
+    // the only caller until 2026-08-31, and 8 pixels square - never showed it.
+    let centred = (corner - vec2<f32>(0.5, 0.5)) * instance.rect.zw;
     let turn = mat2x2<f32>(
         vec2<f32>(cos(instance.rotation), sin(instance.rotation)),
         vec2<f32>(-sin(instance.rotation), cos(instance.rotation)),
     );
-    let placed = turn * centred + vec2<f32>(0.5, 0.5);
+    let placed = turn * centred + instance.rect.zw * 0.5;
     var out: VertexOut;
-    out.position = to_clip(instance.rect.xy + placed * instance.rect.zw);
+    out.position = to_clip(instance.rect.xy + placed);
     // Normalised here rather than in the fragment shader, against whichever
     // texture this quad indexes.
     let size = select(uniforms.atlas, uniforms.sprites, instance.mode > 0.5);

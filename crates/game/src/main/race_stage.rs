@@ -74,7 +74,13 @@ impl RaceStage {
             }
             None => {
                 if let Some(hud) = &mut self.hud {
-                    let readout = self.race.readout();
+                    let mut readout = self.race.readout();
+                    // The rung the grade is showing, which is what names the
+                    // speed class - see `Scene::zone_stage`.
+                    readout.zone_stage = self.scene.zone_stage().unwrap_or(0);
+                    readout.zone_next_in = self
+                        .scene
+                        .zones_to_next_stage(u16::try_from(readout.zone).unwrap_or(u16::MAX));
                     hud.draw(&gpu.device, &gpu.queue, encoder, view, &readout, viewport);
                 }
             }

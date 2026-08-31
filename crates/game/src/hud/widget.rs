@@ -114,6 +114,24 @@ pub struct Sprite {
     pub color: [f32; 4],
     /// The `Src` entry name. See [`Layout::atlas`], which is what resolves it.
     pub src: String,
+    /// `RotationTheta`, in radians about the rectangle's own centre. `0.0` for a
+    /// widget that carries none, which is almost all of them.
+    ///
+    /// **Zone's ladder is what needs it**: `ZoneBG` authors `1.5708`, a quarter
+    /// turn, which is what stands a 676x153 bar up as the 153x676 left-hand
+    /// column, and `ZonePlusLight0`-`10` author `±0.385` down to `0`, the small
+    /// per-row tilts that make the ladder read as an arc rather than a straight
+    /// list. Two spellings ship, `rotationTheta` and `RotationTheta`, and
+    /// [`oag_formats::fexml::Node::value`] folds case.
+    ///
+    /// **The sign convention is passed through, not verified.** The angle is
+    /// handed to [`crate::frontend::Draw::RotatedSprite`], whose own doc reads it
+    /// clockwise; nothing recovered says which way the original turns a widget,
+    /// and the one authored value big enough to see - `ZoneBG`'s quarter turn -
+    /// covers the same pixels either way, differing only by a half turn of the
+    /// art. Confidence 60 on the sign, 90 on the attribute being a rotation at
+    /// all.
+    pub rotation: f32,
 }
 
 /// One `<Text>`: a string, a font, and where it goes.

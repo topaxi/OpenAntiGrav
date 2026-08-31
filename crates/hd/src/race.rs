@@ -45,17 +45,92 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // circuits are offered in the Zone picker too. `zonemodedlc3` is a second
     // revision this does not point at; what selects it is unread.
     zone_palette: Some(oag_title::ZonePalette::TitleWide(ZONE_PALETTE)),
-    // `None`, and not for want of looking. `Environment_UpdateStageBlend`
-    // (`0x003da540`) sources Zone's requested stage from a per-craft field,
-    // `craftArray[n]->+0x640`, and no writer for it was found - the same
-    // folded-index-bias trap `zone-effectsettings-loader.md`'s sixth pass
-    // records defeats an offset search on this binary. 2048's own ladder is
-    // not transplantable here: it names thirteen stages where this title has
-    // fifteen. Detonator's ladder on this title *is* recovered (one stage per
-    // step, `RaceManager->+0x2e10`), and is not this field.
-    zone_stages: None,
+    // Recovered 2026-08-31, and the writer of `craftArray[n]->+0x640` with it.
+    // See `ZONE_STAGES`.
+    zone_stages: Some(ZONE_STAGES),
     zone_stage_textures: Some(ZONE_STAGE_TEXTURES),
     zone_sky: Some(ZONE_SKY),
+};
+
+/// Wipeout HD/Fury's zone-number to speed-class ladder, read out of the
+/// executable.
+///
+/// # The evidence
+///
+/// Full working, addresses and a reproduce script in
+/// [zone-speed-class-table.md]. In short: `g_ZoneSpeedClassTable`
+/// (`0x00860d44`) is fourteen 8-byte records of
+/// `{ u32 zoneThreshold, u32 stringIdPointer }` with the thresholds strictly
+/// descending to zero, and `Hud_UpdateZoneSpeedClass` (`0x00049718`) walks it
+/// from the top and stops at the first record the zone counter has reached.
+/// The record count is a literal `14` in the instruction stream
+/// (`ZoneSpeedClassTable_Count`, `0x00083490`), so where the run ends is read
+/// rather than inferred, and the fourteen string pointers are the only
+/// references to those ids anywhere in the image.
+///
+/// The names below are **string-table ids**, resolved through the language
+/// plugin the same way an `idstring` caption is - `MSC_SVENOM` is `SUB-VENOM`,
+/// `Venom` is `VENOM`, `IG_HUD_MACH1` is `MACH 1`. That is the same convention
+/// [`oag_2048::race::ZONE_STAGES`] uses for its own `MX_CLASS` family.
+///
+/// # Why it was found, and what it closed on the way
+///
+/// The search was for the *HUD*: a Zone race names the current speed class
+/// beside the zone number, and nothing here could say which class a zone runs
+/// at. The walker turned out to end with `stw r3, 0x640(r29)` where `r3` is
+/// `14 - i` - **the writer of the per-craft stage field
+/// `Environment_UpdateStageBlend` reads**, which
+/// `docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md` had
+/// recorded as unfound and which was the one thing between this port and a Zone
+/// race whose colour grade escalates. So HD has the same architecture 2048 does
+/// and for the same reason: **the HUD widget drives the grade**.
+///
+/// `14 - i` lands on `zonemode.effectsettings`' own fifteen rungs exactly -
+/// record 13 (`MSC_SVENOM`) on `1 Sub Venom`, record 0 (`IG_HUD_SUPSON`) on
+/// `14 Supersonic`, and all twelve between - which is fourteen independent
+/// agreements between a table in `.data` and a table in an asset file.
+///
+/// # Confidence 88, and three checks come from the running game
+///
+/// The compared value is a float, so the instruction stream alone does not say
+/// what it counts. Three observations of the original pin it, on different rows:
+/// a Zone frame the maintainer supplied reads `SUB-VENOM` at zone 1 (record
+/// 13's band is `[0, 2)`), and the maintainer's own play names **zone 2 as
+/// already Venom, explicitly as the exception to "not every zone is a speed
+/// class bump"** - record 12's band is the single zone `2`. A second frame, at
+/// zone 8, reads `SUB-RAPIER` on the current row and `RAPIER` four rows down on
+/// zone `12`, which is record 9's `[7, 12)` band and record 8's threshold
+/// exactly. A one-zone band in the middle of a table whose others run 2 to 15
+/// wide is not something a wrong reading lands on, and a five-zone band with its
+/// upper boundary named is a check the table was written before anyone had.
+///
+/// # It is not 2048's table
+///
+/// [`oag_2048::race::ZONE_STAGES`] is seventeen records with a sentinel and
+/// bands of `0`-`1`, `2`-`8`, `9`-`16`, then every five. This is fourteen
+/// records, no sentinel, and bands of `0`-`1`, `2`, `3`-`4`, `5`-`6`, `7`-`11`,
+/// widening to fifteen at the top. Same character, different numbers; neither
+/// is a copy of the other.
+///
+/// [zone-speed-class-table.md]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/ghidra/functions/ps3-hdfury-eu/zone-speed-class-table.md
+/// [`oag_2048::race::ZONE_STAGES`]: https://github.com/topaxi/OpenAntiGrav/blob/main/crates/2048/src/race.rs
+pub const ZONE_STAGES: &oag_title::ZoneStages = &oag_title::ZoneStages {
+    records: &[
+        (75, "IG_HUD_SUPSON"),
+        (60, "IG_HUD_MACH1"),
+        (50, "IG_HUD_SUBSON"),
+        (42, "IG_HUD_SUPZEN"),
+        (35, "MSC_ZEN"),
+        (27, "MSC_SPPHANTOM"),
+        (20, "Phantom"),
+        (16, "MSC_SPHANTOM"),
+        (12, "Rapier"),
+        (7, "MSC_SRAPIER"),
+        (5, "Flash"),
+        (3, "MSC_SFLASH"),
+        (2, "Venom"),
+        (0, "MSC_SVENOM"),
+    ],
 };
 
 /// The cubemap a Zone race draws in place of the circuit's own `sky.gtf`.
@@ -285,3 +360,75 @@ pub const DEFAULT_TRACK: &str = "/data/environments/talons_junction/track.vex";
 /// `/data/ships/assegai/handlingstats.xml` is in `DATA02`, and it parses with
 /// Pulse's schema. Nothing about Assegai is HD's own preference.
 pub const DEFAULT_TEAM: &str = "assegai";
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// **The two Zone tables cannot drift apart.**
+    ///
+    /// [`ZONE_STAGES`] is indexed by zone and [`crate::hud::ZONE_SPEED_CLASSES`]
+    /// by rung, and both carry the same fourteen string ids because both were
+    /// read off the same fourteen records. `oag_game::hud` reads the second and
+    /// the colour grade the first, so a drift would put a class name on screen
+    /// that disagrees with the palette the circuit is graded with.
+    #[test]
+    fn the_two_zone_tables_name_the_same_class_at_every_zone() {
+        for zone in 0..=120u16 {
+            let stage = ZONE_STAGES
+                .stage_for(zone)
+                .expect("a shipped table ends at 0");
+            assert_eq!(
+                crate::hud::ZONE_SPEED_CLASSES.id_for(stage),
+                ZONE_STAGES.class_for(zone),
+                "zone {zone} on rung {stage}"
+            );
+        }
+    }
+
+    /// The fourteen records, as the executable stores them: descending, no
+    /// sentinel, ending at zero.
+    #[test]
+    fn the_ladder_is_the_fourteen_records_the_executable_holds() {
+        assert_eq!(ZONE_STAGES.records.len(), 14);
+        assert_eq!(ZONE_STAGES.records[0], (75, "IG_HUD_SUPSON"));
+        assert_eq!(ZONE_STAGES.records[13], (0, "MSC_SVENOM"));
+        for pair in ZONE_STAGES.records.windows(2) {
+            assert!(pair[0].0 > pair[1].0, "{pair:?} is not descending");
+        }
+        // Fourteen distinct names: unlike 2048's, this table has no guard entry
+        // sharing a name with its neighbour.
+        let mut names: Vec<_> = ZONE_STAGES.records.iter().map(|r| r.1).collect();
+        names.sort_unstable();
+        names.dedup();
+        assert_eq!(names.len(), 14);
+    }
+
+    /// **The two rungs the running game pins.** The reference frame reads
+    /// `SUB-VENOM` at zone 1, and the maintainer's play names zone 2 as already
+    /// Venom - the one-zone band that rules out one rung per zone.
+    #[test]
+    fn the_bands_match_what_the_original_shows() {
+        assert_eq!(ZONE_STAGES.class_for(0), Some("MSC_SVENOM"));
+        assert_eq!(ZONE_STAGES.class_for(1), Some("MSC_SVENOM"));
+        assert_eq!(ZONE_STAGES.class_for(2), Some("Venom"));
+        assert_eq!(ZONE_STAGES.class_for(3), Some("MSC_SFLASH"));
+        assert_eq!(ZONE_STAGES.stage_for(1), Some(1));
+        assert_eq!(ZONE_STAGES.stage_for(2), Some(2));
+        // `14 - i`, the executable's own arithmetic, tops out on the fifteenth
+        // `.effectSettings` rung.
+        assert_eq!(ZONE_STAGES.stage_for(75), Some(14));
+        assert_eq!(ZONE_STAGES.stage_for(999), Some(14));
+    }
+
+    /// The next bump, which is what places the HUD's next-class bar.
+    #[test]
+    fn the_next_bump_is_the_threshold_above_the_current_band() {
+        assert_eq!(ZONE_STAGES.next_zone(1), Some(2));
+        assert_eq!(ZONE_STAGES.next_zone(2), Some(3));
+        assert_eq!(ZONE_STAGES.next_zone(7), Some(12));
+        // The top rung has nothing above it.
+        assert_eq!(ZONE_STAGES.next_zone(75), None);
+        assert_eq!(ZONE_STAGES.next_zone(999), None);
+    }
+}

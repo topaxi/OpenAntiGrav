@@ -96,6 +96,7 @@ const TITLE: &Title = &Title {
         always_on: &[],
         sights: &oag_title::hud::Sights::Unread,
         pickup_backdrop_colour: None,
+        zone_speed_classes: None,
     },
     // Unread here for the fourth and fifth time, and the same reason both
     // times: an archive is found by name, and what is inside one is nothing

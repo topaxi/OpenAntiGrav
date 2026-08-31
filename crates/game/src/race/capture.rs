@@ -504,14 +504,15 @@ pub fn capture(
             Err(why) => warn!("the scoreboard did not build ({why}); capturing without one"),
         },
         None => match crate::hud::Overlay::new(&device, &queue, format, &hud) {
-            Ok(Some(mut overlay)) => overlay.draw(
-                &device,
-                &queue,
-                &mut encoder,
-                &view,
-                &race.readout(),
-                viewport,
-            ),
+            Ok(Some(mut overlay)) => {
+                let mut readout = race.readout();
+                // The rung the grade is showing - see `Scene::zone_stage`. A
+                // `--zone-stage` capture reads its own class name back here.
+                readout.zone_stage = scene.zone_stage().unwrap_or(0);
+                readout.zone_next_in =
+                    scene.zones_to_next_stage(u16::try_from(readout.zone).unwrap_or(u16::MAX));
+                overlay.draw(&device, &queue, &mut encoder, &view, &readout, viewport)
+            }
             Ok(None) => warn!("no HUD layout: capturing without one"),
             Err(why) => warn!("the HUD overlay did not build ({why}); capturing without one"),
         },

@@ -280,6 +280,10 @@ impl Layout {
             ],
             color: colour(&self.constants, node.value("Color")),
             src,
+            // `RotationTheta`, in radians about the rectangle's own centre. See
+            // [`Sprite::rotation`]; `Node::value` folds the two spellings the
+            // Zone layout ships.
+            rotation: number(&self.constants, node.value("RotationTheta")).unwrap_or(0.0),
         })
     }
 
@@ -469,6 +473,30 @@ pub struct Readout {
     pub zone: u32,
     /// Zone mode's score.
     pub score: i32,
+    /// Which rung of the Zone escalation ladder the race is on.
+    ///
+    /// The same index `crate::race::zone_grade::ZoneGrade` shows and
+    /// `--zone-stage` selects, read against
+    /// [`oag_title::HudArt::zone_speed_classes`] to name the speed class. Zero
+    /// outside Zone mode and on a title whose ladder is unrecovered, which is
+    /// where HD still rests: its own loader zeroes the stage and nothing
+    /// recovered advances it.
+    ///
+    /// **Deliberately not derived from [`Self::zone`] here.** What zone sits on
+    /// what rung is a per-title table (`oag_title::RaceDefaults::zone_stages`),
+    /// recovered on 2048 and not on HD, and the maintainer's own play says the
+    /// obvious guess - one rung per zone - is wrong.
+    pub zone_stage: u32,
+    /// How many rows down the ladder the **next** speed class begins, counted
+    /// from the current zone's row.
+    ///
+    /// `None` outside Zone mode, on the top rung, and on a title whose ladder is
+    /// unrecovered. HD's `NextSpeedClassBG` is authored on top of the current
+    /// row and moved at runtime to the row of the zone its class starts at - the
+    /// maintainer's own observation of the original - so this is what places it.
+    /// Filled from `crate::race::Scene::zones_to_next_stage` at the two draw
+    /// sites, for the same reason [`Self::zone_stage`] is.
+    pub zone_next_in: Option<u32>,
     /// What the craft is carrying, if anything.
     ///
     /// `None` on every tick of a race with weapons off, which is every mode but
@@ -621,3 +649,5 @@ pub fn inside_screen(rect: [f32; 4]) -> bool {
 mod reticle_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod zone_tests;

@@ -95,6 +95,9 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // *outline* rather than a filled white one, so the icon on it is visible in
     // the colour the layout authors. See [`ALWAYS_ON`] for the frame.
     pickup_backdrop_colour: None,
+    // The fifteen rungs' names. Which rung a zone is on is a different
+    // question and an open one - see [`ZONE_SPEED_CLASSES`].
+    zone_speed_classes: Some(ZONE_SPEED_CLASSES),
 };
 
 /// The sprite widgets HD draws whenever its HUD is up.
@@ -144,8 +147,29 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
 /// - `FrameLeft`/`Middle`/`Right` and their four numbered copies, the info-text
 ///   frames; `WrongWayFrame*`; the forward and rear warning icons; `VoiceCom0`-
 ///   `VoiceCom7`; `Prox0`-`Prox4`; `AssistIndicator*`; `MissileSight*` and
-///   `LeachBeamSight*`; `ReverseShipPos*`; and Zone's `ZoneBG`,
-///   `CurrentZonePanel` and `ZonePlusLight0`-`ZonePlusLight10`.
+///   `LeachBeamSight*`; and `ReverseShipPos*`.
+///
+/// # Zone's ladder is the second frame, and it is a different mode
+///
+/// **2026-08-31.** The three names this list used to leave out for want of a
+/// Zone capture - `ZoneBG`, `CurrentZonePanel` and
+/// `ZonePlusLight0`-`ZonePlusLight10` - are here now, off a Zone frame of the
+/// running original the maintainer supplied
+/// (`data/shots/hd_zone_hud_original.png`, gitignored). All thirteen are up in
+/// it with the craft mid-race: the vertical column down the left, the wider
+/// panel across the current zone's row, and the small tick beside each row.
+///
+/// **They cost this list nothing on the other seventeen layouts.** All thirteen
+/// are authored by the Zone roots and by nothing else across the whole disc -
+/// checked over every `*_hud.xml` including the split-screen family - so a
+/// title-wide allow-list carrying them changes no other mode's frame.
+/// `every_zone_ladder_widget_is_authored_by_the_zone_layouts_alone` pins that.
+///
+/// **`NextSpeedClassBG` is authored beside them and is still not on this list**,
+/// but for a reason rather than a gap: it is up only when there *is* a next
+/// class with a row on screen, which an allow-list cannot express.
+/// `oag_game::hud::draw::zone_next_row` draws it and reconstructs its position,
+/// the layout authoring it at the placeholder `x=0 y=0`.
 ///
 /// [`rpcs3-debugger.md`]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/reverse-engineering/rpcs3-debugger.md
 pub const ALWAYS_ON: &[&str] = &[
@@ -164,7 +188,85 @@ pub const ALWAYS_ON: &[&str] = &[
     "SpeedBarBG",
     "ThrustBarBG",
     "SpeedBarOverlay",
+    // Zone's ladder. Authored by the Zone roots alone; see the section above.
+    "ZoneBG",
+    "CurrentZonePanel",
+    "ZonePlusLight0",
+    "ZonePlusLight1",
+    "ZonePlusLight2",
+    "ZonePlusLight3",
+    "ZonePlusLight4",
+    "ZonePlusLight5",
+    "ZonePlusLight6",
+    "ZonePlusLight7",
+    "ZonePlusLight8",
+    "ZonePlusLight9",
+    "ZonePlusLight10",
 ];
+
+/// The fifteen rungs of Wipeout HD's Zone escalation ladder, by name.
+///
+/// # The names, and the three readings that agree on them
+///
+/// 1. **`/data/environments/zonemode.effectsettings`** keys its palettes by
+///    `0 Start`, `1 Sub Venom`, `2 Venom`, `3 Sub Flash` .. `14 Supersonic` -
+///    fifteen rungs whose names *are* speed classes, numbered from zero.
+/// 2. **The language plugin carries every one of those names as a HUD string**,
+///    one for one: `MSC_SVENOM` = `SUB-VENOM` against `1 Sub Venom`, through to
+///    `IG_HUD_SUPSON` = `SUPERSONIC` against `14 Supersonic`. `IG_HUD_MACH1` =
+///    `MACH 1` fills `13 Mach 1`, the one rung with no obvious class name of its
+///    own - which is the row that says this is the right table rather than a
+///    plausible one.
+/// 3. **A Zone frame of the running original reads `SUB-VENOM`** in the
+///    `SpeedClass` widget (`data/shots/hd_zone_hud_original.png`), spelled with
+///    the hyphen the string table has and the effectsettings key does not - so
+///    the HUD is drawing *these strings*, not the palette keys.
+///
+/// `0 Start` is `None`: the string table has no class name for it, and every
+/// other rung has one.
+///
+/// **Confidence 84** on the fifteen names in this order. It is a table read off
+/// the disc twice and confirmed on one rung in a frame; no disassembly says the
+/// HUD indexes it, and nothing at all has been read about rungs 3 upward.
+///
+/// # This is the rung's name; which zone is on which rung is [`crate::race::ZONE_STAGES`]
+///
+/// The two are separate tables in the original too, and they were recovered
+/// hours apart. An earlier revision of this constant read the ladder as **one
+/// rung per zone** off the reference frame's first two rows; the maintainer's
+/// play corrected it - not every zone is a class bump - and the executable then
+/// settled it outright: `g_ZoneSpeedClassTable` (`0x00860d44`) is fourteen
+/// records of `{ zoneThreshold, stringIdPointer }` with bands `0`-`1`, `2`,
+/// `3`-`4`, `5`-`6`, `7`-`11` and so on. See
+/// [zone-speed-class-table.md].
+///
+/// **That table carries these same ids**, which is why this constant is a
+/// cross-check rather than a duplicate: it is indexed by *rung* where
+/// `ZONE_STAGES` is indexed by *zone*, and
+/// `the_two_zone_tables_name_the_same_class_at_every_zone` asserts the two
+/// cannot drift. `oag_game::hud` reads this one, because what the HUD has in
+/// hand is the rung the colour grade is showing.
+///
+/// [zone-speed-class-table.md]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/ghidra/functions/ps3-hdfury-eu/zone-speed-class-table.md
+pub const ZONE_SPEED_CLASSES: &oag_title::ZoneSpeedClasses = &oag_title::ZoneSpeedClasses {
+    ids: &[
+        None,                  // 0 Start - no class name in the string table
+        Some("MSC_SVENOM"),    // 1 Sub Venom
+        Some("Venom"),         // 2 Venom
+        Some("MSC_SFLASH"),    // 3 Sub Flash
+        Some("Flash"),         // 4 Flash
+        Some("MSC_SRAPIER"),   // 5 Sub Rapier
+        Some("Rapier"),        // 6 Rapier
+        Some("MSC_SPHANTOM"),  // 7 Sub Phantom
+        Some("Phantom"),       // 8 Phantom
+        Some("MSC_SPPHANTOM"), // 9 Super Phantom
+        Some("MSC_ZEN"),       // 10 Zen
+        Some("IG_HUD_SUPZEN"), // 11 Super Zen
+        Some("IG_HUD_SUBSON"), // 12 Subsonic
+        Some("IG_HUD_MACH1"),  // 13 Mach 1
+        Some("IG_HUD_SUPSON"), // 14 Supersonic
+    ],
+};
 
 /// The eighteen root layouts, by mode and skin.
 ///
