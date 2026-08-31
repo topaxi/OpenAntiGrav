@@ -194,6 +194,14 @@ isn't IEEE-conformant for rsqrt/recip). Full rules in
 - All randomness goes through the seeded `Rng` in `crates/core/src/rng.rs`, never OS entropy.
 - Simulation is single-threaded unless proven otherwise.
 
+These rules bind `oag-core`, `oag-physics`, `oag-gameplay`, `oag-ai`, `oag-race` and
+`oag-formats` - the crates `just check-determinism` actually scans, because their
+arithmetic reaches a committed state hash. `oag-render` is deliberately exempt: a pixel
+is not compared across machines, so it may use `mul_add`, SIMD glam, reassociated
+arithmetic, or the algebraic float ops stabilized in Rust 1.98 (`f32::algebraic_add` and
+friends) freely - reach for them in a proven-hot per-frame CPU loop rather than leaving
+performance on the table out of sim-code caution.
+
 CI's `determinism` job runs on all three OSes and asserts hashes match a committed
 reference (`crates/core/src/hash.rs`, `crates/core/tests/determinism.rs`). **When that
 test fails, find the bug - never update the reference constants to make it pass.**

@@ -33,7 +33,13 @@ Two consequences in `crates/game/src/race.rs`:
   `Scene::new` makes the same "decoded, never uploaded" choice for the same
   reason: the geometry decode is asset-pipeline correctness, mode-independent,
   and `the_weapon_pads_are_drawn_where_they_trigger` checks exactly that on
-  every mode's own default settings.
+  every mode's own default settings. `Mode::weapons_enabled` is title-agnostic -
+  `Scene::new` takes no title parameter - so this gate was already applying to
+  HD races on the strength of the Pulse (PPSSPP) measurement alone. **HD itself
+  now corroborates it**: the user, playing HD directly, reports time trial,
+  speed lap and Zone draw no weapon pads there either (2026-08-31, reported
+  from play, not yet screenshotted against the disc the way the PPSSPP pass
+  was).
 
 The rules live in `crates/race`; how a lap is decided at all is
 [lap counting](lap-counting.md), and it is a convention rather than a recovery.
