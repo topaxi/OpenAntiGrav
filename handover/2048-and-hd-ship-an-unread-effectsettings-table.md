@@ -1055,7 +1055,7 @@ evidence, including the byte-level trace of every function in this chain:
   "current program" is not stable across concurrent sessions - always
   pass the full `program` path once more than one program can be open)
   on
-  [zone-effectsettings-loader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md#2026-08-30-a-ninth-pass-the-0x00-write-is-found-environment_updatestageblend-at-0x003da540-confidence-85).
+  [zone-effectsettings-loader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md#2026-08-30-a-ninth-pass-the-0x00-write-is-found---environment_updatestageblend-at-0x003da540-confidence-85).
 
   **This closes the RPCS3-patch decision point above - a runtime watch
   was never needed to find this write, so there is nothing to greenlight

@@ -1998,7 +1998,7 @@ makes this page authoritative over the database.
 
 ## The resolve's full-screen colour inputs, enumerated (2026-08-30)
 
-The section ["`scaleAdd` re-read"](#scaleadd-re-read-and-the-parameter-names-are-literals)
+The section ["`scaleAdd` re-read"](#scaleadd-re-read-and-the-parameter-names-are-literals-2026-08-20)
 above left one thread hanging: `fullscreenTintColour` arrives at the binder as a
 *pointer argument*, so "the caller holds the current value and passes it in" -
 and the caller was never chased. This section chases it, and then chases the

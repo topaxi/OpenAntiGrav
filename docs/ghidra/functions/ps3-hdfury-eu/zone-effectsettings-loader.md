@@ -2614,7 +2614,7 @@ same `vm::write<v128>()` template every scalar store already goes through -
 so a zero-hit result on these addresses is not explained by the store being
 vector-typed. Full account, including what the actual zero-hit result meant
 instead, is in
-[rpcs3-debugger.md](../../reverse-engineering/rpcs3-debugger.md)'s "not a
+[rpcs3-debugger.md](../../../reverse-engineering/rpcs3-debugger.md)'s "not a
 gap, confirmed from source" section.
 
 *(An observation deliberately left as an observation: `g_FullscreenTintColour`
@@ -3261,7 +3261,7 @@ r31, <offset>` with `r31 = 0x00c49000`:
 | `0x18` | 0 | `time` | `block+0x7c20` |
 | `0x38` | 1 | `viewProj` | `block+0xc0` (4 vec4s - a matrix) |
 | `0x58` | 2 | `view` | `block+0x00` |
-| `0x78` | 3 | `world` | r28 |
+| `0x78` | 3 | `world` | `0` - cleared, not an address; see below |
 | `0x98` | 4 | `eyePositionWorldSpace` | `block+0x100` |
 | **`0xf8`** | **7** | **`fogColour`** | **`block+0x110`** |
 | `0x158` | 10 | `constantAmbientColour` | `block+0x7ba0` |
@@ -3330,6 +3330,48 @@ a *different* colour. If they are the three fog densities, then whatever key
 `Scene.Texture Colour`'s rgb. Both readings rest on real traces and are
 recorded here unreconciled rather than one being quietly dropped - the
 resolution is a parse-offset re-check against the schema.
+
+### Three follow-ups the same day: the fog blocks are whole, and two negatives worth not re-deriving
+
+**Both halves of each colour come out of the stage table, so each `(vec4,
+scalar)` pair is a complete fog block.** The vec4 bases were the weak point of
+the reading above - nothing had traced them to any key. They resolve directly:
+`Environment_UpdateStageBlend` loads them as index registers off its own stage
+base `r30` (`= 0x00c7dfb0`) -
+
+```text
+003dc3ac  li   r23, 0x3630          ; 0x00c7dfb0 + 0x3630 = 0x00c815e0, vec4 A
+003dc3c8  li   r22, 0x3640          ;                       0x00c815f0, vec4 B
+003dc3f4  li   r21, 0x3650          ;                       0x00c81600, vec4 C
+003dc4d0  stvx v13, r30, r23        ; six stores in all, two per colour,
+003dc4f4  stvx v1,  r30, r23        ; through 0x003dc57c
+```
+
+- and the three scalars are written against that same base at `+0x3aac`,
+`+0x3ab0`, `+0x3ab4`. So the rgb and the `.w` of every one of the three
+colours are authored by the same `.effectsettings` stage table and cross-faded
+by the same function, per frame. That lifts the "three fog blocks (`Fog`,
+`Alt Fog`, `Track Fog`), each colour-plus-density" reading from 65 to **80**,
+and it sharpens rather than settles the `Scene.Texture Colour` question: what
+needs re-checking is which schema key parses to `+0x3aac`, now known to be a
+companion scalar of the colour at `+0x3630` rather than a colour's own channel.
+
+**`+0x120` and `+0x130` are *not* bound as engine parameter values.** Checked
+two ways, and recorded because a negative costs as much to establish as a hit:
+`get_xrefs_to` returns nothing at all for `0x00c49120` or `0x00c49130` (against
+`0x00c49110`, which is published), and neither offset appears among
+`Scene_PrepareFrame`'s `addi rX, r31, <off>` forms - the only one in the whole
+`0x100`-`0x180` band is `r23 = +0x110`. **So only the first of the three fog
+blocks reaches a shader through the engine parameter table.** The other two are
+consumed by some other route (a material-level parameter, or a second table),
+which is a fresh question rather than a continuation of this one.
+
+**Parameter 3 `world` is published as a null pointer, not an address.** Its
+source register is `li r28, 0` at `0x003ab204`, so `stw r28, 0x78(r11)` clears
+`world`'s value pointer rather than pointing it at scene-block memory -
+consistent with `world` being a per-object matrix bound per draw, not a
+per-frame constant. Noted because the row would otherwise read as an
+unresolved register in the table above.
 
 ### Names applied
 

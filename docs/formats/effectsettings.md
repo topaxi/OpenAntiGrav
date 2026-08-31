@@ -438,7 +438,7 @@ traced.
   request/commit pair: `+0x04` holds a requested stage sourced from
   `g_GameState.mode`-dependent tables, committed into `+0x00` when the two
   differ
-  ([zone-effectsettings-loader.md](../ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md#2026-08-30-a-ninth-pass-the-0x00-write-is-found-environment_updatestageblend-at-0x003da540-confidence-85)).
+  ([zone-effectsettings-loader.md](../ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md#2026-08-30-a-ninth-pass-the-0x00-write-is-found---environment_updatestageblend-at-0x003da540-confidence-85)).
   **2026-08-30, later the same day: 2048's numeric mapping is recovered and
   wired; HD's is not.** The 17-entry table was read out of the executable
   with `read_memory` (`0x8151faf8`, now `g_zone_speed_class_thresholds`) and
