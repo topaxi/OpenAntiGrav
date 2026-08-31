@@ -234,6 +234,29 @@ evidence, including the byte-level trace of every function in this chain:
 
 ## Open
 
+- **2026-08-31, later: the tint consumer is `fogColour`, and the two questions
+  that replace it are both narrow.** See the struck-through first entry under
+  Next Steps for the finding itself; the entries below it are kept as the
+  record of how the search ran, not as live questions. What is genuinely still
+  open from that line of work:
+
+  1. **Who consumes `0x00c49120` and `0x00c49130`.** Established negatively
+     this pass: neither has a single xref anywhere, and neither appears among
+     `Scene_PrepareFrame`'s `addi rX, r31, <off>` publication forms, so
+     neither is bound as an engine parameter value the way `+0x110` is. They
+     are the second and third fog blocks (`Alt Fog`, `Track Fog` on the
+     vocabulary reading, confidence 80), so something consumes them - a
+     material-level parameter or a second table. **Do not re-run the xref or
+     `addi` sweeps**; both are done and both came back empty.
+  2. **Which schema key parses to `iVar8 + 0x3aac`.** This page attributes it
+     to `Scene.Texture Colour` at confidence 85, from the seventeenth pass.
+     That attribution now sits awkwardly: the field is a lone scalar that
+     becomes the `.w` of the colour at `+0x3630`, not a colour's own three
+     channels. Either the parse-offset attribution needs a re-check against
+     `g_EffectSettingsSchemaKeyNames`, or the key genuinely is a density-like
+     companion under a colour-sounding name. A parse-offset re-check settles
+     it; nothing else needs to be re-derived first.
+
 - **2026-08-31, the object is found and the consumer search is now bounded.**
   The stalled `0x90(r1)` step is resolved: the slot is filled through a one-line
   setter (`FUN_005d4958`, `{ *r3 = r4; }`), which is why no `stw`/`std` to it
@@ -652,15 +675,40 @@ evidence, including the byte-level trace of every function in this chain:
 
 ## Next Steps
 
-- Find the tint consumer for `0x00c49110`/`0x00c49120`/`0x00c49130` - the
-  `+0xd8`/`+0xf8` render-context table it is published into is now well
-  understood (see `Open`'s 2026-08-31 entries), but nothing that reads
-  `+0xf8` back out has been found yet. `Render_RunCompiledOps`'s own
-  dispatch table has three opcodes left unread (tags 7, 13, 14 of 16) - a
-  quick, bounded check before assuming the consumer sits outside this
-  dispatcher entirely, at whatever step flushes the lazily-filled parameter
-  table (the more likely case, given how generic every other opcode turned
-  out to be).
+- ~~Find the tint consumer for `0x00c49110`/`0x00c49120`/`0x00c49130`~~
+  **Done, 2026-08-31 - it is the shader parameter `fogColour`.** Both halves
+  of that step ran. The three unread opcodes (which were tags **11, 13 and
+  14**, not 7/13/14 - the previous pass's tag numbering was off by a slot in
+  the 7-11 band) are a bounding-volume trio, so the dispatcher is now fully
+  mapped and its exclusion is exhaustive rather than probable. The consumer
+  was then found by the route the thread had listed as untried: `*(obj+0xd8)`
+  is a **link-time constant**, `0x00d42220`, installed by
+  `Scene_InitRenderBlock` (`0x003aa618`, newly named) - so there was no
+  allocation to read a `__FILE__` tag off, which is why that route kept
+  stalling. `0x00d42220` is `*(0x008b7f04) + 0x4000`, the 81-entry engine
+  shader parameter array [renderer.md](../docs/ghidra/functions/ps3-hdfury-eu/renderer.md)
+  already recovered, so `+0xf8` is parameter **7**'s value pointer:
+  `fogColour`. Confidence 90, corroborated by eleven other parameters in the
+  same publication run mapping onto sensible scene-block sources. Full
+  evidence in
+  [zone-effectsettings-loader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md)'s
+  twenty-second pass.
+
+  **Two things this changed on the way.** The merge mask is
+  `[0,0,0,0xffffffff]`, so each blended scalar becomes a colour's **`.w`**,
+  not one of its channels; and `Environment_UpdateStageBlend` writes the three
+  vec4 bases too (`+0x3630`/`+0x3640`/`+0x3650` off the stage base). So the
+  stage table authors three complete `(rgb, density)` fog blocks, of which
+  only the first reaches a shader through the parameter table - `+0x120` and
+  `+0x130` are provably *not* bound as parameter values. **This corroborates
+  the shipped `oag_formats::effectsettings` design rather than contradicting
+  it**: the parser's own confidence-74 reading that a fog colour's fourth lane
+  carries its density is exactly the packing HD's renderer performs at
+  runtime.
+
+  What is left from this step is two narrower questions, both listed below
+  rather than here: who consumes `+0x120`/`+0x130`, and which schema key
+  actually parses to `+0x3aac`.
 - Find the write site for `Zone_UpdateStage`'s `+0x634` field - the field the
   clamp-to-12 match confirms drives stage selection, but nothing this pass
   traced writes it. **Searched a third time, 2026-08-28, and still not
