@@ -20,7 +20,34 @@ This page is the combination rule. What *feeds* it is on
 table, the per-stage texture arrays, the stage blend); what the palette table
 authors is in [effectsettings.md](../../../formats/effectsettings.md).
 
-## The rule, from `zone_1/materials/billboarddiffuse.rcsmaterial` block `0x2cf0`
+## The rule - but read the next section first: this is the **arena** form, not the common one
+
+**Corrected 2026-08-31.** The block below was read from a `zone_1` material and
+was published here as *the* Zone rule. A census says it is the rare one: the
+`albedo + zoneCol * (1 - blackMask)` shape occurs in **130 of 20,214**
+Zone-bearing fragment blocks (0.6%), and every one of them is in
+`zone_1`..`zone_4` - HD's four Zone **arenas**. All twelve racing circuits
+carry a different surface line with **no albedo term at all**:
+
+```text
+surface = zoneTex<I|O>(zoneUV).rgb * E.rgb
+          + zoneBase<I|O>.rgb * rim^10
+          + zoneBaseAlt<I|O>.rgb * rim^5
+```
+
+Checked here independently, and the check controls for material type by using
+the *same material name* on both sides: `billboarddiffuse.rcsmaterial` in
+`zone_1` contains the distinctive `100000.0` `blackMask` literal **four
+times**; the same file in `05_ubermall` contains it **zero** times.
+
+That difference is what a frame comparison had already shown without
+explaining: raced on Moa Therma, the original's crowds, banners, advertising
+and concrete all vanish into the zone terms, which a rule that only adds where
+the albedo is already black could never do. On a racing circuit the albedo is
+not in the equation.
+
+Everything else below - the UV transform, the `zoneTexVis` lookup, the sphere
+test, the rim exponents - is unaffected and was read in both forms.
 
 `E` is `zoneEffectInner` or `zoneEffectOuter`, chosen by the sphere test below.
 
@@ -110,12 +137,17 @@ exponents of `pow(1 - dot(N,-V), p)`, which indexes `zoneAnisoPalette` and
 
 ## Two findings that change what the artists were doing
 
-**The zone recolour applies only where the material's own albedo is black.**
-`saturate((r+g+b) * 100000)` is a hand-rolled `step(0, x)`, and `surface =
-albedo + zoneCol * (1 - blackMask)`. So the artists chose which parts of each
-surface light up in Zone mode **by painting them pure black in the ordinary
-diffuse texture**. Confidence 78. Nothing in the palette table or the parameter
-list expresses this; it is authored in the albedo.
+**On the four Zone arenas - and only there - the recolour applies where the
+material's own albedo is black.** `saturate((r+g+b) * 100000)` is a hand-rolled
+`step(0, x)`, and `surface = albedo + zoneCol * (1 - blackMask)`. So on those
+circuits the artists chose which parts of each surface light up **by painting
+them pure black in the ordinary diffuse texture** - authored in the albedo,
+expressed nowhere in the palette table or the parameter list.
+
+**This was published as universal and is not**: 130 blocks of 20,214, all in
+`zone_1`..`zone_4`. The twelve racing circuits drop the albedo term entirely -
+see the retraction at the top of this page. Confidence 78 on the mechanism
+where it occurs; the scope was the error, not the reading.
 
 **The visualiser glow is gated to up-facing surfaces**: `saturate(N.y - 0.5)`.
 That is the microcode independently producing the maintainer's own play
@@ -129,39 +161,72 @@ session did not go looking for it.
 to an untextured family. That is wrong, and it is wrong in the way this page
 keeps warning about: it generalised from three materials read by hand.**
 
-A per-block census over all 1,590 `.rcsmaterial` files in `DATA00`, counting
+A per-block census over all 1,632 `.rcsmaterial` files on the disc, counting
 the parameter and sampler hashes each fragment block *declares*
 (`~crc32(name)`, validated first against four known names in a block already
 read by hand - `fogColour`, `constantAmbientColour` and the two
 `directionalLight0*`):
 
-| Zone-bearing fragment blocks | 20,048 |
+| Zone-bearing fragment blocks | **20,214** |
 | --- | ---: |
-| declare **both** `zoneTex*` and `zoneBase*` | **17,906** |
-| `zoneBase*` only | 2,052 |
-| `zoneTex*` only | 90 |
+| `zoneBase*` **and** a sampled `zoneTex*` | **18,032** |
+| `zoneBase*` with no zone texture | 2,052 |
+| the `zoneAniso` shape, with a zone texture | 90 |
+| the `zoneAniso` shape, without one | 40 |
 
-So the two co-occur in **89%** of Zone blocks. The three materials the original
-reading was drawn from - `cf_constantcolourglow`, `frontendconstantfranelblend`,
-`cf_fetracks` - all sit in the 10% minority that happens to carry no
-`zoneTex*`; `cf_fetracks` is among the census's own examples of that bucket.
-Reading three of them and concluding "never" was sampling the exception.
+So `zoneBase*` and `zoneTex*` co-occur in **89%** of Zone blocks, and the
+"never in the same block" claim is refuted 18,032 times over. The three
+materials the original reading was drawn from - `cf_constantcolourglow`,
+`frontendconstantfranelblend`, `cf_fetracks` - all sit in the 2,052-block
+minority that happens to carry no `zoneTex*`. Reading three of them and
+concluding "never" was sampling the exception.
 
-**What survives.** The formula itself was read from real microcode in blocks
-that genuinely have no texture term, and it stands *for those blocks*:
+**Counted mechanically off the disc image, and asserted rather than reported**:
+`crates/formats/tests/zone_shader_census_ground_truth.rs` re-derives every
+number in this table from `data/images/hdfury-ps3-eu-dec.iso` on each
+`just test-data` run, so the table cannot quietly drift from the disc.
+Confidence **88** on the census.
+
+**One earlier version of these figures was wrong and is worth recording as a
+trap.** The first count was taken over a directory that a second process had
+extracted *other* archives into, so it swept 1,592 files believing them to be
+DATA00's 693 and reported 20,092 / 19,958 / 134. The shape of the finding
+survived unchanged - it is a ratio, and both corpora were dominated by the
+same materials - but every absolute number was wrong. The lesson is narrow and
+sharp: **a census taken over an extraction directory is only as trustworthy as
+that directory's exclusivity.** The test above reads the image directly and
+has no extraction step for this reason.
+
+### How the two terms combine, which was previously unread
+
+In a block that has both, the texture term is a `MAD` **onto** the rim terms:
 
 ```text
-colour = zoneBase<I|O>.rgb * rim^10  +  zoneBaseAlt<I|O>.rgb * rim^5
+@0x2c  MAD H3.xyz, H3, R3.yyyy, R2      ; zoneBase*rim^10 + zoneBaseAlt*rim^5
+@0x48  MAD H3.xyz, H6, H7, H3           ; + zoneTex * zoneEffect
+@0x4b  MAD H1.xyz, H2, H3, H4           ; colour = light * surface + glow
 ```
 
-The `10` and `5` are inline literals, not parameters. What does **not** survive
-is "a different shader family": the rim terms are part of ordinary Zone
-shading, and in the 17,906 blocks that also sample a zone texture they combine
-with the texture term rather than replacing it. **How they combine there is
-unread** - the formula above is the untextured case, and nothing here measures
-the textured one. Confidence 88 on the census (a count, re-derived
-independently by two parties who agree on 17,906), 80 on the formula in the
-blocks it was read from, and no claim at all about the combined case.
+read from `02_track/materials/diffuse.rcsmaterial` block 11 and
+`05_ubermall/materials/billboarddiffuse.rcsmaterial` block 11, which are
+**byte-identical** - two unrelated materials on two unrelated circuits. So:
+
+```text
+surface = zoneTex(zoneUV).rgb * zoneEffect<I|O>.rgb
+        + zoneBase<I|O>.rgb    * rim^10
+        + zoneBaseAlt<I|O>.rgb * rim^5
+```
+
+and **the albedo is not in that sum at all.** In block 11 the material binds
+five samplers and every one is a zone texture; in the sibling
+`02_track/materials/diffuse_specular.rcsmaterial` block 15 `Texture1` *is*
+bound but only its `.w` is read, for gloss. That is what makes the original's
+Zone frame near-monochrome, and it is a stronger statement than the rim terms
+themselves - `rim` is ~0 on a camera-facing surface, so `rim^10` and `rim^5`
+are silhouette-only. Confidence **82**: two programs read end to end, plus the
+census showing the shape is universal on circuits, against no dataflow proof
+that the minority of blocks which *do* fetch albedo RGB keep it out of the
+surface.
 
 `zoneAnisoPower` was also said here not to be used by "this family". That is
 retracted too: `zone_1/materials/billboarddiffuse.rcsmaterial` declares it
