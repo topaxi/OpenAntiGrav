@@ -545,14 +545,45 @@ decompiled.
 world object *by its class* must call `FUN_08a6b5bc` (`0002675bc`
 un-rebased) the same way `Race_CreateModeObject` and `World_LoadTrack_q` do -
 this is the same standard the doc already applied to `DirectionalLight`'s
-own class stub ("exactly 5 references... all now read"). That enumeration
-was not completed this pass (a `jal` to `0x002675bc` is exactly the call-target
-wart described above, so `get_xrefs_to` on `0x08a6b5bc` should be expected to
-under-count and needs `search_instructions` on the un-rebased operand
-`jal 0x002675bc` unioned with it, per the same workaround
-`HANDOVER.md`'s trap entry already prescribes) - left as the concrete next
-step rather than started and left half-finished in the same pass that just
-corrected an over-claim on the same question.
+own class stub ("exactly 5 references... all now read").
+
+### A sixth pass: the class-key enumeration, and a new lead in an already-documented function
+
+2026-08-31, same session, immediately following the fifth pass above.
+`get_xrefs_to` on `0x08a6b5bc` returns empty, as expected - it is another
+`jal` target and hits the same wart. `search_instructions` on the un-rebased
+operand (`jal 0x002675bc`) is not subject to that wart (it matches on the
+raw operand text, not the reference database) and finds **12 call sites
+across 10 unique functions**, program-wide - the union of the two methods is
+just this list, since `get_xrefs_to` contributed nothing. `World_LoadTrack_q`'s
+own class-key call sits at `0x088848b0`, only `0x34` bytes before its `jal`
+to `World_CollectMarkerLists` at `0x088848e4` - independent, address-level
+corroboration of the tag-walk-then-forward reading the fourth pass drew from
+its decompile alone:
+
+| Function | Status |
+| --- | --- |
+| `Race_CreateModeObject` (`0x08821038`) | Already read (fifth pass) - this is a tag *write* (constructing the world object), not a read of its class |
+| `FUN_0887a0fc` | The world object's own constructor (already named in "A second, unrelated structural finding" above) - self-tagging at construction (a write, per the page's already-established zeroing of `World_CollectMarkerLists`'s own target fields) is the expected, already-documented shape; not separately decompiled this pass |
+| `World_LoadTrack_q` (`0x088835f0`) | Already read (fourth pass) - resolves the world object only to forward it to `World_CollectMarkerLists`; ruled out as a consumer itself |
+| `FUN_08900984` (`0x08900984`-`0x08900c53`) | **Decompiled and ruled out this pass** - constructs a *fresh, disposable* `0x6d0`-byte world object of its own (not a lookup of an existing one) and calls `World_CollectMarkerLists` on it as its last real act before an unrelated list-removal bookkeeping step; no read of `+0x40`/`+0x7c` follows. Contains `0x08900bb8`, one of the "two other call sites" this page's live capture already covered (front-end/menu scene graph, all-zero counts) - the decompile now explains *why* those counts were zero (a freshly built, empty scene graph, not the raceable track) rather than merely matching the address |
+| `FUN_08900c54` (`0x08900c54`-`0x08900e53`) | **Decompiled and ruled out this pass**, identical shape to `FUN_08900984` - builds its own fresh world object, calls `World_CollectMarkerLists` on it, returns immediately after with no field read. Contains `0x08900e1c`, the other already-covered call site |
+| `Mesh_ApplyMaterialLighting` (`0x0890cea8`) | **Already fully quoted on this page (confidence 78) - and its own quoted body contains this exact tag-walk**, missed until this pass connected the two: it caches the resolved world pointer at `material+0xc4`, but the instructions already quoted above never read a field back off that cached pointer - the material-ambient reads that follow it (`param_1+0x70`, `param_1+0x6c`) are the *material's own* fields, not the world object's. What `material+0xc4` is for, if anything past this cache write, is unconfirmed: a blind `lw ...,0xc4(...)` sweep to find another reader is not viable (`+0xc4` is a common offset - 50+ matches before the scan even finished, unrelated structs everywhere). The narrower, already-answerable question: `Mesh_CompileDisplayLists` and `FUN_0890ed84` - the two callers this page already read in full, and already confirmed clean for `+0x40`/`+0x7c` - were never checked for `+0xc4` specifically, a different field |
+| `FUN_088b7504` | Genuinely unread this pass |
+| `FUN_088b8d00` | Genuinely unread this pass - calls the class key **three times** (`0x088b8e4c`, `0x088b8fa0`, `0x088b90e8`), suggesting three separate lookups or a loop over several objects |
+| `FUN_0890e494` | Genuinely unread this pass |
+| `Vex_LoadModel` | Genuinely unread this pass - already a named, high-confidence function for a completely different purpose (model loading), which is a useful data point on its own: it corroborates that resolving the world object by class is a **generic, reused idiom** across this codebase, not something lighting-specific, so most of these 10 functions likely want the world object for unrelated bookkeeping and only a minority (if any) touch `+0x40`/`+0x7c` |
+
+**Net effect**: of the 12 call sites (10 unique functions), 5 are now
+genuinely ruled out or accounted for by real evidence (`World_LoadTrack_q`,
+`FUN_08900984` and `FUN_08900c54` all read and ruled out; `Race_CreateModeObject`
+and `FUN_0887a0fc` are tag *writes*, not reads), leaving **4 functions
+genuinely unread** (`FUN_088b7504`, `FUN_088b8d00`, `FUN_0890e494`,
+`Vex_LoadModel`) plus one narrow, already-scoped question on an
+already-documented function (does `Mesh_CompileDisplayLists` or
+`FUN_0890ed84` read `material+0xc4`?). This is a substantially smaller,
+better-bounded set than "1,228 instructions" or "14 global readers" - left
+as the concrete next step.
 
 ## Open
 
@@ -570,8 +601,8 @@ corrected an over-claim on the same question.
   gates *whether* the ambient branch runs at all, not what colour it uses -
   but the colour question, the one this pass opened to answer, is closed.
 - **`DirectionalLight`'s collection is live-confirmed real; its final
-  consumer is still unfound after four independent passes, and the fourth
-  closed off `World_LoadTrack_q`'s own body specifically.**
+  consumer is still unfound after six independent passes, but the search
+  space is now a short, enumerated list rather than an unbounded trace.**
   `World_CollectMarkerLists` (confidence 85) builds a 4-entry
   `DirectionalLight` list at track load from genuine authored data -
   live-verified against `oag-view --nodes` ground truth on three independent
@@ -579,29 +610,29 @@ corrected an over-claim on the same question.
   `AmbientLight`/`PointLight`, both confirmed inert: `DirectionalLight`'s
   *data pipeline*, to the point of sitting in memory correctly populated, is
   real. What's still missing is anything reading `world+0x40`/`+0x7c`
-  afterward. One live capture and three Ghidra passes (see "The object
-  itself" and "A fourth pass" above) have now exhausted every lead that
-  doesn't require a per-frame function elsewhere - the class-based lookup
-  path is exhaustively closed (exactly 5 references to the class stub, all
-  read), the per-frame draw dispatcher's one ambiguous touch turned out to
-  be an out-of-bounds artifact, every sibling display-list function was
-  checked, and `World_LoadTrack_q`'s own body is now disassembly-verified
-  (not just decompiler-read) to end in pure epilogue right after the
-  collection call - no read of any kind follows it. **Converged, not
-  abandoned, and narrower than before**: the reader cannot be inside
-  `World_LoadTrack_q` itself (ruled out, not just unchecked), so either it is
-  in `World_LoadTrack_q`'s own caller (`FUN_08886950`, itself unread past the
-  constructor-boilerplate call site - see "A fourth pass" above) or some
-  later per-frame function, or the collection doesn't render-consume the
-  list at all and exists for some other purpose this project hasn't
-  identified. `FUN_08886950`'s full body was read in this pass (it is what
-  calls `World_LoadTrack_q`) and reads no `+0x40`/`+0x7c` off its own
-  `param_1` either - but that check doesn't fully retire this lead, since
-  `FUN_08886950`'s `param_1` is not established to be the same object the
-  tag-lookup inside `World_LoadTrack_q` resolves to before calling
-  `World_CollectMarkerLists`; they could be, or could be two different
-  objects in the same scene-construction tree. Confirming which is the
-  concrete next step, not a fresh trace of `World_LoadTrack_q` itself.
+  afterward. `World_LoadTrack_q` is ruled out at the disassembly level (pure
+  epilogue right after the collection call), and `FUN_08886950` is ruled out
+  structurally (`Race_CreateModeObject`, fifth pass, confirms its `param_1`
+  is one hop short of the world object, and it never reads that hop). The
+  class-based lookup path - every function that resolves the world object by
+  its class stub `FUN_08a6b5bc` - is now enumerated (sixth pass): 12 call
+  sites, 10 unique functions, of which 5 are genuinely ruled out or
+  accounted for by real evidence (`World_LoadTrack_q`, `FUN_08900984` and
+  `FUN_08900c54` all decompiled and ruled out; `Race_CreateModeObject` and
+  `FUN_0887a0fc` are tag *writes*, not reads). **Remaining, concrete, and
+  short**: `FUN_088b7504`, `FUN_088b8d00` (3 call sites, possibly a loop over
+  several objects), `FUN_0890e494` and `Vex_LoadModel` are genuinely unread;
+  separately, `Mesh_ApplyMaterialLighting` - already fully quoted on this
+  page - turns out to do this exact tag-walk too, caching the result at
+  `material+0xc4`, and whether `Mesh_CompileDisplayLists`/`FUN_0890ed84`
+  (its two callers, already read in full and already confirmed clean for
+  `+0x40`/`+0x7c`, but never checked for this different field) read it back
+  is unconfirmed. See "A sixth pass" above for the full table and reasoning
+  per function. The per-frame draw dispatcher's one ambiguous touch already
+  turned out to be an out-of-bounds artifact, and every sibling
+  display-list function was already checked for `+0x40`/`+0x7c` - so this
+  enumerated list, not a fresh trace of `World_LoadTrack_q`/`FUN_08886950`,
+  is where the search continues.
 - **`world+0x44`/`world+0x48` read as `0` on the one track checked live**,
   but that doesn't settle what they're *for* - a zero on `16_Track` is
   consistent with either "these two classes are never authored on this
