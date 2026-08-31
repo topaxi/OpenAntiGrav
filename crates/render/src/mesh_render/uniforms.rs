@@ -461,34 +461,45 @@ impl Light {
 ///   `Texture U scale` / `Texture V scale`, which
 ///   `Environment_RegisterStageSchema` (`0x003d0b98`) registers straight into
 ///   shader parameter 52's own storage. Confidence 85.
-/// - [`Self::effect`] is the showing stage's `Scene.Texture Colour`, which
+/// - [`Self::effect`] is the showing stage's `Track.Texture Colour`, which
 ///   `Environment_UpdateStageBlend` (`0x003da540`) copies into
 ///   `zoneEffectInner`/`zoneEffectOuter`. Confidence 84.
 /// - The texture is the stage's own `zoneModeTrack<n>.gtf`.
 ///
 /// # Two approximations, stated
-///
 /// **The recolour reaches every surface this renderer draws, and the original
-/// applies it per material** - *and* it feeds two of these parameter sets, not
-/// one. `Environment_UpdateStageBlend` publishes the identical seven
-/// parameters twice: once from the stage's `Scene.*` keys and once from its
-/// `Track.*` ones, to two different value pointers. Which set a material sees
-/// is presumably the same publisher choice that governs `zoneMode*` versus
-/// `zoneModeTrack*`, and is unread - so this binds the `Scene` group to
-/// everything. The two differ in magnitude, not only in hue:
-/// `Track.Texture Colour` reaches `9.0` where its `Scene` sibling runs to
-/// `3.0`. 1,467 of the disc's 1,590 `.rcsmaterial` files
-/// carry a Zone variant, so 123 do not - and craft hulls, the sky cube, pads,
-/// rockets and the collision wireframe all reach `mesh.wgsl` here. Wherever
-/// one of those carries pure-black texels it picks up stage colour the
-/// original would leave alone. Same shape as the shared specular exponent and
-/// the blanket sun term `mesh.wgsl` already carries; the per-material branch
-/// that would separate the families does not exist yet.
+/// splits its surfaces in two.** HD publishes these parameters twice, and the
+/// two publications are paired end to end: one block binds the `zoneMode*`
+/// textures beside the `Scene.*` colours, the other binds `zoneModeTrack*`
+/// beside the `Track.*` ones. So "which texture set" and "which colour group"
+/// are one choice, not two - and the reading, from the names, from the general
+/// set being fifteen flat whites, and from the maintainer's own observation
+/// that the *floor* shows the equaliser, is that `Scene` is scenery and
+/// `Track` is the track surface.
+///
+/// **This build takes the `Track` half of that pair and applies it to
+/// everything**, because it has no scenery/track distinction to branch on. So
+/// scenery here gets the track's recolour where the original would give it the
+/// blank set and a colour of its own. Preferred over the `Scene` half, which
+/// would be self-inconsistent - it would feed the track texture set colours
+/// the original only ever pairs with the blank one. Which block a draw goes
+/// through is genuinely unread: the two sit in one function whose basic blocks
+/// the scheduler has reordered, so telling them apart needs control-flow
+/// reconstruction rather than peephole reading.
+///
+/// On top of that, the original applies the variant per material at all:
+/// 1,467 of the disc's 1,590 `.rcsmaterial` files carry one, so 123 do not -
+/// and craft hulls, the sky cube, pads, rockets and the collision wireframe
+/// all reach `mesh.wgsl` here. Wherever one of those carries pure-black texels
+/// it picks up stage colour the original would leave alone. Same shape as the
+/// shared specular exponent and the blanket sun term `mesh.wgsl` already
+/// carries.
 ///
 /// **The sum happens in each shading path's own colour space.** `zoneTex` is a
 /// texture and takes the same `pow(x, 2.2)` decode every other sample here
 /// takes; `zoneEffect` is a shader parameter and takes none - it is authored
-/// past `1.0` (to `3.0` on stage 12), which is a multiplier's range. Getting
+/// past `1.0` (`Track.Texture Colour` reaches `9.0`), which is a
+/// multiplier's range. Getting
 /// that wrong is invisible whenever `zoneEffect` is exactly `1.0`, which is
 /// why `crates/render/tests/zone_recolour.rs` binds `2.0`.
 ///

@@ -353,30 +353,32 @@ fn open_2048() -> Option<oag_assets::Archives> {
     Some(oag_2048::open(&path.display().to_string()).expect("opening 2048"))
 }
 
-/// **The Zone shader's own parameters assemble off the disc, and the recolour
-/// switches itself off where the file says nothing.**
+/// **The Zone shader's own parameters assemble off the disc, and they come
+/// from the half of HD's paired publication whose textures this build binds.**
 ///
-/// Both halves matter. `Texture U/V scale` are the two title-wide,
-/// prefix-free keys `Environment_RegisterStageSchema` (`0x003d0b98`) registers
-/// straight into shader parameter 52 - `zoneColourTint.xy` - and
-/// `Scene.Texture Colour` is what `Environment_UpdateStageBlend`
-/// (`0x003da540`) copies into `zoneEffectInner`/`zoneEffectOuter`. Both are
+/// `Texture U/V scale` are the two title-wide, prefix-free keys
+/// `Environment_RegisterStageSchema` (`0x003d0b98`) registers straight into
+/// shader parameter 52 - `zoneColourTint.xy`. `Track.Texture Colour` is what
+/// `Environment_UpdateStageBlend` (`0x003da540`) copies into
+/// `zoneEffectInner`/`zoneEffectOuter` **in the block that also binds the
+/// `zoneModeTrack*` textures**, which are the ones this build loads. Both are
 /// read here off the real file, not from a constant this test carries.
 ///
-/// **`Start` authors `Scene.Texture Colour` as pure black**, so a Zone race
-/// resting on stage 0 - which is where HD's own loader leaves it, its trigger
-/// being unrecovered - adds nothing at all. That is the file's statement, and
-/// asserting it is what stops a later "make Zone visible" change from
-/// inventing a value for the stage the disc paints black.
+/// **The `Scene`/`Track` distinction is asserted, not incidental.** `Start`
+/// authors the two in opposite corners - `Scene.Texture Colour` pure black
+/// against `Track.Texture Colour` at `9.0` - so a regression that took the
+/// `Scene` half while still binding the track texture set would draw nothing
+/// where the disc draws its brightest stage, and only this pair catches it.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn the_zone_shader_parameters_come_off_the_disc_and_stage_zero_adds_nothing() {
+fn the_zone_shader_parameters_come_from_the_half_whose_textures_are_bound() {
     let Some(loaded) = load(oag_race::Mode::Zone) else {
         return;
     };
     let mut grade = loaded.zone_grade.expect("the table loads");
 
-    // Stage 0, `Start`, is where an HD Zone race rests.
+    // Stage 0, `Start`, is where an HD Zone race rests: its own loader resets
+    // the stage to zero and its trigger is unrecovered.
     assert_eq!(grade.blend().current, 0);
     let start = grade.zone_uniform();
     // `"Texture U scale"=1.000000` / `"Texture V scale"=1.000000`, the only
@@ -386,48 +388,53 @@ fn the_zone_shader_parameters_come_off_the_disc_and_stage_zero_adds_nothing() {
         start.enabled, 1.0,
         "every input resolved, so the term is switched on"
     );
-    // `"0 Start.Scene.Texture Colour"=0.000000 0.000000 0.000000` - so the
-    // multiply is zero and the recolour adds nothing, by the file's own hand.
-    assert_eq!(start.effect, [0.0, 0.0, 0.0, 0.0]);
+    // `"0 Start.Track.Texture Colour"=9.000000 9.000000 9.000000`, against
+    // `"0 Start.Scene.Texture Colour"=0.000000 0.000000 0.000000`.
+    assert_eq!(start.effect, [9.0, 9.0, 9.0, 0.0]);
+    assert_ne!(
+        start.effect[0], 0.0,
+        "the Scene half would be black here - the wrong half of the pair"
+    );
 
-    // `"1 Sub Venom.Scene.Texture Colour"=0.721569 0.909804 0.964706`.
+    // `"1 Sub Venom.Track.Texture Colour"=4.584567 6.537755 6.917541`.
     grade.request_stage(1);
     assert!(grade.commit());
     let sub_venom = grade.zone_uniform();
     assert_eq!(sub_venom.uv_scale, [1.0, 1.0]);
-    assert_eq!(sub_venom.enabled, 1.0);
     assert_eq!(
         sub_venom.effect,
-        [0.721_569, 0.909_804, 0.964_706, 0.0],
-        "the stage's own Scene.Texture Colour, and a zero glow scale because \
+        [4.584_567, 6.537_755, 6.917_541, 0.0],
+        "the stage's own Track.Texture Colour, and a zero glow scale because \
          zoneTexVis is not fed"
     );
 
     // **The unblended stage, not the cross-fade.** `commit` zeroes the weight,
-    // so `palette()` here reads stage 0's black - and the Zone parameters must
-    // not, because the original hands the shader both stages separately and
-    // picks between them with a sphere test rather than mixing them.
+    // so `palette()` here reads stage 0's - and the Zone parameters must not,
+    // because the original hands the shader both stages separately and picks
+    // between them with a sphere test rather than mixing them.
     assert_eq!(grade.blend().weight, 0.0);
     assert_eq!(
-        grade.palette().scene_texture_colour,
-        Some([0.0, 0.0, 0.0]),
+        grade.palette().track_texture_colour,
+        Some([9.0, 9.0, 9.0]),
         "the colour-space cross-fade is at stage 0's end"
     );
     assert_ne!(
-        sub_venom.effect[0], 0.0,
+        sub_venom.effect[0], 9.0,
         "zoneEffect must read the showing stage itself, not the cross-fade"
     );
 
-    // Every one of the fifteen stages carries a texture, so `enabled` never
-    // drops for want of art - the one input that is a decode rather than a
-    // parse.
+    // Every one of the fifteen stages carries a texture and a track colour, so
+    // `enabled` never drops - and none of the fifteen is black, which is why
+    // an HD Zone race resting on stage 0 still shows something.
     for stage in 0..=grade.last_stage() {
         grade.request_stage(stage);
         grade.commit();
-        assert_eq!(
-            grade.zone_uniform().enabled,
-            1.0,
-            "stage {stage} has all three inputs"
+        let uniform = grade.zone_uniform();
+        assert_eq!(uniform.enabled, 1.0, "stage {stage} has all three inputs");
+        assert_ne!(
+            uniform.effect[..3],
+            [0.0; 3],
+            "stage {stage} authors a Track.Texture Colour that draws"
         );
     }
 }

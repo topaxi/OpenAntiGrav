@@ -235,6 +235,7 @@ impl EffectSettings {
             scene_base_colour: self.stage_rgb(stage, key::SCENE_BASE_COLOUR),
             scene_base_colour_highlight: self.stage_rgb(stage, key::SCENE_BASE_COLOUR_HIGHLIGHT),
             scene_aniso_power: self.stage_scalar(stage, key::SCENE_ANISO_POWER),
+            track_texture_colour: self.stage_rgb(stage, key::TRACK_TEXTURE_COLOUR),
             // HD's spelling first, then 2048's. A file carries one vocabulary
             // or the other, never both, so the order only decides which miss
             // costs a second lookup.
@@ -365,6 +366,25 @@ pub mod key {
     pub const SCENE_BASE_COLOUR: &str = "Scene.Base Colour";
     /// Three floats. The third of them.
     pub const SCENE_BASE_COLOUR_HIGHLIGHT: &str = "Scene.Base Colour Highlight";
+    /// **`zoneEffectInner`/`zoneEffectOuter` for the *track* material group**,
+    /// which is the group whose textures carry Zone's real art.
+    ///
+    /// HD publishes the Zone shader's parameters **twice**, and the two
+    /// publications are paired end to end: one block binds the
+    /// `zoneMode{0..14}.gtf` textures together with the `Scene.*` colours, the
+    /// other binds `zoneModeTrack{0..14}.gtf` together with these. Read out of
+    /// `FUN_003ff860`'s own two blocks, every constant a TOC-resolved
+    /// `lwz rX,-N(r2)` at the exact store - `0x00c81368` beside `0x00c81490`
+    /// in the first, `0x00c813e0` beside `0x00c81500` in the second.
+    /// Confidence 85; see
+    /// `docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md`'s
+    /// twenty-fifth pass.
+    ///
+    /// **So a port that binds the track texture set must use this key and not
+    /// [`SCENE_TEXTURE_COLOUR`]** - the mixed pair is one the original never
+    /// publishes. The two are not interchangeable in magnitude either: this
+    /// one reaches `9.0` where its `Scene` sibling runs to `3.0`.
+    pub const TRACK_TEXTURE_COLOUR: &str = "Track.Texture Colour";
     /// One float, the exponent of the rim term the Zone shader raises
     /// `1 - dot(N, -V)` to.
     ///
@@ -471,6 +491,9 @@ pub struct StagePalette {
     pub scene_base_colour: Option<[f32; 3]>,
     /// [`key::SCENE_BASE_COLOUR_HIGHLIGHT`], on the same terms.
     pub scene_base_colour_highlight: Option<[f32; 3]>,
+    /// [`key::TRACK_TEXTURE_COLOUR`] - `zoneEffect<Inner|Outer>` for the track
+    /// material group, the one whose texture set carries Zone's real art.
+    pub track_texture_colour: Option<[f32; 3]>,
     /// [`key::SCENE_ANISO_POWER`] - `zoneAnisoPower.x`, the exponent of the
     /// Zone shader's rim term. Read and reported; the term it indexes
     /// (`zoneAnisoPalette`) has no located filler, so nothing draws it.
@@ -583,6 +606,11 @@ impl StagePalette {
             scene_base_colour_highlight: fade_field(
                 self.scene_base_colour_highlight,
                 previous.scene_base_colour_highlight,
+                fade3,
+            ),
+            track_texture_colour: fade_field(
+                self.track_texture_colour,
+                previous.track_texture_colour,
                 fade3,
             ),
             // Not faded by the original at all: the blend hands the two

@@ -227,6 +227,13 @@ fn hd_stage_zero_and_stage_one_are_two_different_authored_palettes() {
         scene_eq_brightness: Some(0.0),
         scene_base_colour: Some([3.0, 3.0, 3.0]),
         scene_base_colour_highlight: Some([0.0, 0.0, 0.0]),
+        // **`Start` authors its two texture colours in opposite corners**:
+        // `Scene` is pure black and `Track` is `9.0`, the file's own maximum.
+        // Which of the two a surface gets is which half of HD's paired
+        // publication it goes through, so this pair is the reason that pairing
+        // has to be read rather than assumed - they disagree about whether an
+        // HD Zone race at rest shows anything at all.
+        track_texture_colour: Some([9.0, 9.0, 9.0]),
         // **The file authors no `Scene.Aniso Power` on any of its fifteen
         // stages**, though HD's own schema registers the key. So the Zone
         // shader's `zoneAnisoPower` keeps the `(6, 6)` its constructor sets
@@ -252,6 +259,7 @@ fn hd_stage_zero_and_stage_one_are_two_different_authored_palettes() {
         scene_base_colour: Some([0.003_922, 0.847_059, 1.0]),
         scene_base_colour_highlight: Some([0.0, 1.694_118, 2.0]),
         scene_aniso_power: None,
+        track_texture_colour: Some([4.584_567, 6.537_755, 6.917_541]),
         fog_colour: Some([0.0, 1.305_882, 1.8]),
         fog_density: Some(0.002_1),
         sun_colour: Some([0.0, 0.0, 0.0]),

@@ -366,9 +366,21 @@ impl ZoneGrade {
     ///   parameter 52's storage, so this is the whole of the binding rather
     ///   than a reading of it. Confidence 85.
     /// - `zoneEffectInner`/`zoneEffectOuter`, the showing stage's
-    ///   `Scene.Texture Colour`. `Environment_UpdateStageBlend` (`0x003da540`)
-    ///   copies stage `n`'s into the inner parameter and stage `n - 1`'s into
-    ///   the outer one. Confidence 84.
+    ///   **`Track.Texture Colour`**. `Environment_UpdateStageBlend`
+    ///   (`0x003da540`) copies stage `n`'s into the inner parameter and stage
+    ///   `n - 1`'s into the outer one. Confidence 84.
+    ///
+    /// **`Track`, not `Scene`, because the texture set decides it.** HD
+    /// publishes these parameters twice and the two publications are paired:
+    /// one binds the `zoneMode*` textures beside the `Scene.*` colours, the
+    /// other binds `zoneModeTrack*` beside the `Track.*` ones (read out of
+    /// `FUN_003ff860`'s two blocks, confidence 85). This build binds the
+    /// **track** set - the one that carries real art, the general set being
+    /// fifteen flat whites - so the track colours are its half of that pair,
+    /// and pairing them the other way is a combination the original never
+    /// publishes. It also matters: `Scene.Texture Colour` is authored black on
+    /// stage `Start` and its `Track` sibling is `9.0` there, so the two
+    /// disagree about whether an HD Zone race at rest shows anything at all.
     ///
     /// **The showing stage's own palette, not [`Self::palette`]'s cross-fade.**
     /// The original does not blend these two in colour space at all: it hands
@@ -390,7 +402,7 @@ impl ZoneGrade {
         ) else {
             return off;
         };
-        let (Some([r, g, b]), true) = (palette.scene_texture_colour, self.stage_art().is_some())
+        let (Some([r, g, b]), true) = (palette.track_texture_colour, self.stage_art().is_some())
         else {
             return off;
         };
@@ -455,7 +467,7 @@ impl ZoneGrade {
                 // because it is the file's own statement and not a failure:
                 // `Start` is authored that way.
                 let effect = if [r, g, b] == [0.0; 3] {
-                    "adds nothing here, this stage authoring Scene.Texture Colour black".to_string()
+                    "adds nothing here, this stage authoring Track.Texture Colour black".to_string()
                 } else {
                     format!("draws where the albedo is black, zoneEffect [{r}, {g}, {b}]")
                 };
@@ -470,7 +482,7 @@ impl ZoneGrade {
                 } else if self.stage_art().is_none() {
                     "this stage has no decoded texture"
                 } else {
-                    "this stage authors no Scene.Texture Colour"
+                    "this stage authors no Track.Texture Colour"
                 };
                 format!("; the Zone recolour draws nothing - {missing}")
             }
