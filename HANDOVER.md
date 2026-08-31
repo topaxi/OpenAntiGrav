@@ -330,7 +330,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [`12_Track`'s sky draws one white face](handover/12-tracks-sky-draws-one-white-face.md)
 - [Audio: race SFX plays on all three titles](handover/audio-race-sfx-plays-on-all-three-titles.md)
 - [`oag-trace plan` has never been replayed into the emulator](handover/oag-trace-plan-has-never-been-replayed-into.md)
-- [M6 authored lighting: no hardware light slot found enabled](handover/m6-authored-lighting-no-hardware-light-slot-found.md)
+- [M6 authored lighting: no hardware light slot found enabled, and no `DirectionalLight` consumer found anywhere](handover/m6-authored-lighting-no-hardware-light-slot-found.md)
 - [Ghidra target of record is `psp-pulse-eu`; EU cross-verification is owed](handover/ghidra-target-of-record-is-psp-pulse-eu.md)
 - [`/psp-pure-usa`, `/psp-pure-eu` and `/psp-pure-eu-reimport` were missing from the project on 2026-08-10, despite the 2026-08-09 note below describing them as already imported and saved](handover/psp-pure-usa-psp-pure-eu-and-psp.md)
 - [The EU/Pure imports have never been diffed](handover/the-eu-pure-imports-have-never-been-diffed.md)

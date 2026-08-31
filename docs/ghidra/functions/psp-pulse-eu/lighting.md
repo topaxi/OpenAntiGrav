@@ -161,8 +161,14 @@ arrived at by inspection alone:
 
 - `Mesh_CompileDisplayLists` (`0x0890f5d4`, EU, already documented) calls it
   **twice, both times with the literal `0xffffffff`** (`-1`) - i.e. every
-  display list this function ever bakes takes the `Gu_Disable(GU_LIGHTING)`
-  branch. Lighting is never baked on at display-list-compile time.
+  display list *this function* bakes takes the `Gu_Disable(GU_LIGHTING)`
+  branch. **Scoped 2026-08-31 (seventh pass, below): this is true of
+  `Mesh_CompileDisplayLists` specifically, not of display-list compilation in
+  general** - `FUN_08930290` is a second, previously unknown baking function
+  that passes the genuine per-material value instead, so a compiled list
+  *can* carry `Gu_Enable(GU_LIGHTING)`. The M6 conclusion is unaffected
+  either way: `Mesh_ApplyMaterialLighting` disables all four hardware light
+  slots itself, regardless of which caller reaches that branch - see below.
 - `FUN_0890ed84` (EU, the real per-frame draw dispatcher, not yet named) calls
   it with `*(int *)(material + 0x6c)` - a genuine per-material runtime value,
   gated on `!= -1` for a display-list caching decision. This is a call site
@@ -580,7 +586,7 @@ its decompile alone:
 | `World_LoadTrack_q` (`0x088835f0`) | Already read (fourth pass) - resolves the world object only to forward it to `World_CollectMarkerLists`; ruled out as a consumer itself |
 | `FUN_08900984` (`0x08900984`-`0x08900c53`) | **Decompiled and ruled out this pass** - constructs a *fresh, disposable* `0x6d0`-byte world object of its own (not a lookup of an existing one) and calls `World_CollectMarkerLists` on it as its last real act before an unrelated list-removal bookkeeping step; no read of `+0x40`/`+0x7c` follows. Contains `0x08900bb8`, one of the "two other call sites" this page's live capture already covered (front-end/menu scene graph, all-zero counts) - the decompile now explains *why* those counts were zero (a freshly built, empty scene graph, not the raceable track) rather than merely matching the address |
 | `FUN_08900c54` (`0x08900c54`-`0x08900e53`) | **Decompiled and ruled out this pass**, identical shape to `FUN_08900984` - builds its own fresh world object, calls `World_CollectMarkerLists` on it, returns immediately after with no field read. Contains `0x08900e1c`, the other already-covered call site |
-| `Mesh_ApplyMaterialLighting` (`0x0890cea8`) | **Already fully quoted on this page (confidence 78) - and its own quoted body contains this exact tag-walk**, missed until this pass connected the two: it caches the resolved world pointer at `material+0xc4`, but the instructions already quoted above never read a field back off that cached pointer - the material-ambient reads that follow it (`param_1+0x70`, `param_1+0x6c`) are the *material's own* fields, not the world object's. **Resolved this pass**: `material+0xc4` is write-only across every known caller. `search_instructions` on the un-rebased `jal` target found this function has **three** call sites, not the two this page previously named (see the correction above `Mesh_ApplyMaterialLighting`'s own quoted body) - `Mesh_CompileDisplayLists` and `FUN_0890ed84` were already read in full and confirmed clean for `+0xc4`, and the newly found third caller `FUN_08930290` was scanned (not fully read - it is a second, large per-frame draw dispatcher this page never previously mentioned) and shows no `+0xc4` read either. A blind `lw ...,0xc4(...)` sweep across the whole binary was tried first and abandoned as not viable (`+0xc4` is a common offset - 50+ unrelated matches before the scan even finished); checking the three actual callers by name is what converged |
+| `Mesh_ApplyMaterialLighting` (`0x0890cea8`) | **Already fully quoted on this page (confidence 78) - and its own quoted body contains this exact tag-walk**, missed until this pass connected the two: it caches the resolved world pointer at `material+0xc4`, but the instructions already quoted above never read a field back off that cached pointer - the material-ambient reads that follow it (`param_1+0x70`, `param_1+0x6c`) are the *material's own* fields, not the world object's. **Resolved this pass**: `material+0xc4` is write-only across every known caller. `search_instructions` on the un-rebased `jal` target found this function has **three** call sites, not the two this page previously named (see the correction above `Mesh_ApplyMaterialLighting`'s own quoted body) - `Mesh_CompileDisplayLists` and `FUN_0890ed84` were already read in full and confirmed clean for `+0xc4`, and the newly found third caller `FUN_08930290` - now fully characterized below as a display-list-baking function, not a draw dispatcher - shows no `+0xc4` read either. A blind `lw ...,0xc4(...)` sweep across the whole binary was tried first and abandoned as not viable (`+0xc4` is a common offset - 50+ unrelated matches before the scan even finished); checking the three actual callers by name is what converged |
 | `FUN_088b7504` | **Decompiled and ruled out (seventh pass)** - same shape as `Race_CreateModeObject`/`FUN_08900984`/`FUN_08900c54`: constructs its own fresh `0x6d0`-byte world object and tags it with the class key. A tag *write*, not a read. Also writes several unrelated float constants (`0.7`, `0.7`, `20.0`, `100.0`) to its own object - looks like a distance/LOD parameter block for a specific game mode, not examined further |
 | `FUN_088b8d00` | **Decompiled and ruled out (seventh pass)**. Calls the class key **three times** (`0x088b8e4c`, `0x088b8fa0`, `0x088b90e8`) but not as a tree-walk of its own - it passes the resolved class key **as a query parameter** into a different helper, `func_0x000b43fc` (un-rebased), a pattern not seen elsewhere on this page. The rest of the function is text/resource lookups gated on a difficulty-like 3-way branch (`param+0x94`/`+0x98`) - reads as a UI/results-text function, not a render one. No `+0x40`/`+0x7c` reference anywhere in the body |
 | `FUN_0890e494` | **Decompiled (seventh pass) - and turns out to be the actual writer of `Mesh_ApplyMaterialLighting`'s `material+0xc4` cache**, not a reader of `DirectionalLight`. It runs the identical tag-walk and writes the result straight to `param_1+0xc4` at what reads as material/mesh-node construction time; `Mesh_ApplyMaterialLighting`'s own tag-walk (already documented above) is a lazy-init fallback for the case this hasn't run yet, not the primary writer. Confirms rather than reopens the "write-only" finding above - this is simply *which* function does most of the writing. The rest of the function resolves two more classes into `param_1+0x70`/`+0x74`, does texture-UV scaling math, and ends in the same `+0xdc..+0x108` colour-packing block seen in `FUN_0890ed84`/`Mesh_CompileDisplayLists`/`FUN_08930290` - a generic, reused block, not lighting-specific |
@@ -613,24 +619,71 @@ and so cannot appear in a search keyed on that call. `FUN_08930290` (below)
 is exactly this shape, which is why it survived an otherwise exhaustive
 sweep and remains the one open lead.
 
-**A second per-frame draw dispatcher this page never mentioned:**
-`FUN_08930290`, found while enumerating `Mesh_ApplyMaterialLighting`'s real
-callers above, is large (roughly 200 decompiled lines) and was scanned, not
-fully read, this pass. It calls `Mesh_ApplyMaterialLighting` twice with
-`*(material + 0x6c)` - the same genuine-runtime-value pattern `FUN_0890ed84`
-uses, not the `-1` literal `Mesh_CompileDisplayLists` uses - so the
-`Gu_Enable(GU_LIGHTING)` branch is reachable from at least two functions on
-this page, not the one previously named. Separately, in a branch gated on
-`local_a4 & 8` that does *not* call `Mesh_ApplyMaterialLighting`, it reads
-`+0xcc`/`+0xd0` off what looks like the same per-batch material pointer and
-feeds them to two other, uncharacterized functions
-(`func_0x001098d4`/`func_0x0011a464`, un-rebased `0x001098d4`/`0x0011a464`) -
-flagged here as an unexamined lighting-adjacent path, not interpreted:
-`+0xcc`/`+0xd0` being near `+0xc4` is proximity, not evidence they're
-related fields of the same sub-struct. Neither this function's relationship
-to `FUN_0890ed84` (are they alternate per-mode dispatchers? one legacy, one
-current?) nor its own callers were examined - left for a future pass, not
-opened this session.
+### An eighth pass: `FUN_08930290` characterized - it is a display-list baker, not a second draw dispatcher, and it is ruled out too
+
+2026-08-31, same session. **Retracting this page's own "second per-frame
+draw dispatcher" label from the seventh pass above**: `FUN_08930290` is not
+that. Its real callers, found the same way as everywhere else on this page
+(`search_instructions` on its un-rebased `jal` target, `0x0012c290`), are
+`FUN_0892ee38` (4 sites) and `FUN_0892fcf8` (1 site) - both decompiled in
+full this pass.
+
+`FUN_0892ee38` builds a model wrapper from a raw node array: it sorts nodes
+into four category lists by material flags (matching
+`Mesh_CompileDisplayLists`'s own flag categories, `0x800`/`0x2000`/a
+per-node byte's `0x4` bit), then bakes display lists for them via the exact
+allocation sequence `Mesh_CompileDisplayLists` itself uses
+(`func_0x0000cb28`/`func_0x0000c09c`/`func_0x0000ca9c`/`func_0x0000ca80`/`func_0x00142b20`),
+calling `func_0x0012c290(param_1, 1, 7)` for the main categories and,
+conditionally, `func_0x0012c290(param_1, 1, 8)` for the fourth. `FUN_0892fcf8`
+does the lazy-first-use equivalent: `if (*(param_1+0xac) == 0) { ... call
+func_0x0012c290(param_1, 0, 0xf) ... }` - `param_1+0xac` being exactly
+`Vex_LoadModel`'s own world-pointer cache field, so this triggers the bake
+once, the first time a model's world pointer hasn't been resolved yet, and
+does lighter per-frame-shaped maintenance work on later calls instead.
+
+**`FUN_08930290` is therefore a display-list-baking function analogous to
+`Mesh_CompileDisplayLists`, for a second, previously undocumented
+model-construction pathway - invoked at model build time or on first use,
+not every frame.** It is not an alternate to `FUN_0890ed84`: that function's
+own "real per-frame draw dispatcher" label stands, corroborated this pass -
+`FUN_08910adc` (one of its two callers) forwards to it directly for the
+`0x45000000`-tagged mainline case (`func_0x0010ad84(param_1,param_2,param_3)`,
+`0x0010ad84 + 0x08804000 = FUN_0890ed84`) and does ghost/overlay rendering
+otherwise. The two functions have unrelated roles that happen to both reach
+`Mesh_ApplyMaterialLighting`.
+
+**This forces a real scoping correction, not just a relabelling**: this
+page's own claim that "lighting is never baked on at display-list-compile
+time" was true only of `Mesh_CompileDisplayLists`, corrected above.
+`FUN_08930290`'s `mask & 1` branch bakes `Mesh_ApplyMaterialLighting` with
+the genuine `*(material + 0x6c)` value, exactly like `FUN_0890ed84` does -
+so a *compiled* display list can carry `Gu_Enable(GU_LIGHTING)` after all.
+The M6 conclusion is unaffected: `Mesh_ApplyMaterialLighting` disables all
+four hardware light slots itself regardless of which of its three now-known
+callers reaches that branch, per its own quoted body above.
+
+**`+0xcc`/`+0xd0` are resolved: caller-supplied per-model values, not
+lighting.** `FUN_0892ee38` writes them directly from its own arguments
+(`*(iVar18+0xcc) = param_4; *(iVar18+0xd0) = param_5;`), and both
+`FUN_08930290`'s `mask & 8` branch and `FUN_08910adc`'s ghost/overlay path
+read them back and feed them to the same function, `func_0x0011a464`
+(un-rebased), alongside a per-node byte and (in the `mask & 8` case)
+`Mesh_ApplyShinemapReflection_q`. Two model-level values threaded through
+from construction, consumed by a shared drawing helper - the shape reads as
+a **per-model tint pair**, which points at (does not confirm) this
+project's existing per-team-hull-colour work rather than anything
+`DirectionalLight`-related - worth flagging to whoever owns that thread, not
+chased further here.
+
+**`FUN_08930290` is ruled out as `DirectionalLight`'s consumer, fully
+characterized rather than merely scanned.** Its four mask branches touch:
+material ambient (`mask & 1`, via `Mesh_ApplyMaterialLighting`), an
+unexamined transform pass (`mask & 2`, `func_0x00109490`), vertex/UV
+matrix math (`mask & 4`), and the shinemap-plus-tint pass (`mask & 8`,
+above). None reads `world+0x40` or `world+0x7c`. This was the one lead the
+class-key enumeration (sixth/seventh passes) could not see by construction
+- and it comes up empty too.
 
 ## Open
 
@@ -677,21 +730,29 @@ opened this session.
   sibling display-list function was already checked for `+0x40`/`+0x7c` too
   - **this is now the strongest negative result on this page**: every
   class-based path to the world object, not just the ones this page
-  happened to read first, comes up empty. The only lead this doesn't cover
-  is `FUN_08930290` (below), which never calls the class key at all and so
-  couldn't be found this way.
+  happened to read first, comes up empty. The only lead this couldn't cover
+  by construction, `FUN_08930290`, is also now fully characterized and
+  closed (eighth pass, below) - **no consumer of `world+0x40`/`+0x7c` has
+  been found anywhere in this codebase**, across every mechanism this
+  project has been able to identify for reaching the world object at all.
+  Either the collection exists for a purpose this project hasn't identified,
+  or it has none past track load - not a claim this page can rule between,
+  but the search itself has converged.
 - **`Mesh_ApplyMaterialLighting` has three call sites, not the two this page
-  previously named, and the third is a second per-frame draw dispatcher
-  (`FUN_08930290`) this page never mentioned before this pass.** Found while
-  enumerating its real callers via `search_instructions` on the un-rebased
-  `jal` target - the same wart-driven undercount as everywhere else on this
-  page. `FUN_08930290` was only scanned, not fully read: it calls
-  `Mesh_ApplyMaterialLighting` with a genuine runtime ambient value (like
-  `FUN_0890ed84`, unlike `Mesh_CompileDisplayLists`'s `-1` literal), so the
-  `Gu_Enable(GU_LIGHTING)` branch is reachable from at least two functions,
-  and it has an unexamined `+0xcc`/`+0xd0` read in an unrelated branch that
-  might or might not be lighting-adjacent. Its relationship to `FUN_0890ed84`
-  and its own callers are both open.
+  previously named - and the third, `FUN_08930290`, turned out to be a
+  display-list-baking function analogous to `Mesh_CompileDisplayLists`, not
+  a second draw dispatcher (this page's own seventh-pass label for it was
+  wrong, retracted in the eighth pass below).** Found while enumerating
+  `Mesh_ApplyMaterialLighting`'s real callers via `search_instructions` on
+  the un-rebased `jal` target - the same wart-driven undercount as
+  everywhere else on this page. `FUN_08930290` bakes `Mesh_ApplyMaterialLighting`
+  with a genuine runtime ambient value at model-construction or
+  first-use time (not `Mesh_CompileDisplayLists`'s `-1` literal), which
+  scopes this page's "lighting is never baked at compile time" claim to
+  `Mesh_CompileDisplayLists` specifically - the M6 conclusion is unaffected,
+  since `Mesh_ApplyMaterialLighting` disables all four hardware light slots
+  regardless of caller. Its `+0xcc`/`+0xd0` read is resolved as a
+  caller-supplied per-model tint pair, unrelated to lighting.
 - **`world+0x44`/`world+0x48` read as `0` on the one track checked live**,
   but that doesn't settle what they're *for* - a zero on `16_Track` is
   consistent with either "these two classes are never authored on this
