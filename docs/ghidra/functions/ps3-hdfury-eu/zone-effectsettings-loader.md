@@ -3364,25 +3364,52 @@ than a colour and an unrelated companion: `Scene.Texture Colour` with `Scene.EQ
 brightness` in its fourth lane, and the same shape for
 `Scene.Base Colour Highlight` and `Scene.Base Colour`.
 
-**`+0x120` and `+0x130` were not found bound as engine parameter values.**
-Checked two ways, and recorded because a negative costs as much to establish as
-a hit: `get_xrefs_to` returns nothing at all for `0x00c49120` or `0x00c49130`
-(against `0x00c49110`, which is published), and neither offset appears among
-`Scene_PrepareFrame`'s `addi rX, r31, <off>` forms - the only one in the whole
-`0x100`-`0x180` band is `r23 = +0x110`.
+**`+0x120` and `+0x130` are bound after all - to `fogColour` itself.**
+**Corrected the same day; the paragraph this replaces published a negative that
+was an artefact of how it was searched, and the correction is worth more than
+the claim was.** What was run first: `get_xrefs_to` on `0x00c49120`/`0x00c49130`
+(nothing) and a scan of `Scene_PrepareFrame`'s own `addi rX, r31, <off>` forms
+(only `r23 = +0x110` in the whole `0x100`-`0x180` band). Both are **source-side**
+and both are blind to the addressing this actually uses.
 
-**But both of those are source-side searches and share one blind spot**, so
-this is a gap named rather than a proof: a publisher that reaches
-`block+0x120` by loading a base from its own TOC slot and adding `0x120`
-leaves no literal `0x00c49120` for `get_xrefs_to` and no
-`addi rX, r31, 0x120` anywhere - which is precisely the addressing form that
-defeated eighteen passes of this page's own consumer search. **The search that
-would actually discriminate is destination-side**: sweep both publication
-offset families (`i*0x20 + 0x18` for floats and `i*0x20 + 0x1c` for samplers)
-image-wide and look for any published pointer landing in
-`0x00c49100`-`0x00c49140`. Until that runs, "only the first of the three fog
-blocks reaches a shader through the parameter table" is the working reading,
-not a result.
+The window is four 16-byte slots and all four are in use:
+
+| address | parameter | table offset | store | publisher |
+| --- | --- | --- | --- | --- |
+| `0x00c49100` | 4 `eyePositionWorldSpace` | `0x98` | `0x003ab34c` | `Scene_PrepareFrame` |
+| `0x00c49110` | 7 `fogColour` | `0xf8` | `0x003ab430` | `Scene_PrepareFrame` |
+| `0x00c49120` | **7 `fogColour`** | `0xf8` | `0x00400658` | `FUN_003ff860` |
+| `0x00c49130` | **7 `fogColour`** | `0xf8` | `0x00401800` | `FUN_00400a00` |
+| `0x00c49140` | - | - | never formed | - |
+
+So the engine keeps **three fog-colour buffers and one parameter**, and picks
+between them at runtime. The other two are reached through three
+two-instruction getters -
+
+```text
+3aa2e8: lwz r3,-0x6288(r2); addi r3,r3,0x110   ; -> 0x00c49110
+3aa2f8: lwz r3,-0x6288(r2); addi r3,r3,0x120   ; -> 0x00c49120
+3aa308: lwz r3,-0x6288(r2); addi r3,r3,0x130   ; -> 0x00c49130
+```
+
+- each called from ten sites; `FUN_003ff860` calls all three, **spills the
+returned pointers to its own stack frame**, and selects one at `0x003ffa7c`
+onward behind a bit test on a halfword flag, defaulting to `0x00c49120`.
+Confidence 80, every store hand-read in the disassembly after the sweep
+pointed at it.
+
+**The transferable part is why both searches missed it, and this is now the
+third distinct instance on this page.** A pointer that is *computed in a
+getter*, *returned in `r3`*, *spilled to a stack slot* and *selected by a
+runtime flag* has no literal for an xref, no `addi` in the consuming function,
+and no constant offset anywhere near the store. Even a destination-side sweep
+of the publication offsets misses it if the sweep's register model is sloppy:
+the first one run here returned a clean negative that was an artefact, because
+`llvm-objdump` prints `lfs 31,` and `lwz 31,` identically and the tracker
+clobbered the scene-block base on the float loads. **The self-check that
+distinguishes a real sweep from a broken one is whether it recovers
+`0x00c49110` - a known-positive - unaided.** A sweep that cannot find the
+answer you already have is not evidence about the answers you do not.
 
 **Parameter 3 `world` is published as a null pointer, not an address.** Its
 source register is `li r28, 0` at `0x003ab204`, so `stw r28, 0x78(r11)` clears
@@ -3526,12 +3553,20 @@ to see open.
 ### What this pass could not determine
 
 - **What writes `H[e].u32@28`/`@32`, the stage index itself.** The loader only
-  zeroes them (confidence 78 that it never sets them), and a displacement grep
-  near any `0x008c2cb8` reference finds nothing, so the writer reaches the
-  struct through a pointer parameter or `stwx`. **This is the same open end as
-  HD's Zone trigger** - the texture side and the palette side both terminate
-  at an unrecovered stage-number source. Candidates holding `0x008c2cb8`:
-  `FUN_003ce2c0`, `FUN_003da540`, `FUN_003d0b98`.
+  zeroes them, and **a four-sweep search found no other writer anywhere in the
+  PPU image** - which, if it holds, means `zoneTexInner`/`zoneTexOuter` resolve
+  to array index `0` on every frame. That is scored **72 and is deliberately
+  not written up as a finding here**: a static negative is only as good as the
+  sweeps, one defect in these came within a hair of hiding a writer (an
+  index-tainted base that dropped its immediate, six stores of exactly that
+  shape), and the counter-argument - that the per-frame cross-fader snapshots
+  these two fields at all - is weakened but not answered by the copy being a
+  whole-struct assignment. **The step that settles it is an RPCS3 write
+  watchpoint on `0x008c2cd4`**, not more sweeping; see
+  [rpcs3-debugger.md](../../../reverse-engineering/rpcs3-debugger.md). Four ways
+  it could still be wrong are recorded with the sweep itself: an SPU job DMAing
+  into main memory, a pointer round-tripped through memory, `DFEngine.sprx`, and
+  a register-model defect that yields false unknowns.
 - **What writes the eight colour vec4s** (`0x00c81460`, `0x00c81470`-`0x00c814d0`),
   including `zoneColourTint`'s own value. Nothing stores into that range by
   displacement off `r14`, so the writer is almost certainly indexed VMX
@@ -3545,7 +3580,14 @@ to see open.
   entries in `H` makes `0..1` the plausible range, and the loader's own two
   files are `ZoneMode.effectSettings` and `ZoneModeDLC3.effectSettings`, which
   would fit - **hypothesis, not finding, confidence 35**, and nothing is named
-  on it.
+  on it. **Refuted the same day, confidence 78**: `Environment_UpdateStageBlend`
+  at `0x003dc738`-`0x003dc7c4` is a field-by-field **`H[1] = H[0]`** - all
+  fourteen fields, typed loads matched to typed stores, the shape a compiler
+  emits for a whole-struct assignment. So `H[1]` is a *previous-frame snapshot*
+  of `H[0]`, not a second environment, and the base-vs-DLC3 reading is wrong.
+  `0x008c1430` is initialised to **`-1`** (`0x002b9a34`), which is why every
+  consumer wraps it in a `max(x, 0)` clamp and why no consumer applies an upper
+  one.
 
 Reproduce with (note that `scripts/ps3-toc.py resolve` parses its displacement
 as **hex**, so a decimal argument resolves somewhere else entirely and reads

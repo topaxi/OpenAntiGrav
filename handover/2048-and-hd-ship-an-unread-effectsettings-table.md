@@ -240,19 +240,18 @@ evidence, including the byte-level trace of every function in this chain:
   record of how the search ran, not as live questions. What is genuinely still
   open from that line of work:
 
-  1. **Who consumes `0x00c49120` and `0x00c49130`.** Searched two ways this
-     pass and not found: neither has a single xref anywhere, and neither
-     appears among `Scene_PrepareFrame`'s `addi rX, r31, <off>` publication
-     forms. They are the second and third fog blocks (`Alt Fog`, `Track Fog`
-     on the vocabulary reading, confidence 80), so something consumes them.
-     **Both searches are source-side and share a blind spot** - a publisher
-     reaching `block+0x120` through its own TOC-held base leaves neither a
-     literal nor an `addi` - so re-running either is wasted, but the negative
-     is not a proof. **The search worth running is destination-side**: sweep
-     both publication offset families (`i*0x20 + 0x18`, `i*0x20 + 0x1c`)
-     image-wide for a published pointer in `0x00c49100`-`0x00c49140`. That is
-     the technique that mapped parameters 52-71 successfully; it just was not
-     pointed at this question.
+  1. ~~Who consumes `0x00c49120` and `0x00c49130`.~~ **Answered the same day,
+     and the negative published against them was wrong.** Both are bound to
+     **`fogColour` itself** - `0x00c49120` from `FUN_003ff860` at `0x00400658`,
+     `0x00c49130` from `FUN_00400a00` at `0x00401800`, both writing the same
+     table offset `0xf8` that `Scene_PrepareFrame` writes with `0x00c49110`. So
+     the engine keeps **three fog-colour buffers and one parameter** and picks
+     between them at runtime, behind a bit test on a halfword flag, defaulting
+     to `0x00c49120`. `0x00c49100` is parameter 4, `eyePositionWorldSpace`.
+     Confidence 80, every store hand-read. Which of the three a given draw
+     wants, and whether they line up with the `Fog`/`Alt Fog`/`Track Fog`
+     triple the file authors, is **not** established - that is the question
+     that replaces this one.
   2. ~~Which schema key parses to `iVar8 + 0x3aac`.~~ **Answered the same
      day** - it is `Scene.Texture Colour`'s own fourth lane, i.e.
      `Scene.EQ brightness`, per the measured schema table. The seventeenth
