@@ -34,15 +34,16 @@ const SIZE: u32 = 64;
 const ZONE_TEXEL: u8 = 128;
 const ZONE_EFFECT: [f32; 4] = [2.0, 1.0, 0.0, 0.0];
 
-fn vertex(position: [f32; 3]) -> GpuVertex {
+fn vertex(position: [f32; 3], lit: f32) -> GpuVertex {
     GpuVertex {
         position,
         normal: [0.0, 0.0, 1.0],
         colour: [1.0, 1.0, 1.0, 1.0],
         texcoord: [0.0, 0.0],
         lightmap_texcoord: [0.0, 0.0],
-        // The authored path, which is the one that shades in linear light.
-        lit: 1.0,
+        // `1.0` takes the authored path, which shades in linear light; `0.0`
+        // takes the stand-in path, which is gamma throughout.
+        lit,
         anim: 0,
         xform: 0,
         sun_mask: 1.0,
@@ -55,7 +56,7 @@ fn vertex(position: [f32; 3]) -> GpuVertex {
     }
 }
 
-fn model(albedo: Arc<ModelTexture>) -> Model {
+fn model(albedo: Arc<ModelTexture>, lit: f32) -> Model {
     Model {
         airbrakes: [None, None],
         node_vertex_ranges: Vec::new(),
@@ -90,9 +91,9 @@ fn model(albedo: Arc<ModelTexture>) -> Model {
         anim_tracks: Vec::new(),
         anim_nodes: Vec::new(),
         vertices: vec![
-            vertex([-0.9, -0.9, 0.5]),
-            vertex([0.9, -0.9, 0.5]),
-            vertex([0.0, 0.9, 0.5]),
+            vertex([-0.9, -0.9, 0.5], lit),
+            vertex([0.9, -0.9, 0.5], lit),
+            vertex([0.0, 0.9, 0.5], lit),
         ],
     }
 }
@@ -146,7 +147,7 @@ fn the_zone_recolour_paints_a_black_albedo_and_leaves_a_white_one() {
 
     // A pure-black diffuse, which is exactly what the original's artists paint
     // where they want Zone mode to light a surface up.
-    let black = model(texture("black albedo", [0, 0, 0, 255]));
+    let black = model(texture("black albedo", [0, 0, 0, 255]), 1.0);
     let stage = texture("zone stage", [ZONE_TEXEL, ZONE_TEXEL, ZONE_TEXEL, 255]);
 
     let mut scene = Scene::off();
@@ -179,12 +180,28 @@ fn the_zone_recolour_paints_a_black_albedo_and_leaves_a_white_one() {
 
     // A white albedo: `blackMask` is 1, so the recolour adds nothing and the
     // surface draws exactly as it would outside Zone mode.
-    let white = model(texture("white albedo", [255, 255, 255, 255]));
+    let white = model(texture("white albedo", [255, 255, 255, 255]), 1.0);
     let untouched = draw(&device, &queue, &white, Some(&stage), scene);
     assert_eq!(
         (untouched[0], untouched[1], untouched[2]),
         (255, 255, 255),
         "the recolour must land only where the albedo is black"
+    );
+
+    // **The stand-in path, which is gamma throughout.** Prelit geometry
+    // (`lit == 0`) takes it even under an authored rig, because its light is
+    // baked into its vertex colours in the space the asset authors - so the
+    // Zone term is summed there *undecoded*. Green is the discriminating
+    // channel: `128` is the raw sample, and `56` is what a linear summand
+    // would have left.
+    let prelit = model(texture("black albedo", [0, 0, 0, 255]), 0.0);
+    let gamma = draw(&device, &queue, &prelit, Some(&stage), scene);
+    let raw =
+        |effect: f32| ((f32::from(ZONE_TEXEL) / 255.0 * effect).min(1.0) * 255.0).round() as u8;
+    assert_eq!(
+        (gamma[0], gamma[1], gamma[2]),
+        (raw(ZONE_EFFECT[0]), raw(ZONE_EFFECT[1]), 0),
+        "the stand-in path must sum in gamma, not fold in a linear term"
     );
 
     // The same black surface with the Zone term switched off draws black,
