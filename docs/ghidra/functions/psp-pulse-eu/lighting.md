@@ -685,6 +685,107 @@ above). None reads `world+0x40` or `world+0x7c`. This was the one lead the
 class-key enumeration (sixth/seventh passes) could not see by construction
 - and it comes up empty too.
 
+### A ninth pass: a live read watchpoint on the runtime addresses, not another static trace
+
+2026-08-31, same session, prompted directly by a question about whether the
+eight static passes above could have missed a conditionally-triggered
+consumer (a weapon effect, specifically). They could have - none of them
+proves a negative for code paths never reached. `docs/reverse-engineering/ppsspp-debugger.md`'s
+own memory watchpoint section says plainly: "it is the tool for 'does
+anything read this?', which no amount of static sweeping answers as well."
+This pass used it.
+
+**Method** (`scripts/psp-watch-directionallight-consumer.py`, new this pass):
+broke at `World_CollectMarkerLists`'s USA counterpart
+(`0x0887a368` - confirmed by `diff_functions` as a 100% structural match,
+98/98 instructions equal, to EU's `0x0887a1c4`; the USA binary was used
+because `psp-drive.py`'s menu/restart automation is calibrated for it, not
+because EU stops being the target of record) on a fresh `psp-drive.py
+restart` of Talon's Junction, read `$a0` for the live world pointer
+(`0x0980a1d0`), and armed two non-halting read watchpoints
+(`memory.breakpoint.add`, `enabled: false, log: false` - counting only, no
+log-flood risk per the doc's own warning) on `world+0x40` (the
+`DirectionalLight` count, 4 bytes) and `world+0x7c` (the list, 16 bytes). A
+third watchpoint armed a live craft's rigid-body position as the positive
+control the doc's own methodology requires - "a watchpoint that never fires
+looks exactly like a watchpoint that does not work."
+
+**Result: the control fired 489,461 times; both `DirectionalLight` addresses
+fired zero, across driving and three weapons.** Coverage: ~2 minutes of
+active driving at speed (throttle 100%, real track progress, hundreds of
+units covered on Talon's Junction) plus three of the four weapons
+`scripts/psp-fire-weapon.py` wired at the time - `rocket` (three
+projectiles, fanned), `burst` (rapid cannon fire) and `backward`
+(bomb/mine).
+
+**One transient hit is worth stating precisely rather than glossing over,
+because it is exactly the kind of thing that would look alarming out of
+context.** A separate run of this same rig (arming the watchpoint
+immediately after catching `World_CollectMarkerLists` at its own entry,
+before its body had run) caught **one** read of `world+0x40` and **zero** of
+`world+0x7c`. This is not an external consumer - it is `World_CollectMarkerLists`
+finishing the very call this pass broke into: this page's own "The object
+itself" section above already documents that this function "sums `+0x3c`
+(`AmbientLight`) + `+0x40` (`DirectionalLight`) + `+0x44` + `+0x48` + `+0x4c`
+(`wopoint`) + its own local into `+0x6cc`" - a count-only checksum, never
+touching the list at `+0x7c`. One hit on the count and zero on the list is
+exactly that signature, not a new consumer; recorded here because a watchpoint
+that never explains its own hits is not trustworthy, and this one does.
+
+### Missile and Energy Drain remain untested, and why - a real, reproducible PPSSPP crash, not a shrug
+
+Both weapons are actually already identified with real confidence -
+`docs/ghidra/functions/psp-pulse-usa/missile.md`'s id-to-bit table gives
+Missile bit `0x40` (confidence 90, `Weapon_FireMissile` named and read in
+full) and "10 LeachBeam" bit `0x8000` (settled from a second, independent
+direction) - `scripts/psp-fire-weapon.py` simply didn't have them in its
+`WEAPONS` dict yet, so this pass called its `fire()` function directly with
+the raw bits instead of extending the script.
+
+**Neither bit was ever observed consumed, and both attempts (on two
+separate, freshly booted, confirmed-live emulators - the second explicitly
+verified racing and gaining control-watch hits seconds before) were
+followed by PPSSPP crashing**: `E[MEMMAP] Bad memory access detected!
+00000030 ... Stopping emulation`, at the identical JIT block
+(`08872f98_z_un_08872f54`, `movaps xmm6,[rbx+rbp]`) both times, roughly four
+minutes into each session. `Weapon_FireMissile`'s own decompiled body
+(`0x088685cc`) was read to check the obvious hypothesis - that
+`psp-fire-weapon.py`'s own `craft+0x1bc = 0xffffffff` write (borrowed from
+the rocket path, which has no target) corrupts something a homing weapon
+needs - and it doesn't hold up: `Weapon_FireMissile` writes that exact same
+value to that exact same field itself, unconditionally, as its second
+instruction. Since the fire bit was never observed cleared either (which
+`Weapon_FireMissile` also does unconditionally, near the top, before the
+crash-implicated code), the simplest reading is that **the handler never
+ran at all** for a raw-bit-set craft - `Weapons_DispatchFire` dispatches
+something else, or gates on state a direct bit write doesn't satisfy - and
+the crash is a separate event, not this function executing and failing.
+
+**Whether the crash is caused by the bit-write attempt at all, or is a
+coincidence with something else happening deterministically a few minutes
+into any race on this seed (an AI opponent naturally picking up and firing
+one of these two weapons, for instance, since seven AI craft are also
+calling the same dispatcher every tick with real state), is not
+established.** The timing repeated closely across two independent boots,
+which argues weakly for "something deterministic about this race," not
+specifically for "my write caused it." Untangling that needs its own pass -
+watching `Weapons_DispatchFire` itself (all craft, not just index 0) for
+which craft and which bit is live in the tick immediately before the crash
+would settle it directly. **This is where the coverage gap actually
+stands**: not "these two weapons were skipped," but "these two weapons hit
+a real, reproducible, undiagnosed emulator crash on both attempts," which is
+a stronger reason to flag than a silent gap would be.
+
+**This is still the strongest evidence tier this project's rubric has for a
+negative claim, on everything it could test** - live, positive-control-verified,
+across load and multiple untested-before gameplay conditions, and it agrees
+with all eight static passes. Not "still hasn't been found": genuinely never
+read, under every condition this pass could get the emulator to sustain.
+The honest remaining uncertainty is now narrow and named: Missile, Energy
+Drain, and whatever this pass's crash prevented from being reached, not the
+open-ended "maybe some function somewhere" this thread carried into this
+pass.
+
 ## Open
 
 - **The global ambient RGB triple's writer is unfound, and the live capture
@@ -728,16 +829,23 @@ class-key enumeration (sixth/seventh passes) could not see by construction
   and reasoning per function. The per-frame draw dispatcher's one ambiguous
   touch already turned out to be an out-of-bounds artifact, and every
   sibling display-list function was already checked for `+0x40`/`+0x7c` too
-  - **this is now the strongest negative result on this page**: every
-  class-based path to the world object, not just the ones this page
+  - every class-based path to the world object, not just the ones this page
   happened to read first, comes up empty. The only lead this couldn't cover
   by construction, `FUN_08930290`, is also now fully characterized and
-  closed (eighth pass, below) - **no consumer of `world+0x40`/`+0x7c` has
-  been found anywhere in this codebase**, across every mechanism this
-  project has been able to identify for reaching the world object at all.
-  Either the collection exists for a purpose this project hasn't identified,
-  or it has none past track load - not a claim this page can rule between,
-  but the search itself has converged.
+  closed (eighth pass) - no consumer of `world+0x40`/`+0x7c` was found in
+  any static mechanism this project could identify. **A ninth pass then
+  settled the question live**: a read watchpoint on the actual runtime
+  addresses, positive-control-verified, across ~2 minutes of driving plus
+  the rocket/burst/backward weapons - zero hits on both fields throughout,
+  the strongest evidence tier this project's rubric has, agreeing with every
+  static pass. **Missile and Energy Drain remain untested** - both attempts
+  to fire them hit a real, reproducible PPSSPP crash (`Bad memory access...
+  Stopping emulation`, identical JIT block both times) whose cause (the
+  test's own bit-write, or an unrelated deterministic race event) is not
+  established; see "Missile and Energy Drain remain untested" below. Either
+  the collection exists for a purpose this project hasn't identified, or it
+  has none past track load - not a claim this page can rule between, but the
+  search itself has converged as far as it currently can.
 - **`Mesh_ApplyMaterialLighting` has three call sites, not the two this page
   previously named - and the third, `FUN_08930290`, turned out to be a
   display-list-baking function analogous to `Mesh_CompileDisplayLists`, not

@@ -1194,6 +1194,40 @@ target that counts zero beside it is genuinely not being read.
 
 Getting a craft address needs no new tooling: `psp-drive.py state` prints one.
 
+### A stale or invalid watchpoint address is not harmless - it can stop emulation outright
+
+**Verified 2026-08-31, PPSSPP v1.20.4, `pulse-psp-usa.chd`.** A control watch
+computed as `craft + BODY_POINTER` came back reading a body pointer of `0`
+(see the next trap for why), so the watchpoint was armed on address `0x30`
+instead of a real one - well outside `0x08000000`-`0x0A000000`. It sat there,
+`enabled: false`, at 0 hits, looking exactly as harmless as the doc above
+says a working-but-quiet watchpoint should. It was not: minutes later,
+`E[MEMMAP] Bad memory access detected! 00000030 (0x7f8300000030) Stopping
+emulation.` killed the whole session, at the same JIT block
+(`08872f98_z_un_08872f54`, `movaps xmm6,[rbx+rbp]`) both times it recurred
+across two independent sessions. **Always check a computed watch address is
+in PSP RAM bounds before arming it, and remove one that isn't immediately**
+rather than trusting `enabled: false` to make a bad address inert - it does
+not.
+
+### Two connections racing the same execution breakpoint corrupts the read, not just the timing
+
+**Found the same session.** `psp-drive.py restart`'s own `settle_into_race`
+breaks at `Ship_UpdateCraft` internally to print its own progress line. A
+second, independent `Debugger` connection that *also* adds, waits on, and
+removes an execution breakpoint at that same address - to learn a craft
+address for its own purposes - is not just redundant, it corrupts the read:
+one run produced a craft address that matched `psp-drive.py`'s own output
+exactly, but a field read off that craft one instruction later (`craft +
+0x1CC`, the rigid-body pointer) came back `0`, which is what produced the
+invalid watchpoint address in the trap above. PPSSPP execution breakpoints
+are global CPU state shared across every connected client - two clients each
+resuming and re-breaking the same address race each other for which one's
+resume actually advances the CPU past which one's read. **The fix is not
+retrying the read - it's not re-deriving state a script that is already
+running (`psp-drive.py restart`/`state`) already printed.** Take the address
+from that output instead of re-breaking to learn it a second time.
+
 ### Locating a heap structure without a breakpoint
 
 If a structure's contents are authored and distinctive, **scan for them** rather
