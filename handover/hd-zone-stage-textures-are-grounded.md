@@ -182,6 +182,59 @@ HD rests wherever its loader left the grade, so before this there was no way to
 put an HD Zone race on a named rung at all, and no way to compare a frame
 against an original that is visibly on one.
 
+## 2026-08-31: the Zone sky is answered - it is a **file swap**, and the gradient is a second, unread mechanism
+
+Full evidence in
+[zone-sky.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-sky.md). The Next
+Steps item below is done; what it asked for - read it, do not implement from
+the key names - is what happened, and the answer was neither of the two options
+that item framed.
+
+- **A Zone race loads `Data/Tex/ZoneSky.gtf` instead of the circuit's own
+  `sky.gtf`.** `Environment_LoadRaceScene` (`0x003f3fb0`) branches on one byte
+  and calls the *same* loader with the *same* `"skycube"` tag into the *same*
+  handle slot under the *same* sampler-state patch, so the picture is the only
+  thing that changes. It is 64x64 where `01_vineta_k`'s is 2048x2048 - 1,024
+  times fewer texels a face - which is the measured form of "solid colours or
+  gradients". Confidence 84.
+- **The gate is `g_ZoneEffectsActive` (`0x00d45f84`), and its writer is found**:
+  `(1 << mode) & 0x00206040`, i.e. mode ids **6, 13, 14 and 21**.
+  `mode-manager.md` had guessed 6, 13 and 14 were Zone, Zone Battle and
+  Detonator and marked it *not established*; this mask is independent evidence
+  for it, and 14 is already pinned as Detonator. Which of 6 and 13 is which is
+  still unknown. Id 21 does not fit and is recorded, not explained.
+- **The horizon/zenith gradient exists too, and its consumer is located** - the
+  four vec4s are read at `0x003adf58` behind the same gate, scaled, lerped
+  inner-to-outer on the CPU, packed into two RGBA words and passed to
+  `FUN_005ebd58`, which has exactly one caller in the image. **What it draws is
+  unread, so this port draws no gradient and says so.** That is the honest
+  result, not a gap in the work.
+
+**Two of this thread's own premises were wrong and are corrected there**:
+`zone_3/sky.gtf` is 262,784 B, not the 12,583,040 the other three are, so "all
+four arenas share one cubemap" does not generalise - and more usefully, the
+branch being either/or makes all four arenas' `sky.gtf` **dead art in Zone
+mode**. They are never what a Zone race shows.
+
+**Wired**: `oag_title::RaceDefaults::zone_sky`, `oag_hd::race::ZONE_SKY`, and
+`hd_sky_model` taking it when `Mode::Zone`. Checked against
+`hdfury-ps3-eu-dec.iso` in `crates/game/tests/zone_sky_ground_truth.rs`: a Zone
+race and a Single Race on the **same named circuit** resolve different cubemaps,
+the Zone one 64x64 against `01_vineta_k`'s 2048x2048, and five of its six faces
+carry real art rather than a flat fill. The size is the load-bearing assertion:
+no `sky.gtf` on the disc is 64x64.
+
+**Deferred, with the reason nailed down**: the sky yaw sign. The maintainer was
+asked for a reference frame and could not capture one now, so **every in-race
+frame already in `data/reference/hd-capture/` was looked at instead** - all
+seven. None can settle it: `anulpha/00..02` are inside an enclosed tube with no
+sky, and the four Talons Junction frames show its sky only as a blown-out white
+haze behind structure, the same failure Vineta K's produced. So this is not a
+matter of choosing a better frame from what is on disk; it needs a new capture,
+on a **racing circuit**, with open sky and one measurable feature. A Zone frame
+can never serve now that the Zone sky is measured at 64x64. Written up in
+`crates/render/src/mesh/sky_cube.rs` so it is not re-attempted.
+
 ## Open
 
 - What the Zone shader does with the six-plus Zone parameters. Unread. This is
@@ -201,39 +254,25 @@ against an original that is visibly on one.
 
 ## Next Steps
 
-- **The Zone sky is its own thing, and this port draws the wrong one.**
-  Observed in play (HD/Fury): *"the skybox looks visibly different in zone
-  races, almost like solid colours or gradients."* Three measured facts line up
-  behind it:
+- ~~The Zone sky is its own thing, and this port draws the wrong one~~
+  **Done, 2026-08-31, and the answer was neither option the item framed** - see
+  the section above and
+  [zone-sky.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-sky.md). It is a
+  *file swap*: `Data/Tex/ZoneSky.gtf`, 64x64, replacing the circuit's own
+  `sky.gtf` on the same gate byte, through the same loader call. The
+  gradient is a **second** mechanism on the same gate whose draw is unread, so
+  nothing draws it. The item's own instinct - do not implement from the key
+  names - was right, and the microcode route it proposed was the wrong one:
+  there is no sky *material* on this disc, `"skycube"` is a resource tag, and
+  the answer was in the loader's control flow.
 
-  1. **All four Zone arenas share one cubemap.** `zone_1/sky.gtf` and
-     `zone_2/sky.gtf` are **byte-identical** (`md5 4a89a7d5...`, 12,583,040 B,
-     `DATA00`), and differ from a racing circuit's (`01_vineta_k`,
-     `6868bfb6...`). One sky for all of Zone, not one per arena.
-  2. **`Sky horizon colour` and `Sky zenith colour` are cross-faded per Zone
-     stage**, by `Environment_UpdateStageBlend`, into
-     `0x00c81560`-`0x00c81590`, on exactly the same inner/outer terms as every
-     Zone parameter - see
-     [zone-effectsettings-loader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md).
-     A cubemap has no horizon/zenith term, so something else consumes these.
-  3. **This port parses both keys and draws neither.** `oag_render`'s HD sky is
-     the cubemap and has nowhere to put them.
-
-  **What is not established**: whether the gradient *replaces* the cubemap or
-  tints it, and what the interpolation is. Both are needed before drawing
-  anything - the observation says the result looks like a gradient, not how it
-  is built, and a horizon-to-zenith lerp is the obvious guess rather than a
-  read. **Do not implement from the key names alone.** The place to settle it
-  is the sky material's own microcode, the same way the surface equation was
-  settled: `scripts/ps3-microcode.py` now resolves patched constants to their
-  parameter hashes, so a sky material declaring these two keys would name
-  itself.
-
-  **A trap this item already sprang, for the fourth time in this thread**: the
-  first pass here looked only in `DATA02`, found no `zone_N/sky.gtf`, and was
-  one step from publishing "the Zone arenas ship no sky, so it must be the
-  gradient". They ship one; it is in `DATA00`. **Check both archives before
-  concluding anything from an absence.**
+- **What `FUN_005ebd58` draws, which is the only thing between here and the
+  gradient.** Single caller (`0x003ae1bc`), two packed RGBA colours in, a
+  dozen four-float groups built on the stack and one helper called twenty-odd
+  times. Whether that is a dome, a screen-space quad or a fog term decides
+  whether the horizon/zenith pair is a sky gradient at all. **Do not draw a
+  horizon-to-zenith lerp before this is read** - it is the obvious guess, and
+  the whole reason the sky question needed a read rather than a guess.
 
 - **The visualiser glow is the largest remaining gap in what draws, and it is
   wanted by the racing circuits rather than being an arena extra.**

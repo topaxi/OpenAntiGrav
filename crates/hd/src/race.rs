@@ -55,7 +55,32 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // step, `RaceManager->+0x2e10`), and is not this field.
     zone_stages: None,
     zone_stage_textures: Some(ZONE_STAGE_TEXTURES),
+    zone_sky: Some(ZONE_SKY),
 };
+
+/// The cubemap a Zone race draws in place of the circuit's own `sky.gtf`.
+///
+/// **A file swap, read out of the loader's control flow rather than inferred
+/// from the look.** The per-race environment loader (`0x003f3fb0`) tests one
+/// byte and takes one of two branches: `Data/Tex/ZoneSky.gtf` by its own name,
+/// or the `sky.gtf` beside the circuit under a path it builds. Both branches
+/// call the same loader, store the handle into the same slot and fall into the
+/// same sampler-state patch, so nothing downstream distinguishes them - the
+/// picture is the only thing that changes. Confidence 84, capped there because
+/// the reading is static; full evidence in
+/// `docs/ghidra/functions/ps3-hdfury-eu/zone-sky.md`.
+///
+/// **It is a 64x64 cubemap where `01_vineta_k`'s is 2048x2048** - 12,288 bytes
+/// of DXT1 against 12,582,912, 1,024 times fewer texels a face - which is the
+/// measured form of the maintainer's own observation that a Zone race's sky
+/// reads as solid colours or gradients. It
+/// is not itself flat: five of its six faces carry hundreds of distinct
+/// colours, in the cyan-teal the Zone palette works in.
+///
+/// **The four Zone arenas' own `sky.gtf` are dead art under this rule.** The
+/// branch is either/or, so `zone_1`..`zone_4/sky.gtf` are never what a Zone
+/// race shows - which is worth knowing before anyone reaches for them.
+pub const ZONE_SKY: &str = "/data/tex/zonesky.gtf";
 
 /// The two fifteen-entry per-stage texture sets a Zone race indexes.
 ///

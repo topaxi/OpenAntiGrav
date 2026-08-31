@@ -88,6 +88,19 @@ const CORNERS: [(f32, f32); 4] = [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 
 /// in view, rather than one seen through an arch. The tone difference above is
 /// the separate exposure/bloom gap, not this.
 ///
+/// **2026-08-31: every in-race frame in `data/reference/hd-capture/` has now
+/// been looked at, and none of them is that frame.** Recorded so the next
+/// contributor does not re-open the same seven pictures: `anulpha/00..02` are
+/// inside Anulpha Pass's enclosed tube with no sky at all; `talons/00..01`,
+/// `talons-heap/00..01` and `talons-rm/00` show Talons Junction's sky, but as
+/// a blown-out white haze behind trackside structure - the same "no feature to
+/// localise, and brighter than ours" failure Vineta K's produced, on a second
+/// circuit. So this is **not** a matter of picking a better frame from what is
+/// on disk; it needs a new capture, and the ask is specific: a **racing
+/// circuit** (a Zone frame cannot serve - HD's Zone sky is a 64x64 cubemap,
+/// see `docs/ghidra/functions/ps3-hdfury-eu/zone-sky.md`), open sky filling a
+/// good part of the frame, and one feature whose position can be measured.
+///
 /// **Do not "fix" the sign to make a screenshot match** without that: under an
 /// exposure mismatch a hue can be moved either way by eye.
 ///

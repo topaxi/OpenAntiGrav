@@ -607,9 +607,9 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let sky_model = if ps3_geometry.is_some() {
         // Wipeout HD authors no `Skycube` node at all - its sky is the
         // `sky.gtf` cubemap beside the track, drawn through the same
-        // camera-centred sky path. See `mesh::sky_cube` for what of that is
-        // the disc's and what is this project's.
-        hd_sky_model(&mut archives, &track, &mut report)
+        // camera-centred sky path, and a Zone race swaps that file out. See
+        // `mesh::sky_cube` and `oag_hd::race::ZONE_SKY`.
+        hd_sky_model(&mut archives, &track, title.race, options.mode, &mut report)
     } else if !vex_geometry {
         None
     } else {

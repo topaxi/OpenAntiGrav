@@ -55,6 +55,10 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // `ZONE_STAGES`.
     zone_stages: Some(ZONE_STAGES),
     zone_stage_textures: None,
+    // `None`: no Zone sky swap has been looked for on this title. HD/Fury's is
+    // a named file its loader picks by a mode gate; nothing equivalent has been
+    // read here.
+    zone_sky: None,
 };
 
 /// Wipeout 2048's zone-number to speed-class ladder, read out of the

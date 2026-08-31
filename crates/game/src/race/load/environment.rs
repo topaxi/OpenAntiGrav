@@ -24,12 +24,29 @@ fn sky_gtf_name(vex_name: &str) -> Option<String> {
 /// rather than a guess, and why the sign is still this project's choice. A
 /// missing or unreadable `.envsettings` leaves the sky unrotated rather than
 /// undrawn: the picture is data, the turn is presentation.
+///
+/// **A Zone race draws [`oag_title::RaceDefaults::zone_sky`] instead**, where
+/// the title has one located. That is a replacement rather than a tint, and it
+/// is what the original does: its per-race loader picks between the circuit's
+/// sibling `sky.gtf` and `Data/Tex/ZoneSky.gtf` on one byte - set for four mode
+/// ids, `Mode::Zone` being this port's stand-in for it - and the two branches
+/// converge on the same loader call, the same handle and the same sampler
+/// state, so the picture is the only thing that changes. The rotation is still
+/// the circuit's. See `docs/ghidra/functions/ps3-hdfury-eu/zone-sky.md`.
 pub(super) fn hd_sky_model(
     archives: &mut oag_assets::Archives,
     track: &str,
+    race: &'static oag_title::RaceDefaults,
+    mode: oag_race::Mode,
     report: &mut Vec<String>,
 ) -> Option<mesh::Model> {
-    let name = sky_gtf_name(track)?;
+    let zone_sky = (mode == oag_race::Mode::Zone)
+        .then_some(race.zone_sky)
+        .flatten();
+    let name = match zone_sky {
+        Some(zone) => zone.to_string(),
+        None => sky_gtf_name(track)?,
+    };
     let Ok(blob) = archives.read_name(&name) else {
         report.push(format!(
             "{name}: not in the archive set - the sky stays black"
@@ -49,8 +66,13 @@ pub(super) fn hd_sky_model(
                 .first()
                 .and_then(Option::as_ref)
                 .map_or((0, 0), |t| (t.width, t.height));
+            let whose = if zone_sky.is_some() {
+                "the Zone sky, drawn in place of the circuit's own"
+            } else {
+                "the circuit's sky"
+            };
             report.push(format!(
-                "{name}: the circuit's sky, six {width}x{height} cubemap face(s) on a \
+                "{name}: {whose}, six {width}x{height} cubemap face(s) on a \
                  camera-centred cube, turned {rotation:.0} degree(s) by the authored Sky \
                  rotation (unit read off the corpus; sign and axis this project's)"
             ));

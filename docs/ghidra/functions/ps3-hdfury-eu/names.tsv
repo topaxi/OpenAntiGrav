@@ -179,3 +179,5 @@
 0x008b7f04	data	g_ShaderEngineParamBase	88	zone-effectsettings-loader.md
 0x00c81368	data	g_ZoneStageTextures	82	zone-effectsettings-loader.md
 0x00c813e0	data	g_ZoneStageTrackTextures	80	zone-effectsettings-loader.md
+0x003f3fb0	function	Environment_LoadRaceScene	75	zone-sky.md
+0x00d45f84	data	g_ZoneEffectsActive	80	zone-sky.md

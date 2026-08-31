@@ -267,6 +267,22 @@ puts those two keys at exactly those offsets. So the reason they draw off
 nothing here is a gap in *this* renderer's sky, not an absence in the data -
 which is a different kind of open item, and a more actionable one.
 
+**2026-08-31, later: the consumer is located, and the sky question splits in
+two.** The four cross-faded vec4s are loaded together at `0x003adf58`, inside
+`Scene_PrepareFrame`'s own function, behind the **same gate byte** that switches
+on the whole Zone effect block - `g_ZoneEffectsActive` (`0x00d45f84`). They are
+scaled by a constant, lerped inner-to-outer on the CPU by one weight, packed
+into two 32-bit RGBA words and handed to a function with exactly one caller in
+the image. **What that function draws is unread, so nothing is drawn on it.**
+
+The separate half is the one a port can act on: a Zone race does not draw the
+circuit's `sky.gtf` at all. It draws `Data/Tex/ZoneSky.gtf` - a 64x64 cubemap
+where `01_vineta_k`'s is 2048x2048 - swapped in by the same gate byte, through the
+same loader call and into the same handle. See
+[zone-sky.md](../ghidra/functions/ps3-hdfury-eu/zone-sky.md). That is what the
+maintainer's "solid colours or gradients" is measuring, and it is what
+`oag_hd::race::ZONE_SKY` now loads.
+
 **And nothing moves the stage.** A Zone race rests on stage `0` - which is
 where HD's own loader leaves it, `Environment_LoadStageTextures` resetting
 `+0x00` to `0` on every load - because the mapping from a live race onto a

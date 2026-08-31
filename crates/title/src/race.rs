@@ -163,6 +163,19 @@ pub struct RaceDefaults {
     /// `None` for a title whose set has not been located, which is every title
     /// but HD/Fury.
     pub zone_stage_textures: Option<&'static ZoneStageTextures>,
+    /// The entry name of the cubemap a Zone race draws **instead of** the
+    /// circuit's own `sky.gtf`.
+    ///
+    /// A replacement, not a tint, and read off the original's own control flow
+    /// rather than inferred from the look: HD/Fury's per-race environment
+    /// loader picks between the circuit's sibling `sky.gtf` and this one on a
+    /// single byte, and the two branches converge on the same handle slot and
+    /// the same sampler-state patch, so nothing downstream can tell them
+    /// apart. See `docs/ghidra/functions/ps3-hdfury-eu/zone-sky.md`.
+    ///
+    /// `None` for a title with no such swap located, which is every title but
+    /// HD/Fury.
+    pub zone_sky: Option<&'static str>,
 }
 
 /// Where a title keeps the two per-stage texture sets a Zone race indexes by
