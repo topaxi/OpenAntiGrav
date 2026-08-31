@@ -9,9 +9,11 @@ use anyhow::Result;
 use crate::mesh::{GpuVertex, Model};
 
 mod blend;
+mod tables;
 mod uniforms;
 
 pub use blend::{ADDITIVE_BLEND, TRANSPARENT_BLEND, TransparentPipelines};
+pub use tables::{EMISSIVES_SIZE, Emissives, NODE_ANIMS_SIZE, NodeAnims, TEX_ANIMS_SIZE, TexAnims};
 use uniforms::Uniforms;
 mod velocity;
 pub use uniforms::{
@@ -19,111 +21,6 @@ pub use uniforms::{
 };
 pub(crate) use velocity::velocity_targets;
 pub use velocity::{VELOCITY_FORMAT, Velocity};
-
-/// The texture-transform table `mesh.wgsl` reads from bind group 3: one
-/// `(scale, offset)` pair per entry of [`Model::anim_tracks`], already sampled
-/// for this frame.
-///
-/// Slot 0 is the identity, which is what [`GpuVertex::anim`] `== 0` selects, so
-/// the shader needs no branch for the overwhelming majority of vertices.
-#[repr(C)]
-#[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct TexAnims {
-    /// `[scale_u, scale_v, offset_u, offset_v]` per track.
-    pub transform: [[f32; 4]; crate::mesh::ANIM_TRACK_LIMIT],
-}
-
-impl Default for TexAnims {
-    fn default() -> Self {
-        Self {
-            transform: [[1.0, 1.0, 0.0, 0.0]; crate::mesh::ANIM_TRACK_LIMIT],
-        }
-    }
-}
-
-impl TexAnims {
-    /// Samples every track of `model` at `seconds` and packs the table.
-    ///
-    /// `seconds` is the model's animation clock. The original gives each model
-    /// its own - the boost plume's is its flare's life timer, reset at every
-    /// reveal - but for **world meshes** it passes the race clock, which is
-    /// what a track's scenery gets here. See
-    /// `docs/ghidra/functions/psp-pulse-usa/texture-animation.md`, "The values
-    /// gap is closed"; one mesh in that page's one-frame census was seen on a
-    /// different clock, and which models get their own is not recovered.
-    ///
-    /// Every track wraps on its own authored period, so there is no shared
-    /// phase to keep them in step and nothing to seam at a global wrap.
-    ///
-    /// Clamped to the table's size here as well as in the builder, because
-    /// [`Model`] is a plain struct anyone can fill in and [`crate::mesh::merge`]
-    /// concatenates track lists without re-checking the ceiling. A model past
-    /// it animates its first [`crate::mesh::ANIM_TRACK_LIMIT`] `- 1` tracks and
-    /// leaves the rest at identity, which is what the builder does too.
-    #[must_use]
-    pub fn sample(model: &Model, seconds: f32) -> Self {
-        let mut out = Self::default();
-        for (slot, track) in model
-            .anim_tracks
-            .iter()
-            .take(crate::mesh::ANIM_TRACK_LIMIT - 1)
-            .enumerate()
-        {
-            let (scale, offset) = track.sample(seconds);
-            out.transform[slot + 1] = [scale[0], scale[1], offset[0], offset[1]];
-        }
-        out
-    }
-}
-
-/// Size, in bytes, of the [`TexAnims`] uniform buffer.
-pub const TEX_ANIMS_SIZE: u64 = std::mem::size_of::<TexAnims>() as u64;
-
-/// The node-transform table `mesh.wgsl` reads from bind group 4: one world
-/// matrix per entry of [`Model::anim_nodes`], sampled for this frame.
-///
-/// Slot 0 is the identity, which is what [`GpuVertex::xform`] `== 0` selects,
-/// so the 93% of a circuit's geometry that does not move costs one indexed load
-/// and no branch - deliberately the same shape as [`TexAnims`].
-///
-/// 8 KiB at [`crate::mesh::NODE_ANIM_LIMIT`], which is inside the 64 KiB
-/// uniform binding every wgpu backend guarantees.
-#[repr(C)]
-#[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct NodeAnims {
-    /// One column-major world matrix per node. The layout
-    /// `oag_formats::vex` already uses - see `mesh.wgsl`'s own note.
-    pub transform: [[f32; 16]; crate::mesh::NODE_ANIM_LIMIT],
-}
-
-impl Default for NodeAnims {
-    fn default() -> Self {
-        Self {
-            transform: [oag_formats::vex::IDENTITY; crate::mesh::NODE_ANIM_LIMIT],
-        }
-    }
-}
-
-impl NodeAnims {
-    /// Samples every `Anim Transform` of `model` at `seconds` and packs the
-    /// table.
-    ///
-    /// `seconds` is the model's animation clock, the same one
-    /// [`TexAnims::sample`] takes and for the same reason: the original passes
-    /// the race clock to every world mesh's updater, and each node wraps on its
-    /// own authored `LoopEnd`.
-    #[must_use]
-    pub fn sample(model: &Model, seconds: f32) -> Self {
-        let mut out = Self::default();
-        for (slot, matrix) in model.sample_anim_nodes(seconds).into_iter().enumerate() {
-            out.transform[slot + 1] = matrix;
-        }
-        out
-    }
-}
-
-/// Size, in bytes, of the [`NodeAnims`] uniform buffer.
-pub const NODE_ANIMS_SIZE: u64 = std::mem::size_of::<NodeAnims>() as u64;
 
 /// Headless capture, split into `crate::capture` so a pixel-returning entry
 /// point could be added there without pushing this file past its frozen
@@ -494,9 +391,25 @@ pub fn build(
         },
         count: None,
     };
+    // Binding 2 is the glow table, and it is the one of the three the
+    // *fragment* stage reads: the sample and its tint are per pixel, where the
+    // two coordinate transforms above are per vertex.
     let anim_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("animation"),
-        entries: &[anim_entry(0), anim_entry(1)],
+        entries: &[
+            anim_entry(0),
+            anim_entry(1),
+            wgpu::BindGroupLayoutEntry {
+                binding: 2,
+                visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+        ],
     });
 
     // Initialised to all-identity for the same reason the fog buffer is
@@ -522,6 +435,20 @@ pub fn build(
         0,
         bytemuck::bytes_of(&NodeAnims::default()),
     );
+    // **Written here and never again**: every value in it is authored, and the
+    // only moving part - the clock - is already a scene uniform. A model with
+    // no glow layers writes an all-zero table, which adds nothing.
+    let emissive_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("emissive glow"),
+        size: EMISSIVES_SIZE,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    queue.write_buffer(
+        &emissive_buffer,
+        0,
+        bytemuck::bytes_of(&Emissives::of(model)),
+    );
     let anim_bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("animation"),
         layout: &anim_layout,
@@ -533,6 +460,10 @@ pub fn build(
             wgpu::BindGroupEntry {
                 binding: 1,
                 resource: node_anim_buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: emissive_buffer.as_entire_binding(),
             },
         ],
     });

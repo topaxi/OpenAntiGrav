@@ -62,6 +62,12 @@ pub(super) fn skeleton(label: &str, out: &Model) -> Model {
         lightmaps: out.lightmaps.clone(),
         material_slots: out.material_slots.clone(),
         material_variants: out.material_variants.clone(),
+        // **Carried because `material_slots` is.** A slot's word holds its
+        // index into this table in its high half, so copying the roles without
+        // the table leaves a pad's vertices indexing an empty one - which
+        // reads as an all-zero entry and silently drops the glow rather than
+        // failing. See `mesh::slots::MATERIAL_SHIFT`.
+        emissive: out.emissive.clone(),
         vertex_colour_is_light: out.vertex_colour_is_light,
         ..Model::none(label)
     }

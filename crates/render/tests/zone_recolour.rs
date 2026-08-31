@@ -90,6 +90,7 @@ fn model(albedo: Arc<ModelTexture>, lit: f32) -> Model {
         mesh_count: 1,
         anim_tracks: Vec::new(),
         anim_nodes: Vec::new(),
+        emissive: Vec::new(),
         vertices: vec![
             vertex([-0.9, -0.9, 0.5], lit),
             vertex([0.9, -0.9, 0.5], lit),

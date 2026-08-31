@@ -107,6 +107,7 @@ fn model_of(draws: Vec<DrawCall>) -> Model {
         radius: 1.0,
         anim_tracks: Vec::new(),
         anim_nodes: Vec::new(),
+        emissive: Vec::new(),
         mesh_count: 1,
     }
 }

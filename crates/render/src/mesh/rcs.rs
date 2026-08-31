@@ -32,7 +32,7 @@ use anyhow::{Context, Result, bail};
 use oag_core::math::{Mat4, Vec3};
 use oag_formats::{rcsmodel, vex};
 
-use super::{Bounds, DrawCall, GpuVertex, Model, ModelTexture, slots};
+use super::{Bounds, DrawCall, GpuVertex, Model, ModelTexture, anim_node, slots};
 
 /// How far a dequantised point may miss the authored box face by, in world
 /// units, before a stride is rejected.
@@ -145,128 +145,11 @@ pub mod psp2;
 mod skin;
 use skin::{flips, picks, roles, skin, variants};
 
-/// The bounding box and chunk hash a PS3 `Mesh` node's payload carries.
-///
-/// The layout the PSP uses for geometry, with the geometry taken out: the box
-/// pair at `+0x10`/`+0x20` is measured `min <= max` on 1,638 of 1,638 nodes,
-/// and the word at `+0x30` is the `.rcsmodel` chunk's own first word.
-fn node_geometry(
-    payload: &[u8],
-    order: oag_formats::ByteOrder,
-) -> Option<(u32, [f32; 3], [f32; 3])> {
-    if payload.len() < 0x34 {
-        return None;
-    }
-    let read3 = |at: usize| std::array::from_fn(|i| order.f32(payload, at + i * 4));
-    Some((order.u32(payload, 0x30), read3(0x10), read3(0x20)))
-}
+mod emissive;
+pub use emissive::EMISSIVE_LIMIT;
 
-/// Whether a `Mesh` node's chunk is baked in world space despite the node
-/// naming it: the node's own authored box, carried through its own `to_world`
-/// transform, lands within [`WORLD_BAKE_TOLERANCE`] of the chunk's own bias.
-///
-/// # The pad precedent, generalised
-///
-/// **Confidence 88.** A `Weapon Pad`/`Speedup Pad` node carries a chunk hash
-/// at the mesh payload's own `+0x30`, but the chunk it names is baked in
-/// world space anyway - `docs/formats/rcsmodel.md`, "The pads are second-pass
-/// geometry with a first-pass-shaped reference". The node pass only ever
-/// draws the `Mesh` class, so those chunks structurally never reach it and
-/// [`referenced`] excluding their hashes is enough on its own.
-///
-/// **The same pattern recurs on ordinary `Mesh` nodes, and there it is not
-/// enough to fix in `referenced` alone.** A `wohdtrack_*` node - and a
-/// handful of other names, `startscreenShape`, `sign_emissive_glow`'s
-/// billboards, `cf_startbeam_glow` among them - addresses a chunk baked the
-/// same way, but the node pass *does* iterate these (same class as every
-/// ordinary prop), so leaving [`build`]'s node loop unchanged risks drawing
-/// the chunk **twice** once [`referenced`] stops excluding its hash: once
-/// through the node transform, wherever `submesh_fits`'s loose tolerance
-/// happens to pass by coincidence on a small chunk, and once at identity
-/// through the world-space pass. Measured, not assumed:
-/// `crates/render/examples/hd_double_submit_check.rs` found the node path
-/// still succeeding on a real fraction of the excluded hashes across
-/// `12_sol_2`, `15_anulpha_pass`, `10_sebenco_climb`, `05_ubermall`,
-/// `01_vineta_k`, `02_track` and `03_track`. So this predicate is shared: the
-/// node loop in [`build`] skips a world-baked chunk before it ever reaches
-/// [`Mesh::solve_stride`] or `submesh_fits`, exactly where a pad's different
-/// class already keeps it out, and [`referenced`] excludes the same hash so
-/// the world-space pass in [`build_scene`] is where it draws instead.
-///
-/// **Structural, not tuned.** A chunk this applies to reads 0.01-0.02 world
-/// units away - quantisation noise on an exact match - and every ordinary
-/// node-local chunk measured is at least an order of magnitude further; on
-/// the census that found this (`crates/render/examples/hd_floor_census.rs`)
-/// the next-closest non-match was 2.5 units and most sit in the tens or
-/// hundreds. One world unit sits in the gap between the two clusters with
-/// room either side, not on either cluster's edge.
-fn is_world_baked(mesh: &rcsmodel::Mesh, min: [f32; 3], max: [f32; 3], to_world: Mat4) -> bool {
-    // **The disc answers this outright, and the geometry below was a guess at
-    // it.** A chunk's `+0x07` byte says which space its positions are in - see
-    // `rcsmodel::Space`, which carries the measurement. Where the two differ,
-    // the chunk's own bias sides with the byte: on 5,724 chunks the byte calls
-    // node-local and this test called baked, the median bias is 1.2 units, and
-    // on the 775 the other way it is 544.3. The test stays for a value neither
-    // 1 nor 2, which nothing on this disc has.
-    match mesh.space {
-        rcsmodel::Space::World => return true,
-        rcsmodel::Space::Node => return false,
-        rcsmodel::Space::Unknown(_) => {}
-    }
-    let centre = Vec3::new(
-        (min[0] + max[0]) / 2.0,
-        (min[1] + max[1]) / 2.0,
-        (min[2] + max[2]) / 2.0,
-    );
-    let world_centre = to_world.transform_point3(centre);
-    world_centre.distance(Vec3::from_array(mesh.bias)) < WORLD_BAKE_TOLERANCE
-}
-
-/// How close a `Mesh` node's own authored box, carried through its own
-/// transform chain into world space, must land to a chunk's own bias before
-/// [`is_world_baked`] treats the chunk as baked in world space rather than
-/// node-local. See [`is_world_baked`] for the evidence behind the number.
-const WORLD_BAKE_TOLERANCE: f32 = 1.0;
-
-/// The chunk hashes the node pass consumes: `+0x30` of every `Mesh` node -
-/// **except a chunk that is baked in world space despite the node naming it**,
-/// see [`is_world_baked`].
-///
-/// **Only what [`build`] draws, and that reverses an earlier over-collection.**
-/// This used to scan every node's whole payload for anything shaped like a
-/// chunk hash, on the theory that a hash wrongly counted as referenced would
-/// still be drawn through its node. Measured false: a `Weapon Pad` and a
-/// `Speedup Pad` node each carry a chunk hash at the mesh payload's own
-/// `+0x30`, the node pass only draws the `Mesh` class, and so all 423 pad
-/// chunks on the disc were drawn by nobody. Their positions are baked in world
-/// space like every other circuit chunk - each pad chunk's centre sits beside
-/// its node's world translation, never at the origin and never doubled -
-/// so the world-space pass is the right place for them, and the way to hand
-/// them to it is to stop counting them here.
-fn referenced(
-    data: &[u8],
-    nodes: &[vex::Node],
-    mesh_class: u32,
-    model: &rcsmodel::Model,
-) -> Vec<u32> {
-    let order = vex::byte_order(data);
-    let world = vex::world_transforms(data, nodes);
-    nodes
-        .iter()
-        .enumerate()
-        .filter(|(_, node)| node.class_id == mesh_class)
-        .filter_map(|(index, node)| {
-            let (hash, min, max) = node_geometry(&data[node.payload()], order)?;
-            if let Some(mesh) = model.mesh(hash) {
-                let to_world = Mat4::from_cols_array(&world[index]);
-                if is_world_baked(mesh, min, max, to_world) {
-                    return None;
-                }
-            }
-            Some(hash)
-        })
-        .collect()
-}
+mod place;
+use place::{is_world_baked, node_geometry, referenced};
 
 /// The whole of a PS3 model: the meshes its `.vex` places, and the geometry
 /// nothing in the `.vex` mentions.
@@ -384,7 +267,7 @@ pub fn build_scene(
                         indices: &indices,
                         chunk: u32::try_from(chunk_index).ok(),
                     },
-                    Mat4::IDENTITY,
+                    &anim_node::Placement::STATIC,
                     None,
                     surface,
                 );
@@ -587,7 +470,20 @@ fn authored(normals: &[[f32; 3]]) -> usize {
 ///
 /// `normals` are the file's own, already decoded; `None` leaves the vertex
 /// normal zero, which is [`face_normals`]'s signal to derive one.
-fn emit(out: &mut Model, mesh: Geometry<'_>, to_world: Mat4, node: Option<u32>, surface: Surface) {
+///
+/// `place` is what an `Anim Transform` above this node changes: the vertices
+/// are baked in that node's space rather than in world space, they carry its
+/// slot, and the draw call's bounding sphere is lifted back out by its
+/// time-zero matrix. See `mesh::anim_node::placement`, which decides all three
+/// together so they cannot get out of step.
+fn emit(
+    out: &mut Model,
+    mesh: Geometry<'_>,
+    place: &anim_node::Placement,
+    node: Option<u32>,
+    surface: Surface,
+) {
+    let to_world = Mat4::from_cols_array(&place.to_world);
     let Geometry {
         points,
         normals,
@@ -662,7 +558,7 @@ fn emit(out: &mut Model, mesh: Geometry<'_>, to_world: Mat4, node: Option<u32>, 
             },
             anim: 0,
             slots: surface.roles,
-            xform: 0,
+            xform: place.xform,
             // The colour set's fourth byte - see
             // `oag_formats::rcsmodel::Mesh::vertex_light` and
             // `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`, "The sun is
@@ -678,6 +574,13 @@ fn emit(out: &mut Model, mesh: Geometry<'_>, to_world: Mat4, node: Option<u32>, 
         .iter()
         .map(|v| (Vec3::from_array(v.position) - centre).length())
         .fold(0.0f32, f32::max);
+    // The vertices are in the anchor's space when this batch moves, so the
+    // sphere is too; the anchor's own time-zero matrix makes it a world-space
+    // statement about one instant, which is why `moving` turns the frustum
+    // test off rather than trusting it.
+    let centre = place.bounds_matrix.map_or(centre, |m| {
+        Vec3::from_array(vex::transform_point(&m, centre.to_array()))
+    });
 
     out.indices
         .extend(indices.iter().map(|&i| first_vertex + u32::from(i)));
@@ -686,7 +589,7 @@ fn emit(out: &mut Model, mesh: Geometry<'_>, to_world: Mat4, node: Option<u32>, 
         None => &mut out.draws,
     };
     list.push(DrawCall {
-        moving: false,
+        moving: place.xform != 0,
         range: first_index..u32::try_from(out.indices.len()).unwrap_or(u32::MAX),
         texture: surface.texture,
         bounds: Bounds {
@@ -774,8 +677,19 @@ fn build_with_options(
     // circuit. Nothing about that moved to the PS3.
     let world = vex::world_transforms(data, &nodes);
     let order = vex::byte_order(data);
+    // **Anchored, not absolute, for anything under an `Anim Transform`.** The
+    // vertices are baked once at load and the node's matrix changes every
+    // frame, so the node has to stay out of the bake - exactly as
+    // `super::build_class` does it, and on the same data: HD authors 5,518 of
+    // these nodes and 2,321 of a circuit's `Mesh` nodes hang under one. `world`
+    // above is kept alongside, because [`is_world_baked`] asks a world-space
+    // question and gets a world-space answer.
+    let anchors = vex::anim_anchors(data, &nodes);
+    let (anim_nodes, anim_slot) = anim_node::collect(data, &nodes, &anchors, classes);
+    let anchor_world = vex::anchor_world(data, &nodes, 0.0);
 
     let mut out = Model::none(label);
+    out.anim_nodes = anim_nodes;
     let mut report = Report::default();
     // **The variant first**, because which sampler entry each of this
     // renderer's two bindings comes from is a property of the shader the
@@ -799,6 +713,16 @@ fn build_with_options(
             *packed |= slots::FLIP_V;
         }
     }
+    // The additive glow, read off the same resolved variant the roles are -
+    // and after the flip, because it writes into the same word. See
+    // `mesh::slots::ADD_SECOND`.
+    out.emissive = emissive::emissive(
+        &model,
+        &material_variants,
+        &seconds,
+        &mut material_slots,
+        textures,
+    );
     out.textures = skins;
     out.lightmaps = seconds;
     // Every vertex this module writes carries HD's baked per-vertex light in
@@ -830,6 +754,10 @@ fn build_with_options(
         // `report.no_stride`/`strays` invites `referenced`'s exclusion (which
         // hands the same hash to the world-space pass) to draw it twice
         // wherever the loose `submesh_fits` tolerance happens to pass anyway.
+        // The world-space question, asked of the world-space matrix: `place`
+        // below may bake this node's vertices in its anchor's space instead,
+        // and testing the chunk's own bias against a matrix that is not world
+        // space would answer a different question.
         let to_world = Mat4::from_cols_array(&world[index]);
         if world_space_fallback && is_world_baked(mesh, min, max, to_world) {
             report.world_baked += 1;
@@ -840,6 +768,7 @@ fn build_with_options(
             continue;
         }
         report.addressed += 1;
+        let place = anim_node::placement(&anchors, &anchor_world, &anim_slot, index);
         let mut emitted = false;
         // Every surface, as the world-space pass does - `Mesh::surfaces`.
         for mesh in chunk.surfaces() {
@@ -903,7 +832,7 @@ fn build_with_options(
                         indices: &indices,
                         chunk: u32::try_from(chunk_index).ok(),
                     },
-                    to_world,
+                    &place,
                     u32::try_from(index).ok(),
                     surface,
                 );

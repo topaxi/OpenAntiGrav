@@ -277,3 +277,101 @@ fails the test before it renders a wrong frame.
   [`texture-animation.md`](../ghidra/functions/psp-pulse-usa/texture-animation.md).
 - **`FEISAR2anim.tga`-style filmstrips.** Still referenced by zero materials, so
   still nothing to draw.
+
+## Wipeout HD: one mechanism is now played, the other is measured and unwired
+
+Added 2026-08-31. The two halves diverged on the PS3, and they diverged in
+opposite directions:
+
+| | Pulse | Wipeout HD |
+| --- | --- | --- |
+| `Anim Transform` node motion | 393 nodes, played | **5,518 nodes, now played** |
+| Per-material texture scroll | keyframe block in the mesh payload, played | **no keyframe block at all**; a fragment program off an engine `time`, unwired |
+
+### `Anim Transform` is the same class, written big-endian
+
+`vex::anim_transform` read its payload little-endian, on the strength of
+`vex.rs`'s own comment that no big-endian file reaches the decoders around it -
+true of every *geometry* decoder there, and this is not one. So all 5,518 of
+HD's nodes decoded to `None`, fell back to the identity, and **dropped their
+placement along with their motion**: the same defect, and the same cost, as
+Pulse's before 2026-08-18.
+
+The layout is field for field identical. What makes that a measurement rather
+than a resemblance is the tiling: the six key arrays fill each payload
+contiguously from `0x50`, with at most 15 bytes of alignment padding (Pulse
+leaves none), on **5,518 of 5,518** nodes across all seven archives, and
+`seconds_per_key` is `1/60` on every one.
+
+| | Pulse | Wipeout HD |
+| --- | ---: | ---: |
+| `Anim Transform` nodes | 393 | 5,518 |
+| `.vex` files authoring one | 44 surveyed | 669 of 742 |
+| Busiest single file | 74 (`16_Track`) | **259** (`modesto_heights/track.vex`) |
+| `Mesh` nodes anchored to one | 474 | 9,067 |
+
+**What it moves on a circuit**: across the twelve `track.vex` in `DATA00` and
+`DATA02`, **2,302 of 2,321** anchored meshes now draw somewhere other than
+where the identity fallback put them. Nothing changes its `is_world_baked`
+verdict, because a chunk's own `+0x07` space byte answers that outright and the
+geometric fallback never sees the new matrix - measured, not assumed
+(`crates/render/examples/hd_anim_placement.rs`).
+
+`mesh::NODE_ANIM_LIMIT` went 128 to 384 for the busiest file. `mesh::rcs` now
+takes the same anchor split `mesh::build_class` already had, so the geometry
+moves rather than merely landing correctly.
+`crates/render/tests/hd_scenery_animation_ground_truth.rs` is the harness.
+
+### A widened key form, which Pulse never exercises
+
+The payload's `+0x34` word is zero on all 393 of Pulse's nodes, so what it
+selects was unknown. **97 of HD's carry `0x5`**, and under the `s16` reading
+those 97 are exactly the 97 whose key arrays leave gaps. Bit 0 widens a
+translation key to an `f32` triple and bit 2 widens a rotation key to a whole
+`f32` quaternion; read that way, all 5,518 tile.
+
+**Confidence 85 on the widths**, from the tiling closing disc-wide rather than
+from an evaluator: the key counts and the six array offsets are separate
+fields, so a wrong width leaves a gap on the first file rather than a plausible
+animation. Corroborated from a second direction - the 21 of the 97 with
+geometry below them author a translation `quantum` of `1.0` and a `base` at the
+origin, which is what `base + value * quantum` wants when the value is already
+in world units.
+
+Two things deliberately not claimed. The quaternion's component order is taken
+as `(x, y, z, w)`, continuing the `s16` form's own `(x, y, z)` plus the `w` it
+reconstructs - **confidence 60, a choice rather than a reading**. And bits 0
+and 2 are always set together on this disc, so nothing here separates them; a
+file setting one alone is the test that would.
+
+The 97 are the grid-camera paths in the `start_grid*.vex` family and one
+billboard's shoal of fish (`piranha_landscape.vex`).
+
+### The texture half has no keyframe block to read
+
+HD scrolls a surface in the **fragment program**, off an engine-supplied `time`
+parameter, with the material's own authored floats remapping the coordinate
+first. The microcode, the parameter-name preimages and the disc-wide reach are
+on [`rcsmaterial.md`](../formats/rcsmaterial.md), "A surface scrolls off an
+engine `time`".
+
+**Wired 2026-08-31, layer and clock together.** The family adds its scrolled
+second texture to the diffuse where `mesh.wgsl` *selects* between the two, so
+the layer had to land first and there was nothing for a scroll to move until it
+did. `mesh::slots::ADD_SECOND` is the role bit - the same shape as the
+`ALBEDO_FROM_SECOND` and `ALPHA_FROM_SECOND` beside it, not the per-material
+*lighting* branch that has been refuted twice - and the tint and the two
+coordinate constants ride in a per-material table `mesh_render::Emissives`
+uploads once at build, because all three are authored and only the clock moves.
+
+**119 material slots across the 16 circuits** draw it, which on the built model
+is 62,904 of Modesto Heights' 1,151,776 vertices. The shape census that cleared
+it and the reach that sized it are on
+[`rcsmaterial.md`](../formats/rcsmaterial.md).
+
+**`uvScale`/`uvOffset` are not the cheaper first step they looked like.** They
+are the disc's two commonest parameters and this section used to name them as
+the thing to do first; **2,510 of 2,582 records author the identity**, and
+`uvScale` is `(1, 1)` on every record on the disc. About fifty billboard
+surfaces carry a real sub-tile offset. The numbers are on
+[`rcsmaterial.md`](../formats/rcsmaterial.md).

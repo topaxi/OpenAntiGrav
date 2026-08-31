@@ -37,7 +37,9 @@ fn moving_quad(xform: u32) -> Model {
     // Two keys, one second apart: `z` runs 0 to 3 over 60 frames.
     let translation = vex::AnimChannel {
         times: vec![0, 60],
-        values: vec![(0, 0, 0), (0, 0, 3)],
+        values: vec![[0.0, 0.0, 0.0], [0.0, 0.0, 3.0]],
+        w: Vec::new(),
+        wide: false,
     };
     Model {
         label: "moving quad".to_string(),
@@ -85,6 +87,7 @@ fn moving_quad(xform: u32) -> Model {
 
         flame: None,
         node_vertex_ranges: Vec::new(),
+        emissive: Vec::new(),
         anim_nodes: vec![AnimNode {
             transform: vex::AnimTransform {
                 translation,

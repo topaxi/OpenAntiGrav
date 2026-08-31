@@ -173,6 +173,7 @@ pub fn build_model(label: &str, ai: &AiTrack) -> Model {
         radius,
         anim_tracks: Vec::new(),
         anim_nodes: Vec::new(),
+        emissive: Vec::new(),
         mesh_count: ai.paths.len(),
     }
 }

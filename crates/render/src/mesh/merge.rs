@@ -47,6 +47,7 @@ pub fn merge(label: &str, models: Vec<Model>) -> Model {
         mesh_count: 0,
         anim_tracks: Vec::new(),
         anim_nodes: Vec::new(),
+        emissive: Vec::new(),
         node_vertex_ranges: Vec::new(),
     };
 
@@ -92,6 +93,15 @@ pub fn merge(label: &str, models: Vec<Model>) -> Model {
                 let rebased = v.xform.saturating_add(xform_base);
                 v.xform = if rebased < node_limit { rebased } else { 0 };
             }
+            // **Cleared rather than rebased**, because this function does not
+            // merge the tables an HD model's materials index at all - not
+            // `material_slots`, not `lightmaps`, not `emissive`. Its two
+            // callers merge a collision soup with a track ribbon, neither of
+            // which is one. A rebased index into a table that was never
+            // concatenated would read whatever slot 0 happens to hold; leaving
+            // the roles and dropping the index draws the surface as it drew
+            // before this bit existed, which is the honest degradation.
+            v.slots &= crate::mesh::slots::ROLE_MASK;
             v
         }));
         out.indices
@@ -198,6 +208,7 @@ mod merge_tests {
             radius: 1.0,
             anim_tracks: Vec::new(),
             anim_nodes: Vec::new(),
+            emissive: Vec::new(),
             mesh_count: 1,
         }
     }

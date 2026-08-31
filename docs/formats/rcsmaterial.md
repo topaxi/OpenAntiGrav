@@ -1388,17 +1388,147 @@ Anulpha Pass from brown to black. The number that decides it is the overlap
 between those 827 chunks and the ones that actually carry a lightmap, and that
 has not been measured yet.
 
+## A surface scrolls off an engine `time`, not off a keyframe block (2026-08-31)
+
+**HD authors no texture-transform keyframe block at all**, and that is a
+property of where the block lives rather than a gap in this reading. Pulse
+stores one `0x40`-byte block per material *inside the mesh payload*
+([vex.md](vex.md), "The texture-transform keyframe block"), and HD emptied that
+payload out - a PS3 `Mesh` node is a bounding-box pair and a chunk hash
+([rcsmodel.md](rcsmodel.md)). The animation moved into the shader.
+
+**The mechanism, read at instruction level.** `uvanim_diffuse_emissive`'s lit
+fragment block on Amphiseum, disassembled with `scripts/ps3-microcode.py`:
+
+```text
+@0x00  MOV R2.xy, f[TC3]
+@0x01  MOV R0.w, {const}          [<- parameter 0x906b67ba]
+@0x03  ADD R0.z, R2.yyyy, {const} [<- parameter 0x78256a45]
+@0x05  MAD R0.w, R0.zzzz, {const}, R0  [<- parameter 0x78787596]
+@0x07  TEX H0, f[TC3] unit0
+@0x08  MOV R0.z, R2.xxxx
+@0x0c  TEX H1.xyz, R0.zwzz unit1
+@0x0d  MUL H1.xyz, H1, {const}    [<- parameter 0xe8bcd7f5]
+@0x0f  MAD H0.xyz, H0.wwww, H1, H0
+```
+
+So unit 1 is sampled at `(u, (v + a) * b + time)` where `a` and `b` are the
+material's own authored floats and `time` is engine-supplied, and its result
+is **added** to the diffuse, gated by the diffuse alpha. On Talon's Junction's
+`mt_uvanim_diffuse_emissive2` those floats are `a = 0` and `b = -1`, so the
+emissive layer scrolls one texture unit per second in `-v`.
+
+**`0x906b67ba` is `time`, by preimage**, which is what turns "a constant the
+engine patches" into a clock. The same technique names 63 more; see below.
+
+**How far it reaches**, from `crates/render/examples/hd_uv_time_census.rs`:
+**310 of the disc's 1,186 `.rcsmaterial` declare `time`** in a fragment block,
+and a circuit's own material table runs from 4 of Sol 2's 442 slots to 101 of
+Modesto Heights' 859. `and_arrowmaterial`, `animating_traffic`,
+`scanlinebillboard`, `hologram`, `nr_crowd_bustle` and `cf_startbeam_glow` are
+among them - the same content classes Pulse animates through its keyframe
+blocks.
+
+**Wired 2026-08-31**, as `mesh::slots::ADD_SECOND` plus a per-material table.
+This section previously ended "none of it is wired, and wiring the scroll
+alone would change no pixel", which was right about the ordering: `mesh.wgsl`
+*selects* between its two textures where this family **adds** one to the
+other, so the layer had to come first and the clock rides in with it.
+
+What decided it was a shape census rather than a name
+(`scripts/hd_time_shapes.py`): **290 of 291** materials take `time` into a
+texture coordinate and **2,230 of 2,305 blocks** combine the sample by
+accumulate. The 35 materials that are not *purely* accumulate all mix
+accumulating blocks with multiply-only ones - the pass dimension, which
+`skin::variants` already resolves - and exactly one material on the disc,
+`hd_waketrail`, is multiply-only throughout. That is one coherent change, not
+the classifier problem that killed `output_lit_by`.
+
+**What it reaches**, from `crates/render/examples/hd_emissive_reach.rs`, which
+joins the three conditions the layer needs all of - the lit variant's program
+accumulates, the second `.gtf` decoded, and it is not the baked atlas:
+
+| | Count |
+| --- | ---: |
+| Slots declaring `time` across 16 circuits | 236 |
+| Accumulating | 189 |
+| With a decoded second texture | 222 |
+| Not lightmapped | 169 |
+| **Drawing the layer** | **119** |
+
+On the built model that is **62,904 of Modesto Heights' 1,151,776 vertices**,
+24,296 of Talon's Junction's and 17,448 of Anulpha Pass's -
+`crates/render/tests/hd_emissive_glow_ground_truth.rs`, which also measures the
+glow's own pixel contribution by rendering the same model with the bit cleared.
+
+**One approximation is stated rather than hidden**: the program addresses unit
+1 from `f[TC3]`, and whether the UV set feeding that interpolator is the one
+this renderer carries as `texcoord` is unestablished - the same open question
+`skin::roles` already has for the second texture's own sampling. Only `v`
+moves, so a mismatch shows as a glow tiled wrongly rather than as a missing
+one.
+
+### The parameter names, by preimage
+
+The sweep that named the samplers, pointed at the *parameter* table:
+`crates/render/examples/hd_param_names.rs` hashes every identifier-shaped
+string in `EBOOT.elf` and matches against the hashes the disc's `.rcsmodel`
+material records carry. **64 of 300 land.** The `.rcsmaterial` files are no
+help here and that is itself a finding: their own tables store the hashes and
+never the strings, so 0 of 300 preimage against the whole shader corpus.
+
+| Hash | Name | Uses | Where |
+| --- | --- | ---: | --- |
+| `0xea1dcc4c` | `uvScale` | 1,364 | `lambert`, `simpletextureuvoffsetscale`, everywhere |
+| `0x1eb13436` | `uvOffset` | 1,364 | the same records, always paired with the above |
+| `0xce5c4410` | `W_Cycle` | 338 | `weapon_pads` |
+| `0x02ab9f07` | `Colour` | 156 | `mageffect08`, `speedup_material` |
+| `0xab31c2b1` | `Refbrightness` | 97 | the glass family |
+| `0xf0d90109` | `speed` | 79 | `uvanim_diffuse_emissive` and its five siblings |
+| `0x31182e0d` | `Speed` | 66 | `animhexlights`, `hologram` |
+| `0x336d2dcc` | `V_Offset` | 47 | `scrollingalpha`, `hd_muzzleflash` |
+| `0x1028bf46` | `Transparency` | 16 | `glass_colour_spec_trans` |
+| `0x8f2fe704` | `UV_offset` | 5 | `hd_plasmaring_glow` and the explosion glows |
+
+`uvScale`/`uvOffset` being the two commonest parameters on the disc, and always
+appearing together and in equal number, looked like the static half of the same
+story. **The values say otherwise, and this section used to claim otherwise.**
+The operation is confirmed at instruction level -
+`simpletextureandtexturealphauvoffsetscale`'s vertex block does
+`MUL R1.xy, v[2].xy, c[207].xy` then `ADD R1.xy, R1.xy, c[208].xy`, with
+`c[207]`/`c[208]` the two parameters (a vertex program's `c[N]` is register
+`N + 256`), so it is `uv * uvScale + uvOffset` exactly as the names say. What is
+*authored* is almost always nothing:
+
+| | Records |
+| --- | ---: |
+| Carry the pair (4 archives swept) | 2,582 |
+| **Of those, the identity** - scale `(1, 1)`, offset `(0, 0)` | **2,510** |
+| Offset by a whole tile in `v`, a no-op under a repeat sampler | 21 |
+| A genuine sub-tile offset | **~51**, every one on an `hd_adverts` billboard |
+
+**`uvScale` is `(1, 1)` on every record on the disc** - all 42 distinct value
+pairs have it - so the scale half is authored and never used. This page
+previously said "the surfaces carrying one would tile wrongly first", and
+`crates/render/examples/hd_uv_transform_census.rs` is what withdrew it: reading
+these would move about fifty billboard surfaces, not a circuit.
+
 ## Open
 
-- **87 of the 125 sampler hashes**, including the three commonest
-  (`0xd5e000d1`, `0x00e5b679`, `0x1f6f85a3`, ~4,400 uses each across every unit),
-  which by their spread are engine samplers rather than a material's own.
 - **87 of the 125 sampler hashes**, including the three commonest
   (`0xd5e000d1`, `0x00e5b679`, `0x1f6f85a3`, ~4,400 uses each across every unit),
   which by their spread are engine samplers rather than a material's own. Three
   of those three are now named - `zoneTexInner`, `zoneTexInnerNearest`,
   `zoneTexVis` - by a preimage sweep over the executable's own identifier-shaped
   strings, which is the technique that should be tried on the rest.
+- **236 of the 300 parameter hashes**, after the sweep above. The residue is not
+  arbitrary: the named ones are artist-facing (`Colour`, `Speed`, `Brightness`)
+  and the unnamed ones cluster on one material each, which is what a name that
+  never reaches the executable's own string table looks like.
+- **The `time` scroll is read and unwired**, and what blocks it is the additive
+  second-texture layer rather than the scroll itself. `uvScale`/`uvOffset` are
+  read and unwired too and are **not** the cheaper first step they looked like:
+  2,510 of 2,582 records author the identity.
 - **The microcode**, which is where the operation - multiply, add, replace -
   actually is.
 

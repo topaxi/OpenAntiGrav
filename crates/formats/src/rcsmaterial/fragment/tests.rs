@@ -425,3 +425,105 @@ fn a_half_register_and_its_same_numbered_full_register_are_different_storage() {
         "R2's write must not have clobbered H2 - they are different storage"
     );
 }
+
+/// A register operand, for the `accumulates` cases below.
+fn reg(index: u8, half: bool) -> Source {
+    Source::Register { index, half }
+}
+
+/// Builds the program shape Wipeout HD's emissive family ships:
+/// `TEX H1 unit1`, a tint multiply, then `MAD H0.xyz, H0.wwww, H1, H0`.
+fn emissive_program(combine: u8, accumulate_into_self: bool) -> Program {
+    let mut tex = insn(0x17);
+    tex.dst = 1;
+    tex.dst_half = true;
+    tex.unit = 1;
+
+    let mut tint = insn(0x02); // MUL H1, H1, {const}
+    tint.dst = 1;
+    tint.dst_half = true;
+    tint.sources = [reg(1, true), Source::Constant, Source::Input];
+
+    let mut add = insn(combine);
+    add.dst = 0;
+    add.dst_half = true;
+    add.sources = [
+        reg(0, true),
+        reg(1, true),
+        if accumulate_into_self {
+            reg(0, true)
+        } else {
+            reg(3, true)
+        },
+    ];
+    if !accumulate_into_self {
+        // Not merely a different addend: `MAD H0, H0, H1, H3` still names H0
+        // on both sides, and that shape is a *multiply* of H0 by the sample.
+        add.sources[0] = reg(2, true);
+    }
+    add.end = true;
+
+    Program {
+        declared: Declared::default(),
+        instructions: vec![tex, tint, add],
+    }
+}
+
+/// The shape the renderer keys on: a unit-1 sample folded through a tint and
+/// then **added into** the register it lands in.
+#[test]
+fn a_sample_added_into_its_own_destination_is_an_accumulate() {
+    assert!(emissive_program(0x04, true).accumulates(1), "MAD");
+    assert!(emissive_program(0x03, true).accumulates(1), "ADD");
+}
+
+/// Multiplying by the sample is not adding it, however the result is used -
+/// this is the distinction the whole reading rests on, and `hd_waketrail` is
+/// the one material on the disc that lands here.
+#[test]
+fn a_multiply_is_not_an_accumulate() {
+    let mut program = emissive_program(0x04, true);
+    program.instructions[2].opcode = 0x02; // MUL
+    assert!(!program.accumulates(1));
+}
+
+/// A `MAD` whose addend is not its own destination is a combine, not an
+/// accumulate.
+#[test]
+fn a_mad_whose_addend_is_not_its_destination_is_not_an_accumulate() {
+    assert!(!emissive_program(0x04, false).accumulates(1));
+}
+
+/// `MAD H0, H0, H1, H3` names `H0` on both sides and is still not one: it
+/// *scales* `H0` by the sample. Only the third operand is added to.
+#[test]
+fn a_mad_that_scales_by_the_sample_is_not_an_accumulate() {
+    let mut program = emissive_program(0x04, false);
+    program.instructions[2].sources[0] = reg(0, true);
+    assert!(!program.accumulates(1));
+}
+
+/// The question is asked of one unit, and unit 0's sample is not unit 1's.
+#[test]
+fn the_unit_is_part_of_the_question() {
+    let program = emissive_program(0x04, true);
+    assert!(program.accumulates(1));
+    assert!(!program.accumulates(0), "nothing samples unit 0 here");
+}
+
+/// A register that another unit's fetch overwrites stops carrying the first
+/// unit's sample - otherwise a program that samples unit 1, discards it, then
+/// accumulates an unrelated unit-0 fetch would read as emissive.
+#[test]
+fn a_later_fetch_clobbers_the_register_it_writes() {
+    let mut program = emissive_program(0x04, true);
+    let mut clobber = insn(0x17);
+    clobber.dst = 1;
+    clobber.dst_half = true;
+    clobber.unit = 0;
+    program.instructions.insert(1, clobber);
+    assert!(
+        !program.accumulates(1),
+        "unit 0's fetch took H1 over before the add"
+    );
+}

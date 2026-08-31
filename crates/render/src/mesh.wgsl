@@ -207,9 +207,27 @@ override colour_is_light: f32 = 0.0;
 // already is when read as a `mat4x4<f32>`: `transform_point` computes
 // `p.x*m[0] + p.y*m[4] + p.z*m[8] + m[12]`, which is exactly `M * v`.
 struct NodeAnims {
-    transform: array<mat4x4<f32>, 128>,
+    transform: array<mat4x4<f32>, 384>,
 };
 @group(3) @binding(1) var<uniform> node_anims: NodeAnims;
+
+// Wipeout HD's additive glow, per material - see `oag_render::mesh::Emissive`
+// and `mesh::slots::ADD_SECOND`. The disc's emissive family samples unit 1 at
+// `(u, (v + a) * b + time)`, multiplies by a tint and **adds** the result to
+// the albedo gated by the diffuse alpha, where everything below *selects*
+// between the two textures. Slot 0 is all zeros, which adds nothing, and is
+// what `slots::material_index == 0` selects.
+//
+// The one table here that is not resampled every frame: `tint`, `a` and `b`
+// are authored constants and `scene.time` is already a uniform, so this is
+// written once at build.
+struct Emissives {
+    // `rgb` the tint, `w` the coordinate offset `a`.
+    tint_offset: array<vec4<f32>, 64>,
+    // `x` the coordinate scale `b`, `y` whether the clock moves this layer.
+    scale: array<vec4<f32>, 64>,
+};
+@group(3) @binding(2) var<uniform> emissives: Emissives;
 
 struct VertexInput {
     @location(0) position: vec3<f32>,
@@ -564,6 +582,48 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     let coverage = select(first, second, (in.slots & 4u) != 0u);
     let texel = vec4<f32>(picture.rgb, coverage[(in.slots >> 3u) & 3u]);
 
+    // **Wipeout HD's additive glow.** Its emissive family samples unit 1 at
+    // `(u, (v + a) * b + time)`, multiplies by a tint and adds the result to
+    // the albedo gated by the diffuse alpha:
+    //
+    //     MAD H0.xyz, H0.wwww, H1, H0
+    //
+    // `slots::ADD_SECOND` says a material does this and its index selects the
+    // three constants. Every other surface indexes slot 0, whose tint is zero,
+    // so this costs one sample and no branch - the same shape the two anim
+    // tables take. See `docs/formats/rcsmaterial.md` for the disassembly, and
+    // `oag_render::mesh::rcs::emissive` for which materials qualify.
+    //
+    // **The `u` is the diffuse coordinate, which is a stated approximation and
+    // not a reading**, exactly as the second texture's own sampling above
+    // already is: the program addresses unit 1 from `f[TC3]`, and whether the
+    // UV set feeding that interpolator is the one this renderer carries as
+    // `texcoord` is unestablished. Only `v` moves, so a mismatch shows as a
+    // glow tiled wrongly across the surface rather than as a missing one.
+    let glow_slot = in.slots >> 16u;
+    let glow_tint_offset = emissives.tint_offset[glow_slot];
+    let glow_scale = emissives.scale[glow_slot];
+    // **The clock is gated, and `b` defaults to 1 rather than 0.** A material
+    // that adds its second texture is not necessarily one that scrolls it:
+    // some read `time` while keeping their coordinate constants as the
+    // shader's own inline literals, which this reading has not recovered, and
+    // some never read it at all. A `b` of 0 with the clock ungated is the
+    // worst of both - it annihilates the surface's own `v` and marches one row
+    // of the texture across it. See `oag_render::mesh::Emissive::rate`.
+    let glow_v = (in.texcoord.y + glow_tint_offset.w) * glow_scale.x
+        + scene.time.x * glow_scale.y;
+    let glow_sample = textureSample(
+        lightmap,
+        albedo_sampler,
+        vec2<f32>(in.texcoord.x, glow_v),
+    );
+    // Gated by the *diffuse* alpha, which is `first.a` rather than the
+    // resolved `texel.a`: the microcode's `H0.wwww` is the unit-0 fetch's own
+    // fourth channel, before any of the role bits above choose where the
+    // output's alpha comes from.
+    let glow = glow_sample.rgb * glow_tint_offset.rgb * first.a
+        * select(0.0, 1.0, (in.slots & 256u) != 0u);
+
     // The Zone surface, in both domains, from one sample. See `zone_sample`.
     //
     // `rim` is the microcode's own `1 - dot(N, -V)`, where its `-V` points
@@ -650,7 +710,10 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // The gamma-domain sum, for the same reason this whole path is gamma: a
     // prelit surface's light is baked into its vertex colours in the space the
     // asset authors, so a linear summand would be the one term shaded twice.
-    let plain = mix(texel.rgb, zone_gamma, scene.zone.enabled) * tint * light;
+    // The glow is **added after the light**, which is where the microcode puts
+    // it: the accumulate reads `H0` once the lightmap and the interpolated
+    // term have already multiplied the albedo, so a glow is not itself lit.
+    let plain = mix(texel.rgb, zone_gamma, scene.zone.enabled) * tint * light + glow;
     let plain_rgb = mix(plain, pow(plain, vec3<f32>(2.2)), linear_out);
 
     // Vertex colour modulates the texture on all four channels, as the GE's
