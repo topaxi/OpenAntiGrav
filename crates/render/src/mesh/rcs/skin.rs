@@ -637,6 +637,8 @@ mod tests {
             state: 1,
             src_factor: 0,
             dst_factor: 0,
+            alpha_func: 0,
+            alpha_ref: 0.0,
             texture: "a.gtf".to_string(),
             second_texture: second.map(|_| "b.gtf".to_string()),
             texture_sampler: first,

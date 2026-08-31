@@ -224,6 +224,8 @@ fn every_factor_the_disc_uses_is_one_of_the_four_named_ones() {
             },
             src_factor: src,
             dst_factor: dst,
+            alpha_func: 0,
+            alpha_ref: 0.0,
             texture: String::new(),
             second_texture: None,
             texture_sampler: 0,

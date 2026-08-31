@@ -839,7 +839,14 @@ material +0x04  u32   file offset of the material's own path, NUL-terminated
 material +0x10  u32   state word; the low two bits are the transparency mode
 material +0x14  u16   source blend factor
 material +0x16  u16   destination blend factor
+material +0x18  u32   alpha test comparison function
+material +0x1c  f32   alpha test reference, in [0, 1]
 ```
+
+The last two are read by the same decompiled RSX write that resolved
+`Transparency::Mode2` - see
+["Mode 2 is a plain alpha test after all"](#mode-2-is-a-plain-alpha-test-after-all-2026-08-31)
+below.
 
 Records are not fixed-length: consecutive offsets differ by 96 to 768 bytes,
 most often 128. Everything above sits inside the smallest of them.
@@ -949,6 +956,96 @@ outside a race and the `[graphics] anti_aliasing` MSAA count inside one, so
 the feature is a conditional no-op rather than definitionally unwireable -
 `wgpu::MultisampleState::alpha_to_coverage_enabled` takes effect only when
 `count` is greater than 1.
+
+### Mode 2's six materials carry no fragment-program kill (2026-08-31)
+
+**The microcode route the previous section left open comes back empty.**
+Every fragment block of all six mode-2 material names
+(`nr_crowd_bustle`, `jd_alphalambert_test`, `fence_alpha`,
+`emissive_alpha_heathaze_test`, `cf_alpha4glow`,
+`uv_anim_diffuse_alpha_emissive` - 86 blocks total, decoded end to end with
+[`scripts/ps3-microcode.py`](../../scripts/ps3-microcode.py)) was checked for
+a `KIL` instruction or a comparison op (`SLT`/`SGE`/`SEQ`/`SNE`/`SGT`/`SLE`)
+against anything but the shared boilerplate below. **`KIL` never appears.**
+The only comparisons present are `SLT` against parameter `0xa410aa44`
+(`zoneColourTint`, per
+[renderer.md](../ghidra/functions/ps3-hdfury-eu/renderer.md)) and a family of
+`ADD_SAT ..., -0.5` range-compresses - and both are present, identically, in
+a mode-0 material (`track_surface`) and a mode-1 material (`glass_texture`)
+checked as controls. Neither is mode-2-specific; both are ordinary shared
+fragment boilerplate (a zone-tint fog term, a signed-normal decode), not an
+alpha-cutout threshold. Confidence 80 that no cutout comparison exists in
+these six materials' fragment code specifically - lower than the container
+facts on this page because it is an absence claim over 86 blocks, not a
+positive pattern match, and the three opcodes still unnamed in this corpus
+(`0x3b`/`0x3d`/`0x3e`, see [rcsmaterial.md](rcsmaterial.md)) are read as
+normalise/rsq helpers from their position rather than confirmed, so a
+disguised comparison hiding in one of them cannot be fully ruled out.
+
+**This refutes the premise the previous section's open item was written
+against, not just the specific guess.** A programmable discard is something
+the fragment microcode would show directly; its absence across every mode-2
+material means mode 2 is not implemented as a shader-side cutout at all.
+What is left is fixed-function GPU state - an `ALPHA_REF`/`ALPHA_FUNC`-style
+comparison the RSX applies after the fragment program runs, the same class of
+mechanism bit 7 above is suspected of selecting (alpha-to-coverage). Neither
+is visible in a fragment program by construction: both are register writes
+made around the draw call, not instructions inside it. Resolving what mode 2
+selects now needs the same evidence bit 7 needs - a decompiled RSX method
+write in `ps3-hdfury-eu`'s Ghidra database - not more microcode reading.
+
+### Mode 2 is a plain alpha test after all (2026-08-31)
+
+**The RSX-method-write search the previous section pointed at found it.**
+`Material_ApplyRenderState` (`0x005d8f68`,
+[material-state.md](../ghidra/functions/ps3-hdfury-eu/material-state.md)) is
+the caller that turns a material record into GPU state, and it reads
+`Material::state` bit 0 into `NV4097_SET_BLEND_ENABLE` and bit 1 into
+`NV4097_SET_ALPHA_TEST_ENABLE` - two different fixed-function features, not
+two variants of one. `Transparency::Blended` (bit 0) blends with the factor
+pair; `Transparency::Mode2` (bit 1) alpha-tests, with the comparison and
+reference at the two new fields above, fed straight into
+`NV4097_SET_ALPHA_FUNC`/`SET_ALPHA_REF` by a sibling function this pass also
+named and read (`Rsx_SetAlphaFunc`). That is why the blend equation never
+separated the two modes - 211 of 212 mode-2 materials share mode 1's
+`0302`/`0303` pair, because the pair is irrelevant to mode 2's actual
+mechanism.
+
+**And the values turn out to be constants, not per-material authoring.**
+Extending `oag_formats::rcsmodel::Material` with the two fields and sweeping
+every material name across all 16 circuits and all three `PSARC` archives:
+`alpha_ref` is `0.5` everywhere, and `alpha_func` takes exactly two values
+disc-wide, `0x0201`/`GL_LESS` and `0x0204`/`GL_GREATER` - every one of the
+six `Transparency::Mode2` material names reads `GL_GREATER`. **Mode 2 is
+the "obvious hypothesis" this page and the handover thread both tried and
+believed refuted**: a plain `GL_GREATER`/`0.5` alpha-test cutout.
+
+**The refutation itself was the error, not the hypothesis.** It rested on
+`crowd_avatars_22x4.gtf`'s alpha running `0..255` at a mean of `120` and
+concluded a `0.5` threshold "discards most of it". Histogramming the same
+texture end to end (`oag_formats::gtf`) shows why the mean was the wrong
+statistic: **52.9% of texels sit at alpha `0`, 47.1% at `255`, nothing
+between.** `GL_GREATER` against `0.5` keeps exactly the 47.1% - the crowd
+figures - and drops the transparent background, which is correct cutout
+behaviour, not erasure. A mean near the threshold only means "discards most
+of it" if the distribution is roughly uniform around that mean; a
+hand-authored cutout mask is built to be the opposite of uniform, and this
+one is a clean bimodal split. `nr_crowd_bustle`'s own fragment microcode
+confirms this is genuinely the texture the alpha test sees, with nothing
+combined in between: block `#3` samples sampler hash `0x11cb4f74` at unit 1
+into the register that becomes output alpha, and that hash is exactly
+`Material::texture_sampler` for `crowd_avatars_22x4.gtf` on this material.
+
+**Still not wired.** `oag_render` has no fixed-function alpha test, and
+`Material::blend()` currently routes `Transparency::Mode2` through the same
+`Blend::Factors` alpha-blend path as `Transparency::Blended`, because both
+satisfy `is_see_through()`. Given the crowd texture's hard `0`/`255` split,
+per-pixel colour is likely close either way, but blending and testing differ
+in depth-buffer interaction - alpha test writes depth like opaque geometry,
+blending typically does not - so this is a real if probably subtle
+correctness gap, not yet checked against a screenshot. Wiring a true test
+needs a shader-side `discard` in `mesh.wgsl`, since `wgpu` has no
+fixed-function equivalent to bind.
 
 ### The factor values, and which are mapped
 
@@ -1449,12 +1546,21 @@ Named explicitly, with what each would take.
    cutout, and **the obvious reading of that is refuted by the picture**:
    routing mode 2 through `oag_render`'s existing alpha-test pipeline erases
    the crowd entirely, because `crowd_avatars_22x4.gtf`'s alpha runs 0..255 at
-   a mean of 120 and the threshold takes most of it. So mode 2 is not a plain
-   0.5 cutout, and what it *is* still wants the microcode. The microcode route
-   is now open -
-   [`scripts/ps3-microcode.py`](../../scripts/ps3-microcode.py) disassembles
-   both RSX program kinds - but nothing has yet tied a state-word bit to a
-   variant choice.
+   a mean of 120 and the threshold takes most of it - so mode 2 was believed
+   not to be a plain 0.5 cutout. ~~**Resolved 2026-08-31, and the belief above
+   was itself the error.**~~ `Material_ApplyRenderState`
+   (`0x005d8f68`, [material-state.md](../ghidra/functions/ps3-hdfury-eu/material-state.md))
+   reads state bit 1 straight into `NV4097_SET_ALPHA_TEST_ENABLE` and the two
+   new fields at `+0x18`/`+0x1c` into `SET_ALPHA_FUNC`/`SET_ALPHA_REF` - mode
+   2 **is** a plain alpha test, `GL_GREATER`/`0.5` disc-wide. The crowd
+   texture's alpha is a clean bimodal `0`/`255` split, not the roughly-uniform
+   spread "a mean of 120 discards most of it" assumed; the threshold keeps
+   exactly the 47.1% that is the crowd figures. See
+   [above](#mode-2-is-a-plain-alpha-test-after-all-2026-08-31). **What is
+   left**: bit 7's question is untouched by this pass, and `oag_render` does
+   not yet implement the alpha test this resolves - `Material::blend()` still
+   routes mode 2 through the alpha-*blend* path, a real if likely subtle
+   depth-interaction gap.
 10. **Which of a vertex's several texture coordinates a shader actually
     samples**, per material. The declaration names them - `Uv1`, `Uv2`,
     `lightmapUV`, `map1`, `map2`, `Uvset1` - and
