@@ -181,3 +181,8 @@
 0x00c813e0	data	g_ZoneStageTrackTextures	80	zone-effectsettings-loader.md
 0x003f3fb0	function	Environment_LoadRaceScene	75	zone-sky.md
 0x00d45f84	data	g_ZoneEffectsActive	80	zone-sky.md
+0x00860d44	data	g_ZoneSpeedClassTable	86	zone-speed-class-table.md
+0x00083490	function	ZoneSpeedClassTable_Count	88	zone-speed-class-table.md
+0x00083498	function	ZoneSpeedClassTable_ThresholdAt	88	zone-speed-class-table.md
+0x000834b0	function	ZoneSpeedClassTable_NameAt	88	zone-speed-class-table.md
+0x00049718	function	Hud_UpdateZoneSpeedClass	85	zone-speed-class-table.md
