@@ -229,7 +229,37 @@ fn fs_reconstruct(in: VertexOutput) -> @location(0) vec4<f32> {
         return centre;
     }
 
-    let tile = vec2<i32>(vec2<u32>(in.position.xy) / constants.tile);
+    // **The tile lookup is jittered by up to half a tile, and has to be.** A
+    // nearest fetch gives every pixel of a tile the same dominant velocity,
+    // so wherever the scene's motion ramps - the road ahead of a craft, most
+    // of the screen in a turn - the gather's span jumps discontinuously at
+    // each tile edge. The cone weights hide most of it, because they follow
+    // the smooth per-pixel reach rather than the tile's; what survives is a
+    // step in blur *intensity* on the tile lattice. Measured on the
+    // synthetic ramp in `docs/rendering/motion-blur.md`: the smear profile
+    // steps up by 5-13 % of its own level in a single pixel column at every
+    // 87 px boundary, always the same sign, which is neighbour-max raising
+    // the dominant as the lookup crosses over. That lattice is anchored to
+    // the window rather than to the world, so the scene flows through a
+    // stationary grid and the eye reads squares.
+    //
+    // Offsetting the lookup by up to +/-half a tile trades the lattice for
+    // per-pixel noise, which reads as grain. It cannot under-reach: the tile
+    // it lands on is at most one away, and that tile's neighbour-max already
+    // covers this pixel's own tile, so a surface can never miss its own
+    // smear. It can *over*-reach by one tile, and near the edge of a fast
+    // object's smear a pixel may miss the tile that holds it - so the
+    // boundary of a smear is now stochastic where it was hard. That is the
+    // trade, and it is the one worth making.
+    let wobble = vec2<f32>(
+        jitter(in.position.xy + vec2<f32>(11.0, 3.0)),
+        jitter(in.position.xy + vec2<f32>(5.0, 29.0)),
+    ) * f32(constants.tile);
+    let tile = clamp(
+        vec2<i32>((in.position.xy + wobble) / f32(constants.tile)),
+        vec2<i32>(0),
+        vec2<i32>(textureDimensions(tile_tex)) - vec2<i32>(1),
+    );
     let dominant = reach_px(textureLoad(tile_tex, tile, 0).xy);
     let dominant_len = length(dominant);
     if dominant_len <= 0.5 {
