@@ -652,6 +652,15 @@ evidence, including the byte-level trace of every function in this chain:
 
 ## Next Steps
 
+- Find the tint consumer for `0x00c49110`/`0x00c49120`/`0x00c49130` - the
+  `+0xd8`/`+0xf8` render-context table it is published into is now well
+  understood (see `Open`'s 2026-08-31 entries), but nothing that reads
+  `+0xf8` back out has been found yet. `Render_RunCompiledOps`'s own
+  dispatch table has three opcodes left unread (tags 7, 13, 14 of 16) - a
+  quick, bounded check before assuming the consumer sits outside this
+  dispatcher entirely, at whatever step flushes the lazily-filled parameter
+  table (the more likely case, given how generic every other opcode turned
+  out to be).
 - Find the write site for `Zone_UpdateStage`'s `+0x634` field - the field the
   clamp-to-12 match confirms drives stage selection, but nothing this pass
   traced writes it. **Searched a third time, 2026-08-28, and still not
