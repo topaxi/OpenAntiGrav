@@ -272,6 +272,93 @@ def fp_src(bits: int, const: list[float] | None, input_src: int) -> str:
     return f"{neg}?{bits:08x}"
 
 
+FP_COND = ("FL", "LT", "EQ", "LE", "GT", "NE", "GE", "TR")
+# `TR` on every lane: the unconditional default, and the value observed on
+# every ordinary instruction in every block read so far.
+FP_COND_ALWAYS = 0x727
+
+
+def fp_cond(d1: int) -> str:
+    """The instruction's condition code, or `""` when it is unconditional.
+
+    **The RSX predicates individual instructions**, and Wipeout HD's Zone
+    materials express their whole inner/outer selection that way rather than
+    as a branch - so a disassembler that drops this prints both arms as
+    straight-line code and its reader concludes one of them is dead. That is
+    exactly what happened here before this was decoded.
+
+    Word 1 is `[17:0] src0` and, above it, `[20:18]` the condition test and
+    `[28:21]` a two-bits-per-lane swizzle with `x` at 21. Derived empirically,
+    confidence 80: the split was found by diffing instruction pairs that were
+    provably dead in linear order, and these field boundaries are the unique
+    ones that make the observed default decode as `TR`/identity.
+    `[NE(wwww)]` and `[EQ(wwww)]` are `0x7fd`/`0x7fa`, checked against
+    `cf_constantcolourglow` block `0x3a40`.
+    """
+    cond = (d1 >> 18) & 0x7FF
+    if cond == FP_COND_ALWAYS:
+        return ""
+    lanes = "xyzw"
+    swizzle = "".join(lanes[((cond >> 3) >> s) & 3] for s in (0, 2, 4, 6))
+    return f" [{FP_COND[cond & 7]}({swizzle})]"
+
+
+def fp_patch_slots(raw: bytes, at: int, program_at: int, fslot: int) -> list[int]:
+    """The 16-byte code slots one parameter's value is written into.
+
+    A fragment program has no constant registers: a source of register-type
+    CONST takes its four floats from the 16 bytes after the instruction, so
+    the engine patches parameter values **straight into the code**. Following
+    that chain is what turns a printed `{0, 0, 0, 0}` into the parameter that
+    belongs there:
+
+        u16 index     at  at + fslot
+        u32 entry_off at  at + program_at + 0x18 + 4*index   (rel. to at+program_at)
+        u16 count     at  at + program_at + entry_off
+        u16 slot[i]   at  at + program_at + entry_off + 2 + 2*i
+
+    Confidence 82, verified on `billboarddiffuse` blocks `0x1d60`/`0x2cf0` and
+    `cf_constantcolourglow` block `0x2b80`: in all three the three lighting
+    parameters and `fogColour` land on the instructions their names demand.
+    Returns `[]` rather than raising for a chain that runs off the end, so a
+    malformed block still disassembles.
+    """
+    base = at + program_at
+    try:
+        index = struct.unpack_from(">H", raw, at + fslot)[0]
+        entries = struct.unpack_from(">I", raw, base + 0x14)[0]
+        if index >= entries:
+            return []
+        entry_off = struct.unpack_from(">I", raw, base + 0x18 + 4 * index)[0]
+        count = struct.unpack_from(">H", raw, base + entry_off)[0]
+        return [
+            struct.unpack_from(">H", raw, base + entry_off + 2 + 2 * i)[0]
+            for i in range(count)
+        ]
+    except struct.error:
+        return []
+
+
+def fp_patch_map(raw: bytes, at: int, program_at: int) -> dict[int, list[int]]:
+    """`{code slot: [parameter name hash, ...]}` for every patched parameter.
+
+    The hash is `~crc32(name)` - a preimage rather than a name, so nothing is
+    transcribed here. `docs/ghidra/functions/ps3-hdfury-eu/renderer.md` lists
+    the 81 engine parameter names those hashes resolve against.
+    """
+    counts, offsets, _ = block_header(raw, at)
+    out: dict[int, list[int]] = {}
+    for i in range(counts[1]):
+        h, _ty, _count, vreg, fslot = struct.unpack_from(
+            ">IHHHH", raw, at + offsets[1] + 12 * i
+        )
+        if vreg != 0xFFFF:
+            continue
+        for slot in fp_patch_slots(raw, at, program_at, fslot):
+            out.setdefault(slot, []).append(h)
+    return out
+
+
 def fp_disasm(raw: bytes, at: int) -> None:
     """One fragment block: tables, then code.
 
@@ -286,6 +373,10 @@ def fp_disasm(raw: bytes, at: int) -> None:
     code_len = struct.unpack_from(">I", raw, at + program_at)[0]
     code_off = struct.unpack_from(">I", raw, at + program_at + 0x10)[0]
     print(f"  {code_len:#x} byte(s) of code at +{code_off:#x}")
+    patches = fp_patch_map(raw, at, program_at)
+    for slot in sorted(patches):
+        names = ", ".join(f"{h:#010x}" for h in patches[slot])
+        print(f"  patch slot {slot:#x} <- parameter {names}")
     start = at + program_at + code_off
     pos = start
     while pos < start + code_len:
@@ -308,9 +399,18 @@ def fp_disasm(raw: bytes, at: int) -> None:
         ops = ", ".join(fp_src(b, const, input_src) for b in srcs[:arity])
         unit = f" unit{(d0 >> 17) & 0xF}" if name in ("TEX", "TXP", "TXB", "TXL", "TXD") else ""
         slot = (pos - start) // 16
-        tail = f" [const@slot {slot + 1:#x}]" if const is not None else ""
+        tail = ""
+        if const is not None:
+            # The constant sits in the *next* 16-byte slot, which is the one a
+            # parameter's patch list names.
+            patched = patches.get(slot + 1)
+            named = (
+                " = " + ", ".join(f"{h:#010x}" for h in patched) if patched else ""
+            )
+            tail = f" [const@slot {slot + 1:#x}{named}]"
         end = " END" if d0 & 1 else ""
-        print(f"@{slot:#04x}  {name}{sat} {half}{out_reg}{wm}, {ops}{unit}{tail}{end}")
+        cond = fp_cond(d1)
+        print(f"@{slot:#04x}  {name}{sat} {half}{out_reg}{wm}, {ops}{unit}{tail}{cond}{end}")
         pos += 32 if const is not None else 16
         if d0 & 1:
             break

@@ -3610,6 +3610,297 @@ python3 scripts/ps3-toc.py resolve 0x003d6dc8 -0x5A84    # -> 0x00c7dfb0
   `zoneModeTrack{0..14}.gtf`, the set that carries the real art.
 
 
+## 2026-08-31, a twenty-fourth pass: **the eight Zone vec4s' writer is found, statically** - `Environment_UpdateStageBlend` cross-fades the stage table straight into them
+
+The [twenty-third pass](#the-float-parameters-and-where-the-tint-sits) closed
+with two "static analysis does not settle this, an RPCS3 write watchpoint does"
+items. **Both are settled here, from the file, with no bridge and no emulator.**
+The pass also answers the
+[fifteenth pass](#2026-08-30-a-fifteenth-pass-the-stage-table-has-a-per-key-getter-api---four-keys-reach-a-draw-and-the-scenetrack-colours-reach-nothing)'s
+own negative - the `Scene.*`/`Track.*` colours *do* reach a draw.
+
+### Why four sweeps missed it, and the sweep that finds it
+
+Every prior sweep keyed on **`displacement(r14)`**, where `r14`/`r28` is the
+loader's own base `0x00c7dfb0`. The writer is a *different function* that loads
+the same base into `r30` and stores with the **indexed** form
+`stvx rV, r30, rB`, where `rB` is an ordinary `li rB, 13504` a few instructions
+earlier. There is no displacement to grep and no `lis`/`ori` literal either, so
+a byte-pattern search for the address finds nothing - which is exactly the shape
+the twenty-third pass predicted, and then wrongly concluded was unreachable
+statically.
+
+The sweep that works, and is worth reusing on this image:
+
+1. Enumerate every TOC slot whose word lands within +/-0x8000 of the target
+   range (`scan_toc_loads` in `scripts/ps3-toc.py` already builds slot -> users).
+2. Collect the functions that load any such slot. For `0x00c81450`-`0x00c81570`
+   that is 21 functions off `0x00c7dfb0` plus the eight parameter publishers.
+3. Run a straight-line register tracker over each, resolving `stw`/`stfs`/`stvx`
+   /`stwx` targets to absolute addresses.
+
+**The transferable rule, and this page's fourth instance of it**: sweep on the
+*set* of addressing forms, never on one. `stvx rA,rB` is a store with no
+displacement and no literal, and it is invisible to both of this page's
+established search idioms at once.
+
+### `Environment_UpdateStageBlend` (`0x003da540`) writes all seven Zone vec4s
+
+Base `r30 = 0x00c7dfb0` (TOC slot `0x008b7940`, `lwz r30,-23172(r2)` at
+`0x003da780`), independently cross-checked by `addi r27, r30, 4096` at
+`0x003da898` producing `0x00c7efb0` = `g_effect_settings_stages` - so every
+target address below rests on a base that two separate instructions agree on.
+
+Two stage indices are in play, both read from `H[e]` (`0x008c2cb8`):
+
+```
+3da7a0  lwzx r8, r8, r0       ; r8 = H[e].u32@0   - the current stage, n
+3da7bc  addi r9, r8, -1
+3da7c8  not  r0, r9
+3da7d4  srawi r0, r0, 31
+3da7e0  and  r9, r9, r0       ; r9 = max(n - 1, 0)
+3da7e8  mulli r9, r9, 592     ; 0x250 stride -> &stages[n-1]
+3da8b0  mulli r31, r8, 592    ;              -> &stages[n]
+```
+
+which is the ninth pass's "stage `n` against stage `n - 1`, saturating at zero",
+now read at the instruction level.
+
+**`Inner` is stage `n`; `Outer` is stage `max(n - 1, 0)`.** Confidence 84.
+
+| shader parameter | address | fed from |
+| --- | --- | --- |
+| `zoneEffectInner` | `0x00c81480` | `Scene.Texture Colour` of stage `n` |
+| `zoneEffectOuter` | `0x00c81490` | `Scene.Texture Colour` of stage `n-1` |
+| `zoneBaseInner` | `0x00c814a0` | `Scene.Base Colour Highlight` of stage `n` |
+| `zoneBaseOuter` | `0x00c814b0` | `Scene.Base Colour Highlight` of stage `n-1` |
+| `zoneBaseAltInner` | `0x00c814c0` | `Scene.Base Colour` of stage `n` |
+| `zoneBaseAltOuter` | `0x00c814d0` | `Scene.Base Colour` of stage `n-1` |
+| `zoneAnisoPower` | `0x00c81460` | (`Scene.Aniso Power`[`n`], `Scene.Aniso Power`[`n-1`]) |
+
+Confidence **84** on the whole table: each row is one `lvx vD, rBase, rOff` whose
+base register traces to `stages[n or n-1]` and whose `li r0, N` index traces to
+the pass-23 published pointer, read in sequence with no branch between them. The
+worked example, in program order (note the compiler schedules each `li r0` after
+the store that consumes the *previous* one):
+
+```
+3da8d0  lvx  v0, r9, r28      ; r9 = r30 + n*0x250, r28 = 4096 -> stages[n] + 0x00
+3da8dc  stvx v0, r30, r0      ; r0 = 13520 (0x34d0) -> 0x00c81480  zoneEffectInner
+3da8e0  li   r0, 13552
+3da8e4  lvx  v1, r10, r28     ; stages[n] + 0x20
+3da8f8  stvx v1, r30, r0      ; 0x34f0 -> 0x00c814a0                zoneBaseInner
+```
+
+`zoneAnisoPower` is assembled on the stack rather than copied, which is what
+makes it a **float2** rather than a vec4 - only two lanes are written with
+floats:
+
+```
+3da964  lfs  f0,  4096(r9)    ; stages[n]   + 0x180  Scene.Aniso Power
+3da970  lfs  f13, 4096(r4)    ; stages[n-1] + 0x180
+3da988  stfs f0,  2848(r1)    ; lane 0
+3da98c  stfs f13, 2852(r1)    ; lane 1
+3da990  stw  r0,  2856(r1)    ; lanes 2-3: whatever r0 held, never read
+3da994  stw  r0,  2860(r1)
+3da99c  lvx  v0, r1, r0
+3da9a4  stvx v0, r30, r0      ; 0x34b0 -> 0x00c81460                zoneAnisoPower
+```
+
+This is an exact, independent corroboration of
+[zone-shader.md](zone-shader.md)'s reading that `zoneAnisoPower` is a float2
+whose `.x`/`.y` are the inner and outer exponents: the engine writes exactly two
+lanes and leaves the other two as an integer it happened to have in a register.
+
+### Inner versus outer is a **stage-transition wavefront**, not a static region
+
+Putting the sphere test together with the two indices reframes the whole effect,
+and the reframing is what makes the shader page's counter-intuitive parameter
+names read naturally:
+
+- `zoneColourTint.w` is the sphere **radius**, written per frame - see below.
+- Inside the sphere the **new** stage's colours apply, outside it the **old**
+  stage's.
+- So a Zone stage change is not a cross-fade in colour space at all. It is a
+  sphere expanding out of `zoneOrigin` that repaints the world stage by stage,
+  and the ninth pass's request/commit pair is what restarts it.
+
+Confidence **78** - every component is measured, but "the sphere grows and then
+the commit fires" is the assembly of them rather than a traced sequence. It is
+corroborated from a fourth direction: 2048 ships a whole named
+`Growing Texture.{Colour, Scale Bias, Factors}` key group and a
+`Debug.Reload Growing Textures` command (twelfth pass), which is the same idea
+under the successor title's own name.
+
+### `zoneColourTint`: the schema writes `.xy`, the blend writes `.w`, `.z` is never touched
+
+The single most useful row, because it closes the parameter end to end across
+three independent sources. The merge is a masked write, and the mask is built
+two instructions apart from where it is used:
+
+```
+3da788  vspltisw v30, -1       ; v30 = ~0 in all four lanes
+3da79c  vxor v1, v1, v1        ; v1  = 0
+3da7b4  vsldoi v30, v1, v30, 4 ; v30 = (0, 0, 0, ~0)  - lane 3 only
+3da778  li   r11, 13504
+3da7a8  lvx  v13, r30, r11     ; v13 = the current 0x00c81470
+3da7b8  lfs  f0, 8(r9)         ; r9 = &H[e]  ->  H[e].f32@0x08
+3da7c4  stfs f0, 3712(r1)
+3da7cc  lvewx v0, r1, r26
+3da7d8  vperm v1, v1, v0, v28
+3da7ec  vspltw v1, v1, 0       ; v1  = splat(H[e].f32@0x08)
+3da804  vsel v13, v13, v1, v30 ; lane 3 only
+3da81c  stvx v13, r30, r11     ; -> 0x00c81470
+```
+
+`vsel vD, vA, vB, vC` is `(vA & ~vC) | (vB & vC)`, so with `v30 = (0,0,0,~0)`
+**exactly lane 3 is replaced and lanes 0-2 survive the frame**. Confidence 85 -
+the mask is constructed from two literals and one `vsldoi` with nothing between.
+
+That matters because lanes 0 and 1 have their own, *different* writer, found the
+same day and described next. So:
+
+| lane | written by | value |
+| --- | --- | --- |
+| `.x` | `Environment_RegisterStageSchema`, at file-parse time | `Texture U scale` |
+| `.y` | the same | `Texture V scale` |
+| `.z` | nothing after the zero-initialiser | `0` |
+| `.w` | `Environment_UpdateStageBlend`, per frame | `H[e].f32@0x08` |
+
+Three sources agreeing that `zoneColourTint` is **not a colour**: the microcode
+(`zone-shader.md`, `.xy` scales the zone UV, `.w` is the sphere radius), the
+engine's own schema (the keys are literally named "Texture U/V scale"), and the
+lane-3-only mask (a colour would be written whole). Confidence **86**, up from
+the shader page's own 78.
+
+### `Texture U scale` / `Texture V scale` are `zoneColourTint.xy`, from the file
+
+`Environment_RegisterStageSchema` (`0x003d0b98`) makes 58 registration calls;
+the seven that run before the fifteen-stage loop take **non-stage** destinations,
+and the last two of those are the answer:
+
+```
+3d5bfc  lwz  r24, -23172(r2)   ; r24 = 0x00c7dfb0   (the alternate entry path
+                               ;  taken from the test at 0x003d0c04)
+3d4fa4  addi r26, r24, 13504   ; r26 = 0x00c81470
+3d5094  bl   0x005d4418        ; f32 helper; r4 = r26, r5 = "Texture U scale"
+3d5090  addi r26, r26, 4
+3d50ac  bl   0x005d4418        ; f32 helper; r4 = 0x00c81474, r5 = "Texture V scale"
+```
+
+`r24 = 0x00c7dfb0` is checked a second way: `0x003d5c14` `lwz r3,13480(r24)` is
+the same field access as `0x003d8bc8` `lwz r3,13480(r14)` inside
+`Environment_LoadStageTextures`, where `r14`'s value is already established.
+Confidence **85**.
+
+[effectsettings.md](../../../formats/effectsettings.md) already records
+`"Texture U scale"`/`"Texture V scale"` as HD's only two **prefix-free**,
+title-wide keys, read straight off `EffectSettings::table`. So the file side and
+the executable side name the same two floats without either having been derived
+from the other.
+
+The full seven non-stage registrations, with the flag each is registered under
+(`r6`; across the other four registrars on this image, `2` marks every
+`Debug.*` key and `0` marks the authored ones):
+
+| key | helper | flag |
+| --- | --- | --- |
+| (group `"ZoneMode"`, string `0x007b1f80`) | `0x005d35c0` | - |
+| `Override game control` | `0x005d46b8` | 2 |
+| `Target zone level` | `0x005d4220` | 2 |
+| `Transition start speed` | `0x005d4418` (f32) | 2 |
+| `Transition acceleration` | `0x005d4418` (f32) | 2 |
+| `Texture U scale` | `0x005d4418` (f32) | 0 |
+| `Texture V scale` | `0x005d4418` (f32) | 0 |
+
+**`Target zone level`, `Transition start speed` and `Transition acceleration`
+are a developer stage driver** - flag 2, so not authored in the shipped file.
+They are not the race's own trigger (still unfound), but they are the first
+named handle on it, and `Transition start speed`/`acceleration` are the obvious
+candidates for what advances `H[e].f32@0x08`, the sphere radius. Confidence 65
+on that last link; the keys' destinations were not traced.
+
+### The zero-initialisers, for the record
+
+The same function stores stack-built vectors into the whole block before
+registering anything (`stvx rV, r28, rIdx`, `r28 = 0x00c7dfb0`). Simulated
+straight-line over `0x003d0de8`-`0x003d1038`:
+
+| address | parameter | initialiser |
+| --- | --- | --- |
+| `0x00c81460` | `zoneAnisoPower` | `(6, 6, 0, 0)` |
+| `0x00c81470` | `zoneColourTint` | `(1, 1, 0, 0)` |
+| `0x00c81480`-`0x00c814d0` | `zoneEffect*`, `zoneBase*` | zero |
+| `0x00c814e0` | the Track group's aniso power | `(6, 6, 0, 0)` |
+| `0x00c814f0`-`0x00c81570` | the rest of the Track group | zero |
+
+Confidence 80. **These are defaults, not runtime values** - and reading them as
+runtime values is the specific mistake this pass nearly shipped: with
+`zoneEffect*` at zero the whole effect multiplies out to nothing, which would
+have been written up as "HD's Zone effect cannot be fed" one step before the
+writer was found.
+
+### There is a second, parallel `Track` group of the same seven parameters
+
+`0x00c814e0`-`0x00c81540` receives the identical seven-parameter pattern built
+from the `Track.*` keys instead of the `Scene.*` ones. Two rows read in full:
+
+| address | fed from |
+| --- | --- |
+| `0x00c814e0` | (`Track.Aniso Power`[`n`], `Track.Aniso Power`[`n-1`]) - `lfs f0,4100(r11)`, `+0x184`, at `0x003daa94` |
+| `0x00c814f0` | `Track.Texture Colour` of stage `n` (`stages[n] + 0x60`) |
+
+The remaining five rows follow the same idiom and the same register set but were
+not each traced to their `li r0` index, so the *group* is confidence 80 and the
+individual assignments below `0x00c814f0` are **not** stated here.
+
+**This answers the fifteenth pass's negative.** `Scene.*` and `Track.*` are not
+"colours that reach nothing": they are two parallel feeds of the same seven Zone
+shader parameters, published to two different value pointers, and which of the
+two a material sees is the same publisher choice the twenty-third pass found
+governing `zoneMode*` versus `zoneModeTrack*`. So "which material does this
+recolour" has the plausible answer the fourteenth pass hoped for - scenery
+versus track - now with a traced path rather than a name-based guess.
+Confidence 75 that the publisher choice is what selects between them; the
+publishers themselves were not re-read this pass.
+
+### What is still unfed
+
+- **`zoneOrigin` (`0x00c81550`), the sphere centre.** Zero-initialised by
+  `Environment_RegisterStageSchema` and **not written by
+  `Environment_UpdateStageBlend`** - there is no `li rX, 13728` anywhere in
+  `0x003da540`-`0x003dc740`. Confidence 75 that it has no writer in this
+  function; no claim at all about the rest of the image.
+- **`H[e].f32@0x08`, the radius the blend copies into `.w`.** Its own writer was
+  not chased.
+- **`zoneAnisoPalette` / `zoneAnisoPaletteOuter`** (`0x00c81330`-`0x00c81350`).
+  Unchanged from the twenty-third pass: no filling write located, confidence 60
+  that they hold texture pointers at all.
+- **`zoneTexVis`'s 256 entries.** Unchanged, and the loop arithmetic does not
+  close: nine passes of 64 texels with the source running `0x008c2d78 + 1728`
+  down to `+ 192` and the destination advancing 256 bytes a pass is 576 texels
+  against a 256-entry table. No confidence score is offered until that is
+  reconciled.
+
+Reproduce with:
+
+```sh
+ELF=data/extracted/ps3/hdfury-eu/PS3_GAME/USRDIR/EBOOT.elf
+llvm-objdump -d --mcpu=pwr6 --start-address=0x3da740 --stop-address=0x3dab60 $ELF
+llvm-objdump -d --mcpu=pwr6 --start-address=0x3d4fa0 --stop-address=0x3d50b0 $ELF
+python3 scripts/ps3-toc.py resolve 0x003d0b98 -0x5A84   # -> 0x00c7dfb0
+python3 scripts/ps3-toc.py resolve 0x003d0b98 -0x59E4 -0x59E0   # the two key names
+```
+
+### Names applied
+
+None. Every function this pass reads (`Environment_UpdateStageBlend`
+`0x003da540`, `Environment_RegisterStageSchema` `0x003d0b98`) is already named
+in `names.tsv`, and no new function or datum crossed the threshold: the seven
+`Scene` value pointers are already covered by the twenty-third pass's own table,
+and the `Track` group is only 80 with two of seven rows read.
+
+
 ## See also
 
 - [zone-shader.md](zone-shader.md) - **what the shader does with all of it**,
