@@ -240,22 +240,24 @@ evidence, including the byte-level trace of every function in this chain:
   record of how the search ran, not as live questions. What is genuinely still
   open from that line of work:
 
-  1. **Who consumes `0x00c49120` and `0x00c49130`.** Established negatively
-     this pass: neither has a single xref anywhere, and neither appears among
-     `Scene_PrepareFrame`'s `addi rX, r31, <off>` publication forms, so
-     neither is bound as an engine parameter value the way `+0x110` is. They
-     are the second and third fog blocks (`Alt Fog`, `Track Fog` on the
-     vocabulary reading, confidence 80), so something consumes them - a
-     material-level parameter or a second table. **Do not re-run the xref or
-     `addi` sweeps**; both are done and both came back empty.
-  2. **Which schema key parses to `iVar8 + 0x3aac`.** This page attributes it
-     to `Scene.Texture Colour` at confidence 85, from the seventeenth pass.
-     That attribution now sits awkwardly: the field is a lone scalar that
-     becomes the `.w` of the colour at `+0x3630`, not a colour's own three
-     channels. Either the parse-offset attribution needs a re-check against
-     `g_EffectSettingsSchemaKeyNames`, or the key genuinely is a density-like
-     companion under a colour-sounding name. A parse-offset re-check settles
-     it; nothing else needs to be re-derived first.
+  1. **Who consumes `0x00c49120` and `0x00c49130`.** Searched two ways this
+     pass and not found: neither has a single xref anywhere, and neither
+     appears among `Scene_PrepareFrame`'s `addi rX, r31, <off>` publication
+     forms. They are the second and third fog blocks (`Alt Fog`, `Track Fog`
+     on the vocabulary reading, confidence 80), so something consumes them.
+     **Both searches are source-side and share a blind spot** - a publisher
+     reaching `block+0x120` through its own TOC-held base leaves neither a
+     literal nor an `addi` - so re-running either is wasted, but the negative
+     is not a proof. **The search worth running is destination-side**: sweep
+     both publication offset families (`i*0x20 + 0x18`, `i*0x20 + 0x1c`)
+     image-wide for a published pointer in `0x00c49100`-`0x00c49140`. That is
+     the technique that mapped parameters 52-71 successfully; it just was not
+     pointed at this question.
+  2. ~~Which schema key parses to `iVar8 + 0x3aac`.~~ **Answered the same
+     day** - it is `Scene.Texture Colour`'s own fourth lane, i.e.
+     `Scene.EQ brightness`, per the measured schema table. The seventeenth
+     pass's attribution stands; the field is a lone scalar because the blend
+     stores a 16-byte key's rgb and its fourth lane to two different places.
 
 - **2026-08-31, the object is found and the consumer search is now bounded.**
   The stalled `0x90(r1)` step is resolved: the slot is filled through a one-line
@@ -363,6 +365,14 @@ evidence, including the byte-level trace of every function in this chain:
   then a **read** watchpoint on `0x00c49110`, which names the consumer and
   settles the buffer's identity outright.
 
+  **Superseded in part, 2026-08-31**: the **read** watchpoint is no longer
+  needed - the consumer is `fogColour` and the buffer is the scene render
+  block, initialised by `Scene_InitRenderBlock`, so neither question is worth
+  a build cycle now. The **write** watchpoints are still the way to confirm
+  the gate byte `0x00d45f84` is open in a real Zone race, and a write
+  watchpoint on `0x00c81470` is the way to settle who writes `zoneColourTint`
+  (see [hd-zone-stage-textures-are-grounded.md](hd-zone-stage-textures-are-grounded.md)).
+
 
 - **2026-08-30, THE READER OF `0x00c81a5c` IS LOCATED.** Nineteen passes in,
   the "no reader located" row is answered: `Scene_PrepareFrame` reads it
@@ -411,6 +421,13 @@ evidence, including the byte-level trace of every function in this chain:
   needs no runtime address mapping. **General trap for this binary: a raw 16-bit
   displacement above `0x7fff` is negative, and mis-signing one yields a slot
   that exists, reads cleanly, and means nothing.**
+
+  **Settled 2026-08-31 - `0x00c49000` is the scene render block**, initialised
+  by `Scene_InitRenderBlock` (`0x003aa618`), whose own body maps a good part of
+  its layout (identity matrices at `+0x00`-`+0xf0`, the `float4` run at
+  `+0x7ba0`-`+0x7c30`, the parameter-array pointer at `+0x7c60`). The paragraph
+  below is the record of the attempt that did not close it, kept for the
+  technique rather than the question.
 
   **The buffer's identity is still open at 55, and the static attempt to close
   it came back ambiguous rather than empty.** `0x00c49000` is touched from
@@ -694,21 +711,25 @@ evidence, including the byte-level trace of every function in this chain:
   [zone-effectsettings-loader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md)'s
   twenty-second pass.
 
-  **Two things this changed on the way.** The merge mask is
+  **What it says the tint actually is.** The merge mask is
   `[0,0,0,0xffffffff]`, so each blended scalar becomes a colour's **`.w`**,
   not one of its channels; and `Environment_UpdateStageBlend` writes the three
-  vec4 bases too (`+0x3630`/`+0x3640`/`+0x3650` off the stage base). So the
-  stage table authors three complete `(rgb, density)` fog blocks, of which
-  only the first reaches a shader through the parameter table - `+0x120` and
-  `+0x130` are provably *not* bound as parameter values. **This corroborates
-  the shipped `oag_formats::effectsettings` design rather than contradicting
-  it**: the parser's own confidence-74 reading that a fog colour's fourth lane
-  carries its density is exactly the packing HD's renderer performs at
-  runtime.
+  vec4 bases too (`+0x3630`/`+0x3640`/`+0x3650` off the stage base). Lined up
+  against the fourteenth pass's measured key-to-offset table (51 keys,
+  confidence 88), that makes each `(rgb, scalar)` pair the two halves of one
+  authored 16-byte key, stored apart and reassembled per frame - and the table
+  names the three cross-faded fields as `Scene.Texture Colour`,
+  `Scene.Base Colour Highlight` and `Scene.Base Colour`, with `Scene.EQ
+  brightness` occupying `Scene.Texture Colour`'s own fourth lane. **So
+  `fogColour` = `Scene.Texture Colour.rgb` + `Scene.EQ brightness` in `.w`**,
+  and this *confirms* the seventeenth pass's `Scene.Texture Colour`
+  attribution rather than unsettling it. An intermediate reading of these
+  three pairs as the three fog blocks (`Fog`/`Alt Fog`/`Track Fog`) was
+  withdrawn on that evidence - `Lighting.Fog *` sits at `+0x1a0`/`+0x1d0` and
+  is not cross-faded at all.
 
-  What is left from this step is two narrower questions, both listed below
-  rather than here: who consumes `+0x120`/`+0x130`, and which schema key
-  actually parses to `+0x3aac`.
+  What is left from this step is one narrower question, listed below rather
+  than here: who consumes `+0x120`/`+0x130`.
 - Find the write site for `Zone_UpdateStage`'s `+0x634` field - the field the
   clamp-to-12 match confirms drives stage selection, but nothing this pass
   traced writes it. **Searched a third time, 2026-08-28, and still not

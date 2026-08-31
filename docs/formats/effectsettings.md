@@ -609,6 +609,16 @@ traced.
   The Rust side still blends fields chosen by the *file's own key names*,
   which this measurement vindicates rather than changes.
 
+  **2026-08-31: where the first of the three ends up is now known too.** HD
+  stores `Scene.Texture Colour`'s rgb and its fourth lane
+  (`Scene.EQ brightness`) to two separate addresses, reassembles them into one
+  `float4` per frame in `Scene_PrepareFrame`, and publishes that as the engine
+  shader parameter **`fogColour`** - so the parameter's name and the key's name
+  disagree while the addresses do not. Chain and arithmetic in
+  [zone-effectsettings-loader.md](../ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md)'s
+  twenty-second pass, confidence 90 on the binding and 80 on the key
+  attribution. Nothing was found publishing the other two.
+
   **2026-08-30: the mapping's producer is found, the mapping itself is not.**
   `Environment_RegisterStageSchema` (`0x003d0b98` on HD, `0x8104714c` on
   2048) is the function that hands each `"%s.<Key>"` template, formatted

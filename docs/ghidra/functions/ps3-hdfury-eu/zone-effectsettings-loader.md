@@ -3313,23 +3313,31 @@ colour, and the three results are stored to `block+0x110`, `+0x120` and
 `0x003aad64` and `0x003aafc8`), confirming the twentieth pass's correction of
 the destinations exactly.
 
-`fogColour` is therefore `rgb` from `0x00c815e0` and `.w` from `0x00c81a5c` -
-**a colour and a density packed into one `float4`**, which is precisely the
-shape `.effectsettings` authors its fog in (`Fog colour` + its own density,
-three times over: `Fog`, `Alt Fog`, `Track Fog`). Three `(rgb, scalar)` pairs
-merging into three vec4s, of which the first is the engine's fog colour, is a
-strong structural match for those three fog blocks. Confidence **65** on that
-reading - structural and vocabulary evidence, no direct parse-offset proof.
+`fogColour` is therefore `rgb` from `0x00c815e0` and `.w` from `0x00c81a5c`,
+assembled from two separately-stored halves of one authored key.
 
-**And it puts a real question against this page's own `Scene.Texture Colour`
-attribution** (confidence 85, seventeenth pass): the three floats at
-`0x00c81a5c`/`0x60`/`0x64` are not a colour's three channels feeding one
-destination, they are three *independent* scalars, each landing in the `.w` of
-a *different* colour. If they are the three fog densities, then whatever key
-`Environment_UpdateStageBlend` reads into `iVar8+0x3aac` is not
-`Scene.Texture Colour`'s rgb. Both readings rest on real traces and are
-recorded here unreconciled rather than one being quietly dropped - the
-resolution is a parse-offset re-check against the schema.
+**And the fourteenth pass's schema table says which key, so this confirms the
+seventeenth pass's attribution rather than threatening it.** The first reading
+of this section guessed the three `(rgb, scalar)` pairs were the three fog
+blocks (`Fog`, `Alt Fog`, `Track Fog`) on vocabulary grounds, and **that guess
+is withdrawn** - the measured key-to-offset table (51 keys, confidence 88,
+enumerated from `Environment_RegisterStageSchema`'s own registration calls)
+already answers it and answers it differently. The three cross-faded fields
+are `Scene.Texture Colour` (`+0x00`), `Scene.Base Colour Highlight` (`+0x20`)
+and `Scene.Base Colour` (`+0x40`) - **not** any `Lighting.Fog *` key, which
+sits at `+0x1a0`/`+0x1d0` and is not cross-faded at all. And that table
+records exactly one structural oddity in the Scene block: **`Scene.EQ
+brightness` occupies the fourth lane of `Scene.Texture Colour`**.
+
+That is this section's split, from the other side. The blend takes one 16-byte
+authored key and stores its halves apart - rgb to `0x00c815e0`, fourth lane to
+`0x00c81a5c` - and `Scene_PrepareFrame` reassembles them into one `float4`.
+So `fogColour`'s value is `Scene.Texture Colour.rgb` with `Scene.EQ
+brightness` in `.w`. Confidence **80**, resting on the schema table's 88 plus
+this pass's instruction-level read of the merge. The engine parameter is
+called `fogColour` and the key that feeds it is called `Texture Colour`; the
+names disagree and the addresses do not, which is worth stating plainly rather
+than smoothing over.
 
 ### Three follow-ups the same day: the fog blocks are whole, and two negatives worth not re-deriving
 
@@ -3350,21 +3358,31 @@ base `r30` (`= 0x00c7dfb0`) -
 - and the three scalars are written against that same base at `+0x3aac`,
 `+0x3ab0`, `+0x3ab4`. So the rgb and the `.w` of every one of the three
 colours are authored by the same `.effectsettings` stage table and cross-faded
-by the same function, per frame. That lifts the "three fog blocks (`Fog`,
-`Alt Fog`, `Track Fog`), each colour-plus-density" reading from 65 to **80**,
-and it sharpens rather than settles the `Scene.Texture Colour` question: what
-needs re-checking is which schema key parses to `+0x3aac`, now known to be a
-companion scalar of the colour at `+0x3630` rather than a colour's own channel.
+by the same function, per frame. Read together with the schema table above,
+that makes each pair the two halves of **one** authored 16-byte key rather
+than a colour and an unrelated companion: `Scene.Texture Colour` with `Scene.EQ
+brightness` in its fourth lane, and the same shape for
+`Scene.Base Colour Highlight` and `Scene.Base Colour`.
 
-**`+0x120` and `+0x130` are *not* bound as engine parameter values.** Checked
-two ways, and recorded because a negative costs as much to establish as a hit:
-`get_xrefs_to` returns nothing at all for `0x00c49120` or `0x00c49130` (against
-`0x00c49110`, which is published), and neither offset appears among
+**`+0x120` and `+0x130` were not found bound as engine parameter values.**
+Checked two ways, and recorded because a negative costs as much to establish as
+a hit: `get_xrefs_to` returns nothing at all for `0x00c49120` or `0x00c49130`
+(against `0x00c49110`, which is published), and neither offset appears among
 `Scene_PrepareFrame`'s `addi rX, r31, <off>` forms - the only one in the whole
-`0x100`-`0x180` band is `r23 = +0x110`. **So only the first of the three fog
-blocks reaches a shader through the engine parameter table.** The other two are
-consumed by some other route (a material-level parameter, or a second table),
-which is a fresh question rather than a continuation of this one.
+`0x100`-`0x180` band is `r23 = +0x110`.
+
+**But both of those are source-side searches and share one blind spot**, so
+this is a gap named rather than a proof: a publisher that reaches
+`block+0x120` by loading a base from its own TOC slot and adding `0x120`
+leaves no literal `0x00c49120` for `get_xrefs_to` and no
+`addi rX, r31, 0x120` anywhere - which is precisely the addressing form that
+defeated eighteen passes of this page's own consumer search. **The search that
+would actually discriminate is destination-side**: sweep both publication
+offset families (`i*0x20 + 0x18` for floats and `i*0x20 + 0x1c` for samplers)
+image-wide and look for any published pointer landing in
+`0x00c49100`-`0x00c49140`. Until that runs, "only the first of the three fog
+blocks reaches a shader through the parameter table" is the working reading,
+not a result.
 
 **Parameter 3 `world` is published as a null pointer, not an address.** Its
 source register is `li r28, 0` at `0x003ab204`, so `stw r28, 0x78(r11)` clears
