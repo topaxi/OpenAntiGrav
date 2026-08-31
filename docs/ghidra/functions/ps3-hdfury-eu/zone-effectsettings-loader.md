@@ -3990,10 +3990,10 @@ that precedes it:
 | 13696 | `0x3580` | `0x00c81530` | |
 | 13712 | `0x3590` | `0x00c81540` | |
 | *(none)* | `0x35a0` | `0x00c81550` | **`zoneOrigin` - skipped, no store** |
-| 13744 | `0x35b0` | `0x00c81560` | **unattributed** |
-| 13760 | `0x35c0` | `0x00c81570` | **unattributed** |
-| 13776 | `0x35d0` | `0x00c81580` | **unattributed** |
-| 13792 | `0x35e0` | `0x00c81590` | **unattributed** |
+| 13744 | `0x35b0` | `0x00c81560` | `Sky horizon colour`, inner |
+| 13760 | `0x35c0` | `0x00c81570` | `Sky horizon colour`, outer |
+| 13776 | `0x35d0` | `0x00c81580` | `Sky zenith colour`, inner |
+| 13792 | `0x35e0` | `0x00c81590` | `Sky zenith colour`, outer |
 
 Two results and one lead:
 
@@ -4004,12 +4004,18 @@ Two results and one lead:
    stepped over rather than merely unfound - which corroborates "no writer" from
    the strongest side available to a static read: the function that writes its
    neighbours declines to write it.
-3. **Four more vec4s are written immediately after the Track block and match
-   nothing published.** `0x00c81560`-`0x00c81590` are not in the parameter map
-   (`zoneAnisoPalette`/`zoneAnisoPaletteOuter` and `GradientColour0..3` are
-   *pointer arrays* at `0x00c81330`-`0x00c81350`, a different region). They are
-   deliberately left unnamed - four consecutive per-frame vec4s with no
-   consumer traced is a lead, not a finding.
+3. ~~Four more vec4s are written immediately after the Track block and match
+   nothing published.~~ **Attributed the same day, and they are the sky.**
+   `0x00c81560`-`0x00c81590` are `Sky horizon colour` and `Sky zenith colour`,
+   inner and outer, fed from stage-record offsets `+0x170` and `+0x160` - see
+   the pass above. **Two independent derivations agree**: that pass's symbolic
+   tracker reads those source offsets off the stores, and the key-to-offset
+   table recovered separately from `Environment_RegisterStageSchema` puts
+   `Sky zenith colour` at `+0x160` and `Sky horizon colour` at `+0x170`. Left
+   here as a worked example of the lead being right to raise and wrong to
+   name: four consecutive per-frame vec4s with no traced consumer really was a
+   lead, and it took a *source*-side read to say what they were - the
+   destination map alone could never have.
 
 Also worth separating for the next reader: `stvx v1, r1, r0` at `0x003daa78`
 and `stvx v0, r1, r0` at `0x003dab00` are base **`r1`**, the stack - register

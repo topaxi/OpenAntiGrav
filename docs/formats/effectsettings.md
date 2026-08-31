@@ -231,8 +231,23 @@ reversible and none of them a substitution for authored values:
 
 **What still draws off nothing**: `Sky horizon/zenith colour` (this engine's
 HD sky is the `sky.gtf` cubemap, which has no horizon/zenith term), the
-`Scene.*`/`Track.*` colours, the EQ tints and the `Growing Texture`
-parameters. All are parsed and reported; none is given an invented consumer.
+`Track.*` colours, the EQ tints and the `Growing Texture` parameters. All are
+parsed and reported; none is given an invented consumer.
+
+**2026-08-31, two corrections to that list.** The `Scene.*` colours came off
+it - `Scene.Texture Colour` reaches the shader as `zoneEffect*` and draws, and
+`Scene.Base Colour`/`Base Colour Highlight` feed `zoneBaseAlt*`/`zoneBase*`,
+which are traced and fed but not yet drawn. And **the sky pair is no longer
+"no consumer exists"**: `Environment_UpdateStageBlend` cross-faces
+`Sky horizon colour` and `Sky zenith colour` per stage into
+`0x00c81560`-`0x00c81590`, on exactly the same inner/outer terms as the Zone
+parameters, so the *original* does take a horizon/zenith term even though this
+engine's cubemap sky has nowhere to put one. Confirmed twice over: a symbolic
+read of the stores gives stage-record offsets `+0x170`/`+0x160`, and the
+key-to-offset table recovered separately from `Environment_RegisterStageSchema`
+puts those two keys at exactly those offsets. So the reason they draw off
+nothing here is a gap in *this* renderer's sky, not an absence in the data -
+which is a different kind of open item, and a more actionable one.
 
 **And nothing moves the stage.** A Zone race rests on stage `0` - which is
 where HD's own loader leaves it, `Environment_LoadStageTextures` resetting
