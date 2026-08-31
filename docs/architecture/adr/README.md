@@ -41,6 +41,7 @@ out to be wrong.
 | [0028](0028-camera-motion-blur-first.md) | Ship camera-reprojection motion blur first, under the strength row the full design specified | Accepted as the stepping stone; technique superseded by [ADR-0030](0030-velocity-buffer-motion-blur.md) |
 | [0029](0029-primer-capture-and-craft-focus-mask.md) | A capture renders a primer frame, and the craft are masked out of the camera blur | Accepted; the focus mask superseded by [ADR-0030](0030-velocity-buffer-motion-blur.md), the primer capture and cap stand |
 | [0030](0030-velocity-buffer-motion-blur.md) | The velocity buffer lands - measured per-draw motion replaces camera reprojection and the focus mask | Accepted; supersedes [ADR-0028](0028-camera-motion-blur-first.md)'s technique and [ADR-0029](0029-primer-capture-and-craft-focus-mask.md)'s mask |
+| [0031](0031-wait-briefly-for-the-mixer-lock.md) | The audio callback waits out a held mixer lock, and ramps the buffer it still loses | Accepted; supersedes [ADR-0018](0018-audio-mixer-architecture.md)'s silence-on-contention consequence |
 
 ## Format
 
