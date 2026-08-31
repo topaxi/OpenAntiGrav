@@ -50,6 +50,25 @@ Three things follow:
 - **A short grid packs to the back.** The compaction loop runs until nothing
   moves, so a three-racer field occupies slots 6, 7 and 8 rather than 1, 2 and
   3. That is a real behaviour and a cheap one to get wrong.
+
+  **It cannot be the whole story for a field of one, and the conflict is
+  recorded here rather than resolved.** Taken literally, compaction puts a
+  solo racer on slot 8 - which is the authored node itself, per this page's own
+  measurement below. But
+  [`track.md`](../../../formats/track.md#start-position)'s live capture of a
+  **time trial** on `16_Track` puts the craft **137.9 units ahead** of that
+  node and 22.4 to its left, which is slot 1's own offset, not slot 8's. Both
+  numbers are measured against the running original, so they cannot both
+  describe one code path.
+
+  The likeliest reading is that a **solo mode does not route through
+  `Race_SpawnGrid` at all** - there is no field to order or compact - and that
+  the compaction rule above governs only a race that fields opponents.
+  **That has not been traced**, so it is a hypothesis; what is measured is the
+  time trial's own start pose. `oag_game::race::Race::start` follows the
+  capture, placing a solo mode on slot 1, because it is the measurement that
+  directly covers the case - and it says so in its own comment and in the load
+  report rather than implying the grid path was read.
 - **The local player is forced to the back in the AI's own view.** `Ai_Construct`
   (`0x088536bc`) stores the slot at `obj + 0x50`, and for the local player it
   **overwrites it with `8`** before use. Five adjacent fields
