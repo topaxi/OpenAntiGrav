@@ -1388,17 +1388,97 @@ Anulpha Pass from brown to black. The number that decides it is the overlap
 between those 827 chunks and the ones that actually carry a lightmap, and that
 has not been measured yet.
 
+## A surface scrolls off an engine `time`, not off a keyframe block (2026-08-31)
+
+**HD authors no texture-transform keyframe block at all**, and that is a
+property of where the block lives rather than a gap in this reading. Pulse
+stores one `0x40`-byte block per material *inside the mesh payload*
+([vex.md](vex.md), "The texture-transform keyframe block"), and HD emptied that
+payload out - a PS3 `Mesh` node is a bounding-box pair and a chunk hash
+([rcsmodel.md](rcsmodel.md)). The animation moved into the shader.
+
+**The mechanism, read at instruction level.** `uvanim_diffuse_emissive`'s lit
+fragment block on Amphiseum, disassembled with `scripts/ps3-microcode.py`:
+
+```text
+@0x00  MOV R2.xy, f[TC3]
+@0x01  MOV R0.w, {const}          [<- parameter 0x906b67ba]
+@0x03  ADD R0.z, R2.yyyy, {const} [<- parameter 0x78256a45]
+@0x05  MAD R0.w, R0.zzzz, {const}, R0  [<- parameter 0x78787596]
+@0x07  TEX H0, f[TC3] unit0
+@0x08  MOV R0.z, R2.xxxx
+@0x0c  TEX H1.xyz, R0.zwzz unit1
+@0x0d  MUL H1.xyz, H1, {const}    [<- parameter 0xe8bcd7f5]
+@0x0f  MAD H0.xyz, H0.wwww, H1, H0
+```
+
+So unit 1 is sampled at `(u, (v + a) * b + time)` where `a` and `b` are the
+material's own authored floats and `time` is engine-supplied, and its result
+is **added** to the diffuse, gated by the diffuse alpha. On Talon's Junction's
+`mt_uvanim_diffuse_emissive2` those floats are `a = 0` and `b = -1`, so the
+emissive layer scrolls one texture unit per second in `-v`.
+
+**`0x906b67ba` is `time`, by preimage**, which is what turns "a constant the
+engine patches" into a clock. The same technique names 63 more; see below.
+
+**How far it reaches**, from `crates/render/examples/hd_uv_time_census.rs`:
+**310 of the disc's 1,186 `.rcsmaterial` declare `time`** in a fragment block,
+and a circuit's own material table runs from 4 of Sol 2's 442 slots to 101 of
+Modesto Heights' 859. `and_arrowmaterial`, `animating_traffic`,
+`scanlinebillboard`, `hologram`, `nr_crowd_bustle` and `cf_startbeam_glow` are
+among them - the same content classes Pulse animates through its keyframe
+blocks.
+
+**None of it is wired, and wiring the scroll alone would change no pixel.**
+`mesh.wgsl` samples the second texture at the diffuse coordinate and *selects*
+between the two, where this family **adds** one to the other. So the scroll
+has nothing to scroll until the additive emissive layer exists, and that is
+the per-material shader path this page's own "What is acted on, and what is
+not" defers. `scene.time` is already bound and already reaches the shader; the
+flame path is the only thing reading it.
+
+### The parameter names, by preimage
+
+The sweep that named the samplers, pointed at the *parameter* table:
+`crates/render/examples/hd_param_names.rs` hashes every identifier-shaped
+string in `EBOOT.elf` and matches against the hashes the disc's `.rcsmodel`
+material records carry. **64 of 300 land.** The `.rcsmaterial` files are no
+help here and that is itself a finding: their own tables store the hashes and
+never the strings, so 0 of 300 preimage against the whole shader corpus.
+
+| Hash | Name | Uses | Where |
+| --- | --- | ---: | --- |
+| `0xea1dcc4c` | `uvScale` | 1,364 | `lambert`, `simpletextureuvoffsetscale`, everywhere |
+| `0x1eb13436` | `uvOffset` | 1,364 | the same records, always paired with the above |
+| `0xce5c4410` | `W_Cycle` | 338 | `weapon_pads` |
+| `0x02ab9f07` | `Colour` | 156 | `mageffect08`, `speedup_material` |
+| `0xab31c2b1` | `Refbrightness` | 97 | the glass family |
+| `0xf0d90109` | `speed` | 79 | `uvanim_diffuse_emissive` and its five siblings |
+| `0x31182e0d` | `Speed` | 66 | `animhexlights`, `hologram` |
+| `0x336d2dcc` | `V_Offset` | 47 | `scrollingalpha`, `hd_muzzleflash` |
+| `0x1028bf46` | `Transparency` | 16 | `glass_colour_spec_trans` |
+| `0x8f2fe704` | `UV_offset` | 5 | `hd_plasmaring_glow` and the explosion glows |
+
+`uvScale`/`uvOffset` being the two commonest parameters on the disc, and always
+appearing together and in equal number, is the static half of the same story:
+a material's coordinate is `uv * uvScale + uvOffset` before anything animates
+it. **Nothing here reads either yet**, which is a second reason a scroll would
+be invisible - the surfaces carrying one would tile wrongly first.
+
 ## Open
 
-- **87 of the 125 sampler hashes**, including the three commonest
-  (`0xd5e000d1`, `0x00e5b679`, `0x1f6f85a3`, ~4,400 uses each across every unit),
-  which by their spread are engine samplers rather than a material's own.
 - **87 of the 125 sampler hashes**, including the three commonest
   (`0xd5e000d1`, `0x00e5b679`, `0x1f6f85a3`, ~4,400 uses each across every unit),
   which by their spread are engine samplers rather than a material's own. Three
   of those three are now named - `zoneTexInner`, `zoneTexInnerNearest`,
   `zoneTexVis` - by a preimage sweep over the executable's own identifier-shaped
   strings, which is the technique that should be tried on the rest.
+- **236 of the 300 parameter hashes**, after the sweep above. The residue is not
+  arbitrary: the named ones are artist-facing (`Colour`, `Speed`, `Brightness`)
+  and the unnamed ones cluster on one material each, which is what a name that
+  never reaches the executable's own string table looks like.
+- **`uvScale`, `uvOffset` and the `time` scroll are read and unwired**, in that
+  order of what should land first - the static transform before the animation.
 - **The microcode**, which is where the operation - multiply, add, replace -
   actually is.
 
