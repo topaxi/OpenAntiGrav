@@ -172,3 +172,6 @@
 0x003cdc60	function	Environment_GetStageBombOuterColour	85	zone-effectsettings-loader.md
 0x003cde20	function	Environment_GetStageAirbrakeColour	85	zone-effectsettings-loader.md
 0x003aa888	function	Scene_PrepareFrame	78	zone-effectsettings-loader.md
+0x005d6e78	function	Render_SetClipPlanes	65	zone-effectsettings-loader.md
+0x005bd0d8	function	Render_ClassifyAgainstPlanes	65	zone-effectsettings-loader.md
+0x005d4a08	function	Render_RunCompiledOps	58	zone-effectsettings-loader.md

@@ -2930,7 +2930,7 @@ left unpaired, the same discipline `renderer.md` itself already applies to
 `ShipAbsorbNode`/`exitglow`. Confidence on any reading of these functions'
 own purpose is below 50; per this project's naming rule, neither is renamed.
 
-### `FUN_005d4a08` - the most concrete remaining lead, not itself confirmed
+### `FUN_005d4a08` (`0x005d4a08`) - the most concrete remaining lead, not itself confirmed
 
 Called immediately after the `+0xf8` install, on both branches of the
 `entity->0xe4 & 0x2000` check, as `FUN_005d4a08(entity+300, iVar16)`. Its
@@ -2997,6 +2997,139 @@ it into a shader constant or vertex colour - is still not found, but the
 search is now bounded to one small, concrete artefact
 (`PTR_PTR_008bf21c`'s own entries, and one real entity's compiled list at
 `+300`/`+0x12c`) rather than an open-ended image-wide hunt.
+
+## 2026-08-31, a twenty-first pass: `PTR_PTR_008bf21c` decoded - `Render_SetClipPlanes` fully explained, `Render_RunCompiledOps` mapped, the tint consumer still not among its opcodes
+
+Continuing the twentieth pass's own next step at the team lead's request. Two
+results: a real error in that pass's own table reading is caught and fixed,
+and the correction turns into the clean explanation this whole thread was
+missing for what `FUN_005d6e78` actually is.
+
+### The error: a TOC slot is not the table, it is a pointer *to* the table
+
+The twentieth pass read the raw bytes at `PTR_PTR_008bf21c` (`0x008bf21c`)
+directly and found IEEE-754 floats mixed in among plausible-looking
+addresses, and concluded the table itself was heterogeneous. That reading
+missed one level of indirection. `RenderContext_RunCompiledOps`'s own
+disassembly (renamed `Render_RunCompiledOps` below) is unambiguous once
+looked at directly:
+
+```
+005d4a3c  lwz  r30, 0x1e58(r2)     ; r30 = the VALUE stored at TOC+0x1e58 (0x008bf21c)
+005d4a40  rlwinm r9, r3, 0x2,...   ; r9 = tag * 4
+005d4a4c  lwzx r11, r30, r9        ; r11 = *(r30 + tag*4)   <- the real table is at r30, not 0x008bf21c
+005d4a50  lwz  r0, 0x0(r11)        ; func   <- {func, toc} OPD descriptor
+005d4a58  lwz  r2, 0x4(r11)        ; toc
+005d4a5c  mtspr CTR, r0
+005d4a60  bctrl                    ; proper cross-module indirect call
+```
+
+`lwz rX, disp(r2)` **loads** the TOC slot's contents; it does not compute the
+slot's own address. `0x008bf21c` is a TOC slot holding a pointer, and that
+pointer - read directly, `0x00927518` - is where the real 16-entry table
+lives. The same mistake, caught the same way, applies to the twentieth
+pass's read of `PTR_DAT_008bf208`: that slot holds `0x005d27c8`, a self-
+relative jump table living inside `FwKeyedText_ParseEntry`'s own body (case
+targets are `0x005d27c8 + table[tag]`, confirmed directly from Ghidra's own
+decompile: `PTR_DAT_008bf208 + *(int*)(PTR_DAT_008bf208 + bVar1*4)`, where
+Ghidra's `PTR_DAT_...` reference already denotes the *loaded* pointer, not
+the slot's own address - the same convention that tripped this pass up
+manually). **The "shared table" hypothesis the twentieth pass raised is
+retracted**: `0x00927518` (16 real entries, TOC-verified, see below) and
+`0x005d27c8` (`FwKeyedText_ParseEntry`'s own switch table) are two
+completely separate tables at two unrelated addresses. Their TOC slots
+happen to sit 20 bytes apart in the same module's TOC - two ordinary,
+unrelated TOC entries, nothing more.
+
+### The real table, read from its real base
+
+`0x00927518`, 16 entries, each a pointer to an OPD descriptor (`{func, toc}`,
+every one TOC-verified `0x008bd3c4`, dereferenced and read, not assumed):
+
+| tag | target | role, read from the decompile |
+| ---: | --- | --- |
+| 0 | `FUN_005d5dd8` | no-op (`{ return; }`) |
+| 1 | *(null - never called, this is the loop terminator)* | |
+| 2 | `FUN_005d5e40` | reads one word, calls `FUN_005d6e20(cursor, word)` - invoke a named/indexed sub-list |
+| 3 | `FUN_005d5de0` | `*cursor = *(int*)*cursor` - follow a pointer embedded in the stream |
+| 4 | `FUN_005d6a68` | `*cursor = *cursor + *(int*)*cursor + 4` - skip a variable-length span by its own encoded length |
+| 5 | `FUN_005d69f0` | test one bit of a flag byte at `context+8`-relative; conditionally jump to an **absolute** offset read from the stream |
+| 6 | `FUN_005d6970` | the same bit test as tag 5; conditionally jump to a **cursor-relative** offset instead - the same primitive, two addressing modes |
+| 8 | `FUN_005d68d0` | reads 2 words, calls `FUN_005d74d0`, which writes them straight into `context+8`/`context+0xc` and flips two bits of `context+4` |
+| 9 | `FUN_005d6920` | reads 2 words, calls `FUN_005d7410` (not itself read this pass - same shape as tag 8's helper) |
+| 10 | `FUN_005d6820` | reads 3 words, calls `FUN_005d7430` (not read) |
+| 11 | `FUN_005d6878` | reads 3 words, calls `FUN_005d7480` (not read) |
+| 12 | `FUN_005d6758` | reads **24 words (six vec4)** into a stack buffer, then calls `Render_SetClipPlanes(cursor_ctx, &buffer)` |
+| 15 | `FUN_005d6660` | reads 3 words, calls `FUN_005d70c8(cursor_ctx, w0, w1, w2)` - a bitmask writer, below |
+
+(tags 7, 13, 14 not fetched this pass - the pattern is clear enough without
+them and nothing about the tint consumer hinges on the two remaining gaps.)
+
+### `Render_SetClipPlanes` (renamed from `FUN_005d6e78`) is fully explained, and it really is unrelated to the tint
+
+Tag 12's handler reads six vec4s **directly out of the compiled bytecode
+stream** and hands them to the exact function the twentieth pass ruled out
+as the tint consumer - `FUN_005d6e78(context, &six_vec4_buffer)` - the
+identical six-`lvx`/`stvx`-pair copy into `context+0x50..0xb0` that
+`Scene_PrepareFrame` itself calls with `block+0x7cb0` as the source. **This
+is a second, independent, structurally different call site for the same
+function**, and it settles what the function actually is: a generic
+`Render_SetClipPlanes(context, six_vec4s)` primitive, reused by at least two
+unrelated callers (`Scene_PrepareFrame`'s own scene setup, and this generic
+per-entity bytecode format's tag 12) to install six vectors into a fixed
+context slot. Named at confidence 65 (structural evidence is unambiguous;
+the "planes" reading, not just "six vec4 sink", comes from what consumes
+them next).
+
+### `Render_ClassifyAgainstPlanes` (renamed from `FUN_005bd0d8`) - this closes the loop
+
+This is the address the original brief flagged as sitting in `renderer.md`'s
+RSX-command-emitter band, unverified. It is not an RSX emitter. Decompiled
+directly, it is an unambiguous six-plane classifier: for each of the six
+`context+{0x00,0x10,0x20,0x30,0x40,0x50}` vec4s, it computes a dot-product-
+style `vectorMultiplyAddFloatingPoint` + horizontal-sum against an input
+vector, compares against a threshold global (`fRam008bead8`), and returns
+one of three codes - `0` (inside every plane), `1` (outside at least one),
+`2` (partially intersecting). That is a standard point/sphere-vs-six-planes
+test, consuming exactly the slot `Render_SetClipPlanes` fills. Named at
+confidence 65 for the same reason - the shape is unambiguous, the exact
+semantic ("view frustum" vs "a local bounding volume") is not independently
+confirmed by a string or a caller name.
+
+`Render_RunCompiledOps`'s own tag 15 (`FUN_005d6660` -> `FUN_005d70c8`)
+feeds `Render_ClassifyAgainstPlanes`'s three-way result into a per-bit
+set/clear on a byte array at `context+8` (the same field tag 8 writes) -
+i.e. **tag 15 is "classify N consecutive parts against the current planes
+and record each one's visibility as a bit"**, matching the earlier reading
+of `+0x50` as a "plane cache" exactly. `Render_RunCompiledOps` itself
+(renamed from `FUN_005d4a08`, confidence 58 - the dispatch mechanism is
+100% certain from the disassembly, the "compiled ops for a render context"
+characterization is inferred from what its opcodes touch) is a generic
+per-object setup interpreter: control flow (skip/branch, both absolute and
+cursor-relative), sub-list invocation, and writes into several fields of
+the same context struct (`+4` flags, `+8`/`+0xc` scratch, `+0x50` planes) -
+not a shader-parameter binder or a draw-call emitter itself.
+
+### What this means for the still-open tint consumer
+
+None of the eleven opcodes read this pass touches `context+0xd8` or
+`context+0xf8` at all - `Render_RunCompiledOps` configures culling state and
+control flow for a per-entity setup pass, a genuinely different concern
+from the `+0xd8` parameter table `FUN_003ea368`/`FUN_003eb890` write the
+live tint into. The two mechanisms coexist inside the same context struct
+without one obviously feeding the other from what has been read so far.
+**Still open, and narrower than before**: whatever reads `context+0xd8+0xf8`
+back out is not among tags 0, 2-6, 8-12 or 15 of this bytecode format;
+either it is one of the three unread tags (7, 13, 14), or - more likely
+given how generic every other opcode in this table turned out to be - the
+`+0xd8` table is consumed by something entirely outside this dispatcher,
+at whatever later step actually flushes the per-object draw state (the
+"lazily-uploaded parameter table" idiom this page's nineteenth pass already
+compared to `Shader_InitParamEntry`'s own value-pointer convention).
+
+Applied and saved live: `Render_SetClipPlanes` (65), `Render_ClassifyAgainstPlanes`
+(65), `Render_RunCompiledOps` (58); rows added to `names.tsv` citing this
+section.
 
 ## See also
 

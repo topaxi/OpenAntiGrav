@@ -280,6 +280,29 @@ evidence, including the byte-level trace of every function in this chain:
   `docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md`'s
   twentieth pass.
 
+  **2026-08-31, twenty-first pass: the table read above was a misread - fixed,
+  and it explains `FUN_005d6e78` completely.** `PTR_PTR_008bf21c` is a TOC
+  slot, not the table; the real 16-entry table lives at the address that slot
+  holds (`0x00927518`), and every entry is a genuine pointer to a TOC-verified
+  OPD descriptor (no float constants mixed in after all - that reading missed
+  one level of indirection). Decoding it: `FUN_005d6e78` (now renamed
+  `Render_SetClipPlanes`, 65) turns out to be a generic "install six vec4s
+  into this render context's `+0x50` slot" primitive, called both by
+  `Scene_PrepareFrame` (with the scene block's planes) and by this dispatcher's
+  own tag 12 (with six vec4s read straight out of the compiled bytecode) -
+  fully explaining why it never touches `+0xd8`/`+0xf8`. `FUN_005bd0d8` (now
+  `Render_ClassifyAgainstPlanes`, 65) - the address the original brief tied to
+  "RSX command emitters" - is actually a six-plane point classifier
+  (inside/outside/intersecting), not an RSX emitter at all. `FUN_005d4a08`
+  (now `Render_RunCompiledOps`, 58) is a generic per-object setup interpreter:
+  control flow, sub-list calls, and culling/plane state - none of its eleven
+  read opcodes touch the `+0xd8`/`+0xf8` tint slot. **The tint consumer is
+  still open**, narrowed to: one of three unread opcodes (tags 7/13/14), or -
+  more likely given how generic everything else in this table is - something
+  entirely outside this dispatcher, at whatever step actually flushes the
+  lazily-filled parameter table. Full detail in the doc's twenty-first pass;
+  three renames applied and saved live, `names.tsv` updated.
+
 
 - **2026-08-31, where the static route stands on this thread, and what is left.**
   The chain is read end to end as data: `zonemode.effectsettings` ->
