@@ -123,7 +123,6 @@ BASELINE = {
     # `menu/rows.rs` and `menu/strip.rs`; `draw_list` picks between them and
     # draws nothing itself.
     "crates/game/src/menu.rs": 1975,
-    "crates/game/src/frontend.rs": 1289,
     "crates/render/src/psys.rs": 1956,
     "crates/game/src/audio.rs": 1798,
     "crates/trace/src/main.rs": 1614,
