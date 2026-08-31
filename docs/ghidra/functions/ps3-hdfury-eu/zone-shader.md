@@ -163,18 +163,36 @@ Settling it needs an RPCS3 **write watchpoint on the pixel buffer**
 reading. Confidence 75 that this is the right next experiment. Until it runs,
 a port can reproduce the *lookup* faithfully and must not invent what varies.
 
-## Two `scripts/ps3-microcode.py` defects found on the way
+## Two `scripts/ps3-microcode.py` defects found on the way - both now fixed
 
 Both would silently mislead the next reader, which is worse than a crash:
 
-1. **The per-instruction condition code is dropped** (word1 bits 20:18 test,
-   bits 28:21 swizzle). Without it the inner arm of the sphere test reads as
-   dead code, and the whole inner/outer mechanism disappears.
-2. **The parameter patch chain is not implemented**, so constants read as raw
-   slots rather than as the named parameters the engine patches in.
+1. **The per-instruction condition code was dropped** (word1 bits 20:18 test,
+   bits 28:21 swizzle, `TR`/`xyzw` = `0x727` the unconditional default).
+   Without it the inner arm of the sphere test reads as dead code and the
+   whole inner/outer mechanism disappears. Confidence 80.
+2. **The parameter patch chain was described in the tool's own docstring but
+   never implemented**, so constants printed as `{0, 0, 0, 0}` where a
+   parameter belongs. Confidence 82.
 
-Neither is fixed here. Anything read with that tool before this date and not
-hand-checked against the raw words should be treated as provisional.
+**Both fixed 2026-08-31**, and swept over 400 materials / 656,219 fragment
+instructions: no crashes, 60% of inline constants now resolve to the parameter
+that patches them (the rest are genuine literals, which a shader also has), and
+3% of instructions carry a non-default condition - a rate consistent with real
+predication rather than with a field being misread as one. A second copy of
+`cf_constantcolourglow` carries 20 `EQ(wwww)` against 18 `GE(wwww)`: near-equal
+counts of complementary predicates on one lane, which is the shape of two arms
+of a selection and not the shape of noise.
+
+**One caveat kept rather than smoothed over**: the condition field is verified
+on ALU instructions. Texture ops decode to non-default values too, and mixed
+opcodes carrying conditions is part of what argues the decode is real - but
+whether those bits mean the same thing for a texture fetch is unchecked, so a
+condition printed on a `TEX`/`TXP` is unconfirmed.
+
+**Anything read with that tool before 2026-08-31 and not hand-checked against
+the raw words should still be treated as provisional** - the fix does not
+retroactively validate output produced without it.
 
 ## See also
 
