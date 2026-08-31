@@ -23,7 +23,7 @@
 //! repeated on a disc twelve times the size, and
 //! `docs/rendering/scenery-animation.md` records the Pulse half.
 //!
-//! Four claims, each against something a self-consistent misread could not
+//! Five claims, each against something a self-consistent misread could not
 //! satisfy:
 //!
 //! 1. **Every node decodes, and its six key arrays tile its payload.** The
@@ -36,6 +36,10 @@
 //!    identity fallback put it.
 //! 4. **The drawn model carries it**: batches under a node get a non-zero
 //!    `xform`, and sampling the table at two times gives two matrices.
+//! 5. **Something uploads that table.** The first four all stop at the CPU,
+//!    and geometry baked in anchor space against an all-identity table on the
+//!    GPU draws at the anchor's origin - worse than the defect this fixed.
+//!    Only two frames of pixels answer it.
 
 use std::path::{Path, PathBuf};
 
@@ -279,4 +283,105 @@ fn a_circuits_anchored_scenery_is_placed_and_moves() {
         "no draw call is marked moving, so the frustum test would cull on a \
          time-zero sphere"
     );
+}
+
+/// Claim 5, and the only one that proves anything *uploads* the table: two
+/// renders of the same model at two clocks are two different pictures.
+///
+/// Every claim above stops at the CPU. `Model::sample_anim_nodes` producing
+/// two tables says nothing about whether a drawable writes one, and a model
+/// whose vertices are baked in **anchor** space against an all-identity table
+/// on the GPU draws at the anchor's local origin - which would be *worse* than
+/// the placement defect this work fixed, not better. Only a pixel answers that.
+///
+/// Offscreen, because this machine's windowed wgpu path screenshots black
+/// while the headless one works - `mesh_render::tests` and `zone_recolour`
+/// render on a real device the same way.
+///
+/// **The billboard is the discriminating target and the circuit is not.** A
+/// `track.vex` framed by its own bounding sphere puts every mover at a few
+/// pixels: Talon's Junction's 79 nodes move **4 of 76,800**, which is a real
+/// signal and a fragile assertion. `piranha_billboard_01` is 19 nodes over
+/// 1,174 vertices and is *all* mover, so it moves 1.5 % of the frame. Both are
+/// checked, with the threshold on the one that can carry it.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn two_animation_clocks_render_two_different_frames() {
+    let Some(image) = image() else { return };
+    let mut checked = 0usize;
+    for (path, floor) in MOVING_MODELS {
+        let Some((model, from)) = build_anywhere(&image, path) else {
+            continue;
+        };
+        checked += 1;
+        let shot = |seconds: f32| {
+            oag_render::mesh_render::capture_pixels_from(
+                &model,
+                320,
+                240,
+                0.0,
+                0.3,
+                oag_render::mesh_render::Anisotropy::default(),
+                seconds,
+            )
+            .expect("the offscreen capture runs")
+        };
+        let a = shot(0.0);
+        let b = shot(1.5);
+        let moved = a
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(b.as_chunks::<4>().0)
+            .filter(|(x, y)| x != y)
+            .count();
+        println!(
+            "{from}{path}: {} anim nodes, {moved} of {} pixels differ at 1.5 s",
+            model.anim_nodes.len(),
+            a.len() / 4
+        );
+        assert!(
+            moved >= *floor,
+            "{path} moved {moved} pixels, under the {floor} this target carries - \
+             either nothing uploads the node table or the geometry is not anchored"
+        );
+    }
+    assert_eq!(checked, MOVING_MODELS.len(), "every target was reachable");
+}
+
+/// Models whose geometry hangs off an `Anim Transform`, with the pixel count
+/// each is expected to move at 1.5 seconds. See the test's own doc comment for
+/// why the floors differ by two orders of magnitude.
+const MOVING_MODELS: &[(&str, usize)] = &[
+    (CIRCUIT.1, 1),
+    (
+        "/data/billboards/hd_adverts/piranha/piranha_billboard_01.vex",
+        500,
+    ),
+    (
+        "/data/billboards/hd_adverts/icaras/looping_background.vex",
+        100,
+    ),
+];
+
+/// Builds a `.vex` and its `.rcsmodel` out of whichever archive carries them.
+///
+/// The billboards are not in the circuits' archive, and which one holds a given
+/// advert is not worth pinning here - `oag_assets::Archives` exists for exactly
+/// this and needs a title package this test does not otherwise want.
+fn build_anywhere(image: &Path, path: &str) -> Option<(oag_render::mesh::Model, String)> {
+    for n in 0..ARCHIVES {
+        let archive = format!("PS3_GAME/USRDIR/DATA0{n}.PSARC");
+        let spec = format!("{}:{archive}", image.display());
+        let Ok(data) = mesh::read_blob(&spec, path) else {
+            continue;
+        };
+        let geometry = mesh::rcs::sibling_geometry(&spec, path, &data)?;
+        let (model, _) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
+            mesh::read_blob(&spec, name).ok()
+        })
+        .expect("the scene builds");
+        return Some((model, format!("DATA0{n} ")));
+    }
+    None
 }

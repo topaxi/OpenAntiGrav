@@ -32,8 +32,8 @@
 //! +0x20 f32[3] translation quantum, per axis
 //! +0x2c u32    translation key values  -> (s16, s16, s16) per key
 //! +0x30 f32    denominator of `AnimTransform_Update`'s rate multiplier
-//! +0x34 u32    flags: bit0 picks the translation evaluator, bit1 the rotation
-//!              one. Zero on all 393 nodes, so only the 16-bit forms are read
+//! +0x34 u32    flags: bit0 widens a translation key to an f32 triple, bit2 a
+//!              rotation key to an f32 quaternion. Zero on all 393 Pulse nodes
 //! +0x38 u32    scale key times         -> u16 frames
 //! +0x3c f32    seconds per key unit; 1/60 on all 393 nodes
 //! +0x40 u32    scale key values        -> (s16, s16, s16) per key, 1/256
