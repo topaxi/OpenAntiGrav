@@ -21,6 +21,7 @@ impl Session {
         // dropped buffer is a property of the wall clock, not of the timestep,
         // and `Output::report_health` throttles itself in frames.
         self.audio.output().report_health();
+        self.audio.output().flush_tap();
 
         // Before everything, because it is what makes there be anything: until
         // a disc has been picked there is no boot to finish and no front end to

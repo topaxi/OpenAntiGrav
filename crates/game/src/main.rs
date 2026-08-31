@@ -244,7 +244,13 @@ fn main() -> Result<()> {
     // headless, so that a player never hears the front end before the window
     // that shows it exists. See the two call sites below and
     // `App::open`.
-    let audio = audio::Audio::open(&settings.audio, cli.dump_audio.clone());
+    // `--tap-audio` records what the device is actually handed, which
+    // `--dump-audio` cannot: that one forces the null backend by construction.
+    let tap = cli.tap_audio.clone().map(|path| oag_audio::TapSpec {
+        seconds: cli.tap_seconds,
+        path,
+    });
+    let audio = audio::Audio::open(&settings.audio, cli.dump_audio.clone(), tap.as_ref());
 
     let (pose, camera) = match &cli.pose_from {
         Some(path) => {

@@ -209,6 +209,30 @@ pub(crate) struct Cli {
     #[arg(long, value_name = "FILE")]
     pub(crate) dump_audio: Option<std::path::PathBuf>,
 
+    /// Record what the **device** is handed to a WAV, while it plays.
+    ///
+    /// Not `--dump-audio`, which forces the null backend so that it can pull
+    /// from the mixer without racing a callback that is already draining it.
+    /// This one taps the callback itself, so it is the only way to see the
+    /// signal a real sound card received - which is what a fault that only
+    /// happens with hardware attached needs.
+    ///
+    /// Recording starts when the stream opens, so pair it with `--race` to skip
+    /// the front end. The file is written once it is full, from the frame loop,
+    /// so a run killed at the terminal still leaves it behind.
+    #[arg(long, value_name = "FILE")]
+    pub(crate) tap_audio: Option<std::path::PathBuf>,
+
+    /// How many seconds `--tap-audio` records. Preallocated, so it costs about
+    /// 384 KB a second.
+    #[arg(
+        long,
+        value_name = "SECONDS",
+        default_value_t = 90.0,
+        requires = "tap_audio"
+    )]
+    pub(crate) tap_seconds: f32,
+
     /// Pin the animation clock, in seconds, instead of deriving it from the
     /// tick.
     ///

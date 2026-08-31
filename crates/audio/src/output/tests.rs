@@ -372,3 +372,28 @@ fn an_unknown_range_is_left_alone() {
         cpal::BufferSize::Default
     );
 }
+
+/// The tap fills once and is taken once, which is what makes writing it from
+/// the frame loop safe to call sixty times a second.
+#[test]
+fn a_tap_fills_to_its_capacity_and_is_taken_exactly_once() {
+    let tap = Tap::new(8);
+    assert!(!tap.is_full());
+
+    tap.push(&[1.0, 2.0, 3.0, 4.0]);
+    assert_eq!(tap.recorded(), 4);
+    assert!(!tap.is_full());
+
+    // Past the end it keeps what fits and drops the rest rather than growing,
+    // because growing is allocating and this runs on the audio thread.
+    tap.push(&[5.0, 6.0, 7.0, 8.0, 9.0, 10.0]);
+    assert_eq!(tap.recorded(), 8);
+    assert!(tap.is_full());
+
+    assert_eq!(
+        tap.take().expect("the first take"),
+        vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]
+    );
+    assert!(tap.take().is_none(), "a recording is written once");
+    assert!(!tap.is_full());
+}

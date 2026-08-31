@@ -23,7 +23,17 @@ use log::{error, warn};
 use crate::mixer::{CHANNELS, Mixer};
 
 mod health;
+mod tap;
 pub use health::Health;
+pub use tap::Tap;
+
+/// What `--tap-audio` asks for: how much to record, and where to put it.
+#[derive(Debug, Clone)]
+pub struct TapSpec {
+    /// Seconds of output to keep. The recording starts when the stream does.
+    pub seconds: f32,
+    pub path: std::path::PathBuf,
+}
 
 /// The rate used when there is no device to ask.
 ///
@@ -88,6 +98,8 @@ pub struct Output {
     /// alone, because it is the only way a machine that cannot open a window
     /// learns what is happening on the machine that can.
     health: Arc<Health>,
+    /// The recording `--tap-audio` asked for, and where it goes.
+    tap: Option<(Arc<Tap>, std::path::PathBuf)>,
 }
 
 // `cpal::Stream` is deliberately not `Debug`, and the workspace warns on a
@@ -121,6 +133,7 @@ impl Output {
             sample_rate: rate,
             device: None,
             health: Arc::new(Health::default()),
+            tap: None,
         }
     }
 
@@ -131,7 +144,7 @@ impl Output {
     /// If there is no default device, its configuration cannot be read, or the
     /// stream cannot be built or started. Callers that would rather be silent
     /// than fail should use [`Output::open_or_null`].
-    pub fn open() -> Result<Self> {
+    pub fn open(tap: Option<&TapSpec>) -> Result<Self> {
         let host = cpal::default_host();
         let device = host
             .default_output_device()
@@ -167,6 +180,19 @@ impl Output {
 
         let mixer = Arc::new(Mutex::new(Mixer::new(sample_rate)));
         let health = Arc::new(Health::default());
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "a sample count from a caller-supplied duration"
+        )]
+        let recording = tap.map(|spec| {
+            (
+                Arc::new(Tap::new(
+                    (sample_rate as f32 * spec.seconds.clamp(1.0, 600.0)) as usize * CHANNELS,
+                )),
+                spec.path.clone(),
+            )
+        });
 
         // **The device's own sample format, not `f32`.** This built an `f32`
         // stream unconditionally until finding U1 of the 2026-08-18 review, and
@@ -177,16 +203,76 @@ impl Output {
         // `spread` is generic over the destination for that reason.
         let format = supported.sample_format();
         let stream = match format {
-            cpal::SampleFormat::F32 => build::<f32>(&device, config, &mixer, &health),
-            cpal::SampleFormat::F64 => build::<f64>(&device, config, &mixer, &health),
-            cpal::SampleFormat::I8 => build::<i8>(&device, config, &mixer, &health),
-            cpal::SampleFormat::I16 => build::<i16>(&device, config, &mixer, &health),
-            cpal::SampleFormat::I32 => build::<i32>(&device, config, &mixer, &health),
-            cpal::SampleFormat::I64 => build::<i64>(&device, config, &mixer, &health),
-            cpal::SampleFormat::U8 => build::<u8>(&device, config, &mixer, &health),
-            cpal::SampleFormat::U16 => build::<u16>(&device, config, &mixer, &health),
-            cpal::SampleFormat::U32 => build::<u32>(&device, config, &mixer, &health),
-            cpal::SampleFormat::U64 => build::<u64>(&device, config, &mixer, &health),
+            cpal::SampleFormat::F32 => build::<f32>(
+                &device,
+                config,
+                &mixer,
+                &health,
+                recording.as_ref().map(|(t, _)| t),
+            ),
+            cpal::SampleFormat::F64 => build::<f64>(
+                &device,
+                config,
+                &mixer,
+                &health,
+                recording.as_ref().map(|(t, _)| t),
+            ),
+            cpal::SampleFormat::I8 => build::<i8>(
+                &device,
+                config,
+                &mixer,
+                &health,
+                recording.as_ref().map(|(t, _)| t),
+            ),
+            cpal::SampleFormat::I16 => build::<i16>(
+                &device,
+                config,
+                &mixer,
+                &health,
+                recording.as_ref().map(|(t, _)| t),
+            ),
+            cpal::SampleFormat::I32 => build::<i32>(
+                &device,
+                config,
+                &mixer,
+                &health,
+                recording.as_ref().map(|(t, _)| t),
+            ),
+            cpal::SampleFormat::I64 => build::<i64>(
+                &device,
+                config,
+                &mixer,
+                &health,
+                recording.as_ref().map(|(t, _)| t),
+            ),
+            cpal::SampleFormat::U8 => build::<u8>(
+                &device,
+                config,
+                &mixer,
+                &health,
+                recording.as_ref().map(|(t, _)| t),
+            ),
+            cpal::SampleFormat::U16 => build::<u16>(
+                &device,
+                config,
+                &mixer,
+                &health,
+                recording.as_ref().map(|(t, _)| t),
+            ),
+            cpal::SampleFormat::U32 => build::<u32>(
+                &device,
+                config,
+                &mixer,
+                &health,
+                recording.as_ref().map(|(t, _)| t),
+            ),
+            cpal::SampleFormat::U64 => build::<u64>(
+                &device,
+                config,
+                &mixer,
+                &health,
+                recording.as_ref().map(|(t, _)| t),
+            ),
             // `SampleFormat` is `#[non_exhaustive]`, and the packed 24-bit and
             // DSD formats have no `FromSample<f32>` to convert through. Named
             // rather than silently silent, which is the failure this arm's
@@ -201,6 +287,7 @@ impl Output {
             sample_rate,
             device: Some(name),
             health,
+            tap: recording,
         })
     }
 
@@ -209,8 +296,8 @@ impl Output {
     /// The same degradation the video path already takes when its decoder is
     /// missing: say what is absent, by name, and carry on.
     #[must_use]
-    pub fn open_or_null() -> Self {
-        match Self::open() {
+    pub fn open_or_null(tap: Option<&TapSpec>) -> Self {
+        match Self::open(tap) {
             Ok(output) => output,
             Err(error) => {
                 warn!("audio: no output device ({error:#}); running silent");
@@ -235,6 +322,33 @@ impl Output {
     #[must_use]
     pub fn is_streaming(&self) -> bool {
         self.stream.is_some()
+    }
+
+    /// Writes the recording once it is full, and says where it went.
+    ///
+    /// Called once a frame beside [`Output::report_health`]. Writing from here
+    /// rather than at exit is deliberate: a run killed at the terminal still
+    /// leaves the evidence behind.
+    pub fn flush_tap(&self) {
+        let Some((tap, path)) = &self.tap else {
+            return;
+        };
+        if !tap.is_full() {
+            return;
+        }
+        let Some(samples) = tap.take() else {
+            return;
+        };
+        #[expect(clippy::cast_precision_loss, reason = "a duration for a message")]
+        let seconds = samples.len() as f32 / (self.sample_rate as f32 * CHANNELS as f32);
+        let wav = crate::wav::from_samples(&samples, self.sample_rate);
+        match std::fs::write(path, wav) {
+            Ok(()) => warn!(
+                "audio: wrote {} - {seconds:.1} s of exactly what the device was handed",
+                path.display()
+            ),
+            Err(e) => error!("audio: could not write {}: {e}", path.display()),
+        }
     }
 
     /// What the output callback has seen, for a test or an overlay to read.
@@ -327,6 +441,7 @@ fn build<T>(
     config: cpal::StreamConfig,
     mixer: &Arc<Mutex<Mixer>>,
     health: &Arc<Health>,
+    tap: Option<&Arc<Tap>>,
 ) -> Result<cpal::Stream>
 where
     T: cpal::SizedSample + cpal::FromSample<f32> + Send + 'static,
@@ -334,6 +449,7 @@ where
     let device_channels = usize::from(config.channels).max(1);
     let callback_mixer = Arc::clone(mixer);
     let callback_health = Arc::clone(health);
+    let callback_tap = tap.cloned();
     // Seconds per frame, so the waiting budget can be derived from the size of
     // the buffer actually handed over - a PipeWire quantum of 64 frames is
     // 1.45 ms and a 2,048-frame ALSA period is 46 ms, and a budget that suits
@@ -382,6 +498,10 @@ where
                 }
             } else {
                 callback_health.dropped();
+            }
+
+            if let Some(tap) = &callback_tap {
+                tap.push(&scratch);
             }
 
             spread(&scratch, data, device_channels);

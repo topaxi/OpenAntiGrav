@@ -659,10 +659,14 @@ impl Audio {
     /// could hear. Forcing the null backend makes the two mutually exclusive
     /// where they would otherwise be quietly wrong.
     #[must_use]
-    pub fn open(settings: &crate::settings::Audio, dump: Option<PathBuf>) -> Self {
+    pub fn open(
+        settings: &crate::settings::Audio,
+        dump: Option<PathBuf>,
+        tap: Option<&oag_audio::TapSpec>,
+    ) -> Self {
         let output = match &dump {
             Some(_) => Output::null(DUMP_SAMPLE_RATE),
-            None => Output::open_or_null(),
+            None => Output::open_or_null(tap),
         };
         if let Some(name) = output.device_name() {
             info!("audio: {name} at {} Hz", output.sample_rate());

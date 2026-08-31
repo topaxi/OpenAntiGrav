@@ -8,7 +8,13 @@
 //!
 //! ```sh
 //! cargo run -p oag-audio --example device-report --release -- 20
+//! cargo run -p oag-audio --example device-report --release -- 20 /tmp/tone.wav
 //! ```
+//!
+//! With a path, it also records what the device was handed and writes it
+//! there. That is the same `--tap-audio` the game has, on a tone this file
+//! generated, so a fault in the recording can be told from a fault in the
+//! game.
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -21,7 +27,9 @@ fn main() {
         .and_then(|a| a.parse().ok())
         .unwrap_or(10.0);
 
-    let output = Output::open_or_null();
+    let path = std::env::args().nth(2).map(std::path::PathBuf::from);
+    let tap = path.map(|path| oag_audio::TapSpec { seconds, path });
+    let output = Output::open_or_null(tap.as_ref());
     println!(
         "device: {:?}  rate: {} Hz  streaming: {}",
         output.device_name(),
@@ -59,6 +67,7 @@ fn main() {
         // `report_health` behaves the way it does in a race.
         std::thread::sleep(Duration::from_millis(16));
         output.report_health();
+        output.flush_tap();
         frame += 1;
     }
 

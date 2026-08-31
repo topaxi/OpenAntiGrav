@@ -116,49 +116,89 @@ nothing there either.
 
 ## Open
 
-**Where the thump comes from is still not known**, and the fault is now in the
-instrument as much as anywhere: `Health::scan` checked only the *seam between*
-two buffers until now, so it reported zero through a race that was audibly
-thumping. A voice ends wherever its own playhead runs out, which with a
-1,920-frame buffer is at the seam roughly one time in two thousand. It now
-scans every frame of every buffer and reports the **worst step it saw and the
-frame it saw it at**, whether or not anything crossed the threshold:
+**Every counter says the mix is clean, and the thump is still there.** The run
+after the full-buffer scan landed produced **no `audio:` line at all** - no
+dropped buffers, no steps over a quarter of full scale anywhere in any buffer,
+no late callbacks, no refused voices, nothing clipped, and no worst-step large
+enough to report on its own. Reproduced on speakers and on a Bluetooth headset,
+so it is not one output path.
 
+**The step detector is the wrong instrument for a thump, and that is why.** A
+click is a discontinuity between two adjacent samples and `Health::scan` finds
+those. A *bass drum* is not: a full-scale 50 Hz sine moves **0.0065** between
+samples at 48 kHz, which is a fifth of the *median* step in a busy engine bed
+(0.055) and well under its 99.9th percentile (0.287). An audible low-frequency
+transient can sit in the mix with every counter reading zero, which is exactly
+what is happening.
+
+So the next instrument is the waveform itself. `--tap-audio FILE` records what
+the callback hands cpal - not what the mixer would have produced, which is what
+`--dump-audio` gives and which is a different thing, because that one forces
+the null backend by construction. It is verified end to end on a generated
+tone: 4 s recorded, peak exactly half scale, maximum sample step 474 against a
+theoretical 472, no gaps.
+
+```sh
+just play --race --tap-audio /tmp/oag-tap.wav --tap-seconds 90
 ```
-audio: 0 dropped, 0 jump(s) in the mix (worst 0.187 at frame 913),
-       0 late callback(s) (worst 0.0 ms over), 0 voice(s) refused,
-       0 sample(s) clipped - of 5310 buffer(s) of 1920 frame(s) so far
-```
 
-That number is the whole diagnosis waiting to happen. A busy race genuinely
-moves 0.287 between samples on its own, so anything near or above that is the
-mix stepping, and the frame offset says whether it is at a buffer boundary
-(gain or pan, which `Mixer::render` applies once per buffer and not per sample)
-or in the middle of one (a voice starting or ending).
+Recording starts when the stream opens, so `--race` matters - it skips the front
+end and puts the recording on the track. The file is written from the frame loop
+the moment it is full, so a run killed at the terminal still leaves it behind.
 
-**One candidate is untested and now more likely than it was**: `Mixer::render`
-takes `gain` and `channel_gain` once for the whole buffer, by its own admission
-- "the original moves a pan over a ramp inside SCREAM rather than per sample,
-and a tick is short enough that stepping it here would model an interpolator we
-have not read". A tick was short enough at 512 frames. **At 1,920 frames it is
-40 ms**, and a craft passing the camera changes both across it. Ramping them
-per sample is a small change and would be closer to the original, not further
-from it - but it is a hypothesis, and two have already been wrong this session,
-so the worst-step line comes first.
+## What the file will settle
+
+- **The thump is in the recording**: it is ours, and it is visible as a
+  waveform and a spectrum rather than as a counter. That localises it to the
+  mixer or to what the mixer was told to play, and the timestamps line up
+  against whatever else the terminal said.
+- **The thump is not in the recording**: our samples are correct and something
+  downstream of `cpal`'s callback produces it - the ALSA plugin, PipeWire's
+  graph, or the resampler between 48 kHz and whatever the endpoint runs at.
+  That is a different investigation and none of the code in `crates/audio` can
+  fix it.
+
+## Two hypotheses tested and refuted, so nobody tests them twice
+
+**The engine's loop is not the seam.** The player's own guess was that
+`~ENGINE` loops and the wrap is the thump - it is 1.211 s long and held for the
+whole race, which fits "regular, every few seconds, even if I hit nothing"
+exactly. Rendered four loop periods through a real `Mixer`, the step across the
+wrap is **0.002 of full scale** against a median step of 0.055 in the same bed.
+The sample was authored to loop over its whole decoded buffer and it does.
+
+**And the PS-ADPCM loop flags are not usable as read.** Every block carries a
+flag byte at `+1` which `decode_adpcm` walks past; `pulse-psp-eu.chd`'s
+`~ENGINE` is 1,907 blocks flagged `0, 6, 2 x 1903, 3, 255` - a lead-in, a
+loop-start mark, the body, a loop-end mark, and a trailing block whose flag is
+not one of the eight defined values. Honouring those marks - loop 28..53,368
+rather than 0..53,396 - was implemented, measured, and **reverted**: it takes
+the seam from 0.002 to **0.176**, sixty times worse. Either the marks are one
+block off from the conventional reading or the encoder set them decoratively;
+what is certain is that the waveform's own seam is at 0 and the flags do not
+point at it. `.COLLISIONS` is flagged the same way (`0 x 434, 1, 7`) and its
+terminator block decodes to silence, so it costs nothing there either.
+
+## Also still open
+
+`Mixer::render` takes `gain` and `channel_gain` once for the whole buffer, by
+its own admission - "a tick is short enough that stepping it here would model an
+interpolator we have not read". A tick was short enough at 512 frames. **At
+1,920 frames it is 40 ms**, and a craft passing the camera changes both across
+it. Ramping them per sample would be closer to the original, not further from
+it. Untested, and not the thump on current evidence - the worst-step figure
+would have caught a gain staircase of any size - but it is real and it got
+worse when the buffer grew.
 
 ## Next Steps
 
-1. Play a race and read the `worst N at frame M` figure on the `audio:` line.
-   That is the measurement everything else waits on.
-2. **Worst near or above 0.3, at a frame that is not 0**: a voice is starting or
-   ending discontinuously. The frame offset times 1/48,000 says when inside the
-   buffer, and the release fade already covers a *stopped* voice, so look at
-   what starts.
-3. **Worst near or above 0.3, at frame 0 or near it**: the per-buffer gain and
-   pan staircase above. Ramp them per sample.
-4. **Worst comfortably under 0.3 and still thumping**: our samples are clean and
-   the fault is downstream of this process. The next instrument is a tap in the
-   callback that writes exactly what cpal was handed to a WAV, which
-   `--dump-audio` cannot do because it forces the null backend.
+1. Record a race: `just play --race --tap-audio /tmp/oag-tap.wav`. Hear at least
+   two thumps before the 90 s is up, and note roughly when.
+2. Look at the file. `audacity /tmp/oag-tap.wav`, or hand it to whoever can run
+   a spectrogram - a bass thump is obvious in one and invisible in a counter.
+3. If it is in the file, the timestamps are the lead: what else was happening at
+   that second, and which voice started or stopped near it.
+4. If it is not, stop looking in `crates/audio` - the mix is provably what it
+   should be, and the next place is the ALSA plugin and PipeWire's own graph.
 5. Still not done: the counters belong on the performance overlay
    (`crates/game/src/perf.rs`, `draw_list`) rather than only in the log.
