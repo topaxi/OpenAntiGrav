@@ -11,16 +11,20 @@ use super::*;
 ///
 /// Slot 0 is the identity, so a model gets `NODE_ANIM_LIMIT - 1` real nodes.
 ///
-/// **Measured, not guessed**: the busiest circuit is `16_Track` with 74
-/// `Anim Transform` nodes and `06_Track` has 71, against 393 over all twelve.
-/// So this is about a factor of 1.7 on the worst file, and 128 mat4s is 8 KiB
-/// of uniform - well inside the 64 KiB binding every backend guarantees.
-/// `scenery_animation_ground_truth.rs` re-measures it.
+/// **Measured, not guessed, and Wipeout HD is what sets it.** Pulse's busiest
+/// circuit is `16_Track` with 74 nodes, against 393 over all twelve - 128 was
+/// a factor of 1.7 on that. HD authors **5,518** across its seven archives and
+/// its busiest file is `modesto_heights/track.vex` with **259**, so 128 would
+/// have frozen 131 of that circuit's moving objects while drawing them in the
+/// right place. 384 is a factor of 1.48 on the worst file measured, and 384
+/// mat4s is 24 KiB of uniform - still well inside the 64 KiB binding every
+/// backend guarantees. `scenery_animation_ground_truth.rs` re-measures Pulse's
+/// side and `crates/render/examples/hd_anim_census.rs` sweeps HD's.
 ///
 /// Exceeding it is graceful: the nodes past the ceiling draw at their
 /// time-zero placement rather than the build failing - which is a frozen
 /// object, not a misplaced one.
-pub const NODE_ANIM_LIMIT: usize = 128;
+pub const NODE_ANIM_LIMIT: usize = 384;
 
 /// One `Anim Transform` a model carries, with everything needed to place it
 /// again at another time.
@@ -113,6 +117,7 @@ pub(super) fn collect(
 }
 
 /// How one node's geometry is baked and drawn: see [`placement`].
+#[derive(Debug, Clone, Copy)]
 pub(super) struct Placement {
     /// The matrix to bake this node's vertices with.
     pub(super) to_world: [f32; 16],
@@ -121,6 +126,19 @@ pub(super) struct Placement {
     /// The matrix that lifts an anchor-space bounding sphere into world space,
     /// or `None` when the vertices are already in world space.
     pub(super) bounds_matrix: Option<[f32; 16]>,
+}
+
+impl Placement {
+    /// Geometry that is already in world space and moves for nobody.
+    ///
+    /// Wipeout HD's second pass, which draws the 913 chunks of a circuit that
+    /// no `Mesh` node addresses: they carry a world-space bias and there is no
+    /// node above them to be anchored to. See `mesh::rcs::build_with_options`.
+    pub(super) const STATIC: Self = Self {
+        to_world: vex::IDENTITY,
+        xform: 0,
+        bounds_matrix: None,
+    };
 }
 
 /// Decides whether node `index` is baked in world space or in its anchor's.

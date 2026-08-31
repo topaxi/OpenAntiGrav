@@ -6,31 +6,56 @@
 //! quantisations, the hold-and-blend rule and the composition order.
 
 use super::*;
+use crate::ByteOrder;
 
 /// Builds a payload in the layout the module doc states.
 struct Builder {
     header: [u8; 0x50],
     body: Vec<u8>,
+    /// Which way round to write every field, so one test can build the same
+    /// payload the way Pulse ships it and the way Wipeout HD does.
+    order: ByteOrder,
 }
 
 impl Builder {
     fn new() -> Self {
-        let mut header = [0u8; 0x50];
-        header[0x3c..0x40].copy_from_slice(&(1.0f32 / 60.0).to_le_bytes());
-        Self {
-            header,
+        Self::with_order(ByteOrder::Little)
+    }
+
+    fn with_order(order: ByteOrder) -> Self {
+        let mut out = Self {
+            header: [0u8; 0x50],
             body: Vec::new(),
+            order,
+        };
+        let rate = (1.0f32 / 60.0).to_bits();
+        out.header[0x3c..0x40].copy_from_slice(&Self::bytes32(order, rate));
+        out
+    }
+
+    fn bytes16(order: ByteOrder, v: u16) -> [u8; 2] {
+        match order {
+            ByteOrder::Little => v.to_le_bytes(),
+            ByteOrder::Big => v.to_be_bytes(),
+        }
+    }
+
+    fn bytes32(order: ByteOrder, v: u32) -> [u8; 4] {
+        match order {
+            ByteOrder::Little => v.to_le_bytes(),
+            ByteOrder::Big => v.to_be_bytes(),
         }
     }
 
     fn u16(&mut self, at: usize, v: u16) -> &mut Self {
-        self.header[at..at + 2].copy_from_slice(&v.to_le_bytes());
+        self.header[at..at + 2].copy_from_slice(&Self::bytes16(self.order, v));
         self
     }
 
     fn f32x3(&mut self, at: usize, v: [f32; 3]) -> &mut Self {
         for (i, f) in v.iter().enumerate() {
-            self.header[at + i * 4..at + i * 4 + 4].copy_from_slice(&f.to_le_bytes());
+            self.header[at + i * 4..at + i * 4 + 4]
+                .copy_from_slice(&Self::bytes32(self.order, f.to_bits()));
         }
         self
     }
@@ -46,18 +71,20 @@ impl Builder {
         self.u16(count_at, u16::try_from(keys.len()).expect("small"));
         let times = 0x50 + self.body.len();
         for (time, _) in keys {
-            self.body.extend_from_slice(&time.to_le_bytes());
+            self.body
+                .extend_from_slice(&Self::bytes16(self.order, *time));
         }
         let values = 0x50 + self.body.len();
         for (_, (x, y, z)) in keys {
-            self.body.extend_from_slice(&x.to_le_bytes());
-            self.body.extend_from_slice(&y.to_le_bytes());
-            self.body.extend_from_slice(&z.to_le_bytes());
+            for axis in [x, y, z] {
+                self.body
+                    .extend_from_slice(&Self::bytes16(self.order, *axis as u16));
+            }
         }
         let times = u32::try_from(times).expect("small");
         let values = u32::try_from(values).expect("small");
-        self.header[times_at..times_at + 4].copy_from_slice(&times.to_le_bytes());
-        self.header[values_at..values_at + 4].copy_from_slice(&values.to_le_bytes());
+        self.header[times_at..times_at + 4].copy_from_slice(&Self::bytes32(self.order, times));
+        self.header[values_at..values_at + 4].copy_from_slice(&Self::bytes32(self.order, values));
         self
     }
 
@@ -69,7 +96,16 @@ impl Builder {
 }
 
 fn translation_only(keys: &[(u16, (i16, i16, i16))], base: [f32; 3], quantum: [f32; 3]) -> Vec<u8> {
-    let mut b = Builder::new();
+    translation_only_in(ByteOrder::Little, keys, base, quantum)
+}
+
+fn translation_only_in(
+    order: ByteOrder,
+    keys: &[(u16, (i16, i16, i16))],
+    base: [f32; 3],
+    quantum: [f32; 3],
+) -> Vec<u8> {
+    let mut b = Builder::with_order(order);
     b.channel(0x02, 0x0c, 0x2c, keys)
         .f32x3(0x10, base)
         .f32x3(0x20, quantum)
@@ -85,8 +121,8 @@ fn translation_only(keys: &[(u16, (i16, i16, i16))], base: [f32; 3], quantum: [f
 /// partly-filled one.
 #[test]
 fn a_short_payload_decodes_to_nothing() {
-    assert!(anim_transform(&[0u8; 0x4f]).is_none());
-    assert!(anim_transform(&[]).is_none());
+    assert!(anim_transform(&[0u8; 0x4f], ByteOrder::Little).is_none());
+    assert!(anim_transform(&[], ByteOrder::Little).is_none());
 }
 
 /// A key offset that runs past the payload fails the whole decode rather than
@@ -96,7 +132,7 @@ fn a_key_array_past_the_payload_fails_the_decode() {
     let mut payload = translation_only(&[(0, (0, 0, 0))], [0.0; 3], [1.0; 3]);
     // Point the translation values a kilobyte past the end.
     payload[0x2c..0x30].copy_from_slice(&4096u32.to_le_bytes());
-    assert!(anim_transform(&payload).is_none());
+    assert!(anim_transform(&payload, ByteOrder::Little).is_none());
 }
 
 /// `pos = value * quantum + base`, which is what `FUN_088fed44` computes with
@@ -108,7 +144,7 @@ fn translation_is_the_key_times_the_quantum_plus_the_base() {
         [10.0, 20.0, 30.0],
         [0.5, 0.25, 0.125],
     );
-    let anim = anim_transform(&payload).expect("decodes");
+    let anim = anim_transform(&payload, ByteOrder::Little).expect("decodes");
     let m = anim.sample(0.0);
     assert!((m[12] - (10.0 + 100.0 * 0.5)).abs() < 1e-4, "{}", m[12]);
     assert!((m[13] - (20.0 + 200.0 * 0.25)).abs() < 1e-4, "{}", m[13]);
@@ -121,7 +157,7 @@ fn translation_is_the_key_times_the_quantum_plus_the_base() {
 #[test]
 fn a_track_holds_its_first_and_last_key() {
     let payload = translation_only(&[(60, (0, 0, 0)), (120, (100, 0, 0))], [0.0; 3], [1.0; 3]);
-    let anim = anim_transform(&payload).expect("decodes");
+    let anim = anim_transform(&payload, ByteOrder::Little).expect("decodes");
     // Key times are frames, so 60 frames is one second.
     assert!((anim.sample(0.0)[12] - 0.0).abs() < 1e-4, "before");
     assert!((anim.sample(0.5)[12] - 0.0).abs() < 1e-4, "still before");
@@ -135,7 +171,7 @@ fn a_track_holds_its_first_and_last_key() {
 #[test]
 fn the_step_flag_holds_the_preceding_key() {
     let payload = translation_only(&[(0, (0, 0, 0)), (60, (100, 0, 0))], [0.0; 3], [1.0; 3]);
-    let mut anim = anim_transform(&payload).expect("decodes");
+    let mut anim = anim_transform(&payload, ByteOrder::Little).expect("decodes");
     assert!(
         !anim.step,
         "the payload alone cannot know: it is an attribute"
@@ -150,7 +186,7 @@ fn the_step_flag_holds_the_preceding_key() {
 #[test]
 fn loop_end_wraps_the_clock() {
     let payload = translation_only(&[(0, (0, 0, 0)), (60, (60, 0, 0))], [0.0; 3], [1.0; 3]);
-    let mut anim = anim_transform(&payload).expect("decodes");
+    let mut anim = anim_transform(&payload, ByteOrder::Little).expect("decodes");
     assert_eq!(
         anim.loop_seconds, DEFAULT_LOOP_SECONDS,
         "no attribute means the engine's own 6,000 second default"
@@ -175,7 +211,7 @@ fn rotation_is_a_compressed_unit_quaternion() {
         .channel(0x04, 0x08, 0x1c, &[(0, (0, quarter, 0))])
         .channel(0x06, 0x38, 0x40, &[(0, (256, 256, 256))])
         .u16(0x06, 0);
-    let anim = anim_transform(&b.build()).expect("decodes");
+    let anim = anim_transform(&b.build(), ByteOrder::Little).expect("decodes");
     let m = anim.sample(0.0);
     // A 90-degree turn about +y sends +x to -z and +z to +x, in this crate's
     // row-vector convention.
@@ -195,7 +231,7 @@ fn scale_is_two_fifty_sixths_and_leaves_the_translation_alone() {
         .channel(0x04, 0x08, 0x1c, &[(0, (0, 0, 0))])
         .u16(0x04, 0)
         .channel(0x06, 0x38, 0x40, &[(0, (512, 128, 256))]);
-    let anim = anim_transform(&b.build()).expect("decodes");
+    let anim = anim_transform(&b.build(), ByteOrder::Little).expect("decodes");
     let m = anim.sample(0.0);
     assert!((m[0] - 2.0).abs() < 1e-5, "x doubled: {}", m[0]);
     assert!((m[5] - 0.5).abs() < 1e-5, "y halved: {}", m[5]);
@@ -213,7 +249,7 @@ fn scale_is_two_fifty_sixths_and_leaves_the_translation_alone() {
 #[test]
 fn a_zero_count_channel_contributes_nothing() {
     let payload = translation_only(&[(0, (0, 0, 0))], [0.0; 3], [1.0; 3]);
-    let anim = anim_transform(&payload).expect("decodes");
+    let anim = anim_transform(&payload, ByteOrder::Little).expect("decodes");
     assert!(anim.rotation.is_empty());
     assert!(anim.scale.is_empty());
     let m = anim.sample(0.0);
@@ -228,6 +264,33 @@ fn a_zero_count_channel_contributes_nothing() {
 fn a_zero_seconds_per_key_falls_back_to_sixty_hertz() {
     let mut payload = translation_only(&[(0, (0, 0, 0)), (60, (60, 0, 0))], [0.0; 3], [1.0; 3]);
     payload[0x3c..0x40].copy_from_slice(&0.0f32.to_le_bytes());
-    let anim = anim_transform(&payload).expect("decodes");
+    let anim = anim_transform(&payload, ByteOrder::Little).expect("decodes");
     assert!((anim.sample(0.5)[12] - 30.0).abs() < 1e-3);
+}
+
+/// The same keys written big-endian decode to the same transform, and read the
+/// wrong way round they decode to nothing at all.
+///
+/// The second half is what matters: Wipeout HD writes this class big-endian on
+/// 5,518 nodes, and a little-endian read of one does **not** produce a slightly
+/// wrong matrix. It inflates the key counts by a factor of 256, the arrays then
+/// run past the payload, and the node falls back to the identity - which drops
+/// its placement along with its motion. See `docs/formats/hd-status.md`.
+#[test]
+fn a_big_endian_payload_decodes_the_same_and_only_that_way() {
+    let keys = [(0, (0, 0, 0)), (60, (100, -200, 300))];
+    let base = [1.5, -2.5, 3.5];
+    let quantum = [0.25, 0.5, 0.125];
+    let little = translation_only_in(ByteOrder::Little, &keys, base, quantum);
+    let big = translation_only_in(ByteOrder::Big, &keys, base, quantum);
+    assert_ne!(little, big, "the two spellings are different bytes");
+
+    let want = anim_transform(&little, ByteOrder::Little).expect("decodes");
+    let got = anim_transform(&big, ByteOrder::Big).expect("decodes big-endian");
+    assert_eq!(got, want);
+
+    assert!(
+        anim_transform(&big, ByteOrder::Little).is_none(),
+        "a big-endian payload read little-endian must fail rather than mislead"
+    );
 }

@@ -207,7 +207,7 @@ override colour_is_light: f32 = 0.0;
 // already is when read as a `mat4x4<f32>`: `transform_point` computes
 // `p.x*m[0] + p.y*m[4] + p.z*m[8] + m[12]`, which is exactly `M * v`.
 struct NodeAnims {
-    transform: array<mat4x4<f32>, 128>,
+    transform: array<mat4x4<f32>, 384>,
 };
 @group(3) @binding(1) var<uniform> node_anims: NodeAnims;
 

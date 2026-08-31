@@ -44,17 +44,41 @@
 //! `0` still stores one key, and the six arrays tile `[0x50, payload_len)`
 //! exactly on every one of the 393 - which is what pins the field map rather
 //! than making it plausible.
+//!
+//! # Wipeout HD writes the same layout big-endian
+//!
+//! Field for field, with only the byte order changed: 5,518 nodes across all
+//! seven of its archives decode, their six arrays tile contiguously from
+//! `0x50` with at most 15 bytes of alignment padding after (Pulse leaves none),
+//! and `seconds_per_key` is `1/60` and `flags` `0` on every one - the two
+//! values the evaluators above were read against. That is why
+//! [`anim_transform`] takes the order rather than sniffing it: a payload has no
+//! magic. See `docs/formats/hd-status.md`.
 
 use super::Node;
 
-/// One channel's authored keys: `u16` times in frames, `(x, y, z)` `s16`
-/// values whose meaning is the channel's.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+/// One channel's authored keys: `u16` times in frames, and a value per key
+/// whose meaning and units are the channel's.
+///
+/// **Values are held widened to `f32` and otherwise unscaled** - an `s16` key
+/// of `256` is `256.0` here, not `1.0` - because the scaling is the channel's
+/// own (`1/32767` on a rotation, `1/256` on a scale, the node's per-axis
+/// quantum on a translation) and [`AnimTransform::sample`] is where it belongs.
+/// Widening rather than keeping the `s16` is what lets [`wide`](Self::wide)
+/// keys share every line of the evaluator; see the module doc.
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct AnimChannel {
     /// Key times, in key units (frames at 1/60 s).
     pub times: Vec<u16>,
     /// `(x, y, z)` at each key, raw.
-    pub values: Vec<(i16, i16, i16)>,
+    pub values: Vec<[f32; 3]>,
+    /// The `w` of each key, on a [`wide`](Self::wide) rotation channel that
+    /// stores a whole quaternion. Empty on every other channel, where `w` is
+    /// reconstructed from the other three instead.
+    pub w: Vec<f32>,
+    /// Whether the file stored `f32` keys rather than `s16` ones - the widened
+    /// form flagged by the node's `+0x34` word.
+    pub wide: bool,
 }
 
 impl AnimChannel {
@@ -64,8 +88,8 @@ impl AnimChannel {
         self.times.is_empty() || self.values.is_empty()
     }
 
-    /// The key index and blend factor at `t` frames, the way all three
-    /// evaluators pick one.
+    /// The pair of key indices and the blend factor at `t` frames, the way all
+    /// three evaluators pick one.
     ///
     /// They share the shape exactly: below the first key time, hold the first
     /// key; at or past the last, hold the last; otherwise find the first key
@@ -73,9 +97,9 @@ impl AnimChannel {
     /// node's authored `FixedFrames` attribute, which snaps to the preceding
     /// key instead of blending - the same choice the texture-transform block's
     /// step flag makes.
-    fn at(&self, t: f32, step: bool) -> ((i16, i16, i16), (i16, i16, i16), f32) {
+    fn at(&self, t: f32, step: bool) -> (usize, usize, f32) {
         let last = self.values.len() - 1;
-        let hold = |i: usize| (self.values[i], self.values[i], 0.0);
+        let hold = |i: usize| (i, i, 0.0);
         let Some(&first_time) = self.times.first() else {
             return hold(0);
         };
@@ -97,14 +121,21 @@ impl AnimChannel {
         if step || t1 <= t0 {
             return hold(i - 1);
         }
-        (self.values[i - 1], self.values[i], (t - t0) / (t1 - t0))
+        (i - 1, i, (t - t0) / (t1 - t0))
     }
 
     /// The blended raw value at `t` frames.
     fn sample(&self, t: f32, step: bool) -> [f32; 3] {
         let (a, b, f) = self.at(t, step);
-        let blend = |a: i16, b: i16| f32::from(a) + (f32::from(b) - f32::from(a)) * f;
-        [blend(a.0, b.0), blend(a.1, b.1), blend(a.2, b.2)]
+        let (a, b) = (self.values[a], self.values[b]);
+        std::array::from_fn(|k| a[k] + (b[k] - a[k]) * f)
+    }
+
+    /// The blended `w` at `t` frames, or `None` on a channel that stores none.
+    fn sample_w(&self, t: f32, step: bool) -> Option<f32> {
+        let (a, b, f) = self.at(t, step);
+        let (a, b) = (*self.w.get(a)?, *self.w.get(b)?);
+        Some(a + (b - a) * f)
     }
 }
 
@@ -126,10 +157,14 @@ pub struct AnimTransform {
     /// Seconds per key-time unit, from `+0x3c`. `1/60` on every node read, so
     /// key times are 60 Hz frames.
     pub seconds_per_key: f32,
-    /// The word at `+0x34`. Bit 0 selects a different translation evaluator
-    /// and bit 1 a different rotation one; **zero on all 393 nodes**, so the
-    /// other two evaluators were never read and a non-zero value here means
-    /// this decode does not apply.
+    /// The word at `+0x34`: which key *width* each channel uses. See
+    /// [`TRANSLATION_IS_FLOAT`] and [`ROTATION_IS_QUATERNION`].
+    ///
+    /// **Zero on all 393 of Pulse's nodes**, which is why the widened forms
+    /// were unknown until Wipeout HD was read: 97 of its 5,518 carry `0x5`,
+    /// and they are the grid-camera paths and one billboard's fish. Any bit
+    /// outside those two is still unaccounted for and appears nowhere on
+    /// either disc.
     pub flags: u32,
     /// The float at `+0x30`: the denominator of the rate multiplier
     /// `AnimTransform_Update` (`0x088fe0a8`) applies to its delta time,
@@ -199,10 +234,19 @@ impl AnimTransform {
         let mut m = super::IDENTITY;
         if !self.rotation.is_empty() {
             let q = self.rotation.sample(t, step);
-            let (x, y, z) = (q[0] / 32767.0, q[1] / 32767.0, q[2] / 32767.0);
-            // The evaluator's own reconstruction. A blended pair can leave the
-            // sum a hair over 1, which would take the root of a negative.
-            let w = (1.0 - x * x - y * y - z * z).max(0.0).sqrt();
+            // The widened form stores the quaternion outright, in whatever
+            // units it is already a unit quaternion in; the `s16` form stores
+            // three components in 1/32767 and leaves `w` to be reconstructed.
+            let [x, y, z] = if self.rotation.wide {
+                q
+            } else {
+                [q[0] / 32767.0, q[1] / 32767.0, q[2] / 32767.0]
+            };
+            let w = self.rotation.sample_w(t, step).unwrap_or_else(|| {
+                // The evaluator's own reconstruction. A blended pair can leave
+                // the sum a hair over 1, which would root a negative.
+                (1.0 - x * x - y * y - z * z).max(0.0).sqrt()
+            });
             m = quaternion_matrix([x, y, z, w]);
         }
         if !self.translation.is_empty() {
@@ -257,66 +301,129 @@ fn quaternion_matrix([x, y, z, w]: [f32; 4]) -> [f32; 16] {
 /// arrays run past its end - never a partly-filled transform, since a channel
 /// read off the end of the payload would place a mesh somewhere arbitrary
 /// rather than fail visibly.
+///
+/// `order` is the containing file's, from [`super::byte_order`], for the same
+/// reason [`super::transform`] has to be told: a payload carries no magic of
+/// its own. **Wipeout HD writes this class big-endian and authors 5,518 of
+/// them**, and reading those little-endian does not fail loudly - the counts
+/// come out in the tens of thousands, the key arrays then run past the payload,
+/// and every node decodes to `None` and falls back to the identity. That is the
+/// Pulse defect exactly: placement dropped along with the animation.
 #[must_use]
-pub fn anim_transform(payload: &[u8]) -> Option<AnimTransform> {
+pub fn anim_transform(payload: &[u8], order: crate::ByteOrder) -> Option<AnimTransform> {
     if payload.len() < 0x50 {
         return None;
     }
-    let u16_at = |at: usize| u16::from_le_bytes([payload[at], payload[at + 1]]);
-    let u32_at = |at: usize| {
-        u32::from_le_bytes([
-            payload[at],
-            payload[at + 1],
-            payload[at + 2],
-            payload[at + 3],
-        ])
-    };
-    let f32_at = |at: usize| f32::from_bits(u32_at(at));
+    let u16_at = |at: usize| order.u16(payload, at);
+    let u32_at = |at: usize| order.u32(payload, at);
+    let f32_at = |at: usize| order.f32(payload, at);
     let f32x3_at = |at: usize| [f32_at(at), f32_at(at + 4), f32_at(at + 8)];
+
+    let flags = u32_at(0x34);
 
     // A count of zero still stores one key - the evaluators read `values[0]`
     // through the "before the first key" branch whatever the count says - so a
     // channel is empty only when the *evaluator* skips it, which it does on a
     // count of zero. The stored key is still parsed, and `is_empty` is what
     // decides, so the arrays tile whatever the counts are.
-    let channel = |count: usize, times_at: usize, values_at: usize| {
+    //
+    // `width` is the key's stride in bytes and is what the flag word selects:
+    // 6 for an `s16` triple, 12 for an `f32` triple, 16 for an `f32`
+    // quaternion. See [`Key`].
+    let channel = |count: usize, times_at: usize, values_at: usize, key: Key| {
         let stored = count.max(1);
         let times = u32_at(times_at) as usize;
         let values = u32_at(values_at) as usize;
-        if times + stored * 2 > payload.len() || values + stored * 6 > payload.len() {
+        if times + stored * 2 > payload.len() || values + stored * key.width() > payload.len() {
             return None;
         }
         if count == 0 {
             return Some(AnimChannel::default());
         }
+        let read = |at: usize| -> [f32; 3] {
+            match key {
+                Key::Short => std::array::from_fn(|k| f32::from(u16_at(at + k * 2) as i16)),
+                Key::Float3 | Key::Float4 => std::array::from_fn(|k| f32_at(at + k * 4)),
+            }
+        };
         Some(AnimChannel {
             times: (0..count).map(|i| u16_at(times + i * 2)).collect(),
-            values: (0..count)
-                .map(|i| {
-                    let at = values + i * 6;
-                    (
-                        u16_at(at) as i16,
-                        u16_at(at + 2) as i16,
-                        u16_at(at + 4) as i16,
-                    )
-                })
-                .collect(),
+            values: (0..count).map(|i| read(values + i * key.width())).collect(),
+            w: match key {
+                Key::Float4 => (0..count)
+                    .map(|i| f32_at(values + i * key.width() + 12))
+                    .collect(),
+                Key::Short | Key::Float3 => Vec::new(),
+            },
+            wide: key != Key::Short,
         })
     };
 
+    let translation_key = if flags & TRANSLATION_IS_FLOAT != 0 {
+        Key::Float3
+    } else {
+        Key::Short
+    };
+    let rotation_key = if flags & ROTATION_IS_QUATERNION != 0 {
+        Key::Float4
+    } else {
+        Key::Short
+    };
+
     Some(AnimTransform {
-        translation: channel(usize::from(u16_at(0x02)), 0x0c, 0x2c)?,
+        translation: channel(usize::from(u16_at(0x02)), 0x0c, 0x2c, translation_key)?,
         translation_quantum: f32x3_at(0x20),
         translation_base: f32x3_at(0x10),
-        rotation: channel(usize::from(u16_at(0x04)), 0x08, 0x1c)?,
-        scale: channel(usize::from(u16_at(0x06)), 0x38, 0x40)?,
+        rotation: channel(usize::from(u16_at(0x04)), 0x08, 0x1c, rotation_key)?,
+        scale: channel(usize::from(u16_at(0x06)), 0x38, 0x40, Key::Short)?,
         seconds_per_key: f32_at(0x3c),
-        flags: u32_at(0x34),
+        flags,
         rate_denominator: f32_at(0x30),
         loop_seconds: DEFAULT_LOOP_SECONDS,
         step: false,
     })
 }
+
+/// How wide one key of a channel is, which the node's `+0x34` word selects.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Key {
+    /// Three `s16`, the only form Pulse ships.
+    Short,
+    /// Three `f32`: a translation in world units, with the node's quantum at
+    /// `1.0` and its base at the origin on all 21 nodes that use it.
+    Float3,
+    /// Four `f32`: a quaternion with its `w` stored rather than reconstructed.
+    Float4,
+}
+
+impl Key {
+    fn width(self) -> usize {
+        match self {
+            Self::Short => 6,
+            Self::Float3 => 12,
+            Self::Float4 => 16,
+        }
+    }
+}
+
+/// `+0x34` bit 0: translation keys are `f32` triples rather than `s16` ones.
+///
+/// **Measured on the Wipeout HD disc by tiling, not read from an evaluator.**
+/// Under the `s16` reading, 97 of its 5,518 nodes leave gaps between their six
+/// key arrays; under this one all 5,518 tile contiguously from `0x50`. The
+/// widths and the counts are separate fields, so a wrong width shows up as a
+/// gap on the first file rather than as a plausible animation. Confidence 85.
+pub const TRANSLATION_IS_FLOAT: u32 = 1;
+
+/// `+0x34` bit 2: rotation keys are whole `f32` quaternions.
+///
+/// Measured the same way as [`TRANSLATION_IS_FLOAT`], and always set with it on
+/// this disc - every one of the 97 carries `0x5` - so **nothing here separates
+/// the two bits**, and a file setting only one would be the test that does.
+/// The component order is taken as `(x, y, z, w)`, continuing the `s16` form's
+/// own `(x, y, z)` with the `w` it reconstructs; that ordering is a choice at
+/// confidence 60, not a reading. Confidence 85 on the width.
+pub const ROTATION_IS_QUATERNION: u32 = 4;
 
 /// One node's `Anim Transform`, with its `LoopEnd` and `FixedFrames`
 /// attributes applied.
@@ -327,7 +434,7 @@ pub fn anim_transform(payload: &[u8]) -> Option<AnimTransform> {
 /// later than the artists asked for.
 #[must_use]
 pub fn anim_transform_of(data: &[u8], node: &Node) -> Option<AnimTransform> {
-    let mut out = anim_transform(data.get(node.payload())?)?;
+    let mut out = anim_transform(data.get(node.payload())?, super::byte_order(data))?;
     let attributes = super::node_attributes(data, node);
     let named = |want: &str| {
         attributes

@@ -807,8 +807,12 @@ impl Node {
 /// a PS3 `.vex` has those and this project reads them. What it does **not** have
 /// is geometry: a PS3 `Mesh` node is a bounding-box pair and a reference into a
 /// `.rcsmodel`, so every batch, vertex and embedded-texture decoder below runs
-/// on little-endian files by construction. Threading an order through those
-/// would be untestable - no big-endian file reaches them.
+/// on little-endian files by construction.
+///
+/// **That is a claim about these decoders, not about the format.** This comment
+/// used to end "no big-endian file reaches them", and [`anim_transform`] was
+/// written little-endian on the strength of it. It reads no geometry - HD keeps
+/// the class and authors 5,518 nodes - so every one decoded to nothing.
 mod le {
     use crate::ByteOrder;
 
@@ -1001,8 +1005,8 @@ pub use attributes::node_attributes;
 
 mod anim_transform;
 pub use anim_transform::{
-    AnimChannel, AnimTransform, DEFAULT_LOOP_SECONDS, anim_transform, anim_transform_of,
-    anim_transforms,
+    AnimChannel, AnimTransform, DEFAULT_LOOP_SECONDS, ROTATION_IS_QUATERNION, TRANSLATION_IS_FLOAT,
+    anim_transform, anim_transform_of, anim_transforms,
 };
 
 mod textures;

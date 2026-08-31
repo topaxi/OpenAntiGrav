@@ -326,7 +326,7 @@ fn every_payload_tiles_exactly_under_the_field_map() {
         let nodes = vex::nodes(&data).expect("walking the node tree");
         for node in nodes.iter().filter(|n| n.class_id == CLASS_ANIM_TRANSFORM) {
             let payload = &data[node.payload()];
-            let anim = vex::anim_transform(payload).expect("decodes");
+            let anim = vex::anim_transform(payload, vex::byte_order(&data)).expect("decodes");
             total += 1;
 
             assert_eq!(
@@ -556,13 +556,14 @@ fn no_lit_mesh_hangs_under_a_non_uniform_scale() {
             if node.class_id != CLASS_ANIM_TRANSFORM {
                 continue;
             }
-            let anim = vex::anim_transform(&data[node.payload()]).expect("decodes");
+            let anim = vex::anim_transform(&data[node.payload()], vex::byte_order(&data))
+                .expect("decodes");
             keys += anim.scale.values.len();
             let skewed = anim
                 .scale
                 .values
                 .iter()
-                .filter(|v| v.0 != v.1 || v.1 != v.2)
+                .filter(|v| v[0] != v[1] || v[1] != v[2])
                 .count();
             non_uniform += skewed;
             if skewed == 0 {
