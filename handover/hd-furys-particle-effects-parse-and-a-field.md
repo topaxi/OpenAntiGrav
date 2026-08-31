@@ -5,8 +5,35 @@
 ## Open
 
 - Nothing else in HD is wired to fire any of the remaining parsed effects
-- `WO_SHIP_COLL_SPARK_DAMAGE`'s wall-contact trigger owner is confidence 55 - inferred, not confirmed by HD's own dispatch
+- **2026-08-31: HD's own dispatch has now been read** (`docs/ghidra/functions/ps3-hdfury-eu/ship-collision-fx.md`) -
+  `Ship_DispatchCollisionFx_q` (nearest-of-ten locator pick, confirming
+  `hd-status.md`'s own "ten" prediction from the executable side) calls
+  `ShipCollisionFx_Trigger_q`, which names two of its four `kind` branches
+  from literal strings: `kind==1` spawns a **previously unrecorded** effect,
+  `WO_SHIP_SPARK_DAMAGE_WEAPON`, and `kind==2` spawns
+  `WO_SHIP_COLL_SPARK_NODAMAGE` or its `_ZONE` variant depending on a
+  game-mode mask. **Neither branch is `WO_SHIP_COLL_SPARK_DAMAGE`** - the
+  plain damage variant this thread's "wall contact" question was actually
+  about is still unnamed anywhere in that function, so the confidence-55
+  claim is not confirmed, it is complicated: what fires the plain
+  `WO_SHIP_COLL_SPARK_DAMAGE` variant specifically remains open, and the one
+  dispatch-table entry read (`FUN_0010f730`, entry 11 of a >=12-entry
+  reaction table at `0x00875800`) reaches the *weapon*-named branch via a
+  hardcoded `kind`, not confirmed to be wall contact at all. See that page's
+  own Open section for the exact gaps - do not re-close this bullet at
+  confidence 55's old framing.
+- `WO_SHIP_SPARK_DAMAGE_WEAPON` is not yet cross-checked against
+  `psys_inventory_ground_truth.rs`'s HD names.
 
 ## Next Steps
 
 - Reverse-engineer the triggers for the remaining parsed HD particle effects (the parser itself is done)
+- Find what names `WO_SHIP_COLL_SPARK_DAMAGE` (plain) and
+  `WO_SHIP_SPARK_DAMAGE_LEACHBEAM` - `ship-collision-fx.md`'s
+  `ShipCollisionFx_Trigger_q` does not, despite being read in full across all
+  four of its `kind` values.
+- Identify what `0x00875800`'s reaction table is keyed by and what index 11
+  represents - the table's own base is a second TOC hop away from every
+  address this pass's literal-search technique could resolve in one step;
+  see `ship-collision-fx.md`'s "reusable technique" section for what worked
+  and where it stopped.
