@@ -23,6 +23,13 @@ const ARCHIVES: &[&str] = &[
 const UV_SCALE: u32 = 0xea1d_cc4c;
 /// `~crc32("uvOffset")`.
 const UV_OFFSET: u32 = 0x1eb1_3436;
+/// The unnamed float3 the `uvanim` family multiplies its emissive sample by,
+/// before adding it to the diffuse. No preimage yet; see `hd_param_names`.
+const EMISSIVE_TINT: u32 = 0xe8bc_d7f5;
+/// The two floats that remap the emissive coordinate before `time` is added:
+/// `(v + a) * b`. Neither has a preimage either.
+const SCROLL_A: u32 = 0x7825_6a45;
+const SCROLL_B: u32 = 0x7878_7596;
 
 fn main() -> anyhow::Result<()> {
     let image = std::env::args()
@@ -34,6 +41,10 @@ fn main() -> anyhow::Result<()> {
     let mut identity = 0usize;
     let mut moved: Vec<(String, [f32; 4], [f32; 4])> = Vec::new();
     let mut values: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
+    // The emissive layer's own three parameters, counted the same way: what a
+    // shader path would have to carry per material, against what is authored.
+    let mut tints: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
+    let mut scrolls: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
 
     for archive in ARCHIVES {
         let spec = format!("{image}:{archive}");
@@ -62,6 +73,16 @@ fn main() -> anyhow::Result<()> {
                         .find(|p| p.hash == hash)
                         .map(|p| p.value)
                 };
+                if let Some(t) = find(EMISSIVE_TINT) {
+                    *tints
+                        .entry(format!("({:.3}, {:.3}, {:.3})", t[0], t[1], t[2]))
+                        .or_default() += 1;
+                }
+                if let (Some(a), Some(b)) = (find(SCROLL_A), find(SCROLL_B)) {
+                    *scrolls
+                        .entry(format!("a {:.3}  b {:.3}", a[0], b[0]))
+                        .or_default() += 1;
+                }
                 let (Some(scale), Some(offset)) = (find(UV_SCALE), find(UV_OFFSET)) else {
                     continue;
                 };
@@ -103,5 +124,17 @@ fn main() -> anyhow::Result<()> {
     for (name, scale, offset) in &moved {
         println!("  {name}\n    scale {scale:?}\n    offset {offset:?}");
     }
+
+    let show = |title: &str, table: std::collections::BTreeMap<String, usize>| {
+        let total: usize = table.values().sum();
+        println!("\n{title}: {total} records, {} distinct", table.len());
+        let mut rows: Vec<_> = table.into_iter().collect();
+        rows.sort_by_key(|(_, n)| std::cmp::Reverse(*n));
+        for (text, n) in rows.iter().take(12) {
+            println!("  x{n:<5} {text}");
+        }
+    };
+    show("emissive tint", tints);
+    show("emissive scroll", scrolls);
     Ok(())
 }
