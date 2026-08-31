@@ -426,10 +426,10 @@ impl ZoneGrade {
             // surface: `zoneBase.rgb * rim^10 + zoneBaseAlt.rgb * rim^5`, both
             // exponents inline literals in the microcode.
             //
-            // **Not a separate family.** These are consumed by 19,958 of the
-            // 20,092 Zone-bearing fragment blocks in `DATA00.PSARC` - more
+            // **Not a separate family.** These are consumed by 20,084 of the
+            // 20,214 Zone-bearing fragment blocks on the disc - more
             // than `zoneTexInner` is - and co-occur with a sampled `zoneTex*`
-            // in 17,906 of them. Every one of the twelve racing circuits
+            // in 18,032 of them. Every one of the twelve racing circuits
             // carries this shape and nothing else. See
             // `oag_render::mesh_render::Zone` for the census and the second,
             // arena-only shape it is not.

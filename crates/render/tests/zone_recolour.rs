@@ -192,7 +192,7 @@ fn the_zone_surface_replaces_the_albedo_in_the_right_colour_space() {
 
     // **A white albedo draws the same pixel, and that is the finding.** The
     // Zone variant *replaces* a circuit material's shading rather than tinting
-    // it: 19,958 of the disc's 20,092 Zone-bearing fragment blocks carry this
+    // it: 20,084 of the disc's 20,214 Zone-bearing fragment blocks carry this
     // shape and not one of them contains the `100000` black-mask literal. This
     // assertion is the inverse of the one it replaces, which asserted the
     // `zoneAniso` shape that lives only in HD's four Zone arenas.
@@ -236,7 +236,7 @@ fn the_zone_surface_replaces_the_albedo_in_the_right_colour_space() {
 ///
 /// `colour = zoneBase.rgb * rim^10 + zoneBaseAlt.rgb * rim^5`, where
 /// `rim = 1 - dot(N, toEye)`. The exponents are inline constants in every one
-/// of the 19,958 blocks that carry this shape, so nothing per-stage drives
+/// of the 20,084 blocks that carry this shape, so nothing per-stage drives
 /// them and a swap would be invisible to any test that only checks the
 /// colours arrive.
 ///

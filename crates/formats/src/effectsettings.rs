@@ -400,8 +400,8 @@ pub mod key {
     /// in the microcode.
     ///
     /// **Not confined to an untextured family**, which an earlier reading of
-    /// `cf_constantcolourglow` and its kin suggested: 19,958 of the 20,092
-    /// Zone-bearing fragment blocks on the disc consume it, 17,906 of them
+    /// `cf_constantcolourglow` and its kin suggested: 20,084 of the 20,214
+    /// Zone-bearing fragment blocks on the disc consume it, 18,032 of them
     /// alongside a sampled `zoneTex*`. See
     /// `oag_render::mesh_render::Zone` for the census.
     pub const TRACK_BASE_COLOUR_HIGHLIGHT: &str = "Track.Base Colour Highlight";

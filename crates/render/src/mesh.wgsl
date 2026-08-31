@@ -363,10 +363,10 @@ fn fogged(colour: vec3<f32>, world: vec3<f32>, view_depth: f32) -> vec3<f32> {
 // Zone frame reads near-monochrome: crowds, banners and concrete all go, and
 // what is left is the stage's own two colours over the stage's own texture.
 //
-// A census of all 20,092 Zone-bearing fragment blocks in `DATA00.PSARC` finds
-// two shapes and no block in both: this one, 19,958 blocks, which never
+// A census of all 20,214 Zone-bearing fragment blocks on the disc finds
+// two shapes and no block in both: this one, 20,084 blocks, which never
 // carries the `blackMask` literal at all; and a `zoneAnisoPalette` shape of
-// 134 blocks which always does. All twelve racing circuits are 100% this
+// 130 blocks which always does. All twelve racing circuits are 100% this
 // shape; the other lives only in `zone_1`..`zone_4`, HD's Zone arenas. The
 // `albedo + zoneCol * (1 - blackMask)` rule this file used to carry was the
 // arena shape, read correctly from an arena material and generalised.
@@ -398,7 +398,7 @@ fn zone_sample(uv: vec2<f32>) -> vec3<f32> {
 
 // The two rim-lit summands, `zoneBase.rgb * rim^10 + zoneBaseAlt.rgb * rim^5`.
 //
-// Both exponents are **inline literals** in every one of the 19,958 blocks
+// Both exponents are **inline literals** in every one of the 20,084 blocks
 // that carry this shape, not parameters, so nothing per-stage drives them and
 // there is no uniform for them to come from.
 //

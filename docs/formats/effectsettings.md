@@ -186,10 +186,10 @@ surface = zoneTex(zoneUV).rgb * zoneEffect.rgb
 rather than tinting it.** This paragraph first said the opposite - that the
 recolour lands only where the diffuse is pure black - and that was an
 over-generalisation, corrected 2026-08-31 by a per-block census of every
-`.rcsmaterial` in `DATA00`. Of 20,092 fragment blocks naming a Zone parameter,
-the `blackMask` shape appears in **134**, all of them in `zone_1`..`zone_4`,
+`.rcsmaterial` on the disc. Of 20,214 fragment blocks naming a Zone parameter,
+the `blackMask` shape appears in **130**, all of them in `zone_1`..`zone_4`,
 HD's four Zone *arenas*; all twelve racing circuits carry the rim shape
-instead, in 19,958 blocks. The original reading came from an arena material.
+instead, in 20,084 blocks. The original reading came from an arena material.
 See [zone-shader.md](../ghidra/functions/ps3-hdfury-eu/zone-shader.md), whose
 own statement of the rule is being corrected on the same evidence.
 

@@ -458,14 +458,15 @@ impl Light {
 ///
 /// # Which of the disc's two Zone shapes this is
 ///
-/// A census of every `.rcsmaterial` in `DATA00.PSARC` - 20,092 fragment
-/// blocks that name a Zone parameter or sampler - finds exactly two shapes,
-/// with no block in both:
+/// A census of every `.rcsmaterial` on the disc - 20,214 fragment blocks that
+/// name a Zone parameter or sampler - finds exactly two shapes, with no block
+/// in both. Asserted against the image itself by
+/// `crates/formats/tests/zone_shader_census_ground_truth.rs`:
 ///
-/// | shape | blocks | `rim^10`/`rim^5` | `blackMask` | albedo RGB |
-/// | --- | ---: | ---: | ---: | ---: |
-/// | `zoneBase` (this one) | 19,958 | all | **none** | 1,832 |
-/// | `zoneAniso` | 134 | none | all | 90 |
+/// | shape | blocks | `rim^10`/`rim^5` | `blackMask` |
+/// | --- | ---: | ---: | ---: |
+/// | `zoneBase` (this one) | 20,084 | all | **none** |
+/// | `zoneAniso` | 130 | none | all |
 ///
 /// And the split is by *environment*: all twelve racing circuits are 100%
 /// `zoneBase` and contain not one `zoneAniso` block, while the `zoneAniso`
