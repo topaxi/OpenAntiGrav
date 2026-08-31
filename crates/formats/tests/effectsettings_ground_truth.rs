@@ -221,6 +221,12 @@ fn hd_stage_zero_and_stage_one_are_two_different_authored_palettes() {
 
     // `Start`: no fog of its own, a neutral rig, a black sky reflection.
     let start = StagePalette {
+        // The three fields HD's own cross-fade reads, plus the scalar that
+        // rides in the first one's fourth lane.
+        scene_texture_colour: Some([0.0, 0.0, 0.0]),
+        scene_eq_brightness: Some(0.0),
+        scene_base_colour: Some([3.0, 3.0, 3.0]),
+        scene_base_colour_highlight: Some([0.0, 0.0, 0.0]),
         fog_colour: Some([0.0, 0.0, 0.0]),
         fog_density: Some(0.0),
         sun_colour: Some([1.0, 1.0, 1.0]),
@@ -234,6 +240,12 @@ fn hd_stage_zero_and_stage_one_are_two_different_authored_palettes() {
     // `Sub Venom`: a cyan fog at a real density, a brighter ambient, a sunless
     // rig and a white sky reflection - the escalation this table exists for.
     let sub_venom = StagePalette {
+        // `Scene.Texture Colour` is what reaches the shader as `fogColour`,
+        // and `Scene.EQ brightness` is the `20.0` that rides in its `.w`.
+        scene_texture_colour: Some([0.721_569, 0.909_804, 0.964_706]),
+        scene_eq_brightness: Some(20.0),
+        scene_base_colour: Some([0.003_922, 0.847_059, 1.0]),
+        scene_base_colour_highlight: Some([0.0, 1.694_118, 2.0]),
         fog_colour: Some([0.0, 1.305_882, 1.8]),
         fog_density: Some(0.002_1),
         sun_colour: Some([0.0, 0.0, 0.0]),
@@ -262,6 +274,13 @@ fn hd_stage_zero_and_stage_one_are_two_different_authored_palettes() {
     assert_eq!(half.fog_colour, Some([0.0, 1.305_882 / 2.0, 0.9]));
     assert_eq!(half.fog_density, Some(0.002_1 / 2.0));
     assert_eq!(half.sky_reflection_colour, Some([127, 127, 127, 254]));
+    // And the field that actually reaches a shader fades on the same terms:
+    // `Start` authors black, so half of `Sub Venom` is half its own value.
+    assert_eq!(
+        half.scene_texture_colour,
+        Some([0.721_569 / 2.0, 0.909_804 / 2.0, 0.964_706 / 2.0])
+    );
+    assert_eq!(half.scene_eq_brightness, Some(10.0));
 }
 
 /// **The whole ladder is populated, not just its first rungs** - every one of
@@ -290,6 +309,25 @@ fn every_hd_stage_authors_the_keys_this_project_reads() {
         assert!(
             palette.sky_reflection_colour.is_some(),
             "stage {stage} sky reflection"
+        );
+        // The three the original cross-fades, and the scalar that shares the
+        // first one's storage - a hole in any of these would mean a stage
+        // whose traced consumer has nothing to consume.
+        assert!(
+            palette.scene_texture_colour.is_some(),
+            "stage {stage} Scene.Texture Colour"
+        );
+        assert!(
+            palette.scene_eq_brightness.is_some(),
+            "stage {stage} Scene.EQ brightness"
+        );
+        assert!(
+            palette.scene_base_colour.is_some(),
+            "stage {stage} Scene.Base Colour"
+        );
+        assert!(
+            palette.scene_base_colour_highlight.is_some(),
+            "stage {stage} Scene.Base Colour Highlight"
         );
     }
 }

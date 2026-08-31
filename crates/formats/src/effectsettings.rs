@@ -48,9 +48,10 @@
 //! the executable - HD/Fury's own runtime cross-fade between adjacent
 //! stages, recovered from two independent functions (confidence 80, see
 //! its own doc comment). [`StagePalette`] is what it blends, and
-//! `oag_game::race::zone_grade` is what applies the result to a race - from
-//! an explicit stage index, because **what selects the stage during a race
-//! is still unrecovered on both titles that ship one of these tables**.
+//! `oag_game::race::zone_grade` is what applies the result to a race. 2048
+//! drives it off its own recovered zone-number ladder; **HD/Fury still takes
+//! an explicit stage index, because what selects the stage during a race is
+//! unrecovered on that title**.
 
 use std::collections::BTreeMap;
 
@@ -215,6 +216,10 @@ impl EffectSettings {
     pub fn stage_palette(&self, stage: u32) -> Option<StagePalette> {
         self.stages.get(&stage)?;
         Some(StagePalette {
+            scene_texture_colour: self.stage_rgb(stage, key::SCENE_TEXTURE_COLOUR),
+            scene_eq_brightness: self.stage_scalar(stage, key::SCENE_EQ_BRIGHTNESS),
+            scene_base_colour: self.stage_rgb(stage, key::SCENE_BASE_COLOUR),
+            scene_base_colour_highlight: self.stage_rgb(stage, key::SCENE_BASE_COLOUR_HIGHLIGHT),
             // HD's spelling first, then 2048's. A file carries one vocabulary
             // or the other, never both, so the order only decides which miss
             // costs a second lookup.
@@ -316,6 +321,36 @@ pub fn cross_fade_rgba8(current: [u8; 4], previous: [u8; 4], weight: f32) -> [u8
 /// [`envsettings::SUN_COLOUR`] belongs to a different table's vocabulary and
 /// is not a second spelling this one also accepts.
 pub mod key {
+    /// **The one key on this list whose consumer is traced end to end.**
+    ///
+    /// Three floats. HD/Fury cross-fades it per frame, stores its rgb and the
+    /// separately-authored [`SCENE_EQ_BRIGHTNESS`] to two different addresses,
+    /// reassembles them into one `float4` in `Scene_PrepareFrame`, and
+    /// publishes that as the engine shader parameter **`fogColour`** - entry 7
+    /// of the 81-entry parameter table, its value pointer written at a
+    /// computed offset that lands on the nose. Confidence 90 on the binding,
+    /// 80 on this key being the source; see
+    /// `docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md`'s
+    /// twenty-second pass.
+    ///
+    /// **The name the engine gives it and the name the file gives it
+    /// disagree**, and the file's values say the file is right: `Track.Texture
+    /// Colour` reaches `9.0` and `Scene.Texture Colour` runs to `0.96`, which
+    /// is a multiplier's range, not a fog colour's. What the fragment program
+    /// does with `fogColour` is unread, so nothing here draws it as fog.
+    pub const SCENE_TEXTURE_COLOUR: &str = "Scene.Texture Colour";
+    /// One float, authored `0.0` or `20.0` in `zonemode.effectsettings`.
+    ///
+    /// A separate key in the *file*, but the fourth lane of
+    /// [`SCENE_TEXTURE_COLOUR`] in the runtime's per-stage struct - one of only
+    /// two such overlaps in the measured key-to-offset table. That overlap is
+    /// why HD can reassemble the two into a single `float4`.
+    pub const SCENE_EQ_BRIGHTNESS: &str = "Scene.EQ brightness";
+    /// Three floats. The second of the three fields HD's own cross-fade reads.
+    pub const SCENE_BASE_COLOUR: &str = "Scene.Base Colour";
+    /// Three floats. The third of them.
+    pub const SCENE_BASE_COLOUR_HIGHLIGHT: &str = "Scene.Base Colour Highlight";
+
     /// The stage's own distance fog colour. Four floats, alpha authored `0`.
     pub const FOG_COLOUR: &str = "Lighting.Fog colour";
     /// The coefficient of the same `exp(-(density * depth)^2)` curve
@@ -382,6 +417,16 @@ pub mod key {
 /// about it - the same reason [`EnvSettings::vec3`] does not clamp either.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct StagePalette {
+    /// [`key::SCENE_TEXTURE_COLOUR`] - the one field here whose consumer in
+    /// the original is traced: it becomes the shader parameter `fogColour`.
+    pub scene_texture_colour: Option<[f32; 3]>,
+    /// [`key::SCENE_EQ_BRIGHTNESS`], which rides in `fogColour`'s `.w`.
+    pub scene_eq_brightness: Option<f32>,
+    /// [`key::SCENE_BASE_COLOUR`]. Cross-faded by the original; no traced
+    /// consumer past the blend.
+    pub scene_base_colour: Option<[f32; 3]>,
+    /// [`key::SCENE_BASE_COLOUR_HIGHLIGHT`], on the same terms.
+    pub scene_base_colour_highlight: Option<[f32; 3]>,
     /// [`key::FOG_COLOUR`], alpha dropped.
     pub fog_colour: Option<[f32; 3]>,
     /// [`key::FOG_DENSITY`].
@@ -411,9 +456,12 @@ pub struct StagePalette {
 /// white - three of `zonemode.effectsettings`' own float colours already do
 /// exceed `1.0` - so the quantisation stays where the storage it belongs to
 /// is, and a float-authored key is blended by the same weights without it.
-/// Which of the two a given runtime field used is not recovered: the three
-/// 16-byte fields HD's own cross-fade reads are unidentified, and the schema's
-/// destination mapping has not been read at that granularity.
+/// Which of the two a given runtime field used is still not recovered, but
+/// the fields themselves now are: HD's cross-fade reads the three 16-byte
+/// records at per-stage offsets `+0x00`, `+0x20` and `+0x40`, which the
+/// measured key-to-offset table names as [`key::SCENE_TEXTURE_COLOUR`],
+/// [`key::SCENE_BASE_COLOUR_HIGHLIGHT`] and [`key::SCENE_BASE_COLOUR`] - all
+/// three float-authored, so this domain is the right one for them.
 fn fade_scalar(current: f32, previous: f32, weight: f32) -> f32 {
     // Written as two multiplies and an add rather than a `mul_add`, per
     // `docs/architecture/determinism.md`.
@@ -452,15 +500,43 @@ impl StagePalette {
     /// - **Recovered (confidence 80)**: that HD/Fury cross-fades stage `n`
     ///   against stage `n - 1` by a weight, and the byte arithmetic it does it
     ///   with - see [`cross_fade_rgba8`].
-    /// - **Not recovered**: which of the schema's keys the three blended
-    ///   runtime fields are, and what drives `weight` during a race. The
-    ///   fields blended here are chosen by the file's own key names, not by a
-    ///   read of the executable's destination offsets.
+    /// - **Recovered since**: *which* three fields the original blends -
+    ///   [`key::SCENE_TEXTURE_COLOUR`], [`key::SCENE_BASE_COLOUR`] and
+    ///   [`key::SCENE_BASE_COLOUR_HIGHLIGHT`], from the measured
+    ///   key-to-offset table. They are read and faded here now; before this
+    ///   they were not parsed at all.
+    /// - **Not recovered**: what drives `weight` during a race, and whether
+    ///   the *other* fields faded here are faded by the original at all or
+    ///   snapped on commit by some path that has not been traced. They are
+    ///   kept faded because a snap is the stronger claim of the two and
+    ///   nothing has been read that supports it.
     #[must_use]
     pub fn cross_fade(self, previous: Self, weight: f32) -> Self {
         let fade3 =
             |c: [f32; 3], p: [f32; 3]| std::array::from_fn(|i| fade_scalar(c[i], p[i], weight));
         Self {
+            // The three fields the original's own cross-fade reads, plus the
+            // scalar that shares the first one's storage.
+            scene_texture_colour: fade_field(
+                self.scene_texture_colour,
+                previous.scene_texture_colour,
+                fade3,
+            ),
+            scene_eq_brightness: fade_field(
+                self.scene_eq_brightness,
+                previous.scene_eq_brightness,
+                |c, p| fade_scalar(c, p, weight),
+            ),
+            scene_base_colour: fade_field(
+                self.scene_base_colour,
+                previous.scene_base_colour,
+                fade3,
+            ),
+            scene_base_colour_highlight: fade_field(
+                self.scene_base_colour_highlight,
+                previous.scene_base_colour_highlight,
+                fade3,
+            ),
             fog_colour: fade_field(self.fog_colour, previous.fog_colour, fade3),
             fog_density: fade_field(self.fog_density, previous.fog_density, |c, p| {
                 fade_scalar(c, p, weight)
