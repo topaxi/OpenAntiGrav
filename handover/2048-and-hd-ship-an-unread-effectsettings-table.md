@@ -232,6 +232,29 @@ an unfound-consumer file is exactly the guess `CLAUDE.md` rules out. Full
 evidence, including the byte-level trace of every function in this chain:
 [zone-effectsettings-loader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md#2026-08-28-a-fifth-pass-the-live-project-had-reverted-and-once-restored-the-files-own-content-turns-out-to-be-parsed-after-all).
 
+## 2026-08-31, later still: **the writer of `+0x640` is found**, and this thread's central question is closed
+
+`Hud_UpdateZoneSpeedClass` (`0x00049718`) ends with `stw r3, 0x640(r29)` where
+`r3` is `14 - i` off a fourteen-record threshold table at `0x00860d44`. Full
+evidence in
+[zone-speed-class-table.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-speed-class-table.md);
+wired as `oag_hd::race::ZONE_STAGES`, so `oag_title::RaceDefaults::zone_stages`
+is no longer `None` on this title and **an HD Zone race escalates its colour
+grade**.
+
+**It was found from the HUD, not from the field.** Three passes here searched for
+the writer by offset and by dataflow and came back empty - the folded-index-bias
+trap this thread already records. What worked was going in through the *string
+ids* the Zone HUD displays, which the language plugin already named: one `grep`
+of the ELF for `MSC_SVENOM` landed in a contiguous fourteen-string blob, and the
+only references to it were the table. **On this binary a known string is a better
+handle than a known field**, and that is the transferable part.
+
+`14 - i` lands on the fifteen `.effectSettings` rungs one for one, so the
+palette ladder this thread reads and the speed-class ladder the HUD shows are the
+same index - which is also why the HUD's class name and the circuit's grade can
+no longer disagree.
+
 ## Open
 
 - **2026-08-31, the Zone shader's own inputs are traced and the recolour
