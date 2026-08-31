@@ -122,21 +122,51 @@ That is the microcode independently producing the maintainer's own play
 observation - *the floor* displays the equaliser - from a direction this
 session did not go looking for it.
 
-## `zoneBase*` is a different family, and `GradientColour*` are samplers
+## `zoneBase*` is **not** a separate family - retracted, and the count says so
 
-`zoneBase<I|O>` and `zoneBaseAlt<I|O>` never appear in the same block as
-`zoneTex*`. They belong to the **untextured** materials
-(`cf_constantcolourglow`, `frontendconstantfranelblend`, `cf_fetracks`), where
-the whole surface colour is two rim-lit terms with **inline literal
-exponents**:
+**The first version of this section said `zoneBase<I|O>` and
+`zoneBaseAlt<I|O>` "never appear in the same block as `zoneTex*`" and belonged
+to an untextured family. That is wrong, and it is wrong in the way this page
+keeps warning about: it generalised from three materials read by hand.**
+
+A per-block census over all 1,590 `.rcsmaterial` files in `DATA00`, counting
+the parameter and sampler hashes each fragment block *declares*
+(`~crc32(name)`, validated first against four known names in a block already
+read by hand - `fogColour`, `constantAmbientColour` and the two
+`directionalLight0*`):
+
+| Zone-bearing fragment blocks | 20,048 |
+| --- | ---: |
+| declare **both** `zoneTex*` and `zoneBase*` | **17,906** |
+| `zoneBase*` only | 2,052 |
+| `zoneTex*` only | 90 |
+
+So the two co-occur in **89%** of Zone blocks. The three materials the original
+reading was drawn from - `cf_constantcolourglow`, `frontendconstantfranelblend`,
+`cf_fetracks` - all sit in the 10% minority that happens to carry no
+`zoneTex*`; `cf_fetracks` is among the census's own examples of that bucket.
+Reading three of them and concluding "never" was sampling the exception.
+
+**What survives.** The formula itself was read from real microcode in blocks
+that genuinely have no texture term, and it stands *for those blocks*:
 
 ```text
 colour = zoneBase<I|O>.rgb * rim^10  +  zoneBaseAlt<I|O>.rgb * rim^5
 ```
 
-Confidence 80. The `10` and `5` are literals in the microcode, not parameters -
-only the two colours are driven, and `zoneAnisoPower` is not used by this
-family at all.
+The `10` and `5` are inline literals, not parameters. What does **not** survive
+is "a different shader family": the rim terms are part of ordinary Zone
+shading, and in the 17,906 blocks that also sample a zone texture they combine
+with the texture term rather than replacing it. **How they combine there is
+unread** - the formula above is the untextured case, and nothing here measures
+the textured one. Confidence 88 on the census (a count, re-derived
+independently by two parties who agree on 17,906), 80 on the formula in the
+blocks it was read from, and no claim at all about the combined case.
+
+`zoneAnisoPower` was also said here not to be used by "this family". That is
+retracted too: `zone_1/materials/billboarddiffuse.rcsmaterial` declares it
+(`0x7d494659`, **float2**, confirming the two-lane reading) in the same block
+that samples `zoneTexInner` and declares `zoneColourTint`.
 
 `GradientColour1` is declared as a **sampler on unit 0** in
 `zone_2/materials/gradientcolour1.rcsmaterial` - the slot `Texture1` occupies
