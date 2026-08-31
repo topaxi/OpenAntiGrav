@@ -469,7 +469,15 @@ impl Light {
 /// # Two approximations, stated
 ///
 /// **The recolour reaches every surface this renderer draws, and the original
-/// applies it per material.** 1,467 of the disc's 1,590 `.rcsmaterial` files
+/// applies it per material** - *and* it feeds two of these parameter sets, not
+/// one. `Environment_UpdateStageBlend` publishes the identical seven
+/// parameters twice: once from the stage's `Scene.*` keys and once from its
+/// `Track.*` ones, to two different value pointers. Which set a material sees
+/// is presumably the same publisher choice that governs `zoneMode*` versus
+/// `zoneModeTrack*`, and is unread - so this binds the `Scene` group to
+/// everything. The two differ in magnitude, not only in hue:
+/// `Track.Texture Colour` reaches `9.0` where its `Scene` sibling runs to
+/// `3.0`. 1,467 of the disc's 1,590 `.rcsmaterial` files
 /// carry a Zone variant, so 123 do not - and craft hulls, the sky cube, pads,
 /// rockets and the collision wireframe all reach `mesh.wgsl` here. Wherever
 /// one of those carries pure-black texels it picks up stage colour the

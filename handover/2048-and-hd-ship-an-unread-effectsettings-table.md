@@ -249,12 +249,15 @@ evidence, including the byte-level trace of every function in this chain:
 
   **What that leaves open, all of it narrow:**
 
-  1. **Which of the two parallel feeds a material sees.** `0x00c814e0`-
-     `0x00c81540` receives the identical seven parameters built from the
-     `Track.*` keys. Two of the seven rows are read; the other five follow the
-     same idiom but were not traced to their `li r0` index. Which set a given
-     material gets is presumably the same publisher choice that governs
-     `zoneMode*` versus `zoneModeTrack*`, unconfirmed.
+  1. **Which of the two parallel feeds a material sees.** The block itself is
+     now read whole - `0x00c81450`-`0x00c81600` is a full table in the
+     twenty-fourth pass, all twenty stores traced, confidence 84: `Scene.*` and
+     `Track.*` are two *complete* parallel feeds of the same seven parameters,
+     and `Sky {horizon,zenith} colour` is cross-faded on the same terms into
+     `0x00c81560`-`0x00c81590`. What is left is only the selection: which set a
+     given material gets, presumably the same publisher choice that governs
+     `zoneMode*` versus `zoneModeTrack*`. `oag_render` binds the `Scene` group
+     to everything meanwhile, which is stated in `mesh_render::Zone`.
   2. **`zoneOrigin` (`0x00c81550`) and the sphere radius.** The radius is
      `H[e].f32@0x08`, copied per frame under a lane-3-only `vsel`; nothing was
      found writing `zoneOrigin` at all. Inner/outer is a **stage-transition
@@ -728,13 +731,17 @@ evidence, including the byte-level trace of every function in this chain:
 
 ## Next Steps
 
-- **Read the remaining five `Track.*` rows of the cross-fader.** Bounded and
-  cheap: `llvm-objdump -d --mcpu=pwr6 --start-address=0x3daa00
-  --stop-address=0x3dab60`, then pair each `stvx vD, r30, rN` with the `li rN`
-  before it and the `lvx` that filled `vD`. Two of the seven are already read
-  (`0x00c814e0` = the two stages' `Track.Aniso Power`, `0x00c814f0` =
-  `Track.Texture Colour` of stage `n`). That would let the renderer pick the
-  right feed once a material group can be told apart.
+- ~~Read the remaining five `Track.*` rows of the cross-fader.~~ **Done
+  2026-08-31**; the whole block is the table in the twenty-fourth pass. The
+  next step in that direction is the *selection*, not the layout: read which of
+  the eight parameter publishers a material's draw goes through, the same
+  question that decides `zoneMode*` versus `zoneModeTrack*`.
+- **Find `zoneOrigin`'s writer, or establish it has none.** Its absence is now
+  structural rather than a search failure - it sits at `+0x35a0`, the one gap
+  in an otherwise unbroken run of vec4s this function writes - so the search
+  should move outside `Environment_UpdateStageBlend` rather than deeper into
+  it. It is only needed once a stage transition can be in flight, which needs
+  HD's trigger first.
 - **Close `zoneTexVis`'s build loop** before drawing the visualiser glow. The
   texel count does not match the table size, and a port that guesses at the
   reconciliation would be inventing the equaliser rather than reproducing it.

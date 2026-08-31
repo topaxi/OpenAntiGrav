@@ -3857,36 +3857,80 @@ runtime values is the specific mistake this pass nearly shipped: with
 have been written up as "HD's Zone effect cannot be fed" one step before the
 writer was found.
 
-### There is a second, parallel `Track` group of the same seven parameters
+### The whole block, read: two parallel groups and a sky pair
 
-`0x00c814e0`-`0x00c81540` receives the identical seven-parameter pattern built
-from the `Track.*` keys instead of the `Scene.*` ones. Two rows read in full:
+Completed 2026-08-31 in a second pass with a symbolic tracker over
+`0x003da540`-`0x003dac00` - GPRs carried as `base + offset` where `base` is
+`r30`, `n * 0x250` or `(n-1) * 0x250`, vector registers carried as provenance
+strings. The two rows the first pass had read by hand come back identical,
+which is the check that the tracker is not inventing.
 
-| address | fed from |
-| --- | --- |
-| `0x00c814e0` | (`Track.Aniso Power`[`n`], `Track.Aniso Power`[`n-1`]) - `lfs f0,4100(r11)`, `+0x184`, at `0x003daa94` |
-| `0x00c814f0` | `Track.Texture Colour` of stage `n` (`stages[n] + 0x60`) |
+Every store into `0x00c81450`-`0x00c81600`, in address order. `N` is stage `n`
+(inner), `P` is `max(n - 1, 0)` (outer); the offset column is into the
+`0x250`-stride per-stage struct, and the key names are the fourteenth pass's
+measured table.
 
-The remaining five rows follow the same idiom and the same register set but were
-not each traced to their `li r0` index, so the *group* is confidence 80 and the
-individual assignments below `0x00c814f0` are **not** stated here.
+| address | `r30 +` | fed from | key |
+| --- | --- | --- | --- |
+| `0x00c81460` | `0x34b0` | (`stages[N]+0x180`, `stages[P]+0x180`) | `Scene.Aniso Power`, both stages - **`zoneAnisoPower`** |
+| `0x00c81470` | `0x34c0` | `H[e].f32@0x08`, **lane 3 only** | **`zoneColourTint.w`**; `.xy` is the schema's |
+| `0x00c81480` | `0x34d0` | `stages[N]+0x00` | `Scene.Texture Colour` - **`zoneEffectInner`** |
+| `0x00c81490` | `0x34e0` | `stages[P]+0x00` | **`zoneEffectOuter`** |
+| `0x00c814a0` | `0x34f0` | `stages[N]+0x20` | `Scene.Base Colour Highlight` - **`zoneBaseInner`** |
+| `0x00c814b0` | `0x3500` | `stages[P]+0x20` | **`zoneBaseOuter`** |
+| `0x00c814c0` | `0x3510` | `stages[N]+0x40` | `Scene.Base Colour` - **`zoneBaseAltInner`** |
+| `0x00c814d0` | `0x3520` | `stages[P]+0x40` | **`zoneBaseAltOuter`** |
+| `0x00c814e0` | `0x3530` | (`stages[N]+0x184`, `stages[P]+0x184`) | `Track.Aniso Power`, both stages |
+| `0x00c814f0` | `0x3540` | `stages[N]+0x60` | `Track.Texture Colour` |
+| `0x00c81500` | `0x3550` | `stages[P]+0x60` | |
+| `0x00c81510` | `0x3560` | `stages[N]+0x80` | `Track.Base Colour Highlight` |
+| `0x00c81520` | `0x3570` | `stages[P]+0x80` | |
+| `0x00c81530` | `0x3580` | `stages[N]+0xa0` | `Track.Base Colour` |
+| `0x00c81540` | `0x3590` | `stages[P]+0xa0` | |
+| `0x00c81550` | `0x35a0` | **nothing** | `zoneOrigin` |
+| `0x00c81560` | `0x35b0` | `stages[N]+0x170` | `Sky horizon colour` |
+| `0x00c81570` | `0x35c0` | `stages[P]+0x170` | |
+| `0x00c81580` | `0x35d0` | `stages[N]+0x160` | `Sky zenith colour` |
+| `0x00c81590` | `0x35e0` | `stages[P]+0x160` | |
 
-**This answers the fifteenth pass's negative.** `Scene.*` and `Track.*` are not
-"colours that reach nothing": they are two parallel feeds of the same seven Zone
-shader parameters, published to two different value pointers, and which of the
-two a material sees is the same publisher choice the twenty-third pass found
-governing `zoneMode*` versus `zoneModeTrack*`. So "which material does this
-recolour" has the plausible answer the fourteenth pass hoped for - scenery
-versus track - now with a traced path rather than a name-based guess.
-Confidence 75 that the publisher choice is what selects between them; the
-publishers themselves were not re-read this pass.
+Confidence **84**, the same score as the first pass's Scene rows and for the
+same reason: each row is one `lvx vD, rBase, rOff` whose base traces to
+`stages[N or P]` and one `li r0, K` whose value is the pass-23 published
+pointer, with no branch between them. The four sky rows and the two aniso rows
+were additionally re-read by hand off `llvm-objdump` rather than taken from the
+tracker.
+
+Three things this settles that the first pass could only gesture at:
+
+1. **`Scene.*` and `Track.*` are two complete, parallel feeds of the same seven
+   parameters** - not a partial mirror. Every Scene row at `0x00c81460`-`d0`
+   has its Track twin at `0x00c814e0`-`0x00c81540`, same keys, same
+   inner/outer pairing, same order. Which of the two a given material sees is
+   the one part still unread, and it is presumably the publisher choice the
+   twenty-third pass found governing `zoneMode*` versus `zoneModeTrack*`.
+2. **The sky is in the same publication.** `Sky horizon colour` and
+   `Sky zenith colour` are cross-faded into `0x00c81560`-`0x00c81590` on
+   exactly the same inner/outer terms, which puts them past the range
+   parameters 52-67 cover and makes them the first Zone-blended parameters
+   found outside that band.
+3. **`zoneOrigin`'s absence is structural, not a search failure.** It sits at
+   `0x35a0`, in the middle of an otherwise unbroken run of written vec4s, with
+   its neighbours on both sides written by this function. Nothing skips it by
+   accident. Confidence 82 that it has no writer here, up from 75.
+
+One anomaly, recorded rather than explained: **`0x00c81510` is written twice**,
+at `0x003daa24` (`stvx v0, r30, r7`) and `0x003daa30` (`stvx v1, r30, r11`),
+with `r7` and `r11` both `li`-set to `13664` and both vectors loaded from the
+same `stages[N]+0x80`. There is no branch between the two, so it is a genuine
+redundant store rather than two arms of a choice. Nothing is built on it.
 
 ### What is still unfed
 
 - **`zoneOrigin` (`0x00c81550`), the sphere centre.** Zero-initialised by
   `Environment_RegisterStageSchema` and **not written by
   `Environment_UpdateStageBlend`** - there is no `li rX, 13728` anywhere in
-  `0x003da540`-`0x003dc740`. Confidence 75 that it has no writer in this
+  `0x003da540`-`0x003dc740`, and the block table above shows it as the one gap
+  in an otherwise unbroken run. Confidence 82 that it has no writer in this
   function; no claim at all about the rest of the image.
 - **`H[e].f32@0x08`, the radius the blend copies into `.w`.** Its own writer was
   not chased.
@@ -3905,6 +3949,10 @@ Reproduce with:
 ELF=data/extracted/ps3/hdfury-eu/PS3_GAME/USRDIR/EBOOT.elf
 llvm-objdump -d --mcpu=pwr6 --start-address=0x3da740 --stop-address=0x3dab60 $ELF
 llvm-objdump -d --mcpu=pwr6 --start-address=0x3d4fa0 --stop-address=0x3d50b0 $ELF
+# the block table above: pair each `stvx vD, r30, rN` with the `li rN` before
+# it, and vD with the `lvx` that filled it. Bases: r30 = 0x00c7dfb0,
+# r27 = r30 + 4096 = g_effect_settings_stages, r31 = n * 0x250,
+# and the early r9 = max(n - 1, 0) * 0x250.
 python3 scripts/ps3-toc.py resolve 0x003d0b98 -0x5A84   # -> 0x00c7dfb0
 python3 scripts/ps3-toc.py resolve 0x003d0b98 -0x59E4 -0x59E0   # the two key names
 ```
