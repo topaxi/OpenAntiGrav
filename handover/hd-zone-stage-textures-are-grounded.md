@@ -150,19 +150,32 @@ albedo is black, which is what the microcode says. But the original is
 *near-monochrome*: its crowds, its orange and red trackside banners, its
 advertising boards and its grey concrete are all subsumed into cyan, black and
 white. A term that only adds where the albedo is already black cannot do that,
-so **the look is carried by the family this port leaves undrawn** - the
-untextured `zoneBase*`/`zoneBaseAlt*` materials, where
-[zone-shader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-shader.md) records
-that the two rim terms are *the entire surface colour* rather than an addition
-to it. Their inputs are already traced and authored (`Scene.Base Colour
-Highlight` and `Scene.Base Colour`); only the shader path is missing.
+so **the look is carried by something this port was not drawing**.
 
-That reframes the remaining work. The gap is **not** an unfed input, and it is
-not the visualiser: it is that a Zone race in the original selects a different
-*material variant* per surface, which replaces the shading, where this port
-adds a term on top of the ordinary one. Confidence 80 - the two frames, the
-authored numbers matching the original's hue, and the microcode's own
-"entire surface colour" reading all agree.
+**What that something is was got wrong first, and the correction is the useful
+part.** This entry originally said the missing piece was the untextured
+`zoneBase*`/`zoneBaseAlt*` rim terms. It is not. A census over the whole disc
+settled the real rule, and it is *per environment*, with two mutually
+exclusive shapes:
+
+- **All twelve racing circuits** compile `surface = zoneTex * zoneEffect +
+  zoneBase * rim^10 + zoneBaseAlt * rim^5`, with **no albedo term at all**.
+- **`zone_1`..`zone_4`, HD's four Zone arenas**, compile the black-mask shape
+  (`albedo + zoneCol * (1 - blackMask)`) - 130 blocks of 20,214.
+
+The three materials the shader page was written from included two arena ones,
+which is how the rare shape got published as the rule.
+
+And the rim terms are **not** what carries it either: `rim` is near zero
+head-on, so they are silhouette-only. **What carries the look is the albedo
+being absent from the equation** on every racing circuit - which is exactly
+why the original's crowds, banners and advertising vanish while ours kept
+showing them. Confidence 86 on the split, **82** on the missing albedo:
+there is no dataflow proof that the ~8% of blocks which do fetch albedo RGB
+keep it out of the surface.
+
+So the gap was not an unfed input, not the visualiser, and not a missing
+material family - it was one term too many in the surface equation.
 
 **Tooling this produced**: `--zone-stage N` (`oag_game::race::Options::zone_stage`).
 HD rests wherever its loader left the grade, so before this there was no way to
@@ -191,13 +204,13 @@ against an original that is visibly on one.
 - ~~Load the fifteen `zoneModeTrack{0..14}.gtf` and hold them per stage~~
   **Done, 2026-08-31** - see the section above. Fifteen decode, all distinct,
   ground-truth tested.
-- **Draw the untextured `zoneBase*` family** - `colour = zoneBaseI/O.rgb *
-  rim^10 + zoneBaseAltI/O.rgb * rim^5`, replacing the surface shading rather
-  than adding to it. Both colours are already fed from `Scene.Base Colour
-  Highlight` and `Scene.Base Colour`. **This is now the top item**: the
-  side-by-side above shows it is what carries the original's look, and nothing
-  about it is unrecovered. The open question is which materials compile to that
-  variant, which is a `.rcsmaterial` question rather than a microcode one.
+- ~~Draw the untextured `zoneBase*` family~~ **Done, and the premise was
+  wrong** - there is no untextured family, and the rim terms are silhouette-only.
+  What landed instead is the racing-circuit surface equation with the albedo
+  dropped, gated per environment off the disc's own census, with craft excluded
+  because `data/materials/ships/*` and `data/weapons/*` carry no Zone blocks at
+  all. Measured before and after on the Moa Therma frame: saturated pixels
+  outside the cyan band went **50.4% -> 0.7%**, against the original's **3.4%**.
 - ~~Read HD's Zone fragment program.~~ **Done** - it is not an engine program
   at all but a variant compiled into 1,467 of the disc's 1,590 `.rcsmaterial`
   files, which is why every search of the executable came back empty. Full
