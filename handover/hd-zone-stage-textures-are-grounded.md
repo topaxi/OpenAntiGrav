@@ -201,6 +201,40 @@ against an original that is visibly on one.
 
 ## Next Steps
 
+- **The Zone sky is its own thing, and this port draws the wrong one.**
+  Observed in play (HD/Fury): *"the skybox looks visibly different in zone
+  races, almost like solid colours or gradients."* Three measured facts line up
+  behind it:
+
+  1. **All four Zone arenas share one cubemap.** `zone_1/sky.gtf` and
+     `zone_2/sky.gtf` are **byte-identical** (`md5 4a89a7d5...`, 12,583,040 B,
+     `DATA00`), and differ from a racing circuit's (`01_vineta_k`,
+     `6868bfb6...`). One sky for all of Zone, not one per arena.
+  2. **`Sky horizon colour` and `Sky zenith colour` are cross-faded per Zone
+     stage**, by `Environment_UpdateStageBlend`, into
+     `0x00c81560`-`0x00c81590`, on exactly the same inner/outer terms as every
+     Zone parameter - see
+     [zone-effectsettings-loader.md](../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md).
+     A cubemap has no horizon/zenith term, so something else consumes these.
+  3. **This port parses both keys and draws neither.** `oag_render`'s HD sky is
+     the cubemap and has nowhere to put them.
+
+  **What is not established**: whether the gradient *replaces* the cubemap or
+  tints it, and what the interpolation is. Both are needed before drawing
+  anything - the observation says the result looks like a gradient, not how it
+  is built, and a horizon-to-zenith lerp is the obvious guess rather than a
+  read. **Do not implement from the key names alone.** The place to settle it
+  is the sky material's own microcode, the same way the surface equation was
+  settled: `scripts/ps3-microcode.py` now resolves patched constants to their
+  parameter hashes, so a sky material declaring these two keys would name
+  itself.
+
+  **A trap this item already sprang, for the fourth time in this thread**: the
+  first pass here looked only in `DATA02`, found no `zone_N/sky.gtf`, and was
+  one step from publishing "the Zone arenas ship no sky, so it must be the
+  gradient". They ship one; it is in `DATA00`. **Check both archives before
+  concluding anything from an absence.**
+
 - **The visualiser glow is the largest remaining gap in what draws, and it is
   wanted by the racing circuits rather than being an arena extra.**
   `zoneTexVis` is declared in **all 16** Zone blocks of the two circuit
