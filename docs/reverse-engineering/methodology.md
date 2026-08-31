@@ -304,3 +304,45 @@ down, that is knowledge; unwritten, it gets re-litigated. (Both figures were
 measured from the old spline-sample-0 spawn and do not reproduce since `4b2236a`
 moved the start onto the authored grid slot; the finding stands, the numbers do
 not.)
+
+**A sweep's negative is only as good as its addressing model, and a sweep that
+cannot find a known positive is not evidence about anything.** Five instances
+in one day on `ps3-hdfury-eu`, each a *clean* negative that was wrong or nearly
+wrong, and none of which announced itself:
+
+- Four independent sweeps failed to find what writes eight per-frame vec4s, and
+  the page concluded an emulator watchpoint was the only route left. All four
+  keyed on `displacement(base)`; the stores are indexed `stvx rV, rA, rB`, which
+  carries no displacement. A fifth sweep found the writer statically in one
+  pass. **"No displacement to grep" is a reason a displacement sweep fails, not
+  a reason static analysis fails** - and the two get conflated precisely when
+  the first sweep was expensive enough to feel exhaustive.
+- Two searches for what consumes a fixed address came back empty - no xrefs, no
+  `addi` forming it - and the address turned out to have two more consumers. The
+  pointer is computed in a two-instruction getter, returned in `r3`, spilled to
+  the caller's stack frame and selected by a runtime flag: **no literal for an
+  xref, no `addi` in the consuming function, no constant offset near the
+  store.** Both searches were source-side and shared one blind spot.
+- The destination-side sweep that should have caught it returned its own clean
+  negative, from a register-model defect: `llvm-objdump` prints `lfs 31,` and
+  `lwz 31,` identically, so a float load silently clobbered the tracked base.
+- A disassembler dropped the per-instruction condition code, so both arms of a
+  predicated selection printed as straight-line code. The natural reading of
+  that output is that one arm is dead, which is how a whole mechanism stayed
+  hidden behind a tool that never errored.
+- The same tool described a parameter patch chain in its own docstring and did
+  not implement it, printing `{0, 0, 0, 0}` where a named parameter belonged.
+
+The habit that catches all five is one check, and it is cheap:
+
+**Before believing a sweep's negative, confirm the sweep recovers a positive you
+already know.** If it cannot re-find the answer you have, it is not evidence
+about the answers you do not. Write the control into the sweep itself rather
+than running it once by hand - the defect above survived three re-runs because
+each re-run asked the same question of the same broken model.
+
+And when a search does come back empty, **name the addressing form it was blind
+to** before concluding anything: displacement versus indexed, source-side versus
+destination-side, literal versus computed, direct versus spilled-and-reselected.
+A negative with that sentence attached is publishable. Without it, it is a
+report about the tool.
