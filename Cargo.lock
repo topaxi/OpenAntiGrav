@@ -1982,6 +1982,7 @@ dependencies = [
  "oag-assets",
  "oag-core",
  "oag-formats",
+ "rtrb",
 ]
 
 [[package]]
@@ -2977,6 +2978,12 @@ checksum = "f1964b10c76125c36f8afe190065a4bf9a87bf324842c05701330bba9f1cacbb"
 dependencies = [
  "memchr",
 ]
+
+[[package]]
+name = "rtrb"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9278fb35b3e730abe136e9b395b5b81b96d06b9f5478a50f0c8430a2237b22de"
 
 [[package]]
 name = "rustc-hash"

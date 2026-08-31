@@ -13,7 +13,7 @@
 //! and only the handoff to hardware is missing. That mirrors
 //! `oag_input::Controls::without_pad`, which exists for exactly the same reason.
 
-use std::sync::{Arc, Mutex, MutexGuard, TryLockError};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
@@ -23,6 +23,7 @@ use log::{error, warn};
 use crate::mixer::{CHANNELS, Mixer};
 
 mod health;
+mod render;
 mod tap;
 pub use health::Health;
 pub use tap::Tap;
@@ -42,46 +43,39 @@ pub struct TapSpec {
 /// nothing.
 pub const DEFAULT_SAMPLE_RATE: u32 = 44_100;
 
-/// The share of a buffer's own playing time the callback will spend waiting for
-/// the mixer lock before giving the buffer up.
+/// The least audio this project renders ahead of the device.
 ///
-/// A quarter, so that even a callback which spends the whole budget still has
-/// three quarters of the period left to render and convert in. Contention here
-/// is measured in microseconds - the control side takes the lock to start,
-/// stop or retune a voice and nothing else - so the budget is far more than a
-/// collision costs, and matters only for the collision that happens because
-/// the *holder* was preempted, which is the one this cannot win anyway.
-const SPIN_FRACTION: f32 = 0.25;
-
-/// The ceiling on that share, for a device that asks for very long buffers.
-const SPIN_CAP: Duration = Duration::from_micros(500);
-
-/// Spins between each yield while waiting for the lock.
+/// **60 ms, and it is a real number now rather than a request.** It used to be
+/// a buffer size asked of the device, which the ALSA host honoured and the
+/// PipeWire host ignored - see [`render`] for that measurement. The audio is
+/// held in this crate's own ring instead, so this is how long a stall the queue
+/// covers on every host, and it is also exactly how late a cue is heard.
 ///
-/// **Not a pure spin.** The thread holding the mixer lock is, on a loaded
-/// machine, the thread that just got preempted, and refusing to yield the core
-/// is precisely what stops it finishing. Spinning is right for the microsecond
-/// case and yielding is right for the preempted one, so this does both.
-const SPINS_PER_YIELD: u32 = 64;
-
-/// The least audio to keep queued at the device, whatever a caller asks for.
+/// 60 ms is three and a half frames at 60 Hz, chosen against the stalls
+/// actually measured in a Wipeout HD race on the machine that reported the
+/// fault: frames of 40 to 80 ms, with a callback 25 ms late behind them. It
+/// does not cover the worst of those and is not meant to - past here the delay
+/// on a collision starts being something a player can feel, and the honest
+/// place to spend the rest is the stall.
 ///
-/// 40 ms - two and a half frames at 60 Hz. See where it is used in
-/// [`Output::open`] for the measurement that chose it. **A caller that knows
-/// its loop is slower than 60 Hz should ask for more**, because the number that
-/// matters is how long a stall the queue can cover and a stall is measured in
-/// frames: at a 30 Hz cap this floor is one and a fifth frames rather than two
-/// and a half, and a single missed frame outruns it.
-pub const MIN_BUFFER: Duration = Duration::from_millis(40);
-
-/// Frames a dropped buffer ramps over, either side of the gap.
+/// **It is a ceiling and not a constant.** The render thread stops a chunk
+/// short of it rather than filling to the brim, so a cue is heard between
+/// `60 ms - CHUNK` and 60 ms after the tick that raised it - about 49 to 60 ms
+/// at 48 kHz. Against what it replaced that is roughly 40 ms added: the device
+/// buffer this used to rely on was 5 to 21 ms on PipeWire, and cue emission
+/// already cost up to a tick on top of either.
 ///
-/// About 1.5 ms at 44.1 kHz. A dropped buffer used to be filled with zeroes
-/// outright, which puts a step discontinuity into the signal wherever the
-/// waveform happened to be - and a step is a click, which is far more audible
-/// than the millisecond of missing music around it. The mixer's playback
-/// position does not advance across a miss (`render` never ran), so both edges
-/// are discontinuities of amplitude alone and a short ramp removes them.
+/// **A caller whose loop is slower than 60 Hz should ask for more**, because
+/// what matters is frames rather than milliseconds: at a 30 Hz cap this is one
+/// and four fifths of a frame.
+pub const MIN_BUFFER: Duration = Duration::from_millis(60);
+
+/// Frames a starved buffer ramps over, either side of the gap.
+///
+/// About 1.5 ms at 44.1 kHz. A buffer the ring could not fill used to be
+/// zeroed outright, which puts a step discontinuity into the signal wherever
+/// the waveform happened to be - and a step is a click, which is far more
+/// audible than the millisecond of missing music around it.
 const DECLICK_FRAMES: usize = 64;
 
 /// A mixer, and optionally the device draining it.
@@ -90,6 +84,14 @@ pub struct Output {
     /// Dropping this stops the stream, so it is held even though nothing reads
     /// it. `None` is the null backend.
     stream: Option<cpal::Stream>,
+    /// The thread filling the ring the callback drains.
+    ///
+    /// Declared after [`Self::stream`] so it is dropped after it: the device
+    /// stops asking first, and only then is the thread told to stop and joined.
+    /// Either order is safe - a ring whose far half has gone simply stops
+    /// accepting or yielding - but this one never leaves the callback reading a
+    /// ring nobody is filling.
+    ahead: Option<render::Ahead>,
     sample_rate: u32,
     device: Option<String>,
     /// What the callback saw, shared with the callback itself.
@@ -112,6 +114,7 @@ impl std::fmt::Debug for Output {
             .field("sample_rate", &self.sample_rate)
             .field("device", &self.device)
             .field("streaming", &self.stream.is_some())
+            .field("rendering ahead", &self.ahead.is_some())
             .field("dropped", &self.health.dropped_buffers())
             .finish()
     }
@@ -135,6 +138,7 @@ impl Output {
             sample_rate: rate,
             device: None,
             health: Arc::new(Health::default()),
+            ahead: None,
             tap: None,
         }
     }
@@ -160,35 +164,21 @@ impl Output {
             .default_output_config()
             .with_context(|| format!("reading the default output config of {name}"))?;
 
-        let mut config: cpal::StreamConfig = supported.config();
+        let config: cpal::StreamConfig = supported.config();
         // `cpal::SampleRate` is a plain `u32` alias as of 0.18, not a newtype.
         let sample_rate = config.sample_rate;
 
-        // **Ask for a bigger buffer than the device would have chosen.**
-        // `default_output_config` was taken verbatim until 2026-08-31 and gave
-        // 512 frames on this machine's PipeWire - 10.7 ms, which is a deadline
-        // a game misses. Instrumented during a race it produced a run of
-        // `A buffer underrun or overrun occurred` from ALSA with callbacks
-        // arriving up to 96 ms late, while the mix itself was measurably clean:
-        // no dropped buffers, no discontinuities, no refused voices, nothing
-        // clipped. Nothing about the samples was wrong; there was simply not
-        // enough of them queued to survive a stall.
-        //
-        // The cost is latency, and it is paid knowingly: a cue is up to a
-        // frame and a half later than it was. That is the right side of the
-        // trade for a racing game, where a thump in the music is louder than
-        // 40 ms of lateness is late.
-        //
-        // `buffer` rather than a constant because the queue's job is to cover a
-        // stall, and a stall is a frame: what is two and a half frames at 60 Hz
-        // is one and a fifth at 30, so a caller that has capped its loop low
-        // asks for more. See [`MIN_BUFFER`], which is the floor it cannot go
-        // under.
-        config.buffer_size =
-            requested_buffer_size(supported.buffer_size(), sample_rate, buffer.max(MIN_BUFFER));
+        // **The device's own buffer, whatever it is.** This used to ask for a
+        // bigger one; the ALSA host honoured that and the PipeWire host - the
+        // default on every current desktop - does not, and cannot. The audio
+        // that covers a stall is held in this crate's own ring instead, so
+        // whatever the device asks for per callback is now nobody's problem.
+        // See `output::render`.
 
         let mixer = Arc::new(Mutex::new(Mixer::new(sample_rate)));
         let health = Arc::new(Health::default());
+        let (producer, consumer) =
+            rtrb::RingBuffer::new(render::ring_capacity(sample_rate, buffer.max(MIN_BUFFER)));
         if let Some(spec) = tap {
             log::info!(
                 "audio: recording {:.0} s of output to {}",
@@ -222,70 +212,70 @@ impl Output {
             cpal::SampleFormat::F32 => build::<f32>(
                 &device,
                 config,
-                &mixer,
+                consumer,
                 &health,
                 recording.as_ref().map(|(t, _)| t),
             ),
             cpal::SampleFormat::F64 => build::<f64>(
                 &device,
                 config,
-                &mixer,
+                consumer,
                 &health,
                 recording.as_ref().map(|(t, _)| t),
             ),
             cpal::SampleFormat::I8 => build::<i8>(
                 &device,
                 config,
-                &mixer,
+                consumer,
                 &health,
                 recording.as_ref().map(|(t, _)| t),
             ),
             cpal::SampleFormat::I16 => build::<i16>(
                 &device,
                 config,
-                &mixer,
+                consumer,
                 &health,
                 recording.as_ref().map(|(t, _)| t),
             ),
             cpal::SampleFormat::I32 => build::<i32>(
                 &device,
                 config,
-                &mixer,
+                consumer,
                 &health,
                 recording.as_ref().map(|(t, _)| t),
             ),
             cpal::SampleFormat::I64 => build::<i64>(
                 &device,
                 config,
-                &mixer,
+                consumer,
                 &health,
                 recording.as_ref().map(|(t, _)| t),
             ),
             cpal::SampleFormat::U8 => build::<u8>(
                 &device,
                 config,
-                &mixer,
+                consumer,
                 &health,
                 recording.as_ref().map(|(t, _)| t),
             ),
             cpal::SampleFormat::U16 => build::<u16>(
                 &device,
                 config,
-                &mixer,
+                consumer,
                 &health,
                 recording.as_ref().map(|(t, _)| t),
             ),
             cpal::SampleFormat::U32 => build::<u32>(
                 &device,
                 config,
-                &mixer,
+                consumer,
                 &health,
                 recording.as_ref().map(|(t, _)| t),
             ),
             cpal::SampleFormat::U64 => build::<u64>(
                 &device,
                 config,
-                &mixer,
+                consumer,
                 &health,
                 recording.as_ref().map(|(t, _)| t),
             ),
@@ -297,9 +287,18 @@ impl Output {
         }
         .with_context(|| format!("building a {format} output stream on {name}"))?;
 
+        // After the stream, so a device that refuses to open does not leave a
+        // thread rendering into a ring nothing will ever read.
+        let ahead = render::Ahead::spawn(
+            Arc::clone(&mixer),
+            producer,
+            render::target_samples(sample_rate, buffer.max(MIN_BUFFER)),
+        );
+
         Ok(Self {
             mixer,
             stream: Some(stream),
+            ahead: Some(ahead),
             sample_rate,
             device: Some(name),
             health,
@@ -423,40 +422,10 @@ impl Output {
     }
 }
 
-/// The buffer size to ask a device for, given what it says it supports.
-///
-/// `target` clamped into the device's own range, or
-/// [`cpal::BufferSize::Default`] when it will not say what its range is -
-/// guessing a fixed size against an unknown range is how a stream fails to
-/// build at all, and a device whose default is already generous is not one this
-/// needs to argue with.
-fn requested_buffer_size(
-    supported: &cpal::SupportedBufferSize,
-    sample_rate: u32,
-    target: Duration,
-) -> cpal::BufferSize {
-    let cpal::SupportedBufferSize::Range { min, max } = supported else {
-        return cpal::BufferSize::Default;
-    };
-    #[expect(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        reason = "a frame count, bounded by the device's own range below"
-    )]
-    let want = (sample_rate as f32 * target.as_secs_f32()) as u32;
-    cpal::BufferSize::Fixed(want.clamp(*min, *max))
-}
-
-/// Builds and starts one output stream in the device's own sample format.
-///
-/// Generic over `T` so the fifteen-line callback is written once rather than
-/// once per format; `cpal`'s own `FromSample` does the conversion, which is the
-/// same integer scaling this crate's `Sound` decoding uses in the other
-/// direction.
 fn build<T>(
     device: &cpal::Device,
     config: cpal::StreamConfig,
-    mixer: &Arc<Mutex<Mixer>>,
+    mut ring: rtrb::Consumer<f32>,
     health: &Arc<Health>,
     tap: Option<&Arc<Tap>>,
 ) -> Result<cpal::Stream>
@@ -464,16 +433,15 @@ where
     T: cpal::SizedSample + cpal::FromSample<f32> + Send + 'static,
 {
     let device_channels = usize::from(config.channels).max(1);
-    let callback_mixer = Arc::clone(mixer);
     let callback_health = Arc::clone(health);
     let callback_tap = tap.cloned();
-    // Seconds per frame, so the waiting budget can be derived from the size of
-    // the buffer actually handed over - a PipeWire quantum of 64 frames is
-    // 1.45 ms and a 2,048-frame ALSA period is 46 ms, and a budget that suits
-    // one is wrong for the other.
+    // Seconds per frame, so lateness can be judged against the size of the
+    // buffer actually handed over rather than a constant: a PipeWire quantum of
+    // 256 frames is 5.3 ms and a 2,048-frame ALSA period is 46 ms.
     let seconds_per_frame = 1.0 / f64::from(config.sample_rate.max(1)) as f32;
-    // Rendered stereo, before it is spread over however many channels the
-    // device actually has. Allocated once here rather than in the callback.
+    // The stereo the ring hands over, before it is spread across however many
+    // channels the device actually has. Allocated once here, never in the
+    // callback.
     let mut scratch: Vec<f32> = Vec::new();
     let mut declick = Declick::default();
     // When the previous callback returned, so the next one can say whether more
@@ -487,8 +455,6 @@ where
         config,
         move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
             let frames = data.len() / device_channels;
-            let budget = Duration::from_secs_f32(frames as f32 * seconds_per_frame * SPIN_FRACTION)
-                .min(SPIN_CAP);
 
             let now = Instant::now();
             if let Some(previous) = previous {
@@ -506,15 +472,44 @@ where
             let tail = declick.tail;
             let recovering = declick.recovering;
             callback_health.buffer(frames);
-            if render_stereo(&callback_mixer, &mut scratch, frames, budget, &mut declick) {
-                // Not after a drop: the ramp either side of a gap is a
-                // deliberate discontinuity, and counting it would bury the
-                // accidental ones this exists to find.
-                if !recovering {
-                    callback_health.scan(&scratch, tail);
+
+            // **The whole of the audio thread's work: copy.** No lock, no
+            // mixing, no allocation - the render thread did all of it ahead of
+            // time. See `output::render`.
+            scratch.clear();
+            scratch.resize(frames * CHANNELS, 0.0);
+            let short = {
+                let (_, unfilled) = ring.pop_partial_slice(&mut scratch);
+                unfilled.len()
+            };
+
+            if short == 0 {
+                if recovering {
+                    ramp_up(&mut scratch);
+                    declick.recovering = false;
                 }
+                declick.tail = last_frame(&scratch);
             } else {
+                // The ring ran dry: the render thread was starved for longer
+                // than the queue was deep. Ramp what did arrive down rather
+                // than stopping on it, and leave the rest silent.
                 callback_health.dropped();
+                let filled = scratch.len() - short;
+                scratch[filled..].fill(0.0);
+                if filled >= CHANNELS {
+                    fade_out(&mut scratch[..filled]);
+                } else if !recovering {
+                    // Nothing arrived at all, so there is no signal to ramp -
+                    // decay from where the previous buffer ended instead, which
+                    // is the step that would otherwise be uncovered.
+                    ramp_from(&mut scratch, tail);
+                }
+                declick.tail = [0.0; CHANNELS];
+                declick.recovering = true;
+            }
+
+            if !recovering || short == 0 {
+                callback_health.scan(&scratch, tail);
             }
 
             if let Some(tap) = &callback_tap {
@@ -530,86 +525,17 @@ where
     Ok(stream)
 }
 
-/// What the callback remembers from one buffer to the next, so that a dropped
+/// What the callback remembers from one buffer to the next, so that a starved
 /// one is a gap rather than a click. See [`DECLICK_FRAMES`].
 #[derive(Debug, Default, Clone, Copy)]
 struct Declick {
-    /// The last stereo frame actually emitted, which a give-up ramps down from.
+    /// The last stereo frame actually emitted, which a gap ramps down from.
     tail: [f32; CHANNELS],
-    /// Whether the previous buffer was given up on, so this one ramps back in.
+    /// Whether the previous buffer ran short, so this one ramps back in.
     recovering: bool,
 }
 
-/// Fills `scratch` with `frames` stereo frames, returning whether the mixer
-/// rendered them.
-///
-/// A `false` return means the lock was still held when the budget ran out and
-/// the buffer is a declicked gap. Split out of the closure so that a machine
-/// with no sound card can still test the contended path, which is the one that
-/// only ever happens when nobody is watching.
-fn render_stereo(
-    mixer: &Mutex<Mixer>,
-    scratch: &mut Vec<f32>,
-    frames: usize,
-    budget: Duration,
-    declick: &mut Declick,
-) -> bool {
-    scratch.clear();
-    scratch.resize(frames * CHANNELS, 0.0);
-
-    let Some(mut guard) = acquire(mixer, budget) else {
-        ramp_down(scratch, declick.tail);
-        declick.tail = [0.0; CHANNELS];
-        declick.recovering = true;
-        return false;
-    };
-
-    guard.render(scratch);
-    if declick.recovering {
-        ramp_up(scratch);
-        declick.recovering = false;
-    }
-    declick.tail = last_frame(scratch);
-    true
-}
-
-/// Waits up to `budget` for the mixer lock without ever blocking on it.
-///
-/// **Not `lock`.** Blocking the audio thread on a tick that is mid-update
-/// hands the device's deadline to the frame loop, and missing that deadline is
-/// an underrun in the driver rather than a gap this code can shape. **Not a
-/// bare `try_lock` either**, which is what this was: the control side holds the
-/// lock for microseconds at a time, so almost every collision is one a short
-/// wait wins outright, and giving up on the first attempt threw those away.
-fn acquire<'a>(mixer: &'a Mutex<Mixer>, budget: Duration) -> Option<MutexGuard<'a, Mixer>> {
-    // Before any clock is read, because the uncontended case is the common one
-    // and it should cost exactly what it did before this function existed.
-    match mixer.try_lock() {
-        Ok(guard) => return Some(guard),
-        // A poisoned lock never becomes unpoisoned, so waiting on it is waiting
-        // forever, once per buffer.
-        Err(TryLockError::Poisoned(_)) => return None,
-        Err(TryLockError::WouldBlock) => {}
-    }
-
-    let deadline = Instant::now() + budget;
-    loop {
-        for _ in 0..SPINS_PER_YIELD {
-            std::hint::spin_loop();
-        }
-        std::thread::yield_now();
-        match mixer.try_lock() {
-            Ok(guard) => return Some(guard),
-            Err(TryLockError::Poisoned(_)) => return None,
-            Err(TryLockError::WouldBlock) => {}
-        }
-        if Instant::now() >= deadline {
-            return None;
-        }
-    }
-}
-
-/// The last stereo frame in a rendered buffer, or silence if there is none.
+/// The last stereo frame in a buffer, or silence if there is none.
 fn last_frame(stereo: &[f32]) -> [f32; CHANNELS] {
     let frames = stereo.len() / CHANNELS;
     if frames == 0 {
@@ -619,8 +545,25 @@ fn last_frame(stereo: &[f32]) -> [f32; CHANNELS] {
     [stereo[at], stereo[at + 1]]
 }
 
-/// Ramps a silent buffer down from `tail`, so a gap does not start with a step.
-fn ramp_down(stereo: &mut [f32], tail: [f32; CHANNELS]) {
+/// Ramps the end of a short buffer down to zero, so the gap after it does not
+/// start with a step.
+fn fade_out(stereo: &mut [f32]) {
+    let frames = stereo.len() / CHANNELS;
+    if frames == 0 {
+        return;
+    }
+    let ramp = frames.min(DECLICK_FRAMES);
+    for step in 0..ramp {
+        let gain = 1.0 - (step + 1) as f32 / ramp as f32;
+        let at = (frames - ramp + step) * CHANNELS;
+        stereo[at] *= gain;
+        stereo[at + 1] *= gain;
+    }
+}
+
+/// Decays a silent buffer from `tail`, for the gap that begins with a buffer
+/// the ring could not fill at all.
+fn ramp_from(stereo: &mut [f32], tail: [f32; CHANNELS]) {
     let frames = stereo.len() / CHANNELS;
     let ramp = frames.min(DECLICK_FRAMES);
     for frame in 0..ramp {
@@ -631,7 +574,7 @@ fn ramp_down(stereo: &mut [f32], tail: [f32; CHANNELS]) {
     }
 }
 
-/// Ramps a rendered buffer up from silence, the other edge of the same gap.
+/// Ramps a buffer up from silence, the other edge of the same gap.
 fn ramp_up(stereo: &mut [f32]) {
     let frames = stereo.len() / CHANNELS;
     let ramp = frames.min(DECLICK_FRAMES);
