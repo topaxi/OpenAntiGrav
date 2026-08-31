@@ -201,6 +201,27 @@ against an original that is visibly on one.
 
 ## Next Steps
 
+- **The visualiser glow is the largest remaining gap in what draws, and it is
+  wanted by the racing circuits rather than being an arena extra.**
+  `zoneTexVis` is declared in **all 16** Zone blocks of the two circuit
+  materials read directly (`02_track/materials/diffuse`,
+  `05_ubermall/materials/billboarddiffuse`), so the twelve circuits genuinely
+  sample it and `mesh.wgsl` leaves it out. **Blocked material-side by nothing**
+  - the block is on the build loop at `0x003d8b40` not reconciling: nine passes
+  of 64 texels, source running `+1728` down to `+192`, destination advancing
+  256 bytes a pass, against a 256-entry table. Read that arithmetic before
+  generating anything, and read it with the equaliser observation in hand -
+  "an RGB ramp" was the reading from before anyone knew the effect was a
+  spectrum, and a per-band palette and a gradient are easy to confuse from a
+  packing loop alone.
+- **A third shape exists inside the circuit bucket**, and it is where the
+  `zoneColourTint.w` radius correlation was measured:
+  `01_vineta_k/materials/cf_constantcolourglow` is a *circuit* material whose
+  twelve Zone blocks declare `zoneBase*` and sample **nothing at all**. So
+  "rim-only" is not the arena shape - the arena shape is the black-mask one -
+  and a census binning on "has `zoneBase*`" swallows this sub-population into
+  the circuit bucket correctly but invisibly. Worth knowing before anyone
+  reasons from the two-shape split as though it were exhaustive.
 - ~~Load the fifteen `zoneModeTrack{0..14}.gtf` and hold them per stage~~
   **Done, 2026-08-31** - see the section above. Fifteen decode, all distinct,
   ground-truth tested.

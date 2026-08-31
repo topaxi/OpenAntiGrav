@@ -2,9 +2,22 @@
 
 **The Zone effect is not an engine program.** No Zone name appears in the
 EBOOT's own 121-name shader census. Zone is a set of compiled **variants
-inside the materials themselves** - 1,467 of the disc's 1,590
-`.rcsmaterial` files carry one. That is why every search of the executable for
-a "Zone shader" came back empty: there is nothing there to find.
+inside the materials themselves**, which is why every search of the executable
+for a "Zone shader" came back empty: there is nothing there to find. The
+measured scale is **20,214 Zone-bearing fragment blocks**, asserted against the
+image by `crates/formats/tests/zone_shader_census_ground_truth.rs`.
+
+**A file count that stood here has been removed rather than corrected**, and
+the reason is worth more than the number was. It read "1,467 of the disc's
+1,590 `.rcsmaterial` files". The disc has **1,632**
+(`rcsmaterial_ground_truth.rs`); `DATA00` alone has **693**. `1,590` is neither
+- it is the size of a `/tmp` extraction directory that a second process had
+extracted other archives into, and it reached this page three separate times:
+in that sentence, in a census whose absolute numbers all had to be restated,
+and in a "two independent parties agree" claim that turned out to be one corpus
+counted twice. **Nobody has measured how many files carry a Zone variant**, so
+this page no longer says. See
+[methodology.md](../../../reverse-engineering/methodology.md#rules-learned-the-expensive-way).
 
 Read in full from three materials that agree with each other:
 
