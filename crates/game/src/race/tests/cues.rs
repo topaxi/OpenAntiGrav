@@ -197,6 +197,81 @@ fn the_shield_announcer_fires_on_the_edge_and_not_on_the_level() {
     assert_eq!(announcements, 1);
 }
 
+/// A synthetic two-record ladder, the smallest shape that has a boundary to
+/// cross: stage `1` ("A") from zone `0`, stepping to stage `2` ("B") at zone
+/// `2` and holding there. Mirrors `oag_title::ZoneStages`' own real tables'
+/// shape - a sentinel-free descending threshold list - without needing HD's
+/// fifteen-stage one just to prove the edge.
+static TEST_ZONE_STAGES: oag_title::ZoneStages = oag_title::ZoneStages {
+    records: &[(2, "B"), (0, "A")],
+};
+
+fn zone_race() -> Race {
+    let mut setup = setup(hulled_handling());
+    setup.mode = Mode::Zone;
+    setup.zone_stages = Some(&TEST_ZONE_STAGES);
+    Race::start(setup)
+}
+
+/// The speed-class announcer's own trigger: it fires on a stage *boundary*,
+/// not on every zone survived - most zone steps do not cross one, since a
+/// real ladder's bands are wider than one zone (see
+/// `oag_title::ZoneStages`' own docs). `TEST_ZONE_STAGES` has exactly one
+/// boundary, at zone `2`, so a wiring bug that fired on every
+/// `outcome.zone_advanced` instead of on the stage changing would show up as
+/// more than one announcement here.
+#[test]
+fn the_class_announcer_fires_on_a_stage_step_and_not_on_every_zone() {
+    let mut race = zone_race();
+    let mut raised = Vec::new();
+    // Comfortably past two 600-tick zone steps (`zone::tests` pins
+    // `STEP_SECONDS * 60.0 == 600`), with margin for the dt sum's own f32
+    // slop - the boundary this asserts sits at zone 2 and every zone after
+    // it names the same stage, so overshooting past it changes nothing.
+    for _ in 0..1300 {
+        race.tick(&InputSnapshot::default());
+        raised.extend(race.drain_class_announcements());
+    }
+    assert!(
+        race.world.race.zone >= 2,
+        "sanity: 1300 ticks should survive at least two zones, got {}",
+        race.world.race.zone
+    );
+    assert_eq!(
+        raised,
+        vec![2],
+        "one class change, to stage 2 (TEST_ZONE_STAGES' only boundary) - not one per zone \
+         survived, and not fired again for every zone stage 2 goes on to cover"
+    );
+}
+
+/// The same race, but for a title with no recovered zone-to-stage ladder -
+/// every title but HD/Fury today. Nothing should fire: there is no stage to
+/// have changed.
+#[test]
+fn a_title_with_no_zone_stages_never_raises_a_class_announcement() {
+    let mut setup = setup(hulled_handling());
+    setup.mode = Mode::Zone;
+    // The default `setup()` fixture already leaves this `None` - restated
+    // here so the test does not depend on that staying true by accident.
+    setup.zone_stages = None;
+    let mut race = Race::start(setup);
+
+    let mut raised = Vec::new();
+    for _ in 0..1300 {
+        race.tick(&InputSnapshot::default());
+        raised.extend(race.drain_class_announcements());
+    }
+    assert!(
+        race.world.race.zone >= 2,
+        "sanity: the zone counter itself does not need a ladder to step"
+    );
+    assert!(
+        raised.is_empty(),
+        "no ladder, no stage, nothing to announce: {raised:?}"
+    );
+}
+
 /// Cues are an *output*, so a race that raises them must hash exactly like one
 /// that does not. This is the guard on the committed determinism constants:
 /// `docs/architecture/determinism.md` puts audio outside the simulation, and

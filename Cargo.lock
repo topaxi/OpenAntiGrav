@@ -2070,6 +2070,7 @@ name = "oag-hd"
 version = "0.1.0"
 dependencies = [
  "oag-assets",
+ "oag-formats",
  "oag-pulse",
  "oag-pure",
  "oag-title",

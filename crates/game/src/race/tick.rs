@@ -269,6 +269,27 @@ impl Race {
                 self.push_announcement(self.world.race.zone);
             }
 
+            // The speed-class announcer's own trigger, on a title whose
+            // zone-to-stage ladder is recovered: the zone counter just
+            // stepped by exactly one (`RaceState::advance_zone`'s own
+            // `saturating_add(1)`), so the zone before this tick is the new
+            // value minus one. Fires only when that step also crosses a
+            // stage boundary - most zone steps do not, since the ladder's
+            // bands are wider than one zone - which is what keeps this from
+            // announcing a class on every zone survived. See
+            // `oag_title::ZoneStages` and `oag_title::ZoneClassAnnouncer`.
+            if outcome.zone_advanced
+                && let Some(stages) = self.zone_stages
+            {
+                let after = self.world.race.zone;
+                let before = after.saturating_sub(1);
+                if let Some(stage_after) = stages.stage_for(after)
+                    && Some(stage_after) != stages.stage_for(before)
+                {
+                    self.push_class_announcement(stage_after);
+                }
+            }
+
             if outcome.lap_completed {
                 self.grant_free_turbo();
             }

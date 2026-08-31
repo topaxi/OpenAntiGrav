@@ -30,6 +30,10 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     },
     sounds: SOUND_BANKS,
     zone_announcer: Some(ZONE_ANNOUNCER),
+    // Pulse's own `speech_zone.bnk` was listed alongside Pure's and HD's -
+    // see `docs/formats/psp-audio.md`'s bank table - and names no `MR_*`-shaped
+    // speed-class cues at all, only the numbered ladder.
+    zone_class_announcer: None,
     // Searched, not skipped: two independently generated candidate lists
     // resolved no `.effectSettings`-shaped entry on this disc at all - see
     // `oag_title::ZonePalette`. A Zone race here escalates its speed alone,

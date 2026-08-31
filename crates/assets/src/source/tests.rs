@@ -69,6 +69,7 @@ const TITLE: &Title = &Title {
         },
         // Unread here too: nothing in this crate reads the Zone ladder.
         zone_announcer: None,
+        zone_class_announcer: None,
         // Unread on the same terms: resolving archives has nothing to do with
         // the colour grade a Zone race climbs.
         zone_palette: None,

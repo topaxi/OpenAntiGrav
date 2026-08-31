@@ -85,6 +85,9 @@ pub struct ShipPaths {
     pub zone: ZoneCraft,
 }
 
+mod announcer;
+pub use announcer::{ZoneAnnouncer, ZoneClassAnnouncer};
+
 /// The circuit and team a race falls back to on one title.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RaceDefaults {
@@ -143,6 +146,15 @@ pub struct RaceDefaults {
     /// `None` rather than a guessed ladder for a title whose bank has not been
     /// read - see [`ZoneAnnouncer`]'s own docs for which that is today.
     pub zone_announcer: Option<&'static ZoneAnnouncer>,
+    /// The Zone-mode **speed-class** announcer this title ships, when it has
+    /// been read off the disc. See [`ZoneClassAnnouncer`].
+    ///
+    /// A different ladder from [`Self::zone_announcer`]'s: that one calls a
+    /// zone *count* ("Zone 5"), this one calls a speed *class* ("Venom"). Both
+    /// happen to live in the same family of banks on every title measured so
+    /// far, which is why they read as one axis until the cue names are
+    /// actually listed.
+    pub zone_class_announcer: Option<&'static ZoneClassAnnouncer>,
     /// Where this title keeps the per-stage colour grade a Zone race escalates
     /// through. See [`ZonePalette`].
     ///
@@ -443,57 +455,6 @@ pub struct SoundBanks {
     pub weapons: &'static str,
     /// Where `shieldactive` is: the announcer, not an effect.
     pub speech: &'static str,
-}
-
-/// A title's Zone-mode announcer: the milestone numbers it names a voice line
-/// for, and the bank that line is in.
-///
-/// # Every title's ladder is its own disc data, not one shared table
-///
-/// `Data\Sound\speech_zone.bnk` is one path all three measured titles carry -
-/// see `docs/formats/psp-audio.md`'s bank table - but what it names differs:
-/// Pulse announces every five zones to 30 then every ten to 100 (thirteen
-/// cues), Pure stops naming every five after 30 and jumps straight to 75
-/// (ten cues, plus a `bronze`/`silver`/`gold` medal set this port does not
-/// read), and Wipeout HD keeps naming every five all the way to 50 before
-/// switching to tens (fifteen cues, plus eleven speed-class lines this port
-/// also does not read - see the same doc page). A milestone number is
-/// therefore a title fact and not an engine constant, the same way
-/// [`ZoneCircuit`] and [`ZoneCraft`] are.
-///
-/// # The cue name is always `zone_<n>`
-///
-/// Measured on all three: every numbered cue in every title's own
-/// `speech_zone.bnk` is spelled exactly that way, so [`Self::cue_name`] is one
-/// function rather than a per-title table of names.
-///
-/// # Confidence
-///
-/// **95** for "the bank exists, holds these cues, under this name" - read
-/// directly off the shipped audio with `oag-wad sounds`, not inferred. **75**
-/// for "the run-time zone counter reaching this number is what plays this
-/// cue" - traced end to end only on Pulse's executable
-/// (`docs/ghidra/functions/psp-pulse-usa/zone-mode.md#the-ten-second-step`),
-/// where the milestone table's own thresholds and the bank's own cue order
-/// agree ordinally but the instruction that finally selects a waveform sits
-/// outside this project's Ghidra database. Pure and HD's own executables have
-/// not been read for this at all; their ladders are attributed by the pattern
-/// three-titles-and-no-hole already established for the other two Zone axes,
-/// not by a second traced call site.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ZoneAnnouncer {
-    /// `Data\Sound\speech_zone.bnk` on every title measured so far.
-    pub bank: &'static str,
-    /// The zone numbers this title's bank names a `zone_<n>` cue for, ascending.
-    pub milestones: &'static [u16],
-}
-
-impl ZoneAnnouncer {
-    /// The cue name for one of [`Self::milestones`], e.g. `"zone_5"`.
-    #[must_use]
-    pub fn cue_name(milestone: u16) -> String {
-        format!("zone_{milestone}")
-    }
 }
 
 /// Where a title keeps the hull a Zone race flies.

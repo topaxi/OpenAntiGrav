@@ -697,6 +697,12 @@ pub struct Race {
     sounds: crate::audio::sfx::Banks,
     /// Zone mode's milestone announcer, straight out of [`Setup::announcer`].
     announcer: crate::audio::sfx::Announcer,
+    /// Zone mode's speed-class announcer, straight out of
+    /// [`Setup::class_announcer`].
+    class_announcer: crate::audio::sfx::ClassAnnouncer,
+    /// This title's own zone-to-speed-class ladder, straight out of
+    /// [`Setup::zone_stages`] - what [`Self::class_announcer`] fires against.
+    zone_stages: Option<&'static oag_title::ZoneStages>,
     /// The multi-instance pool everything *except* the hull-mounted sparks
     /// plays in: the rockets' flares and their detonations today, and
     /// whatever gets a recovered trigger next.
@@ -918,6 +924,11 @@ pub struct Race {
     /// per-tick-output shape as `cues` and the same exclusion from
     /// [`Self::state_hash`].
     announcements: Vec<u16>,
+    /// Speed-class stages reached this tick, awaiting a drain. Same shape as
+    /// [`Self::announcements`]; kept apart because the two ladders are
+    /// separate title axes that happen to raise on related but distinct
+    /// edges - see [`Self::push_class_announcement`].
+    class_announcements: Vec<u32>,
     /// Seconds before a wall contact may raise a sound cue again.
     ///
     /// Its own timer rather than [`Self::sparks_cooldown`], because a shielded

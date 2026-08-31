@@ -192,6 +192,11 @@ fn setup(handling: Handling) -> Setup {
         sounds: crate::audio::sfx::Banks::default(),
         // Same path: no title data, so no ladder, so nothing decodes.
         announcer: crate::audio::sfx::Announcer::default(),
+        class_announcer: crate::audio::sfx::ClassAnnouncer::default(),
+        // No title data here either, so no zone-to-stage ladder to fire the
+        // class announcer against - the same "not this title" reason `zone`
+        // above is `None`.
+        zone_stages: None,
         // A synthetic track authors no pads, which is also what every Pure
         // track does: an empty set is an ordinary state, not a stub.
         speedup_pads: Vec::new(),
