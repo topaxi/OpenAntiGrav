@@ -19,6 +19,11 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+      # `oag-audio` builds `cpal` with its PipeWire host, which links
+      # libpipewire-0.3 through pkg-config. The runner image has ALSA's headers
+      # and not these, so without this the audio crate does not compile at all.
+      - name: Install libpipewire
+        run: sudo apt-get update && sudo apt-get install -y libpipewire-0.3-dev
       - run: cargo fmt --all -- --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - uses: taiki-e/install-action@nextest
@@ -63,6 +68,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.88
         id: msrv-toolchain
       - uses: Swatinem/rust-cache@v2
+      - name: Install libpipewire
+        run: sudo apt-get update && sudo apt-get install -y libpipewire-0.3-dev
       - run: cargo +${{ steps.msrv-toolchain.outputs.name }} build --workspace
 
   # The simulation must produce bit-identical results on every target we ship.

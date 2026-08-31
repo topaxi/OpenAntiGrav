@@ -22,7 +22,21 @@ log.workspace = true
 # The device layer only. Voices, mixing, pitch and volume are this crate's job,
 # because the original's are `sceSasCore` semantics we will have to model rather
 # than inherit from whatever a higher-level crate happens to implement.
-cpal = "0.18.1"
+#
+# **PipeWire's own host, not only ALSA.** cpal's Linux default is ALSA, which on
+# a modern desktop means ALSA's `default` device routed through PipeWire's ALSA
+# plugin - a compatibility shim with its own buffering and resampling between
+# this process and the graph that actually plays. With this feature on,
+# `default_host` prefers PipeWire when it is running and falls back to
+# PulseAudio and then ALSA when it is not, so a machine without it is unchanged.
+# Measured here: the device goes from "Default Audio Device" at a 512-frame
+# plugin-chosen buffer to the graph's own `output_default` node at its 1,024-
+# frame quantum.
+#
+# It links libpipewire-0.3 through pkg-config, which CI installs and every
+# distribution shipping PipeWire already has. The dependency is target-gated
+# upstream, so Windows and macOS are unaffected.
+cpal = { version = "0.18.1", features = ["pipewire"] }
 
 [lints]
 workspace = true
