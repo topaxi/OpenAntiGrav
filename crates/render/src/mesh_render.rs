@@ -14,7 +14,9 @@ mod uniforms;
 pub use blend::{ADDITIVE_BLEND, TRANSPARENT_BLEND, TransparentPipelines};
 use uniforms::Uniforms;
 mod velocity;
-pub use uniforms::{DEPTH_FORMAT, Fog, Light, SCENE_SIZE, Scene, UNIFORMS_SIZE, write_uniforms};
+pub use uniforms::{
+    DEPTH_FORMAT, Fog, Light, SCENE_SIZE, Scene, UNIFORMS_SIZE, Zone, write_uniforms,
+};
 pub(crate) use velocity::velocity_targets;
 pub use velocity::{VELOCITY_FORMAT, Velocity};
 
@@ -322,6 +324,7 @@ pub fn build(
     blend: wgpu::BlendState,
     glow: GlowMask,
     velocity: Velocity,
+    zone: Option<&std::sync::Arc<crate::mesh::ModelTexture>>,
 ) -> Result<Built> {
     // The blended pipeline never writes depth whichever role this is; the rest
     // is what [`Depth`] chooses between.
@@ -423,16 +426,38 @@ pub fn build(
         // Labelled for what the buffer holds, which is `Scene` - fog *and* the
         // light rig. The three "fog" labels here predated `Light` joining it.
         label: Some("scene"),
-        entries: &[wgpu::BindGroupLayoutEntry {
-            binding: 0,
-            visibility: wgpu::ShaderStages::FRAGMENT,
-            ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Uniform,
-                has_dynamic_offset: false,
-                min_binding_size: None,
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
             },
-            count: None,
-        }],
+            // The Zone stage's own texture, in the *scene* group rather than
+            // the per-material one: it is a property of the race, not of a
+            // material slot, so binding it here uploads it once per model
+            // instead of once per slot naming a material.
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 2,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                count: None,
+            },
+        ],
     });
 
     // Every pipeline gets a fog buffer, initialised to `Fog::off`. A caller that
@@ -446,13 +471,49 @@ pub fn build(
         mapped_at_creation: false,
     });
     queue.write_buffer(&fog_buffer, 0, bytemuck::bytes_of(&Scene::off()));
+    // **Black, not white, where there is no Zone texture.** `Scene::off`
+    // leaves `zone.enabled` at zero so the sample is multiplied out anyway,
+    // and a black placeholder means that even a caller that writes a Zone
+    // uniform without a texture adds nothing rather than adding a white sheet
+    // - the failure this project wants from a missing asset is an absence.
+    let zone_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+        label: Some("zone"),
+        address_mode_u: wgpu::AddressMode::Repeat,
+        address_mode_v: wgpu::AddressMode::Repeat,
+        mag_filter: wgpu::FilterMode::Linear,
+        min_filter: wgpu::FilterMode::Linear,
+        mipmap_filter: wgpu::MipmapFilterMode::Linear,
+        anisotropy_clamp: anisotropy.clamp(),
+        ..Default::default()
+    });
+    let zone_view = match zone {
+        Some(texture) => texture::upload(
+            device,
+            queue,
+            texture,
+            device
+                .features()
+                .contains(wgpu::Features::TEXTURE_COMPRESSION_BC),
+        ),
+        None => texture::upload_rgba(device, queue, 1, 1, &[0, 0, 0, 255], "no zone stage"),
+    };
     let fog_bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("scene"),
         layout: &fog_layout,
-        entries: &[wgpu::BindGroupEntry {
-            binding: 0,
-            resource: fog_buffer.as_entire_binding(),
-        }],
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: fog_buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::TextureView(&zone_view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: wgpu::BindingResource::Sampler(&zone_sampler),
+            },
+        ],
     });
 
     // **Two bindings in one group, not two groups.** wgpu's downlevel limit is

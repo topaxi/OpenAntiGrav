@@ -301,6 +301,8 @@ impl Session {
             // it draws into one target, so there is no velocity buffer.
             mesh_render::GlowMask::Protected,
             mesh_render::Velocity::None,
+            // The asset viewer draws a model, not a race, so no Zone stage.
+            None,
         )?;
         let _ = placeholder_bind_group;
 

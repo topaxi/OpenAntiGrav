@@ -227,6 +227,11 @@ fn hd_stage_zero_and_stage_one_are_two_different_authored_palettes() {
         scene_eq_brightness: Some(0.0),
         scene_base_colour: Some([3.0, 3.0, 3.0]),
         scene_base_colour_highlight: Some([0.0, 0.0, 0.0]),
+        // **The file authors no `Scene.Aniso Power` on any of its fifteen
+        // stages**, though HD's own schema registers the key. So the Zone
+        // shader's `zoneAnisoPower` keeps the `(6, 6)` its constructor sets
+        // and the rim term it exponentiates has no per-stage source.
+        scene_aniso_power: None,
         fog_colour: Some([0.0, 0.0, 0.0]),
         fog_density: Some(0.0),
         sun_colour: Some([1.0, 1.0, 1.0]),
@@ -246,6 +251,7 @@ fn hd_stage_zero_and_stage_one_are_two_different_authored_palettes() {
         scene_eq_brightness: Some(20.0),
         scene_base_colour: Some([0.003_922, 0.847_059, 1.0]),
         scene_base_colour_highlight: Some([0.0, 1.694_118, 2.0]),
+        scene_aniso_power: None,
         fog_colour: Some([0.0, 1.305_882, 1.8]),
         fog_density: Some(0.002_1),
         sun_colour: Some([0.0, 0.0, 0.0]),

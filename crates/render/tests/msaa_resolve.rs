@@ -143,6 +143,8 @@ fn render_and_resolve(
         mesh_render::TRANSPARENT_BLEND,
         mesh_render::GlowMask::Protected,
         mesh_render::Velocity::None,
+        // No Zone stage: this test draws a model, not a race.
+        None,
     )
     .expect("building the mesh pipeline");
 

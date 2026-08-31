@@ -150,6 +150,14 @@ impl Scene {
             // animation ride, so `--anim-seconds` pins all three at once and a
             // race runs all three off the tick.
             time: [seconds; 4],
+            // The Zone stage's own shader parameters, or all-zero (and so the
+            // identity on every albedo) outside a Zone race. Per frame for the
+            // same reason the fog and rig above are: the stage is a runtime
+            // selection in the original.
+            zone: self
+                .zone_grade
+                .as_ref()
+                .map_or_else(Default::default, |grade| grade.zone_uniform()),
         };
         for drawable in [
             Some(&self.track),

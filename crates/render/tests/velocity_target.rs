@@ -142,6 +142,8 @@ fn the_velocity_target_carries_the_ndc_delta_halved_and_y_flipped() {
         mesh_render::TRANSPARENT_BLEND,
         mesh_render::GlowMask::Protected,
         mesh_render::Velocity::Write,
+        // No Zone stage: this test draws a model, not a race.
+        None,
     )
     .expect("building the mesh pipeline");
 

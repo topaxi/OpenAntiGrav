@@ -431,6 +431,77 @@ impl Light {
     }
 }
 
+/// The Zone effect's per-stage shader parameters, as much of them as the disc
+/// itself feeds.
+///
+/// # What this is
+///
+/// Wipeout HD/Fury's Zone mode is **not an engine program**: it is a variant
+/// compiled into 1,467 of the disc's own `.rcsmaterial` files, and its rule was
+/// read out of that fragment microcode - see
+/// `docs/ghidra/functions/ps3-hdfury-eu/zone-shader.md`. The part reproduced
+/// here is:
+///
+/// ```text
+/// zoneUV    = zoneColourTint.xy * (1 - meshUV)
+/// zoneCol   = zoneTex(zoneUV).rgb * zoneEffect<I|O>.rgb
+/// blackMask = saturate((albedo.r + albedo.g + albedo.b) * 100000)
+/// surface   = albedo + zoneCol * (1 - blackMask)
+/// ```
+///
+/// So the Zone recolour lands **only where the material's own diffuse texture
+/// is pure black**: the artists chose what lights up in Zone mode by painting
+/// it black in the ordinary albedo. Confidence 78-82 across those four lines.
+///
+/// # Where each field comes from, and what is left out
+///
+/// Every value here has a located source on the disc:
+///
+/// - [`Self::uv_scale`] is the two title-wide `.effectSettings` keys
+///   `Texture U scale` / `Texture V scale`, which
+///   `Environment_RegisterStageSchema` (`0x003d0b98`) registers straight into
+///   shader parameter 52's own storage. Confidence 85.
+/// - [`Self::effect`] is the showing stage's `Scene.Texture Colour`, which
+///   `Environment_UpdateStageBlend` (`0x003da540`) copies into
+///   `zoneEffectInner`/`zoneEffectOuter`. Confidence 84.
+/// - The texture is the stage's own `zoneModeTrack<n>.gtf`.
+///
+/// **Three terms of the recovered rule are deliberately absent**, because
+/// nothing on the disc feeds them and this project does not invent:
+///
+/// 1. `2 * zoneAnisoPalette[pow(rim, zoneAnisoPower)]`, the rim-lit summand:
+///    the palette textures (`0x00c81330`-`0x00c81350`) have no located filling
+///    write, and `zonemode.effectsettings` authors no `Scene.Aniso Power` on
+///    any of its fifteen stages either.
+/// 2. The visualiser glow, `saturate(N.y - 0.5) * ... * zoneTexVis[band]`: the
+///    256-entry lookup is built at runtime from a static table inside the
+///    executable, which is game content this project may not carry, and the
+///    build loop's own arithmetic does not yet close.
+/// 3. The inner/outer sphere test. `zoneOrigin` has no located writer at all,
+///    and the radius is a field of a per-environment struct whose own writer is
+///    unfound. It does not matter here: the split is a *stage-transition
+///    wavefront* between stage `n` and stage `n - 1`, and this build never has
+///    a transition in flight, so both sides read the same stage and the test is
+///    a no-op whichever way it would have gone.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct Zone {
+    /// `zoneColourTint.xy` - the zone texture's own coordinate scale. `1.0` on
+    /// both lanes in `zonemode.effectsettings`, read rather than assumed.
+    pub uv_scale: [f32; 2],
+    /// `1.0` to draw the recolour, `0.0` to leave the albedo alone.
+    ///
+    /// Not a look switch: it is `0.0` for every draw that is not a Zone race on
+    /// a title whose table, UV scale and stage texture all resolved, so a
+    /// missing input draws nothing rather than something approximate.
+    pub enabled: f32,
+    pub _pad: f32,
+    /// `zoneEffect<Inner|Outer>` - the showing stage's `Scene.Texture Colour`
+    /// in `.rgb`. The `.w` scales the glow this build does not draw and is
+    /// left at zero rather than filled with a stand-in.
+    pub effect: [f32; 4],
+}
+
 /// Everything bind group 2 carries: the fog volume and the light rig.
 ///
 /// One buffer rather than two groups because `wgpu`'s default
@@ -453,6 +524,10 @@ pub struct Scene {
     /// race tick over 60 rather than the wall clock, so it is deterministic;
     /// the original's epoch is unread and does not matter to a scroll.
     pub time: [f32; 4],
+    /// The Zone effect's per-stage parameters. [`Zone::default`] - all zero,
+    /// `enabled` included - for every draw that is not a Zone race, which is
+    /// the identity on the albedo.
+    pub zone: Zone,
 }
 
 impl Scene {
@@ -464,6 +539,7 @@ impl Scene {
             fog: Fog::off(),
             light: Light::stand_in(),
             time: [0.0; 4],
+            zone: Zone::default(),
         }
     }
 }

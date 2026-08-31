@@ -205,6 +205,20 @@ impl EffectSettings {
         }
     }
 
+    /// The Zone shader's `zoneColourTint.xy`: the two title-wide, prefix-free
+    /// keys [`key::TEXTURE_U_SCALE`] and [`key::TEXTURE_V_SCALE`].
+    ///
+    /// `None` unless the file authors **both** - a half-authored scale would
+    /// be an invented lane, and only HD's own two Zone files carry these keys
+    /// at all (2048 reauthored the vocabulary and drops them).
+    #[must_use]
+    pub fn zone_uv_scale(&self) -> Option<[f32; 2]> {
+        Some([
+            self.table.scalar(key::TEXTURE_U_SCALE)?,
+            self.table.scalar(key::TEXTURE_V_SCALE)?,
+        ])
+    }
+
     /// One stage's [`StagePalette`], or `None` for a stage this file does not
     /// name at all.
     ///
@@ -220,6 +234,7 @@ impl EffectSettings {
             scene_eq_brightness: self.stage_scalar(stage, key::SCENE_EQ_BRIGHTNESS),
             scene_base_colour: self.stage_rgb(stage, key::SCENE_BASE_COLOUR),
             scene_base_colour_highlight: self.stage_rgb(stage, key::SCENE_BASE_COLOUR_HIGHLIGHT),
+            scene_aniso_power: self.stage_scalar(stage, key::SCENE_ANISO_POWER),
             // HD's spelling first, then 2048's. A file carries one vocabulary
             // or the other, never both, so the order only decides which miss
             // costs a second lookup.
@@ -350,6 +365,35 @@ pub mod key {
     pub const SCENE_BASE_COLOUR: &str = "Scene.Base Colour";
     /// Three floats. The third of them.
     pub const SCENE_BASE_COLOUR_HIGHLIGHT: &str = "Scene.Base Colour Highlight";
+    /// One float, the exponent of the rim term the Zone shader raises
+    /// `1 - dot(N, -V)` to.
+    ///
+    /// **`zoneAnisoPower` is a float2 and this is its `.x`.**
+    /// `Environment_UpdateStageBlend` (`0x003da540`) writes exactly two lanes
+    /// of it - stage `n`'s value in lane 0 and stage `n - 1`'s in lane 1 - and
+    /// leaves lanes 2 and 3 holding whatever integer a register happened to
+    /// carry. That is an independent confirmation of the shader page's own
+    /// reading that the parameter is a float2. Confidence 84; see
+    /// `docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md`'s
+    /// twenty-fourth pass.
+    pub const SCENE_ANISO_POWER: &str = "Scene.Aniso Power";
+
+    /// **The `.x` of `zoneColourTint`, and one of only two keys in HD's whole
+    /// schema with no stage prefix at all.**
+    ///
+    /// `Environment_RegisterStageSchema` (`0x003d0b98`) hands this key the
+    /// address `0x00c81470` directly, which is shader parameter 52's own value
+    /// pointer - so the U scale is written once when the file is parsed and
+    /// never again. Confidence 85. The shader multiplies it into the zone
+    /// texture's coordinate: `zoneUV = zoneColourTint.xy * (1 - meshUV)`.
+    ///
+    /// This is why `zoneColourTint` is **not a colour**: the engine's own
+    /// schema calls its first two lanes a texture scale, and the microcode
+    /// uses them as one.
+    pub const TEXTURE_U_SCALE: &str = "Texture U scale";
+    /// The `.y` of `zoneColourTint`, registered at `0x00c81474` on the same
+    /// terms as [`TEXTURE_U_SCALE`].
+    pub const TEXTURE_V_SCALE: &str = "Texture V scale";
 
     /// The stage's own distance fog colour. Four floats, alpha authored `0`.
     pub const FOG_COLOUR: &str = "Lighting.Fog colour";
@@ -427,6 +471,10 @@ pub struct StagePalette {
     pub scene_base_colour: Option<[f32; 3]>,
     /// [`key::SCENE_BASE_COLOUR_HIGHLIGHT`], on the same terms.
     pub scene_base_colour_highlight: Option<[f32; 3]>,
+    /// [`key::SCENE_ANISO_POWER`] - `zoneAnisoPower.x`, the exponent of the
+    /// Zone shader's rim term. Read and reported; the term it indexes
+    /// (`zoneAnisoPalette`) has no located filler, so nothing draws it.
+    pub scene_aniso_power: Option<f32>,
     /// [`key::FOG_COLOUR`], alpha dropped.
     pub fog_colour: Option<[f32; 3]>,
     /// [`key::FOG_DENSITY`].
@@ -536,6 +584,16 @@ impl StagePalette {
                 self.scene_base_colour_highlight,
                 previous.scene_base_colour_highlight,
                 fade3,
+            ),
+            // Not faded by the original at all: the blend hands the two
+            // stages' exponents to the shader as two separate lanes rather
+            // than mixing them. Faded here for the same reason the fields
+            // below it are - see this function's own note - and the Zone
+            // draw reads the unblended stage palette instead.
+            scene_aniso_power: fade_field(
+                self.scene_aniso_power,
+                previous.scene_aniso_power,
+                |c, p| fade_scalar(c, p, weight),
             ),
             fog_colour: fade_field(self.fog_colour, previous.fog_colour, fade3),
             fog_density: fade_field(self.fog_density, previous.fog_density, |c, p| {

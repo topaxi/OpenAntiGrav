@@ -95,6 +95,19 @@ struct Light {
     _lpad2: f32,
 };
 
+// The Zone effect's per-stage parameters. See `mesh_render::Zone`, which
+// carries the microcode this reproduces and, more importantly, the list of
+// terms deliberately left out of it for want of a source on the disc.
+struct Zone {
+    // `zoneColourTint.xy`, the `.effectSettings` keys `Texture U/V scale`.
+    uv_scale: vec2<f32>,
+    // 1.0 only when every input this path reads resolved off the disc.
+    enabled: f32,
+    _pad: f32,
+    // `zoneEffect<Inner|Outer>`: the showing stage's `Scene.Texture Colour`.
+    effect: vec4<f32>,
+};
+
 struct Scene {
     fog: Fog,
     light: Light,
@@ -102,6 +115,7 @@ struct Scene {
     // four lanes exactly as Wipeout HD's draw-state builders bind it. Only the
     // flame path below reads it. See `mesh_render::Scene::time`.
     time: vec4<f32>,
+    zone: Zone,
 };
 
 // 1.0 when the render target holds linear light - Wipeout HD's float scene
@@ -155,6 +169,14 @@ override colour_is_light: f32 = 0.0;
 // no branch is needed - the same arrangement `albedo` already uses.
 @group(1) @binding(2) var lightmap: texture_2d<f32>;
 @group(2) @binding(0) var<uniform> scene: Scene;
+// The Zone stage's own `zoneModeTrack<n>.gtf`, and a sampler of its own
+// because it is addressed by a coordinate this shader builds rather than by
+// the mesh's own - `scene.zone.uv_scale * (1 - meshUV)` runs outside [0, 1]
+// wherever the scale does, and the albedo sampler's `Repeat` is what the
+// original's own sampler state says there too. Every draw outside a Zone race
+// binds a 1x1 black, which is the identity once `scene.zone.enabled` is 0.
+@group(2) @binding(1) var zone_tex: texture_2d<f32>;
+@group(2) @binding(2) var zone_sampler: sampler;
 @group(3) @binding(0) var<uniform> anims: TexAnims;
 
 // The world matrix of each `Anim Transform` node the model carries, sampled for
@@ -310,6 +332,32 @@ fn fogged(colour: vec3<f32>, world: vec3<f32>, view_depth: f32) -> vec3<f32> {
     return mix(scene.fog.colour, colour, mix(1.0, factor, scene.fog.enabled));
 }
 
+// **The Zone recolour**, read out of the Zone variant compiled into the disc's
+// own materials rather than out of any engine program - see
+// `docs/ghidra/functions/ps3-hdfury-eu/zone-shader.md`:
+//
+//     zoneUV    = zoneColourTint.xy * (1 - meshUV)
+//     zoneCol   = zoneTex(zoneUV).rgb * zoneEffect.rgb
+//     blackMask = saturate((albedo.r + albedo.g + albedo.b) * 100000)
+//     surface   = albedo + zoneCol * (1 - blackMask)
+//
+// `blackMask` is a hand-rolled `step(0, x)` - the `100000` is the literal in
+// the microcode - so the recolour lands **only where the material's own
+// diffuse is pure black**. That is how the artists chose what lights up in
+// Zone mode, and nothing in the palette table or the parameter list says it;
+// it is authored in the albedo.
+//
+// The zone texture is sampled at the *mesh's own* UV, not in screen space and
+// not projected through `zoneOrigin` - which is the counter-intuitive half of
+// the reading, and is confirmed from the file side by the engine's own schema
+// naming the two lanes "Texture U scale" and "Texture V scale".
+fn zone_surface(albedo: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
+    let zone_uv = scene.zone.uv_scale * (1.0 - uv);
+    let zone_col = textureSample(zone_tex, zone_sampler, zone_uv).rgb * scene.zone.effect.rgb;
+    let black_mask = saturate((albedo.r + albedo.g + albedo.b) * 100000.0);
+    return albedo + zone_col * (1.0 - black_mask) * scene.zone.enabled;
+}
+
 fn lit_texel(in: VertexOutput) -> vec4<f32> {
     let n = normalize(in.normal);
 
@@ -455,7 +503,10 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     let second = textureSample(lightmap, albedo_sampler, in.texcoord);
     let picture = select(first, second, (in.slots & 2u) != 0u);
     let coverage = select(first, second, (in.slots & 4u) != 0u);
-    let texel = vec4<f32>(picture.rgb, coverage[(in.slots >> 3u) & 3u]);
+    let texel = vec4<f32>(
+        zone_surface(picture.rgb, in.texcoord),
+        coverage[(in.slots >> 3u) & 3u],
+    );
 
     // The read specular term: half-vector against the sun, and the exponent
     // is a **stand-in**. It is an inline constant of each fragment program,

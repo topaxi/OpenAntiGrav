@@ -300,6 +300,22 @@ impl Scene {
         } else {
             format
         };
+        // **The Zone stage's own texture, bound once per model.** The showing
+        // stage's `zoneModeTrack<n>.gtf`, which `mesh.wgsl` samples at
+        // `zoneColourTint.xy * (1 - meshUV)` wherever the material's albedo is
+        // pure black - see `mesh_render::Zone`. `None` outside a Zone race, or
+        // on a title with no located set, and then the shader's own
+        // `zone.enabled` is zero too and nothing is added.
+        //
+        // **Bound at build time, so it does not follow a stage change.** No
+        // title reaches one on this path - HD's own trigger is unrecovered and
+        // the art set is HD's alone - and re-binding every drawable's scene
+        // group mid-race is machinery this has no caller for yet.
+        let zone_art = zone_grade
+            .as_ref()
+            .and_then(|grade| grade.stage_art())
+            .cloned();
+        let zone_art = zone_art.as_ref();
         let sky = sky_model
             .filter(|model| !model.indices.is_empty())
             .map(|model| {
@@ -313,6 +329,7 @@ impl Scene {
                     mesh_render::Depth::Sky,
                     mesh_render::TRANSPARENT_BLEND,
                     mesh_render::GlowMask::Protected,
+                    zone_art,
                 )
             })
             .transpose()?;
@@ -326,6 +343,7 @@ impl Scene {
             scene_depth,
             mesh_render::TRANSPARENT_BLEND,
             mesh_render::GlowMask::Protected,
+            zone_art,
         )?;
         // One per grid slot, each drawing **its own team's hull**. Built up
         // front rather than on demand, because a `Drawable` needs the device
@@ -346,6 +364,7 @@ impl Scene {
                 scene_depth,
                 mesh_render::TRANSPARENT_BLEND,
                 mesh_render::GlowMask::Protected,
+                zone_art,
             )?);
         }
         let collision = collision_model
@@ -360,6 +379,7 @@ impl Scene {
                     scene_depth,
                     mesh_render::TRANSPARENT_BLEND,
                     mesh_render::GlowMask::Protected,
+                    zone_art,
                 )
             })
             .transpose()?;
@@ -377,6 +397,7 @@ impl Scene {
                         scene_depth,
                         mesh_render::TRANSPARENT_BLEND,
                         mesh_render::GlowMask::Protected,
+                        zone_art,
                     )
                 })
                 .transpose()
@@ -571,6 +592,7 @@ impl Scene {
                         scene_depth,
                         mesh_render::ADDITIVE_BLEND,
                         mesh_render::GlowMask::Protected,
+                        zone_art,
                     )?),
                     None => None,
                 },
@@ -599,6 +621,7 @@ impl Scene {
                     // boost's brightest surface contributes nothing to the glow
                     // mask, which is the shape of the effect a player notices.
                     mesh_render::GlowMask::Written,
+                    zone_art,
                 )?));
             }
         }
@@ -648,6 +671,7 @@ impl Scene {
                 scene_depth,
                 exhaust::BLEND,
                 mesh_render::GlowMask::Written,
+                zone_art,
             )?));
         }
         // The cockpit sphere, on the shell's own pipeline: same additive blend,
@@ -664,6 +688,7 @@ impl Scene {
                 scene_depth,
                 exhaust::BLEND,
                 mesh_render::GlowMask::Written,
+                zone_art,
             )?),
             None => None,
         };
@@ -685,6 +710,7 @@ impl Scene {
                     scene_depth,
                     mesh_render::TRANSPARENT_BLEND,
                     mesh_render::GlowMask::Protected,
+                    zone_art,
                 )?);
             }
         }

@@ -160,6 +160,8 @@ pub fn capture_pixels_from(
         // and it draws alone into one target, so there is no velocity buffer.
         GlowMask::Protected,
         Velocity::None,
+        // No Zone stage: the offscreen helper draws one model, not a race.
+        None,
     )?;
 
     let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {

@@ -154,13 +154,17 @@ impl ZoneGrade {
     /// The per-stage texture the showing stage indexes, where the title ships
     /// one and it decoded.
     ///
-    /// **This is the "track" set, and nothing draws it yet.** The original
-    /// samples it through the `zoneTexInner`/`zoneTexOuter` shader parameters,
-    /// alongside a runtime-built 256x1 texture (`zoneTexVis`) this build does
-    /// not generate; what its fragment program does with any of them is
-    /// unread, so the art is decoded and held rather than drawn. Held rather
-    /// than dropped because the decode is the half that is recovered, and
-    /// proving it against the disc is worth more than an empty seam.
+    /// **This is the "track" set, and it draws.** The original samples it
+    /// through the `zoneTexInner`/`zoneTexOuter` shader parameters, and
+    /// `mesh.wgsl`'s `zone_surface` reproduces the part of that rule whose
+    /// inputs are all on the disc - see [`Self::zone_uniform`] and
+    /// [`oag_render::mesh_render::Zone`]. The visualiser glow that rides
+    /// alongside it needs a runtime-built 256-entry lookup (`zoneTexVis`)
+    /// built from a table inside the executable, and is not drawn.
+    ///
+    /// The **track** set rather than the "general" one because the general
+    /// set is fifteen byte-identical flat whites whose alpha is 255
+    /// everywhere: it indexes one lookup entry and can display nothing.
     ///
     /// `None` for a stage past the set, or one whose entry did not decode -
     /// the slots are positional, so a hole stays a hole.
@@ -349,6 +353,57 @@ impl ZoneGrade {
         Some([r, g, b, palette.scene_eq_brightness.unwrap_or(0.0)])
     }
 
+    /// The Zone shader's own per-stage parameters, for the showing stage.
+    ///
+    /// # What is fed and what is not
+    ///
+    /// [`oag_render::mesh_render::Zone`] carries the rule and the full list of
+    /// terms left out; the two values assembled here are:
+    ///
+    /// - `zoneColourTint.xy`, the file's own title-wide `Texture U scale` /
+    ///   `Texture V scale`. `Environment_RegisterStageSchema` (`0x003d0b98`,
+    ///   `ps3-hdfury-eu`) registers those two keys directly into shader
+    ///   parameter 52's storage, so this is the whole of the binding rather
+    ///   than a reading of it. Confidence 85.
+    /// - `zoneEffectInner`/`zoneEffectOuter`, the showing stage's
+    ///   `Scene.Texture Colour`. `Environment_UpdateStageBlend` (`0x003da540`)
+    ///   copies stage `n`'s into the inner parameter and stage `n - 1`'s into
+    ///   the outer one. Confidence 84.
+    ///
+    /// **The showing stage's own palette, not [`Self::palette`]'s cross-fade.**
+    /// The original does not blend these two in colour space at all: it hands
+    /// the shader both stages and picks between them per pixel with a sphere
+    /// test. This build never has a stage transition in flight - nothing
+    /// advances [`StageBlend::weight`] and no title on this path has a
+    /// recovered trigger - so inner and outer are the same stage and the
+    /// unblended palette is what the original would compute too.
+    ///
+    /// `enabled` is `0.0`, and the whole term disappears, unless the file
+    /// authors the UV scale *and* the stage authors `Scene.Texture Colour`
+    /// *and* the stage's texture decoded. A missing input draws nothing.
+    #[must_use]
+    pub fn zone_uniform(&self) -> mesh_render::Zone {
+        let off = mesh_render::Zone::default();
+        let (Some(uv_scale), Some(palette)) = (
+            self.table.zone_uv_scale(),
+            self.table.stage_palette(self.blend.current),
+        ) else {
+            return off;
+        };
+        let (Some([r, g, b]), true) = (palette.scene_texture_colour, self.stage_art().is_some())
+        else {
+            return off;
+        };
+        mesh_render::Zone {
+            uv_scale,
+            enabled: 1.0,
+            _pad: 0.0,
+            // The `.w` scales the visualiser glow, which this build does not
+            // draw for want of `zoneTexVis`. Left at zero rather than filled.
+            effect: [r, g, b, 0.0],
+        }
+    }
+
     /// What the load report says about this table.
     #[must_use]
     pub fn describe(&self) -> String {
@@ -387,8 +442,33 @@ impl ZoneGrade {
             }
             None => String::new(),
         };
+        // What the Zone material term will actually add, so a load says
+        // whether it draws and, when it does not, which input was missing.
+        let zone = {
+            let uniform = self.zone_uniform();
+            let (decoded, named) = self.stage_art_counts();
+            if uniform.enabled > 0.0 {
+                let [r, g, b, _] = uniform.effect;
+                let [u, v] = uniform.uv_scale;
+                format!(
+                    "; the Zone recolour draws where the albedo is black: stage {} art of \
+                     {decoded}/{named}, zoneEffect [{r}, {g}, {b}], zone UV scale [{u}, {v}]",
+                    self.blend.current,
+                )
+            } else {
+                let missing = if self.table.zone_uv_scale().is_none() {
+                    "the file authors no Texture U/V scale"
+                } else if self.stage_art().is_none() {
+                    "this stage has no decoded texture"
+                } else {
+                    "this stage authors no Scene.Texture Colour"
+                };
+                format!("; the Zone recolour draws nothing - {missing}")
+            }
+        };
         format!(
-            "{}: the Zone colour grade, {stages} stage(s) from {first} to {last}; {ladder}{tint}",
+            "{}: the Zone colour grade, {stages} stage(s) from {first} to {last}; \
+             {ladder}{tint}{zone}",
             self.entry
         )
     }

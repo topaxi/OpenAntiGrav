@@ -74,6 +74,7 @@ impl Drawable {
         depth: mesh_render::Depth,
         blend: wgpu::BlendState,
         glow: mesh_render::GlowMask,
+        zone: Option<&std::sync::Arc<oag_render::mesh::ModelTexture>>,
     ) -> Result<Self> {
         let mesh_render::Built {
             pipeline,
@@ -107,6 +108,7 @@ impl Drawable {
             // motion blur setting says. See `mesh_render::Velocity` and
             // `race::Scene::velocity`.
             mesh_render::Velocity::Write,
+            zone,
         )?;
 
         let uniforms = device.create_buffer(&wgpu::BufferDescriptor {
